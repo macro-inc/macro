@@ -622,7 +622,7 @@ describe('repeatPartsFromDate', () => {
     expect(parts.dayOfMonth).toBe('17');
   });
 
-  it('defaults to weekly, the middle of the three frequencies', () => {
+  it('defaults to weekly', () => {
     expect(repeatPartsFromDate(new Date('2026-08-17T09:00:00')).frequency).toBe(
       'week'
     );
@@ -644,13 +644,14 @@ describe('defaultRepeatParts', () => {
 describe('recurringSchedule', () => {
   it('builds a cron schedule carrying the timezone it was built in', () => {
     const schedule = recurringSchedule(
-      repeatPartsFromDate(new Date('2026-08-10T09:00:00'), 'day'),
+      // 2026-08-10 is a Monday, which is 2 in the backend's numbering.
+      repeatPartsFromDate(new Date('2026-08-10T09:00:00')),
       'America/Denver'
     );
 
     expect(schedule).toEqual({
       type: 'recurring',
-      cron: '0 0 9 * * *',
+      cron: '0 0 9 * * 2',
       timezone: 'America/Denver',
     });
   });
@@ -847,8 +848,8 @@ describe('keeping a recurring schedule unchanged', () => {
   });
 
   it('does not treat a re-spelled equivalent cron as a change', () => {
-    // `withoutDailyFrequency` rewrites daily as weekly-all-days for the
-    // automation picker, so the same schedule can arrive spelled either way.
+    // `*` and the full list of days are the same schedule spelled two ways,
+    // and which one a reminder carries depends on what last wrote it.
     const asDaily = { ...weekdays, cron: '0 0 9 * * *' };
     const asEveryWeekday = { ...weekdays, cron: '0 0 9 * * 1,2,3,4,5,6,7' };
 

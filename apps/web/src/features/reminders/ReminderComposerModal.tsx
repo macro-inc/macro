@@ -748,9 +748,13 @@ function WhenList(props: {
   );
 }
 
-/** The three recurrences the picker offers, in ascending period. */
+/**
+ * The recurrences the picker offers, in ascending period.
+ *
+ * No daily entry: weekly with every day ticked says the same thing, and the
+ * summary reads it back as "every day".
+ */
 const REPEAT_FREQUENCIES: Array<{ value: ScheduleFrequency; label: string }> = [
-  { value: 'day', label: 'Daily' },
   { value: 'week', label: 'Weekly' },
   { value: 'month', label: 'Monthly' },
 ];

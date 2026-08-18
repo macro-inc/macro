@@ -9,7 +9,6 @@ import {
   isValidTime,
   normalizeCron,
   parseCron,
-  withoutDailyFrequency,
 } from './cron';
 
 /** Weekly on Monday and Wednesday at 09:00, in cron's 1=Sun numbering. */
@@ -20,8 +19,9 @@ const weekly: CronParts = {
   dayOfMonth: '1',
 };
 
-const daily: CronParts = {
-  frequency: 'day',
+/** Weekly with every day ticked, which is how "every day" is now said. */
+const everyDay: CronParts = {
+  frequency: 'week',
   time: '09:00',
   daysOfWeek: ['1', '2', '3', '4', '5', '6', '7'],
   dayOfMonth: '1',
@@ -36,13 +36,13 @@ const monthly: CronParts = {
 
 describe('buildCron', () => {
   it('emits six fields, since that is what the cron crate parses', () => {
-    for (const parts of [daily, weekly, monthly]) {
+    for (const parts of [everyDay, weekly, monthly]) {
       expect(buildCron(parts).split(' ')).toHaveLength(6);
     }
   });
 
-  it('builds a daily schedule with no day constraints', () => {
-    expect(buildCron(daily)).toBe('0 0 9 * * *');
+  it('builds every day as the full list of days', () => {
+    expect(buildCron(everyDay)).toBe('0 0 9 * * 1,2,3,4,5,6,7');
   });
 
   it('builds a weekly schedule from the selected days', () => {
@@ -62,7 +62,7 @@ describe('buildCron', () => {
   });
 
   it('falls back to the default time when the time is malformed', () => {
-    const [, minute, hour] = buildCron({ ...daily, time: 'nonsense' }).split(
+    const [, minute, hour] = buildCron({ ...everyDay, time: 'nonsense' }).split(
       ' '
     );
     const [defaultHour, defaultMinute] = DEFAULT_TIME.split(':').map(Number);
@@ -82,7 +82,7 @@ describe('buildCron', () => {
 
 describe('parseCron', () => {
   it('round-trips everything buildCron produces', () => {
-    for (const parts of [daily, weekly, monthly]) {
+    for (const parts of [everyDay, weekly, monthly]) {
       const reparsed = parseCron(buildCron(parts));
       expect(reparsed.frequency).toBe(parts.frequency);
       expect(reparsed.time).toBe(parts.time);
@@ -95,8 +95,12 @@ describe('parseCron', () => {
     }
   });
 
-  it('reads an unconstrained expression as daily', () => {
-    expect(parseCron('0 0 9 * * *').frequency).toBe('day');
+  it('reads an unconstrained day-of-week as every day of the week', () => {
+    // There is no separate daily frequency: `*` and the full list are the same
+    // schedule, and the picker only knows how to show the latter.
+    const parts = parseCron('0 0 9 * * *');
+    expect(parts.frequency).toBe('week');
+    expect(parts.daysOfWeek).toEqual(['1', '2', '3', '4', '5', '6', '7']);
   });
 
   it('expands a day-of-week range', () => {
@@ -158,36 +162,6 @@ describe('parseCron', () => {
   });
 });
 
-describe('withoutDailyFrequency', () => {
-  it('rewrites a daily schedule as every day of the week', () => {
-    // What automations' picker relies on: it has no daily option, so a daily
-    // expression has to arrive as the weekly selection that means the same.
-    const collapsed = withoutDailyFrequency(parseCron('0 0 9 * * *'));
-
-    expect(collapsed.frequency).toBe('week');
-    expect(collapsed.daysOfWeek).toEqual(['1', '2', '3', '4', '5', '6', '7']);
-    expect(collapsed.time).toBe('09:00');
-  });
-
-  it('builds an expression that still means the same schedule', () => {
-    // Not byte-identical: `*` comes back as an explicit list of all seven days.
-    // What matters is that the meaning survives, so opening an automation and
-    // saving it again cannot quietly change when it runs.
-    const original = '0 0 9 * * *';
-    const rebuilt = buildCron(withoutDailyFrequency(parseCron(original)));
-
-    expect(rebuilt).toBe('0 0 9 * * 1,2,3,4,5,6,7');
-    expect(describeCron(parseCron(rebuilt))).toBe(
-      describeCron(parseCron(original))
-    );
-  });
-
-  it('leaves weekly and monthly schedules alone', () => {
-    expect(withoutDailyFrequency(weekly)).toEqual(weekly);
-    expect(withoutDailyFrequency(monthly)).toEqual(monthly);
-  });
-});
-
 /**
  * `09:00` as the runtime's locale writes it.
  *
@@ -203,10 +177,6 @@ const NINE_AM = new Intl.DateTimeFormat(undefined, {
 }).format(new Date(2026, 0, 1, 9, 0));
 
 describe('describeCron', () => {
-  it('names a daily schedule', () => {
-    expect(describeCron(daily)).toBe(`every day at ${NINE_AM}`);
-  });
-
   it('names the sets of days that have a name', () => {
     const week = (daysOfWeek: string[]) =>
       describeCron({ ...weekly, daysOfWeek });
@@ -238,7 +208,7 @@ describe('describeCron', () => {
   });
 
   it('appends the timezone when given one', () => {
-    expect(describeCron(daily, 'America/New_York')).toBe(
+    expect(describeCron(everyDay, 'America/New_York')).toBe(
       `every day at ${NINE_AM} (America/New_York)`
     );
   });
@@ -269,13 +239,13 @@ describe('isValidTime', () => {
 
 describe('isValidCronParts', () => {
   it('accepts each frequency at its defaults', () => {
-    for (const parts of [daily, weekly, monthly]) {
+    for (const parts of [everyDay, weekly, monthly]) {
       expect(isValidCronParts(parts)).toBe(true);
     }
   });
 
   it('rejects any frequency with an unusable time', () => {
-    for (const parts of [daily, weekly, monthly]) {
+    for (const parts of [everyDay, weekly, monthly]) {
       expect(isValidCronParts({ ...parts, time: '24:00' })).toBe(false);
     }
   });
@@ -300,10 +270,11 @@ describe('isValidCronParts', () => {
     expect(isValidCronParts({ ...weekly, daysOfWeek: [] })).toBe(false);
   });
 
-  it('ignores the day fields the frequency does not use', () => {
-    expect(
-      isValidCronParts({ ...daily, dayOfMonth: '99', daysOfWeek: [] })
-    ).toBe(true);
+  it('ignores the day field the frequency does not use', () => {
+    // Each frequency reads exactly one of them, so junk in the other is not a
+    // reason to refuse a schedule the user can actually see.
+    expect(isValidCronParts({ ...weekly, dayOfMonth: '99' })).toBe(true);
+    expect(isValidCronParts({ ...monthly, daysOfWeek: [] })).toBe(true);
   });
 });
 
@@ -359,7 +330,7 @@ describe('normalizeCron', () => {
 
   it('still normalizes a seven-field expression with an open year', () => {
     // `*` in the year field constrains nothing, so it stays representable.
-    expect(normalizeCron('0 0 9 * * * *')).toBe('0 0 9 * * *');
+    expect(normalizeCron('0 0 9 * * * *')).toBe('0 0 9 * * 1,2,3,4,5,6,7');
   });
 });
 
@@ -394,6 +365,6 @@ describe('normalizeCron on fields the picker cannot express', () => {
   });
 
   it('still normalizes plain in-range fields', () => {
-    expect(normalizeCron('0 0 9 * * 1,2,3,4,5,6,7')).toBe('0 0 9 * * *');
+    expect(normalizeCron('0 0 9 * * *')).toBe('0 0 9 * * 1,2,3,4,5,6,7');
   });
 });

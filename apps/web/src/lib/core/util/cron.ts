@@ -13,8 +13,14 @@
  *   weekly schedule by a day.
  */
 
-/** How often a schedule repeats. */
-export type ScheduleFrequency = 'day' | 'week' | 'month';
+/**
+ * How often a schedule repeats.
+ *
+ * No daily option: a weekly schedule with every day selected is the same
+ * thing, and the pickers let you say it that way. One fewer frequency to
+ * render, and no expression that only one picker can express.
+ */
+export type ScheduleFrequency = 'week' | 'month';
 
 /** Time of day a schedule fires when none was chosen, as `HH:MM`. */
 export const DEFAULT_TIME = '09:00';
@@ -92,11 +98,8 @@ export function isValidCronParts(parts: CronParts): boolean {
       parts.daysOfWeek.every((day) => DOW_VALUES.includes(day))
     );
   }
-  if (parts.frequency === 'month') {
-    const day = Number(parts.dayOfMonth);
-    return Number.isInteger(day) && day >= 1 && day <= 31;
-  }
-  return true;
+  const day = Number(parts.dayOfMonth);
+  return Number.isInteger(day) && day >= 1 && day <= 31;
 }
 
 /** `HH:MM` from separate fields, falling back on anything out of range. */
@@ -176,9 +179,6 @@ export function describeCron(parts: CronParts, timezone?: string): string {
   const timeLabel = formatTimeLabel(parts.time);
   const zone = timezone ? ` (${timezone})` : '';
 
-  if (parts.frequency === 'day') {
-    return `every day at ${timeLabel}${zone}`;
-  }
   if (parts.frequency === 'week') {
     return `${formatDayList(parts.daysOfWeek)} at ${timeLabel}${zone}`;
   }
@@ -301,9 +301,10 @@ function interpretCron(cron: string): CronReading {
 
   if (dayOfMonth === '*') {
     if (dayOfWeek === '*') {
+      // Every day, said the way the picker says it.
       return {
         parts: {
-          frequency: 'day',
+          frequency: 'week',
           time,
           daysOfWeek: [...DOW_VALUES],
           dayOfMonth: '1',
@@ -338,29 +339,15 @@ function interpretCron(cron: string): CronReading {
 }
 
 /**
- * Rewrite a `day` frequency as the weekly selection that means the same thing.
- *
- * For pickers that offer weekly and monthly only: `every day` and `weekly with
- * all seven days selected` build the identical expression, so a picker with no
- * daily option can show the latter without changing what the schedule does.
- * Anything already weekly or monthly passes through untouched.
- */
-export function withoutDailyFrequency(parts: CronParts): CronParts {
-  if (parts.frequency !== 'day') return parts;
-  return { ...parts, frequency: 'week', daysOfWeek: [...DOW_VALUES] };
-}
-
-/**
  * A cron expression in the one form the pickers write it.
  *
  * `0 0 9 * * *` and `0 0 9 * * 1,2,3,4,5,6,7` are the same schedule spelled two
- * ways, and which one you hold depends on which picker last touched it. Callers
- * comparing two expressions for "did this change?" want them to agree, since a
- * difference that is only spelling still reads as an edit — and on a reminder
- * an edit resets state the owner cares about.
+ * ways, and which one you hold depends on what last wrote it. Callers comparing
+ * two expressions for "did this change?" want them to agree, since a difference
+ * that is only spelling still reads as an edit — and on a reminder an edit
+ * resets state the owner cares about.
  *
- * Anything the pickers cannot represent normalizes to whatever they would show
- * for it, which is the same answer {@link parseCron} already gives.
+ * Both spellings parse to the same parts, so rebuilding is the whole job.
  */
 export function normalizeCron(cron: string): string {
   const { parts, representable } = interpretCron(cron);
@@ -369,16 +356,7 @@ export function normalizeCron(cron: string): string {
   // expression parses to the same fallback, so normalizing them would make two
   // different schedules compare equal — and a comparison that says "unchanged"
   // about a real change silently discards the edit.
-  if (!representable) return cron;
-
-  const isEveryDay =
-    parts.frequency === 'week' &&
-    parts.daysOfWeek.length === DOW_VALUES.length &&
-    // Membership, not just count, so a duplicated day cannot pass for a full
-    // week and collapse a partial schedule into a daily one.
-    DOW_VALUES.every((day) => parts.daysOfWeek.includes(day));
-
-  return buildCron(isEveryDay ? { ...parts, frequency: 'day' } : parts);
+  return representable ? buildCron(parts) : cron;
 }
 
 /** Build the six-field expression the backend expects. */
@@ -387,9 +365,6 @@ export function buildCron(parts: CronParts): string {
     .split(':')
     .map((value) => Number(value));
 
-  if (parts.frequency === 'day') {
-    return `0 ${minute} ${hour} * * *`;
-  }
   if (parts.frequency === 'week') {
     const days = parts.daysOfWeek.length
       ? [...parts.daysOfWeek]

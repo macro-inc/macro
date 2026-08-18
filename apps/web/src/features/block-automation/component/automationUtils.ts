@@ -9,7 +9,6 @@ import {
   describeCron,
   getDefaultTimezone,
   parseCron as parseCronParts,
-  withoutDailyFrequency,
 } from '@core/util/cron';
 import { ThrownResultError } from '@core/util/result';
 import type {
@@ -75,16 +74,11 @@ type ParsedCron = Pick<
 /**
  * Read a cron expression into the parts an automation's picker edits.
  *
- * Automations offer weekly and monthly only ({@link FREQUENCY_OPTIONS}), so a
- * daily expression is collapsed to the equivalent weekly selection rather than
- * reported as a frequency this picker cannot show.
+ * A pass-through: the shared parser only ever reports frequencies this picker
+ * can render, so there is nothing to adapt.
  */
 export function parseCron(cron: string): ParsedCron {
-  const parts = withoutDailyFrequency(parseCronParts(cron));
-  // `withoutDailyFrequency` rules out 'day', which is what narrows the shared
-  // frequency union to the two an automation draft allows.
-  if (parts.frequency === 'day') return { ...parts, frequency: 'week' };
-  return { ...parts, frequency: parts.frequency };
+  return parseCronParts(cron);
 }
 
 function buildCron(draft: ScheduleDraft) {
