@@ -161,7 +161,7 @@
         version = appVersion;
         binaryName = "app";
         src = ../apps/web/tauri;
-        # The native GraphQL cache plugin depends on cache-core/cache-sqlite
+        # The native GraphQL cache plugin depends on cache-core/cache-turso
         # at the repository root, so preserve those relative paths in the
         # filtered Cargo source used by crane.
         cargoRoot = ../.;

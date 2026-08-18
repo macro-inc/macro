@@ -256,11 +256,11 @@ soup entities from the normy config as they migrate.
 ```
 crates/client/            # members of the root cargo workspace
   cache-core/                  # pure engine, native tests (schema codegen in build.rs)
-  cache-sqlite/                # Storage over SQLite (Tauri native host)
-  cache-idb/                   # Storage over IndexedDB (browser wasm host)
+  cache-turso/                 # Turso Storage (browser OPFS + Tauri filesystem)
+  turso-opfs/                  # browser OPFS adapter for Turso
   cache-wasm/                  # wasm-bindgen shell (web)
 apps/web/tauri/graphql_cache_plugin/ # tauri commands + engine thread wrapping
-                                     # cache-core over cache-sqlite. Lives in the
+                                     # cache-core over cache-turso. Lives in the
                                      # tauri workspace (not crates/client): it
                                      # depends on the patched tauri fork pinned
                                      # there, path-deps back to crates/client.
@@ -294,14 +294,12 @@ apps/web/src/lib/graphql-cache/ # JS glue
 - Deferred: nullability-based partial results (metadata already generated),
   byte-based LRU budgets, proptest round-trips, staleness metadata.
 
-**Phase 2 — persistence** *(done — `cache-sqlite`, `cache-idb`)*
+**Phase 2 — persistence** *(done — `cache-turso`)*
 - Shared postcard record codec + `cache_namespace(scope)` embedding
   schema compatibility epoch + format version.
-- SQLite backend (Tauri native): WAL mode, batch txns, namespace
-  wipe-on-mismatch; tested natively incl. engine integration.
-- IndexedDB backend via the `idb` crate: one DB per namespace, atomic
-  batch txns; tested in headless Chromium via wasm-bindgen-test incl.
-  engine-over-IDB round trip.
+- Turso backend for both Tauri native filesystem storage and browser OPFS:
+  WAL mode, batch transactions, and physical reset on incompatible storage;
+  tested natively and in headless Chromium.
 - Deferred: stale-namespace DB cleanup (browser), `scan_prefix`/
   `approx_size` for GC (hardening phase).
 
@@ -317,14 +315,14 @@ apps/web/src/lib/graphql-cache/ # JS glue
   happens with the Phase 4 exchange integration.
 - ~~Tauri host~~ (`apps/web/tauri/graphql_cache_plugin`, in the *tauri*
   workspace — it needs the patched tauri fork pinned there; path-deps on
-  `crates/client/{cache-core,cache-sqlite}`): engine behind an async mutex
+  `crates/client/{cache-core,cache-turso}`): engine behind an async mutex
   on the tauri runtime (`Storage` futures are `MaybeSend` → `Send` native;
-  SQLite completes immediately), commands mirroring the worker protocol
+  Turso uses its synchronous native IO driver), commands mirroring the worker protocol
   registered app-level in `src-tauri` (bundle-updater pattern, no
   capability plumbing), changed ops broadcast to every webview via the
   `graphql-cache://ops-affected` event. One native engine per app process = SharedWorker topology: no Web
   Locks / BroadcastChannel machinery. DB at
-  `{app_data_dir}/graphql-cache/cache.sqlite`.
+  `{app_data_dir}/graphql-cache/cache.turso`.
   JS side: `createTauriCacheHost` (`host/tauri-host.ts`) — invoke-based
   RPC with the same 10s timeout + Error-normalized rejections, event
   subscription filtered by clientId prefix; `isTauri()` selects it in

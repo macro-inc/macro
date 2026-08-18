@@ -8,11 +8,8 @@ use cache_core::queue::{
 use cache_core::search::{SearchProfile, project_search_documents};
 use cache_core::store::{InMemoryStorage, Storage};
 use cache_core::value::{CacheValue, EntityKey, Record};
-use cache_sqlite::SqliteStorage;
 use cache_turso::{TursoMemoryDatabase, TursoStorage, TursoStorageCloseOutcome};
 use pollster::block_on;
-use std::path::PathBuf;
-use std::sync::atomic::{AtomicU64, Ordering};
 
 trait BackendFactory: Sized {
     type Backend: Storage;
@@ -36,36 +33,6 @@ impl BackendFactory for InMemoryFactory {
     }
 
     fn finish(self, _: Self::Backend) {}
-}
-
-struct SqliteFactory {
-    path: PathBuf,
-}
-
-impl BackendFactory for SqliteFactory {
-    type Backend = SqliteStorage;
-
-    fn create() -> (Self, Self::Backend) {
-        static NEXT_DATABASE: AtomicU64 = AtomicU64::new(1);
-        let id = NEXT_DATABASE.fetch_add(1, Ordering::Relaxed);
-        let path = std::env::temp_dir().join(format!(
-            "cache-turso-shared-conformance-{}-{id}.db",
-            std::process::id()
-        ));
-        let _ = std::fs::remove_file(&path);
-        let storage = SqliteStorage::open(&path, "shared-conformance").unwrap();
-        (Self { path }, storage)
-    }
-
-    fn reopen(&mut self, storage: Self::Backend) -> Self::Backend {
-        drop(storage);
-        SqliteStorage::open(&self.path, "shared-conformance").unwrap()
-    }
-
-    fn finish(self, storage: Self::Backend) {
-        drop(storage);
-        std::fs::remove_file(self.path).unwrap();
-    }
 }
 
 struct TursoFactory {
@@ -614,11 +581,6 @@ fn run<F: BackendFactory>() {
 #[test]
 fn in_memory_storage_satisfies_shared_contract() {
     run::<InMemoryFactory>();
-}
-
-#[test]
-fn sqlite_storage_satisfies_shared_contract() {
-    run::<SqliteFactory>();
 }
 
 #[test]

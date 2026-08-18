@@ -595,11 +595,6 @@
       "crates/client/cache-core",
       "crates/maybe_send"
     ],
-    "cache-sqlite": [
-      "crates/client/cache-core",
-      "crates/client/cache-sqlite",
-      "crates/maybe_send"
-    ],
     "cache-turso": [
       "crates/client/cache-core",
       "crates/client/cache-turso",

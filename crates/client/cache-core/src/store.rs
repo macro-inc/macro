@@ -1,7 +1,7 @@
 //! Storage abstraction: the cold tier behind the in-memory hot tier.
 //!
-//! Implementations: in-memory (tests), Turso over OPFS (browser), and SQLite
-//! (Tauri native). Futures are [`MaybeSend`]: `Send` on native targets (so
+//! Implementations: in-memory (tests) and Turso over OPFS (browser) or native
+//! filesystem IO (Tauri). Futures are [`MaybeSend`]: `Send` on native targets (so
 //! hosts can drive the engine from a multi-threaded runtime), unbounded on
 //! wasm — wasm futures aren't
 //! `Send`.

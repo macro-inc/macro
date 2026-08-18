@@ -13,7 +13,6 @@ members = [
   "crates/calendar_events",
   "crates/channel_bots",
   "crates/client/cache-core",
-  "crates/client/cache-sqlite",
   "crates/client/cache-turso",
   "crates/client/cache-wasm",
   "crates/client/turso-opfs",
