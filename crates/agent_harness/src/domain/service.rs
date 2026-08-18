@@ -240,7 +240,6 @@ where
                 workspace: request.workspace,
                 // The thread linkage is the caller's claim, not an observed
                 // mention; it must not grant the channel anything.
-                verified_mention: false,
             })
             .await?;
 
@@ -348,7 +347,6 @@ where
                 // Managed sandboxes run in the path baked into their image.
                 workspace: agent_session::MANAGED_CONTAINER_WORKSPACE.to_owned(),
                 // This open came from the trigger pipeline seeing the mention.
-                verified_mention: true,
             })
             .await?;
 

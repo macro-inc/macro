@@ -248,7 +248,6 @@ async fn seed(args: &Args) -> Result<(), SeedError> {
             harness: args.harness.clone(),
             repo_url: Some(args.repo_url.clone()),
             workspace: args.workspace.clone(),
-            verified_mention: true,
         },
     )
     .await

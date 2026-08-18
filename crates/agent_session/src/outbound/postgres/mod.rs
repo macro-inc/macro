@@ -142,7 +142,6 @@ impl AgentSessionRepo for PgAgentSessionRepo {
             harness,
             repo_url,
             workspace,
-            verified_mention,
         } = params;
 
         // The session row and its access grants land together: a crash between
@@ -207,13 +206,12 @@ impl AgentSessionRepo for PgAgentSessionRepo {
         .await
         .context("failed to grant the owner access to the agent session")?;
 
-        // The channel the bot was mentioned in can steer the session: the
-        // invocation was public there, so that audience is. Only when the
-        // trigger pipeline observed the mention itself - a caller-claimed
-        // message id must not be able to hand an arbitrary channel access
-        // to the session. A directly created session has no verified
-        // mention, and so no inherited audience.
-        let origin_channel_id = match originating_message_id.filter(|_| verified_mention) {
+        // The channel the bot was invoked in can steer the session: the
+        // invocation was public there, so that audience is. Read from the
+        // message rather than taken from the caller, so the channel is always
+        // the one the message actually sits in. A session created without a
+        // message - directly, rather than from a channel - is its owner's alone.
+        let origin_channel_id = match originating_message_id {
             Some(message_id) => sqlx::query_scalar!(
                 "SELECT channel_id FROM comms_messages WHERE id = $1",
                 message_id,

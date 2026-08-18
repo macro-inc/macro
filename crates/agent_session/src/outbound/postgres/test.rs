@@ -90,7 +90,6 @@ fn new_session(
         harness: "claude-code".to_string(),
         repo_url: Some("https://github.com/example/example".to_string()),
         workspace: "/workspace".to_string(),
-        verified_mention: true,
     }
 }
 

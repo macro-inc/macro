@@ -110,8 +110,6 @@ impl AgentSessionRepo for InMemoryAgentSessionRepo {
             harness: params.harness,
             repo_url: params.repo_url,
             workspace: params.workspace,
-            // verified_mention only affects access grants, which the in-memory
-            // repo does not model.
             acp_session_id: None,
             status: SessionStatus::default(),
             created_at: now,

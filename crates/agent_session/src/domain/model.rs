@@ -46,10 +46,6 @@ pub struct CreateAgentSessionParams {
     pub repo_url: Option<String>,
     /// Absolute directory the harness runs in on its runtime.
     pub workspace: String,
-    /// Whether `originating_message_id` came from the trigger pipeline
-    /// observing a real mention, as opposed to being claimed by the caller.
-    /// Only a verified mention grants its channel access to the session.
-    pub verified_mention: bool,
 }
 
 /// A running or historical agent coding session.

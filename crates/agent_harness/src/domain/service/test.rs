@@ -174,7 +174,6 @@ async fn disconnected_session(
             harness: "opencode".to_owned(),
             repo_url: Some("https://github.com/macro-inc/macro".to_owned()),
             workspace: "/workspace".to_owned(),
-            verified_mention: true,
         },
     )
     .await
