@@ -5,8 +5,8 @@ mod queries;
 mod test;
 
 use crate::domain::models::{
-    ChatAgentKind, ChatErr, ChatResponse, CopyChatArgs, CreateChatArgs, PatchChatArgs,
-    PatchChatMessageArgs, Result, WebCitation,
+    ChatErr, ChatResponse, CopyChatArgs, CreateChatArgs, PatchChatArgs, PatchChatMessageArgs,
+    Result, WebCitation,
 };
 use crate::domain::ports::{ChatRepo, MessageRepo};
 use agent::types::ChatMessageContent;
@@ -93,7 +93,6 @@ impl ChatRepo for PgChatRepo {
             &user_id,
             &args.name,
             args.project_id.as_deref(),
-            args.kind,
         )
         .await
         .map_err(to_chat_err)?;
@@ -179,13 +178,6 @@ impl ChatRepo for PgChatRepo {
             .map_err(to_chat_err)
     }
 
-    #[tracing::instrument(err, skip(self))]
-    async fn get_agent_kind(&self, chat_id: &str) -> Result<ChatAgentKind> {
-        queries::get_agent_kind::get_agent_kind(&self.pool, chat_id)
-            .await
-            .map_err(to_chat_err)
-    }
-
     #[tracing::instrument(err, skip(self, share_permission))]
     async fn copy_chat(
         &self,
@@ -205,7 +197,6 @@ impl ChatRepo for PgChatRepo {
             &user_id,
             &args.name,
             args.project_id.as_deref(),
-            ChatAgentKind::MacroChat,
         )
         .await
         .map_err(to_chat_err)?;

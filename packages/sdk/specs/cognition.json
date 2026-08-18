@@ -2447,11 +2447,6 @@
           }
         }
       },
-      "ChatAgentKind": {
-        "type": "string",
-        "description": "What kind of agent backs a chat.",
-        "enum": ["MacroChat", "External"]
-      },
       "ChatAttachment": {
         "type": "object",
         "required": ["id", "attachment_type", "attachment_id"],
@@ -2733,24 +2728,19 @@
                 "type": "array",
                 "items": {
                   "$ref": "#/components/schemas/Entity"
-                },
-                "description": "Attachments included with the message."
+                }
               },
               "chat_id": {
-                "type": "string",
-                "description": "The chat the message belongs to."
+                "type": "string"
               },
               "content": {
-                "type": "string",
-                "description": "The user's message text."
+                "type": "string"
               },
               "message_id": {
-                "type": "string",
-                "description": "The persisted id of the user's message."
+                "type": "string"
               },
               "stream_id": {
-                "type": "string",
-                "description": "Correlates every item in this stream to one prompt turn."
+                "type": "string"
               },
               "type": {
                 "type": "string",
@@ -2770,20 +2760,16 @@
             ],
             "properties": {
               "chat_id": {
-                "type": "string",
-                "description": "The chat the message belongs to."
+                "type": "string"
               },
               "content": {
-                "$ref": "#/components/schemas/AssistantMessagePart",
-                "description": "One part of the assistant's (possibly still streaming) response."
+                "$ref": "#/components/schemas/AssistantMessagePart"
               },
               "message_id": {
-                "type": "string",
-                "description": "The id the assistant's message will be persisted under."
+                "type": "string"
               },
               "stream_id": {
-                "type": "string",
-                "description": "Correlates every item in this stream to one prompt turn."
+                "type": "string"
               },
               "type": {
                 "type": "string",
@@ -2793,12 +2779,10 @@
           },
           {
             "type": "object",
-            "description": "Signals that no further items will be appended for this turn.",
             "required": ["stream_id", "type"],
             "properties": {
               "stream_id": {
-                "type": "string",
-                "description": "Correlates every item in this stream to one prompt turn."
+                "type": "string"
               },
               "type": {
                 "type": "string",
@@ -2806,8 +2790,7 @@
               }
             }
           }
-        ],
-        "description": "One item pushed through the connection gateway's live-chat stream for a\nchat entity."
+        ]
       },
       "CompleteOnboardingRequest": {
         "type": "object",
@@ -2884,17 +2867,6 @@
         "type": "object",
         "description": "Request body for creating a chat.",
         "properties": {
-          "kind": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/ChatAgentKind",
-                "description": "What kind of agent backs the chat. Defaults to `Macro`."
-              }
-            ]
-          },
           "name": {
             "type": ["string", "null"],
             "description": "Optional name for the chat."
@@ -4508,26 +4480,22 @@
         "oneOf": [
           {
             "type": "object",
-            "description": "The model provider (or the request to it) failed.",
             "required": ["stream_id", "model", "stream_error"],
             "properties": {
               "model": {
-                "type": "string",
-                "description": "The model the request was running against."
+                "type": "string"
               },
               "stream_error": {
                 "type": "string",
                 "enum": ["provider_error"]
               },
               "stream_id": {
-                "type": "string",
-                "description": "The stream this error ended."
+                "type": "string"
               }
             }
           },
           {
             "type": "object",
-            "description": "The conversation exceeded the model's context window.",
             "required": ["stream_id", "stream_error"],
             "properties": {
               "stream_error": {
@@ -4535,14 +4503,12 @@
                 "enum": ["model_context_overflow"]
               },
               "stream_id": {
-                "type": "string",
-                "description": "The stream this error ended."
+                "type": "string"
               }
             }
           },
           {
             "type": "object",
-            "description": "An unclassified internal error.",
             "required": ["stream_id", "stream_error"],
             "properties": {
               "stream_error": {
@@ -4550,13 +4516,11 @@
                 "enum": ["internal_error"]
               },
               "stream_id": {
-                "type": "string",
-                "description": "The stream this error ended."
+                "type": "string"
               }
             }
           }
-        ],
-        "description": "A client-facing classification of a failure that ended a stream early."
+        ]
       },
       "StringIDResponse": {
         "type": "object",

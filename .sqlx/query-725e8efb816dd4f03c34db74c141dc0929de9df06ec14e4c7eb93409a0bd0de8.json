@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT\n                message.id,\n                message.channel_id,\n                message.thread_id,\n                message.sender_id,\n                message.triggered_by_user_id,\n                message.content,\n                message.created_at,\n                message.updated_at,\n                message.edited_at::timestamptz AS \"edited_at?\",\n                message.deleted_at::timestamptz AS \"deleted_at?\"\n            FROM comms_messages AS message\n            WHERE message.channel_id = $1\n              AND (message.created_at, message.id) > ($2, $3)\n            ORDER BY message.created_at ASC, message.id ASC\n            LIMIT $4\n            ",
+  "query": "\n            SELECT\n                id,\n                channel_id,\n                thread_id,\n                sender_id,\n                triggered_by_user_id,\n                content,\n                created_at,\n                updated_at,\n                edited_at::timestamptz AS \"edited_at?\",\n                deleted_at::timestamptz AS \"deleted_at?\"\n            FROM comms_messages\n            WHERE channel_id = $1\n              AND (created_at, id) < ($2, $3)\n            ORDER BY created_at DESC, id DESC\n            LIMIT $4\n            ",
   "describe": {
     "columns": [
       {
@@ -75,5 +75,5 @@
       null
     ]
   },
-  "hash": "7f6294dcfc43f98b928f96e62bf9f7c8c362e4547acea74ef6019e09f53e7ca2"
+  "hash": "725e8efb816dd4f03c34db74c141dc0929de9df06ec14e4c7eb93409a0bd0de8"
 }

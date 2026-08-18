@@ -9,8 +9,6 @@ export const MagicChip: Component<MagicChipDecoratorProps> = (props) => {
   const { insertSplit } = useSplitLayout();
   const model = createMagicChipModel(props);
 
-  console.log('[magic-chip] Macro agent session ID:', props.agentSessionId);
-
   return (
     <MagicChipView
       agentSessionId={props.agentSessionId}

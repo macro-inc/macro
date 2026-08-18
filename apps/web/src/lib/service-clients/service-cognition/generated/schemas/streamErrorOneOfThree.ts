@@ -6,11 +6,7 @@
  */
 import type { StreamErrorOneOfThreeStreamError } from './streamErrorOneOfThreeStreamError';
 
-/**
- * The conversation exceeded the model's context window.
- */
 export type StreamErrorOneOfThree = {
   stream_error: StreamErrorOneOfThreeStreamError;
-  /** The stream this error ended. */
   stream_id: string;
 };

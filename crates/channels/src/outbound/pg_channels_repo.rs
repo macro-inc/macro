@@ -1955,8 +1955,7 @@ impl ChannelRepo for PgChannelsRepo {
             SELECT
                 id AS "id!", thread_id AS "thread_id!", sender_id AS "sender_id!",
                 triggered_by_user_id,
-                content AS "content!",
-                created_at AS "created_at!", updated_at AS "updated_at!",
+                content AS "content!", created_at AS "created_at!", updated_at AS "updated_at!",
                 edited_at::timestamptz AS "edited_at?",
                 reply_count AS "reply_count!", latest_reply_at AS "latest_reply_at?"
             FROM (
@@ -2015,18 +2014,18 @@ impl ChannelRepo for PgChannelsRepo {
             ThreadReplyOnlyRow,
             r#"
             SELECT
-                message.id,
-                message.thread_id AS "thread_id!",
-                message.sender_id,
-                message.triggered_by_user_id,
-                message.content,
-                message.created_at,
-                message.updated_at,
-                message.edited_at::timestamptz AS "edited_at?"
-            FROM comms_messages AS message
-            WHERE message.thread_id = $1
-              AND message.deleted_at IS NULL
-            ORDER BY message.created_at ASC, message.id ASC
+                id,
+                thread_id AS "thread_id!",
+                sender_id,
+                triggered_by_user_id,
+                content,
+                created_at,
+                updated_at,
+                edited_at::timestamptz AS "edited_at?"
+            FROM comms_messages
+            WHERE thread_id = $1
+              AND deleted_at IS NULL
+            ORDER BY created_at ASC, id ASC
             "#,
             parent_id,
         )
@@ -2244,18 +2243,18 @@ impl ChannelRepo for PgChannelsRepo {
             ContextMessageRow,
             r#"
             SELECT
-                message.id,
-                message.channel_id,
-                message.thread_id,
-                message.sender_id,
-                message.triggered_by_user_id,
-                message.content,
-                message.created_at,
-                message.updated_at,
-                message.edited_at::timestamptz AS "edited_at?",
-                message.deleted_at::timestamptz AS "deleted_at?"
-            FROM comms_messages AS message
-            WHERE message.id = $1 AND message.channel_id = $2
+                id,
+                channel_id,
+                thread_id,
+                sender_id,
+                triggered_by_user_id,
+                content,
+                created_at,
+                updated_at,
+                edited_at::timestamptz AS "edited_at?",
+                deleted_at::timestamptz AS "deleted_at?"
+            FROM comms_messages
+            WHERE id = $1 AND channel_id = $2
             "#,
             message_id,
             channel_id,
@@ -2271,20 +2270,20 @@ impl ChannelRepo for PgChannelsRepo {
             ContextMessageRow,
             r#"
             SELECT
-                message.id,
-                message.channel_id,
-                message.thread_id,
-                message.sender_id,
-                message.triggered_by_user_id,
-                message.content,
-                message.created_at,
-                message.updated_at,
-                message.edited_at::timestamptz AS "edited_at?",
-                message.deleted_at::timestamptz AS "deleted_at?"
-            FROM comms_messages AS message
-            WHERE message.channel_id = $1
-              AND (message.created_at, message.id) < ($2, $3)
-            ORDER BY message.created_at DESC, message.id DESC
+                id,
+                channel_id,
+                thread_id,
+                sender_id,
+                triggered_by_user_id,
+                content,
+                created_at,
+                updated_at,
+                edited_at::timestamptz AS "edited_at?",
+                deleted_at::timestamptz AS "deleted_at?"
+            FROM comms_messages
+            WHERE channel_id = $1
+              AND (created_at, id) < ($2, $3)
+            ORDER BY created_at DESC, id DESC
             LIMIT $4
             "#,
             channel_id,
@@ -2300,20 +2299,20 @@ impl ChannelRepo for PgChannelsRepo {
             ContextMessageRow,
             r#"
             SELECT
-                message.id,
-                message.channel_id,
-                message.thread_id,
-                message.sender_id,
-                message.triggered_by_user_id,
-                message.content,
-                message.created_at,
-                message.updated_at,
-                message.edited_at::timestamptz AS "edited_at?",
-                message.deleted_at::timestamptz AS "deleted_at?"
-            FROM comms_messages AS message
-            WHERE message.channel_id = $1
-              AND (message.created_at, message.id) > ($2, $3)
-            ORDER BY message.created_at ASC, message.id ASC
+                id,
+                channel_id,
+                thread_id,
+                sender_id,
+                triggered_by_user_id,
+                content,
+                created_at,
+                updated_at,
+                edited_at::timestamptz AS "edited_at?",
+                deleted_at::timestamptz AS "deleted_at?"
+            FROM comms_messages
+            WHERE channel_id = $1
+              AND (created_at, id) > ($2, $3)
+            ORDER BY created_at ASC, id ASC
             LIMIT $4
             "#,
             channel_id,

@@ -7,8 +7,3 @@ ALTER TABLE bots
 DROP TABLE agent_session_log;
 
 DROP TABLE agent_session;
-
-DROP TABLE agent_proxy_pending_message;
-
-ALTER TABLE "Chat"
-    DROP COLUMN "agentKind";

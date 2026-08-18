@@ -1,5 +1,4 @@
 import type { MacroOpts } from './config';
-import { AgentNamespace } from './entities/agents/namespace';
 import { BotsNamespace } from './entities/bots/namespace';
 import { CallRecordNamespace } from './entities/calls/namespace';
 import { ChannelNamespace } from './entities/channels/namespace';
@@ -35,7 +34,6 @@ export {
 } from './mentions';
 
 export class Macro<T extends MacroOpts = MacroOpts> {
-  readonly agents: AgentNamespace;
   readonly bots: BotsNamespace;
   readonly calls: CallRecordNamespace;
   readonly channels: ChannelNamespace;
@@ -66,7 +64,6 @@ export class Macro<T extends MacroOpts = MacroOpts> {
     this.opts = opts;
     const client = new MacroClient(opts);
     this._client = client;
-    this.agents = new AgentNamespace(client);
     this.bots = new BotsNamespace(client);
     this.calls = new CallRecordNamespace(client);
     this.channels = new ChannelNamespace(client);

@@ -14,8 +14,7 @@ export type ServiceName =
   | 'static-files'
   | 'connection'
   | 'contacts'
-  | 'unfurl'
-  | 'agent-proxy';
+  | 'unfurl';
 
 export const WEB_APP_URLS: Record<Env, string> = {
   dev: 'https://dev.macro.com',
@@ -37,7 +36,6 @@ export const HOSTS: Record<Env, Record<ServiceName, string>> = {
     connection: 'https://connection-gateway-dev.macro.com',
     contacts: 'https://contacts-dev.macro.com',
     unfurl: 'https://unfurl-service-dev.macro.com',
-    'agent-proxy': 'https://agent-proxy-dev.macro.com',
   },
   prod: {
     storage: 'https://cloud-storage.macro.com',
@@ -52,7 +50,6 @@ export const HOSTS: Record<Env, Record<ServiceName, string>> = {
     connection: 'https://connection-gateway.macro.com',
     contacts: 'https://contacts.macro.com',
     unfurl: 'https://unfurl-service.macro.com',
-    'agent-proxy': 'https://agent-proxy.macro.com',
   },
   local: {
     storage: 'http://localhost:8086',
@@ -67,7 +64,6 @@ export const HOSTS: Record<Env, Record<ServiceName, string>> = {
     connection: 'http://localhost:8082',
     contacts: 'http://localhost:8083',
     unfurl: 'http://localhost:8095',
-    'agent-proxy': 'http://localhost:8091',
   },
 };
 

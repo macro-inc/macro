@@ -3742,6 +3742,25 @@ export const TextEditorCodeExecutionResponse = z.object({
 
 export const UpdateCalendarEvent = z.object({
   eventId: z.string().uuid(),
+  scope: z.any().superRefine((x, ctx) => {
+    const schemas = [z.literal('all'), z.literal('this_event')];
+    const errors = schemas.reduce<z.ZodError[]>(
+      (errors, schema) =>
+        ((result) => (result.error ? [...errors, result.error] : errors))(
+          schema.safeParse(x)
+        ),
+      []
+    );
+    if (schemas.length - errors.length !== 1) {
+      ctx.addIssue({
+        path: ctx.path,
+        code: 'invalid_union',
+        unionErrors: errors,
+        message: 'Invalid input: Should pass single schema',
+      });
+    }
+  }),
+  recurrenceId: z.union([z.string(), z.null()]).optional(),
   title: z.union([z.string(), z.null()]).optional(),
   description: z.union([z.string(), z.null()]).optional(),
   location: z.union([z.string(), z.null()]).optional(),

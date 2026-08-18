@@ -6,11 +6,7 @@
  */
 import type { StreamErrorOneOfFiveStreamError } from './streamErrorOneOfFiveStreamError';
 
-/**
- * An unclassified internal error.
- */
 export type StreamErrorOneOfFive = {
   stream_error: StreamErrorOneOfFiveStreamError;
-  /** The stream this error ended. */
   stream_id: string;
 };

@@ -10,7 +10,7 @@ use macro_event_broker::{EventBrokerError, MacroEvent};
 use model::chat::Chat;
 
 use super::*;
-use crate::domain::models::{ChatAgentKind, ChatResponse, PatchChatMessageArgs};
+use crate::domain::models::{ChatResponse, PatchChatMessageArgs};
 
 const CHAT_ID: &str = "3f6f8b0a-6f9f-4a3f-9c3a-2b1e5d4c7a90";
 const NEW_CHAT_ID: &str = "0197f776-6e7b-7c69-a251-780ae754d3e4";
@@ -119,10 +119,6 @@ impl ChatRepo for StubChatRepo {
             is_persistent: true,
             deleted_at: None,
         })
-    }
-
-    async fn get_agent_kind(&self, _chat_id: &str) -> Result<ChatAgentKind> {
-        unimplemented!("not exercised")
     }
 
     async fn get_access_level(
@@ -502,7 +498,6 @@ async fn create_publishes_chat_created() {
         .create(
             owner(),
             CreateChatArgs {
-                kind: Default::default(),
                 name: "New Chat".to_string(),
                 project_id: Some(PROJECT_ID.to_string()),
             },
@@ -538,7 +533,6 @@ async fn create_resolves_share_permission_from_team_default() {
         .create(
             owner(),
             CreateChatArgs {
-                kind: Default::default(),
                 name: "New Chat".to_string(),
                 project_id: None,
             },
@@ -568,7 +562,6 @@ async fn create_uses_chat_default_without_team() {
         .create(
             owner(),
             CreateChatArgs {
-                kind: Default::default(),
                 name: "New Chat".to_string(),
                 project_id: None,
             },
@@ -600,7 +593,6 @@ async fn create_disables_link_share_when_team_turned_it_off() {
         .create(
             owner(),
             CreateChatArgs {
-                kind: Default::default(),
                 name: "New Chat".to_string(),
                 project_id: None,
             },
@@ -794,7 +786,6 @@ async fn failing_repo_calls_emit_no_events() {
             .create(
                 owner(),
                 CreateChatArgs {
-                    kind: Default::default(),
                     name: "New Chat".to_string(),
                     project_id: None,
                 },
@@ -833,7 +824,6 @@ async fn broker_scheduling_failure_does_not_fail_the_call() {
             .create(
                 owner(),
                 CreateChatArgs {
-                    kind: Default::default(),
                     name: "New Chat".to_string(),
                     project_id: None,
                 },

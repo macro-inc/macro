@@ -6,13 +6,8 @@
  */
 import type { StreamErrorOneOfStreamError } from './streamErrorOneOfStreamError';
 
-/**
- * The model provider (or the request to it) failed.
- */
 export type StreamErrorOneOf = {
-  /** The model the request was running against. */
   model: string;
   stream_error: StreamErrorOneOfStreamError;
-  /** The stream this error ended. */
   stream_id: string;
 };

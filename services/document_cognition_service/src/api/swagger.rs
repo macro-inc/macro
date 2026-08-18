@@ -15,7 +15,7 @@ use crate::api::{
 };
 use crate::model::{
     response::attachments::GetChatsForAttachmentResponse,
-    stream::{SendChatMessagePayload, ToolSet},
+    stream::{ChatStream, SendChatMessagePayload, StreamError, ToolSet},
 };
 use ai_projections::domain::model::{Expiry, ProjectionStatus, RefreshCadence, TargetType};
 use ai_projections::inbound::axum_router::upsert_projection::{
@@ -37,7 +37,7 @@ use pipedream_mcp::inbound::axum_router::{
 
 use crate::api::preview::get_batch_preview::{GetBatchPreviewRequest, GetBatchPreviewResponse};
 
-use chat::domain::models::{ChatResponse, ChatStream, GetChatResponse, StreamError, WebCitation};
+use chat::domain::models::{ChatResponse, GetChatResponse, WebCitation};
 use chat::inbound::http::router::{
     self as chat_router, CallToolRequest, CallToolResponse, CreateChatRequest,
     GetChatPermissionsResponse, PatchChatRequest, RejectToolCallRequest, UpdateToolCallRequest,
