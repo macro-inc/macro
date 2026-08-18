@@ -28,6 +28,7 @@ import {
 } from '../protocol';
 import { entityFromArgument } from './entity-resolvers';
 import {
+  HYDRATE_ONLY_CONTEXT_KEY,
   type NormalizedCacheExchangeOptions,
   normalizedCacheExchange,
 } from './normalized-cache-exchange';
@@ -36,6 +37,17 @@ import { optimisticMutationDispositionOf } from './optimistic';
 const QUERY = gql`
   query Soup($input: SoupInput!) {
     soup(input: $input) {
+      nextCursor
+    }
+  }
+`;
+
+const HYDRATION_QUERY = gql`
+  query SoupHydration($input: SoupInput!) {
+    soup(input: $input) {
+      items @cacheOnly {
+        id
+      }
       nextCursor
     }
   }
@@ -363,6 +375,23 @@ function makeOp(
     'query',
     { key, query: QUERY, variables: { input: { limit: 2 } } },
     { requestPolicy, url: 'http://test', suspense: false } as never
+  );
+}
+
+function makeHydrationOp(key: number): Operation {
+  return makeOperation(
+    'query',
+    {
+      key,
+      query: HYDRATION_QUERY,
+      variables: { input: { limit: 2 } },
+    },
+    {
+      requestPolicy: 'network-only',
+      url: 'http://test',
+      suspense: false,
+      [HYDRATE_ONLY_CONTEXT_KEY]: true,
+    } as never
   );
 }
 
@@ -849,6 +878,42 @@ describe('normalizedCacheExchange', () => {
     expect(host.reads[0]?.entityResolvers).toEqual(EXPECTED_ENTITY_RESOLVERS);
     expect(results[0]?.data).toEqual({ from: 'network' });
     expect(host.writes).toHaveLength(1);
+  });
+
+  it('hydrate-only stores the full response and emits only the cache projection', async () => {
+    host.hydrateQuery = vi.fn(async (args) => {
+      expect(args.query).toContain('@cacheOnly');
+      expect(args.data).toEqual({
+        soup: { items: [{ id: 'doc-1' }], nextCursor: 'cursor-2' },
+      });
+      return {
+        kind: 'data',
+        data: { soup: { nextCursor: 'cursor-2' } },
+      };
+    });
+    const { ops, network, forwarded, results } = controlledQueryHarness(host);
+    ops.next(makeHydrationOp(7));
+    await tick();
+
+    expect(host.reads).toHaveLength(0);
+    expect(stringifyDocument(forwarded[0]!.query)).not.toContain('@cacheOnly');
+    network.next({
+      operation: forwarded[0]!,
+      data: {
+        soup: { items: [{ id: 'doc-1' }], nextCursor: 'cursor-2' },
+      },
+      error: undefined,
+      extensions: undefined,
+      stale: false,
+      hasNext: false,
+    });
+    await tick();
+
+    expect(host.hydrateQuery).toHaveBeenCalledOnce();
+    expect(host.reads).toHaveLength(0);
+    expect(results[0]?.data).toEqual({
+      soup: { nextCursor: 'cursor-2' },
+    });
   });
 
   it('cache-only miss emits empty data and never touches the network', async () => {

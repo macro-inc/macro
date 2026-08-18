@@ -164,6 +164,29 @@ describe('createTauriCacheHost', () => {
     });
   });
 
+  it('returns only the native hydration projection', async () => {
+    const host = createTauriCacheHost({ scope: 'scope-1' });
+    const hydration = { kind: 'data' as const, data: { cursor: 'next' } };
+    invokeMock.mockImplementation((command: string) =>
+      Promise.resolve(command === 'graphql_cache_hydrate' ? hydration : null)
+    );
+
+    await expect(
+      host.hydrateQuery({
+        query: 'query Backfill { items @cacheOnly { id } cursor }',
+        data: { items: [{ id: '1' }], cursor: 'next' },
+        identity: 'user-1',
+      })
+    ).resolves.toEqual(hydration);
+    expect(invokeMock).toHaveBeenCalledWith('graphql_cache_hydrate', {
+      query: 'query Backfill { items @cacheOnly { id } cursor }',
+      operationName: undefined,
+      variables: undefined,
+      data: { items: [{ id: '1' }], cursor: 'next' },
+      identity: 'user-1',
+    });
+  });
+
   it('settles optimistic writes through the dedicated commands', async () => {
     const host = createTauriCacheHost({ scope: 'scope-1' });
     const optimistic = {

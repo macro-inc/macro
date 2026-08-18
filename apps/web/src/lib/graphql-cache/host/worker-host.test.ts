@@ -34,6 +34,8 @@ function responseFor(request: CacheRequest): unknown {
       return [];
     case 'search':
       return { documents: [], nextCursor: null };
+    case 'hydrate':
+      return { kind: 'data', data: { cursor: 'next' } };
     case 'write':
     case 'commit-optimistic-write':
     case 'rollback-optimistic-write':
@@ -195,6 +197,27 @@ describe('createWorkerCacheHost', () => {
     await expect(
       host.writeQuery({ query: '{ x }', data: { x: 1 } })
     ).resolves.toEqual(EMPTY_WRITE);
+  });
+
+  it('routes hydration through the payload-projecting RPC', async () => {
+    const host = createWorkerCacheHost({ scope: 'scope-1' });
+
+    await expect(
+      host.hydrateQuery({
+        query: 'query Backfill { items @cacheOnly { id } cursor }',
+        data: { items: [{ id: '1' }], cursor: 'next' },
+        identity: 'user-1',
+      })
+    ).resolves.toEqual({ kind: 'data', data: { cursor: 'next' } });
+
+    expect(requireAdapter().requests).toContainEqual(
+      expect.objectContaining({
+        kind: 'hydrate',
+        query: 'query Backfill { items @cacheOnly { id } cursor }',
+        data: { items: [{ id: '1' }], cursor: 'next' },
+        identity: 'user-1',
+      })
+    );
   });
 
   it('uses the no-op host when OPFS is unavailable', () => {
