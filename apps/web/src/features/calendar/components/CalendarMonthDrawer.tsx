@@ -2,7 +2,7 @@ import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import CaretDownIcon from '@phosphor/caret-down.svg';
 import { Button, CalendarMonthMenu, formatCalendarMonth } from '@ui';
 import { createSignal } from 'solid-js';
-import { useCalendarPager } from '../CalendarPagerContext';
+import { useCalendarPager } from './CalendarPagerContext';
 
 type CalendarMonthDrawerProps = {
   month: Date;

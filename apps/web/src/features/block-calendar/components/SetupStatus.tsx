@@ -1,5 +1,5 @@
-import { useCalendarPager } from '@app/features/calendar/CalendarPagerContext';
 import { isCalendarRangeSupported } from '@app/features/calendar/calendar-supported-range';
+import { useCalendarPager } from '@app/features/calendar/components/CalendarPagerContext';
 import { useAddInboxFlow } from '@core/email-link';
 import { useEmailLinksQuery } from '@queries/email/link';
 import { Button } from '@ui';

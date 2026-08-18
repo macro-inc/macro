@@ -2,9 +2,9 @@ import {
   CALENDAR_PAGE_IDS,
   CalendarPagerContextProvider,
   useCalendarPager,
-} from '@app/features/calendar/CalendarPagerContext';
-import { useCalendarView } from '@app/features/calendar/CalendarViewContext';
+} from '@app/features/calendar/components/CalendarPagerContext';
 import { CalendarRangeUnavailableBanner } from '@app/features/calendar/components/CalendarRangeUnavailableBanner';
+import { useCalendarView } from '@app/features/calendar/components/CalendarViewContext';
 import { SidePanel } from '@components/app/side-panel/SidePanel';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { isMobile } from '@core/mobile/isMobile';

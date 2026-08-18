@@ -2,14 +2,14 @@ import { createAssertedContextProvider } from '@core/context/createContext';
 import { isMobile } from '@core/mobile/isMobile';
 import { makePersisted } from '@solid-primitives/storage';
 import { createStore } from 'solid-js/store';
-import { useCalendarSources } from './data/use-calendar-sources';
-import { createCalendarEventSelection } from './events/create-calendar-event-selection';
+import { useCalendarSources } from '../data/use-calendar-sources';
+import { createCalendarEventSelection } from '../events/create-calendar-event-selection';
 import type {
   CalendarPeriodView,
   CalendarTimeFormat,
   CalendarWeekStart,
-} from './events/types';
-import { getDefaultCalendarTimeFormat } from './time-format';
+} from '../events/types';
+import { getDefaultCalendarTimeFormat } from '../time-format';
 
 interface CalendarEventState {
   readonly visibleSourceIds: string[];

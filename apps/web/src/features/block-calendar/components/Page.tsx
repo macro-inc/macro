@@ -1,9 +1,9 @@
+import { isCalendarRangeSupported } from '@app/features/calendar/calendar-supported-range';
 import {
   type CalendarPageId,
   useCalendarPager,
-} from '@app/features/calendar/CalendarPagerContext';
-import { useCalendarView } from '@app/features/calendar/CalendarViewContext';
-import { isCalendarRangeSupported } from '@app/features/calendar/calendar-supported-range';
+} from '@app/features/calendar/components/CalendarPagerContext';
+import { useCalendarView } from '@app/features/calendar/components/CalendarViewContext';
 import {
   type CalendarOccurrenceData,
   useCalendarOccurrenceData,
