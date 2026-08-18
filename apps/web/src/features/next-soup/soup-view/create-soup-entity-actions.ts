@@ -34,6 +34,7 @@ import {
   makeRenameAction,
   makeSetCompanyPropertyAction,
   makeShareAction,
+  markReminderTargetDone,
 } from '../actions';
 import type { SoupState } from '../create-soup-state';
 import {
@@ -130,7 +131,11 @@ export function createSoupEntityActions(): {
   const copyLinkAction = makeCopyLinkAction();
   const copyBranchNameAction = makeCopyBranchNameAction();
   const copyEntityIdAction = makeCopyEntityIdAction();
-  const createReminderAction = makeCreateReminderAction();
+  // Setting a reminder puts the row down: it marks it done, so the list drops
+  // it and the reminder is what brings it back.
+  const createReminderAction = makeCreateReminderAction({
+    onCreated: markReminderTargetDone(markDone),
+  });
   const editReminderAction = makeEditReminderAction();
   const shareAction = makeShareAction();
   const blockSenderAction = makeBlockSenderAction();

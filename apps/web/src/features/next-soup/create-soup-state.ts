@@ -17,14 +17,20 @@ import { createStore, reconcile } from 'solid-js/store';
 
 /**
  * Active "focus" predicates that exclude done entities. When one of these is
- * active, marking an entity done removes it from the list, so its row should
- * collapse before being removed rather than disappearing instantly.
+ * active, marking an entity done removes it from the list — so its row should
+ * collapse before being removed rather than disappearing instantly, and
+ * whatever had focus has to move off it.
  *
  * The inbox tabs activate `inbox` / `noise` rather than the standalone
  * `not-done` predicate (see `soup-filter-presets.ts`), so all three are
  * included here.
  */
-const COLLAPSE_ON_DONE_PREDICATES: FilterID[] = ['not-done', 'inbox', 'noise'];
+export const HIDES_DONE_PREDICATES: FilterID[] = ['not-done', 'inbox', 'noise'];
+
+/** Whether this list hides done rows — see `HIDES_DONE_PREDICATES`. */
+export const soupHidesDoneRows = (soup: {
+  predicates: { isActive: (id: FilterID) => boolean };
+}): boolean => HIDES_DONE_PREDICATES.some((id) => soup.predicates.isActive(id));
 
 export type SoupEntity = WithNotification<EntityData | WithSearch<EntityData>>;
 
@@ -412,7 +418,7 @@ export const createSoupState = <TId extends string = FilterID>(
       set: setCollapseEntityCallback,
       shouldCollapse: () => {
         return (
-          COLLAPSE_ON_DONE_PREDICATES.some((id) => predicates.isActive(id)) &&
+          HIDES_DONE_PREDICATES.some((id) => predicates.isActive(id)) &&
           collapseEntityCallback() !== undefined &&
           isModality('touch')
         );
