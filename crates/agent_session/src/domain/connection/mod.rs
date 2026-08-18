@@ -205,11 +205,6 @@ where
         self.handshake.clone()
     }
 
-    /// Whether a session is already riding on this connection.
-    pub fn carries(&self, session: AgentSessionId) -> bool {
-        self.bound.contains_key(&session)
-    }
-
     /// Give `session` its own view of this connection.
     ///
     /// Rebinding replaces: the newest view receives this session's frames, and
@@ -243,12 +238,6 @@ where
             },
             handshake: self.handshake.clone(),
         }
-    }
-
-    /// Stop carrying a session, forgetting what it was waiting for.
-    pub async fn unbind(&self, session: AgentSessionId) {
-        self.bound.remove(&session);
-        self.routes.lock().await.forget(session);
     }
 
     /// Send on behalf of `session`, recording what it expects back.
