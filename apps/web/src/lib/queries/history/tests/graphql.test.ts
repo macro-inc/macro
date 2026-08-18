@@ -92,9 +92,12 @@ describe('cached GraphQL history', () => {
       subType: { type: 'task' },
     });
     expect(readRecordsByKeys).toHaveBeenCalledTimes(2);
+    expect(
+      readRecordsByKeys.mock.calls.map(([{ fragmentName }]) => fragmentName)
+    ).toEqual(['GraphqlDocumentQuickAccessName', 'GraphqlChatQuickAccessName']);
     for (const [{ document }] of readRecordsByKeys.mock.calls) {
-      expect(document).toMatch(/fragment QuickAccessName on GraphqlSoup/);
-      expect(document).toMatch(/\{ name \}/);
+      expect(document).toMatch(/QuickAccessName on GraphqlSoup/);
+      expect(document).toMatch(/name/);
     }
   });
 

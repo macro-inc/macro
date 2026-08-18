@@ -38,3 +38,15 @@ fragment GraphqlProjectHistoryFields on GraphqlSoupProject {
 	viewedAt
 	deletedAt
 }
+
+fragment GraphqlDocumentQuickAccessName on GraphqlSoupDocument {
+	name
+}
+
+fragment GraphqlChatQuickAccessName on GraphqlSoupChat {
+	name
+}
+
+fragment GraphqlProjectQuickAccessName on GraphqlSoupProject {
+	name
+}

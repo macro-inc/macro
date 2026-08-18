@@ -3,10 +3,22 @@ import {
   type RecordSelection,
   readRecordsByKeys,
   type SearchDocumentWire,
+  selectRecords,
 } from '@graphql-cache/index';
+import {
+  type GraphqlChatQuickAccessNameFragment,
+  GraphqlChatQuickAccessNameFragmentDoc,
+  type GraphqlDocumentQuickAccessNameFragment,
+  GraphqlDocumentQuickAccessNameFragmentDoc,
+  type GraphqlProjectQuickAccessNameFragment,
+  GraphqlProjectQuickAccessNameFragmentDoc,
+} from '@service-storage/graphql/generated/graphql';
 import type { HistoryItem } from './types';
 
-type NameProjection = { name: string };
+type NameProjection =
+  | GraphqlDocumentQuickAccessNameFragment
+  | GraphqlChatQuickAccessNameFragment
+  | GraphqlProjectQuickAccessNameFragment;
 
 const HISTORY_TYPENAMES = [
   'GraphqlSoupDocument',
@@ -16,13 +28,18 @@ const HISTORY_TYPENAMES = [
 
 type HistoryTypename = (typeof HISTORY_TYPENAMES)[number];
 
-const nameSelection = (
+function nameSelection(
   typename: HistoryTypename
-): RecordSelection<NameProjection> =>
-  ({
-    document: `fragment QuickAccessName on ${typename} { name }`,
-    fragmentName: 'QuickAccessName',
-  }) as RecordSelection<NameProjection>;
+): RecordSelection<NameProjection> {
+  switch (typename) {
+    case 'GraphqlSoupDocument':
+      return selectRecords(GraphqlDocumentQuickAccessNameFragmentDoc);
+    case 'GraphqlSoupChat':
+      return selectRecords(GraphqlChatQuickAccessNameFragmentDoc);
+    case 'GraphqlSoupProject':
+      return selectRecords(GraphqlProjectQuickAccessNameFragmentDoc);
+  }
+}
 
 function historyItemFromSearchDocument(
   document: SearchDocumentWire,
