@@ -326,7 +326,7 @@ export function Page(props: {
       return effectiveSelectionColor();
     },
     get eventId() {
-      return isActive() ? calendarView.eventState.selectedEventId : undefined;
+      return isActive() ? calendarView.selectedEvent()?.id : undefined;
     },
     onDateSelect: handleSelect,
     onEventSelect: (event, element) => {
@@ -421,7 +421,7 @@ function CalendarPageHost(props: {
       () =>
         [
           isActive(),
-          calendarView.eventState.selectedEventId,
+          calendarView.selectedEvent()?.id,
           props.data.occurrencesQuery.dataUpdatedAt,
         ] as const,
       ([active, selectedEventId]) => {

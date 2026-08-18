@@ -1,3 +1,4 @@
+import { parseLocalDate } from '@app/features/calendar/utils/calendar-date';
 import {
   type CalendarOccurrenceQueryRange,
   createCalendarOccurrenceQueryRange,
@@ -7,22 +8,6 @@ import {
 export type CalendarBlockEventTime =
   | { kind: 'timed'; startsAt: string; endsAt?: string }
   | { kind: 'allDay'; startDate: string; endDate?: string };
-
-function parseLocalDate(value: string): Date | undefined {
-  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
-  if (!match) return undefined;
-
-  const date = new Date(
-    Number(match[1]),
-    Number(match[2]) - 1,
-    Number(match[3])
-  );
-  return date.getFullYear() === Number(match[1]) &&
-    date.getMonth() === Number(match[2]) - 1 &&
-    date.getDate() === Number(match[3])
-    ? date
-    : undefined;
-}
 
 function nextLocalDay(date: Date) {
   const next = new Date(date);

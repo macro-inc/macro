@@ -173,10 +173,7 @@ export function EventForm(props: EventFormProps) {
                 start={controller.startForRecurrence()}
                 allDay={state().allDay}
                 disabled={fieldIsDisabled('recurrence')}
-                onChange={({
-                  recurrenceDescription: _recurrenceDescription,
-                  ...config
-                }) => controller.setCustomConfig(config)}
+                onChange={controller.setCustomConfig}
               />
             </div>
           </Layer>

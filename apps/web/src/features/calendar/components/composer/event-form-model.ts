@@ -9,12 +9,12 @@ import {
   addHours,
   differenceInCalendarDays,
   format,
-  isMatch,
   parseISO,
   startOfHour,
 } from 'date-fns';
 import { type Accessor, batch, createMemo, createSignal } from 'solid-js';
 import type { CalendarEvent } from '../../types';
+import { parseLocalDate } from '../../utils/calendar-date';
 import {
   buildRecurrenceLines,
   defaultCustomConfig,
@@ -30,7 +30,7 @@ const DATE_VALUE = 'yyyy-MM-dd';
 /** `<input type="datetime-local">` value. */
 const DATETIME_VALUE = "yyyy-MM-dd'T'HH:mm";
 
-const isDateOnly = (value: string) => isMatch(value, DATE_VALUE);
+const isDateOnly = (value: string) => parseLocalDate(value) !== undefined;
 
 /** Option displayed by an event editor recurrence selector. */
 export interface EventEditorRecurrenceOption {

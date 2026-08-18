@@ -12,11 +12,6 @@ import type {
 } from '../types';
 import { getDefaultCalendarTimeFormat } from '../utils/time-format';
 
-interface CalendarEventState {
-  readonly visibleSourceIds: string[];
-  readonly selectedEventId: string | undefined;
-}
-
 interface CalendarDisplaySettings {
   readonly periodView: CalendarPeriodView;
   readonly showWeekends: boolean;
@@ -84,16 +79,6 @@ export const [CalendarViewContextProvider, useCalendarView] =
       !preferences.hiddenSourceIds.includes(sourceId);
 
     const selection = createCalendarEventSelection();
-    const eventState: CalendarEventState = {
-      get visibleSourceIds() {
-        return sources()
-          .filter((source) => isSourceVisible(source.id))
-          .map((source) => source.id);
-      },
-      get selectedEventId() {
-        return selection.event()?.id;
-      },
-    };
     const displaySettings: CalendarDisplaySettings = {
       get periodView() {
         return preferences.periodView;
@@ -126,7 +111,6 @@ export const [CalendarViewContextProvider, useCalendarView] =
     };
 
     return {
-      eventState,
       displaySettings,
       sources,
       sourceById,

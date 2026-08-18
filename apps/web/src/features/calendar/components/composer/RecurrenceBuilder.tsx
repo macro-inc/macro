@@ -10,7 +10,7 @@ import {
   WEEKDAY_CODES,
   type WeekdayCode,
 } from '../../utils/recurrence';
-import { EventDateField } from './EventDateTimeField';
+import { EventDateField } from './EventDateTimeInputs';
 
 const DATE_VALUE = 'yyyy-MM-dd';
 
@@ -26,18 +26,12 @@ const FREQUENCY_OPTIONS: FrequencyOption[] = [
   { value: 'YEARLY', label: 'year' },
 ];
 
-/** Value emitted whenever the recurrence builder changes. */
-export interface RecurrenceBuilderValue extends RecurrenceConfig {
-  /** Human-readable description formed from the individual recurrence parts. */
-  recurrenceDescription: string;
-}
-
 export interface RecurrenceBuilderProps {
   value: RecurrenceConfig;
   start: Date;
   allDay: boolean;
   disabled?: boolean;
-  onChange: (value: RecurrenceBuilderValue) => void;
+  onChange: (value: RecurrenceConfig) => void;
 }
 
 /** Builds an RFC 5545 recurrence rule from individually editable parts. */
@@ -56,16 +50,8 @@ export function RecurrenceBuilder(props: RecurrenceBuilderProps) {
       ) ?? 'Recurring event'
   );
 
-  const changeConfig = (next: RecurrenceConfig) => {
-    const recurrenceLines = buildRecurrenceLines(next, props.allDay);
-    props.onChange({
-      ...next,
-      recurrenceDescription:
-        formatRecurrenceDescription(recurrenceLines) ?? 'Recurring event',
-    });
-  };
   const patchConfig = (patch: Partial<RecurrenceConfig>) =>
-    changeConfig({ ...props.value, ...patch });
+    props.onChange({ ...props.value, ...patch });
   const setEnds = (ends: RecurrenceConfig['ends']) => patchConfig({ ends });
   const toggleWeekday = (code: WeekdayCode) =>
     patchConfig({

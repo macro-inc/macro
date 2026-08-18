@@ -13,6 +13,23 @@ export function formatLocalDate(date: Date) {
   ].join('-');
 }
 
+/** Parses a canonical local calendar date without applying UTC conversion. */
+export function parseLocalDate(value: string): Date | undefined {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!match) return undefined;
+
+  const year = Number(match[1]);
+  const month = Number(match[2]) - 1;
+  const day = Number(match[3]);
+  const date = new Date(year, month, day);
+
+  return date.getFullYear() === year &&
+    date.getMonth() === month &&
+    date.getDate() === day
+    ? date
+    : undefined;
+}
+
 /** Whether two dates fall on the same local calendar day. */
 export function isSameLocalDate(first: Date, second: Date) {
   return (

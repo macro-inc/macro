@@ -34,7 +34,7 @@ import {
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import type { CalendarEvent, CalendarTimeFormat } from '../types';
-import { isSameLocalDate } from '../utils/calendar-date';
+import { isSameLocalDate, parseLocalDate } from '../utils/calendar-date';
 import {
   formatReminderOffset,
   REMINDER_METHOD_POPUP,
@@ -55,9 +55,6 @@ const formatShortDate = new Intl.DateTimeFormat(undefined, {
   month: 'short',
   day: 'numeric',
 });
-const DATE_ONLY_REGEX = /^\d{4}-\d{2}-\d{2}$/;
-const isDateOnly = (value: string) => DATE_ONLY_REGEX.test(value);
-
 const ATTENDEE_RESPONSE = {
   accepted: {
     label: 'Accepted',
@@ -283,10 +280,7 @@ function ScrollableAttendeeList(props: { attendees: CalendarAttendee[] }) {
 }
 
 function parseCalendarDate(value: string) {
-  if (!isDateOnly(value)) return new Date(value);
-
-  const [year, month, day] = value.split('-').map(Number);
-  return new Date(year ?? 0, (month ?? 1) - 1, day ?? 1);
+  return parseLocalDate(value) ?? new Date(value);
 }
 
 function formatEventSchedule(
