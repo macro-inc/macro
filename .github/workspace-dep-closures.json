@@ -921,6 +921,7 @@
       "crates/prompt",
       "crates/remote_env_var",
       "crates/roles_and_permissions",
+      "crates/share_permission_db_utils",
       "crates/workspace-hack"
     ],
     "comms_db_client": [
