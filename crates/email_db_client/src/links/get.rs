@@ -180,6 +180,11 @@ pub struct InboxDetails {
     /// Distinguishes a deliberate opt-out from a grant that never carried the
     /// calendar scopes, which read identically from the scopes alone.
     pub calendar_disabled: bool,
+    /// Whether the inbox has a calendar account in Macro, i.e. whether there
+    /// is calendar data to remove. Independent of the recorded scopes, which
+    /// stop satisfying the capability check whenever Macro changes the scope
+    /// set it requests.
+    pub has_calendar_data: bool,
 }
 
 struct DbInboxDetailsRow {
@@ -199,6 +204,7 @@ struct DbInboxDetailsRow {
     latest_backfill_status: Option<db::backfill::BackfillJobStatus>,
     google_granted_scopes: Vec<String>,
     calendar_disabled: bool,
+    has_calendar_data: bool,
     photo_url: Option<String>,
 }
 
@@ -231,7 +237,10 @@ pub async fn fetch_inbox_details_for_macro_id(
                bj.status as "latest_backfill_status?: _",
                c.sfs_photo_url as "photo_url?",
                COALESCE(g.granted_scopes, '{}') AS "google_granted_scopes!",
-               (g.calendar_disabled_at IS NOT NULL) AS "calendar_disabled!"
+               (g.calendar_disabled_at IS NOT NULL) AS "calendar_disabled!",
+               EXISTS (
+                   SELECT 1 FROM calendar_accounts ca WHERE ca.email_link_id = l.id
+               ) AS "has_calendar_data!"
         FROM (
             SELECT el.id, el.macro_id, el.fusionauth_user_id, el.email_address,
                    el.provider, el.is_sync_active, el.is_primary, el.needs_reauth,
@@ -291,6 +300,7 @@ pub async fn fetch_inbox_details_for_macro_id(
                 photo_url: row.photo_url,
                 google_granted_scopes: row.google_granted_scopes,
                 calendar_disabled: row.calendar_disabled,
+                has_calendar_data: row.has_calendar_data,
             })
         })
         .collect()

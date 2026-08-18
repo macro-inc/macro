@@ -2,7 +2,11 @@
 edition = "2024"
 name = "cache-wasm"
 publish = false
-version = "0.3.2"
+version = "0.4.0"
+
+[features]
+default = []
+browser-test-hooks = ["cache-turso/browser-test-hooks"]
 
 [lib]
 crate-type = ["cdylib", "rlib"]
@@ -17,22 +21,22 @@ wasm-opt = false
 demangle-name-section = true
 dwarf-debug-info = true
 
-# Browser-only wasm-bindgen shell around the engine + IDB storage. Like
-# cache-idb, it compiles to an empty shell off-wasm so workspace `cargo test`
-# stays green.
+# Browser-only wasm-bindgen shell around the engine + Turso OPFS storage. It
+# compiles to an empty shell off-wasm so workspace `cargo test` stays green.
 
 [dependencies]
 cache-core = { path = "../cache-core" }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 async-lock = { workspace = true }
-cache-idb = { path = "../cache-idb" }
+cache-turso = { path = "../cache-turso" }
 js-sys = { workspace = true }
 serde = { workspace = true }
 serde-wasm-bindgen = { workspace = true }
 serde_json = { workspace = true }
+turso-opfs = { path = "../turso-opfs" }
 wasm-bindgen = { workspace = true }
 wasm-bindgen-futures = { workspace = true }
 
 [target.'cfg(target_arch = "wasm32")'.dev-dependencies]
-wasm-bindgen-test = "0.3"
+wasm-bindgen-test = { workspace = true }

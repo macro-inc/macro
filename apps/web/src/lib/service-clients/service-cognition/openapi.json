@@ -1562,6 +1562,347 @@
         }
       }
     },
+    "/pipedream/mcp/catalog": {
+      "get": {
+        "tags": ["pipedream-mcp"],
+        "summary": "Browse or search the catalog of connectable apps.",
+        "description": "Curated priority connectors come first (flagged `priority`), followed by\nresults from Pipedream's app directory.",
+        "operationId": "browse_pipedream_mcp_catalog",
+        "parameters": [
+          {
+            "name": "search",
+            "in": "query",
+            "description": "Search query to filter apps by name. Omit to browse.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "description": "Opaque pagination cursor from a previous response.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Page size (default 20, max 50).",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PipedreamCatalogResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "501": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/pipedream/mcp/complete": {
+      "post": {
+        "tags": ["pipedream-mcp"],
+        "summary": "Register a connected account reported by the Pipedream Connect UI.",
+        "description": "Verifies with Pipedream that the account exists and was connected for\nthe authenticated user before persisting anything.",
+        "operationId": "complete_pipedream_mcp_connection",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PipedreamCompleteRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PipedreamConnectionResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "501": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/pipedream/mcp/connections": {
+      "get": {
+        "tags": ["pipedream-mcp"],
+        "summary": "List the MCP apps connected by the authenticated user.",
+        "operationId": "list_pipedream_mcp_connections",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PipedreamConnectionResponse"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": ["pipedream-mcp"],
+        "summary": "Rename or enable/disable a connected app.",
+        "operationId": "update_pipedream_mcp_connection",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PipedreamUpdateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PipedreamConnectionResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["pipedream-mcp"],
+        "summary": "Disconnect an app, revoking its Pipedream account.",
+        "operationId": "delete_pipedream_mcp_connection",
+        "parameters": [
+          {
+            "name": "app_slug",
+            "in": "query",
+            "description": "The app slug to disconnect.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/pipedream/mcp/token": {
+      "post": {
+        "tags": ["pipedream-mcp"],
+        "summary": "Create a short-lived Pipedream Connect token for the authenticated user.",
+        "description": "The frontend opens Pipedream's hosted Connect UI with this token; the\nuser picks (or is deep-linked into) an app and authorizes it there.",
+        "operationId": "create_pipedream_mcp_token",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PipedreamTokenResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "501": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/preview": {
       "post": {
         "tags": ["get_batch_preview"],
@@ -3622,6 +3963,123 @@
                 "description": "Share permission updates."
               }
             ]
+          }
+        }
+      },
+      "PipedreamCatalogEntryResponse": {
+        "type": "object",
+        "description": "One connectable app in the catalog.",
+        "required": ["app_slug", "display_name", "priority"],
+        "properties": {
+          "app_slug": {
+            "type": "string",
+            "description": "Pipedream app name slug — pass this to the connect flow."
+          },
+          "description": {
+            "type": ["string", "null"],
+            "description": "One-line description of the app."
+          },
+          "display_name": {
+            "type": "string",
+            "description": "Human-readable name to display."
+          },
+          "icon_url": {
+            "type": ["string", "null"],
+            "description": "URL of the app's icon, when available."
+          },
+          "priority": {
+            "type": "boolean",
+            "description": "Curated priority connectors rank first and may be rendered as their\nown featured section."
+          }
+        }
+      },
+      "PipedreamCatalogResponse": {
+        "type": "object",
+        "description": "A page of the connector catalog.",
+        "required": ["servers"],
+        "properties": {
+          "next_cursor": {
+            "type": ["string", "null"],
+            "description": "Cursor for the next page. Absent on the last page."
+          },
+          "servers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PipedreamCatalogEntryResponse"
+            },
+            "description": "Catalog entries in display order (priority connectors first)."
+          }
+        }
+      },
+      "PipedreamCompleteRequest": {
+        "type": "object",
+        "description": "Request body for completing a Pipedream connect flow.",
+        "required": ["account_id"],
+        "properties": {
+          "account_id": {
+            "type": "string",
+            "description": "The connected-account ID reported by the Connect UI on success."
+          },
+          "server_name": {
+            "type": ["string", "null"],
+            "description": "Optional display name for the connector. Defaults to the app's name\nfor new connections; existing connections keep their name."
+          }
+        }
+      },
+      "PipedreamConnectionResponse": {
+        "type": "object",
+        "description": "A connected MCP app as returned by the API.",
+        "required": ["app_slug", "server_name", "enabled"],
+        "properties": {
+          "app_slug": {
+            "type": "string",
+            "description": "Pipedream app name slug, e.g. `linear`."
+          },
+          "enabled": {
+            "type": "boolean",
+            "description": "Whether the connector is enabled for tool use."
+          },
+          "server_name": {
+            "type": "string",
+            "description": "Human-readable display name."
+          }
+        }
+      },
+      "PipedreamTokenResponse": {
+        "type": "object",
+        "description": "Response from creating a Pipedream Connect token.",
+        "required": ["token", "expires_at", "connect_link_url"],
+        "properties": {
+          "connect_link_url": {
+            "type": "string",
+            "description": "Shareable link that opens the same connect flow in a browser tab."
+          },
+          "expires_at": {
+            "type": "string",
+            "description": "RFC 3339 expiry of the token."
+          },
+          "token": {
+            "type": "string",
+            "description": "Short-lived token to open the Pipedream Connect UI with."
+          }
+        }
+      },
+      "PipedreamUpdateRequest": {
+        "type": "object",
+        "description": "Request body for updating a connected app.",
+        "required": ["app_slug"],
+        "properties": {
+          "app_slug": {
+            "type": "string",
+            "description": "The app slug to update."
+          },
+          "enabled": {
+            "type": ["boolean", "null"],
+            "description": "Enable or disable the connector."
+          },
+          "server_name": {
+            "type": ["string", "null"],
+            "description": "New display name for the connector."
           }
         }
       },

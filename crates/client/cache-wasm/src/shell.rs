@@ -1,19 +1,35 @@
 use async_lock::Mutex;
+use cache_core::codec::cache_database_name;
 use cache_core::deps::OpId;
-use cache_core::engine::{BeginOptimisticWrite, Engine, InitialClaimOutcome, ReadResult};
+use cache_core::engine::{
+    BeginOptimisticWrite, Engine, EngineError, InitialClaimOutcome, ReadResult,
+};
 use cache_core::entity_resolver::EntityResolver;
 use cache_core::link_patch::{OptimisticLinkPatch, QueryRevalidation};
 use cache_core::query_inspection::QueryInspection;
 use cache_core::queue::{ClaimedMutation, MutationClaimRequest, MutationClaimToken};
 use cache_core::record_selection::{RecordCursor, RecordSelection};
+use cache_core::store::QueueDiagnosticsAvailability;
 use cache_core::value::EntityKey;
-use cache_idb::IdbStorage;
+use cache_turso::{
+    PhysicalResetReason, TursoStorage, TursoStorageCloseOutcome, TursoStorageError,
+    TursoStorageOpenOutcome,
+};
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
+use turso_opfs::{OpenResult, OpfsOwner};
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::future_to_promise;
+
+#[cfg(test)]
+mod test;
+#[cfg(test)]
+mod test_storage;
+
+#[cfg(test)]
+use test_storage::{BrowserStorage, TestStorageFault};
 
 /// Interns host-side string operation ids to engine `u64` ids.
 #[derive(Default)]
@@ -53,6 +69,49 @@ impl OpInterner {
 enum JsReadResult {
     Hit { data: serde_json::Value },
     Miss,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum CacheOpenOutcome {
+    OpenedExisting,
+    OpenedNew,
+    ResetIncompatible,
+    ResetCorrupt,
+    ResetStorageUncertain,
+}
+
+impl CacheOpenOutcome {
+    const fn as_str(self) -> &'static str {
+        match self {
+            Self::OpenedExisting => "opened-existing",
+            Self::OpenedNew => "opened-new",
+            Self::ResetIncompatible => "reset-incompatible",
+            Self::ResetCorrupt => "reset-corrupt",
+            Self::ResetStorageUncertain => "reset-storage-uncertain",
+        }
+    }
+}
+
+impl From<TursoStorageOpenOutcome> for CacheOpenOutcome {
+    fn from(outcome: TursoStorageOpenOutcome) -> Self {
+        match outcome {
+            TursoStorageOpenOutcome::OpenedExisting => Self::OpenedExisting,
+            TursoStorageOpenOutcome::OpenedNew => Self::OpenedNew,
+        }
+    }
+}
+
+fn recovery_outcome(reason: PhysicalResetReason) -> CacheOpenOutcome {
+    match reason {
+        PhysicalResetReason::Compatibility => CacheOpenOutcome::ResetIncompatible,
+        PhysicalResetReason::Corruption
+        | PhysicalResetReason::Codec
+        | PhysicalResetReason::Invariant
+        | PhysicalResetReason::Integrity => CacheOpenOutcome::ResetCorrupt,
+        PhysicalResetReason::StorageFull
+        | PhysicalResetReason::TransactionOutcomeUncertain
+        | PhysicalResetReason::Io => CacheOpenOutcome::ResetStorageUncertain,
+    }
 }
 
 #[derive(Serialize)]
@@ -140,36 +199,355 @@ fn parse_timestamp(value: f64, label: &str) -> Result<i64, JsValue> {
     Ok(value as i64)
 }
 
+#[cfg(not(test))]
+type BrowserStorage = TursoStorage;
+type BrowserEngine = Engine<BrowserStorage>;
+
+#[cfg(not(test))]
+fn wrap_storage(storage: TursoStorage) -> BrowserStorage {
+    storage
+}
+
+#[cfg(test)]
+fn wrap_storage(storage: TursoStorage) -> BrowserStorage {
+    BrowserStorage::new(storage)
+}
+
+#[cfg(not(test))]
+fn unwrap_storage(storage: BrowserStorage) -> TursoStorage {
+    storage
+}
+
+#[cfg(test)]
+fn unwrap_storage(storage: BrowserStorage) -> TursoStorage {
+    storage.into_inner()
+}
+
+struct CacheState {
+    engine: Option<BrowserEngine>,
+    scope: String,
+    hot_capacity: Option<u32>,
+    reset_required: bool,
+}
+
+impl CacheState {
+    fn ensure_callable(&self) -> Result<(), JsValue> {
+        if self.reset_required {
+            Err(reset_required_js_error())
+        } else if self.engine.is_none() {
+            Err(closed_js_error())
+        } else {
+            Ok(())
+        }
+    }
+
+    fn engine_mut(&mut self) -> Result<&mut BrowserEngine, JsValue> {
+        self.ensure_callable()?;
+        Ok(self
+            .engine
+            .as_mut()
+            .expect("callable cache state contains an engine"))
+    }
+
+    fn engine_result<T>(
+        &mut self,
+        result: Result<T, EngineError<TursoStorageError>>,
+    ) -> Result<T, JsValue> {
+        result.map_err(|error| self.engine_error(error))
+    }
+
+    fn engine_error(&mut self, error: EngineError<TursoStorageError>) -> JsValue {
+        if engine_error_requires_reset(&error) {
+            self.reset_required = true;
+            reset_required_js_error()
+        } else {
+            err_js(error)
+        }
+    }
+}
+
 #[wasm_bindgen]
 pub struct CacheEngine {
-    engine: Rc<Mutex<Engine<IdbStorage>>>,
+    state: Rc<Mutex<CacheState>>,
     ops: Rc<RefCell<OpInterner>>,
 }
 
-/// Opens (or creates) the cache for `scope`. The physical database is selected
-/// by [`cache_core::codec::cache_database_name`] from `scope` alone; the schema
-/// compatibility epoch and format version are record-compatibility inputs.
-#[wasm_bindgen(js_name = openCache)]
-pub async fn open_cache(scope: String, hot_capacity: Option<u32>) -> Result<CacheEngine, JsError> {
-    let storage = IdbStorage::open(&scope)
-        .await
-        .map_err(|e| JsError::new(&e.to_string()))?;
-    let engine = match hot_capacity {
-        Some(cap) => Engine::with_capacity(storage, cap as usize),
-        None => Engine::new(storage),
-    };
-    Ok(CacheEngine {
-        engine: Rc::new(Mutex::new(engine)),
-        ops: Rc::new(RefCell::new(OpInterner::default())),
-    })
+fn database_identity(scope: &str) -> String {
+    cache_database_name(scope)
 }
 
-/// Deletes the cache database for `scope` (logout).
-#[wasm_bindgen(js_name = destroyCache)]
-pub async fn destroy_cache(scope: String) -> Result<(), JsError> {
-    IdbStorage::destroy(&scope)
+fn build_engine(storage: TursoStorage, hot_capacity: Option<u32>) -> BrowserEngine {
+    let storage = wrap_storage(storage);
+    match hot_capacity {
+        Some(capacity) => Engine::with_capacity(storage, capacity as usize),
+        None => Engine::new(storage),
+    }
+}
+
+fn validate_hot_capacity(hot_capacity: Option<u32>) -> Result<(), JsValue> {
+    if hot_capacity == Some(0) {
+        Err(err_js("hot capacity must be greater than zero"))
+    } else {
+        Ok(())
+    }
+}
+
+async fn open_owner(owner: OpfsOwner) -> Result<OpenResult, JsValue> {
+    match owner.open().await {
+        Ok(opened) => Ok(opened),
+        Err(failure) => {
+            let error = err_js(&failure);
+            if let Some(owner) = failure.into_owner() {
+                owner.release().await.map_err(err_js)?;
+            }
+            Err(error)
+        }
+    }
+}
+
+struct OpenedStorage {
+    storage: TursoStorage,
+    outcome: CacheOpenOutcome,
+}
+
+async fn open_storage(scope: &str, owner: OpfsOwner) -> Result<OpenedStorage, JsValue> {
+    let (owner, reset_outcome) = match open_owner(owner).await? {
+        OpenResult::Ready(session) => {
+            let connected = session.connect().map_err(err_js)?;
+            match TursoStorage::from_opfs_session_with_outcome(connected, scope) {
+                Ok((storage, outcome)) => {
+                    return Ok(OpenedStorage {
+                        storage,
+                        outcome: outcome.into(),
+                    });
+                }
+                Err(failure) => {
+                    let error = failure.error();
+                    if !error.requires_physical_reset() {
+                        let owner = failure.preserve().map_err(err_js)?;
+                        owner.release().await.map_err(err_js)?;
+                        return Err(err_js(error));
+                    }
+                    let outcome = recovery_outcome(
+                        error
+                            .physical_reset_reason()
+                            .expect("reset-required error has a reset reason"),
+                    );
+                    (failure.reset().await.map_err(err_js)?, outcome)
+                }
+            }
+        }
+        OpenResult::ResetRequired(session) => (
+            session.reset().await.map_err(err_js)?,
+            CacheOpenOutcome::ResetStorageUncertain,
+        ),
+    };
+
+    match open_owner(owner).await? {
+        OpenResult::Ready(session) => {
+            let connected = session.connect().map_err(err_js)?;
+            match TursoStorage::from_opfs_session(connected, scope) {
+                Ok(storage) => Ok(OpenedStorage {
+                    storage,
+                    outcome: reset_outcome,
+                }),
+                Err(failure) => {
+                    let reset_required = failure.error().requires_physical_reset();
+                    let owner = failure.reset().await.map_err(err_js)?;
+                    owner.release().await.map_err(err_js)?;
+                    Err(if reset_required {
+                        reset_required_js_error()
+                    } else {
+                        err_js("cache storage initialization failed")
+                    })
+                }
+            }
+        }
+        OpenResult::ResetRequired(session) => {
+            let owner = session.reset().await.map_err(err_js)?;
+            owner.release().await.map_err(err_js)?;
+            Err(reset_required_js_error())
+        }
+    }
+}
+
+async fn acquire_storage(scope: &str, recovery_wipe: bool) -> Result<OpenedStorage, JsValue> {
+    let owner = OpfsOwner::acquire(&database_identity(scope))
         .await
-        .map_err(|e| JsError::new(&e.to_string()))
+        .map_err(err_js)?;
+    let owner = if recovery_wipe {
+        owner.recovery_wipe().await.map_err(err_js)?
+    } else {
+        owner
+    };
+    let mut opened = open_storage(scope, owner).await?;
+    if recovery_wipe {
+        opened.outcome = CacheOpenOutcome::ResetStorageUncertain;
+    }
+    Ok(opened)
+}
+
+async fn open_cache_inner(
+    scope: String,
+    hot_capacity: Option<u32>,
+    recovery_wipe: bool,
+) -> Result<(CacheEngine, CacheOpenOutcome), JsValue> {
+    validate_hot_capacity(hot_capacity)?;
+    let OpenedStorage { storage, outcome } = acquire_storage(&scope, recovery_wipe).await?;
+    Ok((
+        CacheEngine {
+            state: Rc::new(Mutex::new(CacheState {
+                engine: Some(build_engine(storage, hot_capacity)),
+                scope,
+                hot_capacity,
+                reset_required: false,
+            })),
+            ops: Rc::new(RefCell::new(OpInterner::default())),
+        },
+        outcome,
+    ))
+}
+
+fn cache_open_result(engine: CacheEngine, outcome: CacheOpenOutcome) -> Result<JsValue, JsValue> {
+    let result = js_sys::Object::new();
+    js_sys::Reflect::set(
+        &result,
+        &JsValue::from_str("engine"),
+        &JsValue::from(engine),
+    )?;
+    js_sys::Reflect::set(
+        &result,
+        &JsValue::from_str("outcome"),
+        &JsValue::from_str(outcome.as_str()),
+    )?;
+    Ok(result.into())
+}
+
+/// Opens (or creates) the cache for `scope` after acquiring its exclusive OPFS
+/// owner lock. The physical identity is derived from `scope` alone; disposable
+/// incomplete or incompatible files are reset and reopened before returning.
+#[wasm_bindgen(js_name = openCache)]
+pub async fn open_cache(scope: String, hot_capacity: Option<u32>) -> Result<CacheEngine, JsValue> {
+    open_cache_inner(scope, hot_capacity, false)
+        .await
+        .map(|(engine, _)| engine)
+}
+
+/// Additive open API returning the engine and payload-free recovery outcome.
+#[wasm_bindgen(js_name = openCacheWithOutcome)]
+pub async fn open_cache_with_outcome(
+    scope: String,
+    hot_capacity: Option<u32>,
+) -> Result<JsValue, JsValue> {
+    let (engine, outcome) = open_cache_inner(scope, hot_capacity, false).await?;
+    cache_open_result(engine, outcome)
+}
+
+/// Acquires the canonical owner once, recovery-wipes before any Turso open,
+/// then opens a fresh cache while continuously retaining that same owner lock.
+#[wasm_bindgen(js_name = openCacheForRecovery)]
+pub async fn open_cache_for_recovery(
+    scope: String,
+    hot_capacity: Option<u32>,
+) -> Result<CacheEngine, JsValue> {
+    open_cache_inner(scope, hot_capacity, true)
+        .await
+        .map(|(engine, _)| engine)
+}
+
+/// Additive recovery-open API returning the engine and coarse wipe outcome.
+#[wasm_bindgen(js_name = openCacheForRecoveryWithOutcome)]
+pub async fn open_cache_for_recovery_with_outcome(
+    scope: String,
+    hot_capacity: Option<u32>,
+) -> Result<JsValue, JsValue> {
+    let (engine, outcome) = open_cache_inner(scope, hot_capacity, true).await?;
+    cache_open_result(engine, outcome)
+}
+
+/// Recovery-wipes and recreates the cache database for `scope` while holding
+/// the same exclusive OPFS owner lock used by [`openCache`](open_cache).
+#[wasm_bindgen(js_name = destroyCache)]
+pub async fn destroy_cache(scope: String) -> Result<(), JsValue> {
+    OpfsOwner::acquire(&database_identity(&scope))
+        .await
+        .map_err(err_js)?
+        .recovery_wipe()
+        .await
+        .map_err(err_js)?
+        .release()
+        .await
+        .map_err(err_js)
+}
+
+#[cfg(feature = "browser-test-hooks")]
+enum BrowserTestStorageMutation {
+    IncompatibleNamespace,
+    CorruptQueuePayload,
+}
+
+#[cfg(feature = "browser-test-hooks")]
+async fn browser_test_mutate_closed_storage(
+    scope: String,
+    mutation: BrowserTestStorageMutation,
+) -> Result<(), JsValue> {
+    let owner = OpfsOwner::acquire(&database_identity(&scope))
+        .await
+        .map_err(err_js)?;
+    let session = match open_owner(owner).await? {
+        OpenResult::Ready(session) => session,
+        OpenResult::ResetRequired(session) => {
+            let owner = session.reset().await.map_err(err_js)?;
+            owner.release().await.map_err(err_js)?;
+            return Err(err_js("browser-test storage was already reset-required"));
+        }
+    };
+    let connected = session.connect().map_err(err_js)?;
+    let mut storage = match TursoStorage::from_opfs_session(connected, &scope) {
+        Ok(storage) => storage,
+        Err(failure) => {
+            let owner = failure.reset().await.map_err(err_js)?;
+            owner.release().await.map_err(err_js)?;
+            return Err(err_js("browser-test storage validation failed"));
+        }
+    };
+    match mutation {
+        BrowserTestStorageMutation::IncompatibleNamespace => {
+            storage.browser_test_make_namespace_incompatible()
+        }
+        BrowserTestStorageMutation::CorruptQueuePayload => {
+            storage.browser_test_corrupt_queue_payload()
+        }
+    }
+    .map_err(err_js)?;
+    match storage.try_close().map_err(err_js)? {
+        TursoStorageCloseOutcome::Healthy(closed) => closed
+            .preserve()
+            .map_err(err_js)?
+            .release()
+            .await
+            .map_err(err_js),
+        TursoStorageCloseOutcome::ResetRequired(closed) => {
+            let owner = closed.reset().await.map_err(err_js)?;
+            owner.release().await.map_err(err_js)?;
+            Err(err_js("browser-test mutation unexpectedly required reset"))
+        }
+    }
+}
+
+/// Test-artifact-only incompatible-namespace hook.
+#[cfg(feature = "browser-test-hooks")]
+#[wasm_bindgen(js_name = browserTestMakeNamespaceIncompatible)]
+pub async fn browser_test_make_namespace_incompatible(scope: String) -> Result<(), JsValue> {
+    browser_test_mutate_closed_storage(scope, BrowserTestStorageMutation::IncompatibleNamespace)
+        .await
+}
+
+/// Test-artifact-only corrupt-queue hook.
+#[cfg(feature = "browser-test-hooks")]
+#[wasm_bindgen(js_name = browserTestCorruptQueuePayload)]
+pub async fn browser_test_corrupt_queue_payload(scope: String) -> Result<(), JsValue> {
+    browser_test_mutate_closed_storage(scope, BrowserTestStorageMutation::CorruptQueuePayload).await
 }
 
 /// Schema hash baked into this build (build diagnostics).
@@ -184,11 +562,35 @@ fn to_js<T: Serialize>(value: &T) -> Result<JsValue, JsValue> {
         .map_err(|e| JsValue::from_str(&e.to_string()))
 }
 
-/// All rejections surface as real `Error` objects (consistent
-/// `instanceof Error` / `.message` behavior with the `JsError`-returning
-/// functions like `openCache`).
-fn err_js(e: impl std::fmt::Display) -> JsValue {
-    js_sys::Error::new(&e.to_string()).into()
+const RESET_REQUIRED_MARKER: &str = "cacheStorageResetRequired";
+const RESET_REQUIRED_MESSAGE: &str = "cache storage reset required";
+
+/// All rejections surface as real `Error` objects with consistent
+/// `instanceof Error` and `.message` behavior.
+fn err_js(error: impl std::fmt::Display) -> JsValue {
+    js_sys::Error::new(&error.to_string()).into()
+}
+
+fn closed_js_error() -> JsValue {
+    err_js("cache engine is closed")
+}
+
+fn reset_required_js_error() -> JsValue {
+    let error = js_sys::Error::new(RESET_REQUIRED_MESSAGE);
+    js_sys::Reflect::set(
+        error.as_ref(),
+        &JsValue::from_str(RESET_REQUIRED_MARKER),
+        &JsValue::TRUE,
+    )
+    .expect("new JavaScript Error accepts the reset marker");
+    error.into()
+}
+
+fn engine_error_requires_reset(error: &EngineError<TursoStorageError>) -> bool {
+    matches!(
+        error,
+        EngineError::Storage(storage_error) if storage_error.requires_physical_reset()
+    )
 }
 
 fn parse_variables(
@@ -233,20 +635,77 @@ fn parse_query_inspection(
     })
 }
 
+async fn close_storage(storage: BrowserStorage, force_reset: bool) -> Result<OpfsOwner, JsValue> {
+    match unwrap_storage(storage).try_close().map_err(err_js)? {
+        TursoStorageCloseOutcome::Healthy(closed) if force_reset => {
+            closed.reset().await.map_err(err_js)
+        }
+        TursoStorageCloseOutcome::Healthy(closed) => closed.preserve().map_err(err_js),
+        TursoStorageCloseOutcome::ResetRequired(closed) => closed.reset().await.map_err(err_js),
+    }
+}
+
 #[wasm_bindgen]
 impl CacheEngine {
+    /// Returns payload-free durable mutation queue diagnostics.
+    #[wasm_bindgen(js_name = queueDiagnostics)]
+    pub fn queue_diagnostics(&self) -> js_sys::Promise {
+        let state = self.state.clone();
+        future_to_promise(async move {
+            let mut state = state.lock().await;
+            // Observation failures bypass `engine_result`: diagnostics never
+            // latch reset-required state or alter the engine lifecycle.
+            let diagnostics = state
+                .engine_mut()?
+                .queue_diagnostics()
+                .await
+                .map_err(err_js)?;
+            let value = js_sys::Object::new();
+            let available = diagnostics.availability == QueueDiagnosticsAvailability::Available;
+            js_sys::Reflect::set(
+                &value,
+                &JsValue::from_str("availability"),
+                &JsValue::from_str(if available {
+                    "available"
+                } else {
+                    "unavailable"
+                }),
+            )?;
+            js_sys::Reflect::set(
+                &value,
+                &JsValue::from_str("depth"),
+                &if available {
+                    JsValue::from_str(&diagnostics.depth.to_string())
+                } else {
+                    JsValue::NULL
+                },
+            )?;
+            js_sys::Reflect::set(
+                &value,
+                &JsValue::from_str("oldestCreatedAtMs"),
+                &if available {
+                    diagnostics
+                        .oldest_created_at_ms
+                        .map_or(JsValue::NULL, |timestamp| {
+                            JsValue::from_str(&timestamp.to_string())
+                        })
+                } else {
+                    JsValue::NULL
+                },
+            )?;
+            Ok(value.into())
+        })
+    }
+
     /// Returns the opaque identity bound to this cache, or `null` when no
     /// identity-bearing response has been stored yet.
     #[wasm_bindgen(js_name = boundIdentity)]
     pub fn bound_identity(&self) -> js_sys::Promise {
-        let engine = self.engine.clone();
+        let state = self.state.clone();
         future_to_promise(async move {
-            let identity = engine
-                .lock()
-                .await
-                .current_identity()
-                .await
-                .map_err(err_js)?;
+            let mut state = state.lock().await;
+            let result = state.engine_mut()?.current_identity().await;
+            let identity = state.engine_result(result)?;
             to_js(&identity)
         })
     }
@@ -263,14 +722,16 @@ impl CacheEngine {
         variables: JsValue,
         entity_resolvers: JsValue,
     ) -> js_sys::Promise {
-        let engine = self.engine.clone();
+        let state = self.state.clone();
         let ops = self.ops.clone();
         future_to_promise(async move {
+            let mut state = state.lock().await;
+            state.ensure_callable()?;
             let vars = parse_variables(variables)?;
             let entity_resolvers: Vec<EntityResolver> = parse_vec(entity_resolvers)?;
             let op = op_id.map(|name| ops.borrow_mut().intern(&name));
-            let mut engine = engine.lock().await;
-            let result = engine
+            let result = state
+                .engine_mut()?
                 .read_query_with_entity_resolvers(
                     op,
                     &query,
@@ -278,8 +739,8 @@ impl CacheEngine {
                     &vars,
                     &entity_resolvers,
                 )
-                .await
-                .map_err(err_js)?;
+                .await;
+            let result = state.engine_result(result)?;
             to_js(&match result {
                 ReadResult::Hit { data } => JsReadResult::Hit { data },
                 ReadResult::Miss => JsReadResult::Miss,
@@ -296,16 +757,17 @@ impl CacheEngine {
         cursor: JsValue,
         limit: u32,
     ) -> js_sys::Promise {
-        let engine = self.engine.clone();
+        let state = self.state.clone();
         future_to_promise(async move {
+            let mut state = state.lock().await;
+            state.ensure_callable()?;
             let selection = RecordSelection::parse(&document, &fragment_name).map_err(err_js)?;
             let cursor = parse_record_cursor(cursor)?;
-            let page = engine
-                .lock()
-                .await
+            let result = state
+                .engine_mut()?
                 .read_records(&selection, cursor.as_ref(), limit as usize)
-                .await
-                .map_err(err_js)?;
+                .await;
+            let page = state.engine_result(result)?;
             to_js(&page)
         })
     }
@@ -326,14 +788,16 @@ impl CacheEngine {
         data: JsValue,
         identity: Option<String>,
     ) -> js_sys::Promise {
-        let engine = self.engine.clone();
+        let state = self.state.clone();
         let ops = self.ops.clone();
         future_to_promise(async move {
+            let mut state = state.lock().await;
+            state.ensure_callable()?;
             let vars = parse_variables(variables)?;
             let data: serde_json::Value = serde_wasm_bindgen::from_value(data).map_err(err_js)?;
             let origin = origin_op_id.map(|name| ops.borrow_mut().intern(&name));
-            let mut engine = engine.lock().await;
-            let result = engine
+            let result = state
+                .engine_mut()?
                 .write_query(
                     origin,
                     &query,
@@ -342,8 +806,8 @@ impl CacheEngine {
                     &data,
                     identity.as_deref(),
                 )
-                .await
-                .map_err(err_js)?;
+                .await;
+            let result = state.engine_result(result)?;
             to_js(&JsWriteResult {
                 changed: result
                     .changed
@@ -376,9 +840,11 @@ impl CacheEngine {
         now_ms: f64,
         lease_expires_at_ms: f64,
     ) -> js_sys::Promise {
-        let engine = self.engine.clone();
+        let state = self.state.clone();
         let ops = self.ops.clone();
         future_to_promise(async move {
+            let mut state = state.lock().await;
+            state.ensure_callable()?;
             let vars = parse_variables(variables)?;
             let data: serde_json::Value = serde_wasm_bindgen::from_value(data).map_err(err_js)?;
             let link_patches: Vec<OptimisticLinkPatch> = parse_vec(link_patches)?;
@@ -393,8 +859,8 @@ impl CacheEngine {
                 )?,
             };
             let origin = origin_op_id.map(|name| ops.borrow_mut().intern(&name));
-            let mut engine = engine.lock().await;
-            let result = engine
+            let result = state
+                .engine_mut()?
                 .enqueue_optimistic_mutation(
                     origin,
                     BeginOptimisticWrite {
@@ -408,13 +874,16 @@ impl CacheEngine {
                     },
                     claim,
                 )
-                .await
-                .map_err(err_js)?;
+                .await;
+            let result = state.engine_result(result)?;
             let initial_claim = match result.initial_claim {
                 InitialClaimOutcome::Claimed(claimed) => JsInitialMutationClaim::Claimed {
                     mutation: JsClaimedMutation::try_from(*claimed)?,
                 },
                 InitialClaimOutcome::NotRunnable => JsInitialMutationClaim::NotRunnable,
+                InitialClaimOutcome::Failed(error) if engine_error_requires_reset(&error) => {
+                    return Err(state.engine_error(error));
+                }
                 InitialClaimOutcome::Failed(error) => JsInitialMutationClaim::Failed {
                     error: error.to_string(),
                 },
@@ -443,15 +912,16 @@ impl CacheEngine {
         operation_name: Option<String>,
         path: JsValue,
     ) -> js_sys::Promise {
-        let engine = self.engine.clone();
+        let state = self.state.clone();
         future_to_promise(async move {
+            let mut state = state.lock().await;
+            state.ensure_callable()?;
             let inspection = parse_query_inspection(query, operation_name, path, Vec::new())?;
-            let variants = engine
-                .lock()
-                .await
+            let result = state
+                .engine_mut()?
                 .inspect_query_variants(&inspection)
-                .await
-                .map_err(err_js)?;
+                .await;
+            let variants = state.engine_result(result)?;
             to_js(&variants)
         })
     }
@@ -465,16 +935,14 @@ impl CacheEngine {
         path: JsValue,
         variable_filters: JsValue,
     ) -> js_sys::Promise {
-        let engine = self.engine.clone();
+        let state = self.state.clone();
         future_to_promise(async move {
+            let mut state = state.lock().await;
+            state.ensure_callable()?;
             let variable_filters = parse_vec(variable_filters)?;
             let inspection = parse_query_inspection(query, operation_name, path, variable_filters)?;
-            let instances = engine
-                .lock()
-                .await
-                .inspect_query(&inspection)
-                .await
-                .map_err(err_js)?;
+            let result = state.engine_mut()?.inspect_query(&inspection).await;
+            let instances = state.engine_result(result)?;
             to_js(&instances)
         })
     }
@@ -487,8 +955,10 @@ impl CacheEngine {
         now_ms: f64,
         lease_expires_at_ms: f64,
     ) -> js_sys::Promise {
-        let engine = self.engine.clone();
+        let state = self.state.clone();
         future_to_promise(async move {
+            let mut state = state.lock().await;
+            state.ensure_callable()?;
             let request = MutationClaimRequest {
                 owner,
                 now_ms: parse_timestamp(now_ms, "claim timestamp")?,
@@ -497,12 +967,8 @@ impl CacheEngine {
                     "lease expiration timestamp",
                 )?,
             };
-            let claimed = engine
-                .lock()
-                .await
-                .claim_next_mutation(request)
-                .await
-                .map_err(err_js)?;
+            let result = state.engine_mut()?.claim_next_mutation(request).await;
+            let claimed = state.engine_result(result)?;
             to_js(&claimed.map(JsClaimedMutation::try_from).transpose()?)
         })
     }
@@ -517,24 +983,21 @@ impl CacheEngine {
         next_attempt_at_ms: f64,
         error: String,
     ) -> js_sys::Promise {
-        let engine = self.engine.clone();
+        let state = self.state.clone();
         future_to_promise(async move {
+            let mut state = state.lock().await;
+            state.ensure_callable()?;
             let transaction = parse_transaction_id(&transaction_id)?;
             let claim = MutationClaimToken {
                 owner: lease_owner,
                 generation: parse_u64(&lease_generation, "lease generation")?,
             };
-            engine
-                .lock()
-                .await
-                .defer_optimistic_write(
-                    transaction,
-                    claim,
-                    parse_timestamp(next_attempt_at_ms, "next attempt timestamp")?,
-                    error,
-                )
-                .await
-                .map_err(err_js)?;
+            let next_attempt_at_ms = parse_timestamp(next_attempt_at_ms, "next attempt timestamp")?;
+            let result = state
+                .engine_mut()?
+                .defer_optimistic_write(transaction, claim, next_attempt_at_ms, error)
+                .await;
+            state.engine_result(result)?;
             Ok(JsValue::UNDEFINED)
         })
     }
@@ -542,6 +1005,7 @@ impl CacheEngine {
     /// Atomically replaces a claimed optimistic layer with the real network
     /// response and removes it from the durable queue.
     #[wasm_bindgen(js_name = commitOptimisticWrite)]
+    #[allow(clippy::too_many_arguments)]
     pub fn commit_optimistic_write(
         &self,
         transaction_id: String,
@@ -552,9 +1016,11 @@ impl CacheEngine {
         variables: JsValue,
         data: JsValue,
     ) -> js_sys::Promise {
-        let engine = self.engine.clone();
+        let state = self.state.clone();
         let ops = self.ops.clone();
         future_to_promise(async move {
+            let mut state = state.lock().await;
+            state.ensure_callable()?;
             let transaction = parse_transaction_id(&transaction_id)?;
             let claim = MutationClaimToken {
                 owner: lease_owner,
@@ -562,8 +1028,8 @@ impl CacheEngine {
             };
             let vars = parse_variables(variables)?;
             let data: serde_json::Value = serde_wasm_bindgen::from_value(data).map_err(err_js)?;
-            let mut engine = engine.lock().await;
-            let result = engine
+            let result = state
+                .engine_mut()?
                 .commit_optimistic_write(
                     transaction,
                     claim,
@@ -572,8 +1038,8 @@ impl CacheEngine {
                     &vars,
                     &data,
                 )
-                .await
-                .map_err(err_js)?;
+                .await;
+            let result = state.engine_result(result)?;
             to_js(&JsWriteResult {
                 changed: result
                     .changed
@@ -596,19 +1062,21 @@ impl CacheEngine {
         lease_owner: String,
         lease_generation: String,
     ) -> js_sys::Promise {
-        let engine = self.engine.clone();
+        let state = self.state.clone();
         let ops = self.ops.clone();
         future_to_promise(async move {
+            let mut state = state.lock().await;
+            state.ensure_callable()?;
             let transaction = parse_transaction_id(&transaction_id)?;
             let claim = MutationClaimToken {
                 owner: lease_owner,
                 generation: parse_u64(&lease_generation, "lease generation")?,
             };
-            let mut engine = engine.lock().await;
-            let result = engine
+            let result = state
+                .engine_mut()?
                 .rollback_optimistic_write(transaction, claim)
-                .await
-                .map_err(err_js)?;
+                .await;
+            let result = state.engine_result(result)?;
             to_js(&JsWriteResult {
                 changed: result
                     .changed
@@ -627,32 +1095,31 @@ impl CacheEngine {
     /// operation ids.
     #[wasm_bindgen(js_name = invalidateKeys)]
     pub fn invalidate_keys(&self, keys: Vec<String>) -> js_sys::Promise {
-        let engine = self.engine.clone();
+        let state = self.state.clone();
         let ops = self.ops.clone();
         future_to_promise(async move {
+            let mut state = state.lock().await;
+            state.ensure_callable()?;
             let keys: Vec<EntityKey<'static>> =
                 keys.into_iter().map(|key| EntityKey(key.into())).collect();
-            let mut engine = engine.lock().await;
-            let affected = engine.invalidate_keys(keys.iter());
+            let affected = state.engine_mut()?.invalidate_keys(keys.iter());
             to_js(&ops.borrow().names(affected))
         })
     }
 
-    /// Deletes stale records from memory and IndexedDB after a server-side
+    /// Deletes stale records from memory and Turso after a server-side
     /// mutation and resolves to affected local operation ids.
     #[wasm_bindgen(js_name = deleteKeys)]
     pub fn delete_keys(&self, keys: Vec<String>) -> js_sys::Promise {
-        let engine = self.engine.clone();
+        let state = self.state.clone();
         let ops = self.ops.clone();
         future_to_promise(async move {
+            let mut state = state.lock().await;
+            state.ensure_callable()?;
             let keys: Vec<EntityKey<'static>> =
                 keys.into_iter().map(|key| EntityKey(key.into())).collect();
-            let affected = engine
-                .lock()
-                .await
-                .delete_keys(&keys)
-                .await
-                .map_err(err_js)?;
+            let result = state.engine_mut()?.delete_keys(&keys).await;
+            let affected = state.engine_result(result)?;
             to_js(&ops.borrow().names(affected))
         })
     }
@@ -661,15 +1128,12 @@ impl CacheEngine {
     /// queue and returns locally affected operations.
     #[wasm_bindgen(js_name = refreshOptimisticQueue)]
     pub fn refresh_optimistic_queue(&self) -> js_sys::Promise {
-        let engine = self.engine.clone();
+        let state = self.state.clone();
         let ops = self.ops.clone();
         future_to_promise(async move {
-            let result = engine
-                .lock()
-                .await
-                .refresh_optimistic_queue()
-                .await
-                .map_err(err_js)?;
+            let mut state = state.lock().await;
+            let result = state.engine_mut()?.refresh_optimistic_queue().await;
+            let result = state.engine_result(result)?;
             to_js(&JsWriteResult {
                 changed: result
                     .changed
@@ -688,10 +1152,11 @@ impl CacheEngine {
     /// and resolves to every local operation id (all must re-execute).
     #[wasm_bindgen(js_name = externalReset)]
     pub fn external_reset(&self) -> js_sys::Promise {
-        let engine = self.engine.clone();
+        let state = self.state.clone();
         let ops = self.ops.clone();
         future_to_promise(async move {
-            let affected = engine.lock().await.external_reset();
+            let mut state = state.lock().await;
+            let affected = state.engine_mut()?.external_reset();
             to_js(&ops.borrow().names(affected))
         })
     }
@@ -699,34 +1164,106 @@ impl CacheEngine {
     /// Unregisters an operation (urql teardown).
     #[wasm_bindgen(js_name = teardownOperation)]
     pub fn teardown_operation(&self, op_id: String) -> js_sys::Promise {
-        let engine = self.engine.clone();
+        let state = self.state.clone();
         let ops = self.ops.clone();
         future_to_promise(async move {
-            let removed = ops.borrow_mut().remove(&op_id);
-            if let Some(id) = removed {
-                engine.lock().await.teardown_operation(id);
+            let mut state = state.lock().await;
+            let engine = state.engine_mut()?;
+            if let Some(id) = ops.borrow_mut().remove(&op_id) {
+                engine.teardown_operation(id);
             }
             Ok(JsValue::UNDEFINED)
         })
     }
 
-    /// Drops all cached state (logout, corruption rebuild).
+    /// Drops all cached state, including the durable mutation queue.
     pub fn clear(&self) -> js_sys::Promise {
-        let engine = self.engine.clone();
+        let state = self.state.clone();
         future_to_promise(async move {
-            engine.lock().await.clear().await.map_err(err_js)?;
+            let mut state = state.lock().await;
+            let result = state.engine_mut()?.clear().await;
+            state.engine_result(result)?;
             Ok(JsValue::UNDEFINED)
         })
     }
 
-    /// Closes the underlying IndexedDB connection. Call before
-    /// [`destroyCache`](destroy_cache) — database deletion blocks while
-    /// connections are open. The engine is unusable afterwards.
-    pub fn close(&self) -> js_sys::Promise {
-        let engine = self.engine.clone();
+    /// Physically resets and recreates this instance's OPFS database while
+    /// retaining the exclusive owner lock. The instance remains usable after
+    /// the fresh engine has been installed.
+    #[wasm_bindgen(js_name = physicalReset)]
+    pub fn physical_reset(&self) -> js_sys::Promise {
+        let state = self.state.clone();
         future_to_promise(async move {
-            engine.lock().await.storage().close();
+            let mut state = state.lock().await;
+            let engine = state.engine.take().ok_or_else(|| {
+                if state.reset_required {
+                    err_js("cache engine requires worker replacement")
+                } else {
+                    closed_js_error()
+                }
+            })?;
+            let scope = state.scope.clone();
+            let hot_capacity = state.hot_capacity;
+            let owner = match close_storage(engine.into_storage(), true).await {
+                Ok(owner) => owner,
+                Err(error) => {
+                    state.reset_required = true;
+                    return Err(error);
+                }
+            };
+            let storage = match open_storage(&scope, owner).await {
+                Ok(opened) => opened.storage,
+                Err(error) => {
+                    state.reset_required = true;
+                    return Err(error);
+                }
+            };
+            state.engine = Some(build_engine(storage, hot_capacity));
+            state.reset_required = false;
             Ok(JsValue::UNDEFINED)
         })
+    }
+
+    /// Consumes the engine, closes Turso and all OPFS handles, then preserves a
+    /// healthy database or resets a latched-unhealthy database before releasing
+    /// the exclusive owner lock. Every later instance method rejects.
+    pub fn close(&self) -> js_sys::Promise {
+        let state = self.state.clone();
+        future_to_promise(async move {
+            let mut state = state.lock().await;
+            let engine = state.engine.take().ok_or_else(|| {
+                if state.reset_required {
+                    err_js("cache engine requires worker replacement")
+                } else {
+                    closed_js_error()
+                }
+            })?;
+            let owner = match close_storage(engine.into_storage(), state.reset_required).await {
+                Ok(owner) => owner,
+                Err(error) => {
+                    state.reset_required = true;
+                    return Err(error);
+                }
+            };
+            if let Err(error) = owner.release().await {
+                state.reset_required = true;
+                return Err(err_js(error));
+            }
+            state.reset_required = false;
+            Ok(JsValue::UNDEFINED)
+        })
+    }
+}
+
+#[cfg(test)]
+impl CacheEngine {
+    async fn arm_storage_fault(&self, fault: TestStorageFault) {
+        let state = self.state.lock().await;
+        state
+            .engine
+            .as_ref()
+            .expect("test cache contains an engine")
+            .storage()
+            .arm(fault);
     }
 }

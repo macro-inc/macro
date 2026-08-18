@@ -39,6 +39,7 @@ const link = (id: string): EmailLink =>
     email_address: `${id}@example.com`,
     needs_calendar_permission: false,
     calendar_disabled: false,
+    has_calendar_data: true,
   }) as unknown as EmailLink;
 
 const cachedLinks = () =>
@@ -91,10 +92,12 @@ describe('useDisableCalendarMutation', () => {
     expect(cachedLink('inbox-a')).toMatchObject({
       calendar_disabled: true,
       needs_calendar_permission: true,
+      has_calendar_data: false,
     });
     expect(cachedLink('inbox-b')).toMatchObject({
       calendar_disabled: false,
       needs_calendar_permission: false,
+      has_calendar_data: true,
     });
     expect(disableLinkCalendarMock).toHaveBeenCalledWith({
       linkId: 'inbox-a',
@@ -113,6 +116,7 @@ describe('useDisableCalendarMutation', () => {
     expect(cachedLink('inbox-a')).toMatchObject({
       calendar_disabled: false,
       needs_calendar_permission: false,
+      has_calendar_data: true,
     });
     expect(invalidateCalendarViewsMock).not.toHaveBeenCalled();
   });

@@ -68,6 +68,10 @@ export type ChannelMessagesWindowType =
  */
 export type ChannelThreadWindowType = 'allIfSmall' | 'latest' | 'aroundReply';
 /**
+ * A requested change to an event's video conference.
+ */
+export type ConferenceChangeInput = 'google_meet' | 'remove';
+/**
  * The content of the document
  */
 export type Content =
@@ -134,6 +138,38 @@ export type ContentType =
   | 'chat-message'
   | 'project';
 /**
+ * The mutually exclusive time shape supplied to calendar tools.
+ */
+export type EventTimeInput =
+  | {
+      /**
+       * Exclusive end instant, RFC 3339 UTC. Must be after the start.
+       */
+      endsAt: string;
+      kind: 'timed';
+      /**
+       * Inclusive start instant, RFC 3339 UTC (e.g. 2026-08-20T17:00:00Z).
+       */
+      startsAt: string;
+      /**
+       * IANA time zone the event was scheduled in (e.g.
+       * America/New_York). Recurring events expand in this zone.
+       */
+      timeZone?: string | null;
+    }
+  | {
+      /**
+       * Exclusive local end date (YYYY-MM-DD); the day after the last
+       * covered day, so a one-day event ends the next date.
+       */
+      endDate: string;
+      kind: 'allDay';
+      /**
+       * Inclusive local start date (YYYY-MM-DD).
+       */
+      startDate: string;
+    };
+/**
  * External systems items can be imported from.
  */
 export type ImportSource = 'linear' | 'notion' | 'slack';
@@ -145,6 +181,21 @@ export type CreateImportStatus = 'staged' | 'imported';
  * Lifecycle of one import entity.
  */
 export type ImportStatus = 'staged' | 'importing' | 'imported' | 'discarded';
+/**
+ * Entity types a reminder can be attached to.
+ *
+ * Deliberately narrower than [`EntityType`], which covers plenty of things a
+ * reminder has no business pointing at. The names match the ones `ListEntities`
+ * uses so the model sees one vocabulary across tools.
+ */
+export type ReminderEntityType =
+  | 'document'
+  | 'ai_chat'
+  | 'project'
+  | 'email'
+  | 'channel'
+  | 'call'
+  | 'calendar_event';
 /**
  * A tag color from the fixed palette.
  */
@@ -161,6 +212,10 @@ export type TagColor =
   | 'purple'
   | 'pink'
   | 'gray';
+/**
+ * How much of a recurring series a deletion removes.
+ */
+export type DeletionScopeInput = 'all' | 'this_event' | 'this_and_following';
 /**
  * Where document content is, or is expected to be, read from.
  */
@@ -626,6 +681,19 @@ export interface AppliedTag {
   scope: TagScope;
 }
 /**
+ * An attendee supplied to a calendar tool.
+ */
+export interface AttendeeInput {
+  /**
+   * The attendee's email address.
+   */
+  email: string;
+  /**
+   * Whether attendance is optional for this attendee. Defaults to required.
+   */
+  isOptional?: boolean;
+}
+/**
  * Execute a bash command in a sandboxed environment using Claude's built-in code execution tool.
  */
 export interface BashCodeExecution {
@@ -747,6 +815,108 @@ export interface BulkSetEntityPropertyOptionsResult {
    * One of: applied, skipped_no_permission, failed.
    */
   status: string;
+}
+/**
+ * One calendar event occurrence in the requested window.
+ */
+export interface CalendarEventListItem {
+  /**
+   * Total number of attendees.
+   */
+  attendeeCount: number;
+  /**
+   * Attendees, capped at 20; `attendee_count` has the full number.
+   */
+  attendees: ToolEventAttendee[];
+  /**
+   * Calendar the event belongs to, when known.
+   */
+  calendarId?: string | null;
+  /**
+   * Conference join URL, when a conference is attached.
+   */
+  conferenceUrl?: string | null;
+  /**
+   * Event body, truncated for brevity.
+   */
+  description?: string | null;
+  /**
+   * Exclusive occurrence end: RFC 3339 UTC instant, or YYYY-MM-DD for
+   * all-day events.
+   */
+  end: string;
+  /**
+   * Macro calendar event id, used by UpdateCalendarEvent and
+   * DeleteCalendarEvent. Recurring events repeat it across occurrences.
+   */
+  eventId: string;
+  /**
+   * Whether the event covers whole days.
+   */
+  isAllDay: boolean;
+  /**
+   * Whether the user's calendar prohibits modifying this event.
+   */
+  isReadOnly: boolean;
+  /**
+   * Whether this occurrence belongs to a recurring series.
+   */
+  isRecurring: boolean;
+  /**
+   * Location label, when set.
+   */
+  location?: string | null;
+  /**
+   * The user's own RSVP on this event, when they are an attendee.
+   */
+  myResponse?: string | null;
+  /**
+   * Organizer email address, when known.
+   */
+  organizerEmail?: string | null;
+  /**
+   * Occurrence key identifying this instance within its recurring series;
+   * pass as `recurrenceId` for occurrence-scoped deletion.
+   */
+  recurrenceId?: string | null;
+  /**
+   * Occurrence start: RFC 3339 UTC instant, or YYYY-MM-DD for all-day
+   * events.
+   */
+  start: string;
+  /**
+   * Event status: confirmed or tentative.
+   */
+  status: string;
+  /**
+   * IANA time zone the event was scheduled in, when known.
+   */
+  timeZone?: string | null;
+  /**
+   * Display title.
+   */
+  title: string;
+}
+/**
+ * An attendee of a calendar event, as returned by calendar tools.
+ */
+export interface ToolEventAttendee {
+  /**
+   * Attendee email address.
+   */
+  email: string;
+  /**
+   * Whether attendance is optional.
+   */
+  isOptional: boolean;
+  /**
+   * Whether this attendee organized the event.
+   */
+  isOrganizer: boolean;
+  /**
+   * RSVP state: needs_action, accepted, declined, or tentative.
+   */
+  responseStatus: string;
 }
 export interface CallRecordMetadata {
   attended: boolean;
@@ -1251,6 +1421,42 @@ export interface MessageWithAttachments {
   date: string;
 }
 /**
+ * Create an event on the user's calendar, inviting any listed attendees through Google Calendar. The event is written to Google immediately, so attendees receive invitations the moment it is created — confirm details with the user before creating events with attendees.
+ *
+ * The event lands on the user's primary calendar unless `calendarId` (from ListCalendars) targets another one. For recurring events pass RFC 5545 lines in `recurrenceLines`, e.g. ["RRULE:FREQ=WEEKLY;BYDAY=MO"]. Returns the created event with its `eventId` for later updates or deletion. Fails if the user has no writable calendar connected.
+ */
+export interface CreateCalendarEvent {
+  /**
+   * Attach a freshly generated Google Meet video conference to the event.
+   */
+  addGoogleMeet?: boolean;
+  /**
+   * Attendees to invite by email. They are notified by Google Calendar as soon as the event is created. Omit for a solo event.
+   */
+  attendees?: AttendeeInput[];
+  /**
+   * Calendar to create the event on, from ListCalendars. Omit to use the user's primary calendar.
+   */
+  calendarId?: string | null;
+  /**
+   * Optional event body/description.
+   */
+  description?: string | null;
+  /**
+   * Optional physical or virtual location label.
+   */
+  location?: string | null;
+  /**
+   * Raw RFC 5545 recurrence lines (RRULE, RDATE, EXDATE), e.g. ["RRULE:FREQ=WEEKLY;BYDAY=MO,WE"]. Omit for a one-off event.
+   */
+  recurrenceLines?: string[];
+  time: EventTimeInput;
+  /**
+   * The event title.
+   */
+  title: string;
+}
+/**
  * Create a plaintext document.
  */
 export interface CreateDocument {
@@ -1379,6 +1585,56 @@ export interface CreateProjectResponse {
   projectName: string;
 }
 /**
+ * Schedule a reminder for the current user. At `remindAt` it is delivered to their Macro inbox as a notification and stays there until they mark it done.
+ *
+ * A reminder is either attached to one Macro item — so clicking it opens that item — or standalone. Attached is the common case ("remind me to reply to this email tomorrow"); standalone is for everything else ("remind me to book a flight").
+ *
+ * Reminders are private: one is only ever delivered to its owner, and there is no way to set one for somebody else. Only one-off reminders can be created — if the user asks for a repeating one, say so rather than creating a single reminder and implying it repeats.
+ *
+ * ## Times are UTC — convert both ways
+ *
+ * Timestamps are absolute instants, in and out, while the user asks in their own timezone. Getting this wrong silently sets the reminder to the wrong hour.
+ *
+ * - **In:** resolve their wording against their local time, then convert. For America/New_York (UTC-4 in August), "3pm tomorrow" on 2026-08-12 is `"2026-08-13T19:00:00Z"`, not `"2026-08-13T15:00:00Z"`.
+ * - **Out:** report the response's UTC value back in their timezone — `"2026-08-13T19:00:00Z"` is "3:00 PM tomorrow".
+ *
+ * Ask for their timezone rather than assuming UTC.
+ *
+ * ## Attaching to an item
+ *
+ * Pass `entityType` and `entityId` together, using ids from ListEntities, GetThread, or search. The user must already have access to what you attach. `entityType` accepts exactly these values, and a type not on the list cannot be attached even if ListEntities returns it:
+ *
+ * - `document` — a Macro document
+ * - `ai_chat` — an AI chat conversation
+ * - `project` — a project, shown as a folder in the app
+ * - `email` — an email thread
+ * - `channel` — a chat channel
+ * - `call` — a call record
+ * - `calendar_event` — a calendar event
+ *
+ * **A channel thread needs its parent channel's id.** `channel` is on the list; `channel_thread` is not. For a thread row, pass `entityType: "channel"` with the row's `channelId` — never the thread's own `id`, which will not resolve. Put what the thread is about in the description, since that is what tells two reminders on the same channel apart.
+ *
+ * For any other unattachable type, create a standalone reminder naming the thing in the description rather than guessing at a type.
+ */
+export interface CreateReminder {
+  /**
+   * What to remind the user about, written as the reminder text they will read — e.g. "Reply to Dana about the Q3 budget". Max 2000 characters.
+   */
+  description: string;
+  /**
+   * Id of the thing the reminder is about, as a UUID. Must be the id of an entity of entityType — for a channel_thread row that means its channelId, not its own id. Requires entityType.
+   */
+  entityId?: string | null;
+  /**
+   * Type of the thing the reminder is about — one of document, ai_chat, project, email, channel, call, calendar_event. Requires entityId; omit both for a standalone reminder.
+   */
+  entityType?: ReminderEntityType | null;
+  /**
+   * When to fire, as an RFC 3339 timestamp in UTC (e.g. "2026-08-08T14:00:00Z"). Must be in the future. Seconds are dropped, so a reminder fires on the minute. Convert from the user's local timezone before sending — see "Times are UTC" in the tool description.
+   */
+  remindAt: string;
+}
+/**
  * Create a new tag — a colored label the user can apply to documents, emails, tasks, AI chats, and projects — in the user's personal set or their team's shared set. The set is provisioned automatically the first time a tag is created. Tags are matched by label, so call ListTags first and avoid creating one whose label duplicates an existing tag in the same set. Returns the new tag's id and its set's propertyDefinitionId, which you can pass straight to SetEntityProperty (add_option_ids) to apply the tag to an item. Use this only to create a brand-new tag; to apply an existing tag to an item, use ListTags then SetEntityProperty instead.
  */
 export interface CreateTag {
@@ -1479,6 +1735,35 @@ export interface CrmCompanySearchResponseItem {
   updatedAt: string;
 }
 /**
+ * Delete an event from the user's calendar. The deletion is written to Google immediately and attendees are notified, so confirm with the user before deleting — it cannot be undone. Get the `eventId` from ListCalendarEvents.
+ *
+ * For recurring events, `scope` controls how much is removed: "all" (default) removes the whole series, "this_event" removes one occurrence, and "this_and_following" ends the series from an occurrence onward. The scoped variants require `recurrenceId` from the targeted occurrence's ListCalendarEvents entry.
+ */
+export interface DeleteCalendarEvent {
+  /**
+   * The event's id, from ListCalendarEvents or CreateCalendarEvent.
+   */
+  eventId: string;
+  /**
+   * The `recurrenceId` of the targeted occurrence, from its ListCalendarEvents entry. Required for "this_event" and "this_and_following".
+   */
+  recurrenceId?: string | null;
+  scope?: DeletionScopeInput;
+}
+/**
+ * Response from the DeleteCalendarEvent tool.
+ */
+export interface DeleteCalendarEventResponse {
+  /**
+   * The id of the deleted event.
+   */
+  eventId: string;
+  /**
+   * A human-readable confirmation of what was removed.
+   */
+  summary: string;
+}
+/**
  * Decline a staged import candidate on the user's behalf. The item is remembered as declined so it won't be proposed again; only the user's own staged items can be declined.
  */
 export interface DeleteImportEntity {
@@ -1499,6 +1784,30 @@ export interface DeleteImportEntityResponse {
    * What happened.
    */
   message: string;
+}
+/**
+ * Permanently delete one of the current user's reminders, along with any notification it already produced. Get the `reminderId` from ListReminders or CreateReminder.
+ *
+ * This cannot be undone, and it is not the usual way to clear a reminder. When the user has simply dealt with one, use UpdateReminder with `completed: true` instead: that takes it off their active list but keeps it, still readable with ListReminders `completed: true` and restorable with `completed: false`. Delete is for reminders they want gone rather than finished — one set by mistake, or for something that is no longer happening. If it is not clear which they mean, mark it done.
+ */
+export interface DeleteReminder {
+  /**
+   * The id of the reminder to delete.
+   */
+  reminderId: string;
+}
+/**
+ * Response from the DeleteReminder tool.
+ */
+export interface DeleteReminderResponse {
+  /**
+   * The id of the reminder that was deleted.
+   */
+  reminderId: string;
+  /**
+   * A human-readable summary of the operation.
+   */
+  summary: string;
 }
 /**
  * Permanently delete a tag from the user's personal set or their team's shared set. This removes the tag from every item it is currently applied to, so it is destructive and cannot be undone — confirm with the user first. Both ids come from a ListTags result: `id` is the tag's option id, and `property_definition_id` is the propertyDefinitionId of the set that contains it. To simply remove a tag from a single item without deleting the tag itself, use SetEntityProperty with remove_option_ids instead.
@@ -2081,6 +2390,90 @@ export interface ImportNotionPageResponse {
   outcome: string;
 }
 /**
+ * List the user's calendar events between two instants, across every calendar they have connected. Returns one entry per occurrence (a recurring event appears once per instance in the window), soonest first, with the `eventId` needed by UpdateCalendarEvent and DeleteCalendarEvent.
+ *
+ * Use this to answer questions about the user's schedule ("what's on my calendar tomorrow?"), to find an event the user wants changed or removed, and to check for conflicts before creating an event. Keep the window as narrow as the request allows — a day or a week — since wide windows truncate at 200 occurrences. The window must be at most 370 days and within one year past to two years future. If `syncStatus` is `syncing`, tell the user results may still be incomplete.
+ */
+export interface ListCalendarEvents {
+  /**
+   * Exclusive window end, RFC 3339 UTC. Must be after start.
+   */
+  end: string;
+  /**
+   * Inclusive window start, RFC 3339 UTC (e.g. 2026-08-20T00:00:00Z).
+   */
+  start: string;
+}
+/**
+ * Response from the ListCalendarEvents tool.
+ */
+export interface ListCalendarEventsResponse {
+  /**
+   * Occurrences in the window, soonest first.
+   */
+  events: CalendarEventListItem[];
+  /**
+   * A human-readable summary of the result.
+   */
+  summary: string;
+  /**
+   * `syncing` while any connected calendar is still ingesting — results
+   * may be incomplete — or `ready`.
+   */
+  syncStatus: string;
+  /**
+   * Whether the window held more occurrences than were returned; narrow
+   * the window to see the rest.
+   */
+  truncated: boolean;
+}
+/**
+ * List the calendars the user can see across their connected inboxes, with each calendar's `calendarId`, display name, owning inbox address, and whether it is primary and writable.
+ *
+ * Use this before CreateCalendarEvent when the user wants an event on a specific non-default calendar (e.g. "add it to my work calendar") so you can pass the exact `calendarId`. Most users have a single primary calendar, in which case CreateCalendarEvent targets it by default and you do not need this tool. An empty result means no calendar is connected.
+ */
+export type ListCalendars = {};
+/**
+ * Response from the ListCalendars tool.
+ */
+export interface ListCalendarsToolResponse {
+  /**
+   * The calendars the user can see, primaries and writables first.
+   */
+  calendars: ToolCalendar[];
+  /**
+   * A human-readable summary of the calendars.
+   */
+  summary: string;
+}
+/**
+ * A calendar surfaced to the AI.
+ */
+export interface ToolCalendar {
+  /**
+   * Calendar id; pass as `calendarId` to CreateCalendarEvent to target
+   * this calendar.
+   */
+  calendarId: string;
+  /**
+   * Connected inbox address the calendar belongs to.
+   */
+  emailAddress: string;
+  /**
+   * Whether this is its account's primary calendar — the default target
+   * for created events.
+   */
+  isPrimary: boolean;
+  /**
+   * Whether events can be created and modified on this calendar.
+   */
+  isWritable: boolean;
+  /**
+   * Provider display name.
+   */
+  name: string;
+}
+/**
  * List the CRM companies tracked by the authenticated user's team, sorted by most recent interaction. Each row includes the company id, name, domains, last interaction time, and its pipeline Stage / Owner / Revenue properties when set. Use the filters to narrow results: `search` for name/domain text, `stage` for pipeline stage, `owner_user_id` for companies owned by a user. Use GetCompany for one company's full details (contacts + all properties), and SetEntityProperty with entity_type=company to move stages or update owner/revenue/custom properties.
  */
 export interface ListCompanies {
@@ -2430,6 +2823,109 @@ export interface NotificationItem {
    * The user ID of the sender, if any.
    */
   senderId?: string | null;
+}
+/**
+ * Read the current user's reminders, soonest first. **Filtered by default: only reminders the user has not marked done**, which is what "what are my reminders" means. Pass `completed: true` for the ones they have dealt with. To re-read a reminder you already have the id for, pass it in `reminderIds`.
+ *
+ * Filters:
+ * - `overdue: true` / `false` — already fired and waiting on the user, or still upcoming
+ * - `completed: true` / `false` — dealt with, or still outstanding
+ * - `entityType` + `entityId` — reminders about one specific thing. `entityType` takes the same values CreateReminder accepts: document, ai_chat, project, email, channel, call, calendar_event
+ *
+ * The two flags are independent and compose: firing does not complete a reminder, so overdue and not completed is the needs-attention case, and a completed reminder never fires whether or not its time has passed.
+ *
+ * Each reminder comes back with its `id` (pass to UpdateReminder or DeleteReminder), `description`, `nextRunAt`, `overdue`, and what it is attached to. `nextRunAt` is UTC, so convert before quoting it: for America/New_York (UTC-4 in August), `"2026-08-13T19:00:00Z"` is "3:00 PM tomorrow".
+ *
+ * A `recurrence` field means the reminder repeats — rare, and currently broken: nothing in the app creates one and the dispatcher never fires them, so it sits at its `nextRunAt` without arriving. Say that rather than implying it is scheduled.
+ */
+export interface ListReminders {
+  /**
+   * Filter on whether the user has marked the reminder done. Defaults to false — only reminders still outstanding. Set true for ones already dealt with.
+   */
+  completed?: boolean | null;
+  /**
+   * Return only reminders attached to the thing with this id. Requires entityType.
+   */
+  entityId?: string | null;
+  /**
+   * Return only reminders attached to a thing of this type. Requires entityId.
+   */
+  entityType?: ReminderEntityType | null;
+  /**
+   * Maximum number of reminders to return. Defaults to 20, capped at 100.
+   */
+  limit?: number | null;
+  /**
+   * Filter on whether the reminder has already fired. True returns only reminders past their time, false only ones still upcoming. Omit for both.
+   */
+  overdue?: boolean | null;
+  /**
+   * Return only these reminders, by id. Use this to re-read a reminder you already know the id of. Omit to list all of them.
+   */
+  reminderIds?: string[] | null;
+}
+/**
+ * Response from the ListReminders tool.
+ */
+export interface ListRemindersResponse {
+  /**
+   * The matching reminders, soonest firing first.
+   */
+  reminders: ToolReminder[];
+  /**
+   * A human-readable summary of what came back.
+   */
+  summary: string;
+}
+/**
+ * A reminder as the model sees it.
+ */
+export interface ToolReminder {
+  /**
+   * Whether the user has marked the reminder as dealt with.
+   */
+  completed: boolean;
+  /**
+   * What the user wanted to be reminded about.
+   */
+  description: string;
+  /**
+   * Whether the reminder will fire at all. A disabled reminder keeps its
+   * schedule but is skipped by the dispatcher.
+   */
+  enabled: boolean;
+  /**
+   * The id of the thing the reminder is about.
+   */
+  entityId?: string | null;
+  /**
+   * The type of thing the reminder is about, when it is about something and
+   * that type is one these tools name. The app can attach a reminder to
+   * kinds of thing this list does not cover, so `entityId` may be present
+   * with no `entityType` beside it — the reminder is about something, but
+   * not something these tools can name or filter on.
+   */
+  entityType?: ReminderEntityType | null;
+  /**
+   * The reminder's id. Pass this to UpdateReminder or DeleteReminder.
+   */
+  id: string;
+  /**
+   * When the reminder fires next, RFC 3339 in UTC. The user thinks in their
+   * own timezone — convert before quoting this back to them.
+   */
+  nextRunAt: string;
+  /**
+   * Whether `nextRunAt` has already passed, evaluated against the server
+   * clock. An overdue reminder is one the user has been notified about and
+   * has not dealt with yet.
+   */
+  overdue: boolean;
+  /**
+   * For a repeating reminder, its cron expression and timezone. Absent on a
+   * one-shot, which is everything this toolset can create.
+   */
+  recurrence?: string | null;
 }
 /**
  * List the skills the user can access, most recently updated first. Skills are markdown documents containing instructions for AI to read and follow; after finding a relevant skill, read its instructions with ReadContent using the returned document id. Use this to discover what skills exist; when looking for a specific skill by name, prefer SearchSkills.
@@ -3816,6 +4312,161 @@ export interface TextEditorCodeExecutionToolError {
 export interface TextEditorCodeExecutionResponse {
   content: TextEditorCodeExecutionContent;
   tool_use_id: string;
+}
+/**
+ * A calendar event as returned by the create and update tools.
+ */
+export interface ToolCalendarEvent {
+  /**
+   * Total number of attendees.
+   */
+  attendeeCount: number;
+  /**
+   * Attendees, capped at 20; `attendee_count` has the full number.
+   */
+  attendees: ToolEventAttendee[];
+  /**
+   * Calendar the event belongs to, when known.
+   */
+  calendarId?: string | null;
+  /**
+   * Conference join URL, when a conference is attached.
+   */
+  conferenceUrl?: string | null;
+  /**
+   * Event body, truncated for brevity.
+   */
+  description?: string | null;
+  /**
+   * Exclusive event end: RFC 3339 UTC instant, or YYYY-MM-DD for all-day
+   * events.
+   */
+  end: string;
+  /**
+   * Macro calendar event id, used by UpdateCalendarEvent and
+   * DeleteCalendarEvent.
+   */
+  eventId: string;
+  /**
+   * Whether the event covers whole days.
+   */
+  isAllDay: boolean;
+  /**
+   * Whether the user's calendar prohibits modifying this event.
+   */
+  isReadOnly: boolean;
+  /**
+   * Whether the event recurs.
+   */
+  isRecurring: boolean;
+  /**
+   * Location label, when set.
+   */
+  location?: string | null;
+  /**
+   * Organizer email address, when known.
+   */
+  organizerEmail?: string | null;
+  /**
+   * Raw RFC 5545 recurrence properties, when the event recurs.
+   */
+  recurrenceLines: string[];
+  /**
+   * Event start: RFC 3339 UTC instant, or YYYY-MM-DD for all-day events.
+   */
+  start: string;
+  /**
+   * Event status: confirmed, tentative, or cancelled.
+   */
+  status: string;
+  /**
+   * IANA time zone the event was scheduled in, when known.
+   */
+  timeZone?: string | null;
+  /**
+   * Display title.
+   */
+  title: string;
+}
+/**
+ * Update an existing calendar event. Only the supplied fields change; omitted fields keep their current values. The change is written to Google immediately and attendees are notified of it, so confirm details with the user first. Get the `eventId` from ListCalendarEvents.
+ *
+ * Passing `attendees` replaces the full attendee list — include everyone who should remain, not just additions. An empty string for `description` or `location` clears it. Updating a recurring event changes the whole series. Fails on events from calendars the user cannot edit.
+ */
+export interface UpdateCalendarEvent {
+  /**
+   * Replacement attendee list — replaces all current attendees, so include everyone who should remain. Omit to leave attendees unchanged.
+   */
+  attendees?: AttendeeInput[] | null;
+  /**
+   * Change the event's video conference: "google_meet" attaches a fresh Google Meet, "remove" detaches the current conference. Omit to leave it untouched.
+   */
+  conference?: ConferenceChangeInput | null;
+  /**
+   * Replacement event body/description. An empty string clears it; omit to keep the current one.
+   */
+  description?: string | null;
+  /**
+   * The event's id, from ListCalendarEvents or CreateCalendarEvent.
+   */
+  eventId: string;
+  /**
+   * Replacement location label. An empty string clears it; omit to keep the current one.
+   */
+  location?: string | null;
+  /**
+   * Replacement RFC 5545 recurrence lines. An empty list makes the event one-off; omit to keep the current recurrence.
+   */
+  recurrenceLines?: string[] | null;
+  /**
+   * Replacement time: a timed span with `kind` "timed" (startsAt, endsAt, optional timeZone) or whole days with `kind` "allDay" (startDate, exclusive endDate). Omit to keep the current time.
+   */
+  time?: EventTimeInput | null;
+  /**
+   * Replacement title. Omit to keep the current title.
+   */
+  title?: string | null;
+}
+/**
+ * Change one of the current user's reminders: reword it, move when it fires, or mark it done. Get the `reminderId` from ListReminders or CreateReminder.
+ *
+ * Pass only the fields you are changing; anything omitted is left alone. At least one must be given.
+ *
+ * - Snooze or reschedule: set `remindAt`
+ * - Mark done: `completed: true` — the user has dealt with it and it leaves their active list
+ * - Reopen: `completed: false`
+ * - Reword: set `description`
+ *
+ * Marking done is the normal way to clear a reminder the user has handled, and it is reversible: the reminder drops out of the default ListReminders results but is still there, readable with `completed: true` and restorable with `completed: false`. Reach for DeleteReminder only when the user wants the reminder not to exist; that cannot be undone.
+ *
+ * Two things this tool will not do. It cannot change what a reminder is attached to — create a new reminder and delete this one instead. And setting `remindAt` on a repeating reminder replaces the repetition with that single firing, so only do it if the user asked to stop it repeating.
+ *
+ * ## Times are UTC — convert both ways
+ *
+ * Timestamps are absolute instants, in and out, while the user asks in their own timezone. Getting this wrong silently sets the reminder to the wrong hour.
+ *
+ * - **In:** resolve their wording against their local time, then convert. For America/New_York (UTC-4 in August), "3pm tomorrow" on 2026-08-12 is `"2026-08-13T19:00:00Z"`, not `"2026-08-13T15:00:00Z"`.
+ * - **Out:** report the response's UTC value back in their timezone — `"2026-08-13T19:00:00Z"` is "3:00 PM tomorrow".
+ *
+ * Ask for their timezone rather than assuming UTC.
+ */
+export interface UpdateReminder {
+  /**
+   * Mark the reminder as dealt with (true) or put it back on the active list (false).
+   */
+  completed?: boolean | null;
+  /**
+   * Replacement reminder text. Max 2000 characters.
+   */
+  description?: string | null;
+  /**
+   * Reschedule to this RFC 3339 timestamp in UTC (e.g. "2026-08-08T14:00:00Z"). Must be in the future — to move a reminder that has already fired, give it a new future time. Convert from the user's local timezone before sending; see "Times are UTC" in the tool description.
+   */
+  remindAt?: string | null;
+  /**
+   * The id of the reminder to change.
+   */
+  reminderId: string;
 }
 /**
  * Add or remove a single label from every message in a Gmail thread. In Gmail, nearly all inbox operations are just label add/remove operations, so this tool is the primitive for archiving, marking read/unread, starring, trashing, marking important/spam, and applying or removing custom labels.

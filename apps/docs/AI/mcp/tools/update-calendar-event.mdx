@@ -1,0 +1,23 @@
+---
+title: UpdateCalendarEvent
+description: "Update an existing calendar event. Only the supplied fields change; omitted fields keep their current values. The change is written to Google immediately and attendees are notified of it, so confirm details with the user first. Get the `eventId` from ListCalendarEvents.  Passing `attendees` replaces the full attendee list — include everyone who should remain, not just additions. An empty string for `description` or `location` clears it. Updating a recurring event changes the whole series. Fails on events from calendars the user cannot edit."
+---
+
+# UpdateCalendarEvent
+
+Update an existing calendar event. Only the supplied fields change; omitted fields keep their current values. The change is written to Google immediately and attendees are notified of it, so confirm details with the user first. Get the `eventId` from ListCalendarEvents.
+
+Passing `attendees` replaces the full attendee list — include everyone who should remain, not just additions. An empty string for `description` or `location` clears it. Updating a recurring event changes the whole series. Fails on events from calendars the user cannot edit.
+
+## Parameters
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `eventId` | string | Yes | The event's id, from ListCalendarEvents or CreateCalendarEvent. |
+| `title` | string | No | Replacement title. Omit to keep the current title. |
+| `description` | string | No | Replacement event body/description. An empty string clears it; omit to keep the current one. |
+| `location` | string | No | Replacement location label. An empty string clears it; omit to keep the current one. |
+| `time` | EventTimeInput | No | Replacement time: a timed span with `kind` "timed" (startsAt, endsAt, optional timeZone) or whole days with `kind` "allDay" (startDate, exclusive endDate). Omit to keep the current time. |
+| `attendees` | AttendeeInput[] | No | Replacement attendee list — replaces all current attendees, so include everyone who should remain. Omit to leave attendees unchanged. |
+| `recurrenceLines` | string[] | No | Replacement RFC 5545 recurrence lines. An empty list makes the event one-off; omit to keep the current recurrence. |
+| `conference` | `"google_meet"` \| `"remove"` | No | Change the event's video conference: "google_meet" attaches a fresh Google Meet, "remove" detaches the current conference. Omit to leave it untouched. |

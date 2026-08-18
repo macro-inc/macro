@@ -1,6 +1,6 @@
-import { isCalendarRangeSupported } from '@app/features/calendar/calendar-supported-range';
-import { CalendarView } from '@app/features/calendar/calendar-view';
-import { useCalendarUiFlag } from '@app/features/calendar/use-calendar-ui-flag';
+import { CalendarViewContextProvider } from '@app/features/calendar/components/CalendarViewContext';
+import { useCalendarUiFlag } from '@app/features/calendar/hooks/use-calendar-ui-flag';
+import { isCalendarRangeSupported } from '@app/features/calendar/utils/calendar-supported-range';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { usePosthog } from '@app/lib/analytics/posthog';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
@@ -10,8 +10,10 @@ import { createMethodRegistration } from '@core/orchestrator';
 import { blockHandleSignal } from '@core/signal/load';
 import { useCalendarOccurrencesQuery } from '@queries/calendar/occurrences';
 import { createMemo, createSignal, onMount, Show } from 'solid-js';
+import { CalendarFocusContextProvider } from './calendar-focus-target';
 import { isCalendarBlockRange } from './calendar-range';
 import { resolveCalendarBlockTarget } from './calendar-target';
+import { Workspace } from './components/Workspace';
 import type { CalendarBlockProps, CalendarBlockTargetRequest } from './types';
 
 function targetRequestFromParams(
@@ -47,7 +49,7 @@ function CalendarBlockDisabledRedirect() {
 }
 
 /** Bridges the singleton block lifecycle and navigation API to CalendarView. */
-export function CalendarBlockAdapter(props: CalendarBlockProps) {
+function CalendarBlockAdapter(props: CalendarBlockProps) {
   const calendarUiEnabled = useCalendarUiFlag();
   const posthog = usePosthog();
   const userId = useUserId();
@@ -102,7 +104,11 @@ export function CalendarBlockAdapter(props: CalendarBlockProps) {
         </Show>
       }
     >
-      <CalendarView focusTarget={focusTarget()} />
+      <CalendarFocusContextProvider target={focusTarget}>
+        <CalendarViewContextProvider>
+          <Workspace />
+        </CalendarViewContextProvider>
+      </CalendarFocusContextProvider>
     </Show>
   );
 }

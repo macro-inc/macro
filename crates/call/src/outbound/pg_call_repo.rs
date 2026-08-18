@@ -307,7 +307,9 @@ impl CallRepository for PgCallRepo {
         room_name: &str,
         created_by: MacroUserIdStr<'_>,
     ) -> Result<Option<Call>, Self::Err> {
-        // Create share permission
+        // Create share permission. Call access is channel-based by design, so
+        // the team default link-share preference intentionally does not apply:
+        // link sharing is off and the channel gets an explicit edit grant.
         let share_permission_id = uuid::Uuid::now_v7();
         let share_permission = SharePermissionV2 {
             id: share_permission_id.to_string(),

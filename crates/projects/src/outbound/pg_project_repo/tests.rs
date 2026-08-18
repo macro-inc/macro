@@ -207,7 +207,7 @@ async fn reads_share_permissions_and_bumps_modified_timestamp(
 )]
 async fn create_is_atomic_and_inserts_all_metadata(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let repo = PgProjectRepo::new(pool.clone());
-    let permission = SharePermissionV2::new_project_share_permission();
+    let permission = SharePermissionV2::new_project_share_permission(None);
     let project = repo
         .create_project(CreateProjectArgs {
             user_id: "macro|owner@test.com".to_owned(),
@@ -265,7 +265,7 @@ async fn create_is_atomic_and_inserts_all_metadata(pool: Pool<Postgres>) -> anyh
 )]
 async fn create_defaults_enabled_link_share_to_view(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let repo = PgProjectRepo::new(pool.clone());
-    let mut permission = SharePermissionV2::new_project_share_permission();
+    let mut permission = SharePermissionV2::new_project_share_permission(None);
     permission.link_share = Some(LinkShare::Team);
 
     let project = repo
@@ -619,7 +619,7 @@ async fn upload_folder_preserves_tree_metadata_and_compensates(
         ),
         ("Empty".to_owned(), FileSystemNode::Folder(HashMap::new())),
     ]));
-    let mut share_permission = SharePermissionV2::new_project_share_permission();
+    let mut share_permission = SharePermissionV2::new_project_share_permission(None);
     share_permission.link_share = Some(LinkShare::Team);
     let result = repo
         .upload_folder(UploadFolderRepoArgs {

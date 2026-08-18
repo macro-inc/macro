@@ -475,7 +475,13 @@ fn enqueue_does_not_skip_a_leased_or_deferred_head() {
 #[test]
 fn claim_failure_after_enqueue_preserves_one_durable_visible_mutation() {
     block_on(async {
-        let mut engine = Engine::new(ClaimFailingStorage::new());
+        let compatibility_storage = ClaimFailingStorage::new();
+        assert_eq!(
+            compatibility_storage.queue_diagnostics().await.unwrap(),
+            cache_core::store::QueueDiagnostics::default(),
+            "the compatibility default must be explicitly unavailable"
+        );
+        let mut engine = Engine::new(compatibility_storage);
         engine
             .write_query(
                 None,

@@ -1,8 +1,8 @@
 import {
   TurnOffCalendarDialog,
   type TurnOffCalendarTarget,
-} from '@app/features/calendar/TurnOffCalendarDialog';
-import { useCalendarUiFlag } from '@app/features/calendar/use-calendar-ui-flag';
+} from '@app/features/calendar/components/TurnOffCalendarDialog';
+import { useCalendarUiFlag } from '@app/features/calendar/hooks/use-calendar-ui-flag';
 import { openAddInboxDialog } from '@app/features/inbox/AddInboxDialog';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { toast } from '@core/component/Toast/Toast';
@@ -531,12 +531,16 @@ function InboxRow(props: {
             </Button>
           </Show>
           {/* Only the owner sees this: turning calendar off deletes the
-              inbox's calendar data, which a delegate must not do. */}
+              inbox's calendar data, which a delegate must not do. Offered
+              whenever that data exists, not only while the grant satisfies
+              today's capability check — an inbox synced under an earlier scope
+              set still has events to remove. */}
           <Show
             when={
               calendarUiEnabled() &&
               props.isOwn &&
-              !props.link.needs_calendar_permission
+              (!props.link.needs_calendar_permission ||
+                props.link.has_calendar_data)
             }
           >
             <Tooltip label="Turn off calendar">

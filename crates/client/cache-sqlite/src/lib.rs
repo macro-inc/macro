@@ -20,7 +20,7 @@ use cache_core::queue::{
     ClaimedMutation, MutationClaimRequest, MutationClaimToken, MutationId, MutationRequest,
     NewQueuedMutation, PersistedOptimisticLayer, QueuedMutation, StoredMutation,
 };
-use cache_core::store::Storage;
+use cache_core::store::{QueueDiagnostics, QueueDiagnosticsAvailability, Storage};
 use cache_core::value::{EntityKey, Record};
 use rusqlite::{Connection, OptionalExtension, Transaction, params, params_from_iter};
 use std::path::Path;
@@ -89,6 +89,8 @@ impl SqliteStorage {
                  last_error TEXT,
                  created_at_ms INTEGER NOT NULL
              );
+             CREATE INDEX IF NOT EXISTS mutation_queue_created_at_ms_idx
+                 ON mutation_queue(created_at_ms);
              CREATE TABLE IF NOT EXISTS optimistic_layers (
                  mutation_id INTEGER PRIMARY KEY,
                  optimistic_data_json TEXT NOT NULL,
@@ -388,6 +390,27 @@ impl Storage for SqliteStorage {
         Ok(out)
     }
 
+    async fn queue_diagnostics(&self) -> Result<QueueDiagnostics, Self::Error> {
+        let (depth, oldest_created_at_ms): (i64, Option<i64>) = self.conn().query_row(
+            "SELECT COUNT(*), MIN(created_at_ms) FROM mutation_queue",
+            [],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )?;
+        let depth = u64::try_from(depth).map_err(|_| {
+            SqliteStorageError::QueueInvariant("negative mutation queue depth".to_string())
+        })?;
+        if (depth == 0) != oldest_created_at_ms.is_none() {
+            return Err(SqliteStorageError::QueueInvariant(
+                "queue depth and oldest timestamp disagree".to_string(),
+            ));
+        }
+        Ok(QueueDiagnostics {
+            availability: QueueDiagnosticsAvailability::Available,
+            depth,
+            oldest_created_at_ms,
+        })
+    }
+
     async fn claim_next_mutation(
         &mut self,
         request: MutationClaimRequest,
@@ -595,6 +618,75 @@ mod tests {
 
             s.clear().await.unwrap();
             assert_eq!(s.record_count().unwrap(), 0);
+        });
+    }
+
+    #[test]
+    fn queue_diagnostics_return_only_depth_and_oldest_timestamp() {
+        block_on(async {
+            let storage = SqliteStorage::open_in_memory("user-1").unwrap();
+            assert_eq!(
+                storage.queue_diagnostics().await.unwrap(),
+                QueueDiagnostics {
+                    availability: QueueDiagnosticsAvailability::Available,
+                    depth: 0,
+                    oldest_created_at_ms: None,
+                }
+            );
+            storage
+                .conn()
+                .execute(
+                    "INSERT INTO mutation_queue (query, variables_json, created_at_ms) VALUES ('mutation A { a }', '{}', 9), ('mutation B { b }', '{}', 4)",
+                    [],
+                )
+                .unwrap();
+            assert_eq!(
+                storage.queue_diagnostics().await.unwrap(),
+                QueueDiagnostics {
+                    availability: QueueDiagnosticsAvailability::Available,
+                    depth: 2,
+                    oldest_created_at_ms: Some(4),
+                }
+            );
+        });
+    }
+
+    #[test]
+    fn queue_diagnostics_query_uses_covering_index_at_scale() {
+        block_on(async {
+            let storage = SqliteStorage::open_in_memory("queue-plan").unwrap();
+            storage
+                .conn()
+                .execute(
+                    "WITH RECURSIVE values_to_insert(value) AS (VALUES(1) UNION ALL SELECT value + 1 FROM values_to_insert WHERE value < 10000) INSERT INTO mutation_queue (query, variables_json, created_at_ms) SELECT 'mutation Scale { scale }', '{}', 10001 - value FROM values_to_insert",
+                    [],
+                )
+                .unwrap();
+            let details = {
+                let conn = storage.conn();
+                let mut plan = conn
+                    .prepare(
+                        "EXPLAIN QUERY PLAN SELECT COUNT(*), MIN(created_at_ms) FROM mutation_queue",
+                    )
+                    .unwrap();
+                plan.query_map([], |row| row.get::<_, String>(3))
+                    .unwrap()
+                    .collect::<Result<Vec<_>, _>>()
+                    .unwrap()
+                    .join(" ")
+            };
+            assert!(
+                details.contains("mutation_queue_created_at_ms_idx"),
+                "diagnostics query did not use the timestamp index: {details}"
+            );
+            assert_eq!(
+                storage.queue_diagnostics().await.unwrap(),
+                QueueDiagnostics {
+                    availability: QueueDiagnosticsAvailability::Available,
+                    depth: 10_000,
+                    oldest_created_at_ms: Some(1),
+                }
+            );
         });
     }
 

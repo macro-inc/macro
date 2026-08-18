@@ -13,9 +13,10 @@ members = [
   "crates/calendar_events",
   "crates/channel_bots",
   "crates/client/cache-core",
-  "crates/client/cache-idb",
   "crates/client/cache-sqlite",
+  "crates/client/cache-turso",
   "crates/client/cache-wasm",
+  "crates/client/turso-opfs",
   "crates/complete_graph",
   "crates/cowlike",
   "crates/crm",
@@ -47,6 +48,8 @@ members = [
   "crates/macro_sync_service_jwt",
   "crates/maybe_send",
   "crates/memory",
+  "crates/mcp_select",
+  "crates/pipedream_mcp",
   "crates/onboarding",
   "crates/prompt",
   "crates/properties_service",
@@ -205,6 +208,7 @@ pdfium-render = { version = "0.8.37", default-features = false, features = [
 ] }
 pgvector = { version = "0.4", features = ["postgres", "sqlx"] }
 postcard = { version = "1", features = ["use-std"] }
+pollster = "0.4"
 quote = "1"
 rand = "0.9.0"
 # uses vendored to fix lambda builds failing.
@@ -265,6 +269,9 @@ tracing = "0.1.44"
 tracing-opentelemetry = "0.32.1"
 tracing-subscriber = { version = "0.3.22", features = ["env-filter", "json"] }
 tracing-tree = "0.4.0"
+# Exact remotely available Turso fork revision approved by the browser cache G0.
+# Its source tree is identical to the locally verified cf7de761 revision.
+turso_core = { git = "https://github.com/seanaye/turso", rev = "be9acfe9e5e6efb17911af84047e4855cace53a3", default-features = false }
 tungstenite = { version = "0.28", features = ["url"] }
 unsynn = "0.3"
 urlencoding = "2.1.3"
@@ -281,6 +288,8 @@ wiremock = "0.6.5"
 # anything older than 0.2.123, so keep this floor above that.
 wasm-bindgen = "0.2.123"
 wasm-bindgen-futures = "0.4"
+wasm-bindgen-test = "0.3"
+web-sys = "0.3"
 web-time = "1.1.0"
 worker = "0.8.1"
 # this is pinned to match axum 0.7.9 dependency requirements

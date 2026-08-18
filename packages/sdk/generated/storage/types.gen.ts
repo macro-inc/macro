@@ -2980,6 +2980,10 @@ export type CreateTaskResponse = {
      */
     documentMetadata: DocumentResponseMetadata;
     /**
+     * Base64-encoded canonical Loro snapshot used to initialize the task.
+     */
+    initialSnapshot: string;
+    /**
      * The team this task number is scoped to.
      */
     teamId?: string | null;
@@ -10468,6 +10472,10 @@ export type CreateTaskHandlerResponses = {
          * Metadata for the created document
          */
         documentMetadata: DocumentResponseMetadata;
+        /**
+         * Base64-encoded canonical Loro snapshot used to initialize the task.
+         */
+        initialSnapshot: string;
         /**
          * The team this task number is scoped to.
          */

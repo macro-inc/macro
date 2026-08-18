@@ -118,9 +118,10 @@ type DisableCalendarCallbacks = MutationCallbacks<
 /**
  * Turns calendar off for one inbox: the backend deletes its calendar data and
  * drops the calendar scopes from its Google grant. The cached link flips to
- * `calendar_disabled` + `needs_calendar_permission` right away, which is what
- * swaps the settings row back to "Enable calendar" and keeps the enable prompt
- * quiet, and the emptied calendar caches are refetched.
+ * `calendar_disabled` + `needs_calendar_permission` right away and drops
+ * `has_calendar_data`, which is what swaps the settings row back to "Enable
+ * calendar", retires the turn-off control, and keeps the enable prompt quiet.
+ * The emptied calendar caches are refetched.
  */
 export function useDisableCalendarMutation(
   callbacks?: DisableCalendarCallbacks
@@ -152,6 +153,7 @@ export function useDisableCalendarMutation(
                         ...link,
                         calendar_disabled: true,
                         needs_calendar_permission: true,
+                        has_calendar_data: false,
                       }
                     : link
                 ),

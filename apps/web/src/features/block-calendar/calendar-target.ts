@@ -1,20 +1,7 @@
-import type { CalendarFocusTarget } from '@app/features/calendar/calendar-focus-target';
+import { parseLocalDate } from '@app/features/calendar/utils/calendar-date';
 import type { CalendarOccurrenceItem } from '@service-storage/generated/schemas/calendarOccurrenceItem';
+import type { CalendarFocusTarget } from './calendar-focus-target';
 import type { CalendarBlockTargetRequest } from './types';
-
-function parseLocalDate(value: string): Date | undefined {
-  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
-  if (!match) return undefined;
-  const year = Number(match[1]);
-  const month = Number(match[2]) - 1;
-  const day = Number(match[3]);
-  const date = new Date(year, month, day);
-  return date.getFullYear() === year &&
-    date.getMonth() === month &&
-    date.getDate() === day
-    ? date
-    : undefined;
-}
 
 function occurrenceDate(item: CalendarOccurrenceItem): Date | undefined {
   const time = item.occurrence.time;

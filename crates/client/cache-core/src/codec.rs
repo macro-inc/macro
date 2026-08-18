@@ -1,8 +1,10 @@
-//! Binary record codec shared by all persistent backends (IndexedDB,
-//! SQLite). Records are stored as postcard bytes; the cache namespace embeds
-//! [`CACHE_FORMAT_VERSION`] and [`CACHE_SCHEMA_COMPATIBILITY_EPOCH`]. Additive
-//! GraphQL schema changes keep existing records, while incompatible schema or
-//! record-format changes start a fresh cache.
+//! Binary record codec shared by all persistent backends (browser Turso and
+//! native SQLite). Records are stored as postcard bytes; the logical namespace
+//! embeds [`CACHE_FORMAT_VERSION`] and [`CACHE_SCHEMA_COMPATIBILITY_EPOCH`].
+//! A healthy, graceful browser reopen with matching versions preserves records,
+//! queued mutations, and optimistic layers. A compatibility/format mismatch or
+//! abrupt/uncertain browser owner loss physically resets the database and
+//! discards all three.
 
 use crate::normalize::RecordUpdates;
 use crate::queue::{PersistedOptimisticLayer, StoredMutation};
@@ -75,8 +77,10 @@ pub fn decode_record_updates(bytes: &[u8]) -> Result<RecordUpdates, CodecError> 
     decode(bytes)
 }
 
-/// Canonical database/namespace name for a cache instance.
-/// `scope` identifies the user/workspace (host-provided).
+/// Canonical logical namespace for a cache instance.
+///
+/// `scope` is an anonymous, client-generated token supplied by the host. It is
+/// neither user nor workspace identity.
 pub fn cache_namespace(scope: &str) -> String {
     format!("graphql-cache:{scope}:s{CACHE_SCHEMA_COMPATIBILITY_EPOCH}:v{CACHE_FORMAT_VERSION}")
 }
@@ -84,9 +88,11 @@ pub fn cache_namespace(scope: &str) -> String {
 /// Stable physical database name for a cache scope.
 ///
 /// Unlike [`cache_namespace`], this deliberately excludes the schema
-/// compatibility epoch and cache format version. Normalized records are
-/// disposable on version changes, while queued mutations represent user intent
-/// and must remain discoverable.
+/// compatibility epoch and cache format version so the browser can acquire the
+/// same main/WAL paths and validate their metadata. Only a healthy, graceful
+/// close and compatible reopen preserves those files. A compatibility/format
+/// mismatch or abrupt/uncertain owner loss physically resets both files,
+/// discarding every row, including queued mutations and optimistic layers.
 pub fn cache_database_name(scope: &str) -> String {
     format!("graphql-cache:{scope}")
 }
@@ -133,6 +139,9 @@ mod tests {
 
     #[test]
     fn namespace_uses_schema_compatibility_epoch_not_schema_hash() {
-        assert_eq!(cache_namespace("user-1"), "graphql-cache:user-1:s1:v2");
+        assert_eq!(
+            cache_namespace("client-token-1"),
+            "graphql-cache:client-token-1:s1:v2"
+        );
     }
 }

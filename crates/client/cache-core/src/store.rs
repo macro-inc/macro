@@ -1,9 +1,9 @@
 //! Storage abstraction: the cold tier behind the in-memory hot tier.
 //!
-//! Implementations: in-memory (tests, Phase 1), IndexedDB via the `idb`
-//! crate (browser, Phase 2), SQLite (Tauri native, Phase 2). Futures are
-//! [`MaybeSend`]: `Send` on native targets (so hosts can drive the engine
-//! from a multi-threaded runtime), unbounded on wasm — wasm futures aren't
+//! Implementations: in-memory (tests), Turso over OPFS (browser), and SQLite
+//! (Tauri native). Futures are [`MaybeSend`]: `Send` on native targets (so
+//! hosts can drive the engine from a multi-threaded runtime), unbounded on
+//! wasm — wasm futures aren't
 //! `Send`.
 
 use crate::queue::{
@@ -14,6 +14,27 @@ use crate::value::{EntityKey, Record};
 use maybe_send::MaybeSend;
 use std::collections::{BTreeMap, HashMap};
 use std::convert::Infallible;
+
+/// Whether a storage implementation can provide queue diagnostics.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum QueueDiagnosticsAvailability {
+    /// This compatibility implementation has no authoritative diagnostics.
+    #[default]
+    Unavailable,
+    /// The depth and oldest timestamp were read from authoritative storage.
+    Available,
+}
+
+/// Payload-free durable mutation queue diagnostics.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct QueueDiagnostics {
+    /// Whether the numeric snapshot is authoritative.
+    pub availability: QueueDiagnosticsAvailability,
+    /// Number of durable mutations waiting for settlement.
+    pub depth: u64,
+    /// Oldest durable enqueue timestamp, or `None` when the queue is empty.
+    pub oldest_created_at_ms: Option<i64>,
+}
 
 /// Async KV over normalized records. Batch-oriented by design: the engine
 /// issues one `get_batch` per denormalization round, never per record.
@@ -57,6 +78,17 @@ pub trait Storage: MaybeSend {
     fn load_mutation_queue(
         &self,
     ) -> impl Future<Output = Result<Vec<QueuedMutation>, Self::Error>> + MaybeSend;
+
+    /// Returns only queue depth and the oldest enqueue timestamp.
+    ///
+    /// The default preserves source compatibility for external storage
+    /// implementations and explicitly reports diagnostics as unavailable.
+    /// Production backends override it with an authoritative aggregate query.
+    fn queue_diagnostics(
+        &self,
+    ) -> impl Future<Output = Result<QueueDiagnostics, Self::Error>> + MaybeSend {
+        async { Ok(QueueDiagnostics::default()) }
+    }
 
     /// Claims the oldest mutation when it is runnable and not actively leased.
     /// Later mutations are never skipped.
@@ -198,6 +230,18 @@ impl Storage for InMemoryStorage {
                 optimistic: optimistic.clone(),
             })
             .collect())
+    }
+
+    async fn queue_diagnostics(&self) -> Result<QueueDiagnostics, Self::Error> {
+        Ok(QueueDiagnostics {
+            availability: QueueDiagnosticsAvailability::Available,
+            depth: self.mutations.len() as u64,
+            oldest_created_at_ms: self
+                .mutations
+                .values()
+                .map(|(mutation, _)| mutation.created_at_ms)
+                .min(),
+        })
     }
 
     async fn claim_next_mutation(

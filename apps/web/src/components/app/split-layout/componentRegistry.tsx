@@ -1,7 +1,6 @@
 import { useActivityFeedFlag } from '@app/features/activity/use-activity-feed-flag';
-import { EventComposer } from '@app/features/calendar/events/EventComposer';
-import type { EventEditorInitialValues } from '@app/features/calendar/events/EventEditorForm';
-import type { CalendarEvent } from '@app/features/calendar/events/types';
+import type { EventEditorInitialValues } from '@app/features/calendar/components/composer/event-form-model';
+import type { CalendarEvent } from '@app/features/calendar/types';
 import { GettingStarted } from '@app/features/getting-started';
 import { Home } from '@app/features/home';
 import { queryStateFrom } from '@app/features/next-soup/filters/filter-store';
@@ -15,6 +14,7 @@ import { SettingsPanelComponentWrapper } from '@app/features/settings/Settings';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { usePosthog } from '@app/lib/analytics/posthog';
 import { globalSplitManager } from '@app/signal/splitLayout';
+import { EventComposerSplit } from '@block-calendar/components/EventComposerSplit';
 import { ChannelCompose } from '@block-channel/component/Compose';
 import { EmailCompose } from '@block-email/component/compose/Compose';
 import { ComposeSkill } from '@block-md/component/ComposeSkill';
@@ -522,7 +522,7 @@ registerComponent('task-compose', (params) => {
 registerComponent('calendar-event-compose', (params) => {
   usePageViewTracking('calendar-event-compose');
   return (
-    <EventComposer
+    <EventComposerSplit
       event={params?.event as CalendarEvent | undefined}
       initialValues={
         params?.initialValues as EventEditorInitialValues | undefined

@@ -27,7 +27,7 @@ use crate::queue::{
 use crate::record_selection::{
     RecordCursor, RecordSelection, RecordSelectionError, SelectedRecordPage, validate_limit,
 };
-use crate::store::Storage;
+use crate::store::{QueueDiagnostics, Storage};
 use crate::value::{EntityKey, Record, canonical_json};
 use lru::LruCache;
 use serde_json::Value as Json;
@@ -1309,10 +1309,26 @@ impl<S: Storage> Engine<S> {
         self.deps.active_ops()
     }
 
-    /// Access to the underlying storage (hosts need it for lifecycle
-    /// operations like closing connections before database deletion).
+    /// Returns payload-free durable mutation queue diagnostics.
+    pub async fn queue_diagnostics(&self) -> Result<QueueDiagnostics, EngineError<S::Error>> {
+        self.storage
+            .queue_diagnostics()
+            .await
+            .map_err(EngineError::Storage)
+    }
+
+    /// Access to the underlying storage for non-consuming diagnostics.
     pub fn storage(&self) -> &S {
         &self.storage
+    }
+
+    /// Consumes the engine and returns its owned storage.
+    ///
+    /// Hosts must use this transition for storage lifecycles that require
+    /// exclusive ownership, such as proving that a browser database connection
+    /// is closed before preserving or physically resetting its OPFS files.
+    pub fn into_storage(self) -> S {
+        self.storage
     }
 
     /// Memoized document parse. Takes the map (not `&mut self`) so callers

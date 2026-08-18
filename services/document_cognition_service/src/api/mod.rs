@@ -123,6 +123,9 @@ fn api_router(api_context: ApiContext) -> Router {
             },
         ))
         .merge(mcp_client::inbound::mcp_router(mcp_state.clone()))
+        .merge(pipedream_mcp::inbound::pipedream_mcp_router(
+            api_context.pipedream_state.clone(),
+        ))
         .with_state(api_context.clone());
 
     Router::new()

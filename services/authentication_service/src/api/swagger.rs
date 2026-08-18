@@ -209,6 +209,7 @@ use model::user::{
                         PatchUserOnboardingRequest,
 
                         // Teams
+                        models_permissions::share_permission::LinkShare,
                         TeamRole,
                         TeamMember,
                         Team,

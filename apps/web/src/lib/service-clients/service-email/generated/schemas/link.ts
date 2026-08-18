@@ -18,6 +18,12 @@ unprompted calendar nags must stay quiet for the latter. */
   created_at: string;
   email_address: string;
   fusionauth_user_id: string;
+  /** Whether Macro holds calendar data for this inbox. Drives the turn-off
+control on its own, so removing that data never depends on the recorded
+scopes still matching the set Macro requests today — a set that changes
+as the integration narrows, stranding data behind a capability check
+that no longer recognizes an older grant. */
+  has_calendar_data: boolean;
   id: string;
   is_primary: boolean;
   is_sync_active: boolean;

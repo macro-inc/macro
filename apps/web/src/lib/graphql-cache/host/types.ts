@@ -1,7 +1,8 @@
 /**
  * Transport-agnostic cache host interface consumed by the urql exchange and
  * imperative writers (websocket handlers). Implementations:
- * - worker-host.ts: browser (SharedWorker + wasm engine, or no-op fallback)
+ * - worker-host.ts: browser (SharedWorker coordinator + elected WASM engine,
+ *   or no-op fallback)
  * - tauri-host.ts (Phase 3b): Tauri IPC to the native engine
  */
 
@@ -72,7 +73,7 @@ export interface InitialMutationClaimArgs {
 export interface CacheHost {
   /** Stable id of this context; used to namespace operation ids. */
   readonly clientId: string;
-  /** True for the storage-free fallback used without SharedWorker support. */
+  /** True for the storage-free fallback when browser cache APIs are unsupported. */
   readonly disabled?: boolean;
 
   readQuery(args: CacheReadArgs): Promise<ReadResult>;

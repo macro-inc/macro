@@ -528,6 +528,18 @@ where
                     .await?;
                 channel_role_result_to_permission(result)
             }
+            // Ownership is the whole access model, so the only level this can
+            // yield is `Owner` — a caller who is not the owner gets no row.
+            // `ReminderAccessExtractor` builds the same receipt straight from
+            // `get_access_level`; this arm is what lets a non-axum caller (an
+            // AI tool) mint one without reimplementing that.
+            EntityType::Reminder => {
+                let access = self.repo.get_reminder_access(entity_id, user_id).await?;
+                match access {
+                    Some(access_level) => Ok(EntityPermission::AccessLevel { access_level }),
+                    None => Err(AccessError::Unauthorized),
+                }
+            }
             _ => Err(AccessError::BadRequest("Unsupported entity type")),
         }
     }

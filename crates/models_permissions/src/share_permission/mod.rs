@@ -29,6 +29,12 @@ pub struct SharePermissionV2 {
     pub channel_share_permissions: Option<Vec<ChannelSharePermission>>,
 }
 
+/// The owner's team link-share preference. `Some(scope)` = the team wants new items link-shared
+/// at `scope`; `None` = the team wants link sharing off by default.
+/// (Wrapped so call sites can't confuse "no team" with "team says off".)
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TeamLinkShareDefault(pub Option<LinkShare>);
+
 impl SharePermissionV2 {
     fn new(link_share: Option<LinkShare>, link_share_access_level: Option<AccessLevel>) -> Self {
         SharePermissionV2 {
@@ -40,24 +46,50 @@ impl SharePermissionV2 {
         }
     }
 
+    /// Resolves the initial link share for a new item: no team → the entity-type default; a team
+    /// scope → that scope with the entity's default level (else `View`); a team that turned link
+    /// sharing off → off.
+    fn resolve(
+        team_default: Option<TeamLinkShareDefault>,
+        entity_default: (Option<LinkShare>, Option<AccessLevel>),
+    ) -> (Option<LinkShare>, Option<AccessLevel>) {
+        match team_default {
+            None => entity_default,
+            Some(TeamLinkShareDefault(Some(scope))) => (
+                Some(scope),
+                Some(entity_default.1.unwrap_or(AccessLevel::View)),
+            ),
+            Some(TeamLinkShareDefault(None)) => (None, None),
+        }
+    }
+
     /// Creates a new share permission object for a document
-    pub fn new_document_share_permission(file_type: Option<FileType>) -> Self {
-        let (link_share, link_share_access_level) = match file_type {
+    pub fn new_document_share_permission(
+        file_type: Option<FileType>,
+        team_default: Option<TeamLinkShareDefault>,
+    ) -> Self {
+        let entity_default = match file_type {
             Some(FileType::Md) => (Some(LinkShare::Public), Some(AccessLevel::Edit)),
             _ => (None, None),
         };
 
+        let (link_share, link_share_access_level) = Self::resolve(team_default, entity_default);
         Self::new(link_share, link_share_access_level)
     }
 
     /// Creates a new share permission object for an ai chat
-    pub fn new_chat_share_permission() -> Self {
-        Self::new(Some(LinkShare::Public), Some(AccessLevel::View))
+    pub fn new_chat_share_permission(team_default: Option<TeamLinkShareDefault>) -> Self {
+        let (link_share, link_share_access_level) = Self::resolve(
+            team_default,
+            (Some(LinkShare::Public), Some(AccessLevel::View)),
+        );
+        Self::new(link_share, link_share_access_level)
     }
 
     /// Creates a new share permission object for a project
-    pub fn new_project_share_permission() -> Self {
-        Self::new(None, None)
+    pub fn new_project_share_permission(team_default: Option<TeamLinkShareDefault>) -> Self {
+        let (link_share, link_share_access_level) = Self::resolve(team_default, (None, None));
+        Self::new(link_share, link_share_access_level)
     }
 }
 

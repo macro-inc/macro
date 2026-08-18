@@ -1,0 +1,31 @@
+[package]
+edition = "2024"
+name = "cache-turso"
+publish = false
+version = "0.1.0"
+
+[features]
+default = []
+browser-test-hooks = []
+
+[dependencies]
+cache-core = { path = "../cache-core" }
+maybe_send = { path = "../../maybe_send" }
+thiserror = { workspace = true }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+turso-opfs = { path = "../turso-opfs" }
+turso_core = { workspace = true, features = ["fs", "pure-rust-crypto", "uuid"] }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+turso_core = { workspace = true, features = ["fs", "pure-rust-crypto", "uuid"] }
+
+[dev-dependencies]
+pollster = { workspace = true }
+serde_json = { workspace = true }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+cache-sqlite = { path = "../cache-sqlite" }
+
+[target.'cfg(target_arch = "wasm32")'.dev-dependencies]
+wasm-bindgen-test = { workspace = true }

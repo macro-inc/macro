@@ -5671,7 +5671,12 @@
                 "schema": {
                   "type": "object",
                   "description": "Response for creating a task.",
-                  "required": ["documentId", "documentMetadata", "token"],
+                  "required": [
+                    "documentId",
+                    "documentMetadata",
+                    "token",
+                    "initialSnapshot"
+                  ],
                   "properties": {
                     "documentId": {
                       "type": "string",
@@ -5680,6 +5685,10 @@
                     "documentMetadata": {
                       "$ref": "#/components/schemas/DocumentResponseMetadata",
                       "description": "Metadata for the created document"
+                    },
+                    "initialSnapshot": {
+                      "type": "string",
+                      "description": "Base64-encoded canonical Loro snapshot used to initialize the task."
                     },
                     "teamId": {
                       "type": ["string", "null"],
@@ -15254,7 +15263,12 @@
       "CreateTaskResponse": {
         "type": "object",
         "description": "Response for creating a task.",
-        "required": ["documentId", "documentMetadata", "token"],
+        "required": [
+          "documentId",
+          "documentMetadata",
+          "token",
+          "initialSnapshot"
+        ],
         "properties": {
           "documentId": {
             "type": "string",
@@ -15263,6 +15277,10 @@
           "documentMetadata": {
             "$ref": "#/components/schemas/DocumentResponseMetadata",
             "description": "Metadata for the created document"
+          },
+          "initialSnapshot": {
+            "type": "string",
+            "description": "Base64-encoded canonical Loro snapshot used to initialize the task."
           },
           "teamId": {
             "type": ["string", "null"],

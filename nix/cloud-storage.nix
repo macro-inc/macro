@@ -709,6 +709,7 @@
           just-lsp
           taplo
           bun
+          brotli
           pnpm
           sqlx-cli
           typescript-language-server

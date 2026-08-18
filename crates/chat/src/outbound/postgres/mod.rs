@@ -15,8 +15,8 @@ use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use model::chat::ChatMessageWithAttachments;
 use model::chat::NewChatMessage;
-use models_permissions::share_permission::SharePermissionV2;
 use models_permissions::share_permission::access_level::AccessLevel;
+use models_permissions::share_permission::{SharePermissionV2, TeamLinkShareDefault};
 use sqlx::PgPool;
 
 /// Convert an [`anyhow::Error`] to a [`ChatErr`], detecting `sqlx::RowNotFound`.
@@ -75,11 +75,12 @@ impl PgChatRepo {
 }
 
 impl ChatRepo for PgChatRepo {
-    #[tracing::instrument(err, skip(self))]
+    #[tracing::instrument(err, skip(self, share_permission))]
     async fn create(
         &self,
         user_id: MacroUserIdStr<'static>,
         args: CreateChatArgs,
+        share_permission: SharePermissionV2,
     ) -> Result<String> {
         let mut tx = self
             .pool
@@ -96,7 +97,6 @@ impl ChatRepo for PgChatRepo {
         .await
         .map_err(to_chat_err)?;
 
-        let share_permission = SharePermissionV2::new_chat_share_permission();
         queries::create_chat_permission::create_chat_permission(
             &mut tx,
             &chat_id,
@@ -130,6 +130,16 @@ impl ChatRepo for PgChatRepo {
         })?;
 
         Ok(chat_id)
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn get_team_default_link_share(
+        &self,
+        user_id: &str,
+    ) -> Result<Option<TeamLinkShareDefault>> {
+        share_permission_db_utils::get_team_default_link_share(&self.pool, user_id)
+            .await
+            .map_err(|e| ChatErr::Unknown(e.into()))
     }
 
     #[tracing::instrument(err, skip(self))]
@@ -168,12 +178,13 @@ impl ChatRepo for PgChatRepo {
             .map_err(to_chat_err)
     }
 
-    #[tracing::instrument(err, skip(self))]
+    #[tracing::instrument(err, skip(self, share_permission))]
     async fn copy_chat(
         &self,
         user_id: MacroUserIdStr<'static>,
         source_chat_id: &str,
         args: CopyChatArgs,
+        share_permission: SharePermissionV2,
     ) -> Result<String> {
         let mut tx = self
             .pool
@@ -190,7 +201,6 @@ impl ChatRepo for PgChatRepo {
         .await
         .map_err(to_chat_err)?;
 
-        let share_permission = SharePermissionV2::new_chat_share_permission();
         queries::create_chat_permission::create_chat_permission(
             &mut tx,
             &chat_id,

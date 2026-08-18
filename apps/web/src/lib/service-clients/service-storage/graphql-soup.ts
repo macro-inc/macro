@@ -1,7 +1,4 @@
-import {
-  ENABLE_BEARER_TOKEN_AUTH,
-  ENABLE_GRAPHQL_SOUP,
-} from '@core/constant/featureFlags';
+import { ENABLE_BEARER_TOKEN_AUTH } from '@core/constant/featureFlags';
 import { SERVER_HOSTS } from '@core/constant/servers';
 import { fetchToken } from '@core/util/fetchWithToken';
 import { isTauri } from '@core/util/platform';
@@ -14,6 +11,7 @@ import {
   entityFromArgument,
 } from '@graphql-cache/index';
 import { registerCacheHost } from '@graphql-cache/lifecycle';
+import { getBrowserTursoCacheRolloutDecision } from '@graphql-cache/rollout';
 import { getOrCreateCacheScope } from '@graphql-cache/scope';
 import { getMacroApiToken } from '@service-auth/fetch';
 import type { ApiUserNotification } from '@service-notification/generated/schemas/apiUserNotification';
@@ -121,11 +119,27 @@ const graphqlSoupClient = createClient({
  * process (graphql_cache_plugin).
  */
 export function graphqlCacheEnabled(): boolean {
-  return ENABLE_GRAPHQL_SOUP();
+  if (!isTauri() && browserCacheClientActivated) return true;
+  return getBrowserTursoCacheRolloutDecision().enabled;
 }
 
 let cachedClient: Client | undefined;
 let cachedCacheHost: CacheHost | undefined;
+let cachedCacheCleanup: (() => void) | undefined;
+let browserCacheClientActivated = false;
+
+function fallbackAfterInitializationFailure(): void {
+  const cleanup = cachedCacheCleanup;
+  cachedCacheCleanup = undefined;
+  cachedCacheHost = undefined;
+  cachedClient = graphqlSoupClient;
+  browserCacheClientActivated = false;
+  try {
+    cleanup?.();
+  } catch {
+    // Initialization-failure cleanup cannot alter GraphQL transport fallback.
+  }
+}
 
 /** Returns the persistent normalized-cache host after client initialization. */
 export function getGraphqlCacheHost(): CacheHost | undefined {
@@ -141,20 +155,29 @@ export function getGraphqlCacheHost(): CacheHost | undefined {
  * Any failure falls back to the plain fetch client for the session.
  */
 export function getGraphqlSoupClient(): Client {
-  if (!graphqlCacheEnabled()) return graphqlSoupClient;
-  cachedClient ??= (() => {
+  const native = isTauri();
+  // Only the browser Turso client is session-latched. Tauri keeps the prior
+  // dynamic GraphQL transport behavior and can return to the plain client when
+  // ENABLE_GRAPHQL_SOUP changes without constructing a browser resource.
+  if (!native && browserCacheClientActivated && cachedClient)
+    return cachedClient;
+  const rollout = getBrowserTursoCacheRolloutDecision();
+  if (!rollout.enabled) return graphqlSoupClient;
+  if (cachedClient) return cachedClient;
+  cachedClient = (() => {
     let host: CacheHost | undefined;
     let websocketClient: GraphqlWsClient | undefined;
     let unregisterHost: () => void = () => undefined;
     const subscriptionsLifecycle = createGraphqlSoupSubscriptionsLifecycle();
-    const onInitializationError = (error: Error) => {
-      if (!host || cachedCacheHost !== host) return;
+    const cleanup = () => {
       unregisterHost();
-      host.dispose();
+      host?.dispose();
       subscriptionsLifecycle.dispose();
       if (websocketClient) void websocketClient.dispose();
-      cachedCacheHost = undefined;
-      cachedClient = graphqlSoupClient;
+    };
+    const onInitializationError = (error: Error) => {
+      if (!host || cachedCacheHost !== host) return;
+      fallbackAfterInitializationFailure();
       console.warn(
         'graphql cache async init failed; using uncached client',
         error
@@ -162,9 +185,13 @@ export function getGraphqlSoupClient(): Client {
     };
     try {
       const scope = getOrCreateCacheScope();
-      host = isTauri()
+      host = native
         ? createTauriCacheHost({ scope, onInitializationError })
-        : createWorkerCacheHost({ scope, onInitializationError });
+        : createWorkerCacheHost({
+            scope,
+            onInitializationError,
+            rolloutCohort: rollout.cohort,
+          });
       const resolveWebSocketUrl = createGraphqlSoupWebSocketUrlResolver({
         dssHost,
         bearerTokenAuth: ENABLE_BEARER_TOKEN_AUTH,
@@ -232,13 +259,13 @@ export function getGraphqlSoupClient(): Client {
       cachedCacheHost = host;
       unregisterHost = registerCacheHost(host);
       subscriptionsLifecycle.replace(client, host);
+      cachedCacheCleanup = cleanup;
+      browserCacheClientActivated = !native;
       return client;
     } catch (error) {
-      unregisterHost();
-      host?.dispose();
-      subscriptionsLifecycle.dispose();
-      if (websocketClient) void websocketClient.dispose();
+      cleanup();
       cachedCacheHost = undefined;
+      cachedCacheCleanup = undefined;
       console.warn('graphql cache init failed; using uncached client', error);
       return graphqlSoupClient;
     }

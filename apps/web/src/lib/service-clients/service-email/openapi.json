@@ -3563,7 +3563,7 @@
           },
           "body_html": {
             "type": ["string", "null"],
-            "description": "HTML body (base64 URL_SAFE_NO_PAD encoded)."
+            "description": "HTML body (base64 URL_SAFE_NO_PAD encoded). Sanitized before storage."
           },
           "body_macro": {
             "type": ["string", "null"],
@@ -5224,6 +5224,7 @@
           "needs_reauth",
           "needs_calendar_permission",
           "calendar_disabled",
+          "has_calendar_data",
           "settings",
           "is_primary",
           "created_at",
@@ -5243,6 +5244,10 @@
           },
           "fusionauth_user_id": {
             "type": "string"
+          },
+          "has_calendar_data": {
+            "type": "boolean",
+            "description": "Whether Macro holds calendar data for this inbox. Drives the turn-off\ncontrol on its own, so removing that data never depends on the recorded\nscopes still matching the set Macro requests today — a set that changes\nas the integration narrows, stranding data behind a capability check\nthat no longer recognizes an older grant."
           },
           "id": {
             "type": "string",

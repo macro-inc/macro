@@ -96,6 +96,13 @@ fn page_for_user(user: &str, names: &[(&str, &str)]) -> Json {
 }
 
 #[test]
+fn consuming_engine_returns_exclusively_owned_storage() {
+    let engine = Engine::new(InMemoryStorage::new());
+    let storage: InMemoryStorage = engine.into_storage();
+    assert!(storage.is_empty());
+}
+
+#[test]
 fn miss_then_write_then_hit() {
     block_on(async {
         let mut engine = Engine::new(InMemoryStorage::new());

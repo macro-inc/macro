@@ -4,6 +4,7 @@ use std::collections::HashMap;
 
 use chrono::{DateTime, Utc};
 use macro_user_id::{email::Email, lowercased::Lowercase, user_id::MacroUserIdStr};
+use models_permissions::share_permission::LinkShare;
 use roles_and_permissions::domain::model::UserRolesAndPermissionsError;
 
 /// Team plans
@@ -238,6 +239,15 @@ pub struct TeamInviteDetails {
     pub last_sent_at: DateTime<Utc>,
 }
 
+/// Deserializes an optional field while preserving explicit `null` values.
+fn double_option<'de, T, D>(deserializer: D) -> Result<Option<Option<T>>, D::Error>
+where
+    T: serde::Deserialize<'de>,
+    D: serde::Deserializer<'de>,
+{
+    serde::Deserialize::deserialize(deserializer).map(Some)
+}
+
 /// Request to update a team
 #[derive(Debug, serde::Deserialize)]
 #[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
@@ -248,6 +258,10 @@ pub struct PatchTeamRequest {
     pub slug: Option<String>,
     /// Role updates to apply to team users
     pub user_role_updates: Option<Vec<PatchTeamUserRole>>,
+    /// The default link-share scope for items owned by the team. Omit to
+    /// leave unchanged or pass `null` to default to link sharing off.
+    #[serde(default, deserialize_with = "double_option")]
+    pub default_link_share: Option<Option<LinkShare>>,
 }
 
 /// Request to update the team plan
@@ -326,6 +340,10 @@ pub struct Team {
     /// Whether non-admin members may invite users to the team. Defaults to
     /// true; admins can turn it off so only admins/owners may invite.
     pub(crate) allow_non_admin_invites: bool,
+    /// The default link-share scope applied when items owned by the team are
+    /// shared via link without an explicit choice. `None` means link sharing
+    /// is off by default. Defaults to [`LinkShare::Team`].
+    pub(crate) default_link_share: Option<LinkShare>,
 }
 
 impl Team {
@@ -348,6 +366,7 @@ impl Team {
             auto_join_domain: None,
             enterprise,
             allow_non_admin_invites: true,
+            default_link_share: Some(LinkShare::Team),
         }
     }
 }
@@ -391,6 +410,12 @@ impl Team {
     /// Whether non-admin members may invite users to the team
     pub fn allow_non_admin_invites(&self) -> bool {
         self.allow_non_admin_invites
+    }
+
+    /// The default link-share scope for items owned by the team, or `None`
+    /// when link sharing is off by default
+    pub fn default_link_share(&self) -> Option<LinkShare> {
+        self.default_link_share
     }
 }
 

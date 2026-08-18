@@ -484,6 +484,24 @@ export const ENABLE_GRAPHQL_SOUP_OVERRIDE = getFeatureFlagOverride(
   'ENABLE_GRAPHQL_SOUP'
 );
 
+const parseBooleanOverride = (value: unknown): boolean | undefined =>
+  value === 'true' ? true : value === 'false' ? false : undefined;
+
+/** Browser-only Turso/OPFS cache rollout. Production defaults off. */
+export const ENABLE_BROWSER_TURSO_CACHE_FLAG = 'enable-browser-turso-cache';
+const BROWSER_TURSO_CACHE_ENV = import.meta.env.VITE_ENABLE_BROWSER_TURSO_CACHE;
+export const ENABLE_BROWSER_TURSO_CACHE_OVERRIDE = parseBooleanOverride(
+  BROWSER_TURSO_CACHE_ENV
+);
+
+/** Independent emergency stop. Any true env/PostHog source wins. */
+export const DISABLE_BROWSER_TURSO_CACHE_FLAG = 'disable-browser-turso-cache';
+const DISABLE_BROWSER_TURSO_CACHE_ENV = import.meta.env
+  .VITE_DISABLE_BROWSER_TURSO_CACHE;
+export const DISABLE_BROWSER_TURSO_CACHE_OVERRIDE = parseBooleanOverride(
+  DISABLE_BROWSER_TURSO_CACHE_ENV
+);
+
 /**
  * Non-reactive check for imperative call sites (e.g. the soup GraphQL
  * client's normalized-cache gate). Env override first (dev), else the same

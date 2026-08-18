@@ -1,11 +1,13 @@
 import type { FeaturedMcpServer } from '@core/component/AI/constant/mcpServers';
 import { toast } from '@core/component/Toast/Toast';
+import { usePipedreamMcpFlag } from '@core/pipedream/flag';
 import { isTauri } from '@core/util/platform';
 import { openExternalUrl } from '@core/util/url';
 import {
   useAddMcpServerMutation,
   useStartMcpAuthMutation,
 } from '@queries/mcp-servers';
+import { connectPipedreamApp } from '@queries/pipedream-connectors';
 import type { StartAuthResponse } from '@service-cognition/generated/schemas';
 import { type Accessor, createSignal } from 'solid-js';
 
@@ -33,11 +35,31 @@ export function createConnectorConnect(options: {
 }) {
   const addMutation = useAddMcpServerMutation();
   const authMutation = useStartMcpAuthMutation();
+  const pipedreamMcp = usePipedreamMcpFlag();
   const [busy, setBusy] = createSignal(false);
 
   const connect = async () => {
     if (options.authenticated() || busy()) return;
     setBusy(true);
+    // Behind the PostHog flag, connectors go through Pipedream's hosted
+    // Connect UI (an iframe — no popup involved) instead of the native
+    // OAuth popup flow.
+    if (pipedreamMcp()) {
+      try {
+        const outcome = await connectPipedreamApp({
+          appSlug: options.server.app_slug,
+          serverName: options.server.server_name,
+        });
+        if (outcome === 'unsupported') {
+          toast.failure('Connectors are not available on this deployment');
+        }
+      } catch {
+        toast.failure(`Failed to connect ${options.server.server_name}`);
+      } finally {
+        setBusy(false);
+      }
+      return;
+    }
     const popup = isTauri() ? null : window.open('about:blank', '_blank');
     if (popup) popup.opener = null;
     try {

@@ -713,3 +713,41 @@ async fn fetch_link_by_macro_id_and_email_address_none_when_no_match(
 
     Ok(())
 }
+
+/// Removing an inbox's calendar data has to stay reachable no matter what the
+/// recorded scopes say, so the flag tracks the account row rather than the
+/// grant: a calendar synced under an older scope set still reads as present.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn fetch_inbox_details_reports_calendar_data_from_the_account_row(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    insert_user(&pool, CHILD, "sharedbox@corp.test").await;
+    let (link_id, _, _) =
+        insert_inbox_with_thread_and_message(&pool, CHILD, "sharedbox@corp.test").await;
+
+    let details = fetch_inbox_details_for_macro_id(&pool, &macro_id(CHILD)).await?;
+    assert!(!details[0].has_calendar_data);
+
+    sqlx::query!(
+        r#"
+        INSERT INTO calendar_accounts (
+            id, owner_id, email_link_id, provider, provider_account_id
+        )
+        VALUES ($1, $2, $3, 'google', 'sharedbox@corp.test')
+        "#,
+        Uuid::now_v7(),
+        CHILD,
+        link_id,
+    )
+    .execute(&pool)
+    .await?;
+
+    let details = fetch_inbox_details_for_macro_id(&pool, &macro_id(CHILD)).await?;
+    assert!(details[0].has_calendar_data);
+    assert!(
+        details[0].google_granted_scopes.is_empty(),
+        "the flag is about stored data, not about what the grant carries"
+    );
+
+    Ok(())
+}

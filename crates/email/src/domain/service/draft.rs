@@ -12,6 +12,9 @@ use uuid::Uuid;
 
 use super::EmailServiceImpl;
 
+#[cfg(test)]
+mod test;
+
 impl<T, U, E, CS, Eam, B> EmailServiceImpl<T, U, E, CS, Eam, B>
 where
     T: EmailRepo,
@@ -33,8 +36,9 @@ where
 
     /// Shared pipeline for creating a draft or a sent message.
     ///
-    /// Validates existing message / reply-to, decodes HTML body, upserts contacts,
-    /// builds thread if needed, and inserts the message row via the repo layer.
+    /// Validates existing message / reply-to, decodes and sanitizes the HTML
+    /// body, upserts contacts, builds thread if needed, and inserts the message
+    /// row via the repo layer.
     /// `is_draft` controls the `is_draft` flag persisted on the message row.
     #[tracing::instrument(err, skip(self, link, accessible_inboxes, input))]
     pub(crate) async fn prepare_and_insert_db_message(
@@ -53,7 +57,7 @@ where
         self.validate_replying_to(link_id, &accessible_link_ids, &mut input)
             .await?;
 
-        decode_html_body(&mut input)?;
+        decode_and_sanitize_html_body(&mut input)?;
 
         // On send (not drafts), inject the inbox's signature into the body per
         // the user's settings + per-message override. Best-effort: never blocks
@@ -342,11 +346,19 @@ where
     }
 }
 
-fn decode_html_body(input: &mut CreateDraftInput) -> Result<(), EmailErr> {
+/// Decodes the base64 `body_html` and sanitizes it against the shared email
+/// allowlist.
+///
+/// Sanitizing here is what lets the column be called `body_html_sanitized`: the
+/// body is client-supplied, and a stored thread is rendered via `innerHTML` by
+/// every user who can see it, so an unsanitized locally-authored body is stored
+/// XSS against anyone the thread is shared with. Runs before signature
+/// injection so the `.macro-email-signature` marker the server adds survives.
+fn decode_and_sanitize_html_body(input: &mut CreateDraftInput) -> Result<(), EmailErr> {
     if let Some(ref html_body) = input.body_html {
         let decoded = URL_SAFE_NO_PAD.decode(html_body.as_bytes())?;
         let decoded_str = String::from_utf8(decoded)?;
-        input.body_html = Some(decoded_str);
+        input.body_html = Some(email_utils::sanitize_authored_html(&decoded_str));
     }
     Ok(())
 }
