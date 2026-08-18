@@ -83,7 +83,7 @@ const getDisabledSnippetSubtypeExclude = (): Query['exclude'] =>
   ENABLE_SNIPPETS() ? {} : { subType: ['snippet'] };
 
 /** Filters for inbox/signal: not done, importance=true for emails, 2-week window */
-const getInboxSignalFilters = () => {
+export const getInboxSignalFilters = () => {
   const twoWeeksAgo = subWeeks(startOfDay(new Date()), 2).toISOString();
   return defineQueryFilters({
     include: {
