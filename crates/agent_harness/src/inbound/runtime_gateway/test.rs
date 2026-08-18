@@ -89,7 +89,7 @@ fn external_facts() -> BotFacts {
 
 /// Serve the gateway on a loopback port, returning the registry it feeds and
 /// the `ws://` base to dial.
-async fn serve(directory: FactsDirectory) -> (Arc<RuntimeRegistry<GatewayTransport>>, String) {
+async fn serve(directory: FactsDirectory) -> (Arc<RuntimeRegistry<GatewaySender>>, String) {
     let runtimes = RuntimeRegistry::new();
     let authorization = MacroAuthorizationServiceImpl::new(
         FakeJwtValidator,

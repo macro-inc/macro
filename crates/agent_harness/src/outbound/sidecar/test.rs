@@ -18,13 +18,13 @@ fn frame() -> RawJsonRpcMessage {
 
 /// Stand in for the sidecar: accept one WebSocket and hand back the transport
 /// under test alongside the sidecar's end of it.
-async fn transport() -> (SidecarTransport, WebSocketStream<TcpStream>) {
+type Halves = (SidecarSender, mpsc::UnboundedReceiver<ToServerMessage>);
+
+async fn transport() -> (Halves, WebSocketStream<TcpStream>) {
     observed_transport(|| {}).await
 }
 
-async fn observed_transport<Observer>(
-    observer: Observer,
-) -> (SidecarTransport, WebSocketStream<TcpStream>)
+async fn observed_transport<Observer>(observer: Observer) -> (Halves, WebSocketStream<TcpStream>)
 where
     Observer: Fn() + Send + 'static,
 {
@@ -48,14 +48,14 @@ where
     let sidecar = server.await.expect("the accept task should not panic");
 
     (
-        SidecarTransport::connect_observed(client, observer),
+        SidecarTransport::connect_observed(client, observer).split(),
         sidecar,
     )
 }
 
 #[tokio::test]
 async fn reports_acp_ready_before_anything_else() {
-    let (transport, mut sidecar) = transport().await;
+    let ((_outbound, mut inbound), mut sidecar) = transport().await;
 
     // The agent speaks immediately, so this also proves ordering: the frame was
     // on the wire before the first `recv`, and `AcpReady` still comes first.
@@ -65,11 +65,7 @@ async fn reports_acp_ready_before_anything_else() {
         .await
         .expect("the sidecar should be able to send");
 
-    let first = transport
-        .recv()
-        .await
-        .expect("receiving should succeed")
-        .expect("the stream should be open");
+    let first = inbound.recv().await.expect("the stream should be open");
     assert!(matches!(
         first,
         ToServerMessage::Event {
@@ -80,8 +76,8 @@ async fn reports_acp_ready_before_anything_else() {
 
 #[tokio::test]
 async fn wraps_frames_from_the_agent() {
-    let (transport, mut sidecar) = transport().await;
-    let _ready = transport.recv().await;
+    let ((_outbound, mut inbound), mut sidecar) = transport().await;
+    let _ready = inbound.recv().await;
 
     let json = serde_json::to_string(&frame()).expect("the fixture should serialize");
     sidecar
@@ -89,11 +85,7 @@ async fn wraps_frames_from_the_agent() {
         .await
         .expect("the sidecar should be able to send");
 
-    let message = transport
-        .recv()
-        .await
-        .expect("receiving should succeed")
-        .expect("the stream should be open");
+    let message = inbound.recv().await.expect("the stream should be open");
     let ToServerMessage::Acp(AcpMessage(received)) = message else {
         panic!("an agent frame should arrive as an acp message");
     };
@@ -107,11 +99,11 @@ async fn wraps_frames_from_the_agent() {
 async fn observes_valid_inbound_acp_frames() {
     let observed = Arc::new(AtomicUsize::new(0));
     let incremented = observed.clone();
-    let (transport, mut sidecar) = observed_transport(move || {
+    let ((_outbound, mut inbound), mut sidecar) = observed_transport(move || {
         incremented.fetch_add(1, Ordering::Relaxed);
     })
     .await;
-    let _ready = transport.recv().await;
+    let _ready = inbound.recv().await;
 
     sidecar
         .send(Message::Text("not json at all".into()))
@@ -122,16 +114,16 @@ async fn observes_valid_inbound_acp_frames() {
         .send(Message::Text(json.into()))
         .await
         .expect("the sidecar should be able to send");
-    let _frame = transport.recv().await;
+    let _frame = inbound.recv().await;
 
     assert_eq!(observed.load(Ordering::Relaxed), 1);
 }
 
 #[tokio::test]
 async fn unwraps_frames_to_the_agent_without_a_newline() {
-    let (transport, mut sidecar) = transport().await;
+    let ((outbound, _inbound), mut sidecar) = transport().await;
 
-    transport
+    outbound
         .send(ToRuntimeMessage::Acp(AcpMessage(frame())))
         .await
         .expect("sending should succeed");
@@ -155,8 +147,8 @@ async fn unwraps_frames_to_the_agent_without_a_newline() {
 
 #[tokio::test]
 async fn survives_a_frame_it_cannot_parse() {
-    let (transport, mut sidecar) = transport().await;
-    let _ready = transport.recv().await;
+    let ((_outbound, mut inbound), mut sidecar) = transport().await;
+    let _ready = inbound.recv().await;
 
     sidecar
         .send(Message::Text("not json at all".into()))
@@ -168,38 +160,31 @@ async fn survives_a_frame_it_cannot_parse() {
         .await
         .expect("the sidecar should be able to send");
 
-    let message = transport
+    let message = inbound
         .recv()
         .await
-        .expect("receiving should succeed")
         .expect("one bad frame should not close the stream");
     assert!(matches!(message, ToServerMessage::Acp(_)));
 }
 
 #[tokio::test]
 async fn ends_when_the_sidecar_goes_away() {
-    let (transport, sidecar) = transport().await;
-    let _ready = transport.recv().await;
+    let ((_outbound, mut inbound), sidecar) = transport().await;
+    let _ready = inbound.recv().await;
 
     drop(sidecar);
 
-    assert!(
-        transport
-            .recv()
-            .await
-            .expect("a closed connection is not an error")
-            .is_none()
-    );
+    assert!(inbound.recv().await.is_none());
 }
 
 #[tokio::test]
 async fn sending_fails_after_the_sidecar_goes_away() {
-    let (transport, sidecar) = transport().await;
-    let _ready = transport.recv().await;
+    let ((outbound, mut inbound), sidecar) = transport().await;
+    let _ready = inbound.recv().await;
     drop(sidecar);
-    let _closed = transport.recv().await;
+    let _closed = inbound.recv().await;
 
-    let error = transport
+    let error = outbound
         .send(ToRuntimeMessage::Acp(AcpMessage(frame())))
         .await
         .expect_err("a closed socket cannot accept a frame");

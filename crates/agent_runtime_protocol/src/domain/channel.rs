@@ -1,10 +1,8 @@
 //! A typed duplex channel over the logical protocol stream.
 
-use std::sync::Arc;
-
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
-use super::ports::Transport;
+use super::ports::{Transport, TransportReceiver, TransportSender};
 
 /// One typed endpoint of a duplex channel: sends `Tx` messages, receives
 /// `Rx` messages.
@@ -51,18 +49,17 @@ impl<Tx, Rx> Channel<Tx, Rx> {
 
 /// Bridge a physical [`Transport`] into a [`Channel`] endpoint.
 ///
-/// Spawns two independent tasks - one draining outgoing messages into
-/// `transport.send`, one looping on `transport.recv` - until either side
-/// closes or a transport operation fails. They run as separate tasks rather
-/// than arms of one `select!` specifically so that a `recv` future already
-/// mid-flight is always polled to completion instead of being raced against,
-/// and possibly cancelled by, an outgoing send becoming ready.
+/// Spawns two independent tasks, one per half - which is what taking the
+/// carrier apart is for. They run as separate tasks rather than arms of one
+/// `select!` specifically so that a `recv` already mid-flight is always polled
+/// to completion instead of being raced against, and possibly cancelled by, an
+/// outgoing send becoming ready.
 ///
 /// Not exposed outside this crate: outbound adapters adapt to [`Channel`],
 /// they don't hand pumps to callers.
-pub(crate) fn pump<T, Tx, Rx>(transport: Arc<T>) -> Channel<Tx, Rx>
+pub(crate) fn pump<T, Tx, Rx>(transport: T) -> Channel<Tx, Rx>
 where
-    T: Transport<Tx, Rx> + Send + Sync + 'static,
+    T: Transport<Tx, Rx>,
     Tx: Send + 'static,
     Rx: Send + 'static,
 {
@@ -71,18 +68,18 @@ where
         tx: worker_tx,
         rx: mut worker_rx,
     } = worker;
+    let (sender, mut receiver) = transport.split();
 
-    let send_transport = Arc::clone(&transport);
     tokio::spawn(async move {
         while let Some(outgoing) = worker_rx.recv().await {
-            if send_transport.send(outgoing).await.is_err() {
+            if sender.send(outgoing).await.is_err() {
                 break;
             }
         }
     });
 
     tokio::spawn(async move {
-        while let Ok(Some(incoming)) = transport.recv().await {
+        while let Ok(Some(incoming)) = receiver.recv().await {
             if worker_tx.send(incoming).is_err() {
                 break;
             }
@@ -92,53 +89,19 @@ where
     caller
 }
 
-/// A [`Transport`] over the two halves of a [`Channel`] endpoint - the
-/// inverse of [`pump`], for a caller holding a `Channel` (an accepted
-/// WebSocket routed by hand, a test double) that needs the port instead.
-///
-/// Cheap to clone: clones share the endpoint, and `recv` is exclusive
-/// across them, matching the port's one-consumer contract.
-pub struct ChannelTransport<Tx, Rx> {
-    inner: Arc<ChannelTransportInner<Tx, Rx>>,
-}
-
-struct ChannelTransportInner<Tx, Rx> {
-    tx: UnboundedSender<Tx>,
-    rx: tokio::sync::Mutex<UnboundedReceiver<Rx>>,
-}
-
-// Manual Clone impl: deriving would wrongly bound `Tx: Clone, Rx: Clone`.
-impl<Tx, Rx> Clone for ChannelTransport<Tx, Rx> {
-    fn clone(&self) -> Self {
-        Self {
-            inner: Arc::clone(&self.inner),
-        }
-    }
-}
-
-impl<Tx, Rx> From<Channel<Tx, Rx>> for ChannelTransport<Tx, Rx> {
-    fn from(channel: Channel<Tx, Rx>) -> Self {
-        Self {
-            inner: Arc::new(ChannelTransportInner {
-                tx: channel.tx,
-                rx: tokio::sync::Mutex::new(channel.rx),
-            }),
-        }
-    }
-}
-
-impl<Tx, Rx> Transport<Tx, Rx> for ChannelTransport<Tx, Rx>
+/// A [`Channel`] is already a carrier taken apart, so it is one directly -
+/// no adapter, and nothing to lock. This is what a caller holding a `Channel`
+/// (an accepted WebSocket routed by hand, a test double) hands to anything
+/// wanting the port.
+impl<Tx, Rx> Transport<Tx, Rx> for Channel<Tx, Rx>
 where
-    Tx: Send + Sync,
-    Rx: Send,
+    Tx: Send + Sync + 'static,
+    Rx: Send + 'static,
 {
-    async fn send(&self, message: Tx) -> Result<(), super::ports::TransportError> {
-        self.inner.tx.send(message).map_err(|_| {
-            super::ports::TransportError::Client("the connection is closed".to_owned())
-        })
-    }
+    type Sender = UnboundedSender<Tx>;
+    type Receiver = UnboundedReceiver<Rx>;
 
-    async fn recv(&self) -> Result<Option<Rx>, super::ports::TransportError> {
-        Ok(self.inner.rx.lock().await.recv().await)
+    fn split(self) -> (Self::Sender, Self::Receiver) {
+        (self.tx, self.rx)
     }
 }

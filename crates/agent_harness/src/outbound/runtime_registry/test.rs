@@ -2,11 +2,11 @@
 //! bot's runtime, and what a redial does to whatever was there.
 
 use super::*;
-use crate::testing::helpers::containers::ContainerMock;
+use crate::testing::helpers::containers::{ContainerMock, ContainerSender};
 
 #[tokio::test]
 async fn a_bot_with_no_runtime_has_nothing_to_bind_to() {
-    let registry = RuntimeRegistry::<ContainerMock>::new();
+    let registry = RuntimeRegistry::<ContainerSender>::new();
 
     assert!(!registry.is_connected(BotId::TEST_A));
     assert!(

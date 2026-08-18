@@ -18,7 +18,6 @@
 
 use std::sync::Arc;
 
-use agent_runtime_protocol::domain::channel::ChannelTransport;
 use agent_runtime_protocol::domain::schema::v0::{ToRuntimeMessage, ToServerMessage};
 use agent_runtime_protocol::outbound::websocket::connect_socket;
 use agent_session::domain::ports::BotDirectory;
@@ -37,12 +36,12 @@ use crate::outbound::runtime_registry::RuntimeRegistry;
 #[cfg(test)]
 mod test;
 
-/// The transport an accepted dial becomes.
-pub type GatewayTransport = ChannelTransport<ToRuntimeMessage, ToServerMessage>;
+/// The sending half of an accepted dial, shared by every session on it.
+pub type GatewaySender = tokio::sync::mpsc::UnboundedSender<ToRuntimeMessage>;
 
 /// State for the runtime gateway route.
 pub struct RuntimeGatewayState<Bots, Auth> {
-    runtimes: Arc<RuntimeRegistry<GatewayTransport>>,
+    runtimes: Arc<RuntimeRegistry<GatewaySender>>,
     bots: Arc<Bots>,
     authorization_state: MacroAuthorizationState<Auth>,
 }
@@ -50,7 +49,7 @@ pub struct RuntimeGatewayState<Bots, Auth> {
 impl<Bots, Auth> RuntimeGatewayState<Bots, Auth> {
     /// Create gateway state.
     pub fn new(
-        runtimes: Arc<RuntimeRegistry<GatewayTransport>>,
+        runtimes: Arc<RuntimeRegistry<GatewaySender>>,
         bots: Arc<Bots>,
         authorization_state: MacroAuthorizationState<Auth>,
     ) -> Self {
@@ -118,8 +117,7 @@ where
 
     let runtimes = Arc::clone(&state.runtimes);
     ws.on_upgrade(move |socket| async move {
-        let transport =
-            GatewayTransport::from(connect_socket::<ToRuntimeMessage, ToServerMessage>(socket));
+        let transport = connect_socket::<ToRuntimeMessage, ToServerMessage>(socket);
         // Last dial wins. A runtime that redials has lost its old socket
         // whether or not this side has noticed, so displacing is the only
         // answer that lets it recover.

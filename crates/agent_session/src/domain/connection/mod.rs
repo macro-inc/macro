@@ -24,7 +24,9 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 use agent_client_protocol::RawJsonRpcMessage;
 use agent_client_protocol::schema::v1::{RequestId, Response, SessionId};
-use agent_runtime_protocol::domain::ports::{Transport, TransportError};
+use agent_runtime_protocol::domain::ports::{
+    Transport, TransportError, TransportReceiver, TransportSender,
+};
 use agent_runtime_protocol::domain::schema::v0::{
     AcpMessage, SystemEvent, ToRuntimeMessage, ToServerMessage,
 };
@@ -153,8 +155,11 @@ impl<Connector> RuntimeAttachment<Connector> {
 type Bound = DashMap<AgentSessionId, mpsc::Sender<ToServerMessage>>;
 
 /// One runtime connection and the sessions riding on it.
-pub struct RuntimeConnection<Connector> {
-    connector: Connector,
+///
+/// Holds the carrier's sending half only: the receiving half belongs to the
+/// router task, which is the sole reader of a connection by definition.
+pub struct RuntimeConnection<Sender> {
+    outbound: Sender,
     handshake: watch::Sender<HandshakeStatus>,
     /// Whether the runtime has reported its agent ready.
     ///
@@ -167,20 +172,32 @@ pub struct RuntimeConnection<Connector> {
     routes: Mutex<Routes>,
 }
 
-impl<Connector> RuntimeConnection<Connector>
+impl<Sender> RuntimeConnection<Sender>
 where
-    Connector: Transport<ToRuntimeMessage, ToServerMessage> + Send + Sync + 'static,
+    Sender: TransportSender<ToRuntimeMessage>,
 {
-    /// Take ownership of a dialed-in runtime's transport.
-    pub fn new(connector: Connector) -> Arc<Self> {
+    /// Take a dialed-in runtime's carrier apart and start serving it.
+    ///
+    /// The receiving half goes straight into the router task and is never
+    /// stored, which is what makes "one reader" a fact about the code rather
+    /// than a convention.
+    pub fn connect<Carrier>(carrier: Carrier) -> Arc<Self>
+    where
+        Carrier: Transport<ToRuntimeMessage, ToServerMessage, Sender = Sender>,
+    {
+        let (outbound, inbound) = carrier.split();
         let (handshake, _) = watch::channel(HandshakeStatus::Pending);
-        Arc::new(Self {
-            connector,
+        let connection = Arc::new(Self {
+            outbound,
             handshake,
             runtime_ready: AtomicBool::new(false),
             bound: DashMap::new(),
             routes: Mutex::new(Routes::default()),
-        })
+        });
+        // Routing runs for as long as the carrier does; it ends by itself when
+        // the far side closes, which closes every bound session's queue.
+        tokio::spawn(Arc::clone(&connection).route_inbound(inbound));
+        connection
     }
 
     /// The gate every session on this connection shares.
@@ -203,7 +220,7 @@ where
     pub async fn bind(
         self: &Arc<Self>,
         session: AgentSessionId,
-    ) -> RuntimeAttachment<SessionChannel<Connector>> {
+    ) -> RuntimeAttachment<SessionChannel<Sender>> {
         let (inbound, frames) = mpsc::channel(SESSION_INBOUND_BUFFER);
         if self.bound.insert(session, inbound).is_some() {
             self.routes.lock().await.forget(session);
@@ -222,7 +239,7 @@ where
             connector: SessionChannel {
                 connection: Arc::clone(self),
                 session,
-                frames: Mutex::new(frames),
+                frames,
             },
             handshake: self.handshake.clone(),
         }
@@ -256,16 +273,16 @@ where
                 routes.bind_acp_session(acp, session);
             }
         }
-        self.connector.send(message).await
+        self.outbound.send(message).await
     }
 
     /// Pump the shared transport, handing each frame to its session.
     ///
     /// Ends when the transport does, closing every session's queue - which
     /// each session's actor reads as its connection ending.
-    pub async fn route_inbound(self: Arc<Self>) {
+    async fn route_inbound(self: Arc<Self>, mut inbound: impl TransportReceiver<ToServerMessage>) {
         loop {
-            let message = match self.connector.recv().await {
+            let message = match inbound.recv().await {
                 Ok(Some(message)) => message,
                 Ok(None) => break,
                 Err(error) => {
@@ -397,23 +414,44 @@ fn opened_acp_session(frame: &RawJsonRpcMessage) -> Option<SessionId> {
 ///
 /// A [`Transport`] like any other, so the actor above cannot tell whether it
 /// has a socket to itself.
-pub struct SessionChannel<Connector> {
-    connection: Arc<RuntimeConnection<Connector>>,
+pub struct SessionChannel<Sender> {
+    connection: Arc<RuntimeConnection<Sender>>,
     session: AgentSessionId,
-    /// Behind a lock only because [`Transport::recv`] takes `&self`; this
-    /// session's actor is the sole reader.
-    frames: Mutex<mpsc::Receiver<ToServerMessage>>,
+    frames: mpsc::Receiver<ToServerMessage>,
 }
 
-impl<Connector> Transport<ToRuntimeMessage, ToServerMessage> for SessionChannel<Connector>
+/// One session's sending half: the shared carrier, plus whose traffic this is.
+///
+/// Every send goes out tagged with its session, which is how a response coming
+/// back is attributed to the session that asked for it.
+pub struct SessionSender<Sender> {
+    connection: Arc<RuntimeConnection<Sender>>,
+    session: AgentSessionId,
+}
+
+impl<Sender> Transport<ToRuntimeMessage, ToServerMessage> for SessionChannel<Sender>
 where
-    Connector: Transport<ToRuntimeMessage, ToServerMessage> + Send + Sync + 'static,
+    Sender: TransportSender<ToRuntimeMessage>,
+{
+    type Sender = SessionSender<Sender>;
+    type Receiver = mpsc::Receiver<ToServerMessage>;
+
+    fn split(self) -> (Self::Sender, Self::Receiver) {
+        (
+            SessionSender {
+                connection: self.connection,
+                session: self.session,
+            },
+            self.frames,
+        )
+    }
+}
+
+impl<Sender> TransportSender<ToRuntimeMessage> for SessionSender<Sender>
+where
+    Sender: TransportSender<ToRuntimeMessage>,
 {
     async fn send(&self, message: ToRuntimeMessage) -> std::result::Result<(), TransportError> {
         self.connection.send_for(self.session, message).await
-    }
-
-    async fn recv(&self) -> std::result::Result<Option<ToServerMessage>, TransportError> {
-        Ok(self.frames.lock().await.recv().await)
     }
 }

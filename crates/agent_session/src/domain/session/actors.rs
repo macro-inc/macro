@@ -23,6 +23,8 @@ use tokio::sync::{mpsc, oneshot, watch};
 
 use crate::domain::error::Result;
 use crate::domain::model::{AgentSessionId, AgentSessionLog, Message};
+use agent_runtime_protocol::domain::ports::{TransportReceiver, TransportSender};
+
 use crate::domain::ports::{AgentConnector, AgentSessionLogWriter, AgentSessionRepo};
 
 use super::{CloseReason, Effect, HandshakeStatus, Input, SessionMachine};
@@ -46,9 +48,13 @@ pub(crate) enum Stepped {
 
 /// One session connection's imperative shell: pulls one input, runs the
 /// machine, and executes the effects - nothing else.
-pub(crate) struct SessionActor<Connector, Logs> {
+pub(crate) struct SessionActor<Connector: AgentConnector, Logs> {
     machine: SessionMachine<oneshot::Sender<Result<()>>>,
-    connector: Connector,
+    /// The carrier's halves. Sending is shared with whoever else is on the
+    /// same connection; receiving is this actor's alone, which is why it can
+    /// be read with `&mut` and needs no lock.
+    outbound: Connector::Sender,
+    inbound: Connector::Receiver,
     logs: Logs,
     commands: mpsc::Receiver<SessionCommand>,
     /// This connection's handshake gate: published to when this session runs
@@ -77,14 +83,17 @@ where
         let mut handshake_seen = handshake.subscribe();
         handshake_seen.mark_changed();
 
+        let (outbound, inbound) = connector.split();
+
         Self {
+            outbound,
+            inbound,
             handshake_seen,
             handshake,
             machine: match acp_session_id {
                 None => SessionMachine::new(id, workspace),
                 Some(session_id) => SessionMachine::resume(id, session_id, workspace),
             },
-            connector,
             logs,
             commands,
         }
@@ -122,7 +131,7 @@ where
                 // Nothing to act on yet, but the wait must resume.
                 HandshakeStatus::Pending | HandshakeStatus::InFlight => return Stepped::Continue,
             },
-            inbound = self.connector.recv() => match inbound {
+            inbound = self.inbound.recv() => match inbound {
                 Ok(Some(message)) => Input::Inbound(message),
                 Ok(None) => Input::Closed(CloseReason::TransportClosed),
                 Err(error) => {
@@ -223,7 +232,7 @@ where
         message: ToRuntimeMessage,
     ) -> Result<()> {
         self.log(from, Message::ToRuntime(message.clone())).await?;
-        self.connector.send(message).await?;
+        self.outbound.send(message).await?;
         Ok(())
     }
 

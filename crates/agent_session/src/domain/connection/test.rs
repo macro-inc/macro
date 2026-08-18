@@ -162,22 +162,40 @@ fn an_opening_response_announces_the_acp_session_it_created() {
 }
 
 /// A double for the shared socket that records nothing and never answers.
-#[derive(Clone, Default)]
+#[derive(Default)]
 struct SilentSocket;
 
+/// Its sending half: accepts everything, remembers nothing.
+#[derive(Clone, Default)]
+struct SilentSender;
+
+/// Its receiving half: a socket that is open and simply never speaks.
+struct SilentReceiver;
+
 impl Transport<ToRuntimeMessage, ToServerMessage> for SilentSocket {
+    type Sender = SilentSender;
+    type Receiver = SilentReceiver;
+
+    fn split(self) -> (Self::Sender, Self::Receiver) {
+        (SilentSender, SilentReceiver)
+    }
+}
+
+impl TransportSender<ToRuntimeMessage> for SilentSender {
     async fn send(&self, _message: ToRuntimeMessage) -> Result<(), TransportError> {
         Ok(())
     }
+}
 
-    async fn recv(&self) -> Result<Option<ToServerMessage>, TransportError> {
+impl TransportReceiver<ToServerMessage> for SilentReceiver {
+    async fn recv(&mut self) -> Result<Option<ToServerMessage>, TransportError> {
         std::future::pending().await
     }
 }
 
 #[tokio::test]
 async fn a_session_binding_after_the_runtime_reported_ready_is_told_so() {
-    let connection = RuntimeConnection::new(SilentSocket);
+    let connection = RuntimeConnection::connect(SilentSocket);
     // The runtime dials and reports ready with nothing bound yet - the
     // ordinary case, since a session only binds once somebody mentions the
     // bot, which is usually later.
@@ -191,18 +209,19 @@ async fn a_session_binding_after_the_runtime_reported_ready_is_told_so() {
 
     // Handed the readiness it missed, so it can run the handshake rather than
     // booting forever with its prompt queued behind a signal already spent.
-    let first = attachment.connector.recv().await.expect("a frame");
+    let (_outbound, mut inbound) = attachment.connector.split();
+    let first = inbound.recv().await.expect("a frame");
     assert!(matches!(
         first,
-        Some(ToServerMessage::Event {
+        ToServerMessage::Event {
             event: SystemEvent::AcpReady
-        })
+        }
     ));
 }
 
 #[tokio::test]
 async fn only_one_session_is_asked_to_run_the_handshake() {
-    let connection = RuntimeConnection::new(SilentSocket);
+    let connection = RuntimeConnection::connect(SilentSocket);
     connection
         .on_connection_message(ToServerMessage::Event {
             event: SystemEvent::AcpReady,
@@ -212,22 +231,21 @@ async fn only_one_session_is_asked_to_run_the_handshake() {
     let first = connection.bind(AgentSessionId::TEST_A).await;
     let second = connection.bind(OTHER).await;
 
-    assert!(first.connector.recv().await.expect("a frame").is_some());
+    let (_first_outbound, mut first_inbound) = first.connector.split();
+    let (_second_outbound, mut second_inbound) = second.connector.split();
+    assert!(first_inbound.recv().await.is_some());
     // A connection takes exactly one `initialize`, so the second session waits
     // for the first one's answer instead of sending its own.
     assert!(
-        tokio::time::timeout(
-            std::time::Duration::from_millis(50),
-            second.connector.recv()
-        )
-        .await
-        .is_err()
+        tokio::time::timeout(std::time::Duration::from_millis(50), second_inbound.recv())
+            .await
+            .is_err()
     );
 }
 
 #[tokio::test]
 async fn a_session_bound_before_ready_still_runs_the_handshake() {
-    let connection = RuntimeConnection::new(SilentSocket);
+    let connection = RuntimeConnection::connect(SilentSocket);
 
     let attachment = connection.bind(AgentSessionId::TEST_A).await;
     connection
@@ -236,12 +254,13 @@ async fn a_session_bound_before_ready_still_runs_the_handshake() {
         })
         .await;
 
-    let first = attachment.connector.recv().await.expect("a frame");
+    let (_outbound, mut inbound) = attachment.connector.split();
+    let first = inbound.recv().await.expect("a frame");
     assert!(matches!(
         first,
-        Some(ToServerMessage::Event {
+        ToServerMessage::Event {
             event: SystemEvent::AcpReady
-        })
+        }
     ));
 }
 
@@ -258,15 +277,15 @@ fn resume_request(acp_session: &str) -> ToRuntimeMessage {
 
 #[tokio::test]
 async fn a_resumed_session_owns_the_updates_that_follow() {
-    let connection = RuntimeConnection::new(SilentSocket);
+    let connection = RuntimeConnection::connect(SilentSocket);
     let attachment = connection.bind(AgentSessionId::TEST_A).await;
 
     // Resuming is the reconnect path: the request names the ACP session and
     // the answer does not echo it, so this send is the only chance to learn
     // whose it is. Miss it and every later update for that session is an
     // orphan - the session goes silent on exactly the path that restores it.
-    attachment
-        .connector
+    let (outbound, _inbound) = attachment.connector.split();
+    outbound
         .send(resume_request("acp-42"))
         .await
         .expect("the send is accepted");

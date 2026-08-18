@@ -8,13 +8,12 @@
 //! originates the one [`SystemEvent`] the domain acts on.
 
 use agent_client_protocol::RawJsonRpcMessage;
-use agent_runtime_protocol::domain::ports::{Transport, TransportError};
+use agent_runtime_protocol::domain::ports::{Transport, TransportError, TransportSender};
 use agent_runtime_protocol::domain::schema::v0::{
     AcpMessage, SystemEvent, ToRuntimeMessage, ToServerMessage,
 };
 use futures::{SinkExt, StreamExt};
 use tokio::io::{AsyncRead, AsyncWrite};
-use tokio::sync::Mutex as AsyncMutex;
 use tokio::sync::{mpsc, oneshot};
 use tokio_tungstenite::WebSocketStream;
 use tokio_tungstenite::tungstenite::Message;
@@ -28,7 +27,12 @@ mod test;
 /// through an `Arc`, which is what makes them cloneable.
 pub struct SidecarTransport {
     outbound: mpsc::UnboundedSender<Outbound>,
-    inbound: AsyncMutex<mpsc::UnboundedReceiver<ToServerMessage>>,
+    inbound: mpsc::UnboundedReceiver<ToServerMessage>,
+}
+
+/// The sidecar's sending half.
+pub struct SidecarSender {
+    outbound: mpsc::UnboundedSender<Outbound>,
 }
 
 struct Outbound {
@@ -72,12 +76,26 @@ impl SidecarTransport {
 
         Self {
             outbound: outbound_tx,
-            inbound: AsyncMutex::new(inbound_rx),
+            inbound: inbound_rx,
         }
     }
 }
 
 impl Transport<ToRuntimeMessage, ToServerMessage> for SidecarTransport {
+    type Sender = SidecarSender;
+    type Receiver = mpsc::UnboundedReceiver<ToServerMessage>;
+
+    fn split(self) -> (Self::Sender, Self::Receiver) {
+        (
+            SidecarSender {
+                outbound: self.outbound,
+            },
+            self.inbound,
+        )
+    }
+}
+
+impl TransportSender<ToRuntimeMessage> for SidecarSender {
     async fn send(&self, message: ToRuntimeMessage) -> Result<(), TransportError> {
         // A message this transport has no way to deliver is dropped rather than
         // failed: the sidecar carries ACP and nothing else, and refusing would
@@ -94,10 +112,6 @@ impl Transport<ToRuntimeMessage, ToServerMessage> for SidecarTransport {
         result
             .await
             .map_err(|_| TransportError::Client("the sidecar connection is closed".to_owned()))?
-    }
-
-    async fn recv(&self) -> Result<Option<ToServerMessage>, TransportError> {
-        Ok(self.inbound.lock().await.recv().await)
     }
 }
 

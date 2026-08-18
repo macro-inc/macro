@@ -37,7 +37,7 @@ use crate::domain::ports::ContainerManager as _;
 use crate::outbound::runtime_registry::RuntimeRegistry;
 use crate::testing::helpers::agent::FakeAgent;
 use crate::testing::helpers::announcer::AnnouncerMock;
-use crate::testing::helpers::containers::{ContainerMock, MockContainerManager};
+use crate::testing::helpers::containers::{ContainerMock, ContainerSender, MockContainerManager};
 use agent_session::domain::error::AgentSessionError;
 use agent_session::domain::ports::{ExternalSessionOpener as _, OpenExternalAgentSession};
 
@@ -81,7 +81,7 @@ type TestHarness = AgentHarnessService<
     >,
     MockContainerManager,
     AnnouncerMock,
-    Arc<RuntimeRegistry<ContainerMock>>,
+    Arc<RuntimeRegistry<ContainerSender>>,
 >;
 
 fn harness() -> (
@@ -89,7 +89,7 @@ fn harness() -> (
     InMemoryAgentSessionRepo,
     MockContainerManager,
     AnnouncerMock,
-    Arc<RuntimeRegistry<ContainerMock>>,
+    Arc<RuntimeRegistry<ContainerSender>>,
 ) {
     let repo = InMemoryAgentSessionRepo::new();
     let containers = MockContainerManager::new();

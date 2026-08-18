@@ -11,9 +11,10 @@
 
 use std::sync::Arc;
 
+use agent_runtime_protocol::domain::ports::{Transport, TransportSender};
+use agent_runtime_protocol::domain::schema::v0::{ToRuntimeMessage, ToServerMessage};
 use agent_session::domain::connection::{RuntimeAttachment, RuntimeConnection, SessionChannel};
 use agent_session::domain::model::AgentSessionId;
-use agent_session::domain::ports::AgentConnector;
 use bot_id::BotId;
 use dashmap::DashMap;
 
@@ -23,11 +24,11 @@ use crate::domain::ports::RuntimeConnections;
 mod test;
 
 /// Every bot's live runtime connection.
-pub struct RuntimeRegistry<Connector> {
-    connections: DashMap<BotId, Arc<RuntimeConnection<Connector>>>,
+pub struct RuntimeRegistry<Sender> {
+    connections: DashMap<BotId, Arc<RuntimeConnection<Sender>>>,
 }
 
-impl<Connector> Default for RuntimeRegistry<Connector> {
+impl<Sender> Default for RuntimeRegistry<Sender> {
     fn default() -> Self {
         Self {
             connections: DashMap::new(),
@@ -35,9 +36,9 @@ impl<Connector> Default for RuntimeRegistry<Connector> {
     }
 }
 
-impl<Connector> RuntimeRegistry<Connector>
+impl<Sender> RuntimeRegistry<Sender>
 where
-    Connector: AgentConnector,
+    Sender: TransportSender<ToRuntimeMessage>,
 {
     /// An empty registry.
     #[must_use]
@@ -52,19 +53,19 @@ where
     }
 }
 
-impl<Connector> RuntimeRegistry<Connector>
+impl<Sender> RuntimeRegistry<Sender>
 where
-    Connector: AgentConnector,
+    Sender: TransportSender<ToRuntimeMessage>,
 {
     /// Take over as `bot`'s connection, displacing whatever it had.
     ///
     /// Last dial wins: a runtime that redials has necessarily lost its old
     /// socket, and the sessions it was carrying rebind as they are next used.
-    pub fn attach(self: &Arc<Self>, bot: BotId, connector: Connector) {
-        let connection = RuntimeConnection::new(connector);
-        // Routing runs for as long as the socket does; it ends by itself when
-        // the transport closes, which closes every bound session's queue.
-        tokio::spawn(Arc::clone(&connection).route_inbound());
+    pub fn attach<Carrier>(self: &Arc<Self>, bot: BotId, carrier: Carrier)
+    where
+        Carrier: Transport<ToRuntimeMessage, ToServerMessage, Sender = Sender>,
+    {
+        let connection = RuntimeConnection::connect(carrier);
 
         // Replacing drops the old connection's handle. Its router keeps running
         // until its socket closes, and the sessions on it fail their next
@@ -75,17 +76,17 @@ where
     }
 }
 
-impl<Connector> RuntimeConnections for Arc<RuntimeRegistry<Connector>>
+impl<Sender> RuntimeConnections for Arc<RuntimeRegistry<Sender>>
 where
-    Connector: AgentConnector,
+    Sender: TransportSender<ToRuntimeMessage>,
 {
-    type Connector = SessionChannel<Connector>;
+    type Connector = SessionChannel<Sender>;
 
     async fn bind(
         &self,
         bot: BotId,
         session: AgentSessionId,
-    ) -> Option<RuntimeAttachment<SessionChannel<Connector>>> {
+    ) -> Option<RuntimeAttachment<SessionChannel<Sender>>> {
         let connection = self.connections.get(&bot).map(|entry| Arc::clone(&entry))?;
         Some(connection.bind(session).await)
     }
