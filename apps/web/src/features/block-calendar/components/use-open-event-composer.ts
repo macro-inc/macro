@@ -1,5 +1,5 @@
 import type { EventEditorInitialValues } from '@app/features/calendar/components/composer/event-form-model';
-import type { CalendarEvent } from '@app/features/calendar/components/events/types';
+import type { CalendarEvent } from '@app/features/calendar/types';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { confirmDialog } from '@ui';
 import { getOwner } from 'solid-js';

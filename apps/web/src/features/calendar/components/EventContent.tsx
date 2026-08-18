@@ -1,13 +1,13 @@
 import type { EventContentArg } from '@fullcalendar/core';
 import { cn } from '@ui';
 import { Show } from 'solid-js';
+import type { CalendarEvent, CalendarTimeFormat } from '../types';
 import {
   formatCompactCalendarTime,
   formatCompactCalendarTimeRange,
-} from '../../utils/time-format';
-import type { CalendarEvent, CalendarTimeFormat } from './types';
+} from '../utils/time-format';
 
-interface CalendarEventContentProps {
+interface EventContentProps {
   event: CalendarEvent;
   renderProps: EventContentArg;
   isSelected: boolean;
@@ -18,7 +18,7 @@ interface CalendarEventContentProps {
 const SINGLE_LINE_EVENT_DURATION_MS = 15 * 60 * 1000;
 
 /** Renders responsive event content for FullCalendar. */
-export function CalendarEventContent(props: CalendarEventContentProps) {
+export function EventContent(props: EventContentProps) {
   const isRenderedAllDay = () => props.renderProps.event.allDay;
   const isCompact = () =>
     isRenderedAllDay() || props.renderProps.view.type === 'dayGridMonth';

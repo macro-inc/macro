@@ -11,8 +11,8 @@ import {
   type EventEditorDisabledFields,
   type EventEditorSubmitValues,
 } from '../components/composer/event-form-model';
-import type { CalendarEvent } from '../components/events/types';
-import { DEFAULT_CALENDAR_SOURCE } from '../components/events/types';
+import type { CalendarEvent } from '../types';
+import { DEFAULT_CALENDAR_SOURCE } from '../types';
 import {
   calendarDisplayLabel,
   spansMultipleInboxes,

@@ -8,13 +8,13 @@ import {
 } from '@app/features/calendar/components/CalendarPagerContext';
 import { useCalendarView } from '@app/features/calendar/components/CalendarViewContext';
 import { calendarSelectionToEditorInitialValues } from '@app/features/calendar/components/composer/event-form-model';
-import type { CalendarEvent } from '@app/features/calendar/components/events/types';
-import { DEFAULT_CALENDAR_SOURCE } from '@app/features/calendar/components/events/types';
 import {
   type CalendarOccurrenceData,
   useCalendarOccurrenceData,
 } from '@app/features/calendar/hooks/use-calendar-occurrence-data';
 import { useCalendarTimeGridHoverIndicator } from '@app/features/calendar/hooks/use-calendar-time-grid-hover-indicator';
+import type { CalendarEvent } from '@app/features/calendar/types';
+import { DEFAULT_CALENDAR_SOURCE } from '@app/features/calendar/types';
 import { isCalendarRangeSupported } from '@app/features/calendar/utils/calendar-supported-range';
 import {
   type CalendarEventTimeChange,

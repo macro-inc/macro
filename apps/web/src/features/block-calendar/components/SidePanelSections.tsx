@@ -1,6 +1,6 @@
 import { useCalendarPager } from '@app/features/calendar/components/CalendarPagerContext';
-import { CalendarSourceControls } from '@app/features/calendar/components/CalendarSourceControls';
 import { useCalendarView } from '@app/features/calendar/components/CalendarViewContext';
+import { SourceControls } from '@app/features/calendar/components/SourceControls';
 import { SidePanel, useSidePanel } from '@components/app/side-panel/SidePanel';
 import { Calendar as MiniCalendar } from '@ui';
 import { createEffect, createMemo, createSignal, on, Show } from 'solid-js';
@@ -75,7 +75,7 @@ function CalendarSourcesSidePanelSection() {
         order={20}
         defaultOpen
       >
-        <CalendarSourceControls
+        <SourceControls
           sources={calendarView.sources()}
           isVisible={calendarView.isSourceVisible}
           onVisibilityChange={calendarView.setSourceVisibility}

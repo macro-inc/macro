@@ -6,7 +6,7 @@ import { isCalendarRangeSupported } from '../utils/calendar-supported-range';
 import { useCalendarPager } from './CalendarPagerContext';
 
 /** Announces when the visible viewport is outside backend occurrence coverage. */
-export function CalendarRangeUnavailableBanner(props: {
+export function RangeUnavailableBanner(props: {
   class?: string;
   fullWidth?: boolean;
 }) {

@@ -1,11 +1,11 @@
-import { CalendarMonthDrawer } from '@app/features/calendar/components/CalendarMonthDrawer';
 import {
   type CalendarPageId,
   useCalendarPager,
 } from '@app/features/calendar/components/CalendarPagerContext';
-import { CalendarPeriodSelector } from '@app/features/calendar/components/CalendarPeriodSelector';
 import { CalendarSettingsDropdown } from '@app/features/calendar/components/CalendarSettingsDropdown';
 import { useCalendarView } from '@app/features/calendar/components/CalendarViewContext';
+import { MonthDrawer } from '@app/features/calendar/components/MonthDrawer';
+import { PeriodSelector } from '@app/features/calendar/components/PeriodSelector';
 import { useCalendarHotkeys } from '@app/features/calendar/hooks/use-calendar-hotkeys';
 import { calendarPeriodLabel } from '@app/features/calendar/utils/calendar-label';
 import { useSidePanel } from '@components/app/side-panel/SidePanel';
@@ -108,7 +108,7 @@ export function Header() {
               </span>
             }
           >
-            <CalendarMonthDrawer month={currentDate()} />
+            <MonthDrawer month={currentDate()} />
           </Show>
         </HeaderIsland>
       </SplitHeaderLeft>
@@ -161,7 +161,7 @@ export function Header() {
                 <PlusIcon class="size-3.5" />
                 New event
               </Button>
-              <CalendarPeriodSelector isNarrow={sidePanel?.isNarrow()} />
+              <PeriodSelector isNarrow={sidePanel?.isNarrow()} />
               <div class="flex shrink-0 items-center gap-1">
                 <Button
                   variant="ghost"

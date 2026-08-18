@@ -7,10 +7,10 @@ import CheckIcon from '@phosphor/check.svg';
 import { Dropdown, Hotkey, Calendar as MiniCalendar } from '@ui';
 import { createMemo, For, Show } from 'solid-js';
 import { createStore } from 'solid-js/store';
+import type { CalendarPeriodView } from '../types';
 import { calendarPeriodLabel } from '../utils/calendar-label';
 import { useCalendarPager } from './CalendarPagerContext';
 import { useCalendarView } from './CalendarViewContext';
-import type { CalendarPeriodView } from './events/types';
 
 const CALENDAR_VIEWS = [
   {
@@ -138,7 +138,7 @@ function CustomDatePicker(props: { controls: CalendarPeriodControls }) {
 }
 
 /** Desktop calendar period selector and custom-date dropdown. */
-export function CalendarPeriodSelector(props: { isNarrow?: boolean }) {
+export function PeriodSelector(props: { isNarrow?: boolean }) {
   const controls = createCalendarPeriodControls();
 
   return (
@@ -199,7 +199,7 @@ export function CalendarPeriodSelector(props: { isNarrow?: boolean }) {
 }
 
 /** Period controls embedded in the mobile settings drawer. */
-export function MobileCalendarPeriodControls(props: { onSelect: () => void }) {
+export function MobilePeriodControls(props: { onSelect: () => void }) {
   const controls = createCalendarPeriodControls(props.onSelect);
 
   return (

@@ -1,5 +1,5 @@
 import type { VisibleCalendar } from '@queries/calendar/calendars';
-import type { CalendarPeriodView } from '../components/events/types';
+import type { CalendarPeriodView } from '../types';
 
 const CALENDAR_PERIOD_LABELS = {
   dayGridMonth: 'Month',

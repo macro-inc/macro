@@ -10,7 +10,7 @@ import {
   WEEKDAY_CODES,
   type WeekdayCode,
 } from '../../utils/recurrence';
-import { EventDateField } from './CalendarEventDateTimeField';
+import { EventDateField } from './EventDateTimeField';
 
 const DATE_VALUE = 'yyyy-MM-dd';
 
@@ -27,23 +27,21 @@ const FREQUENCY_OPTIONS: FrequencyOption[] = [
 ];
 
 /** Value emitted whenever the recurrence builder changes. */
-export interface CalendarRecurrenceBuilderValue extends RecurrenceConfig {
+export interface RecurrenceBuilderValue extends RecurrenceConfig {
   /** Human-readable description formed from the individual recurrence parts. */
   recurrenceDescription: string;
 }
 
-export interface CalendarRecurrenceBuilderProps {
+export interface RecurrenceBuilderProps {
   value: RecurrenceConfig;
   start: Date;
   allDay: boolean;
   disabled?: boolean;
-  onChange: (value: CalendarRecurrenceBuilderValue) => void;
+  onChange: (value: RecurrenceBuilderValue) => void;
 }
 
 /** Builds an RFC 5545 recurrence rule from individually editable parts. */
-export function CalendarRecurrenceBuilder(
-  props: CalendarRecurrenceBuilderProps
-) {
+export function RecurrenceBuilder(props: RecurrenceBuilderProps) {
   const selectedFrequency = createMemo(
     () =>
       FREQUENCY_OPTIONS.find(

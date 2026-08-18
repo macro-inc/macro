@@ -19,6 +19,13 @@ import {
   type JSX,
   Show,
 } from 'solid-js';
+import {
+  type CalendarEvent,
+  type CalendarPeriodView,
+  type CalendarTimeFormat,
+  type CalendarWeekStart,
+  mapCalendarEventToFullCalendar,
+} from '../types';
 import { isSameLocalDate } from '../utils/calendar-date';
 import {
   type CalendarEventTimeChange,
@@ -33,14 +40,7 @@ import {
   formatCalendarTime,
   formatCompactCalendarTime,
 } from '../utils/time-format';
-import { CalendarEventContent } from './events/CalendarEventContent';
-import {
-  type CalendarEvent,
-  type CalendarPeriodView,
-  type CalendarTimeFormat,
-  type CalendarWeekStart,
-  mapCalendarEventToFullCalendar,
-} from './events/types';
+import { EventContent } from './EventContent';
 import '../calendar.css';
 
 const formatWeekdayHeader = {
@@ -329,7 +329,7 @@ export function CalendarGrid(props: CalendarGridProps) {
           if (!event) return null;
 
           return (
-            <CalendarEventContent
+            <EventContent
               event={event}
               renderProps={renderProps}
               isSelected={props.selectedEventId === event.id}

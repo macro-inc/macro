@@ -1,11 +1,11 @@
-import { CalendarEventForm } from '@app/features/calendar/components/composer/CalendarEventForm';
 import { createCalendarEventFormController } from '@app/features/calendar/components/composer/create-calendar-event-form-controller';
+import { EventForm } from '@app/features/calendar/components/composer/EventForm';
 import {
   defaultEditorInitialValues,
   type EventEditorInitialValues,
 } from '@app/features/calendar/components/composer/event-form-model';
-import type { CalendarEvent } from '@app/features/calendar/components/events/types';
 import { useEventEditor } from '@app/features/calendar/hooks/use-event-editor';
+import type { CalendarEvent } from '@app/features/calendar/types';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { onMount } from 'solid-js';
@@ -48,7 +48,7 @@ export function EventComposerSplit(props: {
       ref={attachHotkeys}
       class="portal-scope flex h-full min-h-0 flex-col p-4 text-ink"
     >
-      <CalendarEventForm
+      <EventForm
         controller={controller}
         isEdit={isEdit()}
         disabledFields={editor.disabledFields()}

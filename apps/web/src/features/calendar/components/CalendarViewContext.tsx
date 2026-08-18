@@ -4,13 +4,13 @@ import { makePersisted } from '@solid-primitives/storage';
 import { batch, createSignal } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { useCalendarSources } from '../hooks/use-calendar-sources';
-import { getDefaultCalendarTimeFormat } from '../utils/time-format';
 import type {
   CalendarEvent,
   CalendarPeriodView,
   CalendarTimeFormat,
   CalendarWeekStart,
-} from './events/types';
+} from '../types';
+import { getDefaultCalendarTimeFormat } from '../utils/time-format';
 
 interface CalendarEventState {
   readonly visibleSourceIds: string[];

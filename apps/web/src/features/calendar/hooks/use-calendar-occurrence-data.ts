@@ -10,7 +10,7 @@ import {
   type CalendarEvent,
   type CalendarSource,
   mapCalendarOccurrence,
-} from '../components/events/types';
+} from '../types';
 import { isCalendarRangeSupported } from '../utils/calendar-supported-range';
 
 export interface CalendarOccurrenceData {

@@ -1,4 +1,4 @@
-import type { CalendarTimeFormat } from '../components/events/types';
+import type { CalendarTimeFormat } from '../types';
 
 /** FullCalendar and Intl options for the supported calendar time formats. */
 export const CALENDAR_TIME_FORMAT_OPTIONS = {

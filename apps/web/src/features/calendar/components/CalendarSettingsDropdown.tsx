@@ -5,9 +5,9 @@ import CheckIcon from '@phosphor/check.svg';
 import GearIcon from '@phosphor/gear.svg';
 import { Button, Checkbox, Dropdown } from '@ui';
 import { createMemo, createSignal, For, Show } from 'solid-js';
-import { MobileCalendarPeriodControls } from './CalendarPeriodSelector';
+import type { CalendarTimeFormat, CalendarWeekStart } from '../types';
 import { useCalendarView } from './CalendarViewContext';
-import type { CalendarTimeFormat, CalendarWeekStart } from './events/types';
+import { MobilePeriodControls } from './PeriodSelector';
 
 const WEEK_START_OPTIONS: Array<{
   value: CalendarWeekStart;
@@ -241,7 +241,7 @@ function MobileCalendarSettings(props: { controls: CalendarSettingsControls }) {
           class="overflow-y-auto"
         >
           <MobileDrawer.Handle />
-          <MobileCalendarPeriodControls onSelect={() => setOpen(false)} />
+          <MobilePeriodControls onSelect={() => setOpen(false)} />
 
           <Show when={controls.showCalendarVisibility()}>
             <MobileDrawer.Label>Calendars</MobileDrawer.Label>

@@ -4,12 +4,12 @@ import { Button, CalendarMonthMenu, formatCalendarMonth } from '@ui';
 import { createSignal } from 'solid-js';
 import { useCalendarPager } from './CalendarPagerContext';
 
-type CalendarMonthDrawerProps = {
+type MonthDrawerProps = {
   month: Date;
 };
 
 /** Drawer presentation for navigating the calendar to a month. */
-export function CalendarMonthDrawer(props: CalendarMonthDrawerProps) {
+export function MonthDrawer(props: MonthDrawerProps) {
   const calendarPager = useCalendarPager();
   const [open, setOpen] = createSignal(false);
 

@@ -1,15 +1,15 @@
 import { Checkbox } from '@ui';
 import { For } from 'solid-js';
-import type { CalendarSource } from './events/types';
+import type { CalendarSource } from '../types';
 
-interface CalendarSourceControlsProps {
+interface SourceControlsProps {
   sources: CalendarSource[];
   isVisible: (sourceId: string) => boolean;
   onVisibilityChange: (sourceId: string, visible: boolean) => void;
 }
 
 /** Controls which calendar sources are visible in the calendar. */
-export function CalendarSourceControls(props: CalendarSourceControlsProps) {
+export function SourceControls(props: SourceControlsProps) {
   return (
     <div class="flex flex-col gap-0.5">
       <For each={props.sources}>

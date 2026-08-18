@@ -14,6 +14,7 @@ import {
   startOfHour,
 } from 'date-fns';
 import { type Accessor, batch, createMemo, createSignal } from 'solid-js';
+import type { CalendarEvent } from '../../types';
 import {
   buildRecurrenceLines,
   defaultCustomConfig,
@@ -23,7 +24,6 @@ import {
   recurrenceConfigsEqual,
   recurrencePresetsFor,
 } from '../../utils/recurrence';
-import type { CalendarEvent } from '../events/types';
 
 /** `<input type="date">` value. */
 const DATE_VALUE = 'yyyy-MM-dd';

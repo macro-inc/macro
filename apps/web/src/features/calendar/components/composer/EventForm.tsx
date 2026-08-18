@@ -1,21 +1,21 @@
 import SpinnerIcon from '@phosphor/spinner.svg';
 import { Button, cn, Layer } from '@ui';
 import { createEffect, createUniqueId, Show } from 'solid-js';
-import { CalendarEventDateTimeRangeFields } from './CalendarEventDateTimeRangeFields';
+import type { CalendarEventFormController } from './create-calendar-event-form-controller';
+import { EventDateTimeRangeFields } from './EventDateTimeRangeFields';
 import {
   EventComposerCalendarPill,
   EventComposerGuestsPill,
   EventComposerLocationPill,
   EventComposerRecurrencePill,
-} from './CalendarEventPropertyPills';
-import { CalendarRecurrenceBuilder } from './CalendarRecurrenceBuilder';
-import type { CalendarEventFormController } from './create-calendar-event-form-controller';
+} from './EventPropertyPills';
 import type {
   EventEditorDisabledFields,
   EventEditorSubmitValues,
 } from './event-form-model';
+import { RecurrenceBuilder } from './RecurrenceBuilder';
 
-export interface CalendarEventFormProps {
+export interface EventFormProps {
   controller: CalendarEventFormController;
   isEdit?: boolean;
   disabledFields?: EventEditorDisabledFields;
@@ -29,7 +29,7 @@ export interface CalendarEventFormProps {
 }
 
 /** Create/edit event form laid out like the standalone task composer. */
-export function CalendarEventForm(props: CalendarEventFormProps) {
+export function EventForm(props: EventFormProps) {
   const formId = createUniqueId();
 
   const dateRangeErrorId = `event-composer-date-range-error-${formId}`;
@@ -70,7 +70,7 @@ export function CalendarEventForm(props: CalendarEventFormProps) {
         <div class="flex min-w-0 flex-col gap-6 text-sm text-ink-muted">
           <div class="flex min-w-0 flex-col gap-1">
             <div class="flex min-w-0 flex-col gap-0">
-              <CalendarEventDateTimeRangeFields
+              <EventDateTimeRangeFields
                 start={state().start}
                 end={state().end}
                 allDay={state().allDay}
@@ -168,7 +168,7 @@ export function CalendarEventForm(props: CalendarEventFormProps) {
         <Show when={controller.recurrenceChoice() === 'custom'}>
           <Layer depth={3}>
             <div class="rounded-xl bg-surface p-4 text-ink">
-              <CalendarRecurrenceBuilder
+              <RecurrenceBuilder
                 value={controller.customConfig()}
                 start={controller.startForRecurrence()}
                 allDay={state().allDay}

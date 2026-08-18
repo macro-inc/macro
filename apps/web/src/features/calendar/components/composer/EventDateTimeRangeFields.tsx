@@ -16,7 +16,7 @@ import {
   timeLabelFormatter,
   withLocalDate,
   withLocalTime,
-} from './CalendarEventDateTimeField';
+} from './EventDateTimeField';
 
 function formatTime(value: string) {
   const [hour, minute] = value.split(':').map(Number);
@@ -24,7 +24,7 @@ function formatTime(value: string) {
   return timeLabelFormatter.format(new Date(2000, 0, 1, hour, minute));
 }
 
-export interface CalendarEventDateTimeRangeFieldsProps {
+export interface EventDateTimeRangeFieldsProps {
   start: string;
   end: string;
   allDay: boolean;
@@ -39,9 +39,7 @@ export interface CalendarEventDateTimeRangeFieldsProps {
 }
 
 /** Combined date-range display with start/end calendar and time controls. */
-export function CalendarEventDateTimeRangeFields(
-  props: CalendarEventDateTimeRangeFieldsProps
-) {
+export function EventDateTimeRangeFields(props: EventDateTimeRangeFieldsProps) {
   const fieldId = createUniqueId();
   const [open, setOpen] = createSignal(false);
   let trigger: HTMLButtonElement | undefined;

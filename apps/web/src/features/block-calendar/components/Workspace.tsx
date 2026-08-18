@@ -3,8 +3,8 @@ import {
   CalendarPagerContextProvider,
   useCalendarPager,
 } from '@app/features/calendar/components/CalendarPagerContext';
-import { CalendarRangeUnavailableBanner } from '@app/features/calendar/components/CalendarRangeUnavailableBanner';
 import { useCalendarView } from '@app/features/calendar/components/CalendarViewContext';
+import { RangeUnavailableBanner } from '@app/features/calendar/components/RangeUnavailableBanner';
 import { SidePanel } from '@components/app/side-panel/SidePanel';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { isMobile } from '@core/mobile/isMobile';
@@ -50,7 +50,7 @@ function CalendarPages() {
   return (
     <Layer depth={2}>
       <div class="flex min-w-0 min-h-0 flex-1 flex-col">
-        <CalendarRangeUnavailableBanner
+        <RangeUnavailableBanner
           class={isMobile() ? 'order-last' : undefined}
           fullWidth={isMobile()}
         />
