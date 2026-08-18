@@ -1,5 +1,5 @@
-import type { CalendarFocusTarget } from '@app/features/calendar/calendar-focus-target';
 import type { CalendarOccurrenceItem } from '@service-storage/generated/schemas/calendarOccurrenceItem';
+import type { CalendarFocusTarget } from './calendar-focus-target';
 import type { CalendarBlockTargetRequest } from './types';
 
 function parseLocalDate(value: string): Date | undefined {

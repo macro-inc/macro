@@ -3,10 +3,6 @@ import {
   useCalendarPager,
 } from '@app/features/calendar/CalendarPagerContext';
 import { useCalendarView } from '@app/features/calendar/CalendarViewContext';
-import {
-  calendarFocusTargetId,
-  useCalendarFocus,
-} from '@app/features/calendar/calendar-focus-target';
 import { isCalendarRangeSupported } from '@app/features/calendar/calendar-supported-range';
 import {
   type CalendarOccurrenceData,
@@ -48,6 +44,10 @@ import {
   Show,
 } from 'solid-js';
 import { Portal } from 'solid-js/web';
+import {
+  calendarFocusTargetId,
+  useCalendarFocus,
+} from '../calendar-focus-target';
 import { useOpenEventComposer } from './use-open-event-composer';
 
 interface CalendarScrollTarget {

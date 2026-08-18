@@ -1,5 +1,4 @@
 import { CalendarViewContextProvider } from '@app/features/calendar/CalendarViewContext';
-import { CalendarFocusContextProvider } from '@app/features/calendar/calendar-focus-target';
 import { isCalendarRangeSupported } from '@app/features/calendar/calendar-supported-range';
 import { useCalendarUiFlag } from '@app/features/calendar/use-calendar-ui-flag';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
@@ -11,6 +10,7 @@ import { createMethodRegistration } from '@core/orchestrator';
 import { blockHandleSignal } from '@core/signal/load';
 import { useCalendarOccurrencesQuery } from '@queries/calendar/occurrences';
 import { createMemo, createSignal, onMount, Show } from 'solid-js';
+import { CalendarFocusContextProvider } from './calendar-focus-target';
 import { isCalendarBlockRange } from './calendar-range';
 import { resolveCalendarBlockTarget } from './calendar-target';
 import { Workspace } from './components/Workspace';
