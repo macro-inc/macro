@@ -1,4 +1,3 @@
-import { CalendarPagerContextProvider } from '@app/features/calendar/CalendarPagerContext';
 import { CalendarViewContextProvider } from '@app/features/calendar/CalendarViewContext';
 import { CalendarFocusContextProvider } from '@app/features/calendar/calendar-focus-target';
 import { isCalendarRangeSupported } from '@app/features/calendar/calendar-supported-range';
@@ -107,9 +106,7 @@ export function CalendarBlockAdapter(props: CalendarBlockProps) {
     >
       <CalendarFocusContextProvider target={focusTarget}>
         <CalendarViewContextProvider>
-          <CalendarPagerContextProvider>
-            <Workspace />
-          </CalendarPagerContextProvider>
+          <Workspace />
         </CalendarViewContextProvider>
       </CalendarFocusContextProvider>
     </Show>

@@ -1,5 +1,6 @@
 import {
   CALENDAR_PAGE_IDS,
+  CalendarPagerContextProvider,
   useCalendarPager,
 } from '@app/features/calendar/CalendarPagerContext';
 import { CalendarRangeUnavailableBanner } from '@app/features/calendar/CalendarRangeUnavailableBanner';
@@ -120,7 +121,7 @@ function WorkspaceContent() {
   );
 }
 
-export function Workspace() {
+function CalendarPagerWorkspace() {
   const calendarPager = useCalendarPager();
 
   return (
@@ -129,5 +130,21 @@ export function Workspace() {
         <WorkspaceContent />
       </SidePanel.Layout>
     </Pager.Root>
+  );
+}
+
+export function Workspace() {
+  const calendarView = useCalendarView();
+
+  return (
+    <CalendarPagerContextProvider
+      initialView={calendarView.displaySettings.periodView}
+      showWeekends={() => calendarView.displaySettings.showWeekends}
+      weekStartsOn={() => calendarView.displaySettings.weekStartsOn}
+      onNavigate={calendarView.closeEventDetails}
+      onViewChange={calendarView.setPeriodView}
+    >
+      <CalendarPagerWorkspace />
+    </CalendarPagerContextProvider>
   );
 }
