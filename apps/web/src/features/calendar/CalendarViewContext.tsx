@@ -1,11 +1,11 @@
 import { createAssertedContextProvider } from '@core/context/createContext';
 import { isMobile } from '@core/mobile/isMobile';
 import { makePersisted } from '@solid-primitives/storage';
-import { batch, createSignal } from 'solid-js';
+import { createSignal } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { useCalendarSources } from './data/use-calendar-sources';
+import { createCalendarEventSelection } from './events/create-calendar-event-selection';
 import type {
-  CalendarEvent,
   CalendarPeriodView,
   CalendarTimeFormat,
   CalendarWeekStart,
@@ -60,7 +60,7 @@ export const [CalendarViewContextProvider, useCalendarView] =
     const isSourceVisible = (sourceId: string) =>
       !preferences.hiddenSourceIds.includes(sourceId);
 
-    const [selectedEventId, setSelectedEventId] = createSignal<string>();
+    const selection = createCalendarEventSelection();
     const eventState: CalendarEventState = {
       get visibleSourceIds() {
         return sources()
@@ -68,7 +68,7 @@ export const [CalendarViewContextProvider, useCalendarView] =
           .map((source) => source.id);
       },
       get selectedEventId() {
-        return selectedEventId();
+        return selection.event()?.id;
       },
     };
     const displaySettings: CalendarDisplaySettings = {
@@ -86,18 +86,9 @@ export const [CalendarViewContextProvider, useCalendarView] =
       },
     };
 
-    const [selectedEvent, setSelectedEvent] = createSignal<CalendarEvent>();
-    const [selectedEventAnchor, setSelectedEventAnchor] =
-      createSignal<HTMLElement>();
     const [useNarrowDayHeaders, setUseNarrowDayHeaders] = createSignal(false);
 
-    const closeEventDetails = () => {
-      batch(() => {
-        setSelectedEventId(undefined);
-        setSelectedEvent(undefined);
-        setSelectedEventAnchor(undefined);
-      });
-    };
+    const closeEventDetails = selection.close;
 
     const setSourceVisibility = (sourceId: string, visible: boolean) => {
       setPreferences('hiddenSourceIds', (current) =>
@@ -108,22 +99,9 @@ export const [CalendarViewContextProvider, useCalendarView] =
             : [...current, sourceId]
       );
 
-      if (!visible && selectedEvent()?.calendar.id === sourceId) {
+      if (!visible && selection.event()?.calendar.id === sourceId) {
         closeEventDetails();
       }
-    };
-
-    const selectEvent = (event: CalendarEvent, anchor: HTMLElement) => {
-      batch(() => {
-        setSelectedEventId(event.id);
-        setSelectedEvent(() => event);
-        setSelectedEventAnchor(anchor);
-      });
-    };
-
-    const refreshSelectedEvent = (event: CalendarEvent) => {
-      if (eventState.selectedEventId !== event.id) return;
-      setSelectedEvent(event);
     };
 
     return {
@@ -133,8 +111,8 @@ export const [CalendarViewContextProvider, useCalendarView] =
       sourceById,
       isSourceVisible,
       setSourceVisibility,
-      selectedEvent,
-      selectedEventAnchor,
+      selectedEvent: selection.event,
+      selectedEventAnchor: selection.anchor,
       useNarrowDayHeaders,
       setUseNarrowDayHeaders,
       setPeriodView: (periodView: CalendarPeriodView) =>
@@ -146,7 +124,7 @@ export const [CalendarViewContextProvider, useCalendarView] =
       setTimeFormat: (timeFormat: CalendarTimeFormat) =>
         setPreferences('timeFormat', timeFormat),
       closeEventDetails,
-      selectEvent,
-      refreshSelectedEvent,
+      selectEvent: selection.select,
+      refreshSelectedEvent: selection.refresh,
     };
   });
