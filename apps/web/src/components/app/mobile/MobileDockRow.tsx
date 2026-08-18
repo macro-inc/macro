@@ -5,10 +5,6 @@ import {
 } from '@app/features/command/mobile/MobileSearchInput';
 import { SearchState } from '@app/features/command/mobile/mobileSearchState';
 import { useHandleFileUpload } from '@app/util/handleFileUpload';
-import {
-  type BadgedNavView,
-  useRailBadgeCounts,
-} from '@components/app/app-sidebar/use-rail-badge-counts';
 import { ENABLE_ANIMATED_ICONS } from '@core/constant/featureFlags';
 import { useSettingsState } from '@core/constant/SettingsState';
 import { triggerFocusInput } from '@core/directive/focusInput';
@@ -101,8 +97,6 @@ type MobileDockButtonProps = {
   class?: string;
   /** Plain svg icons (e.g. Bell) don't accept `triggerAnimation`. */
   animateIcon?: boolean;
-  /** Shows a corner dot marking unread items when true. */
-  unread?: () => boolean;
 };
 
 /**
@@ -141,9 +135,6 @@ function MobileDockButton(props: MobileDockButtonProps) {
           <Dynamic component={props.icon} triggerAnimation={animating()} />
         )}
       </div>
-      <Show when={props.unread?.()}>
-        <span class="pointer-events-none absolute right-1 top-1 z-10 size-2 rounded-full bg-accent" />
-      </Show>
     </button>
   );
 }
@@ -193,16 +184,9 @@ function MoreViewsMenu(props: {
 function MobileCompactDockRow() {
   const navigate = useMobileNavNavigate();
   const foregroundView = useForegroundMobileView();
-  // Unread dots on Notifications/Email/Channels, driven by the same count
-  // rollup the desktop icon rail uses; other ids read undefined and render
-  // no dot.
-  const badgeCounts = useRailBadgeCounts();
 
-  // Typed BadgedNavView because today's buttons are exactly the badged
-  // views; a future non-badged button widens this and must then decide its
-  // own `unread` wiring.
   const navButtons = (): Array<{
-    id: BadgedNavView;
+    id: MobileDockNavId;
     label: string;
     icon: MobileTouchIconComponent;
     animateIcon?: boolean;
@@ -227,7 +211,6 @@ function MobileCompactDockRow() {
               ariaLabel={button.label}
               animateIcon={button.animateIcon}
               active={foregroundView() === button.id}
-              unread={() => (badgeCounts()[button.id] ?? 0) > 0}
               onClick={() => navigate(button.id)}
             />
           )}
