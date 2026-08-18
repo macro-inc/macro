@@ -37,10 +37,7 @@ fn keys(page: &[TouchedEntity]) -> Vec<(EntityType, String)> {
 }
 
 #[sqlx::test(
-    fixtures(
-        path = "../../../../fixtures",
-        scripts("touched_by_me")
-    ),
+    fixtures(path = "../../../../fixtures", scripts("touched_by_me")),
     migrator = "MACRO_DB_MIGRATIONS"
 )]
 async fn expanded_feed_orders_by_own_latest_mutation(pool: Pool<Postgres>) -> anyhow::Result<()> {
@@ -77,10 +74,7 @@ async fn expanded_feed_orders_by_own_latest_mutation(pool: Pool<Postgres>) -> an
 }
 
 #[sqlx::test(
-    fixtures(
-        path = "../../../../fixtures",
-        scripts("touched_by_me")
-    ),
+    fixtures(path = "../../../../fixtures", scripts("touched_by_me")),
     migrator = "MACRO_DB_MIGRATIONS"
 )]
 async fn unexpanded_feed_includes_projects(pool: Pool<Postgres>) -> anyhow::Result<()> {
@@ -105,10 +99,7 @@ async fn unexpanded_feed_includes_projects(pool: Pool<Postgres>) -> anyhow::Resu
 }
 
 #[sqlx::test(
-    fixtures(
-        path = "../../../../fixtures",
-        scripts("touched_by_me")
-    ),
+    fixtures(path = "../../../../fixtures", scripts("touched_by_me")),
     migrator = "MACRO_DB_MIGRATIONS"
 )]
 async fn keyset_paginates_without_overlap_or_gaps(pool: Pool<Postgres>) -> anyhow::Result<()> {
@@ -142,10 +133,7 @@ async fn keyset_paginates_without_overlap_or_gaps(pool: Pool<Postgres>) -> anyho
 }
 
 #[sqlx::test(
-    fixtures(
-        path = "../../../../fixtures",
-        scripts("touched_by_me")
-    ),
+    fixtures(path = "../../../../fixtures", scripts("touched_by_me")),
     migrator = "MACRO_DB_MIGRATIONS"
 )]
 async fn entity_filters_compose_with_the_touch_gate(pool: Pool<Postgres>) -> anyhow::Result<()> {
