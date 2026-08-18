@@ -553,6 +553,26 @@
 	visibility: hidden;
 }
 
+.calendar-embed
+	.calendar-view
+	.fc
+	.fc-timegrid-slots
+	tbody
+	tr:first-child
+	.fc-timegrid-slot {
+	box-shadow: inset 0 1px var(--fc-border-color);
+}
+
+.calendar-embed
+	.calendar-view
+	.fc
+	.fc-timegrid-slots
+	tbody
+	tr:first-child
+	.fc-timegrid-slot-label-cushion {
+	visibility: visible;
+}
+
 .calendar-view .fc .fc-timegrid-now-indicator-line {
 	--calendar-now-arrow-bottom: 50%;
 	--calendar-now-arrow-top: 50%;
