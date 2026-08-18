@@ -213,6 +213,11 @@ the engine directly from its multi-threaded runtime, and unbounded on wasm.
 - On network result: RPC `writeQuery`; engine returns the set of changed
   record keys; exchange re-executes affected active operations (mirrors
   graphcache `cache-and-network` re-emission behavior).
+- Hydration-only operations skip cache reads and active-operation registration.
+  Client-only `@cacheOnly` fields are fetched and normalized but omitted from
+  the result returned across the worker/Tauri boundary. The directive is
+  stripped before network transport; remaining fields are projected directly
+  from the validated response during the write, avoiding a denormalizing read.
 - On teardown: unregister operation (unpins dependencies).
 - Cross-context: engine broadcasts changed-keys; every context's exchange
   re-executes its own affected active operations.
