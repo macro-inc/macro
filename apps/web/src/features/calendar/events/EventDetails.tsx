@@ -20,9 +20,9 @@ import PersonIcon from '@phosphor/user.svg';
 import UsersIcon from '@phosphor/users.svg';
 import VideoCameraIcon from '@phosphor/video-camera.svg';
 import XIcon from '@phosphor/x.svg';
-import { useVisibleCalendarsQuery } from '@queries/calendar/calendars';
 import type { AttendeeResponseStatus } from '@service-storage/generated/schemas/attendeeResponseStatus';
 import type { CalendarAttendee } from '@service-storage/generated/schemas/calendarAttendee';
+import type { EventReminderOverride } from '@service-storage/generated/schemas/eventReminderOverride';
 import { Avatar, Button, cn } from '@ui';
 import {
   type Accessor,
@@ -350,17 +350,16 @@ function findOrganizer(event: CalendarEvent): CalendarOrganizer | undefined {
  * it departed from the calendar defaults, the calendar defaults otherwise.
  * Nothing renders while the calendar (and so its defaults) is unknown.
  */
-function EventRemindersItem(props: { event: CalendarEvent }) {
-  const calendarsQuery = useVisibleCalendarsQuery();
-  const reminders = createMemo(() => {
-    const calendar = calendarsQuery.data?.find(
-      (candidate) => candidate.id === props.event.calendarId
-    );
-    return resolveReminderOverrides(
+function EventRemindersItem(props: {
+  event: CalendarEvent;
+  defaultReminders?: EventReminderOverride[];
+}) {
+  const reminders = createMemo(() =>
+    resolveReminderOverrides(
       props.event.reminders,
-      calendar?.defaultReminders
-    ).toSorted((a, b) => a.minutes - b.minutes);
-  });
+      props.defaultReminders
+    ).toSorted((a, b) => a.minutes - b.minutes)
+  );
 
   return (
     <Show when={reminders().length > 0}>
@@ -442,6 +441,7 @@ function formatOriginalTimeZone(
 export function EventDetails(props: {
   event: CalendarEvent;
   timeFormat: CalendarTimeFormat;
+  defaultReminders?: EventReminderOverride[];
 }) {
   const conferenceUrl = createMemo(() =>
     safeConferenceUrl(props.event.conferenceUrl)
@@ -539,7 +539,10 @@ export function EventDetails(props: {
         )}
       </Show>
 
-      <EventRemindersItem event={props.event} />
+      <EventRemindersItem
+        event={props.event}
+        defaultReminders={props.defaultReminders}
+      />
 
       <Show when={organizer()}>
         {(eventOrganizer) => (

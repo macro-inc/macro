@@ -1,3 +1,4 @@
+import type { CalendarEvent } from '@app/features/calendar/events/types';
 import { toast } from '@core/component/Toast/Toast';
 import CloseIcon from '@phosphor/x.svg';
 import { useRsvpCalendarEventMutation } from '@queries/calendar/mutations';
@@ -5,7 +6,6 @@ import type { CalendarRsvpScope } from '@service-email/client';
 import type { AttendeeResponseStatus } from '@service-storage/generated/schemas/attendeeResponseStatus';
 import { Button, Dialog, Panel } from '@ui';
 import { createMemo, createSignal, For, Show } from 'solid-js';
-import type { CalendarEvent } from './types';
 
 type RsvpResponse = Exclude<AttendeeResponseStatus, 'needs_action'>;
 

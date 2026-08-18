@@ -2,7 +2,6 @@ import {
   EventAttendeesSection,
   EventDetails,
 } from '@app/features/calendar/events/EventDetails';
-import { EventRsvpSection } from '@app/features/calendar/events/EventRsvpSection';
 import type {
   CalendarEvent,
   CalendarTimeFormat,
@@ -14,8 +13,10 @@ import { Popover } from '@kobalte/core/popover';
 import PencilSimpleIcon from '@phosphor/pencil-simple.svg';
 import TrashIcon from '@phosphor/trash.svg';
 import CloseIcon from '@phosphor/x.svg';
+import { useVisibleCalendarsQuery } from '@queries/calendar/calendars';
 import { useDeleteCalendarEventMutation } from '@queries/calendar/mutations';
 import type { CalendarDeletionScope } from '@service-email/client';
+import type { EventReminderOverride } from '@service-storage/generated/schemas/eventReminderOverride';
 import {
   Button,
   DeleteDialog,
@@ -24,6 +25,7 @@ import {
   useImperativeDialog,
 } from '@ui';
 import { type Accessor, createMemo, createSignal, Show } from 'solid-js';
+import { EventRsvpSection } from './EventRsvpSection';
 import { useOpenEventComposer } from './use-open-event-composer';
 
 interface SelectedEventDetailsProps {
@@ -43,6 +45,10 @@ interface SelectedEventDetailsProps {
  * overlay closes rather than lingering on stale data.
  */
 export function SelectedEventDetails(props: SelectedEventDetailsProps) {
+  const calendarsQuery = useVisibleCalendarsQuery();
+  const defaultReminders = (event: CalendarEvent) =>
+    calendarsQuery.data?.find((calendar) => calendar.id === event.calendarId)
+      ?.defaultReminders;
   const popoverSelection = createMemo(
     () => {
       const event = props.event();
@@ -73,6 +79,7 @@ export function SelectedEventDetails(props: SelectedEventDetailsProps) {
                   anchor={selected.anchor}
                   event={currentEvent()}
                   timeFormat={props.timeFormat()}
+                  defaultReminders={defaultReminders(currentEvent())}
                   onOpenChange={(open) => {
                     if (!open) props.onClose();
                   }}
@@ -89,6 +96,7 @@ export function SelectedEventDetails(props: SelectedEventDetailsProps) {
             <EventDetailsDrawer
               event={currentEvent()}
               timeFormat={props.timeFormat()}
+              defaultReminders={defaultReminders(currentEvent())}
               onOpenChange={(open) => {
                 if (!open) props.onClose();
               }}
@@ -103,6 +111,7 @@ export function SelectedEventDetails(props: SelectedEventDetailsProps) {
 interface EventDetailsOverlayProps {
   event: CalendarEvent;
   timeFormat: CalendarTimeFormat;
+  defaultReminders?: EventReminderOverride[];
   onOpenChange: (open: boolean) => void;
 }
 
@@ -174,7 +183,11 @@ function EventDetailsDrawer(props: EventDetailsOverlayProps) {
           </div>
           <div class="flex min-h-0 flex-1 flex-col overflow-y-auto">
             <div class="px-3">
-              <EventDetails event={props.event} timeFormat={props.timeFormat} />
+              <EventDetails
+                event={props.event}
+                timeFormat={props.timeFormat}
+                defaultReminders={props.defaultReminders}
+              />
             </div>
             <EventAttendeesSection attendees={props.event.attendees} />
             <EventRsvpSection event={props.event} buttonSize="md" />
@@ -392,6 +405,7 @@ function EventDetailsPopover(props: EventDetailsPopoverProps) {
                   <EventDetails
                     event={props.event}
                     timeFormat={props.timeFormat}
+                    defaultReminders={props.defaultReminders}
                   />
                 </div>
                 <EventAttendeesSection attendees={props.event.attendees} />
