@@ -1,4 +1,3 @@
-import { CalendarPage } from '@app/features/calendar/CalendarPage';
 import {
   CALENDAR_PAGE_IDS,
   useCalendarPager,
@@ -21,6 +20,7 @@ import {
   Suspense,
 } from 'solid-js';
 import { Header } from './Header';
+import { Page } from './Page';
 import { SetupStatus } from './SetupStatus';
 import { SidePanelSections } from './SidePanelSections';
 
@@ -64,7 +64,7 @@ function CalendarPages() {
               {(pageId) => (
                 <Pager.Page id={pageId}>
                   <Suspense>
-                    <CalendarPage
+                    <Page
                       id={pageId}
                       initialDate={calendarPager.initialDateFor(pageId)}
                     />

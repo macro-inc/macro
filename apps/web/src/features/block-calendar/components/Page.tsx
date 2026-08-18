@@ -1,3 +1,31 @@
+import {
+  type CalendarPageId,
+  useCalendarPager,
+} from '@app/features/calendar/CalendarPagerContext';
+import { useCalendarView } from '@app/features/calendar/CalendarViewContext';
+import {
+  calendarFocusTargetId,
+  useCalendarFocus,
+} from '@app/features/calendar/calendar-focus-target';
+import { isCalendarRangeSupported } from '@app/features/calendar/calendar-supported-range';
+import {
+  type CalendarOccurrenceData,
+  useCalendarOccurrenceData,
+} from '@app/features/calendar/data/use-calendar-occurrence-data';
+import { DEFAULT_CALENDAR_SOURCE } from '@app/features/calendar/events/calendar-occurrence-mapper';
+import { calendarSelectionToEditorInitialValues } from '@app/features/calendar/events/event-form-model';
+import {
+  type CalendarEventTimeChange,
+  calendarEventTimeFromFullCalendar,
+  canEditCalendarEventTime,
+} from '@app/features/calendar/events/event-interaction';
+import type { CalendarEvent } from '@app/features/calendar/events/types';
+import { useOpenEventComposer } from '@app/features/calendar/events/useOpenEventComposer';
+import {
+  CalendarGrid,
+  type CalendarGridHandle,
+} from '@app/features/calendar/grid/CalendarGrid';
+import { useCalendarTimeGridHoverIndicator } from '@app/features/calendar/useCalendarTimeGridHoverIndicator';
 import { toast } from '@core/component/Toast/Toast';
 import { ScrollIndicators } from '@core/component/VerticalScrollIndicators';
 import { isMobile } from '@core/mobile/isMobile';
@@ -21,28 +49,6 @@ import {
   Show,
 } from 'solid-js';
 import { Portal } from 'solid-js/web';
-import { type CalendarPageId, useCalendarPager } from './CalendarPagerContext';
-import { useCalendarView } from './CalendarViewContext';
-import {
-  calendarFocusTargetId,
-  useCalendarFocus,
-} from './calendar-focus-target';
-import { isCalendarRangeSupported } from './calendar-supported-range';
-import {
-  type CalendarOccurrenceData,
-  useCalendarOccurrenceData,
-} from './data/use-calendar-occurrence-data';
-import { DEFAULT_CALENDAR_SOURCE } from './events/calendar-occurrence-mapper';
-import { calendarSelectionToEditorInitialValues } from './events/event-form-model';
-import {
-  type CalendarEventTimeChange,
-  calendarEventTimeFromFullCalendar,
-  canEditCalendarEventTime,
-} from './events/event-interaction';
-import type { CalendarEvent } from './events/types';
-import { useOpenEventComposer } from './events/useOpenEventComposer';
-import { CalendarGrid, type CalendarGridHandle } from './grid/CalendarGrid';
-import { useCalendarTimeGridHoverIndicator } from './useCalendarTimeGridHoverIndicator';
 
 interface CalendarScrollTarget {
   scrollElement: HTMLElement;
@@ -197,7 +203,7 @@ function CalendarPageDataStatus(props: { data: CalendarOccurrenceData }) {
 }
 
 /** One independently rendered and queried FullCalendar page. */
-export function CalendarPage(props: { id: CalendarPageId; initialDate: Date }) {
+export function Page(props: { id: CalendarPageId; initialDate: Date }) {
   const pager = useCalendarPager();
   const calendarView = useCalendarView();
   const openEventComposer = useOpenEventComposer();

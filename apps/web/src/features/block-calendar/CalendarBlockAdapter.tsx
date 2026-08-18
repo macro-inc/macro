@@ -1,3 +1,6 @@
+import { CalendarPagerContextProvider } from '@app/features/calendar/CalendarPagerContext';
+import { CalendarViewContextProvider } from '@app/features/calendar/CalendarViewContext';
+import { CalendarFocusContextProvider } from '@app/features/calendar/calendar-focus-target';
 import { isCalendarRangeSupported } from '@app/features/calendar/calendar-supported-range';
 import { useCalendarUiFlag } from '@app/features/calendar/use-calendar-ui-flag';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
@@ -11,7 +14,7 @@ import { useCalendarOccurrencesQuery } from '@queries/calendar/occurrences';
 import { createMemo, createSignal, onMount, Show } from 'solid-js';
 import { isCalendarBlockRange } from './calendar-range';
 import { resolveCalendarBlockTarget } from './calendar-target';
-import { View } from './components/View';
+import { Workspace } from './components/Workspace';
 import type { CalendarBlockProps, CalendarBlockTargetRequest } from './types';
 
 function targetRequestFromParams(
@@ -102,7 +105,13 @@ export function CalendarBlockAdapter(props: CalendarBlockProps) {
         </Show>
       }
     >
-      <View focusTarget={focusTarget()} />
+      <CalendarFocusContextProvider target={focusTarget}>
+        <CalendarViewContextProvider>
+          <CalendarPagerContextProvider>
+            <Workspace />
+          </CalendarPagerContextProvider>
+        </CalendarViewContextProvider>
+      </CalendarFocusContextProvider>
     </Show>
   );
 }
