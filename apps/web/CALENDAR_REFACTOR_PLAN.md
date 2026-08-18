@@ -148,27 +148,26 @@ src/features/block-calendar/
 
 src/features/calendar/
 ├── calendar.css
+├── types.ts
 ├── components/
 │   ├── CalendarGrid.tsx
 │   ├── CalendarPagerContext.tsx
 │   ├── CalendarViewContext.tsx
-│   ├── CalendarMonthDrawer.tsx
-│   ├── CalendarPeriodSelector.tsx
-│   ├── CalendarRangeUnavailableBanner.tsx
 │   ├── CalendarSettingsDropdown.tsx
-│   ├── CalendarSourceControls.tsx
-│   ├── composer/
-│   │   ├── CalendarEventForm.tsx
-│   │   ├── CalendarEventDateTimeField.tsx
-│   │   ├── CalendarEventDateTimeRangeFields.tsx
-│   │   ├── CalendarEventPropertyPills.tsx
-│   │   ├── CalendarRecurrenceBuilder.tsx
-│   │   ├── create-calendar-event-form-controller.ts
-│   │   └── event-form-model.ts
-│   └── events/
-│       ├── CalendarEventContent.tsx
-│       ├── CalendarEventDetails.tsx
-│       └── types.ts
+│   ├── EventContent.tsx
+│   ├── EventDetails.tsx
+│   ├── MonthDrawer.tsx
+│   ├── PeriodSelector.tsx
+│   ├── RangeUnavailableBanner.tsx
+│   ├── SourceControls.tsx
+│   └── composer/
+│       ├── EventForm.tsx
+│       ├── EventDateTimeField.tsx
+│       ├── EventDateTimeRangeFields.tsx
+│       ├── EventPropertyPills.tsx
+│       ├── RecurrenceBuilder.tsx
+│       ├── create-calendar-event-form-controller.ts
+│       └── event-form-model.ts
 ├── hooks/
 │   ├── use-calendar-hotkeys.ts
 │   ├── use-calendar-occurrence-data.ts
