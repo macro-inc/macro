@@ -8,8 +8,8 @@ import { LoadingBlock } from '@core/component/LoadingBlock';
 import { useUserId } from '@core/context/user';
 import { createMethodRegistration } from '@core/orchestrator';
 import { blockHandleSignal } from '@core/signal/load';
+import { fetchCalendarMentionPreview } from '@queries/calendar/mention-preview';
 import { useCalendarOccurrencesQuery } from '@queries/calendar/occurrences';
-import { storageServiceClient } from '@service-storage/client';
 import { createMemo, createSignal, onMount, Show } from 'solid-js';
 import { CalendarFocusContextProvider } from './calendar-focus-target';
 import {
@@ -60,32 +60,31 @@ async function resolveTargetRequestFromPreview(
   }
   const occurrenceKey =
     typeof params.occurrenceKey === 'string' ? params.occurrenceKey : undefined;
-  const result = await storageServiceClient.getBatchCalendarEventPreviews({
-    items: [{ eventId: params.eventId, occurrenceKey }],
-  });
-  if (result.isErr()) return undefined;
-  const item = result.value.items[0];
-  if (item?.type !== 'access' || !item.event) return undefined;
+  const event = await fetchCalendarMentionPreview(
+    params.eventId,
+    occurrenceKey
+  ).catch(() => null);
+  if (!event) return undefined;
 
   const time: CalendarBlockEventTime =
-    item.event.time.kind === 'timed'
+    event.time.kind === 'timed'
       ? {
           kind: 'timed',
-          startsAt: item.event.time.startsAt,
-          endsAt: item.event.time.endsAt,
+          startsAt: event.time.startsAt,
+          endsAt: event.time.endsAt,
         }
       : {
           kind: 'allDay',
-          startDate: item.event.time.startDate,
-          endDate: item.event.time.endDate,
+          startDate: event.time.startDate,
+          endDate: event.time.endDate,
         };
   const range = createCalendarBlockRange(time);
   if (!range) return undefined;
 
   return {
-    eventId: item.event.viewerEventId,
+    eventId: event.viewerEventId,
     range,
-    occurrenceKey: item.event.occurrenceKey ?? occurrenceKey,
+    occurrenceKey: event.occurrenceKey ?? occurrenceKey,
     requestId,
     requestedAt: Date.now(),
   };
@@ -107,20 +106,21 @@ function CalendarBlockAdapter(props: CalendarBlockProps) {
   const analytics = useAnalytics();
   const blockHandle = blockHandleSignal.get;
   let nextRequestId = 1;
+  let latestRequestId = 0;
   const [targetRequest, setTargetRequest] = createSignal<
     CalendarBlockTargetRequest | undefined
   >(targetRequestFromParams(props, nextRequestId++));
 
   // Preview resolution is async, so a stale answer must never clobber a
-  // target the user has since re-aimed.
+  // target the user has since re-aimed or cleared.
   const applyResolvedTarget = (request: CalendarBlockTargetRequest) => {
-    setTargetRequest((previous) =>
-      previous && previous.requestId > request.requestId ? previous : request
-    );
+    if (request.requestId < latestRequestId) return;
+    setTargetRequest(request);
   };
 
   const aimAtParams = (params: CalendarBlockProps) => {
     const requestId = nextRequestId++;
+    latestRequestId = requestId;
     const direct = targetRequestFromParams(params, requestId);
     if (direct) {
       setTargetRequest(direct);
