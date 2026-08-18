@@ -13,7 +13,9 @@ use crate::link_patch::{
     LinkPatchError, OptimisticLinkPatch, QueryRevalidation, apply_link_patches,
     deduplicate_patches, missing_patch_record,
 };
-use crate::normalize::{NormalizeError, RecordUpdates, normalize};
+use crate::normalize::{
+    NormalizeError, RecordUpdates, normalize, project_hydration_response,
+};
 use crate::query_inspection::{
     CachedQueryInstance, CachedQueryVariant, OwnerResolution, QueryInspection,
     QueryInspectionError, matches_variable_filters, prepare, recover_variants, resolve_owner,
@@ -95,6 +97,15 @@ pub struct WriteResult {
     pub reset: bool,
     /// Queries that should be revalidated after a successful settlement.
     pub revalidations: Vec<QueryRevalidation>,
+}
+
+/// Result of hydrating a query while returning only non-`@cacheOnly` fields.
+#[derive(Debug)]
+pub struct HydrationWriteResult {
+    /// Cache changes used by hosts for invalidation fan-out.
+    pub write_result: WriteResult,
+    /// Small caller-visible projection, or `None` when every field is cache-only.
+    pub data: Option<Json>,
 }
 
 /// Outcome of the initial strict-head claim attempted after enqueue.
@@ -911,6 +922,40 @@ impl<S: Storage> Engine<S> {
             affected_ops,
             reset,
             revalidations: Vec::new(),
+        })
+    }
+
+    /// Stores a network response and returns only fields not marked
+    /// `@cacheOnly`. Projection is taken directly from the validated network
+    /// payload, so hydration never denormalizes the response back out of
+    /// storage.
+    pub async fn hydrate_query(
+        &mut self,
+        query: &str,
+        operation_name: Option<&str>,
+        variables: &serde_json::Map<String, Json>,
+        data: &Json,
+        identity: Option<&str>,
+    ) -> Result<HydrationWriteResult, EngineError<S::Error>> {
+        let projected = {
+            let doc = Self::document(&mut self.docs, query)?;
+            let op = doc.operation(operation_name)?;
+            if op.kind != OperationKind::Query {
+                return Err(EngineError::Document(
+                    DocumentError::UnsupportedOperationType(format!(
+                        "{:?} (cache hydration is query-only)",
+                        op.kind
+                    )),
+                ));
+            }
+            project_hydration_response(op, data)?
+        };
+        let write_result = self
+            .write_query(None, query, operation_name, variables, data, identity)
+            .await?;
+        Ok(HydrationWriteResult {
+            write_result,
+            data: projected,
         })
     }
 

@@ -14,6 +14,7 @@ import {
   type CachedQueryVariantWire,
   type ClaimedMutation,
   type EnqueueOptimisticMutationResult,
+  type HydrationResult,
   type MutationClaim,
   type MutationSettlement,
   type ReadRecordsByKeysArgs,
@@ -190,6 +191,19 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
       await ready;
       return await request<WriteResult>('graphql_cache_write', {
         originOpId: args.opKey === undefined ? undefined : opId(args.opKey),
+        query: args.query,
+        operationName: args.operationName,
+        variables: args.variables,
+        data: args.data,
+        identity: args.identity,
+      });
+    },
+
+    async hydrateQuery(
+      args: Omit<CacheWriteArgs, 'opKey'>
+    ): Promise<HydrationResult> {
+      await ready;
+      return await request<HydrationResult>('graphql_cache_hydrate', {
         query: args.query,
         operationName: args.operationName,
         variables: args.variables,

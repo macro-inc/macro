@@ -56,6 +56,15 @@ pub struct WriteResultWire {
     pub revalidations: Vec<QueryRevalidation>,
 }
 
+/// Internal hydration result used to fan out changes before returning only
+/// the caller-visible projection across IPC.
+pub struct HydrationWriteResultWire {
+    /// Cache changes required for host notifications.
+    pub write_result: WriteResultWire,
+    /// Fields not marked `@cacheOnly`, or `None` when there are none.
+    pub data: Option<serde_json::Value>,
+}
+
 /// Result of durably enqueueing an optimistic mutation and attempting to
 /// claim the strict queue head.
 #[derive(Debug, Serialize)]
@@ -357,6 +366,34 @@ impl EngineHandle {
             .await
             .map(|result| wire_write_result(ops, result))
             .map_err(|e| e.to_string())
+    }
+
+    /// Stores a query response and returns only fields not marked
+    /// `@cacheOnly`.
+    pub async fn hydrate_query(
+        &self,
+        query: String,
+        operation_name: Option<String>,
+        variables: Variables,
+        data: serde_json::Value,
+        identity: Option<String>,
+    ) -> Result<HydrationWriteResultWire, String> {
+        let mut state = self.inner.lock().await;
+        let EngineState { engine, ops } = &mut *state;
+        engine
+            .hydrate_query(
+                &query,
+                operation_name.as_deref(),
+                &variables,
+                &data,
+                identity.as_deref(),
+            )
+            .await
+            .map(|result| HydrationWriteResultWire {
+                write_result: wire_write_result(ops, result.write_result),
+                data: result.data,
+            })
+            .map_err(|error| error.to_string())
     }
 
     /// Durably queues a mutation and its optimistic layer, then attempts to

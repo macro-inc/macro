@@ -22,7 +22,7 @@ use cache_core::query_inspection::{CachedQueryInstance, CachedQueryVariant};
 use cache_core::record_selection::SelectedRecord;
 use cache_core::search::{SearchPage, SearchRequest};
 use cache_turso::TursoFileDatabase;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager, Runtime, State};
 
 type Variables = serde_json::Map<String, serde_json::Value>;
@@ -146,6 +146,52 @@ pub async fn graphql_cache_write<R: Runtime>(
     emit_ops_affected(&app, &result.affected_ops, &result.changed);
     emit_cache_changed(&app);
     Ok(result)
+}
+
+/// Result of hydrating a response without returning cache-only fields.
+#[derive(Debug, Serialize)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum HydrationResultWire {
+    /// At least one non-cache-only field was projected.
+    Data {
+        /// Projected GraphQL response data.
+        data: serde_json::Value,
+    },
+    /// Every response field was cache-only.
+    Void,
+}
+
+/// Normalizes and stores a network response, broadcasts affected operations,
+/// and returns only fields not marked `@cacheOnly`.
+#[tauri::command]
+pub async fn graphql_cache_hydrate<R: Runtime>(
+    app: AppHandle<R>,
+    state: State<'_, CacheState>,
+    query: String,
+    operation_name: Option<String>,
+    variables: Option<Variables>,
+    data: serde_json::Value,
+    identity: Option<String>,
+) -> Result<HydrationResultWire, String> {
+    let result = engine_handle(&state)?
+        .hydrate_query(
+            query,
+            operation_name,
+            variables.unwrap_or_default(),
+            data,
+            identity,
+        )
+        .await?;
+    emit_ops_affected(
+        &app,
+        &result.write_result.affected_ops,
+        &result.write_result.changed,
+    );
+    emit_cache_changed(&app);
+    Ok(match result.data {
+        Some(data) => HydrationResultWire::Data { data },
+        None => HydrationResultWire::Void,
+    })
 }
 
 /// Durably queues an optimistic mutation and attempts to claim the strict

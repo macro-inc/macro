@@ -3,7 +3,10 @@ import { SERVER_HOSTS } from '@core/constant/servers';
 import { fetchToken } from '@core/util/fetchWithToken';
 import { isTauri } from '@core/util/platform';
 import { platformFetch } from '@core/util/platformFetch';
-import { normalizedCacheExchange } from '@graphql-cache/exchange/normalized-cache-exchange';
+import {
+  HYDRATE_ONLY_CONTEXT_KEY,
+  normalizedCacheExchange,
+} from '@graphql-cache/exchange/normalized-cache-exchange';
 import type { CacheHost } from '@graphql-cache/host/types';
 import {
   createTauriCacheHost,
@@ -1340,6 +1343,54 @@ export function mapGraphqlGroupedSoupPage(
   });
 
   return { items, groups };
+}
+
+export type GraphqlSoupHydrationPage = {
+  nextCursor: string | null;
+};
+
+type GraphqlSoupHydrationData = {
+  user: {
+    soup: {
+      nextCursor: string | null;
+    };
+  };
+};
+
+/**
+ * Fetches and persists a Soup page while returning only fields not marked
+ * `@cacheOnly`. The generated GraphQL response type is deliberately narrowed
+ * to the directive-projected cursor shape at this boundary.
+ */
+export async function hydrateGraphqlSoup<
+  Data extends GraphqlSoupPageData,
+  Variables extends AnyVariables,
+>(
+  document: DocumentInput<Data, Variables>,
+  variables: Variables,
+  options: Pick<FetchGraphqlSoupOptions, 'signal'> = {}
+): Promise<GraphqlSoupHydrationPage> {
+  const client = getGraphqlSoupClient();
+  if (!graphqlCacheEnabled()) {
+    throw new Error('GraphQL cache hydration requires an active cache');
+  }
+  const result = await client
+    .query<GraphqlSoupHydrationData, Variables>(
+      document as DocumentInput<GraphqlSoupHydrationData, Variables>,
+      variables,
+      {
+        requestPolicy: 'network-only',
+        [HYDRATE_ONLY_CONTEXT_KEY]: true,
+        ...(options.signal ? { fetchOptions: { signal: options.signal } } : {}),
+      }
+    )
+    .toPromise();
+
+  if (result.error) throw result.error;
+  if (!result.data) {
+    throw new Error('GraphQL Soup hydration returned no cursor projection');
+  }
+  return { nextCursor: result.data.user.soup.nextCursor };
 }
 
 /** Executes any Soup-shaped query and maps its result to the shared page type. */

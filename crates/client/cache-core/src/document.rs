@@ -44,6 +44,8 @@ pub struct FieldNode {
     pub response_key: String,
     /// Schema field name.
     pub name: String,
+    /// The field is persisted but omitted from hydration results.
+    pub cache_only: bool,
     pub arguments: Vec<(String, ArgValue)>,
     pub selection_set: Vec<Selection>,
 }
@@ -257,6 +259,13 @@ fn convert_selection_set(
                         arguments.push((arg_name, convert_value(value)?));
                     }
                 }
+                let cache_only = f.directives().is_some_and(|directives| {
+                    directives.directives().any(|directive| {
+                        directive
+                            .name()
+                            .is_some_and(|name| name.text() == "cacheOnly")
+                    })
+                });
                 let selection_set = match f.selection_set() {
                     Some(s) => convert_selection_set(s, fragments, depth + 1)?,
                     None => Vec::new(),
@@ -264,6 +273,7 @@ fn convert_selection_set(
                 out.push(Selection::Field(FieldNode {
                     response_key,
                     name,
+                    cache_only,
                     arguments,
                     selection_set,
                 }));

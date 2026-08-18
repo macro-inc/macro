@@ -240,6 +240,10 @@ export type CachedQueryInstanceWire = CachedQueryVariantWire & {
   value?: unknown;
 };
 
+export type HydrationResult =
+  | { kind: 'data'; data: unknown }
+  | { kind: 'void' };
+
 export type WriteResult = {
   /** Entity keys whose records changed. */
   changed: string[];
@@ -328,6 +332,14 @@ export type CacheRequest = { id: number } & (
        * write tagged with a different identity than the cache's bound one
        * wipes and rebinds the cache atomically (silent restart).
        */
+      identity?: string;
+    }
+  | {
+      kind: 'hydrate';
+      query: string;
+      operationName?: string;
+      variables?: Record<string, unknown>;
+      data: unknown;
       identity?: string;
     }
   /** Durably enqueue an optimistic mutation and claim the strict head. */

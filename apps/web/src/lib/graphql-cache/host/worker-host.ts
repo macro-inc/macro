@@ -13,6 +13,7 @@ import {
   type CacheResponseErrorCode,
   type ClaimedMutation,
   type EnqueueOptimisticMutationResult,
+  type HydrationResult,
   isCachePush,
   isCacheResponse,
   type MutationClaim,
@@ -812,6 +813,20 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
         data: args.data,
         identity: args.identity,
       })) as WriteResult;
+    },
+
+    async hydrateQuery(
+      args: Omit<CacheWriteArgs, 'opKey'>
+    ): Promise<HydrationResult> {
+      await ensureInitialized();
+      return (await request({
+        kind: 'hydrate',
+        query: args.query,
+        operationName: args.operationName,
+        variables: args.variables,
+        data: args.data,
+        identity: args.identity,
+      })) as HydrationResult;
     },
 
     async enqueueOptimisticMutation(

@@ -13,6 +13,7 @@ import type {
   CacheReadPriority,
   ClaimedMutation,
   EnqueueOptimisticMutationResult,
+  HydrationResult,
   MutationClaim,
   MutationSettlement,
   OptimisticLinkPatchWire,
@@ -86,6 +87,8 @@ export interface CacheHost {
   /** Searches the compact write-through materialized projection. */
   search(args: SearchCacheArgs): Promise<SearchCachePage>;
   writeQuery(args: CacheWriteArgs): Promise<WriteResult>;
+  /** Stores a query response and returns only fields not marked `@cacheOnly`. */
+  hydrateQuery(args: Omit<CacheWriteArgs, 'opKey'>): Promise<HydrationResult>;
   /** Durably queues an optimistic mutation and claims the strict head. */
   enqueueOptimisticMutation(
     args: EnqueueOptimisticMutationArgs,

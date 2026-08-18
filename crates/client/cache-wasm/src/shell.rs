@@ -124,6 +124,16 @@ struct JsWriteResult {
     revalidations: Vec<QueryRevalidation>,
 }
 
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct JsHydrationWriteResult {
+    changed: Vec<String>,
+    affected_ops: Vec<String>,
+    reset: bool,
+    revalidations: Vec<QueryRevalidation>,
+    data: Option<serde_json::Value>,
+}
+
 #[derive(Deserialize)]
 struct JsInspectionPathSegment {
     field: String,
@@ -824,6 +834,50 @@ impl CacheEngine {
                 affected_ops: ops.borrow().names(result.affected_ops),
                 reset: result.reset,
                 revalidations: result.revalidations,
+            })
+        })
+    }
+
+    /// Normalizes and stores a query response while returning only fields not
+    /// marked `@cacheOnly` in the GraphQL document.
+    #[wasm_bindgen(js_name = hydrateQuery)]
+    pub fn hydrate_query(
+        &self,
+        query: String,
+        operation_name: Option<String>,
+        variables: JsValue,
+        data: JsValue,
+        identity: Option<String>,
+    ) -> js_sys::Promise {
+        let state = self.state.clone();
+        let ops = self.ops.clone();
+        future_to_promise(async move {
+            let mut state = state.lock().await;
+            state.ensure_callable()?;
+            let variables = parse_variables(variables)?;
+            let data: serde_json::Value = serde_wasm_bindgen::from_value(data).map_err(err_js)?;
+            let result = state
+                .engine_mut()?
+                .hydrate_query(
+                    &query,
+                    operation_name.as_deref(),
+                    &variables,
+                    &data,
+                    identity.as_deref(),
+                )
+                .await;
+            let result = state.engine_result(result)?;
+            to_js(&JsHydrationWriteResult {
+                changed: result
+                    .write_result
+                    .changed
+                    .into_iter()
+                    .map(|key| key.0.into_owned())
+                    .collect(),
+                affected_ops: ops.borrow().names(result.write_result.affected_ops),
+                reset: result.write_result.reset,
+                revalidations: result.write_result.revalidations,
+                data: result.data,
             })
         })
     }

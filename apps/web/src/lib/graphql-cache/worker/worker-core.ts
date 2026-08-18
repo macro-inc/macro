@@ -9,6 +9,7 @@ import type {
   CacheRequest,
   CacheResponse,
   EnqueueOptimisticMutationResult,
+  HydrationResult,
   ReadResult,
   SearchCachePage,
   SelectedRecordByKeyWire,
@@ -79,6 +80,7 @@ function requestPriority(request: CacheRequest): number {
   }
   if (
     request.kind === 'write' ||
+    request.kind === 'hydrate' ||
     request.kind === 'enqueue-optimistic-mutation' ||
     request.kind === 'claim-next-mutation' ||
     request.kind === 'commit-optimistic-write' ||
@@ -187,7 +189,7 @@ export class CacheWorkerCore {
         });
       }
       if (
-        request.kind === 'write' &&
+        (request.kind === 'write' || request.kind === 'hydrate') &&
         typeof result === 'object' &&
         result !== null &&
         'reset' in result &&
@@ -400,6 +402,20 @@ export class CacheWorkerCore {
         );
         this.fanOut(result, true);
         return result;
+      })
+      .with({ kind: 'hydrate' }, async (request) => {
+        const result = await this.requireEngine().hydrateQuery(
+          request.query,
+          request.operationName,
+          request.variables,
+          request.data,
+          request.identity
+        );
+        this.fanOut(result, true);
+        return {
+          kind: result.data === null ? 'void' : 'data',
+          ...(result.data === null ? {} : { data: result.data }),
+        } satisfies HydrationResult;
       })
       .with({ kind: 'enqueue-optimistic-mutation' }, async (request) => {
         const engine = this.requireEngine();

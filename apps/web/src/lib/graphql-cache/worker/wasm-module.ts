@@ -55,6 +55,10 @@ export interface CacheOpenResult {
   outcome: CacheOpenOutcome;
 }
 
+export type CacheEngineHydrationResult = WriteResult & {
+  data: unknown | null;
+};
+
 export interface CacheEngine {
   boundIdentity(): Promise<string | null>;
   /** Optional for compatibility engines; absence means unavailable. */
@@ -82,6 +86,13 @@ export interface CacheEngine {
     data: unknown,
     identity: string | undefined
   ): Promise<WriteResult>;
+  hydrateQuery(
+    query: string,
+    operationName: string | undefined,
+    variables: Record<string, unknown> | undefined,
+    data: unknown,
+    identity: string | undefined
+  ): Promise<CacheEngineHydrationResult>;
   enqueueOptimisticMutation(
     originOpId: string | undefined,
     query: string,

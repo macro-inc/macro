@@ -378,6 +378,23 @@ export function isCacheRequest(value: unknown): value is CacheRequest {
         hasOwn(value, 'data') &&
         isOptionalString(value.identity)
       );
+    case 'hydrate':
+      return (
+        hasOnlyKeys(value, [
+          'id',
+          'kind',
+          'query',
+          'operationName',
+          'variables',
+          'data',
+          'identity',
+        ]) &&
+        isString(value.query) &&
+        isOptionalString(value.operationName) &&
+        isOptionalRecord(value.variables) &&
+        hasOwn(value, 'data') &&
+        isOptionalString(value.identity)
+      );
     case 'enqueue-optimistic-mutation':
       return (
         hasOnlyKeys(value, [
