@@ -165,11 +165,15 @@ function hydrationTransportOperation(op: Operation): Operation {
     });
     transportDocumentCache.set(op.query, document);
   }
-  return makeOperation(op.kind, { ...op, query: document }, {
-    ...op.context,
-    requestPolicy: 'network-only',
-    [HYDRATION_DOCUMENT_CONTEXT_KEY]: op.query,
-  });
+  return makeOperation(
+    op.kind,
+    { ...op, query: document },
+    {
+      ...op.context,
+      requestPolicy: 'network-only',
+      [HYDRATION_DOCUMENT_CONTEXT_KEY]: op.query,
+    }
+  );
 }
 
 function operationName(op: Operation): string | undefined {

@@ -3,8 +3,8 @@ import { createTabLeaderSignal } from '@notifications/notification-election';
 import { SoupBackfillDocument } from '@service-storage/graphql/generated/graphql';
 import {
   type FetchGraphqlSoupOptions,
-  type GraphqlSoupInitialInput,
   type GraphqlSoupHydrationPage,
+  type GraphqlSoupInitialInput,
   type GraphqlSoupInput,
   getGraphqlSoupCacheHost,
   hydrateGraphqlSoup,
