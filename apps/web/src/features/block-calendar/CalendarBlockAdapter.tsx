@@ -49,7 +49,7 @@ function CalendarBlockDisabledRedirect() {
 }
 
 /** Bridges the singleton block lifecycle and navigation API to CalendarView. */
-export function CalendarBlockAdapter(props: CalendarBlockProps) {
+function CalendarBlockAdapter(props: CalendarBlockProps) {
   const calendarUiEnabled = useCalendarUiFlag();
   const posthog = usePosthog();
   const userId = useUserId();
