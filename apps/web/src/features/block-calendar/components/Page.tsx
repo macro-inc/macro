@@ -20,7 +20,6 @@ import {
   canEditCalendarEventTime,
 } from '@app/features/calendar/events/event-interaction';
 import type { CalendarEvent } from '@app/features/calendar/events/types';
-import { useOpenEventComposer } from '@app/features/calendar/events/useOpenEventComposer';
 import {
   CalendarGrid,
   type CalendarGridHandle,
@@ -49,6 +48,7 @@ import {
   Show,
 } from 'solid-js';
 import { Portal } from 'solid-js/web';
+import { useOpenEventComposer } from './use-open-event-composer';
 
 interface CalendarScrollTarget {
   scrollElement: HTMLElement;

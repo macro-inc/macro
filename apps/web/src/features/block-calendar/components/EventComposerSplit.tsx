@@ -1,17 +1,17 @@
-import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
-import { useHotkeyDOMScope } from '@core/hotkey/hotkeys';
-import { onMount } from 'solid-js';
-import { createCalendarEventFormController } from './create-calendar-event-form-controller';
-import { EventComposerForm } from './EventComposerForm';
+import { createCalendarEventFormController } from '@app/features/calendar/events/create-calendar-event-form-controller';
+import { EventComposerForm } from '@app/features/calendar/events/EventComposerForm';
 import {
   defaultEditorInitialValues,
   type EventEditorInitialValues,
-} from './event-form-model';
-import type { CalendarEvent } from './types';
-import { useEventEditor } from './useEventEditor';
+} from '@app/features/calendar/events/event-form-model';
+import type { CalendarEvent } from '@app/features/calendar/events/types';
+import { useEventEditor } from '@app/features/calendar/events/useEventEditor';
+import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
+import { useHotkeyDOMScope } from '@core/hotkey/hotkeys';
+import { onMount } from 'solid-js';
 
 /** Standalone create/edit event composer hosted in a popover split. */
-export function EventComposer(props: {
+export function EventComposerSplit(props: {
   event?: CalendarEvent;
   initialValues?: EventEditorInitialValues;
   onCalendarChange?: (calendarId: string, color: string) => void;

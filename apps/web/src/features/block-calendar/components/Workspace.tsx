@@ -4,7 +4,6 @@ import {
 } from '@app/features/calendar/CalendarPagerContext';
 import { CalendarRangeUnavailableBanner } from '@app/features/calendar/CalendarRangeUnavailableBanner';
 import { useCalendarView } from '@app/features/calendar/CalendarViewContext';
-import { SelectedEventDetails } from '@app/features/calendar/events/EventDetailsPopover';
 import { SidePanel } from '@components/app/side-panel/SidePanel';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { isMobile } from '@core/mobile/isMobile';
@@ -21,6 +20,7 @@ import {
 } from 'solid-js';
 import { Header } from './Header';
 import { Page } from './Page';
+import { SelectedEventDetails } from './SelectedEventDetails';
 import { SetupStatus } from './SetupStatus';
 import { SidePanelSections } from './SidePanelSections';
 

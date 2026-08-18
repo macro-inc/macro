@@ -1,3 +1,12 @@
+import {
+  EventAttendeesSection,
+  EventDetails,
+} from '@app/features/calendar/events/EventDetails';
+import { EventRsvpSection } from '@app/features/calendar/events/EventRsvpSection';
+import type {
+  CalendarEvent,
+  CalendarTimeFormat,
+} from '@app/features/calendar/events/types';
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import { toast } from '@core/component/Toast/Toast';
 import { isMobile } from '@core/mobile/isMobile';
@@ -15,10 +24,7 @@ import {
   useImperativeDialog,
 } from '@ui';
 import { type Accessor, createMemo, createSignal, Show } from 'solid-js';
-import { EventAttendeesSection, EventDetails } from './EventDetails';
-import { EventRsvpSection } from './EventRsvpSection';
-import type { CalendarEvent, CalendarTimeFormat } from './types';
-import { useOpenEventComposer } from './useOpenEventComposer';
+import { useOpenEventComposer } from './use-open-event-composer';
 
 interface SelectedEventDetailsProps {
   anchor: Accessor<HTMLElement | undefined>;

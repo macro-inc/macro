@@ -7,7 +7,6 @@ import { CalendarPeriodSelector } from '@app/features/calendar/CalendarPeriodSel
 import { CalendarSettingsDropdown } from '@app/features/calendar/CalendarSettingsDropdown';
 import { useCalendarView } from '@app/features/calendar/CalendarViewContext';
 import { calendarPeriodLabel } from '@app/features/calendar/calendar-label';
-import { useOpenEventComposer } from '@app/features/calendar/events/useOpenEventComposer';
 import { useCalendarHotkeys } from '@app/features/calendar/use-calendar-hotkeys';
 import { HeaderIsland } from '@components/app/split-layout/components/HeaderIsland';
 import {
@@ -24,6 +23,7 @@ import PlusIcon from '@phosphor/plus.svg';
 import { Button } from '@ui';
 import { usePager } from '@ui/components/Pager';
 import { createMemo, createSignal, onCleanup, Show } from 'solid-js';
+import { useOpenEventComposer } from './use-open-event-composer';
 
 const formatMonthTitle = new Intl.DateTimeFormat(undefined, {
   month: 'long',
