@@ -2,7 +2,8 @@ import { openReminderComposer } from '@app/features/reminders/reminder-composer'
 import { ENABLE_REMINDERS } from '@core/constant/featureFlags';
 import type { EntityData } from '@entity';
 import { reminderTarget } from '@queries/reminders/reminders';
-import { type SoupState, soupHidesDoneRows } from '../create-soup-state';
+import type { SoupState } from '../create-soup-state';
+import { soupHidesDoneRows } from '../hides-done';
 import type { makeMarkDoneAction } from './make-mark-done-action';
 
 /**
