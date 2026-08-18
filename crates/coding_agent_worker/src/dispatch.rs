@@ -5,7 +5,7 @@ use agent_session::inbound::axum_router::{CreateAgentSessionRequest, CreateSessi
 
 use crate::config::Workspace;
 use crate::outbound::agent_session::{ApiError, HarnessApi};
-use crate::sessions::Bridges;
+use crate::runtime::Runtime;
 use crate::webhook::{TriggerWork, WorkExecutor};
 
 /// A failure doing an event's work.
@@ -22,16 +22,16 @@ pub enum DispatchError {
 /// The daemon's real executor: the API client plus the bridge registry.
 pub struct Dispatcher {
     api: HarnessApi,
-    bridges: Bridges,
+    runtime: Runtime,
     workspace: Workspace,
 }
 
 impl Dispatcher {
     /// Build the executor.
-    pub fn new(api: HarnessApi, bridges: Bridges, workspace: Workspace) -> Self {
+    pub fn new(api: HarnessApi, runtime: Runtime, workspace: Workspace) -> Self {
         Self {
             api,
-            bridges,
+            runtime,
             workspace,
         }
     }
@@ -71,8 +71,8 @@ impl WorkExecutor for Dispatcher {
                         session: Some(session),
                     }) => {
                         tracing::info!(%thread_id, %session, "thread already has a session; resuming it");
-                        self.bridges
-                            .ensure_by_id(session)
+                        self.runtime
+                            .ensure_connected()
                             .await
                             .map_err(DispatchError::Dial)?;
                         self.api.prompt(session, &sender, &content).await?;
@@ -85,8 +85,8 @@ impl WorkExecutor for Dispatcher {
                     Err(error) => return Err(error.into()),
                 };
                 let session = AgentSessionId::new_from_uuid(created.session.id);
-                self.bridges
-                    .ensure(session, &created.gateway_url)
+                self.runtime
+                    .ensure_connected()
                     .await
                     .map_err(DispatchError::Dial)?;
                 // No retry around the prompt: the session actor buffers
@@ -105,8 +105,8 @@ impl WorkExecutor for Dispatcher {
                 sender,
                 content,
             } => {
-                self.bridges
-                    .ensure_by_id(session)
+                self.runtime
+                    .ensure_connected()
                     .await
                     .map_err(DispatchError::Dial)?;
                 self.api.prompt(session, &sender, &content).await?;

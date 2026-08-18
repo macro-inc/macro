@@ -2,6 +2,8 @@
 //! with in-memory persistence, mock containers, a fake agent, and a
 //! recording announcer. Only the edges are doubles.
 
+use std::sync::Arc;
+
 use agent_client_protocol::RawJsonRpcMessage;
 use agent_client_protocol::schema::v1::{
     AgentCapabilities, ClientRequest, ContentBlock, InitializeResponse, NewSessionResponse,
@@ -11,7 +13,7 @@ use agent_fold::domain::model::{AuthorKind, MessageId};
 use agent_fold::domain::service::FoldedMessageService;
 use agent_runtime_protocol::domain::{
     action::AgentAction,
-    schema::v0::{AcpMessage, ToRuntimeMessage},
+    schema::v0::{AcpMessage, SystemEvent, ToRuntimeMessage, ToServerMessage},
 };
 use agent_session::PROTOCOL_VERSION;
 use agent_session::domain::model::{AgentSessionId, CreateAgentSessionParams, Message};
@@ -32,6 +34,7 @@ use crate::domain::model::{
     SpawnContainer,
 };
 use crate::domain::ports::ContainerManager as _;
+use crate::outbound::runtime_registry::RuntimeRegistry;
 use crate::testing::helpers::agent::FakeAgent;
 use crate::testing::helpers::announcer::AnnouncerMock;
 use crate::testing::helpers::containers::{ContainerMock, MockContainerManager};
@@ -69,23 +72,29 @@ fn forward_message(content: &str) -> DeliverAction {
     )
 }
 
-fn harness() -> (
-    AgentHarnessService<
-        AgentSessionServiceImpl<
-            InMemoryAgentSessionRepo,
-            FoldedMessageService<InMemoryAgentSessionRepo>,
-            NoOpRealtime,
-        >,
-        MockContainerManager,
-        AnnouncerMock,
+/// The orchestrator under test, over the session service it really uses.
+type TestHarness = AgentHarnessService<
+    AgentSessionServiceImpl<
+        InMemoryAgentSessionRepo,
+        FoldedMessageService<InMemoryAgentSessionRepo>,
+        NoOpRealtime,
     >,
+    MockContainerManager,
+    AnnouncerMock,
+    Arc<RuntimeRegistry<ContainerMock>>,
+>;
+
+fn harness() -> (
+    TestHarness,
     InMemoryAgentSessionRepo,
     MockContainerManager,
     AnnouncerMock,
+    Arc<RuntimeRegistry<ContainerMock>>,
 ) {
     let repo = InMemoryAgentSessionRepo::new();
     let containers = MockContainerManager::new();
     let announcer = AnnouncerMock::new();
+    let runtimes = RuntimeRegistry::new();
     let service = AgentHarnessService::new(
         AgentSessionServiceImpl::new(
             repo.clone(),
@@ -94,13 +103,14 @@ fn harness() -> (
         ),
         containers.clone(),
         announcer.clone(),
+        Arc::clone(&runtimes),
         SessionDefaults {
             model: "claude".to_owned(),
             harness: "opencode".to_owned(),
             repo_url: "https://github.com/macro-inc/macro".to_owned(),
         },
     );
-    (service, repo, containers, announcer)
+    (service, repo, containers, announcer, runtimes)
 }
 
 /// Play the agent's half of the ACP handshake.
@@ -184,7 +194,7 @@ async fn disconnected_session(
 
 #[tokio::test]
 async fn open_creates_announces_and_delivers_the_mention() {
-    let (service, repo, containers, announcer) = harness();
+    let (service, repo, containers, announcer, _runtimes) = harness();
     let command = open_command();
     let id = AgentSessionId::new();
     let origin = command.origin.clone();
@@ -232,7 +242,7 @@ async fn open_creates_announces_and_delivers_the_mention() {
 
 #[tokio::test]
 async fn open_announces_while_the_container_is_still_booting() {
-    let (service, _repo, containers, announcer) = harness();
+    let (service, _repo, containers, announcer, _runtimes) = harness();
     let id = AgentSessionId::new();
 
     let open = service.execute(id, HarnessCommand::Open(open_command()));
@@ -267,7 +277,7 @@ async fn open_announces_while_the_container_is_still_booting() {
 
 #[tokio::test]
 async fn forward_to_a_live_session_reuses_the_transport() {
-    let (service, _repo, containers, announcer) = harness();
+    let (service, _repo, containers, announcer, _runtimes) = harness();
     let command = open_command();
     let id = AgentSessionId::new();
     let open = service.execute(id, HarnessCommand::Open(command));
@@ -313,7 +323,7 @@ async fn forward_to_a_live_session_reuses_the_transport() {
 
 #[tokio::test]
 async fn a_delivery_failure_is_not_automatically_resumed() {
-    let (service, _repo, containers, _announcer) = harness();
+    let (service, _repo, containers, _announcer, _runtimes) = harness();
     let command = open_command();
     let id = AgentSessionId::new();
     let open = service.execute(id, HarnessCommand::Open(command));
@@ -347,7 +357,7 @@ async fn a_delivery_failure_is_not_automatically_resumed() {
 
 #[tokio::test]
 async fn forward_to_a_disconnected_session_resumes_acp_and_delivers_the_prompt() {
-    let (service, repo, containers, _announcer) = harness();
+    let (service, repo, containers, _announcer, _runtimes) = harness();
     let id = disconnected_session(&repo, &containers).await;
 
     let forward = service.execute(
@@ -398,7 +408,7 @@ async fn forward_to_a_disconnected_session_resumes_acp_and_delivers_the_prompt()
 
 #[tokio::test]
 async fn concurrent_forwards_share_one_session_recovery() {
-    let (service, repo, containers, announcer) = harness();
+    let (service, repo, containers, announcer, _runtimes) = harness();
     let id = disconnected_session(&repo, &containers).await;
     let first = service.execute(id, HarnessCommand::Deliver(forward_message("first")));
     let second = service.execute(id, HarnessCommand::Deliver(forward_message("second")));
@@ -447,7 +457,7 @@ async fn concurrent_forwards_share_one_session_recovery() {
 
 #[tokio::test]
 async fn different_sessions_execute_concurrently() {
-    let (service, repo, containers, _announcer) = harness();
+    let (service, repo, containers, _announcer, _runtimes) = harness();
     let first_id = disconnected_session(&repo, &containers).await;
     let second_id = disconnected_session(&repo, &containers).await;
     let first = service.execute(first_id, HarnessCommand::Deliver(forward_message("first")));
@@ -493,7 +503,7 @@ async fn different_sessions_execute_concurrently() {
 
 #[tokio::test]
 async fn an_admitted_command_survives_caller_cancellation() {
-    let (service, repo, containers, _announcer) = harness();
+    let (service, repo, containers, _announcer, _runtimes) = harness();
     let id = disconnected_session(&repo, &containers).await;
     let completion = service.execute(
         id,
@@ -523,7 +533,7 @@ async fn an_admitted_command_survives_caller_cancellation() {
 
 #[tokio::test]
 async fn a_failed_announce_surfaces_and_does_not_start_the_agent() {
-    let (service, repo, containers, announcer) = harness();
+    let (service, repo, containers, announcer, _runtimes) = harness();
     announcer.fails("comms is down");
 
     let result = service
@@ -546,15 +556,7 @@ fn session_of(containers: &MockContainerManager) -> AgentSessionId {
 
 /// Open a session and complete its handshake, returning its live container.
 async fn live_session(
-    service: &AgentHarnessService<
-        AgentSessionServiceImpl<
-            InMemoryAgentSessionRepo,
-            FoldedMessageService<InMemoryAgentSessionRepo>,
-            NoOpRealtime,
-        >,
-        MockContainerManager,
-        AnnouncerMock,
-    >,
+    service: &TestHarness,
     containers: &MockContainerManager,
     id: AgentSessionId,
 ) -> ContainerMock {
@@ -579,7 +581,7 @@ async fn live_session(
 
 #[tokio::test]
 async fn changing_the_model_persists_it_and_tells_the_running_agent() {
-    let (service, repo, containers, _announcer) = harness();
+    let (service, repo, containers, _announcer, _runtimes) = harness();
     let id = AgentSessionId::new();
     let container = live_session(&service, &containers, id).await;
 
@@ -612,7 +614,7 @@ async fn changing_the_model_persists_it_and_tells_the_running_agent() {
 
 #[tokio::test]
 async fn deleting_a_session_tears_down_its_container_and_removes_it() {
-    let (service, repo, containers, _announcer) = harness();
+    let (service, repo, containers, _announcer, _runtimes) = harness();
     let id = AgentSessionId::new();
     live_session(&service, &containers, id).await;
 
@@ -630,7 +632,7 @@ async fn deleting_a_session_tears_down_its_container_and_removes_it() {
 
 #[tokio::test]
 async fn a_prompt_through_control_reaches_the_agent_without_announcing() {
-    let (service, _repo, containers, announcer) = harness();
+    let (service, _repo, containers, announcer, _runtimes) = harness();
     let id = AgentSessionId::new();
     let container = live_session(&service, &containers, id).await;
     let announced_before = announcer.announced().len();
@@ -660,7 +662,7 @@ async fn a_prompt_through_control_reaches_the_agent_without_announcing() {
 
 #[tokio::test]
 async fn compact_through_control_reaches_opencode_as_a_slash_command() {
-    let (service, _repo, containers, _announcer) = harness();
+    let (service, _repo, containers, _announcer, _runtimes) = harness();
     let id = AgentSessionId::new();
     let container = live_session(&service, &containers, id).await;
 
@@ -688,7 +690,7 @@ async fn compact_through_control_reaches_opencode_as_a_slash_command() {
 
 #[tokio::test]
 async fn a_prompt_through_control_resumes_a_disconnected_session() {
-    let (service, repo, containers, _announcer) = harness();
+    let (service, repo, containers, _announcer, _runtimes) = harness();
     let id = disconnected_session(&repo, &containers).await;
 
     let prompted = service.control_event(
@@ -732,9 +734,87 @@ fn open_external_request(workspace: &str) -> OpenExternalAgentSession {
     }
 }
 
+/// Play the agent's half of the handshake for a session that binds lazily.
+///
+/// The ready event is repeated because it is the connection's, not the
+/// session's: a session binds when it is prompted, and until it has, there is
+/// nobody on the connection to act on being told the runtime is up.
+async fn complete_bound_handshake(runtime: &ContainerMock) {
+    let agent = runtime.agent();
+    while agent.received_requests().is_empty() {
+        runtime.sends_ready();
+        tokio::task::yield_now().await;
+    }
+    agent.completes_initialize(InitializeResponse::new(PROTOCOL_VERSION));
+    agent.wait_for_requests(2).await;
+    agent.opens_session(NewSessionResponse::new("acp-test"));
+}
+
+/// As [`complete_bound_handshake`], for a session the runtime is restoring.
+async fn complete_bound_resume(runtime: &ContainerMock) {
+    let agent = runtime.agent();
+    while agent.received_requests().is_empty() {
+        runtime.sends_ready();
+        tokio::task::yield_now().await;
+    }
+    agent.completes_initialize(
+        InitializeResponse::new(PROTOCOL_VERSION).agent_capabilities(
+            AgentCapabilities::new().session_capabilities(
+                SessionCapabilities::new().resume(SessionResumeCapabilities::new()),
+            ),
+        ),
+    );
+    agent.wait_for_requests(2).await;
+    assert!(matches!(
+        &agent.received_requests()[1],
+        ClientRequest::ResumeSessionRequest(request) if request.session_id.to_string() == "acp-test"
+    ));
+    agent.resumes_session(ResumeSessionResponse::new());
+}
+
+/// Wait until a session has noticed that its transport ended.
+///
+/// Until it has, the session still counts as attached, and an action sent in
+/// that window goes into the dead socket instead of being retried onto a live
+/// one - so anything about reconnecting has to start from here.
+async fn await_disconnect(repo: &InMemoryAgentSessionRepo, id: AgentSessionId) {
+    loop {
+        let log = repo
+            .list_by_session(id)
+            .await
+            .expect("the session log is readable");
+        let disconnected = log.iter().any(|stored| {
+            matches!(
+                &stored.entry.content,
+                Message::ToServer(ToServerMessage::Event {
+                    event: SystemEvent::Disconnected
+                })
+            )
+        });
+        if disconnected {
+            return;
+        }
+        tokio::task::yield_now().await;
+    }
+}
+
+/// Prompt a session the way the control endpoint does.
+async fn prompt(
+    service: &TestHarness,
+    id: AgentSessionId,
+    content: &str,
+) -> Result<(), HarnessError> {
+    service
+        .execute(
+            id,
+            HarnessCommand::Deliver(DeliverAction::prompt(content, Some(sender()), None)),
+        )
+        .await
+}
+
 #[tokio::test]
 async fn an_external_open_provisions_nothing_and_prompts_nobody() {
-    let (service, repo, containers, announcer) = harness();
+    let (service, repo, containers, announcer, runtimes) = harness();
 
     let session = service
         .open_external_session(open_external_request("/home/operator/code"))
@@ -749,26 +829,31 @@ async fn an_external_open_provisions_nothing_and_prompts_nobody() {
     assert_eq!(containers.spawned(), 0);
     assert!(announcer.announced().is_empty());
 
-    // The operator's runtime dials in and drives the ACP handshake; still no
-    // prompt, because none has been sent yet.
+    // The operator's runtime dials in for the bot. Nothing happens to the
+    // session: no handshake, no ACP session, nothing sent - a session nobody
+    // is prompting costs the runtime nothing.
     let runtime = ContainerMock::default();
-    let attach = service.attach_external_runtime(session.id, runtime.clone());
-    let drive = complete_handshake(&runtime);
-    let (attached, ()) = tokio::join!(attach, drive);
-    attached.expect("attach should succeed");
-    assert!(prompts(&runtime.agent()).is_empty());
+    runtimes.attach(session.bot_id, runtime.clone());
+    assert!(runtime.agent().received_requests().is_empty());
+    assert!(
+        repo.get(session.id)
+            .await
+            .expect("the session row exists")
+            .acp_session_id
+            .is_none()
+    );
 
-    // The runtime forwards the mention through control: the prompt lands.
-    service
-        .control_event(
-            session.id,
-            ControlEvent {
-                action: AgentAction::prompt("@claude fix the failing test"),
-                actor: Some(sender()),
-            },
-        )
-        .await
-        .expect("the first prompt reaches the attached runtime");
+    // The runtime forwards the mention through control: that is what binds the
+    // session to the connection, handshakes, and lands the prompt.
+    let prompted = service.control_event(
+        session.id,
+        ControlEvent {
+            action: AgentAction::prompt("@claude fix the failing test"),
+            actor: Some(sender()),
+        },
+    );
+    let (result, ()) = tokio::join!(prompted, complete_bound_handshake(&runtime));
+    result.expect("the first prompt binds the session and reaches the runtime");
     assert_eq!(
         prompts(&runtime.agent()),
         [vec![ContentBlock::from("@claude fix the failing test")]]
@@ -780,68 +865,122 @@ async fn an_external_open_provisions_nothing_and_prompts_nobody() {
 }
 
 #[tokio::test]
-async fn a_redial_attaches_only_after_the_live_connection_drops() {
-    let (service, _repo, _containers, _announcer) = harness();
+async fn a_bound_session_stays_on_its_connection_until_it_drops() {
+    let (service, _repo, _containers, _announcer, runtimes) = harness();
     let session = service
         .open_external_session(open_external_request("/srv/agent"))
         .await
         .expect("open");
 
     let first = ContainerMock::default();
-    let (attached, ()) = tokio::join!(
-        service.attach_external_runtime(session.id, first.clone()),
-        complete_handshake(&first)
+    runtimes.attach(session.bot_id, first.clone());
+    let (result, ()) = tokio::join!(
+        prompt(&service, session.id, "fix the failing test"),
+        complete_bound_handshake(&first)
     );
-    attached.expect("first attach");
+    result.expect("the first prompt binds the session");
 
-    // A redial while the first connection is still live is refused: one
-    // session, one runtime.
-    let premature = ContainerMock::default();
-    let error = service
-        .attach_external_runtime(session.id, premature)
+    // Already bound: a second prompt goes straight down the same connection,
+    // with no second handshake to drive.
+    prompt(&service, session.id, "and now the docs")
         .await
-        .expect_err("a live session refuses a second runtime");
-    assert!(
-        matches!(
-            &error,
-            HarnessError::Session(AgentSessionError::AlreadyConnected(id)) if *id == session.id,
-        ),
-        "got {error:?}"
+        .expect("a bound session needs no rebinding");
+    assert_eq!(
+        prompts(&first.agent()),
+        ["fix the failing test", "and now the docs"]
+            .map(|text| vec![ContentBlock::from(text)])
+            .to_vec()
     );
-
-    // After the first connection drops, a redial attaches cleanly.
-    first.disconnects();
-    let second = ContainerMock::default();
-    while service
-        .attach_external_runtime(session.id, second.clone())
-        .await
-        .is_err()
-    {
-        // The actor notices the drop asynchronously; retry until it has.
-        tokio::task::yield_now().await;
-    }
-    assert!(prompts(&second.agent()).is_empty());
 }
 
 #[tokio::test]
-async fn nothing_may_dial_in_for_a_managed_session() {
-    let (service, repo, containers, _announcer) = harness();
-    let id = disconnected_session(&repo, &containers).await;
-
-    let error = service
-        .attach_external_runtime(id, ContainerMock::default())
+async fn a_prompt_after_a_redial_restores_the_session_on_the_new_connection() {
+    let (service, repo, containers, _announcer, runtimes) = harness();
+    let session = service
+        .open_external_session(open_external_request("/srv/agent"))
         .await
-        .expect_err("a managed session's runtime is not dialable");
+        .expect("open");
 
+    let first = ContainerMock::default();
+    runtimes.attach(session.bot_id, first.clone());
+    let (result, ()) = tokio::join!(
+        prompt(&service, session.id, "fix the failing test"),
+        complete_bound_handshake(&first)
+    );
+    result.expect("the first prompt binds the session");
+
+    // The socket dies and the operator's runtime redials. The session is not
+    // touched by the redial itself - the next prompt is what restores it, on
+    // the ACP session id the row remembers.
+    first.disconnects();
+    await_disconnect(&repo, session.id).await;
+    let second = ContainerMock::default();
+    runtimes.attach(session.bot_id, second.clone());
+    assert!(second.agent().received_requests().is_empty());
+
+    let (result, ()) = tokio::join!(
+        prompt(&service, session.id, "carry on"),
+        complete_bound_resume(&second)
+    );
+    result.expect("a prompt after a reconnect restores the session on the way through");
+    assert_eq!(
+        prompts(&second.agent()),
+        [vec![ContentBlock::from("carry on")]]
+    );
+    // Still an operator-hosted session: reconnecting never provisions.
+    assert_eq!(containers.spawned(), 0);
+    assert_eq!(containers.resumed(), 0);
+}
+
+#[tokio::test]
+async fn a_managed_session_resumes_its_sandbox_rather_than_a_dialed_in_runtime() {
+    let (service, repo, containers, _announcer, runtimes) = harness();
+    let id = disconnected_session(&repo, &containers).await;
+    let session = repo.get(id).await.expect("the session row exists");
+
+    // A runtime dialed in claiming to serve the managed bot. Its sandbox is
+    // this deployment's to run, so the dial must not be what the session is
+    // restored onto.
+    let dialed_in = ContainerMock::default();
+    runtimes.attach(session.bot_id, dialed_in.clone());
+
+    let prompted = service.control_event(
+        id,
+        ControlEvent {
+            action: AgentAction::prompt("wake up"),
+            actor: Some(sender()),
+        },
+    );
+    let drive_resume = async {
+        loop {
+            if containers.resumed() == 1 {
+                break;
+            }
+            tokio::task::yield_now().await;
+        }
+        let resumed = containers
+            .container(id)
+            .expect("the resumed container is findable");
+        complete_resume(&resumed).await;
+        resumed.agent().wait_for_requests(3).await;
+        resumed
+    };
+    let (result, resumed) = tokio::join!(prompted, drive_resume);
+    result.expect("a managed session resumes its own sandbox");
+
+    assert_eq!(
+        prompts(&resumed.agent()),
+        [vec![ContentBlock::from("wake up")]]
+    );
     assert!(
-        matches!(error, HarnessError::ManagedRuntime),
-        "got {error:?}"
+        dialed_in.agent().received_requests().is_empty(),
+        "the dialed-in runtime is never consulted for a managed session"
     );
 }
 
 #[tokio::test]
 async fn a_disconnected_external_session_never_gets_a_sandbox() {
-    let (service, _repo, containers, _announcer) = harness();
+    let (service, _repo, containers, _announcer, _runtimes) = harness();
     let session = service
         .open_external_session(open_external_request("/srv/agent"))
         .await
@@ -868,7 +1007,7 @@ async fn a_disconnected_external_session_never_gets_a_sandbox() {
 
 #[tokio::test]
 async fn an_external_open_with_a_mention_announces_as_the_sessions_bot() {
-    let (service, _repo, containers, announcer) = harness();
+    let (service, _repo, containers, announcer, _runtimes) = harness();
     let mut request = open_external_request("/srv/agent");
     let bot = request.bot_id;
     request.thread = Some(agent_session::domain::ports::SessionThread {
@@ -901,7 +1040,7 @@ async fn an_external_open_with_a_mention_announces_as_the_sessions_bot() {
 
 #[tokio::test]
 async fn an_external_prompt_announce_posts_into_the_observed_origin() {
-    let (service, _repo, containers, announcer) = harness();
+    let (service, _repo, containers, announcer, _runtimes) = harness();
     let request = open_external_request("/srv/agent");
     let bot = request.bot_id;
     let session = service
@@ -944,7 +1083,7 @@ async fn an_external_prompt_announce_posts_into_the_observed_origin() {
 
 #[tokio::test]
 async fn an_announce_whose_bot_does_not_own_the_session_is_dropped() {
-    let (service, _repo, _containers, announcer) = harness();
+    let (service, _repo, _containers, announcer, _runtimes) = harness();
     let session = service
         .open_external_session(open_external_request("/srv/agent"))
         .await

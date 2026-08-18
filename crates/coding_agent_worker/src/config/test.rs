@@ -36,8 +36,8 @@ fn args_and_scope_default() {
 fn the_gateway_url_is_the_api_base_with_a_websocket_scheme() {
     let config: Config = toml::from_str(EXAMPLE).expect("example config parses");
     assert_eq!(
-        config.macro_api.gateway_url("abc"),
-        "ws://localhost:50009/agent-harness/runtime/abc/ws",
+        config.macro_api.gateway_url(),
+        "ws://localhost:50009/agent-harness/runtime/ws",
     );
 
     let secure = MacroApi {
@@ -48,7 +48,7 @@ fn the_gateway_url_is_the_api_base_with_a_websocket_scheme() {
         bot_scope: "user".to_owned(),
     };
     assert_eq!(
-        secure.gateway_url("abc"),
-        "wss://agent-harness.macro.com/runtime/abc/ws",
+        secure.gateway_url(),
+        "wss://agent-harness.macro.com/runtime/ws",
     );
 }

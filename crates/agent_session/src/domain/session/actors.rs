@@ -17,7 +17,6 @@ use std::collections::VecDeque;
 
 use agent_client_protocol::schema::v1::SessionId;
 use agent_runtime_protocol::domain::action::{AgentAction, AgentActionId};
-use agent_runtime_protocol::domain::ports::TransportError;
 use agent_runtime_protocol::domain::schema::v0::{SystemEvent, ToRuntimeMessage, ToServerMessage};
 use macro_user_id::user_id::MacroUserIdStr;
 use tokio::sync::{mpsc, oneshot, watch};
@@ -27,9 +26,6 @@ use crate::domain::model::{AgentSessionId, AgentSessionLog, Message};
 use crate::domain::ports::{AgentConnector, AgentSessionLogWriter, AgentSessionRepo};
 
 use super::{CloseReason, Effect, HandshakeStatus, Input, SessionMachine};
-
-/// Buffered inbound messages between the receive pump and the actor select.
-const INBOUND_BUFFER: usize = 1028;
 
 /// A caller's request to deliver one action, and the wire back to them.
 pub(crate) struct SessionCommand {
@@ -55,19 +51,15 @@ pub(crate) struct SessionActor<Connector, Logs> {
     connector: Connector,
     logs: Logs,
     commands: mpsc::Receiver<SessionCommand>,
-    inbound: mpsc::Receiver<std::result::Result<Option<ToServerMessage>, TransportError>>,
     /// This connection's handshake gate: published to when this session runs
     /// the handshake, watched for when another session runs it.
     handshake: watch::Sender<HandshakeStatus>,
     handshake_seen: watch::Receiver<HandshakeStatus>,
-    /// The task owning the in-flight physical receive; aborted when this
-    /// actor drops.
-    pump: tokio::task::JoinHandle<()>,
 }
 
 impl<Connector, Logs> SessionActor<Connector, Logs>
 where
-    Connector: AgentConnector + Clone,
+    Connector: AgentConnector,
     Logs: AgentSessionLogWriter + AgentSessionRepo,
 {
     pub(crate) fn new(
@@ -79,22 +71,14 @@ where
         commands: mpsc::Receiver<SessionCommand>,
         handshake: watch::Sender<HandshakeStatus>,
     ) -> Self {
-        // Keep one physical receive alive independently of the actor select.
-        // Some transports are not cancellation-safe.
-        let (inbound_tx, inbound) = mpsc::channel(INBOUND_BUFFER);
-        let receiver = connector.clone();
-        let pump = tokio::spawn(async move {
-            loop {
-                let inbound = receiver.recv().await;
-                let finished = matches!(inbound, Ok(None) | Err(_));
-                if inbound_tx.send(inbound).await.is_err() || finished {
-                    break;
-                }
-            }
-        });
+        // Marked unseen so the first wait reports the *current* state rather
+        // than only later changes: a session binding after the handshake
+        // finished would otherwise wait for an announcement already made.
+        let mut handshake_seen = handshake.subscribe();
+        handshake_seen.mark_changed();
 
         Self {
-            handshake_seen: handshake.subscribe(),
+            handshake_seen,
             handshake,
             machine: match acp_session_id {
                 None => SessionMachine::new(id, workspace),
@@ -103,8 +87,6 @@ where
             connector,
             logs,
             commands,
-            inbound,
-            pump,
         }
     }
 
@@ -132,14 +114,15 @@ where
                 // The service dropped every handle; nobody can reach us.
                 None => Input::Closed(CloseReason::Abandoned),
             },
-            // A handshake somebody else ran. Never fires before one completes,
-            // and the machine ignores it unless it is still booting - which is
-            // what makes the session that ran the handshake ignore its own.
+            // A handshake somebody else ran. The machine ignores it unless it
+            // is still booting, which is what makes the session that ran the
+            // handshake ignore its own result coming back.
             Ok(()) = self.handshake_seen.changed() => match *self.handshake_seen.borrow_and_update() {
                 HandshakeStatus::Ready(restore) => Input::Ready { restore },
-                HandshakeStatus::Pending => return Stepped::Continue,
+                // Nothing to act on yet, but the wait must resume.
+                HandshakeStatus::Pending | HandshakeStatus::InFlight => return Stepped::Continue,
             },
-            inbound = self.inbound.recv() => match inbound.unwrap_or(Ok(None)) {
+            inbound = self.connector.recv() => match inbound {
                 Ok(Some(message)) => Input::Inbound(message),
                 Ok(None) => Input::Closed(CloseReason::TransportClosed),
                 Err(error) => {
@@ -262,12 +245,5 @@ where
         self.logs
             .set_acp_session_id(self.machine.id(), acp_session_id)
             .await
-    }
-}
-
-/// Abort the receiver pump when the actor goes away, however it goes away.
-impl<Connector, Logs> Drop for SessionActor<Connector, Logs> {
-    fn drop(&mut self) {
-        self.pump.abort();
     }
 }

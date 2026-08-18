@@ -57,7 +57,7 @@ impl LocalEnv {
             storage: StorageEnv::local(),
             queues: QueueEnv::local(),
             mail: MailEnv::local(),
-            agent_harness: AgentHarnessEnv::for_instance(instance),
+            agent_harness: AgentHarnessEnv::local(),
             service_auth: ServiceAuthEnv::for_instance(name),
             fusionauth: FusionAuthEnv::for_instance(instance),
             boot_stubs: BootStubEnv,
@@ -258,23 +258,14 @@ impl MailEnv {
 struct AgentHarnessEnv {
     bot_id: &'static str,
     snapshot: &'static str,
-    /// The gateway URL external agent runtimes dial from the host: the
-    /// instance's proxy, which routes `/agent-harness/*` to the service.
-    /// Without the override, `AgentHarnessGatewayWebsocketUrl`'s local
-    /// default (`ws://localhost:8101`) points at an unpublished port.
-    gateway_ws_url: String,
 }
 
 impl AgentHarnessEnv {
-    fn for_instance(instance: &Instance) -> Self {
+    fn local() -> Self {
         AgentHarnessEnv {
             // bot_id::MACRO_CODER_BOT_ID, seeded by the bots_has_agent migration.
             bot_id: "00000000-0000-0000-0000-00000000a9e7",
             snapshot: "macro-agent-harness",
-            gateway_ws_url: format!(
-                "ws://localhost:{}/agent-harness",
-                instance.port(Port::Proxy)
-            ),
         }
     }
 
@@ -283,10 +274,6 @@ impl AgentHarnessEnv {
         env.insert("DAYTONA_SNAPSHOT".into(), self.snapshot.into());
         env.insert("DAYTONA_API_KEY".into(), String::new());
         env.insert("GITHUB_TOKEN".into(), String::new());
-        env.insert(
-            "OVERRIDE_AGENT_HARNESS_GATEWAY_WEBSOCKET_URL".into(),
-            self.gateway_ws_url.clone(),
-        );
     }
 }
 

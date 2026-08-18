@@ -11,7 +11,7 @@ mod config;
 mod dispatch;
 mod harness;
 mod outbound;
-mod sessions;
+mod runtime;
 mod webhook;
 
 use clap::Parser;
@@ -23,7 +23,7 @@ use std::process::ExitCode;
 use crate::dispatch::Dispatcher;
 use crate::outbound::agent_session::HarnessApi;
 use crate::outbound::registration::FeedReconciler;
-use crate::sessions::Bridges;
+use crate::runtime::Runtime;
 use crate::webhook::{WebhookState, webhook_router};
 
 /// Serve a bot's agent sessions: host the webhook receiver, bridge each
@@ -81,9 +81,9 @@ async fn run(config_path: &std::path::Path) -> rootcause::Result<()> {
     };
 
     let api = HarnessApi::new(&config.macro_api);
-    let bridges = Bridges::new(config.macro_api.clone(), config.harness.clone());
+    let runtime = Runtime::new(config.macro_api.clone(), config.harness.clone());
     let app = webhook_router(WebhookState {
-        executor: Dispatcher::new(api, bridges, config.workspace.clone()),
+        executor: Dispatcher::new(api, runtime, config.workspace.clone()),
         signing_secret,
     });
 

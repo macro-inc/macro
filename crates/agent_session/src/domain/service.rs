@@ -39,6 +39,7 @@ use tokio::sync::{mpsc, oneshot};
 
 use bots::domain::models::BotId;
 
+use super::connection::RuntimeAttachment;
 use super::error::{AgentSessionError, Result};
 use super::model::{
     AgentSession, AgentSessionId, AgentSessionLog, AuthorKind, ChannelSession,
@@ -48,7 +49,6 @@ use super::ports::{
     AgentConnector, AgentSessionLogRepo, AgentSessionLogWriter, AgentSessionRealtime,
     AgentSessionRepo,
 };
-use super::session::HandshakeStatus;
 use super::session::actors::{SessionActor, SessionCommand, Stepped};
 
 /// Buffered not-yet-accepted commands per session actor.
@@ -80,13 +80,17 @@ pub trait AgentSessionService: Send + Sync + 'static {
     fn close_session(&self, id: AgentSessionId) -> impl Future<Output = Result<()>> + Send;
 
     /// Attach a new transport to an existing persisted session.
+    ///
+    /// The attachment carries the connection's handshake gate as well as the
+    /// transport, because whether this session runs `initialize` depends on
+    /// whether another session on the same connection already did.
     fn attach_session<Connector>(
         &self,
         id: AgentSessionId,
-        connector: Connector,
+        attachment: RuntimeAttachment<Connector>,
     ) -> impl Future<Output = Result<()>> + Send
     where
-        Connector: AgentConnector + Clone;
+        Connector: AgentConnector;
 
     /// Deliver an action through the session's active transport, under the
     /// action id it will carry onto the wire.
@@ -156,12 +160,12 @@ impl<R, Folds, Rt> AgentSessionServiceImpl<R, Folds, Rt> {
         id: AgentSessionId,
         acp_session_id: Option<SessionId>,
         workspace: String,
-        connector: Connector,
+        attachment: RuntimeAttachment<Connector>,
     ) -> Result<()>
     where
         R: AgentSessionRepo + AgentSessionLogRepo + Clone,
         Rt: AgentSessionRealtime + Clone + Send + Sync + 'static,
-        Connector: AgentConnector + Clone,
+        Connector: AgentConnector,
     {
         let (commands, command_rx) = mpsc::channel(COMMAND_BUFFER);
 
@@ -178,17 +182,14 @@ impl<R, Folds, Rt> AgentSessionServiceImpl<R, Folds, Rt> {
         // which costs an attach nothing until the session actually says
         // something.
         let logs = LiveSessionLogWriter::new(self.repo.clone(), self.realtime.clone());
-        // One session per connection, so the gate this session publishes to is
-        // its own. Sharing a connection means sharing one of these instead.
-        let (handshake, _) = tokio::sync::watch::channel(HandshakeStatus::Pending);
         let actor = SessionActor::new(
             id,
             acp_session_id,
             workspace,
-            connector,
+            attachment.connector,
             logs,
             command_rx,
-            handshake,
+            attachment.handshake,
         );
         tokio::spawn(run_session(actor, Arc::downgrade(&self.active), commands));
         Ok(())
@@ -270,17 +271,17 @@ where
     async fn attach_session<Connector>(
         &self,
         id: AgentSessionId,
-        connector: Connector,
+        attachment: RuntimeAttachment<Connector>,
     ) -> Result<()>
     where
-        Connector: AgentConnector + Clone,
+        Connector: AgentConnector,
     {
         let session = self.repo.get(id).await?;
         self.register_transport(
             session.id,
             session.acp_session_id.map(Into::into),
             session.workspace,
-            connector,
+            attachment,
         )
     }
 
@@ -521,7 +522,7 @@ async fn run_session<Connector, Logs>(
     active: std::sync::Weak<ActiveSessions>,
     commands: mpsc::Sender<SessionCommand>,
 ) where
-    Connector: AgentConnector + Clone,
+    Connector: AgentConnector,
     Logs: AgentSessionLogWriter + AgentSessionRepo,
 {
     while actor.step().await == Stepped::Continue {}

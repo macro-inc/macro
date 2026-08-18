@@ -65,14 +65,15 @@ pub struct SessionRestoreSupport {
 /// broadcast, because a session can bind long after the handshake finished
 /// and still needs to be told - it reads the current value on subscribe.
 ///
-/// One session per connection today, so the gate is written and read by the
-/// same machine and every read is a no-op. When sessions start sharing a
-/// connection this also needs a failed state, so waiters are released rather
-/// than left booting forever.
+/// The states are a claim as much as a status: exactly one session may run
+/// the handshake, so moving `Pending` to `InFlight` is how a session takes
+/// that job and how every other session knows not to.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum HandshakeStatus {
-    /// Nobody has finished initializing this connection yet.
+    /// Nobody has started initializing this connection.
     Pending,
+    /// A session is initializing it; the rest wait rather than initialize too.
+    InFlight,
     /// The connection is initialized and sessions may open.
     Ready(SessionRestoreSupport),
 }

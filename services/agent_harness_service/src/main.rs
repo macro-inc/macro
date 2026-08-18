@@ -21,6 +21,7 @@ use agent_harness::outbound::daytona::{
     DaytonaApiKey as DaytonaApiKeySecret, DaytonaContainerManager, DaytonaSettings,
     GithubToken as GithubTokenSecret, Snapshot,
 };
+use agent_harness::outbound::runtime_registry::RuntimeRegistry;
 use agent_session::domain::ports::NoOpRealtime;
 use agent_session::domain::service::AgentSessionServiceImpl;
 use agent_session::inbound::axum_router::{
@@ -172,10 +173,15 @@ async fn main() -> anyhow::Result<()> {
         ),
     );
 
+    // One connection per bot, shared by every session that bot runs. Held
+    // here because the gateway puts dialed-in sockets into it and the harness
+    // takes sessions out of it.
+    let runtimes = RuntimeRegistry::new();
     let harness = Arc::new(AgentHarnessService::new(
         sessions,
         containers,
         announcer,
+        Arc::clone(&runtimes),
         SessionDefaults {
             model: config.harness_model.clone(),
             harness: config.harness_slug.clone(),
@@ -226,15 +232,9 @@ async fn main() -> anyhow::Result<()> {
         harness.clone(),
         bots_directory.clone(),
         MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
-        &macro_service_urls::AgentHarnessGatewayWebsocketUrl::new()?,
     );
     let gateway_state = RuntimeGatewayState::new(
-        harness.clone(),
-        Arc::new(AgentSessionServiceImpl::new(
-            session_repo.clone(),
-            FoldedMessageService::new(session_repo.clone()),
-            NoOpRealtime,
-        )),
+        runtimes,
         bots_directory,
         MacroAuthorizationState::new(Arc::new(authorization_service)),
     );

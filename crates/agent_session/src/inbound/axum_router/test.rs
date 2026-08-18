@@ -8,7 +8,6 @@ use macro_authorization::{
     BotScope, InternalAuthConfig, JwtValidator, MacroAuthorizationError,
     MacroAuthorizationServiceImpl, ValidatedIdentity,
 };
-use macro_service_urls::AgentHarnessGatewayWebsocketUrl;
 use rootcause::Report;
 use std::sync::{Arc, Mutex};
 use tower::ServiceExt;
@@ -151,7 +150,6 @@ fn router_for(opener: Arc<RecordingOpener>, bots: OneBotDirectory) -> Router {
         opener,
         Arc::new(bots),
         MacroAuthorizationState::new(Arc::new(service)),
-        &AgentHarnessGatewayWebsocketUrl::local(),
     ))
 }
 
@@ -203,10 +201,6 @@ async fn a_bot_opens_an_external_session_for_itself() {
         .unwrap();
     let payload: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
     assert_eq!(payload["session"]["workspace"], "/home/wolf/code");
-    assert_eq!(
-        payload["gatewayUrl"],
-        format!("ws://localhost:8101/runtime/{}/ws", AgentSessionId::TEST_A),
-    );
 
     let opened = opener.opened.lock().unwrap();
     assert_eq!(opened.len(), 1);

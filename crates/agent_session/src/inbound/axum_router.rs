@@ -598,31 +598,29 @@ pub async fn get_agent_session_log_handler<
 }
 
 /// Shared state for the create route: the opener that owns session-opening
-/// semantics, the bot directory that gates it, the authorization state the
-/// extractor runs against, and where the runtime gateway is dialed.
+/// semantics, the bot directory that gates it, and the authorization state the
+/// extractor runs against.
+///
+/// Nothing about the gateway: a runtime dials once per bot, at an address its
+/// own configuration names, so creating a session says nothing about where to
+/// connect.
 pub struct CreateSessionState<Opener, Bots, Auth> {
     opener: Arc<Opener>,
     bots: Arc<Bots>,
     authorization_state: MacroAuthorizationState<Auth>,
-    /// Normalized (no trailing slash) base of the runtime gateway.
-    gateway_base_url: String,
 }
 
 impl<Opener, Bots, Auth> CreateSessionState<Opener, Bots, Auth> {
-    /// Create route state. The gateway URL arrives as the typed service URL
-    /// so every environment resolves it the same way the rest of the fleet
-    /// does.
+    /// Create route state.
     pub fn new(
         opener: Arc<Opener>,
         bots: Arc<Bots>,
         authorization_state: MacroAuthorizationState<Auth>,
-        gateway: &macro_service_urls::AgentHarnessGatewayWebsocketUrl,
     ) -> Self {
         Self {
             opener,
             bots,
             authorization_state,
-            gateway_base_url: gateway.to_string().trim_end_matches('/').to_owned(),
         }
     }
 }
@@ -635,7 +633,6 @@ impl<Opener, Bots, Auth> Clone for CreateSessionState<Opener, Bots, Auth> {
             opener: Arc::clone(&self.opener),
             bots: Arc::clone(&self.bots),
             authorization_state: self.authorization_state.clone(),
-            gateway_base_url: self.gateway_base_url.clone(),
         }
     }
 }
@@ -726,9 +723,6 @@ pub struct CreateSessionThread {
 pub struct CreateAgentSessionResponse {
     /// The created session.
     pub session: AgentSessionResponse,
-    /// Websocket endpoint the bot's runtime dials to serve the session,
-    /// authenticated by the bot's API token.
-    pub gateway_url: String,
 }
 
 /// What the 409 from `POST /agent-sessions` says when a thread already
@@ -918,9 +912,11 @@ fn resolve_owner(
 )]
 /// Open an agent session served by an external runtime.
 ///
-/// The returned `gatewayUrl` is where that runtime dials in; the runtime
-/// then delivers the triggering mention as the first prompt through the
-/// control endpoint.
+/// Nothing here tells the runtime where to dial: one connection per bot
+/// carries every session it runs, so a runtime that has already dialed serves
+/// this session too, and one that has not dials the gateway its own
+/// configuration names. The triggering mention reaches the session as its
+/// first prompt through the control endpoint.
 #[tracing::instrument(skip_all, err(Debug))]
 pub async fn create_agent_session_handler<
     Opener: ExternalSessionOpener,
@@ -995,12 +991,10 @@ pub async fn create_agent_session_handler<
         Err(error) => return Err(error.into()),
     };
 
-    let gateway_url = format!("{}/runtime/{}/ws", state.gateway_base_url, session.id);
     Ok((
         StatusCode::CREATED,
         Json(CreateAgentSessionResponse {
             session: session.into(),
-            gateway_url,
         }),
     ))
 }

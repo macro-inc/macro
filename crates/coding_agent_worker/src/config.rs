@@ -48,12 +48,12 @@ pub struct MacroApi {
 impl MacroApi {
     /// The dial-in URL for a session on this deployment's runtime gateway:
     /// the API base with a websocket scheme.
-    pub fn gateway_url(&self, session_id: &str) -> String {
+    pub fn gateway_url(&self) -> String {
         let base = self.api_url.trim_end_matches('/');
         let base = base
             .replacen("https://", "wss://", 1)
             .replacen("http://", "ws://", 1);
-        format!("{base}/runtime/{session_id}/ws")
+        format!("{base}/runtime/ws")
     }
 }
 
