@@ -132,6 +132,15 @@ pub(in crate::api) async fn handler(
             .into_response()
     })?;
 
+    // Clean up failed Microsoft account-link callbacks before validating the
+    // redirect so an invalid original_url cannot leave the pending link behind.
+    if params.code.is_none()
+        && provider == "microsoft"
+        && let Some(link_id) = state.link_id.as_ref()
+    {
+        account_link::cleanup_pending_link(&ctx, link_id).await;
+    }
+
     validate_original_url(state.original_url.as_deref()).map_err(|error| {
         match error {
             OriginalUrlValidationError::Invalid => {
@@ -168,11 +177,6 @@ pub(in crate::api) async fn handler(
                 error_description = ?params.error_description,
                 "oauth2 callback received without code",
             );
-            if provider == "microsoft"
-                && let Some(link_id) = state.link_id.as_ref()
-            {
-                account_link::cleanup_pending_link(&ctx, link_id).await;
-            }
             return Err((
                 StatusCode::BAD_REQUEST,
                 Json(ErrorResponse {
