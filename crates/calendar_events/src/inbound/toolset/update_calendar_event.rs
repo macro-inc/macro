@@ -5,6 +5,7 @@ use ai_toolset::{
     ToolResult,
 };
 use async_trait::async_trait;
+use rootcause::compat::boxed_error::IntoBoxedError;
 use schemars::JsonSchema;
 use serde::Deserialize;
 
@@ -183,7 +184,9 @@ where
                     description: "A this_event update requires `recurrenceId` — use the \
                                   occurrence's `recurrenceId` from ListCalendarEvents."
                         .to_string(),
-                    internal_error: anyhow::anyhow!("scoped update without recurrenceId"),
+                    internal_error: anyhow::Error::from_boxed(
+                        rootcause::report!("scoped update without recurrenceId").into_boxed_error(),
+                    ),
                 });
             }
             // Dropping the key would silently widen a one-occurrence intent
@@ -195,7 +198,9 @@ where
                                   scope \"this_event\" to change that occurrence, or drop \
                                   `recurrenceId` to change the whole series."
                         .to_string(),
-                    internal_error: anyhow::anyhow!("series update with a recurrenceId"),
+                    internal_error: anyhow::Error::from_boxed(
+                        rootcause::report!("series update with a recurrenceId").into_boxed_error(),
+                    ),
                 });
             }
         };
