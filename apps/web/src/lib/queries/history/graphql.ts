@@ -43,7 +43,7 @@ function nameSelection(
 
 function historyItemFromSearchDocument(
   document: SearchDocumentWire,
-  name: string
+  record: NameProjection
 ): HistoryItem | undefined {
   const separator = document.recordKey.indexOf(':');
   if (separator < 0) return undefined;
@@ -55,14 +55,16 @@ function historyItemFromSearchDocument(
     : date.toISOString();
   const base = {
     id,
-    name,
-    rawName: name,
-    ownerId: '',
+    name: record.name,
+    rawName: record.name,
+    ownerId: record.ownerId,
+    createdAt: record.createdAt,
     updatedAt,
     deletedAt: null,
   };
   switch (typename) {
     case 'GraphqlSoupDocument': {
+      if (record.__typename !== 'GraphqlSoupDocument') return undefined;
       const markdown = document.bucket !== 'document';
       const subType =
         document.bucket === 'task' ||
@@ -71,7 +73,12 @@ function historyItemFromSearchDocument(
           ? {
               type: document.bucket,
               ...(document.bucket === 'task'
-                ? { is_completed: undefined }
+                ? {
+                    is_completed:
+                      record.subType?.__typename === 'GraphqlTaskSubType'
+                        ? record.subType.isCompleted
+                        : undefined,
+                  }
                 : {}),
             }
           : null;
@@ -101,7 +108,7 @@ export async function materializeCachedGraphqlHistoryItems(
       document.recordKey
     )
   );
-  const names = new Map<string, string>();
+  const recordsByKey = new Map<string, NameProjection>();
   await Promise.all(
     HISTORY_TYPENAMES.map(async (typename) => {
       const keys = supported
@@ -114,15 +121,15 @@ export async function materializeCachedGraphqlHistoryItems(
         keys
       );
       for (const { recordKey, record } of records) {
-        names.set(recordKey, record.name);
+        recordsByKey.set(recordKey, record);
       }
     })
   );
 
   return supported.flatMap((document) => {
-    const name = names.get(document.recordKey);
-    const item = name
-      ? historyItemFromSearchDocument(document, name)
+    const record = recordsByKey.get(document.recordKey);
+    const item = record
+      ? historyItemFromSearchDocument(document, record)
       : undefined;
     return item ? [item] : [];
   });

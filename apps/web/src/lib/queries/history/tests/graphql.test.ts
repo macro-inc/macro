@@ -50,17 +50,31 @@ describe('cached GraphQL history', () => {
       })
     );
     const readRecordsByKeys = vi.fn(async (args: ReadRecordsByKeysArgs) =>
-      args.keys.map((recordKey) => ({
-        recordKey,
-        record: {
-          name:
-            recordKey === 'GraphqlSoupDocument:document-newest'
-              ? 'Newest Document'
-              : recordKey === 'GraphqlSoupChat:chat-middle'
-                ? 'Middle Chat'
-                : 'Task Document',
-        },
-      }))
+      args.keys.map((recordKey) => {
+        const isChat = recordKey === 'GraphqlSoupChat:chat-middle';
+        const isTask = recordKey === 'GraphqlSoupDocument:document-task';
+        return {
+          recordKey,
+          record: {
+            __typename: isChat ? 'GraphqlSoupChat' : 'GraphqlSoupDocument',
+            name:
+              recordKey === 'GraphqlSoupDocument:document-newest'
+                ? 'Newest Document'
+                : isChat
+                  ? 'Middle Chat'
+                  : 'Task Document',
+            ownerId: isChat ? 'chat-owner' : 'document-owner',
+            createdAt: isChat
+              ? '2025-01-01T00:00:00.000Z'
+              : '2024-12-31T00:00:00.000Z',
+            ...(!isChat && {
+              subType: isTask
+                ? { __typename: 'GraphqlTaskSubType', isCompleted: true }
+                : null,
+            }),
+          },
+        };
+      })
     );
 
     const result = await readCachedGraphqlHistoryItems(
@@ -86,10 +100,16 @@ describe('cached GraphQL history', () => {
       'chat-middle',
       'document-task',
     ]);
+    expect(result[0]).toMatchObject({
+      ownerId: 'document-owner',
+      createdAt: '2024-12-31T00:00:00.000Z',
+    });
     expect(result[2]).toMatchObject({
       type: 'document',
       fileType: 'md',
-      subType: { type: 'task' },
+      ownerId: 'document-owner',
+      createdAt: '2024-12-31T00:00:00.000Z',
+      subType: { type: 'task', is_completed: true },
     });
     expect(readRecordsByKeys).toHaveBeenCalledTimes(2);
     expect(

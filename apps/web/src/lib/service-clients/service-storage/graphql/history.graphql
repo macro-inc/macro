@@ -40,13 +40,28 @@ fragment GraphqlProjectHistoryFields on GraphqlSoupProject {
 }
 
 fragment GraphqlDocumentQuickAccessName on GraphqlSoupDocument {
+	__typename
 	name
+	ownerId
+	createdAt
+	subType {
+		__typename
+		... on GraphqlTaskSubType {
+			isCompleted
+		}
+	}
 }
 
 fragment GraphqlChatQuickAccessName on GraphqlSoupChat {
+	__typename
 	name
+	ownerId
+	createdAt
 }
 
 fragment GraphqlProjectQuickAccessName on GraphqlSoupProject {
+	__typename
 	name
+	ownerId
+	createdAt
 }
