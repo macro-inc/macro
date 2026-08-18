@@ -62,7 +62,6 @@ import {
 import {
   defaultRepeatParts,
   describeReminderSchedule,
-  formatReminderWhen,
   futureDateOptions,
   isRecurring,
   onceSchedule,
@@ -212,13 +211,6 @@ export function ReminderComposerModal() {
     })
   );
 
-  /** How to confirm a schedule that was just set, in the past tense. */
-  const confirmationFor = (schedule: ReminderSchedule) => {
-    const recurrence = describeReminderSchedule(schedule);
-    if (recurrence) return `Reminder set — ${recurrence.toLowerCase()}`;
-    return `Reminder set for ${formatReminderWhen(new Date(schedule.type === 'once' ? schedule.remindAt : Date.now()))}`;
-  };
-
   const submitCreate = async (
     schedule: ReminderSchedule,
     target: EntityData
@@ -234,7 +226,7 @@ export function ReminderComposerModal() {
         // Both or neither: the API rejects one without the other.
         ...(attachTo ?? undefined),
       });
-      toast.success(confirmationFor(schedule));
+      toast.success('Reminder set');
     } catch {
       toast.failure('Failed to create reminder');
     }
@@ -262,9 +254,7 @@ export function ReminderComposerModal() {
 
     try {
       await updateReminder.mutateAsync({ id: draft.id, patch });
-      toast.success(
-        patch.schedule ? confirmationFor(patch.schedule) : 'Reminder updated'
-      );
+      toast.success('Reminder updated');
     } catch {
       toast.failure('Failed to update reminder');
     }

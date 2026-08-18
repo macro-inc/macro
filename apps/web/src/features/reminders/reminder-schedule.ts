@@ -14,7 +14,7 @@ import {
 import type { EntityData } from '@entity';
 import type { ReminderSchedule } from '@service-storage/generated/schemas/reminderSchedule';
 import type { UpdateReminderRequest } from '@service-storage/generated/schemas/updateReminderRequest';
-import { addDays, addHours, addWeeks, endOfWeek } from 'date-fns';
+import { addDays, addHours, addWeeks } from 'date-fns';
 
 /**
  * The time of day a bare date resolves to.
@@ -240,19 +240,15 @@ export function reminderDefaultOptions(now: Date): DateOption[] {
     },
     { id: 'tomorrow', label: 'Tomorrow', date: atDefaultTime(addDays(now, 1)) },
     {
-      id: 'end-of-week',
-      label: 'End of week',
-      date: atDefaultTime(endOfWeek(now, { weekStartsOn: 1 })),
-    },
-    {
       id: 'in-1-week',
       label: 'In 1 week',
       date: atDefaultTime(addWeeks(now, 1)),
     },
   ];
 
-  // On a Saturday `endOfWeek` (Sunday) is the same instant as "Tomorrow" at the
-  // morning default, which would offer the same time under two labels.
+  // No two of the presets above can currently land on the same instant, but
+  // they are a list people add to, and two entries offering one time under two
+  // labels is the kind of thing nobody notices until it ships.
   const seen = new Set<number>();
   const unique = entries.filter(({ date }) => {
     const time = date.getTime();
@@ -424,25 +420,4 @@ export function resolveEditedDescription(
   fallback?: string
 ): string {
   return clampDescription(input) || fallback || current;
-}
-
-const ONE_DAY_MS = 24 * 60 * 60 * 1000;
-
-/** Confirmation text for a reminder that was just set.
- *
- * The date is dropped for anything inside the next day: "set for 1:08 PM" is
- * what someone who just asked for three hours from now wants to read back, and
- * "Aug 7, 1:08 PM" only adds a date they already know. Past the day boundary
- * the date carries the meaning, so it stays.
- */
-export function formatReminderWhen(
-  date: Date,
-  now: number = Date.now()
-): string {
-  const withinADay = date.getTime() - now < ONE_DAY_MS;
-  return date.toLocaleString(undefined, {
-    ...(withinADay ? {} : { month: 'short', day: 'numeric' }),
-    hour: 'numeric',
-    minute: '2-digit',
-  });
 }

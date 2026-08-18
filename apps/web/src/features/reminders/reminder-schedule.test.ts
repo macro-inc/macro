@@ -5,7 +5,6 @@ import { describe, expect, it } from 'vitest';
 import {
   defaultRepeatParts,
   describeReminderSchedule,
-  formatReminderWhen,
   futureDateOptions,
   isRecurring,
   onceSchedule,
@@ -74,16 +73,10 @@ describe('reminderDefaultOptions', () => {
   // A Wednesday afternoon, so every entry is still ahead of "now".
   const wednesdayAfternoon = new Date(2026, 6, 29, 16, 37, 52, 400);
 
-  it('offers the five reminder defaults in order', () => {
+  it('offers the four reminder defaults in order', () => {
     expect(
       reminderDefaultOptions(wednesdayAfternoon).map((o) => o.displayText)
-    ).toEqual([
-      'In 1 hour',
-      'In 2 hours',
-      'Tomorrow',
-      'End of week',
-      'In 1 week',
-    ]);
+    ).toEqual(['In 1 hour', 'In 2 hours', 'Tomorrow', 'In 1 week']);
   });
 
   it('offsets the hour entries from now, keeping the time of day', () => {
@@ -112,41 +105,36 @@ describe('reminderDefaultOptions', () => {
     }
   });
 
-  it('dates the day-scale entries a day, a week end and a week out', () => {
-    const [, , tomorrow, endOfWeek, oneWeek] =
-      reminderDefaultOptions(wednesdayAfternoon);
+  it('dates the day-scale entries a day and a week out', () => {
+    const [, , tomorrow, oneWeek] = reminderDefaultOptions(wednesdayAfternoon);
 
     expect(tomorrow.date.getDate()).toBe(30);
-    // Week starts Monday, so the end of this week is Sunday the 2nd.
-    expect(endOfWeek.date.getMonth()).toBe(7);
-    expect(endOfWeek.date.getDate()).toBe(2);
     expect(oneWeek.date.getDate()).toBe(5);
   });
 
-  // On a Saturday the week ends tomorrow, so both land on Sunday morning.
-  it('drops a preset that duplicates an earlier one', () => {
-    const saturday = new Date(2026, 7, 1, 13, 0, 0);
-    const options = reminderDefaultOptions(saturday);
-    const labels = options.map((o) => o.displayText);
-
-    expect(labels).toContain('Tomorrow');
-    expect(labels).not.toContain('End of week');
-    expect(new Set(options.map((o) => o.date.getTime())).size).toBe(
-      options.length
-    );
+  // No two presets can currently land on the same instant, so this guards the
+  // list as it grows rather than a case it has today.
+  it('never offers the same instant under two labels', () => {
+    for (const now of [
+      new Date(2026, 7, 1, 13, 0, 0),
+      new Date(2026, 7, 2, 20, 0, 0),
+      wednesdayAfternoon,
+    ]) {
+      const options = reminderDefaultOptions(now);
+      expect(new Set(options.map((o) => o.date.getTime())).size).toBe(
+        options.length
+      );
+    }
   });
 
-  // Late on a Sunday, "End of week" has already gone by — offering it would
-  // just produce a 400 from the API.
-  it('drops entries that have already passed', () => {
-    const sundayEvening = new Date(2026, 7, 2, 20, 0, 0);
-    const labels = reminderDefaultOptions(sundayEvening).map(
-      (o) => o.displayText
-    );
-
-    expect(labels).not.toContain('End of week');
-    expect(labels).toContain('In 1 hour');
-    expect(labels).toContain('Tomorrow');
+  // The API rejects a firing that is not strictly in the future, and every
+  // preset is now offset forward from `now` — so this holds whenever it runs.
+  it('only ever offers times in the future', () => {
+    for (const now of [new Date(2026, 7, 2, 23, 59, 0), wednesdayAfternoon]) {
+      for (const option of reminderDefaultOptions(now)) {
+        expect(option.date.getTime()).toBeGreaterThan(now.getTime());
+      }
+    }
   });
 
   it('describes each entry with a concrete date and time', () => {
@@ -308,53 +296,6 @@ describe('REMINDER_DEFAULT_TIME', () => {
   });
 });
 
-describe('formatReminderWhen', () => {
-  // Fixed instants rather than the wall clock, and the assertions compare
-  // against `toLocaleString` output rather than a hardcoded string, so the
-  // test states what is included and stays put across locales and timezones.
-  const now = new Date('2026-08-07T10:00:00.000Z').getTime();
-  const timeOnly = { hour: 'numeric', minute: '2-digit' } as const;
-  const withDate = { month: 'short', day: 'numeric', ...timeOnly } as const;
-
-  it('omits the date three hours out', () => {
-    const date = new Date(now + 3 * 60 * 60 * 1000);
-    expect(formatReminderWhen(date, now)).toBe(
-      date.toLocaleString(undefined, timeOnly)
-    );
-  });
-
-  it('omits the date just under a day out', () => {
-    const date = new Date(now + 24 * 60 * 60 * 1000 - 1);
-    expect(formatReminderWhen(date, now)).toBe(
-      date.toLocaleString(undefined, timeOnly)
-    );
-  });
-
-  it('includes the date at exactly a day out', () => {
-    const date = new Date(now + 24 * 60 * 60 * 1000);
-    expect(formatReminderWhen(date, now)).toBe(
-      date.toLocaleString(undefined, withDate)
-    );
-  });
-
-  it('includes the date a week out', () => {
-    const date = new Date(now + 7 * 24 * 60 * 60 * 1000);
-    expect(formatReminderWhen(date, now)).toBe(
-      date.toLocaleString(undefined, withDate)
-    );
-  });
-
-  // The composer rejects past times before this runs, but a date that slipped
-  // past while the dialog sat open should still read as a time, not crash or
-  // sprout a date.
-  it('omits the date for an instant already past', () => {
-    const date = new Date(now - 60 * 1000);
-    expect(formatReminderWhen(date, now)).toBe(
-      date.toLocaleString(undefined, timeOnly)
-    );
-  });
-});
-
 describe('reminderEditOptions', () => {
   // A Wednesday afternoon, so every default entry is still ahead of "now".
   const wednesdayAfternoon = new Date(2026, 6, 29, 16, 37, 52, 400);
@@ -368,7 +309,6 @@ describe('reminderEditOptions', () => {
       'In 1 hour',
       'In 2 hours',
       'Tomorrow',
-      'End of week',
       'In 1 week',
     ]);
   });
