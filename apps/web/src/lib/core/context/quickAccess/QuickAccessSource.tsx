@@ -794,7 +794,11 @@ export function createQuickAccessValue(): QuickAccessContextValue {
     });
 
     const [projectedItems, setProjectedItems] = createSignal<
-      QuickAccessItem[] | undefined
+      | {
+          recordKeys: string[];
+          materialized: Map<string, QuickAccessItem>;
+        }
+      | undefined
     >(undefined);
     if (options && cacheHost) {
       let generation = 0;
@@ -829,10 +833,11 @@ export function createQuickAccessValue(): QuickAccessContextValue {
               missingDocuments
             );
             if (currentGeneration !== generation) return;
-            const materialized = new Map(
+            const materializedHistoryItems = new Map(
               historyItems.map((item) => [item.id, item] as const)
             );
-            const ranked: QuickAccessItem[] = [];
+            const recordKeys: string[] = [];
+            const materialized = new Map<string, QuickAccessItem>();
             const seen = new Set<string>();
             for (const document of page.documents) {
               const separator = document.recordKey.indexOf(':');
@@ -841,13 +846,12 @@ export function createQuickAccessValue(): QuickAccessContextValue {
                   ? document.recordKey
                   : document.recordKey.slice(separator + 1);
               if (seen.has(id)) continue;
-              const existing = itemCache.get(id)?.item;
-              if (existing) {
+              if (itemCache.get(id)?.item) {
                 seen.add(id);
-                ranked.push(existing);
+                recordKeys.push(document.recordKey);
                 continue;
               }
-              const historyItem = materialized.get(id);
+              const historyItem = materializedHistoryItems.get(id);
               if (!historyItem) continue;
               const entity = historyItemToEntity(historyItem);
               const item: QuickAccessItem = {
@@ -863,11 +867,14 @@ export function createQuickAccessValue(): QuickAccessContextValue {
                 data: entity,
               };
               seen.add(id);
-              ranked.push(item);
+              recordKeys.push(document.recordKey);
+              materialized.set(id, item);
             }
-            setProjectedItems(ranked);
+            setProjectedItems({ recordKeys, materialized });
           } catch {
-            if (currentGeneration === generation) setProjectedItems([]);
+            if (currentGeneration === generation) {
+              setProjectedItems({ recordKeys: [], materialized: new Map() });
+            }
           }
         })();
       });
@@ -882,8 +889,15 @@ export function createQuickAccessValue(): QuickAccessContextValue {
 
       // Search describes cached contents, not corpus completeness. Preserve
       // projection rank, then append server/local candidates as fallback.
-      const seen = new Set(projected.map((item) => item.id));
-      return projected.concat(local.filter((item) => !seen.has(item.id)));
+      const ranked = projected.recordKeys.flatMap((recordKey) => {
+        const separator = recordKey.indexOf(':');
+        const key = separator < 0 ? recordKey : recordKey.slice(separator + 1);
+        const item =
+          itemCache.get(key)?.item ?? projected.materialized.get(key);
+        return item ? [item] : [];
+      });
+      const seen = new Set(ranked.map((item) => item.id));
+      return ranked.concat(local.filter((item) => !seen.has(item.id)));
     });
     return {
       items: list,
