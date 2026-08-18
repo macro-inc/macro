@@ -221,14 +221,8 @@
 		var(--event-calendar-color, var(--color-calendar)) 5%,
 		var(--color-surface)
 	);
-	--fc-event-border-color: var(
-		--event-calendar-color,
-		var(--color-calendar)
-	);
-	--fc-event-text-color: var(
-		--event-calendar-color,
-		var(--color-calendar)
-	);
+	--fc-event-border-color: var(--event-calendar-color, var(--color-calendar));
+	--fc-event-text-color: var(--event-calendar-color, var(--color-calendar));
 	border-color: var(--fc-event-border-color);
 	background-color: var(--fc-event-bg-color);
 	color: var(--fc-event-text-color);
@@ -351,10 +345,7 @@
 	font-size: clamp(0.625rem, min(6cqi, 20cqh), 0.75rem);
 }
 
-.calendar-view
-	.fc
-	.calendar-event-content-compact
-	.calendar-event-title {
+.calendar-view .fc .calendar-event-content-compact .calendar-event-title {
 	font-size: inherit;
 }
 
@@ -437,11 +428,7 @@
 
 .calendar-view .fc .fc-event:hover .calendar-event-content,
 .calendar-view .fc .fc-event:focus-visible .calendar-event-content {
-	background-color: color-mix(
-		in oklch,
-		var(--color-accent) 10%,
-		transparent
-	);
+	background-color: color-mix(in oklch, var(--color-accent) 10%, transparent);
 }
 
 .calendar-view .fc .fc-event:has(.calendar-event-content-selected) {
