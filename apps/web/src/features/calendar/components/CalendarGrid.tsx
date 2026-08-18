@@ -88,22 +88,30 @@ export interface CalendarGridHandle extends FullCalendarContextValue {
   chipMounts: Accessor<undefined>;
 }
 
-export interface CalendarGridProps {
-  initialDate: Date;
+export interface CalendarGridSettings {
   initialView: CalendarPeriodView;
-  events: CalendarEvent[];
-  eventsById: Map<string, CalendarEvent>;
   showWeekends: boolean;
   weekStartsOn: CalendarWeekStart;
   timeFormat: CalendarTimeFormat;
   useNarrowDayHeaders: boolean;
   useNarrowEventContent: boolean;
-  selectionColor: string;
-  selectedEventId?: string;
-  eventTimeChangePending?: boolean;
-  onDatesSet?: (info: DatesSetArg) => void;
+}
+
+export interface CalendarGridSelection {
+  color: string;
+  eventId?: string;
   onDateSelect?: (selection: DateSelectArg) => void;
   onEventSelect?: (event: CalendarEvent, element: HTMLElement) => void;
+}
+
+export interface CalendarGridProps {
+  initialDate: Date;
+  events: CalendarEvent[];
+  eventsById: Map<string, CalendarEvent>;
+  settings: CalendarGridSettings;
+  selection: CalendarGridSelection;
+  eventTimeChangePending?: boolean;
+  onDatesSet?: (info: DatesSetArg) => void;
   onEventTimeChange?: (
     change: CalendarEventTimeChange,
     event: CalendarEvent | undefined
@@ -187,7 +195,7 @@ export function CalendarGrid(props: CalendarGridProps) {
         timeGridPlugin,
         multiDaySelectionRenderingPlugin,
       ]}
-      initialView={props.initialView}
+      initialView={props.settings.initialView}
       initialDate={props.initialDate}
       height="100%"
       expandRows
@@ -198,10 +206,10 @@ export function CalendarGrid(props: CalendarGridProps) {
       headerToolbar={false}
       scrollTime={getLocalScrollTime()}
       scrollTimeReset={false}
-      weekends={props.showWeekends}
-      firstDay={props.weekStartsOn}
-      slotLabelFormat={CALENDAR_TIME_FORMAT_OPTIONS[props.timeFormat]}
-      eventTimeFormat={CALENDAR_TIME_FORMAT_OPTIONS[props.timeFormat]}
+      weekends={props.settings.showWeekends}
+      firstDay={props.settings.weekStartsOn}
+      slotLabelFormat={CALENDAR_TIME_FORMAT_OPTIONS[props.settings.timeFormat]}
+      eventTimeFormat={CALENDAR_TIME_FORMAT_OPTIONS[props.settings.timeFormat]}
       events={renderedEvents()}
       eventAllow={() =>
         props.onEventTimeChange !== undefined &&
@@ -224,15 +232,15 @@ export function CalendarGrid(props: CalendarGridProps) {
           eventByRenderId(calendarEventRenderId(change.event))
         )
       }
-      selectable={props.onDateSelect !== undefined && !isMobile()}
+      selectable={props.selection.onDateSelect !== undefined && !isMobile()}
       unselectAuto={false}
       selectMirror
       selectMinDistance={5}
-      select={(selection) => props.onDateSelect?.(selection)}
+      select={(selection) => props.selection.onDateSelect?.(selection)}
       eventClick={({ el, event, jsEvent }) => {
         jsEvent.preventDefault();
         const selectedEvent = eventByRenderId(calendarEventRenderId(event));
-        if (selectedEvent) props.onEventSelect?.(selectedEvent, el);
+        if (selectedEvent) props.selection.onEventSelect?.(selectedEvent, el);
       }}
       eventDidMount={({ el, event, isMirror }) => {
         const eventId = calendarEventRenderId(event);
@@ -246,9 +254,9 @@ export function CalendarGrid(props: CalendarGridProps) {
         if (isMirror || isMultiDaySelectionPreview(event)) return;
 
         eventElements.set(eventId, el);
-        if (props.selectedEventId === eventId) {
+        if (props.selection.eventId === eventId) {
           const selected = eventByRenderId(eventId);
-          if (selected) props.onEventSelect?.(selected, el);
+          if (selected) props.selection.onEventSelect?.(selected, el);
         }
         notifyChipMount();
       }}
@@ -262,7 +270,7 @@ export function CalendarGrid(props: CalendarGridProps) {
       }}
       datesSet={(info) => props.onDatesSet?.(info)}
       dayHeaderFormat={{
-        weekday: props.useNarrowDayHeaders ? 'narrow' : 'short',
+        weekday: props.settings.useNarrowDayHeaders ? 'narrow' : 'short',
       }}
       dayCellClassNames={({ date, view }) =>
         isSameLocalDate(date, view.calendar.getDate())
@@ -277,7 +285,7 @@ export function CalendarGrid(props: CalendarGridProps) {
               view.type === 'timeGridDay'
                 ? formatWeekdayHeader.short(date)
                 : formatWeekdayHeader[
-                    props.useNarrowDayHeaders ? 'narrow' : 'short'
+                    props.settings.useNarrowDayHeaders ? 'narrow' : 'short'
                   ](date);
 
             return (
@@ -302,7 +310,9 @@ export function CalendarGrid(props: CalendarGridProps) {
       </FullCalendar.DayHeaderContent>
 
       <FullCalendar.SlotLabelContent>
-        {({ date }) => formatCompactCalendarTime(date, props.timeFormat)}
+        {({ date }) =>
+          formatCompactCalendarTime(date, props.settings.timeFormat)
+        }
       </FullCalendar.SlotLabelContent>
 
       <FullCalendar.EventContent>
@@ -332,9 +342,9 @@ export function CalendarGrid(props: CalendarGridProps) {
             <EventContent
               event={event}
               renderProps={renderProps}
-              isSelected={props.selectedEventId === event.id}
-              timeFormat={props.timeFormat}
-              isNarrow={props.useNarrowEventContent}
+              isSelected={props.selection.eventId === event.id}
+              timeFormat={props.settings.timeFormat}
+              isNarrow={props.settings.useNarrowEventContent}
             />
           );
         }}
@@ -347,14 +357,14 @@ export function CalendarGrid(props: CalendarGridProps) {
           return (
             <CurrentTimeAxisIndicator
               date={new Date()}
-              timeFormat={props.timeFormat}
+              timeFormat={props.settings.timeFormat}
             />
           );
         }}
       </FullCalendar.NowIndicatorContent>
 
       <CalendarGridHost
-        selectionColor={props.selectionColor}
+        selectionColor={props.selection.color}
         eventElements={eventElements}
         chipMounts={chipMounts}
         children={props.children}

@@ -1,6 +1,8 @@
 import {
   CalendarGrid,
   type CalendarGridHandle,
+  type CalendarGridSelection,
+  type CalendarGridSettings,
 } from '@app/features/calendar/components/CalendarGrid';
 import {
   type CalendarPageId,
@@ -299,27 +301,48 @@ export function Page(props: {
     );
   };
 
+  const gridSettings: CalendarGridSettings = {
+    get initialView() {
+      return calendarView.displaySettings.periodView;
+    },
+    get showWeekends() {
+      return calendarView.displaySettings.showWeekends;
+    },
+    get weekStartsOn() {
+      return calendarView.displaySettings.weekStartsOn;
+    },
+    get timeFormat() {
+      return calendarView.displaySettings.timeFormat;
+    },
+    get useNarrowDayHeaders() {
+      return useNarrowWeekdayHeaders();
+    },
+    get useNarrowEventContent() {
+      return props.useNarrowDayHeaders;
+    },
+  };
+  const gridSelection: CalendarGridSelection = {
+    get color() {
+      return effectiveSelectionColor();
+    },
+    get eventId() {
+      return isActive() ? calendarView.eventState.selectedEventId : undefined;
+    },
+    onDateSelect: handleSelect,
+    onEventSelect: (event, element) => {
+      if (isActive()) calendarView.selectEvent(event, element);
+    },
+  };
+
   return (
     <CalendarGrid
-      initialView={calendarView.displaySettings.periodView}
       initialDate={props.initialDate}
       events={data.visibleEvents()}
       eventsById={data.eventsById()}
-      showWeekends={calendarView.displaySettings.showWeekends}
-      weekStartsOn={calendarView.displaySettings.weekStartsOn}
-      timeFormat={calendarView.displaySettings.timeFormat}
-      useNarrowDayHeaders={useNarrowWeekdayHeaders()}
-      useNarrowEventContent={props.useNarrowDayHeaders}
-      selectionColor={effectiveSelectionColor()}
-      selectedEventId={
-        isActive() ? calendarView.eventState.selectedEventId : undefined
-      }
+      settings={gridSettings}
+      selection={gridSelection}
       eventTimeChangePending={updateEventTime.isPending}
       onDatesSet={handleDatesSet}
-      onDateSelect={handleSelect}
-      onEventSelect={(event, element) => {
-        if (isActive()) calendarView.selectEvent(event, element);
-      }}
       onEventTimeChange={handleEventTimeChange}
     >
       {(grid) => <CalendarPageHost id={props.id} data={data} grid={grid} />}
