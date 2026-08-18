@@ -1,3 +1,4 @@
+import type { ListView } from '@app/constants/list-views';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { CALENDAR_BLOCK_ID } from '@block-calendar/types';
 import { useSettingsState } from '@core/constant/SettingsState';
@@ -5,9 +6,14 @@ import { type Accessor, createMemo } from 'solid-js';
 import { useSplitLayout } from '../split-layout/layout';
 import { isMobileNavViewId, type MobileNavViewId } from './mobile-nav-views';
 
-type MobileSplitNavViewId = Exclude<MobileNavViewId, 'settings'>;
+/**
+ * Everything the dock can navigate to: the pill-row views plus the list views
+ * only reachable through the Views menu or the dynamic nav button (folders,
+ * companies, …).
+ */
+export type MobileDockNavId = ListView | 'calendar' | 'settings';
 
-function mobileNavContent(id: MobileSplitNavViewId) {
+function mobileNavContent(id: Exclude<MobileDockNavId, 'settings'>) {
   return id === 'calendar'
     ? ({ type: 'calendar', id: CALENDAR_BLOCK_ID } as const)
     : ({ type: 'component', id } as const);
@@ -34,7 +40,7 @@ export function useForegroundMobileView(): Accessor<
  * so the switch doesn't push a swipe-back entry; from an entity it is forward
  * navigation so the user can swipe back. Settings toggles the settings split.
  */
-export function useMobileNavNavigate(): (id: MobileNavViewId) => void {
+export function useMobileNavNavigate(): (id: MobileDockNavId) => void {
   const { openWithSplit } = useSplitLayout();
   const { toggleSettings } = useSettingsState();
 
