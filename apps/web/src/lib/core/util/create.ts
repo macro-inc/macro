@@ -17,6 +17,7 @@ import type { PropertyInput } from '@service-storage/generated/schemas/propertyI
 
 import { uploadToPresignedUrl } from '@service-storage/util/uploadToPresignedUrl';
 import { err, ok } from 'neverthrow';
+import { decodeBase64Bytes } from './base64';
 import { isPaymentError } from './handlePaymentError';
 import { contentHash } from './hash';
 import {
@@ -106,10 +107,7 @@ export async function createTaskWithInitialSnapshot(args?: CreateTaskArgs) {
   let initialSnapshot: Uint8Array | undefined;
   if (typeof createdTask.initialSnapshot === 'string') {
     try {
-      initialSnapshot = Uint8Array.from(
-        atob(createdTask.initialSnapshot),
-        (character) => character.charCodeAt(0)
-      );
+      initialSnapshot = decodeBase64Bytes(createdTask.initialSnapshot);
     } catch (error) {
       console.error('Failed to decode initial task snapshot', error);
     }
