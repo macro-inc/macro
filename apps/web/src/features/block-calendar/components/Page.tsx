@@ -1,26 +1,26 @@
 import {
+  CalendarGrid,
+  type CalendarGridHandle,
+} from '@app/features/calendar/components/CalendarGrid';
+import {
   type CalendarPageId,
   useCalendarPager,
 } from '@app/features/calendar/components/CalendarPagerContext';
 import { useCalendarView } from '@app/features/calendar/components/CalendarViewContext';
+import { calendarSelectionToEditorInitialValues } from '@app/features/calendar/components/composer/event-form-model';
+import type { CalendarEvent } from '@app/features/calendar/components/events/types';
+import { DEFAULT_CALENDAR_SOURCE } from '@app/features/calendar/components/events/types';
 import {
   type CalendarOccurrenceData,
   useCalendarOccurrenceData,
-} from '@app/features/calendar/data/use-calendar-occurrence-data';
-import { DEFAULT_CALENDAR_SOURCE } from '@app/features/calendar/events/calendar-occurrence-mapper';
-import { calendarSelectionToEditorInitialValues } from '@app/features/calendar/events/event-form-model';
+} from '@app/features/calendar/hooks/use-calendar-occurrence-data';
+import { useCalendarTimeGridHoverIndicator } from '@app/features/calendar/hooks/use-calendar-time-grid-hover-indicator';
+import { isCalendarRangeSupported } from '@app/features/calendar/utils/calendar-supported-range';
 import {
   type CalendarEventTimeChange,
   calendarEventTimeFromFullCalendar,
   canEditCalendarEventTime,
-} from '@app/features/calendar/events/event-interaction';
-import type { CalendarEvent } from '@app/features/calendar/events/types';
-import {
-  CalendarGrid,
-  type CalendarGridHandle,
-} from '@app/features/calendar/grid/CalendarGrid';
-import { useCalendarTimeGridHoverIndicator } from '@app/features/calendar/hooks/use-calendar-time-grid-hover-indicator';
-import { isCalendarRangeSupported } from '@app/features/calendar/utils/calendar-supported-range';
+} from '@app/features/calendar/utils/event-interaction';
 import { toast } from '@core/component/Toast/Toast';
 import { ScrollIndicators } from '@core/component/VerticalScrollIndicators';
 import { isMobile } from '@core/mobile/isMobile';

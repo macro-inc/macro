@@ -4,7 +4,7 @@ import { Show } from 'solid-js';
 import {
   formatCompactCalendarTime,
   formatCompactCalendarTimeRange,
-} from '../utils/time-format';
+} from '../../utils/time-format';
 import type { CalendarEvent, CalendarTimeFormat } from './types';
 
 interface CalendarEventContentProps {

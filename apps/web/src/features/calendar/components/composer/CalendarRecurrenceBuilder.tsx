@@ -2,15 +2,15 @@ import { RadioGroup } from '@kobalte/core/radio-group';
 import { Button, Select } from '@ui';
 import { addMonths, format } from 'date-fns';
 import { createMemo, For, Show } from 'solid-js';
-import { EventDateField } from './EventDateTimeField';
-import { formatRecurrenceDescription } from './recurrence-description';
 import {
   buildRecurrenceLines,
+  formatRecurrenceDescription,
   type RecurrenceConfig,
   type RecurrenceFrequency,
   WEEKDAY_CODES,
   type WeekdayCode,
-} from './recurrence-editor';
+} from '../../utils/recurrence';
+import { EventDateField } from './CalendarEventDateTimeField';
 
 const DATE_VALUE = 'yyyy-MM-dd';
 
@@ -27,21 +27,23 @@ const FREQUENCY_OPTIONS: FrequencyOption[] = [
 ];
 
 /** Value emitted whenever the recurrence builder changes. */
-export interface RecurrenceBuilderValue extends RecurrenceConfig {
+export interface CalendarRecurrenceBuilderValue extends RecurrenceConfig {
   /** Human-readable description formed from the individual recurrence parts. */
   recurrenceDescription: string;
 }
 
-export interface RecurrenceBuilderProps {
+export interface CalendarRecurrenceBuilderProps {
   value: RecurrenceConfig;
   start: Date;
   allDay: boolean;
   disabled?: boolean;
-  onChange: (value: RecurrenceBuilderValue) => void;
+  onChange: (value: CalendarRecurrenceBuilderValue) => void;
 }
 
 /** Builds an RFC 5545 recurrence rule from individually editable parts. */
-export function RecurrenceBuilder(props: RecurrenceBuilderProps) {
+export function CalendarRecurrenceBuilder(
+  props: CalendarRecurrenceBuilderProps
+) {
   const selectedFrequency = createMemo(
     () =>
       FREQUENCY_OPTIONS.find(

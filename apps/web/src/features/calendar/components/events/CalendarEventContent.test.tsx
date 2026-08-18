@@ -8,8 +8,8 @@ import { describe, expect, it } from 'vitest';
 import {
   formatCompactCalendarTime,
   formatCompactCalendarTimeRange,
-} from '../utils/time-format';
-import { CalendarEventContent } from './EventContent';
+} from '../../utils/time-format';
+import { CalendarEventContent } from './CalendarEventContent';
 import type { CalendarEvent } from './types';
 
 const start = new Date(2025, 0, 15, 9);

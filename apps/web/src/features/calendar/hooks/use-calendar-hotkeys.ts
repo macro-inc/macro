@@ -1,7 +1,7 @@
 import { createHotkeyGroup, registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
 import { onCleanup } from 'solid-js';
-import type { CalendarPeriodView } from '../events/types';
+import type { CalendarPeriodView } from '../components/events/types';
 
 interface CalendarHotkeyHandlers {
   scopeId: string;

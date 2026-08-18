@@ -1,11 +1,11 @@
 import {
+  CalendarEventDetails,
   EventAttendeesSection,
-  EventDetails,
-} from '@app/features/calendar/events/EventDetails';
+} from '@app/features/calendar/components/events/CalendarEventDetails';
 import type {
   CalendarEvent,
   CalendarTimeFormat,
-} from '@app/features/calendar/events/types';
+} from '@app/features/calendar/components/events/types';
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import { toast } from '@core/component/Toast/Toast';
 import { isMobile } from '@core/mobile/isMobile';
@@ -183,7 +183,7 @@ function EventDetailsDrawer(props: EventDetailsOverlayProps) {
           </div>
           <div class="flex min-h-0 flex-1 flex-col overflow-y-auto">
             <div class="px-3">
-              <EventDetails
+              <CalendarEventDetails
                 event={props.event}
                 timeFormat={props.timeFormat}
                 defaultReminders={props.defaultReminders}
@@ -402,7 +402,7 @@ function EventDetailsPopover(props: EventDetailsPopoverProps) {
               </div>
               <div>
                 <div class="px-3 pb-3">
-                  <EventDetails
+                  <CalendarEventDetails
                     event={props.event}
                     timeFormat={props.timeFormat}
                     defaultReminders={props.defaultReminders}

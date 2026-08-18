@@ -8,7 +8,7 @@ import { Calendar } from '@ui/components/Calendar';
 import { Layer } from '@ui/components/Layer';
 import { cn } from '@ui/utils/classname';
 import { createMemo, createSignal, createUniqueId } from 'solid-js';
-import { formatLocalDate } from '../utils/calendar-date';
+import { formatLocalDate } from '../../utils/calendar-date';
 
 export interface EventTimeOption {
   value: string;

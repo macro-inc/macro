@@ -1,6 +1,6 @@
 import { useActivityFeedFlag } from '@app/features/activity/use-activity-feed-flag';
-import type { EventEditorInitialValues } from '@app/features/calendar/events/event-form-model';
-import type { CalendarEvent } from '@app/features/calendar/events/types';
+import type { EventEditorInitialValues } from '@app/features/calendar/components/composer/event-form-model';
+import type { CalendarEvent } from '@app/features/calendar/components/events/types';
 import { GettingStarted } from '@app/features/getting-started';
 import { Home } from '@app/features/home';
 import { queryStateFrom } from '@app/features/next-soup/filters/filter-store';

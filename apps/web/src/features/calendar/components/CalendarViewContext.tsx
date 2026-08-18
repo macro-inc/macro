@@ -1,15 +1,16 @@
 import { createAssertedContextProvider } from '@core/context/createContext';
 import { isMobile } from '@core/mobile/isMobile';
 import { makePersisted } from '@solid-primitives/storage';
+import { batch, createSignal } from 'solid-js';
 import { createStore } from 'solid-js/store';
-import { useCalendarSources } from '../data/use-calendar-sources';
-import { createCalendarEventSelection } from '../events/create-calendar-event-selection';
+import { useCalendarSources } from '../hooks/use-calendar-sources';
+import { getDefaultCalendarTimeFormat } from '../utils/time-format';
 import type {
+  CalendarEvent,
   CalendarPeriodView,
   CalendarTimeFormat,
   CalendarWeekStart,
-} from '../events/types';
-import { getDefaultCalendarTimeFormat } from '../utils/time-format';
+} from './events/types';
 
 interface CalendarEventState {
   readonly visibleSourceIds: string[];
@@ -32,6 +33,29 @@ interface CalendarPreferences {
 }
 
 const CALENDAR_PREFERENCES_KEY = 'macro:pref:calendar:settings';
+
+function createCalendarEventSelection() {
+  const [event, setEvent] = createSignal<CalendarEvent>();
+  const [anchor, setAnchor] = createSignal<HTMLElement>();
+
+  const close = () => {
+    batch(() => {
+      setEvent(undefined);
+      setAnchor(undefined);
+    });
+  };
+  const select = (nextEvent: CalendarEvent, nextAnchor: HTMLElement) => {
+    batch(() => {
+      setEvent(() => nextEvent);
+      setAnchor(nextAnchor);
+    });
+  };
+  const refresh = (nextEvent: CalendarEvent) => {
+    if (event()?.id === nextEvent.id) setEvent(nextEvent);
+  };
+
+  return { anchor, close, event, refresh, select };
+}
 
 export const [CalendarViewContextProvider, useCalendarView] =
   createAssertedContextProvider('CalendarViewContext', () => {

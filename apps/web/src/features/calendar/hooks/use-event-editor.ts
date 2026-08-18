@@ -6,13 +6,13 @@ import {
   useUpdateCalendarEventMutation,
 } from '@queries/calendar/mutations';
 import { type Accessor, createMemo } from 'solid-js';
-import { DEFAULT_CALENDAR_SOURCE } from '../events/calendar-occurrence-mapper';
 import {
   calendarEventToEditorInitialValues,
   type EventEditorDisabledFields,
   type EventEditorSubmitValues,
-} from '../events/event-form-model';
-import type { CalendarEvent } from '../events/types';
+} from '../components/composer/event-form-model';
+import type { CalendarEvent } from '../components/events/types';
+import { DEFAULT_CALENDAR_SOURCE } from '../components/events/types';
 import {
   calendarDisplayLabel,
   spansMultipleInboxes,

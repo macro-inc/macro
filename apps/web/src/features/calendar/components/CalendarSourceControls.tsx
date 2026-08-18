@@ -1,6 +1,6 @@
 import { Checkbox } from '@ui';
 import { For } from 'solid-js';
-import type { CalendarSource } from '../events/types';
+import type { CalendarSource } from './events/types';
 
 interface CalendarSourceControlsProps {
   sources: CalendarSource[];

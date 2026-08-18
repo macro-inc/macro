@@ -1,8 +1,8 @@
 import { type Accessor, batch, createMemo, createSignal } from 'solid-js';
 import {
-  type EventComposerFormSnapshot,
-  isEventComposerFormDirty,
-} from './event-composer-dirty';
+  parseRecurrenceConfig,
+  recurrenceConfigsEqual,
+} from '../../utils/recurrence';
 import {
   convertTimesForAllDay,
   createEventEditorState,
@@ -15,6 +15,64 @@ import {
   moveAllDayRange,
   type SelectedEventEditorGuest,
 } from './event-form-model';
+
+interface EventComposerFormSnapshot {
+  title: string;
+  allDay: boolean;
+  start: string;
+  end: string;
+  recurrenceLines: readonly string[];
+  calendarId?: string;
+  guestEmails: readonly string[];
+  location: string;
+  description: string;
+}
+
+function normalizedGuestEmails(emails: readonly string[]) {
+  return emails.map((email) => email.trim().toLowerCase()).sort();
+}
+
+function arraysEqual(first: readonly string[], second: readonly string[]) {
+  return (
+    first.length === second.length &&
+    first.every((value, index) => value === second[index])
+  );
+}
+
+function recurrenceLinesEqual(
+  first: readonly string[],
+  second: readonly string[]
+) {
+  if (arraysEqual(first, second)) return true;
+
+  const firstConfig = parseRecurrenceConfig([...first]);
+  const secondConfig = parseRecurrenceConfig([...second]);
+  return (
+    firstConfig !== undefined &&
+    secondConfig !== undefined &&
+    recurrenceConfigsEqual(firstConfig, secondConfig)
+  );
+}
+
+function isEventComposerFormDirty(
+  initial: EventComposerFormSnapshot,
+  current: EventComposerFormSnapshot
+) {
+  return (
+    initial.title !== current.title ||
+    initial.allDay !== current.allDay ||
+    initial.start !== current.start ||
+    initial.end !== current.end ||
+    initial.calendarId !== current.calendarId ||
+    initial.location !== current.location ||
+    initial.description !== current.description ||
+    !arraysEqual(
+      normalizedGuestEmails(initial.guestEmails),
+      normalizedGuestEmails(current.guestEmails)
+    ) ||
+    !recurrenceLinesEqual(initial.recurrenceLines, current.recurrenceLines)
+  );
+}
 
 export interface CreateCalendarEventFormControllerOptions {
   initialValue: EventEditorInitialValues;
@@ -35,13 +93,16 @@ export function createCalendarEventFormController(
     cloneValue(options.initialValue)
   );
   const [state, setState] = createSignal(cloneValue(options.initialValue));
+
   const initialGuests = initialGuestOptions(
     options.initialValue.guests,
     options.guestOptions()
   );
+
   const [initialGuestEmails, setInitialGuestEmails] = createSignal(
     initialGuests.map(guestEmail)
   );
+
   const [selectedGuests, setSelectedGuestsState] =
     createSignal<SelectedEventEditorGuest[]>(initialGuests);
 
@@ -49,20 +110,25 @@ export function createCalendarEventFormController(
     initialValues: options.initialValue,
     state,
   });
+
   const effectiveCalendarId = () =>
     state().calendarId ?? options.calendarOptions()[0]?.id;
+
   const selectedCalendarOption = () =>
     options
       .calendarOptions()
       .find((option) => option.id === effectiveCalendarId()) ??
     options.calendarOptions()[0];
+
   const effectiveRecurrenceLines = () =>
     recurrence.recurrenceLines() ?? initialValue().recurrenceLines;
+
   const value = createMemo<EventEditorInitialValues>(() => ({
     ...state(),
     recurrenceLines: [...effectiveRecurrenceLines()],
     guests: selectedGuests().map(guestEmail).join(', '),
   }));
+
   const snapshot = (): EventComposerFormSnapshot => ({
     title: state().title,
     allDay: state().allDay,
@@ -74,6 +140,7 @@ export function createCalendarEventFormController(
     location: state().location,
     description: state().description,
   });
+
   const initialSnapshot = (): EventComposerFormSnapshot => ({
     title: initialValue().title,
     allDay: initialValue().allDay,
@@ -85,6 +152,7 @@ export function createCalendarEventFormController(
     location: initialValue().location,
     description: initialValue().description,
   });
+
   const isDirty = createMemo(() =>
     isEventComposerFormDirty(initialSnapshot(), snapshot())
   );
@@ -94,16 +162,20 @@ export function createCalendarEventFormController(
     setState(cloneValue(next));
     notifyChange();
   };
+
   const setField = <Key extends keyof EventEditorInitialValues>(
     field: Key,
     next: EventEditorInitialValues[Key]
   ) => replaceState({ ...state(), [field]: next });
+
   const setStart = (start: string) =>
     replaceState(
       state().allDay ? moveAllDayRange(state(), start) : { ...state(), start }
     );
+
   const setAllDay = (allDay: boolean) =>
     replaceState(convertTimesForAllDay(state(), allDay));
+
   const setSelectedGuests = (guests: SelectedEventEditorGuest[]) => {
     batch(() => {
       setSelectedGuestsState(guests);
@@ -114,14 +186,17 @@ export function createCalendarEventFormController(
     });
     notifyChange();
   };
+
   const changeRecurrenceChoice = (choice: string) => {
     recurrence.changeRecurrenceChoice(choice);
     notifyChange();
   };
+
   const setCustomConfig: typeof recurrence.setCustomConfig = (next) => {
     recurrence.setCustomConfig(next);
     notifyChange();
   };
+
   const submitValues = (): EventEditorSubmitValues | undefined => {
     const time = recurrence.eventTime();
     if (!time || !recurrence.canSave()) return undefined;
@@ -136,6 +211,7 @@ export function createCalendarEventFormController(
       description: current.description,
     };
   };
+
   const replaceFromExternal = (next: EventEditorInitialValues) => {
     const cloned = cloneValue(next);
     const guests = initialGuestOptions(next.guests, options.guestOptions());

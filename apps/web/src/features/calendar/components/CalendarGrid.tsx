@@ -19,28 +19,28 @@ import {
   type JSX,
   Show,
 } from 'solid-js';
-import { CalendarEventContent } from '../events/EventContent';
+import { isSameLocalDate } from '../utils/calendar-date';
 import {
   type CalendarEventTimeChange,
   calendarEventRenderId,
-} from '../events/event-interaction';
-import { mapCalendarEventToFullCalendar } from '../events/event-mapper';
+} from '../utils/event-interaction';
 import {
   isMultiDaySelectionPreview,
   multiDaySelectionRenderingPlugin,
-} from '../events/multi-day-selection-rendering';
-import type {
-  CalendarEvent,
-  CalendarPeriodView,
-  CalendarTimeFormat,
-  CalendarWeekStart,
-} from '../events/types';
-import { isSameLocalDate } from '../utils/calendar-date';
+} from '../utils/fullcalendar-multi-day-selection';
 import {
   CALENDAR_TIME_FORMAT_OPTIONS,
   formatCalendarTime,
   formatCompactCalendarTime,
 } from '../utils/time-format';
+import { CalendarEventContent } from './events/CalendarEventContent';
+import {
+  type CalendarEvent,
+  type CalendarPeriodView,
+  type CalendarTimeFormat,
+  type CalendarWeekStart,
+  mapCalendarEventToFullCalendar,
+} from './events/types';
 import '../calendar.css';
 
 const formatWeekdayHeader = {

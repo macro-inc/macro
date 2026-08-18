@@ -1,7 +1,7 @@
 import { useVisibleCalendarsQuery } from '@queries/calendar/calendars';
 import { createMemo } from 'solid-js';
-import { DEFAULT_CALENDAR_SOURCE } from '../events/calendar-occurrence-mapper';
-import type { CalendarSource } from '../events/types';
+import type { CalendarSource } from '../components/events/types';
+import { DEFAULT_CALENDAR_SOURCE } from '../components/events/types';
 import {
   calendarDisplayLabel,
   spansMultipleInboxes,

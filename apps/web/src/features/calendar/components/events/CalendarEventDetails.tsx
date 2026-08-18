@@ -33,17 +33,17 @@ import {
   Show,
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
-import { isSameLocalDate } from '../utils/calendar-date';
-import {
-  CALENDAR_TIME_FORMAT_OPTIONS,
-  formatCalendarTime,
-} from '../utils/time-format';
+import { isSameLocalDate } from '../../utils/calendar-date';
 import {
   formatReminderOffset,
   REMINDER_METHOD_POPUP,
   resolveReminderOverrides,
-} from './event-reminders';
-import { formatRecurrenceDescription } from './recurrence-description';
+} from '../../utils/event-reminders';
+import { formatRecurrenceDescription } from '../../utils/recurrence';
+import {
+  CALENDAR_TIME_FORMAT_OPTIONS,
+  formatCalendarTime,
+} from '../../utils/time-format';
 import type { CalendarEvent, CalendarTimeFormat } from './types';
 
 const formatDate = new Intl.DateTimeFormat(undefined, {
@@ -434,7 +434,7 @@ function formatOriginalTimeZone(
 }
 
 /** Displays read-only details for a selected calendar event. */
-export function EventDetails(props: {
+export function CalendarEventDetails(props: {
   event: CalendarEvent;
   timeFormat: CalendarTimeFormat;
   defaultReminders?: EventReminderOverride[];

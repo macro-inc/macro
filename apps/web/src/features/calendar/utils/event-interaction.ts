@@ -1,7 +1,7 @@
 import type { EventApi } from '@fullcalendar/core';
 import type { EventTime } from '@service-email/generated/schemas/eventTime';
-import { formatLocalDate } from '../utils/calendar-date';
-import type { CalendarEvent } from './types';
+import type { CalendarEvent } from '../components/events/types';
+import { formatLocalDate } from './calendar-date';
 
 interface FullCalendarEventRange {
   allDay: boolean;

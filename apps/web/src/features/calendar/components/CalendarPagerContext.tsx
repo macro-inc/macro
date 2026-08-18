@@ -11,8 +11,8 @@ import {
   onCleanup,
   type ParentProps,
 } from 'solid-js';
-import type { CalendarOccurrenceData } from '../data/use-calendar-occurrence-data';
-import type { CalendarPeriodView } from '../events/types';
+import type { CalendarOccurrenceData } from '../hooks/use-calendar-occurrence-data';
+import type { CalendarPeriodView } from './events/types';
 
 export const CALENDAR_PAGE_IDS = ['previous', 'current', 'next'] as const;
 export type CalendarPageId = (typeof CALENDAR_PAGE_IDS)[number];

@@ -7,7 +7,7 @@ import { Layer } from '@ui/components/Layer';
 import { ToggleSwitch } from '@ui/components/ToggleSwitch';
 import { cn } from '@ui/utils/classname';
 import { createSignal, createUniqueId } from 'solid-js';
-import { formatLocalDate } from '../utils/calendar-date';
+import { formatLocalDate } from '../../utils/calendar-date';
 import {
   dateLabelFormatter,
   EventTimeInput,
@@ -16,7 +16,7 @@ import {
   timeLabelFormatter,
   withLocalDate,
   withLocalTime,
-} from './EventDateTimeField';
+} from './CalendarEventDateTimeField';
 
 function formatTime(value: string) {
   const [hour, minute] = value.split(':').map(Number);
@@ -24,7 +24,7 @@ function formatTime(value: string) {
   return timeLabelFormatter.format(new Date(2000, 0, 1, hour, minute));
 }
 
-export interface EventComposerDateTimeRangeFieldsProps {
+export interface CalendarEventDateTimeRangeFieldsProps {
   start: string;
   end: string;
   allDay: boolean;
@@ -39,8 +39,8 @@ export interface EventComposerDateTimeRangeFieldsProps {
 }
 
 /** Combined date-range display with start/end calendar and time controls. */
-export function EventComposerDateTimeRangeFields(
-  props: EventComposerDateTimeRangeFieldsProps
+export function CalendarEventDateTimeRangeFields(
+  props: CalendarEventDateTimeRangeFieldsProps
 ) {
   const fieldId = createUniqueId();
   const [open, setOpen] = createSignal(false);

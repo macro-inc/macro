@@ -14,16 +14,16 @@ import {
   startOfHour,
 } from 'date-fns';
 import { type Accessor, batch, createMemo, createSignal } from 'solid-js';
-import { formatRecurrenceDescription } from './recurrence-description';
 import {
   buildRecurrenceLines,
   defaultCustomConfig,
+  formatRecurrenceDescription,
   parseRecurrenceConfig,
   type RecurrenceConfig,
   recurrenceConfigsEqual,
   recurrencePresetsFor,
-} from './recurrence-editor';
-import type { CalendarEvent } from './types';
+} from '../../utils/recurrence';
+import type { CalendarEvent } from '../events/types';
 
 /** `<input type="date">` value. */
 const DATE_VALUE = 'yyyy-MM-dd';

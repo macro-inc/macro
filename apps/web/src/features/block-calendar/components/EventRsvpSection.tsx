@@ -1,4 +1,4 @@
-import type { CalendarEvent } from '@app/features/calendar/events/types';
+import type { CalendarEvent } from '@app/features/calendar/components/events/types';
 import { toast } from '@core/component/Toast/Toast';
 import CloseIcon from '@phosphor/x.svg';
 import { useRsvpCalendarEventMutation } from '@queries/calendar/mutations';
