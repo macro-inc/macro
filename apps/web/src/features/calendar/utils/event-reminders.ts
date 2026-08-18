@@ -6,7 +6,22 @@ import { daysInWeek, minutesInDay, minutesInHour } from 'date-fns/constants';
 /** The reminder method that fires Macro notifications. */
 export const REMINDER_METHOD_POPUP = 'popup';
 
+/** Google caps an event at five reminders. */
+export const REMINDER_OVERRIDES_MAX = 5;
+
 const minutesInWeek = minutesInDay * daysInWeek;
+
+/** Offsets offered by the picker, matching Google Calendar's presets. */
+export const REMINDER_PRESET_MINUTES = [
+  0,
+  5,
+  10,
+  15,
+  30,
+  minutesInHour,
+  minutesInDay,
+  minutesInWeek,
+];
 
 /**
  * The largest whole unit expressing an offset — Google's pickers display a
@@ -25,6 +40,16 @@ export function formatReminderOffset(minutes: number): string {
   return `${formatDuration(offsetAsDuration(minutes))} before`;
 }
 
+/** The popup offsets in a reminder list, sorted ascending. */
+export function popupMinutes(
+  overrides: EventReminderOverride[] | undefined
+): number[] {
+  return (overrides ?? [])
+    .filter((reminder) => reminder.method === REMINDER_METHOD_POPUP)
+    .map((reminder) => reminder.minutes)
+    .sort((a, b) => a - b);
+}
+
 /**
  * The reminders an event resolves to: its own overrides when it departed
  * from the calendar defaults, the calendar defaults otherwise. `undefined`
@@ -37,4 +62,29 @@ export function resolveReminderOverrides(
 ): EventReminderOverride[] {
   if (reminders && !reminders.useDefault) return reminders.overrides ?? [];
   return calendarDefaults ?? [];
+}
+
+/**
+ * Build the explicit reminder configuration a save submits after the user
+ * edited the popup offsets. Non-popup overrides the event already carried
+ * are preserved; an event that followed its calendar defaults stops doing
+ * so, exactly like editing the pre-filled rows in Google Calendar.
+ */
+export function buildReminderOverrides(
+  popupOffsets: number[],
+  previous: EventReminders | undefined
+): EventReminders {
+  const preserved = (
+    previous && !previous.useDefault ? (previous.overrides ?? []) : []
+  ).filter((reminder) => reminder.method !== REMINDER_METHOD_POPUP);
+  return {
+    useDefault: false,
+    overrides: [
+      ...popupOffsets.map((minutes) => ({
+        method: REMINDER_METHOD_POPUP,
+        minutes,
+      })),
+      ...preserved,
+    ],
+  };
 }
