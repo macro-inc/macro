@@ -502,3 +502,60 @@ fn next_run_after_is_strictly_after_the_instant_given() {
     );
     assert_eq!(next, utc(2026, 7, 2, 13, 0));
 }
+
+#[test]
+fn every_day_spelled_as_a_full_day_list_fires_daily() {
+    // The picker builds every-day schedules as `1,2,3,4,5,6,7` rather than `*`,
+    // so this pins that the backend reads the two identically. If the crate's
+    // day-of-week were 0-6 rather than 1-7, the `7` would be out of range and
+    // this would not even parse.
+    let starred = ReminderCron::parse("0 0 9 * * *").expect("`*` parses");
+    let listed = ReminderCron::parse("0 0 9 * * 1,2,3,4,5,6,7").expect("a full list parses");
+
+    let mut from_starred = utc(2026, 7, 1, 0, 0);
+    let mut from_listed = from_starred;
+
+    // A fortnight, so a day-shift or a missing day shows up rather than hiding
+    // inside a single week.
+    for _ in 0..14 {
+        let a = starred
+            .next_run_after(from_starred, New_York)
+            .expect("`*` keeps firing");
+        let b = listed
+            .next_run_after(from_listed, New_York)
+            .expect("the list keeps firing");
+        assert_eq!(a, b, "the two spellings must fire at the same instants");
+        from_starred = a;
+        from_listed = b;
+    }
+
+    // And that it really is every day, not every other one.
+    let first = starred
+        .next_run_after(utc(2026, 7, 1, 0, 0), New_York)
+        .unwrap();
+    let second = starred.next_run_after(first, New_York).unwrap();
+    assert_eq!(second - first, chrono::Duration::days(1));
+}
+
+#[test]
+fn day_of_week_two_is_monday() {
+    // Everything the pickers build rests on the crate numbering day-of-week
+    // 1=Sunday through 7=Saturday, which is not the JS convention and not the
+    // POSIX one. Asserted against a real calendar date so a crate change that
+    // shifted it could not pass quietly.
+    let mondays = ReminderCron::parse("0 0 9 * * 2").expect("valid cron");
+
+    // 2026-07-01 is a Wednesday, so the next firing is Monday the 6th.
+    let next = mondays
+        .next_run_after(utc(2026, 7, 1, 0, 0), New_York)
+        .expect("a weekly cron keeps firing");
+
+    assert_eq!(
+        next.with_timezone(&New_York).date_naive().to_string(),
+        "2026-07-06"
+    );
+    assert_eq!(
+        next.with_timezone(&New_York).format("%A").to_string(),
+        "Monday"
+    );
+}
