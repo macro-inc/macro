@@ -8,6 +8,7 @@ import { CalendarSettingsDropdown } from '@app/features/calendar/CalendarSetting
 import { useCalendarView } from '@app/features/calendar/CalendarViewContext';
 import { calendarPeriodLabel } from '@app/features/calendar/calendar-label';
 import { useCalendarHotkeys } from '@app/features/calendar/use-calendar-hotkeys';
+import { useSidePanel } from '@components/app/side-panel/SidePanel';
 import { HeaderIsland } from '@components/app/split-layout/components/HeaderIsland';
 import {
   SplitHeaderLeft,
@@ -60,6 +61,7 @@ function createLocalToday() {
 
 export function Header() {
   const panel = useSplitPanelOrThrow();
+  const sidePanel = useSidePanel();
   const calendarPager = useCalendarPager();
   const pager = usePager<CalendarPageId>();
   const calendarView = useCalendarView();
@@ -159,7 +161,7 @@ export function Header() {
                 <PlusIcon class="size-3.5" />
                 New event
               </Button>
-              <CalendarPeriodSelector />
+              <CalendarPeriodSelector isNarrow={sidePanel?.isNarrow()} />
               <div class="flex shrink-0 items-center gap-1">
                 <Button
                   variant="ghost"
@@ -183,7 +185,7 @@ export function Header() {
                 </Button>
               </div>
             </Show>
-            <CalendarSettingsDropdown />
+            <CalendarSettingsDropdown isNarrow={sidePanel?.isNarrow()} />
           </div>
         </HeaderIsland>
       </SplitHeaderRight>

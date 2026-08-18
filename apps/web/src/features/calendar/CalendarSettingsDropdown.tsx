@@ -1,5 +1,4 @@
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
-import { useSidePanel } from '@components/app/side-panel/SidePanel';
 import { isMobile } from '@core/mobile/isMobile';
 import CaretRightIcon from '@phosphor/caret-right.svg';
 import CheckIcon from '@phosphor/check.svg';
@@ -26,12 +25,11 @@ const TIME_FORMAT_OPTIONS: Array<{
   { value: '24-hour', label: '24-hour' },
 ];
 
-function createCalendarSettingsControls() {
+function createCalendarSettingsControls(isNarrow: () => boolean) {
   const calendarView = useCalendarView();
-  const sidePanel = useSidePanel();
 
   const showCalendarVisibility = () =>
-    (sidePanel?.isNarrow() ?? false) && calendarView.sources().length > 1;
+    isNarrow() && calendarView.sources().length > 1;
 
   const weekStartLabel = createMemo(
     () =>
@@ -343,8 +341,10 @@ function MobileCalendarSettings(props: { controls: CalendarSettingsControls }) {
 }
 
 /** Responsive calendar display settings menu. */
-export function CalendarSettingsDropdown() {
-  const controls = createCalendarSettingsControls();
+export function CalendarSettingsDropdown(props: { isNarrow?: boolean }) {
+  const controls = createCalendarSettingsControls(
+    () => props.isNarrow ?? false
+  );
 
   return (
     <Show

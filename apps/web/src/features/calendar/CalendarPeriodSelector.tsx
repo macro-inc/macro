@@ -1,5 +1,4 @@
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
-import { useSidePanel } from '@components/app/side-panel/SidePanel';
 import { type HotkeyToken, TOKENS } from '@core/hotkey/tokens';
 import CalendarIcon from '@phosphor/calendar-blank.svg';
 import CaretDownIcon from '@phosphor/caret-down.svg';
@@ -139,10 +138,8 @@ function CustomDatePicker(props: { controls: CalendarPeriodControls }) {
 }
 
 /** Desktop calendar period selector and custom-date dropdown. */
-export function CalendarPeriodSelector() {
-  const sidePanel = useSidePanel();
+export function CalendarPeriodSelector(props: { isNarrow?: boolean }) {
   const controls = createCalendarPeriodControls();
-  const isNarrow = () => sidePanel?.isNarrow() ?? false;
 
   return (
     <Dropdown
@@ -180,7 +177,7 @@ export function CalendarPeriodSelector() {
             </For>
           </Dropdown.RadioGroup>
         </Dropdown.Group>
-        <Show when={isNarrow()}>
+        <Show when={props.isNarrow}>
           <Dropdown.Group>
             <Dropdown.Sub>
               <Dropdown.SubTrigger>
