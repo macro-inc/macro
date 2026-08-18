@@ -1364,7 +1364,7 @@ export async function hydrateGraphqlSoup<
   options: Pick<FetchGraphqlSoupOptions, 'signal'> = {}
 ): Promise<GraphqlSoupHydrationPage> {
   const client = getGraphqlSoupClient();
-  if (!graphqlCacheEnabled()) {
+  if (!getGraphqlCacheHost()) {
     throw new Error('GraphQL cache hydration requires an active cache');
   }
   const result = await client

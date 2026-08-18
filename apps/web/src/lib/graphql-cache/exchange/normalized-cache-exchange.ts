@@ -1008,7 +1008,14 @@ export function normalizedCacheExchange(
             };
           } catch (error) {
             options.onCacheError?.(error, op);
-            return result;
+            return {
+              ...result,
+              data: undefined,
+              error: new CombinedError({
+                networkError:
+                  error instanceof Error ? error : new Error(String(error)),
+              }),
+            };
           }
         } else if (op.kind === 'query') {
           const releaseTurn = await acquireQueryResultTurn(op.key);

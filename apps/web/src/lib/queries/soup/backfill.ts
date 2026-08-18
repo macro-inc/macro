@@ -9,7 +9,7 @@ import {
   type GraphqlSoupInitialInput,
   type GraphqlSoupHydrationPage,
   type GraphqlSoupInput,
-  graphqlCacheEnabled,
+  getGraphqlSoupCacheHost,
   hydrateGraphqlSoup,
 } from '@service-storage/graphql-soup';
 import { useQueries, useQueryClient } from '@tanstack/solid-query';
@@ -422,7 +422,7 @@ export function useSoupBackfills(userId: Accessor<string | undefined>) {
     const backfillEnabled =
       ENABLE_GRAPHQL_BACKFILL &&
       currentUserId !== undefined &&
-      graphqlCacheEnabled() &&
+      getGraphqlSoupCacheHost() !== undefined &&
       currentLeadership.isLeader;
 
     return {

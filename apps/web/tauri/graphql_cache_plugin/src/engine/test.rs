@@ -5,6 +5,16 @@ const QUERY: &str = r#"query Soup($input: SoupInput!) {
     user { id soup(input: $input) { nextCursor items { __typename id } } }
 }"#;
 
+const HYDRATION_QUERY: &str = r#"query Soup($input: SoupInput!) {
+    user {
+        id @cacheOnly
+        soup(input: $input) {
+            nextCursor
+            items @cacheOnly { __typename id }
+        }
+    }
+}"#;
+
 fn variables() -> Variables {
     let serde_json::Value::Object(vars) = serde_json::json!({"input": {"limit": 1}}) else {
         unreachable!()
@@ -70,6 +80,31 @@ fn write_then_read_round_trips() {
         panic!("expected hit");
     };
     assert_eq!(data, soup_data(false));
+}
+
+#[test]
+fn hydration_returns_only_unmarked_fields() {
+    let handle = spawn_handle();
+    let result = block_on(handle.hydrate_query(
+        HYDRATION_QUERY.to_string(),
+        Some("Soup".to_string()),
+        variables(),
+        soup_data(true),
+        None,
+    ))
+    .unwrap();
+
+    assert_eq!(
+        result.data,
+        Some(serde_json::json!({
+            "user": { "soup": { "nextCursor": "cursor-1" } }
+        }))
+    );
+    assert!(!result.write_result.changed.is_empty());
+    let ReadResultWire::Hit { data } = read(&handle, None) else {
+        panic!("expected hydrated cache hit");
+    };
+    assert_eq!(data, soup_data(true));
 }
 
 #[test]

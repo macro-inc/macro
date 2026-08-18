@@ -38,6 +38,18 @@ query SoupBackfill($input: SoupInput!) {
 }
 "#;
 
+const VOID_HYDRATION_QUERY: &str = r#"
+query SoupBackfill($input: SoupInput!) {
+  user @cacheOnly {
+    id
+    soup(input: $input) {
+      items { __typename id }
+      nextCursor
+    }
+  }
+}
+"#;
+
 const CHANNEL_NOTIFICATIONS_QUERY: &str = r#"
 query ChannelNotifications($input: SoupInput!) {
   user {
@@ -191,6 +203,24 @@ fn hydration_persists_cache_only_fields_and_returns_only_projection() {
             panic!("expected hydrated query hit");
         };
         assert_eq!(cached, data);
+    });
+}
+
+#[test]
+fn fully_cache_only_hydration_returns_void_projection() {
+    block_on(async {
+        let mut engine = Engine::new(InMemoryStorage::new());
+        let hydration = engine
+            .hydrate_query(
+                VOID_HYDRATION_QUERY,
+                Some("SoupBackfill"),
+                &vars(10),
+                &page(&[("doc-1", "Design doc")]),
+                None,
+            )
+            .await
+            .unwrap();
+        assert_eq!(hydration.data, None);
     });
 }
 
