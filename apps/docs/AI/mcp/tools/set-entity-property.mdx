@@ -1,26 +1,47 @@
 ---
 title: SetEntityProperty
-description: "Generated from the Macro Rust tool registry."
+description: "Set or update a property value on an entity (document, project, etc.). Tasks are targeted as entity_type='document'. Provide the property_definition_id and exactly one value field matching the property's data type.  For multi-select properties — including tags — prefer add_option_ids / remove_option_ids over option_ids: they add or remove just those options atomically, composing with concurrent edits. option_ids replaces the entire value, so a stale read can silently drop options someone else just added; only use it when the user asks to set the value to exactly a given list. To apply a tag, pass the tag set's property_definition_id and the tag's option id (both from ListTags) in add_option_ids; to remove a tag, use remove_option_ids.  Tasks always have these system properties (use these property_definition_id values directly): - Assignees (00000001-0000-0000-0000-000000000001): entity type, multi-select. Use entity_refs with entity_type='user' and entity_id='macro|email@domain.com'. - Status (00000001-0000-0000-0000-000000000002): select_string, single. Options: Not Started (00000001-0000-0000-0002-000000000001), In Progress (...0002), In Review (...0003), Completed (...0004), Canceled (...0005). - Priority (00000001-0000-0000-0000-000000000003): select_string, single. Options: Low (...0001), Medium (...0002), High (...0003), Urgent (...0004). Option IDs: 00000001-0000-0000-0003-0000000000XX. - Due Date (00000001-0000-0000-0000-000000000004): date, single. Use date_value with ISO 8601. - Parent Task (00000001-0000-0000-0000-000000000005): entity, single. Use entity_ref with entity_type='task'. - Subtasks (00000001-0000-0000-0000-000000000006): entity, multi. Use entity_refs with entity_type='task'. - Story Points (00000001-0000-0000-0000-000000000009): number, single. Use number_value.  CRM companies (entity_type='company', entity_id=the company UUID) always have these system properties: - Stage (00000001-0000-0000-0000-000000000010): select_string, single. Use option_id. Default options: Lead (00000001-0000-0000-0010-000000000001), Qualified (...0002), Demo (...0003), Trial (...0004), Negotiation (...0005), Customer (...0006), Churned (...0007). Teams can customize their stages, so prefer calling GetCompany or GetEntityProperties first to get the valid stage option ids. - Owner (00000001-0000-0000-0000-000000000011): entity, single. Use entity_ref with entity_type='user' and entity_id='macro|email@domain.com'. - Revenue (00000001-0000-0000-0000-000000000012): number, single. Use number_value (dollars). Any member of the owning team can edit visible company properties; hidden records remain admin/owner-only.  For non-system or custom properties, call GetEntityProperties first to discover property_definition_id values and options."
 ---
 
 # SetEntityProperty
 
-Generated from the Macro Rust tool registry.
+Set or update a property value on an entity (document, project, etc.). Tasks are targeted as entity_type='document'. Provide the property_definition_id and exactly one value field matching the property's data type.
+
+For multi-select properties — including tags — prefer add_option_ids / remove_option_ids over option_ids: they add or remove just those options atomically, composing with concurrent edits. option_ids replaces the entire value, so a stale read can silently drop options someone else just added; only use it when the user asks to set the value to exactly a given list. To apply a tag, pass the tag set's property_definition_id and the tag's option id (both from ListTags) in add_option_ids; to remove a tag, use remove_option_ids.
+
+Tasks always have these system properties (use these property_definition_id values directly):
+- Assignees (00000001-0000-0000-0000-000000000001): entity type, multi-select. Use entity_refs with entity_type='user' and entity_id='macro|email@domain.com'.
+- Status (00000001-0000-0000-0000-000000000002): select_string, single. Options: Not Started (00000001-0000-0000-0002-000000000001), In Progress (...0002), In Review (...0003), Completed (...0004), Canceled (...0005).
+- Priority (00000001-0000-0000-0000-000000000003): select_string, single. Options: Low (...0001), Medium (...0002), High (...0003), Urgent (...0004). Option IDs: 00000001-0000-0000-0003-0000000000XX.
+- Due Date (00000001-0000-0000-0000-000000000004): date, single. Use date_value with ISO 8601.
+- Parent Task (00000001-0000-0000-0000-000000000005): entity, single. Use entity_ref with entity_type='task'.
+- Subtasks (00000001-0000-0000-0000-000000000006): entity, multi. Use entity_refs with entity_type='task'.
+- Story Points (00000001-0000-0000-0000-000000000009): number, single. Use number_value.
+
+CRM companies (entity_type='company', entity_id=the company UUID) always have these system properties:
+- Stage (00000001-0000-0000-0000-000000000010): select_string, single. Use option_id. Default options: Lead (00000001-0000-0000-0010-000000000001), Qualified (...0002), Demo (...0003), Trial (...0004), Negotiation (...0005), Customer (...0006), Churned (...0007). Teams can customize their stages, so prefer calling GetCompany or GetEntityProperties first to get the valid stage option ids.
+- Owner (00000001-0000-0000-0000-000000000011): entity, single. Use entity_ref with entity_type='user' and entity_id='macro|email@domain.com'.
+- Revenue (00000001-0000-0000-0000-000000000012): number, single. Use number_value (dollars).
+Any member of the owning team can edit visible company properties; hidden records remain admin/owner-only.
+
+For non-system or custom properties, call GetEntityProperties first to discover property_definition_id values and options.
 
 ## Parameters
 
 | Parameter | Type | Required | Description |
 | --- | --- | --- | --- |
-| `boolean_value` | boolean | Yes | For boolean properties. |
-| `date_value` | string | Yes | For date properties (ISO 8601 date-time). |
 | `entity_id` | string | Yes | The ID of the entity to update. |
-| `entity_ref` | object | Yes | For single entity reference properties. |
-| `entity_refs` | array | Yes | For multi entity reference properties. |
-| `entity_type` | string | Yes | The type of entity. |
-| `link_url` | string | Yes | For single link properties. |
-| `link_urls` | array | Yes | For multi link properties. |
-| `number_value` | number | Yes | For number properties. |
-| `option_id` | string | Yes | For single-select properties. The option UUID from available options. |
-| `option_ids` | array | Yes | For multi-select properties. The option UUIDs from available options. |
+| `entity_type` | `"document"` \| `"project"` \| `"chat"` \| `"thread"` \| `"channel"` \| `"call"` \| `"user"` \| `"company"` | Yes | Canonical entity type accepted when an AI tool targets an entity's properties. |
 | `property_definition_id` | string | Yes | The property definition ID. Get this from GetEntityProperties results. |
-| `string_value` | string | Yes | For string properties. |
+| `boolean_value` | boolean | No | For boolean properties. |
+| `date_value` | string | No | For date properties (ISO 8601 date-time). |
+| `number_value` | number | No | For number properties. |
+| `string_value` | string | No | For string properties. |
+| `option_id` | string | No | For single-select properties. The option UUID from available options. |
+| `option_ids` | string[] | No | For multi-select properties. Replaces the entire value with these option UUIDs — prefer add_option_ids / remove_option_ids for adding or removing specific options. |
+| `add_option_ids` | string[] | No | For multi-select properties (including tags): add these options to the current value atomically without touching other options. Cannot be combined with other value fields. |
+| `remove_option_ids` | string[] | No | For multi-select properties (including tags): remove these options from the current value atomically without touching other options. Removing an absent option is a no-op. Cannot be combined with other value fields. |
+| `entity_ref` | ToolEntityRef | No | For single entity reference properties. |
+| `entity_refs` | ToolEntityRef[] | No | For multi entity reference properties. |
+| `link_url` | string | No | For single link properties. |
+| `link_urls` | string[] | No | For multi link properties. |
