@@ -504,6 +504,42 @@
 	transform: translateY(-50%);
 }
 
+.calendar-embed
+	.calendar-view
+	.fc.fc-direction-ltr
+	.fc-timegrid-slot-lane,
+.calendar-embed
+	.calendar-view
+	.fc.fc-direction-ltr
+	.fc-timegrid-axis
+	+ .fc-timegrid-col {
+	border-left-width: 0;
+}
+
+.calendar-embed
+	.calendar-view
+	.fc.fc-direction-rtl
+	.fc-timegrid-slot-lane,
+.calendar-embed
+	.calendar-view
+	.fc.fc-direction-rtl
+	.fc-timegrid-axis
+	+ .fc-timegrid-col {
+	border-right-width: 0;
+}
+
+.calendar-embed
+	.calendar-view
+	.fc
+	.fc-timegrid-slot-label:not(.fc-timegrid-slot-minor) {
+	border-top: 1px solid var(--fc-border-color);
+}
+
+.calendar-embed .calendar-view .fc .fc-timegrid-slot-label-cushion {
+	padding-top: 0.25rem;
+	transform: none;
+}
+
 .calendar-view
 	.fc
 	.fc-timegrid-slots

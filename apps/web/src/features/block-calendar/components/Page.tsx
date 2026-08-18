@@ -328,7 +328,7 @@ export function Page(props: {
     get eventId() {
       return isActive() ? calendarView.selectedEvent()?.id : undefined;
     },
-    onDateSelect: handleSelect,
+    onDateSelect: isMobile() ? undefined : handleSelect,
     onEventSelect: (event, element) => {
       if (isActive()) calendarView.selectEvent(event, element);
     },
