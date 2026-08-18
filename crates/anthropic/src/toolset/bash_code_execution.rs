@@ -3,6 +3,7 @@ use crate::types::request::CODE_EXECUTION_TOOL;
 use crate::types::response::ResponseContentKind;
 use crate::types::response::code_execution::BashCodeExecutionResponse;
 use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
+use ai_toolset::{ToolAnnotated, ToolAnnotations};
 use async_trait::async_trait;
 use schemars::JsonSchema;
 use serde::Deserialize;
@@ -16,6 +17,11 @@ use serde::Deserialize;
 pub struct BashCodeExecution {
     /// The bash command or instruction to execute.
     pub input: String,
+}
+
+impl ToolAnnotated for BashCodeExecution {
+    const ANNOTATIONS: ToolAnnotations =
+        ToolAnnotations::destructive("Run bash command").with_open_world();
 }
 
 #[async_trait]

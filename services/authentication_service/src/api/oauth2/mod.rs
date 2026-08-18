@@ -1,12 +1,19 @@
-use crate::config::BASE_URL;
+use crate::{
+    api::login::sso::{is_allowed_original_url, redact_original_url_for_logging},
+    config::BASE_URL,
+};
 use axum::{Router, extract::State, routing::get};
 use tower_cookies::CookieManagerLayer;
+use url::Url;
 
 mod account_link;
 mod github;
 mod google;
 mod login;
 mod microsoft;
+
+#[cfg(test)]
+mod test;
 
 pub fn router() -> Router<ApiContext> {
     Router::new().route(
@@ -64,6 +71,30 @@ pub(in crate::api) struct PathParams {
     provider: String,
 }
 
+#[derive(Debug)]
+enum OriginalUrlValidationError {
+    Invalid,
+    Disallowed(Url),
+}
+
+fn validate_original_url(original_url: Option<&str>) -> Result<(), OriginalUrlValidationError> {
+    let Some(original_url) = original_url else {
+        return Ok(());
+    };
+
+    // OAuth state is client-visible and may be forged. Decode it exactly as the
+    // redirect handlers do before validating the resulting destination.
+    let decoded_url =
+        urlencoding::decode(original_url).map_err(|_| OriginalUrlValidationError::Invalid)?;
+    let url = Url::parse(&decoded_url).map_err(|_| OriginalUrlValidationError::Invalid)?;
+
+    if !is_allowed_original_url(&url) {
+        return Err(OriginalUrlValidationError::Disallowed(url));
+    }
+
+    Ok(())
+}
+
 /// Custom OAuth2 callback
 #[utoipa::path(
         get,
@@ -101,6 +132,42 @@ pub(in crate::api) async fn handler(
             .into_response()
     })?;
 
+    // Clean up failed Microsoft account-link callbacks before validating the
+    // redirect so an invalid original_url cannot leave the pending link behind.
+    if params.code.is_none()
+        && provider == "microsoft"
+        && let Some(link_id) = state.link_id.as_ref()
+    {
+        account_link::cleanup_pending_link(&ctx, link_id).await;
+    }
+
+    validate_original_url(state.original_url.as_deref()).map_err(|error| {
+        match error {
+            OriginalUrlValidationError::Invalid => {
+                tracing::error!(
+                    auth_handoff_failure = "original_url_invalid",
+                    "original_url in oauth2 state is invalid"
+                );
+            }
+            OriginalUrlValidationError::Disallowed(url) => {
+                let redacted_url = redact_original_url_for_logging(&url);
+                tracing::error!(
+                    auth_handoff_failure = "original_url_rejected",
+                    original_url = %redacted_url,
+                    "original_url in oauth2 state is not allowed"
+                );
+            }
+        }
+
+        (
+            StatusCode::BAD_REQUEST,
+            Json(ErrorResponse {
+                message: "provided original_url is not allowed".into(),
+            }),
+        )
+            .into_response()
+    })?;
+
     let code = match params.code {
         Some(c) => c,
         None => {
@@ -110,11 +177,6 @@ pub(in crate::api) async fn handler(
                 error_description = ?params.error_description,
                 "oauth2 callback received without code",
             );
-            if provider == "microsoft"
-                && let Some(link_id) = state.link_id.as_ref()
-            {
-                account_link::cleanup_pending_link(&ctx, link_id).await;
-            }
             return Err((
                 StatusCode::BAD_REQUEST,
                 Json(ErrorResponse {

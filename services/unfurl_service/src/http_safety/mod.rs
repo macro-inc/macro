@@ -1,10 +1,45 @@
+mod resolver;
+
 use axum::response::{IntoResponse, Response};
 use futures::StreamExt;
 use reqwest::StatusCode;
 use std::error::Error;
 use std::fmt;
 use std::net::IpAddr;
+use std::sync::Arc;
 use url::Url;
+
+use resolver::PrivateIpFilteringResolver;
+
+/// Maximum redirects followed by unfurl and proxy fetches.
+pub const MAX_REDIRECTS: u8 = 5;
+
+const REQUEST_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(8);
+const CONNECT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(3);
+
+/// HTTP client with redirect and DNS-rebinding SSRF protections built in.
+#[derive(Clone)]
+pub struct SsrfSafeHttpClient(reqwest::Client);
+
+impl SsrfSafeHttpClient {
+    /// Build a client with automatic redirects disabled and private DNS
+    /// connection targets filtered.
+    pub fn new() -> Result<Self, reqwest::Error> {
+        reqwest::Client::builder()
+            .timeout(REQUEST_TIMEOUT)
+            .connect_timeout(CONNECT_TIMEOUT)
+            .redirect(reqwest::redirect::Policy::none())
+            .dns_resolver(Arc::new(PrivateIpFilteringResolver))
+            .build()
+            .map(Self)
+    }
+}
+
+impl AsRef<reqwest::Client> for SsrfSafeHttpClient {
+    fn as_ref(&self) -> &reqwest::Client {
+        &self.0
+    }
+}
 
 #[derive(Debug)]
 pub enum FetchError {
@@ -119,7 +154,10 @@ pub fn is_private_ip(ip: &IpAddr) -> bool {
             if let Some(mapped_v4) = v6.to_ipv4_mapped() {
                 return is_private_ip(&IpAddr::V4(mapped_v4));
             }
-            v6.is_loopback() || v6.is_unspecified()
+            v6.is_loopback()
+                || v6.is_unspecified()
+                || v6.is_unique_local()
+                || v6.is_unicast_link_local()
         }
     }
 }
@@ -128,7 +166,7 @@ pub async fn send_request(
     http_client: &reqwest::Client,
     url: &Url,
 ) -> Result<reqwest::Response, FetchError> {
-    let response = http_client.get(url.as_str()).send().await.map_err(|e| {
+    http_client.get(url.as_str()).send().await.map_err(|e| {
         let error_chain = build_error_chain(&e);
         tracing::warn!(url = %url, error = %error_chain, "upstream request failed");
         if e.is_timeout() {
@@ -140,13 +178,30 @@ pub async fn send_request(
         } else {
             FetchError::UpstreamNetwork(error_chain)
         }
+    })
+}
+
+/// Resolve a redirect's `Location` header against the current URL.
+pub fn redirect_target(current: &Url, response: &reqwest::Response) -> Result<Url, FetchError> {
+    let location = response
+        .headers()
+        .get(reqwest::header::LOCATION)
+        .ok_or_else(|| {
+            FetchError::UpstreamRedirect("redirect response missing Location header".into())
+        })?
+        .to_str()
+        .map_err(|e| FetchError::UpstreamRedirect(format!("invalid Location header: {e}")))?;
+
+    let mut next = current.join(location).map_err(|e| {
+        FetchError::UpstreamRedirect(format!("could not parse redirect target {location}: {e}"))
     })?;
 
-    if !response.status().is_success() {
-        return Err(FetchError::UpstreamStatus(response.status()));
+    if next.scheme() != "http" && next.scheme() != "https" {
+        return Err(FetchError::InvalidScheme);
     }
+    next.set_fragment(None);
 
-    Ok(response)
+    Ok(next)
 }
 
 pub fn content_type_of(response: &reqwest::Response) -> String {

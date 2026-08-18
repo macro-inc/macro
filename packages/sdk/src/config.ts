@@ -104,7 +104,7 @@ export interface MacroOpts {
   webhookSecret?: string;
   wsVerify?: string;
   /** User id the bot acts for, sent as `x-macro-bot-for-macro-user-id` on
-   * every request. Bot auth only. Set via `macro.requestedAs(userId)` rather
+   * every request. Bot auth only. Set via `macro.requestedAs(user)` rather
    * than directly. */
   requestedAs?: string;
 }

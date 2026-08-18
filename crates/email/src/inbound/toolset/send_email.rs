@@ -5,6 +5,7 @@ use crate::domain::{
     ports::{EmailService, GmailTokenProvider},
 };
 use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
+use ai_toolset::{ToolAnnotated, ToolAnnotations};
 use async_trait::async_trait;
 use entity_access::domain::ports::EntityAccessService;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -84,6 +85,11 @@ pub enum SendEmailResponse {
         draft_id: Uuid,
     },
     UserEdited,
+}
+
+impl ToolAnnotated for SendEmail {
+    const ANNOTATIONS: ToolAnnotations =
+        ToolAnnotations::destructive("Send email").with_open_world();
 }
 
 #[async_trait]

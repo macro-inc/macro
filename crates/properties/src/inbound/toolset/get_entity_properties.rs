@@ -3,6 +3,7 @@
 use crate::domain::model::{EntityPropertyInfo, PropertyOptionInfo};
 use crate::domain::service::PropertiesService;
 use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
+use ai_toolset::{ToolAnnotated, ToolAnnotations};
 use async_trait::async_trait;
 use entity_access::domain::models::ViewAccessLevel;
 use entity_access::domain::ports::EntityAccessService;
@@ -137,6 +138,10 @@ pub struct GetEntityPropertiesResponse {
     pub properties: Vec<ToolPropertyItem>,
     /// Human-readable summary.
     pub summary: String,
+}
+
+impl ToolAnnotated for GetEntityProperties {
+    const ANNOTATIONS: ToolAnnotations = ToolAnnotations::read_only("Read entity properties");
 }
 
 #[async_trait]

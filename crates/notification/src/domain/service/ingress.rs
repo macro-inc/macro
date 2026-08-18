@@ -13,8 +13,8 @@ use crate::domain::models::queue_message::{
     QueueMessageNeedsStateMachine, UserApnsEndpoints,
 };
 use crate::domain::models::request::{
-    BuildApnsOutput, GetNotificationsByEventItemIdsRequest, NotificationEntityRef,
-    NotificationListFilters, NotificationStatus, SendNotificationRequest,
+    BuildApnsOutput, GetNotificationsByEventItemIdsRequest, NotificationListFilters,
+    NotificationStatus, SendNotificationRequest, UpdateNotificationsForEntitiesRequest,
     UpdateNotificationsRequest,
 };
 use crate::domain::models::{
@@ -29,6 +29,7 @@ use crate::domain::service::SendNotificationError;
 use ::futures::future::join_all;
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
+use model_entity::Entity;
 use models_pagination::{CreatedAt, PaginateOn, Paginated, Query, TypeEraseCursor};
 use rootcause::Report;
 use rootcause::prelude::ResultExt;
@@ -63,10 +64,16 @@ pub trait NotificationReader: Send + Sync + 'static {
     ) -> impl Future<Output = Result<(), Report>> + Send;
 
     /// Update notifications and return the authoritative active rows owned by the user.
-    fn update_notifications_and_return(
+    fn update_notifications_and_return<T: DeserializeOwned + Send>(
         &self,
         req: UpdateNotificationsRequest,
-    ) -> impl Future<Output = Result<Vec<UserNotificationRow<serde_json::Value>>, Report>> + Send;
+    ) -> impl Future<Output = Result<Vec<UserNotificationRow<T>>, Report>> + Send;
+
+    /// Update every active notification associated with any requested entity for a user.
+    fn update_notifications_for_entities<T: DeserializeOwned + Send>(
+        &self,
+        req: UpdateNotificationsForEntitiesRequest,
+    ) -> impl Future<Output = Result<Vec<UserNotificationRow<T>>, Report>> + Send;
 
     /// Get a user's non-deleted notifications, paginated.
     ///
@@ -92,10 +99,8 @@ pub trait NotificationReader: Send + Sync + 'static {
     fn get_entity_notifications_batch<T: DeserializeOwned + Send>(
         &self,
         user_id: MacroUserIdStr<'_>,
-        entity_refs: Vec<NotificationEntityRef>,
-    ) -> impl Future<
-        Output = Result<HashMap<NotificationEntityRef, Vec<UserNotificationRow<T>>>, Report>,
-    > + Send;
+        entities: Vec<Entity<'static>>,
+    ) -> impl Future<Output = Result<HashMap<Entity<'static>, Vec<UserNotificationRow<T>>>, Report>> + Send;
 
     /// Get a single user notification by ID.
     fn get_user_notification_by_id<T: DeserializeOwned + Send>(
@@ -495,10 +500,10 @@ where
     ///    b. Look up the user's iOS device endpoints
     ///    c. Publish silent background push messages to clear badges on devices
     #[tracing::instrument(err, skip(self))]
-    async fn update_notifications_impl(
+    async fn update_notifications_impl<T: DeserializeOwned + Send>(
         &self,
         req: UpdateNotificationsRequest<'_>,
-    ) -> Result<Vec<UserNotificationRow<serde_json::Value>>, Report> {
+    ) -> Result<Vec<UserNotificationRow<T>>, Report> {
         let changed = match &req.status {
             NotificationStatus::Seen => {
                 self.repository
@@ -529,7 +534,7 @@ where
         }
 
         if !req.status.should_clear_push_notifs() {
-            return Ok(changed);
+            return deserialize_updated_notifications(changed);
         }
 
         let notifications_with_keys = self
@@ -538,7 +543,7 @@ where
             .await?;
 
         if notifications_with_keys.is_empty() {
-            return Ok(changed);
+            return deserialize_updated_notifications(changed);
         }
 
         let device_endpoints = self
@@ -571,7 +576,7 @@ where
             .collect();
 
         if ios_endpoints.is_empty() {
-            return Ok(changed);
+            return deserialize_updated_notifications(changed);
         }
 
         let messages: Vec<QueueMessage<'_, ClearPushIdentifier, ClearPushIdentifier>> =
@@ -609,8 +614,33 @@ where
 
         self.queue.publish(messages).await?;
 
-        Ok(changed)
+        deserialize_updated_notifications(changed)
     }
+}
+
+/// Deserialize updated rows from their persisted event-tagged metadata representation.
+fn deserialize_updated_notifications<T: DeserializeOwned>(
+    notifications: Vec<UserNotificationRow<serde_json::Value>>,
+) -> Result<Vec<UserNotificationRow<T>>, Report> {
+    Ok(notifications
+        .into_iter()
+        .filter_map(|notification| {
+            let notification_id = notification.notification_id;
+            let notification_event_type = notification.notification_event_type.clone();
+            match notification.into_tagged().deserialize_metadata::<T>() {
+                Ok(notification) => Some(notification),
+                Err(error) => {
+                    tracing::warn!(
+                        error = ?error,
+                        %notification_id,
+                        notification_event_type,
+                        "skipping updated notification with invalid metadata"
+                    );
+                    None
+                }
+            }
+        })
+        .collect())
 }
 
 impl<N, Q, S, R> NotificationReader for NotificationReaderService<N, Q, S, R>
@@ -624,15 +654,39 @@ where
         &self,
         req: UpdateNotificationsRequest<'_>,
     ) -> Result<(), Report> {
-        self.update_notifications_impl(req).await.map(|_| ())
+        self.update_notifications_impl::<serde_json::Value>(req)
+            .await
+            .map(|_| ())
     }
 
     #[tracing::instrument(err, skip(self))]
-    async fn update_notifications_and_return(
+    async fn update_notifications_and_return<T: DeserializeOwned + Send>(
         &self,
         req: UpdateNotificationsRequest<'_>,
-    ) -> Result<Vec<UserNotificationRow<serde_json::Value>>, Report> {
+    ) -> Result<Vec<UserNotificationRow<T>>, Report> {
         self.update_notifications_impl(req).await
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn update_notifications_for_entities<T: DeserializeOwned + Send>(
+        &self,
+        req: UpdateNotificationsForEntitiesRequest<'_>,
+    ) -> Result<Vec<UserNotificationRow<T>>, Report> {
+        let notification_ids = self
+            .repository
+            .get_notification_ids_for_entities(req.user_id.copied(), &req.entities)
+            .await?;
+
+        if notification_ids.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        self.update_notifications_impl(UpdateNotificationsRequest {
+            user_id: req.user_id,
+            notification_ids: &notification_ids,
+            status: req.status,
+        })
+        .await
     }
 
     #[tracing::instrument(err, skip(self))]
@@ -690,14 +744,14 @@ where
     async fn get_entity_notifications_batch<T: DeserializeOwned + Send>(
         &self,
         user_id: MacroUserIdStr<'_>,
-        entity_refs: Vec<NotificationEntityRef>,
-    ) -> Result<HashMap<NotificationEntityRef, Vec<UserNotificationRow<T>>>, Report> {
+        entities: Vec<Entity<'static>>,
+    ) -> Result<HashMap<Entity<'static>, Vec<UserNotificationRow<T>>>, Report> {
         Ok(self
             .repository
-            .get_entity_notifications_batch(user_id, entity_refs)
+            .get_entity_notifications_batch(user_id, entities)
             .await?
             .into_iter()
-            .map(|(entity_ref, notifications)| {
+            .map(|(entity, notifications)| {
                 let notifications = notifications
                     .into_iter()
                     .filter_map(|notification| {
@@ -710,8 +764,8 @@ where
                                     error = ?error,
                                     %notification_id,
                                     notification_event_type,
-                                    entity_type = ?entity_ref.entity_type,
-                                    entity_id = %entity_ref.id,
+                                    entity_type = ?entity.entity_type,
+                                    entity_id = %entity.entity_id,
                                     "skipping notification with invalid metadata"
                                 );
                                 None
@@ -720,7 +774,7 @@ where
                     })
                     .collect();
 
-                (entity_ref, notifications)
+                (entity, notifications)
             })
             .collect())
     }

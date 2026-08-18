@@ -5,6 +5,7 @@ use crate::domain::ports::{
     DocumentService, create::DocumentCreationService, editing::EditingWorkerService,
 };
 use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
+use ai_toolset::{ToolAnnotated, ToolAnnotations};
 use async_trait::async_trait;
 use entity_access::domain::{
     models::{EditAccessLevel, EntityType},
@@ -69,6 +70,10 @@ pub struct EditDocumentResponse {
     pub summary: String,
     /// If present, invoke this tool again with this information appended to `instructions`.
     pub clarification: Option<String>,
+}
+
+impl ToolAnnotated for EditDocument {
+    const ANNOTATIONS: ToolAnnotations = ToolAnnotations::destructive("Edit document");
 }
 
 #[async_trait]

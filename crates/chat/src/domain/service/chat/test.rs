@@ -1,7 +1,9 @@
 use std::sync::Mutex;
 
 use agent::types::{AssistantMessagePart, ChatMessageContent};
-use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolResult};
+use ai_toolset::{
+    AsyncTool, RequestContext, ServiceContext, ToolAnnotated, ToolAnnotations, ToolResult,
+};
 use attachment::FormattedParts;
 use entity_access_management::domain::models::EntityAccessManagementError;
 use macro_event_broker::{EventBrokerError, MacroEvent};
@@ -306,6 +308,10 @@ impl MacroEventBroker for RecordingEventBroker {
 }
 
 // -- Test tool --
+
+impl ToolAnnotated for TestTool {
+    const ANNOTATIONS: ToolAnnotations = ToolAnnotations::read_only("Test tool");
+}
 
 #[derive(serde::Deserialize, schemars::JsonSchema)]
 #[schemars(title = "test_tool", description = "A tool used by chat service tests")]

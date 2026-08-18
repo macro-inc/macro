@@ -455,6 +455,59 @@ async fn main() -> anyhow::Result<()> {
     let mcp_server_repo =
         mcp_client::outbound::pg_server_repo::PgServerRepo::new(db.clone(), mcp_encryption_key);
 
+    // The Pipedream MCP stack, fully separate from the native one above
+    // (own endpoints, own table, own toolset). Without credentials its
+    // endpoints answer 501 and its toolsets come up empty.
+    let pipedream_client: ai_tools::ToolPipedreamConnection = match (
+        config.pipedream_client_id.value(),
+        config.pipedream_client_secret.value(),
+        config.pipedream_project_id.value(),
+    ) {
+        (Some(client_id), Some(client_secret), Some(project_id)) => Some(Arc::new(
+            pipedream_mcp::outbound::api::PipedreamClient::new(
+                pipedream_mcp::outbound::api::PipedreamConfig {
+                    client_id: client_id.to_owned(),
+                    client_secret: client_secret.to_owned(),
+                    project_id: project_id.to_owned(),
+                    environment: config
+                        .pipedream_environment
+                        .value()
+                        .unwrap_or(match config.environment {
+                            Environment::Production => "production",
+                            _ => "development",
+                        })
+                        .to_owned(),
+                    api_url: config
+                        .pipedream_api_url
+                        .value()
+                        .unwrap_or(pipedream_mcp::outbound::api::DEFAULT_API_URL)
+                        .to_owned(),
+                    mcp_url: config
+                        .pipedream_mcp_url
+                        .value()
+                        .unwrap_or(pipedream_mcp::outbound::api::DEFAULT_MCP_URL)
+                        .to_owned(),
+                },
+            )
+            .context("failed to build Pipedream client")?,
+        )),
+        _ => {
+            tracing::info!("Pipedream credentials not set; Pipedream MCP connectors disabled");
+            None
+        }
+    };
+    let pipedream_repo =
+        pipedream_mcp::outbound::pg_connection_repo::PgConnectionRepo::new(db.clone());
+
+    // The one sanctioned meeting point of the two MCP stacks: agents load
+    // tools through this selector, which prefers a user's Pipedream
+    // connectors and falls back to the native ones (see `mcp_select`).
+    let mcp_selector: Arc<ai_tools::ToolMcpSelector> = Arc::new(mcp_select::McpToolSelector::new(
+        Arc::new(mcp_server_repo.clone()),
+        Arc::new(pipedream_repo.clone()),
+        Arc::new(pipedream_client.clone()),
+    ));
+
     // Nudges the user's connected clients when import rows flip, so setup
     // sections and chat surfaces update immediately instead of on the next
     // poll (see import::outbound::gateway_notifier).
@@ -472,7 +525,7 @@ async fn main() -> anyhow::Result<()> {
     let import_service = Arc::new(
         import::domain::service::ImportServiceImpl::new(
             import::outbound::pg_import_repo::PgImportRepo::new(db.clone()),
-            Arc::new(mcp_server_repo.clone()),
+            mcp_selector.clone(),
             Arc::new(entity_creator),
             recorder.clone(),
         )
@@ -596,6 +649,7 @@ async fn main() -> anyhow::Result<()> {
         onboarding::outbound::pg_onboarding_repo::PgOnboardingRepo::new(db.clone()),
         Arc::new(mcp_server_repo.clone()),
         import_service.clone(),
+        mcp_selector.clone(),
     ));
 
     tracing::info!("initialized onboarding service");
@@ -639,6 +693,30 @@ async fn main() -> anyhow::Result<()> {
     )
     .with_auth_completed_hook(mcp_auth_hook);
 
+    // The Pipedream stack gets the same post-connect reconcile hook as the
+    // native one: a finished Connect flow starts gather jobs immediately.
+    let onboarding_for_pipedream_hook = onboarding_service.clone();
+    let pipedream_auth_hook: pipedream_mcp::inbound::axum_router::PipedreamAuthCompletedHook =
+        Arc::new(
+            move |connection: pipedream_mcp::domain::models::PipedreamConnection| {
+                let service = onboarding_for_pipedream_hook.clone();
+                Box::pin(async move {
+                    tokio::spawn(async move {
+                        use onboarding::domain::service::OnboardingService;
+                        if let Err(e) = service.reconcile(connection.user_id).await {
+                            tracing::warn!(error = ?e, "post-connect onboarding reconcile failed");
+                        }
+                    });
+                })
+            },
+        );
+    let pipedream_state = pipedream_mcp::inbound::PipedreamRouterState::new(
+        pipedream_repo,
+        pipedream_client,
+        authorization_state.clone(),
+    )
+    .with_auth_completed_hook(pipedream_auth_hook);
+
     let user_permissions_service = Arc::new(
         roles_and_permissions::domain::service::UserRolesAndPermissionsServiceImpl::new(
             roles_and_permissions::outbound::pgpool::MacroDB::new(db.clone()),
@@ -678,6 +756,8 @@ async fn main() -> anyhow::Result<()> {
             redis_client.clone(),
         ),
         mcp_state,
+        pipedream_state,
+        mcp_selector,
         import_service,
         onboarding_service,
         macro_event_broker: macro_event_broker.clone(),

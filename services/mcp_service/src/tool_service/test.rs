@@ -85,6 +85,78 @@ async fn empty_toolset_lists_no_tools() {
     assert!(empty_service().tool_definitions().is_empty());
 }
 
+/// Anthropic's connector directory rejects any tool missing a display title or
+/// the applicable `readOnlyHint`/`destructiveHint`, and any tool name over 64
+/// characters. Assert it against the toolset the server actually exposes, so a
+/// newly added tool can't quietly regress the submission.
+#[test]
+fn every_exposed_tool_meets_directory_requirements() {
+    let tools = ai_tools::mcp_tools();
+    assert!(
+        !tools.toolset.tools.is_empty(),
+        "the MCP toolset should not be empty"
+    );
+
+    for (name, tool) in tools.toolset.tools.iter() {
+        let annotations = mcp_annotations(&tool.annotations);
+
+        assert!(
+            name.len() <= 64,
+            "{name} exceeds the 64-character tool name limit"
+        );
+        assert!(
+            annotations
+                .title
+                .as_deref()
+                .is_some_and(|title| !title.trim().is_empty()),
+            "{name} has no display title"
+        );
+        assert!(
+            annotations.read_only_hint.is_some(),
+            "{name} has no readOnlyHint"
+        );
+        assert!(
+            annotations.destructive_hint.is_some(),
+            "{name} has no destructiveHint"
+        );
+        assert!(
+            !(annotations.read_only_hint == Some(true)
+                && annotations.destructive_hint == Some(true)),
+            "{name} claims to be both read-only and destructive"
+        );
+    }
+}
+
+#[test]
+fn read_only_tools_map_to_read_only_hint() {
+    let annotations = mcp_annotations(&ai_toolset::ToolAnnotations::read_only("Read document"));
+
+    assert_eq!(annotations.title.as_deref(), Some("Read document"));
+    assert_eq!(annotations.read_only_hint, Some(true));
+    assert_eq!(annotations.destructive_hint, Some(false));
+    assert_eq!(annotations.idempotent_hint, Some(true));
+    assert_eq!(annotations.open_world_hint, Some(false));
+}
+
+#[test]
+fn destructive_tools_map_to_destructive_hint() {
+    let annotations =
+        mcp_annotations(&ai_toolset::ToolAnnotations::destructive("Send email").with_open_world());
+
+    assert_eq!(annotations.title.as_deref(), Some("Send email"));
+    assert_eq!(annotations.read_only_hint, Some(false));
+    assert_eq!(annotations.destructive_hint, Some(true));
+    assert_eq!(annotations.open_world_hint, Some(true));
+}
+
+#[test]
+fn additive_tools_set_neither_hint() {
+    let annotations = mcp_annotations(&ai_toolset::ToolAnnotations::additive("Create document"));
+
+    assert_eq!(annotations.read_only_hint, Some(false));
+    assert_eq!(annotations.destructive_hint, Some(false));
+}
+
 #[test]
 fn authenticated_user_id_is_read_from_http_request_parts() {
     let expected_user_id = MacroUserIdStr::try_from_email("User@macro.com").unwrap();

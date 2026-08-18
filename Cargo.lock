@@ -301,6 +301,7 @@ dependencies = [
  "macro_service_urls",
  "macro_user_id",
  "mcp_client",
+ "mcp_select",
  "model",
  "model-entity",
  "model_notifications",
@@ -313,6 +314,7 @@ dependencies = [
  "models_soup",
  "non_empty",
  "notification",
+ "pipedream_mcp",
  "projects",
  "prompt",
  "properties",
@@ -1778,7 +1780,7 @@ dependencies = [
  "aws-smithy-runtime-api",
  "aws-smithy-types",
  "h2 0.3.27",
- "h2 0.4.14",
+ "h2 0.4.16",
  "http 0.2.12",
  "http 1.4.0",
  "http-body 0.4.6",
@@ -4386,6 +4388,7 @@ dependencies = [
  "macro_user_id",
  "macro_uuid",
  "mcp_client",
+ "mcp_select",
  "memory",
  "model",
  "model-entity",
@@ -4397,6 +4400,7 @@ dependencies = [
  "non_empty",
  "notification",
  "onboarding",
+ "pipedream_mcp",
  "prompt",
  "readonly_pool",
  "redis",
@@ -5534,7 +5538,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -6593,9 +6597,9 @@ dependencies = [
 
 [[package]]
 name = "h2"
-version = "0.4.14"
+version = "0.4.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "171fefbc92fe4a4de27e0698d6a5b392d6a0e333506bc49133760b3bcf948733"
+checksum = "a9f37a958b41b3b19ee2707c06439c0e9e547e847223eb791ecb0cb821c65e27"
 dependencies = [
  "atomic-waker",
  "bytes",
@@ -7141,7 +7145,7 @@ dependencies = [
  "bytes",
  "futures-channel",
  "futures-core",
- "h2 0.4.14",
+ "h2 0.4.16",
  "http 1.4.0",
  "http-body 1.0.1",
  "httparse",
@@ -7231,7 +7235,7 @@ dependencies = [
  "libc",
  "percent-encoding",
  "pin-project-lite",
- "socket2 0.6.3",
+ "socket2 0.5.10",
  "system-configuration",
  "tokio",
  "tower-service",
@@ -7549,7 +7553,7 @@ dependencies = [
  "macro_authorization",
  "macro_db_migrator",
  "macro_user_id",
- "mcp_client",
+ "mcp_select",
  "model-entity",
  "models_properties",
  "properties",
@@ -7763,7 +7767,7 @@ checksum = "3640c1c38b8e4e43584d8df18be5fc6b0aa314ce6ebf51b53313d4306cca8e46"
 dependencies = [
  "hermit-abi",
  "libc",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -9173,6 +9177,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "mcp_select"
+version = "0.1.0"
+dependencies = [
+ "ai_toolset",
+ "anyhow",
+ "macro_user_id",
+ "mcp_client",
+ "pipedream_mcp",
+ "serde_json",
+ "tracing",
+ "workspace-hack",
+]
+
+[[package]]
 name = "mcp_service"
 version = "0.1.0"
 dependencies = [
@@ -10184,7 +10202,7 @@ version = "0.50.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7957b9740744892f114936ab4a57b3f487491bbeafaf8083688b16841a4240e5"
 dependencies = [
- "windows-sys 0.61.2",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -10531,6 +10549,7 @@ dependencies = [
  "macro_authorization",
  "macro_user_id",
  "mcp_client",
+ "mcp_select",
  "serde",
  "serde_json",
  "sqlx",
@@ -11239,6 +11258,30 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8b870d8c151b6f2fb93e84a13146138f05d02ed11c7e7c54f8826aaaf7c9f184"
 
 [[package]]
+name = "pipedream_mcp"
+version = "0.1.0"
+dependencies = [
+ "ai_toolset",
+ "anyhow",
+ "axum",
+ "futures",
+ "macro_authorization",
+ "macro_user_id",
+ "model-error-response",
+ "reqwest 0.13.4",
+ "rmcp",
+ "schemars 1.2.1",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "utoipa",
+ "workspace-hack",
+]
+
+[[package]]
 name = "piper"
 version = "0.2.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -11811,7 +11854,7 @@ dependencies = [
  "quinn-udp",
  "rustc-hash 2.1.2",
  "rustls 0.23.40",
- "socket2 0.6.3",
+ "socket2 0.5.10",
  "thiserror 2.0.18",
  "tokio",
  "tracing",
@@ -11849,7 +11892,7 @@ dependencies = [
  "cfg_aliases",
  "libc",
  "once_cell",
- "socket2 0.6.3",
+ "socket2 0.5.10",
  "tracing",
  "windows-sys 0.59.0",
 ]
@@ -12398,7 +12441,7 @@ dependencies = [
  "encoding_rs",
  "futures-core",
  "futures-util",
- "h2 0.4.14",
+ "h2 0.4.16",
  "hickory-resolver",
  "http 1.4.0",
  "http-body 1.0.1",
@@ -12768,7 +12811,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys 0.12.1",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -12839,7 +12882,7 @@ dependencies = [
  "security-framework",
  "security-framework-sys",
  "webpki-root-certs",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -14904,7 +14947,7 @@ dependencies = [
  "getrandom 0.4.2",
  "once_cell",
  "rustix 1.1.4",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -16409,7 +16452,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.61.2",
+ "windows-sys 0.48.0",
 ]
 
 [[package]]

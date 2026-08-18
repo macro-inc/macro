@@ -968,6 +968,116 @@ export type PatchChatRequest = {
 };
 
 /**
+ * One connectable app in the catalog.
+ */
+export type PipedreamCatalogEntryResponse = {
+    /**
+     * Pipedream app name slug — pass this to the connect flow.
+     */
+    app_slug: string;
+    /**
+     * One-line description of the app.
+     */
+    description?: string | null;
+    /**
+     * Human-readable name to display.
+     */
+    display_name: string;
+    /**
+     * URL of the app's icon, when available.
+     */
+    icon_url?: string | null;
+    /**
+     * Curated priority connectors rank first and may be rendered as their
+     * own featured section.
+     */
+    priority: boolean;
+};
+
+/**
+ * A page of the connector catalog.
+ */
+export type PipedreamCatalogResponse = {
+    /**
+     * Cursor for the next page. Absent on the last page.
+     */
+    next_cursor?: string | null;
+    /**
+     * Catalog entries in display order (priority connectors first).
+     */
+    servers: Array<PipedreamCatalogEntryResponse>;
+};
+
+/**
+ * Request body for completing a Pipedream connect flow.
+ */
+export type PipedreamCompleteRequest = {
+    /**
+     * The connected-account ID reported by the Connect UI on success.
+     */
+    account_id: string;
+    /**
+     * Optional display name for the connector. Defaults to the app's name
+     * for new connections; existing connections keep their name.
+     */
+    server_name?: string | null;
+};
+
+/**
+ * A connected MCP app as returned by the API.
+ */
+export type PipedreamConnectionResponse = {
+    /**
+     * Pipedream app name slug, e.g. `linear`.
+     */
+    app_slug: string;
+    /**
+     * Whether the connector is enabled for tool use.
+     */
+    enabled: boolean;
+    /**
+     * Human-readable display name.
+     */
+    server_name: string;
+};
+
+/**
+ * Response from creating a Pipedream Connect token.
+ */
+export type PipedreamTokenResponse = {
+    /**
+     * Shareable link that opens the same connect flow in a browser tab.
+     */
+    connect_link_url: string;
+    /**
+     * RFC 3339 expiry of the token.
+     */
+    expires_at: string;
+    /**
+     * Short-lived token to open the Pipedream Connect UI with.
+     */
+    token: string;
+};
+
+/**
+ * Request body for updating a connected app.
+ */
+export type PipedreamUpdateRequest = {
+    /**
+     * The app slug to update.
+     */
+    app_slug: string;
+    /**
+     * Enable or disable the connector.
+     */
+    enabled?: boolean | null;
+    /**
+     * New display name for the connector.
+     */
+    server_name?: string | null;
+};
+
+/**
  * Resolved price for one completion.
  */
 export type Price = {
@@ -2431,6 +2541,149 @@ export type CompleteHandlerResponses = {
 };
 
 export type CompleteHandlerResponse = CompleteHandlerResponses[keyof CompleteHandlerResponses];
+
+export type BrowsePipedreamMcpCatalogData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Search query to filter apps by name. Omit to browse.
+         */
+        search?: string;
+        /**
+         * Opaque pagination cursor from a previous response.
+         */
+        cursor?: string;
+        /**
+         * Page size (default 20, max 50).
+         */
+        limit?: number;
+    };
+    url: '/pipedream/mcp/catalog';
+};
+
+export type BrowsePipedreamMcpCatalogErrors = {
+    401: string;
+    500: ErrorResponse;
+    501: ErrorResponse;
+};
+
+export type BrowsePipedreamMcpCatalogError = BrowsePipedreamMcpCatalogErrors[keyof BrowsePipedreamMcpCatalogErrors];
+
+export type BrowsePipedreamMcpCatalogResponses = {
+    200: PipedreamCatalogResponse;
+};
+
+export type BrowsePipedreamMcpCatalogResponse = BrowsePipedreamMcpCatalogResponses[keyof BrowsePipedreamMcpCatalogResponses];
+
+export type CompletePipedreamMcpConnectionData = {
+    body: PipedreamCompleteRequest;
+    path?: never;
+    query?: never;
+    url: '/pipedream/mcp/complete';
+};
+
+export type CompletePipedreamMcpConnectionErrors = {
+    401: string;
+    404: ErrorResponse;
+    500: ErrorResponse;
+    501: ErrorResponse;
+};
+
+export type CompletePipedreamMcpConnectionError = CompletePipedreamMcpConnectionErrors[keyof CompletePipedreamMcpConnectionErrors];
+
+export type CompletePipedreamMcpConnectionResponses = {
+    200: PipedreamConnectionResponse;
+};
+
+export type CompletePipedreamMcpConnectionResponse = CompletePipedreamMcpConnectionResponses[keyof CompletePipedreamMcpConnectionResponses];
+
+export type DeletePipedreamMcpConnectionData = {
+    body?: never;
+    path?: never;
+    query: {
+        /**
+         * The app slug to disconnect.
+         */
+        app_slug: string;
+    };
+    url: '/pipedream/mcp/connections';
+};
+
+export type DeletePipedreamMcpConnectionErrors = {
+    401: string;
+    500: ErrorResponse;
+};
+
+export type DeletePipedreamMcpConnectionError = DeletePipedreamMcpConnectionErrors[keyof DeletePipedreamMcpConnectionErrors];
+
+export type DeletePipedreamMcpConnectionResponses = {
+    204: void;
+};
+
+export type DeletePipedreamMcpConnectionResponse = DeletePipedreamMcpConnectionResponses[keyof DeletePipedreamMcpConnectionResponses];
+
+export type ListPipedreamMcpConnectionsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/pipedream/mcp/connections';
+};
+
+export type ListPipedreamMcpConnectionsErrors = {
+    401: string;
+    500: ErrorResponse;
+};
+
+export type ListPipedreamMcpConnectionsError = ListPipedreamMcpConnectionsErrors[keyof ListPipedreamMcpConnectionsErrors];
+
+export type ListPipedreamMcpConnectionsResponses = {
+    200: Array<PipedreamConnectionResponse>;
+};
+
+export type ListPipedreamMcpConnectionsResponse = ListPipedreamMcpConnectionsResponses[keyof ListPipedreamMcpConnectionsResponses];
+
+export type UpdatePipedreamMcpConnectionData = {
+    body: PipedreamUpdateRequest;
+    path?: never;
+    query?: never;
+    url: '/pipedream/mcp/connections';
+};
+
+export type UpdatePipedreamMcpConnectionErrors = {
+    401: string;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type UpdatePipedreamMcpConnectionError = UpdatePipedreamMcpConnectionErrors[keyof UpdatePipedreamMcpConnectionErrors];
+
+export type UpdatePipedreamMcpConnectionResponses = {
+    200: PipedreamConnectionResponse;
+};
+
+export type UpdatePipedreamMcpConnectionResponse = UpdatePipedreamMcpConnectionResponses[keyof UpdatePipedreamMcpConnectionResponses];
+
+export type CreatePipedreamMcpTokenData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/pipedream/mcp/token';
+};
+
+export type CreatePipedreamMcpTokenErrors = {
+    401: string;
+    500: ErrorResponse;
+    501: ErrorResponse;
+};
+
+export type CreatePipedreamMcpTokenError = CreatePipedreamMcpTokenErrors[keyof CreatePipedreamMcpTokenErrors];
+
+export type CreatePipedreamMcpTokenResponses = {
+    200: PipedreamTokenResponse;
+};
+
+export type CreatePipedreamMcpTokenResponse = CreatePipedreamMcpTokenResponses[keyof CreatePipedreamMcpTokenResponses];
 
 export type GetBatchPreviewData = {
     body: GetBatchPreviewRequest;
