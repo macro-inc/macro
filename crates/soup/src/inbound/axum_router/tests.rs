@@ -1962,8 +1962,9 @@ async fn touched_cursor_round_trips() {
         },
     );
 
-    // The shape the service emits: entity id + own-mutation timestamp with
-    // the self-describing touched sort tag.
+    // The shape the service emits: entity id + own-mutation timestamp. The
+    // sort marker serializes as null (like frecency's); the timestamp value
+    // is what keeps this out of the frecency cursor arm.
     let cursor = models_pagination::Base64Str::encode_json(models_pagination::Cursor {
         id: Uuid::new_v4().to_string(),
         limit: 20usize,
