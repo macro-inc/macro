@@ -1,5 +1,9 @@
 #![cfg(not(target_arch = "wasm32"))]
 
+use cache_core::normalize::RecordUpdates;
+use cache_core::queue::{
+    MutationRequest, NewQueuedMutation, PersistedOptimisticLayer, StoredMutation,
+};
 use cache_core::store::Storage;
 use cache_core::value::{CacheValue, EntityKey, Record};
 use cache_turso::{TursoFileDatabase, TursoStorageCloseOutcome};
@@ -37,6 +41,56 @@ fn filesystem_database_persists_across_close_and_reopen() {
         assert_eq!(
             storage.get_batch(&[key("Document:1")]).await.unwrap(),
             vec![Some(record("persisted"))]
+        );
+        assert_eq!(
+            storage.try_close().unwrap(),
+            TursoStorageCloseOutcome::Healthy
+        );
+    });
+}
+
+#[test]
+fn filesystem_database_preserves_the_mutation_queue() {
+    block_on(async {
+        let directory = tempfile::tempdir().unwrap();
+        let database = TursoFileDatabase::new(directory.path().join("cache.turso")).unwrap();
+
+        let mut storage = database.open("scope-1").unwrap();
+        let mutation_id = storage
+            .enqueue_mutation(NewQueuedMutation {
+                mutation: StoredMutation::new(
+                    MutationRequest {
+                        query: "mutation Persist { persist }".into(),
+                        operation_name: Some("Persist".into()),
+                        variables_json: r#"{"value":1}"#.into(),
+                        identity: Some("identity".into()),
+                    },
+                    42,
+                ),
+                optimistic: PersistedOptimisticLayer {
+                    optimistic_data_json: r#"{"persist":true}"#.into(),
+                    normalized_updates: RecordUpdates::default(),
+                },
+            })
+            .await
+            .unwrap();
+        assert_eq!(
+            storage.try_close().unwrap(),
+            TursoStorageCloseOutcome::Healthy
+        );
+
+        let storage = database.open("scope-1").unwrap();
+        let queue = storage.load_mutation_queue().await.unwrap();
+        assert_eq!(queue.len(), 1);
+        assert_eq!(queue[0].id, mutation_id);
+        assert_eq!(
+            queue[0].mutation.request.operation_name.as_deref(),
+            Some("Persist")
+        );
+        assert_eq!(queue[0].mutation.created_at_ms, 42);
+        assert_eq!(
+            queue[0].optimistic.optimistic_data_json,
+            r#"{"persist":true}"#
         );
         assert_eq!(
             storage.try_close().unwrap(),

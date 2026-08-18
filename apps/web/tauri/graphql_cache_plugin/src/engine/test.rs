@@ -421,6 +421,11 @@ fn clear_wipes_everything() {
 }
 
 #[test]
+fn sole_engine_handle_shuts_turso_down_explicitly() {
+    spawn_handle().shutdown().unwrap();
+}
+
+#[test]
 fn bad_transaction_id_is_an_error() {
     let handle = spawn_handle();
     let error = block_on(handle.rollback_optimistic_write(
