@@ -341,6 +341,20 @@ where
             }
         })?;
 
+    // Positional pairing is only sound with one preview per requested item,
+    // which the port guarantees — treat any drift as a server error rather
+    // than silently mispairing.
+    if previews.len() != requested_ids.len() {
+        tracing::error!(
+            requested = requested_ids.len(),
+            resolved = previews.len(),
+            "calendar mention preview resolution returned a mismatched item count"
+        );
+        return Err(CalendarApiError {
+            status: StatusCode::INTERNAL_SERVER_ERROR,
+            message: "unable to resolve calendar mention previews",
+        });
+    }
     let items = requested_ids
         .into_iter()
         .zip(previews)

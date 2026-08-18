@@ -30,17 +30,20 @@ function mentionHtml(event: CalendarEvent): string {
 }
 
 /**
- * Plain-text flavor for surfaces outside Macro, using the same host
- * convention as the mention hover card's copy-link action.
+ * Deep link to one event on the singleton calendar block, using the same
+ * host convention as the copy-link actions elsewhere in the app.
  */
-function eventLink(event: CalendarEvent): string {
+export function calendarEventDeepLink(target: {
+  eventId: string;
+  occurrenceKey?: string;
+}): string {
   let hostname = window.location.hostname.replace('www.', '').toLowerCase();
   if (hostname === 'localhost') {
     hostname = 'dev.macro.com';
   }
   const params = new URLSearchParams({
-    eventId: event.eventId,
-    ...(isRecurring(event) ? { occurrenceKey: event.occurrenceKey } : {}),
+    eventId: target.eventId,
+    ...(target.occurrenceKey ? { occurrenceKey: target.occurrenceKey } : {}),
   });
   return `https://${hostname}/app/calendar/${CALENDAR_BLOCK_ID}?${params.toString()}`;
 }
@@ -52,7 +55,10 @@ function eventLink(event: CalendarEvent): string {
 export async function copyCalendarEventMention(event: CalendarEvent) {
   const written = await writeClipboardData({
     'text/html': mentionHtml(event),
-    'text/plain': eventLink(event),
+    'text/plain': calendarEventDeepLink({
+      eventId: event.eventId,
+      occurrenceKey: isRecurring(event) ? event.occurrenceKey : undefined,
+    }),
   });
   if (written) {
     toast.success('Copied event to clipboard');

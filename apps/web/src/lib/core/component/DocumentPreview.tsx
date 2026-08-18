@@ -1,6 +1,7 @@
 import { parseLocalDate } from '@app/features/calendar/utils/calendar-date';
 import { openChatWithAgent } from '@app/features/chat/ChatWithAgentButton';
 import { globalSplitManager } from '@app/signal/splitLayout';
+import { calendarEventDeepLink } from '@block-calendar/copy-event-mention';
 import { openCalendarEventSplit } from '@block-calendar/open-calendar-event';
 import { CALENDAR_BLOCK_ID } from '@block-calendar/types';
 import { URL_PARAMS as URL_PARAMS_CANVAS } from '@block-canvas/constants';
@@ -701,15 +702,7 @@ export function DocumentPreviewContent(props: DocumentPreviewContentProps) {
 
       const calendarTarget = calendarOpenTarget();
       if (calendarTarget) {
-        const queryParams = new URLSearchParams({
-          eventId: calendarTarget.eventId,
-          ...(calendarTarget.occurrenceKey
-            ? { occurrenceKey: calendarTarget.occurrenceKey }
-            : {}),
-        }).toString();
-        navigator.clipboard.writeText(
-          `https://${hostname}/app/calendar/${CALENDAR_BLOCK_ID}?${queryParams}`
-        );
+        navigator.clipboard.writeText(calendarEventDeepLink(calendarTarget));
         toast.success('Copied document link to clipboard');
         return;
       }
