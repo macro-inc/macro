@@ -62,6 +62,7 @@ mod tests {
     use crate::api::unfurl::get_unfurl::{GetUnfurlBulkBody, GetUnfurlBulkResponse};
 
     use super::*;
+    use crate::http_safety::SsrfSafeHttpClient;
     use crate::unfurl::{GetUnfurlResponse, GetUnfurlResponseList};
     use ::unfurl::outbound::ReqwestUnfurlFetcher;
     use axum::{
@@ -75,7 +76,7 @@ mod tests {
     fn test_state() -> ApiContext {
         ApiContext {
             environment: Environment::Local,
-            http_client: reqwest::Client::new(),
+            http_client: SsrfSafeHttpClient::new().expect("build safe test HTTP client"),
         }
     }
 

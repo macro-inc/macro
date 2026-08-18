@@ -2,6 +2,7 @@ use axum::extract::Json;
 use axum::extract::State;
 use axum::http::StatusCode;
 
+use crate::http_safety::SsrfSafeHttpClient;
 use crate::unfurl::GetUnfurlResponseList;
 use crate::unfurl::fetch_links_async;
 use serde::{Deserialize, Serialize};
@@ -31,10 +32,10 @@ pub struct GetUnfurlBulkBody {
     ))]
 #[tracing::instrument(skip(http_client, body))]
 pub async fn get_bulk_unfurl_handler(
-    State(http_client): State<reqwest::Client>,
+    State(http_client): State<SsrfSafeHttpClient>,
     body: Json<GetUnfurlBulkBody>,
 ) -> (StatusCode, Json<GetUnfurlBulkResponse>) {
-    let links = fetch_links_async(&http_client, &body.url_list).await;
+    let links = fetch_links_async(http_client.as_ref(), &body.url_list).await;
     let response = GetUnfurlBulkResponse { responses: links };
     (StatusCode::OK, Json(response))
 }
