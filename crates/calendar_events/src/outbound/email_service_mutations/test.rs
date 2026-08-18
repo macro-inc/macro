@@ -146,9 +146,26 @@ fn router_error_bodies_round_trip_to_their_domain_failures() {
 }
 
 #[test]
-fn an_unparseable_error_body_is_retryable() {
-    let parsed = error_from_response(StatusCode::NOT_FOUND, Some("not found".to_string()));
-    assert!(matches!(parsed, CalendarMutationError::Retryable(_)));
+fn unrecognized_failures_are_classified_by_status() {
+    // Only genuinely transient statuses may invite a retry — a retried
+    // create is not idempotent.
     let parsed = error_from_response(StatusCode::SERVICE_UNAVAILABLE, None);
+    assert!(matches!(parsed, CalendarMutationError::Retryable(_)));
+    let parsed = error_from_response(StatusCode::TOO_MANY_REQUESTS, None);
+    assert!(matches!(parsed, CalendarMutationError::Retryable(_)));
+
+    let parsed = error_from_response(StatusCode::NOT_FOUND, Some("not found".to_string()));
+    assert!(matches!(parsed, CalendarMutationError::NotFound));
+    let parsed = error_from_response(StatusCode::BAD_REQUEST, Some("nope".to_string()));
+    assert!(matches!(parsed, CalendarMutationError::InvalidInput(_)));
+    let parsed = error_from_response(
+        StatusCode::FORBIDDEN,
+        Some(r#"{"code":"mystery","message":"no"}"#.to_string()),
+    );
+    assert!(matches!(parsed, CalendarMutationError::InvalidInput(_)));
+    let parsed = error_from_response(
+        StatusCode::INTERNAL_SERVER_ERROR,
+        Some(r#"{"code":"mystery","message":"no"}"#.to_string()),
+    );
     assert!(matches!(parsed, CalendarMutationError::Retryable(_)));
 }

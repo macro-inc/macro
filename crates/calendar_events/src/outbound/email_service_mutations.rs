@@ -113,9 +113,13 @@ fn error_from_response(status: StatusCode, body: Option<String>) -> CalendarMuta
         .as_deref()
         .and_then(|body| serde_json::from_str::<MutationErrorWire>(body).ok());
     let Some(error) = parsed else {
-        return CalendarMutationError::Retryable(format!(
-            "the email service calendar API returned status {status} with no mutation error body"
-        ));
+        return fallback_error(
+            status,
+            format!(
+                "the email service calendar API returned status {status} with no mutation \
+                 error body"
+            ),
+        );
     };
     match error.code.as_str() {
         "not_found" => CalendarMutationError::NotFound,
@@ -125,8 +129,24 @@ fn error_from_response(status: StatusCode, body: Option<String>) -> CalendarMuta
         "invalid_input" => CalendarMutationError::InvalidInput(error.message),
         "reauth_required" => CalendarMutationError::ReauthRequired(error.message),
         "provider_rejected" => CalendarMutationError::ProviderRejected(error.message),
+        "retryable" => CalendarMutationError::Retryable(error.message),
         "persist_failed" => CalendarMutationError::PersistFailed(error.message),
-        _ => CalendarMutationError::Retryable(error.message),
+        _ => fallback_error(status, error.message),
+    }
+}
+
+/// Classify an unrecognized failure by its status. Marking a client error
+/// retryable would invite a duplicate non-idempotent write (a retried create
+/// makes a second event and re-invites its attendees), so only statuses that
+/// genuinely signal a transient condition stay [`CalendarMutationError::Retryable`].
+fn fallback_error(status: StatusCode, message: String) -> CalendarMutationError {
+    match status {
+        StatusCode::NOT_FOUND => CalendarMutationError::NotFound,
+        StatusCode::REQUEST_TIMEOUT | StatusCode::TOO_MANY_REQUESTS => {
+            CalendarMutationError::Retryable(message)
+        }
+        _ if status.is_client_error() => CalendarMutationError::InvalidInput(message),
+        _ => CalendarMutationError::Retryable(message),
     }
 }
 
