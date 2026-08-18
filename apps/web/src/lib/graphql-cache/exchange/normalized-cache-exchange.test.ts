@@ -258,6 +258,11 @@ function makeFakeHost(): FakeHost {
       host.cacheActions.push({ kind: 'write', value: args.data });
       return { changed: [], affectedOps: [], reset: false };
     },
+    async hydrateQuery(args) {
+      host.writes.push({ data: args.data, identity: args.identity });
+      host.cacheActions.push({ kind: 'write', value: args.data });
+      return { kind: 'data', data: args.data };
+    },
     async enqueueOptimisticMutation(
       args,
       claim

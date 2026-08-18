@@ -412,10 +412,11 @@ export class CacheWorkerCore {
           request.identity
         );
         this.fanOut(result, true);
-        return {
-          kind: result.data === null ? 'void' : 'data',
-          ...(result.data === null ? {} : { data: result.data }),
-        } satisfies HydrationResult;
+        const hydration: HydrationResult =
+          result.data === null
+            ? { kind: 'void' }
+            : { kind: 'data', data: result.data };
+        return hydration;
       })
       .with({ kind: 'enqueue-optimistic-mutation' }, async (request) => {
         const engine = this.requireEngine();
