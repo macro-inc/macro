@@ -9,8 +9,8 @@ use uuid::Uuid;
 use super::*;
 use crate::domain::models::{CalendarAttendeeInput, EventReminders, EventTime};
 use crate::inbound::mutation_router::{
-    CalendarMutationApiError, CreateCalendarEventRequest, DeleteCalendarEventQuery,
-    RsvpCalendarEventRequest, UpdateCalendarEventRequest,
+    CalendarMutationApiError, CalendarUpdateScopeParam, CreateCalendarEventRequest,
+    DeleteCalendarEventQuery, RsvpCalendarEventRequest, UpdateCalendarEventRequest,
 };
 
 fn sample_draft() -> CalendarEventDraft {
@@ -81,6 +81,7 @@ fn update_body_matches_the_router_request() {
         request.conference,
         Some(crate::domain::models::ConferenceChange::Removed)
     );
+    assert!(matches!(request.scope, Some(CalendarUpdateScopeParam::All)));
     assert!(request.recurrence_id.is_none());
 }
 
@@ -104,7 +105,10 @@ fn update_body_carries_the_occurrence_scope() {
         request.recurrence_id.as_deref(),
         Some("2026-08-18T20:00:00+00:00")
     );
-    assert!(request.scope.is_some());
+    assert!(matches!(
+        request.scope,
+        Some(CalendarUpdateScopeParam::ThisEvent)
+    ));
 }
 
 #[test]
