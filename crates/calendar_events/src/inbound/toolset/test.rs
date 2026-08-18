@@ -217,13 +217,21 @@ impl CalendarOccurrenceService for MockOccurrences {
         &self,
         _requester_id: &str,
         _range: OccurrenceRange,
-        _cursor: Option<crate::domain::models::CalendarOccurrenceCursor>,
+        cursor: Option<crate::domain::models::CalendarOccurrenceCursor>,
         limit: u16,
     ) -> Result<Vec<(crate::domain::models::CalendarEvent, CalendarOccurrence)>, rootcause::Report>
     {
-        let mut rows = self.rows.lock().unwrap().clone();
-        rows.truncate(usize::from(limit));
-        Ok(rows)
+        let rows = self.rows.lock().unwrap().clone();
+        let start = cursor
+            .map(|cursor| {
+                rows.iter()
+                    .position(|(_, occurrence)| occurrence.occurrence_key == cursor.occurrence_key)
+                    .map_or(rows.len(), |position| position + 1)
+            })
+            .unwrap_or(0);
+        let mut page: Vec<_> = rows.into_iter().skip(start).collect();
+        page.truncate(usize::from(limit));
+        Ok(page)
     }
 
     async fn sync_status(
@@ -457,6 +465,40 @@ async fn list_events_reports_truncation() {
     assert_eq!(response.events.len(), max);
     assert!(response.truncated);
     assert!(response.summary.contains("narrow the window"));
+}
+
+#[tokio::test]
+async fn cancelled_occurrences_do_not_count_toward_truncation() {
+    let event = sample_event(Vec::new());
+    let max = usize::from(super::list_calendar_events::OCCURRENCES_MAX);
+    // Exactly the cap of active occurrences plus one cancelled row in the
+    // middle: the first page overflows only because of the cancelled row, so
+    // the tool must page past it instead of reporting truncation.
+    let mut rows: Vec<_> = (0..max)
+        .map(|index| {
+            (
+                event.clone(),
+                occurrence_of(&event, &format!("k-{index}"), false),
+            )
+        })
+        .collect();
+    rows.insert(
+        max / 2,
+        (event.clone(), occurrence_of(&event, "k-cancelled", true)),
+    );
+    let occurrences = MockOccurrences {
+        rows: Mutex::new(rows),
+        status: CalendarSyncStatus::Ready,
+    };
+    let (_, context) = context(MockMutations::default(), occurrences);
+
+    let tool = ListCalendarEvents {
+        start: Utc.with_ymd_and_hms(2026, 8, 20, 0, 0, 0).unwrap(),
+        end: Utc.with_ymd_and_hms(2026, 8, 27, 0, 0, 0).unwrap(),
+    };
+    let response = tool.call(context, request_context()).await.unwrap();
+    assert_eq!(response.events.len(), max);
+    assert!(!response.truncated);
 }
 
 #[tokio::test]

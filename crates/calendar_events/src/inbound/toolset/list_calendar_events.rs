@@ -12,13 +12,17 @@ use serde::{Deserialize, Serialize};
 
 use super::{CalendarToolContext, ToolEventAttendee, description_preview, time_fields};
 use crate::domain::{
-    models::{CalendarSyncStatus, OccurrenceRange},
+    models::{CalendarOccurrenceCursor, CalendarSyncStatus, OccurrenceRange},
     ports::{CalendarMutationService, CalendarOccurrenceService},
     service::CalendarValidationError,
 };
 
 /// The most occurrences one call returns; wider windows report truncation.
 pub(super) const OCCURRENCES_MAX: u16 = 200;
+
+/// Bound on cursor pages fetched while filling the cap with non-cancelled
+/// occurrences; stopping early reports the window as truncated.
+const PAGES_MAX: usize = 10;
 
 /// One calendar event occurrence in the requested window.
 #[derive(Debug, Serialize, JsonSchema)]
@@ -137,29 +141,41 @@ where
             end_date: end_date_bound(self.end),
         };
 
-        let mut occurrences = service_context
-            .occurrences
-            .list_occurrences(&requester_id, range, None, OCCURRENCES_MAX + 1)
-            .await
-            .map_err(|error| {
-                let description = if error
-                    .as_ref()
-                    .downcast_current_context::<CalendarValidationError>()
-                    .is_some()
-                {
-                    "The window is invalid: it must be positive, at most 370 days, and within \
-                     one year past to two years future."
-                        .to_string()
-                } else {
-                    "Failed to query calendar events. Try again shortly.".to_string()
-                };
-                ToolCallError {
-                    description,
-                    internal_error: anyhow::Error::from_boxed(error.into_boxed_error()),
-                }
-            })?;
-
-        let truncated = occurrences.len() > usize::from(OCCURRENCES_MAX);
+        // Cancelled occurrences never reach the response, so they must not
+        // count toward the cap or its truncation flag: keep paging until the
+        // cap is exceeded by active occurrences alone or the window is
+        // exhausted, up to a bounded number of pages.
+        let mut occurrences = Vec::new();
+        let mut cursor = None;
+        let mut exhausted = false;
+        for _ in 0..PAGES_MAX {
+            let rows = service_context
+                .occurrences
+                .list_occurrences(
+                    &requester_id,
+                    range.clone(),
+                    cursor.take(),
+                    OCCURRENCES_MAX + 1,
+                )
+                .await
+                .map_err(list_error)?;
+            let full_page = rows.len() > usize::from(OCCURRENCES_MAX);
+            cursor = rows
+                .last()
+                .map(|(_, occurrence)| CalendarOccurrenceCursor::from_occurrence(occurrence));
+            occurrences.extend(
+                rows.into_iter()
+                    .filter(|(_, occurrence)| !occurrence.is_cancelled),
+            );
+            if !full_page {
+                exhausted = true;
+                break;
+            }
+            if occurrences.len() > usize::from(OCCURRENCES_MAX) {
+                break;
+            }
+        }
+        let truncated = occurrences.len() > usize::from(OCCURRENCES_MAX) || !exhausted;
         occurrences.truncate(usize::from(OCCURRENCES_MAX));
 
         let sync_status = service_context
@@ -173,7 +189,6 @@ where
 
         let events: Vec<CalendarEventListItem> = occurrences
             .into_iter()
-            .filter(|(_, occurrence)| !occurrence.is_cancelled)
             .map(|(event, occurrence)| {
                 let (start, end, is_all_day, time_zone) = time_fields(&occurrence.time);
                 let is_recurring = !event.recurrence_lines.is_empty();
@@ -227,6 +242,25 @@ where
             sync_status,
             summary,
         })
+    }
+}
+
+/// Map an occurrence-query failure to an agent-readable tool error.
+fn list_error(error: rootcause::Report) -> ToolCallError {
+    let description = if error
+        .as_ref()
+        .downcast_current_context::<CalendarValidationError>()
+        .is_some()
+    {
+        "The window is invalid: it must be positive, at most 370 days, and within one year past \
+         to two years future."
+            .to_string()
+    } else {
+        "Failed to query calendar events. Try again shortly.".to_string()
+    };
+    ToolCallError {
+        description,
+        internal_error: anyhow::Error::from_boxed(error.into_boxed_error()),
     }
 }
 
