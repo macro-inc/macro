@@ -2,7 +2,10 @@
 
 use std::num::NonZeroU32;
 
-use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
+use ai_toolset::{
+    AsyncTool, RequestContext, ServiceContext, ToolAnnotated, ToolAnnotations, ToolCallError,
+    ToolResult,
+};
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use schemars::JsonSchema;
@@ -34,6 +37,10 @@ pub struct ReadActivity {
         description = "Exclusive end of the range as an RFC 3339 timestamp. Must be after from."
     )]
     pub to: DateTime<Utc>,
+}
+
+impl ToolAnnotated for ReadActivity {
+    const ANNOTATIONS: ToolAnnotations = ToolAnnotations::read_only("Read activity");
 }
 
 /// One activity action returned to the AI.
@@ -164,7 +171,7 @@ where
 
     #[tracing::instrument(
         skip_all,
-        fields(user_id = ?request_context.user_id, from = ?self.from, to = ?self.to),
+        fields(from = ?self.from, to = ?self.to),
         err
     )]
     async fn call(

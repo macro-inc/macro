@@ -1,6 +1,7 @@
 import ClockCounterClockwise from '@phosphor-icons/core/regular/clock-counter-clockwise.svg';
 import type { NamedTool } from '@service-cognition/generated/tools/tool';
 import { createSignal, For } from 'solid-js';
+import { match } from 'ts-pattern';
 import { BaseTool } from './BaseTool';
 import { Tool } from './Tool';
 import { createToolRenderer } from './ToolRenderer';
@@ -11,30 +12,28 @@ type Activity = NamedTool<
 >['data']['activities'][number];
 
 function actionLabel(action: Activity['action']): string {
-  switch (action.type) {
-    case 'created':
-      return 'Created';
-    case 'edited':
-      return 'Edited';
-    case 'opened':
-      return 'Opened';
-    case 'deleted':
-      return 'Deleted';
-    case 'messaged':
-      return 'Sent a message in';
-    case 'sent':
-      return 'Sent an email in';
-    case 'propertyChanged':
-      return `Changed property ${action.property} on`;
-    case 'participantAdded':
-      return `Added ${action.participant} to`;
-    case 'participantRemoved':
-      return `Removed ${action.participant} from`;
-    case 'callStarted':
-      return 'Started a call in';
-    case 'unknown':
-      return action.tag.replaceAll('_', ' ');
-  }
+  return match(action)
+    .with({ type: 'created' }, () => 'Created')
+    .with({ type: 'edited' }, () => 'Edited')
+    .with({ type: 'opened' }, () => 'Opened')
+    .with({ type: 'deleted' }, () => 'Deleted')
+    .with({ type: 'messaged' }, () => 'Sent a message in')
+    .with({ type: 'sent' }, () => 'Sent an email in')
+    .with(
+      { type: 'propertyChanged' },
+      ({ property }) => `Changed property ${property} on`
+    )
+    .with(
+      { type: 'participantAdded' },
+      ({ participant }) => `Added ${participant} to`
+    )
+    .with(
+      { type: 'participantRemoved' },
+      ({ participant }) => `Removed ${participant} from`
+    )
+    .with({ type: 'callStarted' }, () => 'Started a call in')
+    .with({ type: 'unknown' }, ({ tag }) => tag.replaceAll('_', ' '))
+    .exhaustive();
 }
 
 function formatRangeTimestamp(value: string): string {
