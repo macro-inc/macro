@@ -134,12 +134,14 @@ function CalendarGridHost(props: {
 
   return (
     <>
-      <FullCalendar.Host
-        tabIndex={-1}
-        ref={setElement}
-        style={{ '--calendar-selection-color': props.selectionColor }}
-        class="calendar-view calendar-view-host size-full min-w-0 min-h-0 overflow-hidden"
-      />
+      <div class="calendar-view size-full min-w-0 min-h-0 overflow-hidden">
+        <FullCalendar.Host
+          tabIndex={-1}
+          ref={setElement}
+          style={{ '--calendar-selection-color': props.selectionColor }}
+          class="calendar-view-host size-full min-w-0 min-h-0 overflow-hidden"
+        />
+      </div>
       {props.children?.(handle)}
     </>
   );
