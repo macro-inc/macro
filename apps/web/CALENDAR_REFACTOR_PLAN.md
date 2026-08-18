@@ -1,6 +1,6 @@
 # Calendar Composability and Refactor Plan
 
-Status: **reviewed implementation plan / deferred**
+Status: **composability refactor implemented; hover and AI consumers deferred**
 
 Planning baseline: `rahul/feat-calendar-block-and-params` at `7a02db2f09`.
 
@@ -66,7 +66,7 @@ Do not load FullCalendar in the hover unless the miniature grid is explicitly re
 
 It currently combines provider composition, split headers, side panels, hotkeys, responsive workspace layout, local time state, event details, event composer opening, pager rendering, and calendar rendering.
 
-The full composition belongs in `block-calendar/components/View.tsx` and its owned components.
+The full composition now starts in `CalendarBlockAdapter.tsx` and delegates rendered workspace pieces to `block-calendar/components`. A pass-through `View.tsx` is intentionally unnecessary.
 
 ### `CalendarPage.tsx`
 
@@ -137,12 +137,13 @@ src/features/block-calendar/
 ├── calendar-range.ts
 ├── calendar-target.ts
 └── components/
-    ├── View.tsx
     ├── Workspace.tsx
+    ├── Page.tsx
     ├── Header.tsx
     ├── SidePanelSections.tsx
     ├── SetupStatus.tsx
     ├── SelectedEventDetails.tsx
+    ├── EventRsvpSection.tsx
     └── EventComposerSplit.tsx
 
 src/features/calendar/
@@ -206,7 +207,7 @@ src/lib/fullcalendar-solid/
 
 `CalendarBlockAdapter.tsx` remains at the block feature root as the public lifecycle/navigation adapter. Components below it use concise names because their path already establishes block ownership.
 
-Do not add a `block-calendar/components/index.ts`; the adapter should directly import `./components/View`.
+Do not add a `block-calendar/components/index.ts`; the adapter should directly compose the feature providers and import `./components/Workspace`.
 
 ## 7. Composable contracts
 
@@ -382,6 +383,8 @@ The refactor must preserve all of the following:
 
 ### Phase 0: Confirm the consumer contracts
 
+**Status: complete.**
+
 Before extracting APIs, document fixed examples for:
 
 - the full block;
@@ -400,6 +403,8 @@ Resolve these product questions before implementing each consumer:
 **Review checkpoint:** the reusable API is justified by at least two concrete consumers.
 
 ### Phase 1: Characterize high-risk behavior
+
+**Status: complete for high-risk contracts. Broad fixture and snapshot tests were intentionally not added.**
 
 Add focused tests before moving the corresponding logic.
 
@@ -427,6 +432,8 @@ Add focused fixtures/tests proving that:
 
 ### Phase 2: Move the Solid FullCalendar adapter
 
+**Status: complete.**
+
 Move `src/features/calendar/fullcalendar-solid` to `src/lib/fullcalendar-solid` without changing behavior.
 
 Preserve its context, content slots, option resetting, Solid ownership, disposal, registration constraints, and callback ordering.
@@ -434,6 +441,8 @@ Preserve its context, content slots, option resetting, Solid ownership, disposal
 **Review checkpoint:** adapter tests and type-check pass independently.
 
 ### Phase 3: Extract the event draft and form primitives
+
+**Status: complete.**
 
 1. Move active types and pure transformations out of `EventEditorForm.tsx`.
 2. Introduce the headless form controller.
@@ -449,6 +458,8 @@ Do not add cognition behavior in this phase.
 
 ### Phase 4: Extract occurrence data and agenda primitives
 
+**Status: occurrence adapter complete; agenda and hover deferred to their feature commit.**
+
 1. Extract query/range/mapping state from `CalendarPage` into a headless adapter.
 2. Keep active-page polling configurable by the caller.
 3. Add the query-free agenda model and rendered primitives.
@@ -461,6 +472,8 @@ Prefer the lightweight agenda implementation unless product explicitly requires 
 
 ### Phase 5: Extract the query-free calendar grid
 
+**Status: complete.**
+
 1. Separate FullCalendar configuration/rendering from query and mutation ownership.
 2. Pass event selection, date selection, and event-time changes as commands.
 3. Keep event content slot-based.
@@ -470,6 +483,8 @@ Prefer the lightweight agenda implementation unless product explicitly requires 
 **Review checkpoint:** a fixed-data grid works without split, block, source-query, or composer context.
 
 ### Phase 6: Move the full product composition into `block-calendar`
+
+**Status: complete.**
 
 Create the approved `block-calendar/components` structure.
 
@@ -484,13 +499,15 @@ Move or compose the following there:
 - hotkey scope;
 - block preference/source composition.
 
-Keep `CalendarBlockAdapter` focused on feature gating, analytics, block methods, target lookup, and rendering `components/View`.
+Keep `CalendarBlockAdapter` focused on feature gating, analytics, block methods, target lookup, provider composition, and rendering `components/Workspace`.
 
 After this phase, reusable calendar files should not import split-layout or block contexts. Any necessary split wrapper should live in `block-calendar`.
 
 **Review checkpoint:** the complete current block behavior passes before further organization.
 
 ### Phase 7: Refactor pager and state ownership
+
+**Status: complete for the current consumers.**
 
 1. Extract testable pager mechanics into a controller.
 2. Keep the buffered pager optional.
@@ -503,6 +520,8 @@ Do not require agenda or form consumers to mount pager/display contexts.
 
 ### Phase 8: Refactor event details and actions
 
+**Status: complete.**
+
 1. Extract pure details view data and formatting.
 2. Keep attendee and details rendering query-free where practical.
 3. Inject edit/delete/RSVP commands into reusable details composition.
@@ -510,6 +529,8 @@ Do not require agenda or form consumers to mount pager/display contexts.
 5. Preserve stable event-ID memoization and anchor replacement.
 
 ### Phase 9: AI tool consumer
+
+**Status: deferred to a separate feature commit.**
 
 Plan and implement the AI tool end-to-end as a separate reviewed feature using the shared event form primitives.
 
@@ -520,6 +541,8 @@ Use the email tool composer as the behavioral reference, not as a dependency.
 **Review checkpoint:** user edits persist into tool arguments, execution uses the edited values, and completed results render read-only.
 
 ### Phase 10: Mechanical organization and cleanup
+
+**Status: complete for ownership moves; further folder churn is intentionally deferred until a second consumer needs it.**
 
 Only after ownership boundaries are real:
 
