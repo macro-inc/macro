@@ -48,6 +48,7 @@ use super::ports::{
     AgentConnector, AgentSessionLogRepo, AgentSessionLogWriter, AgentSessionRealtime,
     AgentSessionRepo,
 };
+use super::session::HandshakeStatus;
 use super::session::actors::{SessionActor, SessionCommand, Stepped};
 
 /// Buffered not-yet-accepted commands per session actor.
@@ -177,7 +178,18 @@ impl<R, Folds, Rt> AgentSessionServiceImpl<R, Folds, Rt> {
         // which costs an attach nothing until the session actually says
         // something.
         let logs = LiveSessionLogWriter::new(self.repo.clone(), self.realtime.clone());
-        let actor = SessionActor::new(id, acp_session_id, workspace, connector, logs, command_rx);
+        // One session per connection, so the gate this session publishes to is
+        // its own. Sharing a connection means sharing one of these instead.
+        let (handshake, _) = tokio::sync::watch::channel(HandshakeStatus::Pending);
+        let actor = SessionActor::new(
+            id,
+            acp_session_id,
+            workspace,
+            connector,
+            logs,
+            command_rx,
+            handshake,
+        );
         tokio::spawn(run_session(actor, Arc::downgrade(&self.active), commands));
         Ok(())
     }

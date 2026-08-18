@@ -20,13 +20,13 @@ use agent_runtime_protocol::domain::action::{AgentAction, AgentActionId};
 use agent_runtime_protocol::domain::ports::TransportError;
 use agent_runtime_protocol::domain::schema::v0::{SystemEvent, ToRuntimeMessage, ToServerMessage};
 use macro_user_id::user_id::MacroUserIdStr;
-use tokio::sync::{mpsc, oneshot};
+use tokio::sync::{mpsc, oneshot, watch};
 
 use crate::domain::error::Result;
 use crate::domain::model::{AgentSessionId, AgentSessionLog, Message};
 use crate::domain::ports::{AgentConnector, AgentSessionLogWriter, AgentSessionRepo};
 
-use super::{CloseReason, Effect, Input, SessionMachine};
+use super::{CloseReason, Effect, HandshakeStatus, Input, SessionMachine};
 
 /// Buffered inbound messages between the receive pump and the actor select.
 const INBOUND_BUFFER: usize = 1028;
@@ -56,6 +56,10 @@ pub(crate) struct SessionActor<Connector, Logs> {
     logs: Logs,
     commands: mpsc::Receiver<SessionCommand>,
     inbound: mpsc::Receiver<std::result::Result<Option<ToServerMessage>, TransportError>>,
+    /// This connection's handshake gate: published to when this session runs
+    /// the handshake, watched for when another session runs it.
+    handshake: watch::Sender<HandshakeStatus>,
+    handshake_seen: watch::Receiver<HandshakeStatus>,
     /// The task owning the in-flight physical receive; aborted when this
     /// actor drops.
     pump: tokio::task::JoinHandle<()>,
@@ -73,6 +77,7 @@ where
         connector: Connector,
         logs: Logs,
         commands: mpsc::Receiver<SessionCommand>,
+        handshake: watch::Sender<HandshakeStatus>,
     ) -> Self {
         // Keep one physical receive alive independently of the actor select.
         // Some transports are not cancellation-safe.
@@ -89,6 +94,8 @@ where
         });
 
         Self {
+            handshake_seen: handshake.subscribe(),
+            handshake,
             machine: match acp_session_id {
                 None => SessionMachine::new(id, workspace),
                 Some(session_id) => SessionMachine::resume(id, session_id, workspace),
@@ -124,6 +131,13 @@ where
                 },
                 // The service dropped every handle; nobody can reach us.
                 None => Input::Closed(CloseReason::Abandoned),
+            },
+            // A handshake somebody else ran. Never fires before one completes,
+            // and the machine ignores it unless it is still booting - which is
+            // what makes the session that ran the handshake ignore its own.
+            Ok(()) = self.handshake_seen.changed() => match *self.handshake_seen.borrow_and_update() {
+                HandshakeStatus::Ready(restore) => Input::Ready { restore },
+                HandshakeStatus::Pending => return Stepped::Continue,
             },
             inbound = self.inbound.recv() => match inbound.unwrap_or(Ok(None)) {
                 Ok(Some(message)) => Input::Inbound(message),
@@ -183,6 +197,12 @@ where
                         effects.clear();
                         effects.extend(self.machine.handle(Input::Closed(CloseReason::LogFailed)));
                     }
+                }
+                Effect::Initialized { restore } => {
+                    // Nothing waits on this today; a failed send would mean
+                    // every receiver is gone, which cannot happen while this
+                    // actor holds one.
+                    let _ = self.handshake.send(HandshakeStatus::Ready(restore));
                 }
                 Effect::Complete { token, result } => {
                     let _ = token.send(result);

@@ -21,7 +21,7 @@ use crate::domain::model::AgentSessionId;
 
 use super::types::{
     CloseReason, Effect, Input, PendingAction, RuntimeStatus, SessionOpening, SessionPhase,
-    StopReason,
+    SessionRestoreSupport, StopReason,
 };
 
 const INITIAL_REQUEST_NUM: u64 = 0;
@@ -102,8 +102,22 @@ impl<Token> SessionMachine<Token> {
                 token,
             } => self.on_command(from, action, action_id, token),
             Input::Inbound(message) => self.on_inbound(message),
+            Input::Ready { restore } => self.on_connection_ready(restore),
             Input::Closed(reason) => self.on_closed(reason),
         }
+    }
+
+    /// Open on a connection somebody else initialized.
+    ///
+    /// Ignored unless still booting: the machine that ran the handshake is
+    /// told its own result this way too, and a session already opening or
+    /// live has nothing to learn from it.
+    fn on_connection_ready(&mut self, restore: SessionRestoreSupport) -> Vec<Effect<Token>> {
+        let mut effects = Vec::new();
+        if matches!(self.phase, SessionPhase::Booting) {
+            self.begin_opening(restore, &mut effects);
+        }
+        effects
     }
 
     fn on_command(
@@ -239,19 +253,25 @@ impl<Token> SessionMachine<Token> {
             }
         };
 
+        let restore = SessionRestoreSupport {
+            resume: response
+                .agent_capabilities
+                .session_capabilities
+                .resume
+                .is_some(),
+            load: response.agent_capabilities.load_session,
+        };
+        // Announced before this session opens: every other session on this
+        // connection needs the same answer, and only this machine was told it.
+        effects.push(Effect::Initialized { restore });
+        self.begin_opening(restore, effects);
+    }
+
+    /// Ask the agent for this session, however it has to be established.
+    fn begin_opening(&mut self, restore: SessionRestoreSupport, effects: &mut Vec<Effect<Token>>) {
         let opening = match self.resume_session_id.clone() {
-            Some(session_id)
-                if response
-                    .agent_capabilities
-                    .session_capabilities
-                    .resume
-                    .is_some() =>
-            {
-                self.build_resume_session_request(session_id)
-            }
-            Some(session_id) if response.agent_capabilities.load_session => {
-                self.build_load_session_request(session_id)
-            }
+            Some(session_id) if restore.resume => self.build_resume_session_request(session_id),
+            Some(session_id) if restore.load => self.build_load_session_request(session_id),
             Some(_) => {
                 self.resume_unsupported(effects);
                 return;
@@ -513,9 +533,11 @@ impl<Token> SessionMachine<Token> {
         });
     }
 
-    /// Namespaced so a caller's request id can never collide with ours.
+    /// Namespaced so a caller's request id can never collide with ours - and
+    /// carries the session, so sessions sharing one connection cannot collide
+    /// with each other either.
     fn next_id(&mut self) -> RequestId {
-        let id = RequestId::Str(format!("agent_session:{}", self.next_request));
+        let id = RequestId::Str(format!("agent_session:{}:{}", self.id, self.next_request));
         self.next_request += 1;
         id
     }
