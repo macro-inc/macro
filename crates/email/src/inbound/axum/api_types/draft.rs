@@ -60,7 +60,7 @@ pub struct ApiDraftInput {
     pub bcc: Option<Vec<ApiDraftContactInfo>>,
     /// Plain text body.
     pub body_text: Option<String>,
-    /// HTML body (base64 URL_SAFE_NO_PAD encoded).
+    /// HTML body (base64 URL_SAFE_NO_PAD encoded). Sanitized before storage.
     pub body_html: Option<String>,
     /// Macro body format.
     pub body_macro: Option<String>,

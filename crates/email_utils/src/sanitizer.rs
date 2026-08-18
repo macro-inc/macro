@@ -1,3 +1,11 @@
+//! Shared HTML sanitization for email bodies.
+//!
+//! Every HTML body that reaches the `body_html_sanitized` column must pass
+//! through one of these entry points: [`sanitize_email_html`] for
+//! provider-fetched messages, [`sanitize_authored_html`] for bodies composed in
+//! Macro, and [`sanitize_html_fragment`] for standalone fragments such as
+//! signatures.
+
 use ammonia::Builder;
 use regex::Regex;
 use scraper::{Html, Selector};
@@ -39,6 +47,17 @@ pub fn sanitize_email_html(raw_html: &str) -> String {
 /// has no `<head>`/`<body>` to extract, so we just clean it in place.
 pub fn sanitize_html_fragment(raw_html: &str) -> String {
     sanitize_style_blocks(&CLEANER.clean(raw_html).to_string())
+}
+
+/// Sanitizes an HTML body composed inside Macro (draft save / send).
+///
+/// Same allowlist as provider-fetched mail, plus the editor's own round-trip
+/// markers (`data-*` attributes, `<li value>`, checklist tags) so reopening a
+/// draft still rebuilds mentions, indentation, and list state. Those carry no
+/// script surface — the point is that locally-authored HTML is no more trusted
+/// than inbound HTML: it is attacker-controlled the moment a thread is shared.
+pub fn sanitize_authored_html(raw_html: &str) -> String {
+    sanitize_style_blocks(&AUTHORED_CLEANER.clean(raw_html).to_string())
 }
 
 /// Extracts all <style> tags and the <body> tag from a parsed document,
@@ -135,7 +154,12 @@ fn filter_css_declarations(declarations: &str) -> String {
 }
 
 // create a single time
-static CLEANER: LazyLock<Builder<'static>> = LazyLock::new(|| {
+static CLEANER: LazyLock<Builder<'static>> = LazyLock::new(|| build_cleaner(false));
+
+/// Cleaner for locally-authored bodies; see [`sanitize_authored_html`].
+static AUTHORED_CLEANER: LazyLock<Builder<'static>> = LazyLock::new(|| build_cleaner(true));
+
+fn build_cleaner(allow_editor_round_trip: bool) -> Builder<'static> {
     let mut cleaner = Builder::default();
 
     // Keep <style> elements and their text. NOTE: ammonia's CSS filtering
@@ -258,8 +282,19 @@ static CLEANER: LazyLock<Builder<'static>> = LazyLock::new(|| {
     allowed_schemes.insert("tel");
     allowed_schemes.insert("sms");
     cleaner.url_schemes(allowed_schemes);
+
+    if allow_editor_round_trip {
+        // `data-*` attributes are inert, and the composer round-trips through
+        // them: document mentions, `data-lexical-indent`, html-render markers.
+        cleaner.add_generic_attribute_prefixes(&["data-"]);
+        // Explicit list numbering and Lexical's checklist marker.
+        cleaner.add_tag_attributes("li", &["value"]);
+        cleaner.add_tag_attributes("ul", &["__lexicalListType"]);
+        cleaner.add_tag_attributes("ol", &["__lexicalListType"]);
+    }
+
     cleaner
-});
+}
 
 /// a wild guess based on what the internet told me
 fn get_safe_css_properties() -> HashSet<&'static str> {
@@ -293,6 +328,22 @@ fn get_safe_css_properties() -> HashSet<&'static str> {
         "margin-right",
         "margin-bottom",
         "margin-left",
+        // Logical equivalents of the box properties above. The editor emits
+        // `padding-inline-start` for indentation, so dropping these silently
+        // flattens indented paragraphs and nested lists.
+        "padding-inline",
+        "padding-inline-start",
+        "padding-inline-end",
+        "padding-block",
+        "padding-block-start",
+        "padding-block-end",
+        "margin-inline",
+        "margin-inline-start",
+        "margin-inline-end",
+        "margin-block",
+        "margin-block-start",
+        "margin-block-end",
+        "text-indent",
         "border",
         "border-top",
         "border-right",

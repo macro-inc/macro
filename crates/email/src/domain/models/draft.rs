@@ -28,7 +28,8 @@ pub struct CreateDraftInput {
     pub bcc: Vec<ContactInfo>,
     /// Plain text body.
     pub body_text: Option<String>,
-    /// HTML body (base64 encoded from the client, decoded before storage).
+    /// HTML body (base64 encoded from the client; decoded and sanitized
+    /// before storage).
     pub body_html: Option<String>,
     /// Macro-specific body format.
     pub body_macro: Option<String>,

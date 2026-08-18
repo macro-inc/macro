@@ -149,7 +149,7 @@ export type ApiDraftInput = {
      */
     bcc?: Array<ApiDraftContactInfo> | null;
     /**
-     * HTML body (base64 URL_SAFE_NO_PAD encoded).
+     * HTML body (base64 URL_SAFE_NO_PAD encoded). Sanitized before storage.
      */
     body_html?: string | null;
     /**

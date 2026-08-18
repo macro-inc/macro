@@ -3563,7 +3563,7 @@
           },
           "body_html": {
             "type": ["string", "null"],
-            "description": "HTML body (base64 URL_SAFE_NO_PAD encoded)."
+            "description": "HTML body (base64 URL_SAFE_NO_PAD encoded). Sanitized before storage."
           },
           "body_macro": {
             "type": ["string", "null"],
