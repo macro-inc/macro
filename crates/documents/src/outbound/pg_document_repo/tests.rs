@@ -5,7 +5,9 @@ use models_permissions::share_permission::access_level::AccessLevel;
 use models_permissions::share_permission::channel_share_permission::{
     UpdateChannelSharePermission, UpdateOperation,
 };
-use models_permissions::share_permission::{LinkShare, UpdateSharePermissionRequestV2};
+use models_permissions::share_permission::{
+    LinkShare, SharePermissionV2, TeamLinkShareDefault, UpdateSharePermissionRequestV2,
+};
 use sqlx::{Pool, Postgres, Row};
 
 use crate::domain::models::{
@@ -47,14 +49,23 @@ fn create_document_args(
     }
 }
 
+/// The no-team default permission for an md document — the repo persists whatever
+/// the domain layer resolved, so tests pass it explicitly.
+fn md_share_permission() -> SharePermissionV2 {
+    SharePermissionV2::new_document_share_permission(Some(model::document::FileType::Md), None)
+}
+
 async fn create_task_for_team(
     repo: &PgDocumentRepo,
     user_id: &str,
     team_id: uuid::Uuid,
 ) -> model::document::DocumentMetadata {
-    repo.create_document(create_document_args(user_id, true, Some(team_id)))
-        .await
-        .unwrap()
+    repo.create_document(
+        create_document_args(user_id, true, Some(team_id)),
+        md_share_permission(),
+    )
+    .await
+    .unwrap()
 }
 
 async fn team_task_numbers(pool: &Pool<Postgres>, team_id: uuid::Uuid) -> Vec<i32> {
@@ -371,13 +382,39 @@ async fn test_get_user_view_location(pool: Pool<Postgres>) {
 async fn test_create_document_writes_link_share_fields(pool: Pool<Postgres>) {
     let repo = PgDocumentRepo::new(pool.clone());
     let document = repo
-        .create_document(create_document_args(TEST_DOCUMENT_OWNER_ID, false, None))
+        .create_document(
+            create_document_args(TEST_DOCUMENT_OWNER_ID, false, None),
+            md_share_permission(),
+        )
         .await
         .unwrap();
 
     let result = share_permission_columns(&pool, &document.document_id).await;
 
     assert_eq!(result.link_share.as_deref(), Some("PUBLIC"));
+    assert_eq!(result.link_share_access_level.as_deref(), Some("edit"));
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("documents_test_data"))
+)]
+async fn test_create_document_persists_resolved_team_share_permission(pool: Pool<Postgres>) {
+    let repo = PgDocumentRepo::new(pool.clone());
+    let document = repo
+        .create_document(
+            create_document_args(TEST_DOCUMENT_OWNER_ID, false, None),
+            SharePermissionV2::new_document_share_permission(
+                Some(model::document::FileType::Md),
+                Some(TeamLinkShareDefault(Some(LinkShare::Team))),
+            ),
+        )
+        .await
+        .unwrap();
+
+    let result = share_permission_columns(&pool, &document.document_id).await;
+
+    assert_eq!(result.link_share.as_deref(), Some("TEAM"));
     assert_eq!(result.link_share_access_level.as_deref(), Some("edit"));
 }
 
@@ -881,7 +918,10 @@ async fn test_team_share_no_team_owner(pool: Pool<Postgres>) {
 
     // Create a document owned by a user without a team
     let metadata = repo
-        .create_document(create_document_args("macro|no-team@user.com", false, None))
+        .create_document(
+            create_document_args("macro|no-team@user.com", false, None),
+            md_share_permission(),
+        )
         .await
         .unwrap();
 
@@ -1096,11 +1136,10 @@ async fn test_non_task_document_does_not_create_team_task_row(pool: Pool<Postgre
     let repo = PgDocumentRepo::new(pool);
 
     let metadata = repo
-        .create_document(create_document_args(
-            "macro|user@user.com",
-            false,
-            Some(TEST_TEAM_ID),
-        ))
+        .create_document(
+            create_document_args("macro|user@user.com", false, Some(TEST_TEAM_ID)),
+            md_share_permission(),
+        )
         .await
         .unwrap();
 
@@ -1120,7 +1159,10 @@ async fn test_task_without_team_id_does_not_create_team_task_row(pool: Pool<Post
     let repo = PgDocumentRepo::new(pool);
 
     let metadata = repo
-        .create_document(create_document_args("macro|user@user.com", true, None))
+        .create_document(
+            create_document_args("macro|user@user.com", true, None),
+            md_share_permission(),
+        )
         .await
         .unwrap();
 
@@ -1170,13 +1212,16 @@ async fn test_copying_task_allocates_new_team_task_number(pool: Pool<Postgres>) 
     let original = create_task_for_team(&repo, "macro|user@user.com", TEST_TEAM_ID).await;
 
     let copied = repo
-        .copy_document(CopyDocumentRepoArgs {
-            original_document: original,
-            user_id: user_id("macro|user@user.com"),
-            document_name: "copied task".to_string(),
-            file_type: Some(model::document::FileType::Md),
-            team_id: Some(TEST_TEAM_ID),
-        })
+        .copy_document(
+            CopyDocumentRepoArgs {
+                original_document: original,
+                user_id: user_id("macro|user@user.com"),
+                document_name: "copied task".to_string(),
+                file_type: Some(model::document::FileType::Md),
+                team_id: Some(TEST_TEAM_ID),
+            },
+            md_share_permission(),
+        )
         .await
         .unwrap();
 

@@ -14,6 +14,7 @@ mod share;
 use document_sub_type::DocumentSubType;
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use model::document::{DocumentBasic, DocumentMetadata};
+use models_permissions::share_permission::{SharePermissionV2, TeamLinkShareDefault};
 use sqlx::PgPool;
 
 use model_entity::{Entity, EntityType};
@@ -403,10 +404,19 @@ impl DocumentRepo for PgDocumentRepo {
         Ok(content.content)
     }
 
-    #[tracing::instrument(err, skip(self, args))]
+    #[tracing::instrument(err, skip(self))]
+    async fn get_team_default_link_share(
+        &self,
+        user_id: &str,
+    ) -> Result<Option<TeamLinkShareDefault>, Self::Err> {
+        share_permission_db_utils::get_team_default_link_share(&self.pool, user_id).await
+    }
+
+    #[tracing::instrument(err, skip(self, args, share_permission))]
     async fn create_document(
         &self,
         args: CreateDocumentRepoArgs,
+        share_permission: SharePermissionV2,
     ) -> Result<DocumentMetadata, Self::Err> {
         let CreateDocumentRepoArgs {
             id,
@@ -472,7 +482,7 @@ impl DocumentRepo for PgDocumentRepo {
         .await?;
 
         // Create share permission
-        create::set_share_permission(&mut transaction, &document_id, file_type).await?;
+        create::set_share_permission(&mut transaction, &document_id, &share_permission).await?;
 
         // Add to user history (if not skipped)
         if !skip_history {
@@ -1013,10 +1023,11 @@ impl DocumentRepo for PgDocumentRepo {
         Ok(children)
     }
 
-    #[tracing::instrument(err, skip(self, args))]
+    #[tracing::instrument(err, skip(self, args, share_permission))]
     async fn copy_document(
         &self,
         args: CopyDocumentRepoArgs,
+        share_permission: SharePermissionV2,
     ) -> Result<DocumentMetadata, Self::Err> {
         let CopyDocumentRepoArgs {
             original_document,
@@ -1059,9 +1070,7 @@ impl DocumentRepo for PgDocumentRepo {
         }
 
         // Create share permission
-        create::set_share_permission(&mut transaction, &document_id, file_type).await?;
-
-        // Insert user entity access (Owner level)
+        create::set_share_permission(&mut transaction, &document_id, &share_permission).await?;
 
         // Insert user entity access (Owner level)
         entity_access_db_utils::insert_entity_access_row(

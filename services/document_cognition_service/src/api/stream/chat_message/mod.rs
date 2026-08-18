@@ -365,7 +365,20 @@ async fn create_new_chat(
     model: &str,
     stream_id: &str,
 ) -> Result<(crate::model::chats::ChatResponse, String), ChatMessageError> {
-    let share_permission = SharePermissionV2::new_chat_share_permission();
+    // The owner's team default link-share preference decides the initial
+    // share permission; without a team the chat default (public/view) applies.
+    let team_default =
+        share_permission_db_utils::get_team_default_link_share(&ctx.db, (**user_id).as_ref())
+            .await
+            .map_err(|err| {
+                tracing::error!(error=?err, "failed to resolve team default link share");
+                ChatMessageError {
+                    error: "Failed to create chat".to_string(),
+                    stream_id: Some(stream_id.to_string()),
+                    status: None,
+                }
+            })?;
+    let share_permission = SharePermissionV2::new_chat_share_permission(team_default);
     let new_chat_id = create_chat::create_chat_v2(
         &ctx.db,
         (**user_id).clone(),
