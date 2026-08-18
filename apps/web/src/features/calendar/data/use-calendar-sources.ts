@@ -1,0 +1,28 @@
+import { useVisibleCalendarsQuery } from '@queries/calendar/calendars';
+import { createMemo } from 'solid-js';
+import { calendarDisplayLabel, spansMultipleInboxes } from '../calendar-label';
+import { DEFAULT_CALENDAR_SOURCE } from '../events/calendar-occurrence-mapper';
+import type { CalendarSource } from '../events/types';
+
+/** Query-backed calendar sources with presentation labels and colors. */
+export function useCalendarSources() {
+  const calendarsQuery = useVisibleCalendarsQuery();
+  const sources = createMemo<CalendarSource[]>(() => {
+    const calendars = calendarsQuery.data;
+    if (!calendars || calendars.length === 0) {
+      return [DEFAULT_CALENDAR_SOURCE];
+    }
+
+    const spansInboxes = spansMultipleInboxes(calendars);
+    return calendars.map((calendar) => ({
+      id: calendar.id,
+      name: calendarDisplayLabel(calendar, spansInboxes),
+      color: calendar.color ?? DEFAULT_CALENDAR_SOURCE.color,
+    }));
+  });
+  const sourceById = createMemo(
+    () => new Map(sources().map((source) => [source.id, source]))
+  );
+
+  return { calendarsQuery, sourceById, sources };
+}

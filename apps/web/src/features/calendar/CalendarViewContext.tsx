@@ -1,15 +1,12 @@
 import { createAssertedContextProvider } from '@core/context/createContext';
 import { isMobile } from '@core/mobile/isMobile';
-import { useVisibleCalendarsQuery } from '@queries/calendar/calendars';
 import { makePersisted } from '@solid-primitives/storage';
-import { batch, createMemo, createSignal } from 'solid-js';
+import { batch, createSignal } from 'solid-js';
 import { createStore } from 'solid-js/store';
-import { calendarDisplayLabel, spansMultipleInboxes } from './calendar-label';
-import { DEFAULT_CALENDAR_SOURCE } from './events/calendar-occurrence-mapper';
+import { useCalendarSources } from './data/use-calendar-sources';
 import type {
   CalendarEvent,
   CalendarPeriodView,
-  CalendarSource,
   CalendarTimeFormat,
   CalendarWeekStart,
 } from './events/types';
@@ -56,22 +53,7 @@ export const [CalendarViewContextProvider, useCalendarView] =
         }),
       }
     );
-    const calendarsQuery = useVisibleCalendarsQuery();
-    const sources = createMemo<CalendarSource[]>(() => {
-      const calendars = calendarsQuery.data;
-      if (!calendars || calendars.length === 0) {
-        return [DEFAULT_CALENDAR_SOURCE];
-      }
-      const spansInboxes = spansMultipleInboxes(calendars);
-      return calendars.map((calendar) => ({
-        id: calendar.id,
-        name: calendarDisplayLabel(calendar, spansInboxes),
-        color: calendar.color ?? DEFAULT_CALENDAR_SOURCE.color,
-      }));
-    });
-    const sourceById = createMemo(
-      () => new Map(sources().map((source) => [source.id, source]))
-    );
+    const { sources, sourceById } = useCalendarSources();
     // Sources default to visible, so calendars discovered after a
     // preference was saved (or events whose calendar is still loading)
     // never silently disappear.
