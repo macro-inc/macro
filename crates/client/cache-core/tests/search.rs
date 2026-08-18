@@ -104,7 +104,6 @@ fn text_search_loads_compact_catalog_once_and_never_scans_records() {
         assert_eq!(second.documents.len(), 1);
         assert_eq!(diagnostics.search_catalog_load_count(), 1);
         assert_eq!(diagnostics.record_get_count(), gets_before_search);
-        assert_eq!(diagnostics.record_scan_count(), 0);
 
         // A write-through update patches the loaded catalog incrementally.
         engine
@@ -149,7 +148,6 @@ fn text_search_loads_compact_catalog_once_and_never_scans_records() {
                 .documents
                 .is_empty()
         );
-        assert_eq!(diagnostics.record_scan_count(), 0);
     });
 }
 
@@ -273,6 +271,5 @@ fn empty_query_is_bounded_and_uses_recent_projection_path() {
         assert!(page.next_cursor.is_some());
         assert_eq!(diagnostics.search_catalog_load_count(), 0);
         assert_eq!(diagnostics.record_get_count(), 0);
-        assert_eq!(diagnostics.record_scan_count(), 0);
     });
 }

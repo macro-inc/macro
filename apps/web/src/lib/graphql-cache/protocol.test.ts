@@ -5,28 +5,29 @@ import {
   isWorkerMessage,
   MAX_RECORD_SELECTION_PAGE_SIZE,
   validateCacheSearchArgs,
-  validateRecordSelectionLimit,
+  validateRecordSelectionKeys,
 } from './protocol';
 
-describe('validateRecordSelectionLimit', () => {
-  it('accepts bounded positive integers', () => {
-    expect(validateRecordSelectionLimit(1)).toBe(1);
-    expect(validateRecordSelectionLimit(MAX_RECORD_SELECTION_PAGE_SIZE)).toBe(
-      MAX_RECORD_SELECTION_PAGE_SIZE
-    );
+describe('validateRecordSelectionKeys', () => {
+  it('accepts bounded canonical entity keys, including an empty set', () => {
+    expect(validateRecordSelectionKeys([])).toEqual([]);
+    expect(validateRecordSelectionKeys(['GraphqlSoupDocument:one'])).toEqual([
+      'GraphqlSoupDocument:one',
+    ]);
   });
 
-  it.each([
-    0,
-    -1,
-    1.5,
-    MAX_RECORD_SELECTION_PAGE_SIZE + 1,
-    Number.NaN,
-    Number.POSITIVE_INFINITY,
-  ])('rejects invalid limit %s', (limit) => {
-    expect(() => validateRecordSelectionLimit(limit)).toThrow(
-      'record selection limit must be an integer between 1 and 500'
+  it('rejects invalid or unbounded key sets', () => {
+    expect(() => validateRecordSelectionKeys(['ROOT_QUERY'])).toThrow(
+      'invalid normalized record key'
     );
+    expect(() =>
+      validateRecordSelectionKeys(
+        Array.from(
+          { length: MAX_RECORD_SELECTION_PAGE_SIZE + 1 },
+          (_, index) => `Thing:${index}`
+        )
+      )
+    ).toThrow('accepts at most 500 keys');
   });
 });
 
@@ -64,7 +65,7 @@ describe('validateCacheSearchArgs', () => {
     ).toThrow('invalid cache search bucket');
     expect(() =>
       validateCacheSearchArgs({ profile: 'quick-access-v1', limit: 501 })
-    ).toThrow('record selection limit');
+    ).toThrow('cache search limit');
   });
 });
 

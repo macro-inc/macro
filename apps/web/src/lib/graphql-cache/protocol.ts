@@ -20,15 +20,6 @@ export type CacheReadPriority = 'user-visible';
 /** Recursive partial-variable object used to limit query inspection work. */
 export type QueryVariableFilter = Record<string, unknown>;
 
-/** Opaque exclusive cursor for deterministic normalized-record scans. */
-export type RecordCursor = string;
-
-/** Untyped wire page returned by cache hosts. */
-export type SelectedRecordPageWire = {
-  records: unknown[];
-  nextCursor: RecordCursor | null;
-};
-
 export type SearchProfile = 'quick-access-v1';
 
 export type SearchCursor = {
@@ -60,36 +51,54 @@ export type SearchCachePage = {
   nextCursor: SearchCursor | null;
 };
 
-export type ReadRecordsArgs = {
+export type ReadRecordsByKeysArgs = {
   /** Serialized generated fragment document. */
   document: string;
-  /** Root fragment to apply to matching normalized records. */
+  /** Root fragment to apply to the requested normalized records. */
   fragmentName: string;
-  cursor?: RecordCursor;
-  limit: number;
+  /** Canonical normalized entity keys; bounded by the selection page size. */
+  keys: string[];
+};
+
+export type SelectedRecordByKeyWire = {
+  recordKey: string;
+  record: unknown;
 };
 
 export const MAX_RECORD_SELECTION_PAGE_SIZE = 500;
 export const MAX_CACHE_SEARCH_QUERY_BYTES = 512;
 
-/** Validates a record-selection page size before crossing a host boundary. */
-export function validateRecordSelectionLimit(limit: number): number {
-  if (
-    !Number.isSafeInteger(limit) ||
-    limit < 1 ||
-    limit > MAX_RECORD_SELECTION_PAGE_SIZE
-  ) {
+export function validateRecordSelectionKeys(keys: string[]): string[] {
+  if (keys.length > MAX_RECORD_SELECTION_PAGE_SIZE) {
     throw new RangeError(
-      `record selection limit must be an integer between 1 and ${MAX_RECORD_SELECTION_PAGE_SIZE}`
+      `record selection accepts at most ${MAX_RECORD_SELECTION_PAGE_SIZE} keys`
     );
   }
-  return limit;
+  if (
+    keys.some(
+      (key) =>
+        typeof key !== 'string' ||
+        key.length > 1024 ||
+        !/^[A-Za-z_][A-Za-z0-9_]*:/.test(key)
+    )
+  ) {
+    throw new RangeError('invalid normalized record key');
+  }
+  return keys;
 }
 
 export function validateCacheSearchArgs(
   args: SearchCacheArgs
 ): SearchCacheArgs & { nowMs: number } {
-  validateRecordSelectionLimit(args.limit);
+  if (
+    !Number.isSafeInteger(args.limit) ||
+    args.limit < 1 ||
+    args.limit > MAX_RECORD_SELECTION_PAGE_SIZE
+  ) {
+    throw new RangeError(
+      `cache search limit must be an integer between 1 and ${MAX_RECORD_SELECTION_PAGE_SIZE}`
+    );
+  }
   const query = args.query ?? '';
   if (new TextEncoder().encode(query).length > MAX_CACHE_SEARCH_QUERY_BYTES) {
     throw new RangeError('cache search query is too long');
@@ -304,11 +313,10 @@ export type CacheRequest = { id: number } & (
       error: string;
     }
   | {
-      kind: 'read-records';
+      kind: 'read-records-by-keys';
       document: string;
       fragmentName: string;
-      cursor?: RecordCursor;
-      limit: number;
+      keys: string[];
     }
   | {
       kind: 'search';

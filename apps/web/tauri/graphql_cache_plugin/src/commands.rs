@@ -19,20 +19,13 @@ use crate::{
 use cache_core::entity_resolver::EntityResolver;
 use cache_core::link_patch::{OptimisticLinkPatch, QueryRevalidation};
 use cache_core::query_inspection::{CachedQueryInstance, CachedQueryVariant};
-use cache_core::record_selection::{RecordCursor, SelectedRecordPage};
+use cache_core::record_selection::SelectedRecord;
 use cache_core::search::{SearchPage, SearchRequest};
 use cache_sqlite::SqliteStorage;
 use serde::Deserialize;
 use tauri::{AppHandle, Manager, Runtime, State};
 
 type Variables = serde_json::Map<String, serde_json::Value>;
-
-fn parse_record_cursor(cursor: Option<String>) -> Result<Option<RecordCursor>, String> {
-    cursor
-        .map(|value| serde_json::from_value(serde_json::Value::String(value)))
-        .transpose()
-        .map_err(|error| error.to_string())
-}
 
 fn engine_handle(state: &State<'_, CacheState>) -> Result<EngineHandle, String> {
     state
@@ -104,17 +97,16 @@ pub async fn graphql_cache_read(
         .await
 }
 
-/// Projects normalized records through a named GraphQL fragment.
+/// Projects explicit normalized entity keys without scanning storage.
 #[tauri::command]
-pub async fn graphql_cache_read_records(
+pub async fn graphql_cache_read_records_by_keys(
     state: State<'_, CacheState>,
     document: String,
     fragment_name: String,
-    cursor: Option<String>,
-    limit: u32,
-) -> Result<SelectedRecordPage, String> {
+    keys: Vec<String>,
+) -> Result<Vec<SelectedRecord>, String> {
     engine_handle(&state)?
-        .read_records(document, fragment_name, parse_record_cursor(cursor)?, limit)
+        .read_records_by_keys(document, fragment_name, keys)
         .await
 }
 

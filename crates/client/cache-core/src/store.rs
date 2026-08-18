@@ -62,15 +62,6 @@ pub trait Storage: MaybeSend {
         keys: &[EntityKey<'static>],
     ) -> impl Future<Output = Result<(), Self::Error>> + MaybeSend;
 
-    /// Scans normalized records of the requested concrete types in ascending
-    /// entity-key order. `after` is exclusive.
-    fn scan_records(
-        &self,
-        type_names: &[String],
-        after: Option<&EntityKey<'static>>,
-        limit: usize,
-    ) -> impl Future<Output = Result<Vec<(EntityKey<'static>, Record)>, Self::Error>> + MaybeSend;
-
     /// Loads the compact catalog for text search. This must read only the
     /// derived search table, never normalized record payloads.
     fn load_search_documents(
@@ -167,7 +158,6 @@ pub struct InMemoryStorage {
     >,
     next_mutation_id: MutationId,
     record_get_count: Arc<AtomicUsize>,
-    record_scan_count: Arc<AtomicUsize>,
     search_catalog_load_count: Arc<AtomicUsize>,
 }
 
@@ -187,11 +177,6 @@ impl InMemoryStorage {
     /// Number of normalized-record get calls (test diagnostics).
     pub fn record_get_count(&self) -> usize {
         self.record_get_count.load(Ordering::Relaxed)
-    }
-
-    /// Number of normalized-record scan calls (test diagnostics).
-    pub fn record_scan_count(&self) -> usize {
-        self.record_scan_count.load(Ordering::Relaxed)
     }
 
     /// Number of compact catalog loads (test diagnostics).
@@ -231,34 +216,6 @@ impl Storage for InMemoryStorage {
                 .retain(|(_, existing_key), _| existing_key != key);
         }
         Ok(())
-    }
-
-    async fn scan_records(
-        &self,
-        type_names: &[String],
-        after: Option<&EntityKey<'static>>,
-        limit: usize,
-    ) -> Result<Vec<(EntityKey<'static>, Record)>, Self::Error> {
-        self.record_scan_count.fetch_add(1, Ordering::Relaxed);
-        if limit == 0 || type_names.is_empty() {
-            return Ok(Vec::new());
-        }
-        let type_names: std::collections::HashSet<_> =
-            type_names.iter().map(String::as_str).collect();
-        let mut records: Vec<_> = self
-            .records
-            .iter()
-            .filter(|(key, _)| after.as_ref().is_none_or(|after| *key > after))
-            .filter(|(key, _)| {
-                key.0
-                    .split_once(':')
-                    .is_some_and(|(type_name, _)| type_names.contains(type_name))
-            })
-            .map(|(key, record)| (key.clone(), record.clone()))
-            .collect();
-        records.sort_by(|(left, _), (right, _)| left.cmp(right));
-        records.truncate(limit);
-        Ok(records)
     }
 
     async fn load_search_documents(

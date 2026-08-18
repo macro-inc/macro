@@ -30,8 +30,8 @@ function responseFor(request: CacheRequest): unknown {
   switch (request.kind) {
     case 'read':
       return { kind: 'miss' };
-    case 'read-records':
-      return { records: [], nextCursor: null };
+    case 'read-records-by-keys':
+      return [];
     case 'search':
       return { documents: [], nextCursor: null };
     case 'write':
@@ -316,11 +316,10 @@ describe('createWorkerCacheHost', () => {
           },
         ],
       }),
-      host.readRecords({
-        document: 'fragment Item on GraphqlSoupItem { id }',
+      host.readRecordsByKeys({
+        document: 'fragment Item on GraphqlSoupDocument { id }',
         fragmentName: 'Item',
-        cursor: 'cursor-1',
-        limit: 20,
+        keys: ['GraphqlSoupDocument:item-1'],
       }),
       host.search({
         profile: 'quick-access-v1',
@@ -369,7 +368,7 @@ describe('createWorkerCacheHost', () => {
     expect(requests.map(({ id, kind }) => [id, kind])).toEqual([
       [1, 'init'],
       [2, 'read'],
-      [3, 'read-records'],
+      [3, 'read-records-by-keys'],
       [4, 'search'],
       [5, 'write'],
       [6, 'enqueue-optimistic-mutation'],

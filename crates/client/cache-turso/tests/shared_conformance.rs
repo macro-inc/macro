@@ -169,21 +169,6 @@ fn claim_request(owner: &str, now_ms: i64, lease_expires_at_ms: i64) -> Mutation
     }
 }
 
-async fn scan_keys<S: Storage>(
-    storage: &S,
-    type_names: &[String],
-    after: Option<&EntityKey<'static>>,
-    limit: usize,
-) -> Vec<String> {
-    storage
-        .scan_records(type_names, after, limit)
-        .await
-        .unwrap()
-        .into_iter()
-        .map(|(key, _)| key.as_ref().to_owned())
-        .collect()
-}
-
 async fn record_contract<S: Storage>(storage: &mut S) {
     storage
         .put_batch(vec![
@@ -231,115 +216,6 @@ async fn record_contract<S: Storage>(storage: &mut S) {
             None,
         ]
     );
-
-    let names = ["Type".to_owned(), "Type0".to_owned(), "Type".to_owned()];
-    let mut rust_sorted = [
-        key("Type:9"),
-        key("Type0:1"),
-        key("Type:0"),
-        key("Type0:0"),
-        key("Type:a"),
-        key("Type:a:colon"),
-        key("Type:a:colon:again"),
-    ];
-    rust_sorted.sort();
-    let expected = rust_sorted
-        .iter()
-        .map(|key| key.as_ref().to_owned())
-        .collect::<Vec<_>>();
-    assert!(scan_keys(storage, &[], None, 10).await.is_empty());
-    assert!(scan_keys(storage, &names, None, 0).await.is_empty());
-    assert_eq!(scan_keys(storage, &names, None, 10).await, expected);
-    assert_eq!(
-        scan_keys(storage, &names, Some(&key("A:0")), 10).await,
-        expected
-    );
-    assert_eq!(
-        scan_keys(storage, &names, Some(&key("Type0:0")), 10).await,
-        [
-            "Type0:1",
-            "Type:0",
-            "Type:9",
-            "Type:a",
-            "Type:a:colon",
-            "Type:a:colon:again",
-        ]
-    );
-    assert_eq!(
-        scan_keys(storage, &names, Some(&key("Type0:0z")), 10).await,
-        [
-            "Type0:1",
-            "Type:0",
-            "Type:9",
-            "Type:a",
-            "Type:a:colon",
-            "Type:a:colon:again",
-        ]
-    );
-    assert_eq!(
-        scan_keys(storage, &names, Some(&key("Type0:1")), 10).await,
-        [
-            "Type:0",
-            "Type:9",
-            "Type:a",
-            "Type:a:colon",
-            "Type:a:colon:again",
-        ]
-    );
-    assert_eq!(
-        scan_keys(storage, &names, Some(&key("Type0:zz")), 10).await,
-        [
-            "Type:0",
-            "Type:9",
-            "Type:a",
-            "Type:a:colon",
-            "Type:a:colon:again",
-        ]
-    );
-    assert_eq!(
-        scan_keys(storage, &names, Some(&key("Type:0")), 1).await,
-        ["Type:9"]
-    );
-    assert_eq!(
-        scan_keys(storage, &names, Some(&key("Type:9")), 10).await,
-        ["Type:a", "Type:a:colon", "Type:a:colon:again"]
-    );
-    assert_eq!(
-        scan_keys(storage, &names, Some(&key("Type:a")), 10).await,
-        ["Type:a:colon", "Type:a:colon:again"]
-    );
-    assert_eq!(
-        scan_keys(storage, &names, Some(&key("Type:a:colon")), 10).await,
-        ["Type:a:colon:again"]
-    );
-    assert!(
-        scan_keys(storage, &names, Some(&key("Type:a:colon:again")), 10,)
-            .await
-            .is_empty()
-    );
-    assert!(
-        scan_keys(storage, &names, Some(&key("Z:9")), 10)
-            .await
-            .is_empty()
-    );
-
-    for limit in [1, 2] {
-        let mut cursor = None;
-        let mut paged = Vec::new();
-        loop {
-            let page = storage
-                .scan_records(&names, cursor.as_ref(), limit)
-                .await
-                .unwrap();
-            assert!(page.len() <= limit);
-            let Some((last, _)) = page.last() else {
-                break;
-            };
-            cursor = Some(last.clone());
-            paged.extend(page.into_iter().map(|(key, _)| key.as_ref().to_owned()));
-        }
-        assert_eq!(paged, expected);
-    }
 
     storage
         .delete_batch(&[key("Missing:delete"), key("Type:a"), key("Type:a")])

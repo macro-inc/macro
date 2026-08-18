@@ -86,7 +86,7 @@ type WithoutVersion<T> = T extends unknown
   ? Omit<T, 'coordinatorVersion'>
   : never;
 
-const envelope = <T extends { coordinatorVersion: 1 }>(
+const envelope = <T extends { coordinatorVersion: 2 }>(
   value: WithoutVersion<T>
 ): T =>
   ({

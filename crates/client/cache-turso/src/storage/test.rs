@@ -74,10 +74,6 @@ async fn expect_every_storage_method_latched(
         expected,
     );
     expect_reset_reason(storage.delete_batch(&[key("Thing:1")]).await, expected);
-    expect_reset_reason(
-        storage.scan_records(&["Thing".into()], None, 1).await,
-        expected,
-    );
     expect_reset_reason(storage.enqueue_mutation(queued("Blocked")).await, expected);
     expect_reset_reason(storage.load_mutation_queue().await, expected);
     expect_reset_reason(storage.queue_diagnostics().await, expected);
@@ -763,25 +759,6 @@ fn corrupt_keys_blobs_queue_relationships_and_numerics_request_reset() {
         assert_eq!(
             error.physical_reset_reason(),
             Some(PhysicalResetReason::Codec)
-        );
-
-        let storage = TursoStorage::open_in_memory("corrupt-key").unwrap();
-        raw_execute(
-            &storage,
-            RECORD_UPSERT,
-            vec![
-                text(""),
-                text("id"),
-                Value::from_blob(encode_record(&record("valid"))),
-            ],
-        );
-        let error = storage
-            .scan_records(&[String::new()], None, 10)
-            .await
-            .unwrap_err();
-        assert_eq!(
-            error.physical_reset_reason(),
-            Some(PhysicalResetReason::Corruption)
         );
 
         let storage = TursoStorage::open_in_memory("missing-layer").unwrap();

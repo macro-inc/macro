@@ -10,8 +10,8 @@ import {
 
 export { isCachePush, isCacheResponse, isWorkerMessage };
 
-/** Version of the topology envelope around the unchanged cache RPC. */
-export const CACHE_COORDINATOR_PROTOCOL_VERSION = 1 as const;
+/** Version of the topology envelope and routed cache RPC surface. */
+export const CACHE_COORDINATOR_PROTOCOL_VERSION = 2 as const;
 
 export type OwnerEpoch = number;
 export type RouteId = number;
@@ -30,7 +30,7 @@ export type ActivationFailureCode =
 
 export type TabToCoordinatorEnvelope =
   | {
-      coordinatorVersion: 1;
+      coordinatorVersion: 2;
       kind: 'register-tab';
       scope: string;
       tabId: string;
@@ -38,32 +38,32 @@ export type TabToCoordinatorEnvelope =
       hotCapacity?: number;
     }
   | {
-      coordinatorVersion: 1;
+      coordinatorVersion: 2;
       kind: 'cache-request';
       tabId: string;
       request: CacheRequest;
     }
   | {
-      coordinatorVersion: 1;
+      coordinatorVersion: 2;
       kind: 'attach-engine-port';
       tabId: string;
       ownerEpoch: OwnerEpoch;
     }
   | {
-      coordinatorVersion: 1;
+      coordinatorVersion: 2;
       kind: 'graceful-departure';
       tabId: string;
       ownerEpoch: OwnerEpoch;
     }
   | {
-      coordinatorVersion: 1;
+      coordinatorVersion: 2;
       kind: 'engine-lost';
       tabId: string;
       ownerEpoch: OwnerEpoch;
       reason: string;
     }
   | {
-      coordinatorVersion: 1;
+      coordinatorVersion: 2;
       kind: 'disconnect-tab';
       tabId: string;
       reason: string;
@@ -71,12 +71,12 @@ export type TabToCoordinatorEnvelope =
 
 export type CoordinatorToTabEnvelope =
   | {
-      coordinatorVersion: 1;
+      coordinatorVersion: 2;
       kind: 'registered';
       tabId: string;
     }
   | {
-      coordinatorVersion: 1;
+      coordinatorVersion: 2;
       kind: 'become-owner';
       scope: string;
       tabId: string;
@@ -86,36 +86,36 @@ export type CoordinatorToTabEnvelope =
       hotCapacity?: number;
     }
   | {
-      coordinatorVersion: 1;
+      coordinatorVersion: 2;
       kind: 'cache-message';
       message: WorkerMessage;
     }
   | {
-      coordinatorVersion: 1;
+      coordinatorVersion: 2;
       kind: 'terminate-engine';
       tabId: string;
       ownerEpoch: OwnerEpoch;
       reason: string;
     }
   | {
-      coordinatorVersion: 1;
+      coordinatorVersion: 2;
       kind: 'retire-complete';
       tabId: string;
       ownerEpoch: OwnerEpoch;
     }
   | {
-      coordinatorVersion: 1;
+      coordinatorVersion: 2;
       kind: 'engine-replaced';
       ownerEpoch: OwnerEpoch;
     }
   | {
-      coordinatorVersion: 1;
+      coordinatorVersion: 2;
       kind: 'protocol-error';
       error: string;
     };
 
 export type PageToEngineEnvelope = {
-  coordinatorVersion: 1;
+  coordinatorVersion: 2;
   kind: 'activate-engine';
   scope: string;
   tabId: string;
@@ -127,19 +127,19 @@ export type PageToEngineEnvelope = {
 
 export type CoordinatorToEngineEnvelope =
   | {
-      coordinatorVersion: 1;
+      coordinatorVersion: 2;
       kind: 'engine-request';
       ownerEpoch: OwnerEpoch;
       routeId: RouteId;
       request: CacheRequest;
     }
   | {
-      coordinatorVersion: 1;
+      coordinatorVersion: 2;
       kind: 'drain-engine';
       ownerEpoch: OwnerEpoch;
     }
   | {
-      coordinatorVersion: 1;
+      coordinatorVersion: 2;
       kind: 'heartbeat';
       ownerEpoch: OwnerEpoch;
       heartbeatId: number;
@@ -147,7 +147,7 @@ export type CoordinatorToEngineEnvelope =
 
 export type EngineToCoordinatorEnvelope =
   | {
-      coordinatorVersion: 1;
+      coordinatorVersion: 2;
       kind: 'engine-ready';
       tabId: string;
       ownerEpoch: OwnerEpoch;
@@ -157,26 +157,26 @@ export type EngineToCoordinatorEnvelope =
       openOutcome: EngineOpenOutcome;
     }
   | {
-      coordinatorVersion: 1;
+      coordinatorVersion: 2;
       kind: 'engine-response';
       ownerEpoch: OwnerEpoch;
       routeId: RouteId;
       response: CacheResponse;
     }
   | {
-      coordinatorVersion: 1;
+      coordinatorVersion: 2;
       kind: 'engine-push';
       ownerEpoch: OwnerEpoch;
       push: CachePush;
     }
   | {
-      coordinatorVersion: 1;
+      coordinatorVersion: 2;
       kind: 'engine-drained';
       tabId: string;
       ownerEpoch: OwnerEpoch;
     }
   | {
-      coordinatorVersion: 1;
+      coordinatorVersion: 2;
       kind: 'engine-fatal';
       tabId: string;
       ownerEpoch: OwnerEpoch;
@@ -184,7 +184,7 @@ export type EngineToCoordinatorEnvelope =
       fatalCode: EngineFatalCode;
     }
   | {
-      coordinatorVersion: 1;
+      coordinatorVersion: 2;
       kind: 'activation-failed';
       tabId: string;
       ownerEpoch: OwnerEpoch;
@@ -192,7 +192,7 @@ export type EngineToCoordinatorEnvelope =
       failureCode: ActivationFailureCode;
     }
   | {
-      coordinatorVersion: 1;
+      coordinatorVersion: 2;
       kind: 'heartbeat-ack';
       ownerEpoch: OwnerEpoch;
       heartbeatId: number;
@@ -470,20 +470,19 @@ export function isCacheRequest(value: unknown): value is CacheRequest {
         isString(value.leaseGeneration) &&
         isString(value.error)
       );
-    case 'read-records':
+    case 'read-records-by-keys':
       return (
         hasOnlyKeys(value, [
           'id',
           'kind',
           'document',
           'fragmentName',
-          'cursor',
-          'limit',
+          'keys',
         ]) &&
         isString(value.document) &&
         isString(value.fragmentName) &&
-        isOptionalString(value.cursor) &&
-        isPositiveInteger(value.limit)
+        isStringArray(value.keys) &&
+        value.keys.length <= 500
       );
     case 'search':
       return (

@@ -14,6 +14,7 @@ import type {
   SnippetEntity,
 } from '@entity';
 import { queryReadyGate } from '@queries/gate';
+import { materializeCachedGraphqlHistoryItems } from '@queries/history/graphql';
 import { type HistoryItem, useHistoryQuery } from '@queries/history/history';
 import { useQuickAccessCrmCompaniesQuery } from '@queries/soup/quick-access-crm-companies';
 import { useQuickAccessSkillsQuery } from '@queries/soup/quick-access-skills';
@@ -792,9 +793,9 @@ export function createQuickAccessValue(): QuickAccessContextValue {
       return resolveEntries(indices);
     });
 
-    const [projectedIds, setProjectedIds] = createSignal<string[] | undefined>(
-      undefined
-    );
+    const [projectedItems, setProjectedItems] = createSignal<
+      QuickAccessItem[] | undefined
+    >(undefined);
     if (options && cacheHost) {
       let generation = 0;
       onCleanup(() => {
@@ -806,32 +807,69 @@ export function createQuickAccessValue(): QuickAccessContextValue {
         const query = options.searchTerm?.() ?? '';
         const currentGeneration = ++generation;
         if (!enabled) {
-          setProjectedIds(undefined);
+          setProjectedItems(undefined);
           return;
         }
-        void cacheHost
-          .search({
-            profile: 'quick-access-v1',
-            buckets,
-            query,
-            limit: 500,
-          })
-          .then(
-            (page) => {
-              if (currentGeneration !== generation) return;
-              setProjectedIds(
-                page.documents.map(({ recordKey }) => {
-                  const separator = recordKey.indexOf(':');
-                  return separator < 0
-                    ? recordKey
-                    : recordKey.slice(separator + 1);
-                })
-              );
-            },
-            () => {
-              if (currentGeneration === generation) setProjectedIds([]);
+        void (async () => {
+          try {
+            const page = await cacheHost.search({
+              profile: 'quick-access-v1',
+              buckets,
+              query,
+              limit: 500,
+            });
+            const missingDocuments = page.documents.filter(({ recordKey }) => {
+              const separator = recordKey.indexOf(':');
+              const id =
+                separator < 0 ? recordKey : recordKey.slice(separator + 1);
+              return !itemCache.has(id);
+            });
+            const historyItems = await materializeCachedGraphqlHistoryItems(
+              cacheHost,
+              missingDocuments
+            );
+            if (currentGeneration !== generation) return;
+            const materialized = new Map(
+              historyItems.map((item) => [item.id, item] as const)
+            );
+            const ranked: QuickAccessItem[] = [];
+            const seen = new Set<string>();
+            for (const document of page.documents) {
+              const separator = document.recordKey.indexOf(':');
+              const id =
+                separator < 0
+                  ? document.recordKey
+                  : document.recordKey.slice(separator + 1);
+              if (seen.has(id)) continue;
+              const existing = itemCache.get(id)?.item;
+              if (existing) {
+                seen.add(id);
+                ranked.push(existing);
+                continue;
+              }
+              const historyItem = materialized.get(id);
+              if (!historyItem) continue;
+              const entity = historyItemToEntity(historyItem);
+              const item: QuickAccessItem = {
+                kind: 'entity',
+                id,
+                bucket: getBucketForHistoryItem(historyItem),
+                searchText: getEntitySearchText(entity),
+                sortTimestamp: document.timestampMs,
+                timestamps: {
+                  updatedAt: historyItem.updatedAt,
+                  createdAt: historyItem.createdAt,
+                },
+                data: entity,
+              };
+              seen.add(id);
+              ranked.push(item);
             }
-          );
+            setProjectedItems(ranked);
+          } catch {
+            if (currentGeneration === generation) setProjectedItems([]);
+          }
+        })();
       });
     }
 
@@ -839,29 +877,13 @@ export function createQuickAccessValue(): QuickAccessContextValue {
       const base = baseList();
       if (!options) return base;
       const local = searchQuickAccessItems(base, options.searchTerm?.() ?? '');
-      const projected = projectedIds();
+      const projected = projectedItems();
       if (!projected) return local;
 
-      // Search describes cached contents, not corpus completeness. Keep the
-      // server-backed/local candidates as a fallback after projection-ranked
-      // hits, and resolve full data only from the already materialized item
-      // cache. Consumers never need a normalized-record scan.
-      const allowed = new Set(base.map((item) => item.id));
-      const seen = new Set<string>();
-      const ranked: QuickAccessItem[] = [];
-      for (const id of projected) {
-        if (!allowed.has(id) || seen.has(id)) continue;
-        const item = itemCache.get(id)?.item;
-        if (!item) continue;
-        seen.add(id);
-        ranked.push(item);
-      }
-      for (const item of local) {
-        if (seen.has(item.id)) continue;
-        seen.add(item.id);
-        ranked.push(item);
-      }
-      return ranked;
+      // Search describes cached contents, not corpus completeness. Preserve
+      // projection rank, then append server/local candidates as fallback.
+      const seen = new Set(projected.map((item) => item.id));
+      return projected.concat(local.filter((item) => !seen.has(item.id)));
     });
     return {
       items: list,

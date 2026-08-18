@@ -120,7 +120,7 @@ fn entity_resolvers_cross_the_native_engine_boundary() {
 }
 
 #[test]
-fn record_selection_returns_native_cache_entities() {
+fn explicit_key_selection_returns_native_cache_entities() {
     let handle = spawn_handle();
     let query = r#"query Soup($input: SoupInput!) {
         user {
@@ -167,18 +167,16 @@ fn record_selection_returns_native_cache_entities() {
     ))
     .unwrap();
 
-    let page = block_on(handle.read_records(
+    let records = block_on(handle.read_records_by_keys(
         "fragment Document on GraphqlSoupDocument { id name }".to_string(),
         "Document".to_string(),
-        None,
-        10,
+        vec!["GraphqlSoupDocument:doc-1".to_string()],
     ))
     .unwrap();
     assert_eq!(
-        page.records,
-        vec![serde_json::json!({"id": "doc-1", "name": "A note"})]
+        records[0].record,
+        serde_json::json!({"id": "doc-1", "name": "A note"})
     );
-    assert!(page.next_cursor.is_none());
 }
 
 #[test]

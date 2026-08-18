@@ -25,7 +25,7 @@ use crate::queue::{
     decode_optimistic_source, encode_optimistic_source,
 };
 use crate::record_selection::{
-    RecordCursor, RecordSelection, RecordSelectionError, SelectedRecordPage, validate_limit,
+    MAX_RECORD_SELECTION_KEYS, RecordSelection, RecordSelectionError, SelectedRecord,
 };
 use crate::search::{
     SearchCursor, SearchDocument, SearchError, SearchPage, SearchProfile, SearchRequest,
@@ -495,94 +495,74 @@ impl<S: Storage> Engine<S> {
         Ok(outcome)
     }
 
-    /// Reads complete cached records selected by a named fragment.
-    ///
-    /// Durable and optimistic-only records are merged in ascending entity-key
-    /// order. Incomplete projections are omitted, and one complete record is
-    /// read ahead before a continuation cursor is returned.
-    pub async fn read_records(
+    /// Projects a bounded explicit set of normalized entity keys through a
+    /// named fragment without scanning storage. Missing, wrong-type, and
+    /// incomplete records are omitted; output preserves first-occurrence key
+    /// order.
+    pub async fn read_records_by_keys(
         &mut self,
         selection: &RecordSelection,
-        cursor: Option<&RecordCursor>,
-        limit: usize,
-    ) -> Result<SelectedRecordPage, EngineError<S::Error>> {
-        validate_limit(limit)?;
+        keys: &[EntityKey<'static>],
+    ) -> Result<Vec<SelectedRecord>, EngineError<S::Error>> {
+        if keys.len() > MAX_RECORD_SELECTION_KEYS {
+            return Err(RecordSelectionError::TooManyKeys {
+                count: keys.len(),
+                max: MAX_RECORD_SELECTION_KEYS,
+            }
+            .into());
+        }
+        if keys.iter().any(|key| {
+            key.as_ref().len() > 1024
+                || key.as_ref().split_once(':').is_none_or(|(typename, _)| {
+                    typename.is_empty()
+                        || !typename.bytes().enumerate().all(|(index, byte)| {
+                            byte == b'_'
+                                || byte.is_ascii_alphabetic()
+                                || (index > 0 && byte.is_ascii_digit())
+                        })
+                })
+        }) {
+            return Err(RecordSelectionError::InvalidKey.into());
+        }
+        if keys.is_empty() {
+            return Ok(Vec::new());
+        }
         self.hydrate_optimistic().await?;
 
-        const SCAN_BATCH_SIZE: usize = 128;
-        let after: Option<EntityKey<'static>> = cursor.map(RecordCursor::entity_key).cloned();
-        let type_names: BTreeSet<_> = selection.type_names().iter().map(String::as_str).collect();
-        let optimistic = merged_optimistic(&self.optimistic);
-        let mut optimistic_candidates: BTreeSet<_> = optimistic
-            .keys()
+        let selected_types: BTreeSet<_> =
+            selection.type_names().iter().map(String::as_str).collect();
+        let mut seen = BTreeSet::new();
+        let ordered_keys: Vec<_> = keys
+            .iter()
             .filter(|key| {
-                after.as_ref().is_none_or(|after| *key > after)
-                    && record_key_type(key).is_some_and(|name| type_names.contains(name))
+                record_key_type(key).is_some_and(|name| selected_types.contains(name))
+                    && seen.insert((*key).clone())
             })
             .cloned()
             .collect();
-        let mut storage_after = after;
-        let mut selected = Vec::new();
-        let target = limit.saturating_add(1);
-
-        loop {
-            let rows = self
-                .storage
-                .scan_records(
-                    selection.type_names(),
-                    storage_after.as_ref(),
-                    SCAN_BATCH_SIZE,
-                )
-                .await
-                .map_err(EngineError::Storage)?;
-            let storage_exhausted = rows.len() < SCAN_BATCH_SIZE;
-            let high_key = rows.last().map(|(key, _)| key.clone());
-            if let Some(high_key) = &high_key {
-                storage_after = Some(high_key.clone());
-            }
-
-            let mut candidates: BTreeMap<EntityKey<'static>, Option<Record>> = rows
-                .into_iter()
-                .map(|(key, record)| (key, Some(record)))
-                .collect();
-            let optimistic_in_batch: Vec<_> = if storage_exhausted {
-                optimistic_candidates.iter().cloned().collect()
-            } else {
-                optimistic_candidates
-                    .iter()
-                    .take_while(|key| high_key.as_ref().is_some_and(|high| *key <= high))
-                    .cloned()
-                    .collect()
-            };
-            for key in optimistic_in_batch {
-                optimistic_candidates.remove(&key);
-                candidates.entry(key).or_insert(None);
-            }
-
-            let projected = self
-                .project_record_batch(selection, candidates, &optimistic)
-                .await?;
-            selected.extend(projected);
-            if selected.len() >= target || storage_exhausted {
-                break;
-            }
-        }
-
-        let has_more = selected.len() > limit;
-        selected.truncate(limit);
-        let next_cursor = has_more.then(|| {
-            RecordCursor::new(
-                selected
-                    .last()
-                    .expect("a page with lookahead contains a record")
-                    .0
-                    .clone(),
-            )
-        });
-        Ok(SelectedRecordPage {
-            records: selected.into_iter().map(|(_, record)| record).collect(),
-            next_cursor,
-        })
+        let key_set: BTreeSet<_> = ordered_keys.iter().cloned().collect();
+        let mut bases = self.load_bases(&key_set).await?;
+        let candidates = ordered_keys
+            .iter()
+            .cloned()
+            .map(|key| {
+                let record = bases.remove(&key);
+                (key, record)
+            })
+            .collect();
+        let optimistic = merged_optimistic(&self.optimistic);
+        let projected = self
+            .project_record_batch(selection, candidates, &optimistic)
+            .await?;
+        let mut projected: HashMap<_, _> = projected.into_iter().collect();
+        Ok(ordered_keys
+            .into_iter()
+            .filter_map(|record_key| {
+                projected
+                    .remove(&record_key)
+                    .map(|record| SelectedRecord { record_key, record })
+            })
+            .collect())
     }
 
     async fn project_record_batch(

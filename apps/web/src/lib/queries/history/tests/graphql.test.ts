@@ -1,184 +1,123 @@
-import type { CacheHost, ReadRecordsArgs } from '@graphql-cache/index';
 import type {
-  GraphqlChatHistoryFieldsFragment,
-  GraphqlDocumentHistoryFieldsFragment,
-  GraphqlProjectHistoryFieldsFragment,
-} from '@service-storage/graphql/generated/graphql';
+  CacheHost,
+  ReadRecordsByKeysArgs,
+  SearchCacheArgs,
+  SearchCachePage,
+} from '@graphql-cache/index';
 import { describe, expect, it, vi } from 'vitest';
 import { readCachedGraphqlHistoryItems } from '../graphql';
 
-vi.mock('@core/constant/allBlocks', () => ({
-  itemToSafeName: (item: { name?: string }) => item.name || 'Untitled',
-}));
-vi.mock('@service-storage/util/filename', () => ({
-  formatDocumentName: (name: string) => name,
-}));
-
-const createdAt = '2025-01-01T00:00:00.000Z';
-
-function document(
-  overrides: Partial<GraphqlDocumentHistoryFieldsFragment> = {}
-): GraphqlDocumentHistoryFieldsFragment {
-  return {
-    __typename: 'GraphqlSoupDocument',
-    id: 'document-1',
-    documentName: 'Document',
-    ownerId: 'user-1',
-    fileType: 'md',
-    createdAt,
-    updatedAt: createdAt,
-    viewedAt: null,
-    deletedAt: null,
-    subType: null,
-    ...overrides,
-  };
-}
-
-function chat(
-  overrides: Partial<GraphqlChatHistoryFieldsFragment> = {}
-): GraphqlChatHistoryFieldsFragment {
-  return {
-    __typename: 'GraphqlSoupChat',
-    id: 'chat-1',
-    chatName: 'Chat',
-    ownerId: 'user-1',
-    isPersistent: true,
-    createdAt,
-    updatedAt: createdAt,
-    viewedAt: null,
-    deletedAt: null,
-    ...overrides,
-  };
-}
-
-function project(
-  overrides: Partial<GraphqlProjectHistoryFieldsFragment> = {}
-): GraphqlProjectHistoryFieldsFragment {
-  return {
-    __typename: 'GraphqlSoupProject',
-    id: 'project-1',
-    projectName: 'Project',
-    ownerId: 'user-1',
-    createdAt,
-    updatedAt: createdAt,
-    viewedAt: null,
-    deletedAt: null,
-    ...overrides,
-  };
-}
-
 function cacheHost(
-  readRecords: (args: ReadRecordsArgs) => Promise<unknown>
-): Pick<CacheHost, 'readRecords'> {
-  return { readRecords } as Pick<CacheHost, 'readRecords'>;
+  search: (args: SearchCacheArgs) => Promise<SearchCachePage>,
+  readRecordsByKeys: (
+    args: ReadRecordsByKeysArgs
+  ) => Promise<Array<{ recordKey: string; record: unknown }>>
+): Pick<CacheHost, 'search' | 'readRecordsByKeys'> {
+  return { search, readRecordsByKeys };
 }
 
 describe('cached GraphQL history', () => {
-  it('scans only minimal concrete history types, paginates, filters deleted items, and preserves ordering', async () => {
-    const readRecords = vi.fn(async (args: ReadRecordsArgs) => {
-      switch (args.fragmentName) {
-        case 'GraphqlDocumentHistoryFields':
-          return args.cursor
-            ? {
-                records: [
-                  document({
-                    id: 'document-older',
-                    documentName: 'Older document',
-                    updatedAt: '2025-01-03T00:00:00.000Z',
-                    subType: {
-                      __typename: 'GraphqlTaskSubType',
-                      isCompleted: true,
-                    },
-                  }),
-                ],
-                nextCursor: null,
-              }
-            : {
-                records: [
-                  document({
-                    id: 'document-newest',
-                    documentName: 'Newest document',
-                    viewedAt: '2025-01-05T00:00:00.000Z',
-                  }),
-                ],
-                nextCursor: 'document-cursor',
-              };
-        case 'GraphqlChatHistoryFields':
-          return {
-            records: [
-              chat({
-                id: 'chat-middle',
-                updatedAt: '2025-01-04T00:00:00.000Z',
-              }),
-            ],
-            nextCursor: null,
-          };
-        case 'GraphqlProjectHistoryFields':
-          return {
-            records: [
-              project({
-                id: 'project-deleted',
-                viewedAt: '2025-01-06T00:00:00.000Z',
-                deletedAt: '2025-01-06T00:00:00.000Z',
-              }),
-            ],
-            nextCursor: null,
-          };
-        default:
-          throw new Error(`unexpected fragment ${args.fragmentName}`);
-      }
+  it('browses the indexed recent projection and materializes only final keys', async () => {
+    const search = vi.fn(
+      async (): Promise<SearchCachePage> => ({
+        documents: [
+          {
+            profile: 'quick-access-v1',
+            recordKey: 'GraphqlSoupDocument:document-newest',
+            bucket: 'note',
+            searchText: 'newest document',
+            timestampMs: Date.parse('2025-01-05T00:00:00.000Z'),
+            sourceHash: 'one',
+          },
+          {
+            profile: 'quick-access-v1',
+            recordKey: 'GraphqlSoupChat:chat-middle',
+            bucket: 'chat',
+            searchText: 'middle chat',
+            timestampMs: Date.parse('2025-01-04T00:00:00.000Z'),
+            sourceHash: 'two',
+          },
+          {
+            profile: 'quick-access-v1',
+            recordKey: 'GraphqlSoupDocument:document-task',
+            bucket: 'task',
+            searchText: 'task document',
+            timestampMs: Date.parse('2025-01-03T00:00:00.000Z'),
+            sourceHash: 'three',
+          },
+        ],
+        nextCursor: null,
+      })
+    );
+    const readRecordsByKeys = vi.fn(async (args: ReadRecordsByKeysArgs) =>
+      args.keys.map((recordKey) => ({
+        recordKey,
+        record: {
+          name:
+            recordKey === 'GraphqlSoupDocument:document-newest'
+              ? 'Newest Document'
+              : recordKey === 'GraphqlSoupChat:chat-middle'
+                ? 'Middle Chat'
+                : 'Task Document',
+        },
+      }))
+    );
+
+    const result = await readCachedGraphqlHistoryItems(
+      cacheHost(search, readRecordsByKeys)
+    );
+
+    expect(search).toHaveBeenCalledWith({
+      profile: 'quick-access-v1',
+      buckets: [
+        'document',
+        'note',
+        'task',
+        'snippet',
+        'skill',
+        'chat',
+        'project',
+      ],
+      query: '',
+      limit: 500,
     });
-
-    const result = await readCachedGraphqlHistoryItems(cacheHost(readRecords));
-
     expect(result.map(({ id }) => id)).toEqual([
       'document-newest',
       'chat-middle',
-      'document-older',
+      'document-task',
     ]);
     expect(result[2]).toMatchObject({
       type: 'document',
-      subType: { type: 'task', is_completed: true },
+      fileType: 'md',
+      subType: { type: 'task' },
     });
-
-    const initialCalls = readRecords.mock.calls
-      .map(([args]) => args)
-      .filter(({ cursor }) => cursor === undefined);
-    expect(initialCalls.map(({ fragmentName }) => fragmentName).sort()).toEqual(
-      [
-        'GraphqlChatHistoryFields',
-        'GraphqlDocumentHistoryFields',
-        'GraphqlProjectHistoryFields',
-      ]
-    );
-
-    const expectedRoots = {
-      GraphqlChatHistoryFields: 'GraphqlSoupChat',
-      GraphqlDocumentHistoryFields: 'GraphqlSoupDocument',
-      GraphqlProjectHistoryFields: 'GraphqlSoupProject',
-    } as const;
-    for (const { document, fragmentName } of initialCalls) {
-      expect(document).toContain(
-        `fragment ${fragmentName} on ${expectedRoots[fragmentName as keyof typeof expectedRoots]}`
-      );
-      expect(document).not.toContain('GraphqlSoupEntity');
-      expect(document).not.toMatch(
-        /\b(properties|notifications|participants|messages|entityType|frecencyScore)\b/
-      );
+    expect(readRecordsByKeys).toHaveBeenCalledTimes(2);
+    for (const [{ document }] of readRecordsByKeys.mock.calls) {
+      expect(document).toMatch(/fragment QuickAccessName on GraphqlSoup/);
+      expect(document).toMatch(/\{ name \}/);
     }
   });
 
-  it('rejects a repeated cursor from any concrete history scan', async () => {
-    const readRecords = vi.fn(async (args: ReadRecordsArgs) => ({
-      records: [],
-      nextCursor:
-        args.fragmentName === 'GraphqlDocumentHistoryFields'
-          ? 'repeated-cursor'
-          : null,
-    }));
+  it('omits keys whose minimal name projection is incomplete', async () => {
+    const search = vi.fn(
+      async (): Promise<SearchCachePage> => ({
+        documents: [
+          {
+            profile: 'quick-access-v1',
+            recordKey: 'GraphqlSoupDocument:missing-name',
+            bucket: 'document',
+            searchText: 'fallback text',
+            timestampMs: 1,
+            sourceHash: 'hash',
+          },
+        ],
+        nextCursor: null,
+      })
+    );
+    const readRecordsByKeys = vi.fn(async () => []);
 
     await expect(
-      readCachedGraphqlHistoryItems(cacheHost(readRecords))
-    ).rejects.toThrow('cache record selection returned a repeated cursor');
+      readCachedGraphqlHistoryItems(cacheHost(search, readRecordsByKeys))
+    ).resolves.toEqual([]);
   });
 });

@@ -19,7 +19,7 @@ use cache_core::entity_resolver::EntityResolver;
 use cache_core::link_patch::{OptimisticLinkPatch, QueryRevalidation};
 use cache_core::query_inspection::{CachedQueryInstance, CachedQueryVariant, QueryInspection};
 use cache_core::queue::{ClaimedMutation, MutationClaimRequest, MutationClaimToken};
-use cache_core::record_selection::{RecordCursor, RecordSelection, SelectedRecordPage};
+use cache_core::record_selection::RecordSelection;
 use cache_core::search::{SearchPage, SearchRequest};
 use cache_core::value::EntityKey;
 use cache_sqlite::SqliteStorage;
@@ -242,21 +242,24 @@ impl EngineHandle {
             .map_err(|e| e.to_string())
     }
 
-    /// Projects normalized records through a named GraphQL fragment.
-    pub async fn read_records(
+    /// Projects explicit normalized entity keys without scanning storage.
+    pub async fn read_records_by_keys(
         &self,
         document: String,
         fragment_name: String,
-        cursor: Option<RecordCursor>,
-        limit: u32,
-    ) -> Result<SelectedRecordPage, String> {
+        keys: Vec<String>,
+    ) -> Result<Vec<cache_core::record_selection::SelectedRecord>, String> {
         let selection =
             RecordSelection::parse(&document, &fragment_name).map_err(|error| error.to_string())?;
+        let keys: Vec<_> = keys
+            .into_iter()
+            .map(|key| EntityKey(key.into()))
+            .collect();
         self.inner
             .lock()
             .await
             .engine
-            .read_records(&selection, cursor.as_ref(), limit as usize)
+            .read_records_by_keys(&selection, &keys)
             .await
             .map_err(|error| error.to_string())
     }

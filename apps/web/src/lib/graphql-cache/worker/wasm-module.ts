@@ -17,10 +17,9 @@ import type {
   OptimisticLinkPatchWire,
   QueryRevalidationWire,
   ReadResult,
-  RecordCursor,
   SearchCacheArgs,
   SearchCachePage,
-  SelectedRecordPageWire,
+  SelectedRecordByKeyWire,
   WriteResult,
 } from '../protocol';
 import { workerCacheTelemetry } from '../telemetry-relay';
@@ -67,12 +66,11 @@ export interface CacheEngine {
     variables: Record<string, unknown> | undefined,
     entityResolvers: readonly EntityResolverWire[] | undefined
   ): Promise<ReadResult>;
-  readRecords(
+  readRecordsByKeys(
     document: string,
     fragmentName: string,
-    cursor: RecordCursor | undefined,
-    limit: number
-  ): Promise<SelectedRecordPageWire>;
+    keys: string[]
+  ): Promise<SelectedRecordByKeyWire[]>;
   search(
     request: SearchCacheArgs & { nowMs: number }
   ): Promise<SearchCachePage>;

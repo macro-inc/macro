@@ -696,68 +696,6 @@ impl Storage for TursoStorage {
         self.latch_result(result)
     }
 
-    async fn scan_records(
-        &self,
-        type_names: &[String],
-        after: Option<&EntityKey<'static>>,
-        limit: usize,
-    ) -> Result<Vec<(EntityKey<'static>, Record)>, Self::Error> {
-        self.require_healthy()?;
-        let result = (|| {
-            if type_names.is_empty() || limit == 0 {
-                return Ok(Vec::new());
-            }
-            let mut type_names = type_names.to_vec();
-            type_names.sort();
-            type_names.dedup();
-            let after = after
-                .map(|key| RecordKey::from_entity(key).map(|_| key.as_ref().to_owned()))
-                .transpose()?;
-            let limit = i64::try_from(limit).map_err(|_| TursoStorageError::InvalidInput)?;
-
-            let mut sql =
-                String::from("SELECT __typename, id, value FROM records WHERE __typename IN (");
-            for index in 0..type_names.len() {
-                if index != 0 {
-                    sql.push_str(", ");
-                }
-                sql.push('?');
-                sql.push_str(&(index + 1).to_string());
-            }
-            sql.push_str(") AND NOT (__typename = 'ROOT_QUERY' AND id = '')");
-            let mut values = type_names
-                .iter()
-                .map(|value| text(value))
-                .collect::<Vec<_>>();
-            if let Some(after) = after {
-                let cursor_index = values.len() + 1;
-                sql.push_str(" AND ((__typename || ':' || id) COLLATE BINARY) > ?");
-                sql.push_str(&cursor_index.to_string());
-                values.push(text(&after));
-            }
-            let limit_index = values.len() + 1;
-            sql.push_str(" ORDER BY (__typename || ':' || id) COLLATE BINARY ASC LIMIT ?");
-            sql.push_str(&limit_index.to_string());
-            values.push(Value::from_i64(limit));
-
-            let connection = self.connection();
-            let rows = driver::query(&connection, &sql, values)?;
-            rows.into_iter()
-                .map(|row| {
-                    let key = RecordKey {
-                        typename: required_text(&row, 0)?,
-                        id: required_text(&row, 1)?,
-                    }
-                    .into_entity()?;
-                    let record = decode_record(&required_blob(&row, 2)?)
-                        .map_err(|_| TursoStorageError::reset(PhysicalResetReason::Codec))?;
-                    Ok((key, record))
-                })
-                .collect()
-        })();
-        self.latch_result(result)
-    }
-
     async fn load_search_documents(
         &self,
         profile: SearchProfile,

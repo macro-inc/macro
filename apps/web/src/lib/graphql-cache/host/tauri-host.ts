@@ -16,13 +16,13 @@ import {
   type EnqueueOptimisticMutationResult,
   type MutationClaim,
   type MutationSettlement,
-  type ReadRecordsArgs,
+  type ReadRecordsByKeysArgs,
   type ReadResult,
   type SearchCacheArgs,
   type SearchCachePage,
-  type SelectedRecordPageWire,
+  type SelectedRecordByKeyWire,
   validateCacheSearchArgs,
-  validateRecordSelectionLimit,
+  validateRecordSelectionKeys,
   type WriteResult,
 } from '../protocol';
 import type {
@@ -163,16 +163,17 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
       });
     },
 
-    async readRecords(args: ReadRecordsArgs): Promise<SelectedRecordPageWire> {
-      const limit = validateRecordSelectionLimit(args.limit);
+    async readRecordsByKeys(
+      args: ReadRecordsByKeysArgs
+    ): Promise<SelectedRecordByKeyWire[]> {
+      const keys = validateRecordSelectionKeys(args.keys);
       await ready;
-      return await request<SelectedRecordPageWire>(
-        'graphql_cache_read_records',
+      return await request<SelectedRecordByKeyWire[]>(
+        'graphql_cache_read_records_by_keys',
         {
           document: args.document,
           fragmentName: args.fragmentName,
-          cursor: args.cursor,
-          limit,
+          keys,
         }
       );
     },

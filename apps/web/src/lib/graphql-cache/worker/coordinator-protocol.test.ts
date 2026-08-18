@@ -17,9 +17,18 @@ const version = {
 } as const;
 
 describe('coordinator runtime protocol', () => {
-  it('validates unchanged cache RPC and rejects unknown fields or kinds', () => {
+  it('validates cache RPCs and rejects unknown fields or kinds', () => {
     expect(isCacheRequest({ id: 0, kind: 'clear' })).toBe(true);
     expect(isCacheRequest({ id: 1, kind: 'read', query: '{ x }' })).toBe(true);
+    expect(
+      isCacheRequest({
+        id: 2,
+        kind: 'read-records-by-keys',
+        document: 'fragment Item on GraphqlSoupDocument { name }',
+        fragmentName: 'Item',
+        keys: ['GraphqlSoupDocument:one'],
+      })
+    ).toBe(true);
     expect(
       isCacheRequest({
         id: 2,

@@ -82,28 +82,35 @@ describe('createTauriCacheHost', () => {
     host.dispose();
   });
 
-  it('reads selected records with fragment and cursor arguments', async () => {
-    const page = { records: [], nextCursor: null };
+  it('projects selected records by explicit key', async () => {
+    const records = [
+      {
+        recordKey: 'GraphqlSoupDocument:item-1',
+        record: { id: 'item-1' },
+      },
+    ];
     invokeMock.mockImplementation((command: string) =>
-      Promise.resolve(command === 'graphql_cache_read_records' ? page : null)
+      Promise.resolve(
+        command === 'graphql_cache_read_records_by_keys' ? records : null
+      )
     );
     const host = createTauriCacheHost({ scope: 'scope-1' });
-    const cursor = 'cursor-1';
 
     await expect(
-      host.readRecords({
-        document: 'fragment Item on GraphqlSoupItem { id }',
+      host.readRecordsByKeys({
+        document: 'fragment Item on GraphqlSoupDocument { id }',
         fragmentName: 'Item',
-        cursor,
-        limit: 25,
+        keys: ['GraphqlSoupDocument:item-1'],
       })
-    ).resolves.toEqual(page);
-    expect(invokeMock).toHaveBeenCalledWith('graphql_cache_read_records', {
-      document: 'fragment Item on GraphqlSoupItem { id }',
-      fragmentName: 'Item',
-      cursor,
-      limit: 25,
-    });
+    ).resolves.toEqual(records);
+    expect(invokeMock).toHaveBeenCalledWith(
+      'graphql_cache_read_records_by_keys',
+      {
+        document: 'fragment Item on GraphqlSoupDocument { id }',
+        fragmentName: 'Item',
+        keys: ['GraphqlSoupDocument:item-1'],
+      }
+    );
   });
 
   it('searches the compact native projection with the same typed request', async () => {

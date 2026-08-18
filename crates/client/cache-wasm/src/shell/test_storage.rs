@@ -69,15 +69,6 @@ impl Storage for BrowserStorage {
         self.inner.delete_batch(keys).await
     }
 
-    async fn scan_records(
-        &self,
-        type_names: &[String],
-        after: Option<&EntityKey<'static>>,
-        limit: usize,
-    ) -> Result<Vec<(EntityKey<'static>, Record)>, Self::Error> {
-        self.inner.scan_records(type_names, after, limit).await
-    }
-
     async fn load_search_documents(
         &self,
         profile: SearchProfile,
