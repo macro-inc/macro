@@ -84,6 +84,32 @@ fn provider_rejections_surface_their_message_but_internal_failures_do_not() {
 }
 
 #[test]
+fn update_scope_resolves_each_transport_pair() {
+    assert_eq!(update_scope(None, None).unwrap(), CalendarUpdateScope::All);
+    assert_eq!(
+        update_scope(Some(CalendarUpdateScopeParam::All), None).unwrap(),
+        CalendarUpdateScope::All
+    );
+    for scope in [None, Some(CalendarUpdateScopeParam::ThisEvent)] {
+        assert_eq!(
+            update_scope(scope, Some("k-1".to_string())).unwrap(),
+            CalendarUpdateScope::ThisEvent {
+                recurrence_id: "k-1".to_string(),
+            }
+        );
+    }
+
+    let missing_key = update_scope(Some(CalendarUpdateScopeParam::ThisEvent), None).unwrap_err();
+    assert_eq!(missing_key.code, CalendarMutationErrorCode::InvalidInput);
+
+    // A series update carrying an occurrence key is contradictory input;
+    // dropping the key would apply a one-occurrence intent to the series.
+    let stray_key =
+        update_scope(Some(CalendarUpdateScopeParam::All), Some("k-1".to_string())).unwrap_err();
+    assert_eq!(stray_key.code, CalendarMutationErrorCode::InvalidInput);
+}
+
+#[test]
 fn attendee_body_defaults_to_required_attendance() {
     let body: CalendarAttendeeInputBody =
         serde_json::from_value(serde_json::json!({ "email": "a@b.com" })).unwrap();

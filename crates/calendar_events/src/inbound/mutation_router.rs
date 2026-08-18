@@ -459,6 +459,31 @@ where
     Ok(Json(ListCalendarsResponse { calendars }))
 }
 
+/// Resolve an update's scope from its transport pair. An omitted scope
+/// defers to `recurrenceId`; contradictory pairs are rejected so a
+/// one-occurrence intent is never silently widened to the series and a
+/// series intent never carries a dangling occurrence key.
+fn update_scope(
+    scope: Option<CalendarUpdateScopeParam>,
+    recurrence_id: Option<String>,
+) -> Result<CalendarUpdateScope, CalendarMutationApiError> {
+    match (scope, recurrence_id) {
+        (Some(CalendarUpdateScopeParam::All), None) | (None, None) => Ok(CalendarUpdateScope::All),
+        (Some(CalendarUpdateScopeParam::ThisEvent), Some(recurrence_id))
+        | (None, Some(recurrence_id)) => Ok(CalendarUpdateScope::ThisEvent { recurrence_id }),
+        (Some(CalendarUpdateScopeParam::ThisEvent), None) => Err(CalendarMutationApiError {
+            code: CalendarMutationErrorCode::InvalidInput,
+            message: "a this-event update requires recurrenceId".to_string(),
+            status: StatusCode::BAD_REQUEST,
+        }),
+        (Some(CalendarUpdateScopeParam::All), Some(_)) => Err(CalendarMutationApiError {
+            code: CalendarMutationErrorCode::InvalidInput,
+            message: "recurrenceId only applies to a this_event update".to_string(),
+            status: StatusCode::BAD_REQUEST,
+        }),
+    }
+}
+
 /// Update fields of a calendar event and return its synced entity.
 #[tracing::instrument(skip_all, fields(event_id = %event_id), err)]
 #[utoipa::path(
@@ -487,18 +512,7 @@ where
     S: CalendarMutationService,
     Auth: MacroAuthorizationService,
 {
-    let scope = match (request.scope, request.recurrence_id) {
-        (Some(CalendarUpdateScopeParam::All), _) | (None, None) => CalendarUpdateScope::All,
-        (Some(CalendarUpdateScopeParam::ThisEvent), Some(recurrence_id))
-        | (None, Some(recurrence_id)) => CalendarUpdateScope::ThisEvent { recurrence_id },
-        (Some(CalendarUpdateScopeParam::ThisEvent), None) => {
-            return Err(CalendarMutationApiError {
-                code: CalendarMutationErrorCode::InvalidInput,
-                message: "a this-event update requires recurrenceId".to_string(),
-                status: StatusCode::BAD_REQUEST,
-            });
-        }
-    };
+    let scope = update_scope(request.scope, request.recurrence_id)?;
     let patch = CalendarEventPatch {
         title: request.title,
         description: request.description,
