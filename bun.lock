@@ -391,6 +391,7 @@
   "patchedDependencies": {
     "@lexical/table@0.45.0": "apps/web/patches/@lexical%2Ftable@0.45.0.patch",
     "@tanstack/solid-query@5.90.3": "apps/web/patches/@tanstack%2Fsolid-query@5.90.3.patch",
+    "ai-fallback@2.0.1": "apps/web/patches/ai-fallback@2.0.1.patch",
     "solid-gesture@0.0.3": "apps/web/patches/solid-gesture@0.0.3.patch",
     "@kobalte/core@0.13.11": "apps/web/patches/@kobalte%2Fcore@0.13.11.patch",
     "virtua@0.48.8": "apps/web/patches/virtua@0.48.8.patch",
