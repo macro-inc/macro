@@ -10,18 +10,6 @@ query Soup($input: SoupInput!) {
 	}
 }
 
-query SoupHydration($input: SoupInput!) {
-	user {
-		id @cacheOnly
-		soup(input: $input) {
-			items @cacheOnly {
-				...SoupItemFields
-			}
-			nextCursor
-		}
-	}
-}
-
 query SoupBackfill($input: SoupInput!) {
 	user {
 		id @cacheOnly

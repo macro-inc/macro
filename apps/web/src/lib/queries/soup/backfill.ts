@@ -1,9 +1,6 @@
 import { ENABLE_GRAPHQL_BACKFILL } from '@core/constant/featureFlags';
 import { createTabLeaderSignal } from '@notifications/notification-election';
-import {
-  SoupBackfillDocument,
-  SoupHydrationDocument,
-} from '@service-storage/graphql/generated/graphql';
+import { SoupBackfillDocument } from '@service-storage/graphql/generated/graphql';
 import {
   type FetchGraphqlSoupOptions,
   type GraphqlSoupInitialInput,
@@ -38,7 +35,7 @@ type SoupBackfillFetchPage = (
 ) => Promise<GraphqlSoupHydrationPage>;
 
 const fetchSoupPage: SoupBackfillFetchPage = (input, options) =>
-  hydrateGraphqlSoup(SoupHydrationDocument, { input }, options);
+  hydrateGraphqlSoup(SoupBackfillDocument, { input }, options);
 
 const fetchEmailContentPage: SoupBackfillFetchPage = (input, options) =>
   hydrateGraphqlSoup(SoupBackfillDocument, { input }, options);

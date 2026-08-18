@@ -57,7 +57,7 @@ import {
   type GroupSoupQueryVariables,
   type SoupInitialInput,
   type SoupInput,
-  type SoupHydrationResult,
+  type SoupBackfillResult,
   type SoupNotificationFieldsFragment,
   type SoupPropertyFieldsFragment,
   type SoupQuery,
@@ -1368,8 +1368,8 @@ export async function hydrateGraphqlSoup<
     throw new Error('GraphQL cache hydration requires an active cache');
   }
   const result = await client
-    .query<SoupHydrationResult, Variables>(
-      document as DocumentInput<SoupHydrationResult, Variables>,
+    .query<SoupBackfillResult, Variables>(
+      document as DocumentInput<SoupBackfillResult, Variables>,
       variables,
       {
         requestPolicy: 'network-only',
