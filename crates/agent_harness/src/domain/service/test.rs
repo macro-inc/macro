@@ -219,7 +219,7 @@ async fn open_creates_announces_and_delivers_the_mention() {
 
     // The row exists, carries the origin, and was announced into it.
     let session = repo.get(id).await.expect("the session row exists");
-    assert_eq!(session.acp_session_id.as_deref(), Some("acp-test"));
+    assert_eq!(session.acp_session_id, Some(SessionId::new("acp-test")));
     assert_eq!(session.originating_message_id, Some(origin.message_id));
     assert_eq!(session.thread_id, Some(origin.thread_id));
     let announced = announcer.announced();
@@ -860,7 +860,7 @@ async fn an_external_open_provisions_nothing_and_prompts_nobody() {
     // Prompt delivery is ordered behind the `session/new` response, so the
     // negotiated ACP session id has been persisted by now.
     let row = repo.get(session.id).await.expect("the session row exists");
-    assert_eq!(row.acp_session_id.as_deref(), Some("acp-test"));
+    assert_eq!(row.acp_session_id, Some(SessionId::new("acp-test")));
 }
 
 #[tokio::test]

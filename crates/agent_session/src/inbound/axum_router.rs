@@ -335,7 +335,7 @@ impl From<AgentSession> for AgentSessionResponse {
             harness: session.harness,
             repo_url: session.repo_url,
             workspace: session.workspace,
-            acp_session_id: session.acp_session_id,
+            acp_session_id: session.acp_session_id.map(|id| id.to_string()),
             status: session.status.into(),
             created_at: session.created_at,
             modified_at: session.modified_at,

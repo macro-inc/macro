@@ -1,3 +1,4 @@
+use agent_client_protocol::schema::v1::SessionId;
 use agent_runtime_protocol::domain::schema::v0::SystemEvent;
 use bots::domain::models::BotId;
 use chrono::{DateTime, Utc};
@@ -77,7 +78,7 @@ pub struct AgentSession {
     /// not whatever the runtime is configured with today.
     pub workspace: String,
     /// ACP session if we have one
-    pub acp_session_id: Option<String>,
+    pub acp_session_id: Option<SessionId>,
     pub status: SessionStatus,
     pub created_at: DateTime<Utc>,
     pub modified_at: DateTime<Utc>,

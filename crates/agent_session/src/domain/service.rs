@@ -279,7 +279,7 @@ where
         let session = self.repo.get(id).await?;
         self.register_transport(
             session.id,
-            session.acp_session_id.map(Into::into),
+            session.acp_session_id,
             session.workspace,
             attachment,
         )

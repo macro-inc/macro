@@ -172,7 +172,7 @@ impl AgentSessionRepo for InMemoryAgentSessionRepo {
         let session = sessions.get_mut(&id).ok_or_else(|| {
             AgentSessionError::Unknown(anyhow::anyhow!("no agent session {}", id.as_uuid()))
         })?;
-        session.acp_session_id = Some(acp_session_id.to_string());
+        session.acp_session_id = Some(acp_session_id);
         session.modified_at = chrono::Utc::now();
         Ok(())
     }
@@ -244,7 +244,7 @@ impl AgentSessionLogRepo for InMemoryAgentSessionRepo {
                 .lock()
                 .expect("in-memory session store is not poisoned")
                 .get_mut(&session_id)
-            && session.acp_session_id.as_deref() == Some(acp_session_id.to_string().as_str())
+            && session.acp_session_id.as_ref() == Some(&acp_session_id)
         {
             session.model = change.model;
             session.modified_at = chrono::Utc::now();

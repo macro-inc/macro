@@ -200,7 +200,10 @@ async fn set_acp_session_id_updates_only_the_resume_identity(pool: PgPool) {
         .expect("persist ACP session id");
 
     let updated = repo.get(id).await.expect("get updated agent session");
-    assert_eq!(updated.acp_session_id.as_deref(), Some("acp-session-1"));
+    assert_eq!(
+        updated.acp_session_id,
+        Some(SessionId::from("acp-session-1"))
+    );
     assert!(matches!(
         updated.status,
         SessionStatus::Event(SystemEvent::AcpReady)

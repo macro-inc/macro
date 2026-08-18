@@ -122,7 +122,7 @@ impl TryFrom<AgentSessionRow> for AgentSession {
             harness: row.harness,
             repo_url: row.repo_url,
             workspace: row.workspace,
-            acp_session_id: row.acp_session_id,
+            acp_session_id: row.acp_session_id.map(Into::into),
             status,
             created_at: row.created_at,
             modified_at: row.modified_at,
