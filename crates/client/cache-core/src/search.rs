@@ -360,13 +360,13 @@ fn subsequence_score(haystack: &str, needle: &str) -> Option<f64> {
     let mut chars = needle.chars();
     let mut wanted = chars.next()?;
     let mut first = None;
-    for (index, character) in haystack.char_indices() {
+    for (position, character) in haystack.chars().enumerate() {
         if character == wanted {
-            first.get_or_insert(index);
+            first.get_or_insert(position);
             match chars.next() {
                 Some(next) => wanted = next,
                 None => {
-                    let span = index.saturating_sub(first.unwrap_or(index)) + 1;
+                    let span = position.saturating_sub(first.unwrap_or(position)) + 1;
                     return Some((needle.chars().count() as f64 / span as f64).clamp(0.1, 0.8));
                 }
             }

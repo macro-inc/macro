@@ -64,6 +64,11 @@ fn rfc3339_timestamps_use_validated_dates_offsets_and_fractional_seconds() {
 }
 
 #[test]
+fn subsequence_scoring_measures_spans_in_characters() {
+    assert_eq!(subsequence_score("aéxb", "ab"), Some(0.5));
+}
+
+#[test]
 fn fuzzy_matching_rewards_prefix_and_freshness() {
     let recent = SearchDocument {
         profile: SearchProfile::QuickAccessV1,
