@@ -887,7 +887,7 @@ describe('normalizedCacheExchange', () => {
         soup: { items: [{ id: 'doc-1' }], nextCursor: 'cursor-2' },
       });
       return {
-        kind: 'data',
+        kind: 'data' as const,
         data: { soup: { nextCursor: 'cursor-2' } },
       };
     });

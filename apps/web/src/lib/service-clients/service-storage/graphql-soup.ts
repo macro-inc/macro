@@ -57,6 +57,7 @@ import {
   type GroupSoupQueryVariables,
   type SoupInitialInput,
   type SoupInput,
+  type SoupHydrationResult,
   type SoupNotificationFieldsFragment,
   type SoupPropertyFieldsFragment,
   type SoupQuery,
@@ -1349,14 +1350,6 @@ export type GraphqlSoupHydrationPage = {
   nextCursor: string | null;
 };
 
-type GraphqlSoupHydrationData = {
-  user: {
-    soup: {
-      nextCursor: string | null;
-    };
-  };
-};
-
 /**
  * Fetches and persists a Soup page while returning only fields not marked
  * `@cacheOnly`. The generated GraphQL response type is deliberately narrowed
@@ -1375,8 +1368,8 @@ export async function hydrateGraphqlSoup<
     throw new Error('GraphQL cache hydration requires an active cache');
   }
   const result = await client
-    .query<GraphqlSoupHydrationData, Variables>(
-      document as DocumentInput<GraphqlSoupHydrationData, Variables>,
+    .query<SoupHydrationResult, Variables>(
+      document as DocumentInput<SoupHydrationResult, Variables>,
       variables,
       {
         requestPolicy: 'network-only',
