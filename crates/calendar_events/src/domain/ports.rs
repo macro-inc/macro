@@ -131,6 +131,21 @@ pub trait GoogleCalendarMutationProvider: Send + Sync + 'static {
         patch: &CalendarEventPatch,
     ) -> impl Future<Output = Result<Option<CalendarEventUpsert>, GoogleProviderError>> + Send;
 
+    /// Patch the supplied fields of one occurrence of a recurring series,
+    /// identified by its original start key, then refresh the series. An
+    /// occurrence the provider does not have writes nothing and surfaces as
+    /// [`GoogleInstanceUpdateOutcome::OccurrenceGone`] with the refreshed
+    /// series, so a stale projection converges instead of mutating the
+    /// master.
+    fn update_event_instance(
+        &self,
+        access_token: &str,
+        target: &GoogleCalendarTarget,
+        master_provider_event_id: &str,
+        original_start: &str,
+        patch: &CalendarEventPatch,
+    ) -> impl Future<Output = Result<GoogleInstanceUpdateOutcome, GoogleProviderError>> + Send;
+
     /// Delete an event. An event already gone at the provider is success.
     fn delete_event(
         &self,
@@ -225,6 +240,28 @@ pub enum CalendarRsvpScope {
     },
 }
 
+/// How much of a recurring series an update applies to.
+///
+/// Like [`CalendarRsvpScope`] there is deliberately no this-and-following
+/// variant: the provider has no forward-scoped write, and emulating one the
+/// way Google's own UI does — truncate the series, then insert a clone
+/// carrying the edits — is two non-atomic provider writes whose first half
+/// alone destroys every future occurrence, and the clone is a new provider
+/// event that re-invites its attendees. Callers wanting that shape compose
+/// it explicitly from a this-and-following deletion and a create.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum CalendarUpdateScope {
+    /// The entire event or series, written on the master. A time change
+    /// here re-anchors a recurring series: every occurrence moves.
+    All,
+    /// One occurrence, identified by its original start key, written as a
+    /// provider exception. The rest of the series stays untouched.
+    ThisEvent {
+        /// Stable original-start key of the occurrence.
+        recurrence_id: String,
+    },
+}
+
 /// Result of a provider mutation that reshapes a recurring series.
 pub enum GoogleSeriesMutationOutcome {
     /// The series survives; the echo carries its refreshed state.
@@ -233,6 +270,18 @@ pub enum GoogleSeriesMutationOutcome {
     SeriesDeleted,
     /// The series master vanished before the mutation could apply.
     Gone,
+}
+
+/// Result of patching one occurrence of a recurring series.
+pub enum GoogleInstanceUpdateOutcome {
+    /// The occurrence was patched; the echo carries the refreshed series.
+    Applied(Box<CalendarEventUpsert>),
+    /// The provider has no such occurrence — nothing was written. The echo
+    /// carries the series as the provider actually holds it, so the caller
+    /// can converge a projection stale enough to list phantom occurrences.
+    OccurrenceGone(Box<CalendarEventUpsert>),
+    /// The whole series no longer exists at the provider.
+    SeriesGone,
 }
 
 /// Result of attempting to set the connected account's RSVP.
@@ -422,12 +471,14 @@ pub trait CalendarMutationService: Send + Sync + 'static {
         requester_id: &str,
     ) -> impl Future<Output = Result<Vec<VisibleCalendar>, CalendarMutationError>> + Send;
 
-    /// Patch an event at its provider and persist the echo.
+    /// Patch an event at its provider — the whole event or series, or one
+    /// occurrence of a recurring series — and persist the echo.
     fn update_event(
         &self,
         requester_id: &str,
         event_id: Uuid,
         patch: CalendarEventPatch,
+        scope: CalendarUpdateScope,
     ) -> impl Future<Output = Result<CalendarEvent, CalendarMutationError>> + Send;
 
     /// Delete an event at its provider — entirely, one occurrence, or from
@@ -465,6 +516,10 @@ pub enum CalendarMutationError {
     /// The event does not exist or is not visible to the requester.
     #[error("calendar event was not found")]
     NotFound,
+    /// The targeted occurrence does not exist on the recurring event at the
+    /// provider; the local projection was refreshed to match the provider.
+    #[error("the targeted occurrence was not found on the recurring event")]
+    OccurrenceNotFound,
     /// The containing calendar prohibits mutation.
     #[error("calendar event is read-only")]
     ReadOnly,

@@ -35,7 +35,7 @@ pub use list_calendar_events::{
     CalendarEventListItem, ListCalendarEvents, ListCalendarEventsResponse,
 };
 pub use list_calendars::{ListCalendars, ListCalendarsToolResponse, ToolCalendar};
-pub use update_calendar_event::{ConferenceChangeInput, UpdateCalendarEvent};
+pub use update_calendar_event::{ConferenceChangeInput, UpdateCalendarEvent, UpdateScopeInput};
 
 /// Service context for calendar AI tools.
 pub struct CalendarToolContext<M, O>
@@ -298,6 +298,12 @@ fn mutation_tool_error(action: &str, error: CalendarMutationError) -> ToolCallEr
         CalendarMutationError::NotFound => {
             "The calendar event was not found — it may have been deleted or the id is stale. \
              Use ListCalendarEvents to get current event ids."
+                .to_string()
+        }
+        CalendarMutationError::OccurrenceNotFound => {
+            "That occurrence does not exist on the recurring event at Google — the calendar \
+             copy was out of date and has now been refreshed. Nothing was changed. Run \
+             ListCalendarEvents again and retry with a current occurrence."
                 .to_string()
         }
         CalendarMutationError::ReadOnly => {

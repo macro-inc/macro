@@ -271,6 +271,7 @@ impl CalendarRepository for FakeRepo {
 enum FakeProviderBehavior {
     Echo,
     Gone,
+    OccurrenceGone,
     NotAttendee,
     Fail(GoogleProviderErrorKind),
 }
@@ -331,6 +332,29 @@ impl GoogleCalendarMutationProvider for FakeProvider {
             return Ok(None);
         }
         Ok(Some(echo_upsert(&target.owner_id)))
+    }
+
+    async fn update_event_instance(
+        &self,
+        _access_token: &str,
+        target: &GoogleCalendarTarget,
+        master_provider_event_id: &str,
+        original_start: &str,
+        _patch: &CalendarEventPatch,
+    ) -> Result<GoogleInstanceUpdateOutcome, GoogleProviderError> {
+        self.calls.lock().unwrap().push(format!(
+            "instance-update:{master_provider_event_id}:{original_start}"
+        ));
+        if let Some(error) = self.fail() {
+            return Err(error);
+        }
+        Ok(match self.behavior {
+            FakeProviderBehavior::Gone => GoogleInstanceUpdateOutcome::SeriesGone,
+            FakeProviderBehavior::OccurrenceGone => {
+                GoogleInstanceUpdateOutcome::OccurrenceGone(Box::new(echo_upsert(&target.owner_id)))
+            }
+            _ => GoogleInstanceUpdateOutcome::Applied(Box::new(echo_upsert(&target.owner_id))),
+        })
     }
 
     async fn delete_event(
@@ -564,7 +588,12 @@ async fn update_validates_lookup_policy_and_addresses_the_series_master() {
     );
     assert!(matches!(
         empty_patch
-            .update_event("macro|user", Uuid::now_v7(), CalendarEventPatch::default())
+            .update_event(
+                "macro|user",
+                Uuid::now_v7(),
+                CalendarEventPatch::default(),
+                CalendarUpdateScope::All,
+            )
             .await,
         Err(CalendarMutationError::InvalidInput(_))
     ));
@@ -581,7 +610,12 @@ async fn update_validates_lookup_policy_and_addresses_the_series_master() {
     );
     assert!(matches!(
         not_found
-            .update_event("macro|user", Uuid::now_v7(), patch.clone())
+            .update_event(
+                "macro|user",
+                Uuid::now_v7(),
+                patch.clone(),
+                CalendarUpdateScope::All,
+            )
             .await,
         Err(CalendarMutationError::NotFound)
     ));
@@ -596,7 +630,12 @@ async fn update_validates_lookup_policy_and_addresses_the_series_master() {
     );
     assert!(matches!(
         read_only
-            .update_event("macro|user", Uuid::now_v7(), patch.clone())
+            .update_event(
+                "macro|user",
+                Uuid::now_v7(),
+                patch.clone(),
+                CalendarUpdateScope::All,
+            )
             .await,
         Err(CalendarMutationError::ReadOnly)
     ));
@@ -611,7 +650,12 @@ async fn update_validates_lookup_policy_and_addresses_the_series_master() {
         provider,
         FakeTokens::ok(),
     )
-    .update_event("macro|user", Uuid::now_v7(), patch)
+    .update_event(
+        "macro|user",
+        Uuid::now_v7(),
+        patch,
+        CalendarUpdateScope::All,
+    )
     .await
     .unwrap();
     assert_eq!(
@@ -640,6 +684,7 @@ async fn update_on_a_provider_deleted_event_retires_the_stale_source() {
             title: Some("Renamed".to_string()),
             ..CalendarEventPatch::default()
         },
+        CalendarUpdateScope::All,
     )
     .await;
 
@@ -647,6 +692,143 @@ async fn update_on_a_provider_deleted_event_retires_the_stale_source() {
     let removed = removed.lock().unwrap();
     assert_eq!(removed.len(), 1);
     assert_eq!(removed[0].2, "master-id");
+}
+
+#[tokio::test]
+async fn occurrence_scoped_update_patches_the_instance_not_the_master() {
+    let repo = FakeRepo {
+        mutation_target: Some(mutation_target(false)),
+        ..FakeRepo::default()
+    };
+    let upserts = repo.upserts.clone();
+    let provider = FakeProvider::new(FakeProviderBehavior::Echo);
+    let calls = provider.calls.clone();
+
+    service(repo, provider, FakeTokens::ok())
+        .update_event(
+            "macro|user",
+            Uuid::now_v7(),
+            CalendarEventPatch {
+                time: Some(timed_time()),
+                ..CalendarEventPatch::default()
+            },
+            CalendarUpdateScope::ThisEvent {
+                recurrence_id: "2026-08-18T20:00:00+00:00".to_string(),
+            },
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(
+        calls.lock().unwrap().as_slice(),
+        ["instance-update:master-id:2026-08-18T20:00:00+00:00"],
+        "an occurrence-scoped update must never patch the series master"
+    );
+    assert_eq!(upserts.lock().unwrap().len(), 1);
+}
+
+#[tokio::test]
+async fn occurrence_scoped_update_rejects_recurrence_changes() {
+    let provider = FakeProvider::new(FakeProviderBehavior::Echo);
+    let calls = provider.calls.clone();
+    let result = service(
+        FakeRepo {
+            mutation_target: Some(mutation_target(false)),
+            ..FakeRepo::default()
+        },
+        provider,
+        FakeTokens::ok(),
+    )
+    .update_event(
+        "macro|user",
+        Uuid::now_v7(),
+        CalendarEventPatch {
+            recurrence_lines: Some(vec!["RRULE:FREQ=WEEKLY".to_string()]),
+            ..CalendarEventPatch::default()
+        },
+        CalendarUpdateScope::ThisEvent {
+            recurrence_id: "2026-08-18T20:00:00+00:00".to_string(),
+        },
+    )
+    .await;
+
+    assert!(matches!(
+        result,
+        Err(CalendarMutationError::InvalidInput(_))
+    ));
+    assert!(calls.lock().unwrap().is_empty());
+}
+
+/// The listed occurrence may be a phantom from a stale projection. Nothing
+/// must be written, the caller must hear the target is gone, and the fresh
+/// series echo must be persisted so the phantom disappears from listings.
+#[tokio::test]
+async fn occurrence_scoped_update_on_a_vanished_occurrence_persists_the_refresh_and_errors() {
+    let repo = FakeRepo {
+        mutation_target: Some(mutation_target(false)),
+        ..FakeRepo::default()
+    };
+    let upserts = repo.upserts.clone();
+    let removed = repo.removed_sources.clone();
+    let result = service(
+        repo,
+        FakeProvider::new(FakeProviderBehavior::OccurrenceGone),
+        FakeTokens::ok(),
+    )
+    .update_event(
+        "macro|user",
+        Uuid::now_v7(),
+        CalendarEventPatch {
+            time: Some(timed_time()),
+            ..CalendarEventPatch::default()
+        },
+        CalendarUpdateScope::ThisEvent {
+            recurrence_id: "2026-08-18T20:00:00+00:00".to_string(),
+        },
+    )
+    .await;
+
+    assert!(matches!(
+        result,
+        Err(CalendarMutationError::OccurrenceNotFound)
+    ));
+    assert_eq!(
+        upserts.lock().unwrap().len(),
+        1,
+        "the provider's fresh view of the series converges the stale projection"
+    );
+    assert!(removed.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn occurrence_scoped_update_on_a_vanished_series_retires_the_source() {
+    let repo = FakeRepo {
+        mutation_target: Some(mutation_target(false)),
+        ..FakeRepo::default()
+    };
+    let upserts = repo.upserts.clone();
+    let removed = repo.removed_sources.clone();
+    let result = service(
+        repo,
+        FakeProvider::new(FakeProviderBehavior::Gone),
+        FakeTokens::ok(),
+    )
+    .update_event(
+        "macro|user",
+        Uuid::now_v7(),
+        CalendarEventPatch {
+            title: Some("Renamed".to_string()),
+            ..CalendarEventPatch::default()
+        },
+        CalendarUpdateScope::ThisEvent {
+            recurrence_id: "2026-08-18T20:00:00+00:00".to_string(),
+        },
+    )
+    .await;
+
+    assert!(matches!(result, Err(CalendarMutationError::NotFound)));
+    assert!(upserts.lock().unwrap().is_empty());
+    assert_eq!(removed.lock().unwrap().len(), 1);
 }
 
 #[tokio::test]
@@ -890,6 +1072,7 @@ async fn conference_changes_reach_the_provider_for_any_conference() {
                     conference: Some(change),
                     ..CalendarEventPatch::default()
                 },
+                CalendarUpdateScope::All,
             )
             .await;
 

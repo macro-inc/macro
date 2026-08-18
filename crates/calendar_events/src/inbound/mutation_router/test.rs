@@ -12,6 +12,13 @@ fn domain_errors_map_to_distinct_transport_semantics() {
         (StatusCode::NOT_FOUND, CalendarMutationErrorCode::NotFound)
     );
     assert_eq!(
+        transport_of(CalendarMutationError::OccurrenceNotFound),
+        (
+            StatusCode::NOT_FOUND,
+            CalendarMutationErrorCode::OccurrenceNotFound
+        )
+    );
+    assert_eq!(
         transport_of(CalendarMutationError::ReadOnly),
         (StatusCode::FORBIDDEN, CalendarMutationErrorCode::ReadOnly)
     );

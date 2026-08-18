@@ -621,6 +621,10 @@ export type TextEditorCodeExecutionContent =
       type: 'text_editor_code_execution_tool_result_error';
     });
 /**
+ * How much of a recurring series an update applies to.
+ */
+export type UpdateScopeInput = 'all' | 'this_event';
+/**
  * User tools are pending until a user executes them
  */
 export type UserToolResponse =
@@ -876,7 +880,7 @@ export interface CalendarEventListItem {
   organizerEmail?: string | null;
   /**
    * Occurrence key identifying this instance within its recurring series;
-   * pass as `recurrenceId` for occurrence-scoped deletion.
+   * pass as `recurrenceId` for occurrence-scoped updates and deletions.
    */
   recurrenceId?: string | null;
   /**
@@ -4391,7 +4395,9 @@ export interface ToolCalendarEvent {
 /**
  * Update an existing calendar event. Only the supplied fields change; omitted fields keep their current values. The change is written to Google immediately and attendees are notified of it, so confirm details with the user first. Get the `eventId` from ListCalendarEvents.
  *
- * Passing `attendees` replaces the full attendee list — include everyone who should remain, not just additions. An empty string for `description` or `location` clears it. Updating a recurring event changes the whole series. Fails on events from calendars the user cannot edit.
+ * `scope` picks how much of a recurring series changes and is always required: "this_event" edits one occurrence (pass the occurrence's `recurrenceId` from ListCalendarEvents) and leaves the rest of the series alone; "all" edits the series itself — with `time` that MOVES EVERY OCCURRENCE, so never use "all" to reschedule a single occurrence. Non-recurring events use "all". There is no this-and-following update: end the series with DeleteCalendarEvent's "this_and_following" and create a new event instead.
+ *
+ * Passing `attendees` replaces the full attendee list — include everyone who should remain, not just additions. An empty string for `description` or `location` clears it. Fails on events from calendars the user cannot edit.
  */
 export interface UpdateCalendarEvent {
   /**
@@ -4415,9 +4421,14 @@ export interface UpdateCalendarEvent {
    */
   location?: string | null;
   /**
-   * Replacement RFC 5545 recurrence lines. An empty list makes the event one-off; omit to keep the current recurrence.
+   * The `recurrenceId` of the targeted occurrence, from its ListCalendarEvents entry. Required for "this_event"; omit for "all".
+   */
+  recurrenceId?: string | null;
+  /**
+   * Replacement RFC 5545 recurrence lines. An empty list makes the event one-off; omit to keep the current recurrence. Only valid with scope "all".
    */
   recurrenceLines?: string[] | null;
+  scope: UpdateScopeInput;
   /**
    * Replacement time: a timed span with `kind` "timed" (startsAt, endsAt, optional timeZone) or whole days with `kind` "allDay" (startDate, exclusive endDate). Omit to keep the current time.
    */

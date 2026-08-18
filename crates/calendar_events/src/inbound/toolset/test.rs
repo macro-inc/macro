@@ -14,7 +14,7 @@ use crate::domain::models::{
 };
 use crate::domain::ports::{
     CalendarDeletionScope, CalendarMutationError, CalendarMutationService,
-    CalendarOccurrenceService, CalendarRsvpScope,
+    CalendarOccurrenceService, CalendarRsvpScope, CalendarUpdateScope,
 };
 
 #[test]
@@ -138,7 +138,7 @@ type RecordedCreate = (Option<Uuid>, Option<Uuid>, CalendarEventDraft);
 struct MockMutations {
     created: Mutex<Vec<RecordedCreate>>,
     create_error: Mutex<Option<CalendarMutationError>>,
-    updated: Mutex<Vec<(Uuid, CalendarEventPatch)>>,
+    updated: Mutex<Vec<(Uuid, CalendarEventPatch, CalendarUpdateScope)>>,
     deleted: Mutex<Vec<(Uuid, CalendarDeletionScope)>>,
     calendars: Mutex<Vec<VisibleCalendar>>,
 }
@@ -173,8 +173,9 @@ impl CalendarMutationService for MockMutations {
         _requester_id: &str,
         event_id: Uuid,
         patch: CalendarEventPatch,
+        scope: CalendarUpdateScope,
     ) -> Result<crate::domain::models::CalendarEvent, CalendarMutationError> {
-        self.updated.lock().unwrap().push((event_id, patch));
+        self.updated.lock().unwrap().push((event_id, patch, scope));
         Ok(sample_event(Vec::new()))
     }
 
@@ -343,6 +344,8 @@ async fn update_converts_input_into_a_domain_patch() {
 
     let tool = UpdateCalendarEvent {
         event_id,
+        scope: UpdateScopeInput::All,
+        recurrence_id: None,
         title: Some("Renamed".to_string()),
         description: Some(String::new()),
         location: None,
@@ -357,8 +360,9 @@ async fn update_converts_input_into_a_domain_patch() {
     tool.call(context, request_context()).await.unwrap();
 
     let updated = mutations.updated.lock().unwrap();
-    let (patched_id, patch) = updated.first().expect("one update call");
+    let (patched_id, patch, scope) = updated.first().expect("one update call");
     assert_eq!(*patched_id, event_id);
+    assert_eq!(*scope, CalendarUpdateScope::All);
     assert_eq!(patch.title.as_deref(), Some("Renamed"));
     assert_eq!(patch.description.as_deref(), Some(""));
     assert_eq!(patch.location, None);
@@ -367,6 +371,84 @@ async fn update_converts_input_into_a_domain_patch() {
         Some(1)
     );
     assert_eq!(patch.conference, Some(ConferenceChange::Removed));
+}
+
+#[tokio::test]
+async fn update_passes_the_selected_occurrence_scope() {
+    let (mutations, context) = context(MockMutations::default(), empty_occurrences());
+    let event_id = Uuid::from_u128(11);
+
+    let tool = UpdateCalendarEvent {
+        event_id,
+        scope: UpdateScopeInput::ThisEvent,
+        recurrence_id: Some("2026-08-18T20:00:00+00:00".to_string()),
+        title: None,
+        description: None,
+        location: None,
+        time: Some(EventTimeInput::Timed {
+            starts_at: Utc.with_ymd_and_hms(2026, 8, 18, 20, 0, 0).unwrap(),
+            ends_at: Utc.with_ymd_and_hms(2026, 8, 18, 22, 0, 0).unwrap(),
+            time_zone: None,
+        }),
+        attendees: None,
+        recurrence_lines: None,
+        conference: None,
+    };
+    tool.call(context, request_context()).await.unwrap();
+
+    let updated = mutations.updated.lock().unwrap();
+    let (_, _, scope) = updated.first().expect("one update call");
+    assert_eq!(
+        *scope,
+        CalendarUpdateScope::ThisEvent {
+            recurrence_id: "2026-08-18T20:00:00+00:00".to_string(),
+        }
+    );
+}
+
+#[tokio::test]
+async fn scoped_update_requires_a_recurrence_id() {
+    let (mutations, context) = context(MockMutations::default(), empty_occurrences());
+
+    let tool = UpdateCalendarEvent {
+        event_id: Uuid::from_u128(11),
+        scope: UpdateScopeInput::ThisEvent,
+        recurrence_id: None,
+        title: Some("Renamed".to_string()),
+        description: None,
+        location: None,
+        time: None,
+        attendees: None,
+        recurrence_lines: None,
+        conference: None,
+    };
+    let error = tool.call(context, request_context()).await.unwrap_err();
+    assert!(error.description.contains("recurrenceId"));
+    assert!(mutations.updated.lock().unwrap().is_empty());
+}
+
+/// A series-wide update carrying an occurrence key is contradictory input;
+/// silently dropping the key would apply a one-occurrence intent to the
+/// whole series — the exact failure scoping exists to prevent.
+#[tokio::test]
+async fn series_update_rejects_a_stray_recurrence_id() {
+    let (mutations, context) = context(MockMutations::default(), empty_occurrences());
+
+    let tool = UpdateCalendarEvent {
+        event_id: Uuid::from_u128(11),
+        scope: UpdateScopeInput::All,
+        recurrence_id: Some("2026-08-18T20:00:00+00:00".to_string()),
+        title: Some("Renamed".to_string()),
+        description: None,
+        location: None,
+        time: None,
+        attendees: None,
+        recurrence_lines: None,
+        conference: None,
+    };
+    let error = tool.call(context, request_context()).await.unwrap_err();
+    assert!(error.description.contains("this_event"));
+    assert!(mutations.updated.lock().unwrap().is_empty());
 }
 
 #[tokio::test]
