@@ -103,7 +103,12 @@ where
         service_context: ServiceContext<CalendarToolContext<M, O>>,
         request_context: RequestContext,
     ) -> ToolResult<Self::Output> {
-        tracing::info!(params=?self, "Create calendar event");
+        tracing::info!(
+            calendar_id=?self.calendar_id,
+            attendee_count = self.attendees.len(),
+            add_google_meet = self.add_google_meet,
+            "Create calendar event"
+        );
 
         let requester_id = request_context.user_id.to_string();
         let draft = CalendarEventDraft {

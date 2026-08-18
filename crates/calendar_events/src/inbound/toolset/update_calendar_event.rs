@@ -129,7 +129,11 @@ where
         service_context: ServiceContext<CalendarToolContext<M, O>>,
         request_context: RequestContext,
     ) -> ToolResult<Self::Output> {
-        tracing::info!(params=?self, "Update calendar event");
+        tracing::info!(
+            event_id=%self.event_id,
+            attendee_count=?self.attendees.as_ref().map(Vec::len),
+            "Update calendar event"
+        );
 
         let requester_id = request_context.user_id.to_string();
         let patch = CalendarEventPatch {
