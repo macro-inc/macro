@@ -17,6 +17,10 @@
 	--fc-now-indicator-color: var(--color-accent);
 }
 
+.calendar-sidebar-preview .calendar-view {
+	--fc-border-color: var(--color-edge);
+}
+
 .calendar-view-content {
 	box-sizing: border-box;
 	padding: 0.5rem;
