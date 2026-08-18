@@ -203,7 +203,11 @@ function CalendarPageDataStatus(props: { data: CalendarOccurrenceData }) {
 }
 
 /** One independently rendered and queried FullCalendar page. */
-export function Page(props: { id: CalendarPageId; initialDate: Date }) {
+export function Page(props: {
+  id: CalendarPageId;
+  initialDate: Date;
+  useNarrowDayHeaders: boolean;
+}) {
   const pager = useCalendarPager();
   const calendarView = useCalendarView();
   const openEventComposer = useOpenEventComposer();
@@ -219,7 +223,7 @@ export function Page(props: { id: CalendarPageId; initialDate: Date }) {
     DEFAULT_CALENDAR_SOURCE.color;
   const isActive = () => pager.isActive(props.id);
   const useNarrowWeekdayHeaders = () =>
-    calendarView.useNarrowDayHeaders() && !isMobile();
+    props.useNarrowDayHeaders && !isMobile();
   const data = useCalendarOccurrenceData({
     range,
     sourceById: calendarView.sourceById,
@@ -305,7 +309,7 @@ export function Page(props: { id: CalendarPageId; initialDate: Date }) {
       weekStartsOn={calendarView.displaySettings.weekStartsOn}
       timeFormat={calendarView.displaySettings.timeFormat}
       useNarrowDayHeaders={useNarrowWeekdayHeaders()}
-      useNarrowEventContent={calendarView.useNarrowDayHeaders()}
+      useNarrowEventContent={props.useNarrowDayHeaders}
       selectionColor={effectiveSelectionColor()}
       selectedEventId={
         isActive() ? calendarView.eventState.selectedEventId : undefined

@@ -1,7 +1,6 @@
 import { createAssertedContextProvider } from '@core/context/createContext';
 import { isMobile } from '@core/mobile/isMobile';
 import { makePersisted } from '@solid-primitives/storage';
-import { createSignal } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { useCalendarSources } from './data/use-calendar-sources';
 import { createCalendarEventSelection } from './events/create-calendar-event-selection';
@@ -86,8 +85,6 @@ export const [CalendarViewContextProvider, useCalendarView] =
       },
     };
 
-    const [useNarrowDayHeaders, setUseNarrowDayHeaders] = createSignal(false);
-
     const closeEventDetails = selection.close;
 
     const setSourceVisibility = (sourceId: string, visible: boolean) => {
@@ -113,8 +110,6 @@ export const [CalendarViewContextProvider, useCalendarView] =
       setSourceVisibility,
       selectedEvent: selection.event,
       selectedEventAnchor: selection.anchor,
-      useNarrowDayHeaders,
-      setUseNarrowDayHeaders,
       setPeriodView: (periodView: CalendarPeriodView) =>
         setPreferences('periodView', periodView),
       setShowWeekends: (showWeekends: boolean) =>

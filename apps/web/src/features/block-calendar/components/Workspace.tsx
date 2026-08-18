@@ -29,8 +29,8 @@ const CALENDAR_SWIPE_EDGE_INSET = 40;
 
 function CalendarPages() {
   const calendarPager = useCalendarPager();
-  const calendarView = useCalendarView();
   const [viewport, setViewport] = createSignal<HTMLDivElement>();
+  const [useNarrowDayHeaders, setUseNarrowDayHeaders] = createSignal(false);
   let resizeFrame: number | undefined;
 
   createResizeObserver(viewport, ({ width }) => {
@@ -38,7 +38,7 @@ function CalendarPages() {
 
     resizeFrame = requestAnimationFrame(() => {
       resizeFrame = undefined;
-      calendarView.setUseNarrowDayHeaders(width < 520);
+      setUseNarrowDayHeaders(width < 520);
       calendarPager.updateSize();
     });
   });
@@ -68,6 +68,7 @@ function CalendarPages() {
                     <Page
                       id={pageId}
                       initialDate={calendarPager.initialDateFor(pageId)}
+                      useNarrowDayHeaders={useNarrowDayHeaders()}
                     />
                   </Suspense>
                 </Pager.Page>
