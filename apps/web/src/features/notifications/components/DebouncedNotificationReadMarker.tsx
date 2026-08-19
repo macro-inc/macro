@@ -39,9 +39,9 @@ function DebouncedMarker(props: DebouncedMarkerProps) {
 export function DebouncedNotificationReadMarker(props: {
   notificationSource: NotificationSource;
   debounceTime?: number;
-  entity: Entity | Omit<Entity, 'type'>;
+  entity: Entity;
 }) {
-  if ('type' in props.entity && props.entity.type === 'email') {
+  if (props.entity.type === 'email') {
     return (
       <EmailDebouncedReadMarker
         notificationSource={props.notificationSource}
@@ -55,17 +55,10 @@ export function DebouncedNotificationReadMarker(props: {
     <DebouncedMarker
       debounceTime={props.debounceTime}
       debouncedFn={() => {
-        if ('type' in props.entity) {
-          markNotificationsForEntityAsRead(
-            props.notificationSource,
-            props.entity
-          );
-        } else {
-          markNotificationForEntityIdAsRead(
-            props.notificationSource,
-            props.entity.id
-          );
-        }
+        void markNotificationsForEntityAsRead(
+          props.notificationSource,
+          props.entity
+        );
       }}
     />
   );
