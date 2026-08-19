@@ -15,7 +15,7 @@ use super::*;
 use crate::domain::model::HarnessCommand;
 
 fn user() -> MacroUserIdStr<'static> {
-    MacroUserIdStr::try_from_email("asker@example.com").expect("a valid user id")
+    MacroUserIdStr::try_from_email("asker@macro.com").expect("a valid user id")
 }
 
 fn message(sender: ChannelSender<'static>) -> ChannelMessagePostedMetadata {
@@ -115,6 +115,20 @@ fn a_bot_authored_mention_is_skipped() {
         )
         .unwrap_err(),
         Skipped::NotFromUser
+    );
+}
+
+#[test]
+fn a_non_staff_mention_is_skipped() {
+    let user = MacroUserIdStr::try_from_email("asker@example.com").expect("a valid user id");
+
+    assert_eq!(
+        agent_trigger_to_harness_command(
+            mentioned(BotId::TEST_A, ChannelSender::new_from_user(user)),
+            BotId::TEST_A,
+        )
+        .unwrap_err(),
+        Skipped::NotMacroStaff
     );
 }
 
