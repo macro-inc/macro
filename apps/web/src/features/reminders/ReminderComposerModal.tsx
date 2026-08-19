@@ -46,6 +46,7 @@ import {
   type ReminderDraft,
   reminderComposerOpen,
   reminderComposerState,
+  takeReminderCreatedHandler,
 } from './reminder-composer';
 import {
   formatReminderWhen,
@@ -160,6 +161,8 @@ export function ReminderComposerModal() {
   const submitCreate = async (date: Date, target: EntityData) => {
     const resolved = resolveReminderDescription(description(), target);
     const attachTo = reminderTarget(target);
+    // Taken before the close, which clears it.
+    const onCreated = takeReminderCreatedHandler();
     closeReminderComposer();
 
     try {
@@ -172,7 +175,13 @@ export function ReminderComposerModal() {
       toast.success(`Reminder set for ${formatReminderWhen(date)}`);
     } catch {
       toast.failure('Failed to create reminder');
+      return;
     }
+
+    // Whatever the invoking surface does with its row now that the reminder
+    // will bring it back — marking it done, in every soup list. Runs only once
+    // the reminder exists, so a failed create leaves the row alone.
+    await onCreated?.();
   };
 
   const submitEdit = async (date: Date, draft: ReminderDraft) => {

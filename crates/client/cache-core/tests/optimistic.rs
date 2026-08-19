@@ -88,19 +88,6 @@ impl Storage for ClaimFailingStorage {
         Ok(())
     }
 
-    async fn scan_records(
-        &self,
-        type_names: &[String],
-        after: Option<&EntityKey<'static>>,
-        limit: usize,
-    ) -> Result<Vec<(EntityKey<'static>, Record)>, Self::Error> {
-        Ok(self
-            .inner
-            .scan_records(type_names, after, limit)
-            .await
-            .unwrap())
-    }
-
     async fn enqueue_mutation(
         &mut self,
         entry: NewQueuedMutation,

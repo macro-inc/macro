@@ -93,6 +93,10 @@ const mutationRenderer = (
     render: (ctx) => {
       const [isExpanded, setIsExpanded] = createSignal(false);
       const event = () => ctx.response?.data as ToolCalendarEvent | undefined;
+      const callLabel = () => {
+        const scope = (ctx.tool.data as { scope?: string }).scope;
+        return scope === 'this_event' ? `${label} occurrence` : label;
+      };
       const title = () => {
         const responseTitle = event()?.title;
         if (responseTitle) return responseTitle;
@@ -113,7 +117,7 @@ const mutationRenderer = (
         >
           <div class="flex min-w-0 flex-1 items-center justify-between gap-3 overflow-hidden">
             <span class="min-w-0 truncate">
-              {label}
+              {callLabel()}
               <Show when={title()}>
                 {(eventTitle) => (
                   <>

@@ -244,6 +244,30 @@ pub const RUST_SERVICES: &[RustService] = &[
         opt_in: false,
         no_default_features: true,
     },
+    RustService {
+        compose_name: "agent_trigger_service",
+        cargo_bin: "agent_trigger_service",
+        package: "agent_trigger_service",
+        host_port: None,
+        path_prefix: None,
+        is_websocket: false,
+        modes: &[Mode::Local],
+        opt_in: false,
+        no_default_features: false,
+    },
+    RustService {
+        compose_name: "agent_harness_service",
+        cargo_bin: "agent_harness_service",
+        package: "agent_harness_service",
+        host_port: None,
+        path_prefix: Some("/agent-harness"),
+        is_websocket: false,
+        // Runs by default. LocalEnv reserves the credential keys so the
+        // process-env overlay can supply them; startup requires both.
+        modes: &[Mode::Local],
+        opt_in: false,
+        no_default_features: false,
+    },
 ];
 
 /// The Rust services that participate in `mode` (opt-in services list no modes,

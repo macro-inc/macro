@@ -63,21 +63,21 @@ local-email: ensure-cache-wasm
 # Lift the ceiling; peak usage stays the same, it just stops aborting.
 node_heap := "--max-old-space-size=6144"
 
-build-dev: build-cache-wasm
+build-dev: build-cache-wasm build-agent-fold-wasm
     MODE=development NODE_ENV=production NODE_OPTIONS="{{node_heap}}" bun run --bun build
     bun scripts/cache-wasm/cli.ts package-dist --dist dist
 
-build-staging: build-cache-wasm
+build-staging: build-cache-wasm build-agent-fold-wasm
     MODE=staging NODE_ENV=production NODE_OPTIONS="{{node_heap}}" bun run --bun build
     bun scripts/cache-wasm/cli.ts package-dist --dist dist
 
-build-prod: build-cache-wasm
+build-prod: build-cache-wasm build-agent-fold-wasm
     MODE=production NODE_ENV=production NODE_OPTIONS="{{node_heap}}" bun run --bun build
     bun scripts/cache-wasm/cli.ts package-dist --dist dist
 
 # Tauri build hook (run automatically via beforeBuildCommand) — not meant to be run directly
 [private]
-build-tauri: build-cache-wasm
+build-tauri: build-cache-wasm build-agent-fold-wasm
     printf production > tauri/src-tauri/.macro-tauri-env
     MODE=production NODE_ENV=production NODE_OPTIONS="{{node_heap}}" bun run --bun build
     bun scripts/cache-wasm/cli.ts package-dist --dist dist
@@ -195,6 +195,34 @@ test-cache-wasm-browser:
 # used by application or CI builds.
 build-cache-wasm-profile:
     wasm-pack build {{justfile_directory()}}/../../crates/client/cache-wasm --target web --profile cache-wasm-profiling --out-dir {{justfile_directory()}}/src/lib/graphql-cache/wasm
+
+# Build the agent-fold wasm module into src/lib/core/agent-fold/wasm
+# (gitignored). `--no-default-features` drops the crate's `cli` feature, whose
+# tokio/clap do not build for wasm32; the fold itself needs neither.
+build-agent-fold-wasm:
+    wasm-pack build {{justfile_directory()}}/../../crates/agent_fold --target web --release --out-dir {{justfile_directory()}}/src/lib/core/agent-fold/wasm -- --no-default-features
+
+# Dev fast path: build the agent-fold wasm pkg only when it is missing or any
+# fold source is newer than the built artifact. A stale artifact folds with the
+# wrong wire shape, which renders as chips silently stuck on their last event.
+ensure-agent-fold-wasm:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    WASM="{{justfile_directory()}}/src/lib/core/agent-fold/wasm/agent_fold_bg.wasm"
+    CRATE="{{justfile_directory()}}/../../crates/agent_fold"
+    if [ ! -f "$WASM" ] || [ -n "$(find "$CRATE/src" "$CRATE/Cargo.toml" -newer "$WASM" -print -quit)" ]; then
+        just --justfile "{{justfile()}}" build-agent-fold-wasm
+    fi
+
+# Regenerate src/lib/service-clients/service-agent-fold/generated/types.ts
+# from agent_fold's Rust wire types with specta. Run after changing anything
+# under crates/agent_fold/src/inbound/wire.rs. Specta's own output is tabs and
+# commas, not this project's style, so biome reformats it in place - without
+# that, every regeneration would be a diff-format mismatch even with no real
+# change.
+gen-agent-fold-types:
+    cargo run -p agent_fold --bin export_types
+    bunx biome format --write {{justfile_directory()}}/src/lib/service-clients/service-agent-fold/generated/types.ts
 
 # Dev fast path: build the wasm pkg only when missing or its version drifts
 # from client/cache-wasm/Cargo.toml (bump that version to push a rebuild to

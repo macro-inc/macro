@@ -12,6 +12,7 @@ import {
   onCleanup,
   Show,
 } from 'solid-js';
+import { MobileDockIsland } from './MobileDockIsland';
 import { MobileTouchMenu } from './MobileTouchMenu';
 import { computeVisiblePillValues } from './pillTabsLayout';
 import { pressPulse } from './pressPulse';
@@ -79,8 +80,9 @@ type PillTabsProps<T extends string> = {
   contentClass?: string;
   /**
    * Scrollable variant only: rendered as the first child of the scroll
-   * content, ahead of the pills. For a control pinned at the strip's start
-   * while pills scroll beneath it (e.g. the filter-drawer button), give it
+   * content, ahead of the pills, scrolling along with them (e.g. the
+   * filter-drawer button). To instead pin a control at the strip's start
+   * while pills scroll beneath it, give it
    * `sticky left-(--mobile-chrome-gutter) z-10` — the keep-active-in-view
    * logic accounts for a sticky leading element's width.
    */
@@ -140,6 +142,24 @@ function PillButton<T extends string>(props: {
       {props.item.label}
     </button>
   );
+}
+
+/**
+ * The strip's snap origin and trailing inset: the content row's edge padding,
+ * with the origin also moved past a sticky leading control (it stays pinned
+ * over the scrolled content).
+ */
+function snapInsets(content: HTMLElement) {
+  const contentStyle = getComputedStyle(content);
+  const padLeft = Number.parseFloat(contentStyle.paddingLeft || '0');
+  const padRight = Number.parseFloat(contentStyle.paddingRight || '0');
+  const gap = Number.parseFloat(contentStyle.columnGap || '0') || 0;
+  const leading = content.firstElementChild as HTMLElement | null;
+  const pinnedInset =
+    leading && getComputedStyle(leading).position === 'sticky'
+      ? leading.offsetWidth + gap
+      : 0;
+  return { minLeft: padLeft + pinnedInset, padRight };
 }
 
 function ScrollablePillTabs<T extends string>(props: PillTabsProps<T>) {
@@ -283,18 +303,8 @@ function ScrollablePillTabs<T extends string>(props: PillTabsProps<T>) {
           const active = strip?.querySelector<HTMLElement>('[data-checked]');
           if (!strip || !active) return;
           const content = strip.firstElementChild as HTMLElement | null;
-          const contentStyle = content ? getComputedStyle(content) : undefined;
-          const padLeft = Number.parseFloat(contentStyle?.paddingLeft || '0');
-          const padRight = Number.parseFloat(contentStyle?.paddingRight || '0');
-          const gap = Number.parseFloat(contentStyle?.columnGap || '0') || 0;
-          // A sticky leading control stays pinned over the scrolled content,
-          // so the snap origin moves past it.
-          const leading = content?.firstElementChild as HTMLElement | null;
-          const pinnedInset =
-            leading && getComputedStyle(leading).position === 'sticky'
-              ? leading.offsetWidth + gap
-              : 0;
-          const minLeft = padLeft + pinnedInset;
+          if (!content) return;
+          const { minLeft, padRight } = snapInsets(content);
           // Rect arithmetic rather than offsetLeft: the strip is not
           // positioned (see SCROLL_STRIP_CLASS), so it is no offsetParent.
           const stripLeft = strip.getBoundingClientRect().left;
@@ -448,17 +458,19 @@ function MenuOverflowPillTabs<T extends string>(props: PillTabsProps<T>) {
         )}
       </For>
       <Show when={overflowItems().length > 0}>
-        <MobileTouchMenu
-          triggerIcon={DotsThreeIcon}
-          position="trigger-bottom"
-          footerLabel="Tabs"
-          items={overflowItems().map((item) => ({
-            id: item.value,
-            label: item.label,
-            active: () => props.value === item.value,
-            onSelect: () => props.onChange(item.value),
-          }))}
-        />
+        <MobileDockIsland class="shrink-0">
+          <MobileTouchMenu
+            triggerIcon={DotsThreeIcon}
+            position="trigger-bottom"
+            footerLabel="Tabs"
+            items={overflowItems().map((item) => ({
+              id: item.value,
+              label: item.label,
+              active: () => props.value === item.value,
+              onSelect: () => props.onChange(item.value),
+            }))}
+          />
+        </MobileDockIsland>
       </Show>
       <div
         ref={setMeasureRef}

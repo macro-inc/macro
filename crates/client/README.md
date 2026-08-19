@@ -8,14 +8,13 @@ Normalized GraphQL cache with disk-backed persistence for urql. Design doc:
 | Crate | Purpose |
 |---|---|
 | `cache-core` | Pure engine: normalize/denormalize, LRU hot tier, dependency index, durable ordered optimistic-mutation queue, async `Storage` trait |
-| `cache-sqlite` | `Storage` over SQLite — Tauri native host |
-| `cache-turso` | `Storage` over Turso core — browser WASM host |
+| `cache-turso` | `Storage` over Turso core — browser WASM and Tauri native hosts |
 | `turso-opfs` | Browser OPFS `IO`/`File` adapter for the dedicated Turso engine worker |
 | `cache-wasm` | wasm-bindgen shell combining the engine, Turso storage, and OPFS adapter for browser worker glue (`apps/web/src/lib/graphql-cache/`) |
 
 The Tauri host lives in the tauri workspace (it needs the patched tauri fork
 pinned there): `apps/web/tauri/graphql_cache_plugin`, path-depending on
-`cache-core`/`cache-sqlite`. Test it from `apps/web/tauri` with
+`cache-core`/`cache-turso`. Test it from `apps/web/tauri` with
 `cargo test -p graphql_cache_plugin` (on NixOS use the `tauri-linux` dev shell —
 Tauri's Linux desktop stack needs its WebKitGTK/DBus system libraries).
 
@@ -24,7 +23,7 @@ Tauri's Linux desktop stack needs its WebKitGTK/DBus system libraries).
 Run from the repository root:
 
 ```sh
-cargo test -p cache-core -p cache-sqlite -p cache-turso -p turso-opfs
+cargo test -p cache-core -p cache-turso -p turso-opfs
 cargo check --target wasm32-unknown-unknown -p cache-turso -p turso-opfs -p cache-wasm --all-targets
 wasm-pack test --headless --chrome crates/client/cache-turso
 wasm-pack test --headless --chrome crates/client/turso-opfs

@@ -125,6 +125,8 @@ pub struct Bot {
     pub updated_at: DateTime<Utc>,
     /// Soft-delete timestamp.
     pub deleted_at: Option<DateTime<Utc>>,
+    /// Whether mentioning this bot opens a sandboxed coding-agent session.
+    pub has_agent: bool,
 }
 
 /// Channel containing a bot.

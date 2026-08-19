@@ -34,6 +34,7 @@ import {
   makeRenameAction,
   makeSetCompanyPropertyAction,
   makeShareAction,
+  markReminderTargetDone,
 } from '../actions';
 import type { SoupState } from '../create-soup-state';
 import {
@@ -130,7 +131,11 @@ export function createSoupEntityActions(): {
   const copyLinkAction = makeCopyLinkAction();
   const copyBranchNameAction = makeCopyBranchNameAction();
   const copyEntityIdAction = makeCopyEntityIdAction();
-  const createReminderAction = makeCreateReminderAction();
+  // Setting a reminder puts the row down: it marks it done, so the list drops
+  // it and the reminder is what brings it back.
+  const createReminderAction = makeCreateReminderAction({
+    onCreated: markReminderTargetDone(markDone),
+  });
   const editReminderAction = makeEditReminderAction();
   const shareAction = makeShareAction();
   const blockSenderAction = makeBlockSenderAction();
@@ -158,11 +163,13 @@ export function createSoupEntityActions(): {
     // Top group: Mark Done, Open in new split
     const topItems: SoupEntityActionItem[] = [];
 
-    if (
-      activeTab &&
+    // Also what the reminder's own mark-done advances on, further down.
+    const marksDoneOnThisView =
+      !!activeTab &&
       isListViewID(activeListView) &&
-      canExecuteMarkDoneOnView(activeListView, activeTab)
-    ) {
+      canExecuteMarkDoneOnView(activeListView, activeTab);
+
+    if (marksDoneOnThisView) {
       // A fully-done selection (e.g. archived threads in mail "All") gets the
       // reverse action; anything else gets Mark Done.
       if (canExecuteAll(markNotDone.canExecute)) {
@@ -341,7 +348,12 @@ export function createSoupEntityActions(): {
         id: 'create-reminder',
         label: 'Remind me',
         hotkeyToken: TOKENS.entity.action.createReminder,
-        onClick: handle(createReminderAction.executeWithSoup),
+        // Not `handle`: the mark-done that follows needs this view's answer to
+        // whether the list moves on, the same one Mark Done above is gated by.
+        onClick: () =>
+          createReminderAction.executeWithSoup(entities, soup, {
+            advances: marksDoneOnThisView,
+          }),
       });
     }
 

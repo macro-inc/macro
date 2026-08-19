@@ -33,6 +33,7 @@ pub struct LocalEnv {
     storage: StorageEnv,
     queues: QueueEnv,
     mail: MailEnv,
+    agent_harness: AgentHarnessEnv,
     service_auth: ServiceAuthEnv,
     fusionauth: FusionAuthEnv,
     boot_stubs: BootStubEnv,
@@ -56,6 +57,7 @@ impl LocalEnv {
             storage: StorageEnv::local(),
             queues: QueueEnv::local(),
             mail: MailEnv::local(),
+            agent_harness: AgentHarnessEnv::local(),
             service_auth: ServiceAuthEnv::for_instance(name),
             fusionauth: FusionAuthEnv::for_instance(instance),
             boot_stubs: BootStubEnv,
@@ -77,6 +79,7 @@ impl LocalEnv {
         self.storage.write(&mut env);
         self.queues.write(&mut env);
         self.mail.write(&mut env);
+        self.agent_harness.write(&mut env);
         self.service_auth.write(&mut env);
         self.fusionauth.write(&mut env);
         env
@@ -145,6 +148,13 @@ impl InfraEnv {
         env.insert(
             "OVERRIDE_DOCUMENT_STORAGE_SERVICE_URL".into(),
             "http://document-storage-service:8080".into(),
+        );
+        // Lexical has the same host-vs-container split. The plain
+        // `LEXICAL_SERVICE_URL` value does not affect `LexicalServiceUrl`,
+        // which only reads the `OVERRIDE_` form.
+        env.insert(
+            "OVERRIDE_LEXICAL_SERVICE_URL".into(),
+            "http://lexical-service:8096".into(),
         );
         // Same failure mode for the email connect flows: without these,
         // first-inbox provisioning (auth-service → `/email/init`) and Gmail
@@ -236,6 +246,34 @@ impl MailEnv {
             "SENDER_BASE_ADDRESS".into(),
             self.sender_base_address.into(),
         );
+    }
+}
+
+/// The agent harness: which bot it answers for, and the Daytona sandbox
+/// credentials.
+///
+/// The bot id and snapshot name are deterministic (the bot is seeded by
+/// migration). The two secrets are seeded empty so the process-env overlay can
+/// replace them; the harness refuses to start unless both are supplied.
+struct AgentHarnessEnv {
+    bot_id: &'static str,
+    snapshot: &'static str,
+}
+
+impl AgentHarnessEnv {
+    fn local() -> Self {
+        AgentHarnessEnv {
+            // bot_id::MACRO_CODER_BOT_ID, seeded by the bots_has_agent migration.
+            bot_id: "00000000-0000-0000-0000-00000000a9e7",
+            snapshot: "macro-agent-harness",
+        }
+    }
+
+    fn write(&self, env: &mut BTreeMap<String, String>) {
+        env.insert("HARNESS_BOT_ID".into(), self.bot_id.into());
+        env.insert("DAYTONA_SNAPSHOT".into(), self.snapshot.into());
+        env.insert("DAYTONA_API_KEY".into(), String::new());
+        env.insert("GITHUB_TOKEN".into(), String::new());
     }
 }
 

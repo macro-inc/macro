@@ -83,7 +83,7 @@ import GlobalShortcuts from './GlobalHotkeys';
 import { ItemDndProvider } from './ItemDragAndDrop';
 import { FloatRegion } from './mobile/float-regions/FloatRegion';
 import { FloatRegionHost } from './mobile/float-regions/FloatRegionHost';
-import { MobileSearchRow } from './mobile/MobileSearchRow';
+import { MobileDockRow } from './mobile/MobileDockRow';
 import { MobileViewsRow } from './mobile/MobileViewsRow';
 import { SwipeDownDismissKeyboard } from './mobile/SwipeDownDismissKeyboard';
 import { useAppSquishHandlers } from './useAppSquishHandlers';
@@ -541,15 +541,13 @@ function LayoutInner(props: RouteSectionProps) {
         }
       >
         <FloatRegionHost />
+        <MobileViewsRow />
         <FloatRegion
-          region="accessory"
-          priority={() => (SearchState.isOpen() ? 100 : 0)}
+          region="dock"
           active={() => !virtualKeyboardVisible() || SearchState.isOpen()}
         >
-          <MobileSearchRow />
+          <MobileDockRow />
         </FloatRegion>
-        {/* The views row owns the bottom (dock) slot. */}
-        <MobileViewsRow />
       </Show>
       <SwipeDownDismissKeyboard />
       <Suspense>

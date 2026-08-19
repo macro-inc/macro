@@ -137,6 +137,7 @@ export type ItemMention = {
     | 'unknown'
     | 'color'
     | 'call'
+    | 'calendar_event'
     | 'foreign'
     | 'group'
     | 'automation'
@@ -210,6 +211,9 @@ function $mentionItemFromNode(node: MentionNode): ItemMention {
     } else if (blockName === 'call') {
       fileType = 'call';
       itemType = 'call';
+    } else if (blockName === 'calendar') {
+      fileType = 'calendar_event';
+      itemType = 'calendar_event';
     } else if (blockName === 'company') {
       fileType = 'company';
       itemType = 'crm_company';
@@ -301,9 +305,7 @@ const getDocumentMentionItemType = (
     .with('channel_thread', () => 'channel')
     .with('automation', () => 'automation')
     .with('call', () => 'call')
-    .with('calendar_event', () => {
-      throw new Error('calendar blocks cannot be document mentions');
-    })
+    .with('calendar_event', () => 'calendar_event')
     .with('foreign', () => {
       throw new Error('foreign entities cannot be document mentions');
     })

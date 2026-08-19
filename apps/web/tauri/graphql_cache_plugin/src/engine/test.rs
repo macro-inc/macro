@@ -5,6 +5,16 @@ const QUERY: &str = r#"query Soup($input: SoupInput!) {
     user { id soup(input: $input) { nextCursor items { __typename id } } }
 }"#;
 
+const HYDRATION_QUERY: &str = r#"query Soup($input: SoupInput!) {
+    user {
+        id @cacheOnly
+        soup(input: $input) {
+            nextCursor
+            items @cacheOnly { __typename id }
+        }
+    }
+}"#;
+
 fn variables() -> Variables {
     let serde_json::Value::Object(vars) = serde_json::json!({"input": {"limit": 1}}) else {
         unreachable!()
@@ -25,7 +35,7 @@ fn soup_data(has_next_page: bool) -> serde_json::Value {
 }
 
 fn spawn_handle() -> EngineHandle {
-    let storage = SqliteStorage::open_in_memory("scope-1").unwrap();
+    let storage = TursoStorage::open_in_memory("scope-1").unwrap();
     EngineHandle::new(storage, None)
 }
 
@@ -70,6 +80,31 @@ fn write_then_read_round_trips() {
         panic!("expected hit");
     };
     assert_eq!(data, soup_data(false));
+}
+
+#[test]
+fn hydration_returns_only_unmarked_fields() {
+    let handle = spawn_handle();
+    let result = block_on(handle.hydrate_query(
+        HYDRATION_QUERY.to_string(),
+        Some("Soup".to_string()),
+        variables(),
+        soup_data(true),
+        None,
+    ))
+    .unwrap();
+
+    assert_eq!(
+        result.data,
+        Some(serde_json::json!({
+            "user": { "soup": { "nextCursor": "cursor-1" } }
+        }))
+    );
+    assert!(!result.write_result.changed.is_empty());
+    let ReadResultWire::Hit { data } = read(&handle, None) else {
+        panic!("expected hydrated cache hit");
+    };
+    assert_eq!(data, soup_data(true));
 }
 
 #[test]
@@ -120,7 +155,7 @@ fn entity_resolvers_cross_the_native_engine_boundary() {
 }
 
 #[test]
-fn record_selection_returns_native_cache_entities() {
+fn explicit_key_selection_returns_native_cache_entities() {
     let handle = spawn_handle();
     let query = r#"query Soup($input: SoupInput!) {
         user {
@@ -167,18 +202,71 @@ fn record_selection_returns_native_cache_entities() {
     ))
     .unwrap();
 
-    let page = block_on(handle.read_records(
+    let records = block_on(handle.read_records_by_keys(
         "fragment Document on GraphqlSoupDocument { id name }".to_string(),
         "Document".to_string(),
-        None,
-        10,
+        vec!["GraphqlSoupDocument:doc-1".to_string()],
     ))
     .unwrap();
     assert_eq!(
-        page.records,
-        vec![serde_json::json!({"id": "doc-1", "name": "A note"})]
+        records[0].record,
+        serde_json::json!({"id": "doc-1", "name": "A note"})
     );
-    assert!(page.next_cursor.is_none());
+}
+
+#[test]
+fn search_uses_native_materialized_projection() {
+    let handle = spawn_handle();
+    let query = r#"query Soup($input: SoupInput!) {
+        user {
+            id
+            soup(input: $input) {
+                items {
+                    __typename
+                    id
+                    ... on GraphqlSoupDocument { name updatedAt }
+                }
+                nextCursor
+            }
+        }
+    }"#;
+    block_on(handle.write(
+        None,
+        query.to_string(),
+        Some("Soup".to_string()),
+        variables(),
+        serde_json::json!({
+            "user": {
+                "id": "user-1",
+                "soup": {
+                    "items": [{
+                        "__typename": "GraphqlSoupDocument",
+                        "id": "doc-1",
+                        "name": "Quarterly Plan",
+                        "updatedAt": "2025-01-02T03:04:05Z"
+                    }],
+                    "nextCursor": null
+                }
+            }
+        }),
+        None,
+    ))
+    .unwrap();
+
+    let page = block_on(handle.search(SearchRequest {
+        profile: cache_core::search::SearchProfile::QuickAccessV1,
+        buckets: vec!["document".into()],
+        query: "quarter".into(),
+        cursor: None,
+        limit: 20,
+        now_ms: 1_735_787_046_000,
+    }))
+    .unwrap();
+    assert_eq!(page.documents.len(), 1);
+    assert_eq!(
+        page.documents[0].record_key.as_ref(),
+        "GraphqlSoupDocument:doc-1"
+    );
 }
 
 #[test]
@@ -365,6 +453,11 @@ fn clear_wipes_everything() {
     write(&handle, None, soup_data(false), None);
     block_on(handle.clear()).unwrap();
     assert!(matches!(read(&handle, None), ReadResultWire::Miss));
+}
+
+#[test]
+fn sole_engine_handle_shuts_turso_down_explicitly() {
+    spawn_handle().shutdown().unwrap();
 }
 
 #[test]

@@ -1,0 +1,27 @@
+[package]
+edition = "2024"
+name = "agent_trigger"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+agent_session = { path = "../agent_session" }
+bot_id = { path = "../bot_id" }
+channels = { path = "../channels", features = ["ports"] }
+chrono = { workspace = true }
+macro_event_broker = { path = "../macro_event_broker", features = ["outbound"] }
+macro_event_topics = { path = "../macro_event_topics" }
+macro_user_id = { path = "../macro_user_id" }
+channel_sender = { path = "../channel_sender" }
+macro_uuid = { path = "../macro_uuid" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
+
+[dev-dependencies]
+agent_session = { path = "../agent_session", features = ["test-utils"] }
+bot_id = { path = "../bot_id", features = ["test-utils"] }
+mockall = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

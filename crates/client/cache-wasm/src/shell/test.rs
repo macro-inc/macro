@@ -168,6 +168,17 @@ async fn operations_preserve_js_boundary_interner_and_ordering() {
     let identity: Option<String> = from_js(resolved(engine.bound_identity()).await);
     assert_eq!(identity.as_deref(), Some("user-1"));
 
+    let selected: serde_json::Value = from_js(
+        resolved(engine.read_records_by_keys(
+            RECORD_FRAGMENT.into(),
+            "CachedDocument".into(),
+            js(serde_json::json!(["GraphqlSoupDocument:doc-1"])),
+        ))
+        .await,
+    );
+    assert_eq!(selected[0]["recordKey"], "GraphqlSoupDocument:doc-1");
+    assert_eq!(selected[0]["record"]["id"], "doc-1");
+
     let variants: serde_json::Value = from_js(
         resolved(engine.inspect_query_variants(
             QUERY.into(),
@@ -886,11 +897,10 @@ async fn every_method_rejects_after_consuming_close() {
         JsValue::UNDEFINED,
     ))
     .await;
-    assert_closed(engine.read_records(
+    assert_closed(engine.read_records_by_keys(
         RECORD_FRAGMENT.into(),
         "CachedDocument".into(),
-        JsValue::UNDEFINED,
-        1,
+        js(serde_json::json!(["GraphqlSoupDocument:doc-1"])),
     ))
     .await;
     assert_closed(engine.write_query(

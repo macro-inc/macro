@@ -19,19 +19,13 @@ use crate::{
 use cache_core::entity_resolver::EntityResolver;
 use cache_core::link_patch::{OptimisticLinkPatch, QueryRevalidation};
 use cache_core::query_inspection::{CachedQueryInstance, CachedQueryVariant};
-use cache_core::record_selection::{RecordCursor, SelectedRecordPage};
-use cache_sqlite::SqliteStorage;
-use serde::Deserialize;
+use cache_core::record_selection::SelectedRecord;
+use cache_core::search::{SearchPage, SearchRequest};
+use cache_turso::TursoFileDatabase;
+use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager, Runtime, State};
 
 type Variables = serde_json::Map<String, serde_json::Value>;
-
-fn parse_record_cursor(cursor: Option<String>) -> Result<Option<RecordCursor>, String> {
-    cursor
-        .map(|value| serde_json::from_value(serde_json::Value::String(value)))
-        .transpose()
-        .map_err(|error| error.to_string())
-}
 
 fn engine_handle(state: &State<'_, CacheState>) -> Result<EngineHandle, String> {
     state
@@ -45,10 +39,8 @@ fn engine_handle(state: &State<'_, CacheState>) -> Result<EngineHandle, String> 
 
 /// Opens (or creates) the cache for `scope`. Idempotent for the same scope;
 /// errors on a scope mismatch (parity with the browser worker `init`). The
-/// database lives at `{app_data_dir}/graphql-cache/cache.sqlite`. A scope
-/// change clears all cache state; for the same scope, a schema compatibility
-/// epoch or format mismatch clears disposable records but retains queued user
-/// intent.
+/// database lives at `{app_data_dir}/graphql-cache/cache.turso`. Incompatible
+/// or uncertain storage is physically replaced before opening.
 #[tauri::command]
 pub async fn graphql_cache_init<R: Runtime>(
     app: AppHandle<R>,
@@ -75,8 +67,11 @@ pub async fn graphql_cache_init<R: Runtime>(
         .map_err(|e| e.to_string())?
         .join("graphql-cache");
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-    let storage =
-        SqliteStorage::open(dir.join("cache.sqlite"), &scope).map_err(|e| e.to_string())?;
+    let database =
+        TursoFileDatabase::new(dir.join("cache.turso")).map_err(|error| error.to_string())?;
+    let storage = database
+        .open_or_reset(&scope)
+        .map_err(|error| error.to_string())?;
     let handle = EngineHandle::new(storage, hot_capacity);
     *guard = Some(InitializedCache { scope, handle });
     Ok(())
@@ -103,18 +98,26 @@ pub async fn graphql_cache_read(
         .await
 }
 
-/// Projects normalized records through a named GraphQL fragment.
+/// Projects explicit normalized entity keys without scanning storage.
 #[tauri::command]
-pub async fn graphql_cache_read_records(
+pub async fn graphql_cache_read_records_by_keys(
     state: State<'_, CacheState>,
     document: String,
     fragment_name: String,
-    cursor: Option<String>,
-    limit: u32,
-) -> Result<SelectedRecordPage, String> {
+    keys: Vec<String>,
+) -> Result<Vec<SelectedRecord>, String> {
     engine_handle(&state)?
-        .read_records(document, fragment_name, parse_record_cursor(cursor)?, limit)
+        .read_records_by_keys(document, fragment_name, keys)
         .await
+}
+
+/// Searches the compact cache projection without scanning normalized records.
+#[tauri::command]
+pub async fn graphql_cache_search(
+    state: State<'_, CacheState>,
+    request: SearchRequest,
+) -> Result<SearchPage, String> {
+    engine_handle(&state)?.search(request).await
 }
 
 /// Normalizes and stores a network response; broadcasts affected operations
@@ -143,6 +146,52 @@ pub async fn graphql_cache_write<R: Runtime>(
     emit_ops_affected(&app, &result.affected_ops, &result.changed);
     emit_cache_changed(&app);
     Ok(result)
+}
+
+/// Result of hydrating a response without returning cache-only fields.
+#[derive(Debug, Serialize)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum HydrationResultWire {
+    /// At least one non-cache-only field was projected.
+    Data {
+        /// Projected GraphQL response data.
+        data: serde_json::Value,
+    },
+    /// Every response field was cache-only.
+    Void,
+}
+
+/// Normalizes and stores a network response, broadcasts affected operations,
+/// and returns only fields not marked `@cacheOnly`.
+#[tauri::command]
+pub async fn graphql_cache_hydrate<R: Runtime>(
+    app: AppHandle<R>,
+    state: State<'_, CacheState>,
+    query: String,
+    operation_name: Option<String>,
+    variables: Option<Variables>,
+    data: serde_json::Value,
+    identity: Option<String>,
+) -> Result<HydrationResultWire, String> {
+    let result = engine_handle(&state)?
+        .hydrate_query(
+            query,
+            operation_name,
+            variables.unwrap_or_default(),
+            data,
+            identity,
+        )
+        .await?;
+    emit_ops_affected(
+        &app,
+        &result.write_result.affected_ops,
+        &result.write_result.changed,
+    );
+    emit_cache_changed(&app);
+    Ok(match result.data {
+        Some(data) => HydrationResultWire::Data { data },
+        None => HydrationResultWire::Void,
+    })
 }
 
 /// Durably queues an optimistic mutation and attempts to claim the strict

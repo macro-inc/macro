@@ -9,8 +9,8 @@ use uuid::Uuid;
 use super::*;
 use crate::domain::models::{CalendarAttendeeInput, EventReminders, EventTime};
 use crate::inbound::mutation_router::{
-    CalendarMutationApiError, CreateCalendarEventRequest, DeleteCalendarEventQuery,
-    RsvpCalendarEventRequest, UpdateCalendarEventRequest,
+    CalendarMutationApiError, CalendarUpdateScopeParam, CreateCalendarEventRequest,
+    DeleteCalendarEventQuery, RsvpCalendarEventRequest, UpdateCalendarEventRequest,
 };
 
 fn sample_draft() -> CalendarEventDraft {
@@ -68,7 +68,8 @@ fn update_body_matches_the_router_request() {
         conference: Some(crate::domain::models::ConferenceChange::Removed),
         ..Default::default()
     };
-    let request: UpdateCalendarEventRequest = serde_json::from_value(update_body(&patch)).unwrap();
+    let request: UpdateCalendarEventRequest =
+        serde_json::from_value(update_body(&patch, &CalendarUpdateScope::All)).unwrap();
 
     assert_eq!(request.title.as_deref(), Some("Renamed"));
     assert_eq!(request.description.as_deref(), Some(""));
@@ -80,6 +81,34 @@ fn update_body_matches_the_router_request() {
         request.conference,
         Some(crate::domain::models::ConferenceChange::Removed)
     );
+    assert!(matches!(request.scope, Some(CalendarUpdateScopeParam::All)));
+    assert!(request.recurrence_id.is_none());
+}
+
+/// An occurrence-scoped update must arrive at the router still scoped — a
+/// body the router reads as scope-less would widen the write to the series.
+#[test]
+fn update_body_carries_the_occurrence_scope() {
+    let patch = CalendarEventPatch {
+        title: Some("Renamed".to_string()),
+        ..Default::default()
+    };
+    let request: UpdateCalendarEventRequest = serde_json::from_value(update_body(
+        &patch,
+        &CalendarUpdateScope::ThisEvent {
+            recurrence_id: "2026-08-18T20:00:00+00:00".to_string(),
+        },
+    ))
+    .unwrap();
+
+    assert_eq!(
+        request.recurrence_id.as_deref(),
+        Some("2026-08-18T20:00:00+00:00")
+    );
+    assert!(matches!(
+        request.scope,
+        Some(CalendarUpdateScopeParam::ThisEvent)
+    ));
 }
 
 #[test]
@@ -127,6 +156,7 @@ fn rsvp_body_matches_the_router_request() {
 fn router_error_bodies_round_trip_to_their_domain_failures() {
     let cases = [
         CalendarMutationError::NotFound,
+        CalendarMutationError::OccurrenceNotFound,
         CalendarMutationError::ReadOnly,
         CalendarMutationError::NoWritableCalendar,
         CalendarMutationError::NotAttendee,

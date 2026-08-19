@@ -22,6 +22,34 @@ query Soup($input: SoupInput!) {
 }
 "#;
 
+const HYDRATION_QUERY: &str = r#"
+query SoupBackfill($input: SoupInput!) {
+  user {
+    id @cacheOnly
+    soup(input: $input) {
+      items @cacheOnly {
+        __typename
+        id
+        ... on GraphqlSoupDocument { documentName: name ownerId }
+      }
+      nextCursor
+    }
+  }
+}
+"#;
+
+const VOID_HYDRATION_QUERY: &str = r#"
+query SoupBackfill($input: SoupInput!) {
+  user @cacheOnly {
+    id
+    soup(input: $input) {
+      items { __typename id }
+      nextCursor
+    }
+  }
+}
+"#;
+
 const CHANNEL_NOTIFICATIONS_QUERY: &str = r#"
 query ChannelNotifications($input: SoupInput!) {
   user {
@@ -130,6 +158,69 @@ fn miss_then_write_then_hit() {
             panic!("expected hit");
         };
         assert_eq!(cached, data);
+    });
+}
+
+#[test]
+fn hydration_persists_cache_only_fields_and_returns_only_projection() {
+    block_on(async {
+        let mut engine = Engine::new(InMemoryStorage::new());
+        let data = json!({
+            "user": {
+                "id": "user-1",
+                "soup": {
+                    "items": [{
+                        "__typename": "GraphqlSoupDocument",
+                        "id": "doc-1",
+                        "documentName": "Design doc",
+                        "ownerId": "user-1"
+                    }],
+                    "nextCursor": "cursor-2"
+                }
+            }
+        });
+
+        let hydration = engine
+            .hydrate_query(
+                HYDRATION_QUERY,
+                Some("SoupBackfill"),
+                &vars(10),
+                &data,
+                None,
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            hydration.data,
+            Some(json!({ "user": { "soup": { "nextCursor": "cursor-2" } } }))
+        );
+
+        let ReadResult::Hit { data: cached } = engine
+            .read_query(None, HYDRATION_QUERY, Some("SoupBackfill"), &vars(10))
+            .await
+            .unwrap()
+        else {
+            panic!("expected hydrated query hit");
+        };
+        assert_eq!(cached, data);
+    });
+}
+
+#[test]
+fn fully_cache_only_hydration_returns_void_projection() {
+    block_on(async {
+        let mut engine = Engine::new(InMemoryStorage::new());
+        let hydration = engine
+            .hydrate_query(
+                VOID_HYDRATION_QUERY,
+                Some("SoupBackfill"),
+                &vars(10),
+                &page(&[("doc-1", "Design doc")]),
+                None,
+            )
+            .await
+            .unwrap();
+        assert_eq!(hydration.data, None);
     });
 }
 

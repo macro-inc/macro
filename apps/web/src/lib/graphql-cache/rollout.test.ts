@@ -9,9 +9,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@core/util/platform', () => ({ isTauri: mocks.isTauri }));
 vi.mock('@core/constant/featureFlags', () => ({
   ENABLE_GRAPHQL_SOUP: mocks.graphqlEnabled,
-  ENABLE_BROWSER_TURSO_CACHE_FLAG: 'enable-browser-turso-cache',
   DISABLE_BROWSER_TURSO_CACHE_FLAG: 'disable-browser-turso-cache',
-  ENABLE_BROWSER_TURSO_CACHE_OVERRIDE: undefined,
   DISABLE_BROWSER_TURSO_CACHE_OVERRIDE: undefined,
 }));
 vi.mock('@app/lib/analytics', () => ({
@@ -32,24 +30,27 @@ describe('browser Turso cache production gate', () => {
     mocks.isFeatureEnabled.mockReturnValue(undefined);
   });
 
-  it('fails closed while PostHog flags are undefined', () => {
+  it('enables browser cache with the GraphQL soup gate', () => {
     expect(getBrowserTursoCacheRolloutDecision()).toMatchObject({
-      enabled: false,
-      cohort: 'control',
-      reason: 'not-enabled',
+      enabled: true,
+      cohort: 'treatment',
+      reason: 'graphql-transport-enabled',
     });
   });
 
-  it('uses a Boolean PostHog rollout and lets the independent kill win', () => {
-    mocks.isFeatureEnabled.mockImplementation(
-      (flag) => flag === 'enable-browser-turso-cache'
-    );
-    expect(getBrowserTursoCacheRolloutDecision().enabled).toBe(true);
-
+  it('lets the independent emergency kill win', () => {
     mocks.isFeatureEnabled.mockReturnValue(true);
     expect(getBrowserTursoCacheRolloutDecision()).toMatchObject({
       enabled: false,
       reason: 'emergency-disabled',
+    });
+  });
+
+  it('disables browser cache with the GraphQL soup gate', () => {
+    mocks.graphqlEnabled.mockReturnValue(false);
+    expect(getBrowserTursoCacheRolloutDecision()).toMatchObject({
+      enabled: false,
+      reason: 'graphql-transport-disabled',
     });
   });
 

@@ -70,7 +70,7 @@ const buildOutputPath = './output/app';
 const appArchiveOutputPath = './output/app-archive';
 const cacheWasmRetentionDays = 7;
 const shellQuote = (value: string): string =>
-  "'" + value.replaceAll("'", "'\\''") + "'";
+  "'" + value.split("'").join("'\\''") + "'";
 execSync('rm -rf ./output', { stdio: 'inherit' });
 execSync(
   `mkdir -p ${shellQuote(buildOutputPath)} ${shellQuote(appArchiveOutputPath)}`,

@@ -49,13 +49,7 @@ pub fn normalize(
     variables: &serde_json::Map<String, Json>,
     data: &Json,
 ) -> Result<RecordUpdates, NormalizeError> {
-    let root_type = match op.kind {
-        OperationKind::Query => meta::QUERY_ROOT_TYPE,
-        OperationKind::Mutation => meta::MUTATION_ROOT_TYPE
-            .ok_or_else(|| NormalizeError::UnknownType("(mutation root)".to_string()))?,
-        OperationKind::Subscription => meta::SUBSCRIPTION_ROOT_TYPE
-            .ok_or_else(|| NormalizeError::UnknownType("(subscription root)".to_string()))?,
-    };
+    let root_type = operation_root_type(op)?;
     let Json::Object(data) = data else {
         return Err(NormalizeError::Shape {
             type_name: root_type.to_string(),
@@ -77,6 +71,125 @@ pub fn normalize(
         merge_into(&mut records, EntityKey::root(), root);
     }
     Ok(records)
+}
+
+/// Projects fields not marked `@cacheOnly` directly from a network response.
+/// Cache-only branches are not traversed or cloned.
+pub fn project_hydration_response(
+    op: &Operation,
+    data: &Json,
+) -> Result<Option<Json>, NormalizeError> {
+    let root_type = operation_root_type(op)?;
+    let Json::Object(data) = data else {
+        return Err(NormalizeError::Shape {
+            type_name: root_type.to_string(),
+            field: "(data)".to_string(),
+            detail: "response data is not an object",
+        });
+    };
+    Ok(project_object_fields(&op.selection_set, root_type, data)?.map(Json::Object))
+}
+
+fn operation_root_type(op: &Operation) -> Result<&'static str, NormalizeError> {
+    match op.kind {
+        OperationKind::Query => Ok(meta::QUERY_ROOT_TYPE),
+        OperationKind::Mutation => meta::MUTATION_ROOT_TYPE
+            .ok_or_else(|| NormalizeError::UnknownType("(mutation root)".to_string())),
+        OperationKind::Subscription => meta::SUBSCRIPTION_ROOT_TYPE
+            .ok_or_else(|| NormalizeError::UnknownType("(subscription root)".to_string())),
+    }
+}
+
+fn project_object_fields(
+    selections: &[Selection],
+    type_name: &str,
+    data: &serde_json::Map<String, Json>,
+) -> Result<Option<serde_json::Map<String, Json>>, NormalizeError> {
+    let concrete = match data.get("__typename") {
+        Some(Json::String(name)) => name.as_str(),
+        _ => type_name,
+    };
+    let mut fields = Vec::new();
+    collect_fields(selections, concrete, &mut fields);
+    let mut projected = serde_json::Map::new();
+    for field in fields {
+        if field.cache_only {
+            continue;
+        }
+        let Some(value) = data.get(&field.response_key) else {
+            continue;
+        };
+        if field.name == "__typename" {
+            projected.insert(field.response_key.clone(), value.clone());
+            continue;
+        }
+        let field_meta = meta::field_meta(concrete, &field.name).ok_or_else(|| {
+            NormalizeError::UnknownField {
+                type_name: concrete.to_string(),
+                field: field.name.clone(),
+            }
+        })?;
+        if let Some(value) = project_value(field, field_meta.ty.name, field_meta.ty.kind, value)? {
+            projected.insert(field.response_key.clone(), value);
+        }
+    }
+    Ok((!projected.is_empty()).then_some(projected))
+}
+
+fn project_value(
+    field: &FieldNode,
+    named_type: &str,
+    kind: FieldKind,
+    value: &Json,
+) -> Result<Option<Json>, NormalizeError> {
+    match (kind, value) {
+        (FieldKind::Composite, Json::Object(object)) => {
+            Ok(project_object_fields(&field.selection_set, named_type, object)?.map(Json::Object))
+        }
+        (FieldKind::Composite, Json::Array(items)) => {
+            if !field.selection_set.iter().any(selection_returns_data) {
+                return Ok(None);
+            }
+            let mut projected = Vec::with_capacity(items.len());
+            for item in items {
+                let item = match item {
+                    Json::Null => Json::Null,
+                    Json::Object(object) => {
+                        project_object_fields(&field.selection_set, named_type, object)?
+                            .map_or_else(|| Json::Object(serde_json::Map::new()), Json::Object)
+                    }
+                    _ => {
+                        return Err(NormalizeError::Shape {
+                            type_name: named_type.to_string(),
+                            field: field.name.clone(),
+                            detail: "expected object list",
+                        });
+                    }
+                };
+                projected.push(item);
+            }
+            Ok(Some(Json::Array(projected)))
+        }
+        (FieldKind::Composite, Json::Null) => {
+            let has_projected_selection = field.selection_set.iter().any(selection_returns_data);
+            Ok(has_projected_selection.then_some(Json::Null))
+        }
+        (FieldKind::Composite, _) => Err(NormalizeError::Shape {
+            type_name: named_type.to_string(),
+            field: field.name.clone(),
+            detail: "expected object",
+        }),
+        (_, value) => Ok(Some(value.clone())),
+    }
+}
+
+fn selection_returns_data(selection: &Selection) -> bool {
+    match selection {
+        Selection::Field(field) => !field.cache_only,
+        Selection::Fragment { selection_set, .. } => {
+            selection_set.iter().any(selection_returns_data)
+        }
+    }
 }
 
 fn merge_into(records: &mut RecordUpdates, key: EntityKey<'static>, record: Record) {

@@ -1,5 +1,5 @@
 import type { EntityData } from '@entity';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   closeReminderComposer,
@@ -7,6 +7,7 @@ import {
   openReminderEditor,
   reminderComposerOpen,
   reminderComposerState,
+  takeReminderCreatedHandler,
 } from './reminder-composer';
 
 const doc = (id: string, name: string) =>
@@ -106,5 +107,44 @@ describe('reminder composer edit mode', () => {
 
     expect(reminderComposerState.editing?.id).toBe('rem-2');
     expect(reminderComposerState.editing?.description).toBe('Send the invoice');
+  });
+});
+
+describe('reminder composer created handler', () => {
+  beforeEach(() => {
+    closeReminderComposer();
+  });
+
+  // The composer closes before the create request is awaited, so the follow-up
+  // has to be taken out of here first rather than read after the fact.
+  it('hands the created handler over once', () => {
+    const onCreated = vi.fn();
+    openReminderComposer(doc('doc-1', 'Q3 Contract'), { onCreated });
+
+    expect(takeReminderCreatedHandler()).toBe(onCreated);
+    expect(takeReminderCreatedHandler()).toBeUndefined();
+  });
+
+  it('drops the created handler when the composer is closed', () => {
+    openReminderComposer(doc('doc-1', 'Q3 Contract'), { onCreated: vi.fn() });
+    closeReminderComposer();
+
+    expect(takeReminderCreatedHandler()).toBeUndefined();
+  });
+
+  // Editing an existing reminder is not a create, so the previous open's
+  // follow-up must not survive into it.
+  it('drops the created handler when opened to edit', () => {
+    openReminderComposer(doc('doc-1', 'Q3 Contract'), { onCreated: vi.fn() });
+    openReminderEditor(draft('rem-1', 'Chase the contract'));
+
+    expect(takeReminderCreatedHandler()).toBeUndefined();
+  });
+
+  it('drops the previous created handler when reopened to create', () => {
+    openReminderComposer(doc('doc-1', 'Q3 Contract'), { onCreated: vi.fn() });
+    openReminderComposer(doc('doc-2', 'Roadmap'));
+
+    expect(takeReminderCreatedHandler()).toBeUndefined();
   });
 });

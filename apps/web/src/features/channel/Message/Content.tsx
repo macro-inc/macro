@@ -13,10 +13,10 @@ type ContentProps = {
 
 export function Content(props: ContentProps) {
   const message = useMessage();
-  const bigEmoji = createMemo(() => isEmojiOnly(message().content ?? ''));
+  const bigEmoji = createMemo(() => isEmojiOnly(message().content));
   const termsLookup = useSearchHighlightTermsLookup();
 
-  const content = createMemo(() => message().content ?? '');
+  const content = createMemo(() => message().content);
   const terms = createMemo(() => termsLookup?.(message().id));
 
   const [markdownRoot, setMarkdownRoot] = createSignal<HTMLDivElement>();

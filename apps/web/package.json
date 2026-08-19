@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "just ensure-cache-wasm && vite -c vite.config.ts",
+    "dev": "just ensure-cache-wasm && just ensure-agent-fold-wasm && vite -c vite.config.ts",
     "build": "vite build -c vite.config.ts && bun run postbuild:semver && bun run postbuild:bundle-manifest",
     "postbuild:semver": "echo $npm_package_version+$(git rev-parse --short HEAD) > ./dist/semver.txt",
     "postbuild:bundle-manifest": "bun ./scripts/write-bundle-manifest.mjs",
@@ -17,6 +17,7 @@
     "gen-graphql-cache-schema": "bun scripts/generate-graphql-cache-entity-resolver-schema.ts",
     "check-graphql-cache-schema": "bun scripts/generate-graphql-cache-entity-resolver-schema.ts --check",
     "gen-tools": "bun scripts/generate-dcs-tools.ts",
+    "gen-agent-fold-types": "just gen-agent-fold-types",
     "type-check": "tsc --noEmit --skipLibCheck --project tsconfig.json",
     "check": "bun check-graphql-cache-schema && bun type-check && bun biome check",
     "preview": "vite preview -c vite.config.ts --outDir dist --base /app",

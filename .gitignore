@@ -34,3 +34,4 @@ infra/local/generated/
 **/ai_tools/schemas/
 .pi/outputs/
 .commandcode/
+**/.webhook.json

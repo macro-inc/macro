@@ -1,0 +1,106 @@
+# Two recipes, one per sandbox provider. Each publishes `container/` in
+# whatever form its provider wants, then boots an agent in it with a prompt -
+# so both exercise our image, not a stock one. `.env` next to this justfile (or
+# any parent) can supply DAYTONA_API_KEY / NSC_TOKEN / GITHUB_TOKEN.
+#
+# Override the prompt with `just boot-daytona "your prompt"`.
+#
+# Both recipes skip the image build when the image already exists, which is
+# wrong whenever `container/` has changed - a stale image is reused silently and
+# the failure shows up much later, inside the sandbox. Use `just rebuild-daytona`
+# / `rebuild-namespace` after touching the Dockerfile or the sidecar.
+set dotenv-load := true
+
+# What the image is called on both providers: a Daytona snapshot, and a
+# repository in Namespace's nscr.io workspace registry.
+image_name := env_var_or_default("AGENT_HARNESS_IMAGE", "macro-agent-harness")
+
+# Cheap for the agent to answer, and it proves the repo actually cloned.
+default_prompt := "list the files in the repo root, then stop"
+
+# List recipes; first so a bare `just` cannot start an image build
+default:
+    @just --list
+
+# Build the Daytona snapshot if missing, then boot an agent in a sandbox
+boot-daytona prompt=default_prompt:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    # Daytona has no "build from a local Dockerfile at create time" mode, so
+    # the image becomes a snapshot once, out of band, and sandboxes boot from
+    # that.
+    if daytona snapshot list | grep -qw {{image_name}}; then
+      echo "snapshot {{image_name}} already exists, skipping build"
+    else
+      echo "building snapshot {{image_name}} (slow: the image bakes two nix dev shells)"
+      # 10GB disk is the account's per-sandbox ceiling; raising it needs Daytona support.
+      # `--context .` matters twice over. Without any `--context` the CLI
+      # auto-detects from COPY lines and misses
+      # `COPY sidecar/Cargo.toml sidecar/Cargo.lock ./`; with per-entry contexts
+      # (`--context sidecar`) it uploads that directory's *contents* flattened, so
+      # the `sidecar/` prefix the Dockerfile copies from does not exist. Either
+      # way the build dies in the sidecar stage with "/sidecar/src: not found".
+      # Passing the directory keeps paths intact - it is only ~84KB.
+      ( cd container && daytona snapshot create {{image_name}} \
+          --dockerfile Dockerfile \
+          --context . \
+          --cpu 4 --memory 8 --disk 10 )
+    fi
+    DAYTONA_SNAPSHOT={{image_name}} cargo run -p agent_harness --bin boot_agent -- daytona {{ quote(prompt) }}
+
+# Delete the Daytona snapshot so the next boot rebuilds it
+rebuild-daytona prompt=default_prompt:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    # Deleting is how a rebuild happens: `snapshot create` will not replace an
+    # existing name.
+    daytona snapshot delete {{image_name}} || echo "no snapshot {{image_name}} to delete"
+    # Deletion is asynchronous - the snapshot is still listed for a few seconds
+    # after the delete returns, and `boot-daytona` would take that as "already
+    # exists" and reuse the image we just tried to replace.
+    echo "waiting for the snapshot to disappear"
+    for _ in $(seq 1 60); do
+      if ! daytona snapshot list | grep -qw {{image_name}}; then
+        break
+      fi
+      sleep 2
+    done
+    if daytona snapshot list | grep -qw {{image_name}}; then
+      echo "snapshot {{image_name}} is still listed after 120s; not rebuilding" >&2
+      exit 1
+    fi
+    just boot-daytona {{ quote(prompt) }}
+
+# Push the image to nscr.io if needed, then boot an agent in an instance
+boot-namespace prompt=default_prompt:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    # Namespace bearer tokens expire, so unlike the Daytona key this is minted
+    # per run unless the environment already carries one.
+    if [ -n "${NSC_TOKEN:-}" ]; then
+      echo "using NSC_TOKEN from the environment"
+    else
+      echo "minting a dev token (run 'nsc login' first if this fails)"
+      NSC_TOKEN="$(nsc auth generate-dev-token)"
+      export NSC_TOKEN
+    fi
+    # Namespace pulls an ordinary OCI reference, so container/ is built by a
+    # Namespace remote builder and pushed to the workspace registry. Set
+    # NAMESPACE_IMAGE_REF to skip the build and boot an already-pushed image.
+    if [ -z "${NAMESPACE_IMAGE_REF:-}" ]; then
+      echo "building container/ in a Namespace remote builder and pushing to nscr.io"
+      build_log="$(mktemp)"
+      trap 'rm -f "$build_log"' EXIT
+      nsc build container --name {{image_name}} --push 2>&1 | tee "$build_log"
+      # nsc reports the pushed reference in its output; scraping it beats
+      # reassembling nscr.io/<workspace>/<name>:<tag> by hand.
+      NAMESPACE_IMAGE_REF="$(grep -oE 'nscr\.io/[^[:space:]]+' "$build_log" | tail -1)"
+      if [ -z "$NAMESPACE_IMAGE_REF" ]; then
+        echo "could not find the pushed nscr.io reference in the build output;" >&2
+        echo "set NAMESPACE_IMAGE_REF to it and re-run" >&2
+        exit 1
+      fi
+      export NAMESPACE_IMAGE_REF
+    fi
+    echo "booting $NAMESPACE_IMAGE_REF"
+    cargo run -p agent_harness --bin boot_agent -- namespace {{ quote(prompt) }}

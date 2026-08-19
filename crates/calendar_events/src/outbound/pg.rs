@@ -15,7 +15,8 @@ use crate::domain::{
         CalendarBackfillFailureDisposition, CalendarBackfillFailureOutcome, CalendarBackfillJob,
         CalendarBackfillJobKey, CalendarBackfillKind, CalendarCreationTarget, CalendarEvent,
         CalendarEventMutationTarget, CalendarEventOverride, CalendarEventSource,
-        CalendarEventUpsert, CalendarGrantIntent, CalendarLinkTokenIdentity, CalendarOccurrence,
+        CalendarEventUpsert, CalendarGrantIntent, CalendarLinkTokenIdentity, CalendarMentionEvent,
+        CalendarMentionPreview, CalendarMentionRequestItem, CalendarOccurrence,
         CalendarOccurrenceCursor, CalendarReminderFiring, CalendarSyncStatus, CalendarWatchRelease,
         ConferenceProvider, DisconnectedGoogleCalendar, DueCalendarReminder, EventReminderOverride,
         EventReminders, EventStart, EventStatus, EventTime, EventTransparency, EventVisibility,
@@ -303,6 +304,28 @@ struct OccurrenceJoinRow {
     reminder_overrides: serde_json::Value,
     created_at: DateTime<Utc>,
     updated_at: DateTime<Utc>,
+}
+
+struct MentionPreviewRow {
+    mention_exists: bool,
+    viewer_event_id: Option<Uuid>,
+    title: Option<String>,
+    location: Option<String>,
+    organizer_email: Option<String>,
+    organizer_name: Option<String>,
+    recurrence_lines: Option<Vec<String>>,
+    event_starts_at: Option<DateTime<Utc>>,
+    event_ends_at: Option<DateTime<Utc>>,
+    event_start_date: Option<NaiveDate>,
+    event_end_date: Option<NaiveDate>,
+    time_zone: Option<String>,
+    updated_at: Option<DateTime<Utc>>,
+    occurrence_key: Option<String>,
+    occurrence_starts_at: Option<DateTime<Utc>>,
+    occurrence_ends_at: Option<DateTime<Utc>>,
+    occurrence_start_date: Option<NaiveDate>,
+    occurrence_end_date: Option<NaiveDate>,
+    attendee_count: Option<i64>,
 }
 
 struct OverrideAttendeeRow {
@@ -947,6 +970,128 @@ impl CalendarRepository for PgCalendarRepository {
                 Ok((event, occurrence))
             })
             .collect()
+    }
+
+    #[tracing::instrument(skip(self, requester_id, items), err)]
+    async fn mention_previews(
+        &self,
+        requester_id: &str,
+        items: Vec<CalendarMentionRequestItem>,
+        now: DateTime<Utc>,
+    ) -> Result<Vec<CalendarMentionPreview>, Report> {
+        let event_ids: Vec<Uuid> = items.iter().map(|item| item.event_id).collect();
+        let occurrence_keys: Vec<Option<String>> = items
+            .iter()
+            .map(|item| item.occurrence_key.clone())
+            .collect();
+        // The viewer lateral resolves the mentioned meeting to the
+        // requester's own projection through the shared iCalendar UID,
+        // preferring an owned copy over a delegated one and the mentioned
+        // row itself among ties, so the preview only ever reads rows the
+        // requester could already see on their calendar.
+        let rows = sqlx::query_as!(
+            MentionPreviewRow,
+            r#"
+            SELECT
+                (mentioned.id IS NOT NULL) AS "mention_exists!",
+                viewer_event.id AS "viewer_event_id?",
+                viewer_event.title AS "title?",
+                viewer_event.location AS "location?",
+                viewer_event.organizer_email AS "organizer_email?",
+                viewer_event.organizer_name AS "organizer_name?",
+                viewer_event.recurrence_lines AS "recurrence_lines?",
+                viewer_event.starts_at AS "event_starts_at?",
+                viewer_event.ends_at AS "event_ends_at?",
+                viewer_event.start_date AS "event_start_date?",
+                viewer_event.end_date AS "event_end_date?",
+                viewer_event.time_zone AS "time_zone?",
+                viewer_event.updated_at AS "updated_at?",
+                occurrence.occurrence_key AS "occurrence_key?",
+                occurrence.starts_at AS "occurrence_starts_at?",
+                occurrence.ends_at AS "occurrence_ends_at?",
+                occurrence.start_date AS "occurrence_start_date?",
+                occurrence.end_date AS "occurrence_end_date?",
+                attendees.attendee_count AS "attendee_count?"
+            FROM unnest($2::uuid[], $3::text[])
+                WITH ORDINALITY AS requested(event_id, occurrence_key, ord)
+            LEFT JOIN calendar_events mentioned
+                ON mentioned.id = requested.event_id
+               AND mentioned.status <> 'cancelled'
+            LEFT JOIN LATERAL (
+                SELECT
+                    candidate.id,
+                    candidate.title,
+                    candidate.location,
+                    candidate.organizer_email,
+                    candidate.organizer_name,
+                    candidate.recurrence_lines,
+                    candidate.starts_at,
+                    candidate.ends_at,
+                    candidate.start_date,
+                    candidate.end_date,
+                    candidate.time_zone,
+                    candidate.updated_at
+                FROM calendar_events candidate
+                WHERE candidate.ical_uid = mentioned.ical_uid
+                  AND candidate.status <> 'cancelled'
+                  AND (
+                        candidate.owner_id = $1
+                        OR EXISTS (
+                            SELECT 1
+                            FROM macro_user_links link
+                            WHERE link.link_id = candidate.source_link_id
+                              AND link.primary_macro_id = $1
+                        )
+                  )
+                ORDER BY
+                    (candidate.owner_id = $1) DESC,
+                    (candidate.id = mentioned.id) DESC,
+                    candidate.updated_at DESC,
+                    candidate.id
+                LIMIT 1
+            ) viewer_event ON true
+            LEFT JOIN LATERAL (
+                SELECT
+                    instance.occurrence_key,
+                    instance.starts_at,
+                    instance.ends_at,
+                    instance.start_date,
+                    instance.end_date
+                FROM calendar_event_occurrences instance
+                CROSS JOIN LATERAL (
+                    SELECT COALESCE(
+                        instance.starts_at,
+                        instance.start_date::timestamp AT TIME ZONE 'UTC'
+                    ) AS at
+                ) instance_start
+                WHERE instance.event_id = viewer_event.id
+                  AND NOT instance.is_cancelled
+                ORDER BY
+                    (instance.occurrence_key
+                        IS NOT DISTINCT FROM requested.occurrence_key) DESC,
+                    (instance_start.at >= $4) DESC,
+                    CASE WHEN instance_start.at >= $4 THEN instance_start.at END ASC,
+                    instance_start.at DESC,
+                    instance.occurrence_key
+                LIMIT 1
+            ) occurrence ON true
+            LEFT JOIN LATERAL (
+                SELECT count(*) AS attendee_count
+                FROM calendar_event_attendees attendee
+                WHERE attendee.event_id = viewer_event.id
+            ) attendees ON true
+            ORDER BY requested.ord
+            "#,
+            requester_id,
+            &event_ids,
+            &occurrence_keys as &[Option<String>],
+            now,
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map_err(report)?;
+
+        rows.into_iter().map(mention_preview_from_row).collect()
     }
 
     #[tracing::instrument(skip(self, requester_id), err)]
@@ -2986,6 +3131,49 @@ fn row_time(
             "invalid calendar time shape in database"
         )),
     }
+}
+
+fn mention_preview_from_row(row: MentionPreviewRow) -> Result<CalendarMentionPreview, Report> {
+    if !row.mention_exists {
+        return Ok(CalendarMentionPreview::DoesNotExist);
+    }
+    let Some(viewer_event_id) = row.viewer_event_id else {
+        return Ok(CalendarMentionPreview::NoAccess);
+    };
+    let time = if row.occurrence_key.is_some() {
+        row_time(
+            row.occurrence_starts_at,
+            row.occurrence_ends_at,
+            row.occurrence_start_date,
+            row.occurrence_end_date,
+            row.time_zone,
+        )?
+    } else {
+        // No materialized instance (the event sits outside the maintained
+        // window) — the series' own span still gives the preview a time.
+        row_time(
+            row.event_starts_at,
+            row.event_ends_at,
+            row.event_start_date,
+            row.event_end_date,
+            row.time_zone,
+        )?
+    };
+    Ok(CalendarMentionPreview::Accessible(Box::new(
+        CalendarMentionEvent {
+            viewer_event_id,
+            title: row.title.unwrap_or_default(),
+            time,
+            occurrence_key: row.occurrence_key,
+            is_recurring: !row.recurrence_lines.unwrap_or_default().is_empty(),
+            location: row.location,
+            organizer_email: row.organizer_email,
+            organizer_name: row.organizer_name,
+            attendee_count: usize::try_from(row.attendee_count.unwrap_or_default())
+                .unwrap_or_default(),
+            updated_at: row.updated_at.unwrap_or(DateTime::<Utc>::MIN_UTC),
+        },
+    )))
 }
 
 fn event_from_join(

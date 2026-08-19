@@ -32,6 +32,9 @@ const FUSIONAUTH_API_KEY_SECRET_KEY = config.require(
 const AUTHENTICATION_SERVICE_INTERNAL_API_KEY = config.require(
   `authentication_service_internal_api_key`
 );
+const MICROSOFT_TOKEN_KMS_DELETION_WINDOW_IN_DAYS = config.requireNumber(
+  'microsoft_token_kms_deletion_window_days'
+);
 
 const FUSIONAUTH_CLIENT_SECRET_KEY = config.require(
   `fusionauth_client_secret_key`
@@ -148,7 +151,12 @@ const service = new AuthenticationService('authentication-service', {
     backfillQueueArn,
     contactsQueueArn,
   ],
+  microsoftTokenKmsDeletionWindowInDays:
+    MICROSOFT_TOKEN_KMS_DELETION_WINDOW_IN_DAYS,
   containerEnvVars: [
+    // Configure MICROSOFT_CLIENT_ID, MICROSOFT_CLIENT_SECRET, and
+    // MICROSOFT_TENANT_ID together in the authentication_service Doppler
+    // config.
     { name: 'ENVIRONMENT', value: stack },
     { name: 'DOPPLER_PROJECT', value: 'authentication_service' },
     // OpenTelemetry / Datadog tracing configuration

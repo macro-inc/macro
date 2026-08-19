@@ -2,7 +2,6 @@ import './MobileTouchMenu.css';
 import { hapticImpact } from '@core/mobile/haptics';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { ICON_ANIMATION_DURATION_MS } from '@icon/animation';
-import CaretUpIcon from '@phosphor/caret-up.svg';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { cn, Layer } from '@ui';
 import {
@@ -31,6 +30,8 @@ export type MobileTouchMenuItem = {
   icon?: MobileTouchIconComponent;
   active?: () => boolean;
   animateIcon?: boolean;
+  /** Draw a separator line below this row. */
+  dividerAfter?: boolean;
   onSelect: () => void;
 };
 
@@ -72,10 +73,7 @@ function MobileTouchMenuButton(props: MobileTouchMenuButtonProps) {
       }}
       onTouchMove={props.onTouchMove}
       onTouchEnd={props.onTouchEnd}
-      class={cn(
-        'island pointer-events-auto flex items-center justify-center',
-        props.class
-      )}
+      class={cn('flex items-center justify-center', props.class)}
     >
       <div class="size-6 [&_svg]:size-6">
         {props.animateIcon === false ? (
@@ -88,11 +86,14 @@ function MobileTouchMenuButton(props: MobileTouchMenuButtonProps) {
   );
 }
 
+/**
+ * The trigger renders flat: hosts wrap it in a MobileDockIsland (alone or
+ * grouped with other controls) to give it the floating chrome.
+ */
 export function MobileTouchMenu(props: {
   triggerIcon: MobileTouchIconComponent;
   position?: 'bottom-row' | 'trigger-bottom';
   footerLabel: string;
-  footerCaretClass?: string;
   items: MobileTouchMenuItem[];
 }) {
   // `open` drives the show/hide animation (via data-expanded); `mounted`
@@ -231,56 +232,55 @@ export function MobileTouchMenu(props: {
                 >
                   <For each={props.items}>
                     {(item) => (
-                      <button
-                        type="button"
-                        data-mobile-touch-menu-item={item.id}
-                        class={cn(
-                          'flex h-11 items-center gap-2 rounded-lg px-3 text-sm',
-                          item.active?.() ? 'text-accent' : 'text-ink',
-                          hoveredId() === item.id
-                            ? 'bg-hover'
-                            : 'hover:bg-hover'
-                        )}
-                        onClick={() => {
-                          hapticImpact('light');
-                          select(item.id);
-                        }}
-                      >
-                        <Show when={item.icon}>
-                          {(Icon) => (
-                            <div class="size-4 shrink-0 [&_svg]:size-4">
-                              <Show
-                                when={item.animateIcon !== false}
-                                fallback={<Dynamic component={Icon()} />}
-                              >
-                                <Dynamic
-                                  component={Icon()}
-                                  triggerAnimation={hoveredId() === item.id}
-                                />
-                              </Show>
-                            </div>
+                      <>
+                        <button
+                          type="button"
+                          data-mobile-touch-menu-item={item.id}
+                          class={cn(
+                            'flex h-11 items-center gap-2 rounded-lg px-3 text-sm',
+                            item.active?.() ? 'text-accent' : 'text-ink',
+                            hoveredId() === item.id
+                              ? 'bg-hover'
+                              : 'hover:bg-hover'
                           )}
+                          onClick={() => {
+                            hapticImpact('light');
+                            select(item.id);
+                          }}
+                        >
+                          <Show when={item.icon}>
+                            {(Icon) => (
+                              <div class="size-4 shrink-0 [&_svg]:size-4">
+                                <Show
+                                  when={item.animateIcon !== false}
+                                  fallback={<Dynamic component={Icon()} />}
+                                >
+                                  <Dynamic
+                                    component={Icon()}
+                                    triggerAnimation={hoveredId() === item.id}
+                                  />
+                                </Show>
+                              </div>
+                            )}
+                          </Show>
+                          <span>{item.label}</span>
+                        </button>
+                        <Show when={item.dividerAfter}>
+                          <div class="-mx-1 h-px shrink-0 bg-edge" />
                         </Show>
-                        <span>{item.label}</span>
-                      </button>
+                      </>
                     )}
                   </For>
                   <div class="-mx-1 h-px shrink-0 bg-edge" />
                   <button
                     type="button"
-                    class="flex h-9 shrink-0 items-center justify-between px-3 text-sm font-medium text-ink-muted"
+                    class="flex h-9 shrink-0 items-center px-3 text-sm font-medium text-ink-muted"
                     onPointerDown={() => {
                       hapticImpact('light');
                       closeMenu();
                     }}
                   >
                     <span>{props.footerLabel}</span>
-                    <CaretUpIcon
-                      class={cn(
-                        'size-6 rotate-180 text-ink',
-                        props.footerCaretClass
-                      )}
-                    />
                   </button>
                 </div>
               </div>

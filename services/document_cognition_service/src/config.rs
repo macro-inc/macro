@@ -44,6 +44,11 @@ maybe_env_vars!(
     /// URL of Pipedream's remote MCP server. Defaults to
     /// `https://remote.mcp.pipedream.net`.
     pub struct PipedreamMcpUrl;
+    /// Comma-separated browser origins allowed to embed Pipedream's hosted
+    /// Connect UI (sent as the Connect token's `allowed_origins`). Defaults
+    /// by deploy environment: the app origin (`https://macro.com` /
+    /// `https://dev.macro.com`) plus localhost outside production.
+    pub struct PipedreamAllowedOrigins;
 );
 
 /// The configuration parameters for the application.
@@ -95,6 +100,8 @@ pub struct Config {
     pub pipedream_api_url: PipedreamApiUrl,
     /// URL of Pipedream's remote MCP server.
     pub pipedream_mcp_url: PipedreamMcpUrl,
+    /// Browser origins allowed to embed Pipedream's hosted Connect UI.
+    pub pipedream_allowed_origins: PipedreamAllowedOrigins,
     /// The internal api key
     pub internal_api_key: InternalApiKey,
     /// AI editing worker URL
@@ -155,6 +162,7 @@ impl Config {
             pipedream_environment: PipedreamEnvironment::Unset,
             pipedream_api_url: PipedreamApiUrl::Unset,
             pipedream_mcp_url: PipedreamMcpUrl::Unset,
+            pipedream_allowed_origins: PipedreamAllowedOrigins::Unset,
             internal_api_key: InternalApiKey::Comptime(""),
             ai_editing_worker_url: AiEditingWorkerUrl::unwrap_new().to_string(),
             document_permission_jwt: DocumentPermissionJwt::Comptime("DOCUMENT_PERMISSION_JWT"),

@@ -698,7 +698,7 @@ export type CalendarMutationApiError = {
 /**
  * Machine-readable failure category for calendar mutations.
  */
-export type CalendarMutationErrorCode = 'not_found' | 'read_only' | 'no_writable_calendar' | 'not_attendee' | 'invalid_input' | 'reauth_required' | 'provider_rejected' | 'retryable' | 'persist_failed';
+export type CalendarMutationErrorCode = 'not_found' | 'occurrence_not_found' | 'read_only' | 'no_writable_calendar' | 'not_attendee' | 'invalid_input' | 'reauth_required' | 'provider_rejected' | 'retryable' | 'persist_failed';
 
 /**
  * How much of a recurring series an RSVP applies to.
@@ -708,6 +708,17 @@ export type CalendarMutationErrorCode = 'not_found' | 'read_only' | 'no_writable
  * promise sync could not keep.
  */
 export type CalendarRsvpScopeParam = 'all' | 'this_event';
+
+/**
+ * How much of a recurring series an update applies to.
+ *
+ * Like RSVPs there is no this-and-following variant: the provider cannot
+ * express a forward-scoped edit as one write, and emulating it (truncate
+ * the series, insert an edited clone) is non-atomic and re-invites the
+ * attendees of the clone. Compose it from a this-and-following deletion
+ * and a create when that shape is wanted.
+ */
+export type CalendarUpdateScopeParam = 'all' | 'this_event';
 
 export type CancelBackfillParams = {
     job_id: string;
@@ -1435,10 +1446,15 @@ export type UpdateCalendarEventRequest = {
      */
     location?: string | null;
     /**
+     * Original-start key of the occurrence the update targets.
+     */
+    recurrenceId?: string | null;
+    /**
      * Replacement recurrence properties; an empty list clears them.
      */
     recurrenceLines?: Array<string> | null;
     reminders?: null | EventReminders;
+    scope?: null | CalendarUpdateScopeParam;
     time?: null | EventTime;
     /**
      * Replacement title; an empty string clears it.
@@ -1726,7 +1742,7 @@ export type UpdateCalendarEventErrors = {
      */
     403: CalendarMutationApiError;
     /**
-     * Event not found
+     * Event or targeted occurrence not found
      */
     404: CalendarMutationApiError;
     /**

@@ -85,26 +85,3 @@ fn rejects_unknown_fragment_and_type() {
         Err(RecordSelectionError::UnknownType(_))
     ));
 }
-
-#[test]
-fn validates_page_limits() {
-    assert!(matches!(
-        validate_limit(0),
-        Err(RecordSelectionError::InvalidLimit { .. })
-    ));
-    validate_limit(MAX_RECORD_SELECTION_PAGE_SIZE).unwrap();
-    assert!(matches!(
-        validate_limit(MAX_RECORD_SELECTION_PAGE_SIZE + 1),
-        Err(RecordSelectionError::InvalidLimit { .. })
-    ));
-}
-
-#[test]
-fn cursor_has_opaque_roundtrip() {
-    let cursor = RecordCursor::new(EntityKey("GraphqlSoupDocument:item-1".into()));
-    let encoded = serde_json::to_value(&cursor).unwrap();
-    assert_eq!(
-        serde_json::from_value::<RecordCursor>(encoded).unwrap(),
-        cursor
-    );
-}

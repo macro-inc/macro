@@ -1,4 +1,6 @@
 {
+  "git+https://github.com/seanaye/turso?rev=be9acfe9e5e6efb17911af84047e4855cace53a3#be9acfe9e5e6efb17911af84047e4855cace53a3" =
+    "sha256-BTS0ypmcVWne+m0BQp/VT2O6mOFB/cc9F1TgQMo48aM=";
   "git+https://github.com/whutchinson98/jsonwebtoken#c8c0d19511a0e7ba9d456e21437a79d321e99f16" =
     "sha256-jllT52SAIiNpTPg7Vm3wmT79w/CIz9NnVKM81oQq8dM=";
   "git+https://github.com/macro-inc/rig?branch=feat/responses-api-non-strict-tools#6deadfc6f9b432c849ea79733a549f46407530b7" =

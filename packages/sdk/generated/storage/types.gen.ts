@@ -25,7 +25,7 @@ export type AddFavoriteRequest = {
     /**
      * The type of the entity to favorite.
      */
-    entityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill';
+    entityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill' | 'agent_session';
 };
 
 /**
@@ -1027,6 +1027,10 @@ export type Bot = {
      */
     handle: string;
     /**
+     * Whether mentioning this bot opens a sandboxed coding-agent session.
+     */
+    has_agent: boolean;
+    /**
      * Bot id.
      */
     id: BotId;
@@ -1312,6 +1316,108 @@ export type CalendarEventFilters = {
      * Event statuses such as `confirmed`, `tentative`, or `cancelled`.
      */
     statuses?: Array<string>;
+};
+
+/**
+ * Meeting-level fields shown in a calendar event mention preview, taken from
+ * the requester's own projection of the meeting.
+ */
+export type CalendarMentionEvent = {
+    /**
+     * Number of attendees on the requester's copy.
+     */
+    attendeeCount: number;
+    /**
+     * Whether the event repeats.
+     */
+    isRecurring: boolean;
+    /**
+     * Location label, when set.
+     */
+    location?: string | null;
+    /**
+     * Key of the previewed instance, absent when no occurrence is
+     * materialized.
+     */
+    occurrenceKey?: string | null;
+    /**
+     * Organizer email.
+     */
+    organizerEmail?: string | null;
+    /**
+     * Organizer display name.
+     */
+    organizerName?: string | null;
+    /**
+     * Time of the previewed instance: the requested occurrence when it
+     * exists, else the next upcoming one, else the latest past one, else the
+     * series start.
+     */
+    time: EventTime;
+    /**
+     * Display title.
+     */
+    title: string;
+    /**
+     * Entity update time of the requester's copy.
+     */
+    updatedAt: string;
+    /**
+     * The requester's own event entity for the mentioned meeting. Differs
+     * from the mentioned id when the mention came from another attendee.
+     */
+    viewerEventId: string;
+};
+
+/**
+ * Resolution of one mentioned event, in request order.
+ */
+export type CalendarMentionPreviewItem = {
+    event?: null | CalendarMentionEvent;
+    /**
+     * The mentioned event id, echoed from the request.
+     */
+    eventId: string;
+    /**
+     * Visibility of the mentioned event to the requester.
+     */
+    type: CalendarMentionPreviewKind;
+};
+
+/**
+ * Requester-relative visibility of one mentioned event.
+ */
+export type CalendarMentionPreviewKind = 'access' | 'no_access' | 'does_not_exist';
+
+/**
+ * Batch calendar mention preview request.
+ */
+export type CalendarMentionPreviewRequest = {
+    /**
+     * Mentioned events to resolve, at most 100.
+     */
+    items: Array<CalendarMentionPreviewRequestItem>;
+};
+
+/**
+ * One mentioned event to resolve for the requester.
+ */
+export type CalendarMentionPreviewRequestItem = {
+    /**
+     * Mentioned calendar event id.
+     */
+    eventId: string;
+    /**
+     * Occurrence the mention points at, when it targets one instance.
+     */
+    occurrenceKey?: string | null;
+};
+
+/**
+ * Batch calendar mention preview response.
+ */
+export type CalendarMentionPreviewResponse = {
+    items: Array<CalendarMentionPreviewItem>;
 };
 
 /**
@@ -2869,7 +2975,7 @@ export type CreateReminderRequest = {
     /**
      * Type of the entity to attach the reminder to. Requires `entityId`.
      */
-    entityType?: null | 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill';
+    entityType?: null | 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill' | 'agent_session';
     /**
      * When and how often the reminder fires.
      */
@@ -4578,7 +4684,7 @@ export type Favorite = {
     /**
      * The type of the favorited entity.
      */
-    entityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill';
+    entityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill' | 'agent_session';
     /**
      * File type of the favorited document, when applicable.
      */
@@ -4600,7 +4706,7 @@ export type FavoriteEntityRef = {
     /**
      * The type of the favorited entity.
      */
-    entityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill';
+    entityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill' | 'agent_session';
 };
 
 /**
@@ -6187,7 +6293,7 @@ export type Reminder = {
     /**
      * Type of the associated entity, when the reminder is attached to one.
      */
-    entityType?: null | 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill';
+    entityType?: null | 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill' | 'agent_session';
     /**
      * Reminder id.
      */
@@ -7550,7 +7656,7 @@ export type SoupReminderReference = {
     /**
      * The referenced entity's type.
      */
-    entityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill';
+    entityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill' | 'agent_session';
     /**
      * File type, when the reference is a document — `md`, `pdf`, and so on.
      */
@@ -8567,6 +8673,37 @@ export type ListOccurrencesResponses = {
 };
 
 export type ListOccurrencesResponse = ListOccurrencesResponses[keyof ListOccurrencesResponses];
+
+export type MentionPreviewsData = {
+    body: CalendarMentionPreviewRequest;
+    path?: never;
+    query?: never;
+    url: '/calendar-events/preview';
+};
+
+export type MentionPreviewsErrors = {
+    /**
+     * Too many events in one request
+     */
+    400: unknown;
+    /**
+     * Authentication required
+     */
+    401: unknown;
+    /**
+     * Calendar query failed
+     */
+    500: unknown;
+};
+
+export type MentionPreviewsResponses = {
+    /**
+     * Requester-relative previews for the mentioned events
+     */
+    200: CalendarMentionPreviewResponse;
+};
+
+export type MentionPreviewsResponse = MentionPreviewsResponses[keyof MentionPreviewsResponses];
 
 export type GetBatchCallRecordPreviewData = {
     body: GetBatchCallRecordPreviewRequest;
@@ -11370,7 +11507,7 @@ export type RemoveFavoriteByEntityData = {
         /**
          * The type of an entity in Macro
          */
-        entity_type: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill';
+        entity_type: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill' | 'agent_session';
         /**
          * The id of the favorited entity.
          */
@@ -12197,7 +12334,7 @@ export type ListRemindersData = {
         /**
          * The type of an entity in Macro
          */
-        entityType?: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill';
+        entityType?: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill' | 'agent_session';
         /**
          * Restrict to reminders attached to this entity id. Requires `entityType`.
          */
