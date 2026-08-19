@@ -1,10 +1,12 @@
 import { toast } from '@core/component/Toast/Toast';
 import type { CacheHost } from '@graphql-cache/host/types';
-import type { Client } from '@urql/core';
+import type { Client, OperationResult } from '@urql/core';
 import {
+  ActivityUpdatesDocument,
   NotificationUpdatesDocument,
   SoupUpdatesDocument,
 } from './graphql/generated/graphql';
+import { createActivityUpdatesHandler } from './graphql-activity-updates';
 
 const SOUP_GRAPHQL_WEBSOCKET_PATH = '/items/soup/graphql/ws';
 
@@ -80,7 +82,18 @@ export function createGraphqlSoupWebSocketUrlResolver({
   };
 }
 
-const LIVE_UPDATE_SUBSCRIPTIONS = [
+/** One realtime subscription: its document, and optionally a per-connection
+ * result handler (the cache write-through runs regardless). */
+type LiveUpdateSubscription = {
+  document: Parameters<Client['subscription']>[0];
+  errorMessage: string;
+  createOnResult?: (context: {
+    client: Pick<Client, 'query'>;
+    host: CacheHost;
+  }) => (result: OperationResult) => void;
+};
+
+const LIVE_UPDATE_SUBSCRIPTIONS: readonly LiveUpdateSubscription[] = [
   {
     document: SoupUpdatesDocument,
     errorMessage: 'GraphQL Soup updates subscription error',
@@ -89,11 +102,19 @@ const LIVE_UPDATE_SUBSCRIPTIONS = [
     document: NotificationUpdatesDocument,
     errorMessage: 'GraphQL notification updates subscription error',
   },
-] as const;
+  {
+    document: ActivityUpdatesDocument,
+    errorMessage: 'GraphQL activity updates subscription error',
+    createOnResult: createActivityUpdatesHandler,
+  },
+];
 
 /** Owns the realtime subscriptions served by the Soup GraphQL websocket. */
 export function createGraphqlSoupSubscriptionsLifecycle(): {
-  replace(client?: Pick<Client, 'subscription'>, host?: CacheHost): void;
+  replace(
+    client?: Pick<Client, 'subscription' | 'query'>,
+    host?: CacheHost
+  ): void;
   dispose(): void;
 } {
   let unsubscribes: Array<() => void> = [];
@@ -110,7 +131,8 @@ export function createGraphqlSoupSubscriptionsLifecycle(): {
 
       let signaledFailure = false;
       unsubscribes = LIVE_UPDATE_SUBSCRIPTIONS.map(
-        ({ document, errorMessage }) => {
+        ({ document, errorMessage, createOnResult }) => {
+          const onResult = createOnResult?.({ client, host });
           const subscription = client
             .subscription(document, {})
             .subscribe((result) => {
@@ -122,7 +144,9 @@ export function createGraphqlSoupSubscriptionsLifecycle(): {
                     subtext: 'Refresh the app to reconnect.',
                   });
                 }
+                return;
               }
+              onResult?.(result);
             });
           return () => subscription.unsubscribe();
         }

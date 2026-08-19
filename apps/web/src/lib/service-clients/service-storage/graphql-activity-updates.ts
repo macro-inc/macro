@@ -1,0 +1,132 @@
+import { inspectVariants, selectAll } from '@graphql-cache/exchange/inspection';
+import type { CacheHost } from '@graphql-cache/host/types';
+import { notifyEntityActivityPush } from '@queries/activity/push-registry';
+import type { Client, OperationResult } from '@urql/core';
+import {
+  type ActivityUpdatesSubscription,
+  MyActivityDocument,
+  type MyActivityQuery,
+  type MyActivityQueryVariables,
+} from './graphql/generated/graphql';
+
+/** How long pushed events accumulate before one coalesced revalidation. */
+export const ACTIVITY_PUSH_DEBOUNCE_MS = 300;
+
+/**
+ * Random extra delay on top of the debounce. One activity event fans out to
+ * every subscribed client at essentially the same instant; the jitter spreads
+ * their otherwise-synchronized refetches apart.
+ */
+export const ACTIVITY_PUSH_JITTER_MS = 700;
+
+/**
+ * Turns realtime activity pushes into query revalidations.
+ *
+ * A pushed `GraphqlActivityEvent` normalizes into its cache record through
+ * the ordinary subscription write-through, but a brand-new id belongs to no
+ * cached list yet — nothing references it, so no query re-emits. The cache
+ * host has no push-side link-patch surface (link patches exist only inside
+ * optimistic-mutation transactions), so list membership is recovered the
+ * blunt-but-correct way: re-execute the canonical list queries against the
+ * network. Pushes are per-subject and rare, and events are debounced into
+ * one coalesced pass, so the network cost stays at "a page-0 fetch per burst
+ * of your own actions".
+ */
+export function createActivityUpdatesHandler(context: {
+  client: Pick<Client, 'query'>;
+  host: CacheHost;
+}): (result: OperationResult<ActivityUpdatesSubscription>) => void {
+  const { client, host } = context;
+  let pendingEntityIds = new Set<string>();
+  let flushTimer: ReturnType<typeof setTimeout> | undefined;
+  let awaitingVisibility = false;
+
+  const flush = () => {
+    flushTimer = undefined;
+    // A hidden tab holds its refetch until it is next visible: the stale
+    // window is invisible anyway, and this keeps a fleet of background tabs
+    // from stampeding the API over the same pushed event.
+    if (typeof document !== 'undefined' && document.hidden) {
+      if (!awaitingVisibility) {
+        awaitingVisibility = true;
+        document.addEventListener(
+          'visibilitychange',
+          () => {
+            awaitingVisibility = false;
+            scheduleFlush();
+          },
+          { once: true }
+        );
+      }
+      return;
+    }
+    const entityIds = pendingEntityIds;
+    pendingEntityIds = new Set();
+    void revalidateActivityQueries({ client, host, entityIds }).catch(
+      (error) => {
+        console.warn('activity push revalidation failed', error);
+      }
+    );
+  };
+
+  const scheduleFlush = () => {
+    if (flushTimer !== undefined) return;
+    flushTimer = setTimeout(
+      flush,
+      ACTIVITY_PUSH_DEBOUNCE_MS + Math.random() * ACTIVITY_PUSH_JITTER_MS
+    );
+  };
+
+  return (result) => {
+    const patch = result.data?.activityUpdates;
+    // Deletions need no list recovery: the write-through's cache deletion
+    // already removes the record, and removals never add list members.
+    if (patch?.__typename !== 'GraphqlActivityEvent') return;
+
+    pendingEntityIds.add(patch.entityId);
+    scheduleFlush();
+  };
+}
+
+/**
+ * Re-executes the activity list queries a pushed event may belong to: the
+ * feed's first page (variants proven cached via inspection), and — through
+ * the push registry — the entity-activity query of every mounted side panel
+ * showing a pushed entity. EntityActivity is deliberately NOT inspected:
+ * `$limit` is an argument of a deeper field than the inspectable `soup`
+ * selection and the engine rejects the inspection outright, so mounted
+ * queries register their own revalidators instead.
+ */
+async function revalidateActivityQueries(args: {
+  client: Pick<Client, 'query'>;
+  host: CacheHost;
+  entityIds: ReadonlySet<string>;
+}): Promise<void> {
+  const { client, host, entityIds } = args;
+  if (host.disabled) return;
+
+  notifyEntityActivityPush(entityIds);
+
+  const refetches: Array<Promise<unknown>> = [];
+
+  const feedVariants = await inspectVariants(
+    host,
+    selectAll(MyActivityDocument).field('user').field('activity')
+  );
+  for (const variant of feedVariants) {
+    // Deeper pages are anchored strictly before their cursor, so a new
+    // (newest) row can only ever belong to the first page.
+    if (variant.variables.input.cursor != null) continue;
+    refetches.push(
+      client
+        .query<MyActivityQuery, MyActivityQueryVariables>(
+          MyActivityDocument,
+          variant.variables,
+          { requestPolicy: 'network-only' }
+        )
+        .toPromise()
+    );
+  }
+
+  await Promise.all(refetches);
+}
