@@ -7,7 +7,6 @@ version = "0.1.0"
 [dependencies]
 async-graphql = { workspace = true, features = ["dataloader"] }
 async-stream = { workspace = true }
-base64 = { workspace = true }
 futures = { workspace = true }
 axum = { workspace = true }
 axum-extra = { workspace = true }
@@ -34,13 +33,11 @@ model_file_type = { path = "../model_file_type" }
 models_grouping = { path = "../models_grouping" }
 models_pagination = { path = "../models_pagination" }
 models_soup = { path = "../models_soup" }
-predicate-index = { path = "../predicate_index" }
 rootcause = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 soup = { path = "../soup", default-features = false, features = ["ports"] }
 soup_realtime = { path = "../soup_realtime", default-features = false, features = ["ports"] }
-soup-filter-projection = { path = "../soup_filter_projection" }
 tokio = { workspace = true }
 uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }

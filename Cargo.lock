@@ -2823,7 +2823,7 @@ dependencies = [
 
 [[package]]
 name = "cache-wasm"
-version = "0.6.2"
+version = "0.6.3"
 dependencies = [
  "async-lock",
  "cache-core",
@@ -6871,7 +6871,6 @@ dependencies = [
  "async-stream",
  "axum",
  "axum-extra",
- "base64 0.22.1",
  "chrono",
  "document_sub_type",
  "either",
@@ -6892,12 +6891,10 @@ dependencies = [
  "models_pagination",
  "models_properties",
  "models_soup",
- "predicate-index",
  "rootcause",
  "serde",
  "serde_json",
  "soup",
- "soup-filter-projection",
  "soup_realtime",
  "tokio",
  "uuid",
@@ -14764,13 +14761,11 @@ dependencies = [
 name = "soup-filter-cache-adapter"
 version = "0.1.0"
 dependencies = [
- "base64 0.22.1",
  "cache-core",
  "chrono",
  "graphql_soup_filter_input",
  "item-filter-index",
  "predicate-index",
- "serde",
  "serde_json",
  "soup-filter-projection",
  "thiserror 2.0.18",

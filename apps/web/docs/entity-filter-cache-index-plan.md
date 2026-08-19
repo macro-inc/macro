@@ -251,7 +251,7 @@ Tests must prove that unsupported leaves under `And`, `Or`, and `Not` cannot dis
 
 ## Phase 4: Generate compact direct-field projections
 
-Generate a versioned generic projection directly from each authoritative Document, Project, or Chat `SoupItem`. Do not build a second relation-hydration subsystem for the first profile.
+Generate a versioned generic projection in `soup-filter-cache-adapter` from the direct fields on each authoritative Document, Project, or Chat GraphQL response. Use the same projection policy for authoritative responses and local optimistic updates. Do not build a second relation-hydration subsystem for the first profile.
 
 The projection may contain only the facts required by `soup-flat-v1`:
 
@@ -263,13 +263,9 @@ The projection may contain only the facts required by `soup-flat-v1`:
 
 If a proposed fact is not reliably available on the authoritative Soup item, defer that literal or add the value to authoritative Soup hydration. Do not issue an independent set of relation queries merely to increase local filter coverage.
 
-Expose the generic projection as a versioned GraphQL envelope and select it in:
+Select the required direct fields in initial Soup, patch, and mutation-effect fragments capable of replacing supported entities. The browser adapter must require every field needed for a complete projection; missing or malformed direct fields mark the record incomplete rather than producing an empty or partial projection.
 
-- initial Soup item fragments;
-- Soup patch fragments;
-- mutation-effect fragments capable of replacing supported entities.
-
-Projection fact and sort arrays must be required on the wire. Absence must never deserialize as a complete empty projection.
+Do not expose cache projection facts in the server GraphQL schema. Local-first optimistic writes must be able to recalculate the same facts without a server round trip.
 
 ## Phase 5: Add generic cache lifecycle boundaries
 
@@ -436,7 +432,7 @@ Implement in independently verified revisions:
 2. shared GraphQL input materialization;
 3. minimal predicate IR and reference evaluator;
 4. supported-profile eligibility and compiler;
-5. compact direct-field projections and GraphQL envelope;
+5. compact projections derived locally from GraphQL direct fields;
 6. generic cache lifecycle boundary;
 7. minimal Turso schema, maintenance, and SQL evaluation;
 8. browser protocol and `useSoupAstItemsQuery` integration;

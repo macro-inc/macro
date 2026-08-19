@@ -1948,34 +1948,6 @@ enum GraphqlEntityType {
 }
 
 """
-Generic exact posting in a versioned Soup filter projection.
-"""
-type GraphqlFilterExactFact {
-	"""
-	Opaque profile-owned attribute token.
-	"""
-	attribute: String!
-	"""
-	Unpadded base64 encoding of the canonical exact-value bytes.
-	"""
-	value: String!
-}
-
-"""
-Generic ordered integer fact in a versioned Soup filter projection.
-"""
-type GraphqlFilterIntegerFact {
-	"""
-	Opaque profile-owned attribute token.
-	"""
-	attribute: String!
-	"""
-	Signed 64-bit value encoded as decimal to avoid GraphQL `Int` truncation.
-	"""
-	value: String!
-}
-
-"""
 The two operands of a recursive `PropertiesFilterExpr` binary expression.
 """
 input GraphqlFilterPropertiesBinaryExpr {
@@ -4074,10 +4046,6 @@ type GraphqlSoupChat implements GraphqlSoupEntity {
 	"""
 	deletedAt: String
 	"""
-	Complete generic facts for the active exact-filter profile.
-	"""
-	filterProjection: GraphqlSoupFilterProjection!
-	"""
 	Properties assigned to this entity that the authenticated user may view.
 	"""
 	properties: [GraphqlProperty!]!
@@ -4245,10 +4213,6 @@ type GraphqlSoupDocument implements GraphqlSoupEntity {
 	The sub type.
 	"""
 	subType: GraphqlSoupDocumentSubType
-	"""
-	Complete generic facts for the active exact-filter profile.
-	"""
-	filterProjection: GraphqlSoupFilterProjection!
 	"""
 	Properties assigned to this entity that the authenticated user may view.
 	"""
@@ -4890,32 +4854,6 @@ enum GraphqlSoupEntityType {
 }
 
 """
-Required, versioned generic facts for exact local Soup filtering.
-"""
-type GraphqlSoupFilterProjection {
-	"""
-	Projection/compiler compatibility profile.
-	"""
-	profile: String!
-	"""
-	Opaque profile-owned partition token.
-	"""
-	partition: String!
-	"""
-	Complete exact-fact array for this profile.
-	"""
-	exactFacts: [GraphqlFilterExactFact!]!
-	"""
-	Complete ordered-integer array for this profile.
-	"""
-	integerFacts: [GraphqlFilterIntegerFact!]!
-	"""
-	Complete sort-fact array for this profile.
-	"""
-	sortFacts: [GraphqlFilterIntegerFact!]!
-}
-
-"""
 GraphQL representation of the soup foreign entity.
 """
 type GraphqlSoupForeignEntity implements GraphqlSoupEntity {
@@ -5039,10 +4977,6 @@ type GraphqlSoupProject implements GraphqlSoupEntity {
 	The deleted timestamp in RFC 3339 format.
 	"""
 	deletedAt: String
-	"""
-	Complete generic facts for the active exact-filter profile.
-	"""
-	filterProjection: GraphqlSoupFilterProjection!
 	"""
 	Properties assigned to this entity that the authenticated user may view.
 	"""

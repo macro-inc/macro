@@ -4,17 +4,15 @@
 //! This crate owns the application GraphQL schema and `soup-flat-v1` policy.
 //! Cache crates receive only the generic query and projection IR produced here.
 
-use base64::{Engine as _, engine::general_purpose::STANDARD_NO_PAD};
 use cache_core::predicate::{ProjectionIncompleteKind, ProjectionMutation};
 use graphql_soup_filter_input::materialize_graphql_filter;
 use item_filter_index::{
     LocalCompileOutcome, SoupFlatRequest, SoupIndexSort, compile_soup_flat_v1, vocabulary,
 };
 use predicate_index::{
-    ExactFact, ExactValue, IndexDocument, IntegerFact, OptimisticProjectionMutation, Profile,
-    RecordKey, SortDirection, Token, ValidatedIndexQuery,
+    IndexDocument, OptimisticProjectionMutation, RecordKey, SortDirection, Token,
+    ValidatedIndexQuery,
 };
-use serde::Deserialize;
 use soup_filter_projection::{
     DirectProjectionInput, DirectProjectionPatchInput, SoupFlatEntityKind, patch_direct_fields,
     project_direct_fields,
@@ -74,30 +72,6 @@ pub fn compile_filter_request(
     })
 }
 
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-struct WireProjection {
-    profile: String,
-    partition: String,
-    exact_facts: Vec<WireExactFact>,
-    integer_facts: Vec<WireIntegerFact>,
-    sort_facts: Vec<WireIntegerFact>,
-}
-
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
-struct WireExactFact {
-    attribute: String,
-    value: String,
-}
-
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
-struct WireIntegerFact {
-    attribute: String,
-    value: String,
-}
-
 /// Derive authoritative generic projection mutations from a GraphQL response.
 pub fn authoritative_projection_mutations(data: &serde_json::Value) -> Vec<ProjectionMutation> {
     fn walk(value: &serde_json::Value, mutations: &mut HashMap<String, ProjectionMutation>) {
@@ -115,32 +89,19 @@ pub fn authoritative_projection_mutations(data: &serde_json::Value) -> Vec<Proje
                 {
                     let key_text = format!("{typename}:{id}");
                     if let Ok(record_key) = RecordKey::new(key_text.clone()) {
-                        let mutation = match object.get("filterProjection") {
-                            Some(value) => {
-                                parse_projection(record_key.clone(), partition.clone(), value)
-                                    .unwrap_or_else(|| ProjectionMutation::MarkIncomplete {
-                                        record_key,
-                                        profile: vocabulary::profile(),
-                                        partition,
-                                        kind: ProjectionIncompleteKind::IncompatibleVersion,
-                                    })
-                            }
-                            None => direct_projection_for_object(
-                                record_key.clone(),
-                                partition.clone(),
-                                object,
-                                None,
-                            )
-                            .map(ProjectionMutation::Replace)
-                            .unwrap_or(
-                                ProjectionMutation::MarkIncomplete {
-                                    record_key,
-                                    profile: vocabulary::profile(),
-                                    partition,
-                                    kind: ProjectionIncompleteKind::Dirty,
-                                },
-                            ),
-                        };
+                        let mutation = direct_projection_for_object(
+                            record_key.clone(),
+                            partition.clone(),
+                            object,
+                            None,
+                        )
+                        .map(ProjectionMutation::Replace)
+                        .unwrap_or(ProjectionMutation::MarkIncomplete {
+                            record_key,
+                            profile: vocabulary::profile(),
+                            partition,
+                            kind: ProjectionIncompleteKind::Dirty,
+                        });
                         let replace = matches!(mutation, ProjectionMutation::Replace(_));
                         if replace
                             || !matches!(
@@ -295,15 +256,6 @@ fn optimistic_projection_for_object(
     object: &serde_json::Map<String, serde_json::Value>,
     created_at_ms: i64,
 ) -> Option<OptimisticProjectionMutation> {
-    if let Some(value) = object.get("filterProjection") {
-        return match parse_projection(record_key.clone(), partition.clone(), value)? {
-            ProjectionMutation::Replace(document) => {
-                Some(OptimisticProjectionMutation::Replace(document))
-            }
-            ProjectionMutation::MarkIncomplete { .. } | ProjectionMutation::Delete(_) => None,
-        };
-    }
-
     if let Some(document) = direct_projection_for_object(
         record_key.clone(),
         partition.clone(),
@@ -394,51 +346,6 @@ fn projection_partition(typename: &str) -> Option<Token> {
         "GraphqlSoupChat" => Some(vocabulary::chat_partition()),
         _ => None,
     }
-}
-
-fn parse_projection(
-    record_key: RecordKey,
-    expected_partition: Token,
-    value: &serde_json::Value,
-) -> Option<ProjectionMutation> {
-    let projection: WireProjection = serde_json::from_value(value.clone()).ok()?;
-    if projection.profile != item_filter_index::SOUP_FLAT_V1
-        || projection.partition != expected_partition.as_str()
-    {
-        return None;
-    }
-    let token = |value: String| Token::new(value).ok();
-    let exact_facts = projection
-        .exact_facts
-        .into_iter()
-        .map(|fact| {
-            Some(ExactFact {
-                attribute: token(fact.attribute)?,
-                value: ExactValue::new(STANDARD_NO_PAD.decode(fact.value).ok()?).ok()?,
-            })
-        })
-        .collect::<Option<Vec<_>>>()?;
-    let integers = |facts: Vec<WireIntegerFact>| {
-        facts
-            .into_iter()
-            .map(|fact| {
-                Some(IntegerFact {
-                    attribute: token(fact.attribute)?,
-                    value: fact.value.parse().ok()?,
-                })
-            })
-            .collect::<Option<Vec<_>>>()
-    };
-    let document = IndexDocument {
-        record_key,
-        profile: Profile::new(Token::new(projection.profile).ok()?),
-        partition: expected_partition,
-        exact_facts,
-        integer_facts: integers(projection.integer_facts)?,
-        sort_facts: integers(projection.sort_facts)?,
-    };
-    document.validate().ok()?;
-    Some(ProjectionMutation::Replace(document))
 }
 
 #[cfg(test)]
