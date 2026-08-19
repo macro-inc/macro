@@ -1,4 +1,7 @@
-import { CALENDAR_BLOCK_ID } from '@app/features/block-calendar/types';
+import {
+  CALENDAR_BLOCK_ID,
+  type CalendarBlockProps,
+} from '@app/features/block-calendar/types';
 import type { CalendarGridHandle } from '@app/features/calendar/components/CalendarGrid';
 import { CalendarGridSkeleton } from '@app/features/calendar/components/CalendarGridSkeleton';
 import { useCalendarOccurrenceData } from '@app/features/calendar/hooks/use-calendar-occurrence-data';
@@ -131,6 +134,7 @@ function EventSummary(props: {
           size="sm"
           depth={4}
           class="rounded-lg bg-surface px-2"
+          data-calendar-event-target-navigation
           onClick={props.onViewInCalendar}
         >
           Open
@@ -186,6 +190,33 @@ function PreviewContent() {
     const eventId = selectedEventId();
     return eventId ? data.eventsById().get(eventId) : undefined;
   };
+  const openEventInCalendar = async (event: CalendarEvent) => {
+    const params: CalendarBlockProps = {
+      eventId: event.eventId,
+      occurrenceKey: event.occurrenceKey,
+      range: range(),
+    };
+    const manager = globalSplitManager();
+    const existing = manager?.getSplitByContent('calendar', CALENDAR_BLOCK_ID);
+    if (existing) {
+      existing.activate();
+    } else {
+      layout.openWithSplit(
+        { type: 'calendar', id: CALENDAR_BLOCK_ID, params },
+        {
+          allowDuplicate: false,
+          mergeHistory: false,
+          referredFrom: 'sidebar',
+        }
+      );
+    }
+
+    const calendarHandle = await manager
+      ?.getOrchestrator()
+      .getBlockHandle(CALENDAR_BLOCK_ID, 'calendar');
+    await calendarHandle?.goToLocationFromParams(params);
+  };
+
   return (
     <div class="calendar-sidebar-preview flex size-full min-h-0 flex-col bg-surface">
       <div class="relative min-h-0 flex-1">
@@ -252,25 +283,7 @@ function PreviewContent() {
             <EventSummary
               event={event()}
               onClose={() => setSelectedEventId(undefined)}
-              onViewInCalendar={() => {
-                layout.openWithSplit(
-                  {
-                    type: 'calendar',
-                    id: CALENDAR_BLOCK_ID,
-                    params: {
-                      eventId: event().eventId,
-                      occurrenceKey: event().occurrenceKey,
-                      range: range(),
-                    },
-                  },
-                  {
-                    allowDuplicate: false,
-                    mergeHistory: false,
-                    referredFrom: 'sidebar',
-                  }
-                );
-                globalSplitManager()?.returnFocus();
-              }}
+              onViewInCalendar={() => void openEventInCalendar(event())}
             />
           </Layer>
         )}

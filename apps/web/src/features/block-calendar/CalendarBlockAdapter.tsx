@@ -40,6 +40,23 @@ function targetRequestFromParams(
   };
 }
 
+function isSameTargetRequest(
+  current: CalendarBlockTargetRequest | undefined,
+  next: CalendarBlockTargetRequest | undefined
+): boolean {
+  if (!current || !next) return current === next;
+  if (current.eventId !== next.eventId) return false;
+  if (current.occurrenceKey !== undefined || next.occurrenceKey !== undefined) {
+    return current.occurrenceKey === next.occurrenceKey;
+  }
+  return (
+    current.range.start === next.range.start &&
+    current.range.end === next.range.end &&
+    current.range.startDate === next.range.startDate &&
+    current.range.endDate === next.range.endDate
+  );
+}
+
 function CalendarBlockDisabledRedirect() {
   const panel = useSplitPanelOrThrow();
   onMount(() => {
@@ -66,7 +83,9 @@ function CalendarBlockAdapter(props: CalendarBlockProps) {
         params as CalendarBlockProps,
         nextRequestId++
       );
-      setTargetRequest(request);
+      if (!isSameTargetRequest(targetRequest(), request)) {
+        setTargetRequest(request);
+      }
     },
   });
 
