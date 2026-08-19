@@ -852,6 +852,25 @@ impl GithubSyncClient for StubSyncClient {
         })
     }
 
+    async fn get_repository_installation(
+        &self,
+        _jwt: &str,
+        _owner: &str,
+        _repository: &str,
+    ) -> Result<Option<u64>, GithubError> {
+        unimplemented!("the sync service does not look installations up by repository")
+    }
+
+    async fn generate_scoped_installation_access_token(
+        &self,
+        _jwt: &str,
+        _installation_id: u64,
+        _repository: &str,
+        _permissions: &[(&str, &str)],
+    ) -> Result<GithubInstallationAccessToken, GithubError> {
+        unimplemented!("the sync service mints unscoped installation tokens")
+    }
+
     async fn create_pr_comment(
         &self,
         _access_token: &str,

@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            INSERT INTO agent_session (\n                id, owner_id, thread_id, originating_message_id, bot_id, model,\n                harness, repo_url, workspace, sandbox_size, acp_session_id, status,\n                status_event_name\n            )\n            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)\n            RETURNING\n                id, name, owner_id, thread_id, originating_message_id, bot_id,\n                model, harness, repo_url, workspace, sandbox_size, acp_session_id, status,\n                status_event_name, created_at, modified_at,\n                (SELECT channel_id FROM comms_messages WHERE id = agent_session.thread_id)\n                    AS \"thread_channel_id?\",\n                -- A row being created cannot have an external identity yet.\n                NULL::TEXT AS \"external_provider?\", NULL::TEXT AS \"external_id?\",\n                NULL::TEXT AS \"external_name?\", NULL::TEXT AS \"external_url?\"\n            ",
+  "query": "\n            INSERT INTO agent_session (\n                id, owner_id, thread_id, originating_message_id, bot_id, model,\n                harness, repo_url, workspace, sandbox_size, acp_session_id, status,\n                status_event_name, egress_token_hash\n            )\n            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)\n            RETURNING\n                id, name, owner_id, thread_id, originating_message_id, bot_id,\n                model, harness, repo_url, workspace, sandbox_size, acp_session_id, status,\n                status_event_name, created_at, modified_at,\n                (SELECT channel_id FROM comms_messages WHERE id = agent_session.thread_id)\n                    AS \"thread_channel_id?\",\n                -- A row being created cannot have an external identity yet.\n                NULL::TEXT AS \"external_provider?\", NULL::TEXT AS \"external_id?\",\n                NULL::TEXT AS \"external_name?\", NULL::TEXT AS \"external_url?\"\n            ",
   "describe": {
     "columns": [
       {
@@ -123,6 +123,7 @@
         "Text",
         "Text",
         "Text",
+        "Text",
         "Text"
       ]
     },
@@ -150,5 +151,5 @@
       null
     ]
   },
-  "hash": "f634845737b7046901568d7847ebcfb54bfcbdfffe26953fe0732579987f4d2e"
+  "hash": "71e4d8840c1d337af853e4b6d6d25ccf7f6126ff9d96105b04868a5367ad8b92"
 }

@@ -15,6 +15,11 @@ mod trigger;
 
 use std::{future::Future, pin::Pin, sync::Arc};
 
+use agent_egress::domain::service::EgressServiceImpl;
+use agent_egress::outbound::forwarder::ReqwestForwarder;
+use agent_egress::outbound::github_tokens::GithubAppTokens;
+use agent_egress::outbound::mcp_credentials::RmcpMcpCredentials;
+use agent_egress::outbound::session_authority::StoredTokenSessionAuthority;
 use agent_fold::domain::service::FoldedMessageService;
 use agent_harness::domain::model::{HarnessCommand, HarnessDefaults, SessionDefaults};
 use agent_harness::domain::service::AgentHarnessService;
@@ -29,6 +34,7 @@ use agent_harness::outbound::daytona::{
     AnthropicApiKey as AnthropicApiKeySecret, DaytonaApiKey as DaytonaApiKeySecret,
     DaytonaContainerManager, DaytonaSettings, GithubToken as GithubTokenSecret, Snapshot,
 };
+use agent_harness::outbound::egress::EgressProvisioner;
 use agent_harness::outbound::local::{LocalContainerManager, LocalSettings};
 use agent_harness::outbound::routing::RoutedContainerManager;
 use agent_harness::outbound::runtime_registry::RuntimeRegistry;
@@ -61,6 +67,9 @@ use containers::{InMemRuntime, RoutedContainers};
 use cursor_api_key::cipher::{AwsKmsCiphertexts, KmsCursorApiKeyCipher};
 use cursor_cloud_agents::api::CURSOR_API_BASE_URL;
 use cursor_cloud_agents::domain::model::RepoUrl as CursorRepoUrl;
+use github::domain::service::{InstallationTokenConfig, InstallationTokenService};
+use github::outbound::github_sync_client::GithubSyncClientImpl;
+use github::outbound::pg_github_sync_repo::PgGithubSyncRepo;
 use kafka_util::{GroupName, KafkaEventConsumer, consumer_span, record_span_error};
 use lexical_client::LexicalClient;
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
@@ -74,6 +83,8 @@ use macro_event_broker::{
     MacroEventCollection as _, MacroEventConsumerService,
 };
 use macro_service_urls::{ConnectionGatewayUrl, LexicalServiceUrl};
+use mcp_client::domain::models::AesKey;
+use mcp_client::outbound::pg_server_repo::PgServerRepo;
 use rdkafka::consumer::CommitMode;
 use rdkafka::message::{BorrowedMessage, Message as _};
 use sqlx::postgres::PgPoolOptions;
@@ -122,7 +133,15 @@ async fn main() -> anyhow::Result<()> {
 
 async fn run() -> anyhow::Result<()> {
     agent_harness::install_tls_provider();
-    let config = Config::from_env()?;
+    // AWS first, because the config's secrets resolve through Secrets Manager.
+    let aws_config = macro_aws_config::get_macro_aws_config().await;
+    let secrets = secretsmanager_client::SecretsManager::new(aws_sdk_secretsmanager::Client::new(
+        &aws_config,
+    ));
+    let config = Config::from_env()?
+        .resolve_remote_secrets(Environment::new_or_prod(), &secrets)
+        .await
+        .context("failed to resolve agent harness service secrets")?;
     let bot_id = BotId::new_from_uuid(config.harness_bot_id);
     // The in-process Macro bot is a compile-time identity, not configuration:
     // it is always `bot_id::MACRO_AI_BOT_ID`, so the only real question is
@@ -253,8 +272,6 @@ async fn run() -> anyhow::Result<()> {
         ),
     );
 
-    let aws_config = macro_aws_config::get_macro_aws_config().await;
-
     // Cursor sessions run on their owner's own Cursor account, so there is no
     // deployment-wide key to arm this with: the manager reads each session
     // owner's key at spawn. Decrypt-only — registering keys belongs to the
@@ -290,6 +307,7 @@ async fn run() -> anyhow::Result<()> {
     );
     let containers =
         RoutedContainerManager::new(sandbox_and_inmem, cursor_manager, session_repo.clone());
+
     let notifications = Arc::new(notification::domain::service::SqsNotificationIngress {
         queue: notification::outbound::queue::SqsQueue::new(
             aws_sdk_sqs::Client::new(&aws_config),
@@ -360,6 +378,16 @@ async fn run() -> anyhow::Result<()> {
             // in-process too; only mentioning the coder bot gets a sandbox.
             .with_managed_bot(bot);
     }
+
+    // MCP servers: the same encrypted rows the chat tool path reads, so a grant
+    // refreshed by a sandbox and one refreshed by a chat message are the same
+    // grant.
+    let mcp_servers = Arc::new(PgServerRepo::new(
+        pool.clone(),
+        AesKey::try_from(config.mcp_credentials_key_secret_name.as_ref())
+            .context("invalid MCP credentials encryption key")?,
+    ));
+
     let harness = Arc::new(AgentHarnessService::new(
         sessions,
         containers,
@@ -367,6 +395,7 @@ async fn run() -> anyhow::Result<()> {
         Arc::clone(&runtimes),
         prompt_context,
         prompt_composer,
+        EgressProvisioner::new(mcp_servers.clone(), config.egress_base_url.clone()),
         defaults,
     ));
 
@@ -375,13 +404,7 @@ async fn run() -> anyhow::Result<()> {
     // main task, and both run until shutdown.
     let authorization_service = MacroAuthorizationServiceImpl::new(
         MacroAuthJwtValidator::new(
-            JwtValidationArgs::new_with_secret_manager(
-                config.environment,
-                &secretsmanager_client::SecretsManager::new(aws_sdk_secretsmanager::Client::new(
-                    &aws_config,
-                )),
-            )
-            .await?,
+            JwtValidationArgs::new_with_secret_manager(config.environment, &secrets).await?,
         ),
         InternalAuthConfig {
             api_key: config.internal_api_key.clone(),
@@ -437,6 +460,27 @@ async fn run() -> anyhow::Result<()> {
         config.kafka_brokers.as_ref().to_owned(),
         config.internal_api_key.clone(),
     ));
+
+    // The egress proxy: one binary today, its own listener from the start.
+    let egress = EgressServiceImpl::new(
+        StoredTokenSessionAuthority::new(PgAgentSessionRepo::new(pool.clone())),
+        RmcpMcpCredentials::new(mcp_servers),
+        GithubAppTokens::new(InstallationTokenService::new(
+            InstallationTokenConfig {
+                client_id: config.github_sync_app_client_id.clone(),
+                private_key_pem: config.github_sync_app_pem_secret_key.as_ref().to_owned(),
+            },
+            PgGithubSyncRepo::new(pool.clone()),
+            GithubSyncClientImpl::default(),
+        )),
+        ReqwestForwarder::new()?,
+    );
+    let egress_port = config.egress_port;
+    let egress_http = tokio::spawn(async move {
+        if let Err(error) = api::serve_egress(egress, egress_port, shutdown_signal()).await {
+            tracing::error!(error = ?error, "agent harness service egress stopped");
+        }
+    });
 
     // The consumer: every agent-session event, filtered to our bot.
     let consumer =
@@ -604,6 +648,7 @@ async fn run() -> anyhow::Result<()> {
 
     http.abort();
     trigger.abort();
+    egress_http.abort();
     let stop_failures = container_shutdown.shutdown_all().await;
     if stop_failures > 0 {
         tracing::error!(stop_failures, "some sandboxes failed to stop");

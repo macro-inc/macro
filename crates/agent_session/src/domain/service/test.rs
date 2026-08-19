@@ -340,6 +340,13 @@ impl AgentSessionRepo for BlockingPromptLogs {
         self.repo.session_bot(id).await
     }
 
+    async fn find_by_egress_token_hash(
+        &self,
+        egress_token_hash: &str,
+    ) -> Result<Option<AgentSession>> {
+        self.repo.find_by_egress_token_hash(egress_token_hash).await
+    }
+
     async fn find_for_channel(
         &self,
         thread_id: Option<Uuid>,

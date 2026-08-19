@@ -93,6 +93,7 @@ fn new_session(
         repo_url: Some("https://github.com/example/example".to_string()),
         workspace: "/workspace".to_string(),
         sandbox_size: SandboxSize::Default,
+        egress_token_hash: None,
     }
 }
 

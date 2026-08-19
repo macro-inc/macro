@@ -169,6 +169,37 @@ dependencies = [
 ]
 
 [[package]]
+name = "agent_egress"
+version = "0.1.0"
+dependencies = [
+ "agent_fold",
+ "agent_runtime_protocol",
+ "agent_session",
+ "axum",
+ "base64 0.22.1",
+ "bytes",
+ "chrono",
+ "dashmap",
+ "github",
+ "http 1.4.0",
+ "http-body-util",
+ "macro_user_id",
+ "mcp_client",
+ "rand 0.9.4",
+ "reqwest 0.13.4",
+ "rmcp",
+ "rootcause",
+ "serde_json",
+ "sha2 0.10.9",
+ "thiserror 2.0.18",
+ "tokio",
+ "tower 0.5.3",
+ "tracing",
+ "url",
+ "workspace-hack",
+]
+
+[[package]]
 name = "agent_fold"
 version = "0.1.0"
 dependencies = [
@@ -199,6 +230,7 @@ name = "agent_harness"
 version = "0.1.0"
 dependencies = [
  "agent-client-protocol",
+ "agent_egress",
  "agent_fold",
  "agent_runtime_protocol",
  "agent_session",
@@ -223,6 +255,7 @@ dependencies = [
  "macro_tower_layers",
  "macro_user_id",
  "macro_uuid",
+ "mcp_client",
  "mockall",
  "reqwest 0.13.4",
  "rootcause",
@@ -243,6 +276,7 @@ dependencies = [
 name = "agent_harness_service"
 version = "0.1.0"
 dependencies = [
+ "agent_egress",
  "agent_fold",
  "agent_harness",
  "agent_inmem",
@@ -265,6 +299,7 @@ dependencies = [
  "cursor_cloud_agents",
  "database_env_vars",
  "entity_access",
+ "github",
  "kafka_util",
  "lexical_client",
  "macro_auth",
@@ -281,6 +316,7 @@ dependencies = [
  "macro_tower_layers",
  "macro_user_id",
  "macro_uuid",
+ "mcp_client",
  "notification",
  "rdkafka",
  "secretsmanager_client",

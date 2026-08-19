@@ -1140,21 +1140,10 @@ impl<
         &self,
         installation_id: u64,
     ) -> Result<GithubInstallationAccessToken, GithubError> {
-        let now = chrono::Utc::now().timestamp() as u64;
-
-        let claims = serde_json::json!({
-            "iat": now - 60,
-            "exp": now + (10 * 60),
-            "iss": self.config.sync_app_client_id,
-        });
-
-        let header = jsonwebtoken::Header::new(jsonwebtoken::Algorithm::RS256);
-        let encoding_key =
-            jsonwebtoken::EncodingKey::from_rsa_pem(self.config.sync_app_pem.as_bytes())
-                .map_err(|e| GithubError::Internal(anyhow::anyhow!("invalid PEM key: {e}")))?;
-
-        let jwt = jsonwebtoken::encode(&header, &claims, &encoding_key)
-            .map_err(|e| GithubError::Internal(anyhow::anyhow!("failed to encode JWT: {e}")))?;
+        let jwt = crate::domain::models::app_jwt(
+            &self.config.sync_app_client_id,
+            &self.config.sync_app_pem,
+        )?;
 
         self.client
             .generate_installation_access_token(&jwt, installation_id)

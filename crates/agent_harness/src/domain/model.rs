@@ -234,6 +234,91 @@ pub struct SpawnContainer {
     pub repo_url: String,
     /// Compute tier to request from the provider.
     pub size: SandboxSize,
+    /// How the sandbox reaches anything outside itself.
+    pub egress: SandboxEgress,
+}
+
+/// Everything a sandbox needs to make an authenticated outbound call, and
+/// nothing more.
+///
+/// The sandbox runs model-authored code with every permission allowed, so
+/// whatever is in here has been handed to the model. That is why it is one
+/// short-lived session token and a URL rather than any upstream credential:
+/// the credentials stay in the egress proxy, which stamps them on as requests
+/// pass through.
+#[derive(Clone)]
+pub struct SandboxEgress {
+    /// Base URL of the egress proxy, as the sandbox should dial it.
+    pub base_url: String,
+    /// The session token, presented on every proxied call.
+    pub session_token: String,
+    /// A complete opencode config, merged over everything else in the image.
+    pub opencode_config: String,
+}
+
+/// Where the sandbox finds the egress proxy.
+///
+/// Named here rather than written inline because the name is shared knowledge
+/// with the container: `container/ensure_ready.sh` will read it when the
+/// sandbox's git clone moves onto the proxy. It does not yet - that is a later
+/// step - so unlike `provision::SIDECAR_PORT`, which the script does read and a
+/// test holds to agreement, there is nothing here to assert against.
+pub const EGRESS_URL_VARIABLE: &str = "MACRO_EGRESS_URL";
+
+/// The session token the sandbox presents on every proxied call. Shared with
+/// `container/ensure_ready.sh` on the same terms as [`EGRESS_URL_VARIABLE`].
+pub const SESSION_TOKEN_VARIABLE: &str = "MACRO_SESSION_TOKEN";
+
+/// The opencode config, which opencode itself reads - baked into the image, not
+/// into the readiness script.
+pub const OPENCODE_CONFIG_VARIABLE: &str = "OPENCODE_CONFIG_CONTENT";
+
+impl SandboxEgress {
+    /// The sandbox environment this becomes.
+    ///
+    /// Unsized on purpose: a fourth variable should be one more line here and
+    /// nothing at any call site.
+    pub fn environment(&self) -> impl IntoIterator<Item = (String, String)> {
+        [
+            (EGRESS_URL_VARIABLE.to_owned(), self.base_url.clone()),
+            (
+                SESSION_TOKEN_VARIABLE.to_owned(),
+                self.session_token.clone(),
+            ),
+            (
+                OPENCODE_CONFIG_VARIABLE.to_owned(),
+                self.opencode_config.clone(),
+            ),
+        ]
+    }
+}
+
+/// A minted egress environment and the hash that has to be stored for it to
+/// work.
+///
+/// The two halves go to different places and must not be confused: the raw
+/// token in [`ProvisionedEgress::sandbox`] is handed to the container, and
+/// [`ProvisionedEgress::session_token_hash`] is what the session row keeps so
+/// the proxy can recognize it. Returned together because the row has to be
+/// written before the container that holds the token exists.
+#[derive(Debug, Clone)]
+pub struct ProvisionedEgress {
+    /// SHA-256 hex of the session token, for the session row.
+    pub session_token_hash: String,
+    /// The environment the sandbox is spawned with, carrying the raw token.
+    pub sandbox: SandboxEgress,
+}
+
+// The config carries the token too, so neither field prints.
+impl std::fmt::Debug for SandboxEgress {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("SandboxEgress")
+            .field("base_url", &self.base_url)
+            .field("session_token", &"[REDACTED]")
+            .field("opencode_config", &"[REDACTED]")
+            .finish()
+    }
 }
 
 /// Session-row values that remain deployment configuration for now.

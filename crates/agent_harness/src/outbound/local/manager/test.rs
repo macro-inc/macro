@@ -1,5 +1,6 @@
 use super::*;
 use crate::outbound::daytona::{AnthropicApiKey, GithubToken};
+use crate::testing::helpers::egress::test_egress;
 
 /// One container per session, so a resume finds exactly one and `docker ps`
 /// says which session it belongs to.
@@ -32,6 +33,7 @@ fn sandbox_env_carries_the_repo_and_credentials() {
         "https://github.com/macro-inc/macro".to_owned(),
         &GithubToken::new("test-token".to_owned()),
         &AnthropicApiKey::new("test-anthropic-key".to_owned()),
+        test_egress(),
     );
 
     assert!(env.contains(&(

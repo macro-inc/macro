@@ -6,10 +6,16 @@ use database_env_vars::DatabaseUrl;
 pub use macro_env::Environment;
 use macro_uuid::Uuid;
 
+use secretsmanager_client::LocalOrRemoteSecret;
+
 macro_env_var::env_vars!(
     /// Comma-separated Kafka bootstrap servers.
     #[derive(Clone)]
     pub struct KafkaBrokers;
+    /// AES-256 key the owner's MCP OAuth grants are encrypted at rest with.
+    pub struct McpCredentialsKeySecretName;
+    /// PEM private key of the GitHub App installation tokens are minted with.
+    pub struct GithubSyncAppPemSecretKey;
 );
 
 /// The configuration parameters for the agent harness service.
@@ -109,6 +115,30 @@ pub struct Config {
     /// Port the control routes are served on.
     #[macro_config_default(8101)]
     pub port: u16,
+    /// Port the sandbox-facing egress proxy is served on.
+    ///
+    /// A second listener rather than more routes on `port`: the control routes
+    /// are authenticated as Macro users and reached from inside the platform,
+    /// and the egress routes are authenticated by session token and reached
+    /// from a sandbox running model-authored code. Separate ports keep the two
+    /// separable at the network as well as in the code.
+    #[macro_config_default(8102)]
+    pub egress_port: u16,
+    /// Where a sandbox should dial the egress proxy.
+    ///
+    /// Not derivable from `egress_port`: the sandbox reaches this through
+    /// whatever ingress fronts the deployment, not on the container's own port.
+    #[macro_config_default(String::from("http://localhost:8102"))]
+    pub egress_base_url: String,
+    /// AES-256 key (base64) the owner's MCP OAuth grants are encrypted with.
+    ///
+    /// The same key `document_cognition_service` uses: the grants the sandbox
+    /// spends are the ones the person connected in Macro, in the same rows.
+    pub mcp_credentials_key_secret_name: LocalOrRemoteSecret<McpCredentialsKeySecretName>,
+    /// Client id of the GitHub App installation tokens are minted for.
+    pub github_sync_app_client_id: String,
+    /// PEM private key of that App.
+    pub github_sync_app_pem_secret_key: LocalOrRemoteSecret<GithubSyncAppPemSecretKey>,
 }
 
 impl Config {

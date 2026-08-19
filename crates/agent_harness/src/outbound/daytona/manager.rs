@@ -366,6 +366,7 @@ impl ContainerManager for DaytonaContainerManager {
             kind: _,
             repo_url,
             size,
+            egress,
         } = command;
         // `GITHUB_TOKEN` is here for `gh auth setup-git` and the github MCP
         // server. It is also the env var opencode's `github-copilot` provider
@@ -377,7 +378,7 @@ impl ContainerManager for DaytonaContainerManager {
         // `ANTHROPIC_API_KEY` is what activates opencode's `anthropic`
         // provider — with `enabled_providers` pinned in
         // `container/opencode.json`, it is the sandbox's only model source.
-        let env = Env::from(HashMap::from([
+        let mut env = HashMap::from([
             ("REPO_URL".to_owned(), repo_url),
             (
                 "GITHUB_TOKEN".to_owned(),
@@ -387,7 +388,9 @@ impl ContainerManager for DaytonaContainerManager {
                 "ANTHROPIC_API_KEY".to_owned(),
                 self.anthropic_api_key.expose().to_owned(),
             ),
-        ]));
+        ]);
+        env.extend(egress.environment());
+        let env = Env::from(env);
         let labels = Labels::from(HashMap::from([(
             SESSION_LABEL.to_owned(),
             session_id.to_string(),

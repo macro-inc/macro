@@ -249,6 +249,7 @@ async fn seed(args: &Args) -> Result<(), SeedError> {
             repo_url: Some(args.repo_url.clone()),
             workspace: args.workspace.clone(),
             sandbox_size: agent_session::domain::model::SandboxSize::Default,
+            egress_token_hash: None,
         },
     )
     .await

@@ -1,6 +1,7 @@
 use super::super::keys::ResolvedCursorConfig;
 use super::*;
 use crate::domain::model::AgentKind;
+use crate::testing::helpers::egress::test_egress;
 use agent_client_protocol::schema::v1::SessionId;
 use agent_runtime_protocol::domain::ports::{Transport as _, TransportSender as _};
 use agent_runtime_protocol::domain::schema::v0::{AcpMessage, ToRuntimeMessage, ToServerMessage};
@@ -51,6 +52,20 @@ impl ExternalSessionRepo for StubSessions {
 impl AgentSessionRepo for StubSessions {
     async fn create(&self, _params: CreateAgentSessionParams) -> SessionResult<AgentSession> {
         unimplemented!("the manager never creates sessions")
+    }
+
+    async fn find_by_egress_token_hash(
+        &self,
+        _egress_token_hash: &str,
+    ) -> SessionResult<Option<AgentSession>> {
+        unimplemented!("the manager never looks sessions up by egress token")
+    }
+
+    async fn find_all_for_thread(
+        &self,
+        _thread_id: macro_uuid::Uuid,
+    ) -> SessionResult<Vec<AgentSession>> {
+        unimplemented!("the manager never lists a thread's sessions")
     }
 
     async fn get(&self, id: AgentSessionId) -> SessionResult<AgentSession> {
@@ -371,6 +386,7 @@ async fn spawning_and_prompting_records_the_minted_agent() {
             kind: AgentKind::Cursor,
             repo_url: "https://github.com/macro-inc/macro".to_owned(),
             size: SandboxSize::Default,
+            egress: test_egress(),
         })
         .await
         .expect("spawn");
@@ -606,6 +622,7 @@ async fn an_idle_pipe_is_shut_down() {
             kind: AgentKind::Cursor,
             repo_url: "https://github.com/macro-inc/macro".to_owned(),
             size: SandboxSize::Default,
+            egress: test_egress(),
         })
         .await
         .expect("spawn");
@@ -674,6 +691,7 @@ async fn spawning_without_a_registered_key_says_so() {
             kind: AgentKind::Cursor,
             repo_url: "https://github.com/macro-inc/macro".to_owned(),
             size: SandboxSize::Default,
+            egress: test_egress(),
         })
         .await
         // `err()` rather than `expect_err`: the success type is a live

@@ -164,6 +164,33 @@ pub trait GithubSyncClient: Send + Sync + 'static {
         installation_id: u64,
     ) -> impl Future<Output = Result<GithubInstallationAccessToken, GithubError>> + Send;
 
+    /// Finds which installation of our App covers a repository, if any.
+    ///
+    /// `None` means the App is not installed on it - which, from a caller
+    /// acting for a user, is indistinguishable from a repository that does not
+    /// exist, and deliberately so.
+    fn get_repository_installation(
+        &self,
+        jwt: &str,
+        owner: &str,
+        repository: &str,
+    ) -> impl Future<Output = Result<Option<u64>, GithubError>> + Send;
+
+    /// Generates an installation access token cut down to one repository and a
+    /// named set of permissions.
+    ///
+    /// An unscoped installation token reaches every repository in the
+    /// installation with every permission it was granted; this is the narrow
+    /// form, for callers acting on one repository's behalf. `permissions` are
+    /// GitHub's own names and levels, e.g. `("contents", "write")`.
+    fn generate_scoped_installation_access_token(
+        &self,
+        jwt: &str,
+        installation_id: u64,
+        repository: &str,
+        permissions: &[(&str, &str)],
+    ) -> impl Future<Output = Result<GithubInstallationAccessToken, GithubError>> + Send;
+
     /// Posts a comment on a GitHub pull request (via the issues API).
     fn create_pr_comment(
         &self,

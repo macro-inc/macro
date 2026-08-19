@@ -5,7 +5,7 @@ use agent_session::domain::model::{AgentSessionId, SandboxSize};
 use super::docker::{ContainerRef, Docker, RunSpec};
 use super::errors::LocalError;
 use crate::domain::error::{HarnessError, Result};
-use crate::domain::model::SpawnContainer;
+use crate::domain::model::{SandboxEgress, SpawnContainer};
 use crate::domain::ports::ContainerManager;
 use crate::domain::sandbox::{SandboxResizeEffect, create_only_resize_effect};
 use crate::outbound::daytona::{AnthropicApiKey, GithubToken};
@@ -205,6 +205,7 @@ impl ContainerManager for LocalContainerManager {
             kind: _,
             repo_url,
             size: _,
+            egress,
         } = command;
 
         if !self
@@ -234,7 +235,12 @@ impl ContainerManager for LocalContainerManager {
             image: self.image.clone(),
             name: container_name(session_id),
             labels: vec![(SESSION_LABEL.to_owned(), session_id.to_string())],
-            env: sandbox_env(repo_url, &self.github_token, &self.anthropic_api_key),
+            env: sandbox_env(
+                repo_url,
+                &self.github_token,
+                &self.anthropic_api_key,
+                egress,
+            ),
             network: self.network.clone(),
         };
         let container = self.docker.run(&spec).await.map_err(unavailable)?;
@@ -302,15 +308,18 @@ fn sandbox_env(
     repo_url: String,
     github_token: &GithubToken,
     anthropic_api_key: &AnthropicApiKey,
+    egress: SandboxEgress,
 ) -> Vec<(String, String)> {
-    vec![
+    let mut env = vec![
         ("REPO_URL".to_owned(), repo_url),
         ("GITHUB_TOKEN".to_owned(), github_token.expose().to_owned()),
         (
             "ANTHROPIC_API_KEY".to_owned(),
             anthropic_api_key.expose().to_owned(),
         ),
-    ]
+    ];
+    env.extend(egress.environment());
+    env
 }
 
 fn unavailable(error: LocalError) -> HarnessError {

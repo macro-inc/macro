@@ -103,19 +103,21 @@ impl ContainerManager for NamespaceContainerManager {
         fields(agent.container.provider = "namespace")
     )]
     async fn spawn(&self, command: SpawnContainer) -> Result<Self::Transport> {
+        let mut env = vec![
+            ("REPO_URL".to_owned(), command.repo_url),
+            (
+                "GITHUB_TOKEN".to_owned(),
+                self.github_token.expose().to_owned(),
+            ),
+            (
+                "ANTHROPIC_API_KEY".to_owned(),
+                self.anthropic_api_key.expose().to_owned(),
+            ),
+        ];
+        env.extend(command.egress.environment());
         let container = ContainerSpec {
             image_ref: self.image_ref.clone(),
-            env: vec![
-                ("REPO_URL".to_owned(), command.repo_url),
-                (
-                    "GITHUB_TOKEN".to_owned(),
-                    self.github_token.expose().to_owned(),
-                ),
-                (
-                    "ANTHROPIC_API_KEY".to_owned(),
-                    self.anthropic_api_key.expose().to_owned(),
-                ),
-            ],
+            env,
             exported_ports: vec![provision::SIDECAR_PORT],
         };
         let instance = self

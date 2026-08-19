@@ -5,8 +5,10 @@ use agent_session::domain::model::{AgentSessionId, SandboxSize};
 use agent_session::domain::ports::AgentConnector;
 use bot_id::BotId;
 
+use macro_user_id::user_id::MacroUserIdStr;
+
 use super::error::Result;
-use super::model::{PriorChannelMessage, SessionAnnouncement, SpawnContainer};
+use super::model::{PriorChannelMessage, ProvisionedEgress, SessionAnnouncement, SpawnContainer};
 use super::sandbox::SandboxResizeEffect;
 
 #[cfg(test)]
@@ -73,6 +75,24 @@ pub trait RuntimeConnections: Send + Sync + 'static {
         bot: BotId,
         session: AgentSessionId,
     ) -> impl Future<Output = Option<RuntimeAttachment<Self::Connector>>> + Send;
+}
+
+/// Mints the one secret a sandbox is given, and the config that points it at
+/// the egress proxy.
+///
+/// A port rather than domain code because both halves are adapter work the
+/// domain has no business knowing: signing a JWT needs a key, and enumerating
+/// the owner's MCP servers needs their rows. What the domain keeps is *when* -
+/// once, at spawn, for the session's own owner.
+pub trait SandboxEgressProvisioner: Send + Sync + 'static {
+    /// The egress environment for one session, on behalf of `owner`, and the
+    /// hash its session row must carry for that environment to mean anything.
+    fn provision(
+        &self,
+        session: AgentSessionId,
+        owner: &MacroUserIdStr<'static>,
+        repo_url: &str,
+    ) -> impl Future<Output = Result<ProvisionedEgress>> + Send;
 }
 
 /// Provisions the container transports agent sessions run through.

@@ -50,6 +50,10 @@ pub enum HarnessError {
     /// A session command worker stopped before reporting its result.
     #[error("agent session {0} command worker stopped")]
     CommandWorkerStopped(AgentSessionId),
+    /// The sandbox's egress environment could not be prepared: no signing
+    /// key, no repository, or the owner's connected servers could not be read.
+    #[error("failed to provision sandbox egress: {0}")]
+    Egress(rootcause::Report),
     /// The session link could not be posted back to the mention's thread.
     #[error("failed to announce the agent session: {0}")]
     Announce(rootcause::Report),
