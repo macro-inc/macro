@@ -1,9 +1,13 @@
+import { ENABLE_GRAPHQL_BACKFILL } from '@core/constant/featureFlags';
 import { createTabLeaderSignal } from '@notifications/notification-election';
+import { SoupBackfillDocument } from '@service-storage/graphql/generated/graphql';
 import {
-  fetchGraphqlSoupBackfill,
+  type FetchGraphqlSoupOptions,
+  type GraphqlSoupHydrationPage,
   type GraphqlSoupInitialInput,
   type GraphqlSoupInput,
-  graphqlCacheEnabled,
+  getGraphqlSoupCacheHost,
+  hydrateGraphqlSoup,
 } from '@service-storage/graphql-soup';
 import { useQueries, useQueryClient } from '@tanstack/solid-query';
 import {
@@ -16,18 +20,31 @@ import {
 
 // Bump when a default backfill input changes so persisted opaque cursors
 // cannot retain the previous server-side filters.
-const BACKFILL_VERSION = 4;
+const BACKFILL_VERSION = 6;
 const PAGE_LIMIT = 250;
-// Five threads × twenty messages reaches the DataLoader's 100-message cap.
+// Five threads × twenty messages reaches the backend's 100-message cap.
 const EMAIL_CONTENT_PAGE_LIMIT = 5;
 const PAGE_DELAY_MS = 2_000;
 const INITIAL_RETRY_DELAY_MS = 1_000;
 const MAX_RETRY_DELAY_MS = 30_000;
 const EXCLUDED_ENTITY_ID = '00000000-0000-0000-0000-000000000000';
 
+type SoupBackfillFetchPage = (
+  input: GraphqlSoupInput,
+  options?: FetchGraphqlSoupOptions
+) => Promise<GraphqlSoupHydrationPage>;
+
+const fetchSoupPage: SoupBackfillFetchPage = (input, options) =>
+  hydrateGraphqlSoup(SoupBackfillDocument, { input }, options);
+
+const fetchEmailContentPage: SoupBackfillFetchPage = (input, options) =>
+  hydrateGraphqlSoup(SoupBackfillDocument, { input }, options);
+
 export type SoupBackfillParams = {
   /** Stable checkpoint namespace. Change it when the input changes. */
   checkpointId: string;
+  /** Optional network fetcher; defaults to the standard Soup operation. */
+  fetchPage?: SoupBackfillFetchPage;
   /** Soup input shared by every page. The backfill manages the cursor. */
   input: GraphqlSoupInitialInput;
   /** Delay between successful pages. Defaults to two seconds. */
@@ -60,6 +77,7 @@ export const CORE_SOUP_BACKFILL_LANE: SoupBackfillParams = {
 export const EMAIL_SOUP_BACKFILL_LANE: SoupBackfillParams = {
   // Restart completed legacy newest-message checkpoints with the new shape.
   checkpointId: 'email-thread-pages',
+  fetchPage: fetchEmailContentPage,
   input: {
     limit: EMAIL_CONTENT_PAGE_LIMIT,
     expand: true,
@@ -111,7 +129,6 @@ export type SoupBackfillCheckpoint = {
   userId: string;
   nextCursor: string | null;
   pagesFetched: number;
-  itemsFetched: number;
   completed: boolean;
   /** Start of the pass currently being fetched. */
   scanStartedAt: string | null;
@@ -141,7 +158,6 @@ function initialCheckpoint(userId: string): SoupBackfillCheckpoint {
     userId,
     nextCursor: null,
     pagesFetched: 0,
-    itemsFetched: 0,
     completed: false,
     scanStartedAt: null,
     updatedSince: null,
@@ -165,7 +181,6 @@ function isCheckpoint(
     (typeof checkpoint.nextCursor === 'string' ||
       checkpoint.nextCursor === null) &&
     typeof checkpoint.pagesFetched === 'number' &&
-    typeof checkpoint.itemsFetched === 'number' &&
     typeof checkpoint.completed === 'boolean' &&
     isOptionalTimestamp(checkpoint.scanStartedAt) &&
     isOptionalTimestamp(checkpoint.updatedSince) &&
@@ -299,7 +314,7 @@ export async function runSoupBackfill(
   userId: string,
   params: SoupBackfillParams,
   signal: AbortSignal
-): Promise<SoupBackfillCheckpoint> {
+): Promise<void> {
   let checkpoint = loadSoupBackfillCheckpoint(userId, params.checkpointId);
 
   // `completed` only marks the end of one pass. A later invocation resets
@@ -328,16 +343,16 @@ export async function runSoupBackfill(
           },
         }
       : { initial: passInput };
-    // Network-only fetching leaves the persisted cursor unchanged on failure,
-    // so TanStack retries from the same page.
-    const page = await fetchGraphqlSoupBackfill(input, { signal });
+    // Hydration returns only the cursor projection. Cache-only entity payloads
+    // are persisted without being materialized back into this page.
+    const fetchPage = params.fetchPage ?? fetchSoupPage;
+    const page = await fetchPage(input, { signal });
 
-    const completed = page.next_cursor == null;
+    const completed = page.nextCursor == null;
     checkpoint = {
       ...checkpoint,
-      nextCursor: page.next_cursor ?? null,
+      nextCursor: page.nextCursor ?? null,
       pagesFetched: checkpoint.pagesFetched + 1,
-      itemsFetched: checkpoint.itemsFetched + page.items.length,
       completed,
       ...(completed
         ? {
@@ -351,7 +366,7 @@ export async function runSoupBackfill(
     };
     saveSoupBackfillCheckpoint(checkpoint, params.checkpointId);
 
-    if (checkpoint.completed) return checkpoint;
+    if (checkpoint.completed) return;
 
     await delay(params.pageDelayMs ?? PAGE_DELAY_MS, signal);
   }
@@ -402,8 +417,9 @@ export function useSoupBackfills(userId: Accessor<string | undefined>) {
     const currentUserId = userId();
     const currentLeadership = leadership();
     const backfillEnabled =
+      ENABLE_GRAPHQL_BACKFILL &&
       currentUserId !== undefined &&
-      graphqlCacheEnabled() &&
+      getGraphqlSoupCacheHost() !== undefined &&
       currentLeadership.isLeader;
 
     return {

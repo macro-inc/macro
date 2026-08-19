@@ -1,13 +1,30 @@
-import { batch, createEffect, createSignal, For, type Setter, untrack } from 'solid-js';
-import { convertOklchTo, getOklch, validateColor } from '../utils/colorUtil';
-import type { ThemeReactiveColor } from '../types/themeTypes';
+import {
+  batch,
+  createEffect,
+  createSignal,
+  For,
+  type Setter,
+  untrack,
+} from 'solid-js';
 import { themeReactive } from '../signals/themeReactive';
+import type { ThemeReactiveColor } from '../types/themeTypes';
+import { convertOklchTo, getOklch, validateColor } from '../utils/colorUtil';
 import { ColorPickerPopover } from './ColorPickerPopover';
 
 const displayType = () => 'hex';
 
-function setColor(colorValue: ThemeReactiveColor, colorString: string, inputElement: HTMLInputElement, setIsSetByInput: Setter<boolean>){
-  if(!colorString || colorString.trim() === '' || colorString.length < 6 || !validateColor(colorString)){
+function setColor(
+  colorValue: ThemeReactiveColor,
+  colorString: string,
+  inputElement: HTMLInputElement,
+  setIsSetByInput: Setter<boolean>
+) {
+  if (
+    !colorString ||
+    colorString.trim() === '' ||
+    colorString.length < 6 ||
+    !validateColor(colorString)
+  ) {
     inputElement.classList.add('invalid');
     return;
   }
@@ -20,11 +37,12 @@ function setColor(colorValue: ThemeReactiveColor, colorString: string, inputElem
       colorValue.h[1](oklch.h ? oklch.h : 0);
     });
     inputElement.classList.remove('invalid');
+  } catch (error) {
+    console.error(`Error processing color "${colorString}":`, error);
   }
-  catch(error) { console.error(`Error processing color "${colorString}":`, error); }
 }
 
-export function ThemeEditorAdvanced(){
+export function ThemeEditorAdvanced() {
   return (
     <>
       <style>{`
@@ -42,7 +60,7 @@ export function ThemeEditorAdvanced(){
         style={{
           'font-size': 'var(--text-xs)',
           'font-weight': 300,
-          'display': 'block',
+          display: 'block',
         }}
       >
         <div
@@ -55,32 +73,35 @@ export function ThemeEditorAdvanced(){
           "
         >
           <For each={Object.entries(themeReactive)}>
-              {([colorKey, colorValue]) => {
-                // a1 thru a4 are not currently being used, so we will hide them
-                if (['a1', 'a2', 'a3', 'a4'].includes(colorKey)) return null;
-                const [isSetByInput, setIsSetByInput] = createSignal(false);
-                const [inputValue, setInputValue] = createSignal('');
+            {([colorKey, colorValue]) => {
+              // a1 thru a4 are not currently being used, so we will hide them
+              if (['a1', 'a2', 'a3', 'a4'].includes(colorKey)) return null;
+              const [isSetByInput, setIsSetByInput] = createSignal(false);
+              const [inputValue, setInputValue] = createSignal('');
 
-                createEffect(() => {
-                  const newValue = convertOklchTo(
-                    colorValue.l[0](),
-                    colorValue.c[0](),
-                    colorValue.h[0](),
-                    displayType()
-                  );
-                  if (untrack(isSetByInput)) { setIsSetByInput(false); /* console.log('blocked!!!'); */ }
-                  else { setInputValue(newValue); }
-                });
+              createEffect(() => {
+                const newValue = convertOklchTo(
+                  colorValue.l[0](),
+                  colorValue.c[0](),
+                  colorValue.h[0](),
+                  displayType()
+                );
+                if (untrack(isSetByInput)) {
+                  setIsSetByInput(false); /* console.log('blocked!!!'); */
+                } else {
+                  setInputValue(newValue);
+                }
+              });
 
-                return (
-                  <div
-                    style="
+              return (
+                <div
+                  style="
                       font-family: var(--font-mono);
                       background-color: var(--b0);
                     "
-                  >
-                    <div
-                      style="
+                >
+                  <div
+                    style="
                         grid-template-columns: 104px calc(7ch + 40px) 1fr calc(4ch + 40px);
                         background-color: oklch(from var(--c0) l c h / 0.06);
                         align-items: center;
@@ -88,9 +109,9 @@ export function ThemeEditorAdvanced(){
                         height: 61px;
                         gap: 1px 0px;
                       "
-                    >
-                      <div
-                        style="
+                  >
+                    <div
+                      style="
                           background-color: var(--b0);
                           box-sizing: border-box;
                           align-items: center;
@@ -99,22 +120,22 @@ export function ThemeEditorAdvanced(){
                           height: 100%;
                           width: 100%;
                         "
-                      >
-                        <ColorPickerPopover
-                          l={() => colorValue.l[0]()}
-                          c={() => colorValue.c[0]()}
-                          h={() => colorValue.h[0]()}
-                          onL={(n) => colorValue.l[1](n)}
-                          onC={(n) => colorValue.c[1](n)}
-                          onH={(n) => colorValue.h[1](n)}
-                          title={colorValue.description}
-                          subtitle={`--${colorKey}`}
-                          ariaLabel={`Edit ${colorValue.description} (--${colorKey})`}
-                        />
-                      </div>
+                    >
+                      <ColorPickerPopover
+                        l={() => colorValue.l[0]()}
+                        c={() => colorValue.c[0]()}
+                        h={() => colorValue.h[0]()}
+                        onL={(n) => colorValue.l[1](n)}
+                        onC={(n) => colorValue.c[1](n)}
+                        onH={(n) => colorValue.h[1](n)}
+                        title={colorValue.description}
+                        subtitle={`--${colorKey}`}
+                        ariaLabel={`Edit ${colorValue.description} (--${colorKey})`}
+                      />
+                    </div>
 
-                      <div
-                        style="
+                    <div
+                      style="
                           background-color: var(--b0);
                           box-sizing: border-box;
                           align-items: center;
@@ -124,10 +145,17 @@ export function ThemeEditorAdvanced(){
                           height: 100%;
                           width: 100%;
                         "
-                      >
-                        <input
-                          onInput={ (e) => {setColor(colorValue, e.target.value, e.target, setIsSetByInput); }}
-                          style="
+                    >
+                      <input
+                        onInput={(e) => {
+                          setColor(
+                            colorValue,
+                            e.target.value,
+                            e.target,
+                            setIsSetByInput
+                          );
+                        }}
+                        style="
                             color: var(--color-ink-extra-muted);
                             font-family: var(--font-mono);
                             font-size: var(--text-xs);
@@ -137,14 +165,14 @@ export function ThemeEditorAdvanced(){
                             border: none;
                             width: 100%;
                           "
-                          class="theme-editor-advanced-input"
-                          value={inputValue()}
-                          type="text"
-                        />
-                      </div>
+                        class="theme-editor-advanced-input"
+                        value={inputValue()}
+                        type="text"
+                      />
+                    </div>
 
-                      <div
-                        style="
+                    <div
+                      style="
                           color: var(--color-ink-extra-muted);
                           background-color: var(--b0);
                           box-sizing: border-box;
@@ -157,11 +185,11 @@ export function ThemeEditorAdvanced(){
                           height: 100%;
                           width: 100%;
                         "
-                      >
-                        {colorValue.description}
-                      </div>
-                      <div
-                        style="
+                    >
+                      {colorValue.description}
+                    </div>
+                    <div
+                      style="
                           background-color: var(--b0);
                           box-sizing: border-box;
                           white-space: nowrap;
@@ -171,13 +199,13 @@ export function ThemeEditorAdvanced(){
                           height: 100%;
                           width: 100%;
                         "
-                      >
-                        --{colorKey}
-                      </div>
+                    >
+                      --{colorKey}
                     </div>
                   </div>
-                );
-              }}
+                </div>
+              );
+            }}
           </For>
         </div>
       </div>

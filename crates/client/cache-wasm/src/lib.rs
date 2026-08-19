@@ -1,4 +1,4 @@
-//! wasm-bindgen shell around the cache engine + IndexedDB storage.
+//! wasm-bindgen shell around the cache engine + Turso OPFS storage.
 //!
 //! Exposes a `CacheEngine` class to the JS worker glue
 //! (`apps/web/src/lib/graphql-cache/`). All methods return Promises; the

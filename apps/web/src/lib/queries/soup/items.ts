@@ -7,6 +7,7 @@ import {
 import { throwOnErr } from '@core/util/result';
 import type { EntityData } from '@entity';
 import {
+  groupedSortMethod,
   makeGroupComparator,
   parseGroupMeta,
   serializeGroupByField,
@@ -163,13 +164,7 @@ const useRestSoupAstItemsQuery = (
         .queryKey,
       queryFn: async (ctx): Promise<SoupAstItemsPage> => {
         if (groupBy) {
-          let sort_method = params.sort_method ?? undefined;
-
-          // TODO(dev-rb/soup): This is temporary fix since we don't support
-          // 'frecency' for group by. Replace with proper types
-          if (sort_method === 'frecency') {
-            sort_method = 'updated_at';
-          }
+          const sort_method = groupedSortMethod(params.sort_method);
 
           const fetchRest = async () => {
             const response = await throwOnErr(

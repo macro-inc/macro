@@ -15,12 +15,13 @@ use crate::domain::{
         CalendarBackfillFailureDisposition, CalendarBackfillFailureOutcome, CalendarBackfillJob,
         CalendarBackfillJobKey, CalendarBackfillKind, CalendarCreationTarget, CalendarEvent,
         CalendarEventMutationTarget, CalendarEventOverride, CalendarEventSource,
-        CalendarEventUpsert, CalendarLinkTokenIdentity, CalendarOccurrence,
-        CalendarOccurrenceCursor, CalendarReminderFiring, CalendarSyncStatus, DueCalendarReminder,
-        EventReminderOverride, EventReminders, EventStart, EventStatus, EventTime,
-        EventTransparency, EventVisibility, GOOGLE_CALENDAR_SCOPES, GoogleCalendarSyncSnapshot,
-        GoogleScopeSet, GoogleWatchChannel, OccurrenceRange, ProviderCalendar,
-        StoredGoogleCalendar, VisibleCalendar,
+        CalendarEventUpsert, CalendarGrantIntent, CalendarLinkTokenIdentity, CalendarMentionEvent,
+        CalendarMentionPreview, CalendarMentionRequestItem, CalendarOccurrence,
+        CalendarOccurrenceCursor, CalendarReminderFiring, CalendarSyncStatus, CalendarWatchRelease,
+        ConferenceProvider, DisconnectedGoogleCalendar, DueCalendarReminder, EventReminderOverride,
+        EventReminders, EventStart, EventStatus, EventTime, EventTransparency, EventVisibility,
+        GOOGLE_CALENDAR_SCOPES, GoogleCalendarSyncSnapshot, GoogleScopeSet, GoogleWatchChannel,
+        OccurrenceRange, ProviderCalendar, StoredGoogleCalendar, VisibleCalendar,
     },
     ports::{
         CalendarBackfillRepository, CalendarEventWrite, CalendarReminderDispatchRepo,
@@ -231,7 +232,8 @@ impl PgCalendarRepository {
                 l.macro_id,
                 l.email_address::text AS "email_address!",
                 COALESCE(g.granted_scopes, '{}') AS "granted_scopes!",
-                COALESCE(g.grant_version, 0) AS "grant_version!"
+                COALESCE(g.grant_version, 0) AS "grant_version!",
+                g.calendar_disabled_at
             FROM email_links l
             LEFT JOIN email_link_google_scopes g ON g.link_id = l.id
             WHERE l.id = $1
@@ -254,6 +256,7 @@ struct GrantRow {
     email_address: String,
     granted_scopes: Vec<String>,
     grant_version: i64,
+    calendar_disabled_at: Option<DateTime<Utc>>,
 }
 
 struct StoredCalendarRow {
@@ -294,12 +297,35 @@ struct OccurrenceJoinRow {
     organizer_email: Option<String>,
     organizer_name: Option<String>,
     conference_url: Option<String>,
+    conference_provider: Option<String>,
     sequence: i32,
     is_read_only: bool,
     reminders_use_default: bool,
     reminder_overrides: serde_json::Value,
     created_at: DateTime<Utc>,
     updated_at: DateTime<Utc>,
+}
+
+struct MentionPreviewRow {
+    mention_exists: bool,
+    viewer_event_id: Option<Uuid>,
+    title: Option<String>,
+    location: Option<String>,
+    organizer_email: Option<String>,
+    organizer_name: Option<String>,
+    recurrence_lines: Option<Vec<String>>,
+    event_starts_at: Option<DateTime<Utc>>,
+    event_ends_at: Option<DateTime<Utc>>,
+    event_start_date: Option<NaiveDate>,
+    event_end_date: Option<NaiveDate>,
+    time_zone: Option<String>,
+    updated_at: Option<DateTime<Utc>>,
+    occurrence_key: Option<String>,
+    occurrence_starts_at: Option<DateTime<Utc>>,
+    occurrence_ends_at: Option<DateTime<Utc>>,
+    occurrence_start_date: Option<NaiveDate>,
+    occurrence_end_date: Option<NaiveDate>,
+    attendee_count: Option<i64>,
 }
 
 struct OverrideAttendeeRow {
@@ -349,6 +375,7 @@ impl CalendarRepository for PgCalendarRepository {
         &self,
         email_link_id: Uuid,
         scopes: GoogleScopeSet,
+        intent: CalendarGrantIntent,
     ) -> Result<AppliedGoogleGrant, Report> {
         let mut tx = self.pool.begin().await.map_err(report)?;
         // The email_links row remains the grant serialization point. Every
@@ -360,7 +387,8 @@ impl CalendarRepository for PgCalendarRepository {
                 l.macro_id,
                 l.email_address::text AS "email_address!",
                 COALESCE(g.granted_scopes, '{}') AS "granted_scopes!",
-                COALESCE(g.grant_version, 0) AS "grant_version!"
+                COALESCE(g.grant_version, 0) AS "grant_version!",
+                g.calendar_disabled_at
             FROM email_links l
             LEFT JOIN email_link_google_scopes g ON g.link_id = l.id
             WHERE l.id = $1
@@ -372,10 +400,25 @@ impl CalendarRepository for PgCalendarRepository {
         .await
         .map_err(report)?;
 
+        // The user's own opt-out outranks whatever Google reports. Consent
+        // requests carry `include_granted_scopes=true`, so a plain Gmail
+        // reconnect hands back the calendar scopes of an earlier grant; only a
+        // flow that explicitly asked for calendar counts as re-enabling it.
+        let clear_opt_out = matches!(intent, CalendarGrantIntent::CalendarRequested);
+        let calendar_opted_out = row.calendar_disabled_at.is_some() && !clear_opt_out;
+        let scopes = if calendar_opted_out {
+            scopes.without_calendar()
+        } else {
+            scopes
+        };
+
         let old_scopes = GoogleScopeSet::from_scopes(row.granted_scopes);
         let had_calendar_capability = old_scopes.has_calendar_capability();
         let changed = old_scopes != scopes;
         if !changed {
+            if clear_opt_out {
+                clear_calendar_opt_out_tx(&mut tx, email_link_id).await?;
+            }
             let jobs = if scopes.has_calendar_capability() {
                 retry_failed_backfills_tx(&mut tx, email_link_id, row.grant_version).await?
             } else {
@@ -398,11 +441,16 @@ impl CalendarRepository for PgCalendarRepository {
             ON CONFLICT (link_id) DO UPDATE
             SET granted_scopes = EXCLUDED.granted_scopes,
                 grant_version = EXCLUDED.grant_version,
+                calendar_disabled_at = CASE
+                    WHEN $4 THEN NULL
+                    ELSE email_link_google_scopes.calendar_disabled_at
+                END,
                 updated_at = now()
             "#,
             email_link_id,
             &granted_scopes,
             grant_version,
+            clear_opt_out,
         )
         .execute(&mut *tx)
         .await
@@ -471,6 +519,111 @@ impl CalendarRepository for PgCalendarRepository {
             changed,
             jobs,
         })
+    }
+
+    #[tracing::instrument(skip(self, requester_id), err)]
+    async fn disconnect_google_calendar(
+        &self,
+        requester_id: &str,
+        email_link_id: Uuid,
+    ) -> Result<Option<DisconnectedGoogleCalendar>, Report> {
+        let mut tx = self.pool.begin().await.map_err(report)?;
+        // Same serialization point and lock order as grant application, so a
+        // consent landing concurrently either precedes or follows this removal.
+        // Only the inbox's owner may disconnect it: a delegate reads the
+        // owner's calendar and must not be able to delete the owner's data.
+        let row = sqlx::query!(
+            r#"
+            SELECT
+                l.fusionauth_user_id,
+                l.email_address::text AS "email_address!",
+                l.provider::text AS "provider!",
+                COALESCE(g.granted_scopes, '{}') AS "granted_scopes!"
+            FROM email_links l
+            LEFT JOIN email_link_google_scopes g ON g.link_id = l.id
+            WHERE l.id = $1 AND l.macro_id = $2
+            FOR UPDATE OF l
+            "#,
+            email_link_id,
+            requester_id,
+        )
+        .fetch_optional(&mut *tx)
+        .await
+        .map_err(report)?;
+        let Some(row) = row else {
+            return Ok(None);
+        };
+
+        // Read the open channels before the calendars go away; the caller
+        // closes them at Google once the local removal has committed.
+        let watch_channels = sqlx::query!(
+            r#"
+            SELECT
+                c.watch_channel_id AS "channel_id!",
+                c.watch_resource_id AS "resource_id!"
+            FROM calendars c
+            JOIN calendar_accounts a ON a.id = c.account_id
+            WHERE a.email_link_id = $1
+              AND c.watch_channel_id IS NOT NULL
+              AND c.watch_resource_id IS NOT NULL
+            "#,
+            email_link_id,
+        )
+        .fetch_all(&mut *tx)
+        .await
+        .map_err(report)?
+        .into_iter()
+        .map(|row| CalendarWatchRelease {
+            channel_id: row.channel_id,
+            resource_id: row.resource_id,
+        })
+        .collect();
+
+        let granted_scopes = GoogleScopeSet::from_scopes(row.granted_scopes)
+            .without_calendar()
+            .into_vec();
+        let grant_version = sqlx::query_scalar!(
+            r#"
+            INSERT INTO email_link_google_scopes (
+                link_id, granted_scopes, grant_version, calendar_disabled_at
+            )
+            VALUES ($1, $2, 1, now())
+            ON CONFLICT (link_id) DO UPDATE
+            SET granted_scopes = EXCLUDED.granted_scopes,
+                grant_version = email_link_google_scopes.grant_version + 1,
+                calendar_disabled_at = now(),
+                updated_at = now()
+            RETURNING grant_version AS "grant_version!"
+            "#,
+            email_link_id,
+            &granted_scopes,
+        )
+        .fetch_one(&mut *tx)
+        .await
+        .map_err(report)?;
+
+        // Fence anything mid-flight against the superseded grant, then tear
+        // the local projection down and drop the account itself, which
+        // cascades its calendars and backfill jobs.
+        invalidate_stale_google_jobs_tx(&mut tx, email_link_id, grant_version).await?;
+        disable_google_calendar_capability_tx(&mut tx, email_link_id).await?;
+        sqlx::query!(
+            "DELETE FROM calendar_accounts WHERE email_link_id = $1",
+            email_link_id,
+        )
+        .execute(&mut *tx)
+        .await
+        .map_err(report)?;
+
+        tx.commit().await.map_err(report)?;
+        Ok(Some(DisconnectedGoogleCalendar {
+            token_identity: CalendarLinkTokenIdentity {
+                fusionauth_user_id: row.fusionauth_user_id,
+                email_address: row.email_address,
+                provider: row.provider,
+            },
+            watch_channels,
+        }))
     }
 
     #[tracing::instrument(skip(self, write), err)]
@@ -549,7 +702,8 @@ impl CalendarRepository for PgCalendarRepository {
                 status, visibility, transparency,
                 starts_at, ends_at, start_date, end_date, time_zone,
                 recurrence_lines, organizer_email, organizer_name,
-                conference_url, sequence, is_read_only, canonical_source_kind,
+                conference_url, conference_provider, sequence, is_read_only,
+                canonical_source_kind,
                 canonical_source_updated_at,
                 reminders_use_default, reminder_overrides,
                 created_at, updated_at
@@ -559,7 +713,7 @@ impl CalendarRepository for PgCalendarRepository {
                 $8, $9, $10,
                 $11, $12, $13, $14, $15,
                 $16, $17, $18,
-                $19, $20, $21, $22, $24,
+                $19, $27, $20, $21, $22, $24,
                 $25, $26,
                 $23, $24
             )
@@ -579,6 +733,7 @@ impl CalendarRepository for PgCalendarRepository {
                 organizer_email = EXCLUDED.organizer_email,
                 organizer_name = EXCLUDED.organizer_name,
                 conference_url = EXCLUDED.conference_url,
+                conference_provider = EXCLUDED.conference_provider,
                 sequence = EXCLUDED.sequence,
                 is_read_only = EXCLUDED.is_read_only,
                 canonical_source_kind = EXCLUDED.canonical_source_kind,
@@ -621,6 +776,10 @@ impl CalendarRepository for PgCalendarRepository {
             upsert.event.updated_at,
             upsert.event.reminders.use_default,
             serde_json::to_value(&upsert.event.reminders.overrides).map_err(report)?,
+            upsert
+                .event
+                .conference_provider
+                .map(ConferenceProvider::as_str),
         )
         .fetch_optional(&mut *tx)
         .await
@@ -710,6 +869,7 @@ impl CalendarRepository for PgCalendarRepository {
                 event.organizer_email,
                 event.organizer_name,
                 event.conference_url,
+                event.conference_provider,
                 event.sequence,
                 event.is_read_only,
                 event.reminders_use_default,
@@ -810,6 +970,128 @@ impl CalendarRepository for PgCalendarRepository {
                 Ok((event, occurrence))
             })
             .collect()
+    }
+
+    #[tracing::instrument(skip(self, requester_id, items), err)]
+    async fn mention_previews(
+        &self,
+        requester_id: &str,
+        items: Vec<CalendarMentionRequestItem>,
+        now: DateTime<Utc>,
+    ) -> Result<Vec<CalendarMentionPreview>, Report> {
+        let event_ids: Vec<Uuid> = items.iter().map(|item| item.event_id).collect();
+        let occurrence_keys: Vec<Option<String>> = items
+            .iter()
+            .map(|item| item.occurrence_key.clone())
+            .collect();
+        // The viewer lateral resolves the mentioned meeting to the
+        // requester's own projection through the shared iCalendar UID,
+        // preferring an owned copy over a delegated one and the mentioned
+        // row itself among ties, so the preview only ever reads rows the
+        // requester could already see on their calendar.
+        let rows = sqlx::query_as!(
+            MentionPreviewRow,
+            r#"
+            SELECT
+                (mentioned.id IS NOT NULL) AS "mention_exists!",
+                viewer_event.id AS "viewer_event_id?",
+                viewer_event.title AS "title?",
+                viewer_event.location AS "location?",
+                viewer_event.organizer_email AS "organizer_email?",
+                viewer_event.organizer_name AS "organizer_name?",
+                viewer_event.recurrence_lines AS "recurrence_lines?",
+                viewer_event.starts_at AS "event_starts_at?",
+                viewer_event.ends_at AS "event_ends_at?",
+                viewer_event.start_date AS "event_start_date?",
+                viewer_event.end_date AS "event_end_date?",
+                viewer_event.time_zone AS "time_zone?",
+                viewer_event.updated_at AS "updated_at?",
+                occurrence.occurrence_key AS "occurrence_key?",
+                occurrence.starts_at AS "occurrence_starts_at?",
+                occurrence.ends_at AS "occurrence_ends_at?",
+                occurrence.start_date AS "occurrence_start_date?",
+                occurrence.end_date AS "occurrence_end_date?",
+                attendees.attendee_count AS "attendee_count?"
+            FROM unnest($2::uuid[], $3::text[])
+                WITH ORDINALITY AS requested(event_id, occurrence_key, ord)
+            LEFT JOIN calendar_events mentioned
+                ON mentioned.id = requested.event_id
+               AND mentioned.status <> 'cancelled'
+            LEFT JOIN LATERAL (
+                SELECT
+                    candidate.id,
+                    candidate.title,
+                    candidate.location,
+                    candidate.organizer_email,
+                    candidate.organizer_name,
+                    candidate.recurrence_lines,
+                    candidate.starts_at,
+                    candidate.ends_at,
+                    candidate.start_date,
+                    candidate.end_date,
+                    candidate.time_zone,
+                    candidate.updated_at
+                FROM calendar_events candidate
+                WHERE candidate.ical_uid = mentioned.ical_uid
+                  AND candidate.status <> 'cancelled'
+                  AND (
+                        candidate.owner_id = $1
+                        OR EXISTS (
+                            SELECT 1
+                            FROM macro_user_links link
+                            WHERE link.link_id = candidate.source_link_id
+                              AND link.primary_macro_id = $1
+                        )
+                  )
+                ORDER BY
+                    (candidate.owner_id = $1) DESC,
+                    (candidate.id = mentioned.id) DESC,
+                    candidate.updated_at DESC,
+                    candidate.id
+                LIMIT 1
+            ) viewer_event ON true
+            LEFT JOIN LATERAL (
+                SELECT
+                    instance.occurrence_key,
+                    instance.starts_at,
+                    instance.ends_at,
+                    instance.start_date,
+                    instance.end_date
+                FROM calendar_event_occurrences instance
+                CROSS JOIN LATERAL (
+                    SELECT COALESCE(
+                        instance.starts_at,
+                        instance.start_date::timestamp AT TIME ZONE 'UTC'
+                    ) AS at
+                ) instance_start
+                WHERE instance.event_id = viewer_event.id
+                  AND NOT instance.is_cancelled
+                ORDER BY
+                    (instance.occurrence_key
+                        IS NOT DISTINCT FROM requested.occurrence_key) DESC,
+                    (instance_start.at >= $4) DESC,
+                    CASE WHEN instance_start.at >= $4 THEN instance_start.at END ASC,
+                    instance_start.at DESC,
+                    instance.occurrence_key
+                LIMIT 1
+            ) occurrence ON true
+            LEFT JOIN LATERAL (
+                SELECT count(*) AS attendee_count
+                FROM calendar_event_attendees attendee
+                WHERE attendee.event_id = viewer_event.id
+            ) attendees ON true
+            ORDER BY requested.ord
+            "#,
+            requester_id,
+            &event_ids,
+            &occurrence_keys as &[Option<String>],
+            now,
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map_err(report)?;
+
+        rows.into_iter().map(mention_preview_from_row).collect()
     }
 
     #[tracing::instrument(skip(self, requester_id), err)]
@@ -1918,6 +2200,25 @@ async fn invalidate_stale_google_jobs_tx(
     Ok(())
 }
 
+async fn clear_calendar_opt_out_tx(
+    tx: &mut Transaction<'_, Postgres>,
+    email_link_id: Uuid,
+) -> Result<(), Report> {
+    sqlx::query!(
+        r#"
+        UPDATE email_link_google_scopes
+        SET calendar_disabled_at = NULL,
+            updated_at = now()
+        WHERE link_id = $1 AND calendar_disabled_at IS NOT NULL
+        "#,
+        email_link_id,
+    )
+    .execute(&mut **tx)
+    .await
+    .map_err(report)?;
+    Ok(())
+}
+
 async fn disable_google_calendar_capability_tx(
     tx: &mut Transaction<'_, Postgres>,
     email_link_id: Uuid,
@@ -1974,9 +2275,26 @@ async fn disable_google_calendar_capability_tx(
     .fetch_all(&mut **tx)
     .await
     .map_err(report)?;
-    for event_id in affected_event_ids {
-        restore_best_source_or_delete(tx, event_id).await?;
+    for event_id in &affected_event_ids {
+        restore_best_source_or_delete(tx, *event_id).await?;
     }
+
+    // Reminder delivery claims are deliberately not foreign-keyed to
+    // occurrences, so an event that lost its last source takes its claims with
+    // it here rather than leaving them behind forever.
+    sqlx::query!(
+        r#"
+        DELETE FROM calendar_event_reminder_deliveries d
+        WHERE d.event_id = ANY($1)
+          AND NOT EXISTS (
+                SELECT 1 FROM calendar_events e WHERE e.id = d.event_id
+          )
+        "#,
+        &affected_event_ids,
+    )
+    .execute(&mut **tx)
+    .await
+    .map_err(report)?;
     Ok(())
 }
 
@@ -2213,6 +2531,7 @@ async fn restore_best_source_or_delete(
             organizer_email = $14,
             organizer_name = $15,
             conference_url = $16,
+            conference_provider = $25,
             sequence = $17,
             is_read_only = $18,
             canonical_source_kind = $19,
@@ -2247,6 +2566,10 @@ async fn restore_best_source_or_delete(
         projection.event.updated_at,
         projection.event.reminders.use_default,
         serde_json::to_value(&projection.event.reminders.overrides).map_err(report)?,
+        projection
+            .event
+            .conference_provider
+            .map(ConferenceProvider::as_str),
     )
     .execute(&mut **tx)
     .await
@@ -2810,6 +3133,49 @@ fn row_time(
     }
 }
 
+fn mention_preview_from_row(row: MentionPreviewRow) -> Result<CalendarMentionPreview, Report> {
+    if !row.mention_exists {
+        return Ok(CalendarMentionPreview::DoesNotExist);
+    }
+    let Some(viewer_event_id) = row.viewer_event_id else {
+        return Ok(CalendarMentionPreview::NoAccess);
+    };
+    let time = if row.occurrence_key.is_some() {
+        row_time(
+            row.occurrence_starts_at,
+            row.occurrence_ends_at,
+            row.occurrence_start_date,
+            row.occurrence_end_date,
+            row.time_zone,
+        )?
+    } else {
+        // No materialized instance (the event sits outside the maintained
+        // window) — the series' own span still gives the preview a time.
+        row_time(
+            row.event_starts_at,
+            row.event_ends_at,
+            row.event_start_date,
+            row.event_end_date,
+            row.time_zone,
+        )?
+    };
+    Ok(CalendarMentionPreview::Accessible(Box::new(
+        CalendarMentionEvent {
+            viewer_event_id,
+            title: row.title.unwrap_or_default(),
+            time,
+            occurrence_key: row.occurrence_key,
+            is_recurring: !row.recurrence_lines.unwrap_or_default().is_empty(),
+            location: row.location,
+            organizer_email: row.organizer_email,
+            organizer_name: row.organizer_name,
+            attendee_count: usize::try_from(row.attendee_count.unwrap_or_default())
+                .unwrap_or_default(),
+            updated_at: row.updated_at.unwrap_or(DateTime::<Utc>::MIN_UTC),
+        },
+    )))
+}
+
 fn event_from_join(
     row: OccurrenceJoinRow,
     attendees: Vec<CalendarAttendee>,
@@ -2836,6 +3202,7 @@ fn event_from_join(
         organizer_email: row.organizer_email,
         organizer_name: row.organizer_name,
         conference_url: row.conference_url,
+        conference_provider: row.conference_provider.as_deref().map(conference_provider),
         sequence: u32::try_from(row.sequence).unwrap_or_default(),
         is_read_only: row.is_read_only,
         reminders: EventReminders {
@@ -2882,6 +3249,17 @@ fn event_visibility(value: &str) -> EventVisibility {
         "private" => EventVisibility::Private,
         "confidential" => EventVisibility::Confidential,
         _ => EventVisibility::Default,
+    }
+}
+
+/// Parse the stored provider, treating an unknown value as a third-party
+/// conference so a row written by a newer deployment stays joinable and is
+/// never mistaken for one Macro may detach.
+fn conference_provider(value: &str) -> ConferenceProvider {
+    if value == "google_meet" {
+        ConferenceProvider::GoogleMeet
+    } else {
+        ConferenceProvider::Other
     }
 }
 

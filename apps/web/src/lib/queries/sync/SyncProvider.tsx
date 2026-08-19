@@ -1,4 +1,9 @@
 import {
+  AGENT_SESSION_LOG_EVENT,
+  type AgentSessionLogEvent,
+} from '@queries/agent-session/realtime-protocol';
+import { handleAgentSessionLog } from '@queries/agent-session/session-fold';
+import {
   handleCommsAttachment,
   handleCommsMessage,
   handleCommsReaction,
@@ -49,6 +54,16 @@ export function QuerySyncProvider(props: SyncProviderProps) {
       })
       .with({ type: 'comms_message' }, () => {
         withParsedWebsocketPayload(data.type, data.data, handleCommsMessage);
+      })
+      // One frame appended to a live agent session's log. Routed to the
+      // channel's fold rather than to any cache: the frame is not a message,
+      // it is a step towards one, and only the fold knows which.
+      .with({ type: AGENT_SESSION_LOG_EVENT }, () => {
+        withParsedWebsocketPayload<AgentSessionLogEvent>(
+          data.type,
+          data.data,
+          handleAgentSessionLog
+        );
       })
       .with({ type: 'comms_reaction' }, () => {
         withParsedWebsocketPayload(data.type, data.data, handleCommsReaction);

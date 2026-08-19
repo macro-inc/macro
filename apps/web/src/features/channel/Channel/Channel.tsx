@@ -33,7 +33,7 @@ import {
   useChannelType,
 } from '@core/context/channels';
 import { useUserId } from '@core/context/user';
-import { isMobile } from '@core/mobile/isMobile';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import type { DateValue } from '@core/util/date';
 import {
   extractUserMentions,
@@ -135,7 +135,7 @@ export type ChannelProps = {
   lastViewedAt?: DateValue | null;
   initialMessagesStateSnapshot?: ChannelMessagesStateSnapshot;
   onHandleReady?: (handle: ChannelHandle) => void;
-  /** Whether to auto-focus the channel input on mount. Defaults to `!isMobile()`. */
+  /** Whether to auto-focus the channel input on mount. Defaults to `!isTouchDevice()`. */
   autofocus?: boolean;
 };
 
@@ -156,11 +156,11 @@ export function Channel(props: ChannelProps) {
   const userId = useUserId();
   const splitPanel = useSplitPanel();
 
-  // Full-frame mobile: the thread list spans the whole screen and messages
+  // Full-frame mobile/tablet: the thread list spans the whole screen and messages
   // scroll behind the floating header islands (top) and the floating
   // input + dock (bottom). contentOffsetTop already includes the safe area.
   const threadListScrollInsets = () =>
-    isMobile()
+    isTouchDevice()
       ? {
           start: splitPanel?.contentOffsetTop() ?? 0,
           // '4' here is a magic offset so that the ThreadRail correctly hits the the curved edge of the floating input. Not idea, but low impact and it works.
@@ -699,7 +699,7 @@ export function Channel(props: ChannelProps) {
               >
                 <Show when={findBar.isOpen()}>
                   <FindBar
-                    class="absolute top-2 right-3 z-10 w-80 max-w-[calc(100%-1.5rem)] mobile:top-[calc(var(--mobile-content-inset-top,0)+0.5rem)]"
+                    class="absolute top-2 right-3 z-10 w-80 max-w-[calc(100%-1.5rem)] touch:top-[calc(var(--mobile-content-inset-top,0)+0.5rem)]"
                     controller={findBar}
                     direction="desc"
                   />
@@ -823,7 +823,7 @@ export function Channel(props: ChannelProps) {
                       <ScrollToBottomOverlay
                         scrollState={threadListScrollState}
                         onScrollToBottom={handleScrollToBottom}
-                        class="mobile:top-[calc(var(--mobile-content-inset-top,0)+1rem)]"
+                        class="touch:top-[calc(var(--mobile-content-inset-top,0)+1rem)]"
                       />
                     </Show>
                   </div>

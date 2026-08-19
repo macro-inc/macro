@@ -6,12 +6,17 @@ version = "0.1.0"
 
 [features]
 default = []
+# The AI toolset adapter exposing calendar CRUD to agents.
+ai_tools = ["dep:ai_toolset", "dep:anyhow", "dep:async-trait", "dep:schemars"]
 # The reminder dispatch queue worker. Transport-agnostic: it drives the
 # domain through the dispatch ports.
 dispatch = ["dep:tokio", "dep:tokio-util"]
 # The worker plus the SQS adapter that backs it.
 dispatch-sqs = ["dep:aws-sdk-sqs", "dispatch"]
 google = ["dep:reqwest", "dep:urlencoding"]
+# The email-service HTTP adapter implementing the mutation port, for hosts
+# that are not the calendar write authority.
+mutation-client = ["dep:reqwest"]
 inbound = [
   "dep:axum",
   "dep:macro_authorization",
@@ -24,6 +29,9 @@ postgres = ["dep:sqlx", "dep:tokio"]
 schema = ["dep:utoipa"]
 
 [dependencies]
+ai_toolset = { path = "../ai_toolset", optional = true }
+anyhow = { workspace = true, optional = true }
+async-trait = { workspace = true, optional = true }
 aws-sdk-sqs = { workspace = true, optional = true }
 axum = { workspace = true, optional = true }
 chrono = { workspace = true }
@@ -38,6 +46,7 @@ models_pagination = { path = "../models_pagination", optional = true }
 notification = { path = "../notification", optional = true }
 reqwest = { workspace = true, optional = true }
 rootcause = { workspace = true }
+schemars = { workspace = true, optional = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sqlx = { workspace = true, optional = true }
@@ -52,4 +61,5 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
 macro_db_migrator = { path = "../macro_db_migrator" }
+macro_user_id = { path = "../macro_user_id" }
 tokio = { workspace = true }

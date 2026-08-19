@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { previewSyncArguments, publishPreviewAssets } from './deploy';
 import {
   extractPreviewIdFromBody,
   generatePreviewId,
@@ -34,7 +35,8 @@ describe('buildCommentBody', () => {
 
 describe('extractPreviewIdFromBody', () => {
   it('extracts preview id from url without path', () => {
-    const body = '**Preview:** [https://my-feature-abc123.preview.macro.com](...)';
+    const body =
+      '**Preview:** [https://my-feature-abc123.preview.macro.com](...)';
     expect(extractPreviewIdFromBody(body)).toBe('my-feature-abc123');
   });
 
@@ -73,7 +75,8 @@ describe('generatePreviewId', () => {
   });
 
   it('truncates long branch names to 30 chars', () => {
-    const longBranch = 'this-is-a-very-long-branch-name-that-exceeds-thirty-chars';
+    const longBranch =
+      'this-is-a-very-long-branch-name-that-exceeds-thirty-chars';
     const id = generatePreviewId(longBranch);
     const prefixWithoutNanoid = id.slice(0, -7);
     expect(prefixWithoutNanoid.length).toBeLessThanOrEqual(30);
@@ -89,6 +92,51 @@ describe('generatePreviewId', () => {
     expect(id).not.toMatch(/^-/);
     expect(id.slice(0, -7)).not.toMatch(/-$/);
   });
+});
+
+describe('preview cache WASM deployment', () => {
+  it('excludes only cache WASM raw/sidecar from generic sync', () => {
+    const argumentsList = previewSyncArguments('preview-id', '/tmp/dist');
+    expect(argumentsList).toContain('*cache_wasm_bg*.wasm');
+    expect(argumentsList).toContain('*cache_wasm_bg*.wasm.br');
+    expect(argumentsList).not.toContain('*.wasm');
+    expect(argumentsList).not.toContain('*.wasm.br');
+  });
+
+  it('publishes current WASM, assets, and index before pruning', () => {
+    const calls: string[][] = [];
+    publishPreviewAssets('preview-id', '/tmp/dist', (executable, args) => {
+      calls.push([executable, ...args]);
+    });
+    expect(calls.map((call) => call[0])).toEqual([
+      'bash',
+      'aws',
+      'aws',
+      'bash',
+    ]);
+    expect(calls[0].join(' ')).toContain('upload-brotli-to-s3.sh');
+    expect(calls[1].slice(0, 3)).toEqual(['aws', 's3', 'sync']);
+    expect(calls[2].slice(0, 3)).toEqual(['aws', 's3', 'cp']);
+    expect(calls[3].join(' ')).toContain('prune-old-brotli-from-s3.sh');
+  });
+
+  it.each([1, 2])(
+    'does not prune when publication step %i fails',
+    (failedCall) => {
+      const calls: string[][] = [];
+      expect(() =>
+        publishPreviewAssets('preview-id', '/tmp/dist', (executable, args) => {
+          calls.push([executable, ...args]);
+          if (calls.length - 1 === failedCall) throw new Error('publish failed');
+        })
+      ).toThrow('publish failed');
+      expect(
+        calls.some((call) =>
+          call.join(' ').includes('prune-old-brotli-from-s3.sh')
+        )
+      ).toBe(false);
+    }
+  );
 });
 
 describe('roundtrip: build url then extract id', () => {

@@ -24,7 +24,7 @@ export function SendButton(props: SendButtonProps) {
 
   return (
     <Button
-      depth={5}
+      depth={4}
       variant="cta"
       size="icon-sm"
       draggable={false}

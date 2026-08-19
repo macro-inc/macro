@@ -1,0 +1,567 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "agent_harness_service",
+    "description": "",
+    "termsOfService": "https://macro.com/terms",
+    "license": {
+      "name": ""
+    },
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/agent-sessions/{session_id}": {
+      "get": {
+        "tags": ["agent-sessions"],
+        "summary": "Get an agent session by id.",
+        "operationId": "get_agent_session",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "ID of the agent session",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentSessionResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["agent-sessions"],
+        "summary": "Delete an agent session and its live resources.",
+        "operationId": "delete_agent_session",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "ID of the agent session",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/agent-sessions/{session_id}/control": {
+      "post": {
+        "tags": ["agent-sessions"],
+        "summary": "Perform a control operation on a live agent session.",
+        "operationId": "control_agent_session",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "ID of the agent session",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ControlRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Accepted; matches `requestId` on the folded message this action derives",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentActionId"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/agent-sessions/{session_id}/log": {
+      "get": {
+        "tags": ["agent-sessions"],
+        "summary": "The raw protocol log of one agent session.",
+        "description": "Served unfolded, and whole: the fold is a left fold over the frames from\nthe beginning, so a reader that skipped any of them would derive different\nturn numbering.\n\nAn unknown session is an error: the response has to name the session's\nagent, and a session that never existed has none to name.",
+        "operationId": "get_agent_session_log",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "ID of the agent session",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentSessionLogResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "AgentAction": {
+        "oneOf": [
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AgentPromptAction",
+                "description": "Send the agent a prompt."
+              },
+              {
+                "type": "object",
+                "required": ["type"],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": ["prompt"]
+                  }
+                }
+              }
+            ],
+            "description": "Send the agent a prompt."
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AgentSetModelAction",
+                "description": "Switch the model the agent runs on."
+              },
+              {
+                "type": "object",
+                "required": ["type"],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": ["setModel"]
+                  }
+                }
+              }
+            ],
+            "description": "Switch the model the agent runs on."
+          },
+          {
+            "type": "object",
+            "description": "Compact the agent's current context.",
+            "required": ["type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["compact"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Interrupt whatever the agent is doing.",
+            "required": ["type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["stop"]
+              }
+            }
+          }
+        ],
+        "description": "One thing a caller wants an agent to do."
+      },
+      "AgentActionId": {
+        "type": "string",
+        "description": "Identifies one accepted [`AgentAction`] end to end: returned by the\ncontrol endpoint, written as the JSON-RPC request id on the action's wire\nframe, and read back off that frame as `request_id` on the folded message\nit derives. Correlation is string equality; the value is opaque.\n\nMinted only by the server at accept time, as `agent_session:{uuid}` - the\nprefix is what lets [`Self::from_request_id`] tell our ids from ones other\nclients picked."
+      },
+      "AgentPromptAction": {
+        "type": "object",
+        "description": "Ask the agent to work on something.",
+        "required": ["prompt"],
+        "properties": {
+          "prompt": {
+            "type": "string",
+            "description": "What to tell the agent."
+          }
+        }
+      },
+      "AgentSessionLogEntryDto": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/LogFrameDto",
+            "description": "The frame: `direction` and the protocol envelope under `content`.\n\nSerialized by [`Message`] itself rather than rebuilt field by field, so\nthe bytes on the wire are exactly what the fold's own log type reads\nback. [`LogFrameDto`] describes the two fields that produces."
+          },
+          {
+            "type": "object",
+            "required": ["createdAt"],
+            "properties": {
+              "createdAt": {
+                "type": "string",
+                "format": "date-time",
+                "description": "When the log recorded the frame.\n\nThe frame itself carries no time, so this comes from the log row. It is\nwhat a reader has to order these against anything else it is showing\nbeside them - the fold derives an order among the messages of one\nsession and nothing more."
+              },
+              "userId": {
+                "type": ["string", "null"],
+                "description": "The user whose action produced the frame, absent when no user did.\n\nOnly prompts carry one, and only when the frame was attributed at the\ntime - a replayed or recorded session's are anonymous."
+              }
+            }
+          }
+        ],
+        "description": "One entry of a session's protocol log.\n\nSerializes as `{\"userId\": ..., \"direction\": ..., \"content\": ...}` - the\nframe's own two fields, flattened in beside the attribution, which is the\nsame shape a recorded session's JSONL carries. A reader can deserialize the\n`direction`/`content` pair straight back into the fold's own log type\nrather than through a transport vocabulary of its own.\n\n`agentSessionId` is not repeated per entry: every entry in a response\nbelongs to the session named once at the top.\n\n`Deserialize` is for the wire-contract tests only - nothing server-side\ndecodes its own response type."
+      },
+      "AgentSessionLogResponse": {
+        "type": "object",
+        "description": "Response body for one session's raw protocol log.\n\nA wrapper rather than a bare array so that anything which is about the\nresponse rather than about a frame has somewhere to go later without\nbreaking every client.",
+        "required": ["bot", "entries"],
+        "properties": {
+          "bot": {
+            "$ref": "#/components/schemas/SessionBot",
+            "description": "The agent whose messages the log derives.\n\nHere because a client renders those messages and cannot otherwise work\nout who sent them: the sender of an agent message is this session's\nbot, and nothing else names it."
+          },
+          "entries": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AgentSessionLogEntryDto"
+            },
+            "description": "Every logged frame, oldest first. Folding depends on this order."
+          }
+        }
+      },
+      "AgentSessionResponse": {
+        "type": "object",
+        "description": "Response body describing an agent session.",
+        "required": [
+          "id",
+          "ownerId",
+          "botId",
+          "model",
+          "harness",
+          "repoUrl",
+          "status",
+          "createdAt",
+          "modifiedAt"
+        ],
+        "properties": {
+          "acpSessionId": {
+            "type": ["string", "null"],
+            "description": "The ACP session id, if one exists."
+          },
+          "botId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The bot running the agent."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the session was created."
+          },
+          "harness": {
+            "type": "string",
+            "description": "Harness slug."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The session id."
+          },
+          "model": {
+            "type": "string",
+            "description": "Model slug."
+          },
+          "modifiedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the session was last modified."
+          },
+          "originatingMessageId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "The exact message that invoked the bot, if any."
+          },
+          "ownerId": {
+            "type": "string",
+            "description": "The user who created and owns the session."
+          },
+          "repoUrl": {
+            "type": "string",
+            "description": "The repository the session works with."
+          },
+          "status": {
+            "$ref": "#/components/schemas/SessionStatusDto",
+            "description": "The session's status."
+          },
+          "threadId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "The root message of the thread the session was created from, if any."
+          }
+        }
+      },
+      "AgentSetModelAction": {
+        "type": "object",
+        "description": "Ask the agent to run on a different model from here on.",
+        "required": ["model"],
+        "properties": {
+          "model": {
+            "type": "string",
+            "description": "The model slug the agent should switch to."
+          }
+        }
+      },
+      "BotId": {
+        "type": "string"
+      },
+      "ControlRequest": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/AgentAction",
+            "description": "The operation to perform."
+          }
+        ],
+        "description": "Request body for a control operation on a live session.\n\nA wrapper around the operation rather than the bare enum so that fields\nwhich are about the request rather than the operation have somewhere to go.\nThe acting user is deliberately not one of them: it comes from the caller's\ncredentials, so that a caller cannot attribute an operation to someone else."
+      },
+      "LogDirectionDto": {
+        "type": "string",
+        "description": "Which way a logged frame travelled, mirroring [`Message`]'s discriminant.",
+        "enum": ["to_server", "to_runtime"]
+      },
+      "LogFrameDto": {
+        "type": "object",
+        "description": "The two fields [`AgentSessionLogEntryDto`] flattens in.\n\nSchema only. Nothing constructs one: the entry serializes through\n[`Message`], and this exists so the generated clients see `direction` and\n`content` as named fields instead of an open map. A hand-built copy could\ndrift from the fold's wire format, and the point of the endpoint is that it\ncannot - so this describes that format without being able to produce it.",
+        "required": ["direction", "content"],
+        "properties": {
+          "content": {
+            "type": "object",
+            "description": "The protocol envelope, verbatim. Opaque here: it is Agent Runtime\nProtocol, whose shape belongs to the fold rather than this endpoint."
+          },
+          "direction": {
+            "$ref": "#/components/schemas/LogDirectionDto",
+            "description": "Which way the frame travelled."
+          }
+        }
+      },
+      "SessionBot": {
+        "type": "object",
+        "description": "The agent behind a session, as much of it as rendering a message needs.",
+        "required": ["id", "name"],
+        "properties": {
+          "avatarUrl": {
+            "type": ["string", "null"],
+            "description": "Avatar, when it has one."
+          },
+          "id": {
+            "$ref": "#/components/schemas/BotId",
+            "description": "The bot's id. A message it sent has `\"bot|{id}\"` as its sender."
+          },
+          "name": {
+            "type": "string",
+            "description": "Display name."
+          }
+        }
+      },
+      "SessionStatusDto": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "No status updates received.",
+            "required": ["kind"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["no_messages"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "The last system event received from the runtime.",
+            "required": ["event", "kind"],
+            "properties": {
+              "event": {
+                "type": "string",
+                "description": "The wire name of the system event, e.g. `acp_ready`."
+              },
+              "kind": {
+                "type": "string",
+                "enum": ["event"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "The session disconnected without sending a closed event.",
+            "required": ["kind"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["disconnected"]
+              }
+            }
+          }
+        ],
+        "description": "Transport representation of a session's status, mirroring\n[`SessionStatus`]."
+      }
+    }
+  },
+  "tags": [
+    {
+      "name": "agent-sessions",
+      "description": "Agent sessions"
+    }
+  ]
+}

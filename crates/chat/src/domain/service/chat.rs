@@ -129,7 +129,19 @@ where
 
         let project_id = args.project_id.clone();
         let name = args.name.clone();
-        let chat_id = self.repo.create(user_id.clone(), args).await?;
+
+        // The owner's team default link-share preference decides the initial
+        // share permission; without a team the chat default (public/view) applies.
+        let team_default = self
+            .repo
+            .get_team_default_link_share(user_id.as_ref())
+            .await?;
+        let share_permission = SharePermissionV2::new_chat_share_permission(team_default);
+
+        let chat_id = self
+            .repo
+            .create(user_id.clone(), args, share_permission)
+            .await?;
 
         if let Some(project_id) = &project_id
             && !project_id.is_empty()
@@ -212,6 +224,15 @@ where
 
         let chat = self.repo.get_metadata(chat_id).await?;
         let name = format!("{} Copy", chat.name);
+
+        // The copier becomes the owner, so their team default decides the
+        // copy's initial share permission.
+        let team_default = self
+            .repo
+            .get_team_default_link_share(user_id.as_ref())
+            .await?;
+        let share_permission = SharePermissionV2::new_chat_share_permission(team_default);
+
         let new_chat_id = self
             .repo
             .copy_chat(
@@ -221,6 +242,7 @@ where
                     name: name.clone(),
                     project_id: None,
                 },
+                share_permission,
             )
             .await?;
 

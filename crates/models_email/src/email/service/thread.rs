@@ -186,6 +186,11 @@ pub struct ListThreadsPayload {
     /// off to the normal most-recent-to-least sweep.
     #[serde(default)]
     pub priority_pass: bool,
+    /// When true (stale-cursor recovery jobs), threads that already exist in
+    /// the database are refreshed — their message ids are fetched and missing
+    /// messages backfilled — instead of being skipped.
+    #[serde(default)]
+    pub refresh_existing: bool,
 }
 
 /// A mapping from provider IDs to thread IDs

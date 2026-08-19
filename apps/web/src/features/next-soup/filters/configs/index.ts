@@ -59,6 +59,7 @@ import {
   activeTaskFilter,
   assignedToMeFilter,
   assigneeFilter,
+  myTasksFilter,
   TASK_PRIORITY_FILTERS,
   TASK_STATUS_FILTERS,
 } from './task';
@@ -86,6 +87,7 @@ export const SOUP_FILTERS = [
   ownedEntityFilter,
   assignedToMeFilter,
   assigneeFilter,
+  myTasksFilter,
   notTaskFilter,
   documentOrFileFilter,
   activeTaskFilter,

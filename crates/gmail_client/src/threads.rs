@@ -1,14 +1,18 @@
-use crate::{GmailClient, sanitize_error_body};
-use anyhow::Context;
-use models_email::email::service::thread::{ThreadList, ThreadSummary};
+use std::cmp::min;
+
 use models_email::gmail::{ListThreadsResponse, MinimalThreadResource, ThreadResource};
 use serde::de::DeserializeOwned;
-use std::cmp::min;
+
+use crate::error::{decode_json_response, unsuccessful_response};
+use crate::{GmailApiHttpError, GmailClient};
+
+#[cfg(test)]
+mod test;
 
 // 500 is max allowed by gmail api
 pub const LIST_THREADS_BATCH_SIZE: u32 = 500;
 
-/// lists thread provider ids up to the requested number, or all if none specified.
+/// Lists thread provider ids up to the requested number, or all if none specified.
 /// `label_ids` restricts the result to threads carrying all of the given Gmail
 /// label ids; an empty slice applies no label filter.
 #[tracing::instrument(skip(client, access_token, next_page_token), err)]
@@ -18,70 +22,40 @@ pub(crate) async fn list_threads(
     num_threads: u32,
     next_page_token: Option<&str>,
     label_ids: &[&str],
-) -> anyhow::Result<ThreadList> {
+) -> Result<ListThreadsResponse, GmailApiHttpError> {
     if num_threads == 0 {
-        return Ok(ThreadList {
-            threads: Vec::new(),
+        return Ok(ListThreadsResponse {
+            threads: Some(Vec::new()),
             next_page_token: None,
         });
     }
 
-    // The Gmail API's `maxResults` parameter is capped at 500.
     let batch_size = min(num_threads, LIST_THREADS_BATCH_SIZE);
-
-    let http_client = client.inner.clone();
     let url = format!("{}/users/me/threads", client.base_url);
-
     let mut query_params = vec![("maxResults", batch_size.to_string())];
 
-    // If a page token is provided, add it to the list of parameters.
     if let Some(token) = next_page_token {
         query_params.push(("pageToken", token.to_string()));
     }
 
-    // `labelIds` is a repeatable param; a thread matches if it carries all of them.
     for label_id in label_ids {
         query_params.push(("labelIds", label_id.to_string()));
     }
 
-    let response = http_client
-        .get(&url)
+    let response = client
+        .inner
+        .get(url)
         .bearer_auth(access_token)
-        .query(&query_params) // Pass the dynamically built query params
+        .query(&query_params)
         .send()
         .await
-        .context("Failed to send request to Gmail API (list threads)")?;
+        .map_err(GmailApiHttpError::transport)?;
 
-    let status = response.status();
-    if !status.is_success() {
-        let error_body = response
-            .text()
-            .await
-            .unwrap_or_else(|_| "Failed to read error body".to_string());
-        let sanitized = sanitize_error_body(&error_body);
-        anyhow::bail!("Gmail API error {} (list threads): {}", status, sanitized);
+    if !response.status().is_success() {
+        return Err(unsuccessful_response(response).await);
     }
 
-    let gmail_response = response
-        .json::<ListThreadsResponse>()
-        .await
-        .context("Failed to parse JSON response from Gmail API (list threads)")?;
-
-    let thread_summaries = gmail_response
-        .threads
-        .unwrap_or_default()
-        .into_iter()
-        .map(|api_thread| ThreadSummary {
-            provider_id: api_thread.id,
-        })
-        .collect();
-
-    let result = ThreadList {
-        threads: thread_summaries,
-        next_page_token: gmail_response.next_page_token,
-    };
-
-    Ok(result)
+    decode_json_response(response).await
 }
 
 /// Fetches a thread from the Gmail API with the given format and deserializes the response.
@@ -90,43 +64,22 @@ async fn fetch_thread<T: DeserializeOwned>(
     access_token: &str,
     thread_id: &str,
     format: &str,
-) -> anyhow::Result<T> {
-    let url = format!(
-        "{}/users/me/threads/{}?format={}",
-        client.base_url, thread_id, format
-    );
-
+) -> Result<T, GmailApiHttpError> {
+    let url = format!("{}/users/me/threads/{thread_id}", client.base_url);
     let response = client
         .inner
-        .get(&url)
+        .get(url)
         .bearer_auth(access_token)
+        .query(&[("format", format)])
         .send()
         .await
-        .context(format!(
-            "Failed to send request to Gmail API for thread {}",
-            thread_id
-        ))?;
+        .map_err(GmailApiHttpError::transport)?;
 
-    let status = response.status();
-    if !status.is_success() {
-        let error_body = response
-            .text()
-            .await
-            .unwrap_or_else(|_| "Failed to read error body".to_string());
-        let sanitized = sanitize_error_body(&error_body);
-        anyhow::bail!(
-            "Gmail API error {} (get thread, format={}) for thread_id {}: {}",
-            status,
-            format,
-            thread_id,
-            sanitized
-        );
+    if !response.status().is_success() {
+        return Err(unsuccessful_response(response).await);
     }
 
-    response.json::<T>().await.context(format!(
-        "Failed to parse JSON response from Gmail API for thread {}",
-        thread_id
-    ))
+    decode_json_response(response).await
 }
 
 /// Fetches a single email thread with full message content from the Gmail API.
@@ -135,26 +88,24 @@ pub(crate) async fn get_thread(
     client: &GmailClient,
     access_token: &str,
     thread_id: &str,
-) -> anyhow::Result<ThreadResource> {
+) -> Result<ThreadResource, GmailApiHttpError> {
     fetch_thread(client, access_token, thread_id, "full").await
 }
 
 /// Gets all message IDs for a specific thread using the minimal format
-/// to reduce data transfer and processing time
+/// to reduce data transfer and processing time.
 #[tracing::instrument(skip(client, access_token), err)]
 pub(crate) async fn get_message_ids_for_thread(
     client: &GmailClient,
     access_token: &str,
     thread_id: &str,
-) -> anyhow::Result<Vec<String>> {
+) -> Result<Vec<String>, GmailApiHttpError> {
     let thread_resource: MinimalThreadResource =
         fetch_thread(client, access_token, thread_id, "minimal").await?;
 
-    let message_ids = thread_resource
+    Ok(thread_resource
         .messages
-        .iter()
-        .map(|message| message.id.clone())
-        .collect();
-
-    Ok(message_ids)
+        .into_iter()
+        .map(|message| message.id)
+        .collect())
 }

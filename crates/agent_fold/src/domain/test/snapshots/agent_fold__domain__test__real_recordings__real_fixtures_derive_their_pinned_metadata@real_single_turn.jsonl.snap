@@ -1,0 +1,428 @@
+---
+source: crates/agent_fold/src/domain/test/real_recordings.rs
+assertion_line: 270
+expression: machine.metadata()
+input_file: crates/agent_fold/fixtures/real/real_single_turn.jsonl
+---
+SessionMetadata {
+    model: Some(
+        "claude-fable-5[1m]",
+    ),
+    supported_models: [
+        ModelOption {
+            id: "default",
+            name: "Default (recommended)",
+            description: Some(
+                "Opus 5 with 1M context · Best for everyday, complex tasks",
+            ),
+        },
+        ModelOption {
+            id: "opus[1m]",
+            name: "Opus (1M context)",
+            description: Some(
+                "Opus 5 with 1M context · Best for everyday, complex tasks",
+            ),
+        },
+        ModelOption {
+            id: "claude-fable-5[1m]",
+            name: "Fable",
+            description: Some(
+                "Fable 5 · Most capable for your hardest and longest-running tasks",
+            ),
+        },
+        ModelOption {
+            id: "sonnet",
+            name: "Sonnet",
+            description: Some(
+                "Sonnet 5 · Efficient for routine tasks",
+            ),
+        },
+        ModelOption {
+            id: "haiku",
+            name: "Haiku",
+            description: Some(
+                "Haiku 4.5 · Fastest for quick answers",
+            ),
+        },
+    ],
+    title: Some(
+        "hi",
+    ),
+    available_commands: [
+        AvailableCommand {
+            name: "agents-sdk",
+            description: "Build AI agents on Cloudflare Workers using the Agents SDK. Load when creating stateful agents, durable workflows, real-time WebSocket apps, scheduled tasks, MCP servers, chat applications, voice agents, or browser automation. Covers Agent class, state management, callable RPC, Workflows, durable execution, queues, retries, observability, and React hooks. Biases towards retrieval from Cloudflare docs over pre-trained knowledge. (user)",
+            input_hint: None,
+        },
+        AvailableCommand {
+            name: "cleanup-worktrees",
+            description: "Clean up jj ticket worktrees whose PRs have merged — list workspaces, check each one's PR status, and for merged PRs forget the jj workspace and delete its files. Use when the user wants to clean up / prune old worktrees created by do-tickets. (user)",
+            input_hint: None,
+        },
+        AvailableCommand {
+            name: "cloudflare",
+            description: "Comprehensive Cloudflare platform skill covering Workers, Pages, storage (KV, D1, R2), AI (Workers AI, Vectorize, Agents SDK), feature flags (Flagship), networking (Tunnel, Spectrum), security (WAF, DDoS), and infrastructure-as-code (Terraform, Pulumi). Use for any Cloudflare development task. Biases towards retrieval from Cloudflare docs over pre-trained knowledge. (user)",
+            input_hint: None,
+        },
+        AvailableCommand {
+            name: "cloudflare-email-service",
+            description: "Send and receive transactional emails with Cloudflare Email Service (Email Sending + Email Routing). Use when building email sending (Workers binding or REST API), email routing, Agents SDK email handling, or integrating email into any app — Workers, Node.js, Python, Go, etc. Also use for email deliverability, SPF/DKIM/DMARC, wrangler email setup, MCP email tools, or when a coding agent needs to send emails. Even for simple requests like \"add email to my Worker\" — this skill has critical config details. (user)",
+            input_hint: None,
+        },
+        AvailableCommand {
+            name: "cloudflare-one",
+            description: "Guides Cloudflare One Zero Trust and SASE work across Access, Gateway, WARP, Tunnel, Cloudflare WAN, DLP, CASB, device posture, and identity. Use when designing, configuring, troubleshooting, or reviewing Cloudflare One deployments. Retrieval-first: use current Cloudflare docs/API schemas instead of embedded product docs. (user)",
+            input_hint: None,
+        },
+        AvailableCommand {
+            name: "cloudflare-one-migrations",
+            description: "Plans migrations from Zscaler ZIA/ZPA, Palo Alto, legacy VPN, SWG, or SASE stacks to Cloudflare One. Use for migration assessments, policy mapping, rollout plans, and parity/gap analysis. (user)",
+            input_hint: None,
+        },
+        AvailableCommand {
+            name: "create-workspace",
+            description: "Create a new jj (Jujutsu) workspace under ~/Code the same way do-tickets does — `jj workspace add ~/Code/<repo>-<name>` from the main repo — and copy the main repo's .envrc into it. Use when the user wants a fresh worktree/workspace to work in. (user)",
+            input_hint: None,
+        },
+        AvailableCommand {
+            name: "do-tickets",
+            description: "Do a set of Macro tickets. Two modes — with no args, interactively select from the user's tasks and fan out ticket-builder subagents two at a time; with a single named/linked task, implement that one ticket yourself inline (no subagent). Use when the user wants to work through Macro tickets/tasks. (user)",
+            input_hint: None,
+        },
+        AvailableCommand {
+            name: "durable-objects",
+            description: "Create and review Cloudflare Durable Objects. Use when building stateful coordination (chat rooms, multiplayer games, booking systems), implementing RPC methods, SQLite storage, alarms, WebSockets, or reviewing DO code for best practices. Covers Workers integration, wrangler config, and testing with Vitest. Biases towards retrieval from Cloudflare docs over pre-trained knowledge. (user)",
+            input_hint: None,
+        },
+        AvailableCommand {
+            name: "pr",
+            description: "put up a github PR (user)",
+            input_hint: None,
+        },
+        AvailableCommand {
+            name: "resolve-conflicts",
+            description: "Resolve the merge conflicts in this working copy (user)",
+            input_hint: None,
+        },
+        AvailableCommand {
+            name: "sandbox-sdk",
+            description: "Build sandboxed applications for secure code execution. Load when building AI code execution, code interpreters, CI/CD systems, interactive dev environments, or executing untrusted code. Covers Sandbox SDK lifecycle, commands, files, code interpreter, and preview URLs. Biases towards retrieval from Cloudflare docs over pre-trained knowledge. (user)",
+            input_hint: None,
+        },
+        AvailableCommand {
+            name: "turnstile-spin",
+            description: "Set up Cloudflare Turnstile end-to-end in a project. Scan the codebase, create the widget via the Cloudflare API, embed it where user requests need bot verification (form submissions, SPA actions, API endpoints, download links, comment or vote submissions, etc.), wire canonical server-side siteverify in the customer's existing backend, validate, and persist the skill. Load this when a user asks to add Turnstile, set up CAPTCHA, protect a form or endpoint from bots, or fix a Turnstile integration. Mirrors developers.cloudflare.com/turnstile/spin. (user)",
+            input_hint: None,
+        },
+        AvailableCommand {
+            name: "web-perf",
+            description: "Analyzes web performance using Chrome DevTools MCP. Measures Core Web Vitals (LCP, INP, CLS) and supplementary metrics (FCP, TBT, Speed Index), identifies render-blocking resources, network dependency chains, layout shifts, caching issues, and accessibility gaps. Use when asked to audit, profile, debug, or optimize page load performance, Lighthouse scores, or site speed. Biases towards retrieval from current documentation over pre-trained knowledge. (user)",
+            input_hint: None,
+        },
+        AvailableCommand {
+            name: "workers-best-practices",
+            description: "Reviews and authors Cloudflare Workers code against production best practices. Load when writing new Workers, reviewing Worker code, configuring wrangler.jsonc, or checking for common Workers anti-patterns (streaming, floating promises, global state, secrets, bindings, observability). Biases towards retrieval from Cloudflare docs over pre-trained knowledge. (user)",
+            input_hint: None,
+        },
+        AvailableCommand {
+            name: "wrangler",
+            description: "Cloudflare Workers CLI for deploying, developing, and managing Workers, KV, R2, D1, Vectorize, Hyperdrive, Workers AI, Containers, Queues, Workflows, Pipelines, and Secrets Store. Load before running wrangler commands to ensure correct syntax and best practices. Biases towards retrieval from Cloudflare docs over pre-trained knowledge. (user)",
+            input_hint: None,
+        },
+        AvailableCommand {
+            name: "add-sdk-endpoint",
+            description: "Wrap a new backend endpoint in the TypeScript SDK (packages/sdk), or record it as skipped. Use when `just coverage` fails, or after adding an endpoint to a Rust service. (project)",
+            input_hint: None,
+        },
+        AvailableCommand {
+            name: "cloud-storage-hexagonal-architecture",
+            description: "Enforce hexagonal architecture in the Rust backend. Use before modifying crates/ or Rust services, especially inbound axum/tool/listener adapters, domain services/ports, outbound adapters, authorization, permissions, database access, or external clients. (project)",
+            input_hint: None,
+        },
+        AvailableCommand {
+            name: "create-ai-tool",
+            description: "Build a new AI tool end-to-end — Rust implementation, toolset wiring, infra, schema generation, and frontend UI. (project)",
+            input_hint: None,
+        },
+        AvailableCommand {
+            name: "debug-service",
+            description: "You are going to help me interactively debug the rust binary (project)",
+            input_hint: None,
+        },
+        AvailableCommand {
+            name: "dependabot",
+            description: "Find all open Dependabot alerts for this repo and create a plan to resolve them using the appropriate package manager overrides (pnpm, bun, npm, cargo). (project)",
+            input_hint: None,
+        },
+        AvailableCommand {
+            name: "dump-schema",
+            description: "Dump clean Postgres schema to a file and copy path to clipboard. (project)",
+            input_hint: None,
+        },
+        AvailableCommand {
+            name: "qc",
+            description: "Quality gate. 5 parallel agents review changes. All must pass. (project)",
+            input_hint: None,
+        },
+        AvailableCommand {
+            name: "upgrade-model",
+            description: "Upgrade an AI chat model (fast or good) across backend and frontend. (project)",
+            input_hint: None,
+        },
+        AvailableCommand {
+            name: "swagger",
+            description: "Launch local Swagger UI for a service's OpenAPI spec (project)",
+            input_hint: None,
+        },
+        AvailableCommand {
+            name: "deep-research",
+            description: "Deep research harness — fan-out web searches, fetch sources, adversarially verify claims, synthesize a cited report. (dynamic workflow)",
+            input_hint: None,
+        },
+        AvailableCommand {
+            name: "design-sync",
+            description: "Push a React design system to claude.ai/design. This runs a converter that bundles the real component code (from Storybook or a bare package) and uploads it. Use when the user runs /design-sync or says \"sync my design system to Claude Design\".",
+            input_hint: Some(
+                "[<project hint, e.g. \"Acme DS\">]",
+            ),
+        },
+        AvailableCommand {
+            name: "dataviz",
+            description: "Use this skill whenever you are about to create ANY chart, graph, plot, dashboard, or data visualization, in ANY output medium — an HTML or React artifact, inline SVG, plotting code in any library (matplotlib, plotly, d3, Recharts, …), an image/PNG you will render and upload, or a chart shared into Slack. Read it BEFORE writing the first line of chart code, choosing chart colors, building a stat tile / meter / KPI row, or laying out a dashboard. Produces visualizations that read as one system — elegant, accessible, consistent in light and dark — using a brand-neutral placeholder palette you swap for your own. Teaches a design-system-agnostic method: a form heuristic, a color formula with a runnable validator, mark specs, and interaction rules. A validated default palette is documented in `references/palette.md` — swap that file's values for your brand's. Triggers on: \"chart\", \"graph\", \"plot\", \"data viz\", \"visualization\", \"dashboard\", \"analytics\", \"visualize data\", \"categorical colors\", \"sequential / diverging palette\", \"stat tile\", \"sparkline\", \"heatmap\", \"legend\", \"axis\", \"tooltip\", \"chart colors\", \"color by series\".",
+            input_hint: None,
+        },
+        AvailableCommand {
+            name: "update-config",
+            description: "Use this skill to configure the Claude Code harness via settings.json. Automated behaviors (\"from now on when X\", \"each time X\", \"whenever X\", \"before/after X\") require hooks configured in settings.json - the harness executes these, not Claude, so memory/preferences cannot fulfill them. Also use for: permissions (\"allow X\", \"add permission\", \"move permission to\"), env vars (\"set X=Y\"), hook troubleshooting, or any changes to settings.json/settings.local.json files. Examples: \"allow npm commands\", \"add bq permission to global settings\", \"move permission to user settings\", \"set DEBUG=true\", \"when claude stops show X\". For simple settings like theme/model, suggest the /config command.",
+            input_hint: None,
+        },
+        AvailableCommand {
+            name: "verify",
+            description: "Verify that a code change actually does what it's supposed to by exercising it end-to-end and observing behavior — drive the affected flow, not just tests or typecheck. Run before committing nontrivial changes; bootstraps this repo's project verify skill if none exists yet. Don't invoke it on a diff that only touches tests, docs, or other code with no runtime surface to drive (a change to product source always has one) — there's nothing to observe.",
+            input_hint: None,
+        },
+        AvailableCommand {
+            name: "debug",
+            description: "Enable debug logging for this session and help diagnose issues",
+            input_hint: Some(
+                "[issue description]",
+            ),
+        },
+        AvailableCommand {
+            name: "code-review",
+            description: "Review the current diff for correctness bugs and reuse/simplification/efficiency cleanups at the given effort level (low/medium: fewer, high-confidence findings; high→max: broader coverage, may include uncertain findings). Pass --comment to post findings as inline PR comments, or --fix to apply the findings to the working tree after the review.",
+            input_hint: Some(
+                "[low|medium|high|xhigh|max] [--fix] [--comment] [<target>]",
+            ),
+        },
+        AvailableCommand {
+            name: "simplify",
+            description: "Review the changed code for reuse, simplification, efficiency, and altitude cleanups, then apply the fixes. Quality only — it does not hunt for bugs; use /code-review for that.",
+            input_hint: Some(
+                "[<target>]",
+            ),
+        },
+        AvailableCommand {
+            name: "batch",
+            description: "Research and plan a large-scale change, then execute it in parallel across 5–30 isolated worktree agents that each open a PR.",
+            input_hint: Some(
+                "<instruction>",
+            ),
+        },
+        AvailableCommand {
+            name: "fewer-permission-prompts",
+            description: "Scan your transcripts for common read-only Bash and MCP tool calls, then add a prioritized allowlist to project .claude/settings.json to reduce permission prompts.",
+            input_hint: None,
+        },
+        AvailableCommand {
+            name: "doctor",
+            description: "Health-check the user's Claude Code setup and fix issues: diagnose installation health — what the `claude doctor` terminal diagnostics cover — from local data (duplicate or leftover installs, PATH, unparseable settings files, broken or colliding agent definitions); find unused skills, MCP servers, and plugins versus their context cost and disable dead weight; deduplicate local CLAUDE.md files against checked-in ones; trim checked-in CLAUDE.md files by cutting content a session could derive from the codebase (directory layouts, tech-stack lists, architecture overviews) while keeping gotchas, rationale, and non-standard conventions; migrate always-loaded CLAUDE.md guidance into lazy skills and nested CLAUDE.md files; flag slow hooks and context-heavy extensions; check the installed version is current; make auto mode the default permission mode; and pre-approve frequently denied read-only commands. Use when the user asks for a doctor run, checkup, audit, tune-up, or cleanup of their Claude Code setup or configuration.",
+            input_hint: None,
+        },
+        AvailableCommand {
+            name: "loop",
+            description: "Run a prompt or slash command on a recurring interval (e.g. /loop 5m /foo). Omit the interval to let the model self-pace.",
+            input_hint: Some(
+                "[interval] [prompt]",
+            ),
+        },
+        AvailableCommand {
+            name: "schedule",
+            description: "Create, update, list, or run scheduled cloud agents (routines) that execute on a cron schedule.",
+            input_hint: None,
+        },
+        AvailableCommand {
+            name: "claude-api",
+            description: "Reference for the Claude API / Anthropic SDK — model ids, pricing, params, streaming, tool use, MCP, agents, caching, token counting, model migration.\nTRIGGER — read BEFORE opening the target file; don't skip because it \"looks like a one-liner\" — whenever: the prompt names Claude/Anthropic in any form (Claude, Anthropic, Fable, Opus, Sonnet, Haiku, `anthropic`, `@anthropic-ai`, `claude-*`, `us.anthropic.*`, `[1m]`); the user asks about an LLM (pricing/model choice/limits/caching) — never answer from memory; OR the task is LLM-shaped with provider unstated (agent/MCP/tool-definition/multi-agent/RAG/LLM-judge/computer-use; generate/summarize/extract/classify/rewrite/converse over NL; debugging refusals/cutoffs/streaming/tool-calls/tokens).\nSKIP only when another provider is being worked on (overrides all triggers): OpenAI/GPT/Gemini/Llama/Mistral/Cohere/Ollama named in the query; OR `grep -rE 'openai|langchain_openai|google.generativeai|genai|mistralai|cohere|ollama'` over the project hits (run this grep FIRST if no provider named — don't Read the file).",
+            input_hint: None,
+        },
+        AvailableCommand {
+            name: "run",
+            description: "Launch and drive this project's app to see a change working. Use when asked to run, start, or screenshot the app, or to confirm a change works in the real app (not just tests). First looks for a project skill that already covers launching the app; otherwise falls back to built-in patterns per project type (CLI, server, TUI, Electron, browser-driven, library).",
+            input_hint: None,
+        },
+        AvailableCommand {
+            name: "run-skill-generator",
+            description: "Author or improve the run-<unit> skill — a per-project skill that tells agents how to build, launch, and drive this project's app. Use when the user asks to set up the project, get it running, write run instructions, or verify build/run steps work from a clean environment.",
+            input_hint: None,
+        },
+        AvailableCommand {
+            name: "agents",
+            description: "(removed) Ask Claude to create/manage subagents, or edit .claude/agents/",
+            input_hint: None,
+        },
+        AvailableCommand {
+            name: "color",
+            description: "Set the prompt bar color for this session",
+            input_hint: Some(
+                "[red|blue|green|yellow|purple|orange|pink|cyan|default]",
+            ),
+        },
+        AvailableCommand {
+            name: "compact",
+            description: "Free up context by summarizing the conversation so far",
+            input_hint: Some(
+                "<optional custom summarization instructions>",
+            ),
+        },
+        AvailableCommand {
+            name: "config",
+            description: "Set a setting by key",
+            input_hint: Some(
+                "key=value",
+            ),
+        },
+        AvailableCommand {
+            name: "context",
+            description: "Show current context usage",
+            input_hint: None,
+        },
+        AvailableCommand {
+            name: "effort",
+            description: "Set effort level for model usage",
+            input_hint: Some(
+                "<low|medium|high|xhigh|max|ultracode|auto>",
+            ),
+        },
+        AvailableCommand {
+            name: "fast",
+            description: "Toggle fast mode (Opus 5)",
+            input_hint: Some(
+                "[on|off]",
+            ),
+        },
+        AvailableCommand {
+            name: "heapdump",
+            description: "Dump the JS heap to ~/Desktop",
+            input_hint: None,
+        },
+        AvailableCommand {
+            name: "init",
+            description: "Initialize a new CLAUDE.md file with codebase documentation",
+            input_hint: None,
+        },
+        AvailableCommand {
+            name: "mcp",
+            description: "Manage MCP servers",
+            input_hint: Some(
+                "[reconnect|enable|disable [<server>|all]]",
+            ),
+        },
+        AvailableCommand {
+            name: "model",
+            description: "Set the AI model for Claude Code",
+            input_hint: Some(
+                "<model>",
+            ),
+        },
+        AvailableCommand {
+            name: "__remote-workflow",
+            description: "Run the workflow script delivered in this session environment (server-launched sessions only)",
+            input_hint: None,
+        },
+        AvailableCommand {
+            name: "workflow-launch-exec",
+            description: "Execute a server-launched workflow handoff (workflow_launch event sessions only)",
+            input_hint: None,
+        },
+        AvailableCommand {
+            name: "reload-skills",
+            description: "Pick up skills added or changed on disk during this session",
+            input_hint: None,
+        },
+        AvailableCommand {
+            name: "rename",
+            description: "Rename the current conversation",
+            input_hint: Some(
+                "[name]",
+            ),
+        },
+        AvailableCommand {
+            name: "review",
+            description: "Review a GitHub pull request; for your working diff use /code-review",
+            input_hint: Some(
+                "[pr number]",
+            ),
+        },
+        AvailableCommand {
+            name: "security-review",
+            description: "Complete a security review of the pending changes on the current branch",
+            input_hint: None,
+        },
+        AvailableCommand {
+            name: "usage-credits",
+            description: "Configure usage credits or request them from your admin when you hit a limit",
+            input_hint: None,
+        },
+        AvailableCommand {
+            name: "extra-usage",
+            description: "Renamed to /usage-credits",
+            input_hint: None,
+        },
+        AvailableCommand {
+            name: "usage",
+            description: "Show session cost, plan usage, and what's contributing to your limits",
+            input_hint: None,
+        },
+        AvailableCommand {
+            name: "insights",
+            description: "Generate a report analyzing your Claude Code sessions",
+            input_hint: None,
+        },
+        AvailableCommand {
+            name: "recap",
+            description: "Generate a one-line session recap now",
+            input_hint: None,
+        },
+        AvailableCommand {
+            name: "goal",
+            description: "Set a goal — keep working until the condition is met",
+            input_hint: None,
+        },
+        AvailableCommand {
+            name: "design",
+            description: "Grant or revoke Claude agent access to your Design projects",
+            input_hint: Some(
+                "consent | revoke",
+            ),
+        },
+        AvailableCommand {
+            name: "design-consent",
+            description: "Grant Claude agent access to your Design projects",
+            input_hint: None,
+        },
+        AvailableCommand {
+            name: "design-revoke",
+            description: "Revoke Claude agent access to your Design projects",
+            input_hint: None,
+        },
+        AvailableCommand {
+            name: "team-onboarding",
+            description: "Help teammates ramp on Claude Code with a guide from your usage",
+            input_hint: None,
+        },
+    ],
+    status: Some(
+        "acp_ready",
+    ),
+}

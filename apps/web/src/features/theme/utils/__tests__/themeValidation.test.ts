@@ -1,8 +1,12 @@
-import { describe, expect, it } from 'vitest';
+import { DEFAULT_THEMES } from '@theme/constants';
+import { inputColorTokens, semanticTokens } from '@theme/types/themeTypes';
 import {
   isThemeV2,
+  isThemeV3,
   parseThemeV2Json,
+  parseThemeV3Json,
 } from '@theme/utils/themeValidation';
+import { describe, expect, it } from 'vitest';
 
 const validThemeJson = JSON.stringify({
   id: 'test-theme-id',
@@ -27,6 +31,21 @@ const validThemeJson = JSON.stringify({
     c4: { l: 0.5, c: 0.02, h: 300 },
   },
 });
+
+const validV3Theme = {
+  id: 'token-only-theme',
+  name: 'Token only',
+  version: 3,
+  mode: 'light',
+  colorTokens: Object.fromEntries(
+    [...inputColorTokens, ...semanticTokens].map((token) => [
+      token,
+      token === 'hover'
+        ? 'color-mix(in oklch, var(--color-content-0) 3%, transparent)'
+        : `var(--test-${token})`,
+    ])
+  ),
+};
 
 describe('parseThemeV2Json', () => {
   it('returns parsed ThemeV2 for valid theme JSON', () => {
@@ -132,5 +151,81 @@ describe('isThemeV2', () => {
     const data = JSON.parse(validThemeJson);
     delete data.depth;
     expect(isThemeV2(data)).toBe(false);
+  });
+
+  it('accepts flat VNext color tokens', () => {
+    const data = JSON.parse(validThemeJson);
+    data.colorTokens = {
+      'surface-0': '#000000',
+      chrome: 'var(--color-surface-4)',
+    };
+    expect(isThemeV2(data)).toBe(true);
+  });
+
+  it('rejects non-string VNext color token values', () => {
+    const data = JSON.parse(validThemeJson);
+    data.colorTokens = { accent: 42 };
+    expect(isThemeV2(data)).toBe(false);
+  });
+
+  it('rejects a V3 version number even when legacy fields are present', () => {
+    const data = JSON.parse(validThemeJson);
+    data.version = 3;
+    expect(isThemeV2(data)).toBe(false);
+  });
+});
+
+describe('token-only ThemeV3 validation', () => {
+  it('accepts a V3 theme containing only required raw input tokens', () => {
+    const inputOnlyTheme = structuredClone(validV3Theme);
+    for (const token of semanticTokens) {
+      delete inputOnlyTheme.colorTokens[token];
+    }
+
+    expect(isThemeV3(inputOnlyTheme)).toBe(true);
+    expect(parseThemeV3Json(JSON.stringify(inputOnlyTheme))).toEqual(
+      inputOnlyTheme
+    );
+  });
+
+  it('accepts a complete V3 theme without legacy tokens or depth', () => {
+    expect(isThemeV3(validV3Theme)).toBe(true);
+    expect(parseThemeV3Json(JSON.stringify(validV3Theme))).toEqual(
+      validV3Theme
+    );
+  });
+
+  it('requires an explicit light or dark mode', () => {
+    expect(isThemeV3({ ...validV3Theme, mode: 'system' })).toBe(false);
+  });
+
+  it('rejects a missing required raw input token', () => {
+    const colorTokens = { ...validV3Theme.colorTokens };
+    delete colorTokens['surface-4'];
+    expect(isThemeV3({ ...validV3Theme, colorTokens })).toBe(false);
+  });
+
+  it('rejects empty and non-string token values', () => {
+    expect(
+      isThemeV3({
+        ...validV3Theme,
+        colorTokens: { ...validV3Theme.colorTokens, accent: '' },
+      })
+    ).toBe(false);
+    expect(
+      isThemeV3({
+        ...validV3Theme,
+        colorTokens: { ...validV3Theme.colorTokens, accent: 42 },
+      })
+    ).toBe(false);
+  });
+
+  it('exports every built-in theme in token-only V3 form', () => {
+    for (const theme of DEFAULT_THEMES) {
+      expect(isThemeV3(theme)).toBe(true);
+      expect(theme.version).toBe(3);
+      expect(theme).not.toHaveProperty('tokens');
+      expect(theme).not.toHaveProperty('depth');
+    }
   });
 });

@@ -64,6 +64,8 @@ pub struct SoupCalendarEvent<T = ()> {
     pub organizer_name: Option<String>,
     /// Direct conference join URL.
     pub conference_url: Option<String>,
+    /// Which conferencing system backs `conference_url`.
+    pub conference_provider: Option<String>,
     /// Whether the selected canonical source is read-only.
     pub is_read_only: bool,
     /// Entity creation timestamp.

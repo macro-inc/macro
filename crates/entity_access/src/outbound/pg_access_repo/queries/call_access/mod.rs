@@ -19,25 +19,29 @@ pub async fn get_call_access(
         let access_level = sqlx::query_scalar!(
             r#"
             SELECT
-            "publicAccessLevel" as "access_level!"
-            FROM "SharePermission"
-            WHERE id in (SELECT share_permission_id
-            FROM calls
-            WHERE id = $1
-            UNION ALL
-            SELECT share_permission_id
-            FROM call_records
-            WHERE id = $1
-            LIMIT 1)
-            AND "isPublic" = true
-            AND "publicAccessLevel" IS NOT NULL
+                share_permission."linkShareAccessLevel" AS "access_level!: AccessLevel"
+            FROM "SharePermission" share_permission
+            JOIN (
+                SELECT share_permission_id
+                FROM calls
+                WHERE id = $1
+
+                UNION ALL
+
+                SELECT share_permission_id
+                FROM call_records
+                WHERE id = $1
+                LIMIT 1
+            ) call_item ON call_item.share_permission_id = share_permission.id
+            WHERE share_permission."linkShare" = 'PUBLIC'
+              AND share_permission."linkShareAccessLevel" IS NOT NULL
             "#,
-            &call_id
+            call_id,
         )
         .fetch_optional(pool)
         .await?;
 
-        return Ok(access_level.and_then(|level| AccessLevel::from_str(&level).ok()));
+        return Ok(access_level);
     }
 
     let all_level_strings: Vec<Option<String>> = sqlx::query_scalar!(
@@ -51,22 +55,35 @@ pub async fn get_call_access(
             AND source_id = ANY($2)
 
             UNION ALL
-            -- Source 2: items share permission
+            -- Source 2: call link share permission
             SELECT
-                "publicAccessLevel"::text AS access_level
-            FROM "SharePermission"
-            WHERE id in (
-                SELECT share_permission_id
+                share_permission."linkShareAccessLevel"::text AS access_level
+            FROM "SharePermission" share_permission
+            JOIN (
+                SELECT share_permission_id, created_by
                 FROM calls
                 WHERE id = $1
+
                 UNION ALL
-                SELECT share_permission_id
+
+                SELECT share_permission_id, created_by
                 FROM call_records
                 WHERE id = $1
                 LIMIT 1
-            )
-            AND "isPublic" = true
-            AND "publicAccessLevel" IS NOT NULL
+            ) call_item ON call_item.share_permission_id = share_permission.id
+            WHERE share_permission."linkShareAccessLevel" IS NOT NULL
+              AND (
+                  share_permission."linkShare" = 'PUBLIC'
+                  OR (
+                      share_permission."linkShare" = 'TEAM'
+                      AND EXISTS (
+                          SELECT 1
+                          FROM team_user owner_team
+                          WHERE owner_team.user_id = call_item.created_by
+                            AND owner_team.team_id::text = ANY($2)
+                      )
+                  )
+              )
         ) AS combined_access
         "#,
         call_id,

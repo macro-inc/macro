@@ -9,12 +9,6 @@ export type ClientOptions = {
  */
 export type AccessLevel = 'view' | 'comment' | 'edit' | 'owner';
 
-export type Activity = {
-    Document: BasicDocument;
-} | {
-    Chat: Chat;
-};
-
 /**
  * The kind of activity a user performs in a channel.
  */
@@ -31,7 +25,7 @@ export type AddFavoriteRequest = {
     /**
      * The type of the entity to favorite.
      */
-    entityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill';
+    entityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill' | 'agent_session';
 };
 
 /**
@@ -1033,6 +1027,10 @@ export type Bot = {
      */
     handle: string;
     /**
+     * Whether mentioning this bot opens a sandboxed coding-agent session.
+     */
+    has_agent: boolean;
+    /**
      * Bot id.
      */
     id: BotId;
@@ -1209,6 +1207,7 @@ export type CalendarEvent = {
      * projections stored before calendars were attributed.
      */
     calendarId?: string | null;
+    conferenceProvider?: null | ConferenceProvider;
     /**
      * Direct join URL when known.
      */
@@ -1317,6 +1316,108 @@ export type CalendarEventFilters = {
      * Event statuses such as `confirmed`, `tentative`, or `cancelled`.
      */
     statuses?: Array<string>;
+};
+
+/**
+ * Meeting-level fields shown in a calendar event mention preview, taken from
+ * the requester's own projection of the meeting.
+ */
+export type CalendarMentionEvent = {
+    /**
+     * Number of attendees on the requester's copy.
+     */
+    attendeeCount: number;
+    /**
+     * Whether the event repeats.
+     */
+    isRecurring: boolean;
+    /**
+     * Location label, when set.
+     */
+    location?: string | null;
+    /**
+     * Key of the previewed instance, absent when no occurrence is
+     * materialized.
+     */
+    occurrenceKey?: string | null;
+    /**
+     * Organizer email.
+     */
+    organizerEmail?: string | null;
+    /**
+     * Organizer display name.
+     */
+    organizerName?: string | null;
+    /**
+     * Time of the previewed instance: the requested occurrence when it
+     * exists, else the next upcoming one, else the latest past one, else the
+     * series start.
+     */
+    time: EventTime;
+    /**
+     * Display title.
+     */
+    title: string;
+    /**
+     * Entity update time of the requester's copy.
+     */
+    updatedAt: string;
+    /**
+     * The requester's own event entity for the mentioned meeting. Differs
+     * from the mentioned id when the mention came from another attendee.
+     */
+    viewerEventId: string;
+};
+
+/**
+ * Resolution of one mentioned event, in request order.
+ */
+export type CalendarMentionPreviewItem = {
+    event?: null | CalendarMentionEvent;
+    /**
+     * The mentioned event id, echoed from the request.
+     */
+    eventId: string;
+    /**
+     * Visibility of the mentioned event to the requester.
+     */
+    type: CalendarMentionPreviewKind;
+};
+
+/**
+ * Requester-relative visibility of one mentioned event.
+ */
+export type CalendarMentionPreviewKind = 'access' | 'no_access' | 'does_not_exist';
+
+/**
+ * Batch calendar mention preview request.
+ */
+export type CalendarMentionPreviewRequest = {
+    /**
+     * Mentioned events to resolve, at most 100.
+     */
+    items: Array<CalendarMentionPreviewRequestItem>;
+};
+
+/**
+ * One mentioned event to resolve for the requester.
+ */
+export type CalendarMentionPreviewRequestItem = {
+    /**
+     * Mentioned calendar event id.
+     */
+    eventId: string;
+    /**
+     * Occurrence the mention points at, when it targets one instance.
+     */
+    occurrenceKey?: string | null;
+};
+
+/**
+ * Batch calendar mention preview response.
+ */
+export type CalendarMentionPreviewResponse = {
+    items: Array<CalendarMentionPreviewItem>;
 };
 
 /**
@@ -2432,6 +2533,22 @@ export type CommentThread = {
 };
 
 /**
+ * The conferencing system backing an event's join URL.
+ *
+ * Macro generates only Google Meet conferences, so this distinguishes one it
+ * created from a third party's — Zoom and friends arriving as `addOn`
+ * conference data, or a legacy classic Hangout. Clients use it to label the
+ * conference and to tell whether the Meet toggle reflects a Macro-managed
+ * conference.
+ *
+ * It does not gate mutation. An explicit request replaces or detaches any
+ * conference, third-party included, exactly as deleting the event would;
+ * what protects a conference is that omitting the field leaves it untouched,
+ * so an unrelated edit never disturbs it.
+ */
+export type ConferenceProvider = 'google_meet' | 'other';
+
+/**
  * Query parameters for the copy document endpoint.
  */
 export type CopyDocumentQueryParams = {
@@ -2858,7 +2975,7 @@ export type CreateReminderRequest = {
     /**
      * Type of the entity to attach the reminder to. Requires `entityId`.
      */
-    entityType?: null | 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill';
+    entityType?: null | 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill' | 'agent_session';
     /**
      * When and how often the reminder fires.
      */
@@ -2968,6 +3085,10 @@ export type CreateTaskResponse = {
      * Metadata for the created document
      */
     documentMetadata: DocumentResponseMetadata;
+    /**
+     * Base64-encoded canonical Loro snapshot used to initialize the task.
+     */
+    initialSnapshot: string;
     /**
      * The team this task number is scoped to.
      */
@@ -4563,7 +4684,7 @@ export type Favorite = {
     /**
      * The type of the favorited entity.
      */
-    entityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill';
+    entityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill' | 'agent_session';
     /**
      * File type of the favorited document, when applicable.
      */
@@ -4585,7 +4706,7 @@ export type FavoriteEntityRef = {
     /**
      * The type of the favorited entity.
      */
-    entityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill';
+    entityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill' | 'agent_session';
 };
 
 /**
@@ -4758,17 +4879,6 @@ export type GenericSuccessResponse = {
      * Indicates if the request was successful
      */
     success: boolean;
-};
-
-/**
- * @deprecated
- */
-export type GetActivitiesResponse = {
-    data?: null | UserActivitiesResponse;
-    /**
-     * Indicates if an error occurred
-     */
-    error: boolean;
 };
 
 /**
@@ -5388,6 +5498,11 @@ export type LeaveCallResponse = {
      */
     callEnded: boolean;
 };
+
+/**
+ * Defines who can access an item through its share link.
+ */
+export type LinkShare = 'PUBLIC' | 'TEAM';
 
 /**
  * Webhooks visible to the caller across their personal and team workspaces.
@@ -6178,7 +6293,7 @@ export type Reminder = {
     /**
      * Type of the associated entity, when the reminder is attached to one.
      */
-    entityType?: null | 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill';
+    entityType?: null | 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill' | 'agent_session';
     /**
      * Reminder id.
      */
@@ -6503,15 +6618,12 @@ export type SharePermissionV2 = {
      * The share permission id
      */
     id: string;
-    /**
-     * If the item is publicly accessible
-     */
-    isPublic: boolean;
+    linkShare?: null | LinkShare;
+    linkShareAccessLevel?: null | AccessLevel;
     /**
      * The owner of the item
      */
     owner: string;
-    publicAccessLevel?: null | AccessLevel;
 };
 
 /**
@@ -6544,7 +6656,7 @@ export type SimpleMention = {
 };
 
 /**
- * API representation of a soup item with its frecency score.
+ * API representation of a soup item with its per-viewer enrichments.
  */
 export type SoupApiItem = SoupItem & {
     frecency_score: number;
@@ -6552,12 +6664,18 @@ export type SoupApiItem = SoupItem & {
      * Whether the requesting user has favorited this entity.
      */
     is_favorited: boolean;
+    /**
+     * The caller's latest own mutation of this entity, present only when the
+     * page was ordered by `touched_by_me`. Clients keep the touched feed
+     * ordered on this value, so it can be bumped optimistically.
+     */
+    touched_at?: string | null;
 };
 
 /**
  * Sort options accepted by non-grouped soup API endpoints.
  */
-export type SoupApiSort = 'viewed_at' | 'created_at' | 'updated_at' | 'viewed_updated' | 'frecency';
+export type SoupApiSort = 'viewed_at' | 'created_at' | 'updated_at' | 'viewed_updated' | 'frecency' | 'touched_by_me';
 
 /**
  * Sort direction accepted by non-grouped soup API endpoints.
@@ -6639,6 +6757,10 @@ export type SoupCalendarEventTime = {
  * A canonical calendar event entity in Soup.
  */
 export type SoupCalendarEventSoupPropertiesField = {
+    /**
+     * Which conferencing system backs `conference_url`.
+     */
+    conferenceProvider?: string | null;
     /**
      * Direct conference join URL.
      */
@@ -7534,7 +7656,7 @@ export type SoupReminderReference = {
     /**
      * The referenced entity's type.
      */
-    entityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill';
+    entityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill' | 'agent_session';
     /**
      * File type, when the reference is a document — `md`, `pdf`, and so on.
      */
@@ -7939,11 +8061,8 @@ export type UpdateSharePermissionRequestV2 = {
      * Any channel share permissions to be created/updated/removed
      */
     channelSharePermissions?: Array<UpdateChannelSharePermission> | null;
-    /**
-     * If the item is publicly accessible
-     */
-    isPublic?: boolean | null;
-    publicAccessLevel?: null | AccessLevel;
+    linkShare?: null | LinkShare;
+    linkShareAccessLevel?: null | AccessLevel;
 };
 
 /**
@@ -7980,24 +8099,6 @@ export type UploadFolderRequest = {
 
 export type UpsertUserDocumentViewLocationRequest = {
     location: string;
-};
-
-/**
- * @deprecated
- */
-export type UserActivitiesResponse = {
-    /**
-     * The next offset to be used if there is one
-     */
-    next_offset?: number | null;
-    /**
-     * The activities returned from the query
-     */
-    recent: Array<Activity>;
-    /**
-     * The total number of activities the user has
-     */
-    total: number;
 };
 
 /**
@@ -8240,36 +8341,6 @@ export type WithDocumentId = {
 export type WithProjectId = {
     id: string;
 };
-
-export type GetRecentActivityHandlerData = {
-    body?: never;
-    path?: never;
-    query: {
-        /**
-         * The maximum number of items to retreive. Default 10, max 100.
-         */
-        limit: number;
-        /**
-         * The offset to start from. Default 0.
-         */
-        offset: number;
-    };
-    url: '/activity';
-};
-
-export type GetRecentActivityHandlerErrors = {
-    400: GenericErrorResponse;
-    401: GenericErrorResponse;
-    500: GenericErrorResponse;
-};
-
-export type GetRecentActivityHandlerError = GetRecentActivityHandlerErrors[keyof GetRecentActivityHandlerErrors];
-
-export type GetRecentActivityHandlerResponses = {
-    200: GetActivitiesResponse;
-};
-
-export type GetRecentActivityHandlerResponse = GetRecentActivityHandlerResponses[keyof GetRecentActivityHandlerResponses];
 
 export type DeleteAnchorData = {
     body: DeleteUnthreadedAnchorRequest;
@@ -8602,6 +8673,37 @@ export type ListOccurrencesResponses = {
 };
 
 export type ListOccurrencesResponse = ListOccurrencesResponses[keyof ListOccurrencesResponses];
+
+export type MentionPreviewsData = {
+    body: CalendarMentionPreviewRequest;
+    path?: never;
+    query?: never;
+    url: '/calendar-events/preview';
+};
+
+export type MentionPreviewsErrors = {
+    /**
+     * Too many events in one request
+     */
+    400: unknown;
+    /**
+     * Authentication required
+     */
+    401: unknown;
+    /**
+     * Calendar query failed
+     */
+    500: unknown;
+};
+
+export type MentionPreviewsResponses = {
+    /**
+     * Requester-relative previews for the mentioned events
+     */
+    200: CalendarMentionPreviewResponse;
+};
+
+export type MentionPreviewsResponse = MentionPreviewsResponses[keyof MentionPreviewsResponses];
 
 export type GetBatchCallRecordPreviewData = {
     body: GetBatchCallRecordPreviewRequest;
@@ -10514,6 +10616,10 @@ export type CreateTaskHandlerResponses = {
          */
         documentMetadata: DocumentResponseMetadata;
         /**
+         * Base64-encoded canonical Loro snapshot used to initialize the task.
+         */
+        initialSnapshot: string;
+        /**
          * The team this task number is scoped to.
          */
         teamId?: string | null;
@@ -11401,7 +11507,7 @@ export type RemoveFavoriteByEntityData = {
         /**
          * The type of an entity in Macro
          */
-        entity_type: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill';
+        entity_type: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill' | 'agent_session';
         /**
          * The id of the favorited entity.
          */
@@ -11621,7 +11727,8 @@ export type GetItemsSoupData = {
          */
         limit?: number;
         /**
-         * Sort method. Options are viewed_at, created_at, updated_at, viewed_updated. Defaults to viewed_at.
+         * Sort method. Options are viewed_at, created_at, updated_at,
+         * viewed_updated, frecency, touched_by_me. Defaults to viewed_at.
          */
         sort_method?: SoupApiSort;
         /**
@@ -12227,7 +12334,7 @@ export type ListRemindersData = {
         /**
          * The type of an entity in Macro
          */
-        entityType?: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill';
+        entityType?: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill' | 'agent_session';
         /**
          * Restrict to reminders attached to this entity id. Requires `entityType`.
          */

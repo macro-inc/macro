@@ -10,6 +10,7 @@ import {
   E_MULTILINE_BLOCK_EQUATION_NODE,
   I_EQUATION_NODE,
 } from './katex';
+import { I_MAGIC_CHIP } from './magicChip';
 import {
   E_CONTACT_MENTION,
   E_DATE_MENTION,
@@ -73,6 +74,7 @@ export const INTERNAL_TRANSFORMERS: Transformer[] = [
   I_CONTACT_MENTION,
   I_DATE_MENTION,
   I_AWAIT_NODE,
+  I_MAGIC_CHIP,
   I_TABLE_NODE,
   HTML_BLOCKQUOTE,
   I_MACRO_QUOTE,
@@ -154,6 +156,7 @@ export const ALL_TRANSFORMERS: Transformer[] = [
   I_DATE_MENTION,
   E_DATE_MENTION,
   I_AWAIT_NODE,
+  I_MAGIC_CHIP,
   I_MACRO_QUOTE,
   I_EQUATION_NODE,
   I_THEME_MENTION,

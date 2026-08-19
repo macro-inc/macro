@@ -25,7 +25,6 @@ pub(crate) mod util;
 mod middleware;
 
 // Routes
-mod activity;
 mod annotations;
 mod documents;
 mod graphql_soup;
@@ -151,7 +150,6 @@ fn api_router(state: ApiContext) -> Router {
                 macro_middleware::connection_drop_prevention_handler,
             )),
         )
-        .nest("/activity", activity::router())
         .nest(
             "/pins",
             pins::router().layer(axum::middleware::from_fn(

@@ -12,6 +12,7 @@ mod test;
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 
+use models_permissions::share_permission::LinkShare;
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
 use uuid::Uuid;
@@ -19,7 +20,7 @@ use uuid::Uuid;
 /// Marker prefix (hex) carried by every seeded uuid.
 pub const SEED_MARKER: &str = "5eed";
 
-/// Access level names accepted in scenario share/public declarations.
+/// Access level names accepted in scenario share and link declarations.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ShareLevel {
@@ -38,6 +39,23 @@ impl fmt::Display for ShareLevel {
             ShareLevel::Comment => f.write_str("comment"),
             ShareLevel::Edit => f.write_str("edit"),
         }
+    }
+}
+
+fn check_link_share(
+    errors: &mut Vec<String>,
+    context: &str,
+    link_share: Option<LinkShare>,
+    link_share_access_level: Option<ShareLevel>,
+) {
+    match (link_share, link_share_access_level) {
+        (Some(_), None) => errors.push(format!(
+            "{context} sets link_share but not link_share_access_level"
+        )),
+        (None, Some(_)) => errors.push(format!(
+            "{context} sets link_share_access_level but not link_share"
+        )),
+        _ => {}
     }
 }
 
@@ -196,9 +214,12 @@ pub struct ProjectSpec {
     /// Access grants on the project (inherited by contained entities).
     #[serde(default)]
     pub share: Vec<ShareSpec>,
-    /// Public link access level, if the project is public.
+    /// Who can access the project through its share link.
     #[serde(default)]
-    pub public: Option<ShareLevel>,
+    pub link_share: Option<LinkShare>,
+    /// Access level granted through the share link.
+    #[serde(default)]
+    pub link_share_access_level: Option<ShareLevel>,
 }
 
 /// A document in the scenario.
@@ -226,9 +247,12 @@ pub struct DocumentSpec {
     /// Access grants on the document.
     #[serde(default)]
     pub share: Vec<ShareSpec>,
-    /// Public link access level, if the document is public.
+    /// Who can access the document through its share link.
     #[serde(default)]
-    pub public: Option<ShareLevel>,
+    pub link_share: Option<LinkShare>,
+    /// Access level granted through the share link.
+    #[serde(default)]
+    pub link_share_access_level: Option<ShareLevel>,
 }
 
 /// A task in the scenario: a markdown document with the task subtype plus
@@ -275,9 +299,12 @@ pub struct ChatSpec {
     /// Access grants on the chat.
     #[serde(default)]
     pub share: Vec<ShareSpec>,
-    /// Public link access level, if the chat is public.
+    /// Who can access the chat through its share link.
     #[serde(default)]
-    pub public: Option<ShareLevel>,
+    pub link_share: Option<LinkShare>,
+    /// Access level granted through the share link.
+    #[serde(default)]
+    pub link_share_access_level: Option<ShareLevel>,
 }
 
 /// A transcript segment of a seeded call.
@@ -766,7 +793,14 @@ impl ScenarioSpec {
                     "project `{key}` references unknown parent `{parent}`"
                 ));
             }
-            check_shares(&mut errors, &format!("project `{key}`"), &project.share);
+            let context = format!("project `{key}`");
+            check_shares(&mut errors, &context, &project.share);
+            check_link_share(
+                &mut errors,
+                &context,
+                project.link_share,
+                project.link_share_access_level,
+            );
         }
 
         for key in self.projects.keys() {
@@ -797,7 +831,14 @@ impl ScenarioSpec {
                     "document `{key}` sets both `file` and `content`; pick one"
                 ));
             }
-            check_shares(&mut errors, &format!("document `{key}`"), &document.share);
+            let context = format!("document `{key}`");
+            check_shares(&mut errors, &context, &document.share);
+            check_link_share(
+                &mut errors,
+                &context,
+                document.link_share,
+                document.link_share_access_level,
+            );
         }
 
         for (key, task) in &self.tasks {
@@ -833,7 +874,14 @@ impl ScenarioSpec {
 
         for (key, chat) in &self.chats {
             user_exists(&mut errors, &format!("chat `{key}` owner"), &chat.owner);
-            check_shares(&mut errors, &format!("chat `{key}`"), &chat.share);
+            let context = format!("chat `{key}`");
+            check_shares(&mut errors, &context, &chat.share);
+            check_link_share(
+                &mut errors,
+                &context,
+                chat.link_share,
+                chat.link_share_access_level,
+            );
         }
 
         for (key, call) in &self.calls {

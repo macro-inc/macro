@@ -92,6 +92,9 @@
       "@service-storage/*": [
         "./src/lib/service-clients/service-storage/*"
       ],
+      "@service-agent-harness/*": [
+        "./src/lib/service-clients/service-agent-harness/*"
+      ],
       "@service-search/*": [
         "./src/lib/service-clients/service-search/*"
       ],
@@ -128,8 +131,14 @@
       "@service-properties/*": [
         "./src/lib/service-clients/service-properties/*"
       ],
+      "@service-agent-fold/*": [
+        "./src/lib/service-clients/service-agent-fold/*"
+      ],
       "@block-chat/*": [
         "./src/features/block-chat/*"
+      ],
+      "@block-calendar/*": [
+        "./src/features/block-calendar/*"
       ],
       "@block-code/*": [
         "./src/features/block-code/*"

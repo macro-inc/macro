@@ -163,6 +163,7 @@ fn default_reminders_stay_out_of_serialized_projections() {
         organizer_email: None,
         organizer_name: None,
         conference_url: None,
+        conference_provider: None,
         sequence: 0,
         is_read_only: false,
         attendees: Vec::new(),

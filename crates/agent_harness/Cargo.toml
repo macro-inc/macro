@@ -1,0 +1,44 @@
+[package]
+edition = "2024"
+name = "agent_harness"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+agent-client-protocol = { workspace = true }
+agent_runtime_protocol = { path = "../agent_runtime_protocol" }
+agent_session = { path = "../agent_session" }
+agent_trigger = { path = "../agent_trigger" }
+anyhow = { workspace = true }
+base64 = { workspace = true }
+bot_id = { path = "../bot_id" }
+channel_sender = { path = "../channel_sender" }
+chrono = { workspace = true }
+channels = { path = "../channels", features = ["ports"] }
+lexical_client = { path = "../lexical_client" }
+dashmap = { workspace = true }
+futures = { workspace = true }
+kafka_util = { path = "../kafka_util" }
+macro_env_var = { path = "../macro_env_var" }
+macro_event_broker = { path = "../macro_event_broker", features = ["outbound"] }
+macro_user_id = { path = "../macro_user_id" }
+macro_uuid = { path = "../macro_uuid" }
+reqwest = { workspace = true }
+rootcause = { workspace = true }
+rustls = { workspace = true }
+serde = { workspace = true }
+sqlx = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "sync", "time"] }
+tokio-util = { workspace = true, features = ["rt"] }
+tokio-tungstenite = { workspace = true }
+tracing = { workspace = true }
+url = { workspace = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
+
+[dev-dependencies]
+agent_fold = { path = "../agent_fold", features = ["test-utils"] }
+agent_session = { path = "../agent_session", features = ["test-utils"] }
+bot_id = { path = "../bot_id", features = ["test-utils"] }
+mockall = { workspace = true }

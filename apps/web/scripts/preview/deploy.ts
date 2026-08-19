@@ -10,12 +10,43 @@
  *   AWS credentials must be configured (AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, or AWS profile)
  */
 
-import { execSync } from 'node:child_process';
+import { execFileSync, execSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
+const SCRIPT_DIRECTORY = fileURLToPath(new URL('.', import.meta.url));
 const PREVIEW_BUCKET = 'macro-preview-assets-dev';
-const DIST_PATH = resolve(import.meta.dir, '../../dist');
+const DIST_PATH = resolve(SCRIPT_DIRECTORY, '../../dist');
+const CACHE_WASM_UPLOAD_SCRIPT = resolve(
+  SCRIPT_DIRECTORY,
+  '../cache-wasm/upload-brotli-to-s3.sh'
+);
+const CACHE_WASM_PRUNE_SCRIPT = resolve(
+  SCRIPT_DIRECTORY,
+  '../cache-wasm/prune-old-brotli-from-s3.sh'
+);
+
+export function previewSyncArguments(
+  previewId: string,
+  distPath = DIST_PATH
+): string[] {
+  return [
+    's3',
+    'sync',
+    `${distPath}/`,
+    `s3://${PREVIEW_BUCKET}/${previewId}/app/`,
+    '--delete',
+    '--cache-control',
+    'public, max-age=31536000, immutable',
+    '--exclude',
+    'index.html',
+    '--exclude',
+    '*cache_wasm_bg*.wasm',
+    '--exclude',
+    '*cache_wasm_bg*.wasm.br',
+  ];
+}
 
 function parseArgs(): { previewId: string; skipBuild: boolean } {
   const args = process.argv.slice(2);
@@ -65,32 +96,47 @@ function build(): void {
   });
 }
 
+type PreviewCommandRunner = (
+  executable: string,
+  argumentsList: readonly string[]
+) => void;
+
+export function publishPreviewAssets(
+  previewId: string,
+  distPath = DIST_PATH,
+  run: PreviewCommandRunner = (executable, argumentsList) => {
+    execFileSync(executable, [...argumentsList], { stdio: 'inherit' });
+  }
+): void {
+  const s3Prefix = `s3://${PREVIEW_BUCKET}/${previewId}/app`;
+  run('bash', [CACHE_WASM_UPLOAD_SCRIPT, distPath, s3Prefix]);
+  run('aws', previewSyncArguments(previewId, distPath));
+  run('aws', [
+    's3',
+    'cp',
+    `${distPath}/index.html`,
+    `${s3Prefix}/index.html`,
+    '--cache-control',
+    'no-cache, no-store, must-revalidate',
+  ]);
+  run('bash', [CACHE_WASM_PRUNE_SCRIPT, distPath, s3Prefix]);
+}
+
 function deploy(previewId: string): void {
   validateBucket(PREVIEW_BUCKET);
 
   if (!existsSync(DIST_PATH)) {
     console.error(`ERROR: Build output not found at ${DIST_PATH}`);
-    console.error('Run with --skip-build=false or build first with: bun run build:dev');
+    console.error(
+      'Run with --skip-build=false or build first with: bun run build:dev'
+    );
     process.exit(1);
   }
 
   console.log(`\nDeploying to s3://${PREVIEW_BUCKET}/${previewId}/app/\n`);
 
-  // Sync all files except index.html with immutable cache
-  execSync(
-    `aws s3 sync ${DIST_PATH}/ s3://${PREVIEW_BUCKET}/${previewId}/app/ ` +
-      `--delete ` +
-      `--cache-control "public, max-age=31536000, immutable" ` +
-      `--exclude "index.html"`,
-    { stdio: 'inherit' }
-  );
-
-  // Upload index.html with no-cache
-  execSync(
-    `aws s3 cp ${DIST_PATH}/index.html s3://${PREVIEW_BUCKET}/${previewId}/app/index.html ` +
-      `--cache-control "no-cache, no-store, must-revalidate"`,
-    { stdio: 'inherit' }
-  );
+  // Upload current bytes, publish assets/index, and only then prune old keys.
+  publishPreviewAssets(previewId);
 
   const previewUrl = `https://${previewId}.preview.macro.com`;
   console.log(`\nPreview deployed: ${previewUrl}\n`);
@@ -108,14 +154,13 @@ function cleanup(previewId: string): void {
   console.log('\nCleanup complete\n');
 }
 
-// Main
-const { previewId, skipBuild } = parseArgs();
+if (import.meta.main) {
+  const { previewId, skipBuild } = parseArgs();
 
-if (process.argv.includes('--cleanup')) {
-  cleanup(previewId);
-} else {
-  if (!skipBuild) {
-    build();
+  if (process.argv.includes('--cleanup')) {
+    cleanup(previewId);
+  } else {
+    if (!skipBuild) build();
+    deploy(previewId);
   }
-  deploy(previewId);
 }

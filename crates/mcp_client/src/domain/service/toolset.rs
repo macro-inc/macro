@@ -142,6 +142,12 @@ impl McpToolSet {
         self.tools.is_empty()
     }
 
+    /// The full catalog of MCP tools, public for hosts that compose this
+    /// toolset outside [`CombinedToolSet`] (see the `mcp_select` crate).
+    pub fn searchable_catalog(&self) -> Vec<SearchableTool> {
+        self.catalog()
+    }
+
     /// The full catalog of MCP tools (mangled name + description + input schema)
     /// for on-demand loading via tool search.
     fn catalog(&self) -> Vec<SearchableTool> {

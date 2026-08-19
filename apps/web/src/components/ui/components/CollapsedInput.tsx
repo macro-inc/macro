@@ -110,8 +110,8 @@ export function CollapsedInput(props: CollapsedInputProps) {
         </Show>
         <Show when={!isMobile() || !props.disabled}>
           <SendButton
-            // Match the expanded input's send button (pill on mobile).
-            class="mobile:rounded-full"
+            // Match the expanded input's send button (pill on touch).
+            class="touch:rounded-full"
             pending={props.pending}
             disabled={props.disabled || props.pending}
             onPointerDown={(event) => {

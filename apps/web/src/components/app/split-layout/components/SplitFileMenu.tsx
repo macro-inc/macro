@@ -5,8 +5,11 @@ import {
   makeCopyLinkAction,
   makeCreateReminderAction,
   makeFavoriteAction,
+  makeMarkDoneAction,
+  markReminderTargetDone,
 } from '@app/features/next-soup/actions';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import type { BlockTool } from '@components/app/ResponsiveBlockToolbar';
 import { type BlockName, useBlockAliasedName, useBlockName } from '@core/block';
@@ -17,6 +20,7 @@ import {
   ENABLE_REMINDERS_OVERRIDE,
 } from '@core/constant/featureFlags';
 import { useQuickAccess } from '@core/context/quickAccess';
+import { useUserId } from '@core/context/user';
 import { triggerFocusInput } from '@core/directive/focusInput';
 import { type HotkeyToken, TOKENS } from '@core/hotkey/tokens';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
@@ -368,7 +372,18 @@ export function SplitFileMenu(props: {
   const itemOperations = useItemOperations();
   const quickAccess = useQuickAccess();
   const favoriteAction = makeFavoriteAction();
-  const createReminderAction = makeCreateReminderAction();
+  const userId = useUserId();
+  const notificationSource = useGlobalNotificationSource();
+  const markDone = makeMarkDoneAction({
+    userId: () => userId(),
+    notificationSource: () => notificationSource,
+  });
+  // Same follow-up as the block's command menu and every soup list: the
+  // reminder brings the entity back, so it is marked done now. No soup list is
+  // behind this menu, so nothing advances.
+  const createReminderAction = makeCreateReminderAction({
+    onCreated: markReminderTargetDone(markDone),
+  });
   const addTagAction = makeAddTagAction();
   const copyLinkAction = makeCopyLinkAction();
   const copyEntityIdAction = makeCopyEntityIdAction();

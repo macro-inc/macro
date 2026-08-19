@@ -2,7 +2,7 @@
 
 import type { Client, ClientMeta, Options as Options2, RequestResult, TDataShape } from './client';
 import { client } from './client.gen';
-import type { AddMcpServerData, AddMcpServerErrors, AddMcpServerResponses, CallToolData, CallToolErrors, CallToolResponses, CompleteHandlerData, CompleteHandlerErrors, CompleteHandlerResponses, CopyChatData, CopyChatErrors, CopyChatResponses, CreateChatData, CreateChatErrors, CreateChatResponses, DeleteChatData, DeleteChatErrors, DeleteChatResponses, DeleteMcpServerData, DeleteMcpServerErrors, DeleteMcpServerResponses, DismissRunHandlerData, DismissRunHandlerErrors, DismissRunHandlerResponses, GetBatchPreviewData, GetBatchPreviewErrors, GetBatchPreviewResponses, GetChatData, GetChatErrors, GetChatHistoryBatchMessagesHandlerData, GetChatHistoryBatchMessagesHandlerErrors, GetChatHistoryBatchMessagesHandlerResponses, GetChatHistoryHandlerData, GetChatHistoryHandlerErrors, GetChatHistoryHandlerResponses, GetChatPermissionsData, GetChatPermissionsErrors, GetChatPermissionsResponses, GetChatResponses, GetChatsForAttachmentHandlerData, GetChatsForAttachmentHandlerErrors, GetChatsForAttachmentHandlerResponses, GetCitationHandlerData, GetCitationHandlerErrors, GetCitationHandlerResponses, GetMemoryHandlerData, GetMemoryHandlerErrors, GetMemoryHandlerResponses, GetStateHandler2Data, GetStateHandler2Errors, GetStateHandler2Responses, GetStateHandlerData, GetStateHandlerErrors, GetStateHandlerResponses, GetUsageHandlerData, GetUsageHandlerErrors, GetUsageHandlerResponses, HealthHandlerData, HealthHandlerResponses, ListMcpServersData, ListMcpServersErrors, ListMcpServersResponses, McpAuthCallbackData, McpAuthCallbackErrors, McpAuthCallbackResponses, McpOauthClientMetadataData, McpOauthClientMetadataResponses, PatchChatData, PatchChatErrors, PatchChatResponses, PermanentlyDeleteChatData, PermanentlyDeleteChatErrors, PermanentlyDeleteChatResponses, RejectToolCallData, RejectToolCallErrors, RejectToolCallResponses, RetryGatherHandlerData, RetryGatherHandlerErrors, RetryGatherHandlerResponses, RevertDeleteChatData, RevertDeleteChatErrors, RevertDeleteChatResponses, RunImportHandlerData, RunImportHandlerErrors, RunImportHandlerResponses, SendChatMessageData, SendChatMessageErrors, SendChatMessageResponses, SetPricingHandlerData, SetPricingHandlerErrors, SetPricingHandlerResponses, StartMcpAuthData, StartMcpAuthErrors, StartMcpAuthResponses, StopChatStreamData, StopChatStreamErrors, StopChatStreamResponses, StructuredCompletionData, StructuredCompletionErrors, StructuredCompletionResponses, UpdateMcpServerData, UpdateMcpServerErrors, UpdateMcpServerResponses, UpdateToolCallData, UpdateToolCallErrors, UpdateToolCallResponses, UpdateToolResponseData, UpdateToolResponseErrors, UpdateToolResponseResponses, UpsertAiProjectionData, UpsertAiProjectionErrors, UpsertAiProjectionResponses } from './types.gen';
+import type { AddMcpServerData, AddMcpServerErrors, AddMcpServerResponses, BrowsePipedreamMcpCatalogData, BrowsePipedreamMcpCatalogErrors, BrowsePipedreamMcpCatalogResponses, CallToolData, CallToolErrors, CallToolResponses, CompleteHandlerData, CompleteHandlerErrors, CompleteHandlerResponses, CompletePipedreamMcpConnectionData, CompletePipedreamMcpConnectionErrors, CompletePipedreamMcpConnectionResponses, CopyChatData, CopyChatErrors, CopyChatResponses, CreateChatData, CreateChatErrors, CreateChatResponses, CreatePipedreamMcpTokenData, CreatePipedreamMcpTokenErrors, CreatePipedreamMcpTokenResponses, DeleteChatData, DeleteChatErrors, DeleteChatResponses, DeleteMcpServerData, DeleteMcpServerErrors, DeleteMcpServerResponses, DeletePipedreamMcpConnectionData, DeletePipedreamMcpConnectionErrors, DeletePipedreamMcpConnectionResponses, DismissRunHandlerData, DismissRunHandlerErrors, DismissRunHandlerResponses, GetBatchPreviewData, GetBatchPreviewErrors, GetBatchPreviewResponses, GetChatData, GetChatErrors, GetChatHistoryBatchMessagesHandlerData, GetChatHistoryBatchMessagesHandlerErrors, GetChatHistoryBatchMessagesHandlerResponses, GetChatHistoryHandlerData, GetChatHistoryHandlerErrors, GetChatHistoryHandlerResponses, GetChatPermissionsData, GetChatPermissionsErrors, GetChatPermissionsResponses, GetChatResponses, GetChatsForAttachmentHandlerData, GetChatsForAttachmentHandlerErrors, GetChatsForAttachmentHandlerResponses, GetCitationHandlerData, GetCitationHandlerErrors, GetCitationHandlerResponses, GetMemoryHandlerData, GetMemoryHandlerErrors, GetMemoryHandlerResponses, GetStateHandler2Data, GetStateHandler2Errors, GetStateHandler2Responses, GetStateHandlerData, GetStateHandlerErrors, GetStateHandlerResponses, GetUsageHandlerData, GetUsageHandlerErrors, GetUsageHandlerResponses, HealthHandlerData, HealthHandlerResponses, ListMcpServersData, ListMcpServersErrors, ListMcpServersResponses, ListPipedreamMcpConnectionsData, ListPipedreamMcpConnectionsErrors, ListPipedreamMcpConnectionsResponses, McpAuthCallbackData, McpAuthCallbackErrors, McpAuthCallbackResponses, McpOauthClientMetadataData, McpOauthClientMetadataResponses, PatchChatData, PatchChatErrors, PatchChatResponses, PermanentlyDeleteChatData, PermanentlyDeleteChatErrors, PermanentlyDeleteChatResponses, RejectToolCallData, RejectToolCallErrors, RejectToolCallResponses, RetryGatherHandlerData, RetryGatherHandlerErrors, RetryGatherHandlerResponses, RevertDeleteChatData, RevertDeleteChatErrors, RevertDeleteChatResponses, RunImportHandlerData, RunImportHandlerErrors, RunImportHandlerResponses, SendChatMessageData, SendChatMessageErrors, SendChatMessageResponses, SetPricingHandlerData, SetPricingHandlerErrors, SetPricingHandlerResponses, StartMcpAuthData, StartMcpAuthErrors, StartMcpAuthResponses, StopChatStreamData, StopChatStreamErrors, StopChatStreamResponses, StructuredCompletionData, StructuredCompletionErrors, StructuredCompletionResponses, UpdateMcpServerData, UpdateMcpServerErrors, UpdateMcpServerResponses, UpdatePipedreamMcpConnectionData, UpdatePipedreamMcpConnectionErrors, UpdatePipedreamMcpConnectionResponses, UpdateToolCallData, UpdateToolCallErrors, UpdateToolCallResponses, UpdateToolResponseData, UpdateToolResponseErrors, UpdateToolResponseResponses, UpsertAiProjectionData, UpsertAiProjectionErrors, UpsertAiProjectionResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -402,6 +402,71 @@ export class Sdk extends HeyApiClient {
                 ...options.headers
             }
         });
+    }
+    
+    /**
+     * Browse or search the catalog of connectable apps.
+     *
+     * Curated priority connectors come first (flagged `priority`), followed by
+     * results from Pipedream's app directory.
+     */
+    public browsePipedreamMcpCatalog<ThrowOnError extends boolean = false>(options?: Options<BrowsePipedreamMcpCatalogData, ThrowOnError>): RequestResult<BrowsePipedreamMcpCatalogResponses, BrowsePipedreamMcpCatalogErrors, ThrowOnError> {
+        return (options?.client ?? this.client).get<BrowsePipedreamMcpCatalogResponses, BrowsePipedreamMcpCatalogErrors, ThrowOnError>({ url: '/pipedream/mcp/catalog', ...options });
+    }
+    
+    /**
+     * Register a connected account reported by the Pipedream Connect UI.
+     *
+     * Verifies with Pipedream that the account exists and was connected for
+     * the authenticated user before persisting anything.
+     */
+    public completePipedreamMcpConnection<ThrowOnError extends boolean = false>(options: Options<CompletePipedreamMcpConnectionData, ThrowOnError>): RequestResult<CompletePipedreamMcpConnectionResponses, CompletePipedreamMcpConnectionErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<CompletePipedreamMcpConnectionResponses, CompletePipedreamMcpConnectionErrors, ThrowOnError>({
+            url: '/pipedream/mcp/complete',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+    
+    /**
+     * Disconnect an app, revoking its Pipedream account.
+     */
+    public deletePipedreamMcpConnection<ThrowOnError extends boolean = false>(options: Options<DeletePipedreamMcpConnectionData, ThrowOnError>): RequestResult<DeletePipedreamMcpConnectionResponses, DeletePipedreamMcpConnectionErrors, ThrowOnError> {
+        return (options.client ?? this.client).delete<DeletePipedreamMcpConnectionResponses, DeletePipedreamMcpConnectionErrors, ThrowOnError>({ url: '/pipedream/mcp/connections', ...options });
+    }
+    
+    /**
+     * List the MCP apps connected by the authenticated user.
+     */
+    public listPipedreamMcpConnections<ThrowOnError extends boolean = false>(options?: Options<ListPipedreamMcpConnectionsData, ThrowOnError>): RequestResult<ListPipedreamMcpConnectionsResponses, ListPipedreamMcpConnectionsErrors, ThrowOnError> {
+        return (options?.client ?? this.client).get<ListPipedreamMcpConnectionsResponses, ListPipedreamMcpConnectionsErrors, ThrowOnError>({ url: '/pipedream/mcp/connections', ...options });
+    }
+    
+    /**
+     * Rename or enable/disable a connected app.
+     */
+    public updatePipedreamMcpConnection<ThrowOnError extends boolean = false>(options: Options<UpdatePipedreamMcpConnectionData, ThrowOnError>): RequestResult<UpdatePipedreamMcpConnectionResponses, UpdatePipedreamMcpConnectionErrors, ThrowOnError> {
+        return (options.client ?? this.client).put<UpdatePipedreamMcpConnectionResponses, UpdatePipedreamMcpConnectionErrors, ThrowOnError>({
+            url: '/pipedream/mcp/connections',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+    
+    /**
+     * Create a short-lived Pipedream Connect token for the authenticated user.
+     *
+     * The frontend opens Pipedream's hosted Connect UI with this token; the
+     * user picks (or is deep-linked into) an app and authorizes it there.
+     */
+    public createPipedreamMcpToken<ThrowOnError extends boolean = false>(options?: Options<CreatePipedreamMcpTokenData, ThrowOnError>): RequestResult<CreatePipedreamMcpTokenResponses, CreatePipedreamMcpTokenErrors, ThrowOnError> {
+        return (options?.client ?? this.client).post<CreatePipedreamMcpTokenResponses, CreatePipedreamMcpTokenErrors, ThrowOnError>({ url: '/pipedream/mcp/token', ...options });
     }
     
     public getBatchPreview<ThrowOnError extends boolean = false>(options: Options<GetBatchPreviewData, ThrowOnError>): RequestResult<GetBatchPreviewResponses, GetBatchPreviewErrors, ThrowOnError> {

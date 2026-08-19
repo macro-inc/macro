@@ -13,6 +13,7 @@ import {
 } from '@app/features/next-soup/sidebar/soup-filter-presets';
 import { useSoup } from '@app/features/next-soup/soup-context';
 import { MobileFilterDrawer } from '@app/features/next-soup/soup-view/filters-bar/mobile-filter-drawer';
+import { MobileSearchFilterDrawer } from '@app/features/next-soup/soup-view/filters-bar/search/mobile-search-filter-drawer';
 import {
   type SoupViewMode,
   useSoupView,
@@ -131,6 +132,23 @@ export const useApplyPreset = () => {
             tagFilterMode: queryFilters.state.include.tagFilterMode,
           },
         });
+      }
+
+      // Created by is a direct server-side document-owner refinement rather
+      // than a client predicate, so retain an explicit choice across the
+      // Tasks and Files tabs just as we do tags above. Do not carry a tab's
+      // own owner scope (e.g. Files → Owned) into another tab.
+      const currentCreatorIds =
+        queryFilters.state.include.documentOwnerId ?? [];
+      const presetCreatorIds =
+        currentPreset?.filters.include?.documentOwnerId ?? [];
+      const isExplicitCreatorFilter =
+        currentCreatorIds.length !== presetCreatorIds.length ||
+        currentCreatorIds.some((id) => !presetCreatorIds.includes(id));
+      if (isExplicitCreatorFilter) {
+        mergedFilters.include.documentOwnerId = currentCreatorIds.length
+          ? [...currentCreatorIds]
+          : undefined;
       }
 
       nextFilters = mergedFilters;
@@ -270,36 +288,60 @@ export const CollapsedSoupViewTabs = () => {
   );
 };
 
+/**
+ * Filter-drawer button + per-view filter pills, rendered in the mobile split
+ * header. The strip is full-bleed: negative margins cancel the header row's
+ * gutter so pills scroll to the device edges, and the gutter travels inside
+ * the scroll content. The drawer button leads the strip and scrolls along
+ * with the pills.
+ */
 export const MobileSoupViewTabs = () => {
   const listView = useCurrentListView();
 
   return (
-    <div class="flex items-center px-(--mobile-chrome-gutter)">
-      <MobileFilterDrawer />
-      <Switch>
-        <Match when={listView() === 'companies'}>
-          <MobileCompanyModeTabs />
-        </Match>
-        <For
-          each={Object.keys(VIEW_TAB_LISTS) as (keyof typeof VIEW_TAB_LISTS)[]}
-        >
-          {(v) => (
-            <Match when={listView() === v}>
-              <MobileViewTabs view={v} />
-            </Match>
-          )}
-        </For>
-      </Switch>
-    </div>
+    <Switch>
+      <Match when={listView() === 'search'}>
+        {/* The search view has no tab pills — its header hosts only the
+            facet-filter drawer button (the desktop SearchFiltersRow's
+            mobile counterpart). */}
+        <MobileSearchFilterDrawer />
+      </Match>
+      <Match when={listView() === 'companies'}>
+        <MobileCompanyModeTabs />
+      </Match>
+      <For
+        each={Object.keys(VIEW_TAB_LISTS) as (keyof typeof VIEW_TAB_LISTS)[]}
+      >
+        {(v) => (
+          <Match when={listView() === v}>
+            <MobileViewTabs view={v} />
+          </Match>
+        )}
+      </For>
+    </Switch>
   );
 };
+
+// Full-bleed breakout for header strips: the strip sits in the header row's
+// left flex slot, whose right edge stops short of the panel edge (row gap +
+// right-side column), so sizing it there leaves a sliver the pills can't
+// scroll over (right where the list's scrollbar sits). Instead, opt out of
+// flex sizing and span the header container itself (100cqw resolves against
+// @container/split-header = the panel width): -ml cancels the row gutter so
+// the strip runs device edge to device edge, over the scrollbar.
+const MOBILE_TAB_STRIP_CLASS =
+  '-ml-(--mobile-chrome-gutter) w-[100cqw] max-w-none flex-none';
+const MOBILE_TAB_CONTENT_CLASS = 'px-(--mobile-chrome-gutter)';
 
 const MobileCompanyModeTabs = () => {
   const { viewMode, setViewMode } = useSoupView();
 
   return (
     <PillTabs
-      class="pl-2"
+      scrollable
+      class={MOBILE_TAB_STRIP_CLASS}
+      contentClass={MOBILE_TAB_CONTENT_CLASS}
+      leading={<MobileFilterDrawer />}
       items={COMPANY_MODE_TABS}
       value={viewMode()}
       onChange={(value) => setViewMode(value as SoupViewMode)}
@@ -314,7 +356,10 @@ const MobileViewTabs = (props: { view: TabbedListView }) => {
 
   return (
     <PillTabs
-      class="pl-2"
+      scrollable
+      class={MOBILE_TAB_STRIP_CLASS}
+      contentClass={MOBILE_TAB_CONTENT_CLASS}
+      leading={<MobileFilterDrawer />}
       items={VIEW_TAB_LISTS[props.view]}
       value={activeValue()}
       onChange={(value) => applyTabPreset(props.view, value)}

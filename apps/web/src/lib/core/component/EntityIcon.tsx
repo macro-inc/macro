@@ -105,6 +105,12 @@ export const ENTITY_ICON_CONFIGS: Record<EntityWithValidIcon, IconConfig> = {
     background: 'bg-default/20',
     prettyName: 'Call',
   },
+  calendar: {
+    icon: WideCalendar,
+    foreground: 'text-default',
+    background: 'bg-default/20',
+    prettyName: 'Calendar',
+  },
   canvas: {
     icon: Canvas,
     foreground: 'text-canvas',
@@ -287,14 +293,14 @@ export const ENTITY_ICON_CONFIGS: Record<EntityWithValidIcon, IconConfig> = {
   },
   skill: {
     icon: SkillIcon,
-    foreground: 'text-default',
-    background: 'bg-default/20',
+    foreground: 'text-chat',
+    background: 'bg-chat/20',
     prettyName: 'Skill',
   },
   automation: {
     icon: WideAutomation,
-    foreground: 'text-default',
-    background: 'bg-default/20',
+    foreground: 'text-chat',
+    background: 'bg-chat/20',
     prettyName: 'Automation',
   },
   crm_company: {
@@ -347,6 +353,7 @@ const WIDE_ICONS: Record<
   Component<JSX.SvgSVGAttributes<SVGSVGElement>>
 > = {
   call: PhoneCall,
+  calendar: WideCalendar,
   canvas: WideDiagram,
   html: WideFileCode,
   channel: WideChannel,
@@ -530,6 +537,7 @@ export function getEntityIconType(entity: EntityIconData): EntityWithValidIcon {
     // reminder first, and what it points at is iconed beside its name instead
     // — see `reminderReferenceIconType`.
     .with({ type: 'reminder' }, () => 'reminder')
+    .with({ type: 'calendar_event' }, () => 'calendar')
     .otherwise((e) => e.type);
 
   return validateEntity(typeString);

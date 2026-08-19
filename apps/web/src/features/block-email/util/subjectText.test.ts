@@ -1,6 +1,6 @@
+import type { ApiMessage } from '@service-email/generated/schemas';
 import { describe, expect, it } from 'vitest';
-
-import { displaySubject } from './subjectText';
+import { displaySubject, getSubjectText } from './subjectText';
 
 describe('displaySubject', () => {
   it('returns the subject as-is when there is nothing to strip', () => {
@@ -32,5 +32,25 @@ describe('displaySubject', () => {
 
   it('names a subject that is nothing but reply prefixes', () => {
     expect(displaySubject('Re: ')).toBe('[No subject]');
+  });
+});
+
+describe('getSubjectText', () => {
+  const messageWithSubject = (subject: string): ApiMessage =>
+    ({ subject }) as ApiMessage;
+
+  it('preserves an existing reply prefix regardless of case', () => {
+    expect(getSubjectText(messageWithSubject('Re: Q3 contract'), 'reply')).toBe(
+      'Re: Q3 contract'
+    );
+    expect(getSubjectText(messageWithSubject('RE: Q3 contract'), 'reply')).toBe(
+      'RE: Q3 contract'
+    );
+  });
+
+  it('prepends a reply prefix when Re: only appears later in the subject', () => {
+    expect(
+      getSubjectText(messageWithSubject('Project Re: timeline'), 'reply')
+    ).toBe('Re: Project Re: timeline');
   });
 });

@@ -81,7 +81,7 @@ export function CreatedByBadgeSmall(props: { ownerId: string }) {
 }
 
 export function DraftBadge() {
-  return <Badge class="text-accent-30 border-edge-muted px-2">draft</Badge>;
+  return <Badge class="text-yellow border-edge-muted px-2">draft</Badge>;
 }
 
 function _ImportantBadge() {
@@ -106,7 +106,7 @@ function getCallStatusBadgeConfig(status: CallStatus): CallStatusBadgeConfig {
       };
     case 'MISSED':
       return {
-        class: 'text-accent-30 border-edge-muted px-2',
+        class: 'text-yellow border-edge-muted px-2',
         label: 'missed',
       };
     case 'UNATTENDED':

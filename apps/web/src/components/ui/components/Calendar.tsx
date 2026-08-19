@@ -142,6 +142,7 @@ export function Calendar(props: CalendarProps) {
                         >
                           <CorvuCalendar.CellTrigger
                             day={day()}
+                            month={calendar.month}
                             data-highlighted-range={
                               isDateInRange(day(), local.highlightedRange)
                                 ? ''

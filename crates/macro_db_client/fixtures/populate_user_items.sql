@@ -17,15 +17,15 @@ INSERT INTO public."User" ("id","email","stripeCustomerId", "organizationId","ma
 
 INSERT INTO public."Project" ("id", "name", "userId", "createdAt", "updatedAt")
 (SELECT 'p1', 'a', 'macro|user@user.com', '2019-10-16 00:00:00', '2019-10-16 00:00:00');
-INSERT INTO public."SharePermission" ("id", "isPublic", "publicAccessLevel", "createdAt", "updatedAt")
-(SELECT 'sp-project1', false, 'view', '2019-10-16 00:00:00', '2019-10-16 01:00:00');
+INSERT INTO public."SharePermission" ("id", "linkShare", "linkShareAccessLevel", "createdAt", "updatedAt")
+(SELECT 'sp-project1', NULL, NULL, '2019-10-16 00:00:00', '2019-10-16 01:00:00');
 INSERT INTO public."ProjectPermission" ("projectId", "sharePermissionId")
 (SELECT 'p1', 'sp-project1');
 
 INSERT INTO public."Project" ("id", "name", "userId", "parentId", "createdAt", "updatedAt")
 (SELECT 'p2', 'a1', 'macro|user2@user.com', 'p1', '2019-10-16 00:00:00', '2019-10-16 01:00:00');
-INSERT INTO public."SharePermission" ("id", "isPublic", "publicAccessLevel")
-(SELECT 'sp-project2', false, 'view');
+INSERT INTO public."SharePermission" ("id", "linkShare", "linkShareAccessLevel")
+(SELECT 'sp-project2', NULL, NULL);
 INSERT INTO public."ProjectPermission" ("projectId", "sharePermissionId")
 (SELECT 'p2', 'sp-project2');
 
@@ -33,8 +33,8 @@ INSERT INTO public."Document" ("id","name","fileType", "owner", "createdAt", "up
 (SELECT 'd1', 'test_document_name','pdf', 'macro|user@user.com', '2019-10-16 00:00:00', '2019-10-16 00:00:00', 'p1');
 INSERT INTO public."DocumentInstance" ("revisionName", "documentId", "createdAt", "updatedAt", "sha")
 (SELECT 'test_document_name', 'd1', '2019-10-16 00:00:00', '2019-10-16 00:00:00', 'sha');
-INSERT INTO public."SharePermission" ("id", "isPublic", "publicAccessLevel", "createdAt", "updatedAt")
-(SELECT 'sp-document1', true, 'view', '2019-10-16 00:00:00', '2019-10-16 00:00:00');
+INSERT INTO public."SharePermission" ("id", "linkShare", "linkShareAccessLevel", "createdAt", "updatedAt")
+(SELECT 'sp-document1', 'PUBLIC', 'view', '2019-10-16 00:00:00', '2019-10-16 00:00:00');
 INSERT INTO public."DocumentPermission" ("documentId", "sharePermissionId")
 (SELECT 'd1', 'sp-document1');
 
@@ -42,21 +42,21 @@ INSERT INTO public."Document" ("id","name","fileType", "owner", "createdAt", "up
 (SELECT 'd2', 'test_document_name','docx', 'macro|user2@user.com', '2019-10-16 00:10:00', '2019-10-16 00:10:00');
 INSERT INTO public."DocumentBom" ("documentId", "createdAt", "updatedAt")
 (SELECT 'd2', '2019-10-16 00:10:00', '2019-10-16 00:10:00');
-INSERT INTO public."SharePermission" ("id", "isPublic", "createdAt", "updatedAt")
-(SELECT 'sp-document2', false, '2019-10-16 00:00:00', '2019-10-16 00:00:00');
+INSERT INTO public."SharePermission" ("id", "linkShare", "linkShareAccessLevel", "createdAt", "updatedAt")
+(SELECT 'sp-document2', NULL, NULL, '2019-10-16 00:00:00', '2019-10-16 00:00:00');
 INSERT INTO public."DocumentPermission" ("documentId", "sharePermissionId")
 (SELECT 'd2', 'sp-document2');
 
 INSERT INTO public."Chat" ("id","name","userId", "createdAt", "updatedAt", "projectId")
 (SELECT 'c1', 'test-chat', 'macro|user@user.com', '2019-10-16 01:01:00', '2019-10-16 01:01:00', 'p1');
-INSERT INTO public."SharePermission" ("id", "isPublic", "publicAccessLevel", "createdAt", "updatedAt")
-(SELECT 'sp-chat1', true, 'view', '2019-10-16 00:00:00', '2019-10-16 00:00:00');
+INSERT INTO public."SharePermission" ("id", "linkShare", "linkShareAccessLevel", "createdAt", "updatedAt")
+(SELECT 'sp-chat1', 'PUBLIC', 'view', '2019-10-16 00:00:00', '2019-10-16 00:00:00');
 INSERT INTO public."ChatPermission" ("chatId", "sharePermissionId")
 (SELECT 'c1', 'sp-chat1');
 
 INSERT INTO public."Chat" ("id","name","userId", "createdAt", "updatedAt")
 (SELECT 'c2', 'test-chat', 'macro|user2@user.com', '2019-10-16 01:01:00', '2019-10-16 01:01:00');
-INSERT INTO public."SharePermission" ("id", "isPublic", "createdAt", "updatedAt")
-(SELECT 'sp-chat2', false, '2019-10-16 00:00:00', '2019-10-16 00:00:00');
+INSERT INTO public."SharePermission" ("id", "linkShare", "linkShareAccessLevel", "createdAt", "updatedAt")
+(SELECT 'sp-chat2', NULL, NULL, '2019-10-16 00:00:00', '2019-10-16 00:00:00');
 INSERT INTO public."ChatPermission" ("chatId", "sharePermissionId")
 (SELECT 'c2', 'sp-chat2');

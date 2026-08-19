@@ -182,6 +182,7 @@ function TagChip(props: {
   createDocTags: CreateDocTags;
   onFilterByTag?: (id: string) => void;
   onEdit: (tag: ResolvedTag) => void;
+  withClickBlock: boolean;
 }) {
   const [pickerOpen, setPickerOpen] = createSignal(false);
   return (
@@ -202,6 +203,7 @@ function TagChip(props: {
           triggerClass={chipClass}
           triggerLabel={`Change or select tag ${props.tag.label}`}
           onOpenChange={setPickerOpen}
+          withClickBlock={props.withClickBlock}
         >
           <TagDot color={props.tag.color} class="size-2" />
           <span class="min-w-0 truncate">{props.tag.label}</span>
@@ -216,6 +218,7 @@ function TagOverflow(props: {
   createDocTags: CreateDocTags;
   onFilterByTag?: (id: string) => void;
   onEdit: (tag: ResolvedTag) => void;
+  withClickBlock: boolean;
 }) {
   const [pickerOpen, setPickerOpen] = createSignal(false);
   const dots = () => props.tags.slice(0, MAX_OVERFLOW_DOTS);
@@ -246,6 +249,7 @@ function TagOverflow(props: {
           triggerClass={cn(chipClass, 'gap-1.5')}
           triggerLabel="Edit tags"
           onOpenChange={setPickerOpen}
+          withClickBlock={props.withClickBlock}
         >
           <span class="flex items-center">
             <For each={dots()}>
@@ -300,6 +304,7 @@ export function EntityRowTags(props: {
               createDocTags={createDocTags}
               onFilterByTag={props.onFilterByTag}
               onEdit={setEditingTag}
+              withClickBlock
             />
           )}
         </For>
@@ -309,6 +314,7 @@ export function EntityRowTags(props: {
             createDocTags={createDocTags}
             onFilterByTag={props.onFilterByTag}
             onEdit={setEditingTag}
+            withClickBlock
           />
         </Show>
         <Show when={editingTag()}>

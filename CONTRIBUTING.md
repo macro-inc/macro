@@ -15,6 +15,7 @@ serve you including AI tools, but if you don't understand the work you're
 doing it's probably not useful.
 
 You should:
+
 - Understand the changes and decisions you made well enough to answer questions in review.
 - See your change working in a local development environment
 
@@ -43,8 +44,7 @@ No generated boilerplate, no exhaustive file-by-file change lists.
 
 ## Development setup
 
-See [docs/RUNNING_LOCALLY.md](docs/RUNNING_LOCALLY.md) for running the full app
-locally. The short version: use the Nix shell, then `just run_local`.
+See [docs/RUNNING_LOCALLY.md](docs/RUNNING_LOCALLY.md) for running the full app locally.
 
 ## Before you push
 

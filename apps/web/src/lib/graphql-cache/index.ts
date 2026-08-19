@@ -37,8 +37,7 @@ export {
 } from './exchange/optimistic';
 export {
   type RecordSelection,
-  readRecords,
-  type SelectedRecordPage,
+  readRecordsByKeys,
   selectRecords,
 } from './exchange/record-selection';
 export { createTauriCacheHost } from './host/tauri-host';
@@ -62,13 +61,19 @@ export type {
   MutationSettlement,
   OptimisticWriteResult,
   QueryVariableFilter,
-  ReadRecordsArgs,
+  ReadRecordsByKeysArgs,
   ReadResult,
-  RecordCursor,
-  SelectedRecordPageWire,
+  SearchCacheArgs,
+  SearchCachePage,
+  SearchCursor,
+  SearchDocumentWire,
+  SearchProfile,
+  SelectedRecordByKeyWire,
   WriteResult,
 } from './protocol';
 export {
+  MAX_CACHE_SEARCH_QUERY_BYTES,
   MAX_RECORD_SELECTION_PAGE_SIZE,
-  validateRecordSelectionLimit,
+  validateCacheSearchArgs,
+  validateRecordSelectionKeys,
 } from './protocol';

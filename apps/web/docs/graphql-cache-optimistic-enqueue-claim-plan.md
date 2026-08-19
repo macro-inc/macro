@@ -380,7 +380,7 @@ Run from the repository root in the project development environment:
 
 ```bash
 cargo fmt --check
-cargo test -p cache-core -p cache-idb -p cache-sqlite -p cache-wasm
+cargo test -p cache-core -p cache-turso -p cache-wasm
 just build-cache-wasm
 bun type-check
 ```

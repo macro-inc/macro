@@ -77,10 +77,10 @@ function HomeSectionError(props: HomeSectionErrorProps) {
 function HomeSectionFallback() {
   return (
     <div class="space-y-3">
-      <div class="skeleton-shimmer h-4 w-32 rounded-full bg-ink/10" />
+      <div class="skeleton-shimmer h-4 w-32 rounded-full bg-skeleton" />
       <div class="space-y-2">
-        <div class="skeleton-shimmer h-12 rounded-xl bg-hover/60" />
-        <div class="skeleton-shimmer h-12 rounded-xl bg-hover/40" />
+        <div class="skeleton-shimmer h-12 rounded-xl bg-skeleton" />
+        <div class="skeleton-shimmer h-12 rounded-xl bg-skeleton" />
       </div>
     </div>
   );

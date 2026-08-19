@@ -1,0 +1,6 @@
+{"id":"thread-1","messages":[
+  {
+    "id":"message-1","threadId":"thread-1","labelIds":["INBOX"],"snippet":"Hello","sizeEstimate":12,"historyId":"101","internalDate":"1700000000000",
+    "payload":{"mimeType":"text/plain","headers":[{"name":"Message-ID","value":"<message-1@example.test>"}],"body":{"size":5,"data":"SGVsbG8="}}
+  }
+]}

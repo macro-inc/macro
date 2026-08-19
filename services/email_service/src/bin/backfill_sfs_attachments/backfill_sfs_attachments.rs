@@ -41,7 +41,8 @@ async fn main() -> anyhow::Result<()> {
         config.sfs_url.clone(),
     );
 
-    let gmail_client = gmail_client::GmailClient::new("unused".to_string());
+    let email_api_repository =
+        email_api_client::GmailApiClientRepository::from_subscription_topic("unused");
 
     let macro_ids: Vec<String> = config
         .macro_ids
@@ -60,8 +61,14 @@ async fn main() -> anyhow::Result<()> {
             chrono::Local::now().format("%Y-%m-%d %H:%M:%S")
         );
 
-        match process::process_macro_id(&config, &db_pool, &sfs_client, &gmail_client, macro_id)
-            .await
+        match process::process_macro_id(
+            &config,
+            &db_pool,
+            &sfs_client,
+            &email_api_repository,
+            macro_id,
+        )
+        .await
         {
             Ok((success_count, total_attachments)) => {
                 println!(

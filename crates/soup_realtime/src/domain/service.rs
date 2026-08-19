@@ -67,6 +67,7 @@ where
     ) -> tokio::sync::mpsc::Receiver<Patch<Entity<'static>>> {
         self.broadcasts
             .subscribe(user_id, SUBSCRIBER_BUFFER_CAPACITY)
+            .into_receiver()
     }
 
     /// Receives patches and distributes them to subscribers until reception fails.

@@ -1,6 +1,7 @@
 //! MoveToProject tool for moving entities into and out of projects (folders).
 
 use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
+use ai_toolset::{ToolAnnotated, ToolAnnotations};
 use async_trait::async_trait;
 use entity_access::domain::models::EditAccessLevel;
 use entity_access::domain::ports::EntityAccessService;
@@ -158,6 +159,10 @@ pub struct MoveToProject {
     )]
     #[serde(default)]
     pub project_id: Option<uuid::Uuid>,
+}
+
+impl ToolAnnotated for MoveToProject {
+    const ANNOTATIONS: ToolAnnotations = ToolAnnotations::destructive("Move to project");
 }
 
 #[async_trait]

@@ -300,7 +300,9 @@ function MobileConditionalOverlay(
   );
 }
 
-export const MENU_CONTENT_CLASS = `flex flex-col justify-start items-start border border-edge bg-surface shadow-menu rounded-xl p-1.5 cursor-default select-none max-w-full max-h-[calc(100dvh-10rem)] overflow-y-auto z-modal menu-open-animation`;
+const MENU_SURFACE_SCOPE = '[--color-surface:var(--color-menu)]';
+
+export const MENU_CONTENT_CLASS = `flex flex-col justify-start items-start border border-edge bg-menu ${MENU_SURFACE_SCOPE} shadow-menu rounded-xl p-1.5 cursor-default select-none max-w-full max-h-[calc(100dvh-10rem)] overflow-y-auto z-modal menu-open-animation`;
 
 type MenuContentProps = ParentProps<{
   class?: string;
@@ -410,6 +412,7 @@ export function ContextMenuContent(props: ParentProps<MenuContentProps>) {
           <Layer depth={2}>
             <ContextMenu.Content
               class={cn(
+                MENU_SURFACE_SCOPE,
                 !props.overrideStyling && MENU_CONTENT_CLASS,
                 'menu-open-animation',
                 props.class,

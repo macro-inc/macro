@@ -199,4 +199,17 @@ export default defineConfig({
       target: './service-unfurl/openapi.json',
     },
   },
+  agentHarnessService: {
+    output: {
+      client: 'fetch',
+      target: './service-agent-harness/generated/client.ts',
+      schemas: './service-agent-harness/generated/schemas',
+      override: {
+        useDates: false,
+      },
+    },
+    input: {
+      target: './service-agent-harness/openapi.json',
+    },
+  },
 });

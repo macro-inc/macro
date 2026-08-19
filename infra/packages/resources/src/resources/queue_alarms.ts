@@ -2,17 +2,20 @@ import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
 import { CLOUD_TRAIL_SNS_TOPIC_ARN } from '../../../shared';
 
-type Args = {
-  // The queue to create alarms for
-  queue: aws.sqs.Queue;
-  // The tags to apply to the alarms
-  tags: { [key: string]: string };
+export type QueueAlarmOptions = {
   // The evaluation periods for the alarm
   // Defaults to 60s
   approximateAgeOfOldestMessageEvaluationPeriods?: number;
   // The threshold for the alarm
   // Defaults to 120s
   approximateAgeOfOldestMessageThreshold?: number;
+};
+
+type Args = QueueAlarmOptions & {
+  // The queue to create alarms for
+  queue: aws.sqs.Queue;
+  // The tags to apply to the alarms
+  tags: { [key: string]: string };
 };
 
 /**

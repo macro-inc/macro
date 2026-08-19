@@ -82,6 +82,18 @@ pub fn setup_rust_light() -> Step<Use> {
     .add_with(("rust-cache", "false"))
 }
 
+/// [`setup_rust_light`] plus sccache, for jobs that actually compile something
+/// but do not need the Nix dev shell. Pair with
+/// [`configure_namespace_sccache`] to point the wrapper at the remote cache.
+pub fn setup_rust_sccache() -> Step<Use> {
+    uses_local(
+        "Setup Rust",
+        xtask_paths::repo_dir!(".github/actions/setup-rust"),
+    )
+    .add_with(("sccache", "true"))
+    .add_with(("rust-cache", "false"))
+}
+
 /// Install + initialise Nix on the runner. Namespace profiles don't ship Nix,
 /// so this must run before [`setup_dev_shell`] (which shells out to `nix`). The
 /// `/nix` cache volume mounted by [`mount_cache_volume`] keeps the store warm,

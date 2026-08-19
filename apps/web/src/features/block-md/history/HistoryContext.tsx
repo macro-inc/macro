@@ -6,7 +6,6 @@ import {
   buildDiffState,
   buildWhoMap,
   diffStates,
-  serializedEditorStateToMarkdown,
 } from '@macro-inc/lexical-core';
 import { useDocumentPeersQuery } from '@queries/sync/document-peers';
 import type { HistorySession, HistoryVersionId } from '@service-sync/client';
@@ -191,19 +190,22 @@ export function HistoryProvider(props: {
       }
     }
 
-    const index = historyIndex();
-    if (!index) return sessionize(events);
-    return sessionize(events).filter((s) => {
-      const before = index.checkoutAt(s.startMs - 1);
-      const after = index.checkoutAt(s.endMs);
-      // Can't compute both states (edge frontiers) — keep rather than hide.
-      if (!before || !after) return true;
-      return (
-        // HACK: basically, some deltas are not visually different, and that's confusing
-        serializedEditorStateToMarkdown(before) !==
-        serializedEditorStateToMarkdown(after)
-      );
-    });
+    return sessionize(events);
+    // TODO (seamus/wolf): this is expensive. on 55 bones test doc each
+    // each inter of the filter loop took avg 6 seconds.
+    // const index = historyIndex();
+    // if (!index) return sessionize(events);
+    // return sessionize(events).filter((s) => {
+    //   const before = index.checkoutAt(s.startMs - 1);
+    //   const after = index.checkoutAt(s.endMs);
+    //   // Can't compute both states (edge frontiers) — keep rather than hide.
+    //   if (!before || !after) return true;
+    //   return (
+    //     // HACK: basically, some deltas are not visually different, and that's confusing
+    //     serializedEditorStateToMarkdown(before) !==
+    //     serializedEditorStateToMarkdown(after)
+    //   );
+    // });
   });
 
   const checkoutAt = (ms: number): SerializedEditorState | null =>

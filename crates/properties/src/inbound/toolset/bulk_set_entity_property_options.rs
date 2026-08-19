@@ -4,6 +4,7 @@
 use crate::domain::model::{EditReceipt, EntityOptionUpdateOutcome};
 use crate::domain::service::PropertiesService;
 use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
+use ai_toolset::{ToolAnnotated, ToolAnnotations};
 use async_trait::async_trait;
 use entity_access::domain::models::EditAccessLevel;
 use entity_access::domain::ports::EntityAccessService;
@@ -91,6 +92,10 @@ fn entity_type_label(entity_type: ToolPropertyTargetEntityType) -> &'static str 
         ToolPropertyTargetEntityType::User => "user",
         ToolPropertyTargetEntityType::Company => "company",
     }
+}
+
+impl ToolAnnotated for BulkSetEntityPropertyOptions {
+    const ANNOTATIONS: ToolAnnotations = ToolAnnotations::destructive("Bulk-update properties");
 }
 
 #[async_trait]

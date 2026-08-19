@@ -1,5 +1,9 @@
+import { parseLocalDate } from '@app/features/calendar/utils/calendar-date';
 import { openChatWithAgent } from '@app/features/chat/ChatWithAgentButton';
 import { globalSplitManager } from '@app/signal/splitLayout';
+import { calendarEventDeepLink } from '@block-calendar/copy-event-mention';
+import { openCalendarEventSplit } from '@block-calendar/open-calendar-event';
+import { CALENDAR_BLOCK_ID } from '@block-calendar/types';
 import { URL_PARAMS as URL_PARAMS_CANVAS } from '@block-canvas/constants';
 import { URL_PARAMS as CHANNEL_PARAMS } from '@block-channel/constants';
 import { URL_PARAMS as URL_PARAMS_MD } from '@block-md/constants';
@@ -34,14 +38,17 @@ import MapPinIcon from '@phosphor/map-pin-simple.svg';
 import SparkleIcon from '@phosphor/sparkle.svg';
 import LoadingSpinner from '@phosphor/spinner.svg';
 import TrashSimple from '@phosphor/trash-simple.svg';
+import UsersIcon from '@phosphor/users.svg';
 import { Property } from '@property';
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import { useEntityProperties } from '@property/hooks';
 import { getEntityValues, hasValue } from '@property/utils';
 import {
   isAccessiblePreviewItem,
+  isCalendarEventPreviewItem,
   isChannelPreviewItem,
   isPreviewItemNoAccess,
+  type PreviewCalendarEventAccess,
 } from '@queries/preview';
 import { useBinaryDocumentQuery } from '@queries/storage/binary-document';
 import { blockNameToItemType } from '@service-storage/client';
@@ -451,6 +458,82 @@ function PreviewPropertyPill(props: {
   );
 }
 
+const calendarDateFormat = new Intl.DateTimeFormat(undefined, {
+  weekday: 'short',
+  month: 'short',
+  day: 'numeric',
+});
+const calendarTimeFormat = new Intl.DateTimeFormat(undefined, {
+  hour: 'numeric',
+  minute: '2-digit',
+});
+
+/** One compact local-time schedule line for a calendar mention preview. */
+export function calendarPreviewSchedule(
+  event: PreviewCalendarEventAccess['event']
+): string | undefined {
+  if (event.time.kind === 'allDay') {
+    const start = parseLocalDate(event.time.startDate);
+    if (!start) return undefined;
+    const end = parseLocalDate(event.time.endDate);
+    const inclusiveEnd = end ? new Date(end) : undefined;
+    inclusiveEnd?.setDate(inclusiveEnd.getDate() - 1);
+    return inclusiveEnd && inclusiveEnd > start
+      ? `${calendarDateFormat.format(start)} – ${calendarDateFormat.format(inclusiveEnd)} · All day`
+      : `${calendarDateFormat.format(start)} · All day`;
+  }
+  const start = new Date(event.time.startsAt);
+  const end = new Date(event.time.endsAt);
+  if (!Number.isFinite(start.getTime())) return undefined;
+  if (!Number.isFinite(end.getTime())) {
+    return `${calendarDateFormat.format(start)} · ${calendarTimeFormat.format(start)}`;
+  }
+  return start.toDateString() === end.toDateString()
+    ? `${calendarDateFormat.format(start)} · ${calendarTimeFormat.format(start)} – ${calendarTimeFormat.format(end)}`
+    : `${calendarDateFormat.format(start)}, ${calendarTimeFormat.format(start)} – ${calendarDateFormat.format(end)}, ${calendarTimeFormat.format(end)}`;
+}
+
+/** Meeting-level rows of the calendar mention hover card. */
+function CalendarEventPreviewDetails(props: {
+  event: PreviewCalendarEventAccess['event'];
+}) {
+  const organizer = () =>
+    props.event.organizerName ?? props.event.organizerEmail;
+  return (
+    <div class="px-2 pb-2 flex flex-col gap-1 text-sm text-ink-muted">
+      <Show when={calendarPreviewSchedule(props.event)}>
+        {(schedule) => (
+          <MetadataInfo icon={ClockIcon}>
+            {schedule()}
+            <Show when={props.event.isRecurring}> · Repeats</Show>
+          </MetadataInfo>
+        )}
+      </Show>
+      <Show when={props.event.location}>
+        {(location) => (
+          <MetadataInfo icon={MapPinIcon}>
+            <span class="truncate">{location()}</span>
+          </MetadataInfo>
+        )}
+      </Show>
+      <Show when={organizer() || props.event.attendeeCount > 0}>
+        <MetadataInfo icon={UsersIcon}>
+          <span class="truncate">
+            <Show when={organizer()}>{(name) => <>{name()}</>}</Show>
+            <Show when={organizer() && props.event.attendeeCount > 0}>
+              {' · '}
+            </Show>
+            <Show when={props.event.attendeeCount > 0}>
+              {props.event.attendeeCount}{' '}
+              {props.event.attendeeCount === 1 ? 'attendee' : 'attendees'}
+            </Show>
+          </span>
+        </MetadataInfo>
+      </Show>
+    </div>
+  );
+}
+
 /**
  * Props for the reusable document-preview body. These are everything
  * {@link PopupPreview} needs EXCEPT the floating-hover-card concerns
@@ -545,7 +628,36 @@ export function DocumentPreviewContent(props: DocumentPreviewContentProps) {
     props.collapseInfo?.handleCollapse();
   };
 
+  // The calendar is a singleton block: a mentioned event opens it aimed at
+  // the viewer's own copy of the meeting rather than a per-id split.
+  const calendarOpenTarget = () => {
+    const i = item();
+    if (isCalendarEventPreviewItem(i)) {
+      return {
+        eventId: i.event.viewerEventId,
+        occurrenceKey: i.event.occurrenceKey ?? undefined,
+        time: i.event.time,
+      };
+    }
+    // Preview not (yet) accessible — e.g. the recent-mention fallback for a
+    // just-created event. Still route through the singleton opener with the
+    // mentioned id; a generic `{type:'calendar', id:<event-id>}` split would
+    // be rejected by the calendar block's load.
+    if (targetBlockType() === 'calendar') {
+      return {
+        eventId: props.documentInfo.id,
+        occurrenceKey: props.documentInfo.params?.occurrenceKey,
+      };
+    }
+    return undefined;
+  };
+
   const openDocument = createCallback(async () => {
+    const calendarTarget = calendarOpenTarget();
+    if (calendarTarget) {
+      await openCalendarEventSplit(calendarTarget);
+      return;
+    }
     const type = targetBlockType();
     const splitManager = globalSplitManager();
     if (!splitManager) {
@@ -587,6 +699,14 @@ export function DocumentPreviewContent(props: DocumentPreviewContentProps) {
       if (hostname === 'localhost') {
         hostname = 'dev.macro.com';
       }
+
+      const calendarTarget = calendarOpenTarget();
+      if (calendarTarget) {
+        navigator.clipboard.writeText(calendarEventDeepLink(calendarTarget));
+        toast.success('Copied document link to clipboard');
+        return;
+      }
+
       let link = `https://${hostname}/app/${targetBlockType()}/${props.documentInfo.id}`;
 
       if (
@@ -612,6 +732,9 @@ export function DocumentPreviewContent(props: DocumentPreviewContentProps) {
   const isSplitAlreadyOpen = () => {
     const splitManager = globalSplitManager();
     if (!splitManager) return false;
+    if (calendarOpenTarget()) {
+      return !!splitManager.getSplitByContent('calendar', CALENDAR_BLOCK_ID);
+    }
     return !!splitManager.getSplitByContent(
       targetBlockType(),
       props.documentInfo.id
@@ -619,6 +742,11 @@ export function DocumentPreviewContent(props: DocumentPreviewContentProps) {
   };
 
   const openInNewSplit = createCallback(async () => {
+    const calendarTarget = calendarOpenTarget();
+    if (calendarTarget) {
+      await openCalendarEventSplit({ ...calendarTarget, openInNewSplit: true });
+      return;
+    }
     const splitManager = globalSplitManager();
     if (!splitManager) return;
 
@@ -815,6 +943,13 @@ export function DocumentPreviewContent(props: DocumentPreviewContentProps) {
                 <Suspense fallback={<div class="w-full bg-active h-4 m-2" />}>
                   <TaskPropertiesPreview taskId={props.documentInfo.id} />
                 </Suspense>
+              </Show>
+
+              {/* Calendar event schedule, location, and people */}
+              <Show when={matches(item(), isCalendarEventPreviewItem)}>
+                {(calendarItem) => (
+                  <CalendarEventPreviewDetails event={calendarItem().event} />
+                )}
               </Show>
 
               {/* Visual preview for images */}

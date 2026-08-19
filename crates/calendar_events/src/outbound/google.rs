@@ -12,15 +12,16 @@ use crate::domain::{
     models::{
         AttendeeResponseStatus, CalendarAttendee, CalendarAttendeeInput, CalendarEvent,
         CalendarEventDraft, CalendarEventOverride, CalendarEventPatch, CalendarEventSource,
-        CalendarEventUpsert, CalendarOccurrence, EventReminderOverride, EventReminders, EventStart,
-        EventStatus, EventTime, EventTransparency, EventVisibility, GoogleCalendarTarget,
-        GoogleEventSource, GoogleEventSyncBatch, GoogleSyncPlan, GoogleWatchChannel,
-        GoogleWatchConfig, OccurrenceRange, ProviderCalendar,
+        CalendarEventUpsert, CalendarOccurrence, ConferenceChange, ConferenceProvider,
+        EventReminderOverride, EventReminders, EventStart, EventStatus, EventTime,
+        EventTransparency, EventVisibility, GoogleCalendarTarget, GoogleEventSource,
+        GoogleEventSyncBatch, GoogleSyncPlan, GoogleWatchChannel, GoogleWatchConfig,
+        OccurrenceRange, ProviderCalendar,
     },
     ports::{
         CalendarRsvpScope, GoogleCalendarMutationProvider, GoogleCalendarProvider,
-        GoogleEventSyncContext, GoogleProviderError, GoogleProviderErrorKind, GoogleRsvpOutcome,
-        GoogleSeriesMutationOutcome,
+        GoogleEventSyncContext, GoogleInstanceUpdateOutcome, GoogleProviderError,
+        GoogleProviderErrorKind, GoogleRsvpOutcome, GoogleSeriesMutationOutcome,
     },
 };
 
@@ -735,7 +736,53 @@ impl<G: GoogleRequestGate> GoogleCalendarClient<G> {
 /// UI's default behavior for invitations and cancellations.
 const SEND_UPDATES: (&str, &str) = ("sendUpdates", "all");
 
+/// Google ignores `conferenceData` in a request body unless the client
+/// declares conference support. Declaring it per-request, keyed off the body
+/// actually carrying the field, keeps conference-free mutations on the
+/// version the rest of the adapter was written against.
+const CONFERENCE_DATA_VERSION: (&str, &str) = ("conferenceDataVersion", "1");
+
+/// The conference query parameter a body requires, if any.
+fn conference_query(body: &serde_json::Value) -> Option<(&'static str, &'static str)> {
+    body.get("conferenceData").map(|_| CONFERENCE_DATA_VERSION)
+}
+
+/// Apply the conference parameter a body requires, if any.
+fn with_conference_query(request: RequestBuilder, body: &serde_json::Value) -> RequestBuilder {
+    match conference_query(body) {
+        Some(parameter) => request.query(&[parameter]),
+        None => request,
+    }
+}
+
 impl<G: GoogleRequestGate> GoogleCalendarClient<G> {
+    /// Resolve a conference Google is still generating.
+    ///
+    /// Meet creation is asynchronous, so a mutation echo can carry a
+    /// conference whose entry points have not materialized yet — persisting
+    /// that echo would store an event with a conference but no join URL. One
+    /// re-read settles the common case; a slower one converges on the next
+    /// sync, which Google's own push notification for this change triggers.
+    async fn resolve_pending_conference(
+        &self,
+        access_token: &str,
+        target: &GoogleCalendarTarget,
+        event: GoogleEvent,
+    ) -> Result<GoogleEvent, GoogleProviderError> {
+        if !conference_is_pending(event.conference_data.as_ref()) {
+            return Ok(event);
+        }
+        let refreshed = self
+            .event(
+                access_token,
+                target.email_link_id,
+                &target.provider_calendar_id,
+                &event.id,
+            )
+            .await?;
+        Ok(refreshed.unwrap_or(event))
+    }
+
     /// Normalize the provider echo of a mutation into a persistable upsert.
     ///
     /// Recurring series are re-read from the provider so Google stays the
@@ -747,6 +794,9 @@ impl<G: GoogleRequestGate> GoogleCalendarClient<G> {
         target: &GoogleCalendarTarget,
         event: GoogleEvent,
     ) -> Result<Option<CalendarEventUpsert>, GoogleProviderError> {
+        let event = self
+            .resolve_pending_conference(access_token, target, event)
+            .await?;
         let outcome = if let Some(master_id) = event.recurring_event_id.clone() {
             self.refresh_series(access_token, target, &master_id, None)
                 .await?
@@ -827,13 +877,14 @@ impl<G: GoogleRequestGate> GoogleCalendarClient<G> {
         let calendar = urlencoding::encode(&target.provider_calendar_id);
         let event = urlencoding::encode(provider_event_id);
         self.gate.acquire(target.email_link_id).await?;
-        let response = self
+        let request = self
             .client
             .patch(format!(
                 "{GOOGLE_CALENDAR_API}/calendars/{calendar}/events/{event}"
             ))
             .bearer_auth(access_token)
-            .query(&[SEND_UPDATES])
+            .query(&[SEND_UPDATES]);
+        let response = with_conference_query(request, &body)
             .json(&body)
             .send()
             .await
@@ -867,15 +918,15 @@ impl<G: GoogleRequestGate> GoogleCalendarMutationProvider for GoogleCalendarClie
         draft: &CalendarEventDraft,
     ) -> Result<CalendarEventUpsert, GoogleProviderError> {
         let calendar = urlencoding::encode(&target.provider_calendar_id);
+        let body = draft_body(draft);
         self.gate.acquire(target.email_link_id).await?;
-        let created: GoogleEvent = send_google(
-            self.client
-                .post(format!("{GOOGLE_CALENDAR_API}/calendars/{calendar}/events"))
-                .bearer_auth(access_token)
-                .query(&[SEND_UPDATES])
-                .json(&draft_body(draft)),
-        )
-        .await?;
+        let request = self
+            .client
+            .post(format!("{GOOGLE_CALENDAR_API}/calendars/{calendar}/events"))
+            .bearer_auth(access_token)
+            .query(&[SEND_UPDATES]);
+        let created: GoogleEvent =
+            send_google(with_conference_query(request, &body).json(&body)).await?;
         // The insert already happened and carries no idempotency key, so a
         // readback miss must not surface as retryable: a client retry would
         // POST a duplicate event.
@@ -908,6 +959,66 @@ impl<G: GoogleRequestGate> GoogleCalendarMutationProvider for GoogleCalendarClie
             return Ok(None);
         };
         self.mutation_readback(access_token, target, updated).await
+    }
+
+    #[tracing::instrument(
+        skip(self, access_token, target, patch),
+        fields(provider_calendar_id = %target.provider_calendar_id),
+        err
+    )]
+    async fn update_event_instance(
+        &self,
+        access_token: &str,
+        target: &GoogleCalendarTarget,
+        master_provider_event_id: &str,
+        original_start: &str,
+        patch: &CalendarEventPatch,
+    ) -> Result<GoogleInstanceUpdateOutcome, GoogleProviderError> {
+        let refresh_without_writing = |gone_reason: &'static str| async move {
+            tracing::info!(gone_reason, "occurrence-scoped update found no occurrence");
+            match self
+                .refresh_series(access_token, target, master_provider_event_id, None)
+                .await?
+            {
+                SeriesOutcome::Refreshed(upsert) => {
+                    Ok(GoogleInstanceUpdateOutcome::OccurrenceGone(upsert))
+                }
+                SeriesOutcome::Gone => Ok(GoogleInstanceUpdateOutcome::SeriesGone),
+                SeriesOutcome::Malformed => Err(GoogleProviderError::new(
+                    GoogleProviderErrorKind::Permanent,
+                    "Google Calendar returned a malformed series after the mutation",
+                )),
+            }
+        };
+        let Some(instance_id) = self
+            .instance_id_at(
+                access_token,
+                target,
+                master_provider_event_id,
+                original_start,
+            )
+            .await?
+        else {
+            return refresh_without_writing("no instance matches the occurrence key").await;
+        };
+        if self
+            .patch_event_raw(access_token, target, &instance_id, patch_body(patch))
+            .await?
+            .is_none()
+        {
+            return refresh_without_writing("the instance vanished before the patch").await;
+        }
+        match self
+            .series_outcome(access_token, target, master_provider_event_id)
+            .await?
+        {
+            GoogleSeriesMutationOutcome::Applied(upsert) => {
+                Ok(GoogleInstanceUpdateOutcome::Applied(upsert))
+            }
+            GoogleSeriesMutationOutcome::SeriesDeleted | GoogleSeriesMutationOutcome::Gone => {
+                Ok(GoogleInstanceUpdateOutcome::SeriesGone)
+            }
+        }
     }
 
     #[tracing::instrument(
@@ -1084,6 +1195,35 @@ impl<G: GoogleRequestGate> GoogleCalendarMutationProvider for GoogleCalendarClie
                 Ok(GoogleRsvpOutcome::Gone)
             }
         }
+    }
+
+    #[tracing::instrument(skip(self, access_token), err)]
+    async fn stop_watch_channel(
+        &self,
+        access_token: &str,
+        email_link_id: Uuid,
+        channel_id: &str,
+        resource_id: &str,
+    ) -> Result<(), GoogleProviderError> {
+        self.gate.acquire(email_link_id).await?;
+        let response = self
+            .client
+            .post(format!("{GOOGLE_CALENDAR_API}/channels/stop"))
+            .bearer_auth(access_token)
+            .json(&serde_json::json!({
+                "id": channel_id,
+                "resourceId": resource_id,
+            }))
+            .send()
+            .await
+            .map_err(provider_transport_error)?;
+        let status = response.status();
+        // A channel Google has already forgotten is as stopped as it gets.
+        if status.is_success() || status == StatusCode::NOT_FOUND || status == StatusCode::GONE {
+            return Ok(());
+        }
+        let body = response.text().await.map_err(provider_transport_error)?;
+        Err(provider_response_error(status, &body))
     }
 }
 
@@ -1376,6 +1516,9 @@ fn draft_body(draft: &CalendarEventDraft) -> serde_json::Value {
     if let Some(reminders) = &draft.reminders {
         body["reminders"] = google_reminders_body(reminders);
     }
+    if let Some(conference) = draft.conference {
+        body["conferenceData"] = google_conference_body(conference);
+    }
     body
 }
 
@@ -1393,6 +1536,24 @@ fn google_reminders_body(reminders: &EventReminders) -> serde_json::Value {
             })
             .collect::<Vec<_>>(),
     })
+}
+
+/// Build the `conferenceData` write for a requested conference change.
+///
+/// Google generates Meet conferences asynchronously from a `createRequest`,
+/// whose `requestId` is the idempotency key: reusing one makes Google ignore
+/// the request, so every attach mints a fresh identifier. An explicit JSON
+/// null is how the API expresses detachment.
+fn google_conference_body(change: ConferenceChange) -> serde_json::Value {
+    match change {
+        ConferenceChange::GoogleMeet => serde_json::json!({
+            "createRequest": {
+                "requestId": Uuid::new_v4().to_string(),
+                "conferenceSolutionKey": { "type": "hangoutsMeet" },
+            }
+        }),
+        ConferenceChange::Removed => serde_json::Value::Null,
+    }
 }
 
 fn patch_body(patch: &CalendarEventPatch) -> serde_json::Value {
@@ -1425,6 +1586,9 @@ fn patch_body(patch: &CalendarEventPatch) -> serde_json::Value {
     }
     if let Some(reminders) = &patch.reminders {
         body["reminders"] = google_reminders_body(reminders);
+    }
+    if let Some(conference) = patch.conference {
+        body["conferenceData"] = google_conference_body(conference);
     }
     body
 }
@@ -1593,6 +1757,10 @@ fn map_upsert(
         provider_etag: master.etag.clone(),
         raw_payload: serde_json::to_value(&master).map_err(report)?,
     });
+    let join_url = master
+        .hangout_link
+        .clone()
+        .or_else(|| conference_url(master.conference_data.as_ref()));
     let event = CalendarEvent {
         id: event_id,
         owner_id: target.owner_id.clone(),
@@ -1614,10 +1782,11 @@ fn map_upsert(
             .organizer
             .as_ref()
             .and_then(|value| value.display_name.clone()),
-        conference_url: master
-            .hangout_link
-            .clone()
-            .or_else(|| conference_url(master.conference_data.as_ref())),
+        conference_provider: conference_provider(
+            master.conference_data.as_ref(),
+            join_url.is_some(),
+        ),
+        conference_url: join_url,
         sequence: master.sequence.unwrap_or_default(),
         is_read_only: target.is_read_only,
         attendees: master
@@ -1822,6 +1991,36 @@ fn conference_url(data: Option<&GoogleConferenceData>) -> Option<String> {
     })
 }
 
+/// Classify the conference behind a join URL. Only `hangoutsMeet` is one
+/// Macro may rewrite; a bare `hangoutLink` with no conference data is a
+/// legacy classic Hangout, which Macro also leaves alone.
+fn conference_provider(
+    data: Option<&GoogleConferenceData>,
+    has_url: bool,
+) -> Option<ConferenceProvider> {
+    if !has_url {
+        return None;
+    }
+    let solution_type = data
+        .and_then(|data| data.conference_solution.as_ref())
+        .and_then(|solution| solution.key.as_ref())
+        .and_then(|key| key.solution_type.as_deref());
+    Some(match solution_type {
+        Some("hangoutsMeet") => ConferenceProvider::GoogleMeet,
+        _ => ConferenceProvider::Other,
+    })
+}
+
+/// Whether Google is still generating a requested conference. Creation is
+/// asynchronous, so the mutation echo can carry a conference with no entry
+/// points yet; callers re-read the event instead of persisting that gap.
+fn conference_is_pending(data: Option<&GoogleConferenceData>) -> bool {
+    data.and_then(|data| data.create_request.as_ref())
+        .and_then(|request| request.status.as_ref())
+        .and_then(|status| status.status_code.as_deref())
+        == Some("pending")
+}
+
 fn google_status(value: Option<&str>) -> EventStatus {
     match value {
         Some("tentative") => EventStatus::Tentative,
@@ -2017,6 +2216,38 @@ struct GoogleAttendee {
 struct GoogleConferenceData {
     #[serde(default)]
     entry_points: Vec<GoogleEntryPoint>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    conference_solution: Option<GoogleConferenceSolution>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    create_request: Option<GoogleConferenceCreateRequest>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct GoogleConferenceSolution {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    key: Option<GoogleConferenceSolutionKey>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct GoogleConferenceSolutionKey {
+    #[serde(rename = "type", skip_serializing_if = "Option::is_none")]
+    solution_type: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct GoogleConferenceCreateRequest {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    status: Option<GoogleConferenceCreateStatus>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct GoogleConferenceCreateStatus {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    status_code: Option<String>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]

@@ -1,6 +1,7 @@
 use super::LexicalClient;
 use crate::types::{CognitionResponseData, CognitionV2ResponseData};
 
+use agent_fold::domain::model::MessageId;
 use anyhow::{Context, Result};
 use models_search::document::MarkdownParseResult;
 use serde::de::DeserializeOwned;
@@ -47,6 +48,35 @@ pub struct ExtractedMention {
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 struct MentionsResponse {
     mentions: Vec<ExtractedMention>,
+}
+
+/// The Magic Chip embedded in an agent-session announcement, in the shape the
+/// lexical service `/agent-announcement` endpoint validates.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentAnnouncementChip {
+    /// Agent session the chip anchors.
+    pub agent_session_id: String,
+    /// Dedicated channel of the agent session, for chips old enough to
+    /// predate sessions standing alone. New chips carry only the session.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub channel_id: Option<String>,
+    /// Folded user message that prompts the anchored agent response.
+    pub prompted_message: MessageId,
+    /// Persisted chip status (e.g. `booting`).
+    pub status: String,
+}
+
+#[derive(Debug, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct AgentAnnouncementRequest<'a> {
+    prompt_markdown: &'a str,
+    chip: &'a AgentAnnouncementChip,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+struct AgentAnnouncementResponse {
+    markdown: String,
 }
 
 /// Rendering target supported by the lexical service `/markdown` endpoint.
@@ -232,6 +262,32 @@ impl LexicalClient {
         .await?;
         let data: MentionsResponse = response.json().await.context("unexpected response")?;
         Ok(data.mentions)
+    }
+
+    /// Composes the channel message announcing an agent session — the prompt
+    /// quoted back as a blockquote above the session's Magic Chip — via the
+    /// lexical service, so the markdown is built from real Lexical nodes.
+    #[tracing::instrument(skip(self, prompt_markdown, chip), err)]
+    pub async fn compose_agent_announcement(
+        &self,
+        prompt_markdown: &str,
+        chip: &AgentAnnouncementChip,
+    ) -> Result<String> {
+        let url = format!("{}/agent-announcement", self.url);
+        let response = check_response(
+            self.client
+                .post(&url)
+                .json(&AgentAnnouncementRequest {
+                    prompt_markdown,
+                    chip,
+                })
+                .send()
+                .await?,
+        )
+        .await?;
+        let data: AgentAnnouncementResponse =
+            response.json().await.context("unexpected response")?;
+        Ok(data.markdown)
     }
 
     async fn get_json<T: DeserializeOwned>(&self, url: &str) -> Result<T> {

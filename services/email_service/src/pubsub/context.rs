@@ -1,6 +1,6 @@
+use crate::outbound::email_api::GmailApi;
 use crate::pubsub::calendar_backfill_adapters::RedisCalendarRequestGate;
 use crate::util::redis::RedisClient;
-use authentication_service_client::AuthServiceClient;
 use calendar_events::{
     domain::models::GoogleWatchConfig,
     domain::service::{GoogleCalendarBackfillCoordinator, GoogleCalendarBackfillFailureService},
@@ -16,7 +16,6 @@ use crm::outbound::apollo_resolver::ApolloCompanyMetadataResolver;
 use crm::outbound::companies_repo::CompaniesRepositoryImpl;
 use crm::outbound::unfurl_resolver::UnfurlCompanyMetadataResolver;
 use document_storage_service_client::DocumentStorageServiceClient;
-use gmail_client::GmailClient;
 use macro_event_broker::{KafkaEventPublisher, MacroEventBrokerService};
 use notification::domain::service::SqsNotificationIngress;
 use notification::outbound::queue::SqsQueue;
@@ -129,8 +128,7 @@ pub struct PubSubContext {
     pub sqs_worker: sqs_worker::SQSWorker,
     pub sqs_client: sqs_client::SQS,
     pub contacts_ingress: Arc<SqsContactsIngress<SqsContactsQueue>>,
-    pub gmail_client: GmailClient,
-    pub auth_service_client: AuthServiceClient,
+    pub email_api: GmailApi,
     pub redis_client: RedisClient,
     pub notification_ingress_service: Arc<NotificationIngressType>,
     pub sfs_client: StaticFileServiceClient,

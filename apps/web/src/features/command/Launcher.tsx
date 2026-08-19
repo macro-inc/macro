@@ -75,6 +75,7 @@ import {
 } from '@ui';
 import { getNormalizedKeyString } from '@ui/components/Hotkey';
 import {
+  type Accessor,
   createEffect,
   createMemo,
   createSignal,
@@ -589,6 +590,26 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
   },
 ];
 
+/**
+ * The creatable-block entries a create menu renders, with feature gating
+ * applied — the single source of truth shared by the desktop menus and the
+ * mobile dock's Create menu, so they cannot drift. Callers with a custom
+ * block list (e.g. the onboarding sandbox launcher) pass it as `source` to
+ * run it through the same gating.
+ */
+export function useCreateMenuBlocks(
+  source: () => CreatableBlock[] = () => CREATABLE_BLOCKS
+): Accessor<CreatableBlock[]> {
+  const snippetsFlag = useFeatureFlag(ENABLE_SNIPPETS_FLAG, {
+    enabledOverride: ENABLE_SNIPPETS_OVERRIDE,
+  });
+  return createMemo(() =>
+    source().filter(
+      (block) => block.blockName !== 'snippet' || snippetsFlag().enabled
+    )
+  );
+}
+
 export const [createMenuOpen, setCreateMenuOpen] = createControlledOpenSignal(
   false,
   { id: 'launcher' }
@@ -654,13 +675,9 @@ type LauncherInnerProps = {
 
 export const LauncherInner = (props: LauncherInnerProps) => {
   const hkGroup = createHotkeyGroup();
-  const snippetsFlag = useFeatureFlag(ENABLE_SNIPPETS_FLAG, {
-    enabledOverride: ENABLE_SNIPPETS_OVERRIDE,
-  });
-  const availableBlocks = () =>
-    (props.blocks ?? CREATABLE_BLOCKS).filter(
-      (block) => block.blockName !== 'snippet' || snippetsFlag().enabled
-    );
+  const availableBlocks = useCreateMenuBlocks(
+    () => props.blocks ?? CREATABLE_BLOCKS
+  );
   const sortedBlocks = createMemo(() => {
     const now = Date.now();
 
@@ -790,6 +807,18 @@ export const LauncherInner = (props: LauncherInnerProps) => {
     runWithInputFocused: true,
   }).withGroup(hkGroup);
 
+  const searchModeHotkey = registerHotkey({
+    hotkey: '/',
+    scopeId: launcherScope,
+    description: 'Toggle search mode',
+    keyDownHandler: () => {
+      setLauncherSearchMode(!searchMode());
+      return true;
+    },
+    runWithInputFocused: true,
+    displayPriority: 6,
+  }).withGroup(hkGroup);
+
   registerHotkey({
     hotkey: 'escape',
     scopeId: launcherScope,
@@ -862,7 +891,7 @@ export const LauncherInner = (props: LauncherInnerProps) => {
         ref={ref}
         tabindex={-1}
       >
-        <CommandMenuShell.Header class="gap-2 px-4 my-1 bg-surface border-b-0">
+        <CommandMenuShell.Header class="gap-2 px-4 my-1 border-b-0">
           <Show
             when={searchMode()}
             fallback={
@@ -880,12 +909,6 @@ export const LauncherInner = (props: LauncherInnerProps) => {
                 placeholder="Search create options"
                 value={searchQuery()}
                 onInput={(event) => setSearchQuery(event.currentTarget.value)}
-                onKeyDown={(event) => {
-                  if (event.key === 'Escape') {
-                    event.preventDefault();
-                    setLauncherSearchMode(false);
-                  }
-                }}
               />
             </div>
           </Show>
@@ -894,13 +917,18 @@ export const LauncherInner = (props: LauncherInnerProps) => {
             onChange={setLauncherSearchMode}
             size="xs"
             label={
-              <span class="text-[11px] font-medium leading-none text-ink-extra-muted/70">
-                Search mode
+              <span class="flex items-center gap-1 text-[11px] font-medium leading-none text-ink-extra-muted/70">
+                Search mode{' '}
+                <Hotkey
+                  shortcut={searchModeHotkey.hotkey()}
+                  theme="subtle"
+                  class="px-2 py-0.5"
+                />
               </span>
             }
             labelClass="flex items-center"
             controlClass="bg-ink-extra-muted/25 data-checked:bg-accent"
-            class="ml-auto flex-row-reverse gap-1.5 rounded-full bg-ink/4 px-2 py-1"
+            class="ml-auto flex-row-reverse gap-1.5 px-2 py-1"
           />
         </CommandMenuShell.Header>
         <CommandMenuShell.Body>
@@ -985,7 +1013,7 @@ export const Launcher = (props: LauncherProps) => {
     <Dialog open={props.open} onOpenChange={props.onOpenChange} modal={true}>
       <Dialog.Portal>
         <Dialog.Overlay class="fixed inset-0 z-modal"></Dialog.Overlay>
-        <Dialog.Content>
+        <Dialog.Content class="[--color-surface:var(--color-dialog)]">
           <div
             class={cn(
               'fixed top-0 bottom-(--virtual-keyboard-height,0) inset-x-0 z-modal w-screen flex justify-center px-2',

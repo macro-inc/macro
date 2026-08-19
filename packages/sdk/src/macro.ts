@@ -15,6 +15,7 @@ import { PropertiesNamespace } from './entities/properties/namespace';
 import { TaskNamespace } from './entities/tasks/namespace';
 import { TeamNamespace } from './entities/teams/namespace';
 import { UserNamespace } from './entities/users/namespace';
+import type { User } from './entities/users/user';
 import { WebhooksNamespace } from './entities/webhooks/namespace';
 import type { MacroEvents } from './events/receiver';
 import { MacroClient } from './utils/client';
@@ -92,10 +93,10 @@ export class Macro<T extends MacroOpts = MacroOpts> {
     return this._client.myPrincipalId();
   }
 
-  /** Clone of this SDK acting on behalf of `userId` (sent as
+  /** Clone of this SDK acting on behalf of `user` (sent as
    * `x-macro-bot-for-macro-user-id`). Bot auth only — throws for user auth,
    * since a user token always acts as its own user. */
-  requestedAs(userId: string): Macro<T> {
-    return new Macro({ ...this.opts, requestedAs: userId });
+  requestedAs(user: User): Macro<T> {
+    return new Macro({ ...this.opts, requestedAs: user.id });
   }
 }

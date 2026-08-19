@@ -14,6 +14,7 @@ use macro_user_id::{
     lowercased::Lowercase,
     user_id::MacroUserIdStr,
 };
+use models_permissions::share_permission::LinkShare;
 use sqlx::{PgPool, Row};
 use std::str::FromStr;
 
@@ -101,7 +102,8 @@ impl TeamRepositoryImpl {
             r#"
             INSERT INTO team (id, name, slug, owner_id, seat_count, subscription_id, paying)
             VALUES ($1, $2, $3, $4, 1, $5, $6)
-            RETURNING id, name, slug, owner_id, enterprise, allow_non_admin_invites
+            RETURNING id, name, slug, owner_id, enterprise, allow_non_admin_invites,
+                default_link_share as "default_link_share: LinkShare"
             "#,
             id,
             team_name,
@@ -124,6 +126,7 @@ impl TeamRepositoryImpl {
                 auto_join_domain: None,
                 enterprise: row.enterprise,
                 allow_non_admin_invites: row.allow_non_admin_invites,
+                default_link_share: row.default_link_share,
             })
         })
         .fetch_one(&mut *transaction)
@@ -1038,6 +1041,7 @@ impl TeamRepository for TeamRepositoryImpl {
             r#"
             SELECT t.id, t.name, t.slug, t.owner_id, t.auto_join_domain, t.enterprise,
                 t.allow_non_admin_invites,
+                t.default_link_share as "default_link_share: LinkShare",
                 COALESCE(tcs.crm_enabled, FALSE) AS "crm_enabled!"
             FROM team t
             LEFT JOIN team_crm_settings tcs ON tcs.team_id = t.id
@@ -1057,6 +1061,7 @@ impl TeamRepository for TeamRepositoryImpl {
                 auto_join_domain: row.auto_join_domain,
                 enterprise: row.enterprise,
                 allow_non_admin_invites: row.allow_non_admin_invites,
+                default_link_share: row.default_link_share,
             })
         })
         .fetch_one(&self.pool)
@@ -1096,6 +1101,7 @@ impl TeamRepository for TeamRepositoryImpl {
             r#"
             SELECT t.id, t.name, t.slug, t.owner_id, t.auto_join_domain, t.enterprise,
                 t.allow_non_admin_invites,
+                t.default_link_share as "default_link_share: LinkShare",
                 COALESCE(tcs.crm_enabled, FALSE) AS "crm_enabled!"
             FROM team t
             JOIN team_user tu ON t.id = tu.team_id
@@ -1116,6 +1122,7 @@ impl TeamRepository for TeamRepositoryImpl {
                 auto_join_domain: row.auto_join_domain,
                 enterprise: row.enterprise,
                 allow_non_admin_invites: row.allow_non_admin_invites,
+                default_link_share: row.default_link_share,
             })
         })
         .fetch_all(&self.pool)
@@ -1214,7 +1221,6 @@ impl TeamRepository for TeamRepositoryImpl {
     }
 
     #[tracing::instrument(skip(self), err)]
-    #[allow(clippy::disallowed_methods, reason = "legacy code. fix later")]
     async fn patch_team(
         &self,
         team_id: &uuid::Uuid,
@@ -1222,19 +1228,28 @@ impl TeamRepository for TeamRepositoryImpl {
     ) -> Result<(), TeamError> {
         let normalized_slug = req.slug.as_deref().map(normalize_team_slug).transpose()?;
 
-        if req.name.is_some() || normalized_slug.is_some() {
-            let result = sqlx::query(
+        // default_link_share needs a separate "provided" flag: NULL is a
+        // meaningful new value (link sharing off), so COALESCE can't express
+        // "keep".
+        let default_link_share_provided = req.default_link_share.is_some();
+        let default_link_share = req.default_link_share.flatten();
+
+        if req.name.is_some() || normalized_slug.is_some() || default_link_share_provided {
+            let result = sqlx::query!(
                 r#"
                 UPDATE team
                 SET
                     name = COALESCE($2, name),
-                    slug = COALESCE($3, slug)
+                    slug = COALESCE($3, slug),
+                    default_link_share = CASE WHEN $4 THEN $5 ELSE default_link_share END
                 WHERE id = $1
                 "#,
+                team_id,
+                req.name.as_deref(),
+                normalized_slug.as_deref(),
+                default_link_share_provided,
+                default_link_share as Option<LinkShare>,
             )
-            .bind(team_id)
-            .bind(req.name.as_deref())
-            .bind(normalized_slug.as_deref())
             .execute(&self.pool)
             .await?;
 

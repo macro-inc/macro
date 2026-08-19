@@ -108,15 +108,6 @@ impl Storage for OwnerOnlyStorage {
         self.0.delete_batch(keys).await
     }
 
-    async fn scan_records(
-        &self,
-        type_names: &[String],
-        after: Option<&EntityKey<'static>>,
-        limit: usize,
-    ) -> Result<Vec<(EntityKey<'static>, Record)>, Self::Error> {
-        self.0.scan_records(type_names, after, limit).await
-    }
-
     async fn enqueue_mutation(
         &mut self,
         entry: NewQueuedMutation,

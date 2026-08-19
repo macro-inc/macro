@@ -1,5 +1,6 @@
 use agent::PredefinedModel;
 use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
+use ai_toolset::{ToolAnnotated, ToolAnnotations};
 use async_trait::async_trait;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -26,6 +27,11 @@ pub struct Subagent {
         description = "A detailed description of the task for the subagent to complete. Be specific about what information to find or what action to take."
     )]
     pub task: String,
+}
+
+impl ToolAnnotated for Subagent {
+    const ANNOTATIONS: ToolAnnotations =
+        ToolAnnotations::destructive("Delegate to subagent").with_open_world();
 }
 
 #[async_trait]

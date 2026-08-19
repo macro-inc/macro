@@ -1,7 +1,8 @@
 /**
  * Transport-agnostic cache host interface consumed by the urql exchange and
  * imperative writers (websocket handlers). Implementations:
- * - worker-host.ts: browser (SharedWorker + wasm engine, or no-op fallback)
+ * - worker-host.ts: browser (SharedWorker coordinator + elected WASM engine,
+ *   or no-op fallback)
  * - tauri-host.ts (Phase 3b): Tauri IPC to the native engine
  */
 
@@ -12,14 +13,17 @@ import type {
   CacheReadPriority,
   ClaimedMutation,
   EnqueueOptimisticMutationResult,
+  HydrationResult,
   MutationClaim,
   MutationSettlement,
   OptimisticLinkPatchWire,
   QueryRevalidationWire,
   QueryVariableFilter,
-  ReadRecordsArgs,
+  ReadRecordsByKeysArgs,
   ReadResult,
-  SelectedRecordPageWire,
+  SearchCacheArgs,
+  SearchCachePage,
+  SelectedRecordByKeyWire,
   WriteResult,
 } from '../protocol';
 
@@ -52,6 +56,8 @@ export type InspectQueryVariantsArgs = Omit<
 
 export interface CacheWriteArgs extends Omit<CacheReadArgs, 'priority'> {
   data: unknown;
+  /** Installs this active query's dependencies from the normalized response. */
+  registerDependencies?: boolean;
   /** Opaque session tag; see protocol.ts `identity`. */
   identity?: string;
 }
@@ -72,13 +78,19 @@ export interface InitialMutationClaimArgs {
 export interface CacheHost {
   /** Stable id of this context; used to namespace operation ids. */
   readonly clientId: string;
-  /** True for the storage-free fallback used without SharedWorker support. */
+  /** True for the storage-free fallback when browser cache APIs are unsupported. */
   readonly disabled?: boolean;
 
   readQuery(args: CacheReadArgs): Promise<ReadResult>;
-  /** Projects normalized records through a named GraphQL fragment. */
-  readRecords(args: ReadRecordsArgs): Promise<SelectedRecordPageWire>;
+  /** Projects a bounded explicit set of normalized entity keys. */
+  readRecordsByKeys(
+    args: ReadRecordsByKeysArgs
+  ): Promise<SelectedRecordByKeyWire[]>;
+  /** Searches the compact write-through materialized projection. */
+  search(args: SearchCacheArgs): Promise<SearchCachePage>;
   writeQuery(args: CacheWriteArgs): Promise<WriteResult>;
+  /** Stores a query response and returns only fields not marked `@cacheOnly`. */
+  hydrateQuery(args: Omit<CacheWriteArgs, 'opKey'>): Promise<HydrationResult>;
   /** Durably queues an optimistic mutation and claims the strict head. */
   enqueueOptimisticMutation(
     args: EnqueueOptimisticMutationArgs,

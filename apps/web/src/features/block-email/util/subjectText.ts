@@ -18,10 +18,11 @@ export const getSubjectText = (
 ) => {
   if (!replyingTo) return '';
   if (replyType === 'reply-all' || replyType === 'reply') {
-    if (replyingTo.subject?.includes('Re: ')) {
-      return replyingTo.subject;
+    const subject = replyingTo.subject;
+    if (subject && /^re:/i.test(subject)) {
+      return subject;
     } else {
-      return `Re: ${replyingTo.subject}`;
+      return `Re: ${subject}`;
     }
   } else if (replyType === 'forward') {
     return `Fwd: ${replyingTo.subject}`;

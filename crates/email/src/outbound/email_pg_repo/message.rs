@@ -395,24 +395,27 @@ pub(super) async fn process_scheduled_message(
     link_id: Uuid,
     message_db_id: Uuid,
     send_time: Option<DateTime<Utc>>,
+    actor_id: Option<&str>,
 ) -> Result<(), sqlx::Error> {
     if let Some(send_time) = send_time {
         sqlx::query!(
             r#"
             INSERT INTO email_scheduled_messages (
-                link_id, message_id, send_time, sent,
+                link_id, message_id, send_time, sent, actor_id,
                 created_at, updated_at
             )
-            VALUES ($1, $2, $3, $4, NOW(), NOW())
+            VALUES ($1, $2, $3, $4, $5, NOW(), NOW())
             ON CONFLICT (link_id, message_id) DO UPDATE SET
                 send_time = EXCLUDED.send_time,
                 sent = EXCLUDED.sent,
+                actor_id = EXCLUDED.actor_id,
                 updated_at = NOW()
             "#,
             link_id,
             message_db_id,
             send_time,
             false,
+            actor_id,
         )
         .execute(&mut *tx)
         .await?;

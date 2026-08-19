@@ -144,7 +144,7 @@ Check that the load function does not return a preload source when the intent is
     const data = result.value;
     setError(null);
 
-    if (!isNested && data) {
+    if (!isNested && data && props.definition.openTrackingEnabled !== false) {
       const trackOpened = () => {
         // we need to pass in a client accessor since the mutation is dynamically imported outside a query context provider
         import('./trackBlockOpened').then(({ track }) => {

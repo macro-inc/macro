@@ -321,9 +321,7 @@ function CrmContent() {
 export function Crm() {
   return (
     <Suspense
-      fallback={
-        <div class="animate-pulse bg-ink-extra-muted rounded h-4 w-32 m-6" />
-      }
+      fallback={<div class="animate-pulse bg-skeleton rounded h-4 w-32 m-6" />}
     >
       <CrmContent />
     </Suspense>

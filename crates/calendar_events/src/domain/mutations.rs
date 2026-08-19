@@ -12,14 +12,16 @@ use uuid::Uuid;
 use super::{
     models::{
         AttendeeResponseStatus, CalendarEvent, CalendarEventDraft, CalendarEventMutationTarget,
-        CalendarEventPatch, CalendarEventUpsert, EventReminders, EventTime, OccurrenceRange,
-        REMINDER_METHOD_EMAIL, REMINDER_METHOD_POPUP, REMINDER_MINUTES_MAX, REMINDER_OVERRIDES_MAX,
+        CalendarEventPatch, CalendarEventUpsert, DisconnectedGoogleCalendar, EventReminders,
+        EventTime, OccurrenceRange, REMINDER_METHOD_EMAIL, REMINDER_METHOD_POPUP,
+        REMINDER_MINUTES_MAX, REMINDER_OVERRIDES_MAX,
     },
     ports::{
         CalendarAccessTokenProvider, CalendarDeletionScope, CalendarEventWrite,
         CalendarMutationError, CalendarMutationService, CalendarRepository, CalendarRsvpScope,
-        CalendarTokenError, GoogleCalendarMutationProvider, GoogleProviderError,
-        GoogleProviderErrorKind, GoogleRsvpOutcome, GoogleSeriesMutationOutcome,
+        CalendarTokenError, CalendarUpdateScope, GoogleCalendarMutationProvider,
+        GoogleInstanceUpdateOutcome, GoogleProviderError, GoogleProviderErrorKind,
+        GoogleRsvpOutcome, GoogleSeriesMutationOutcome,
     },
 };
 
@@ -137,6 +139,7 @@ where
         requester_id: &str,
         event_id: Uuid,
         patch: CalendarEventPatch,
+        scope: CalendarUpdateScope,
     ) -> Result<CalendarEvent, CalendarMutationError> {
         if patch.is_empty() {
             return Err(CalendarMutationError::InvalidInput(
@@ -152,28 +155,80 @@ where
         if let Some(reminders) = &patch.reminders {
             validate_reminders(reminders)?;
         }
+        if matches!(scope, CalendarUpdateScope::ThisEvent { .. })
+            && patch.recurrence_lines.is_some()
+        {
+            return Err(CalendarMutationError::InvalidInput(
+                "a single occurrence has no recurrence of its own; update the whole series to \
+                 change the recurrence"
+                    .to_string(),
+            ));
+        }
         let target = self.resolve_mutation_target(requester_id, event_id).await?;
         if target.is_read_only {
             return Err(CalendarMutationError::ReadOnly);
         }
         let access_token = self.fetch_token(&target.token_identity).await?;
-        let updated = self
-            .provider
-            .update_event(
-                &access_token,
-                &target.google_target(OccurrenceRange::maintenance_horizon(Utc::now())),
-                target.master_provider_event_id(),
-                &patch,
-            )
-            .await
-            .map_err(provider_error)?;
-        let Some(upsert) = updated else {
-            // The provider no longer has the event; retire the stale local
-            // source the same way a feed tombstone would.
-            self.retire_gone_source(&target).await;
-            return Err(CalendarMutationError::NotFound);
-        };
-        self.persist_echo(upsert).await
+        let google_target = target.google_target(OccurrenceRange::maintenance_horizon(Utc::now()));
+        match scope {
+            CalendarUpdateScope::All => {
+                let updated = self
+                    .provider
+                    .update_event(
+                        &access_token,
+                        &google_target,
+                        target.master_provider_event_id(),
+                        &patch,
+                    )
+                    .await
+                    .map_err(provider_error)?;
+                let Some(upsert) = updated else {
+                    // The provider no longer has the event; retire the stale
+                    // local source the same way a feed tombstone would.
+                    self.retire_gone_source(&target).await;
+                    return Err(CalendarMutationError::NotFound);
+                };
+                self.persist_echo(upsert).await
+            }
+            CalendarUpdateScope::ThisEvent { recurrence_id } => {
+                let outcome = self
+                    .provider
+                    .update_event_instance(
+                        &access_token,
+                        &google_target,
+                        target.master_provider_event_id(),
+                        &recurrence_id,
+                        &patch,
+                    )
+                    .await
+                    .map_err(provider_error)?;
+                match outcome {
+                    GoogleInstanceUpdateOutcome::Applied(upsert) => {
+                        self.persist_echo(*upsert).await
+                    }
+                    GoogleInstanceUpdateOutcome::OccurrenceGone(upsert) => {
+                        // Nothing was written, but the provider's view of the
+                        // series is fresher than whatever listed this
+                        // occurrence — persist it so the phantom disappears.
+                        self.persist_echo(*upsert)
+                            .await
+                            .inspect_err(|error| {
+                                tracing::warn!(
+                                    error=?error,
+                                    event_id=%target.event_id,
+                                    "failed to persist the series refresh for a vanished occurrence"
+                                );
+                            })
+                            .ok();
+                        Err(CalendarMutationError::OccurrenceNotFound)
+                    }
+                    GoogleInstanceUpdateOutcome::SeriesGone => {
+                        self.retire_gone_source(&target).await;
+                        Err(CalendarMutationError::NotFound)
+                    }
+                }
+            }
+        }
     }
 
     #[tracing::instrument(skip(self, requester_id), err)]
@@ -285,6 +340,23 @@ where
             .await
             .map_err(internal)
     }
+
+    #[tracing::instrument(skip(self, requester_id), err)]
+    async fn disconnect_calendar(
+        &self,
+        requester_id: &str,
+        email_link_id: Uuid,
+    ) -> Result<(), CalendarMutationError> {
+        let disconnected = self
+            .repository
+            .disconnect_google_calendar(requester_id, email_link_id)
+            .await
+            .map_err(internal)?
+            .ok_or(CalendarMutationError::NotFound)?;
+        self.release_watch_channels(email_link_id, &disconnected)
+            .await;
+        Ok(())
+    }
 }
 
 impl<R, G, T> CalendarMutationServiceImpl<R, G, T>
@@ -293,6 +365,54 @@ where
     G: GoogleCalendarMutationProvider,
     T: CalendarAccessTokenProvider,
 {
+    /// Close the push channels a disconnected calendar left open. Best-effort:
+    /// the local calendars are already gone, so a notification that still
+    /// arrives resolves to no watch target and is dropped. Stopping the
+    /// channels only spares Google the retries until they expire.
+    async fn release_watch_channels(
+        &self,
+        email_link_id: Uuid,
+        disconnected: &DisconnectedGoogleCalendar,
+    ) {
+        if disconnected.watch_channels.is_empty() {
+            return;
+        }
+        let access_token = match self
+            .tokens
+            .fetch_access_token(&disconnected.token_identity)
+            .await
+        {
+            Ok(token) => token,
+            Err(error) => {
+                tracing::warn!(
+                    error=?error,
+                    email_link_id=%email_link_id,
+                    "no token to close the disconnected calendar's push channels"
+                );
+                return;
+            }
+        };
+        for channel in &disconnected.watch_channels {
+            self.provider
+                .stop_watch_channel(
+                    &access_token,
+                    email_link_id,
+                    &channel.channel_id,
+                    &channel.resource_id,
+                )
+                .await
+                .inspect_err(|error| {
+                    tracing::warn!(
+                        error=?error,
+                        email_link_id=%email_link_id,
+                        channel_id=%channel.channel_id,
+                        "failed to close a disconnected calendar's push channel"
+                    );
+                })
+                .ok();
+        }
+    }
+
     /// Best-effort cleanup when the provider reports the event gone: the
     /// regular sync converges the projection either way.
     async fn retire_gone_source(&self, target: &CalendarEventMutationTarget) {
