@@ -1,3 +1,7 @@
+#![deny(missing_docs)]
+
+//! Database utilities for encrypted Microsoft OAuth grants stored in MacroDB.
+
 use chrono::{DateTime, Utc};
 use sqlx::{Pool, Postgres};
 

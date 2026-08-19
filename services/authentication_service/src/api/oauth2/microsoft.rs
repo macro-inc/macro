@@ -10,7 +10,7 @@ use fusionauth::{
     identity_provider::{IdentityProviderLink, LinkUserRequest},
     microsoft::oauth::{MicrosoftExchangeTokenResponse, MicrosoftUserInfo},
 };
-use macro_db_client::microsoft_oauth_grants::EncryptedMicrosoftOAuthGrant;
+use microsoft_oauth_grant_db_utils::EncryptedMicrosoftOAuthGrant;
 use model::response::ErrorResponse;
 use reqwest::StatusCode;
 use uuid::Uuid;
@@ -283,7 +283,7 @@ impl MicrosoftCallbackDependencies for ApiContext {
             encrypted_token.kms_key_id.clone(),
         );
 
-        macro_db_client::microsoft_oauth_grants::upsert_microsoft_oauth_grant(
+        microsoft_oauth_grant_db_utils::upsert_microsoft_oauth_grant(
             &self.db,
             link_owner_id,
             email,

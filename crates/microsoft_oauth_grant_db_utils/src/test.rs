@@ -1,4 +1,5 @@
 use super::*;
+use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use sqlx::{Pool, Postgres};
 
 const OWNER_ID: &str = "fusionauth-user-1";
@@ -27,7 +28,7 @@ fn assert_envelopes_equal(
     assert_eq!(actual.kms_key_id(), expected.kms_key_id());
 }
 
-#[sqlx::test]
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn normalizes_email_addresses_for_upsert_and_fetch(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
@@ -61,7 +62,7 @@ async fn normalizes_email_addresses_for_upsert_and_fetch(
     Ok(())
 }
 
-#[sqlx::test]
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn first_insert_stores_encrypted_envelope_and_metadata(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
@@ -80,7 +81,7 @@ async fn first_insert_stores_encrypted_envelope_and_metadata(
     Ok(())
 }
 
-#[sqlx::test]
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn reconnect_atomically_replaces_the_complete_envelope(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
@@ -118,7 +119,7 @@ async fn reconnect_atomically_replaces_the_complete_envelope(
     Ok(())
 }
 
-#[sqlx::test]
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn owner_and_normalized_mailbox_form_a_unique_key(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
@@ -179,7 +180,7 @@ async fn owner_and_normalized_mailbox_form_a_unique_key(
     Ok(())
 }
 
-#[sqlx::test]
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn opaque_binary_values_round_trip_without_interpretation(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
@@ -201,7 +202,7 @@ async fn opaque_binary_values_round_trip_without_interpretation(
     Ok(())
 }
 
-#[sqlx::test]
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn schema_has_no_plaintext_secret_columns(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let columns = sqlx::query_scalar!(
         r#"

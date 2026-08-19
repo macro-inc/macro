@@ -450,6 +450,7 @@
       "crates/macro_user_id",
       "crates/macro_uuid",
       "crates/mention_utils",
+      "crates/microsoft_oauth_grant_db_utils",
       "crates/mobile_welcome_email_db_client",
       "crates/model",
       "crates/model-entity",
@@ -4215,6 +4216,10 @@
       "crates/cowlike",
       "crates/macro_user_id",
       "crates/mention_utils",
+      "crates/workspace-hack"
+    ],
+    "microsoft_oauth_grant_db_utils": [
+      "crates/microsoft_oauth_grant_db_utils",
       "crates/workspace-hack"
     ],
     "mobile_welcome_email_db_client": [

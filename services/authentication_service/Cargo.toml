@@ -107,6 +107,7 @@ macro_user_id = { path = "../../crates/macro_user_id" }
 macro_uuid = { path = "../../crates/macro_uuid" }
 maud = { version = "0.27.0" }
 miniserde = "0.1.45"
+microsoft_oauth_grant_db_utils = { path = "../../crates/microsoft_oauth_grant_db_utils" }
 mobile_welcome_email_db_client = { path = "../../crates/mobile_welcome_email_db_client" }
 mockall = { workspace = true }
 model = { path = "../../crates/model" }
