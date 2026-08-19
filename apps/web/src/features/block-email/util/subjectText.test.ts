@@ -36,7 +36,7 @@ describe('displaySubject', () => {
 });
 
 describe('getSubjectText', () => {
-  const messageWithSubject = (subject: string): ApiMessage =>
+  const messageWithSubject = (subject: string | null | undefined): ApiMessage =>
     ({ subject }) as ApiMessage;
 
   it('preserves an existing reply prefix regardless of case', () => {
@@ -52,5 +52,23 @@ describe('getSubjectText', () => {
     expect(
       getSubjectText(messageWithSubject('Project Re: timeline'), 'reply')
     ).toBe('Re: Project Re: timeline');
+  });
+
+  it('uses a bare Re: prefix for a subjectless message on reply', () => {
+    expect(getSubjectText(messageWithSubject(undefined), 'reply')).toBe('Re:');
+    expect(getSubjectText(messageWithSubject(null), 'reply')).toBe('Re:');
+  });
+
+  it('uses a bare Re: prefix for a subjectless message on reply-all', () => {
+    expect(getSubjectText(messageWithSubject(undefined), 'reply-all')).toBe(
+      'Re:'
+    );
+  });
+
+  it('uses a bare Fwd: prefix for a subjectless message on forward', () => {
+    expect(getSubjectText(messageWithSubject(undefined), 'forward')).toBe(
+      'Fwd:'
+    );
+    expect(getSubjectText(messageWithSubject(null), 'forward')).toBe('Fwd:');
   });
 });
