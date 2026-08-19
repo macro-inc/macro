@@ -246,7 +246,10 @@ export function CalendarGrid(props: CalendarGridProps) {
       selectable={props.selection.onDateSelect !== undefined}
       unselectAuto={false}
       selectMirror
-      selectMinDistance={5}
+      // A zero-distance selection lets a click create one snapped time slot,
+      // while pointer movement still supports selecting a longer range.
+      selectMinDistance={0}
+      snapDuration="00:30:00"
       select={(selection) => props.selection.onDateSelect?.(selection)}
       eventClick={
         props.selection.onEventSelect
