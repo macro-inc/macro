@@ -206,6 +206,60 @@ const appRouteFunctionUrl = new aws.lambda.FunctionUrl('app-route-lambda-url', {
   authorizationType: 'NONE',
 });
 
+// Response headers for the app's /app* CloudFront behaviors. The behaviors
+// live on the macro.com distribution in website-infra (site-v21 repo), which
+// consumes these policy ids through its StackReference to this stack — the
+// headers are app concerns, so they're defined here.
+//
+// COOP must stay same-origin-allow-popups: the strict same-origin value
+// severs the opener of any cross-origin popup the page (or an embedded
+// iframe) opens, which breaks OAuth popup flows — Pipedream's hosted Connect
+// UI reports "popup blocked" on every OAuth connector. These replace the
+// console-created "shared-array-response-headers" policies that dev and prod
+// shared; those originally also sent Cross-Origin-Embedder-Policy:
+// require-corp for SharedArrayBuffer, which nothing uses today. If SAB is
+// ever needed again, COEP + COOP same-origin must come back and the
+// cross-origin iframe/popup flows will need a different design.
+const appResponseHeaders = new aws.cloudfront.ResponseHeadersPolicy(
+  `app-response-headers-${stack}`,
+  {
+    securityHeadersConfig: {
+      frameOptions: { frameOption: 'DENY', override: true },
+    },
+    customHeadersConfig: {
+      items: [
+        {
+          header: 'Cross-Origin-Opener-Policy',
+          value: 'same-origin-allow-popups',
+          override: true,
+        },
+      ],
+    },
+  }
+);
+
+// Same headers for the fingerprinted /app/*.* assets, plus a long-lived
+// Cache-Control (asset filenames are content-hashed).
+const appAssetResponseHeaders = new aws.cloudfront.ResponseHeadersPolicy(
+  `app-asset-response-headers-${stack}`,
+  {
+    customHeadersConfig: {
+      items: [
+        {
+          header: 'Cross-Origin-Opener-Policy',
+          value: 'same-origin-allow-popups',
+          override: true,
+        },
+        {
+          header: 'Cache-Control',
+          value: 'max-age=31536000',
+          override: true,
+        },
+      ],
+    },
+  }
+);
+
 new datadog.SoftwareCatalog('service_v3', {
   entity: JSON.stringify(datadogEntity),
 });
@@ -240,3 +294,5 @@ export const macroWebAppBucketWebsiteEndpoint = webAppAssets.websiteEndpoint;
 export const contentEncodingResponseEdgeLambda = pulumi.interpolate`${encodingLambdaEdgeFunction.arn}:${encodingLambdaVersion}`;
 export const appRouteLambdaId = pulumi.interpolate`${appRouteLambda.id}`;
 export const appRouteUrl = pulumi.interpolate`${appRouteFunctionUrl.functionUrl}`;
+export const appResponseHeadersPolicyId = appResponseHeaders.id;
+export const appAssetResponseHeadersPolicyId = appAssetResponseHeaders.id;
