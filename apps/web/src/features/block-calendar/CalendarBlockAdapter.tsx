@@ -117,7 +117,7 @@ function CalendarBlockAdapter(props: CalendarBlockProps) {
         ? props.eventId
         : searchParam(searchParams.eventId),
     occurrenceKey:
-      typeof props.occurrenceKey === 'string'
+      typeof props.occurrenceKey === 'string' && props.occurrenceKey.length > 0
         ? props.occurrenceKey
         : searchParam(searchParams.occurrenceKey),
     range: props.range,
