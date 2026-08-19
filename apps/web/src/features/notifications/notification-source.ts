@@ -1,4 +1,7 @@
-import { ENABLE_DOCUMENT_MENTION_NOTIFICATIONS } from '@core/constant/featureFlags';
+import {
+  ENABLE_DOCUMENT_MENTION_NOTIFICATIONS,
+  ENABLE_GRAPHQL_SOUP,
+} from '@core/constant/featureFlags';
 import type { Entity } from '@core/types';
 import { createSocketEffect } from '@macro-inc/collaboration/websocket';
 import {
@@ -227,6 +230,10 @@ export function createNotificationSource(
   });
 
   createEffect(() => {
+    // TODO(dev-rb/notifications): Remove this legacy eager pagination when the
+    // REST notification source is retired. GraphQL consumers should use Soup
+    // notification edges or dedicated notification queries instead.
+    if (ENABLE_GRAPHQL_SOUP()) return;
     if (!notificationsQuery.data) return;
     if (notificationsQuery.hasNextPage && !notificationsQuery.isFetching) {
       notificationsQuery.fetchNextPage();
