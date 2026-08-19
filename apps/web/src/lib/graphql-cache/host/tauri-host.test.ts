@@ -140,7 +140,7 @@ describe('createTauriCacheHost', () => {
     });
   });
 
-  it('sends writes with origin op id and identity', async () => {
+  it('sends writes with origin and dependency registration', async () => {
     const host = createTauriCacheHost({ scope: 'scope-1' });
     const writeResult = { changed: ['A:1'], affectedOps: [], reset: false };
     invokeMock.mockImplementation((command: string) =>
@@ -149,13 +149,33 @@ describe('createTauriCacheHost', () => {
 
     const result = await host.writeQuery({
       opKey: 3,
+      registerDependencies: true,
       query: '{ x }',
       data: { x: 1 },
       identity: 'user-1',
+      entityResolvers: [
+        {
+          parentType: 'GraphqlUser',
+          fieldName: 'emailThread',
+          targetType: 'GraphqlSoupEmailThread',
+          argumentPath: ['input', 'threadId'],
+        },
+      ],
     });
     expect(result).toEqual(writeResult);
     expect(invokeMock).toHaveBeenCalledWith('graphql_cache_write', {
       originOpId: `${host.clientId}:3`,
+      registration: {
+        opId: `${host.clientId}:3`,
+        entityResolvers: [
+          {
+            parentType: 'GraphqlUser',
+            fieldName: 'emailThread',
+            targetType: 'GraphqlSoupEmailThread',
+            argumentPath: ['input', 'threadId'],
+          },
+        ],
+      },
       query: '{ x }',
       operationName: undefined,
       variables: undefined,

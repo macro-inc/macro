@@ -2,7 +2,8 @@ use async_lock::Mutex;
 use cache_core::codec::cache_database_name;
 use cache_core::deps::OpId;
 use cache_core::engine::{
-    BeginOptimisticWrite, Engine, EngineError, InitialClaimOutcome, ReadResult,
+    BeginOptimisticWrite, Engine, EngineError, InitialClaimOutcome, NetworkWrite,
+    QueryRegistration, ReadResult,
 };
 use cache_core::entity_resolver::EntityResolver;
 use cache_core::link_patch::{OptimisticLinkPatch, QueryRevalidation};
@@ -113,6 +114,21 @@ fn recovery_outcome(reason: PhysicalResetReason) -> CacheOpenOutcome {
         | PhysicalResetReason::TransactionOutcomeUncertain
         | PhysicalResetReason::Io => CacheOpenOutcome::ResetStorageUncertain,
     }
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct JsWriteContext {
+    origin_op_id: Option<String>,
+    registration: Option<JsQueryRegistration>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct JsQueryRegistration {
+    op_id: String,
+    #[serde(default)]
+    entity_resolvers: Vec<EntityResolver>,
 }
 
 #[derive(Serialize)]
@@ -798,7 +814,7 @@ impl CacheEngine {
     #[wasm_bindgen(js_name = writeQuery)]
     pub fn write_query(
         &self,
-        origin_op_id: Option<String>,
+        context: JsValue,
         query: String,
         operation_name: Option<String>,
         variables: JsValue,
@@ -810,18 +826,34 @@ impl CacheEngine {
         future_to_promise(async move {
             let mut state = state.lock().await;
             state.ensure_callable()?;
+            let context: JsWriteContext =
+                serde_wasm_bindgen::from_value(context).map_err(err_js)?;
             let vars = parse_variables(variables)?;
             let data: serde_json::Value = serde_wasm_bindgen::from_value(data).map_err(err_js)?;
-            let origin = origin_op_id.map(|name| ops.borrow_mut().intern(&name));
+            let origin = context
+                .origin_op_id
+                .map(|name| ops.borrow_mut().intern(&name));
+            let registration = context.registration.map(|registration| {
+                let op_id = ops.borrow_mut().intern(&registration.op_id);
+                (op_id, registration.entity_resolvers)
+            });
             let result = state
                 .engine_mut()?
-                .write_query(
+                .write_query_with_registration(
                     origin,
-                    &query,
-                    operation_name.as_deref(),
-                    &vars,
-                    &data,
-                    identity.as_deref(),
+                    registration
+                        .as_ref()
+                        .map(|(op_id, entity_resolvers)| QueryRegistration {
+                            op_id: *op_id,
+                            entity_resolvers,
+                        }),
+                    NetworkWrite {
+                        query: &query,
+                        operation_name: operation_name.as_deref(),
+                        variables: &vars,
+                        data: &data,
+                        identity: identity.as_deref(),
+                    },
                 )
                 .await;
             let result = state.engine_result(result)?;

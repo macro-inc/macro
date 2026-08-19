@@ -79,7 +79,13 @@ export interface CacheEngine {
     request: SearchCacheArgs & { nowMs: number }
   ): Promise<SearchCachePage>;
   writeQuery(
-    originOpId: string | undefined,
+    context: {
+      originOpId?: string;
+      registration?: {
+        opId: string;
+        entityResolvers?: readonly EntityResolverWire[];
+      };
+    },
     query: string,
     operationName: string | undefined,
     variables: Record<string, unknown> | undefined,

@@ -306,6 +306,13 @@ const isEntityResolvers = (value: unknown): boolean =>
         isStringArray(resolver.argumentPath)
     ));
 
+const isWriteRegistration = (value: unknown): boolean =>
+  value === undefined ||
+  (isRecord(value) &&
+    hasOnlyKeys(value, ['opId', 'entityResolvers']) &&
+    isNonEmptyString(value.opId) &&
+    isEntityResolvers(value.entityResolvers));
+
 const isSearchRequest = (value: unknown): boolean => {
   if (!isRecord(value)) return false;
   return (
@@ -365,6 +372,7 @@ export function isCacheRequest(value: unknown): value is CacheRequest {
           'id',
           'kind',
           'originOpId',
+          'registration',
           'query',
           'operationName',
           'variables',
@@ -372,6 +380,7 @@ export function isCacheRequest(value: unknown): value is CacheRequest {
           'identity',
         ]) &&
         isOptionalString(value.originOpId) &&
+        isWriteRegistration(value.registration) &&
         isString(value.query) &&
         isOptionalString(value.operationName) &&
         isOptionalRecord(value.variables) &&

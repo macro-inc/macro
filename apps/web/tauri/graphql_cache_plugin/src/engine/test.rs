@@ -45,14 +45,15 @@ fn write(
     data: serde_json::Value,
     identity: Option<&str>,
 ) -> WriteResultWire {
-    block_on(handle.write(
-        origin.map(str::to_string),
-        QUERY.to_string(),
-        Some("Soup".to_string()),
-        variables(),
+    block_on(handle.write(WriteRequest {
+        origin_op_id: origin.map(str::to_string),
+        registration: None,
+        query: QUERY.to_string(),
+        operation_name: Some("Soup".to_string()),
+        variables: variables(),
         data,
-        identity.map(str::to_string),
-    ))
+        identity: identity.map(str::to_string),
+    }))
     .unwrap()
 }
 
@@ -192,14 +193,15 @@ fn explicit_key_selection_returns_native_cache_entities() {
             }
         }
     });
-    block_on(handle.write(
-        None,
-        query.to_string(),
-        Some("Soup".to_string()),
-        variables(),
+    block_on(handle.write(WriteRequest {
+        origin_op_id: None,
+        registration: None,
+        query: query.to_string(),
+        operation_name: Some("Soup".to_string()),
+        variables: variables(),
         data,
-        None,
-    ))
+        identity: None,
+    }))
     .unwrap();
 
     let records = block_on(handle.read_records_by_keys(
@@ -230,12 +232,13 @@ fn search_uses_native_materialized_projection() {
             }
         }
     }"#;
-    block_on(handle.write(
-        None,
-        query.to_string(),
-        Some("Soup".to_string()),
-        variables(),
-        serde_json::json!({
+    block_on(handle.write(WriteRequest {
+        origin_op_id: None,
+        registration: None,
+        query: query.to_string(),
+        operation_name: Some("Soup".to_string()),
+        variables: variables(),
+        data: serde_json::json!({
             "user": {
                 "id": "user-1",
                 "soup": {
@@ -249,8 +252,8 @@ fn search_uses_native_materialized_projection() {
                 }
             }
         }),
-        None,
-    ))
+        identity: None,
+    }))
     .unwrap();
 
     let page = block_on(handle.search(SearchRequest {
@@ -321,10 +324,21 @@ fn query_variant_inspection_serializes_only_generated_variables() {
 #[test]
 fn registered_op_is_affected_by_later_writes() {
     let handle = spawn_handle();
-    write(&handle, None, soup_data(false), None);
+    block_on(handle.write(WriteRequest {
+        origin_op_id: Some("client:1".to_string()),
+        registration: Some(WriteRegistration {
+            op_id: "client:1".to_string(),
+            entity_resolvers: Vec::new(),
+        }),
+        query: QUERY.to_string(),
+        operation_name: Some("Soup".to_string()),
+        variables: variables(),
+        data: soup_data(false),
+        identity: None,
+    }))
+    .unwrap();
 
-    // Register an active operation, then change its data from another op.
-    read(&handle, Some("client:1"));
+    // The registered write avoids a read and still observes a later change.
     let result = write(&handle, Some("client:2"), soup_data(true), None);
     assert_eq!(result.affected_ops, vec!["client:1".to_string()]);
 
