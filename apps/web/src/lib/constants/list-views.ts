@@ -77,6 +77,15 @@ export const TAGGABLE_LIST_VIEWS: ReadonlySet<ListView> = new Set<ListView>([
   'calls',
 ]);
 
+/**
+ * Raw notifications ride on some soup payloads (see `withRawNotifications`
+ * in transform-utils); the generated types don't surface them uniformly.
+ */
+const soupItemNotifications = (item: SoupApiItem): { done?: boolean }[] => {
+  const data = item.data as { notifications?: { done?: boolean }[] | null };
+  return Array.isArray(data.notifications) ? data.notifications : [];
+};
+
 /** The entity id a soup item normalizes under (channels/calls nest theirs). */
 const soupItemEntityId = (item: SoupApiItem): string => {
   switch (item.tag) {
@@ -112,7 +121,18 @@ export const soupItemMatchesListView = (
     .with('channels', () => item.tag === 'channel')
     .with('calls', () => item.tag === 'call')
     .with('folders', () => item.tag === 'project')
-    .with('inbox', 'flow', 'search', undefined, () => true)
+    .with('inbox', 'search', undefined, () => true)
+    // Flow is inbox ∪ recent, so an insert must belong to at least one half:
+    // the viewer's own touch, or an undone notification (the inbox half —
+    // Signal-vs-noise is re-checked against the server on the next refetch).
+    // Without this, every websocket insert would top the merged feed.
+    .with(
+      'flow',
+      () =>
+        item.touched_at != null ||
+        hasOwnTouchFloor(soupItemEntityId(item)) ||
+        soupItemNotifications(item).some((n) => n.done === false)
+    )
     // Membership in the recent view is "did I touch it", not a type check:
     // only rows that carry a touch timestamp (from the touched_by_me page)
     // or an outstanding optimistic own-touch belong. Without this, any

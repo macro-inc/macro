@@ -38,4 +38,31 @@ describe('soupItemMatchesListView', () => {
   it('inbox admits rows regardless of touch', () => {
     expect(soupItemMatchesListView(documentItem(), 'inbox')).toBe(true);
   });
+
+  it('flow admits only touched rows or undone notifications', () => {
+    // Flow is inbox ∪ recent: an entity belonging to neither half (no touch,
+    // no undone notification) must not enter the merged feed.
+    expect(soupItemMatchesListView(documentItem(), 'flow')).toBe(false);
+    expect(
+      soupItemMatchesListView(documentItem('2026-08-19T00:00:00Z'), 'flow')
+    ).toBe(true);
+
+    const withUndone = {
+      tag: 'document',
+      data: { id: 'd-1', title: 'doc', notifications: [{ done: false }] },
+      frecency_score: 0,
+    } as unknown as SoupApiItem;
+    expect(soupItemMatchesListView(withUndone, 'flow')).toBe(true);
+
+    const withDoneOnly = {
+      tag: 'document',
+      data: { id: 'd-1', title: 'doc', notifications: [{ done: true }] },
+      frecency_score: 0,
+    } as unknown as SoupApiItem;
+    expect(soupItemMatchesListView(withDoneOnly, 'flow')).toBe(false);
+
+    // The viewer's own outstanding touch admits the row too.
+    ownTouchStamp('d-1');
+    expect(soupItemMatchesListView(documentItem(), 'flow')).toBe(true);
+  });
 });
