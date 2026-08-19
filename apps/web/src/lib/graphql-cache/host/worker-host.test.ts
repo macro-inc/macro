@@ -30,8 +30,12 @@ function responseFor(request: CacheRequest): unknown {
   switch (request.kind) {
     case 'read':
       return { kind: 'miss' };
-    case 'read-records':
-      return { records: [], nextCursor: null };
+    case 'read-records-by-keys':
+      return [];
+    case 'search':
+      return { documents: [], nextCursor: null };
+    case 'hydrate':
+      return { kind: 'data', data: { cursor: 'next' } };
     case 'write':
     case 'commit-optimistic-write':
     case 'rollback-optimistic-write':
@@ -195,6 +199,27 @@ describe('createWorkerCacheHost', () => {
     ).resolves.toEqual(EMPTY_WRITE);
   });
 
+  it('routes hydration through the payload-projecting RPC', async () => {
+    const host = createWorkerCacheHost({ scope: 'scope-1' });
+
+    await expect(
+      host.hydrateQuery({
+        query: 'query Backfill { items @cacheOnly { id } cursor }',
+        data: { items: [{ id: '1' }], cursor: 'next' },
+        identity: 'user-1',
+      })
+    ).resolves.toEqual({ kind: 'data', data: { cursor: 'next' } });
+
+    expect(requireAdapter().requests).toContainEqual(
+      expect.objectContaining({
+        kind: 'hydrate',
+        query: 'query Backfill { items @cacheOnly { id } cursor }',
+        data: { items: [{ id: '1' }], cursor: 'next' },
+        identity: 'user-1',
+      })
+    );
+  });
+
   it('uses the no-op host when OPFS is unavailable', () => {
     vi.stubGlobal('navigator', {
       locks: { request: vi.fn() },
@@ -314,17 +339,32 @@ describe('createWorkerCacheHost', () => {
           },
         ],
       }),
-      host.readRecords({
-        document: 'fragment Item on GraphqlSoupItem { id }',
+      host.readRecordsByKeys({
+        document: 'fragment Item on GraphqlSoupDocument { id }',
         fragmentName: 'Item',
-        cursor: 'cursor-1',
+        keys: ['GraphqlSoupDocument:item-1'],
+      }),
+      host.search({
+        profile: 'quick-access-v1',
+        buckets: ['document'],
+        query: 'plan',
         limit: 20,
+        nowMs: 123,
       }),
       host.writeQuery({
         opKey: 8,
+        registerDependencies: true,
         query: 'query Read { user { id } }',
         data: { user: { id: 'user-1' } },
         identity: 'user-1',
+        entityResolvers: [
+          {
+            parentType: 'GraphqlUser',
+            fieldName: 'emailThread',
+            targetType: 'GraphqlSoupEmailThread',
+            argumentPath: ['input', 'threadId'],
+          },
+        ],
       }),
       host.enqueueOptimisticMutation(
         {
@@ -360,19 +400,20 @@ describe('createWorkerCacheHost', () => {
     expect(requests.map(({ id, kind }) => [id, kind])).toEqual([
       [1, 'init'],
       [2, 'read'],
-      [3, 'read-records'],
-      [4, 'write'],
-      [5, 'enqueue-optimistic-mutation'],
-      [6, 'inspect-query-variants'],
-      [7, 'inspect-query'],
-      [8, 'claim-next-mutation'],
-      [9, 'defer-optimistic-write'],
-      [10, 'commit-optimistic-write'],
-      [11, 'rollback-optimistic-write'],
-      [12, 'invalidate'],
-      [13, 'delete-records'],
-      [14, 'teardown'],
-      [15, 'clear'],
+      [3, 'read-records-by-keys'],
+      [4, 'search'],
+      [5, 'write'],
+      [6, 'enqueue-optimistic-mutation'],
+      [7, 'inspect-query-variants'],
+      [8, 'inspect-query'],
+      [9, 'claim-next-mutation'],
+      [10, 'defer-optimistic-write'],
+      [11, 'commit-optimistic-write'],
+      [12, 'rollback-optimistic-write'],
+      [13, 'invalidate'],
+      [14, 'delete-records'],
+      [15, 'teardown'],
+      [16, 'clear'],
     ]);
     expect(requests[0]).toEqual({
       id: 1,
@@ -392,10 +433,32 @@ describe('createWorkerCacheHost', () => {
         ],
       })
     );
-    expect(requests[3]).toEqual(
-      expect.objectContaining({ originOpId: `${CLIENT_ID}:8` })
-    );
+    expect(requests[3]).toEqual({
+      id: 4,
+      kind: 'search',
+      request: {
+        profile: 'quick-access-v1',
+        buckets: ['document'],
+        query: 'plan',
+        limit: 20,
+        nowMs: 123,
+      },
+    });
     expect(requests[4]).toEqual(
+      expect.objectContaining({
+        originOpId: `${CLIENT_ID}:8`,
+        registration: {
+          opId: `${CLIENT_ID}:8`,
+          entityResolvers: [
+            expect.objectContaining({
+              parentType: 'GraphqlUser',
+              fieldName: 'emailThread',
+            }),
+          ],
+        },
+      })
+    );
+    expect(requests[5]).toEqual(
       expect.objectContaining({
         originOpId: `${CLIENT_ID}:9`,
         owner: 'runner',
@@ -404,13 +467,14 @@ describe('createWorkerCacheHost', () => {
         leaseExpiresAtMs: 1_100,
       })
     );
-    expect(requests[13]).toEqual({
-      id: 14,
+    expect(requests[14]).toEqual({
+      id: 15,
       kind: 'teardown',
       opId: `${CLIENT_ID}:7`,
     });
     expect(results[0]).toEqual({ kind: 'miss' });
-    expect(results[3]).toEqual(expect.objectContaining({ transactionId: '1' }));
+    expect(results[2]).toEqual({ documents: [], nextCursor: null });
+    expect(results[4]).toEqual(expect.objectContaining({ transactionId: '1' }));
     host.dispose();
   });
 
@@ -708,7 +772,12 @@ describe('createWorkerCacheHost', () => {
 
     await Promise.all([
       host.readQuery({ opKey: 7, query: 'query Seven { seven }' }),
-      host.readQuery({ opKey: 9, query: 'query Nine { nine }' }),
+      host.writeQuery({
+        opKey: 9,
+        registerDependencies: true,
+        query: 'query Nine { nine }',
+        data: { nine: 9 },
+      }),
       host.readQuery({ query: 'query Untracked { untracked }' }),
     ]);
     const adapter = requireAdapter();

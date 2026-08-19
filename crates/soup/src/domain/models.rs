@@ -777,9 +777,6 @@ pub struct TouchedSoupRequest<'a> {
     pub after: Option<TouchedPagePosition>,
     /// Entity filters folded into the candidate query.
     pub filter: Option<&'a EntityFilterAst>,
-    /// Whether project rows belong in the feed (unexpanded soup only —
-    /// expanded soup shows project contents rather than project rows).
-    pub include_projects: bool,
     /// Every inbox the caller can read; gates email-thread candidates.
     pub link_ids: &'a [Uuid],
 }
@@ -1043,6 +1040,10 @@ pub struct EnrichedSoupItem {
     pub item: SoupItem<SoupPropertiesField>,
     /// The aggregate frecency score, when requested and available.
     pub frecency_score: Option<AggregateFrecency>,
+    /// The caller's latest own mutation of this entity, populated only when
+    /// the page was ordered by `touched_by_me`. Clients sort and optimistic-
+    /// reorder the touched feed on this value.
+    pub touched_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
 /// A soup request with optional grouping configuration.

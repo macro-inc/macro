@@ -43,6 +43,8 @@ import type { ApiThreadReply } from './generated/schemas/apiThreadReply';
 import type { Bot } from './generated/schemas/bot';
 import type { BotChannel } from './generated/schemas/botChannel';
 import type { BotToken } from './generated/schemas/botToken';
+import type { CalendarMentionPreviewRequest } from './generated/schemas/calendarMentionPreviewRequest';
+import type { CalendarMentionPreviewResponse } from './generated/schemas/calendarMentionPreviewResponse';
 import type { CalendarOccurrenceResponse } from './generated/schemas/calendarOccurrenceResponse';
 import type { CallRecordPreview } from './generated/schemas/callRecordPreview';
 import type { ChannelJoinCodeResponse } from './generated/schemas/channelJoinCodeResponse';
@@ -443,6 +445,18 @@ export const storageServiceClient = {
       await dssFetch<CalendarOccurrenceResponse>(
         `/calendar-events?${params.toString()}`,
         { method: 'GET', signal }
+      )
+    ).map((result) => result);
+  },
+
+  async getBatchCalendarEventPreviews(args: CalendarMentionPreviewRequest) {
+    return (
+      await dssFetch<CalendarMentionPreviewResponse>(
+        `/calendar-events/preview`,
+        {
+          method: 'POST',
+          body: JSON.stringify(args),
+        }
       )
     ).map((result) => result);
   },

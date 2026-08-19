@@ -487,11 +487,10 @@ export const ENABLE_GRAPHQL_SOUP_OVERRIDE = getFeatureFlagOverride(
 const parseBooleanOverride = (value: unknown): boolean | undefined =>
   value === 'true' ? true : value === 'false' ? false : undefined;
 
-/** Browser-only Turso/OPFS cache rollout. Production defaults off. */
-export const ENABLE_BROWSER_TURSO_CACHE_FLAG = 'enable-browser-turso-cache';
-const BROWSER_TURSO_CACHE_ENV = import.meta.env.VITE_ENABLE_BROWSER_TURSO_CACHE;
-export const ENABLE_BROWSER_TURSO_CACHE_OVERRIDE = parseBooleanOverride(
-  BROWSER_TURSO_CACHE_ENV
+/** Controls the cache-warming GraphQL soup backfill. */
+export const ENABLE_GRAPHQL_BACKFILL = resolveFeatureFlag(
+  'ENABLE_GRAPHQL_BACKFILL',
+  false
 );
 
 /** Independent emergency stop. Any true env/PostHog source wins. */
@@ -671,4 +670,29 @@ export const ENABLE_ENTITY_ACTIVITY_SECTION_OVERRIDE =
 export const ENABLE_ACTIVITY_FEED_FLAG = 'enable-activity-feed';
 export const ENABLE_ACTIVITY_FEED_OVERRIDE =
   getFeatureFlagOverride('ENABLE_ACTIVITY_FEED') ??
+  (DEV_MODE_ENV ? true : undefined);
+
+// AI agents: the Macro Coder mention entry and the folded agent-session view
+// in channels. Override with VITE_ENABLE_CHAT_V3_AGENTS.
+export const ENABLE_CHAT_V3_AGENTS_FLAG = 'enable-chat-v3-agents';
+export const ENABLE_CHAT_V3_AGENTS_OVERRIDE =
+  getFeatureFlagOverride('ENABLE_CHAT_V3_AGENTS') ??
+  (DEV_MODE_ENV ? true : undefined);
+export function ENABLE_CHAT_V3_AGENTS(): boolean {
+  if (ENABLE_CHAT_V3_AGENTS_OVERRIDE !== undefined) {
+    return ENABLE_CHAT_V3_AGENTS_OVERRIDE;
+  }
+
+  return (
+    analytics.posthog.isFeatureEnabled(ENABLE_CHAT_V3_AGENTS_FLAG) ?? false
+  );
+}
+
+// The Recent view: the touched-by-me feed (everything the viewer mutated,
+// newest own-touch first). Gates the view (the route redirects to the inbox
+// when off) and its sidebar entry. PostHog-gated with a dev-mode default;
+// override with VITE_ENABLE_RECENT_VIEW.
+export const ENABLE_RECENT_VIEW_FLAG = 'enable-recent-view';
+export const ENABLE_RECENT_VIEW_OVERRIDE =
+  getFeatureFlagOverride('ENABLE_RECENT_VIEW') ??
   (DEV_MODE_ENV ? true : undefined);

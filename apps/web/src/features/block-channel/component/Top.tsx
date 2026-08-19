@@ -1,9 +1,9 @@
 import type { ChannelTabId } from '@channel/Channel/channel-tabs';
 import { CollapsibleHeaderItem } from '@components/app/split-layout/components/CollapsibleItem';
 import { HeaderIsland } from '@components/app/split-layout/components/HeaderIsland';
-import { HeaderTitleMenu } from '@components/app/split-layout/components/HeaderTitleMenu';
 import { SplitHeaderLeft } from '@components/app/split-layout/components/SplitHeader';
 import { SplitLabel } from '@components/app/split-layout/components/SplitLabel';
+import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { useBlockId } from '@core/block';
 import type { TabItem } from '@core/component/Tabs';
 import { TabsInset } from '@core/component/TabsInset';
@@ -21,7 +21,7 @@ import { ChannelTypeEnum } from '@service-storage/client';
 import type { ChannelType } from '@service-storage/generated/schemas/channelType';
 import { type Component, type JSX, Show } from 'solid-js';
 
-const CHANNEL_TAB_ICONS: Record<
+export const CHANNEL_TAB_ICONS: Record<
   string,
   Component<JSX.SvgSVGAttributes<SVGSVGElement>>
 > = {
@@ -71,6 +71,7 @@ type ChannelTopLeftProps = TopProps & {
 };
 
 export function ChannelTopLeft(props: ChannelTopLeftProps) {
+  const panel = useSplitPanelOrThrow();
   const blockId = useBlockId();
   const channelName = useChannelName(
     blockId,
@@ -90,67 +91,40 @@ export function ChannelTopLeft(props: ChannelTopLeftProps) {
 
   return (
     <SplitHeaderLeft>
-      <Show
-        when={isTouchDevice() && hasTabsMenu()}
-        fallback={
-          <>
-            <HeaderIsland class="shrink">
-              <div class="ph-no-capture z-split-header-content relative flex items-center gap-2 max-w-full h-full shrink min-w-15">
-                <TopIcon
-                  channelType={props.channelType}
-                  participants={props.participants}
-                />
-                <SplitLabel
-                  label={channelName() ?? 'New Channel'}
-                  lockRename={props.lockRename}
-                  renameOverrides={{ channelType: props.channelType }}
-                  maxDisplayLength={48}
-                />
-              </div>
-            </HeaderIsland>
-            <Show when={!isTouchDevice() && hasTabsMenu() && props.activeTab}>
-              <CollapsibleHeaderItem
-                id="channel-tabs"
-                priority={1}
-                containerClass="ph-no-capture min-w-0 shrink-0 h-full mx-2"
-              >
-                {(isCollapsed) => (
-                  <TabsInset
-                    list={
-                      isCollapsed() ? iconTabList() : [...(props.tabs ?? [])]
-                    }
-                    value={props.activeTab}
-                    onChange={(value) =>
-                      props.onTabChange?.(value as ChannelTabId)
-                    }
-                  />
-                )}
-              </CollapsibleHeaderItem>
-            </Show>
-          </>
-        }
-      >
-        {/* Mobile: the tabs hide behind the channel name — tapping the title
-            opens a menu of the tab views. */}
-        <HeaderIsland class="shrink">
-          <HeaderTitleMenu
-            items={(props.tabs ?? []).map((tab) => ({
-              value: tab.value,
-              label: tab.label,
-              icon: CHANNEL_TAB_ICONS[tab.value],
-            }))}
-            active={props.activeTab}
-            onSelect={(value) => props.onTabChange?.(value as ChannelTabId)}
-          >
-            <TopIcon
-              channelType={props.channelType}
-              participants={props.participants}
+      <HeaderIsland class="shrink">
+        <div class="ph-no-capture z-split-header-content relative flex items-center gap-2 max-w-full h-full shrink min-w-15">
+          <TopIcon
+            channelType={props.channelType}
+            participants={props.participants}
+          />
+          <SplitLabel
+            label={channelName() ?? 'New Channel'}
+            lockRename={props.lockRename}
+            renameOverrides={{ channelType: props.channelType }}
+            maxDisplayLength={48}
+          />
+          <div
+            class="shrink-0 flex items-center h-full"
+            ref={(ref) => panel.setTitleFileMenuRef(ref)}
+          />
+        </div>
+      </HeaderIsland>
+      {/* Mobile has no room for inline tabs; the title file menu carries the
+          tab links there instead (see NewChannelBlockAdapter). */}
+      <Show when={!isTouchDevice() && hasTabsMenu() && props.activeTab}>
+        <CollapsibleHeaderItem
+          id="channel-tabs"
+          priority={1}
+          containerClass="ph-no-capture min-w-0 shrink-0 h-full mx-2"
+        >
+          {(isCollapsed) => (
+            <TabsInset
+              list={isCollapsed() ? iconTabList() : [...(props.tabs ?? [])]}
+              value={props.activeTab}
+              onChange={(value) => props.onTabChange?.(value as ChannelTabId)}
             />
-            <span class="min-w-0 truncate text-sm font-medium">
-              {channelName() ?? 'New Channel'}
-            </span>
-          </HeaderTitleMenu>
-        </HeaderIsland>
+          )}
+        </CollapsibleHeaderItem>
       </Show>
     </SplitHeaderLeft>
   );

@@ -1,5 +1,10 @@
+import { ENABLE_GRAPHQL_SOUP } from '@core/constant/featureFlags';
 import type { Entity, EntityType } from '@core/types';
 import { queryClient } from '@queries/client';
+import {
+  toNotificationEntityRef,
+  updateNotificationsForEntities,
+} from '@queries/notification/entity-mutations';
 import { notificationKeys } from '@queries/notification/keys';
 import {
   bulkMarkNotificationsAsDone,
@@ -188,11 +193,20 @@ export function markNotificationForEntityIdAsRead(
  * @param entity
  * @returns Promise<void>
  */
-export function markNotificationsForEntityAsRead(
+export async function markNotificationsForEntityAsRead(
   notificationSource: NotificationSource,
   entity: Entity
 ): Promise<void> {
-  return notificationSource.bulkMarkAsRead(
+  const entityRef = toNotificationEntityRef(entity);
+  if (ENABLE_GRAPHQL_SOUP() && entityRef) {
+    await updateNotificationsForEntities({
+      entities: [entityRef],
+      operation: 'MARK_SEEN',
+    });
+    return;
+  }
+
+  await notificationSource.bulkMarkAsRead(
     notificationSource.notificationsByEntity()[compositeEntity(entity)] ?? []
   );
 }

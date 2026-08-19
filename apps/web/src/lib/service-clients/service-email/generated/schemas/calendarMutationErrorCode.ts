@@ -14,6 +14,7 @@ export type CalendarMutationErrorCode =
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const CalendarMutationErrorCode = {
   not_found: 'not_found',
+  occurrence_not_found: 'occurrence_not_found',
   read_only: 'read_only',
   no_writable_calendar: 'no_writable_calendar',
   not_attendee: 'not_attendee',

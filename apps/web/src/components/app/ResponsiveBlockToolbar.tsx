@@ -1,5 +1,6 @@
 import type { HotkeyToken } from '@core/hotkey/tokens';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import type { EntityData } from '@entity';
 import type { ItemType } from '@service-storage/client';
 import { Button, cn } from '@ui';
 import { type Component, For, type JSX, Show } from 'solid-js';
@@ -18,7 +19,10 @@ import {
   SplitTitleFileMenu,
 } from './split-layout/components/SplitLabel';
 import { SplitToolbarRight } from './split-layout/components/SplitToolbar';
-import type { SplitFileMenuAction } from './split-layout/context';
+import type {
+  SplitFileMenuAction,
+  SplitFileMenuActionGroup,
+} from './split-layout/context';
 
 export type BlockTool = {
   label: string | (() => string);
@@ -30,6 +34,8 @@ export type BlockTool = {
   buttonComponent?: () => JSX.Element;
   focusTarget?: () => HTMLElement | null;
   hotkeyToken?: HotkeyToken;
+  /** Menu section this tool renders in when shown in the title file menu. */
+  group?: SplitFileMenuActionGroup;
 };
 
 export function ToolButton(props: { tool: BlockTool }) {
@@ -89,6 +95,12 @@ interface BlockToolbarProps {
   itemType: ItemType;
   name: string;
   formattedName?: string;
+  /**
+   * Full entity for the title menu's entity-gated items. Supply it when the
+   * block can build one that generic chrome can't reconstruct from
+   * id/name/blockName alone (e.g. calls need their channelId).
+   */
+  entity?: EntityData;
 }
 
 /**
@@ -141,19 +153,18 @@ export function ResponsiveBlockToolbar(props: BlockToolbarProps) {
               </For>
             </div>
           </SplitHeaderRight>
-          <Show when={props.ops.length > 0}>
-            <SplitTitleFileMenu>
-              <SplitFileMenu
-                id={props.id}
-                itemType={props.itemType}
-                name={props.name}
-                formattedName={props.formattedName}
-                ops={props.ops}
-                tools={fileMenuTools()}
-                buttonClass="order-first"
-              />
-            </SplitTitleFileMenu>
-          </Show>
+          <SplitTitleFileMenu>
+            <SplitFileMenu
+              id={props.id}
+              itemType={props.itemType}
+              name={props.name}
+              formattedName={props.formattedName}
+              ops={props.ops}
+              tools={fileMenuTools()}
+              entity={props.entity}
+              buttonClass="order-first"
+            />
+          </SplitTitleFileMenu>
           <Show when={activeToolbarTools().length > 0}>
             <SplitToolbarRight>
               <For each={activeToolbarTools()}>
@@ -173,17 +184,16 @@ export function ResponsiveBlockToolbar(props: BlockToolbarProps) {
       }
     >
       <SplitTitleFileMenu>
-        <Show when={props.ops.length > 0}>
-          <SplitFileMenu
-            id={props.id}
-            itemType={props.itemType}
-            name={props.name}
-            formattedName={props.formattedName}
-            ops={props.ops}
-            tools={fileMenuTools()}
-            buttonClass="order-last"
-          />
-        </Show>
+        <SplitFileMenu
+          id={props.id}
+          itemType={props.itemType}
+          name={props.name}
+          formattedName={props.formattedName}
+          ops={props.ops}
+          tools={fileMenuTools()}
+          entity={props.entity}
+          buttonClass="order-last"
+        />
       </SplitTitleFileMenu>
     </Show>
   );

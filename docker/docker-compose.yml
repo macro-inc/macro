@@ -296,6 +296,47 @@ services:
       start_period: 10s
 
   # ============================================================================
+  # agent_trigger_service (portless local worker)
+  # Channel messages -> agent session trigger events
+  # ============================================================================
+  agent_trigger_service:
+    <<: [*common-env, *rust-services-image]
+    command: ["/app/out/agent_trigger_service"]
+    restart: on-failure
+    depends_on:
+      - postgres
+      - kafka
+    networks:
+      - databases
+      - services
+
+  # ============================================================================
+  # agent_harness_service (Port 8101)
+  # Agent session trigger events -> sandboxed coding agent sessions, plus the
+  # session control routes, which have to be served from the process that owns
+  # the live transports they act on.
+  # Starts credential-less (and warns); arm it with
+  # `DAYTONA_API_KEY=... GITHUB_TOKEN=... just run_local`.
+  # ============================================================================
+  agent_harness_service:
+    <<: [*common-env, *rust-services-image]
+    command: ["/app/out/agent_harness_service"]
+    restart: on-failure
+    ports:
+      - "8101:8101"
+    environment:
+      # In-network gateway address; the local default (http://localhost:8082)
+      # would point at this container itself.
+      - OVERRIDE_CONNECTION_GATEWAY_URL=http://connection-gateway:8080
+    depends_on:
+      - postgres
+      - kafka
+      - connection_gateway
+    networks:
+      - databases
+      - services
+
+  # ============================================================================
   # static_file_service (Port 8094)
   # Static file serving - DynamoDB
   # ============================================================================

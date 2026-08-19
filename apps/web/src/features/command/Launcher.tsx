@@ -75,6 +75,7 @@ import {
 } from '@ui';
 import { getNormalizedKeyString } from '@ui/components/Hotkey';
 import {
+  type Accessor,
   createEffect,
   createMemo,
   createSignal,
@@ -589,6 +590,26 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
   },
 ];
 
+/**
+ * The creatable-block entries a create menu renders, with feature gating
+ * applied — the single source of truth shared by the desktop menus and the
+ * mobile dock's Create menu, so they cannot drift. Callers with a custom
+ * block list (e.g. the onboarding sandbox launcher) pass it as `source` to
+ * run it through the same gating.
+ */
+export function useCreateMenuBlocks(
+  source: () => CreatableBlock[] = () => CREATABLE_BLOCKS
+): Accessor<CreatableBlock[]> {
+  const snippetsFlag = useFeatureFlag(ENABLE_SNIPPETS_FLAG, {
+    enabledOverride: ENABLE_SNIPPETS_OVERRIDE,
+  });
+  return createMemo(() =>
+    source().filter(
+      (block) => block.blockName !== 'snippet' || snippetsFlag().enabled
+    )
+  );
+}
+
 export const [createMenuOpen, setCreateMenuOpen] = createControlledOpenSignal(
   false,
   { id: 'launcher' }
@@ -654,13 +675,9 @@ type LauncherInnerProps = {
 
 export const LauncherInner = (props: LauncherInnerProps) => {
   const hkGroup = createHotkeyGroup();
-  const snippetsFlag = useFeatureFlag(ENABLE_SNIPPETS_FLAG, {
-    enabledOverride: ENABLE_SNIPPETS_OVERRIDE,
-  });
-  const availableBlocks = () =>
-    (props.blocks ?? CREATABLE_BLOCKS).filter(
-      (block) => block.blockName !== 'snippet' || snippetsFlag().enabled
-    );
+  const availableBlocks = useCreateMenuBlocks(
+    () => props.blocks ?? CREATABLE_BLOCKS
+  );
   const sortedBlocks = createMemo(() => {
     const now = Date.now();
 

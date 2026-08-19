@@ -141,6 +141,7 @@ use utoipa::OpenApi;
     paths(
         health::health_handler,
         calendar_events::inbound::axum_router::list_occurrences,
+        calendar_events::inbound::axum_router::mention_previews,
 
         // annotations
         annotations::get::get_document_comments_handler,
@@ -427,6 +428,12 @@ use utoipa::OpenApi;
             SyncServiceVersionID,
             calendar_events::inbound::axum_router::CalendarOccurrenceItem,
             calendar_events::inbound::axum_router::CalendarOccurrenceResponse,
+            calendar_events::inbound::axum_router::CalendarMentionPreviewRequest,
+            calendar_events::inbound::axum_router::CalendarMentionPreviewRequestItem,
+            calendar_events::inbound::axum_router::CalendarMentionPreviewResponse,
+            calendar_events::inbound::axum_router::CalendarMentionPreviewItem,
+            calendar_events::inbound::axum_router::CalendarMentionPreviewKind,
+            calendar_events::domain::models::CalendarMentionEvent,
             calendar_events::domain::models::CalendarSyncStatus,
             SoupItemWithProperties,
             SoupApiItem,

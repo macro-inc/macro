@@ -1,6 +1,5 @@
 #![cfg(not(target_arch = "wasm32"))]
 
-use cache_core::meta::TYPES;
 use cache_core::normalize::RecordUpdates;
 use cache_core::queue::{
     MutationClaimRequest, MutationClaimToken, MutationRequest, NewQueuedMutation,
@@ -128,88 +127,6 @@ fn compound_keys_batches_duplicates_and_checked_inputs_conform() {
                 .unwrap_err();
             assert!(!error.requires_physical_reset());
         }
-        storage.try_close().unwrap();
-    });
-}
-
-#[test]
-fn canonical_binary_scan_has_global_exclusive_cursor_and_dynamic_in() {
-    block_on(async {
-        let mut storage = TursoStorage::open_in_memory("scope-scan").unwrap();
-        let values = [
-            "ROOT_QUERY",
-            "Type:9",
-            "Type0:1",
-            "Type:a:colon",
-            "Type:tenant:item",
-            "Other:1",
-            "__meta:identity",
-        ];
-        storage
-            .put_batch(
-                values
-                    .iter()
-                    .map(|value| (key(value), record(value)))
-                    .collect(),
-            )
-            .await
-            .unwrap();
-
-        assert!(
-            storage
-                .scan_records(&[], None, 10)
-                .await
-                .unwrap()
-                .is_empty()
-        );
-        assert!(
-            storage
-                .scan_records(&["Type".into()], None, 0)
-                .await
-                .unwrap()
-                .is_empty()
-        );
-        let names = ["Type0".into(), "Type".into(), "Type".into()];
-        let expected = ["Type0:1", "Type:9", "Type:a:colon", "Type:tenant:item"];
-        let all = storage.scan_records(&names, None, 20).await.unwrap();
-        assert_eq!(
-            all.iter().map(|(key, _)| key.as_ref()).collect::<Vec<_>>(),
-            expected
-        );
-
-        let mut cursor = None;
-        let mut paged = Vec::new();
-        loop {
-            let page = storage
-                .scan_records(&names, cursor.as_ref(), 1)
-                .await
-                .unwrap();
-            let Some((last, _)) = page.last() else {
-                break;
-            };
-            cursor = Some(last.clone());
-            paged.extend(page.into_iter().map(|(key, _)| key));
-        }
-        assert_eq!(
-            paged.iter().map(EntityKey::as_ref).collect::<Vec<_>>(),
-            expected
-        );
-        assert!(
-            storage
-                .scan_records(&names, Some(&key("Unselected:zz")), 2)
-                .await
-                .unwrap()
-                .is_empty()
-        );
-
-        let maximum_types = TYPES
-            .iter()
-            .map(|metadata| metadata.name.to_owned())
-            .collect::<Vec<_>>();
-        storage
-            .scan_records(&maximum_types, None, usize::MAX.min(i64::MAX as usize))
-            .await
-            .unwrap();
         storage.try_close().unwrap();
     });
 }

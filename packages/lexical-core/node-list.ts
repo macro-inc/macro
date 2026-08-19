@@ -32,6 +32,7 @@ import { HorizontalRuleNode } from './nodes/HorizontalRuleNode';
 import { HtmlRenderNode } from './nodes/HtmlRenderNode';
 import { ImageNode } from './nodes/ImageNode';
 import { InlineSearchNode } from './nodes/InlineSearchNode';
+import { MagicChipNode } from './nodes/MagicChipNode';
 import { PasteNode } from './nodes/PasteNode';
 import { PullRequestMentionNode } from './nodes/PullRequestMentionNode';
 import { SearchMatchNode } from './nodes/SearchMatchNode';
@@ -107,6 +108,7 @@ export const SupportedNodeTypes = [
   TagMentionNode,
   UnknownMentionNode,
   AwaitNode,
+  MagicChipNode,
 ] as const;
 
 export const NodeReplacements: LexicalNodeReplacement[] = [

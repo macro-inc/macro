@@ -1,0 +1,53 @@
+[package]
+name = "agent_session"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[features]
+# Mock and in-memory port implementations, for crates that test against this one.
+test-utils = ["dep:mockall", "agent_fold/test-utils"]
+
+[dependencies]
+
+agent-client-protocol = { workspace = true }
+dashmap = { workspace = true }
+macro_uuid = { path = "../macro_uuid" }
+mockall = { workspace = true, optional = true }
+agent_fold = { path = "../agent_fold" }
+agent_runtime_protocol = { path = "../agent_runtime_protocol", features = ["utoipa"] }
+axum = { workspace = true }
+bots = { path = "../bots"}
+connection_gateway_client = { path = "../connection_gateway_client" }
+entity_access = { path = "../entity_access", default-features = false, features = [
+  "inbound",
+  "ports",
+] }
+entity_access_db_utils = { path = "../entity_access_db_utils" }
+model-entity = { path = "../model-entity" }
+clap = { workspace = true }
+macro_authorization = { path = "../macro_authorization", default-features = false, features = [
+  "axum",
+] }
+macro_user_id =  { path = "../macro_user_id", features = ["sqlx"] }
+utoipa = { workspace = true }
+rootcause = { workspace = true }
+sqlx = { workspace = true }
+chrono = { workspace = true }
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+strum = { workspace = true }
+tokio = { workspace = true, features = ["rt", "sync"] }
+tracing = { workspace = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
+
+[dev-dependencies]
+agent-client-protocol = { workspace = true }
+non_empty = { path = "../non_empty" }
+agent_fold = { path = "../agent_fold", features = ["test-utils"] }
+axum = { workspace = true, features = ["ws"] }
+macro_db_migrator = { path = "../macro_db_migrator" }
+tokio = { workspace = true, features = ["fs", "io-std", "io-util", "macros", "net", "rt-multi-thread", "time"] }
+tokio-tungstenite = { workspace = true }

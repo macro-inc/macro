@@ -208,6 +208,11 @@ const DEFAULT_PREVIEW_VIEWS = new Set(['inbox', 'channels']);
 const CONDENSED_NARROW_LIST_VIEWS: ReadonlySet<ListView> = new Set([
   'channels',
 ]);
+// Mixed-type lists render every entity as one specially designed line (see
+// NarrowSingleLineLayout) instead of the taller per-type narrow layouts.
+const SINGLE_LINE_NARROW_LIST_VIEWS: ReadonlySet<ListView> = new Set([
+  'search',
+]);
 type SoupListEntryState = {
   focus: string | undefined;
   virtualCache?: CacheSnapshot;
@@ -229,6 +234,13 @@ interface SoupViewProps {
    */
   initialGroupBy?: string;
   disableLocalSearch?: boolean;
+  /**
+   * Client sort ids applied when the user has no persisted sort preference.
+   * Defaults to `['updated_at']`. Pass `[]` for views whose ordering is the
+   * server's (e.g. Recent's touched-by-me order) so rows render as paged —
+   * an explicit user sort still wins once chosen.
+   */
+  initialClientSort?: string[];
   /**
    * Client-side entities to merge into the soup results. Useful for entity
    * types (e.g. automation) that don't come back from the soup API.
@@ -352,7 +364,7 @@ export const SoupView = (props: SoupViewProps) => {
 
       let initialSortIds = initialCrmView?.sort ?? sortPref();
       if (initialSortIds.length === 0) {
-        initialSortIds = ['updated_at'];
+        initialSortIds = props.initialClientSort ?? ['updated_at'];
       }
 
       const persistedViewActiveTab = isListViewID(contentId)
@@ -761,9 +773,9 @@ const SoupViewListContent = (props: SoupViewListProps) => {
 
   const narrowLayout = createMemo<NarrowLayoutVariant>(() => {
     const view = currentView();
-    return view && CONDENSED_NARROW_LIST_VIEWS.has(view)
-      ? 'condensed'
-      : 'standard';
+    if (!view) return 'standard';
+    if (SINGLE_LINE_NARROW_LIST_VIEWS.has(view)) return 'single-line';
+    return CONDENSED_NARROW_LIST_VIEWS.has(view) ? 'condensed' : 'standard';
   });
 
   const focusFirstEntity = () => {

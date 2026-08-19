@@ -57,8 +57,19 @@ impl EditingWorkerService for ReqwestEditingWorkerClient {
                     { "provider": "cerebras", "model": "zai-glm-4.7" },
                     { "provider": "anthropic", "model": "claude-sonnet-4-6" },
                 ],
+                // gpt-5.5 leads the coding chain on testbench evidence: replaying
+                // the same 16 prod sessions in the animated (production)
+                // configuration, against the cerebras/haiku chain it cut the
+                // coder retry rate from 37% to 9% (coders retrying 16 -> 2),
+                // runCode calls -63%, input tokens -61%, cost -35%, and judged
+                // quality improved (fully correct 12/16 -> 14/16, purpose met
+                // 14/16 -> 15/16) with no damaging sessions either way.
+                //
+                // haiku stays as the fallback: OpenAI throttles hard under
+                // concurrency, and a throttled bench run at 4-way parallelism
+                // timed out on 24 of 40 cases where a serial run had none.
                 "coding": [
-                    { "provider": "cerebras", "model": "gpt-oss-120b" },
+                    { "provider": "openai", "model": "gpt-5.5" },
                     { "provider": "anthropic", "model": "claude-haiku-4-5" },
                 ],
             },

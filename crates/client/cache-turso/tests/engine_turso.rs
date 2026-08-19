@@ -144,10 +144,16 @@ fn query_identity_cold_tier_selection_and_clear_run_over_turso() {
             "Property",
         )
         .unwrap();
-        let selected = engine.read_records(&selection, None, 10).await.unwrap();
+        let selected = engine
+            .read_records_by_keys(
+                &selection,
+                &[EntityKey("GraphqlProperty:property-1".into())],
+            )
+            .await
+            .unwrap();
         assert_eq!(
-            selected.records,
-            vec![json!({"id": "property-1", "displayName": "Status"})]
+            selected[0].record,
+            json!({"id": "property-1", "displayName": "Status"})
         );
 
         let reset = engine

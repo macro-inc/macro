@@ -7,7 +7,7 @@
 
 use std::future::Future;
 
-use agent_client_protocol::Channel as AcpChannel;
+use agent_client_protocol::{Channel as AcpChannel, TransportFrame};
 use futures::StreamExt;
 use tokio::sync::mpsc::UnboundedSender;
 
@@ -139,7 +139,9 @@ async fn run_server<H>(
                         system_events.handle(event).await;
                     }
                     ToServerMessage::Acp(AcpMessage(raw)) => {
-                        if acp_open && acp.tx.unbounded_send(Ok(raw)).is_err() {
+                        if acp_open
+                            && acp.tx.unbounded_send(TransportFrame::Single(raw)).is_err()
+                        {
                             acp_open = false;
                         }
                     }
@@ -147,11 +149,19 @@ async fn run_server<H>(
             }
             message = acp.rx.next(), if acp_open => {
                 match message {
-                    Some(Ok(raw)) => {
+                    Some(TransportFrame::Single(raw)) => {
                         if outbound.send(ToRuntimeMessage::Acp(AcpMessage(raw))).is_err() {
                             break;
                         }
                     }
+                    // This connection carries exactly one `AcpMessage` per
+                    // outer envelope value, so there is no envelope shape to
+                    // relay a batch or a malformed frame as. Neither has ever
+                    // been observed here in practice - batching is opt-in on
+                    // the wire and nothing on either side of this relay asks
+                    // for it - so this keeps the old behaviour: anything that
+                    // is not a single message closes this side, same as a
+                    // stream that ended or a transport error used to.
                     _ => acp_open = false,
                 }
             }
@@ -175,7 +185,9 @@ async fn run_runtime(
                 };
                 match message {
                     ToRuntimeMessage::Acp(AcpMessage(raw)) => {
-                        if acp_open && acp.tx.unbounded_send(Ok(raw)).is_err() {
+                        if acp_open
+                            && acp.tx.unbounded_send(TransportFrame::Single(raw)).is_err()
+                        {
                             acp_open = false;
                         }
                     }
@@ -183,11 +195,12 @@ async fn run_runtime(
             }
             message = acp.rx.next(), if acp_open => {
                 match message {
-                    Some(Ok(raw)) => {
+                    Some(TransportFrame::Single(raw)) => {
                         if outbound.send(ToServerMessage::Acp(AcpMessage(raw))).is_err() {
                             break;
                         }
                     }
+                    // See the matching comment in `run_server`.
                     _ => acp_open = false,
                 }
             }

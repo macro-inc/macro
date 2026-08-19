@@ -42,6 +42,8 @@ type HoverCardComponentProps = {
   gutter?: number;
   /** Additional class for content */
   contentClass?: string;
+  /** Receives the underlying Kobalte content element. */
+  contentRef?: (element: HTMLElement) => void;
   /** Semantic z-index class for the portaled content. Defaults to `z-tool-tip`. */
   contentZIndexClass?: string;
   /**
@@ -222,6 +224,7 @@ export function HoverCard(props: HoverCardComponentProps) {
         <KobalteHoverCard.Content
           ref={(el) => {
             contentEl = el;
+            props.contentRef?.(el);
           }}
           class={cn(
             props.contentZIndexClass ?? 'z-tool-tip',

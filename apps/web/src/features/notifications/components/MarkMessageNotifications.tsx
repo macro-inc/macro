@@ -14,6 +14,10 @@ export function MarkMessageNotifications(props: {
   channelId: string;
   children: JSXElement;
 }) {
+  // TODO(dev-rb/notifications): Stop discovering message notifications through the
+  // global NotificationSource. Use an exact-message GraphQL edge or scope that
+  // matches metadata.messageId only; the current CHANNEL_MESSAGE entity scope
+  // is thread-aware, so targeting a root also includes reply notifications.
   const notificationSource = useGlobalNotificationSource();
   const notifications = useNotificationsForEntity(notificationSource, {
     type: 'channel',

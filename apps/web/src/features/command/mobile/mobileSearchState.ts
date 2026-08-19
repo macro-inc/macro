@@ -3,8 +3,9 @@ import { type Accessor, batch, createSignal } from 'solid-js';
 
 interface IMobileSearchState {
   /**
-   * Whether a search session is active: the dock input is focused, or the
-   * user is browsing scoped results with the keyboard dismissed.
+   * Whether a search session is active — from the dock's search button until
+   * the input's X is pressed (or a result opens). Blurring the input only
+   * drops the keyboard; it never ends the session.
    */
   isOpen: Accessor<boolean>;
   open: () => void;

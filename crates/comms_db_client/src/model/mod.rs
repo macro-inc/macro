@@ -22,7 +22,7 @@ pub struct Message {
     /// id of the user who sent the message
     #[schema(value_type = String)]
     pub sender_id: MacroUserIdStr<'static>,
-    /// string content of the message
+    /// String content of the message.
     pub content: String,
     pub created_at: chrono::DateTime<chrono::Utc>,
     pub updated_at: chrono::DateTime<chrono::Utc>,

@@ -52,7 +52,7 @@ pub struct CalendarEventListItem {
     /// Whether this occurrence belongs to a recurring series.
     pub is_recurring: bool,
     /// Occurrence key identifying this instance within its recurring series;
-    /// pass as `recurrenceId` for occurrence-scoped deletion.
+    /// pass as `recurrenceId` for occurrence-scoped updates and deletions.
     pub recurrence_id: Option<String>,
     /// Attendees, capped at 20; `attendee_count` has the full number.
     pub attendees: Vec<ToolEventAttendee>,

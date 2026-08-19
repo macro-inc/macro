@@ -113,6 +113,7 @@ pub fn build_grouped_response(
             .or_insert_with(|| EnrichedSoupItem {
                 item: grouped_item.item,
                 frecency_score: None,
+                touched_at: None,
             });
     }
 

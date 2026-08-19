@@ -1,166 +1,67 @@
-fragment GraphqlHistoryItemFields on GraphqlSoupEntity {
+fragment GraphqlDocumentHistoryFields on GraphqlSoupDocument {
 	__typename
 	id
-	entityType
-	frecencyScore
-	... on GraphqlSoupDocument {
-		id
-		documentName: name
-		ownerId
-		fileType
-		projectId
-		createdAt
-		updatedAt
-		viewedAt
-		deletedAt
-		subType {
-			__typename
-			... on GraphqlTaskSubType {
-				isCompleted
-			}
-		}
-		properties {
-			...SoupPropertyFields
-		}
-		notifications {
-			...SoupNotificationFields
+	documentName: name
+	ownerId
+	fileType
+	createdAt
+	updatedAt
+	viewedAt
+	deletedAt
+	subType {
+		__typename
+		... on GraphqlTaskSubType {
+			isCompleted
 		}
 	}
-	... on GraphqlSoupChat {
-		id
-		chatName: name
-		ownerId
-		projectId
-		isPersistent
-		createdAt
-		updatedAt
-		viewedAt
-		deletedAt
-		properties {
-			...SoupPropertyFields
-		}
-		notifications {
-			...SoupNotificationFields
-		}
-	}
-	... on GraphqlSoupProject {
-		id
-		projectName: name
-		ownerId
-		parentId
-		createdAt
-		updatedAt
-		viewedAt
-		deletedAt
-		properties {
-			...SoupPropertyFields
-		}
-		notifications {
-			...SoupNotificationFields
-		}
-	}
-	# These fields are intentionally absent from cached Soup email records.
-	# Their absence makes email projections incomplete, so record selection
-	# omits email wrappers instead of returning typename-only shells.
-	... on GraphqlSoupEmailThread {
-		attachmentCount
-		participantCount
-	}
-	... on GraphqlSoupChannel {
-		id
-		channelName: name
-		channelType
-		ownerId
-		organizationId
-		channelTeamId: teamId
-		createdAt
-		updatedAt
-		viewedAt
-		interactedAt
-		participants {
-			channelId
-			userId
-			role
-			joinedAt
-			leftAt
-		}
-		latestMessage {
-			...SoupChannelMessageFields
-		}
-		latestNonThreadMessage {
-			...SoupChannelMessageFields
-		}
-		notifications {
-			...SoupNotificationFields
+}
+
+fragment GraphqlChatHistoryFields on GraphqlSoupChat {
+	__typename
+	id
+	chatName: name
+	ownerId
+	isPersistent
+	createdAt
+	updatedAt
+	viewedAt
+	deletedAt
+}
+
+fragment GraphqlProjectHistoryFields on GraphqlSoupProject {
+	__typename
+	id
+	projectName: name
+	ownerId
+	createdAt
+	updatedAt
+	viewedAt
+	deletedAt
+}
+
+fragment GraphqlDocumentQuickAccessName on GraphqlSoupDocument {
+	__typename
+	name
+	ownerId
+	createdAt
+	subType {
+		__typename
+		... on GraphqlTaskSubType {
+			isCompleted
 		}
 	}
-	... on GraphqlSoupChannelMessage {
-		id
-		channelId
-		senderId
-		content
-		createdAt
-		updatedAt
-		effectiveUpdatedAt
-		replyCount
-		notifications {
-			...SoupNotificationFields
-		}
-	}
-	... on GraphqlSoupCall {
-		id
-		channelId
-		channelName
-		createdBy
-		customName
-		summary
-		startedAt
-		endedAt
-		durationMs
-		isActive
-		status
-		attended
-		participants {
-			userId
-			joinedAt
-			leftAt
-		}
-		properties {
-			...SoupPropertyFields
-		}
-		notifications {
-			...SoupNotificationFields
-		}
-	}
-	... on GraphqlSoupCrmCompany {
-		id
-		crmTeamId: teamId
-		crmCompanyName: name
-		description
-		emailSync
-		hidden
-		createdAt
-		updatedAt
-		viewedAt
-		domains
-		properties {
-			...SoupPropertyFields
-		}
-		notifications {
-			...SoupNotificationFields
-		}
-	}
-	... on GraphqlSoupForeignEntity {
-		id
-		foreignEntityId
-		foreignEntitySource
-		storedForId
-		storedForAuthEntity
-		sourceMetadata
-		createdAt
-		updatedAt
-		notifications {
-			...SoupNotificationFields
-		}
-	}
+}
+
+fragment GraphqlChatQuickAccessName on GraphqlSoupChat {
+	__typename
+	name
+	ownerId
+	createdAt
+}
+
+fragment GraphqlProjectQuickAccessName on GraphqlSoupProject {
+	__typename
+	name
+	ownerId
+	createdAt
 }

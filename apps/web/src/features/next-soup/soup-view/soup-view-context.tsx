@@ -660,21 +660,23 @@ export const SoupViewContextProvider: FlowComponent<
       : 'created_at';
 
     const view = activeListView();
-    // The direction belongs to what the tab means — Reminders' Active list
-    // reads soonest-first — not to the sort method, so the preset owns it.
-    // Omitted when absent so the server default (desc) applies and the query
-    // keys of every existing view stay byte-identical.
-    const sortDirection = view
+    // The direction and any forced sort belong to what the tab means —
+    // Reminders' Active list reads soonest-first, Recent reads by the
+    // user's own touches — not to the sort method state, so the preset owns
+    // them. Omitted when absent so the server default (desc) applies and
+    // the query keys of every existing view stay byte-identical.
+    const preset = view
       ? getViewPreset(view, activeTab(), {
           userId: userId(),
           isTeamAdmin: isTeamAdmin(),
-        })?.sortDirection
+        })
       : undefined;
+    const sortDirection = preset?.sortDirection;
 
     return {
       // Mail views use a smaller page size
       limit: view === 'mail' ? 30 : 100,
-      sort_method: sortMethod,
+      sort_method: preset?.sortMethod ?? sortMethod,
       ...(sortDirection ? { sort_direction: sortDirection } : {}),
     };
   });

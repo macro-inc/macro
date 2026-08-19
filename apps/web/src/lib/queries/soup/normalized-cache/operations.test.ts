@@ -45,6 +45,7 @@ import { soupKeys } from '../keys';
 import {
   // biome-ignore lint/correctness/noPrivateImports: testing private export
   buildSingleEntityFilter,
+  bumpSoupEntityTouchedAt,
   getSoupItemId,
   insertSoupEntity,
   optimisticUpdateSoupEntity,
@@ -441,6 +442,41 @@ describe('optimisticUpdateSoupEntity', () => {
         dependentKey
       );
     expect(restored).toEqual(originalData);
+  });
+});
+
+describe('bumpSoupEntityTouchedAt', () => {
+  it('stamps a fresh touch on standard entities', () => {
+    mockNormalizer.getObjectById.mockReturnValueOnce(mockDocumentItem('doc-1'));
+
+    bumpSoupEntityTouchedAt('doc-1');
+
+    expect(mockNormalizer.setNormalizedData).toHaveBeenCalledWith({
+      tag: 'document',
+      data: { id: 'doc-1' },
+      frecency_score: 1,
+      touched_at: expect.any(String),
+    });
+  });
+
+  it('keys channels by their inner channel id', () => {
+    mockNormalizer.getObjectById.mockReturnValueOnce(mockChannelItem('ch-1'));
+
+    bumpSoupEntityTouchedAt('ch-1');
+
+    expect(mockNormalizer.setNormalizedData).toHaveBeenCalledWith({
+      tag: 'channel',
+      data: { channel: { id: 'ch-1' } },
+      frecency_score: 1,
+      touched_at: expect.any(String),
+    });
+  });
+
+  it('is a no-op for entities not in the cache', () => {
+    mockNormalizer.getObjectById.mockReturnValueOnce(null);
+
+    expect(bumpSoupEntityTouchedAt('missing')).toBeUndefined();
+    expect(mockNormalizer.setNormalizedData).not.toHaveBeenCalled();
   });
 });
 

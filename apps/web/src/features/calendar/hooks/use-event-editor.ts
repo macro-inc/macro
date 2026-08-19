@@ -110,6 +110,7 @@ export function useEventEditor(props: UseEventEditorProps) {
           ...(recurrenceChanged
             ? { recurrenceLines: values.recurrenceLines }
             : {}),
+          ...(values.conference ? { conference: values.conference } : {}),
           ...(values.reminders ? { reminders: values.reminders } : {}),
         },
       });
@@ -124,6 +125,7 @@ export function useEventEditor(props: UseEventEditorProps) {
       location: values.location === '' ? undefined : values.location,
       description: values.description === '' ? undefined : values.description,
       attendees: values.guestEmails.map((email) => ({ email })),
+      ...(values.conference ? { conference: values.conference } : {}),
       ...(values.reminders ? { reminders: values.reminders } : {}),
     });
   };

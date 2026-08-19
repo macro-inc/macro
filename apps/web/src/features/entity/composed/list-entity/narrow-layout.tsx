@@ -1,8 +1,5 @@
-import { UserIcon } from '@core/component/UserIcon';
 import { Show } from 'solid-js';
 import { Entity } from '../../entity';
-import { SearchContent } from '../../extractors-search/search-content';
-import { SearchSender } from '../../extractors-search/search-sender';
 import {
   isChannelEntity,
   isChannelMessageEntity,
@@ -10,7 +7,7 @@ import {
   isTaskEntity,
 } from '../../types/entity';
 import { isSearchEntity } from '../../types/search';
-import { ChannelJoinButton } from './channel';
+import { ChannelJoinButton, ChannelMessageSingleLine } from './channel';
 import { EmailInboxChip } from './email';
 import { type LayoutProps, RowIndicator } from './shared';
 
@@ -44,36 +41,7 @@ export function NarrowLayout(props: LayoutProps) {
           when={isChannelMessageEntity(props.entity) && props.entity}
           fallback={<Entity.Title entity={props.entity} />}
         >
-          {(entity) => {
-            const hit = () => {
-              const e = entity();
-              return isSearchEntity(e)
-                ? e.search.contentHitData?.[0]
-                : undefined;
-            };
-            return (
-              <span class="flex items-center gap-1 min-w-0 truncate">
-                <span class="shrink-0 text-ink-muted text-xs whitespace-nowrap">
-                  {entity().channelName}
-                </span>
-                <Show when={entity().senderId}>
-                  {(id) => <UserIcon id={id()} size="sm" />}
-                </Show>
-                <Show when={hit()}>
-                  {(h) => (
-                    <span class="shrink-0 text-ink-extra-muted text-xs whitespace-nowrap">
-                      <SearchSender hit={h()} />
-                    </span>
-                  )}
-                </Show>
-                <span class="text-ink/50 font-normal truncate min-w-0">
-                  <Show when={hit()} fallback={entity().content}>
-                    {(h) => <SearchContent hit={h()} singleLine />}
-                  </Show>
-                </span>
-              </span>
-            );
-          }}
+          {(entity) => <ChannelMessageSingleLine entity={entity()} />}
         </Show>
         <Show when={isEmailEntity(props.entity) && props.entity}>
           {(entity) => <EmailInboxChip entity={entity()} class="ml-auto" />}

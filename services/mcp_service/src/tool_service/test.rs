@@ -27,6 +27,24 @@ async fn server_info_advertises_macro_tools() {
 }
 
 #[tokio::test]
+async fn server_info_advertises_the_web_app_favicon() {
+    let info = empty_service().get_info();
+
+    let icons = info
+        .server_info
+        .icons
+        .expect("server should advertise an icon");
+    let [icon] = icons.as_slice() else {
+        panic!("server should advertise exactly one icon");
+    };
+
+    // The same file the web app's <link rel="icon"> points at.
+    assert_eq!(icon.src, "https://macro.com/app/macro-favicon.svg");
+    assert_eq!(icon.mime_type.as_deref(), Some("image/svg+xml"));
+    assert_eq!(icon.sizes.as_deref(), Some(["any".to_owned()].as_slice()));
+}
+
+#[tokio::test]
 async fn server_instructions_describe_available_workflows() {
     let instructions = empty_service()
         .get_info()

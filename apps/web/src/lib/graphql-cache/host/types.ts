@@ -13,14 +13,17 @@ import type {
   CacheReadPriority,
   ClaimedMutation,
   EnqueueOptimisticMutationResult,
+  HydrationResult,
   MutationClaim,
   MutationSettlement,
   OptimisticLinkPatchWire,
   QueryRevalidationWire,
   QueryVariableFilter,
-  ReadRecordsArgs,
+  ReadRecordsByKeysArgs,
   ReadResult,
-  SelectedRecordPageWire,
+  SearchCacheArgs,
+  SearchCachePage,
+  SelectedRecordByKeyWire,
   WriteResult,
 } from '../protocol';
 
@@ -53,6 +56,8 @@ export type InspectQueryVariantsArgs = Omit<
 
 export interface CacheWriteArgs extends Omit<CacheReadArgs, 'priority'> {
   data: unknown;
+  /** Installs this active query's dependencies from the normalized response. */
+  registerDependencies?: boolean;
   /** Opaque session tag; see protocol.ts `identity`. */
   identity?: string;
 }
@@ -77,9 +82,15 @@ export interface CacheHost {
   readonly disabled?: boolean;
 
   readQuery(args: CacheReadArgs): Promise<ReadResult>;
-  /** Projects normalized records through a named GraphQL fragment. */
-  readRecords(args: ReadRecordsArgs): Promise<SelectedRecordPageWire>;
+  /** Projects a bounded explicit set of normalized entity keys. */
+  readRecordsByKeys(
+    args: ReadRecordsByKeysArgs
+  ): Promise<SelectedRecordByKeyWire[]>;
+  /** Searches the compact write-through materialized projection. */
+  search(args: SearchCacheArgs): Promise<SearchCachePage>;
   writeQuery(args: CacheWriteArgs): Promise<WriteResult>;
+  /** Stores a query response and returns only fields not marked `@cacheOnly`. */
+  hydrateQuery(args: Omit<CacheWriteArgs, 'opKey'>): Promise<HydrationResult>;
   /** Durably queues an optimistic mutation and claims the strict head. */
   enqueueOptimisticMutation(
     args: EnqueueOptimisticMutationArgs,

@@ -19,8 +19,9 @@ use super::{
     ports::{
         CalendarAccessTokenProvider, CalendarDeletionScope, CalendarEventWrite,
         CalendarMutationError, CalendarMutationService, CalendarRepository, CalendarRsvpScope,
-        CalendarTokenError, GoogleCalendarMutationProvider, GoogleProviderError,
-        GoogleProviderErrorKind, GoogleRsvpOutcome, GoogleSeriesMutationOutcome,
+        CalendarTokenError, CalendarUpdateScope, GoogleCalendarMutationProvider,
+        GoogleInstanceUpdateOutcome, GoogleProviderError, GoogleProviderErrorKind,
+        GoogleRsvpOutcome, GoogleSeriesMutationOutcome,
     },
 };
 
@@ -138,6 +139,7 @@ where
         requester_id: &str,
         event_id: Uuid,
         patch: CalendarEventPatch,
+        scope: CalendarUpdateScope,
     ) -> Result<CalendarEvent, CalendarMutationError> {
         if patch.is_empty() {
             return Err(CalendarMutationError::InvalidInput(
@@ -153,28 +155,80 @@ where
         if let Some(reminders) = &patch.reminders {
             validate_reminders(reminders)?;
         }
+        if matches!(scope, CalendarUpdateScope::ThisEvent { .. })
+            && patch.recurrence_lines.is_some()
+        {
+            return Err(CalendarMutationError::InvalidInput(
+                "a single occurrence has no recurrence of its own; update the whole series to \
+                 change the recurrence"
+                    .to_string(),
+            ));
+        }
         let target = self.resolve_mutation_target(requester_id, event_id).await?;
         if target.is_read_only {
             return Err(CalendarMutationError::ReadOnly);
         }
         let access_token = self.fetch_token(&target.token_identity).await?;
-        let updated = self
-            .provider
-            .update_event(
-                &access_token,
-                &target.google_target(OccurrenceRange::maintenance_horizon(Utc::now())),
-                target.master_provider_event_id(),
-                &patch,
-            )
-            .await
-            .map_err(provider_error)?;
-        let Some(upsert) = updated else {
-            // The provider no longer has the event; retire the stale local
-            // source the same way a feed tombstone would.
-            self.retire_gone_source(&target).await;
-            return Err(CalendarMutationError::NotFound);
-        };
-        self.persist_echo(upsert).await
+        let google_target = target.google_target(OccurrenceRange::maintenance_horizon(Utc::now()));
+        match scope {
+            CalendarUpdateScope::All => {
+                let updated = self
+                    .provider
+                    .update_event(
+                        &access_token,
+                        &google_target,
+                        target.master_provider_event_id(),
+                        &patch,
+                    )
+                    .await
+                    .map_err(provider_error)?;
+                let Some(upsert) = updated else {
+                    // The provider no longer has the event; retire the stale
+                    // local source the same way a feed tombstone would.
+                    self.retire_gone_source(&target).await;
+                    return Err(CalendarMutationError::NotFound);
+                };
+                self.persist_echo(upsert).await
+            }
+            CalendarUpdateScope::ThisEvent { recurrence_id } => {
+                let outcome = self
+                    .provider
+                    .update_event_instance(
+                        &access_token,
+                        &google_target,
+                        target.master_provider_event_id(),
+                        &recurrence_id,
+                        &patch,
+                    )
+                    .await
+                    .map_err(provider_error)?;
+                match outcome {
+                    GoogleInstanceUpdateOutcome::Applied(upsert) => {
+                        self.persist_echo(*upsert).await
+                    }
+                    GoogleInstanceUpdateOutcome::OccurrenceGone(upsert) => {
+                        // Nothing was written, but the provider's view of the
+                        // series is fresher than whatever listed this
+                        // occurrence — persist it so the phantom disappears.
+                        self.persist_echo(*upsert)
+                            .await
+                            .inspect_err(|error| {
+                                tracing::warn!(
+                                    error=?error,
+                                    event_id=%target.event_id,
+                                    "failed to persist the series refresh for a vanished occurrence"
+                                );
+                            })
+                            .ok();
+                        Err(CalendarMutationError::OccurrenceNotFound)
+                    }
+                    GoogleInstanceUpdateOutcome::SeriesGone => {
+                        self.retire_gone_source(&target).await;
+                        Err(CalendarMutationError::NotFound)
+                    }
+                }
+            }
+        }
     }
 
     #[tracing::instrument(skip(self, requester_id), err)]

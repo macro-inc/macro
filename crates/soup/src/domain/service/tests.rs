@@ -2467,6 +2467,7 @@ async fn touched_soup_orders_by_touch_and_drops_unhydrated() {
     let doc_1 = Uuid::from_u128(1);
     let doc_2 = Uuid::from_u128(2);
     let ghost = Uuid::from_u128(3);
+    let project = Uuid::from_u128(4);
     let base: DateTime<Utc> = DateTime::default();
 
     let mut soup_mock = MockSoupRepo::new();
@@ -2475,11 +2476,14 @@ async fn touched_soup_orders_by_touch_and_drops_unhydrated() {
         .times(1)
         .returning(move |req| {
             assert!(req.after.is_none());
-            assert!(!req.include_projects, "expanded soup excludes projects");
             Box::pin(async move {
                 Ok(vec![
                     TouchedEntity {
                         entity: EntityType::Document.with_entity_string(doc_1.to_string()),
+                        touched_at: base + Days::new(4),
+                    },
+                    TouchedEntity {
+                        entity: EntityType::Project.with_entity_string(project.to_string()),
                         touched_at: base + Days::new(3),
                     },
                     TouchedEntity {
@@ -2506,6 +2510,42 @@ async fn touched_soup_orders_by_touch_and_drops_unhydrated() {
                 ])
             })
         });
+    // Projects hydrate through the unexpanded by-ids query even in the
+    // expanded feed (the expanded one omits project rows by design).
+    soup_mock
+        .expect_unexpanded_soup_by_ids()
+        .times(1)
+        .returning(move |params| {
+            assert_eq!(params.entities.len(), 1);
+            assert_eq!(params.entities[0].entity_type, EntityType::Project);
+            Box::pin(async move {
+                Ok(vec![SoupItem::Project(models_soup::project::SoupProject {
+                    id: project,
+                    name: 'p'.to_string(),
+                    owner_id: MacroUserIdStr::parse_from_str("macro|test@example.com").unwrap(),
+                    parent_id: None,
+                    created_at: Default::default(),
+                    updated_at: Default::default(),
+                    viewed_at: Default::default(),
+                    deleted_at: None,
+                    extra: (),
+                })])
+            })
+        });
+
+    // Identity property hydration: the enriched page is asserted below so
+    // the per-item touch timestamps are covered too.
+    soup_mock
+        .expect_populate_properties()
+        .times(1)
+        .returning(|_, items| {
+            Box::pin(async move {
+                Ok(items
+                    .into_iter()
+                    .map(|item| item.map_extra(|()| SoupPropertiesField::default()))
+                    .collect())
+            })
+        });
 
     let page = SoupImpl::new(
         soup_mock,
@@ -2517,7 +2557,7 @@ async fn touched_soup_orders_by_touch_and_drops_unhydrated() {
         NoopForeignEntityService,
         NoOpRemindersService,
     )
-    .get_user_soup(
+    .get_user_soup_with_properties(
         SoupRequest {
             sort_direction: SoupSortDirection::default(),
             email_preview_view: PreviewView::StandardLabel(
@@ -2536,10 +2576,112 @@ async fn touched_soup_orders_by_touch_and_drops_unhydrated() {
     .into_touched()
     .unwrap();
 
-    let ids: Vec<Uuid> = page.items.iter().map(|item| item.id()).collect();
-    assert_eq!(ids, vec![doc_1, doc_2]);
-    // Three candidates against a limit of 20: the feed is exhausted.
+    let ids: Vec<Uuid> = page.items.iter().map(|item| item.item.id()).collect();
+    assert_eq!(ids, vec![doc_1, project, doc_2]);
+    // Every touched item carries its own-mutation timestamp — clients sort
+    // and optimistically reorder the feed on it.
+    let touched: Vec<_> = page.items.iter().map(|item| item.touched_at).collect();
+    assert_eq!(
+        touched,
+        vec![
+            Some(base + Days::new(4)),
+            Some(base + Days::new(3)),
+            Some(base + Days::new(1)),
+        ]
+    );
+    // Four candidates against a limit of 20: the feed is exhausted.
     assert!(page.next_cursor.is_none());
+}
+
+/// Unexpanded touched pages hydrate projects through the main by-ids query —
+/// one round trip, not a separate project query (that split exists only for
+/// the expanded feed, whose by-ids query omits project rows by design).
+#[tokio::test]
+async fn unexpanded_touched_hydrates_projects_in_the_main_query() {
+    let user = MacroUserIdStr::parse_from_str("macro|test@example.com").unwrap();
+    let doc = Uuid::from_u128(1);
+    let project = Uuid::from_u128(2);
+    let base: DateTime<Utc> = DateTime::default();
+
+    let mut soup_mock = MockSoupRepo::new();
+    soup_mock
+        .expect_touched_soup_page()
+        .times(1)
+        .returning(move |_req| {
+            Box::pin(async move {
+                Ok(vec![
+                    TouchedEntity {
+                        entity: EntityType::Document.with_entity_string(doc.to_string()),
+                        touched_at: base + Days::new(2),
+                    },
+                    TouchedEntity {
+                        entity: EntityType::Project.with_entity_string(project.to_string()),
+                        touched_at: base + Days::new(1),
+                    },
+                ])
+            })
+        });
+    // Exactly one by-ids call, carrying the document AND the project.
+    soup_mock
+        .expect_unexpanded_soup_by_ids()
+        .withf(move |params| {
+            params.entities.len() == 2
+                && params
+                    .entities
+                    .iter()
+                    .any(|e| e.entity_type == EntityType::Project)
+        })
+        .times(1)
+        .returning(move |_params| {
+            Box::pin(async move {
+                Ok(vec![
+                    SoupItem::Document(soup_document_uuid_with_updated(doc, Default::default())),
+                    SoupItem::Project(models_soup::project::SoupProject {
+                        id: project,
+                        name: 'p'.to_string(),
+                        owner_id: MacroUserIdStr::parse_from_str("macro|test@example.com").unwrap(),
+                        parent_id: None,
+                        created_at: Default::default(),
+                        updated_at: Default::default(),
+                        viewed_at: Default::default(),
+                        deleted_at: None,
+                        extra: (),
+                    }),
+                ])
+            })
+        });
+
+    let page = SoupImpl::new(
+        soup_mock,
+        FrecencyQueryServiceImpl::new(MockFrecencyStorage::new()),
+        NoopEmailPreviewService,
+        RecordingCommsService::new(vec![]),
+        NoopCallRecordQueryService,
+        NoOpCrmService,
+        NoopForeignEntityService,
+        NoOpRemindersService,
+    )
+    .get_user_soup(
+        SoupRequest {
+            sort_direction: SoupSortDirection::default(),
+            email_preview_view: PreviewView::StandardLabel(
+                email::domain::models::PreviewViewStandardLabel::Inbox,
+            ),
+            link_ids: vec![],
+            soup_type: SoupType::UnExpanded,
+            limit: 20,
+            cursor: SoupQuery::new_sort_touched(EntityFilters::default()),
+            user,
+        },
+        None,
+    )
+    .await
+    .unwrap()
+    .into_touched()
+    .unwrap();
+
+    let ids: Vec<Uuid> = page.items.iter().map(|item| item.id()).collect();
+    assert_eq!(ids, vec![doc, project]);
 }
 
 #[tokio::test]

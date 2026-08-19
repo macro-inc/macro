@@ -467,8 +467,8 @@ export function operationCategoryForRequest(
 ): CacheOperationCategory {
   return match(request.kind)
     .with('init', () => 'initialization' as const)
-    .with('read', 'read-records', () => 'read' as const)
-    .with('write', () => 'write' as const)
+    .with('read', 'read-records-by-keys', 'search', () => 'read' as const)
+    .with('write', 'hydrate', () => 'write' as const)
     .with(
       'enqueue-optimistic-mutation',
       'claim-next-mutation',
@@ -492,6 +492,7 @@ export function isStorageTransactionRequest(
 ): boolean {
   return [
     'write',
+    'hydrate',
     'enqueue-optimistic-mutation',
     'claim-next-mutation',
     'defer-optimistic-write',

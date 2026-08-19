@@ -33,7 +33,7 @@ impl FusionAuthClient {
     }
 
     /// This API is used to create a link between a FusionAuth User and a user in a 3rd party identity provider. This API may be useful when you already know the unique Id of a user in a 3rd party identity provider and the corresponding FusionAuth User.
-    #[tracing::instrument(skip(self), fields(application_id=%self.client_id, fusion_auth_base_url=%self.fusion_auth_base_url, user_id=%request.identity_provider_link.user_id, idp_id=%request.identity_provider_link.identity_provider_id))]
+    #[tracing::instrument(skip(self, request), fields(application_id=%self.client_id, fusion_auth_base_url=%self.fusion_auth_base_url, user_id=%request.identity_provider_link.user_id, idp_id=%request.identity_provider_link.identity_provider_id))]
     pub async fn link_user(&self, request: LinkUserRequest<'_>) -> Result<()> {
         link::link_user(&self.auth_client, &self.fusion_auth_base_url, request).await
     }
