@@ -1977,7 +1977,7 @@ describe('normalizedCacheExchange', () => {
       expect(host.commits).toHaveLength(0);
     });
 
-    it('retains a retryable network failure and still returns the error', async () => {
+    it('retains a retryable network failure as a successful local write', async () => {
       const error = new CombinedError({
         networkError: new Error('offline'),
       });
@@ -1995,7 +1995,8 @@ describe('normalizedCacheExchange', () => {
         { transactionId: 'txn-1', error: error.message },
       ]);
       expect(host.rollbacks).toHaveLength(0);
-      expect(results[0]?.error).toBe(error);
+      expect(results[0]?.error).toBeUndefined();
+      expect(results[0]?.data).toEqual(optimistic);
       expect(optimisticMutationDispositionOf(results[0])).toEqual({
         kind: 'queued',
         transactionId: 'txn-1',
@@ -2020,6 +2021,10 @@ describe('normalizedCacheExchange', () => {
       expect(host.claims).toEqual(['txn-1']);
       expect(forwarded.map((op) => op.key)).toEqual([1]);
       expect(results).toHaveLength(2);
+      expect(results[0]?.error).toBeUndefined();
+      expect(results[1]?.error).toBeUndefined();
+      expect(results[0]?.data).toEqual(optimistic);
+      expect(results[1]?.data).toEqual(optimistic);
       expect(optimisticMutationDispositionOf(results[1])).toEqual({
         kind: 'queued',
         transactionId: 'txn-2',
