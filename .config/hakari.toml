@@ -74,6 +74,7 @@ workspace-members = [
     "agent_fold",
     "graphql_soup_filter_input",
     "item_filters",
+    "predicate-index",
     "filter_ast",
     "document_sub_type",
     "model_file_type",
