@@ -10,6 +10,7 @@ import type { Query } from '@app/features/next-soup/filters/filter-store/types';
 import { getViewPreset } from '@app/features/next-soup/sidebar/soup-filter-presets';
 import { NonMemberChannelPreview } from '@app/features/next-soup/soup-view/non-member-channel-preview';
 import { SoupView } from '@app/features/next-soup/soup-view/soup-view';
+import { useFlowViewFlag } from '@app/features/next-soup/use-flow-view-flag';
 import { useRecentTouchedEntities } from '@app/features/next-soup/use-recent-touched-entities';
 import { useRecentViewFlag } from '@app/features/next-soup/use-recent-view-flag';
 import { SettingsPanelComponentWrapper } from '@app/features/settings/Settings';
@@ -180,26 +181,48 @@ registerComponent(
   })
 );
 
-registerComponent(
-  'flow',
-  withAuth(() => {
-    usePageViewTracking('flow');
-    const preset = getViewPreset('flow');
-    // The Recent half rides in as extra entities; the main query is the
-    // inbox Signal set. baseEntities dedupes the overlap and the default
-    // updated_at client sort interleaves the merged feed by recency.
-    const recentEntities = useRecentTouchedEntities();
-    return (
-      <SoupView
-        viewName="Flow"
-        initialFilters={preset?.filters}
-        initialClientFilters={preset?.clientFilters}
-        additionalEntities={recentEntities}
-        disableLocalSearch
-      />
-    );
-  })
-);
+registerComponent('flow', withAuth(FlowViewWrapper));
+
+function TrackedFlowView() {
+  usePageViewTracking('flow');
+  const preset = getViewPreset('flow');
+  // The Recent half rides in as extra entities; the main query is the
+  // inbox Signal set. baseEntities dedupes the overlap and the default
+  // updated_at client sort interleaves the merged feed by recency.
+  const recentEntities = useRecentTouchedEntities();
+  return (
+    <SoupView
+      viewName="Flow"
+      initialFilters={preset?.filters}
+      initialClientFilters={preset?.clientFilters}
+      additionalEntities={recentEntities}
+      disableLocalSearch
+    />
+  );
+}
+
+function FlowViewWrapper() {
+  const flowViewEnabled = useFlowViewFlag();
+  const posthog = usePosthog();
+
+  // Registered even when the flag is off so a bookmarked /flow or a
+  // restored split recovers to the inbox instead of an empty split, and
+  // neither of the view's queries is issued. The redirect replaces the
+  // split irreversibly, so it must wait for PostHog to actually answer —
+  // on a fresh reload the flag reads false until flags load.
+  return (
+    <Show
+      when={flowViewEnabled()}
+      fallback={
+        <Show when={posthog.flagsLoaded()}>
+          <RedirectSplit to={{ type: 'component', id: 'inbox' }} />
+        </Show>
+      }
+    >
+      <TrackedFlowView />
+    </Show>
+  );
+}
 
 registerComponent('recent', withAuth(RecentViewWrapper));
 

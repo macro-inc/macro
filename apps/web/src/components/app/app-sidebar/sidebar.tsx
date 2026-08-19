@@ -17,6 +17,7 @@ import {
   requestInboxFilter,
 } from '@app/features/next-soup/soup-view/inbox-filter-controllers';
 import { requestSearchFocus } from '@app/features/next-soup/soup-view/search-controllers';
+import { useFlowViewFlag } from '@app/features/next-soup/use-flow-view-flag';
 import { useRecentViewFlag } from '@app/features/next-soup/use-recent-view-flag';
 import {
   InviteModal,
@@ -192,16 +193,6 @@ const SIDEBAR_LINKS = [
     icon: AnimatedInboxIcon,
     hotkey: 'i',
     hotkeyToken: TOKENS.sidebar.goTo.inbox,
-  },
-  {
-    id: 'flow',
-    label: 'Flow',
-    href: LIST_VIEW_PATHS.flow,
-    icon: AnimatedSignalIcon,
-    // `f` is Files, `l` is Calls, `o` is Customers; `w` is the only letter
-    // of "flow" that is not already a sidebar destination.
-    hotkey: 'w',
-    hotkeyToken: TOKENS.sidebar.goTo.flow,
   },
   {
     id: 'search',
@@ -427,12 +418,14 @@ export const GoToHotkeys = () => {
   const calendarUiEnabled = useCalendarUiFlag();
   const activityFeedEnabled = useActivityFeedFlag();
   const recentViewEnabled = useRecentViewFlag();
+  const flowViewEnabled = useFlowViewFlag();
   const links = createMemo((): SidebarItem[] =>
     buildSidebarLinks(
       gettingStartedEnabled(),
       calendarUiEnabled(),
       activityFeedEnabled(),
-      recentViewEnabled()
+      recentViewEnabled(),
+      flowViewEnabled()
     )
   );
 
@@ -1059,6 +1052,17 @@ const RECENT_LINK: SidebarItem = {
   hotkeyToken: TOKENS.sidebar.goTo.recent,
 };
 
+const FLOW_LINK: SidebarItem = {
+  id: 'flow',
+  label: 'Flow',
+  href: LIST_VIEW_PATHS.flow,
+  icon: AnimatedSignalIcon,
+  // `f` is Files, `l` is Calls, `o` is Customers; `w` is the only letter
+  // of "flow" that is not already a sidebar destination.
+  hotkey: 'w',
+  hotkeyToken: TOKENS.sidebar.goTo.flow,
+};
+
 const REMINDERS_LINK: SidebarItem = {
   id: 'reminders',
   label: 'Reminders',
@@ -1087,7 +1091,8 @@ const buildSidebarLinks = (
   showGettingStarted: boolean,
   showCalendar: boolean,
   showActivity: boolean,
-  showRecent: boolean
+  showRecent: boolean,
+  showFlow: boolean
 ): SidebarItem[] => {
   let links: SidebarItem[] = [
     DASHBOARD_LINK,
@@ -1095,14 +1100,28 @@ const buildSidebarLinks = (
     ...SIDEBAR_LINKS.filter((link) => showCalendar || link.id !== 'calendar'),
   ];
 
-  if (showRecent) {
-    // Directly below Inbox; Activity and Reminders anchor after it.
+  if (showFlow) {
+    // Directly below Inbox; Recent, Activity, and Reminders anchor after it.
     const idx = links.findIndex((link) => link.id === 'inbox');
+    links = [...links.slice(0, idx + 1), FLOW_LINK, ...links.slice(idx + 1)];
+  }
+
+  if (showRecent) {
+    const anchorId = showFlow ? 'flow' : 'inbox';
+    const idx = links.findIndex((link) => link.id === anchorId);
     links = [...links.slice(0, idx + 1), RECENT_LINK, ...links.slice(idx + 1)];
   }
 
+  // Flag-gated links chain below Inbox in a fixed order (Flow, Recent,
+  // Activity, Reminders); each anchors on the nearest present predecessor.
+  const anchorBelowInbox = (...present: [boolean, string][]) =>
+    present.find(([shown]) => shown)?.[1] ?? 'inbox';
+
   if (showActivity) {
-    const anchorId = showRecent ? 'recent' : 'inbox';
+    const anchorId = anchorBelowInbox(
+      [showRecent, 'recent'],
+      [showFlow, 'flow']
+    );
     const idx = links.findIndex((link) => link.id === anchorId);
     links = [
       ...links.slice(0, idx + 1),
@@ -1112,12 +1131,11 @@ const buildSidebarLinks = (
   }
 
   if (ENABLE_REMINDERS()) {
-    // Directly below Activity, or below Recent/Inbox when Activity is off.
-    const anchorId = showActivity
-      ? 'activity'
-      : showRecent
-        ? 'recent'
-        : 'inbox';
+    const anchorId = anchorBelowInbox(
+      [showActivity, 'activity'],
+      [showRecent, 'recent'],
+      [showFlow, 'flow']
+    );
     const idx = links.findIndex((l) => l.id === anchorId);
     links = [
       ...links.slice(0, idx + 1),
@@ -1204,12 +1222,14 @@ export const AppSidebar = (props: AppSidebarProps) => {
   const calendarUiEnabled = useCalendarUiFlag();
   const activityFeedEnabled = useActivityFeedFlag();
   const recentViewEnabled = useRecentViewFlag();
+  const flowViewEnabled = useFlowViewFlag();
   const allLinks = createMemo((): SidebarItem[] =>
     buildSidebarLinks(
       gettingStartedEnabled(),
       calendarUiEnabled(),
       activityFeedEnabled(),
-      recentViewEnabled()
+      recentViewEnabled(),
+      flowViewEnabled()
     )
   );
 

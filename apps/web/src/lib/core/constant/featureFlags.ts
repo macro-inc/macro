@@ -696,3 +696,12 @@ export const ENABLE_RECENT_VIEW_FLAG = 'enable-recent-view';
 export const ENABLE_RECENT_VIEW_OVERRIDE =
   getFeatureFlagOverride('ENABLE_RECENT_VIEW') ??
   (DEV_MODE_ENV ? true : undefined);
+
+// The Flow view: the inbox Signal feed merged with the Recent (touched-by-me)
+// feed. Gates the view (the route redirects to the inbox when off) and its
+// sidebar entry. PostHog-gated with a dev-mode default; override with
+// VITE_ENABLE_FLOW_VIEW.
+export const ENABLE_FLOW_VIEW_FLAG = 'enable-flow-view';
+export const ENABLE_FLOW_VIEW_OVERRIDE =
+  getFeatureFlagOverride('ENABLE_FLOW_VIEW') ??
+  (DEV_MODE_ENV ? true : undefined);
