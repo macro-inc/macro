@@ -17,6 +17,7 @@ use crate::normalize::{
     DependencyCompleteness, NormalizeError, RecordUpdates, normalize, normalize_with_dependencies,
     project_hydration_response,
 };
+use crate::predicate::{PredicateIndexStorage, PredicateQueryResult, ProjectionMutation};
 use crate::query_inspection::{
     CachedQueryInstance, CachedQueryVariant, OwnerResolution, QueryInspection,
     QueryInspectionError, matches_variable_filters, prepare, recover_variants, resolve_owner,
@@ -37,6 +38,7 @@ use crate::search::{
 use crate::store::{QueueDiagnostics, Storage};
 use crate::value::{EntityKey, Record, canonical_json};
 use lru::LruCache;
+use predicate_index::{RecordKey as PredicateRecordKey, ValidatedIndexQuery};
 use serde_json::Value as Json;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::num::NonZeroUsize;
@@ -1622,6 +1624,81 @@ impl<S: Storage> Engine<S> {
             Entry::Occupied(e) => Ok(e.into_mut()),
             Entry::Vacant(e) => Ok(e.insert(Document::parse(query)?)),
         }
+    }
+}
+
+impl<S: PredicateIndexStorage> Engine<S> {
+    /// Atomically persist normalized records and generic projection lifecycle changes.
+    pub async fn put_records_with_projections(
+        &mut self,
+        origin_op: Option<OpId>,
+        entries: Vec<(EntityKey<'static>, Record)>,
+        projections: Vec<ProjectionMutation>,
+    ) -> Result<WriteResult, EngineError<S::Error>> {
+        let changed = entries
+            .iter()
+            .map(|(key, _)| key.clone())
+            .collect::<BTreeSet<_>>();
+        self.storage
+            .put_batch_with_projections(entries.clone(), projections)
+            .await
+            .map_err(EngineError::Storage)?;
+        for (key, record) in entries {
+            self.hot.put(key, record);
+        }
+        let mut affected_ops = self.deps.ops_for_keys(changed.iter());
+        if let Some(origin_op) = origin_op {
+            affected_ops.remove(&origin_op);
+        }
+        self.search_catalogs.clear();
+        Ok(WriteResult {
+            changed,
+            affected_ops,
+            reset: false,
+            revalidations: Vec::new(),
+        })
+    }
+
+    /// Mark projections incomplete atomically without changing normalized base records.
+    pub async fn mark_projections_incomplete(
+        &mut self,
+        projections: Vec<ProjectionMutation>,
+    ) -> Result<(), EngineError<S::Error>> {
+        self.storage
+            .put_batch_with_projections(Vec::new(), projections)
+            .await
+            .map_err(EngineError::Storage)
+    }
+
+    /// Delete normalized records and generic projections in one storage transaction.
+    pub async fn delete_keys_with_projections(
+        &mut self,
+        keys: &[EntityKey<'static>],
+        projection_keys: &[PredicateRecordKey],
+    ) -> Result<BTreeSet<OpId>, EngineError<S::Error>> {
+        let affected = self.deps.ops_for_keys(keys.iter());
+        self.storage
+            .delete_batch_with_projections(keys, projection_keys)
+            .await
+            .map_err(EngineError::Storage)?;
+        for key in keys {
+            self.hot.pop(key);
+            for catalog in self.search_catalogs.values_mut() {
+                catalog.remove(key);
+            }
+        }
+        Ok(affected)
+    }
+
+    /// Execute a complete generic exact-index query.
+    pub async fn query_predicate_index(
+        &self,
+        query: &ValidatedIndexQuery,
+    ) -> Result<PredicateQueryResult, EngineError<S::Error>> {
+        self.storage
+            .query_predicate_index(query)
+            .await
+            .map_err(EngineError::Storage)
     }
 }
 

@@ -1,0 +1,172 @@
+use cache_core::{
+    engine::Engine,
+    predicate::{PredicateQueryResult, ProjectionIncompleteKind, ProjectionMutation},
+    store::InMemoryStorage,
+    value::{EntityKey, Record},
+};
+use predicate_index::{
+    ExactFact, ExactValue, IndexDocument, IndexQuery, IntegerFact, PartitionPredicate,
+    PredicateExpr, Profile, RecordKey, SortDirection, Token, ValidatedIndexQuery,
+};
+
+fn token(value: &str) -> Token {
+    Token::new(value).unwrap()
+}
+
+fn profile() -> Profile {
+    Profile::new(token("soup-flat-v1"))
+}
+
+fn record_key() -> RecordKey {
+    RecordKey::new("GraphqlSoupDocument:doc-1").unwrap()
+}
+
+fn projection(owner: &str) -> IndexDocument {
+    IndexDocument {
+        record_key: record_key(),
+        profile: profile(),
+        partition: token("document"),
+        exact_facts: vec![ExactFact {
+            attribute: token("owner"),
+            value: ExactValue::utf8(owner).unwrap(),
+        }],
+        integer_facts: vec![],
+        sort_facts: vec![IntegerFact {
+            attribute: token("updated-at"),
+            value: 10,
+        }],
+    }
+}
+
+fn query(owner: &str) -> ValidatedIndexQuery {
+    ValidatedIndexQuery::new(IndexQuery {
+        profile: profile(),
+        partitions: vec![PartitionPredicate {
+            partition: token("document"),
+            predicate: PredicateExpr::Exact {
+                attribute: token("owner"),
+                value: ExactValue::utf8(owner).unwrap(),
+            },
+        }],
+        sort_attribute: token("updated-at"),
+        sort_direction: SortDirection::Desc,
+        tie_break_direction: SortDirection::Desc,
+        limit: 20,
+    })
+    .unwrap()
+}
+
+#[test]
+fn replacement_removes_stale_facts_and_incomplete_states_fall_back() {
+    pollster::block_on(async {
+        let mut engine = Engine::new(InMemoryStorage::new());
+        let entity_key = EntityKey::entity("GraphqlSoupDocument", &["doc-1"]);
+        engine
+            .put_records_with_projections(
+                None,
+                vec![(entity_key.clone(), Record::default())],
+                vec![ProjectionMutation::Replace(projection("owner-1"))],
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            engine
+                .query_predicate_index(&query("owner-1"))
+                .await
+                .unwrap(),
+            PredicateQueryResult::Complete(vec![record_key()])
+        );
+
+        engine
+            .put_records_with_projections(
+                None,
+                vec![(entity_key, Record::default())],
+                vec![ProjectionMutation::Replace(projection("owner-2"))],
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            engine
+                .query_predicate_index(&query("owner-1"))
+                .await
+                .unwrap(),
+            PredicateQueryResult::Complete(vec![])
+        );
+
+        for kind in [
+            ProjectionIncompleteKind::Dirty,
+            ProjectionIncompleteKind::Missing,
+            ProjectionIncompleteKind::IncompatibleVersion,
+        ] {
+            engine
+                .mark_projections_incomplete(vec![ProjectionMutation::MarkIncomplete {
+                    record_key: record_key(),
+                    profile: profile(),
+                    partition: token("document"),
+                    kind,
+                }])
+                .await
+                .unwrap();
+            assert_eq!(
+                engine
+                    .query_predicate_index(&query("owner-2"))
+                    .await
+                    .unwrap(),
+                PredicateQueryResult::Incomplete
+            );
+            engine
+                .put_records_with_projections(
+                    None,
+                    vec![],
+                    vec![ProjectionMutation::Replace(projection("owner-2"))],
+                )
+                .await
+                .unwrap();
+        }
+    });
+}
+
+#[test]
+fn delete_and_clear_remove_projection_state() {
+    pollster::block_on(async {
+        let mut engine = Engine::new(InMemoryStorage::new());
+        let entity_key = EntityKey::entity("GraphqlSoupDocument", &["doc-1"]);
+        engine
+            .put_records_with_projections(
+                None,
+                vec![(entity_key.clone(), Record::default())],
+                vec![ProjectionMutation::Replace(projection("owner-1"))],
+            )
+            .await
+            .unwrap();
+        engine
+            .delete_keys_with_projections(&[entity_key], &[record_key()])
+            .await
+            .unwrap();
+        assert_eq!(
+            engine
+                .query_predicate_index(&query("owner-1"))
+                .await
+                .unwrap(),
+            PredicateQueryResult::Complete(vec![])
+        );
+
+        engine
+            .mark_projections_incomplete(vec![ProjectionMutation::MarkIncomplete {
+                record_key: record_key(),
+                profile: profile(),
+                partition: token("document"),
+                kind: ProjectionIncompleteKind::Dirty,
+            }])
+            .await
+            .unwrap();
+        engine.clear().await.unwrap();
+        assert_eq!(
+            engine
+                .query_predicate_index(&query("owner-1"))
+                .await
+                .unwrap(),
+            PredicateQueryResult::Complete(vec![])
+        );
+    });
+}

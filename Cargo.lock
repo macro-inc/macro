@@ -2798,6 +2798,7 @@ dependencies = [
  "maybe_send",
  "pollster",
  "postcard",
+ "predicate-index",
  "serde",
  "serde_json",
  "sha2 0.10.9",

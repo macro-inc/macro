@@ -6,6 +6,9 @@
 //! wasm — wasm futures aren't
 //! `Send`.
 
+use crate::predicate::{
+    PredicateIndexStorage, PredicateQueryResult, ProjectionMutation, ProjectionState,
+};
 use crate::queue::{
     ClaimedMutation, MutationClaimRequest, MutationClaimToken, MutationId, NewQueuedMutation,
     QueuedMutation,
@@ -13,6 +16,7 @@ use crate::queue::{
 use crate::search::{SearchCursor, SearchDocument, SearchProfile, project_search_documents};
 use crate::value::{EntityKey, Record};
 use maybe_send::MaybeSend;
+use predicate_index::{IndexDocument, RecordKey as PredicateRecordKey, evaluate_reference};
 use std::collections::{BTreeMap, HashMap};
 use std::convert::Infallible;
 use std::sync::Arc;
@@ -149,6 +153,7 @@ pub trait Storage: MaybeSend {
 pub struct InMemoryStorage {
     records: HashMap<EntityKey<'static>, Record>,
     search_documents: HashMap<(SearchProfile, EntityKey<'static>), SearchDocument>,
+    projections: HashMap<PredicateRecordKey, ProjectionState>,
     mutations: BTreeMap<
         MutationId,
         (
@@ -392,8 +397,95 @@ impl Storage for InMemoryStorage {
     async fn clear(&mut self) -> Result<(), Self::Error> {
         self.records.clear();
         self.search_documents.clear();
+        self.projections.clear();
         self.mutations.clear();
         Ok(())
+    }
+}
+
+impl PredicateIndexStorage for InMemoryStorage {
+    async fn put_batch_with_projections(
+        &mut self,
+        entries: Vec<(EntityKey<'static>, Record)>,
+        projections: Vec<ProjectionMutation>,
+    ) -> Result<(), Self::Error> {
+        self.put_batch(entries).await?;
+        for mutation in projections {
+            match mutation {
+                ProjectionMutation::Replace(document) => {
+                    self.projections.insert(
+                        document.record_key.clone(),
+                        ProjectionState::Complete(document),
+                    );
+                }
+                ProjectionMutation::MarkIncomplete {
+                    record_key,
+                    profile,
+                    partition,
+                    kind,
+                } => {
+                    self.projections.insert(
+                        record_key.clone(),
+                        ProjectionState::Incomplete {
+                            record_key,
+                            profile,
+                            partition,
+                            kind,
+                        },
+                    );
+                }
+                ProjectionMutation::Delete(record_key) => {
+                    self.projections.remove(&record_key);
+                }
+            }
+        }
+        Ok(())
+    }
+
+    async fn delete_batch_with_projections(
+        &mut self,
+        keys: &[EntityKey<'static>],
+        projection_keys: &[PredicateRecordKey],
+    ) -> Result<(), Self::Error> {
+        self.delete_batch(keys).await?;
+        for key in projection_keys {
+            self.projections.remove(key);
+        }
+        Ok(())
+    }
+
+    async fn query_predicate_index(
+        &self,
+        query: &predicate_index::ValidatedIndexQuery,
+    ) -> Result<PredicateQueryResult, Self::Error> {
+        let query_descriptor = query.as_query();
+        let queried_partitions = query_descriptor
+            .partitions
+            .iter()
+            .map(|partition| &partition.partition)
+            .collect::<std::collections::HashSet<_>>();
+        if self.projections.values().any(|projection| {
+            projection.profile() == &query_descriptor.profile
+                && queried_partitions.contains(projection.partition())
+                && matches!(projection, ProjectionState::Incomplete { .. })
+        }) {
+            return Ok(PredicateQueryResult::Incomplete);
+        }
+
+        let documents = self
+            .projections
+            .values()
+            .filter_map(|projection| match projection {
+                ProjectionState::Complete(document) => Some(document.clone()),
+                ProjectionState::Incomplete { .. } => None,
+            })
+            .collect::<Vec<IndexDocument>>();
+        Ok(PredicateQueryResult::Complete(
+            evaluate_reference(query, &documents)
+                .into_iter()
+                .map(|hit| hit.record_key)
+                .collect(),
+        ))
     }
 }
 

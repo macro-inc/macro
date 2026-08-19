@@ -10,6 +10,7 @@ chrono = { workspace = true }
 lru = { workspace = true }
 maybe_send = { path = "../../maybe_send" }
 postcard = { workspace = true }
+predicate-index = { path = "../../predicate_index" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sha2 = { workspace = true }
