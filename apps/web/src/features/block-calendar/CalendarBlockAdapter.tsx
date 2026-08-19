@@ -109,9 +109,8 @@ function CalendarBlockAdapter(props: CalendarBlockProps) {
   const [searchParams] = useSearchParams();
   const searchParam = (value: string | string[] | undefined) =>
     typeof value === 'string' && value.length > 0 ? value : undefined;
-  // In-app opens pass the target through split content props; a deep link
-  // (`/app/calendar/view?eventId=...`) carries it in the query string, which
-  // never reaches block props.
+  // In-app opens pass the target through split content props, but a deep
+  // link carries it in the query string, which never reaches block props.
   const initialAim: CalendarBlockProps = {
     eventId:
       typeof props.eventId === 'string' && props.eventId.length > 0
