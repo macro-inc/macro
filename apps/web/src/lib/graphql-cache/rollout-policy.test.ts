@@ -7,56 +7,39 @@ import {
 const values: BooleanFlag[] = [undefined, false, true];
 
 describe('browser Turso cache rollout policy', () => {
-  it('is exhaustive: kill wins, explicit enable override is next, undefined fails closed', () => {
-    for (const enableEnvOverride of values) {
-      for (const disableEnvOverride of values) {
-        for (const posthogEnable of values) {
-          for (const posthogDisable of values) {
-            const decision = resolveBrowserTursoCacheRollout({
-              isTauri: false,
-              graphqlTransportEnabled: true,
-              enableEnvOverride,
-              disableEnvOverride,
-              posthogEnable,
-              posthogDisable,
-            });
-            const killed =
-              disableEnvOverride === true || posthogDisable === true;
-            const expected = killed
-              ? false
-              : enableEnvOverride !== undefined
-                ? enableEnvOverride
-                : posthogEnable === true;
-            expect(
-              decision.enabled,
-              JSON.stringify({
-                enableEnvOverride,
-                disableEnvOverride,
-                posthogEnable,
-                posthogDisable,
-              })
-            ).toBe(expected);
-            if (killed) expect(decision.reason).toBe('emergency-disabled');
-          }
-        }
+  it('follows the GraphQL soup gate unless an emergency kill is active', () => {
+    for (const disableEnvOverride of values) {
+      for (const posthogDisable of values) {
+        const decision = resolveBrowserTursoCacheRollout({
+          isTauri: false,
+          graphqlTransportEnabled: true,
+          disableEnvOverride,
+          posthogDisable,
+        });
+        const killed = disableEnvOverride === true || posthogDisable === true;
+        expect(
+          decision.enabled,
+          JSON.stringify({ disableEnvOverride, posthogDisable })
+        ).toBe(!killed);
+        expect(decision.reason).toBe(
+          killed ? 'emergency-disabled' : 'graphql-transport-enabled'
+        );
       }
     }
   });
 
-  it('keeps production-style undefined flags off', () => {
+  it('enables browser cache when GraphQL soup is enabled', () => {
     expect(
       resolveBrowserTursoCacheRollout({
         isTauri: false,
         graphqlTransportEnabled: true,
-        enableEnvOverride: undefined,
         disableEnvOverride: undefined,
-        posthogEnable: undefined,
         posthogDisable: undefined,
       })
     ).toEqual({
-      enabled: false,
-      cohort: 'control',
-      reason: 'not-enabled',
+      enabled: true,
+      cohort: 'treatment',
+      reason: 'graphql-transport-enabled',
       nativeCacheUnchanged: false,
     });
   });
@@ -66,9 +49,7 @@ describe('browser Turso cache rollout policy', () => {
       resolveBrowserTursoCacheRollout({
         isTauri: false,
         graphqlTransportEnabled: false,
-        enableEnvOverride: true,
         disableEnvOverride: false,
-        posthogEnable: true,
         posthogDisable: false,
       })
     ).toMatchObject({
@@ -84,10 +65,8 @@ describe('browser Turso cache rollout policy', () => {
         resolveBrowserTursoCacheRollout({
           isTauri: true,
           graphqlTransportEnabled,
-          // Even contradictory browser values are irrelevant on native.
-          enableEnvOverride: !graphqlTransportEnabled,
+          // Browser emergency values are irrelevant on native.
           disableEnvOverride: true,
-          posthogEnable: !graphqlTransportEnabled,
           posthogDisable: true,
         })
       ).toEqual({

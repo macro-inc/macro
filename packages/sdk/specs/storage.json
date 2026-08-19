@@ -798,6 +798,44 @@
         }
       }
     },
+    "/calendar-events/preview": {
+      "post": {
+        "tags": ["calendar_events"],
+        "summary": "Resolve mentioned calendar events to the requester's own projections.",
+        "operationId": "mention_previews",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CalendarMentionPreviewRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Requester-relative previews for the mentioned events",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarMentionPreviewResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Too many events in one request"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "500": {
+            "description": "Calendar query failed"
+          }
+        }
+      }
+    },
     "/call/record/preview": {
       "post": {
         "tags": ["call::inbound::axum_router"],
@@ -5671,7 +5709,12 @@
                 "schema": {
                   "type": "object",
                   "description": "Response for creating a task.",
-                  "required": ["documentId", "documentMetadata", "token"],
+                  "required": [
+                    "documentId",
+                    "documentMetadata",
+                    "token",
+                    "initialSnapshot"
+                  ],
                   "properties": {
                     "documentId": {
                       "type": "string",
@@ -5680,6 +5723,10 @@
                     "documentMetadata": {
                       "$ref": "#/components/schemas/DocumentResponseMetadata",
                       "description": "Metadata for the created document"
+                    },
+                    "initialSnapshot": {
+                      "type": "string",
+                      "description": "Base64-encoded canonical Loro snapshot used to initialize the task."
                     },
                     "teamId": {
                       "type": ["string", "null"],
@@ -8321,7 +8368,7 @@
           {
             "name": "sort_method",
             "in": "query",
-            "description": "Sort method. Options are viewed_at, created_at, updated_at, viewed_updated. Defaults to viewed_at.",
+            "description": "Sort method. Options are viewed_at, created_at, updated_at,\nviewed_updated, frecency, touched_by_me. Defaults to viewed_at.",
             "required": false,
             "schema": {
               "$ref": "#/components/schemas/SoupApiSort"
@@ -12939,6 +12986,138 @@
           }
         }
       },
+      "CalendarMentionEvent": {
+        "type": "object",
+        "description": "Meeting-level fields shown in a calendar event mention preview, taken from\nthe requester's own projection of the meeting.",
+        "required": [
+          "viewerEventId",
+          "title",
+          "time",
+          "isRecurring",
+          "attendeeCount",
+          "updatedAt"
+        ],
+        "properties": {
+          "attendeeCount": {
+            "type": "integer",
+            "description": "Number of attendees on the requester's copy.",
+            "minimum": 0
+          },
+          "isRecurring": {
+            "type": "boolean",
+            "description": "Whether the event repeats."
+          },
+          "location": {
+            "type": ["string", "null"],
+            "description": "Location label, when set."
+          },
+          "occurrenceKey": {
+            "type": ["string", "null"],
+            "description": "Key of the previewed instance, absent when no occurrence is\nmaterialized."
+          },
+          "organizerEmail": {
+            "type": ["string", "null"],
+            "description": "Organizer email."
+          },
+          "organizerName": {
+            "type": ["string", "null"],
+            "description": "Organizer display name."
+          },
+          "time": {
+            "$ref": "#/components/schemas/EventTime",
+            "description": "Time of the previewed instance: the requested occurrence when it\nexists, else the next upcoming one, else the latest past one, else the\nseries start."
+          },
+          "title": {
+            "type": "string",
+            "description": "Display title."
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Entity update time of the requester's copy."
+          },
+          "viewerEventId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The requester's own event entity for the mentioned meeting. Differs\nfrom the mentioned id when the mention came from another attendee."
+          }
+        }
+      },
+      "CalendarMentionPreviewItem": {
+        "type": "object",
+        "description": "Resolution of one mentioned event, in request order.",
+        "required": ["eventId", "type"],
+        "properties": {
+          "event": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/CalendarMentionEvent",
+                "description": "Preview of the requester's own copy, present only with access."
+              }
+            ]
+          },
+          "eventId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The mentioned event id, echoed from the request."
+          },
+          "type": {
+            "$ref": "#/components/schemas/CalendarMentionPreviewKind",
+            "description": "Visibility of the mentioned event to the requester."
+          }
+        }
+      },
+      "CalendarMentionPreviewKind": {
+        "type": "string",
+        "description": "Requester-relative visibility of one mentioned event.",
+        "enum": ["access", "no_access", "does_not_exist"]
+      },
+      "CalendarMentionPreviewRequest": {
+        "type": "object",
+        "description": "Batch calendar mention preview request.",
+        "required": ["items"],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CalendarMentionPreviewRequestItem"
+            },
+            "description": "Mentioned events to resolve, at most 100."
+          }
+        }
+      },
+      "CalendarMentionPreviewRequestItem": {
+        "type": "object",
+        "description": "One mentioned event to resolve for the requester.",
+        "required": ["eventId"],
+        "properties": {
+          "eventId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Mentioned calendar event id."
+          },
+          "occurrenceKey": {
+            "type": ["string", "null"],
+            "description": "Occurrence the mention points at, when it targets one instance."
+          }
+        }
+      },
+      "CalendarMentionPreviewResponse": {
+        "type": "object",
+        "description": "Batch calendar mention preview response.",
+        "required": ["items"],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CalendarMentionPreviewItem"
+            }
+          }
+        }
+      },
       "CalendarOccurrence": {
         "type": "object",
         "description": "A materialized recurrence instance optimized for range queries.",
@@ -15254,7 +15433,12 @@
       "CreateTaskResponse": {
         "type": "object",
         "description": "Response for creating a task.",
-        "required": ["documentId", "documentMetadata", "token"],
+        "required": [
+          "documentId",
+          "documentMetadata",
+          "token",
+          "initialSnapshot"
+        ],
         "properties": {
           "documentId": {
             "type": "string",
@@ -15263,6 +15447,10 @@
           "documentMetadata": {
             "$ref": "#/components/schemas/DocumentResponseMetadata",
             "description": "Metadata for the created document"
+          },
+          "initialSnapshot": {
+            "type": "string",
+            "description": "Base64-encoded canonical Loro snapshot used to initialize the task."
           },
           "teamId": {
             "type": ["string", "null"],
@@ -19652,7 +19840,7 @@
               },
               {
                 "$ref": "#/components/schemas/SoupApiSort",
-                "description": "Sort method. Options are viewed_at, created_at, updated_at, viewed_updated. Defaults to viewed_at."
+                "description": "Sort method. Options are viewed_at, created_at, updated_at,\nviewed_updated, frecency, touched_by_me. Defaults to viewed_at."
               }
             ]
           }
@@ -21683,7 +21871,8 @@
           "created_at",
           "updated_at",
           "viewed_updated",
-          "frecency"
+          "frecency",
+          "touched_by_me"
         ]
       },
       "SoupApiSortDirection": {

@@ -2,6 +2,7 @@ import { UserIcon } from '@core/component/UserIcon';
 import { emailToId, recipientEntityMapper } from '@core/user';
 import { Combobox } from '@kobalte/core/combobox';
 import { Popover } from '@kobalte/core/popover';
+import BellSimpleIcon from '@phosphor/bell-simple.svg';
 import CalendarDotsIcon from '@phosphor/calendar-dots.svg';
 import CaretDownIcon from '@phosphor/caret-down.svg';
 import MagnifyingGlassIcon from '@phosphor/magnifying-glass.svg';
@@ -20,6 +21,11 @@ import {
   Show,
 } from 'solid-js';
 import { type VirtualizerHandle, VList } from 'virtua/solid';
+import {
+  formatReminderOffset,
+  REMINDER_OVERRIDES_MAX,
+  REMINDER_PRESET_MINUTES,
+} from '../../utils/event-reminders';
 import {
   type EventEditorCalendarOption,
   type EventEditorGuestOption,
@@ -539,6 +545,137 @@ export function EventComposerLocationPill(
         </Layer>
       </Popover.Portal>
     </Popover>
+  );
+}
+
+export interface EventComposerRemindersPillProps {
+  minutes: number[];
+  usedSlots: number;
+  canAdd: boolean;
+  onChange: (minutes: number[]) => void;
+  disabled?: boolean;
+}
+
+const REMINDER_PRESET_MINUTE_SET = new Set(REMINDER_PRESET_MINUTES);
+const REMINDER_OPTION_CACHE = new Map<number, EventComposerSelectOption>();
+
+function reminderOption(minutes: number): EventComposerSelectOption {
+  const cached = REMINDER_OPTION_CACHE.get(minutes);
+  if (cached) return cached;
+  const option = {
+    value: String(minutes),
+    label: formatReminderOffset(minutes),
+  };
+  REMINDER_OPTION_CACHE.set(minutes, option);
+  return option;
+}
+
+const REMINDER_PRESET_OPTIONS = REMINDER_PRESET_MINUTES.map(reminderOption);
+
+function reminderOptions(customMinutesKey: string) {
+  if (customMinutesKey === '') return REMINDER_PRESET_OPTIONS;
+  return [
+    ...REMINDER_PRESET_OPTIONS,
+    ...customMinutesKey.split(',').map(Number).map(reminderOption),
+  ].sort((first, second) => Number(first.value) - Number(second.value));
+}
+
+function reminderPropertyLabel(minutes: number[]) {
+  if (minutes.length === 0) return 'Choose reminders';
+  if (minutes.length === 1) return formatReminderOffset(minutes[0]);
+  return `${minutes.length} notifications`;
+}
+
+/** Compact multi-select for event popup notification offsets. */
+export function EventComposerRemindersPill(
+  props: EventComposerRemindersPillProps
+) {
+  const customMinutesKey = createMemo(() =>
+    props.minutes
+      .filter((minutes) => !REMINDER_PRESET_MINUTE_SET.has(minutes))
+      .sort((first, second) => first - second)
+      .join(',')
+  );
+  const options = createMemo(() => reminderOptions(customMinutesKey()));
+  const selectedOptions = createMemo(() => {
+    const selected = new Set(props.minutes);
+    return options().filter((option) => selected.has(Number(option.value)));
+  });
+  const changeSelection = (selected: EventComposerSelectOption[]) => {
+    const next = selected
+      .map((option) => Number(option.value))
+      .sort((first, second) => first - second);
+    const current = [...props.minutes].sort((first, second) => first - second);
+    if (
+      next.length === current.length &&
+      next.every((minutes, index) => minutes === current[index])
+    ) {
+      return;
+    }
+    props.onChange(next);
+  };
+
+  return (
+    <Select<EventComposerSelectOption>
+      multiple
+      options={options()}
+      value={selectedOptions()}
+      onChange={changeSelection}
+      optionValue="value"
+      optionTextValue="label"
+      optionDisabled={(option) =>
+        !props.minutes.includes(Number(option.value)) && !props.canAdd
+      }
+      closeOnSelection={false}
+      selectionBehavior="toggle"
+      placeholder="Choose reminders"
+      disabled={props.disabled}
+      itemComponent={(itemProps) => (
+        <Select.Item item={itemProps.item}>
+          <OptionCheckBox
+            checked={props.minutes.includes(
+              Number(itemProps.item.rawValue.value)
+            )}
+            multiselect
+          />
+          <Select.ItemLabel class="min-w-0 flex-1 truncate">
+            {itemProps.item.rawValue.label}
+          </Select.ItemLabel>
+        </Select.Item>
+      )}
+    >
+      <Tooltip label="Set event notifications" placement="bottom">
+        <Select.Trigger
+          aria-label="Notifications"
+          class={cn(PROPERTY_TRIGGER_CLASS, 'max-w-48 overflow-hidden')}
+        >
+          <BellSimpleIcon class="size-3.5 shrink-0 text-ink-extra-muted" />
+          <Select.Value<EventComposerSelectOption>>
+            {(selectState) => (
+              <span class={cn('truncate', PROPERTY_VALUE_CLASS)}>
+                {reminderPropertyLabel(
+                  selectState
+                    .selectedOptions()
+                    .map((option) => Number(option.value))
+                )}
+              </span>
+            )}
+          </Select.Value>
+          <Select.Icon />
+        </Select.Trigger>
+      </Tooltip>
+      <Select.Content class="w-56 p-0">
+        <div class="flex items-center justify-between border-edge-muted border-b px-3 py-2 text-xs text-ink-muted">
+          <span>Choose reminders</span>
+          <span
+            aria-label={`${props.usedSlots} of ${REMINDER_OVERRIDES_MAX} notifications selected`}
+          >
+            {props.usedSlots} / {REMINDER_OVERRIDES_MAX}
+          </span>
+        </div>
+        <Select.Listbox class="p-1.5" />
+      </Select.Content>
+    </Select>
   );
 }
 

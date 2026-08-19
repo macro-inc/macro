@@ -34,6 +34,21 @@ impl Sortable for SimpleSortMethod {
 #[serde(rename_all = "snake_case")]
 pub struct Frecency;
 
+/// Sort by the requesting user's most recent mutation of each entity, as
+/// recorded in the activity log. Doubles as a filter: entities the user has
+/// never mutated have no value to sort on and are absent from the page.
+///
+/// Serializes as `null` like [`Frecency`]; cursors for the two are told
+/// apart by their value types ([`FrecencyValue`]'s tagged map vs a
+/// timestamp).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub struct TouchedByMe;
+
+impl Sortable for TouchedByMe {
+    type Value = DateTime<Utc>;
+}
+
 /// the possible values of the cursor when sorting by frecency
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
 pub enum FrecencyValue {
@@ -72,22 +87,6 @@ impl std::cmp::Ord for FrecencyValue {
 
 impl Sortable for Frecency {
     type Value = FrecencyValue;
-}
-
-/// either a [SimpleSortMethod] or an [AdvancedSortMethod]
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
-#[serde(untagged)]
-pub enum SortMethod {
-    /// A [SimpleSortMethod] with some extra params A
-    Simple(
-        /// the [SimplpleSortMethod]
-        SimpleSortMethod,
-    ),
-    /// A [AdvancedSortMethod] with some extra params B
-    Advanced(
-        /// the [AdvancedSortMethod]
-        Frecency,
-    ),
 }
 
 impl std::fmt::Display for SimpleSortMethod {

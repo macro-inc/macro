@@ -5,13 +5,11 @@ use cache_core::queue::{
     MutationClaimRequest, MutationClaimToken, MutationRequest, NewQueuedMutation,
     PersistedOptimisticLayer, StoredMutation,
 };
+use cache_core::search::{SearchProfile, project_search_documents};
 use cache_core::store::{InMemoryStorage, Storage};
 use cache_core::value::{CacheValue, EntityKey, Record};
-use cache_sqlite::SqliteStorage;
 use cache_turso::{TursoMemoryDatabase, TursoStorage, TursoStorageCloseOutcome};
 use pollster::block_on;
-use std::path::PathBuf;
-use std::sync::atomic::{AtomicU64, Ordering};
 
 trait BackendFactory: Sized {
     type Backend: Storage;
@@ -35,36 +33,6 @@ impl BackendFactory for InMemoryFactory {
     }
 
     fn finish(self, _: Self::Backend) {}
-}
-
-struct SqliteFactory {
-    path: PathBuf,
-}
-
-impl BackendFactory for SqliteFactory {
-    type Backend = SqliteStorage;
-
-    fn create() -> (Self, Self::Backend) {
-        static NEXT_DATABASE: AtomicU64 = AtomicU64::new(1);
-        let id = NEXT_DATABASE.fetch_add(1, Ordering::Relaxed);
-        let path = std::env::temp_dir().join(format!(
-            "cache-turso-shared-conformance-{}-{id}.db",
-            std::process::id()
-        ));
-        let _ = std::fs::remove_file(&path);
-        let storage = SqliteStorage::open(&path, "shared-conformance").unwrap();
-        (Self { path }, storage)
-    }
-
-    fn reopen(&mut self, storage: Self::Backend) -> Self::Backend {
-        drop(storage);
-        SqliteStorage::open(&self.path, "shared-conformance").unwrap()
-    }
-
-    fn finish(self, storage: Self::Backend) {
-        drop(storage);
-        std::fs::remove_file(self.path).unwrap();
-    }
 }
 
 struct TursoFactory {
@@ -168,21 +136,6 @@ fn claim_request(owner: &str, now_ms: i64, lease_expires_at_ms: i64) -> Mutation
     }
 }
 
-async fn scan_keys<S: Storage>(
-    storage: &S,
-    type_names: &[String],
-    after: Option<&EntityKey<'static>>,
-    limit: usize,
-) -> Vec<String> {
-    storage
-        .scan_records(type_names, after, limit)
-        .await
-        .unwrap()
-        .into_iter()
-        .map(|(key, _)| key.as_ref().to_owned())
-        .collect()
-}
-
 async fn record_contract<S: Storage>(storage: &mut S) {
     storage
         .put_batch(vec![
@@ -231,115 +184,6 @@ async fn record_contract<S: Storage>(storage: &mut S) {
         ]
     );
 
-    let names = ["Type".to_owned(), "Type0".to_owned(), "Type".to_owned()];
-    let mut rust_sorted = [
-        key("Type:9"),
-        key("Type0:1"),
-        key("Type:0"),
-        key("Type0:0"),
-        key("Type:a"),
-        key("Type:a:colon"),
-        key("Type:a:colon:again"),
-    ];
-    rust_sorted.sort();
-    let expected = rust_sorted
-        .iter()
-        .map(|key| key.as_ref().to_owned())
-        .collect::<Vec<_>>();
-    assert!(scan_keys(storage, &[], None, 10).await.is_empty());
-    assert!(scan_keys(storage, &names, None, 0).await.is_empty());
-    assert_eq!(scan_keys(storage, &names, None, 10).await, expected);
-    assert_eq!(
-        scan_keys(storage, &names, Some(&key("A:0")), 10).await,
-        expected
-    );
-    assert_eq!(
-        scan_keys(storage, &names, Some(&key("Type0:0")), 10).await,
-        [
-            "Type0:1",
-            "Type:0",
-            "Type:9",
-            "Type:a",
-            "Type:a:colon",
-            "Type:a:colon:again",
-        ]
-    );
-    assert_eq!(
-        scan_keys(storage, &names, Some(&key("Type0:0z")), 10).await,
-        [
-            "Type0:1",
-            "Type:0",
-            "Type:9",
-            "Type:a",
-            "Type:a:colon",
-            "Type:a:colon:again",
-        ]
-    );
-    assert_eq!(
-        scan_keys(storage, &names, Some(&key("Type0:1")), 10).await,
-        [
-            "Type:0",
-            "Type:9",
-            "Type:a",
-            "Type:a:colon",
-            "Type:a:colon:again",
-        ]
-    );
-    assert_eq!(
-        scan_keys(storage, &names, Some(&key("Type0:zz")), 10).await,
-        [
-            "Type:0",
-            "Type:9",
-            "Type:a",
-            "Type:a:colon",
-            "Type:a:colon:again",
-        ]
-    );
-    assert_eq!(
-        scan_keys(storage, &names, Some(&key("Type:0")), 1).await,
-        ["Type:9"]
-    );
-    assert_eq!(
-        scan_keys(storage, &names, Some(&key("Type:9")), 10).await,
-        ["Type:a", "Type:a:colon", "Type:a:colon:again"]
-    );
-    assert_eq!(
-        scan_keys(storage, &names, Some(&key("Type:a")), 10).await,
-        ["Type:a:colon", "Type:a:colon:again"]
-    );
-    assert_eq!(
-        scan_keys(storage, &names, Some(&key("Type:a:colon")), 10).await,
-        ["Type:a:colon:again"]
-    );
-    assert!(
-        scan_keys(storage, &names, Some(&key("Type:a:colon:again")), 10,)
-            .await
-            .is_empty()
-    );
-    assert!(
-        scan_keys(storage, &names, Some(&key("Z:9")), 10)
-            .await
-            .is_empty()
-    );
-
-    for limit in [1, 2] {
-        let mut cursor = None;
-        let mut paged = Vec::new();
-        loop {
-            let page = storage
-                .scan_records(&names, cursor.as_ref(), limit)
-                .await
-                .unwrap();
-            assert!(page.len() <= limit);
-            let Some((last, _)) = page.last() else {
-                break;
-            };
-            cursor = Some(last.clone());
-            paged.extend(page.into_iter().map(|(key, _)| key.as_ref().to_owned()));
-        }
-        assert_eq!(paged, expected);
-    }
-
     storage
         .delete_batch(&[key("Missing:delete"), key("Type:a"), key("Type:a")])
         .await
@@ -350,6 +194,58 @@ async fn record_contract<S: Storage>(storage: &mut S) {
         .put_batch(vec![(key("Type:a"), record("restored"))])
         .await
         .unwrap();
+}
+
+async fn search_projection_contract<S: Storage>(storage: &mut S) {
+    let searchable_key = key("GraphqlSoupDocument:search-1");
+    let mut searchable = Record::default();
+    searchable.fields.insert(
+        "__typename".into(),
+        CacheValue::String("GraphqlSoupDocument".into()),
+    );
+    searchable
+        .fields
+        .insert("name".into(), CacheValue::String("Quarterly Plan".into()));
+    searchable.fields.insert(
+        "updatedAt".into(),
+        CacheValue::Number(cache_core::value::CacheNumber::PosInt(123)),
+    );
+    assert_eq!(
+        project_search_documents(&searchable_key, &searchable).len(),
+        1
+    );
+    storage
+        .put_batch(vec![(searchable_key.clone(), searchable)])
+        .await
+        .unwrap();
+    let loaded = storage
+        .load_search_documents(SearchProfile::QuickAccessV1)
+        .await
+        .unwrap();
+    assert!(
+        loaded
+            .iter()
+            .any(|document| document.record_key == searchable_key)
+    );
+    let browsed = storage
+        .browse_search_documents(SearchProfile::QuickAccessV1, "document", None, 1)
+        .await
+        .unwrap();
+    assert_eq!(browsed.len(), 1);
+    assert_eq!(browsed[0].record_key, searchable_key);
+
+    storage
+        .delete_batch(std::slice::from_ref(&searchable_key))
+        .await
+        .unwrap();
+    assert!(
+        storage
+            .load_search_documents(SearchProfile::QuickAccessV1)
+            .await
+            .unwrap()
+            .iter()
+            .all(|document| document.record_key != searchable_key)
+    );
 }
 
 async fn reopen_contract<F: BackendFactory>(
@@ -669,6 +565,7 @@ async fn common_contract<F: BackendFactory>(
     mut storage: F::Backend,
 ) -> F::Backend {
     record_contract(&mut storage).await;
+    search_projection_contract(&mut storage).await;
     let mut storage = reopen_contract(factory, storage).await;
     queue_contract(&mut storage).await;
     clear_contract(&mut storage).await;
@@ -684,11 +581,6 @@ fn run<F: BackendFactory>() {
 #[test]
 fn in_memory_storage_satisfies_shared_contract() {
     run::<InMemoryFactory>();
-}
-
-#[test]
-fn sqlite_storage_satisfies_shared_contract() {
-    run::<SqliteFactory>();
 }
 
 #[test]

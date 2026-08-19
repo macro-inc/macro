@@ -53,6 +53,13 @@ fn every_action_maps_to_stable_columns() {
         let (tag, payload) = action.to_columns();
         assert_eq!(tag, expected_tag, "tag for {action:?}");
         assert_eq!(payload, expected_payload, "payload for {action:?}");
+        // VIEW_ACTION_TAGS is the SQL-side mirror of is_view: every variant
+        // must agree so tag-filtering queries classify rows identically.
+        assert_eq!(
+            VIEW_ACTION_TAGS.contains(&tag),
+            action.is_view(),
+            "VIEW_ACTION_TAGS disagrees with is_view for {action:?}"
+        );
 
         // The read codec is the exact inverse: every stored pair decodes
         // back to the action that produced it.

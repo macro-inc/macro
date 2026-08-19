@@ -18,10 +18,13 @@ import {
   type MutationClaim,
   type MutationSettlement,
   OWNER_EPOCH_LOST_ERROR_CODE,
-  type ReadRecordsArgs,
+  type ReadRecordsByKeysArgs,
   type ReadResult,
-  type SelectedRecordPageWire,
-  validateRecordSelectionLimit,
+  type SearchCacheArgs,
+  type SearchCachePage,
+  type SelectedRecordByKeyWire,
+  validateCacheSearchArgs,
+  validateRecordSelectionKeys,
   type WorkerMessage,
   type WriteResult,
 } from '../protocol';
@@ -605,7 +608,8 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
         msg.kind === 'init'
           ? initializationTimeoutMs
           : msg.kind === 'read' ||
-              msg.kind === 'read-records' ||
+              msg.kind === 'read-records-by-keys' ||
+              msg.kind === 'search' ||
               msg.kind === 'inspect-query' ||
               msg.kind === 'inspect-query-variants'
             ? requestTimeoutMs
@@ -775,16 +779,26 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
       )) as ReadResult;
     },
 
-    async readRecords(args: ReadRecordsArgs): Promise<SelectedRecordPageWire> {
-      const limit = validateRecordSelectionLimit(args.limit);
+    async readRecordsByKeys(
+      args: ReadRecordsByKeysArgs
+    ): Promise<SelectedRecordByKeyWire[]> {
+      const keys = validateRecordSelectionKeys(args.keys);
       await ensureInitialized();
       return (await request({
-        kind: 'read-records',
+        kind: 'read-records-by-keys',
         document: args.document,
         fragmentName: args.fragmentName,
-        cursor: args.cursor,
-        limit,
-      })) as SelectedRecordPageWire;
+        keys,
+      })) as SelectedRecordByKeyWire[];
+    },
+
+    async search(args: SearchCacheArgs): Promise<SearchCachePage> {
+      const requestArgs = validateCacheSearchArgs(args);
+      await ensureInitialized();
+      return (await request({
+        kind: 'search',
+        request: requestArgs,
+      })) as SearchCachePage;
     },
 
     async writeQuery(args: CacheWriteArgs): Promise<WriteResult> {

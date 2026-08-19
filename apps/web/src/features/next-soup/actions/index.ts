@@ -3,7 +3,10 @@ export { makeCopyAction } from './make-copy-action';
 export { makeCopyBranchNameAction } from './make-copy-branch-name-action';
 export { makeCopyEntityIdAction } from './make-copy-entity-id-action';
 export { makeCopyLinkAction } from './make-copy-link-action';
-export { makeCreateReminderAction } from './make-create-reminder-action';
+export {
+  makeCreateReminderAction,
+  markReminderTargetDone,
+} from './make-create-reminder-action';
 export { makeDeleteAction } from './make-delete-action';
 export { makeEditReminderAction } from './make-edit-reminder-action';
 export { makeFavoriteAction } from './make-favorite-action';

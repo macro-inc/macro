@@ -123,7 +123,7 @@ impl SoupService for CountingSoupService {
         if self.return_empty_raw || raw_response.is_some() {
             let page: PaginatedCursor<SoupItem<()>, String, SimpleSortMethod, T> =
                 Paginated::from_parts(raw_response.unwrap_or_default(), None);
-            return Ok(soup::domain::ports::SoupOutput::Left(page));
+            return Ok(soup::domain::ports::SoupOutput::Simple(page));
         }
         Err(test_soup_err())
     }

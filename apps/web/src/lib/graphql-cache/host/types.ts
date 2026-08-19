@@ -18,9 +18,11 @@ import type {
   OptimisticLinkPatchWire,
   QueryRevalidationWire,
   QueryVariableFilter,
-  ReadRecordsArgs,
+  ReadRecordsByKeysArgs,
   ReadResult,
-  SelectedRecordPageWire,
+  SearchCacheArgs,
+  SearchCachePage,
+  SelectedRecordByKeyWire,
   WriteResult,
 } from '../protocol';
 
@@ -77,8 +79,12 @@ export interface CacheHost {
   readonly disabled?: boolean;
 
   readQuery(args: CacheReadArgs): Promise<ReadResult>;
-  /** Projects normalized records through a named GraphQL fragment. */
-  readRecords(args: ReadRecordsArgs): Promise<SelectedRecordPageWire>;
+  /** Projects a bounded explicit set of normalized entity keys. */
+  readRecordsByKeys(
+    args: ReadRecordsByKeysArgs
+  ): Promise<SelectedRecordByKeyWire[]>;
+  /** Searches the compact write-through materialized projection. */
+  search(args: SearchCacheArgs): Promise<SearchCachePage>;
   writeQuery(args: CacheWriteArgs): Promise<WriteResult>;
   /** Durably queues an optimistic mutation and claims the strict head. */
   enqueueOptimisticMutation(

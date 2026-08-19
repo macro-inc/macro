@@ -8,7 +8,8 @@ use cache_core::entity_resolver::EntityResolver;
 use cache_core::link_patch::{OptimisticLinkPatch, QueryRevalidation};
 use cache_core::query_inspection::QueryInspection;
 use cache_core::queue::{ClaimedMutation, MutationClaimRequest, MutationClaimToken};
-use cache_core::record_selection::{RecordCursor, RecordSelection};
+use cache_core::record_selection::RecordSelection;
+use cache_core::search::SearchRequest;
 use cache_core::store::QueueDiagnosticsAvailability;
 use cache_core::value::EntityKey;
 use cache_turso::{
@@ -602,16 +603,6 @@ fn parse_variables(
     serde_wasm_bindgen::from_value(variables).map_err(err_js)
 }
 
-fn parse_record_cursor(cursor: JsValue) -> Result<Option<RecordCursor>, JsValue> {
-    if cursor.is_undefined() || cursor.is_null() {
-        Ok(None)
-    } else {
-        serde_wasm_bindgen::from_value(cursor)
-            .map(Some)
-            .map_err(err_js)
-    }
-}
-
 fn parse_vec<T: serde::de::DeserializeOwned>(value: JsValue) -> Result<Vec<T>, JsValue> {
     if value.is_undefined() || value.is_null() {
         return Ok(Vec::new());
@@ -748,25 +739,41 @@ impl CacheEngine {
         })
     }
 
-    /// Projects normalized records through a named GraphQL fragment.
-    #[wasm_bindgen(js_name = readRecords)]
-    pub fn read_records(
+    /// Projects explicit normalized entity keys through a named GraphQL
+    /// fragment without scanning storage.
+    #[wasm_bindgen(js_name = readRecordsByKeys)]
+    pub fn read_records_by_keys(
         &self,
         document: String,
         fragment_name: String,
-        cursor: JsValue,
-        limit: u32,
+        keys: JsValue,
     ) -> js_sys::Promise {
         let state = self.state.clone();
         future_to_promise(async move {
             let mut state = state.lock().await;
             state.ensure_callable()?;
             let selection = RecordSelection::parse(&document, &fragment_name).map_err(err_js)?;
-            let cursor = parse_record_cursor(cursor)?;
+            let keys: Vec<String> = parse_vec(keys)?;
+            let keys: Vec<_> = keys.into_iter().map(|key| EntityKey(key.into())).collect();
             let result = state
                 .engine_mut()?
-                .read_records(&selection, cursor.as_ref(), limit as usize)
+                .read_records_by_keys(&selection, &keys)
                 .await;
+            let records = state.engine_result(result)?;
+            to_js(&records)
+        })
+    }
+
+    /// Searches the compact materialized projection. Empty queries use the
+    /// indexed recent path; text queries rank the compact catalog without
+    /// scanning normalized record blobs.
+    pub fn search(&self, request: JsValue) -> js_sys::Promise {
+        let state = self.state.clone();
+        future_to_promise(async move {
+            let mut state = state.lock().await;
+            state.ensure_callable()?;
+            let request: SearchRequest = serde_wasm_bindgen::from_value(request).map_err(err_js)?;
+            let result = state.engine_mut()?.search(&request).await;
             let page = state.engine_result(result)?;
             to_js(&page)
         })

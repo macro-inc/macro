@@ -208,6 +208,11 @@ const DEFAULT_PREVIEW_VIEWS = new Set(['inbox', 'channels']);
 const CONDENSED_NARROW_LIST_VIEWS: ReadonlySet<ListView> = new Set([
   'channels',
 ]);
+// Mixed-type lists render every entity as one specially designed line (see
+// NarrowSingleLineLayout) instead of the taller per-type narrow layouts.
+const SINGLE_LINE_NARROW_LIST_VIEWS: ReadonlySet<ListView> = new Set([
+  'search',
+]);
 type SoupListEntryState = {
   focus: string | undefined;
   virtualCache?: CacheSnapshot;
@@ -761,9 +766,9 @@ const SoupViewListContent = (props: SoupViewListProps) => {
 
   const narrowLayout = createMemo<NarrowLayoutVariant>(() => {
     const view = currentView();
-    return view && CONDENSED_NARROW_LIST_VIEWS.has(view)
-      ? 'condensed'
-      : 'standard';
+    if (!view) return 'standard';
+    if (SINGLE_LINE_NARROW_LIST_VIEWS.has(view)) return 'single-line';
+    return CONDENSED_NARROW_LIST_VIEWS.has(view) ? 'condensed' : 'standard';
   });
 
   const focusFirstEntity = () => {

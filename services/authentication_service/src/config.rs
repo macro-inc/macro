@@ -39,6 +39,7 @@ maybe_env_vars! {
     pub struct MicrosoftClientId;
     pub struct MicrosoftClientSecret;
     pub struct MicrosoftTenantId;
+    pub struct MicrosoftTokenKmsKeyId;
     pub struct GaMeasurementId;
     pub struct GaApiSecret;
     pub struct MetaPixelId;
@@ -88,6 +89,8 @@ pub struct Config {
     pub microsoft_client_secret: MicrosoftClientSecret,
     /// Microsoft Entra tenant ID.
     pub microsoft_tenant_id: MicrosoftTenantId,
+    /// KMS key used to encrypt Microsoft refresh-token data keys.
+    pub microsoft_token_kms_key_id: MicrosoftTokenKmsKeyId,
     /// Stripe secret key
     pub stripe_secret_key: StripeSecretKey,
     /// The port to listen for HTTP requests on.
@@ -139,6 +142,7 @@ pub(crate) struct MicrosoftCredentials {
     pub(crate) client_id: String,
     pub(crate) client_secret: String,
     pub(crate) tenant_id: String,
+    pub(crate) token_kms_key_id: String,
 }
 
 impl Config {
@@ -153,6 +157,7 @@ impl Config {
             &self.microsoft_client_id,
             &self.microsoft_client_secret,
             &self.microsoft_tenant_id,
+            &self.microsoft_token_kms_key_id,
         )
     }
 }
@@ -161,18 +166,26 @@ fn resolve_microsoft_credentials(
     client_id: &MicrosoftClientId,
     client_secret: &MicrosoftClientSecret,
     tenant_id: &MicrosoftTenantId,
+    token_kms_key_id: &MicrosoftTokenKmsKeyId,
 ) -> anyhow::Result<Option<MicrosoftCredentials>> {
     let client_id = nonblank_value(client_id.value());
     let client_secret = nonblank_value(client_secret.value());
     let tenant_id = nonblank_value(tenant_id.value());
+    let token_kms_key_id = nonblank_value(token_kms_key_id.value());
 
     match (client_id, client_secret, tenant_id) {
         (None, None, None) => Ok(None),
-        (Some(client_id), Some(client_secret), Some(tenant_id)) => Ok(Some(MicrosoftCredentials {
-            client_id: client_id.to_owned(),
-            client_secret: client_secret.to_owned(),
-            tenant_id: tenant_id.to_owned(),
-        })),
+        (Some(client_id), Some(client_secret), Some(tenant_id)) => {
+            let token_kms_key_id = token_kms_key_id.context(
+                "MICROSOFT_TOKEN_KMS_KEY_ID must be set to a nonblank value when Microsoft OAuth is enabled",
+            )?;
+            Ok(Some(MicrosoftCredentials {
+                client_id: client_id.to_owned(),
+                client_secret: client_secret.to_owned(),
+                tenant_id: tenant_id.to_owned(),
+                token_kms_key_id: token_kms_key_id.to_owned(),
+            }))
+        }
         _ => anyhow::bail!(
             "MICROSOFT_CLIENT_ID, MICROSOFT_CLIENT_SECRET, and MICROSOFT_TENANT_ID must all be set to nonblank values or all be unset"
         ),

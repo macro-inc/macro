@@ -141,6 +141,13 @@ impl From<CommonAction> for Action {
     }
 }
 
+/// The stored `action` tags that [`Action::is_view`] classifies as views.
+///
+/// SQL surfaces that must exclude views (e.g. the soup touched-by-me page,
+/// which counts mutations only) filter on these tags instead of decoding
+/// every row; the pinned codec test keeps this list and `is_view` agreeing.
+pub const VIEW_ACTION_TAGS: &[&str] = &["opened"];
+
 impl Action {
     /// Whether this action is a view rather than a mutation — the only
     /// classification activity queries need.

@@ -17,6 +17,7 @@ import type { PropertyInput } from '@service-storage/generated/schemas/propertyI
 
 import { uploadToPresignedUrl } from '@service-storage/util/uploadToPresignedUrl';
 import { err, ok } from 'neverthrow';
+import { decodeBase64Bytes } from './base64';
 import { isPaymentError } from './handlePaymentError';
 import { contentHash } from './hash';
 import {
@@ -93,6 +94,29 @@ type CreateTaskArgs = {
 export async function createTask(
   args?: CreateTaskArgs
 ): Promise<string | undefined> {
+  return (await createTaskResponse(args))?.documentId;
+}
+
+/**
+ * Creates a task and returns the canonical snapshot used to initialize it.
+ */
+export async function createTaskWithInitialSnapshot(args?: CreateTaskArgs) {
+  const createdTask = await createTaskResponse(args);
+  if (!createdTask) return;
+
+  let initialSnapshot: Uint8Array | undefined;
+  if (typeof createdTask.initialSnapshot === 'string') {
+    try {
+      initialSnapshot = decodeBase64Bytes(createdTask.initialSnapshot);
+    } catch (error) {
+      console.error('Failed to decode initial task snapshot', error);
+    }
+  }
+
+  return { documentId: createdTask.documentId, initialSnapshot };
+}
+
+async function createTaskResponse(args?: CreateTaskArgs) {
   // Ensure status is always set, defaulting to NOT_STARTED
   const existingPropertyValues = args?.propertyValues ?? [];
   const hasStatus = existingPropertyValues.some(
@@ -123,7 +147,7 @@ export async function createTask(
 
   if (result.isErr()) return;
 
-  const { documentId, documentMetadata, token } = result.value;
+  const { documentId, documentMetadata, token, initialSnapshot } = result.value;
 
   seedDocumentLoadBundle(documentId, {
     documentMetadata,
@@ -159,7 +183,7 @@ export async function createTask(
     ),
   });
 
-  return documentId;
+  return { documentId, initialSnapshot };
 }
 
 type CreateSnippetArgs = {

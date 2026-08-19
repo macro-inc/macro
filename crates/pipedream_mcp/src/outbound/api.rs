@@ -32,6 +32,11 @@ pub struct PipedreamConfig {
     pub project_id: String,
     /// The Pipedream project environment: `development` or `production`.
     pub environment: String,
+    /// Origins allowed to use Connect tokens from the browser (the app
+    /// origins that embed the hosted Connect UI). Pipedream refuses to be
+    /// framed by origins outside this list; localhost is only tolerated by
+    /// default in the `development` project environment.
+    pub allowed_origins: Vec<String>,
     /// Base URL of the Pipedream API. [`DEFAULT_API_URL`] unless overridden.
     pub api_url: String,
     /// URL of Pipedream's remote MCP server. [`DEFAULT_MCP_URL`] unless
@@ -131,10 +136,13 @@ impl PipedreamClient {
 impl PipedreamConnect for PipedreamClient {
     #[tracing::instrument(skip(self), err)]
     async fn create_connect_token(&self, external_user_id: &str) -> anyhow::Result<ConnectToken> {
-        let body = serde_json::json!({
+        let mut body = serde_json::json!({
             "external_user_id": external_user_id,
             "external_id": external_user_id,
         });
+        if !self.config.allowed_origins.is_empty() {
+            body["allowed_origins"] = serde_json::json!(self.config.allowed_origins);
+        }
 
         let response = self
             .authed(self.http.post(self.connect_api("/tokens")))

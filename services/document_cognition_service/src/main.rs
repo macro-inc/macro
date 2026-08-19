@@ -487,6 +487,21 @@ async fn main() -> anyhow::Result<()> {
                         .value()
                         .unwrap_or(pipedream_mcp::outbound::api::DEFAULT_MCP_URL)
                         .to_owned(),
+                    allowed_origins: match config.pipedream_allowed_origins.value() {
+                        Some(origins) => origins
+                            .split(',')
+                            .map(|origin| origin.trim().to_owned())
+                            .filter(|origin| !origin.is_empty())
+                            .collect(),
+                        None => match config.environment {
+                            Environment::Production => vec!["https://macro.com".to_owned()],
+                            Environment::Develop => vec![
+                                "https://dev.macro.com".to_owned(),
+                                "http://localhost:3000".to_owned(),
+                            ],
+                            Environment::Local => vec!["http://localhost:3000".to_owned()],
+                        },
+                    },
                 },
             )
             .context("failed to build Pipedream client")?,
@@ -555,7 +570,16 @@ async fn main() -> anyhow::Result<()> {
         properties_tool_context: properties_tool_context.clone(),
         email_tool_context: email_tool_context.clone(),
         call_tool_context: call_tool_context.clone(),
+        calendar_tool_context: ai_tools::build_calendar_tool_context(
+            db.clone(),
+            EmailServiceUrl::new()?.to_string(),
+            internal_api_key.clone(),
+        ),
         notification_tool_context: notification_tool_context.clone(),
+        reminders_tool_context: ai_tools::build_reminders_tool_context(
+            db.clone(),
+            entity_access_service.clone(),
+        ),
         import_tool_context: import::inbound::toolset::ImportToolContext::wired(
             import_service.clone(),
         ),

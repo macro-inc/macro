@@ -198,7 +198,7 @@ where
                 .initialize_existing_markdown(&document_context.document_id, markdown)
                 .await
             {
-                Ok(()) => {}
+                Ok(_) => {}
                 Err(error) if sync_snapshot_already_exists(&error) => {}
                 Err(error) => return Err(error),
             }

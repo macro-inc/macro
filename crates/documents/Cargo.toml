@@ -33,6 +33,7 @@ attachment = [
 axum = [
   "dep:axum",
   "dep:axum-extra",
+  "dep:base64",
   "dep:jsonwebtoken",
   "dep:lexical_client",
   "dep:macro_authorization",

@@ -4,6 +4,7 @@ import {
   pipedreamAppAvailableInEnv,
 } from '@core/component/AI/constant/mcpServers';
 import { toast } from '@core/component/Toast/Toast';
+import { proxyImageUrl } from '@core/util/imageProxy';
 import PlugIcon from '@phosphor-icons/core/regular/plug.svg?component-solid';
 import XIcon from '@phosphor-icons/core/regular/x.svg?component-solid';
 import {
@@ -155,6 +156,8 @@ function CatalogRow(props: { entry: PipedreamCatalogEntryResponse }) {
 /**
  * Connector icon: our bundled SVG for the apps we ship icons for, the
  * directory-provided icon otherwise, and a generic plug as the fallback.
+ * Directory icons load through the image proxy — the app's COEP blocks
+ * cross-origin images from hosts that don't send CORP headers.
  */
 function CatalogIcon(props: { entry: PipedreamCatalogEntryResponse }) {
   const BundledIcon = () => PIPEDREAM_ICON_MAP.get(props.entry.app_slug);
@@ -168,7 +171,7 @@ function CatalogIcon(props: { entry: PipedreamCatalogEntryResponse }) {
         >
           {(iconUrl) => (
             <img
-              src={iconUrl()}
+              src={proxyImageUrl(iconUrl())}
               alt=""
               loading="lazy"
               class="size-5 rounded object-contain"

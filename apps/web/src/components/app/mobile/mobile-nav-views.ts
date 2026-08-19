@@ -1,9 +1,11 @@
 /**
  * Views reachable from the mobile navigation pill row, in display order.
+ * `search` is the "All" pill, first in the scope pill row;
  * `settings` navigates through the settings state (not `openWithSplit`), and
  * `calendar` is additionally gated by the calendar UI flag.
  */
 export const MOBILE_NAV_VIEW_IDS = [
+  'search',
   'inbox',
   'calendar',
   'mail',

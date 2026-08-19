@@ -13,6 +13,7 @@ import {
 } from '@app/features/next-soup/sidebar/soup-filter-presets';
 import { useSoup } from '@app/features/next-soup/soup-context';
 import { MobileFilterDrawer } from '@app/features/next-soup/soup-view/filters-bar/mobile-filter-drawer';
+import { MobileSearchFilterDrawer } from '@app/features/next-soup/soup-view/filters-bar/search/mobile-search-filter-drawer';
 import {
   type SoupViewMode,
   useSoupView,
@@ -290,15 +291,21 @@ export const CollapsedSoupViewTabs = () => {
 /**
  * Filter-drawer button + per-view filter pills, rendered in the mobile split
  * header. The strip is full-bleed: negative margins cancel the header row's
- * gutter so pills scroll to the device edges, the gutter travels inside the
- * scroll content, and the drawer button stays pinned at the strip's start
- * while pills pass beneath it.
+ * gutter so pills scroll to the device edges, and the gutter travels inside
+ * the scroll content. The drawer button leads the strip and scrolls along
+ * with the pills.
  */
 export const MobileSoupViewTabs = () => {
   const listView = useCurrentListView();
 
   return (
     <Switch>
+      <Match when={listView() === 'search'}>
+        {/* The search view has no tab pills — its header hosts only the
+            facet-filter drawer button (the desktop SearchFiltersRow's
+            mobile counterpart). */}
+        <MobileSearchFilterDrawer />
+      </Match>
       <Match when={listView() === 'companies'}>
         <MobileCompanyModeTabs />
       </Match>
@@ -325,7 +332,6 @@ export const MobileSoupViewTabs = () => {
 const MOBILE_TAB_STRIP_CLASS =
   '-ml-(--mobile-chrome-gutter) w-[100cqw] max-w-none flex-none';
 const MOBILE_TAB_CONTENT_CLASS = 'px-(--mobile-chrome-gutter)';
-const MOBILE_TAB_DRAWER_CLASS = 'sticky left-(--mobile-chrome-gutter) z-10';
 
 const MobileCompanyModeTabs = () => {
   const { viewMode, setViewMode } = useSoupView();
@@ -335,7 +341,7 @@ const MobileCompanyModeTabs = () => {
       scrollable
       class={MOBILE_TAB_STRIP_CLASS}
       contentClass={MOBILE_TAB_CONTENT_CLASS}
-      leading={<MobileFilterDrawer class={MOBILE_TAB_DRAWER_CLASS} />}
+      leading={<MobileFilterDrawer />}
       items={COMPANY_MODE_TABS}
       value={viewMode()}
       onChange={(value) => setViewMode(value as SoupViewMode)}
@@ -353,7 +359,7 @@ const MobileViewTabs = (props: { view: TabbedListView }) => {
       scrollable
       class={MOBILE_TAB_STRIP_CLASS}
       contentClass={MOBILE_TAB_CONTENT_CLASS}
-      leading={<MobileFilterDrawer class={MOBILE_TAB_DRAWER_CLASS} />}
+      leading={<MobileFilterDrawer />}
       items={VIEW_TAB_LISTS[props.view]}
       value={activeValue()}
       onChange={(value) => applyTabPreset(props.view, value)}

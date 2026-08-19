@@ -189,6 +189,9 @@ export type QuickAccessContextValue = {
   /** Whether this source reads normalized records through cache fragments. */
   usesRecordSelection: Accessor<boolean>;
 
+  /** Whether scoped lists are ranked by the cache materialized projection. */
+  usesSearchProjection: Accessor<boolean>;
+
   /**
    * Whether any data sources are still loading.
    */

@@ -14,8 +14,8 @@ pub enum PhysicalResetReason {
     /// Queue, key, numeric, or relational state violated the frozen schema contract.
     #[error("invalid durable cache state")]
     Invariant,
-    /// The browser storage quota is full.
-    #[error("browser storage is full")]
+    /// The browser quota or native filesystem is full.
+    #[error("cache storage is full")]
     StorageFull,
     /// A commit, rollback, or statement cleanup left transaction durability uncertain.
     #[error("transaction outcome is uncertain")]

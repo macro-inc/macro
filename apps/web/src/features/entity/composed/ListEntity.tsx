@@ -48,6 +48,7 @@ import { useIsShared } from '../utils/shared';
 import { NarrowCondensedLayout } from './list-entity/narrow-condensed-layout';
 import { NarrowInboxLayout } from './list-entity/narrow-inbox-layout';
 import { NarrowLayout } from './list-entity/narrow-layout';
+import { NarrowSingleLineLayout } from './list-entity/narrow-single-line-layout';
 import {
   type BaseListEntityProps,
   hasSearchContentHits,
@@ -160,6 +161,8 @@ export function ListEntity(props: ListEntityProps) {
   const isWide = listLayout?.isWide ?? (() => true);
   const isCondensedVariant = () => listLayout?.narrowLayout() === 'condensed';
   const usesCondensedNarrowLayout = () => !isWide() && isCondensedVariant();
+  const isSingleLineVariant = () =>
+    listLayout?.narrowLayout() === 'single-line';
 
   const mobileStacks = createMemo(() => {
     if (!isTouchDevice()) return [];
@@ -206,6 +209,16 @@ export function ListEntity(props: ListEntityProps) {
             config={props.entityRowConfig}
           >
             <WideLayout {...layoutProps()} />
+          </MaybeEntityRow>
+        </Match>
+        {/* Mixed-type lists (Search) render every entity as one line, ahead
+            of the taller per-type mobile layouts below. */}
+        <Match when={isSingleLineVariant()}>
+          <MaybeEntityRow
+            entityId={props.entity.id}
+            config={props.entityRowConfig}
+          >
+            <NarrowSingleLineLayout {...layoutProps()} />
           </MaybeEntityRow>
         </Match>
         <Match when={isTouchDevice() && mobileStacks().length > 0}>

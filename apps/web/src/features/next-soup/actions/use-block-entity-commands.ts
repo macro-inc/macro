@@ -30,6 +30,7 @@ import {
   makeMarkDoneAction,
   makeMoveToProjectAction,
   makeRenameAction,
+  markReminderTargetDone,
 } from './index';
 
 /**
@@ -69,7 +70,6 @@ export const useBlockEntityCommands = (
   const copyBranchNameAction = makeCopyBranchNameAction();
   const copyEntityIdAction = makeCopyEntityIdAction();
   const favoriteAction = makeFavoriteAction();
-  const createReminderAction = makeCreateReminderAction();
 
   const allProperties = useAllProperties();
 
@@ -131,10 +131,51 @@ export const useBlockEntityCommands = (
     );
   };
 
+  /** Follows the list's next row into this split, as the triage flow does. */
+  const advanceSplitTo = (nextEntity: EntityData) => {
+    const splitHandle = splitPanel?.handle;
+    if (!splitHandle) return;
+    void openEntityInSplitFromUnifiedList(nextEntity, {
+      splitHandle,
+      mergeHistory: true,
+      referredFrom: splitHandle.referredFrom(),
+    });
+  };
+
+  // Setting a reminder puts the entity down: it marks it done, so it leaves the
+  // list behind this block and the reminder is what brings it back. Declared
+  // after `advanceSplitTo` so the follow-up advances exactly as 'e' does.
+  const createReminderAction = makeCreateReminderAction({
+    onCreated: markReminderTargetDone(markDone, advanceSplitTo),
+  });
+
+  /**
+   * The soup row for the entity when this block is being triaged out of a list,
+   * which is what decides between advancing the split and leaving it be.
+   */
+  const triageRow = () => {
+    const entity = getEntity();
+    if (!entity || !canUseMarkDoneHotkey() || !soup) return undefined;
+    return soup.items.get(entity.id);
+  };
+
   const runCreateReminder = () => {
     const entity = getEntity();
     if (!entity) return false;
     if (!createReminderAction.canExecute(entity)) return false;
+
+    // Driven through soup when the block is being triaged out of a list. Having
+    // a `triageRow` is the same condition 'e' advances on, so the mark-done
+    // that follows moves to the next row exactly as Mark done does rather than
+    // leaving the split on one the list has dropped.
+    const selectedRow = triageRow();
+    if (soup && selectedRow) {
+      void createReminderAction.executeWithSoup([selectedRow.original], soup, {
+        advances: true,
+      });
+      return true;
+    }
+
     createReminderAction.execute([entity]);
     return true;
   };
@@ -146,22 +187,14 @@ export const useBlockEntityCommands = (
 
     // Plain mark done, no advance: the command-menu registration outside the
     // triage flow, or the entity is no longer in the surviving soup list.
-    const selectedRow = soup?.items.get(entity.id);
-    if (!canUseMarkDoneHotkey() || !soup || !selectedRow) {
+    const selectedRow = triageRow();
+    if (!soup || !selectedRow) {
       markDone.execute([entity]);
       return true;
     }
 
     // Triage flow: mark done and advance to the next item in the list.
-    markDone.executeWithSoup([selectedRow.original], soup, (nextEntity) => {
-      const splitHandle = splitPanel?.handle;
-      if (!splitHandle) return;
-      void openEntityInSplitFromUnifiedList(nextEntity, {
-        splitHandle,
-        mergeHistory: true,
-        referredFrom: splitHandle.referredFrom(),
-      });
-    });
+    markDone.executeWithSoup([selectedRow.original], soup, advanceSplitTo);
 
     return true;
   };

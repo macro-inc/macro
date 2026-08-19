@@ -59,7 +59,7 @@ entire cache in browser memory. With 10s of thousands of cached objects
     anonymous client-generated uuid** (localStorage), *not* user identity:
     construction is synchronous
     and offline-capable (no identity waterfall), and no PII appears in
-    enumerable storage metadata (IDB database names / SQLite filenames).
+    enumerable storage metadata (OPFS or native database filenames).
     User↔cache consistency is enforced by **identity witnessing**, split
     into two halves: *extraction* lives in the urql exchange
     (`extractIdentity: (data) => data.user.id` — the schema exposes
@@ -106,7 +106,8 @@ entire cache in browser memory. With 10s of thousands of cached objects
 ### Open questions
 
 - Encryption-at-rest for cached content (email bodies/snippets will flow
-  through this). IDB/SQLite are origin-/app-scoped but plaintext on disk.
+  through this). Browser OPFS and native Turso files are origin-/app-scoped
+  but plaintext on disk.
 - Disk budget (proposal: 256 MB default, configurable).
 - Memory hot-tier budget (proposal: 32 MB default).
 
@@ -144,12 +145,12 @@ One Rust core engine, two hosts:
 ┌───────────────────────────────┐        ┌─────────────────────────────────┐
 │ BROWSER ONLY: wasm-bindgen    │        │ TAURI: native engine in the     │
 │ module in a worker;           │        │ Tauri host process (Rust);      │
-│ IndexedDB via the `idb` crate │        │ no webview storage ever         │
+│ Turso over OPFS               │        │ no webview storage ever         │
 │ (storage entirely in Rust)    │        │ • naturally shared across ALL   │
-│ • SharedWorker: one engine    │        │   webviews/windows              │
-│   shared by every browser tab │        │ • SQLite (or fs) storage        │
-│ • no SharedWorker: storage-   │        │ • glue over invoke + channels/  │
-│   free no-op cache host       │        │   events                        │
+│ • one coordinated engine     │        │   webviews/windows              │
+│   owner across browser tabs   │        │ • Turso filesystem storage      │
+│ • unsupported browsers use   │        │ • glue over invoke + channels/  │
+│   a storage-free no-op host   │        │   events                        │
 │                               │        │                                 │
 └───────────────┬───────────────┘        └────────────────┬────────────────┘
                 └──────────────────┬──────────────────────┘
@@ -171,56 +172,30 @@ One Rust core engine, two hosts:
   support is inconsistent across WKWebView/WebView2/Android WebView, and
   webviews can't share a SharedWorker across windows. The Tauri host process
   is the shared singleton: it gets us the multi-webview requirement for
-  free, with real SQLite instead of webview storage. The wasm/worker path is
-  **browser-only**.
+  free, with native Turso filesystem storage instead of webview storage. The
+  wasm/worker path is **browser-only**.
 
 ### 4.2 Multi-consumer strategy (browser only)
 
-**Decision: IndexedDB-backed persistence via the [`idb`
-crate](https://docs.rs/idb/latest/idb/), with one engine in a SharedWorker.
-Browsers without SharedWorker support use a storage-free no-op cache host.
-OPFS is dropped.**
-
-Rationale (see Appendix A):
-
-- OPFS sync access handles are unusable from SharedWorker on Chromium (no
-  sync handles, no nested `Worker` to delegate to), forcing a
-  leader-election topology with failover — significant complexity.
-- IDB point-reads measured *faster* than OPFS sync 4 KiB reads in the probe
-  (0.35 ms vs 2 ms avg), and batched writes (119 ms / 1000 records / txn)
-  are fine for our write rates.
-- IDB is available in SharedWorker on supported browsers.
-- Using the `idb` Rust crate keeps the entire storage layer inside the wasm
-  module (no JS-callback storage shim; JS glue is transport only).
-
-Topology:
-
-- **Browser: SharedWorker** hosting the wasm engine — one instance across
-  tabs, no election or cross-engine coordination.
-- **No SharedWorker:** return a no-op `CacheHost` that always misses, ignores
-  writes, and does not initialize wasm or persistent storage. Mutations pass
-  through the exchange without durable optimism.
-- Selection at startup: Tauri detection (`isTauri`) → native transport;
-  otherwise SharedWorker support selects either the browser cache or no-op
-  host. All paths sit behind the same `CacheHost` interface.
+**Decision: Turso-backed persistence over OPFS, with one coordinated engine
+owner across tabs.** The coordinator routes every request to the current
+engine worker and replaces that owner after abrupt loss. Browsers missing the
+required worker, lock, or OPFS capabilities use a storage-free no-op cache
+host. Tauri detection selects the native transport before browser capability
+checks. All paths remain behind the same `CacheHost` interface.
 
 ### 4.3 Storage backends
 
-| Backend    | Host         | Notes                                          |
-|------------|--------------|------------------------------------------------|
-| SQLite     | Tauri native | records, mutation queue, optimistic layers, and meta; WAL mode |
-| IndexedDB  | browser      | via the `idb` crate; stable per-scope DB with object stores for records, mutation queue, optimistic layers, and meta |
+| Backend | Host | Notes |
+|---------|------|-------|
+| Turso over filesystem IO | Tauri native | records, search projection, mutation queue, optimistic layers, and metadata; WAL mode |
+| Turso over OPFS | browser | the same frozen schema behind the OPFS IO adapter and coordinated worker lifecycle |
 
-Normalized records are serialized with `postcard`. SQLite stores the bytes in
-`records.value`; IndexedDB stores the bytes directly in the records object
-store. Both backends implement schema-neutral, entity-key-ordered record scans.
-`Storage::scan_records` selects concrete normalized types by their key ranges;
-`Engine::read_records` applies a validated named fragment, loads linked records
-in batches, includes optimistic layers, and omits incomplete projections.
-Note: wasm futures are not `Send`, so the `Storage` trait's futures
-are bound by `MaybeSend` (`crates/maybe_send`):
-`Send` on native targets — the Tauri host drives the engine directly from its
-multi-threaded runtime — and unbounded on wasm, implementable by `idb`.
+Normalized records are serialized with `postcard` into `records.value`.
+Both hosts use the same `Storage` implementation and compound entity keys.
+Wasm futures are not `Send`, so the `Storage` trait's futures are bound by
+`MaybeSend` (`crates/maybe_send`): `Send` on native targets, where Tauri drives
+the engine directly from its multi-threaded runtime, and unbounded on wasm.
 
 ### 4.4 Data model
 
@@ -256,11 +231,11 @@ soup entities from the normy config as they migrate.
 ```
 crates/client/            # members of the root cargo workspace
   cache-core/                  # pure engine, native tests (schema codegen in build.rs)
-  cache-sqlite/                # Storage over SQLite (Tauri native host)
-  cache-idb/                   # Storage over IndexedDB (browser wasm host)
+  cache-turso/                 # Turso Storage (browser OPFS + Tauri filesystem)
+  turso-opfs/                  # browser OPFS adapter for Turso
   cache-wasm/                  # wasm-bindgen shell (web)
 apps/web/tauri/graphql_cache_plugin/ # tauri commands + engine thread wrapping
-                                     # cache-core over cache-sqlite. Lives in the
+                                     # cache-core over cache-turso. Lives in the
                                      # tauri workspace (not crates/client): it
                                      # depends on the patched tauri fork pinned
                                      # there, path-deps back to crates/client.
@@ -273,10 +248,10 @@ apps/web/src/lib/graphql-cache/ # JS glue
 ## 6. Phases
 
 **Phase 0 — spike** *(closed)*
-- Browser probe harness built; Chromium results in Appendix A. **Decision
-  made: IDB-backed persistence via the `idb` crate in a SharedWorker, with
-  caching disabled when SharedWorker is unavailable (§4.2).** Safari/Firefox
-  probe runs and the Tauri IPC benchmark were deliberately skipped.
+- Browser probe harness built; Chromium results in Appendix A. Its original
+  IDB decision was later superseded by the Turso-over-OPFS architecture in
+  §4.2. Safari/Firefox probe runs and the Tauri IPC benchmark were deliberately
+  skipped.
 - Wire protocol delivered in Phase 3 (`src/lib/graphql-cache/protocol.ts`).
 - The probe harness (`spikes/graphql-cache-probe/`) and the soup payload
   measurement script (`scripts/measure-soup-payloads.ts`) were removed
@@ -294,14 +269,12 @@ apps/web/src/lib/graphql-cache/ # JS glue
 - Deferred: nullability-based partial results (metadata already generated),
   byte-based LRU budgets, proptest round-trips, staleness metadata.
 
-**Phase 2 — persistence** *(done — `cache-sqlite`, `cache-idb`)*
+**Phase 2 — persistence** *(done — `cache-turso`)*
 - Shared postcard record codec + `cache_namespace(scope)` embedding
   schema compatibility epoch + format version.
-- SQLite backend (Tauri native): WAL mode, batch txns, namespace
-  wipe-on-mismatch; tested natively incl. engine integration.
-- IndexedDB backend via the `idb` crate: one DB per namespace, atomic
-  batch txns; tested in headless Chromium via wasm-bindgen-test incl.
-  engine-over-IDB round trip.
+- Turso backend for both Tauri native filesystem storage and browser OPFS:
+  WAL mode, batch transactions, and physical reset on incompatible storage;
+  tested natively and in headless Chromium.
 - Deferred: stale-namespace DB cleanup (browser), `scan_prefix`/
   `approx_size` for GC (hardening phase).
 
@@ -317,14 +290,14 @@ apps/web/src/lib/graphql-cache/ # JS glue
   happens with the Phase 4 exchange integration.
 - ~~Tauri host~~ (`apps/web/tauri/graphql_cache_plugin`, in the *tauri*
   workspace — it needs the patched tauri fork pinned there; path-deps on
-  `crates/client/{cache-core,cache-sqlite}`): engine behind an async mutex
+  `crates/client/{cache-core,cache-turso}`): engine behind an async mutex
   on the tauri runtime (`Storage` futures are `MaybeSend` → `Send` native;
-  SQLite completes immediately), commands mirroring the worker protocol
+  Turso uses its synchronous native IO driver), commands mirroring the worker protocol
   registered app-level in `src-tauri` (bundle-updater pattern, no
   capability plumbing), changed ops broadcast to every webview via the
   `graphql-cache://ops-affected` event. One native engine per app process = SharedWorker topology: no Web
   Locks / BroadcastChannel machinery. DB at
-  `{app_data_dir}/graphql-cache/cache.sqlite`.
+  `{app_data_dir}/graphql-cache/cache.turso`.
   JS side: `createTauriCacheHost` (`host/tauri-host.ts`) — invoke-based
   RPC with the same 10s timeout + Error-normalized rejections, event
   subscription filtered by clientId prefix; `isTauri()` selects it in
@@ -372,13 +345,13 @@ apps/web/src/lib/graphql-cache/ # JS glue
 
 ## 7. Risks
 
-- **Browser storage quirks** (Safari IDB edge cases/private mode, storage
-  eviction under pressure) — mitigated by the disposable-cache design
-  (detect → discard → rebuild from network). Browsers without SharedWorker
-  use the storage-free no-op host. Tauri is unaffected (native host only).
-- **`idb` crate dependency** — maintained third-party wasm bindings; if it
-  stalls, the `Storage` trait isolates us (swap for hand-rolled
-  `web-sys`-based bindings).
+- **Browser storage quirks** (OPFS capability differences, private mode, and
+  storage eviction under pressure) — mitigated by the disposable-cache design
+  and explicit owner/reset lifecycle (detect → discard → rebuild from network).
+  Unsupported browsers use the storage-free no-op host. Tauri is unaffected
+  because it uses native filesystem IO.
+- **Pinned Turso dependency** — both hosts use the same storage engine, while
+  the `IO` boundary isolates browser OPFS from native filesystem behavior.
 - **RPC latency on hot paths** — reads are one round-trip to a worker/host;
   Chromium probe shows ≤1 ms for 64 KiB payloads. Batch reads per
   operation, not per record. Tauri IPC assumed adequate (benchmark skipped);

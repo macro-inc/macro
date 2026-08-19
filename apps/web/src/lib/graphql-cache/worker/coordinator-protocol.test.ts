@@ -17,9 +17,45 @@ const version = {
 } as const;
 
 describe('coordinator runtime protocol', () => {
-  it('validates unchanged cache RPC and rejects unknown fields or kinds', () => {
+  it('validates cache RPCs and rejects unknown fields or kinds', () => {
     expect(isCacheRequest({ id: 0, kind: 'clear' })).toBe(true);
     expect(isCacheRequest({ id: 1, kind: 'read', query: '{ x }' })).toBe(true);
+    expect(
+      isCacheRequest({
+        id: 2,
+        kind: 'read-records-by-keys',
+        document: 'fragment Item on GraphqlSoupDocument { name }',
+        fragmentName: 'Item',
+        keys: ['GraphqlSoupDocument:one'],
+      })
+    ).toBe(true);
+    expect(
+      isCacheRequest({
+        id: 2,
+        kind: 'search',
+        request: {
+          profile: 'quick-access-v1',
+          buckets: ['document'],
+          query: 'plan',
+          limit: 20,
+          nowMs: 123,
+        },
+      })
+    ).toBe(true);
+    expect(
+      isCacheRequest({
+        id: 2,
+        kind: 'search',
+        request: {
+          profile: 'quick-access-v1',
+          buckets: ['document'],
+          query: 'plan',
+          limit: 20,
+          nowMs: 123,
+          extra: true,
+        },
+      })
+    ).toBe(false);
     expect(isCacheRequest({ id: 1, kind: 'clear', surprise: true })).toBe(
       false
     );
@@ -50,6 +86,42 @@ describe('coordinator runtime protocol', () => {
         settlement: { transactionId: '1', status: 'committed' },
       })
     ).toBe(true);
+  });
+
+  it('enforces search and record-key bounds at coordinator ingress', () => {
+    const validSearch = {
+      profile: 'quick-access-v1',
+      buckets: ['document'],
+      query: 'plan',
+      limit: 20,
+      nowMs: 123,
+    };
+    const acceptsSearch = (request: Record<string, unknown>) =>
+      isCacheRequest({ id: 2, kind: 'search', request });
+
+    expect(acceptsSearch({ ...validSearch, limit: 501 })).toBe(false);
+    expect(acceptsSearch({ ...validSearch, query: 'é'.repeat(257) })).toBe(
+      false
+    );
+    expect(acceptsSearch({ ...validSearch, buckets: ['Invalid'] })).toBe(false);
+    expect(acceptsSearch({ ...validSearch, nowMs: -1 })).toBe(false);
+    expect(
+      acceptsSearch({
+        ...validSearch,
+        cursor: { timestampMs: 1, recordKey: 'ROOT_QUERY' },
+      })
+    ).toBe(false);
+
+    const selectionRequest = (keys: string[]) =>
+      isCacheRequest({
+        id: 2,
+        kind: 'read-records-by-keys',
+        document: 'fragment Item on GraphqlSoupDocument { name }',
+        fragmentName: 'Item',
+        keys,
+      });
+    expect(selectionRequest(['ROOT_QUERY'])).toBe(false);
+    expect(selectionRequest([`Thing:${'x'.repeat(1024)}`])).toBe(false);
   });
 
   it.each([

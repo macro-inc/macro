@@ -10,7 +10,8 @@ import type {
   CacheResponse,
   EnqueueOptimisticMutationResult,
   ReadResult,
-  SelectedRecordPageWire,
+  SearchCachePage,
+  SelectedRecordByKeyWire,
   WriteResult,
 } from '../protocol';
 import {
@@ -372,13 +373,18 @@ export class CacheWorkerCore {
         );
         return result;
       })
-      .with({ kind: 'read-records' }, async (request) => {
-        const engine = this.requireEngine();
-        const result: SelectedRecordPageWire = await engine.readRecords(
-          request.document,
-          request.fragmentName,
-          request.cursor,
-          request.limit
+      .with({ kind: 'read-records-by-keys' }, async (request) => {
+        const result: SelectedRecordByKeyWire[] =
+          await this.requireEngine().readRecordsByKeys(
+            request.document,
+            request.fragmentName,
+            request.keys
+          );
+        return result;
+      })
+      .with({ kind: 'search' }, async (request) => {
+        const result: SearchCachePage = await this.requireEngine().search(
+          request.request
         );
         return result;
       })

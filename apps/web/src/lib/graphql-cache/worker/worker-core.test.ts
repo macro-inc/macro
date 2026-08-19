@@ -4,7 +4,6 @@ const loadCacheWasmMock = vi.hoisted(() => vi.fn());
 
 vi.mock('./wasm-module', () => ({ loadCacheWasm: loadCacheWasmMock }));
 
-import type { SelectedRecordPageWire } from '../protocol';
 import { CacheWorkerCore } from './worker-core';
 
 describe('CacheWorkerCore', () => {
@@ -16,14 +15,16 @@ describe('CacheWorkerCore', () => {
     vi.useRealTimers();
   });
 
-  it('dispatches read-records to the wasm engine', async () => {
-    const page: SelectedRecordPageWire = {
-      records: [{ id: 'item-1' }],
-      nextCursor: null,
-    };
-    const readRecords = vi.fn().mockResolvedValue(page);
+  it('dispatches explicit-key projection to the wasm engine', async () => {
+    const records = [
+      {
+        recordKey: 'GraphqlSoupDocument:item-1',
+        record: { id: 'item-1' },
+      },
+    ];
+    const readRecordsByKeys = vi.fn().mockResolvedValue(records);
     loadCacheWasmMock.mockResolvedValue({
-      openCache: vi.fn().mockResolvedValue({ readRecords }),
+      openCache: vi.fn().mockResolvedValue({ readRecordsByKeys }),
     });
     const messages: unknown[] = [];
     const port = { postMessage: (message: unknown) => messages.push(message) };
@@ -36,19 +37,57 @@ describe('CacheWorkerCore', () => {
     });
     await core.handleRequest(port, {
       id: 2,
-      kind: 'read-records',
-      document: 'fragment Item on GraphqlSoupItem { id }',
+      kind: 'read-records-by-keys',
+      document: 'fragment Item on GraphqlSoupDocument { id }',
       fragmentName: 'Item',
-      cursor: 'cursor-1',
-      limit: 25,
+      keys: ['GraphqlSoupDocument:item-1'],
     });
 
-    expect(readRecords).toHaveBeenCalledWith(
-      'fragment Item on GraphqlSoupItem { id }',
+    expect(readRecordsByKeys).toHaveBeenCalledWith(
+      'fragment Item on GraphqlSoupDocument { id }',
       'Item',
-      'cursor-1',
-      25
+      ['GraphqlSoupDocument:item-1']
     );
+    expect(messages.at(-1)).toEqual({ id: 2, ok: true, result: records });
+  });
+
+  it('dispatches bounded search to the wasm compact projection', async () => {
+    const page = {
+      documents: [
+        {
+          profile: 'quick-access-v1' as const,
+          recordKey: 'GraphqlSoupDocument:d1',
+          bucket: 'document',
+          searchText: 'quarterly plan',
+          timestampMs: 123,
+          sourceHash: 'abc',
+        },
+      ],
+      nextCursor: null,
+    };
+    const search = vi.fn().mockResolvedValue(page);
+    loadCacheWasmMock.mockResolvedValue({
+      openCache: vi.fn().mockResolvedValue({ search }),
+    });
+    const messages: unknown[] = [];
+    const port = { postMessage: (message: unknown) => messages.push(message) };
+    const core = new CacheWorkerCore();
+
+    await core.handleRequest(port, {
+      id: 1,
+      kind: 'init',
+      scope: 'scope-1',
+    });
+    const request = {
+      profile: 'quick-access-v1' as const,
+      buckets: ['document'],
+      query: 'plan',
+      limit: 20,
+      nowMs: 456,
+    };
+    await core.handleRequest(port, { id: 2, kind: 'search', request });
+
+    expect(search).toHaveBeenCalledWith(request);
     expect(messages.at(-1)).toEqual({ id: 2, ok: true, result: page });
   });
 

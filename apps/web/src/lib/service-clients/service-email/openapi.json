@@ -259,7 +259,7 @@
             }
           },
           "404": {
-            "description": "Event not found",
+            "description": "Event or targeted occurrence not found",
             "content": {
               "application/json": {
                 "schema": {
@@ -4652,6 +4652,7 @@
         "description": "Machine-readable failure category for calendar mutations.",
         "enum": [
           "not_found",
+          "occurrence_not_found",
           "read_only",
           "no_writable_calendar",
           "not_attendee",
@@ -4665,6 +4666,11 @@
       "CalendarRsvpScopeParam": {
         "type": "string",
         "description": "How much of a recurring series an RSVP applies to.\n\nUnlike deletion there is no this-and-following variant: the provider\ncannot express a forward-scoped response, so offering one would be a\npromise sync could not keep.",
+        "enum": ["all", "this_event"]
+      },
+      "CalendarUpdateScopeParam": {
+        "type": "string",
+        "description": "How much of a recurring series an update applies to.\n\nLike RSVPs there is no this-and-following variant: the provider cannot\nexpress a forward-scoped edit as one write, and emulating it (truncate\nthe series, insert an edited clone) is non-atomic and re-invites the\nattendees of the clone. Compose it from a this-and-following deletion\nand a create when that shape is wanted.",
         "enum": ["all", "this_event"]
       },
       "CancelBackfillParams": {
@@ -6160,6 +6166,10 @@
             "type": ["string", "null"],
             "description": "Replacement location; an empty string clears it."
           },
+          "recurrenceId": {
+            "type": ["string", "null"],
+            "description": "Original-start key of the occurrence the update targets."
+          },
           "recurrenceLines": {
             "type": ["array", "null"],
             "items": {
@@ -6175,6 +6185,17 @@
               {
                 "$ref": "#/components/schemas/EventReminders",
                 "description": "Replacement reminder configuration."
+              }
+            ]
+          },
+          "scope": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/CalendarUpdateScopeParam",
+                "description": "How much of a recurring series the update covers. Omit to let\n`recurrenceId` decide: the identified occurrence alone when one is\nsupplied, otherwise the whole event or series. An explicit\n`this_event` scope requires `recurrenceId`, so a scoped request is\nnever silently widened to the series."
               }
             ]
           },

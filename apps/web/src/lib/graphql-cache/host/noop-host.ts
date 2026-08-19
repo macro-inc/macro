@@ -1,9 +1,7 @@
-import {
-  type EnqueueOptimisticMutationResult,
-  type ReadRecordsArgs,
-  type ReadResult,
-  validateRecordSelectionLimit,
-  type WriteResult,
+import type {
+  EnqueueOptimisticMutationResult,
+  ReadResult,
+  WriteResult,
 } from '../protocol';
 import type { CacheHost } from './types';
 
@@ -27,9 +25,11 @@ export function createNoopCacheHost(reason: string): CacheHost {
     async readQuery(): Promise<ReadResult> {
       return { kind: 'miss' };
     },
-    async readRecords(args: ReadRecordsArgs) {
-      validateRecordSelectionLimit(args.limit);
-      return { records: [], nextCursor: null };
+    async readRecordsByKeys() {
+      return [];
+    },
+    async search() {
+      return { documents: [], nextCursor: null };
     },
     async writeQuery(): Promise<WriteResult> {
       return emptyWriteResult();

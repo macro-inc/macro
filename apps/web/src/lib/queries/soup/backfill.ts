@@ -1,3 +1,4 @@
+import { ENABLE_GRAPHQL_BACKFILL } from '@core/constant/featureFlags';
 import { createTabLeaderSignal } from '@notifications/notification-election';
 import type { SoupPage } from '@service-storage/generated/schemas/soupPage';
 import {
@@ -428,6 +429,7 @@ export function useSoupBackfills(userId: Accessor<string | undefined>) {
     const currentUserId = userId();
     const currentLeadership = leadership();
     const backfillEnabled =
+      ENABLE_GRAPHQL_BACKFILL &&
       currentUserId !== undefined &&
       graphqlCacheEnabled() &&
       currentLeadership.isLeader;

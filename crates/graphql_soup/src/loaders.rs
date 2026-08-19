@@ -148,7 +148,7 @@ where
             .get_user_soup(request, None)
             .await
             .map_err(|error| rootcause::report!(error).into_dynamic().into_cloneable())?
-            .either(|page| page.items, |page| page.items);
+            .into_items();
 
         let mut loaded = HashMap::with_capacity(items.len());
         for item in items {

@@ -36,6 +36,7 @@ import {
   makeRenameAction,
   makeSetCompanyPropertyAction,
   makeShareAction,
+  markReminderTargetDone,
 } from './index';
 
 type UseEntityActionHotkeysOptions = {
@@ -88,7 +89,6 @@ export const useEntityActionHotkeys = (
   const copyBranchNameAction = makeCopyBranchNameAction();
 
   const copyEntityIdAction = makeCopyEntityIdAction();
-  const createReminderAction = makeCreateReminderAction();
   const editReminderAction = makeEditReminderAction();
 
   const shareAction = makeShareAction();
@@ -131,6 +131,26 @@ export const useEntityActionHotkeys = (
       referredFrom: splitHandle.referredFrom(),
     });
   };
+
+  /**
+   * Whether this list is one that marks rows done, and so one that moves on to
+   * the next row when a row is marked. It gates 'e' below, and the mark-done
+   * that follows setting a reminder advances on the same answer.
+   */
+  const marksDoneOnThisView = (): boolean => {
+    const contentId = splitHandle?.content().id;
+    if (!isListViewID(contentId)) return false;
+    const soupViewTab = options.activeSoupViewTab?.();
+    return !soupViewTab || canExecuteMarkDoneOnView(contentId, soupViewTab);
+  };
+
+  // Declared here rather than with the other actions above because its
+  // mark-done follow-up advances the list the same way 'e' does, through
+  // `openNextEntity`. Setting a reminder puts the row down: it marks it done,
+  // so the list drops it and the reminder is what brings it back.
+  const createReminderAction = makeCreateReminderAction({
+    onCreated: markReminderTargetDone(markDone, openNextEntity),
+  });
 
   // Property editor setup
   const allProperties = useAllProperties();
@@ -176,16 +196,7 @@ export const useEntityActionHotkeys = (
     },
     condition: () => {
       if (condition && !condition()) return false;
-
-      const contentId = splitHandle?.content().id;
-
-      const soupViewTab = options.activeSoupViewTab?.();
-
-      if (
-        !isListViewID(contentId) ||
-        (soupViewTab && !canExecuteMarkDoneOnView(contentId, soupViewTab))
-      )
-        return false;
+      if (!marksDoneOnThisView()) return false;
 
       const entities = getEntitiesForAction();
       return entities.length > 0 && entities.every(markDone.canExecute);
@@ -518,7 +529,9 @@ export const useEntityActionHotkeys = (
       const entities = getEntitiesForAction();
       if (entities.length !== 1) return false;
       if (!createReminderAction.canExecute(entities[0])) return false;
-      createReminderAction.executeWithSoup(entities, soup);
+      createReminderAction.executeWithSoup(entities, soup, {
+        advances: marksDoneOnThisView(),
+      });
       return true;
     },
     condition: () => {

@@ -1315,6 +1315,108 @@ export type CalendarEventFilters = {
 };
 
 /**
+ * Meeting-level fields shown in a calendar event mention preview, taken from
+ * the requester's own projection of the meeting.
+ */
+export type CalendarMentionEvent = {
+    /**
+     * Number of attendees on the requester's copy.
+     */
+    attendeeCount: number;
+    /**
+     * Whether the event repeats.
+     */
+    isRecurring: boolean;
+    /**
+     * Location label, when set.
+     */
+    location?: string | null;
+    /**
+     * Key of the previewed instance, absent when no occurrence is
+     * materialized.
+     */
+    occurrenceKey?: string | null;
+    /**
+     * Organizer email.
+     */
+    organizerEmail?: string | null;
+    /**
+     * Organizer display name.
+     */
+    organizerName?: string | null;
+    /**
+     * Time of the previewed instance: the requested occurrence when it
+     * exists, else the next upcoming one, else the latest past one, else the
+     * series start.
+     */
+    time: EventTime;
+    /**
+     * Display title.
+     */
+    title: string;
+    /**
+     * Entity update time of the requester's copy.
+     */
+    updatedAt: string;
+    /**
+     * The requester's own event entity for the mentioned meeting. Differs
+     * from the mentioned id when the mention came from another attendee.
+     */
+    viewerEventId: string;
+};
+
+/**
+ * Resolution of one mentioned event, in request order.
+ */
+export type CalendarMentionPreviewItem = {
+    event?: null | CalendarMentionEvent;
+    /**
+     * The mentioned event id, echoed from the request.
+     */
+    eventId: string;
+    /**
+     * Visibility of the mentioned event to the requester.
+     */
+    type: CalendarMentionPreviewKind;
+};
+
+/**
+ * Requester-relative visibility of one mentioned event.
+ */
+export type CalendarMentionPreviewKind = 'access' | 'no_access' | 'does_not_exist';
+
+/**
+ * Batch calendar mention preview request.
+ */
+export type CalendarMentionPreviewRequest = {
+    /**
+     * Mentioned events to resolve, at most 100.
+     */
+    items: Array<CalendarMentionPreviewRequestItem>;
+};
+
+/**
+ * One mentioned event to resolve for the requester.
+ */
+export type CalendarMentionPreviewRequestItem = {
+    /**
+     * Mentioned calendar event id.
+     */
+    eventId: string;
+    /**
+     * Occurrence the mention points at, when it targets one instance.
+     */
+    occurrenceKey?: string | null;
+};
+
+/**
+ * Batch calendar mention preview response.
+ */
+export type CalendarMentionPreviewResponse = {
+    items: Array<CalendarMentionPreviewItem>;
+};
+
+/**
  * A materialized recurrence instance optimized for range queries.
  */
 export type CalendarOccurrence = {
@@ -2979,6 +3081,10 @@ export type CreateTaskResponse = {
      * Metadata for the created document
      */
     documentMetadata: DocumentResponseMetadata;
+    /**
+     * Base64-encoded canonical Loro snapshot used to initialize the task.
+     */
+    initialSnapshot: string;
     /**
      * The team this task number is scoped to.
      */
@@ -6559,7 +6665,7 @@ export type SoupApiItem = SoupItem & {
 /**
  * Sort options accepted by non-grouped soup API endpoints.
  */
-export type SoupApiSort = 'viewed_at' | 'created_at' | 'updated_at' | 'viewed_updated' | 'frecency';
+export type SoupApiSort = 'viewed_at' | 'created_at' | 'updated_at' | 'viewed_updated' | 'frecency' | 'touched_by_me';
 
 /**
  * Sort direction accepted by non-grouped soup API endpoints.
@@ -8558,6 +8664,37 @@ export type ListOccurrencesResponses = {
 
 export type ListOccurrencesResponse = ListOccurrencesResponses[keyof ListOccurrencesResponses];
 
+export type MentionPreviewsData = {
+    body: CalendarMentionPreviewRequest;
+    path?: never;
+    query?: never;
+    url: '/calendar-events/preview';
+};
+
+export type MentionPreviewsErrors = {
+    /**
+     * Too many events in one request
+     */
+    400: unknown;
+    /**
+     * Authentication required
+     */
+    401: unknown;
+    /**
+     * Calendar query failed
+     */
+    500: unknown;
+};
+
+export type MentionPreviewsResponses = {
+    /**
+     * Requester-relative previews for the mentioned events
+     */
+    200: CalendarMentionPreviewResponse;
+};
+
+export type MentionPreviewsResponse = MentionPreviewsResponses[keyof MentionPreviewsResponses];
+
 export type GetBatchCallRecordPreviewData = {
     body: GetBatchCallRecordPreviewRequest;
     path?: never;
@@ -10469,6 +10606,10 @@ export type CreateTaskHandlerResponses = {
          */
         documentMetadata: DocumentResponseMetadata;
         /**
+         * Base64-encoded canonical Loro snapshot used to initialize the task.
+         */
+        initialSnapshot: string;
+        /**
          * The team this task number is scoped to.
          */
         teamId?: string | null;
@@ -11576,7 +11717,8 @@ export type GetItemsSoupData = {
          */
         limit?: number;
         /**
-         * Sort method. Options are viewed_at, created_at, updated_at, viewed_updated. Defaults to viewed_at.
+         * Sort method. Options are viewed_at, created_at, updated_at,
+         * viewed_updated, frecency, touched_by_me. Defaults to viewed_at.
          */
         sort_method?: SoupApiSort;
         /**

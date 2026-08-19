@@ -1,18 +1,14 @@
 ---
-title: text_editor_code_execution
-description: "Generated from the Macro Rust tool registry."
+title: TextEditorCodeExecution
+description: "Use a text editor in a sandboxed environment using Claude's built-in code execution tool."
 ---
 
-# text_editor_code_execution
+# TextEditorCodeExecution
 
-Generated from the Macro Rust tool registry.
+Use a text editor in a sandboxed environment using Claude's built-in code execution tool.
 
 ## Parameters
 
 | Parameter | Type | Required | Description |
 | --- | --- | --- | --- |
-| `command` | string | Yes | The command to execute: "view", "create", or "str_replace" |
-| `file_text` | string | No | File content for create operations |
-| `new_str` | string | No | Replacement string for str_replace operations |
-| `old_str` | string | No | String to find for str_replace operations |
-| `path` | string | Yes | Path to the file |
+| `input` | string | Yes | The text editing instruction. |

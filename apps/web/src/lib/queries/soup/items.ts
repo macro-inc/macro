@@ -166,8 +166,9 @@ const useRestSoupAstItemsQuery = (
           let sort_method = params.sort_method ?? undefined;
 
           // TODO(dev-rb/soup): This is temporary fix since we don't support
-          // 'frecency' for group by. Replace with proper types
-          if (sort_method === 'frecency') {
+          // 'frecency' or 'touched_by_me' for group by. Replace with proper
+          // types
+          if (sort_method === 'frecency' || sort_method === 'touched_by_me') {
             sort_method = 'updated_at';
           }
 

@@ -67,7 +67,7 @@ export interface LayoutProps {
   ) => void;
 }
 
-export type NarrowLayoutVariant = 'standard' | 'condensed';
+export type NarrowLayoutVariant = 'standard' | 'condensed' | 'single-line';
 
 interface ListLayoutContextValue {
   isWide: Accessor<boolean>;

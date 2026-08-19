@@ -678,6 +678,43 @@ fn mutation_bodies_serialize_reminders_in_google_shape() {
     );
 }
 
+/// The provider write for a patch must carry exactly the supplied fields:
+/// a stray key overwrites provider state the user never asked to change —
+/// a time-only patch that also wrote `recurrence` or `summary` would mangle
+/// a recurring series' rules or revert its title.
+#[test]
+fn patch_bodies_carry_only_the_supplied_fields() {
+    let time_only = patch_body(&CalendarEventPatch {
+        time: Some(EventTime::Timed {
+            starts_at: DateTime::parse_from_rfc3339("2026-08-18T20:00:00Z")
+                .unwrap()
+                .with_timezone(&Utc),
+            ends_at: DateTime::parse_from_rfc3339("2026-08-18T22:00:00Z")
+                .unwrap()
+                .with_timezone(&Utc),
+            time_zone: None,
+        }),
+        ..CalendarEventPatch::default()
+    });
+    let mut keys: Vec<_> = time_only.as_object().unwrap().keys().cloned().collect();
+    keys.sort();
+    assert_eq!(keys, ["end", "start"]);
+
+    let title_only = patch_body(&CalendarEventPatch {
+        title: Some("Renamed".to_string()),
+        ..CalendarEventPatch::default()
+    });
+    let keys: Vec<_> = title_only.as_object().unwrap().keys().cloned().collect();
+    assert_eq!(keys, ["summary"]);
+
+    assert!(
+        patch_body(&CalendarEventPatch::default())
+            .as_object()
+            .unwrap()
+            .is_empty()
+    );
+}
+
 #[test]
 fn attaching_a_meet_asks_google_to_generate_one() {
     let body = patch_body(&CalendarEventPatch {

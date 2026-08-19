@@ -8,6 +8,7 @@ import {
   EventComposerGuestsPill,
   EventComposerLocationPill,
   EventComposerRecurrencePill,
+  EventComposerRemindersPill,
 } from './EventPropertyPills';
 import type {
   EventEditorDisabledFields,
@@ -161,6 +162,16 @@ export function EventForm(props: EventFormProps) {
               value={state().location}
               onChange={(location) => controller.setField('location', location)}
               disabled={fieldIsDisabled('location')}
+            />
+            <EventComposerRemindersPill
+              minutes={controller.reminderMinutes()}
+              usedSlots={
+                controller.reminderMinutes().length +
+                controller.preservedReminderCount()
+              }
+              canAdd={controller.canAddReminder()}
+              onChange={controller.setReminderMinutes}
+              disabled={fieldIsDisabled('reminders')}
             />
           </div>
         </div>

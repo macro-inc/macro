@@ -39,6 +39,29 @@ interface ReminderComposerState {
   editing?: ReminderDraft;
 }
 
+/** What the surface that opened the composer does once the reminder exists. */
+export type ReminderCreatedHandler = () => void | Promise<void>;
+
+/**
+ * Held outside the store: nothing renders it, and a function in a store is a
+ * footgun — the setters read one as an updater.
+ */
+let createdHandler: ReminderCreatedHandler | undefined;
+
+/**
+ * Hand the pending handler to the caller and forget it.
+ *
+ * Taken rather than read because the composer closes — and so clears its
+ * target — before the create request is awaited.
+ */
+export function takeReminderCreatedHandler():
+  | ReminderCreatedHandler
+  | undefined {
+  const handler = createdHandler;
+  createdHandler = undefined;
+  return handler;
+}
+
 const [state, setState] = createStore<ReminderComposerState>({
   entity: undefined,
   editing: undefined,
@@ -51,7 +74,11 @@ const [state, setState] = createStore<ReminderComposerState>({
  * was invoked on and the description is derived from it, so the composer opens
  * straight onto the date list.
  */
-export function openReminderComposer(entity: EntityData) {
+export function openReminderComposer(
+  entity: EntityData,
+  options?: { onCreated?: ReminderCreatedHandler }
+) {
+  createdHandler = options?.onCreated;
   // Batched so the modal's open-keyed effect sees this entity rather than the
   // previous one.
   batch(() => {
@@ -68,6 +95,7 @@ export function openReminderComposer(entity: EntityData) {
  * time so a rename does not force a new date to be picked.
  */
 export function openReminderEditor(reminder: ReminderDraft) {
+  createdHandler = undefined;
   batch(() => {
     setState(reconcile({ entity: undefined, editing: reminder }));
     setReminderComposerOpen(true);
@@ -75,6 +103,7 @@ export function openReminderEditor(reminder: ReminderDraft) {
 }
 
 export function closeReminderComposer() {
+  createdHandler = undefined;
   batch(() => {
     setReminderComposerOpen(false);
     setState(reconcile({ entity: undefined, editing: undefined }));

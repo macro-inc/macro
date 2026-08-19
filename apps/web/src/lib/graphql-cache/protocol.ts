@@ -20,38 +20,164 @@ export type CacheReadPriority = 'user-visible';
 /** Recursive partial-variable object used to limit query inspection work. */
 export type QueryVariableFilter = Record<string, unknown>;
 
-/** Opaque exclusive cursor for deterministic normalized-record scans. */
-export type RecordCursor = string;
+export type SearchProfile = 'quick-access-v1';
 
-/** Untyped wire page returned by cache hosts. */
-export type SelectedRecordPageWire = {
-  records: unknown[];
-  nextCursor: RecordCursor | null;
+export type SearchCursor = {
+  timestampMs: number;
+  recordKey: string;
 };
 
-export type ReadRecordsArgs = {
+export type SearchDocumentWire = {
+  profile: SearchProfile;
+  recordKey: string;
+  bucket: string;
+  searchText: string;
+  timestampMs: number;
+  sourceHash: string;
+};
+
+export type SearchCacheArgs = {
+  profile: SearchProfile;
+  buckets?: string[];
+  query?: string;
+  cursor?: SearchCursor;
+  limit: number;
+  /** Injected for deterministic freshness scoring. Defaults to Date.now(). */
+  nowMs?: number;
+};
+
+export type SearchCachePage = {
+  documents: SearchDocumentWire[];
+  nextCursor: SearchCursor | null;
+};
+
+export type ReadRecordsByKeysArgs = {
   /** Serialized generated fragment document. */
   document: string;
-  /** Root fragment to apply to matching normalized records. */
+  /** Root fragment to apply to the requested normalized records. */
   fragmentName: string;
-  cursor?: RecordCursor;
-  limit: number;
+  /** Canonical normalized entity keys; bounded by the selection page size. */
+  keys: string[];
+};
+
+export type SelectedRecordByKeyWire = {
+  recordKey: string;
+  record: unknown;
 };
 
 export const MAX_RECORD_SELECTION_PAGE_SIZE = 500;
+export const MAX_CACHE_SEARCH_QUERY_BYTES = 512;
+export const MAX_NORMALIZED_RECORD_KEY_LENGTH = 1024;
 
-/** Validates a record-selection page size before crossing a host boundary. */
-export function validateRecordSelectionLimit(limit: number): number {
-  if (
-    !Number.isSafeInteger(limit) ||
-    limit < 1 ||
-    limit > MAX_RECORD_SELECTION_PAGE_SIZE
-  ) {
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
+
+/** Non-throwing canonical normalized-record key validation for wire ingress. */
+export function isValidNormalizedRecordKey(value: unknown): value is string {
+  return (
+    typeof value === 'string' &&
+    value.length <= MAX_NORMALIZED_RECORD_KEY_LENGTH &&
+    /^[A-Za-z_][A-Za-z0-9_]*:/.test(value)
+  );
+}
+
+/** Non-throwing cache-search profile validation for wire ingress. */
+export function isValidCacheSearchProfile(
+  value: unknown
+): value is SearchProfile {
+  return value === 'quick-access-v1';
+}
+
+/** Non-throwing cache-search limit validation for wire ingress. */
+export function isValidCacheSearchLimit(value: unknown): value is number {
+  return (
+    Number.isSafeInteger(value) &&
+    (value as number) >= 1 &&
+    (value as number) <= MAX_RECORD_SELECTION_PAGE_SIZE
+  );
+}
+
+/** Non-throwing cache-search query validation for wire ingress. */
+export function isValidCacheSearchQuery(value: unknown): value is string {
+  return (
+    typeof value === 'string' &&
+    new TextEncoder().encode(value).length <= MAX_CACHE_SEARCH_QUERY_BYTES
+  );
+}
+
+/** Non-throwing cache-search bucket validation for wire ingress. */
+export function isValidCacheSearchBucket(value: unknown): value is string {
+  return typeof value === 'string' && /^[a-z_]{1,64}$/.test(value);
+}
+
+/** Non-throwing cache-search clock validation for wire ingress. */
+export function isValidCacheSearchNowMs(value: unknown): value is number {
+  return Number.isSafeInteger(value) && (value as number) >= 0;
+}
+
+/** Non-throwing cache-search cursor validation for wire ingress. */
+export function isValidCacheSearchCursor(
+  value: unknown
+): value is SearchCursor {
+  return (
+    isRecord(value) &&
+    Object.keys(value).every(
+      (key) => key === 'timestampMs' || key === 'recordKey'
+    ) &&
+    Object.hasOwn(value, 'timestampMs') &&
+    Object.hasOwn(value, 'recordKey') &&
+    Number.isSafeInteger(value.timestampMs) &&
+    isValidNormalizedRecordKey(value.recordKey)
+  );
+}
+
+export function validateRecordSelectionKeys(keys: string[]): string[] {
+  if (keys.length > MAX_RECORD_SELECTION_PAGE_SIZE) {
     throw new RangeError(
-      `record selection limit must be an integer between 1 and ${MAX_RECORD_SELECTION_PAGE_SIZE}`
+      `record selection accepts at most ${MAX_RECORD_SELECTION_PAGE_SIZE} keys`
     );
   }
-  return limit;
+  if (keys.some((key) => !isValidNormalizedRecordKey(key))) {
+    throw new RangeError('invalid normalized record key');
+  }
+  return keys;
+}
+
+export function validateCacheSearchArgs(
+  args: SearchCacheArgs
+): SearchCacheArgs & { nowMs: number } {
+  if (!isValidCacheSearchProfile(args.profile)) {
+    throw new RangeError('invalid cache search profile');
+  }
+  if (!isValidCacheSearchLimit(args.limit)) {
+    throw new RangeError(
+      `cache search limit must be an integer between 1 and ${MAX_RECORD_SELECTION_PAGE_SIZE}`
+    );
+  }
+  const query = args.query === undefined ? '' : args.query;
+  if (!isValidCacheSearchQuery(query)) {
+    throw new RangeError('cache search query is too long');
+  }
+  const buckets = args.buckets === undefined ? [] : args.buckets;
+  if (
+    !Array.isArray(buckets) ||
+    buckets.some((bucket) => !isValidCacheSearchBucket(bucket))
+  ) {
+    throw new RangeError('invalid cache search bucket');
+  }
+  const nowMs = args.nowMs === undefined ? Date.now() : args.nowMs;
+  if (!isValidCacheSearchNowMs(nowMs)) {
+    throw new RangeError('invalid cache search nowMs');
+  }
+  if (args.cursor !== undefined && !isValidCacheSearchCursor(args.cursor)) {
+    throw new RangeError('invalid cache search cursor');
+  }
+  return {
+    ...args,
+    query,
+    buckets,
+    nowMs,
+  };
 }
 
 export type QueryRevalidationWire = {
@@ -253,11 +379,14 @@ export type CacheRequest = { id: number } & (
       error: string;
     }
   | {
-      kind: 'read-records';
+      kind: 'read-records-by-keys';
       document: string;
       fragmentName: string;
-      cursor?: RecordCursor;
-      limit: number;
+      keys: string[];
+    }
+  | {
+      kind: 'search';
+      request: SearchCacheArgs & { nowMs: number };
     }
   | {
       kind: 'inspect-query';

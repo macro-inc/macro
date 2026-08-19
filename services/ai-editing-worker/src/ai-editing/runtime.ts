@@ -5,6 +5,7 @@ import type { LexicalSession } from './ai-toolkit/session';
 import type { AwarenessSource } from './awareness';
 import type { Doc } from './doc';
 import type { DocumentOp } from './editor';
+import { describeEffect, diffNodes, snapshotNodes } from './effect-report';
 import {
   type DocumentOpQueueParams,
   type OpResult,
@@ -12,6 +13,7 @@ import {
   runQueue,
   summarize,
 } from './queue';
+import { serializeWithXml } from './utils';
 
 /** Every durable id currently in the document (what the model is allowed to reference). */
 export function docIds(session: LexicalSession): Set<string> {
@@ -102,7 +104,12 @@ export async function runEditorCode(args: RunEditorCodeArgs): Promise<string> {
   args.onOps?.(ops);
   span?.setAttr('ops.count', ops.length);
   span?.setAttr('animated', args.typingAnimations !== false);
-  if (ops.length === 0) return 'ok';
+  if (ops.length === 0) {
+    return 'ok — but your code produced no editor operations at all. Check that you called `editor.*` methods.';
+  }
+
+  // Snapshot before applying so the coder can be told what actually moved.
+  const before = snapshotNodes(serializeWithXml(args.session));
 
   const results: OpResult[] =
     args.typingAnimations === false
@@ -128,5 +135,6 @@ export async function runEditorCode(args: RunEditorCodeArgs): Promise<string> {
   const failed = results.filter((r) => !r.ok).length;
   span?.setAttr('ops.failed', failed);
   if (failed > 0) span?.setAttr('error.kind', 'apply');
-  return summarize(results);
+  const after = snapshotNodes(serializeWithXml(args.session));
+  return describeEffect(summarize(results), diffNodes(before, after));
 }

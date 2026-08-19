@@ -1,155 +1,158 @@
-import { itemToSafeName } from '@core/constant/allBlocks';
 import {
   type CacheHost,
-  MAX_RECORD_SELECTION_PAGE_SIZE,
-  readRecords,
+  type RecordSelection,
+  readRecordsByKeys,
+  type SearchDocumentWire,
   selectRecords,
 } from '@graphql-cache/index';
 import {
-  type GraphqlHistoryItemFieldsFragment,
-  GraphqlHistoryItemFieldsFragmentDoc,
+  type GraphqlChatQuickAccessNameFragment,
+  GraphqlChatQuickAccessNameFragmentDoc,
+  type GraphqlDocumentQuickAccessNameFragment,
+  GraphqlDocumentQuickAccessNameFragmentDoc,
+  type GraphqlProjectQuickAccessNameFragment,
+  GraphqlProjectQuickAccessNameFragmentDoc,
 } from '@service-storage/graphql/generated/graphql';
-import { formatDocumentName } from '@service-storage/util/filename';
-import type { DocumentHistoryItem, HistoryItem } from './types';
+import type { HistoryItem } from './types';
 
-const graphqlHistorySelection = selectRecords(
-  GraphqlHistoryItemFieldsFragmentDoc
-);
+type NameProjection =
+  | GraphqlDocumentQuickAccessNameFragment
+  | GraphqlChatQuickAccessNameFragment
+  | GraphqlProjectQuickAccessNameFragment;
 
-type GraphqlHistoryRecord = GraphqlHistoryItemFieldsFragment;
-type GraphqlHistoryEntity = GraphqlHistoryRecord;
-type GraphqlDocumentHistoryEntity = Extract<
-  GraphqlHistoryEntity,
-  { __typename: 'GraphqlSoupDocument' }
->;
+const HISTORY_TYPENAMES = [
+  'GraphqlSoupDocument',
+  'GraphqlSoupChat',
+  'GraphqlSoupProject',
+] as const;
 
-function transformDocumentSubType(
-  subType: GraphqlDocumentHistoryEntity['subType']
-): DocumentHistoryItem['subType'] {
-  if (!subType) return subType;
+type HistoryTypename = (typeof HISTORY_TYPENAMES)[number];
 
-  switch (subType.__typename) {
-    case 'GraphqlTaskSubType':
-      return {
-        type: 'task',
-        is_completed: subType.isCompleted,
-      };
-    case 'GraphqlSnippetSubType':
-      return { type: 'snippet' };
-    case 'GraphqlSkillSubType':
-      return { type: 'skill' };
+function nameSelection(
+  typename: HistoryTypename
+): RecordSelection<NameProjection> {
+  switch (typename) {
+    case 'GraphqlSoupDocument':
+      return selectRecords(GraphqlDocumentQuickAccessNameFragmentDoc);
+    case 'GraphqlSoupChat':
+      return selectRecords(GraphqlChatQuickAccessNameFragmentDoc);
+    case 'GraphqlSoupProject':
+      return selectRecords(GraphqlProjectQuickAccessNameFragmentDoc);
   }
 }
 
-/** Maps a normalized GraphQL Soup item to the legacy history shape. */
-export function transformGraphqlHistoryItem(
-  record: GraphqlHistoryRecord
+function historyItemFromSearchDocument(
+  document: SearchDocumentWire,
+  record: NameProjection
 ): HistoryItem | undefined {
-  const entity = record;
-  switch (entity.__typename) {
+  const separator = document.recordKey.indexOf(':');
+  if (separator < 0) return undefined;
+  const typename = document.recordKey.slice(0, separator);
+  const id = document.recordKey.slice(separator + 1);
+  const date = new Date(document.timestampMs);
+  const updatedAt = Number.isNaN(date.getTime())
+    ? undefined
+    : date.toISOString();
+  const base = {
+    id,
+    name: record.name,
+    rawName: record.name,
+    ownerId: record.ownerId,
+    createdAt: record.createdAt,
+    updatedAt,
+    deletedAt: null,
+  };
+  switch (typename) {
     case 'GraphqlSoupDocument': {
-      const subType = transformDocumentSubType(entity.subType);
-      const safeName = itemToSafeName({
-        type: 'document',
-        name: entity.documentName,
-        fileType: entity.fileType,
-        subType,
-      });
+      if (record.__typename !== 'GraphqlSoupDocument') return undefined;
+      const markdown = document.bucket !== 'document';
+      const subType =
+        document.bucket === 'task' ||
+        document.bucket === 'snippet' ||
+        document.bucket === 'skill'
+          ? {
+              type: document.bucket,
+              ...(document.bucket === 'task'
+                ? {
+                    is_completed:
+                      record.subType?.__typename === 'GraphqlTaskSubType'
+                        ? record.subType.isCompleted
+                        : undefined,
+                  }
+                : {}),
+            }
+          : null;
       return {
-        id: entity.id,
+        ...base,
         type: 'document',
-        name: formatDocumentName(safeName, entity.fileType, {
-          fullyQualifiedBlockName: true,
-        }),
-        rawName: entity.documentName,
-        ownerId: entity.ownerId,
-        fileType: entity.fileType,
+        fileType: markdown ? 'md' : undefined,
         subType,
-        createdAt: entity.createdAt,
-        updatedAt: entity.updatedAt,
-        deletedAt: entity.deletedAt,
-      };
+      } as HistoryItem;
     }
     case 'GraphqlSoupChat':
-      return {
-        id: entity.id,
-        type: 'chat',
-        name: itemToSafeName({ type: 'chat', name: entity.chatName }),
-        rawName: entity.chatName,
-        ownerId: entity.ownerId,
-        isPersistent: entity.isPersistent,
-        createdAt: entity.createdAt,
-        updatedAt: entity.updatedAt,
-        deletedAt: entity.deletedAt,
-      };
+      return { ...base, type: 'chat', isPersistent: true };
     case 'GraphqlSoupProject':
-      return {
-        id: entity.id,
-        type: 'project',
-        name: itemToSafeName({ type: 'project', name: entity.projectName }),
-        rawName: entity.projectName,
-        ownerId: entity.ownerId,
-        createdAt: entity.createdAt,
-        updatedAt: entity.updatedAt,
-        deletedAt: entity.deletedAt,
-      };
+      return { ...base, type: 'project' };
     default:
       return undefined;
   }
 }
 
-function getSortTimestamp(record: GraphqlHistoryRecord): number {
-  const entity = record;
-  switch (entity.__typename) {
-    case 'GraphqlSoupDocument':
-    case 'GraphqlSoupChat':
-    case 'GraphqlSoupProject': {
-      const timestamp = Date.parse(
-        entity.viewedAt ?? entity.updatedAt ?? entity.createdAt
+/** Materializes only the supplied compact document/chat/project search hits. */
+export async function materializeCachedGraphqlHistoryItems(
+  cacheHost: Pick<CacheHost, 'readRecordsByKeys'>,
+  documents: SearchDocumentWire[]
+): Promise<HistoryItem[]> {
+  const supported = documents.filter((document) =>
+    /^(GraphqlSoupDocument|GraphqlSoupChat|GraphqlSoupProject):/.test(
+      document.recordKey
+    )
+  );
+  const recordsByKey = new Map<string, NameProjection>();
+  await Promise.all(
+    HISTORY_TYPENAMES.map(async (typename) => {
+      const keys = supported
+        .filter((document) => document.recordKey.startsWith(`${typename}:`))
+        .map((document) => document.recordKey);
+      if (keys.length === 0) return;
+      const records = await readRecordsByKeys(
+        cacheHost,
+        nameSelection(typename),
+        keys
       );
-      return Number.isNaN(timestamp) ? 0 : timestamp;
-    }
-    default:
-      return 0;
-  }
+      for (const { recordKey, record } of records) {
+        recordsByKey.set(recordKey, record);
+      }
+    })
+  );
+
+  return supported.flatMap((document) => {
+    const record = recordsByKey.get(document.recordKey);
+    const item = record
+      ? historyItemFromSearchDocument(document, record)
+      : undefined;
+    return item ? [item] : [];
+  });
 }
 
-/**
- * Reads complete Soup item projections and maps document, chat, and project
- * entities to the history shape.
- */
+/** Reads a bounded recent history through the indexed search projection, then
+ * materializes only those final normalized entity keys. */
 export async function readCachedGraphqlHistoryItems(
-  cacheHost: Pick<CacheHost, 'readRecords'>
+  cacheHost: Pick<CacheHost, 'search' | 'readRecordsByKeys'>
 ): Promise<HistoryItem[]> {
-  const records: GraphqlHistoryRecord[] = [];
-  let cursor: string | undefined;
-  const seenCursors = new Set<string>();
-
-  do {
-    const page = await readRecords(cacheHost, graphqlHistorySelection, {
-      cursor,
-      limit: MAX_RECORD_SELECTION_PAGE_SIZE,
-    });
-    records.push(...page.records);
-    cursor = page.nextCursor ?? undefined;
-    if (cursor) {
-      if (seenCursors.has(cursor)) {
-        throw new Error('cache record selection returned a repeated cursor');
-      }
-      seenCursors.add(cursor);
-    }
-  } while (cursor);
-
-  return records
-    .flatMap((record) => {
-      const item = transformGraphqlHistoryItem(record);
-      return item && !item.deletedAt
-        ? [{ item, sortTimestamp: getSortTimestamp(record) }]
-        : [];
-    })
-    .sort(
-      (a, b) =>
-        b.sortTimestamp - a.sortTimestamp || a.item.id.localeCompare(b.item.id)
-    )
-    .map(({ item }) => item);
+  const page = await cacheHost.search({
+    profile: 'quick-access-v1',
+    buckets: [
+      'document',
+      'note',
+      'task',
+      'snippet',
+      'skill',
+      'chat',
+      'project',
+    ],
+    query: '',
+    limit: 500,
+  });
+  return materializeCachedGraphqlHistoryItems(cacheHost, page.documents);
 }

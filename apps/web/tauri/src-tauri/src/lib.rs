@@ -252,7 +252,8 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             graphql_cache_plugin::commands::graphql_cache_init,
             graphql_cache_plugin::commands::graphql_cache_read,
-            graphql_cache_plugin::commands::graphql_cache_read_records,
+            graphql_cache_plugin::commands::graphql_cache_read_records_by_keys,
+            graphql_cache_plugin::commands::graphql_cache_search,
             graphql_cache_plugin::commands::graphql_cache_write,
             graphql_cache_plugin::commands::graphql_cache_enqueue_optimistic_mutation,
             graphql_cache_plugin::commands::graphql_cache_inspect_query_variants,
@@ -342,6 +343,16 @@ pub fn run() {
                             }
                         }
                     });
+                }
+            }
+            RunEvent::Exit => {
+                if let Some(state) = app_handle.try_state::<graphql_cache_plugin::CacheState>() {
+                    state
+                        .shutdown()
+                        .inspect_err(
+                            |error| tracing::error!(error=?error, "failed to close graphql cache"),
+                        )
+                        .ok();
                 }
             }
             _ => {}

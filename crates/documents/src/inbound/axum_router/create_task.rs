@@ -1,6 +1,7 @@
 //! Handler for `POST /documents/create_task`.
 
 use axum::{Json, extract::State};
+use base64::Engine;
 use entity_access::domain::models::MemberTeamRole;
 use entity_access::domain::ports::EntityAccessService;
 use entity_access::inbound::axum_extractors::{
@@ -80,6 +81,12 @@ pub async fn create_task_handler<
 
     let task_metadata = &created.response().document_response.document_metadata;
     let document_id = created.document_id().to_string();
+    let initial_snapshot = created.initial_snapshot().ok_or_else(|| {
+        DocumentError::Internal(anyhow::anyhow!(
+            "markdown creation did not return its initial snapshot"
+        ))
+    })?;
+    let initial_snapshot = base64::engine::general_purpose::STANDARD.encode(initial_snapshot);
     spawn_task_duplicate_detection(
         state.task_dedup_service.clone(),
         state.lexical_client.clone(),
@@ -110,6 +117,7 @@ pub async fn create_task_handler<
         document_id,
         document_metadata: task_metadata.metadata.clone(),
         token,
+        initial_snapshot,
         team_id: task_metadata.team_id,
         team_task_id: task_metadata.team_task_id,
     }))

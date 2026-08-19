@@ -13,7 +13,6 @@ members = [
   "crates/calendar_events",
   "crates/channel_bots",
   "crates/client/cache-core",
-  "crates/client/cache-sqlite",
   "crates/client/cache-turso",
   "crates/client/cache-wasm",
   "crates/client/turso-opfs",
@@ -109,6 +108,7 @@ members = [
 ]
 
 [workspace.dependencies]
+aes-gcm = { version = "0.10.3", features = ["zeroize"] }
 anyhow = "1.0.100"
 apollo-compiler = "1"
 apollo-parser = "0.8"
@@ -128,6 +128,7 @@ automod = "1"
 aws-config = { version = "1.8.16", features = ["behavior-version-latest"] }
 aws-msk-iam-sasl-signer = "1.0.1"
 aws-sdk-dynamodb = "1.111.0"
+aws-sdk-kms = "1.104.0"
 aws-sdk-lambda = "1.122.0"
 aws-sdk-s3 = "1.132.0"
 aws-sdk-secretsmanager = "1.104.0"
@@ -284,6 +285,7 @@ utoipa = { version = "5.4.0", features = [
 utoipa-swagger-ui = { version = "9", features = ["axum", "vendored"] }
 uuid = { version = "1.15.1", features = ["fast-rng", "serde", "v4", "v5", "v7"] }
 wiremock = "0.6.5"
+zeroize = "1.8.2"
 # worker-build (see services/sync-service/wrangler.toml) refuses to build against
 # anything older than 0.2.123, so keep this floor above that.
 wasm-bindgen = "0.2.123"

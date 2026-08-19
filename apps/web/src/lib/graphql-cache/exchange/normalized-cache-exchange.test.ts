@@ -243,8 +243,11 @@ function makeFakeHost(): FakeHost {
       });
       return readResult;
     },
-    async readRecords() {
-      return { records: [], nextCursor: null };
+    async readRecordsByKeys() {
+      return [];
+    },
+    async search() {
+      return { documents: [], nextCursor: null };
     },
     async writeQuery(args): Promise<WriteResult> {
       host.writes.push({

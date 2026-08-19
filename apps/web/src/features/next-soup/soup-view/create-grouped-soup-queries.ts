@@ -54,7 +54,10 @@ type CreateGroupedSoupQueriesArgs = {
   groupByField: Accessor<GroupByField | undefined>;
   soupParams: Accessor<
     Omit<SoupParams, 'sort_method'> & {
-      sort_method: Exclude<SoupParams['sort_method'], 'frecency'>;
+      sort_method: Exclude<
+        SoupParams['sort_method'],
+        'frecency' | 'touched_by_me'
+      >;
     }
   >;
   soupBody: Accessor<SoupAstBody>;

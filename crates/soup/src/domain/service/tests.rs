@@ -1,3 +1,4 @@
+use crate::domain::models::TouchedEntity;
 use crate::domain::ports::MockSoupRepo;
 use channels::domain::{
     models::{
@@ -641,7 +642,8 @@ async fn simple_soup_includes_channel_threads() {
     )
     .await
     .unwrap()
-    .unwrap_left();
+    .into_simple()
+    .unwrap();
 
     assert_eq!(page.items.len(), 1);
     assert_matches!(
@@ -703,7 +705,8 @@ async fn simple_soup_includes_call_records() {
     )
     .await
     .unwrap()
-    .unwrap_left();
+    .into_simple()
+    .unwrap();
 
     assert_eq!(call_query_service.calls(), 1);
     assert_eq!(page.items.len(), 1);
@@ -763,7 +766,8 @@ async fn simple_soup_uses_channel_thread_filters_without_touching_channel_filter
     )
     .await
     .unwrap()
-    .unwrap_left();
+    .into_simple()
+    .unwrap();
 
     assert_eq!(comms_service.channel_calls(), 1);
     assert_eq!(comms_service.channel_filters(), vec!["null".to_string()]);
@@ -827,7 +831,8 @@ async fn simple_soup_includes_foreign_entities() {
     )
     .await
     .unwrap()
-    .unwrap_left();
+    .into_simple()
+    .unwrap();
 
     assert_eq!(page.items.len(), 2);
     assert_matches!(
@@ -1074,7 +1079,8 @@ async fn foreign_entity_filter_suppresses_non_matching_foreign_entities() {
     )
     .await
     .unwrap()
-    .unwrap_left();
+    .into_simple()
+    .unwrap();
 
     assert!(page.items.is_empty());
     assert!(foreign_entity_service.calls()[0].query.filter().is_some());
@@ -1698,7 +1704,8 @@ async fn frecency_should_fallback() {
     )
     .await
     .unwrap()
-    .unwrap_right();
+    .into_frecency()
+    .unwrap();
 
     // output should be the limit
     assert_eq!(res.items.len(), 100);
@@ -1782,7 +1789,8 @@ async fn frecency_should_paginate() {
     )
     .await
     .unwrap()
-    .unwrap_right();
+    .into_frecency()
+    .unwrap();
 
     // output should be the limit
     assert_eq!(res.items.len(), 100);
@@ -1876,7 +1884,8 @@ async fn frecency_should_resume_cursor() {
     )
     .await
     .unwrap()
-    .unwrap_right();
+    .into_frecency()
+    .unwrap();
 
     // first all items should be frecency
     assert!(
@@ -1978,7 +1987,8 @@ async fn frecency_fallback_cursor_should_resume() {
     )
     .await
     .unwrap()
-    .unwrap_right();
+    .into_frecency()
+    .unwrap();
 
     assert!(res.items.iter().all(|v| v.frecency_score.is_none()));
     let cursor: CursorWithValAndFilter<String, Frecency, EntityFilters> =
@@ -2049,7 +2059,7 @@ async fn cursor_should_return_simple_sort() {
     .await
     .unwrap();
 
-    let simple_cursor = res.unwrap_left();
+    let simple_cursor = res.into_simple().unwrap();
     let cursor_decoded: CursorWithValAndFilter<String, SimpleSortMethod, EntityFilters> =
         simple_cursor.next_cursor.unwrap().decode_json().unwrap();
     assert_matches!(cursor_decoded, CursorWithValAndFilter { id, limit: 1, val: CursorVal { sort_type: SimpleSortMethod::ViewedUpdated, last_val }, filter: _ } => {
@@ -2120,7 +2130,7 @@ async fn cursor_should_return_frecency() {
     .await
     .unwrap();
 
-    let simple_cursor = res.unwrap_right();
+    let simple_cursor = res.into_frecency().unwrap();
     let cursor_decoded: CursorWithValAndFilter<String, Frecency, EntityFilters> =
         simple_cursor.next_cursor.unwrap().decode_json().unwrap();
     assert_matches!(cursor_decoded, CursorWithValAndFilter { id, limit: 100, val: CursorVal { sort_type: Frecency, last_val: FrecencyValue::FrecencyScore(1.0) }, filter: _ } => {
@@ -2430,7 +2440,8 @@ async fn it_should_preserve_is_completed_in_by_ids_queries() {
     )
     .await
     .unwrap()
-    .unwrap_right();
+    .into_frecency()
+    .unwrap();
 
     // Should have 3 items, verify is_completed values are preserved
     assert_eq!(res.items.len(), 3);
@@ -2448,4 +2459,313 @@ async fn it_should_preserve_is_completed_in_by_ids_queries() {
         is_completed_values.contains(&None),
         "Should contain is_completed=None"
     );
+}
+
+#[tokio::test]
+async fn touched_soup_orders_by_touch_and_drops_unhydrated() {
+    let user = MacroUserIdStr::parse_from_str("macro|test@example.com").unwrap();
+    let doc_1 = Uuid::from_u128(1);
+    let doc_2 = Uuid::from_u128(2);
+    let ghost = Uuid::from_u128(3);
+    let base: DateTime<Utc> = DateTime::default();
+
+    let mut soup_mock = MockSoupRepo::new();
+    soup_mock
+        .expect_touched_soup_page()
+        .times(1)
+        .returning(move |req| {
+            assert!(req.after.is_none());
+            assert!(!req.include_projects, "expanded soup excludes projects");
+            Box::pin(async move {
+                Ok(vec![
+                    TouchedEntity {
+                        entity: EntityType::Document.with_entity_string(doc_1.to_string()),
+                        touched_at: base + Days::new(3),
+                    },
+                    TouchedEntity {
+                        entity: EntityType::Document.with_entity_string(ghost.to_string()),
+                        touched_at: base + Days::new(2),
+                    },
+                    TouchedEntity {
+                        entity: EntityType::Document.with_entity_string(doc_2.to_string()),
+                        touched_at: base + Days::new(1),
+                    },
+                ])
+            })
+        });
+    // Hydration returns rows in arbitrary order and is missing the ghost;
+    // the page must come back in touched order without it.
+    soup_mock
+        .expect_expanded_soup_by_ids()
+        .times(1)
+        .returning(move |_params| {
+            Box::pin(async move {
+                Ok(vec![
+                    SoupItem::Document(soup_document_uuid_with_updated(doc_2, Default::default())),
+                    SoupItem::Document(soup_document_uuid_with_updated(doc_1, Default::default())),
+                ])
+            })
+        });
+
+    let page = SoupImpl::new(
+        soup_mock,
+        FrecencyQueryServiceImpl::new(MockFrecencyStorage::new()),
+        NoopEmailPreviewService,
+        RecordingCommsService::new(vec![]),
+        NoopCallRecordQueryService,
+        NoOpCrmService,
+        NoopForeignEntityService,
+        NoOpRemindersService,
+    )
+    .get_user_soup(
+        SoupRequest {
+            sort_direction: SoupSortDirection::default(),
+            email_preview_view: PreviewView::StandardLabel(
+                email::domain::models::PreviewViewStandardLabel::Inbox,
+            ),
+            link_ids: vec![],
+            soup_type: SoupType::Expanded,
+            limit: 20,
+            cursor: SoupQuery::new_sort_touched(EntityFilters::default()),
+            user,
+        },
+        None,
+    )
+    .await
+    .unwrap()
+    .into_touched()
+    .unwrap();
+
+    let ids: Vec<Uuid> = page.items.iter().map(|item| item.id()).collect();
+    assert_eq!(ids, vec![doc_1, doc_2]);
+    // Three candidates against a limit of 20: the feed is exhausted.
+    assert!(page.next_cursor.is_none());
+}
+
+#[tokio::test]
+async fn touched_soup_full_page_builds_keyset_cursor() {
+    let user = MacroUserIdStr::parse_from_str("macro|test@example.com").unwrap();
+    let base: DateTime<Utc> = DateTime::default();
+    let ids: Vec<Uuid> = (1..=20).map(Uuid::from_u128).collect();
+    let last_id = *ids.last().unwrap();
+    let last_touch = base + Days::new(1);
+
+    let mut soup_mock = MockSoupRepo::new();
+    let touched_ids = ids.clone();
+    soup_mock
+        .expect_touched_soup_page()
+        .times(1)
+        .returning(move |_req| {
+            let rows = touched_ids
+                .iter()
+                .enumerate()
+                .map(|(i, id)| TouchedEntity {
+                    entity: EntityType::Document.with_entity_string(id.to_string()),
+                    touched_at: base + Days::new(20 - i as u64),
+                })
+                .collect();
+            Box::pin(async move { Ok(rows) })
+        });
+    let hydrated_ids = ids.clone();
+    soup_mock
+        .expect_expanded_soup_by_ids()
+        .times(1)
+        .returning(move |_params| {
+            let items = hydrated_ids
+                .iter()
+                .map(|id| {
+                    SoupItem::Document(soup_document_uuid_with_updated(*id, Default::default()))
+                })
+                .collect();
+            Box::pin(async move { Ok(items) })
+        });
+
+    let page = SoupImpl::new(
+        soup_mock,
+        FrecencyQueryServiceImpl::new(MockFrecencyStorage::new()),
+        NoopEmailPreviewService,
+        RecordingCommsService::new(vec![]),
+        NoopCallRecordQueryService,
+        NoOpCrmService,
+        NoopForeignEntityService,
+        NoOpRemindersService,
+    )
+    .get_user_soup(
+        SoupRequest {
+            sort_direction: SoupSortDirection::default(),
+            email_preview_view: PreviewView::StandardLabel(
+                email::domain::models::PreviewViewStandardLabel::Inbox,
+            ),
+            link_ids: vec![],
+            soup_type: SoupType::Expanded,
+            limit: 20,
+            cursor: SoupQuery::new_sort_touched(EntityFilters::default()),
+            user,
+        },
+        None,
+    )
+    .await
+    .unwrap()
+    .into_touched()
+    .unwrap();
+
+    assert_eq!(page.items.len(), 20);
+    // A full candidate page continues from the last row's keyset position.
+    let decoded: CursorWithValAndFilter<String, models_pagination::TouchedByMe, EntityFilters> =
+        page.next_cursor.unwrap().decode_json().unwrap();
+    assert_eq!(decoded.id, last_id.to_string());
+    assert_eq!(decoded.val.last_val, last_touch);
+}
+
+/// Records each email hydration request and returns no threads.
+#[derive(Clone, Default)]
+struct RecordingEmailPreviewService {
+    requests: Arc<Mutex<Vec<(PreviewView, Vec<Uuid>, Option<u32>)>>>,
+}
+
+impl EmailPreviewServiceReadOnly for RecordingEmailPreviewService {
+    async fn get_email_thread_previews(
+        &self,
+        req: email::domain::models::GetEmailsRequest,
+    ) -> Result<
+        PaginatedCursor<EnrichedEmailThreadPreview, Uuid, SimpleSortMethod, ()>,
+        email::domain::models::EmailErr,
+    > {
+        self.requests
+            .lock()
+            .unwrap()
+            .push((req.view.clone(), req.link_ids.clone(), req.limit));
+        Ok(Option::<EnrichedEmailThreadPreview>::None
+            .into_iter()
+            .paginate_on(0, SimpleSortMethod::CreatedAt)
+            .into_page())
+    }
+}
+
+/// Touched email hydration must use the unfiltered `All` view: the candidate
+/// query admits threads the caller's display view (e.g. Inbox) would hide,
+/// and a view-filtered hydration would silently drop them from the page.
+#[tokio::test]
+async fn touched_soup_hydrates_emails_with_the_unfiltered_view() {
+    let user = MacroUserIdStr::parse_from_str("macro|test@example.com").unwrap();
+    let thread = Uuid::from_u128(7);
+    let link = Uuid::from_u128(8);
+    let base: DateTime<Utc> = DateTime::default();
+
+    let mut soup_mock = MockSoupRepo::new();
+    soup_mock
+        .expect_touched_soup_page()
+        .times(1)
+        .returning(move |_req| {
+            Box::pin(async move {
+                Ok(vec![TouchedEntity {
+                    entity: EntityType::EmailThread.with_entity_string(thread.to_string()),
+                    touched_at: base + Days::new(1),
+                }])
+            })
+        });
+    soup_mock
+        .expect_expanded_soup_by_ids()
+        .returning(|_params| Box::pin(async move { Ok(Vec::new()) }));
+
+    let email_service = RecordingEmailPreviewService::default();
+    let requests = email_service.requests.clone();
+
+    let _page = SoupImpl::new(
+        soup_mock,
+        FrecencyQueryServiceImpl::new(MockFrecencyStorage::new()),
+        email_service,
+        RecordingCommsService::new(vec![]),
+        NoopCallRecordQueryService,
+        NoOpCrmService,
+        NoopForeignEntityService,
+        NoOpRemindersService,
+    )
+    .get_user_soup(
+        SoupRequest {
+            sort_direction: SoupSortDirection::default(),
+            email_preview_view: PreviewView::StandardLabel(
+                email::domain::models::PreviewViewStandardLabel::Inbox,
+            ),
+            link_ids: vec![link],
+            soup_type: SoupType::Expanded,
+            limit: 20,
+            cursor: SoupQuery::new_sort_touched(EntityFilters::default()),
+            user,
+        },
+        None,
+    )
+    .await
+    .unwrap();
+
+    let recorded = requests.lock().unwrap();
+    let (view, link_ids, limit) = recorded.first().expect("email hydration ran");
+    assert_eq!(
+        view,
+        &PreviewView::StandardLabel(email::domain::models::PreviewViewStandardLabel::All)
+    );
+    assert_eq!(link_ids, &vec![link]);
+    assert_eq!(limit, &Some(1));
+}
+
+/// Channel and email filter trees fold in their own domains; combining them
+/// with touched_by_me is rejected rather than silently dropping the type.
+#[tokio::test]
+async fn touched_soup_rejects_unfoldable_filters() {
+    for (filters, expected_kind) in [
+        (
+            EntityFilters {
+                channel_filters: item_filters::ChannelFilters {
+                    importance: Some(true),
+                    ..Default::default()
+                },
+                ..Default::default()
+            },
+            "channel",
+        ),
+        (
+            EntityFilters {
+                email_filters: item_filters::EmailFilters {
+                    importance: Some(true),
+                    ..Default::default()
+                },
+                ..Default::default()
+            },
+            "email",
+        ),
+    ] {
+        let mut soup_mock = MockSoupRepo::new();
+        soup_mock.expect_touched_soup_page().times(0);
+
+        let err = SoupImpl::new(
+            soup_mock,
+            FrecencyQueryServiceImpl::new(MockFrecencyStorage::new()),
+            NoopEmailPreviewService,
+            RecordingCommsService::new(vec![]),
+            NoopCallRecordQueryService,
+            NoOpCrmService,
+            NoopForeignEntityService,
+            NoOpRemindersService,
+        )
+        .get_user_soup(
+            SoupRequest {
+                sort_direction: SoupSortDirection::default(),
+                email_preview_view: PreviewView::StandardLabel(
+                    email::domain::models::PreviewViewStandardLabel::Inbox,
+                ),
+                link_ids: vec![],
+                soup_type: SoupType::Expanded,
+                limit: 20,
+                cursor: SoupQuery::new_sort_touched(filters),
+                user: MacroUserIdStr::parse_from_str("macro|test@example.com").unwrap(),
+            },
+            None,
+        )
+        .await
+        .unwrap_err();
+
+        assert_matches!(err, SoupErr::TouchedUnsupportedFilter(kind) => {
+            assert_eq!(kind, expected_kind);
+        });
+    }
 }

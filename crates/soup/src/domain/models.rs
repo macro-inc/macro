@@ -32,7 +32,9 @@ use item_filters::{
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::Entity;
 use models_grouping::GroupingConfig;
-use models_pagination::{Cursor, CursorWithValAndFilter, Frecency, Query, SimpleSortMethod};
+use models_pagination::{
+    Cursor, CursorWithValAndFilter, Frecency, Query, SimpleSortMethod, TouchedByMe,
+};
 use models_soup::SoupProperty;
 use models_soup::item::SoupItem;
 use non_empty::IsEmpty;
@@ -161,6 +163,9 @@ pub enum SoupQuery<T> {
     Simple(SimpleQueryInner<T>),
     /// Query sorted by frecency.
     Frecency(FrecencyQueryInner<T>),
+    /// Query filtered and sorted by the user's own latest mutation per
+    /// entity (the activity log's touched-by-me surface).
+    Touched(TouchedQueryInner<T>),
 }
 
 impl<T> SoupQuery<T> {
@@ -175,6 +180,9 @@ impl<T> SoupQuery<T> {
             SoupQuery::Frecency(FrecencyQueryInner(i)) => {
                 SoupQuery::Frecency(FrecencyQueryInner(i.map_filter(f)))
             }
+            SoupQuery::Touched(TouchedQueryInner(i)) => {
+                SoupQuery::Touched(TouchedQueryInner(i.map_filter(f)))
+            }
         }
     }
 }
@@ -186,6 +194,15 @@ pub struct SimpleQueryInner<T>(pub(crate) Query<Uuid, SimpleSortMethod, T>);
 /// the inner private type for [SoupQuery::Frecency]
 #[derive(Debug)]
 pub struct FrecencyQueryInner<T>(pub(crate) Query<Uuid, Frecency, T>);
+
+/// the inner private type for [SoupQuery::Touched]
+///
+/// The id is a [String] rather than a [Uuid]: touched cursors key into the
+/// activity log's TEXT `entity_id` column, and the raw string must survive
+/// the cursor round-trip byte-for-byte (see
+/// [`TouchedPagePosition::entity_id`]).
+#[derive(Debug)]
+pub struct TouchedQueryInner<T>(pub(crate) Query<String, TouchedByMe, T>);
 
 impl<T> SoupQuery<T> {
     /// create a new instance of a [SimpleSortMethod] with [T] this is used to
@@ -218,11 +235,29 @@ impl<T> SoupQuery<T> {
         SoupQuery::Frecency(FrecencyQueryInner(models_pagination::Query::Cursor(cursor)))
     }
 
+    /// create a new instance of a [TouchedByMe] query with [T]. This is used
+    /// to construct the initial page request. To paginate an existing cursor
+    /// see [Self::new_cursor_touched]
+    pub fn new_sort_touched(filters: T) -> Self {
+        SoupQuery::Touched(TouchedQueryInner(models_pagination::Query::Sort(
+            TouchedByMe,
+            filters,
+        )))
+    }
+
+    /// create a new instance of a [TouchedByMe] query with an existing cursor
+    /// on [T]. This is used to continue paginating on an existing cursor.
+    /// To create a new initial page see [Self::new_sort_touched]
+    pub fn new_cursor_touched(cursor: CursorWithValAndFilter<String, TouchedByMe, T>) -> Self {
+        SoupQuery::Touched(TouchedQueryInner(models_pagination::Query::Cursor(cursor)))
+    }
+
     /// Returns the filter payload embedded in this query.
     pub fn filter(&self) -> &T {
         match self {
             SoupQuery::Simple(SimpleQueryInner(query)) => query.filter(),
             SoupQuery::Frecency(FrecencyQueryInner(query)) => query.filter(),
+            SoupQuery::Touched(TouchedQueryInner(query)) => query.filter(),
         }
     }
 }
@@ -236,6 +271,9 @@ impl SoupQuery<EntityFilters> {
             ))),
             SoupQuery::Frecency(FrecencyQueryInner(query)) => Ok(SoupQuery::Frecency(
                 FrecencyQueryInner(query.try_map_filter(EntityFilterAst::new_from_filters)?),
+            )),
+            SoupQuery::Touched(TouchedQueryInner(query)) => Ok(SoupQuery::Touched(
+                TouchedQueryInner(query.try_map_filter(EntityFilterAst::new_from_filters)?),
             )),
         }
     }
@@ -393,6 +431,8 @@ impl SoupRequest<Option<EntityFilterAst>> {
                 })),
                 // we don't yet have sort by frecency implemented for emails yet
                 SoupQuery::Frecency(_) => None,
+                // touched-by-me hydrates emails by thread id, not via this leg
+                SoupQuery::Touched(_) => None,
             }?,
             include_frecency: false,
             team_receipt,
@@ -409,6 +449,7 @@ impl SoupRequest<Option<EntityFilterAst>> {
                 ..
             }))) => filter.as_ref(),
             SoupQuery::Frecency(_) => None,
+            SoupQuery::Touched(TouchedQueryInner(query)) => query.filter().as_ref(),
         }
     }
 
@@ -462,6 +503,9 @@ impl SoupRequest<Option<EntityFilterAst>> {
                 })),
                 // query by frecency not yet implemented for call records
                 SoupQuery::Frecency(_) => None,
+                // call records carry no activity of their own (calls land on
+                // the channel), so the touched feed never includes them
+                SoupQuery::Touched(_) => None,
             }?,
         })
     }
@@ -511,6 +555,8 @@ impl SoupRequest<Option<EntityFilterAst>> {
                 }),
             ),
             SoupQuery::Frecency(_) => return None,
+            // CRM has no mutation activity (deferred from touched-by-me)
+            SoupQuery::Touched(_) => return None,
         };
 
         let sort = match sort_method {
@@ -561,8 +607,8 @@ impl SoupRequest<Option<EntityFilterAst>> {
         }
         // Reminders sort on `next_run_at` regardless of the requested method,
         // so there is nothing to translate — but frecency has no reminder
-        // scoring, so that path skips them.
-        if matches!(self.cursor, SoupQuery::Frecency(_)) {
+        // scoring and reminders record no activity, so both paths skip them.
+        if matches!(self.cursor, SoupQuery::Frecency(_) | SoupQuery::Touched(_)) {
             return None;
         }
 
@@ -618,6 +664,8 @@ impl SoupRequest<Option<EntityFilterAst>> {
                 })),
                 // query by frecency not yet implemented for channels
                 SoupQuery::Frecency(_) => None,
+                // touched-by-me hydrates channels by id, not via this leg
+                SoupQuery::Touched(_) => None,
             }?,
         })
     }
@@ -646,6 +694,9 @@ impl SoupRequest<Option<EntityFilterAst>> {
             })),
             // query by frecency not yet implemented for channel threads
             SoupQuery::Frecency(_) => None,
+            // channel-thread rows carry no activity (messages attribute to
+            // the channel), so the touched feed never includes them
+            SoupQuery::Touched(_) => None,
         }?;
 
         Some(GetThreadReplyRowsRequest {
@@ -680,6 +731,9 @@ impl SoupRequest<Option<EntityFilterAst>> {
             })),
             // query by frecency is not implemented for foreign entities
             SoupQuery::Frecency(_) => None,
+            // foreign entities record no activity, so the touched feed never
+            // includes them
+            SoupQuery::Touched(_) => None,
         }
     }
 
@@ -695,6 +749,48 @@ impl SoupRequest<Option<EntityFilterAst>> {
 
         source_ids
     }
+}
+
+/// Keyset position for a touched-by-me page: the touch timestamp and entity
+/// id of the previous page's last row.
+///
+/// The id stays the raw stored string (never round-tripped through [`Uuid`]):
+/// the SQL keyset compares it byte-for-byte against the `entity_id` TEXT
+/// column, so any canonicalization would shift the page boundary.
+#[derive(Debug, Clone)]
+pub struct TouchedPagePosition {
+    /// The last entity's latest-mutation timestamp.
+    pub occurred_at: chrono::DateTime<chrono::Utc>,
+    /// The last entity's id — the global tiebreaker when two entities share
+    /// a touch timestamp.
+    pub entity_id: String,
+}
+
+/// Parameters for one page of touched-by-me candidates.
+#[derive(Debug)]
+pub struct TouchedSoupRequest<'a> {
+    /// User whose touches are listed; also the access-check subject.
+    pub user_id: MacroUserIdStr<'a>,
+    /// Maximum entities to return.
+    pub limit: u16,
+    /// Resume after this position; `None` for the first page.
+    pub after: Option<TouchedPagePosition>,
+    /// Entity filters folded into the candidate query.
+    pub filter: Option<&'a EntityFilterAst>,
+    /// Whether project rows belong in the feed (unexpanded soup only —
+    /// expanded soup shows project contents rather than project rows).
+    pub include_projects: bool,
+    /// Every inbox the caller can read; gates email-thread candidates.
+    pub link_ids: &'a [Uuid],
+}
+
+/// One touched entity: what it is and when the user last mutated it.
+#[derive(Debug, Clone)]
+pub struct TouchedEntity {
+    /// The touched entity.
+    pub entity: Entity<'static>,
+    /// The user's latest mutation of it.
+    pub touched_at: chrono::DateTime<chrono::Utc>,
 }
 
 /// ANDs a properties filter into the email filter tree as thread-level
@@ -982,6 +1078,11 @@ pub enum SoupErr {
     /// Reminder lookup failed.
     #[error("A reminder error has occurred, see logs for more details")]
     ReminderErr,
+    /// A touched-by-me query carried a filter kind this mode cannot
+    /// evaluate (the fold lives in another domain's query builder).
+    /// Rejecting beats silently returning a feed with that type missing.
+    #[error("sort_method=touched_by_me does not support {0} filters")]
+    TouchedUnsupportedFilter(&'static str),
     /// The filter requested CRM-scoped data but the caller has no
     /// qualifying team membership.
     #[error("CRM-scoped queries require team membership")]

@@ -3285,3 +3285,191 @@ async fn only_the_owner_can_disconnect_an_inbox_calendar(pool: PgPool) {
         1
     );
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn mention_previews_resolve_through_the_shared_uid(pool: PgPool) {
+    let author_id = "macro|mention-author@example.com";
+    let attendee_id = "macro|mention-attendee@example.com";
+    let author_link = insert_link(&pool, author_id).await;
+    let attendee_link = insert_link(&pool, attendee_id).await;
+    let repo = PgCalendarRepository::new(pool.clone());
+    let author_provider = provider_ids(&repo, author_link).await;
+    let attendee_provider = provider_ids(&repo, attendee_link).await;
+
+    let author_copy = timed_upsert(
+        author_id,
+        author_link,
+        author_provider,
+        "meeting@example.com",
+        "Smart Macro Discussion",
+        1,
+    );
+    let author_event_id = author_copy.event.id;
+    repo.upsert_event_fixture(author_copy).await.unwrap();
+    let attendee_copy = timed_upsert(
+        attendee_id,
+        attendee_link,
+        attendee_provider,
+        "meeting@example.com",
+        "Smart Macro Discussion",
+        1,
+    );
+    let attendee_event_id = attendee_copy.event.id;
+    repo.upsert_event_fixture(attendee_copy).await.unwrap();
+    let private_copy = timed_upsert(
+        author_id,
+        author_link,
+        author_provider,
+        "private@example.com",
+        "Author only",
+        1,
+    );
+    let private_event_id = private_copy.event.id;
+    repo.upsert_event_fixture(private_copy).await.unwrap();
+    let mut cancelled_copy = timed_upsert(
+        author_id,
+        author_link,
+        author_provider,
+        "cancelled@example.com",
+        "Cancelled",
+        1,
+    );
+    cancelled_copy.event.status = EventStatus::Cancelled;
+    let cancelled_event_id = cancelled_copy.event.id;
+    repo.upsert_event_fixture(cancelled_copy).await.unwrap();
+
+    let now = Utc.with_ymd_and_hms(2026, 7, 23, 0, 0, 0).unwrap();
+    let request = |event_id| CalendarMentionRequestItem {
+        event_id,
+        occurrence_key: None,
+    };
+
+    let previews = repo
+        .mention_previews(
+            author_id,
+            vec![request(author_event_id), request(Uuid::now_v7())],
+            now,
+        )
+        .await
+        .unwrap();
+    let CalendarMentionPreview::Accessible(own) = &previews[0] else {
+        panic!("author preview should be accessible: {:?}", previews[0]);
+    };
+    assert_eq!(own.viewer_event_id, author_event_id);
+    assert_eq!(own.title, "Smart Macro Discussion");
+    assert!(own.is_recurring);
+    assert_eq!(own.attendee_count, 1);
+    assert_eq!(previews[1], CalendarMentionPreview::DoesNotExist);
+
+    // The attendee resolves the author's row to their own projection, and
+    // never sees the author-only or cancelled meetings.
+    let previews = repo
+        .mention_previews(
+            attendee_id,
+            vec![
+                request(author_event_id),
+                request(private_event_id),
+                request(cancelled_event_id),
+            ],
+            now,
+        )
+        .await
+        .unwrap();
+    let CalendarMentionPreview::Accessible(resolved) = &previews[0] else {
+        panic!("attendee preview should be accessible: {:?}", previews[0]);
+    };
+    assert_eq!(resolved.viewer_event_id, attendee_event_id);
+    assert_eq!(previews[1], CalendarMentionPreview::NoAccess);
+    assert_eq!(previews[2], CalendarMentionPreview::DoesNotExist);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn mention_preview_picks_the_requested_or_nearest_occurrence(pool: PgPool) {
+    let owner_id = "macro|mention-occurrence@example.com";
+    let link_id = insert_link(&pool, owner_id).await;
+    let repo = PgCalendarRepository::new(pool.clone());
+    let provider = provider_ids(&repo, link_id).await;
+    let upsert = timed_upsert(
+        owner_id,
+        link_id,
+        provider,
+        "series@example.com",
+        "Series",
+        1,
+    );
+    let event_id = upsert.event.id;
+    let first_start = Utc.with_ymd_and_hms(2026, 7, 24, 14, 0, 0).unwrap();
+    let second_start = first_start + Duration::days(1);
+    repo.upsert_event_fixture(upsert).await.unwrap();
+
+    let preview_time = |preview: &CalendarMentionPreview| match preview {
+        CalendarMentionPreview::Accessible(event) => {
+            (event.time.clone(), event.occurrence_key.clone())
+        }
+        other => panic!("expected an accessible preview: {other:?}"),
+    };
+
+    // Before the series: the next upcoming instance.
+    let before = Utc.with_ymd_and_hms(2026, 7, 23, 0, 0, 0).unwrap();
+    let previews = repo
+        .mention_previews(
+            owner_id,
+            vec![CalendarMentionRequestItem {
+                event_id,
+                occurrence_key: None,
+            }],
+            before,
+        )
+        .await
+        .unwrap();
+    let (time, key) = preview_time(&previews[0]);
+    assert_eq!(key.as_deref(), Some(first_start.to_rfc3339().as_str()));
+    assert!(matches!(time, EventTime::Timed { starts_at, .. } if starts_at == first_start));
+
+    // Between instances: still the next upcoming one.
+    let between = Utc.with_ymd_and_hms(2026, 7, 24, 18, 0, 0).unwrap();
+    let previews = repo
+        .mention_previews(
+            owner_id,
+            vec![CalendarMentionRequestItem {
+                event_id,
+                occurrence_key: None,
+            }],
+            between,
+        )
+        .await
+        .unwrap();
+    let (_, key) = preview_time(&previews[0]);
+    assert_eq!(key.as_deref(), Some(second_start.to_rfc3339().as_str()));
+
+    // After the series: the latest past instance.
+    let after = Utc.with_ymd_and_hms(2026, 8, 1, 0, 0, 0).unwrap();
+    let previews = repo
+        .mention_previews(
+            owner_id,
+            vec![CalendarMentionRequestItem {
+                event_id,
+                occurrence_key: None,
+            }],
+            after,
+        )
+        .await
+        .unwrap();
+    let (_, key) = preview_time(&previews[0]);
+    assert_eq!(key.as_deref(), Some(second_start.to_rfc3339().as_str()));
+
+    // A requested instance wins regardless of the clock.
+    let previews = repo
+        .mention_previews(
+            owner_id,
+            vec![CalendarMentionRequestItem {
+                event_id,
+                occurrence_key: Some(first_start.to_rfc3339()),
+            }],
+            after,
+        )
+        .await
+        .unwrap();
+    let (_, key) = preview_time(&previews[0]);
+    assert_eq!(key.as_deref(), Some(first_start.to_rfc3339().as_str()));
+}
