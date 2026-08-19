@@ -1,111 +1,191 @@
-# Exact `EntityFilterAst` Cache Index Plan
+# Incremental Exact GraphQL Entity-Filter Cache Index Plan
 
 ## Objective
 
-Compile an input `item_filters::ast::EntityFilterAst` into a generic predicate plan and use a Turso/OPFS-backed inverted index to find matching normalized GraphQL cache records exactly and efficiently.
+Use the browser's Turso/OPFS-backed normalized GraphQL cache to answer a deliberately bounded subset of Soup GraphQL filter-AST requests exactly and efficiently.
 
-This is **not** vector similarity search and does not use Turso FTS. Exact Boolean filtering is implemented with indexed posting lists, range indexes, exact text verification, and SQL set algebra.
+The first release is a complete end-to-end implementation of a small, versioned support profile. It is not an incomplete implementation of every `item_filters::ast::EntityFilterAst` literal. If any part of a request is outside the active profile, the complete request uses the authoritative network path.
+
+This is **not** vector similarity search, fuzzy Quick Access search, or Turso FTS. The first profile uses only exact posting lists, ordered integer facts, and bounded SQL set algebra.
+
+## Product gate
+
+Before expanding the index, measure whether users need the browser to answer previously unseen filters. If immediate reuse of previously fetched requests provides sufficient value, prefer a much smaller query-result cache keyed by the canonical GraphQL filter input, sort, and limit.
+
+The predicate index is justified only when arbitrary supported GraphQL ASTs must be evaluated over entities already present in the local cache. The first indexed profile must ship end to end and demonstrate useful hit rate and latency before more filter families are added.
 
 ## Confirmed decisions
 
-1. Exactness applies to completely indexed entities currently present in the local cache. It does not imply that the local cache contains the user's complete server corpus.
-2. Dirty, incomplete, missing, or forward-incompatible projections cause network fallback. They must never produce approximate local results.
-3. The first consumer is `useSoupAstItemsQuery`.
-4. Browser Turso/OPFS is the only persistence target. `cache-sqlite` and Tauri are out of scope.
-5. This ships as one complete implementation supporting every current `EntityFilterAst` literal. There is no partial profile, gradual rollout, or feature-flagged subset.
-6. The existing fuzzy Quick Access search remains separate from this exact filter index.
-7. Filter semantics must remain isolated from cache and storage implementation details.
+1. The canonical browser input is the Soup **GraphQL filter AST**, not the REST `ApiEntityFilterAst` body.
+2. The same `GraphqlEntityFilterAst` value is passed to both the GraphQL network request and the browser index request. The local path must not translate or interpret the REST AST.
+3. Exactness applies to completely indexed entities currently present in the identity-scoped local cache. It does not imply that the cache contains the user's complete server corpus.
+4. Support is all-or-network per request. An unsupported literal, partition, Boolean shape, sort, or input version causes network fallback before index execution. Supported leaves must never be applied while unsupported leaves are ignored.
+5. Dirty, missing, incomplete, or forward-incompatible projections cause network fallback. They must never produce an approximate local page.
+6. The first consumer is `useSoupAstItemsQuery`.
+7. The first support profile is `soup-flat-v1`, defined below. Expansion is profile-versioned and driven by measured frontend request shapes.
+8. Browser Turso/OPFS is the only persistence target. `cache-sqlite` and Tauri are out of scope.
+9. The server remains corpus, authorization, and pagination authority. The first local API returns only an initial placeholder page and has no local continuation cursor.
+10. Optimistic updates are not locally reprojected in the first profile. A potentially relevant optimistic update makes the affected local scope incomplete until authoritative replacement data arrives.
+11. The existing fuzzy Quick Access search remains separate.
+12. Filter semantics remain isolated from cache and storage implementation details.
 
-## Current state
+## Canonical GraphQL AST boundary
 
 Relevant code:
 
-- `crates/item_filters/src/ast.rs` defines `EntityFilterAst`, its entity-specific trees, `EmailFilterAst`, CRM scope, and the global properties tree.
-- `crates/item_filters/src/ast/**` defines all entity literal variants.
-- `crates/filter_ast/src/lib.rs` defines `Expr::{And, Or, Not, Literal}`.
-- `crates/soup/src/inbound/axum_router.rs` currently owns the reusable-looking REST `ApiEntityFilterAst` DTO and its conversion into the materialized `EntityFilterAst`.
-- `crates/soup/src/outbound/pg_soup_repo/expanded/dynamic.rs` and entity-specific repositories implement authoritative server filtering.
-- `crates/email/src/outbound/email_pg_repo/dynamic/**` implements authoritative email filtering.
-- `apps/web/src/lib/queries/soup/graphql/ast.ts` contains a separate REST-AST-to-GraphQL-input translator. Do not add a third semantic translator in the cache.
-- `apps/web/src/features/next-soup/filters/query-filters.ts` explicitly supports only a subset of filters and is not an exact matcher.
-- `crates/client/cache-core/src/search.rs` contains a Quick Access-specific materialized projection with hard-coded GraphQL typenames, field names, and buckets.
-- `crates/client/cache-core/src/store.rs` exposes Quick Access-specific search operations.
-- `crates/client/cache-turso/src/storage.rs` stores normalized records plus the Quick Access projection transactionally. Its frozen browser schema version must be advanced when the generic index tables are introduced.
-- `crates/client/cache-wasm/src/shell.rs` is the browser composition boundary.
-- `apps/web/src/lib/graphql-cache/**` contains the browser worker protocol and host interfaces.
+- `crates/graphql_soup/src/inputs.rs` owns the current private `GraphqlEntityFilterAst` input types and conversion into `item_filters::ast::EntityFilterAst`.
+- `apps/web/src/lib/queries/soup/graphql/ast.ts` currently translates legacy frontend `SoupAstBody` REST syntax into the generated GraphQL input shape.
+- `crates/item_filters/src/ast.rs` defines the materialized domain AST used by authoritative Soup filtering.
+- `apps/web/src/lib/queries/soup/items.ts` is the first integration point.
 
-The current Quick Access projection is unsuitable for exact `EntityFilterAst` matching. It is specialized for fuzzy name search and recency, and non-empty searches load and rank a compact catalog in memory.
+Extract a lightweight, reusable representation of the GraphQL variables shape and its materialization rules. It must be usable by both the GraphQL adapter and `cache-wasm` without making the browser depend on the GraphQL server crate or Axum.
+
+The canonical flow is:
+
+```text
+frontend filter state
+        │
+        ▼
+GraphqlEntityFilterAst input
+        ├────────────────────► GraphQL Soup request
+        │
+        └────────────────────► browser entity-filter request
+                                      │
+                                      ▼
+                          shared GraphQL-AST materializer
+                                      │
+                                      ▼
+                               EntityFilterAst
+                                      │
+                                      ▼
+                         soup-flat-v1 eligibility/compiler
+```
+
+If legacy callers still produce `SoupAstBody`, `apps/web/src/lib/queries/soup/graphql/ast.ts` may translate it once before this split. The exact output object sent as GraphQL variables must also be sent to the local worker.
+
+The local path must not depend on or reproduce:
+
+- REST field names such as `df`, `pid`, or `ca`;
+- REST compound file-association expansion;
+- REST-only email CRM side fields;
+- `ApiEntityFilterAst` conversion;
+- an independent TypeScript filter matcher.
+
+The REST Soup endpoint may retain its adapter independently; it is not an index ingress contract.
+
+## First support profile: `soup-flat-v1`
+
+### Supported Boolean semantics
+
+The profile supports `And`, `Or`, and `Not` without conversion to DNF, but only when every reachable literal and partition is supported. Normal Boolean simplification of `All` and `None` is allowed.
+
+### Supported partitions and literals
+
+Only flat, record-local facts already present in an authoritative Soup item are eligible initially.
+
+| Partition | Supported literals |
+| --- | --- |
+| Document | `Id`, `FileType`, `ProjectId`, `Owner`, `CreatedAt`, `UpdatedAt` |
+| Project | `ProjectId`, `ProjectIdSelf`, `Owner`, `CreatedAt`, `UpdatedAt` |
+| Chat | `ChatId`, `ProjectId`, `Owner`, `CreatedAt`, `UpdatedAt` |
+
+The only supported sort methods are `CreatedAt` and `UpdatedAt`, in either direction, with the normalized record key as a stable tie-breaker.
+
+Before implementation, inspect representative `useSoupAstItemsQuery` requests and record any constant or mechanically injected GraphQL leaves required to make this profile useful. A constant/no-op leaf may be added to `soup-flat-v1` only when its authoritative behavior is unambiguous and needs no projection fact.
+
+### Partition exclusion and nil sentinels
+
+A missing entity tree means the partition is unrestricted. Therefore, a request with a missing tree for an unsupported partition is not locally eligible.
+
+The compiler may recognize positive nil-ID exclusion sentinels for unsupported partitions so normal Soup requests can prove those partitions empty. This recognition must be conservative:
+
+- a direct positive nil-ID leaf is `None` for a partition whose persisted IDs cannot be nil;
+- an `And` with a proven `None` branch is `None` without interpreting the other branch;
+- `Or`, `Not`, or any shape that could include the unsupported partition causes fallback;
+- negated nil semantics must never be simplified to exclusion.
+
+### Explicitly deferred from `soup-flat-v1`
+
+- global properties;
+- calendar events;
+- emails and email views;
+- channels and channel threads;
+- calls;
+- CRM companies and CRM authorization scope;
+- foreign entities and deduplication;
+- reminders and query-time predicates;
+- notification state;
+- importance, task assignment, and CBM/ATM/NC behavior;
+- attendee, participant, mention, transcript, and other relation-backed predicates;
+- substring text matching;
+- `ViewedAt` and `ViewedUpdated` sorting;
+- local cursor pagination;
+- locally projected optimistic state.
+
+These are deferred product capabilities, not silently false predicates.
 
 ## Required architecture
 
 ```text
-                        predicate-index
-                    generic IR and value types
-                         ▲              ▲
-                         │              │
-                item-filter-index    cache-core
-                filter compiler      generic index port
-                         │              │
-              soup-filter-projection   │
-              authoritative item facts │
-                         │              │
-                      GraphQL       cache-turso
-                                         │
-                                      Turso/OPFS
+                    predicate-index
+              minimal generic flat IR
+                    ▲          ▲
+                    │          │
+          item-filter-index  cache-core
+          profile compiler   generic lifecycle/query port
+                    │          │
+       soup-filter-projection  │
+       direct Soup item facts  │
+                    │          │
+                 GraphQL   cache-turso
+                                │
+                             Turso/OPFS
 
 cache-wasm
-  composition only: parse shared API AST, call item-filter-index,
-  then pass the generic query to cache-core
+  parse the shared GraphQL input, materialize it, run profile eligibility,
+  compile it, and pass only a generic query to cache-core
 ```
 
 ### Dependency rules
 
 - `predicate-index` must not depend on `item_filters`, cache crates, GraphQL, or Turso.
 - `item-filter-index` may depend on `item_filters` and `predicate-index`; it must not depend on cache or Turso crates.
-- `soup-filter-projection` owns business-specific fact generation and may depend on Soup/domain models and `item-filter-index`; it must not depend on cache or Turso crates.
-- `cache-core` may depend on `predicate-index`; it must not import `item_filters` or know literal/entity semantics.
+- The shared GraphQL input/materialization module must not depend on Axum. Browser-compatible code must not require the GraphQL server runtime.
+- `soup-filter-projection` owns business-specific direct fact generation and may depend on Soup/domain models and `item-filter-index`; it must not depend on cache or Turso crates.
+- `cache-core` may depend on `predicate-index`; it must not know Soup entity or literal semantics.
 - `cache-turso` persists and executes generic index operations only. It must not know GraphQL typenames, Soup entity types, or filter literals.
-- `cache-wasm` is the composition root and may wire the item-filter compiler to the generic cache engine.
-- Authorization remains server-side. The local database is already identity-scoped and must not invent authorization policy.
+- `cache-wasm` is the composition root and may wire GraphQL input materialization and the item-filter compiler to the generic cache engine.
+- Authorization remains server-side. The local index only evaluates projections delivered through an identity-scoped authorized cache.
 
-## Phase 1: Specify every existing filter semantic
+## Phase 0: Audit request shapes and set success criteria
 
-Before implementing persistence, build a checked-in support/specification matrix for every current literal under `crates/item_filters/src/ast/**`.
+Before implementation:
 
-For each literal, record:
+1. collect representative GraphQL filter variables produced for `useSoupAstItemsQuery`;
+2. determine the percentage that `soup-flat-v1` can answer;
+3. identify routinely injected constant or nil-sentinel leaves;
+4. set an initial-page latency target and a minimum useful local-hit-rate target;
+5. decide whether cached query-result reuse would meet the product need more cheaply.
 
-- authoritative production-query implementation;
-- exact matching semantics;
-- required item facts;
-- normalization rules;
-- viewer-relative inputs;
-- whether it is equality, ordered range, membership, exact substring, dynamic-time comparison, or constant logic;
-- required sorting values;
-- tests proving the behavior.
+Do not expand semantic scope before this audit. Record the support manifest as GraphQL `Type.field` names, not REST wire tokens.
 
-The audit must include:
+## Phase 1: Share GraphQL input materialization
 
-- Calendar events: ID, status, start/end ranges, attendees, organizers.
-- Documents: file type, ID, project ancestry/scope, owner, importance, notification state, CBM/ATM/NC behavior, subtype, email-attachment state, created/updated ranges.
-- Projects: child versus self ID semantics, owner, importance, notification state, created/updated ranges.
-- Chats: project, role, chat ID, owner, importance, notification state, created/updated ranges.
-- Emails: sender/CC/BCC/recipient direction, complete/domain/partial address semantics, thread ID, mailbox/link owner, project, importance, notification state, shared behavior, calendar-only, created/updated ranges, CRM scope, and internally injected properties.
-- Channels: thread, mention, organization, team, channel ID, sender, channel type, importance, viewer participation, and notification state.
-- Channel threads: thread ID, channel ID, root sender, participant, and notification state.
-- Calls: call ID, channel ID, transcript speaker, status, attendance, and internally injected properties.
-- CRM companies: ID and hidden state.
-- Foreign entities: internal ID, foreign ID, source, includes-current-user, and notification state.
-- Reminders: opt-in/include, ID, referenced entity, completion, and fired state relative to query time.
-- Properties: select-option and entity-reference matching, typed versus untyped applicability, Boolean composition, and property-less entity behavior.
-- Nil UUID exclusion sentinels and every semantic constant/short circuit.
+Extract the GraphQL filter input representation and conversion currently centered in `crates/graphql_soup/src/inputs.rs`.
 
-Every existing literal must be supported before frontend integration. `Unsupported` remains only for malformed input or future schema/profile incompatibility.
+Requirements:
 
-## Phase 2: Add generic `predicate-index`
+- preserve the generated GraphQL variables shape exactly;
+- preserve GraphQL-specific enum, ID, RFC3339, one-of, and CRM validation;
+- convert into the same materialized `EntityFilterAst` used by authoritative Soup;
+- bound AST depth, node count, string length, and aggregate value bytes before expensive compilation;
+- use the same conversion in the GraphQL server and browser composition boundary;
+- add round-trip fixtures using actual generated TypeScript GraphQL variables;
+- do not route the browser through `ApiEntityFilterAst`.
 
-Create a storage-neutral crate, tentatively `crates/predicate_index`.
+## Phase 2: Add the minimal storage-neutral predicate IR
 
-It should define generic, serializable types similar to:
+Create or reduce `predicate-index` to the types needed by `soup-flat-v1`:
 
 ```rust
 pub enum PredicateExpr {
@@ -120,10 +200,6 @@ pub enum PredicateExpr {
         lower: Option<Bound<i64>>,
         upper: Option<Bound<i64>>,
     },
-    TextContains {
-        attribute: Token,
-        normalized_value: String,
-    },
     And(Box<PredicateExpr>, Box<PredicateExpr>),
     Or(Box<PredicateExpr>, Box<PredicateExpr>),
     Not(Box<PredicateExpr>),
@@ -134,212 +210,70 @@ pub struct IndexDocument {
     pub partition: Token,
     pub exact_facts: Vec<ExactFact>,
     pub integer_facts: Vec<IntegerFact>,
-    pub text_facts: Vec<TextFact>,
     pub sort_facts: Vec<IntegerFact>,
 }
 ```
 
 Requirements:
 
-- Tokens are stable and collision-free. Do not use feature hashing for anything affecting exactness.
-- Dynamic values use canonical encodings, not hashes.
-- Integer encodings cover timestamps and other ordered scalars.
-- Text normalization is explicit and versioned.
-- Query-time inputs include at least `now_ms` for predicates such as fired reminders.
-- Generic query descriptors include sort attribute, direction, stable tie-breaker, limit, and local cursor.
-- Input validation bounds AST depth, node count, text length, and total bound values.
-- Include a pure reference evaluator used by conformance and property tests.
-- Simplify `All`, `None`, and redundant Boolean nodes without converting to DNF.
+- stable collision-free tokens and canonical dynamic values;
+- microsecond-safe UTC timestamp encoding matching PostgreSQL boundaries;
+- a query descriptor containing profile, partition predicates, sort, stable tie-break direction, and limit;
+- no local cursor in the first profile;
+- bounded validation and Boolean simplification without DNF expansion;
+- a pure reference evaluator for compiler and Turso conformance tests.
 
-## Phase 3: Add `item-filter-index`
+Do not add text facts, n-grams, correlated groups, query-time values, scope proofs, result stages, or winner-selection machinery before a supported filter requires them.
 
-Create a separate crate, tentatively `crates/item_filter_index`, depending only on `item_filters` and `predicate-index` plus required value-model crates.
+## Phase 3: Compile only the supported profile
 
-Responsibilities:
+`item-filter-index` owns opaque partition/attribute vocabulary and compiles materialized `EntityFilterAst` into the minimal generic IR.
 
-- Own stable opaque partition and attribute token assignments.
-- Compile every current entity-specific `Expr<Literal>` into `PredicateExpr`.
-- Compile the `EntityFilterAst` forest into a union of partition-scoped expressions.
-- Treat missing entity trees as unrestricted for that partition, except reminders, which remain opt-in.
-- Apply the global properties tree to entity partitions exactly as the server does.
-- Handle typed/untyped property applicability and property-less entity behavior.
-- Compile semantic constants correctly; for example, do not model a server-side short circuit as ordinary Boolean equality.
-- Preserve all `AND`, `OR`, and `NOT` semantics without DNF expansion.
-- Compile Soup sort methods and direction into opaque generic sort descriptors.
-- Produce typed errors for malformed, oversized, or future-incompatible input.
+Compilation must be two-stage:
 
-`item-filter-index` must contain all filter-specific query-compilation logic. No equivalent matching switch should appear in `cache-core` or `cache-turso`.
+1. eligibility checks the complete materialized forest, all partitions, sort, and relevant request options;
+2. compilation runs only after eligibility succeeds.
 
-## Phase 4: Extract reusable API AST conversion
-
-Move the REST wire DTO and conversion currently centered around `ApiEntityFilterAst` out of `crates/soup/src/inbound/axum_router.rs` into a reusable filter-facing crate/module with no Axum dependency.
-
-This includes:
-
-- REST field names;
-- compound document file-association literals;
-- email CRM domain/address expansion;
-- conversion into materialized `EntityFilterAst`;
-- validation shared by server and browser composition.
-
-Then:
-
-- update the Soup Axum adapter to call the shared conversion;
-- have `cache-wasm` accept the same REST AST body and call the same conversion;
-- do not duplicate semantics in TypeScript or cache code.
-
-Take care that the REST API email tree and materialized `EmailFilterAst` currently have different serialized shapes.
-
-## Phase 5: Generate complete authoritative projections
-
-Create a business adapter, tentatively `crates/soup_filter_projection`, that generates a complete versioned `IndexDocument` for every Soup entity.
-
-It must use the same opaque identifiers as `item-filter-index`. It must not depend on cache crates.
-
-Projection facts must come from authoritative server data, not inference from arbitrary normalized GraphQL fields. Extend Soup enrichment/loaders where the current `SoupItem` does not contain enough information, including viewer-relative and relation-backed predicates.
-
-Examples likely requiring extra authoritative projection data include:
-
-- all email address directions across the server's matching scope;
-- channel mentions, relevant senders, thread relations, and participants;
-- call transcript speakers;
-- calendar attendees;
-- project ancestry where server semantics are recursive;
-- viewer notification state;
-- CRM/shared-email state;
-- complete property values;
-- reminder fields needed to evaluate fired state at query time.
-
-Expose the generic projection as a versioned GraphQL envelope. The envelope should contain only generic profile, partition, facts, and sort facts; it must not expose cache implementation details.
-
-Select the projection in:
-
-- `SoupItemFields`;
-- `SoupPatchFields`;
-- all relevant mutation-effect fragments;
-- any operation capable of authoritatively replacing a cached Soup entity.
-
-The projection profile/version is a semantic compatibility boundary. Future filter semantic changes advance the profile without requiring business-specific Turso schema changes.
-
-## Phase 6: Add a generic projection boundary to `cache-core`
-
-Introduce an injected projection interface, approximately:
+Use a typed outcome such as:
 
 ```rust
-pub trait RecordIndexProjector {
-    fn project(
-        &self,
-        key: &EntityKey<'_>,
-        effective_record: &Record,
-        incoming_update: Option<&Record>,
-    ) -> ProjectionUpdate;
+pub enum LocalCompileOutcome {
+    Supported(ValidatedIndexQuery),
+    Unsupported(UnsupportedReason),
 }
 ```
 
-The concrete browser implementation should only extract and validate the generic GraphQL projection envelope. It must not match on entity typenames or filter literals.
+Malformed or oversized input remains an error. A well-formed GraphQL filter outside `soup-flat-v1` is `Unsupported` and follows the network path; it is not a user-visible error.
 
-Update cache write preparation so storage receives the normalized record and generic projection change together. The following must remain atomic:
+Tests must prove that unsupported leaves under `And`, `Or`, and `Not` cannot disappear through simplification unless a supported `None` branch makes the complete partition mathematically empty.
 
-- ordinary record upsert plus projection replacement;
-- queued mutation settlement plus projection replacement;
-- record deletion plus projection deletion;
-- cache clear.
+## Phase 4: Generate compact direct-field projections
 
-Do not model the new index through the existing Quick Access `SearchDocument`. Keep the APIs and storage paths separate.
+Generate a versioned generic projection directly from each authoritative Document, Project, or Chat `SoupItem`. Do not build a second relation-hydration subsystem for the first profile.
 
-## Phase 7: Add the generic Turso inverted index
+The projection may contain only the facts required by `soup-flat-v1`:
 
-Add generic Turso tables approximately shaped as follows; exact names may change after benchmarking:
+- identity;
+- direct owner and project/parent identifiers;
+- document file type;
+- created and updated timestamps;
+- created and updated sort facts.
 
-```sql
-CREATE TABLE index_documents (
-    document_id INTEGER PRIMARY KEY,
-    profile BLOB NOT NULL,
-    partition BLOB NOT NULL,
-    __typename TEXT NOT NULL,
-    entity_id TEXT NOT NULL,
-    projection_hash BLOB NOT NULL,
-    UNIQUE(profile, __typename, entity_id)
-);
+If a proposed fact is not reliably available on the authoritative Soup item, defer that literal or add the value to authoritative Soup hydration. Do not issue an independent set of relation queries merely to increase local filter coverage.
 
-CREATE TABLE index_exact_facts (
-    document_id INTEGER NOT NULL,
-    profile BLOB NOT NULL,
-    partition BLOB NOT NULL,
-    attribute BLOB NOT NULL,
-    value BLOB NOT NULL,
-    PRIMARY KEY(profile, partition, attribute, value, document_id),
-    FOREIGN KEY(document_id) REFERENCES index_documents(document_id)
-        ON DELETE CASCADE
-);
+Expose the generic projection as a versioned GraphQL envelope and select it in:
 
-CREATE INDEX index_exact_facts_by_document
-ON index_exact_facts(document_id);
+- initial Soup item fragments;
+- Soup patch fragments;
+- mutation-effect fragments capable of replacing supported entities.
 
-CREATE TABLE index_integer_facts (
-    document_id INTEGER NOT NULL,
-    profile BLOB NOT NULL,
-    partition BLOB NOT NULL,
-    attribute BLOB NOT NULL,
-    value INTEGER NOT NULL,
-    PRIMARY KEY(profile, partition, attribute, value, document_id),
-    FOREIGN KEY(document_id) REFERENCES index_documents(document_id)
-        ON DELETE CASCADE
-);
+Projection fact and sort arrays must be required on the wire. Absence must never deserialize as a complete empty projection.
 
-CREATE INDEX index_integer_facts_by_document
-ON index_integer_facts(document_id);
-```
+## Phase 5: Add generic cache lifecycle boundaries
 
-Add generic normalized-text storage and n-gram postings for exact substring predicates. N-grams are candidate selection only; the final condition must verify the complete normalized text to eliminate collisions and false positives. Handle short strings explicitly.
+Add a generic projection interface to `cache-core`, keeping normalized record and projection changes atomic.
 
-Use integer `document_id` values internally to keep posting lists compact. External results resolve to normalized `(__typename, entity_id)` record keys.
-
-Required work in `cache-turso`:
-
-- bump `BROWSER_STORAGE_SCHEMA_VERSION`;
-- extend `CREATE_SCHEMA`;
-- add prepared statements for atomic projection delete/replacement;
-- update frozen-schema object, column, index, constraint, and foreign-key validation;
-- update corruption/reset tests;
-- update `clear` and record deletion;
-- preserve health latching and uncertain-transaction behavior.
-
-This is a disposable browser-cache schema reset, not a SQLx migration. Do not add SQLx migrations.
-
-## Phase 8: Lower generic predicates to exact SQL set algebra
-
-Implement a bounded, parameterized SQL builder in the Turso adapter that consumes only `PredicateExpr`.
-
-Lower nodes as follows:
-
-| Generic expression | SQL implementation |
-| --- | --- |
-| `Exact` | indexed posting lookup |
-| `I64Range` | indexed ordered-range lookup |
-| `TextContains` | indexed n-gram candidates plus exact text verification |
-| `And` | `INTERSECT` |
-| `Or` | `UNION` |
-| `Not` | scoped profile/partition universe `EXCEPT` child |
-| `All` | indexed profile/partition universe |
-| `None` | empty relation |
-
-Use nested CTEs or equivalent parameterized subqueries. Do not interpolate values and do not convert the expression to DNF.
-
-The final query must:
-
-- return normalized record keys only;
-- order by the requested opaque sort attribute and direction;
-- use a stable normalized-record-key tie-breaker;
-- support bounded local cursor pagination;
-- avoid decoding or scanning `records.value` blobs;
-- exploit selective posting/range indexes before broad set operations where possible.
-
-Benchmark alternate generic query shapes (`INTERSECT`/`UNION` CTEs versus correlated `EXISTS`) before fixing the implementation, but preserve identical generic semantics.
-
-## Phase 9: Handle completeness and optimistic state exactly
-
-Represent projection state explicitly:
+Represent at least:
 
 - `Complete`;
 - `Dirty`;
@@ -348,139 +282,178 @@ Represent projection state explicitly:
 
 Rules:
 
-- An authoritative update carrying a complete projection replaces the old projection.
-- A potentially relevant record update without a replacement projection marks the entity dirty rather than retaining a possibly stale projection.
-- Deletion removes the projection.
-- An optimistic effective record is locally queryable only if the injected projector can produce a complete effective projection.
-- If any entity relevant to the requested local result has unknown projection state, return an incomplete outcome and use the network path.
-- Never silently interpret missing data as a false predicate, especially under `NOT`.
+- authoritative replacement with a valid projection atomically replaces prior facts;
+- a potentially relevant update without a valid replacement projection removes queryable facts and marks the record dirty;
+- deletion removes the projection;
+- cache clear removes all projections;
+- optimistic writes affecting a supported partition mark it incomplete until settlement supplies authoritative projection data;
+- any dirty, missing, or incompatible record in a queried partition returns `Incomplete`;
+- unsupported compilation fails before entering `cache-core`.
 
-The generic cache API should distinguish at least:
+The first release deliberately prefers broad network fallback over trying to prove that a dirty record could not match.
 
-```rust
-pub enum IndexedQueryOutcome {
-    Page(IndexPage),
-    Incomplete,
-    Incompatible,
-}
-```
+## Phase 6: Add minimal Turso persistence and SQL evaluation
 
-Malformed filter compilation fails before entering the cache engine.
+The first schema needs only:
 
-## Phase 10: Expose a separate browser entity-filter API
+- index documents with normalized record key, profile, partition, and completeness state;
+- exact facts;
+- integer facts;
+- sort facts.
 
-Add a distinct API rather than extending Quick Access's fuzzy `search` request.
+Use compact integer document IDs and foreign-key cascades. Keep record replacement, projection replacement, mutation settlement, deletion, invalidation, and clear atomic.
 
-Inside `cache-core`:
+Do not add text/ngram, correlated-group, scope-proof, or result-stage tables in `soup-flat-v1`.
 
-```rust
-Engine::query_index(GenericIndexQuery)
-```
+Lower generic expressions with bounded parameterized SQL:
 
-At the composition boundary:
+| Expression | SQL operation |
+| --- | --- |
+| `Exact` | indexed posting lookup |
+| `I64Range` | indexed ordered-range lookup |
+| `And` | `INTERSECT` |
+| `Or` | `UNION` |
+| `Not` | profile/partition universe `EXCEPT` child |
+| `All` | complete profile/partition universe |
+| `None` | empty relation |
 
-1. `cache-wasm` parses the shared REST API AST.
-2. The shared converter creates `EntityFilterAst`.
-3. `item-filter-index` compiles it into a generic query.
-4. Only the generic query reaches `cache-core` and `cache-turso`.
+The final query must return normalized record keys, order by the requested created/updated sort fact, use a stable record-key tie-breaker, and apply a bounded initial-page limit. It must not decode or scan normalized `records.value` blobs.
 
-In TypeScript, introduce a separate interface such as `EntityFilterIndexHost`, even if the same worker physically implements it. The coordinator protocol may transport the AST request but must not interpret filter semantics.
+The Turso adapter must not advertise an available exact-query capability until SQL evaluation and completeness checks are implemented. Returning an empty page from an unimplemented evaluator is forbidden.
 
-Apply strict ingress bounds before expensive compilation or SQL generation.
+## Phase 7: Integrate the browser API and first consumer
 
-## Phase 11: Integrate `useSoupAstItemsQuery`
+Add a distinct entity-filter index API rather than extending fuzzy Quick Access search.
 
-Integrate the exact local index into `apps/web/src/lib/queries/soup/items.ts` and its GraphQL path.
+The request transports:
 
-For an initial Soup AST request:
+- the exact `GraphqlEntityFilterAst` variables value used by the network request;
+- supported sort method and direction;
+- initial-page limit.
 
-1. Send the REST AST body, sort method, sort direction, limit, and current time to the browser index API.
-2. If it returns a complete local page, materialize only those normalized record keys through a generated Soup fragment/record selection.
-3. Use the materialized page as immediate cached/placeholder data.
-4. Continue to use the server as corpus and server-pagination authority.
-5. Keep local-index cursors distinct from server cursors.
-6. On `Incomplete`, incompatible projection, validation failure, or cache/storage failure, skip local data and follow the existing network path.
+At the browser boundary:
 
-The local page must preserve exact filter membership and requested local ordering. The frontend must not rerun a partial TypeScript matcher over the results.
+1. deserialize and validate the shared GraphQL input;
+2. materialize `EntityFilterAst` with the shared GraphQL conversion;
+3. evaluate `soup-flat-v1` eligibility;
+4. compile a generic query;
+5. call `cache-core` and Turso only for supported requests;
+6. materialize returned normalized keys through generated Soup cache fragments.
 
-## Phase 12: Verification gate
+`useSoupAstItemsQuery` uses a complete local page as immediate placeholder data and still sends the authoritative GraphQL request. On `Unsupported`, `Incomplete`, incompatibility, validation failure, or storage failure, it follows the existing network path without local placeholder data.
 
-The complete implementation must not merge until all gates pass.
+The frontend must not rerun a partial TypeScript matcher over index results.
 
-### Semantic differential tests
+## Phase 8: Verification and product gate
 
-- Compare production Soup SQL results with compiled generic-index results for every current literal.
-- Cover true and false cases for each literal.
-- Cover nested `AND`, `OR`, and `NOT` combinations.
-- Cover global properties mixed with entity-specific filters.
-- Cover viewer-relative predicates for multiple users.
-- Cover timestamps at inclusive/exclusive boundaries.
-- Cover email partial/domain/complete normalization.
-- Cover reminder opt-in and dynamic fired time.
-- Cover nil UUID exclusion sentinels.
+### GraphQL boundary tests
 
-### Generic correctness tests
+- generated TypeScript GraphQL variables deserialize through the shared Rust input;
+- server and browser materialization produce identical `EntityFilterAst` values;
+- REST-only shapes are rejected by the local GraphQL boundary;
+- ingress bounds reject pathological inputs before compilation.
 
-- Compare the pure reference evaluator with Turso results over generated documents and expressions.
-- Verify no hash collision can affect exactness.
-- Verify `NOT` uses the correct scoped universe.
-- Verify stable cursor ordering.
-- Verify AST limits reject pathological input before SQL generation.
+### Supported semantic differential tests
 
-### Cache lifecycle tests
+For every `soup-flat-v1` literal:
 
-- Atomic record plus projection writes.
-- Projection replacement removes stale facts.
-- Delete and clear cascade correctly.
-- Mutation settlement remains atomic.
-- Dirty/missing/incompatible projections trigger fallback.
-- Optimistic updates cannot expose stale exact results.
-- Physical reset behavior remains safe after the browser schema bump.
+- compare authoritative Soup SQL membership with the reference evaluator and Turso;
+- cover true and false cases;
+- cover all four date bounds at equality boundaries;
+- cover nullable project/parent facts under `Not`;
+- cover nested `And`, `Or`, and `Not`;
+- cover positive nil exclusion and negated nil behavior.
 
-### Turso performance tests
+### Unsupported fallback tests
 
-- `EXPLAIN QUERY PLAN` proves exact and range posting indexes are used.
-- Queries do not scan/decode normalized record blobs.
-- Benchmark browser/OPFS behavior at realistic entity and fact counts.
-- Include broad universe, selective conjunction, large disjunction, negation, range, property, and substring cases.
-- Set explicit latency and memory acceptance targets before integration is declared complete.
+- every deferred entity partition causes `Unsupported` unless conservatively proven empty;
+- every deferred literal causes `Unsupported` in all reachable Boolean positions;
+- global properties and unsupported sorts cause fallback;
+- no unsupported request reaches Turso;
+- no supported subset is returned for a partially supported request.
 
-### Browser/frontend tests
+### Generic and cache tests
 
-- WASM request/response validation.
-- Worker coordination transport.
-- Local placeholder materialization.
-- Network fallback for incomplete state.
-- Correct replacement by authoritative network data.
-- Pagination does not mix local and server cursor formats.
+- reference evaluator and Turso agree over generated flat documents and expressions;
+- `Not` uses only the complete profile/partition universe;
+- ordering and tie-breaking are stable;
+- record and projection writes are atomic;
+- stale facts disappear on replacement;
+- delete and clear cascade;
+- dirty/missing/incompatible and optimistic states fall back;
+- physical browser-schema reset remains safe.
+
+### Performance and frontend tests
+
+- `EXPLAIN QUERY PLAN` demonstrates posting/range index use;
+- no normalized record blob scan occurs;
+- browser/OPFS latency meets the Phase 0 target;
+- worker transport and local placeholder materialization work end to end;
+- authoritative network data replaces placeholder data correctly;
+- measured supported-request hit rate meets the Phase 0 threshold.
+
+Do not expand the support profile until this gate passes and an actual local page is observable in the consumer.
+
+## Expansion policy
+
+Add one semantic family at a time, advance the projection profile when facts or semantics change, and retain query-level fallback for older or unsupported profiles.
+
+Suggested order:
+
+1. calendar scalar fields;
+2. simple relation-existence facts such as document email-attachment state;
+3. notification facts with explicit invalidation;
+4. global properties;
+5. reminders and captured query time;
+6. substring text facts and n-grams;
+7. channels and calls;
+8. email correlated message groups;
+9. CRM scope and server-minted authorization/completeness proofs;
+10. CRM-email and foreign-entity post-filter deduplication.
+
+Before adding a family, document:
+
+- demonstrated frontend demand;
+- authoritative semantics;
+- required projection facts;
+- whether facts are record-local or relation-backed;
+- invalidation fan-out;
+- new generic IR/storage capability;
+- differential tests;
+- profile compatibility impact.
+
+Do not add a generic capability speculatively before a supported filter needs it.
 
 ## Implementation order and revision discipline
 
-Implement in independently verified revisions even though the product release is all-or-nothing:
+Implement in independently verified revisions:
 
-1. semantic specification matrix;
-2. `predicate-index` plus reference evaluator;
-3. shared API AST conversion and `item-filter-index` compiler;
-4. complete authoritative Soup projections and GraphQL envelope;
-5. generic `cache-core` projection/query boundaries;
-6. Turso schema and atomic index maintenance;
-7. Turso SQL lowering and performance verification;
-8. completeness/optimistic handling;
-9. browser protocol and `useSoupAstItemsQuery` integration;
-10. full differential, WASM, and performance gate.
+1. GraphQL request-shape audit and checked-in `soup-flat-v1` support manifest;
+2. shared GraphQL input materialization;
+3. minimal predicate IR and reference evaluator;
+4. supported-profile eligibility and compiler;
+5. compact direct-field projections and GraphQL envelope;
+6. generic cache lifecycle boundary;
+7. minimal Turso schema, maintenance, and SQL evaluation;
+8. browser protocol and `useSoupAstItemsQuery` integration;
+9. differential, WASM, performance, and product gate.
 
 After each successful verification step, follow repository policy and create a Jujutsu revision with `jj desc -m "..." && jj new`.
 
 ## Architectural acceptance criteria
 
-- No `item_filters` dependency in `cache-core` or `cache-turso`.
-- No entity/literal switch in cache or Turso code.
-- No business-specific columns or indexes in Turso.
-- No TypeScript reimplementation of filter semantics.
-- No approximate local result presented as exact.
-- No vector-distance or FTS dependency for filter matching.
-- Business/filter semantics live in `item-filter-index` and `soup-filter-projection`.
+- The local request uses the exact GraphQL filter input object also sent to the server.
+- No REST AST parsing or conversion occurs in the browser index path.
+- No TypeScript reimplementation of filter matching semantics exists.
+- A partially supported request never produces a partial local result.
+- No `item_filters` dependency exists in `cache-core` or `cache-turso`.
+- No entity/literal switch exists in cache or Turso code.
+- No business-specific columns or indexes exist in Turso.
+- No relation-hydration projection subsystem is introduced for `soup-flat-v1`.
+- No text, group, proof, dynamic-time, or winner-selection machinery exists before a supported family requires it.
 - Generic cache orchestration lives in `cache-core`.
 - Generic persistence and query execution live in `cache-turso`.
-- Browser shell code performs composition and transport conversion only.
+- Browser shell code performs GraphQL transport materialization and composition only.
+- Dirty or uncertain local state always falls back to the network.
 - Authorization remains server-side; local indexing does not grant access or widen the cached corpus.
+- The first implementation returns a verified local page through `useSoupAstItemsQuery` before semantic expansion begins.
