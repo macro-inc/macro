@@ -64,12 +64,15 @@ fn cla_job() -> Job {
             "github.event_name == 'pull_request_target' || \
              (github.event.issue.pull_request && startsWith(github.event.comment.body, '/macro-cla'))",
         ))
-        // Least privilege for what the script actually calls: commit statuses
-        // (write), PR comments and reactions — which are issue APIs even on a
-        // PR (write), and `pulls.get` (read only).
+        // `pull_requests` must be WRITE, not read. Posting the invitation goes
+        // through the issues API (`POST /issues/{n}/comments`), but GitHub
+        // scopes that call by the *target resource*: when the target is a PR
+        // it demands `pull_requests=write`, and `issues=write` alone gets a
+        // 403 "Resource not accessible by integration". Do not narrow this
+        // again on the reasoning that PR comments are issue comments.
         .permissions(Permissions {
             statuses: Some(Level::Write),
-            pull_requests: Some(Level::Read),
+            pull_requests: Some(Level::Write),
             issues: Some(Level::Write),
             ..Default::default()
         })

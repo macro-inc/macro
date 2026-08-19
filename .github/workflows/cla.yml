@@ -17,7 +17,7 @@ jobs:
     runs-on: namespace-profile-linux-tiny-no-cache
     permissions:
       issues: write
-      pull-requests: read
+      pull-requests: write
       statuses: write
     steps:
     - name: Run CLA check
