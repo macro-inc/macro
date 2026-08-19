@@ -58,9 +58,10 @@ inserted `ccla:<company>` rows.
 7. In branch protection on `main`, mark the `cla` commit status as a required
    check.
 
-> **Legal review**: CLA.md is a standard Apache-ICLA-derived draft. Have it
-> reviewed by counsel before pointing real contributors at it; if the text
-> changes, bump `CLA_VERSION` in the same commit.
+> **Changing the text**: CLA.md is the agreement contributors actually sign.
+> Never edit it without bumping `CLA_VERSION` in the same commit — a version
+> tag must never refer to two different texts, or the check would claim
+> someone agreed to words they never saw.
 
 ## Hosting
 

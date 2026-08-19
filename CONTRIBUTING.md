@@ -64,7 +64,7 @@ future contributions:
    shows red — that's expected and doesn't block review.
 2. Sign at **<https://macro-cla.macroverse.workers.dev/cla>** ("Sign with
    GitHub"; we request no OAuth scopes, only your public identity).
-3. Comment `@macro-bot check` on your PR and the check re-runs and goes
+3. Comment `/macro-cla check` on your PR and the check re-runs and goes
    green.
 
 macro-inc org members are exempt (employee agreements already cover their

@@ -120,7 +120,7 @@ function confirmationPage(receipt: Receipt, env: Env): Response {
      Macro Contributor License Agreement${who}${when}. This covers all your
      future contributions — no need to sign again.</p>
      <p>If a pull request of yours has a red <code>cla</code> check, comment
-     <code>@macro-bot check</code> on it and the check will re-run.</p>
+     <code>/macro-cla check</code> on it and the check will re-run.</p>
      <p><a href="/cla">View the agreement</a></p>`,
   );
   return htmlResponse(body, 200);

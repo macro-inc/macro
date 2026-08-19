@@ -8,7 +8,8 @@
 //! `deploy` script applies pending D1 migrations before `wrangler deploy`.
 
 use gh_workflow::{
-    Concurrency, Event, Expression, Job, Push, Run, Step, Use, Workflow, WorkflowDispatch,
+    Concurrency, Event, Expression, Job, Level, Permissions, Push, Run, Step, Use, Workflow,
+    WorkflowDispatch,
 };
 
 use crate::workflows::{runners, steps, vars};
@@ -36,6 +37,13 @@ fn deploy() -> Job {
     Job::default()
         .name("Deploy to Cloudflare")
         .runs_on(runners::Runner::Small.to_string())
+        // Explicit least privilege rather than the repo default, which this
+        // job would otherwise inherit while holding the Cloudflare API token.
+        // Checking out the source is all it needs from GitHub.
+        .permissions(Permissions {
+            contents: Some(Level::Read),
+            ..Default::default()
+        })
         .add_step(steps::checkout(false, false))
         .add_step(steps::setup_bun())
         .add_step(setup_node())

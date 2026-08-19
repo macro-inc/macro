@@ -11,8 +11,8 @@
 //! Two triggers:
 //! - `pull_request_target` (opened / synchronize / reopened): set the status,
 //!   silently — the bot never comments unprompted.
-//! - `issue_comment` (created) on PRs: `@macro-bot /cla` (org members only)
-//!   posts the signing invitation; `@macro-bot check` (anyone) re-runs the
+//! - `issue_comment` (created) on PRs: `/macro-cla` (org members only)
+//!   posts the signing invitation; `/macro-cla check` (anyone) re-runs the
 //!   check.
 //!
 //! `pull_request_target` runs with base-repo secrets on fork PRs, so this job
@@ -62,11 +62,14 @@ fn cla_job() -> Job {
         // command itself is exact-matched in the script.
         .cond(Expression::new(
             "github.event_name == 'pull_request_target' || \
-             (github.event.issue.pull_request && startsWith(github.event.comment.body, '@macro-bot'))",
+             (github.event.issue.pull_request && startsWith(github.event.comment.body, '/macro-cla'))",
         ))
+        // Least privilege for what the script actually calls: commit statuses
+        // (write), PR comments and reactions — which are issue APIs even on a
+        // PR (write), and `pulls.get` (read only).
         .permissions(Permissions {
             statuses: Some(Level::Write),
-            pull_requests: Some(Level::Write),
+            pull_requests: Some(Level::Read),
             issues: Some(Level::Write),
             ..Default::default()
         })
@@ -152,7 +155,7 @@ fn script() -> String {
           }} catch (err) {{
             core.warning(`CLA org membership probe failed: ${{err.message}}`);
             return setStatus(sha, 'failure',
-              'CLA infrastructure error — comment "@macro-bot check" to retry');
+              'CLA infrastructure error — comment "/macro-cla check" to retry');
           }}
           if (isMember) {{
             return setStatus(sha, 'success', 'macro-inc member — covered by CIIA');
@@ -168,7 +171,7 @@ fn script() -> String {
             // Fail closed, but say why: this is an infra failure, not "unsigned".
             core.warning(`CLA worker check failed: ${{err.message}}`);
             return setStatus(sha, 'failure',
-              'CLA infrastructure error — comment "@macro-bot check" to retry');
+              'CLA infrastructure error — comment "/macro-cla check" to retry');
           }}
           if (result.signed) {{
             return setStatus(sha, 'success', `CLA ${{result.version}} signed`);
@@ -182,7 +185,7 @@ fn script() -> String {
         }} else {{
           const command = (context.payload.comment.body ?? '').split('\n')[0].trim();
           const prNumber = context.issue.number;
-          if (command === '@macro-bot /cla') {{
+          if (command === '/macro-cla') {{
             // Invitation is a maintainer-only communication act; it does not
             // touch check state (the check is already red for an unsigned
             // author). Arbitrary users must not be able to make the bot ping
@@ -195,7 +198,7 @@ fn script() -> String {
                   `@${{pr.user.login}} — we'd like to merge this. Before we can, we need you to sign the`,
                   'Macro CLA (one time, covers all future contributions):',
                   `**${{SIGN_URL}}**`,
-                  'Once signed, comment `@macro-bot check` here and the CLA check will go green.',
+                  'Once signed, comment `/macro-cla check` here and the CLA check will go green.',
                 ].join('\n'),
               }});
             }} else {{
@@ -203,9 +206,18 @@ fn script() -> String {
                 owner, repo, comment_id: context.payload.comment.id, content: '-1',
               }});
             }}
-          }} else if (command === '@macro-bot check') {{
+          }} else if (command === '/macro-cla check') {{
             const {{ data: pr }} = await github.rest.pulls.get({{ owner, repo, pull_number: prNumber }});
             await runCheck(pr);
+          }} else {{
+            // Addressed to the bot but not a command we know (a typo like
+            // "/macro-cla verify", or prose that happens to open with the
+            // mention). React so the author learns it was seen and ignored
+            // rather than silently dropped. Distinct from the '-1' above,
+            // which means "recognized, but you may not run it".
+            await github.rest.reactions.createForIssueComment({{
+              owner, repo, comment_id: context.payload.comment.id, content: 'confused',
+            }});
           }}
         }}
     "#}
