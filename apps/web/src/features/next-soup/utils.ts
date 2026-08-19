@@ -1418,9 +1418,10 @@ export function applyEntitiesNotDoneOptimistic(args: {
 }
 
 /**
- * Fires the archive + bulk-done APIs for the given ids. Throws on any
- * failure; caller is responsible for rollback via the context returned by
- * `applyEntitiesDoneOptimistic`.
+ * Fires archive, ID-scoped notification, optional entity-scoped notification,
+ * and reminder completion writes. Returns the authoritative notification IDs
+ * produced by the entity write. Throws on any failure; the caller owns rollback
+ * through the context returned by `applyEntitiesDoneOptimistic`.
  */
 /**
  * Flip the reminders' own `completed` column. One PATCH each — the reminders
@@ -1436,14 +1437,21 @@ function setRemindersCompleted(
 export async function executeMarkEntitiesDone(args: {
   emailIds: string[];
   notificationIds: string[];
+  markEntityNotificationsDone?: () => Promise<string[]>;
   reminderIds?: string[];
-}): Promise<void> {
-  const { emailIds, notificationIds, reminderIds = [] } = args;
+}): Promise<string[]> {
+  const {
+    emailIds,
+    notificationIds,
+    markEntityNotificationsDone,
+    reminderIds = [],
+  } = args;
   await Promise.all([
     queryClient.cancelQueries({ queryKey: queryKeys.all.email }),
     queryClient.cancelQueries({ queryKey: notificationKeys.user._def }),
   ]);
 
+  let authoritativeNotificationIds: string[] = [];
   const results = await Promise.allSettled([
     ...emailIds.map((id) =>
       throwOnErr(
@@ -1452,6 +1460,11 @@ export async function executeMarkEntitiesDone(args: {
     ),
     notificationIds.length > 0
       ? bulkMarkNotificationsAsDone(notificationIds)
+      : Promise.resolve(),
+    markEntityNotificationsDone
+      ? markEntityNotificationsDone().then((notificationIds) => {
+          authoritativeNotificationIds = notificationIds;
+        })
       : Promise.resolve(),
     ...setRemindersCompleted(reminderIds, true),
   ]);
@@ -1487,6 +1500,8 @@ export async function executeMarkEntitiesDone(args: {
     }),
     ...emailIds.map((id) => invalidateSoupEntity(id)),
   ]);
+
+  return authoritativeNotificationIds;
 }
 
 /**

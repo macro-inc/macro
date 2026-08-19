@@ -3,10 +3,7 @@ import { useNonPrimaryEmailLinkIdHeader } from '@queries/email/link';
 import { useMarkThreadAsSeenMutation } from '@queries/email/thread';
 import { debounce } from '@solid-primitives/scheduled';
 import { onMount } from 'solid-js';
-import {
-  markNotificationForEntityIdAsRead,
-  markNotificationsForEntityAsRead,
-} from '../notification-helpers';
+import { markNotificationsForEntityAsRead } from '../notification-helpers';
 import type { NotificationSource } from '../notification-source';
 
 const DEFAULT_DEBOUNCE_TIME = 2_000;

@@ -34,6 +34,40 @@ export type NotificationEntityRef =
       messageId: string;
     };
 
+type FrontendNotificationEntity = {
+  type: string;
+  id: string;
+  messageId?: string;
+};
+
+/** Return a supported, canonical entity-mutation target when one exists. */
+export function toNotificationEntityRef(
+  entity: FrontendNotificationEntity
+): NotificationEntityRef | undefined {
+  switch (entity.type) {
+    case 'calendar_event':
+    case 'call':
+    case 'channel':
+    case 'chat':
+    case 'crm_company':
+    case 'document':
+    case 'email':
+    case 'email_thread':
+    case 'foreign':
+    case 'foreign_entity':
+    case 'project':
+    case 'reminder':
+      return { type: entity.type, id: entity.id };
+    case 'channel_message':
+    case 'channel_thread':
+      return entity.messageId
+        ? { type: entity.type, id: entity.id, messageId: entity.messageId }
+        : undefined;
+    default:
+      return undefined;
+  }
+}
+
 /** Entity-wide operations. Undo intentionally remains notification-ID scoped. */
 export type NotificationEntityUpdateOperation = Exclude<
   NotificationUpdateOperation,

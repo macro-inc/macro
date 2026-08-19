@@ -17,6 +17,10 @@ vi.mock('@service-connection/websocket', () => ({
 vi.mock('@core/component/Toast/Toast', () => ({
   toast: { alert: toastAlert },
 }));
+vi.mock('@queries/notification/entity-mutations', () => ({
+  toNotificationEntityRef: vi.fn(),
+  updateNotificationsForEntities: vi.fn(),
+}));
 vi.mock('@core/constant/featureFlags', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@core/constant/featureFlags')>()),
   ENABLE_CALENDAR_UI: () => true,
