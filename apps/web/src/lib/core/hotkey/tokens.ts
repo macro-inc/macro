@@ -281,6 +281,8 @@ export const TOKENS = {
     automation: 'create.automation',
     skill: 'create.skill',
     reminder: 'create.reminder',
+    agent: 'create.agent',
+    agentNewSplit: 'create.agentNewSplit',
     close_menu: 'create.close_menu',
   },
 

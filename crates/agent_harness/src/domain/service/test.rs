@@ -39,7 +39,7 @@ use crate::testing::helpers::agent::FakeAgent;
 use crate::testing::helpers::announcer::AnnouncerMock;
 use crate::testing::helpers::containers::{ContainerMock, ContainerSender, MockContainerManager};
 use agent_session::domain::error::AgentSessionError;
-use agent_session::domain::ports::{ExternalSessionOpener as _, OpenExternalAgentSession};
+use agent_session::domain::ports::{OpenExternalAgentSession, SessionOpener as _};
 
 fn sender() -> MacroUserIdStr<'static> {
     MacroUserIdStr::try_from_email("asker@example.com").expect("a valid user id")
@@ -105,6 +105,7 @@ fn harness() -> (
         announcer.clone(),
         Arc::clone(&runtimes),
         SessionDefaults {
+            bot_id: BotId::TEST_A,
             model: "claude".to_owned(),
             harness: "opencode".to_owned(),
             repo_url: "https://github.com/macro-inc/macro".to_owned(),

@@ -566,17 +566,20 @@
       },
       "CreateAgentSessionRequest": {
         "type": "object",
-        "description": "Request body for `POST /agent-sessions`.\n\nClients serialize this, so both derives are used.",
-        "required": ["workspace"],
+        "description": "Request body for `POST /agent-sessions`.\n\nCarries two shapes, told apart by `workspace`. Naming one asks for an\nexternal session: the runtime is the bot operator's, so the caller has to\nsay which bot and which directory, and must own that bot. Omitting it asks\nfor a managed session, whose sandbox this deployment provisions from its\nown configuration - which is why the fields describing someone else's\nruntime must be omitted along with it rather than quietly ignored. Mixing\nthe two is refused rather than guessed at, so that no request can reach the\nmanaged path carrying a bot the caller was never entitled to name.\n\nClients serialize this, so both derives are used.",
         "properties": {
           "botId": {
             "type": ["string", "null"],
             "format": "uuid",
-            "description": "Bot the session runs for. Bot callers may omit it (their own identity\nis used) and must not name another bot; user callers must supply a\nbot they own."
+            "description": "Bot the session runs for. Bot callers may omit it (their own identity\nis used) and must not name another bot; user callers must supply a\nbot they own. External sessions only: a managed session runs as the\nbot its deployment is configured for."
           },
           "owner": {
             "type": ["string", "null"],
             "description": "The user who owns the session. Ignored for user callers, who always\nown their own sessions; required for bot callers without verified\nacting-user claims.\n\nFor bot callers this is a claim, not a verified fact: it is scoped to\nthe bot's own sessions, but the named user owns the session on the\nbot's say-so."
+          },
+          "prompt": {
+            "type": ["string", "null"],
+            "description": "First prompt to deliver once the session is running. Managed sessions\nonly - an external runtime sends its own first prompt through the\ncontrol endpoint. Omitted, the session opens idle."
           },
           "repoUrl": {
             "type": ["string", "null"],
@@ -594,8 +597,8 @@
             ]
           },
           "workspace": {
-            "type": "string",
-            "description": "Absolute directory the bot's harness runs in on its runtime."
+            "type": ["string", "null"],
+            "description": "Absolute directory the bot's harness runs in on its runtime. Present\nfor an external session, absent for a managed one, which runs in the\npath baked into its image."
           }
         }
       },

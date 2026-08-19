@@ -14,6 +14,9 @@ import { CHAT_INPUT_TEXT_AREA_ID } from '@core/component/AI/component/input/Chat
 import { getIconConfig } from '@core/component/EntityIcon';
 import {
   ENABLE_ANIMATED_ICONS,
+  ENABLE_CHAT_V3_AGENTS,
+  ENABLE_CHAT_V3_AGENTS_FLAG,
+  ENABLE_CHAT_V3_AGENTS_OVERRIDE,
   ENABLE_REMINDERS,
   ENABLE_REMINDERS_FLAG,
   ENABLE_REMINDERS_OVERRIDE,
@@ -66,7 +69,9 @@ import type { Span } from '@macro-inc/observability';
 import BellSimpleIcon from '@phosphor/bell-simple.svg';
 import MagnifyingGlassIcon from '@phosphor/magnifying-glass.svg';
 import PlusIcon from '@phosphor/plus.svg';
+import Robot from '@phosphor/robot.svg';
 import { createProject } from '@queries/storage/projects';
+import { agentHarnessServiceClient } from '@service-agent-harness/client';
 import { makePersisted } from '@solid-primitives/storage';
 import {
   CommandMenuHotkeyHint,
@@ -410,6 +415,20 @@ export function runCreateAction(
       setCreateMenuOpen(false, false);
       openStandaloneReminderComposer();
       return;
+    // Nothing to ask for: a managed session's bot, repository and workspace
+    // are all deployment configuration, so this opens one straight away.
+    case 'agent':
+      createBlock({
+        blockName: 'agent',
+        loading: true,
+        createFn: async () => {
+          const result = await agentHarnessServiceClient.create({});
+          if (result.isErr()) return;
+          return result.value.session.id;
+        },
+        shouldInsert,
+      });
+      return;
   }
 }
 
@@ -432,6 +451,9 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
     },
   },
   {
+    // The pre-agent-session chat, kept on `a` for anyone the new agent flag
+    // has not reached. Mutually exclusive with the Coding Agent entry below:
+    // both bind `a`, and exactly one is ever enabled.
     label: 'Agent',
     icon: WideStar,
     animatedIcon: AnimatedStarIcon,
@@ -442,6 +464,11 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
     hotkeyToken: TOKENS.create.chat,
     altHotkeyToken: TOKENS.create.chatNewSplit,
     hotkey: 'a',
+    // Both `a` entries have to survive registration for the dispatcher to
+    // pick between them by condition; the default 'override' would let the
+    // later one silently replace the earlier.
+    registrationType: 'add',
+    enabled: () => !ENABLE_CHAT_V3_AGENTS(),
     keyDownHandler: () => {
       runCreateAction('chat', { shouldInsert: pressedKeys().has('shift') });
       return true;
@@ -458,6 +485,23 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
     hotkey: 'u',
     keyDownHandler: () => {
       runCreateAction('automation');
+      return true;
+    },
+  },
+  {
+    label: 'Coding Agent',
+    icon: Robot,
+    description: 'Create agent session',
+    launcherHint: 'Sandboxed coding session',
+    keywords: ['new', 'make', 'add', 'agent', 'code', 'coder', 'session'],
+    blockName: 'agent',
+    hotkeyToken: TOKENS.create.agent,
+    altHotkeyToken: TOKENS.create.agentNewSplit,
+    hotkey: 'a',
+    registrationType: 'add',
+    enabled: () => ENABLE_CHAT_V3_AGENTS(),
+    keyDownHandler: () => {
+      runCreateAction('agent', { shouldInsert: pressedKeys().has('shift') });
       return true;
     },
   },
@@ -638,13 +682,16 @@ export function useCreateMenuBlocks(
   const remindersFlag = useFeatureFlag(ENABLE_REMINDERS_FLAG, {
     enabledOverride: ENABLE_REMINDERS_OVERRIDE,
   });
+  const agentsFlag = useFeatureFlag(ENABLE_CHAT_V3_AGENTS_FLAG, {
+    enabledOverride: ENABLE_CHAT_V3_AGENTS_OVERRIDE,
+  });
   return createMemo(() => {
     remindersFlag();
-    return source().filter(
-      (block) =>
-        (block.blockName !== 'snippet' || snippetsFlag().enabled) &&
-        (block.enabled?.() ?? true)
-    );
+    agentsFlag();
+    return source().filter((block) => {
+      if (block.blockName === 'snippet') return snippetsFlag().enabled;
+      return block.enabled?.() ?? true;
+    });
   });
 }
 

@@ -185,6 +185,7 @@ async fn main() -> anyhow::Result<()> {
         announcer,
         Arc::clone(&runtimes),
         SessionDefaults {
+            bot_id,
             model: config.harness_model.clone(),
             harness: config.harness_slug.clone(),
             repo_url: config.harness_repo_url.clone(),

@@ -213,7 +213,7 @@ where
 /// The announcement is best-effort: a session a runtime is about to serve
 /// must not die because the courtesy post failed, most plainly when the bot
 /// cannot post in the claimed channel.
-impl<Sessions, Containers, Announcer, Runtimes> agent_session::domain::ports::ExternalSessionOpener
+impl<Sessions, Containers, Announcer, Runtimes> agent_session::domain::ports::SessionOpener
     for AgentHarnessService<Sessions, Containers, Announcer, Runtimes>
 where
     Sessions: AgentSessionService,
@@ -260,6 +260,84 @@ where
                     "external session announcement failed; the session runs unannounced"
                 );
             }
+        }
+
+        Ok(session)
+    }
+
+    /// Provision a sandbox, open a session on it, and deliver the first
+    /// prompt if one came with the request.
+    ///
+    /// Nothing is announced: a managed session opened this way has no
+    /// originating mention and no thread to answer back into. The sandbox is
+    /// spawned before the session is attached because there is nothing to
+    /// attach to until it exists.
+    async fn open_managed_session(
+        &self,
+        request: agent_session::domain::ports::OpenManagedSession,
+    ) -> agent_session::domain::error::Result<AgentSession> {
+        let defaults = &self.inner.defaults;
+        let session = self
+            .inner
+            .sessions
+            .create_session(CreateAgentSessionParams {
+                id: AgentSessionId::new(),
+                owner_id: request.owner.clone(),
+                bot_id: defaults.bot_id,
+                thread_id: None,
+                originating_message_id: None,
+                model: defaults.model.clone(),
+                harness: defaults.harness.clone(),
+                repo_url: Some(defaults.repo_url.clone()),
+                // Managed sandboxes run in the path baked into their image.
+                workspace: agent_session::MANAGED_CONTAINER_WORKSPACE.to_owned(),
+            })
+            .await?;
+
+        let container = match self
+            .inner
+            .containers
+            .spawn(SpawnContainer {
+                session_id: session.id,
+                repo_url: defaults.repo_url.clone(),
+            })
+            .await
+        {
+            Ok(container) => container,
+            // The row is already persisted, so a sandbox that never arrived
+            // would otherwise leave a session claiming to be live. Same
+            // handling as the trigger path's open.
+            Err(error) => {
+                let _ = self
+                    .inner
+                    .sessions
+                    .mark_disconnected(session.id)
+                    .await
+                    .inspect_err(|status_error| {
+                        tracing::error!(
+                            error = ?status_error,
+                            session_id = %session.id,
+                            "failed to mark an unprovisioned session disconnected"
+                        );
+                    });
+                return Err(into_session_error(error));
+            }
+        };
+        self.inner
+            .sessions
+            .attach_session(session.id, RuntimeAttachment::solo(container))
+            .await?;
+
+        if let Some(prompt) = request.prompt {
+            self.inner
+                .sessions
+                .send_action(
+                    session.id,
+                    Some(request.owner),
+                    AgentAction::prompt(prompt),
+                    AgentActionId::mint(),
+                )
+                .await?;
         }
 
         Ok(session)
