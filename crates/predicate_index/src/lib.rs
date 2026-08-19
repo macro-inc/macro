@@ -22,6 +22,8 @@ pub const MAX_TOKEN_BYTES: usize = 128;
 pub const MAX_EXACT_VALUE_BYTES: usize = 16 * 1_024;
 /// Maximum facts in one index document.
 pub const MAX_FACTS_PER_DOCUMENT: usize = 256;
+/// Maximum distinct records whose optimistic projections may be merged into one query.
+pub const MAX_OPTIMISTIC_RECORDS_PER_QUERY: usize = 128;
 
 /// A stable, opaque vocabulary token owned by a profile compiler.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize)]
@@ -346,6 +348,159 @@ impl ValidatedIndexQuery {
     pub fn as_query(&self) -> &IndexQuery {
         &self.0
     }
+
+    /// Clone this query with a different validated initial-page limit.
+    pub fn with_limit(&self, limit: u16) -> Result<Self, ValidationError> {
+        let mut query = self.0.clone();
+        query.limit = limit;
+        Self::new(query)
+    }
+
+    /// Whether this query can inspect documents in `profile` and `partition`.
+    pub fn includes_scope(&self, profile: &Profile, partition: &Token) -> bool {
+        self.0.profile == *profile
+            && self
+                .0
+                .partitions
+                .iter()
+                .any(|candidate| candidate.partition == *partition)
+    }
+
+    /// Whether this query depends on an attribute in one selected partition.
+    ///
+    /// The sort attribute is always a dependency. Predicate attributes are
+    /// collected without expanding the Boolean expression.
+    pub fn depends_on_attribute(&self, partition: &Token, attribute: &Token) -> bool {
+        if !self
+            .0
+            .partitions
+            .iter()
+            .any(|candidate| candidate.partition == *partition)
+        {
+            return false;
+        }
+        if self.0.sort_attribute == *attribute {
+            return true;
+        }
+        self.0
+            .partitions
+            .iter()
+            .find(|candidate| candidate.partition == *partition)
+            .is_some_and(|candidate| expression_depends_on(&candidate.predicate, attribute))
+    }
+}
+
+/// One ordered optimistic change to a generic projection.
+///
+/// Optimistic changes are layered over authoritative [`IndexDocument`] values;
+/// they never overwrite the authoritative projection needed for rollback.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum OptimisticProjectionMutation {
+    /// Replace the effective projection with a complete optimistic document.
+    Replace(IndexDocument),
+    /// Replace selected attributes on the preceding effective projection.
+    Patch {
+        /// Normalized record key.
+        record_key: RecordKey,
+        /// Projection profile.
+        profile: Profile,
+        /// Entity partition.
+        partition: Token,
+        /// Complete replacement values for each exact attribute.
+        exact: Vec<ExactAttributePatch>,
+        /// Complete replacement values for each integer attribute.
+        integers: Vec<IntegerAttributePatch>,
+        /// Replacement values for sort attributes.
+        sorts: Vec<IntegerFact>,
+    },
+    /// Hide the record from the effective local view while retaining its base projection.
+    Delete {
+        /// Normalized record key.
+        record_key: RecordKey,
+        /// Projection profile.
+        profile: Profile,
+        /// Entity partition.
+        partition: Token,
+    },
+    /// The optimistic mutation may change facts that were not deterministically projected.
+    Unknown {
+        /// Normalized record key.
+        record_key: RecordKey,
+        /// Projection profile.
+        profile: Profile,
+        /// Entity partition.
+        partition: Token,
+        /// Potentially changed attributes. Empty means every attribute.
+        affected_attributes: Vec<Token>,
+    },
+}
+
+/// Complete replacement of one exact attribute's values.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ExactAttributePatch {
+    /// Attribute to replace.
+    pub attribute: Token,
+    /// New values. Empty removes the attribute from the effective projection.
+    pub values: Vec<ExactValue>,
+}
+
+/// Complete replacement of one integer attribute's values.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct IntegerAttributePatch {
+    /// Attribute to replace.
+    pub attribute: Token,
+    /// New values. Empty removes the attribute from the effective projection.
+    pub values: Vec<i64>,
+}
+
+impl OptimisticProjectionMutation {
+    /// Read the affected normalized record key.
+    pub fn record_key(&self) -> &RecordKey {
+        match self {
+            Self::Replace(document) => &document.record_key,
+            Self::Patch { record_key, .. }
+            | Self::Delete { record_key, .. }
+            | Self::Unknown { record_key, .. } => record_key,
+        }
+    }
+
+    /// Read the affected profile.
+    pub fn profile(&self) -> &Profile {
+        match self {
+            Self::Replace(document) => &document.profile,
+            Self::Patch { profile, .. }
+            | Self::Delete { profile, .. }
+            | Self::Unknown { profile, .. } => profile,
+        }
+    }
+
+    /// Read the affected partition.
+    pub fn partition(&self) -> &Token {
+        match self {
+            Self::Replace(document) => &document.partition,
+            Self::Patch { partition, .. }
+            | Self::Delete { partition, .. }
+            | Self::Unknown { partition, .. } => partition,
+        }
+    }
+
+    /// Whether uncertainty in this mutation intersects a validated query.
+    pub fn makes_query_uncertain(&self, query: &ValidatedIndexQuery) -> bool {
+        let Self::Unknown {
+            profile,
+            partition,
+            affected_attributes,
+            ..
+        } = self
+        else {
+            return false;
+        };
+        query.includes_scope(profile, partition)
+            && (affected_attributes.is_empty()
+                || affected_attributes
+                    .iter()
+                    .any(|attribute| query.depends_on_attribute(partition, attribute)))
+    }
 }
 
 /// Validation failure for generic index input.
@@ -441,6 +596,24 @@ pub fn evaluate_reference(
 /// Encode a UTC timestamp as signed Unix microseconds without millisecond loss.
 pub fn utc_timestamp_micros(value: DateTime<Utc>) -> i64 {
     value.timestamp_micros()
+}
+
+fn expression_depends_on(expr: &PredicateExpr, attribute: &Token) -> bool {
+    match expr {
+        PredicateExpr::Exact {
+            attribute: candidate,
+            ..
+        }
+        | PredicateExpr::I64Range {
+            attribute: candidate,
+            ..
+        } => candidate == attribute,
+        PredicateExpr::And(left, right) | PredicateExpr::Or(left, right) => {
+            expression_depends_on(left, attribute) || expression_depends_on(right, attribute)
+        }
+        PredicateExpr::Not(expr) => expression_depends_on(expr, attribute),
+        PredicateExpr::All | PredicateExpr::None => false,
+    }
 }
 
 fn simplify(expr: PredicateExpr) -> Result<PredicateExpr, ValidationError> {

@@ -38,7 +38,10 @@ use crate::search::{
 use crate::store::{QueueDiagnostics, Storage};
 use crate::value::{EntityKey, Record, canonical_json};
 use lru::LruCache;
-use predicate_index::{RecordKey as PredicateRecordKey, ValidatedIndexQuery};
+use predicate_index::{
+    IndexDocument, MAX_OPTIMISTIC_RECORDS_PER_QUERY, MAX_QUERY_LIMIT, OptimisticProjectionMutation,
+    RecordKey as PredicateRecordKey, ValidatedIndexQuery, evaluate_reference,
+};
 use serde_json::Value as Json;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::num::NonZeroUsize;
@@ -71,6 +74,8 @@ pub enum EngineError<S: std::error::Error + 'static> {
         id: OptimisticTransactionId,
         detail: String,
     },
+    #[error("invalid optimistic projection: {0}")]
+    InvalidOptimisticProjection(String),
     #[error("storage: {0}")]
     Storage(#[source] S),
 }
@@ -190,6 +195,7 @@ struct OptimisticLayer {
     updates: RecordUpdates,
     link_patches: Vec<OptimisticLinkPatch>,
     revalidations: Vec<QueryRevalidation>,
+    projection_mutations: Vec<OptimisticProjectionMutation>,
 }
 
 /// Reserved storage key holding the identity bound to this cache. The
@@ -339,18 +345,20 @@ impl<S: Storage> Engine<S> {
             // Missing query fields after a format wipe are intentionally not
             // recreated from stale recipes during hydration.
             apply_link_patches(&mut effective, &mut updates, &patches, true)?;
+            let revalidations = deduplicate_revalidations(
+                source.revalidations.iter().cloned().chain(
+                    source
+                        .link_patches
+                        .iter()
+                        .map(OptimisticLinkPatch::revalidation),
+                ),
+            );
             layers.push(OptimisticLayer {
                 id: queued.id,
                 updates,
                 link_patches: patches,
-                revalidations: deduplicate_revalidations(
-                    source.revalidations.into_iter().chain(
-                        source
-                            .link_patches
-                            .iter()
-                            .map(OptimisticLinkPatch::revalidation),
-                    ),
-                ),
+                revalidations,
+                projection_mutations: source.projection_mutations,
             });
         }
         Ok(layers)
@@ -1160,6 +1168,17 @@ impl<S: Storage> Engine<S> {
         origin_op: Option<OpId>,
         input: BeginOptimisticWrite<'_>,
     ) -> Result<(OptimisticTransactionId, WriteResult), EngineError<S::Error>> {
+        self.begin_optimistic_write_with_projections(origin_op, input, Vec::new())
+            .await
+    }
+
+    /// Atomically enqueue an optimistic normalized layer and generic projection overlay.
+    pub async fn begin_optimistic_write_with_projections(
+        &mut self,
+        origin_op: Option<OpId>,
+        input: BeginOptimisticWrite<'_>,
+        projection_mutations: Vec<OptimisticProjectionMutation>,
+    ) -> Result<(OptimisticTransactionId, WriteResult), EngineError<S::Error>> {
         let BeginOptimisticWrite {
             query,
             operation_name,
@@ -1197,10 +1216,54 @@ impl<S: Storage> Engine<S> {
             IdentityState::Bound(identity) => Some(identity),
             IdentityState::NotHydrated | IdentityState::Missing => None,
         };
+        for mutation in &projection_mutations {
+            match mutation {
+                OptimisticProjectionMutation::Replace(document) => document
+                    .validate()
+                    .map_err(|error| EngineError::InvalidOptimisticProjection(error.to_string()))?,
+                OptimisticProjectionMutation::Patch {
+                    exact,
+                    integers,
+                    sorts,
+                    ..
+                } => {
+                    let mut attributes = BTreeSet::new();
+                    if exact
+                        .iter()
+                        .any(|patch| !attributes.insert(patch.attribute.clone()))
+                    {
+                        return Err(EngineError::InvalidOptimisticProjection(
+                            "duplicate exact patch attribute".to_string(),
+                        ));
+                    }
+                    attributes.clear();
+                    if integers
+                        .iter()
+                        .any(|patch| !attributes.insert(patch.attribute.clone()))
+                    {
+                        return Err(EngineError::InvalidOptimisticProjection(
+                            "duplicate integer patch attribute".to_string(),
+                        ));
+                    }
+                    attributes.clear();
+                    if sorts
+                        .iter()
+                        .any(|fact| !attributes.insert(fact.attribute.clone()))
+                    {
+                        return Err(EngineError::InvalidOptimisticProjection(
+                            "duplicate sort patch attribute".to_string(),
+                        ));
+                    }
+                }
+                OptimisticProjectionMutation::Delete { .. }
+                | OptimisticProjectionMutation::Unknown { .. } => {}
+            }
+        }
         let source = OptimisticSource {
             mutation_data: data.clone(),
             link_patches: patches.clone(),
             revalidations: revalidations.clone(),
+            projection_mutations: projection_mutations.clone(),
         };
         let id = self
             .storage
@@ -1226,6 +1289,7 @@ impl<S: Storage> Engine<S> {
             updates,
             link_patches: patches,
             revalidations,
+            projection_mutations,
         });
 
         let after = effective_records(&bases, &self.optimistic, &candidates);
@@ -1258,7 +1322,21 @@ impl<S: Storage> Engine<S> {
         input: BeginOptimisticWrite<'_>,
         claim: MutationClaimRequest,
     ) -> Result<EnqueueOptimisticMutationResult<EngineError<S::Error>>, EngineError<S::Error>> {
-        let (transaction_id, write_result) = self.begin_optimistic_write(origin_op, input).await?;
+        self.enqueue_optimistic_mutation_with_projections(origin_op, input, claim, Vec::new())
+            .await
+    }
+
+    /// Durably enqueue normalized optimism and a queryable projection overlay.
+    pub async fn enqueue_optimistic_mutation_with_projections(
+        &mut self,
+        origin_op: Option<OpId>,
+        input: BeginOptimisticWrite<'_>,
+        claim: MutationClaimRequest,
+        projection_mutations: Vec<OptimisticProjectionMutation>,
+    ) -> Result<EnqueueOptimisticMutationResult<EngineError<S::Error>>, EngineError<S::Error>> {
+        let (transaction_id, write_result) = self
+            .begin_optimistic_write_with_projections(origin_op, input, projection_mutations)
+            .await?;
         let initial_claim = match self.claim_next_mutation(claim).await {
             Ok(Some(claimed)) => InitialClaimOutcome::Claimed(Box::new(claimed)),
             Ok(None) => InitialClaimOutcome::NotRunnable,
@@ -1763,19 +1841,163 @@ impl<S: PredicateIndexStorage> Engine<S> {
         Ok(affected)
     }
 
-    /// Execute a complete generic exact-index query.
+    /// Execute a complete generic exact-index query over authoritative and optimistic projections.
     pub async fn query_predicate_index(
         &mut self,
         query: &ValidatedIndexQuery,
     ) -> Result<PredicateQueryResult, EngineError<S::Error>> {
         self.hydrate_optimistic().await?;
-        if !self.optimistic.is_empty() {
+        let projection_mutations = self
+            .optimistic
+            .iter()
+            .flat_map(|layer| layer.projection_mutations.iter())
+            .filter(|mutation| query.includes_scope(mutation.profile(), mutation.partition()))
+            .cloned()
+            .collect::<Vec<_>>();
+        if projection_mutations.is_empty() {
+            return self
+                .storage
+                .query_predicate_index(query)
+                .await
+                .map_err(EngineError::Storage);
+        }
+        let mut uncertain = BTreeSet::new();
+        for mutation in &projection_mutations {
+            match mutation {
+                OptimisticProjectionMutation::Unknown { record_key, .. }
+                    if mutation.makes_query_uncertain(query) =>
+                {
+                    uncertain.insert(record_key.clone());
+                }
+                OptimisticProjectionMutation::Replace(document) => {
+                    uncertain.remove(&document.record_key);
+                }
+                OptimisticProjectionMutation::Patch { .. } => {}
+                OptimisticProjectionMutation::Delete { record_key, .. } => {
+                    uncertain.remove(record_key);
+                }
+                OptimisticProjectionMutation::Unknown { .. } => {}
+            }
+        }
+        if !uncertain.is_empty() {
             return Ok(PredicateQueryResult::Incomplete);
         }
-        self.storage
-            .query_predicate_index(query)
+
+        let touched = projection_mutations
+            .iter()
+            .map(|mutation| mutation.record_key().clone())
+            .collect::<BTreeSet<_>>();
+        if touched.len() > MAX_OPTIMISTIC_RECORDS_PER_QUERY {
+            return Ok(PredicateQueryResult::Incomplete);
+        }
+        let requested_limit = usize::from(query.as_query().limit);
+        let expanded_limit = requested_limit.saturating_add(touched.len());
+        if expanded_limit > usize::from(MAX_QUERY_LIMIT) {
+            return Ok(PredicateQueryResult::Incomplete);
+        }
+        let expanded_query = query
+            .with_limit(u16::try_from(expanded_limit).expect("bounded predicate query limit"))
+            .expect("an increased bounded limit preserves query validity");
+        let base_keys = match self
+            .storage
+            .query_predicate_index(&expanded_query)
             .await
-            .map_err(EngineError::Storage)
+            .map_err(EngineError::Storage)?
+        {
+            PredicateQueryResult::Complete(keys) => keys,
+            PredicateQueryResult::Incomplete => return Ok(PredicateQueryResult::Incomplete),
+        };
+
+        let mut keys = base_keys.into_iter().collect::<BTreeSet<_>>();
+        keys.extend(touched.iter().cloned());
+        let keys = keys.into_iter().collect::<Vec<_>>();
+        let loaded = self
+            .storage
+            .get_index_documents(&keys)
+            .await
+            .map_err(EngineError::Storage)?;
+        if loaded.len() != keys.len() {
+            return Ok(PredicateQueryResult::Incomplete);
+        }
+        let mut documents = keys
+            .into_iter()
+            .zip(loaded)
+            .filter_map(|(key, document)| document.map(|document| (key, document)))
+            .collect::<BTreeMap<_, _>>();
+
+        for mutation in projection_mutations {
+            match mutation {
+                OptimisticProjectionMutation::Replace(document) => {
+                    documents.insert(document.record_key.clone(), document);
+                }
+                OptimisticProjectionMutation::Patch {
+                    record_key,
+                    profile,
+                    partition,
+                    exact,
+                    integers,
+                    sorts,
+                } => {
+                    let Some(document) = documents.get_mut(&record_key) else {
+                        return Ok(PredicateQueryResult::Incomplete);
+                    };
+                    if document.profile != profile || document.partition != partition {
+                        return Ok(PredicateQueryResult::Incomplete);
+                    }
+                    for patch in exact {
+                        document
+                            .exact_facts
+                            .retain(|fact| fact.attribute != patch.attribute);
+                        document
+                            .exact_facts
+                            .extend(patch.values.into_iter().map(|value| {
+                                predicate_index::ExactFact {
+                                    attribute: patch.attribute.clone(),
+                                    value,
+                                }
+                            }));
+                    }
+                    for patch in integers {
+                        document
+                            .integer_facts
+                            .retain(|fact| fact.attribute != patch.attribute);
+                        document
+                            .integer_facts
+                            .extend(patch.values.into_iter().map(|value| {
+                                predicate_index::IntegerFact {
+                                    attribute: patch.attribute.clone(),
+                                    value,
+                                }
+                            }));
+                    }
+                    for fact in sorts {
+                        document
+                            .sort_facts
+                            .retain(|existing| existing.attribute != fact.attribute);
+                        document.sort_facts.push(fact);
+                    }
+                    if document.validate().is_err() {
+                        return Ok(PredicateQueryResult::Incomplete);
+                    }
+                }
+                OptimisticProjectionMutation::Delete { record_key, .. } => {
+                    documents.remove(&record_key);
+                }
+                OptimisticProjectionMutation::Unknown { .. } => {
+                    // Query-irrelevant uncertainty was filtered above and does
+                    // not alter any known effective facts.
+                }
+            }
+        }
+        Ok(PredicateQueryResult::Complete(
+            evaluate_reference(
+                query,
+                &documents.into_values().collect::<Vec<IndexDocument>>(),
+            )
+            .into_iter()
+            .map(|hit| hit.record_key)
+            .collect(),
+        ))
     }
 }
 

@@ -13,6 +13,7 @@ fn optimistic_source_supports_versioned_and_legacy_json() {
         mutation_data: json!({"rename": {"name": "next"}}),
         link_patches: Vec::new(),
         revalidations: Vec::new(),
+        projection_mutations: Vec::new(),
     };
     assert_eq!(
         decode_optimistic_source(&encode_optimistic_source(&source)).unwrap(),

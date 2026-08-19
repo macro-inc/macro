@@ -113,4 +113,13 @@ pub trait PredicateIndexStorage: Storage {
         &self,
         query: &ValidatedIndexQuery,
     ) -> impl Future<Output = Result<PredicateQueryResult, Self::Error>> + MaybeSend;
+
+    /// Load complete authoritative projections aligned with `keys`.
+    ///
+    /// Incomplete or absent projections are returned as `None`. This is used
+    /// to compose a bounded optimistic overlay without scanning record blobs.
+    fn get_index_documents(
+        &self,
+        keys: &[RecordKey],
+    ) -> impl Future<Output = Result<Vec<Option<IndexDocument>>, Self::Error>> + MaybeSend;
 }

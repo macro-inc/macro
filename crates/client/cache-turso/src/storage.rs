@@ -18,6 +18,7 @@ use predicate_index::{
     PredicateExpr, Profile, RangeBound, RecordKey as PredicateRecordKey, SortDirection, Token,
     ValidatedIndexQuery,
 };
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU8, Ordering};
 use turso_core::{Connection, Numeric, Value};
@@ -1248,6 +1249,17 @@ impl PredicateIndexStorage for TursoStorage {
         });
         self.latch_result(result)
     }
+
+    async fn get_index_documents(
+        &self,
+        keys: &[PredicateRecordKey],
+    ) -> Result<Vec<Option<predicate_index::IndexDocument>>, Self::Error> {
+        self.require_healthy()?;
+        let connection = self.connection();
+        let result =
+            driver::read_transaction(&connection, || load_index_documents(&connection, keys));
+        self.latch_result(result)
+    }
 }
 
 fn write_projection_mutations(
@@ -1397,6 +1409,117 @@ fn projection_state_code(kind: ProjectionIncompleteKind) -> i64 {
         ProjectionIncompleteKind::Missing => 2,
         ProjectionIncompleteKind::IncompatibleVersion => 3,
     }
+}
+
+fn load_index_documents(
+    connection: &Arc<Connection>,
+    keys: &[PredicateRecordKey],
+) -> Result<Vec<Option<predicate_index::IndexDocument>>, TursoStorageError> {
+    if keys.is_empty() {
+        return Ok(Vec::new());
+    }
+    let placeholders = (1..=keys.len())
+        .map(|index| format!("?{index}"))
+        .collect::<Vec<_>>()
+        .join(", ");
+    let rows = driver::query(
+        connection,
+        &format!(
+            "SELECT id, record_key, profile, partition FROM index_documents WHERE state = 0 AND record_key IN ({placeholders})"
+        ),
+        keys.iter().map(|key| text(key.as_str())).collect(),
+    )?;
+    let mut by_id = HashMap::with_capacity(rows.len());
+    let mut documents = HashMap::with_capacity(rows.len());
+    for row in rows {
+        if row.len() != 4 {
+            return Err(invariant());
+        }
+        let id = required_i64(&row, 0)?;
+        let record_key =
+            PredicateRecordKey::new(required_text(&row, 1)?).map_err(|_| invariant())?;
+        let profile = Profile::new(Token::new(required_text(&row, 2)?).map_err(|_| invariant())?);
+        let partition = Token::new(required_text(&row, 3)?).map_err(|_| invariant())?;
+        by_id.insert(id, record_key.clone());
+        documents.insert(
+            record_key.clone(),
+            predicate_index::IndexDocument {
+                record_key,
+                profile,
+                partition,
+                exact_facts: Vec::new(),
+                integer_facts: Vec::new(),
+                sort_facts: Vec::new(),
+            },
+        );
+    }
+    if by_id.is_empty() {
+        return Ok(vec![None; keys.len()]);
+    }
+
+    let id_placeholders = (1..=by_id.len())
+        .map(|index| format!("?{index}"))
+        .collect::<Vec<_>>()
+        .join(", ");
+    let ids = by_id.keys().copied().collect::<Vec<_>>();
+    let id_parameters = || ids.iter().copied().map(Value::from_i64).collect::<Vec<_>>();
+    for row in driver::query(
+        connection,
+        &format!(
+            "SELECT document_id, attribute, value FROM exact_facts WHERE document_id IN ({id_placeholders})"
+        ),
+        id_parameters(),
+    )? {
+        let record_key = by_id.get(&required_i64(&row, 0)?).ok_or_else(invariant)?;
+        documents
+            .get_mut(record_key)
+            .ok_or_else(invariant)?
+            .exact_facts
+            .push(predicate_index::ExactFact {
+                attribute: Token::new(required_text(&row, 1)?).map_err(|_| invariant())?,
+                value: predicate_index::ExactValue::new(required_blob(&row, 2)?)
+                    .map_err(|_| invariant())?,
+            });
+    }
+    for row in driver::query(
+        connection,
+        &format!(
+            "SELECT document_id, attribute, value FROM integer_facts WHERE document_id IN ({id_placeholders})"
+        ),
+        id_parameters(),
+    )? {
+        let record_key = by_id.get(&required_i64(&row, 0)?).ok_or_else(invariant)?;
+        documents
+            .get_mut(record_key)
+            .ok_or_else(invariant)?
+            .integer_facts
+            .push(predicate_index::IntegerFact {
+                attribute: Token::new(required_text(&row, 1)?).map_err(|_| invariant())?,
+                value: required_i64(&row, 2)?,
+            });
+    }
+    for row in driver::query(
+        connection,
+        &format!(
+            "SELECT document_id, attribute, value FROM sort_facts WHERE document_id IN ({id_placeholders})"
+        ),
+        id_parameters(),
+    )? {
+        let record_key = by_id.get(&required_i64(&row, 0)?).ok_or_else(invariant)?;
+        documents
+            .get_mut(record_key)
+            .ok_or_else(invariant)?
+            .sort_facts
+            .push(predicate_index::IntegerFact {
+                attribute: Token::new(required_text(&row, 1)?).map_err(|_| invariant())?,
+                value: required_i64(&row, 2)?,
+            });
+    }
+
+    for document in documents.values() {
+        document.validate().map_err(|_| invariant())?;
+    }
+    Ok(keys.iter().map(|key| documents.remove(key)).collect())
 }
 
 fn predicate_scope_is_incomplete(

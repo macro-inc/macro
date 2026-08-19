@@ -23,13 +23,16 @@ use graphql_soup_filter_input::materialize_graphql_filter;
 use item_filter_index::{
     LocalCompileOutcome, SoupFlatRequest, SoupIndexSort, compile_soup_flat_v1, vocabulary,
 };
+use model_file_type::FileType;
 use predicate_index::{
-    ExactFact, ExactValue, IndexDocument, IntegerFact, Profile, RecordKey, SortDirection, Token,
+    ExactAttributePatch, ExactFact, ExactValue, IndexDocument, IntegerAttributePatch, IntegerFact,
+    OptimisticProjectionMutation, Profile, RecordKey, SortDirection, Token,
 };
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
+use std::str::FromStr;
 use turso_opfs::{OpenResult, OpfsOwner};
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::future_to_promise;
@@ -355,6 +358,269 @@ fn projection_mutations(data: &serde_json::Value) -> Vec<ProjectionMutation> {
     let mut mutations = HashMap::new();
     walk(data, &mut mutations);
     mutations.into_values().collect()
+}
+
+fn optimistic_projection_mutations(
+    data: &serde_json::Value,
+    created_at_ms: i64,
+) -> Vec<OptimisticProjectionMutation> {
+    fn walk(
+        value: &serde_json::Value,
+        created_at_ms: i64,
+        mutations: &mut HashMap<String, OptimisticProjectionMutation>,
+    ) {
+        match value {
+            serde_json::Value::Array(values) => {
+                for value in values {
+                    walk(value, created_at_ms, mutations);
+                }
+            }
+            serde_json::Value::Object(object) => {
+                if object.get("__typename").and_then(|value| value.as_str())
+                    == Some("GraphqlCacheDeletion")
+                    && let (Some(typename), Some(id)) = (
+                        object
+                            .get("graphqlTypeName")
+                            .and_then(|value| value.as_str()),
+                        object.get("entityId").and_then(|value| value.as_str()),
+                    )
+                    && let Some(partition) = projection_partition(typename)
+                {
+                    let key_text = format!("{typename}:{id}");
+                    if let Ok(record_key) = RecordKey::new(key_text.clone()) {
+                        mutations.insert(
+                            key_text,
+                            OptimisticProjectionMutation::Delete {
+                                record_key,
+                                profile: vocabulary::profile(),
+                                partition,
+                            },
+                        );
+                    }
+                }
+
+                let typename = object.get("__typename").and_then(|value| value.as_str());
+                let id = object.get("id").and_then(|value| value.as_str());
+                if let (Some(typename), Some(id)) = (typename, id)
+                    && let Some(partition) = projection_partition(typename)
+                {
+                    let key_text = format!("{typename}:{id}");
+                    if let Ok(record_key) = RecordKey::new(key_text.clone()) {
+                        let mutation = optimistic_projection_for_object(
+                            record_key.clone(),
+                            partition.clone(),
+                            object,
+                            created_at_ms,
+                        )
+                        .unwrap_or(OptimisticProjectionMutation::Unknown {
+                            record_key,
+                            profile: vocabulary::profile(),
+                            partition,
+                            affected_attributes: Vec::new(),
+                        });
+                        mutations.insert(key_text, mutation);
+                    }
+                }
+                for value in object.values() {
+                    walk(value, created_at_ms, mutations);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    let mut mutations = HashMap::new();
+    walk(data, created_at_ms, &mut mutations);
+    mutations.into_values().collect()
+}
+
+fn optimistic_projection_for_object(
+    record_key: RecordKey,
+    partition: Token,
+    object: &serde_json::Map<String, serde_json::Value>,
+    created_at_ms: i64,
+) -> Option<OptimisticProjectionMutation> {
+    if let Some(value) = object.get("filterProjection") {
+        return match parse_projection(record_key.clone(), partition.clone(), value)? {
+            ProjectionMutation::Replace(document) => {
+                Some(OptimisticProjectionMutation::Replace(document))
+            }
+            ProjectionMutation::MarkIncomplete { .. } | ProjectionMutation::Delete(_) => None,
+        };
+    }
+
+    if let Some(document) = complete_optimistic_projection(
+        record_key.clone(),
+        partition.clone(),
+        object,
+        created_at_ms,
+    )? {
+        return Some(OptimisticProjectionMutation::Replace(document));
+    }
+
+    let mut exact = Vec::new();
+    if let Some(owner) = object.get("ownerId") {
+        exact.push(ExactAttributePatch {
+            attribute: vocabulary::owner(),
+            values: vec![ExactValue::utf8(owner.as_str()?).ok()?],
+        });
+    }
+    let project_field = if partition == vocabulary::project_partition() {
+        "parentId"
+    } else {
+        "projectId"
+    };
+    if let Some(project) = object.get(project_field) {
+        exact.push(ExactAttributePatch {
+            attribute: vocabulary::project_id(),
+            values: optional_uuid_exact_values(project)?,
+        });
+    }
+    if partition == vocabulary::document_partition()
+        && let Some(file_type) = object.get("fileType")
+    {
+        let values = match file_type {
+            serde_json::Value::Null => Vec::new(),
+            serde_json::Value::String(value) => {
+                vec![ExactValue::utf8(FileType::from_str(value).ok()?.to_string()).ok()?]
+            }
+            _ => return None,
+        };
+        exact.push(ExactAttributePatch {
+            attribute: vocabulary::file_type(),
+            values,
+        });
+    }
+
+    let mut integers = Vec::new();
+    let mut sorts = Vec::new();
+    if let Some(created_at) = object.get("createdAt") {
+        let value = graphql_timestamp_micros(created_at)?;
+        integers.push(IntegerAttributePatch {
+            attribute: vocabulary::created_at(),
+            values: vec![value],
+        });
+        sorts.push(IntegerFact {
+            attribute: vocabulary::created_at(),
+            value,
+        });
+    }
+    let updated_at = match object.get("updatedAt") {
+        Some(value) => graphql_timestamp_micros(value)?,
+        None => created_at_ms.saturating_mul(1_000),
+    };
+    integers.push(IntegerAttributePatch {
+        attribute: vocabulary::updated_at(),
+        values: vec![updated_at],
+    });
+    sorts.push(IntegerFact {
+        attribute: vocabulary::updated_at(),
+        value: updated_at,
+    });
+
+    Some(OptimisticProjectionMutation::Patch {
+        record_key,
+        profile: vocabulary::profile(),
+        partition,
+        exact,
+        integers,
+        sorts,
+    })
+}
+
+fn complete_optimistic_projection(
+    record_key: RecordKey,
+    partition: Token,
+    object: &serde_json::Map<String, serde_json::Value>,
+    created_at_ms: i64,
+) -> Option<Option<IndexDocument>> {
+    let required_optional_fields_present = if partition == vocabulary::document_partition() {
+        object.contains_key("projectId") && object.contains_key("fileType")
+    } else if partition == vocabulary::project_partition() {
+        object.contains_key("parentId")
+    } else {
+        object.contains_key("projectId")
+    };
+    if !required_optional_fields_present
+        || !object.contains_key("ownerId")
+        || !object.contains_key("createdAt")
+    {
+        return Some(None);
+    }
+
+    let id = uuid::Uuid::parse_str(object.get("id")?.as_str()?).ok()?;
+    let owner = object.get("ownerId")?.as_str()?;
+    let created_at = graphql_timestamp_micros(object.get("createdAt")?)?;
+    let updated_at = match object.get("updatedAt") {
+        Some(value) => graphql_timestamp_micros(value)?,
+        None => created_at_ms.saturating_mul(1_000),
+    };
+    let mut exact_facts = vec![
+        ExactFact {
+            attribute: vocabulary::id(),
+            value: ExactValue::new(id.as_bytes()).ok()?,
+        },
+        ExactFact {
+            attribute: vocabulary::owner(),
+            value: ExactValue::utf8(owner).ok()?,
+        },
+    ];
+    let project_field = if partition == vocabulary::project_partition() {
+        "parentId"
+    } else {
+        "projectId"
+    };
+    for value in optional_uuid_exact_values(object.get(project_field)?)? {
+        exact_facts.push(ExactFact {
+            attribute: vocabulary::project_id(),
+            value,
+        });
+    }
+    if partition == vocabulary::document_partition()
+        && let Some(value) = object.get("fileType")
+        && !value.is_null()
+    {
+        exact_facts.push(ExactFact {
+            attribute: vocabulary::file_type(),
+            value: ExactValue::utf8(FileType::from_str(value.as_str()?).ok()?.to_string()).ok()?,
+        });
+    }
+    let created_fact = IntegerFact {
+        attribute: vocabulary::created_at(),
+        value: created_at,
+    };
+    let updated_fact = IntegerFact {
+        attribute: vocabulary::updated_at(),
+        value: updated_at,
+    };
+    let document = IndexDocument {
+        record_key,
+        profile: vocabulary::profile(),
+        partition,
+        exact_facts,
+        integer_facts: vec![created_fact.clone(), updated_fact.clone()],
+        sort_facts: vec![created_fact, updated_fact],
+    };
+    document.validate().ok()?;
+    Some(Some(document))
+}
+
+fn optional_uuid_exact_values(value: &serde_json::Value) -> Option<Vec<ExactValue>> {
+    match value {
+        serde_json::Value::Null => Some(Vec::new()),
+        serde_json::Value::String(value) => Some(vec![
+            ExactValue::new(uuid::Uuid::parse_str(value).ok()?.as_bytes()).ok()?,
+        ]),
+        _ => None,
+    }
+}
+
+fn graphql_timestamp_micros(value: &serde_json::Value) -> Option<i64> {
+    Some(
+        chrono::DateTime::parse_from_rfc3339(value.as_str()?)
+            .ok()?
+            .timestamp_micros(),
+    )
 }
 
 fn projection_partition(typename: &str) -> Option<Token> {
@@ -1172,6 +1438,7 @@ impl CacheEngine {
             let link_patches: Vec<OptimisticLinkPatch> = parse_vec(link_patches)?;
             let revalidations: Vec<QueryRevalidation> = parse_vec(revalidations)?;
             let created_at_ms = parse_timestamp(created_at_ms, "enqueue timestamp")?;
+            let projection_mutations = optimistic_projection_mutations(&data, created_at_ms);
             let claim = MutationClaimRequest {
                 owner: lease_owner,
                 now_ms: parse_timestamp(now_ms, "claim timestamp")?,
@@ -1183,7 +1450,7 @@ impl CacheEngine {
             let origin = origin_op_id.map(|name| ops.borrow_mut().intern(&name));
             let result = state
                 .engine_mut()?
-                .enqueue_optimistic_mutation(
+                .enqueue_optimistic_mutation_with_projections(
                     origin,
                     BeginOptimisticWrite {
                         query: &query,
@@ -1195,6 +1462,7 @@ impl CacheEngine {
                         created_at_ms,
                     },
                     claim,
+                    projection_mutations,
                 )
                 .await;
             let result = state.engine_result(result)?;

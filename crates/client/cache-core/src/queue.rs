@@ -8,6 +8,7 @@
 use crate::link_patch::{OptimisticLinkPatch, QueryRevalidation};
 use crate::normalize::RecordUpdates;
 use crate::value::canonical_json;
+use predicate_index::OptimisticProjectionMutation;
 use serde::{Deserialize, Serialize};
 use serde_json::Value as Json;
 
@@ -81,6 +82,9 @@ pub struct OptimisticSource {
     /// Revalidations for relevant fields that could not be patched.
     #[serde(default)]
     pub revalidations: Vec<QueryRevalidation>,
+    /// Ordered generic projection changes composed with this optimistic layer.
+    #[serde(default)]
+    pub projection_mutations: Vec<OptimisticProjectionMutation>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -92,6 +96,8 @@ struct OptimisticSourceEnvelope {
     link_patches: Vec<OptimisticLinkPatch>,
     #[serde(default)]
     revalidations: Vec<QueryRevalidation>,
+    #[serde(default)]
+    projection_mutations: Vec<OptimisticProjectionMutation>,
 }
 
 /// Encodes an optimistic source with a reserved prefix and versioned JSON envelope.
@@ -102,6 +108,7 @@ pub fn encode_optimistic_source(source: &OptimisticSource) -> String {
             mutation_data: source.mutation_data.clone(),
             link_patches: source.link_patches.clone(),
             revalidations: source.revalidations.clone(),
+            projection_mutations: source.projection_mutations.clone(),
         })
         .expect("optimistic source serializes"),
     );
@@ -116,6 +123,7 @@ pub fn decode_optimistic_source(value: &str) -> Result<OptimisticSource, String>
             mutation_data: serde_json::from_str(value).map_err(|error| error.to_string())?,
             link_patches: Vec::new(),
             revalidations: Vec::new(),
+            projection_mutations: Vec::new(),
         });
     };
     let envelope: OptimisticSourceEnvelope =
@@ -130,6 +138,7 @@ pub fn decode_optimistic_source(value: &str) -> Result<OptimisticSource, String>
         mutation_data: envelope.mutation_data,
         link_patches: envelope.link_patches,
         revalidations: envelope.revalidations,
+        projection_mutations: envelope.projection_mutations,
     })
 }
 

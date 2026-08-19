@@ -503,6 +503,19 @@ impl PredicateIndexStorage for InMemoryStorage {
                 .collect(),
         ))
     }
+
+    async fn get_index_documents(
+        &self,
+        keys: &[PredicateRecordKey],
+    ) -> Result<Vec<Option<IndexDocument>>, Self::Error> {
+        Ok(keys
+            .iter()
+            .map(|key| match self.projections.get(key) {
+                Some(ProjectionState::Complete(document)) => Some(document.clone()),
+                Some(ProjectionState::Incomplete { .. }) | None => None,
+            })
+            .collect())
+    }
 }
 
 fn apply_in_memory_projection_mutations(
