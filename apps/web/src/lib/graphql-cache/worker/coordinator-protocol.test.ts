@@ -23,6 +23,35 @@ describe('coordinator runtime protocol', () => {
     expect(
       isCacheRequest({
         id: 2,
+        kind: 'write',
+        originOpId: 'client:1',
+        registration: {
+          opId: 'client:1',
+          entityResolvers: [
+            {
+              parentType: 'GraphqlUser',
+              fieldName: 'emailThread',
+              targetType: 'GraphqlSoupEmailThread',
+              argumentPath: ['input', 'threadId'],
+            },
+          ],
+        },
+        query: '{ user { id } }',
+        data: { user: { id: 'user-1' } },
+      })
+    ).toBe(true);
+    expect(
+      isCacheRequest({
+        id: 2,
+        kind: 'write',
+        registration: { opId: '', entityResolvers: [] },
+        query: '{ user { id } }',
+        data: { user: { id: 'user-1' } },
+      })
+    ).toBe(false);
+    expect(
+      isCacheRequest({
+        id: 2,
         kind: 'read-records-by-keys',
         document: 'fragment Item on GraphqlSoupDocument { name }',
         fragmentName: 'Item',

@@ -772,7 +772,12 @@ describe('createWorkerCacheHost', () => {
 
     await Promise.all([
       host.readQuery({ opKey: 7, query: 'query Seven { seven }' }),
-      host.readQuery({ opKey: 9, query: 'query Nine { nine }' }),
+      host.writeQuery({
+        opKey: 9,
+        registerDependencies: true,
+        query: 'query Nine { nine }',
+        data: { nine: 9 },
+      }),
       host.readQuery({ query: 'query Untracked { untracked }' }),
     ]);
     const adapter = requireAdapter();
