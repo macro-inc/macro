@@ -11,6 +11,7 @@ use agent_trigger::domain::broker_events::{
     AgentTriggerTopicEvent, ChannelEventMetadata, ExistingAgentSessionEvent, NewAgentSessionEvent,
 };
 use bot_id::BotId;
+use macro_user_id::email::ReadEmailParts;
 
 use crate::domain::model::{
     AnnounceOrigin, DeliverAction, HarnessCommand, MentionOrigin, OpenSession,
@@ -31,6 +32,8 @@ pub enum Skipped {
     /// vocabulary is non-exhaustive on purpose, and unknown shapes are
     /// skipped rather than wedging the partition.
     Unrecognized,
+    /// We are in beta and only allow Macro employees to use this new harness system.
+    NotMacroStaff,
 }
 
 /// Route one trigger event: a command for `our_bot`, or a reason it was
@@ -41,6 +44,17 @@ pub fn agent_trigger_to_harness_command(
 ) -> Result<(AgentSessionId, HarnessCommand), Skipped> {
     match event {
         AgentTriggerTopicEvent::New(NewAgentSessionEvent::TopLevelMentioned(mentioned)) => {
+            /// TODO: remove
+            if mentioned.message.sender.as_user().is_some_and(|user| {
+                !user
+                    .email_part()
+                    .lowercase()
+                    .email_str()
+                    .ends_with("@macro.com")
+            }) {
+                return Err(Skipped::NotMacroStaff);
+            }
+
             if mentioned.bot_id != our_bot {
                 return Err(Skipped::ForeignBot);
             }
