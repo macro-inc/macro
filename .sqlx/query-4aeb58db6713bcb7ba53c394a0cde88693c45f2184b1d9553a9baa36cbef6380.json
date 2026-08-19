@@ -11,12 +11,12 @@
       {
         "ordinal": 1,
         "name": "contacts_sync_token",
-        "type_info": "Varchar"
+        "type_info": "Text"
       },
       {
         "ordinal": 2,
         "name": "other_contacts_sync_token",
-        "type_info": "Varchar"
+        "type_info": "Text"
       }
     ],
     "parameters": {

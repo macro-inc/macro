@@ -31,7 +31,8 @@
             "name": "email_user_provider_enum",
             "kind": {
               "Enum": [
-                "GMAIL"
+                "GMAIL",
+                "OUTLOOK"
               ]
             }
           }
@@ -76,7 +77,8 @@
             "name": "email_user_provider_enum",
             "kind": {
               "Enum": [
-                "GMAIL"
+                "GMAIL",
+                "OUTLOOK"
               ]
             }
           }

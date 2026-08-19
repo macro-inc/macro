@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE in_progress_user_link\n            SET linked_email = $1,\n                granted_google_scopes = $2\n            WHERE id = $3\n              AND provider = 'GMAIL'\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "TextArray",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "b76ee12dc6c450a377a465951eabbbae138621671d67ead18294a3add3e6101c"
+}

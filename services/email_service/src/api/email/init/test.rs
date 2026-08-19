@@ -157,8 +157,10 @@ fn calendar_intent_follows_the_consent_request_not_the_grant() {
     let in_progress = |requested: Vec<String>| InProgressUserLink {
         macro_user_id: Uuid::now_v7(),
         linked_email: None,
+        provider: macro_db_client::in_progress_user_link::InProgressUserLinkProvider::Gmail,
         requested_google_scopes: requested,
         granted_google_scopes: [vec![gmail_scope.clone()], calendar_scopes.clone()].concat(),
+        granted_microsoft_scopes: Vec::new(),
     };
 
     assert!(matches!(

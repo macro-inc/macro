@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE in_progress_user_link\n            SET linked_email = $1,\n                granted_microsoft_scopes = $2\n            WHERE id = $3\n              AND provider = 'OUTLOOK'\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "TextArray",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "5fef24a33611da7ea14d586c5b3b4b4c90e5aee118bc6262c01420f8484977b6"
+}

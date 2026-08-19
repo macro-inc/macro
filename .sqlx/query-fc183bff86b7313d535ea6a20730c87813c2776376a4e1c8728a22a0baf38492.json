@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO in_progress_user_link (id, macro_user_id, provider)\n            VALUES ($1, $2, 'OUTLOOK')\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "fc183bff86b7313d535ea6a20730c87813c2776376a4e1c8728a22a0baf38492"
+}

@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE email_outlook_sync_state\n        SET delta_cursor = $2,\n            updated_at = NOW()\n        WHERE link_id = $1\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "cb033323f694f30ccf6f295381bc8b821f7be4119b37e540acb39c3b342ecd7e"
+}

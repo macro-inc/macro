@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        DELETE FROM email_outlook_sync_state\n        WHERE link_id = $1\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "5b158d1de25ef18ab2aa9afb9fbba8adf51b9f62f35a67737f1f8168d5dbf46b"
+}

@@ -1,0 +1,62 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                macro_user_id,\n                linked_email,\n                provider AS \"provider: InProgressUserLinkProvider\",\n                requested_google_scopes,\n                granted_google_scopes,\n                granted_microsoft_scopes\n            FROM\n                in_progress_user_link\n            WHERE\n                id = $1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "macro_user_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "linked_email",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "provider: InProgressUserLinkProvider",
+        "type_info": {
+          "Custom": {
+            "name": "email_user_provider_enum",
+            "kind": {
+              "Enum": [
+                "GMAIL",
+                "OUTLOOK"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "requested_google_scopes",
+        "type_info": "TextArray"
+      },
+      {
+        "ordinal": 4,
+        "name": "granted_google_scopes",
+        "type_info": "TextArray"
+      },
+      {
+        "ordinal": 5,
+        "name": "granted_microsoft_scopes",
+        "type_info": "TextArray"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "0d94793fd47ba0b53cedb838073f6354844a99493ee89e996179583771cd4967"
+}

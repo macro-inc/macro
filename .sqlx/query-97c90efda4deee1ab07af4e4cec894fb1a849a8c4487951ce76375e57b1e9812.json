@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE email_outlook_sync_state\n        SET subscription_id = $2,\n            subscription_expires_at = $3,\n            updated_at = NOW()\n        WHERE link_id = $1\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "97c90efda4deee1ab07af4e4cec894fb1a849a8c4487951ce76375e57b1e9812"
+}

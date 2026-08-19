@@ -28,12 +28,12 @@ that no longer recognizes an older grant. */
   is_primary: boolean;
   is_sync_active: boolean;
   macro_id: string;
-  /** Whether the link's Google grant is missing the calendar scope. True for
-inboxes connected before the calendar capability existed (and for
+  /** Whether the link's provider grant is missing calendar permission. True
+for inboxes connected before the calendar capability existed (and for
 grants where the user declined it); drives the per-inbox calendar
 upgrade prompt. Re-running the connect flow records the new grant. */
   needs_calendar_permission: boolean;
-  /** Whether the link's Google grant needs to be reconnected. Drives the
+  /** Whether the link's provider grant needs to be reconnected. Drives the
 per-inbox reconnect prompt independently of the sync-status badge. */
   needs_reauth: boolean;
   /** The inbox's own profile photo (its self-contact's SFS photo), if synced. */

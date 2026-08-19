@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO in_progress_user_link (id, macro_user_id, provider)\n            VALUES ($1, $2, 'GMAIL')\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "52be9be92be483605ae411d48d5655bee1530213f1b07f8f445b5d8014d87d1b"
+}

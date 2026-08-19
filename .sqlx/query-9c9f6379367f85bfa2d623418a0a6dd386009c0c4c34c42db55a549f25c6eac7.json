@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO email_outlook_sync_state (\n            link_id,\n            subscription_id,\n            subscription_expires_at,\n            delta_cursor\n        )\n        VALUES ($1, $2, $3, $4)\n        ON CONFLICT (link_id)\n        DO UPDATE SET\n            subscription_id = EXCLUDED.subscription_id,\n            subscription_expires_at = EXCLUDED.subscription_expires_at,\n            delta_cursor = EXCLUDED.delta_cursor,\n            updated_at = NOW()\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Timestamptz",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "9c9f6379367f85bfa2d623418a0a6dd386009c0c4c34c42db55a549f25c6eac7"
+}
