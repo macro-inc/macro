@@ -95,6 +95,23 @@ describe('createCalendarTargetAim', () => {
     expect(aim.target()?.eventId).toBe('viewer-copy');
   });
 
+  // A mention whose event was deleted resolves to nothing. Holding the
+  // previous target would leave the focus effect free to land on an
+  // unrelated event the user never asked for.
+  it('clears the target when the latest preview cannot resolve', async () => {
+    const resolveFromPreview = vi.fn(async () => undefined);
+
+    const aim = createRoot(() =>
+      createCalendarTargetAim({ initial: standup, resolveFromPreview })
+    );
+    expect(aim.target()?.eventId).toBe('event-1');
+
+    aim.aimAt({ eventId: 'deleted-event' });
+    await vi.waitFor(() => expect(aim.target()).toBeUndefined());
+
+    expect(resolveFromPreview).toHaveBeenCalledTimes(1);
+  });
+
   it('drops a preview answer that a newer aim has superseded', async () => {
     let releaseStalePreview: (() => void) | undefined;
     const resolveFromPreview = vi.fn(

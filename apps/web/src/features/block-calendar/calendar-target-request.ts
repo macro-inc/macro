@@ -108,10 +108,16 @@ export function createCalendarTargetAim(options: {
   >(targetRequestFromParams(options.initial, nextRequestId++));
 
   // Preview resolution is async, so a stale answer must never clobber a
-  // target the user has since re-aimed or cleared.
-  const applyResolvedTarget = (request: CalendarBlockTargetRequest) => {
-    if (request.requestId < latestRequestId) return;
-    setTarget(request);
+  // target the user has since re-aimed or cleared. The latest answer always
+  // wins, including when it resolves to nothing: a mention whose event was
+  // deleted must drop the aim rather than leave the previous event pending
+  // for the focus effect to land on.
+  const applyResolvedTarget = (
+    requestId: number,
+    resolved: CalendarBlockTargetRequest | undefined
+  ) => {
+    if (requestId < latestRequestId) return;
+    setTarget(resolved);
   };
 
   const aimAt = (params: CalendarBlockProps) => {
@@ -119,16 +125,16 @@ export function createCalendarTargetAim(options: {
     latestRequestId = requestId;
     const direct = targetRequestFromParams(params, requestId);
     if (direct) {
-      applyResolvedTarget(direct);
+      applyResolvedTarget(requestId, direct);
       return;
     }
     if (typeof params.eventId === 'string' && params.eventId.length > 0) {
       resolveFromPreview(params, requestId).then((resolved) => {
-        if (resolved) applyResolvedTarget(resolved);
+        applyResolvedTarget(requestId, resolved);
       });
       return;
     }
-    if (target() !== undefined) setTarget(undefined);
+    applyResolvedTarget(requestId, undefined);
   };
 
   if (
