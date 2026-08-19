@@ -60,6 +60,7 @@ members = [
   "crates/reminders",
   "crates/search_service",
   "crates/skills",
+  "crates/soup_filter_cache_adapter",
   "crates/soup_filter_projection",
   "crates/soup_realtime",
   "crates/system_skills",
@@ -112,7 +113,7 @@ members = [
   "tooling/notification_sandbox",
   "tooling/seed_cli",
   "tooling/xtask",
-  "tooling/xtask/crates/*", "crates/soup_filter_cache_adapter",
+  "tooling/xtask/crates/*",
 ]
 
 [workspace.dependencies]
