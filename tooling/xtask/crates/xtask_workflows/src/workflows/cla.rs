@@ -142,7 +142,19 @@ fn script() -> String {
           if (author.type === 'Bot') {{
             return setStatus(sha, 'success', 'bot account — CLA not required');
           }}
-          if (await isOrgMember(author.login)) {{
+          // The probe throws on rate limits and unexpected responses. Publish
+          // the infra error rather than letting it escape: an uncaught throw
+          // fails the step without ever creating the status, which reads as a
+          // permanently pending check instead of a diagnosable failure.
+          let isMember;
+          try {{
+            isMember = await isOrgMember(author.login);
+          }} catch (err) {{
+            core.warning(`CLA org membership probe failed: ${{err.message}}`);
+            return setStatus(sha, 'failure',
+              'CLA infrastructure error — comment "@macro-bot check" to retry');
+          }}
+          if (isMember) {{
             return setStatus(sha, 'success', 'macro-inc member — covered by CIIA');
           }}
           let result;

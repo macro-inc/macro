@@ -3,7 +3,7 @@
 -- version at most once; signing a new version is a new row. Rows are never
 -- mutated or deleted; corrections are new rows or a manual D1 operation with
 -- a paper trail.
-CREATE TABLE signatures (
+CREATE TABLE IF NOT EXISTS signatures (
   github_id    INTEGER NOT NULL, -- immutable numeric GitHub user ID
   github_login TEXT    NOT NULL, -- login at signing time; display only, never keyed on
   cla_version  TEXT    NOT NULL, -- version tag of the text they agreed to

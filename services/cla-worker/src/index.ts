@@ -33,6 +33,12 @@ const STATE_COOKIE = "cla_oauth_state";
 /// Signing must complete within this window or the state cookie expires.
 const STATE_COOKIE_MAX_AGE_SECONDS = 600;
 
+const RECEIPT_COOKIE = "cla_receipt";
+/// How long the confirmation page stays viewable after signing. Short: it is
+/// a receipt for the person who just signed, not a durable record — the D1
+/// row is the record.
+const RECEIPT_COOKIE_MAX_AGE_SECONDS = 600;
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     if (request.method !== "GET") {
@@ -41,7 +47,7 @@ export default {
     const url = new URL(request.url);
     switch (url.pathname) {
       case "/cla":
-        return claPage(url, env);
+        return claPage(request, url, env);
       case "/cla/callback":
         return callback(request, url, env);
       case "/cla/check":
@@ -59,11 +65,16 @@ export default {
 // ---------------------------------------------------------------------------
 // GET /cla
 
-async function claPage(url: URL, env: Env): Promise<Response> {
+async function claPage(request: Request, url: URL, env: Env): Promise<Response> {
   // Post-callback redirect target: refreshing this page never replays the
-  // OAuth code exchange.
+  // OAuth code exchange. The receipt cookie — not the query string — is what
+  // authorizes the confirmation, so `?signed=1` alone renders nothing; an
+  // absent or invalid receipt just falls through to the agreement.
   if (url.searchParams.get("signed") === "1") {
-    return confirmationPage(url, env);
+    const receipt = await readReceipt(env, readCookie(request, RECEIPT_COOKIE));
+    if (receipt) {
+      return confirmationPage(receipt, env);
+    }
   }
 
   const nonce = randomHex(16);
@@ -95,13 +106,13 @@ async function claPage(url: URL, env: Env): Promise<Response> {
   });
 }
 
-function confirmationPage(url: URL, env: Env): Response {
-  // login/at are display-only echoes from the callback redirect; the D1 row
-  // is the record.
-  const login = url.searchParams.get("login");
-  const signedAt = url.searchParams.get("at");
-  const who = login ? ` as <strong>@${escapeHtml(login)}</strong>` : "";
-  const when = signedAt ? ` on <strong>${escapeHtml(signedAt)}</strong>` : "";
+function confirmationPage(receipt: Receipt, env: Env): Response {
+  // Display-only echo of what the callback just wrote; the D1 row is the
+  // record.
+  const who = ` as <strong>@${escapeHtml(receipt.login)}</strong>`;
+  const when = receipt.signed_at
+    ? ` on <strong>${escapeHtml(receipt.signed_at)}</strong>`
+    : "";
   const body = pageShell(
     "CLA signed",
     `<h1>Signed &#10003;</h1>
@@ -186,17 +197,63 @@ async function callback(request: Request, url: URL, env: Env): Promise<Response>
 
   const confirmation = new URL("/cla", url.origin);
   confirmation.searchParams.set("signed", "1");
-  confirmation.searchParams.set("login", user.login);
-  if (row) {
-    confirmation.searchParams.set("at", row.signed_at);
+
+  const headers = new Headers({ Location: confirmation.toString() });
+  headers.append(
+    "Set-Cookie",
+    `${STATE_COOKIE}=; Max-Age=0; Path=/cla; Secure; HttpOnly; SameSite=Lax`,
+  );
+  headers.append(
+    "Set-Cookie",
+    `${RECEIPT_COOKIE}=${await issueReceipt(env, {
+      login: user.login,
+      signed_at: row?.signed_at ?? "",
+    })}; Max-Age=${RECEIPT_COOKIE_MAX_AGE_SECONDS}; ` +
+      "Path=/cla; Secure; HttpOnly; SameSite=Lax",
+  );
+  return new Response(null, { status: 302, headers });
+}
+
+/// What the confirmation page displays back to the signer.
+interface Receipt {
+  login: string;
+  signed_at: string;
+}
+
+/// Mint an HMAC-signed confirmation receipt. Without this the confirmation
+/// page would render from query parameters, letting anyone craft a URL that
+/// claims any account signed. Enforcement never reads this — it reads D1 —
+/// but a receipt people screenshot should not be forgeable.
+async function issueReceipt(env: Env, receipt: Receipt): Promise<string> {
+  const payload = base64UrlEncode(JSON.stringify(receipt));
+  return `${payload}.${await hmacHex(env.GITHUB_CLIENT_SECRET, payload)}`;
+}
+
+/// Verify and decode a receipt cookie. Any tampering, truncation, or garbage
+/// resolves to `null`, which renders the agreement instead of a confirmation.
+async function readReceipt(env: Env, cookie: string | null): Promise<Receipt | null> {
+  if (!cookie) {
+    return null;
   }
-  return new Response(null, {
-    status: 302,
-    headers: {
-      Location: confirmation.toString(),
-      "Set-Cookie": `${STATE_COOKIE}=; Max-Age=0; Path=/cla; Secure; HttpOnly; SameSite=Lax`,
-    },
-  });
+  const separator = cookie.lastIndexOf(".");
+  if (separator <= 0) {
+    return null;
+  }
+  const payload = cookie.slice(0, separator);
+  const signature = cookie.slice(separator + 1);
+  const expected = await hmacHex(env.GITHUB_CLIENT_SECRET, payload);
+  if (!(await timingSafeEqualStrings(signature, expected))) {
+    return null;
+  }
+  try {
+    const parsed = JSON.parse(base64UrlDecode(payload)) as Partial<Receipt>;
+    if (typeof parsed.login !== "string" || typeof parsed.signed_at !== "string") {
+      return null;
+    }
+    return { login: parsed.login, signed_at: parsed.signed_at };
+  } catch {
+    return null;
+  }
 }
 
 async function verifyState(env: Env, cookie: string, state: string): Promise<boolean> {
@@ -283,6 +340,17 @@ async function timingSafeEqualStrings(a: string, b: string): Promise<boolean> {
     crypto.subtle.digest("SHA-256", encoder.encode(b)),
   ]);
   return crypto.subtle.timingSafeEqual(digestA, digestB);
+}
+
+// Receipt payloads are ASCII by construction (GitHub logins and ISO
+// timestamps), so btoa/atob are safe here.
+function base64UrlEncode(text: string): string {
+  return btoa(text).replaceAll("+", "-").replaceAll("/", "_").replaceAll("=", "");
+}
+
+function base64UrlDecode(text: string): string {
+  const padded = text.replaceAll("-", "+").replaceAll("_", "/");
+  return atob(padded + "=".repeat((4 - (padded.length % 4)) % 4));
 }
 
 function hex(buffer: Uint8Array): string {
