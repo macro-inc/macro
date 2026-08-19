@@ -2003,28 +2003,38 @@ describe('normalizedCacheExchange', () => {
       });
     });
 
-    it('reports a later mutation as queued while a deferred head blocks it', async () => {
+    it('accepts later local writes while a deferred offline head blocks the network', async () => {
       const error = new CombinedError({
         networkError: new Error('offline'),
       });
+      const firstOptimistic = {
+        setEntityProperty: { id: 'prop-1', displayName: 'Doing' },
+      };
+      const secondOptimistic = {
+        setEntityProperty: { id: 'prop-1', displayName: 'Completed' },
+      };
       const { ops, results, forwarded } = harness(
         host,
         (op) => (op.kind === 'mutation' ? { error, data: undefined } : {}),
         { shouldRetryMutation: () => true }
       );
 
-      ops.next(makeMutationOp(1, optimistic));
+      ops.next(makeMutationOp(1, firstOptimistic));
       await tick();
-      ops.next(makeMutationOp(2, optimistic));
+      ops.next(makeMutationOp(2, secondOptimistic));
       await tick();
 
       expect(host.claims).toEqual(['txn-1']);
       expect(forwarded.map((op) => op.key)).toEqual([1]);
+      expect(host.begins.map((begin) => begin.data)).toEqual([
+        firstOptimistic,
+        secondOptimistic,
+      ]);
       expect(results).toHaveLength(2);
       expect(results[0]?.error).toBeUndefined();
       expect(results[1]?.error).toBeUndefined();
-      expect(results[0]?.data).toEqual(optimistic);
-      expect(results[1]?.data).toEqual(optimistic);
+      expect(results[0]?.data).toEqual(firstOptimistic);
+      expect(results[1]?.data).toEqual(secondOptimistic);
       expect(optimisticMutationDispositionOf(results[1])).toEqual({
         kind: 'queued',
         transactionId: 'txn-2',
