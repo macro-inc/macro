@@ -230,8 +230,20 @@ fn cross_operation_invalidation() {
         let mut engine = Engine::new(InMemoryStorage::new());
 
         // Op 1: limit 10; Op 2: limit 20 — different root fields, shared
-        // entity doc-1.
+        // entity doc-1. Seed first so registration must include records that
+        // the registered write itself does not change.
         engine
+            .write_query(
+                None,
+                QUERY,
+                Some("Soup"),
+                &vars(10),
+                &page(&[("doc-1", "A")]),
+                None,
+            )
+            .await
+            .unwrap();
+        let registered = engine
             .write_query_with_registration(
                 Some(1),
                 Some(QueryRegistration {
@@ -248,6 +260,7 @@ fn cross_operation_invalidation() {
             )
             .await
             .unwrap();
+        assert!(registered.changed.is_empty());
 
         // Op 2's response renames doc-1 → op 1 must be re-executed.
         let write = engine
