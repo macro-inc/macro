@@ -194,7 +194,7 @@ function EventSummary(props: {
   );
 }
 
-function PreviewContent() {
+function PreviewContent(props: { dropdownMount?: HTMLElement }) {
   const initialDate = new Date();
   const [range, setRange] = createSignal<CalendarOccurrenceQueryRange>(
     dayRange(initialDate)
@@ -333,7 +333,11 @@ function PreviewContent() {
               >
                 <GearIcon class="size-4" />
               </Dropdown.Trigger>
-              <Dropdown.Content depth={4} class="w-56">
+              <Dropdown.Content
+                mount={props.dropdownMount}
+                depth={4}
+                class="w-56"
+              >
                 <Dropdown.Group>
                   <Dropdown.Sub>
                     <Dropdown.SubTrigger>
@@ -341,6 +345,7 @@ function PreviewContent() {
                       <CaretRightIcon class="size-3 shrink-0 text-ink-muted" />
                     </Dropdown.SubTrigger>
                     <Dropdown.SubContent
+                      mount={props.dropdownMount}
                       depth={4}
                       class="max-h-52 w-56 overflow-y-auto"
                     >
@@ -377,7 +382,11 @@ function PreviewContent() {
                       </span>
                       <CaretRightIcon class="size-3 shrink-0 text-ink-muted" />
                     </Dropdown.SubTrigger>
-                    <Dropdown.SubContent depth={4} class="min-w-36">
+                    <Dropdown.SubContent
+                      mount={props.dropdownMount}
+                      depth={4}
+                      class="min-w-36"
+                    >
                       <Dropdown.Group>
                         <Dropdown.RadioGroup
                           value={timeFormat()}
@@ -440,6 +449,7 @@ export function CalendarSidebarPreview(
   props: ParentProps<{ disabled?: boolean }>
 ) {
   const [open, setOpen] = createSignal(false);
+  const [contentElement, setContentElement] = createSignal<HTMLElement>();
 
   return (
     <HoverCard
@@ -462,13 +472,14 @@ export function CalendarSidebarPreview(
           >
             <Show when={open() && !props.disabled}>
               <Suspense fallback={<PreviewSkeleton />}>
-                <PreviewContent />
+                <PreviewContent dropdownMount={contentElement()} />
               </Suspense>
             </Show>
           </div>
         </Surface>
       }
       contentClass="max-w-[calc(100vw-1rem)] menu-open-animation"
+      contentRef={setContentElement}
       openDelay={300}
       closeDelay={200}
       disabled={props.disabled}
