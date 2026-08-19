@@ -54,6 +54,22 @@ See [docs/RUNNING_LOCALLY.md](docs/RUNNING_LOCALLY.md) for running the full app 
 - If you changed SQL queries or migrations, run `just prepare_db` from the
   repository root to refresh the sqlx cache.
 
+## Contributor License Agreement
+
+Before we can merge a PR from outside the macro-inc GitHub org, you need to
+have signed the Macro CLA. It's a one-time signature that covers all your
+future contributions:
+
+1. Every PR runs a required check named `cla`. If you haven't signed, it
+   shows red — that's expected and doesn't block review.
+2. Sign at **<https://macro-cla.macroverse.workers.dev/cla>** ("Sign with
+   GitHub"; we request no OAuth scopes, only your public identity).
+3. Comment `@macro-bot check` on your PR and the check re-runs and goes
+   green.
+
+macro-inc org members are exempt (employee agreements already cover their
+contributions), as are bot accounts like Dependabot.
+
 ## License
 
 By contributing, you agree that your contributions will be licensed under the

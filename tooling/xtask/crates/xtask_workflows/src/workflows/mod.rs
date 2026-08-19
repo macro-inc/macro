@@ -19,12 +19,14 @@ mod cargo_deny;
 mod cargo_workspace_dependency_check;
 mod check_generated;
 mod check_node_modules_nix;
+mod cla;
 mod cleanup_preview;
 mod code_check_cloud_storage;
 mod code_check_conventions;
 mod code_check_infra;
 mod deploy_ai_editing_worker;
 mod deploy_all_services;
+mod deploy_cla_worker;
 mod deploy_fusionauth_instance;
 mod deploy_on_push;
 mod deploy_preview;
@@ -150,6 +152,11 @@ const WORKFLOWS: &[WorkflowFile] = &[
         },
     },
     WorkflowFile {
+        slug: "cla",
+        file_name: "cla.yml",
+        render_yaml: || render_gh_workflow(cla::cla)(),
+    },
+    WorkflowFile {
         slug: "cleanup_preview",
         file_name: "cleanup_preview.yml",
         render_yaml: || render_gh_workflow(cleanup_preview::cleanup_preview)(),
@@ -178,6 +185,11 @@ const WORKFLOWS: &[WorkflowFile] = &[
                 deploy_all_services::patch,
             )
         },
+    },
+    WorkflowFile {
+        slug: "deploy_cla_worker",
+        file_name: "deploy_cla_worker.yml",
+        render_yaml: || render_gh_workflow(deploy_cla_worker::deploy_cla_worker)(),
     },
     WorkflowFile {
         slug: "deploy_on_push",
