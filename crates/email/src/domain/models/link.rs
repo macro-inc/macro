@@ -5,16 +5,18 @@ use uuid::Uuid;
 #[cfg(test)]
 mod test;
 
-/// The provider of this email
+/// The provider of this email.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum UserProvider {
     Gmail,
+    Outlook,
 }
 
 impl UserProvider {
     pub fn as_str(&self) -> &'static str {
         match self {
             UserProvider::Gmail => "GMAIL",
+            UserProvider::Outlook => "OUTLOOK",
         }
     }
 }

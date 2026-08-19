@@ -22,7 +22,7 @@ pub enum SyncStatus {
     UpToDate,
     /// The most recent backfill failed; the user can re-sync to recover.
     Error,
-    /// The link's Google grant has stopped working; the user must reconnect.
+    /// The link's provider grant has stopped working; the user must reconnect.
     NeedsReauth,
     /// Syncing has been turned off for this inbox.
     Inactive,
@@ -58,12 +58,14 @@ impl SyncStatus {
 #[serde(rename_all = "UPPERCASE")]
 pub enum UserProvider {
     Gmail,
+    Outlook,
 }
 
 impl UserProvider {
     pub fn as_str(&self) -> &'static str {
         match self {
             UserProvider::Gmail => "GMAIL",
+            UserProvider::Outlook => "OUTLOOK",
         }
     }
 }
@@ -78,6 +80,7 @@ impl From<crate::email::service::link::UserProvider> for UserProvider {
     fn from(provider: crate::email::service::link::UserProvider) -> Self {
         match provider {
             crate::email::service::link::UserProvider::Gmail => UserProvider::Gmail,
+            crate::email::service::link::UserProvider::Outlook => UserProvider::Outlook,
         }
     }
 }
@@ -95,11 +98,11 @@ pub struct Link {
     pub provider: UserProvider,
     pub is_sync_active: bool,
     pub sync_status: SyncStatus,
-    /// Whether the link's Google grant needs to be reconnected. Drives the
+    /// Whether the link's provider grant needs to be reconnected. Drives the
     /// per-inbox reconnect prompt independently of the sync-status badge.
     pub needs_reauth: bool,
-    /// Whether the link's Google grant is missing the calendar scope. True for
-    /// inboxes connected before the calendar capability existed (and for
+    /// Whether the link's provider grant is missing calendar permission. True
+    /// for inboxes connected before the calendar capability existed (and for
     /// grants where the user declined it); drives the per-inbox calendar
     /// upgrade prompt. Re-running the connect flow records the new grant.
     pub needs_calendar_permission: bool,

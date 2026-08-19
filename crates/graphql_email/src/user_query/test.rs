@@ -13,6 +13,19 @@ use macro_user_id::{email::EmailStr, user_id::MacroUserIdStr};
 use uuid::Uuid;
 
 use super::GraphqlEmailQuery;
+use crate::GraphqlEmailProvider;
+
+#[test]
+fn maps_every_domain_email_provider() {
+    assert_eq!(
+        GraphqlEmailProvider::from(UserProvider::Gmail),
+        GraphqlEmailProvider::Gmail
+    );
+    assert_eq!(
+        GraphqlEmailProvider::from(UserProvider::Outlook),
+        GraphqlEmailProvider::Outlook
+    );
+}
 
 #[derive(Default)]
 struct FakeEmailUserService {

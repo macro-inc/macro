@@ -15,7 +15,7 @@ pub struct Link {
     pub provider: UserProvider,
     pub is_sync_active: bool,
     pub is_primary: bool,
-    /// Set when the link's Google grant stops yielding a token (revoked or
+    /// Set when the link's provider grant stops yielding a token (revoked or
     /// missing); cleared on the next successful token fetch.
     pub needs_reauth: bool,
     /// When the most recent token failure was observed, if any.
@@ -38,12 +38,14 @@ impl Link {
 #[derive(Debug, Clone, Copy, ToSchema, Serialize, Deserialize, PartialEq, Eq)]
 pub enum UserProvider {
     Gmail,
+    Outlook,
 }
 
 impl UserProvider {
     pub fn as_str(&self) -> &'static str {
         match self {
             UserProvider::Gmail => "GMAIL",
+            UserProvider::Outlook => "OUTLOOK",
         }
     }
 }

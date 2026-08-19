@@ -1,4 +1,10 @@
-use super::{EmailBackfillStatus, EmailSyncStatus};
+use super::{EmailBackfillStatus, EmailSyncStatus, UserProvider};
+
+#[test]
+fn provider_database_names_are_uppercase() {
+    assert_eq!(UserProvider::Gmail.as_str(), "GMAIL");
+    assert_eq!(UserProvider::Outlook.as_str(), "OUTLOOK");
+}
 
 #[test]
 fn inactive_sync_takes_precedence_over_other_facts() {

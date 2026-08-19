@@ -1602,6 +1602,10 @@ enum GraphqlEmailProvider {
 	Google Gmail.
 	"""
 	GMAIL
+	"""
+	Microsoft Outlook.
+	"""
+	OUTLOOK
 }
 
 """

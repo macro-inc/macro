@@ -85,12 +85,15 @@ impl From<LinkLabel> for GraphqlEmailLabel {
 pub enum GraphqlEmailProvider {
     /// Google Gmail.
     Gmail,
+    /// Microsoft Outlook.
+    Outlook,
 }
 
 impl From<UserProvider> for GraphqlEmailProvider {
     fn from(provider: UserProvider) -> Self {
         match provider {
             UserProvider::Gmail => Self::Gmail,
+            UserProvider::Outlook => Self::Outlook,
         }
     }
 }

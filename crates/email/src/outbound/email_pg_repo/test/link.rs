@@ -1,5 +1,19 @@
 use super::*;
 use crate::domain::{models::EmailBackfillStatus, ports::EmailUserRepo};
+use crate::outbound::email_pg_repo::db_types::DbUserProvider;
+use doppleganger::Mirror;
+
+#[test]
+fn maps_database_providers_to_domain_values() {
+    assert_eq!(
+        DbUserProvider::mirror(DbUserProvider::Gmail),
+        UserProvider::Gmail
+    );
+    assert_eq!(
+        DbUserProvider::mirror(DbUserProvider::Outlook),
+        UserProvider::Outlook
+    );
+}
 
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",

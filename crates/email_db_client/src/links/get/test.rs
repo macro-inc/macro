@@ -3,6 +3,8 @@ use crate::links::get::{
     fetch_link_by_macro_id_and_email_address, fetch_owned_link_for_message,
     fetch_owned_link_for_thread,
 };
+use crate::links::types::DbUserProvider;
+use doppleganger::Mirror;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_user_id::user_id::MacroUserIdStr;
 use models_email::email::db;
@@ -14,6 +16,18 @@ use sqlx::{Pool, Postgres};
 const CHILD: &str = "macro|sharedbox@corp.test"; // owns the inbox
 const PRIMARY: &str = "macro|primary@corp.test"; // delegate
 const STRANGER: &str = "macro|stranger@corp.test"; // no relationship
+
+#[test]
+fn maps_service_providers_to_database_values() {
+    assert_eq!(
+        DbUserProvider::mirror(UserProvider::Gmail).as_str(),
+        "GMAIL"
+    );
+    assert_eq!(
+        DbUserProvider::mirror(UserProvider::Outlook).as_str(),
+        "OUTLOOK"
+    );
+}
 
 fn macro_id(s: &str) -> MacroUserIdStr<'_> {
     MacroUserIdStr::try_from(s).unwrap()
@@ -640,8 +654,8 @@ async fn fetch_link_by_email_finds_link_owned_by_another_macro_user(
 
     let found = fetch_link_by_email(&pool, "support@external.test", UserProvider::Gmail).await?;
     assert_eq!(
-        found.map(|l| (l.id, l.macro_id.as_ref().to_string())),
-        Some((link_id, CHILD.to_string()))
+        found.map(|link| (link.id, link.macro_id.as_ref().to_string(), link.provider)),
+        Some((link_id, CHILD.to_string(), UserProvider::Gmail))
     );
 
     Ok(())

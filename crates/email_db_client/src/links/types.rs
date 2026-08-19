@@ -9,12 +9,14 @@ use sqlx::{Type, types::Uuid};
 #[dg(backward = models_email::email::service::link::UserProvider)]
 pub enum DbUserProvider {
     Gmail,
+    Outlook,
 }
 
 impl DbUserProvider {
     pub fn as_str(&self) -> &'static str {
         match self {
             DbUserProvider::Gmail => "GMAIL",
+            DbUserProvider::Outlook => "OUTLOOK",
         }
     }
 }
@@ -48,6 +50,7 @@ impl From<models_email::email::service::link::Link> for DbLink {
                 .to_string(),
             provider: match service_link.provider {
                 models_email::service::link::UserProvider::Gmail => DbUserProvider::Gmail,
+                models_email::service::link::UserProvider::Outlook => DbUserProvider::Outlook,
             },
             is_sync_active: service_link.is_sync_active,
             is_primary: service_link.is_primary,
@@ -83,6 +86,7 @@ impl TryFrom<DbLink> for models_email::email::service::link::Link {
             email_address: EmailStr::try_from(email_address)?,
             provider: match provider {
                 DbUserProvider::Gmail => UserProvider::Gmail,
+                DbUserProvider::Outlook => UserProvider::Outlook,
             },
             is_sync_active,
             is_primary,
