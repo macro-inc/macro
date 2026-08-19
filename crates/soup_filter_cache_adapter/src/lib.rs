@@ -125,12 +125,21 @@ pub fn authoritative_projection_mutations(data: &serde_json::Value) -> Vec<Proje
                                         kind: ProjectionIncompleteKind::IncompatibleVersion,
                                     })
                             }
-                            None => ProjectionMutation::MarkIncomplete {
-                                record_key,
-                                profile: vocabulary::profile(),
-                                partition,
-                                kind: ProjectionIncompleteKind::Dirty,
-                            },
+                            None => direct_projection_for_object(
+                                record_key.clone(),
+                                partition.clone(),
+                                object,
+                                None,
+                            )
+                            .map(ProjectionMutation::Replace)
+                            .unwrap_or(
+                                ProjectionMutation::MarkIncomplete {
+                                    record_key,
+                                    profile: vocabulary::profile(),
+                                    partition,
+                                    kind: ProjectionIncompleteKind::Dirty,
+                                },
+                            ),
                         };
                         let replace = matches!(mutation, ProjectionMutation::Replace(_));
                         if replace
@@ -247,6 +256,39 @@ pub fn dirty_projection_mutations(keys: &[String]) -> Vec<ProjectionMutation> {
         .collect()
 }
 
+fn direct_projection_for_object(
+    record_key: RecordKey,
+    partition: Token,
+    object: &serde_json::Map<String, serde_json::Value>,
+    updated_at_fallback_ms: Option<i64>,
+) -> Option<IndexDocument> {
+    let kind = projection_kind(&partition)?;
+    let project_field = if kind == SoupFlatEntityKind::Project {
+        "parentId"
+    } else {
+        "projectId"
+    };
+    let updated_at = match object.get("updatedAt") {
+        Some(value) => graphql_timestamp(value)?,
+        None => chrono::DateTime::from_timestamp_millis(updated_at_fallback_ms?)?,
+    };
+    project_direct_fields(DirectProjectionInput {
+        record_key,
+        kind,
+        id: uuid::Uuid::parse_str(object.get("id")?.as_str()?).ok()?,
+        owner: object.get("ownerId")?.as_str()?.to_owned(),
+        project_id: optional_uuid(object.get(project_field)?)?,
+        file_type: if kind == SoupFlatEntityKind::Document {
+            optional_string(object.get("fileType")?)?
+        } else {
+            None
+        },
+        created_at: graphql_timestamp(object.get("createdAt")?)?,
+        updated_at,
+    })
+    .ok()
+}
+
 fn optimistic_projection_for_object(
     record_key: RecordKey,
     partition: Token,
@@ -262,6 +304,15 @@ fn optimistic_projection_for_object(
         };
     }
 
+    if let Some(document) = direct_projection_for_object(
+        record_key.clone(),
+        partition.clone(),
+        object,
+        Some(created_at_ms),
+    ) {
+        return Some(OptimisticProjectionMutation::Replace(document));
+    }
+
     let kind = projection_kind(&partition)?;
     let project_field = if kind == SoupFlatEntityKind::Project {
         "parentId"
@@ -272,31 +323,6 @@ fn optimistic_projection_for_object(
         Some(value) => graphql_timestamp(value)?,
         None => chrono::DateTime::from_timestamp_millis(created_at_ms)?,
     };
-    let required_optional_fields_present = object.contains_key(project_field)
-        && (kind != SoupFlatEntityKind::Document || object.contains_key("fileType"));
-    if required_optional_fields_present
-        && object.contains_key("ownerId")
-        && object.contains_key("createdAt")
-    {
-        return Some(OptimisticProjectionMutation::Replace(
-            project_direct_fields(DirectProjectionInput {
-                record_key,
-                kind,
-                id: uuid::Uuid::parse_str(object.get("id")?.as_str()?).ok()?,
-                owner: object.get("ownerId")?.as_str()?.to_owned(),
-                project_id: optional_uuid(object.get(project_field)?)?,
-                file_type: if kind == SoupFlatEntityKind::Document {
-                    optional_string(object.get("fileType")?)?
-                } else {
-                    None
-                },
-                created_at: graphql_timestamp(object.get("createdAt")?)?,
-                updated_at,
-            })
-            .ok()?,
-        ));
-    }
-
     patch_direct_fields(DirectProjectionPatchInput {
         record_key,
         kind,

@@ -33,23 +33,6 @@ query SoupBackfill($input: SoupInput!) {
 	}
 }
 
-fragment SoupFilterProjectionFields on GraphqlSoupFilterProjection {
-	profile
-	partition
-	exactFacts {
-		attribute
-		value
-	}
-	integerFacts {
-		attribute
-		value
-	}
-	sortFacts {
-		attribute
-		value
-	}
-}
-
 fragment SoupItemFields on GraphqlSoupEntity {
 	__typename
 	...SoupEntityCoreFields
@@ -59,9 +42,6 @@ fragment SoupItemFields on GraphqlSoupEntity {
 						ownerId
 						fileType
 						projectId
-						filterProjection {
-							...SoupFilterProjectionFields
-						}
 						createdAt
 						updatedAt
 						viewedAt
@@ -80,9 +60,6 @@ fragment SoupItemFields on GraphqlSoupEntity {
 						chatName: name
 						ownerId
 						projectId
-						filterProjection {
-							...SoupFilterProjectionFields
-						}
 						isPersistent
 						createdAt
 						updatedAt
@@ -96,9 +73,6 @@ fragment SoupItemFields on GraphqlSoupEntity {
 						projectName: name
 						ownerId
 						parentId
-						filterProjection {
-							...SoupFilterProjectionFields
-						}
 						createdAt
 						updatedAt
 						viewedAt

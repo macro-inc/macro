@@ -70,6 +70,25 @@ fn optimistic_soup_payloads_compile_to_durable_projection_layers() {
 }
 
 #[test]
+fn authoritative_direct_fields_do_not_require_a_projection_schema_field() {
+    let mutations = authoritative_projection_mutations(&serde_json::json!({
+        "item": {
+            "__typename": "GraphqlSoupDocument",
+            "id": "00000000-0000-0000-0000-000000000001",
+            "ownerId": "user-1",
+            "projectId": null,
+            "fileType": "md",
+            "createdAt": "2025-01-01T00:00:00.000001Z",
+            "updatedAt": "2025-01-02T00:00:00.000001Z"
+        }
+    }));
+    assert!(matches!(
+        mutations.as_slice(),
+        [ProjectionMutation::Replace(_)]
+    ));
+}
+
+#[test]
 fn invalid_sort_direction_is_rejected_at_the_soup_boundary() {
     let error = compile_filter_request(serde_json::json!({}), "UPDATED_AT", "SIDEWAYS", 10)
         .expect_err("invalid direction must not reach the generic cache");
