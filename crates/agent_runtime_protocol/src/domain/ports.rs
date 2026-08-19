@@ -49,6 +49,7 @@ pub trait Transport<Tx, Rx> {
 
 /// An unbounded sender is already a sending half: a closed counterpart is the
 /// only way it fails.
+#[cfg(feature = "transport")]
 impl<Tx: Send + Sync + 'static> TransportSender<Tx> for tokio::sync::mpsc::UnboundedSender<Tx> {
     async fn send(&self, message: Tx) -> Result<(), TransportError> {
         tokio::sync::mpsc::UnboundedSender::send(self, message)
@@ -57,6 +58,7 @@ impl<Tx: Send + Sync + 'static> TransportSender<Tx> for tokio::sync::mpsc::Unbou
 }
 
 /// A bounded receiver is already a receiving half, and an exclusive one.
+#[cfg(feature = "transport")]
 impl<Rx: Send + 'static> TransportReceiver<Rx> for tokio::sync::mpsc::Receiver<Rx> {
     async fn recv(&mut self) -> Result<Option<Rx>, TransportError> {
         Ok(tokio::sync::mpsc::Receiver::recv(self).await)
@@ -64,6 +66,7 @@ impl<Rx: Send + 'static> TransportReceiver<Rx> for tokio::sync::mpsc::Receiver<R
 }
 
 /// An unbounded receiver is already a receiving half, and an exclusive one.
+#[cfg(feature = "transport")]
 impl<Rx: Send + 'static> TransportReceiver<Rx> for tokio::sync::mpsc::UnboundedReceiver<Rx> {
     async fn recv(&mut self) -> Result<Option<Rx>, TransportError> {
         Ok(tokio::sync::mpsc::UnboundedReceiver::recv(self).await)

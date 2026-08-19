@@ -5,7 +5,7 @@ publish = false
 version = "0.1.0"
 
 [[bin]]
-name = "coding_agent_worker"
+name = "macrod"
 path = "src/main.rs"
 
 [dependencies]

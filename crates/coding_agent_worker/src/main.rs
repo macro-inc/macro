@@ -29,6 +29,7 @@ use crate::webhook::{WebhookState, webhook_router};
 /// Serve a bot's agent sessions: host the webhook receiver, bridge each
 /// triggered session to a harness.
 #[derive(Parser)]
+#[command(name = "macrod", version)]
 struct Args {
     /// Path to the daemon's TOML config.
     #[arg(long, default_value = "macro.toml")]
