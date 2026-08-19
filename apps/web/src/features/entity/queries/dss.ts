@@ -21,6 +21,7 @@ import {
   removeSoupEntitiesFromQueriesReferencing,
 } from '@queries/soup/cache';
 import { soupKeys } from '@queries/soup/keys';
+import { ownTouchStamp } from '@queries/soup/normalized-cache/own-touch';
 import { callServiceClient } from '@service-call/client';
 import { scheduledActionClient } from '@service-scheduled-action/client';
 import type { ItemType } from '@service-storage/client';
@@ -220,9 +221,6 @@ export function createBulkRemoveFromProjectDssEntityMutation() {
         (e): e is typeof e & { type: 'document' | 'chat' | 'email' } =>
           e.type === 'document' || e.type === 'chat' || e.type === 'email'
       );
-      // Moves land server-side as Edited activities, so they are touches:
-      // the stamp moves the rows up the Recent feed immediately.
-      const touchedAt = new Date().toISOString();
       const txns = moveableEntities.map((e) => {
         const current = getSoupEntityById(e.id);
         const tag = e.type === 'email' ? 'emailThread' : e.type;
@@ -230,7 +228,8 @@ export function createBulkRemoveFromProjectDssEntityMutation() {
           tag,
           data: { id: e.id, projectId: null },
           frecency_score: current?.frecency_score ?? 0,
-          touched_at: touchedAt,
+          // A move is an Edited activity, i.e. a touch (own-touch.ts).
+          touched_at: ownTouchStamp(e.id),
         });
       });
 
@@ -408,9 +407,6 @@ export function createBulkMoveToProjectDssEntityMutation() {
         (e): e is typeof e & { type: 'document' | 'chat' | 'email' } =>
           e.type === 'document' || e.type === 'chat' || e.type === 'email'
       );
-      // Moves land server-side as Edited activities, so they are touches:
-      // the stamp moves the rows up the Recent feed immediately.
-      const touchedAt = new Date().toISOString();
       return moveableEntities.map((e) => {
         const current = getSoupEntityById(e.id);
         const tag = e.type === 'email' ? 'emailThread' : e.type;
@@ -418,7 +414,8 @@ export function createBulkMoveToProjectDssEntityMutation() {
           tag,
           data: { id: e.id, projectId: project.id },
           frecency_score: current?.frecency_score ?? 0,
-          touched_at: touchedAt,
+          // A move is an Edited activity, i.e. a touch (own-touch.ts).
+          touched_at: ownTouchStamp(e.id),
         });
       });
     },

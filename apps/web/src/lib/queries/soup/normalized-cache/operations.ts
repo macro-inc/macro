@@ -32,6 +32,7 @@ import {
   soupNormKey,
   stripSoupNormPrefix,
 } from './normalizer';
+import { ownTouchStamp } from './own-touch';
 import type {
   SoupEntityPartial,
   SoupEntityTag,
@@ -134,18 +135,18 @@ export function getSoupEntityById(entityId: string): SoupApiItem | undefined {
  * Optimistically stamp the viewer's own touch on a cached entity so the
  * touched_by_me (Recent) order moves it to the top immediately, ahead of the
  * activity consumer. Call it only from mutations whose server side records
- * an activity (the domain `ActivitySource` impls) — bumping an unattributed
- * action would reorder the feed only to snap back on the next refetch. No
- * reconciliation step is needed: the server's `touched_at` field-merges over
- * this stamp on the next touched-mode response, and non-touched responses
- * omit the field entirely so they never clear it.
+ * an activity — see the allowlist rule in `own-touch.ts`, which also records
+ * the stamp as a floor so touched-mode refetches that outrun the consumer
+ * can't clobber the optimistic order; the floor clears once the server's
+ * value catches up. Non-touched responses omit the field entirely, so the
+ * field-merge never clears the stamp either.
  */
 export function bumpSoupEntityTouchedAt(
   entityId: string
 ): SoupTransaction | undefined {
   const current = getSoupEntityById(entityId);
   if (!current) return undefined;
-  const touched_at = new Date().toISOString();
+  const touched_at = ownTouchStamp(entityId);
   const frecency_score = current.frecency_score;
 
   if (current.tag === 'channel') {
@@ -543,11 +544,19 @@ export function removeSearchEntities(entityIds: Set<string>): SoupTransaction {
  * Fetch a single entity from the server and merge it into the cache.
  * If the entity is already cached, updates it via normy (deep-merge).
  * If it's new, prepends it to the first page of every active soup list query.
+ *
+ * `ownTouch` marks the refetch as caused by the viewer's own mutation (e.g.
+ * entity creation): the fetched item is stamped with an optimistic
+ * `touched_at` — the single-entity response never carries one — so the
+ * Recent feed's insert gate admits it, and the touched queries are spared
+ * from the follow-up invalidation, which would replace their pages with
+ * server state that can't include the entity until the activity consumer
+ * catches up.
  */
 export async function refetchSoupEntity(
   entityId: string,
   entityType: SoupEntityTag,
-  options?: { includeRoot?: boolean }
+  options?: { includeRoot?: boolean; ownTouch?: boolean }
 ): Promise<void> {
   const { storageServiceClient } = await import('@service-storage/client');
 
@@ -569,15 +578,45 @@ export async function refetchSoupEntity(
   const page = result.value;
   if (!page.items.length) return;
 
-  for (const item of page.items) {
+  for (let item of page.items) {
     const itemId = getSoupItemId(item);
+    if (options?.ownTouch) {
+      item = { ...item, touched_at: ownTouchStamp(itemId) };
+    }
     if (hasSoupEntity(itemId)) {
       optimisticUpdateSoupEntity(item);
     } else {
       insertSoupEntity(item);
-      invalidateAllSoup();
+      if (options?.ownTouch) {
+        invalidateAllSoupExceptTouched();
+      } else {
+        invalidateAllSoup();
+      }
     }
   }
+}
+
+/**
+ * `invalidateAllSoup` minus the touched_by_me queries: an own-touch insert
+ * must survive in the Recent feed until the activity consumer has recorded
+ * the touch, so those pages keep the optimistic row instead of refetching
+ * a server list that would drop it.
+ */
+function invalidateAllSoupExceptTouched(): void {
+  const notTouched = (query: Query) =>
+    !JSON.stringify(query.queryKey).includes('touched_by_me');
+  queryClient.invalidateQueries({
+    queryKey: soupKeys.items._def,
+    predicate: notTouched,
+  });
+  queryClient.invalidateQueries({
+    queryKey: soupKeys.astItems._def,
+    predicate: notTouched,
+  });
+  queryClient.invalidateQueries({
+    queryKey: soupKeys.groupedGroup._def,
+    predicate: notTouched,
+  });
 }
 
 /** @private */

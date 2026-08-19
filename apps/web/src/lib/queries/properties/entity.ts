@@ -18,6 +18,7 @@ import type {
   PropertyDefinitionDomain,
 } from '@property/types';
 import { isInstantiatedProperty } from '@property/utils';
+import { ownTouchStamp } from '@queries/soup/normalized-cache/own-touch';
 import { useMutation, useMutationState, useQuery } from '@tanstack/solid-query';
 import { type Accessor, batch } from 'solid-js';
 import { propertiesServiceClient } from '../../service-clients/service-properties/client';
@@ -233,9 +234,9 @@ function optimisticUpdateSoupEntityProperties(
       properties: nextProperties,
     },
     frecency_score: current.frecency_score,
-    // Property changes land server-side as PropertyChanged activities, so
-    // they are touches: the stamp moves the row up the Recent feed now.
-    touched_at: new Date().toISOString(),
+    // A property change is a PropertyChanged activity, i.e. a touch
+    // (own-touch.ts).
+    touched_at: ownTouchStamp(entityId),
   });
 }
 
