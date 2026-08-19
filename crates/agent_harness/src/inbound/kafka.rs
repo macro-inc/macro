@@ -44,7 +44,7 @@ pub fn agent_trigger_to_harness_command(
 ) -> Result<(AgentSessionId, HarnessCommand), Skipped> {
     match event {
         AgentTriggerTopicEvent::New(NewAgentSessionEvent::TopLevelMentioned(mentioned)) => {
-            /// TODO: remove
+            // TODO: remove
             if mentioned.message.sender.as_user().is_some_and(|user| {
                 !user
                     .email_part()
