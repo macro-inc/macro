@@ -27,6 +27,9 @@ function performOptimisticFileTypeUpdate(id: string, fileType: string) {
     tag: 'document',
     data: { id, fileType },
     frecency_score: score,
+    // A file-type change lands server-side as an Edited activity, so it is
+    // a touch: the stamp moves the row up the Recent feed immediately.
+    touched_at: new Date().toISOString(),
   });
 
   return { soupTransaction };

@@ -674,6 +674,13 @@ export function optimisticUpdateSoupItemViewedAt(itemId: string) {
 /**
  * Optimistically update the updatedAt/updated_at timestamp for a soup item.
  * Updates the item across all soup queries if it exists and matches the expected tag.
+ *
+ * Deliberately does NOT stamp `touched_at`: this helper's caller is the
+ * incoming-notification path, i.e. *other people's* actions (your own don't
+ * notify you). `updated_at` is global recency, `touched_at` is the viewer's
+ * own touch — stamping it here would pull entities a teammate mutated into
+ * the viewer's Recent feed. Own-mutation flows stamp `touched_at` at their
+ * call sites (see `bumpSoupEntityTouchedAt`).
  */
 export function optimisticUpdateSoupItemUpdatedAt(
   itemId: string,
