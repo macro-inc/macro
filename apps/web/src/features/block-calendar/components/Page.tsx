@@ -21,6 +21,10 @@ import {
   calendarEventTimeFromFullCalendar,
   canEditCalendarEventTime,
 } from '@app/features/calendar/utils/event-interaction';
+import {
+  scrollEventChipIntoView,
+  timeGridScroller,
+} from '@app/features/calendar/utils/time-grid-scroller';
 import { toast } from '@core/component/Toast/Toast';
 import { ScrollIndicators } from '@core/component/VerticalScrollIndicators';
 import { isMobile } from '@core/mobile/isMobile';
@@ -69,9 +73,7 @@ function CalendarScrollIndicators(props: {
 
       let updateFrame: number | undefined;
       const updateScrollElements = () => {
-        const scrollElement = element.querySelector<HTMLElement>(
-          '.fc-timegrid .fc-scroller-harness-liquid > .fc-scroller'
-        );
+        const scrollElement = timeGridScroller(element);
         const fadeContainer = scrollElement?.parentElement;
         setTarget((current) => {
           if (!scrollElement || !fadeContainer) return undefined;
@@ -362,6 +364,7 @@ function CalendarPageHost(props: {
     const chip = props.grid.eventElements.get(targetId);
     if (!event || !chip?.isConnected) return;
     calendarFocus.consume(target.requestId);
+    scrollEventChipIntoView(props.grid.element(), chip);
     calendarView.selectEvent(event, chip);
   });
 
