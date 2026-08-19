@@ -4,7 +4,8 @@ use agent_runtime_protocol::domain::action::{AgentAction, AgentActionId};
 use agent_session::domain::model::SessionBot;
 use agent_session::inbound::axum_router::{
     self, AgentSessionLogEntryDto, AgentSessionLogResponse, AgentSessionResponse, ControlRequest,
-    LogDirectionDto, LogFrameDto, SessionStatusDto,
+    CreateAgentSessionRequest, CreateAgentSessionResponse, LogDirectionDto, LogFrameDto,
+    SessionStatusDto,
 };
 use utoipa::OpenApi;
 
@@ -12,6 +13,7 @@ use utoipa::OpenApi;
 #[openapi(
     info(terms_of_service = "https://macro.com/terms"),
     paths(
+        axum_router::create_agent_session_handler,
         axum_router::get_agent_session_handler,
         axum_router::get_agent_session_log_handler,
         axum_router::control_agent_session_handler,
@@ -19,6 +21,8 @@ use utoipa::OpenApi;
     ),
     components(schemas(
         ControlRequest,
+        CreateAgentSessionRequest,
+        CreateAgentSessionResponse,
         AgentAction,
         AgentActionId,
         AgentSessionResponse,

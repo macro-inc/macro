@@ -36,10 +36,14 @@ use utoipa::ToSchema;
 
 use crate::domain::error::AgentSessionError;
 use crate::domain::model::{
-    AgentSession, AgentSessionId, Message, SessionBot, SessionStatus, StoredAgentSessionLog,
+    AgentSession, AgentSessionId, Message, OpenStandaloneSession, SessionBot, SessionStatus,
+    StoredAgentSessionLog,
 };
-use crate::domain::ports::{AgentSessionNotificationRecipient, ControlEvent};
+use crate::domain::ports::{
+    AgentSessionNotificationRecipient, ControlEvent, StandaloneSessionOpener,
+};
 use crate::domain::service::AgentSessionService;
+use bots::domain::models::BotId;
 
 /// Shared state for the agent session router: the agent session service plus
 /// the authorization state the request extractors authenticate against.
@@ -165,6 +169,69 @@ where
         .with_state(state)
 }
 
+/// Shared state for the create route: the opener that boots sessions, the
+/// bot this deployment's sessions run as, and the authorization state the
+/// extractors run against.
+pub struct AgentSessionCreateState<O, Auth> {
+    opener: Arc<O>,
+    /// The bot every directly-created session runs as. Deployment
+    /// configuration, like the harness's model and repo defaults: one harness
+    /// deployment serves one bot.
+    default_bot: BotId,
+    authorization_state: MacroAuthorizationState<Auth>,
+}
+
+impl<O, Auth> AgentSessionCreateState<O, Auth> {
+    /// Create route state from an opener, the deployment's bot, and
+    /// authorization state.
+    pub fn new(
+        opener: Arc<O>,
+        default_bot: BotId,
+        authorization_state: MacroAuthorizationState<Auth>,
+    ) -> Self {
+        Self {
+            opener,
+            default_bot,
+            authorization_state,
+        }
+    }
+}
+
+// Manual Clone impl so O doesn't need to be Clone (it's behind Arc).
+impl<O, Auth> Clone for AgentSessionCreateState<O, Auth> {
+    fn clone(&self) -> Self {
+        Self {
+            opener: Arc::clone(&self.opener),
+            default_bot: self.default_bot,
+            authorization_state: self.authorization_state.clone(),
+        }
+    }
+}
+
+impl<O, Auth> FromRef<AgentSessionCreateState<O, Auth>> for MacroAuthorizationState<Auth> {
+    fn from_ref(state: &AgentSessionCreateState<O, Auth>) -> Self {
+        state.authorization_state.clone()
+    }
+}
+
+/// Build the create router, mounted under the same prefix as
+/// [`agent_session_read_router`].
+///
+/// Separate from the control router because creating needs the opener rather
+/// than a live-session recipient, and no entity access check - the session
+/// does not exist yet; the repository grants the owner their access row as
+/// part of creation.
+pub fn agent_session_create_router<O, Auth, S>(state: AgentSessionCreateState<O, Auth>) -> Router<S>
+where
+    O: StandaloneSessionOpener,
+    Auth: MacroAuthorizationService,
+    S: Clone + Send + Sync + 'static,
+{
+    Router::new()
+        .route("/", post(create_agent_session_handler::<O, Auth>))
+        .with_state(state)
+}
+
 /// Build the agent session control router, mounted under the same prefix as
 /// [`agent_session_read_router`].
 ///
@@ -196,6 +263,9 @@ where
 pub enum AgentSessionApiError {
     /// The domain rejected the operation.
     Domain(AgentSessionError),
+    /// The caller authenticated as something other than a user, and the
+    /// operation needs a user identity to attribute ownership to.
+    NotAUser,
 }
 
 impl From<AgentSessionError> for AgentSessionApiError {
@@ -211,6 +281,11 @@ impl IntoResponse for AgentSessionApiError {
                 tracing::error!(error = ?error, "agent session request failed");
                 (StatusCode::INTERNAL_SERVER_ERROR, "internal server error").into_response()
             }
+            Self::NotAUser => (
+                StatusCode::FORBIDDEN,
+                "agent sessions are owned by users; authenticate as one",
+            )
+                .into_response(),
         }
     }
 }
@@ -403,6 +478,71 @@ pub async fn control_agent_session_handler<
         .await?;
 
     Ok(Json(action_id))
+}
+
+/// Request to create a standalone agent session.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, ToSchema)]
+pub struct CreateAgentSessionRequest {
+    /// First prompt to deliver once the session boots. Omitted, the session
+    /// opens idle and waits for its owner to speak.
+    #[serde(default)]
+    pub prompt: Option<String>,
+}
+
+/// A freshly created agent session.
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct CreateAgentSessionResponse {
+    /// Id of the session that now exists.
+    pub session_id: Uuid,
+}
+
+#[utoipa::path(
+    post,
+    path = "/agent-sessions",
+    tag = "agent-sessions",
+    operation_id = "create_agent_session",
+    request_body = CreateAgentSessionRequest,
+    responses(
+        (status = 200, body = CreateAgentSessionResponse),
+        (status = 401, body = String),
+        (status = 403, body = String),
+        (status = 500, body = String),
+    )
+)]
+/// Create an agent session with no originating mention.
+///
+/// The caller becomes the owner; the repository grants their access row as
+/// part of creation, so no entity access check runs here - there is no entity
+/// yet to check.
+#[tracing::instrument(skip_all, fields(actor = %caller.acting_entity()), err(Debug))]
+pub async fn create_agent_session_handler<
+    O: StandaloneSessionOpener,
+    Auth: MacroAuthorizationService,
+>(
+    State(state): State<AgentSessionCreateState<O, Auth>>,
+    caller: MacroAuthorizationExtractor<Auth, UserOrBot>,
+    Json(req): Json<CreateAgentSessionRequest>,
+) -> Result<Json<CreateAgentSessionResponse>, AgentSessionApiError> {
+    // Identity mapping, not policy: the command needs a user to own the
+    // session, and a bot caller has no user identity to offer.
+    let owner = caller
+        .authorization
+        .acting_user()
+        .map(|user| user.macro_user_id.clone())
+        .ok_or(AgentSessionApiError::NotAUser)?;
+
+    let session_id = state
+        .opener
+        .open_standalone(OpenStandaloneSession {
+            owner,
+            bot_id: state.default_bot,
+            prompt: req.prompt,
+        })
+        .await?;
+
+    Ok(Json(CreateAgentSessionResponse {
+        session_id: session_id.as_uuid(),
+    }))
 }
 
 #[utoipa::path(

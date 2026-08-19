@@ -151,6 +151,23 @@ pub struct ControlEvent {
 /// space, so only the process that opened the session can act on this. The
 /// port exists so that coupling is named rather than assumed, and so the
 /// control routes can be mounted against it without knowing what a harness is.
+/// Opens standalone sessions: ones created directly rather than by a channel
+/// mention.
+///
+/// Like [`AgentSessionNotificationRecipient`], only the process holding the
+/// live session resources can implement this - opening spawns the session's
+/// container. The port exists so the create route can be mounted against it
+/// without knowing what a harness is.
+#[cfg_attr(feature = "test-utils", mockall::automock)]
+pub trait StandaloneSessionOpener: Send + Sync + 'static {
+    /// Create and boot a session with no originating mention. Returns the id
+    /// of the session that now exists.
+    fn open_standalone(
+        &self,
+        command: OpenStandaloneSession,
+    ) -> impl Future<Output = Result<AgentSessionId>> + Send;
+}
+
 #[cfg_attr(feature = "test-utils", mockall::automock)]
 pub trait AgentSessionNotificationRecipient: Send + Sync + 'static {
     /// The session is going away: release its live resources and delete it.

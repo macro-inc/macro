@@ -1,7 +1,7 @@
 //! Commands and values used by the harness domain.
 
 use agent_runtime_protocol::domain::action::{AgentAction, AgentActionId};
-use agent_session::domain::model::{AgentSessionId, MessageId};
+use agent_session::domain::model::{AgentSessionId, MessageId, OpenStandaloneSession};
 use agent_session::domain::ports::ControlEvent;
 use bot_id::BotId;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -72,6 +72,8 @@ pub struct DeliverAction {
 pub enum HarnessCommand {
     /// Open a new session.
     Open(OpenSession),
+    /// Open a new session with no originating mention.
+    OpenStandalone(OpenStandaloneSession),
     /// Act on a session that already exists.
     Deliver(DeliverAction),
     /// Release a session's live resources and delete it.

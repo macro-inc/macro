@@ -10,6 +10,66 @@
     "version": "0.1.0"
   },
   "paths": {
+    "/agent-sessions": {
+      "post": {
+        "tags": ["agent-sessions"],
+        "summary": "Create an agent session with no originating mention.",
+        "description": "The caller becomes the owner; the repository grants their access row as\npart of creation, so no entity access check runs here - there is no entity\nyet to check.",
+        "operationId": "create_agent_session",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateAgentSessionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateAgentSessionResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/agent-sessions/{session_id}": {
       "get": {
         "tags": ["agent-sessions"],
@@ -479,6 +539,28 @@
           }
         ],
         "description": "Request body for a control operation on a live session.\n\nA wrapper around the operation rather than the bare enum so that fields\nwhich are about the request rather than the operation have somewhere to go.\nThe acting user is deliberately not one of them: it comes from the caller's\ncredentials, so that a caller cannot attribute an operation to someone else."
+      },
+      "CreateAgentSessionRequest": {
+        "type": "object",
+        "description": "Request to create a standalone agent session.",
+        "properties": {
+          "prompt": {
+            "type": ["string", "null"],
+            "description": "First prompt to deliver once the session boots. Omitted, the session\nopens idle and waits for its owner to speak."
+          }
+        }
+      },
+      "CreateAgentSessionResponse": {
+        "type": "object",
+        "description": "A freshly created agent session.",
+        "required": ["session_id"],
+        "properties": {
+          "session_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Id of the session that now exists."
+          }
+        }
       },
       "LogDirectionDto": {
         "type": "string",

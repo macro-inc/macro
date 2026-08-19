@@ -21,7 +21,9 @@ use agent_harness::outbound::daytona::{
 };
 use agent_session::domain::ports::NoOpRealtime;
 use agent_session::domain::service::AgentSessionServiceImpl;
-use agent_session::inbound::axum_router::{AgentSessionControlState, AgentSessionRouterState};
+use agent_session::inbound::axum_router::{
+    AgentSessionControlState, AgentSessionCreateState, AgentSessionRouterState,
+};
 use agent_session::outbound::connection_gateway_realtime::ConnectionGatewayAgentSessionRealtime;
 use agent_session::outbound::postgres::PgAgentSessionRepo;
 use agent_trigger::domain::broker_events::AgentSessionMacroEvent;
@@ -212,15 +214,20 @@ async fn main() -> anyhow::Result<()> {
         entity_access.clone(),
         MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
     );
-    let control_state = AgentSessionControlState::new(
-        harness.clone(),
-        entity_access,
-        MacroAuthorizationState::new(Arc::new(authorization_service)),
-    );
+    let authorization_state = MacroAuthorizationState::new(Arc::new(authorization_service));
+    let control_state =
+        AgentSessionControlState::new(harness.clone(), entity_access, authorization_state.clone());
+    let create_state = AgentSessionCreateState::new(harness.clone(), bot_id, authorization_state);
     let http_port = config.port;
     let http = tokio::spawn(async move {
-        if let Err(error) =
-            api::setup_and_serve(read_state, control_state, http_port, shutdown_signal()).await
+        if let Err(error) = api::setup_and_serve(
+            read_state,
+            control_state,
+            create_state,
+            http_port,
+            shutdown_signal(),
+        )
+        .await
         {
             tracing::error!(error = ?error, "agent harness service http stopped");
         }

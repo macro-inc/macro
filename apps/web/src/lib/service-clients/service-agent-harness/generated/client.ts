@@ -9,7 +9,76 @@ import type {
   AgentSessionLogResponse,
   AgentSessionResponse,
   ControlRequest,
+  CreateAgentSessionRequest,
+  CreateAgentSessionResponse,
 } from './schemas';
+
+/**
+ * The caller becomes the owner; the repository grants their access row as
+part of creation, so no entity access check runs here - there is no entity
+yet to check.
+ * @summary Create an agent session with no originating mention.
+ */
+export type createAgentSessionResponse200 = {
+  data: CreateAgentSessionResponse;
+  status: 200;
+};
+
+export type createAgentSessionResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type createAgentSessionResponse403 = {
+  data: string;
+  status: 403;
+};
+
+export type createAgentSessionResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type createAgentSessionResponseSuccess =
+  createAgentSessionResponse200 & {
+    headers: Headers;
+  };
+export type createAgentSessionResponseError = (
+  | createAgentSessionResponse401
+  | createAgentSessionResponse403
+  | createAgentSessionResponse500
+) & {
+  headers: Headers;
+};
+
+export type createAgentSessionResponse =
+  | createAgentSessionResponseSuccess
+  | createAgentSessionResponseError;
+
+export const getCreateAgentSessionUrl = () => {
+  return `/agent-sessions`;
+};
+
+export const createAgentSession = async (
+  createAgentSessionRequest: CreateAgentSessionRequest,
+  options?: RequestInit
+): Promise<createAgentSessionResponse> => {
+  const res = await fetch(getCreateAgentSessionUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(createAgentSessionRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: createAgentSessionResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as createAgentSessionResponse;
+};
 
 /**
  * @summary Get an agent session by id.

@@ -46,6 +46,21 @@ pub struct CreateAgentSessionParams {
     pub repo_url: String,
 }
 
+/// Open a session directly - from the create menu or an API caller - rather
+/// than from a channel mention. There is no originating thread and nothing to
+/// announce; the session exists on its own from the start.
+#[derive(Debug, Clone)]
+pub struct OpenStandaloneSession {
+    /// User creating the session; owns it and is credited for its messages.
+    pub owner: MacroUserIdStr<'static>,
+    /// Bot running the agent.
+    pub bot_id: BotId,
+    /// First prompt to deliver once the session is attached, when the caller
+    /// supplied one at creation. `None` opens an idle session the owner
+    /// prompts from its own surface.
+    pub prompt: Option<String>,
+}
+
 /// A running or historical agent coding session.
 #[derive(Debug, Clone)]
 pub struct AgentSession {

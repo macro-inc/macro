@@ -14,10 +14,12 @@ use agent_runtime_protocol::domain::{
     schema::v0::{AcpMessage, ToRuntimeMessage},
 };
 use agent_session::PROTOCOL_VERSION;
-use agent_session::domain::model::{AgentSessionId, CreateAgentSessionParams, Message};
+use agent_session::domain::model::{
+    AgentSessionId, CreateAgentSessionParams, Message, OpenStandaloneSession,
+};
 use agent_session::domain::ports::{
     AgentSessionLogRepo as _, AgentSessionNotificationRecipient as _, AgentSessionRepo as _,
-    ControlEvent, NoOpRealtime,
+    ControlEvent, NoOpRealtime, StandaloneSessionOpener as _,
 };
 use agent_session::domain::service::AgentSessionServiceImpl;
 use agent_session::testing::InMemoryAgentSessionRepo;
@@ -714,4 +716,75 @@ async fn a_prompt_through_control_resumes_a_disconnected_session() {
         prompts(&resumed.agent()),
         [vec![ContentBlock::from("wake up")]]
     );
+}
+
+#[tokio::test]
+async fn open_standalone_boots_without_announcing_and_delivers_the_prompt() {
+    let (service, repo, containers, announcer) = harness();
+
+    let open = service.open_standalone(OpenStandaloneSession {
+        owner: sender(),
+        bot_id: BotId::new_from_uuid(macro_uuid::generate_uuid_v7()),
+        prompt: Some("build the thing".to_owned()),
+    });
+    let drive = async {
+        loop {
+            if containers.spawned() == 1 {
+                break;
+            }
+            tokio::task::yield_now().await;
+        }
+        let container = containers
+            .container(session_of(&containers))
+            .expect("the spawned container is findable");
+        complete_handshake(&container).await;
+        container
+    };
+    let (opened, container) = tokio::join!(open, drive);
+    let id = opened.expect("standalone open should succeed");
+
+    // The row exists with no originating mention to link back to.
+    let session = repo.get(id).await.expect("the session row exists");
+    assert_eq!(session.owner_id, sender());
+    assert_eq!(session.thread_id, None);
+    assert_eq!(session.originating_message_id, None);
+
+    // Nothing to announce: the session was not asked for from a channel.
+    assert!(announcer.announced().is_empty());
+
+    // The creation prompt reached the agent.
+    assert_eq!(
+        prompts(&container.agent()),
+        [vec![ContentBlock::from("build the thing")]]
+    );
+}
+
+#[tokio::test]
+async fn open_standalone_without_a_prompt_opens_idle() {
+    let (service, _repo, containers, announcer) = harness();
+
+    let open = service.open_standalone(OpenStandaloneSession {
+        owner: sender(),
+        bot_id: BotId::new_from_uuid(macro_uuid::generate_uuid_v7()),
+        prompt: None,
+    });
+    let drive = async {
+        loop {
+            if containers.spawned() == 1 {
+                break;
+            }
+            tokio::task::yield_now().await;
+        }
+        let container = containers
+            .container(session_of(&containers))
+            .expect("the spawned container is findable");
+        complete_handshake(&container).await;
+        container
+    };
+    let (opened, container) = tokio::join!(open, drive);
+    opened.expect("standalone open should succeed");
+
+    // Idle: booted and attached, but nothing said and nothing announced.
+    assert!(prompts(&container.agent()).is_empty());
+    assert!(announcer.announced().is_empty());
 }

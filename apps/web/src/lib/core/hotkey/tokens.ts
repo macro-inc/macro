@@ -280,6 +280,8 @@ export const TOKENS = {
     snippetNewSplit: 'create.snippetNewSplit',
     automation: 'create.automation',
     skill: 'create.skill',
+    agent: 'create.agent',
+    agentNewSplit: 'create.agentNewSplit',
     close_menu: 'create.close_menu',
   },
 

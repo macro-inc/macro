@@ -6,9 +6,11 @@ use std::sync::Arc;
 use agent_runtime_protocol::domain::action::{AgentAction, AgentActionId};
 use agent_session::domain::error::AgentSessionError;
 use agent_session::domain::model::{
-    AgentSessionId, AuthorKind, CreateAgentSessionParams, MessageId,
+    AgentSessionId, AuthorKind, CreateAgentSessionParams, MessageId, OpenStandaloneSession,
 };
-use agent_session::domain::ports::{AgentSessionNotificationRecipient, ControlEvent};
+use agent_session::domain::ports::{
+    AgentSessionNotificationRecipient, ControlEvent, StandaloneSessionOpener,
+};
 use agent_session::domain::service::AgentSessionService;
 use dashmap::DashMap;
 use dashmap::mapref::entry::Entry;
@@ -118,6 +120,29 @@ where
     }
 }
 
+/// The harness is what boots sessions, so it is what the create route opens
+/// through. The id is minted here rather than taken from the caller: a
+/// standalone session has no prior identity (no chat, no message) for the id
+/// to be derived from.
+impl<Sessions, Containers, Announcer> StandaloneSessionOpener
+    for AgentHarnessService<Sessions, Containers, Announcer>
+where
+    Sessions: AgentSessionService,
+    Containers: ContainerManager,
+    Announcer: SessionAnnouncer,
+{
+    async fn open_standalone(
+        &self,
+        command: OpenStandaloneSession,
+    ) -> agent_session::domain::error::Result<AgentSessionId> {
+        let session_id = AgentSessionId::new();
+        self.execute(session_id, HarnessCommand::OpenStandalone(command))
+            .await
+            .map_err(into_session_error)?;
+        Ok(session_id)
+    }
+}
+
 /// The harness is what holds a session's live resources, so it is what the
 /// control routes notify. Both operations go through the per-session queue, so
 /// a teardown cannot land in the middle of an open and a model change cannot
@@ -174,6 +199,9 @@ where
     async fn execute(&self, session_id: AgentSessionId, command: HarnessCommand) -> Result<()> {
         match command {
             HarnessCommand::Open(command) => self.open(session_id, command).await,
+            HarnessCommand::OpenStandalone(command) => {
+                self.open_standalone(session_id, command).await
+            }
             HarnessCommand::Deliver(command) => self.deliver(session_id, command).await,
             HarnessCommand::Delete => self.delete(session_id).await,
         }
@@ -242,6 +270,63 @@ where
                 AgentActionId::mint(),
             )
             .await?;
+        Ok(())
+    }
+
+    /// Open a session that has no originating mention: create menu, API.
+    ///
+    /// The same shape as [`Self::open`] minus everything the mention implied:
+    /// there is no thread to link, no channel to announce into, and the first
+    /// prompt is optional - an idle session waits for its owner to speak from
+    /// the session's own surface.
+    #[tracing::instrument(err, skip(self, command), fields(
+        %session_id,
+        bot_id = %command.bot_id,
+    ))]
+    async fn open_standalone(
+        &self,
+        session_id: AgentSessionId,
+        command: OpenStandaloneSession,
+    ) -> Result<()> {
+        let OpenStandaloneSession {
+            owner,
+            bot_id,
+            prompt,
+        } = command;
+        let repo_url = self.defaults.repo_url.clone();
+
+        self.sessions
+            .create_session(CreateAgentSessionParams {
+                id: session_id,
+                owner_id: owner.clone(),
+                bot_id,
+                thread_id: None,
+                originating_message_id: None,
+                model: self.defaults.model.clone(),
+                harness: self.defaults.harness.clone(),
+                repo_url: repo_url.clone(),
+            })
+            .await?;
+
+        let container = self
+            .containers
+            .spawn(SpawnContainer {
+                session_id,
+                repo_url,
+            })
+            .await?;
+        self.sessions.attach_session(session_id, container).await?;
+
+        if let Some(prompt) = prompt {
+            self.sessions
+                .send_action(
+                    session_id,
+                    Some(owner),
+                    AgentAction::prompt(prompt),
+                    AgentActionId::mint(),
+                )
+                .await?;
+        }
         Ok(())
     }
 

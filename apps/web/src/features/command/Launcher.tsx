@@ -13,6 +13,8 @@ import { CHAT_INPUT_TEXT_AREA_ID } from '@core/component/AI/component/input/Chat
 import { getIconConfig } from '@core/component/EntityIcon';
 import {
   ENABLE_ANIMATED_ICONS,
+  ENABLE_CHAT_V3_AGENTS_FLAG,
+  ENABLE_CHAT_V3_AGENTS_OVERRIDE,
   ENABLE_SNIPPETS_FLAG,
   ENABLE_SNIPPETS_OVERRIDE,
 } from '@core/constant/featureFlags';
@@ -61,7 +63,9 @@ import { getMarkdownGoldenBytes } from '@macro-inc/lexical-core/markdown-golden'
 import type { Span } from '@macro-inc/observability';
 import MagnifyingGlassIcon from '@phosphor/magnifying-glass.svg';
 import PlusIcon from '@phosphor/plus.svg';
+import Robot from '@phosphor/robot.svg';
 import { createProject } from '@queries/storage/projects';
+import { agentHarnessServiceClient } from '@service-agent-harness/client';
 import { makePersisted } from '@solid-primitives/storage';
 import {
   CommandMenuHotkeyHint,
@@ -398,6 +402,18 @@ export function runCreateAction(
         asPopover: true,
       });
       return;
+    case 'agent':
+      createBlock({
+        blockName: 'agent',
+        loading: true,
+        createFn: async () => {
+          const result = await agentHarnessServiceClient.create({});
+          if (result.isErr()) return;
+          return result.value.session_id;
+        },
+        shouldInsert,
+      });
+      return;
   }
 }
 
@@ -446,6 +462,21 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
     hotkey: 'u',
     keyDownHandler: () => {
       runCreateAction('automation');
+      return true;
+    },
+  },
+  {
+    label: 'Coding Agent',
+    icon: Robot,
+    description: 'Create agent session',
+    launcherHint: 'Sandboxed coding session',
+    keywords: ['new', 'make', 'add', 'agent', 'code', 'coder', 'session'],
+    blockName: 'agent',
+    hotkeyToken: TOKENS.create.agent,
+    altHotkeyToken: TOKENS.create.agentNewSplit,
+    hotkey: 'b',
+    keyDownHandler: () => {
+      runCreateAction('agent', { shouldInsert: pressedKeys().has('shift') });
       return true;
     },
   },
@@ -603,10 +634,15 @@ export function useCreateMenuBlocks(
   const snippetsFlag = useFeatureFlag(ENABLE_SNIPPETS_FLAG, {
     enabledOverride: ENABLE_SNIPPETS_OVERRIDE,
   });
+  const agentsFlag = useFeatureFlag(ENABLE_CHAT_V3_AGENTS_FLAG, {
+    enabledOverride: ENABLE_CHAT_V3_AGENTS_OVERRIDE,
+  });
   return createMemo(() =>
-    source().filter(
-      (block) => block.blockName !== 'snippet' || snippetsFlag().enabled
-    )
+    source().filter((block) => {
+      if (block.blockName === 'snippet') return snippetsFlag().enabled;
+      if (block.blockName === 'agent') return agentsFlag().enabled;
+      return true;
+    })
   );
 }
 
