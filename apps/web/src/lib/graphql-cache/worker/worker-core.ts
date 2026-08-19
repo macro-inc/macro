@@ -412,10 +412,10 @@ export class CacheWorkerCore {
           request.identity
         );
         this.fanOut(result, true);
-        const hydration: HydrationResult =
+        const hydration: HydrationResult & Pick<WriteResult, 'reset'> =
           result.data === null
-            ? { kind: 'void' }
-            : { kind: 'data', data: result.data };
+            ? { kind: 'void', reset: result.reset }
+            : { kind: 'data', data: result.data, reset: result.reset };
         return hydration;
       })
       .with({ kind: 'enqueue-optimistic-mutation' }, async (request) => {

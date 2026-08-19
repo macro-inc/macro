@@ -1055,6 +1055,47 @@ describe('CacheWorkerCore', () => {
     expect(onStorageResetRequired).not.toHaveBeenCalled();
   });
 
+  it('records an identity-changing hydration as a logical reset', async () => {
+    const hydrateQuery = vi.fn().mockResolvedValue({
+      changed: [],
+      affectedOps: [],
+      reset: true,
+      data: { cursor: 'next' },
+    });
+    loadCacheWasmMock.mockResolvedValue({
+      openCache: vi.fn().mockResolvedValue({ hydrateQuery }),
+    });
+    const observations: Array<Record<string, unknown>> = [];
+    const port = { postMessage: vi.fn() };
+    const core = new CacheWorkerCore({
+      telemetry: {
+        record: (observation) => observations.push(observation),
+        flush: vi.fn(),
+      },
+    });
+    await core.handleRequest(port, { id: 1, kind: 'init', scope: 'scope-1' });
+
+    await core.handleRequest(port, {
+      id: 2,
+      kind: 'hydrate',
+      query: 'query Backfill { cursor }',
+      data: { cursor: 'next' },
+      identity: 'user-2',
+    });
+
+    expect(observations).toContainEqual(
+      expect.objectContaining({
+        name: 'graphql_cache.logical_reset',
+        resetReason: 'identity-change',
+      })
+    );
+    expect(port.postMessage).toHaveBeenLastCalledWith({
+      id: 2,
+      ok: true,
+      result: { kind: 'data', data: { cursor: 'next' }, reset: true },
+    });
+  });
+
   it('reports the initialization outcome but leaves every reset phase to the coordinator', async () => {
     const observations: Array<Record<string, unknown>> = [];
     loadCacheWasmMock.mockResolvedValue({
