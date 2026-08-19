@@ -1,3 +1,4 @@
+import { useOpenEventComposer } from '@app/features/block-calendar/components/use-open-event-composer';
 import {
   CALENDAR_BLOCK_ID,
   type CalendarBlockProps,
@@ -6,7 +7,10 @@ import type { CalendarGridHandle } from '@app/features/calendar/components/Calen
 import { CalendarGridSkeleton } from '@app/features/calendar/components/CalendarGridSkeleton';
 import { useCalendarOccurrenceData } from '@app/features/calendar/hooks/use-calendar-occurrence-data';
 import { useCalendarSources } from '@app/features/calendar/hooks/use-calendar-sources';
-import type { CalendarEvent } from '@app/features/calendar/types';
+import type {
+  CalendarEvent,
+  CalendarTimeFormat,
+} from '@app/features/calendar/types';
 import { parseLocalDate } from '@app/features/calendar/utils/calendar-date';
 import {
   formatCalendarTime,
@@ -18,16 +22,22 @@ import { HoverCard } from '@core/component/HoverCard';
 import { ScrollIndicators } from '@core/component/VerticalScrollIndicators';
 import { openExternalUrl } from '@core/util/url';
 import ArrowRightIcon from '@phosphor/arrow-right.svg';
+import CaretRightIcon from '@phosphor/caret-right.svg';
+import CheckIcon from '@phosphor/check.svg';
+import GearIcon from '@phosphor/gear.svg';
+import PlusIcon from '@phosphor/plus.svg';
 import VideoCameraIcon from '@phosphor/video-camera.svg';
 import XIcon from '@phosphor/x.svg';
 import type { CalendarOccurrenceQueryRange } from '@queries/calendar/occurrences';
 import { createCalendarOccurrenceQueryRange } from '@queries/calendar/occurrences';
 import { Button } from '@ui/components/Button';
+import { Dropdown } from '@ui/components/Dropdown';
 import { Layer } from '@ui/components/Layer';
 import { Surface } from '@ui/components/Surface';
 import {
   createEffect,
   createSignal,
+  For,
   lazy,
   onCleanup,
   type ParentProps,
@@ -79,6 +89,14 @@ function CalendarScrollElement(props: {
 
   return null;
 }
+
+const PREVIEW_TIME_FORMAT_OPTIONS: Array<{
+  value: CalendarTimeFormat;
+  label: string;
+}> = [
+  { value: '12-hour', label: '12-hour' },
+  { value: '24-hour', label: '24-hour' },
+];
 
 const eventDateFormat = new Intl.DateTimeFormat(undefined, {
   weekday: 'short',
@@ -183,12 +201,36 @@ function PreviewContent() {
   );
   const [selectedEventId, setSelectedEventId] = createSignal<string>();
   const [scrollElement, setScrollElement] = createSignal<HTMLElement>();
+  const [hiddenSourceIds, setHiddenSourceIds] = createSignal<
+    ReadonlySet<string>
+  >(new Set());
+  const [timeFormat, setTimeFormat] = createSignal<CalendarTimeFormat>(
+    getDefaultCalendarTimeFormat()
+  );
   const layout = useSplitLayout();
-  const { sourceById } = useCalendarSources();
-  const data = useCalendarOccurrenceData({ range, sourceById });
+  const openEventComposer = useOpenEventComposer();
+  const { sourceById, sources } = useCalendarSources();
+  const isSourceVisible = (sourceId: string) =>
+    !hiddenSourceIds().has(sourceId);
+  const data = useCalendarOccurrenceData({
+    range,
+    sourceById,
+    isSourceVisible,
+  });
   const selectedEvent = () => {
     const eventId = selectedEventId();
     return eventId ? data.eventsById().get(eventId) : undefined;
+  };
+  const setSourceVisibility = (sourceId: string, visible: boolean) => {
+    setHiddenSourceIds((current) => {
+      const next = new Set(current);
+      if (visible) next.delete(sourceId);
+      else next.add(sourceId);
+      return next;
+    });
+    if (!visible && selectedEvent()?.calendar.id === sourceId) {
+      setSelectedEventId(undefined);
+    }
   };
   const openEventInCalendar = async (event: CalendarEvent) => {
     const params: CalendarBlockProps = {
@@ -218,7 +260,7 @@ function PreviewContent() {
   };
 
   return (
-    <div class="calendar-sidebar-preview flex size-full min-h-0 flex-col bg-surface">
+    <div class="calendar-sidebar-preview portal-scope flex size-full min-h-0 flex-col bg-surface">
       <div class="relative min-h-0 flex-1">
         <CalendarEmbed
           initialDate={initialDate}
@@ -231,7 +273,7 @@ function PreviewContent() {
             collapseEmptyAllDaySlot: true,
             showWeekends: true,
             weekStartsOn: 0,
-            timeFormat: getDefaultCalendarTimeFormat(),
+            timeFormat: timeFormat(),
           }}
           selection={{
             color: 'var(--color-accent)',
@@ -264,6 +306,107 @@ function PreviewContent() {
           noBorderStart
           noBorderEnd
         />
+
+        <Layer depth={4}>
+          <div class="absolute right-2 bottom-2 z-anchored-controls flex items-center gap-2">
+            <Button
+              aria-label="New event"
+              label="New event"
+              tooltipPlacement="top"
+              variant="ghost"
+              size="icon-md"
+              depth={4}
+              class="rounded-lg bg-surface shadow-menu ring ring-edge-muted"
+              onClick={() => openEventComposer()}
+            >
+              <PlusIcon class="size-4" />
+            </Button>
+            <Dropdown placement="right" gutter={6}>
+              <Dropdown.Trigger
+                aria-label="Calendar settings"
+                label="Calendar settings"
+                tooltipPlacement="top"
+                variant="ghost"
+                size="icon-md"
+                depth={4}
+                class="rounded-lg bg-surface shadow-menu ring ring-edge-muted"
+              >
+                <GearIcon class="size-4" />
+              </Dropdown.Trigger>
+              <Dropdown.Content depth={4} class="w-56">
+                <Dropdown.Group>
+                  <Dropdown.Sub>
+                    <Dropdown.SubTrigger>
+                      <span class="min-w-0 flex-1 truncate">Calendars</span>
+                      <CaretRightIcon class="size-3 shrink-0 text-ink-muted" />
+                    </Dropdown.SubTrigger>
+                    <Dropdown.SubContent
+                      depth={4}
+                      class="max-h-52 w-56 overflow-y-auto"
+                    >
+                      <Dropdown.Group>
+                        <For each={sources()}>
+                          {(source) => (
+                            <Dropdown.CheckboxItem
+                              checked={isSourceVisible(source.id)}
+                              closeOnSelect={false}
+                              onChange={(visible) =>
+                                setSourceVisibility(source.id, visible)
+                              }
+                            >
+                              <span
+                                aria-hidden="true"
+                                class="size-2.5 shrink-0 rounded-sm"
+                                style={{ 'background-color': source.color }}
+                              />
+                              <span class="min-w-0 flex-1 truncate">
+                                {source.name}
+                              </span>
+                            </Dropdown.CheckboxItem>
+                          )}
+                        </For>
+                      </Dropdown.Group>
+                    </Dropdown.SubContent>
+                  </Dropdown.Sub>
+
+                  <Dropdown.Sub>
+                    <Dropdown.SubTrigger>
+                      <span class="min-w-0 flex-1 truncate">Time format</span>
+                      <span class="text-xs text-ink-muted">
+                        {timeFormat() === '12-hour' ? '12-hour' : '24-hour'}
+                      </span>
+                      <CaretRightIcon class="size-3 shrink-0 text-ink-muted" />
+                    </Dropdown.SubTrigger>
+                    <Dropdown.SubContent depth={4} class="min-w-36">
+                      <Dropdown.Group>
+                        <Dropdown.RadioGroup
+                          value={timeFormat()}
+                          onChange={(value) =>
+                            setTimeFormat(value as CalendarTimeFormat)
+                          }
+                        >
+                          <For each={PREVIEW_TIME_FORMAT_OPTIONS}>
+                            {(option) => (
+                              <Dropdown.RadioItem
+                                closeOnSelect
+                                value={option.value}
+                              >
+                                <span class="flex-1">{option.label}</span>
+                                <Dropdown.ItemIndicator>
+                                  <CheckIcon class="size-3.5 text-accent" />
+                                </Dropdown.ItemIndicator>
+                              </Dropdown.RadioItem>
+                            )}
+                          </For>
+                        </Dropdown.RadioGroup>
+                      </Dropdown.Group>
+                    </Dropdown.SubContent>
+                  </Dropdown.Sub>
+                </Dropdown.Group>
+              </Dropdown.Content>
+            </Dropdown>
+          </div>
+        </Layer>
 
         <Show when={data.isLoading()}>
           <div class="absolute inset-0 bg-surface">
