@@ -464,11 +464,15 @@ where
                 EntityType::Document | EntityType::Chat => {
                     main_entities.push(candidate.entity.copied())
                 }
-                // Projects hydrate through the unexpanded by-ids query for
-                // both soup types: the expanded one deliberately omits
-                // project rows, but a project the user touched is a row of
-                // this feed, exactly as in the timestamp-sorted views.
-                EntityType::Project => project_entities.push(candidate.entity.copied()),
+                // Projects are rows of this feed in both soup types, but the
+                // expanded by-ids query deliberately omits project rows, so
+                // under Expanded they hydrate through a separate unexpanded
+                // query. Under UnExpanded the main query is already the
+                // unexpanded one — projects ride it, saving a round trip.
+                EntityType::Project => match soup_type {
+                    SoupType::Expanded => project_entities.push(candidate.entity.copied()),
+                    SoupType::UnExpanded => main_entities.push(candidate.entity.copied()),
+                },
                 EntityType::Channel => match Uuid::parse_str(&candidate.entity.entity_id) {
                     Ok(id) => channel_ids.push(id),
                     Err(error) => {
