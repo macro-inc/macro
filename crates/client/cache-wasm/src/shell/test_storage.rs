@@ -1,3 +1,4 @@
+use cache_core::predicate::{PredicateIndexStorage, PredicateQueryResult, ProjectionMutation};
 use cache_core::queue::{
     ClaimedMutation, MutationClaimRequest, MutationClaimToken, MutationId, NewQueuedMutation,
     QueuedMutation,
@@ -6,6 +7,7 @@ use cache_core::search::{SearchCursor, SearchDocument, SearchProfile};
 use cache_core::store::{QueueDiagnostics, Storage};
 use cache_core::value::{EntityKey, Record};
 use cache_turso::{PhysicalResetReason, TursoStorage, TursoStorageError};
+use predicate_index::{IndexDocument, RecordKey, ValidatedIndexQuery};
 use std::sync::atomic::{AtomicU8, Ordering};
 
 #[derive(Clone, Copy)]
@@ -63,6 +65,16 @@ impl Storage for BrowserStorage {
         entries: Vec<(EntityKey<'static>, Record)>,
     ) -> Result<(), Self::Error> {
         self.inner.put_batch(entries).await
+    }
+
+    async fn put_batch_with_projections(
+        &mut self,
+        entries: Vec<(EntityKey<'static>, Record)>,
+        projections: Vec<ProjectionMutation>,
+    ) -> Result<(), Self::Error> {
+        self.inner
+            .put_batch_with_projections(entries, projections)
+            .await
     }
 
     async fn delete_batch(&mut self, keys: &[EntityKey<'static>]) -> Result<(), Self::Error> {
@@ -132,6 +144,18 @@ impl Storage for BrowserStorage {
         self.inner.complete_mutation(id, claim, entries).await
     }
 
+    async fn complete_mutation_with_projections(
+        &mut self,
+        id: MutationId,
+        claim: MutationClaimToken,
+        entries: Vec<(EntityKey<'static>, Record)>,
+        projections: Vec<ProjectionMutation>,
+    ) -> Result<bool, Self::Error> {
+        self.inner
+            .complete_mutation_with_projections(id, claim, entries, projections)
+            .await
+    }
+
     async fn discard_mutation(
         &mut self,
         id: MutationId,
@@ -142,5 +166,31 @@ impl Storage for BrowserStorage {
 
     async fn clear(&mut self) -> Result<(), Self::Error> {
         self.inner.clear().await
+    }
+}
+
+impl PredicateIndexStorage for BrowserStorage {
+    async fn delete_batch_with_projections(
+        &mut self,
+        keys: &[EntityKey<'static>],
+        projection_keys: &[RecordKey],
+    ) -> Result<(), Self::Error> {
+        self.inner
+            .delete_batch_with_projections(keys, projection_keys)
+            .await
+    }
+
+    async fn query_predicate_index(
+        &self,
+        query: &ValidatedIndexQuery,
+    ) -> Result<PredicateQueryResult, Self::Error> {
+        self.inner.query_predicate_index(query).await
+    }
+
+    async fn get_index_documents(
+        &self,
+        keys: &[RecordKey],
+    ) -> Result<Vec<Option<IndexDocument>>, Self::Error> {
+        self.inner.get_index_documents(keys).await
     }
 }
