@@ -16,8 +16,8 @@ import {
 } from '@service-storage/graphql/generated/graphql';
 import type { GraphqlSoupInput } from '@service-storage/graphql-soup';
 import {
-  getGraphqlSoupClient,
   getGraphqlSoupCacheHost,
+  getGraphqlSoupClient,
   mapGraphqlSoupItem,
   mapGraphqlSoupPage,
 } from '@service-storage/graphql-soup';
@@ -96,7 +96,8 @@ export function createGraphqlSoupAstItemsQuery(
     const input = firstPageInput();
     const queryOptions = options();
     const host = getGraphqlSoupCacheHost();
-    if (!queryOptions.enabled || !input || !host || !('initial' in input)) return;
+    if (!queryOptions.enabled || !input || !host || !('initial' in input))
+      return;
     const initial = input.initial;
     if (!initial) return;
     const filters = initial.filters ?? {};
@@ -113,7 +114,10 @@ export function createGraphqlSoupAstItemsQuery(
           soupItemSelection,
           result.keys
         );
-        if (requestId !== localRequest || selected.length !== result.keys.length)
+        if (
+          requestId !== localRequest ||
+          selected.length !== result.keys.length
+        )
           return;
         const items = selected.flatMap(({ record }) => {
           const item = mapGraphqlSoupItem(record);
@@ -193,7 +197,8 @@ export function createGraphqlSoupAstItemsQuery(
     isLoading: () => query.isLoading && localPlaceholder() === undefined,
     isFetching: () => query.isFetching,
     isFetchingNextPage: () => query.isFetchingNextPage,
-    isPlaceholderData: () => query.data === undefined && localPlaceholder() !== undefined,
+    isPlaceholderData: () =>
+      query.data === undefined && localPlaceholder() !== undefined,
     hasNextPage: () => query.hasNextPage,
     fetchNextPage: async () => {
       await query.fetchNextPage();

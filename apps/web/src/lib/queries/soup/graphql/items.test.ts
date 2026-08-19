@@ -94,7 +94,9 @@ describe('createGraphqlSoupAstItemsQuery', () => {
   it('uses a complete local page as placeholder while authoritative network continues', async () => {
     const fake = makeFakeClient();
     getGraphqlSoupClientMock.mockReturnValue(fake.client);
-    getGraphqlSoupCacheHostMock.mockReturnValue({ entityFilter: entityFilterMock });
+    getGraphqlSoupCacheHostMock.mockReturnValue({
+      entityFilter: entityFilterMock,
+    });
     entityFilterMock.mockResolvedValue({
       kind: 'complete',
       keys: ['GraphqlSoupDocument:task-1'],
@@ -114,19 +116,21 @@ describe('createGraphqlSoupAstItemsQuery', () => {
         );
 
         expect(fake.executions).toHaveLength(1);
-        void vi.waitFor(() => {
-          expect(query.isPlaceholderData()).toBe(true);
-          expect(query.data()?.entities[0]?.name).toBe('Local task');
-        }).then(() => {
-          fake.executions[0]?.next({
-            items: [{ id: 'task-1', type: 'document', name: 'Network task' }],
-            next_cursor: null,
+        void vi
+          .waitFor(() => {
+            expect(query.isPlaceholderData()).toBe(true);
+            expect(query.data()?.entities[0]?.name).toBe('Local task');
+          })
+          .then(() => {
+            fake.executions[0]?.next({
+              items: [{ id: 'task-1', type: 'document', name: 'Network task' }],
+              next_cursor: null,
+            });
+            expect(query.isPlaceholderData()).toBe(false);
+            expect(query.data()?.entities[0]?.name).toBe('Network task');
+            dispose();
+            resolve();
           });
-          expect(query.isPlaceholderData()).toBe(false);
-          expect(query.data()?.entities[0]?.name).toBe('Network task');
-          dispose();
-          resolve();
-        });
       });
     });
     expect(entityFilterMock).toHaveBeenCalled();

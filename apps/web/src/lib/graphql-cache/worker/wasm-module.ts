@@ -80,7 +80,9 @@ export interface CacheEngine {
   search(
     request: SearchCacheArgs & { nowMs: number }
   ): Promise<SearchCachePage>;
-  entityFilter(request: EntityFilterCacheArgs): Promise<EntityFilterCacheResult>;
+  entityFilter(
+    request: EntityFilterCacheArgs
+  ): Promise<EntityFilterCacheResult>;
   writeQuery(
     context: {
       originOpId?: string;
