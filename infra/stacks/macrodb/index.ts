@@ -1,12 +1,58 @@
 import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
-import { config, stack } from '../../packages/shared';
+import { config, RDS_PORT, stack } from '../../packages/shared';
+import { get_coparse_api_vpc } from '../../packages/vpc';
 
 const tags = {
   environment: stack,
   tech_lead: 'hutch',
   project: 'macrodb',
 };
+
+const databaseSecurityGroupIds = config
+  .require('security_group_ids')
+  .split(',')
+  .map((securityGroupId) => securityGroupId.trim())
+  .filter(Boolean);
+
+const datadogDbmAgentSecurityGroup = config.getBoolean('datadog_dbm_enabled')
+  ? new aws.ec2.SecurityGroup('datadog-dbm-agent-security-group', {
+      name: `datadog-dbm-agent-${stack}`,
+      description: `Datadog DBM agent security group for macro-db-${stack}`,
+      vpcId: get_coparse_api_vpc().vpcId,
+      tags: {
+        ...tags,
+        component: 'datadog-dbm-agent',
+      },
+    })
+  : undefined;
+
+if (datadogDbmAgentSecurityGroup) {
+  new aws.vpc.SecurityGroupEgressRule('datadog-dbm-agent-all-out', {
+    securityGroupId: datadogDbmAgentSecurityGroup.id,
+    description: 'Allow the Datadog DBM agent to reach Datadog and Postgres',
+    cidrIpv4: '0.0.0.0/0',
+    ipProtocol: '-1',
+    tags,
+  });
+
+  databaseSecurityGroupIds.forEach((databaseSecurityGroupId, index) => {
+    new aws.vpc.SecurityGroupIngressRule(
+      `database-datadog-dbm-agent-in-${index}`,
+      {
+        securityGroupId: databaseSecurityGroupId,
+        description: 'Allow the Datadog DBM agent to connect to Postgres',
+        referencedSecurityGroupId: datadogDbmAgentSecurityGroup.id,
+        fromPort: RDS_PORT,
+        toPort: RDS_PORT,
+        ipProtocol: 'tcp',
+        tags,
+      }
+    );
+  });
+}
+
+export const datadogDbmAgentSecurityGroupId = datadogDbmAgentSecurityGroup?.id;
 
 // db password
 const password = aws.secretsmanager
@@ -141,7 +187,7 @@ const database = new aws.rds.Instance(
     ),
     dbName: 'macrodb',
     dbSubnetGroupName: config.require('subnet_group_name'),
-    vpcSecurityGroupIds: [...config.require('security_group_ids').split(',')],
+    vpcSecurityGroupIds: databaseSecurityGroupIds,
     publiclyAccessible: true,
     skipFinalSnapshot: stack !== 'prod', // we only want to skip final snapshot for non-prod
     finalSnapshotIdentifier:
@@ -186,7 +232,7 @@ const readReplica = new aws.rds.Instance(
       'performance_insights_kms_key_id'
     ),
     publiclyAccessible: true,
-    vpcSecurityGroupIds: [...config.require('security_group_ids').split(',')],
+    vpcSecurityGroupIds: databaseSecurityGroupIds,
     parameterGroupName: pulumi.interpolate`${originalParameterGroup.name}`,
     enabledCloudwatchLogsExports:
       stack === 'prod' ? ['postgresql', 'upgrade'] : undefined,
