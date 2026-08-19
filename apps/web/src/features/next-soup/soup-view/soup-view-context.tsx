@@ -55,6 +55,7 @@ import {
   ENABLE_FEATURED_SEARCH_RESULTS,
   ENABLE_NEW_INBOX_FLAG,
   ENABLE_NEW_INBOX_OVERRIDE,
+  ENABLE_REMINDERS,
   ENABLE_SUPPORTED_SOUP_FOREIGN_ENTITIES_FLAG,
   ENABLE_SUPPORTED_SOUP_FOREIGN_ENTITIES_OVERRIDE,
 } from '@core/constant/featureFlags';
@@ -251,7 +252,14 @@ const resolveTabId = (
   remembered: string | undefined
 ): string => {
   const config = VIEW_TAB_PRESETS[view];
-  return remembered && remembered in config.tabs ? remembered : config.default;
+  if (!remembered || !(remembered in config.tabs)) return config.default;
+  // A remembered tab can also be flag-gated out of the tab bar (see
+  // `useVisibleViewTabs`): restoring the inbox onto Reminders with the flag
+  // off would leave a hidden tab active, still querying reminders.
+  if (view === 'inbox' && remembered === 'reminders' && !ENABLE_REMINDERS()) {
+    return config.default;
+  }
+  return remembered;
 };
 
 const persistedPredicatesFor = (
@@ -570,11 +578,12 @@ export const SoupViewContextProvider: FlowComponent<
       if (!view) return;
 
       const entryState = panel.handle.currentEntryState();
-      const tabId =
+      const tabId = resolveTabId(
+        view,
         (entryState?.['soup.tab'] as string | undefined) ??
-        persistedActiveTabs()[view] ??
-        activeTab() ??
-        VIEW_TAB_PRESETS[view].default;
+          persistedActiveTabs()[view] ??
+          activeTab()
+      );
       const query =
         entryState && 'search.filters' in entryState
           ? undefined
@@ -820,11 +829,13 @@ export const SoupViewContextProvider: FlowComponent<
         const entryQuery = entryState?.['search.filters'] as Query | undefined;
         const view = activeListView();
         const tabId = view
-          ? ((entryState?.['soup.tab'] as string | undefined) ??
-            (filterPersistenceEnabled()
-              ? persistedActiveTabs()[view]
-              : undefined) ??
-            VIEW_TAB_PRESETS[view].default)
+          ? resolveTabId(
+              view,
+              (entryState?.['soup.tab'] as string | undefined) ??
+                (filterPersistenceEnabled()
+                  ? persistedActiveTabs()[view]
+                  : undefined)
+            )
           : undefined;
         if (tabId) setActiveTab(tabId);
 
