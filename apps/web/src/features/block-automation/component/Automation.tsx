@@ -133,6 +133,10 @@ export function Automation() {
   const schedule = createMemo(() =>
     schedulesQuery.data?.find((item) => item.id === scheduleId)
   );
+  const scheduleEntity = () => {
+    const current = schedule();
+    return current ? scheduleToEntity(current) : undefined;
+  };
 
   const [state, setRawState] = createSignal<ScheduleDraft | undefined>();
 
@@ -242,8 +246,7 @@ export function Automation() {
   // Confirms via the shared bulk-delete modal, which routes automations to
   // the scheduled-action API and evicts them from the schedules cache.
   const deleteAutomation = () => {
-    const current = schedule();
-    const entity = current ? scheduleToEntity(current) : undefined;
+    const entity = scheduleEntity();
     if (!entity) return;
     openBulkEditModal({
       view: 'delete',
@@ -323,6 +326,9 @@ export function Automation() {
               itemType="automation"
               name={d().name || blockNameToDefaultFile('automation')}
               ops={[]}
+              // Generic chrome can't reconstruct an AutomationEntity (it
+              // lacks the cron), so supply it for entity-gated menu items.
+              entity={scheduleEntity()}
               tools={[
                 {
                   group: 'file',

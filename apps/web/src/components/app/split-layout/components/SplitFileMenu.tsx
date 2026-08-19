@@ -452,15 +452,26 @@ export function SplitFileMenu(props: {
     };
   };
 
-  const copyLinkOp = (): SplitFileMenuAction => ({
-    label: 'Copy Link',
-    icon: Link,
-    action: () => {
-      void copyLinkAction.executeByBlock(props.id, aliasedBlockName);
-    },
-    hotkeyToken: blockHotkeyToken(TOKENS.entity.action.copyLink),
-    group: 'sharing' as const,
-  });
+  const copyLinkOp = (): SplitFileMenuAction | undefined => {
+    const entity = menuEntity();
+    // Foreign PRs link out via their entity URL (GitHub); the block-derived
+    // fallback would mint an internal /pr URL that doesn't resolve, so omit
+    // the item when the entity is unavailable.
+    if (!entity && blockName === 'pr') return undefined;
+    return {
+      label: 'Copy Link',
+      icon: Link,
+      action: () => {
+        if (entity) {
+          void copyLinkAction.execute([entity]);
+        } else {
+          void copyLinkAction.executeByBlock(props.id, aliasedBlockName);
+        }
+      },
+      hotkeyToken: blockHotkeyToken(TOKENS.entity.action.copyLink),
+      group: 'sharing' as const,
+    };
+  };
 
   const copyEntityIdOp = (): SplitFileMenuAction => ({
     label: 'Copy ID',

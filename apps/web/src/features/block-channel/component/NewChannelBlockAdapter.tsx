@@ -218,6 +218,9 @@ function NewTop(props: { channelId: string }) {
           itemType="channel"
           name={channelName() ?? 'New Channel'}
           ops={[]}
+          // Generic chrome can't reconstruct a ChannelEntity (it lacks the
+          // channelType), so supply it for the menu's entity-gated items.
+          entity={channelEntity()}
           mobileViews={isMobile() ? mobileViews() : undefined}
           tools={[
             {
