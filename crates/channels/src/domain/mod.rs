@@ -2,6 +2,8 @@
 pub mod activity;
 /// Kafka event models for the `macro.channels` topic.
 pub mod broker_events;
+/// Personal channel-category layout.
+pub mod category;
 #[cfg(feature = "entity_mutation")]
 /// Unified entity-mutation capability impls.
 pub mod entity_mutation;

@@ -423,6 +423,15 @@ async fn main() -> anyhow::Result<()> {
         ),
         authorization_state.clone(),
     );
+    let channel_category_state =
+        channels::inbound::category_router::ChannelCategoryRouterState::new(
+            channels::domain::category::ChannelCategoryServiceImpl::new(
+                channels::outbound::pg_channel_category_repo::PgChannelCategoryRepo::new(
+                    db.clone(),
+                ),
+            ),
+            authorization_state.clone(),
+        );
 
     let s3 = Arc::new(S3::new(
         s3_client,
@@ -1242,6 +1251,7 @@ async fn main() -> anyhow::Result<()> {
         // Shared frecency storage and legacy channel list routes.
         frecency_storage,
         channel_list_state,
+        channel_category_state,
         entity_access_service: entity_access_service.clone(),
         calendar_state,
         projects_state: ProjectRouterState {

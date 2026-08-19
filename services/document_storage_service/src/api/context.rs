@@ -23,15 +23,20 @@ use call::{
 };
 use channels::{
     domain::{
+        category::ChannelCategoryServiceImpl,
         list_service::ChannelListServiceImpl,
         service::ChannelServiceImpl,
         side_effects::{ChannelSideEffectService, SpawnedChannelEventDispatcher},
     },
-    inbound::{axum_router::ChannelsRouterState, list_router::ChannelListRouterState},
+    inbound::{
+        axum_router::ChannelsRouterState, category_router::ChannelCategoryRouterState,
+        list_router::ChannelListRouterState,
+    },
     outbound::{
         connection_gateway_realtime::ConnectionGatewayChannelRealtimePublisher,
         contacts_dispatcher::ContactsChannelDispatcher,
         notification_sender::NotificationChannelSender,
+        pg_channel_category_repo::PgChannelCategoryRepo,
         pg_channel_reference_share_permissions::PgChannelReferenceSharePermissions,
         pg_channels_repo::PgChannelsRepo, pg_side_effect_context::PgChannelSideEffectContext,
     },
@@ -333,6 +338,12 @@ pub(crate) type DssChannelListService =
 pub(crate) type DssChannelListState =
     ChannelListRouterState<DssChannelListService, AuthorizationService>;
 
+/// Type alias for the personal channel-category router state.
+pub(crate) type DssChannelCategoryState = ChannelCategoryRouterState<
+    ChannelCategoryServiceImpl<PgChannelCategoryRepo>,
+    AuthorizationService,
+>;
+
 /// Type alias for the channels service wired into DSS.
 pub(crate) type DssChannelService = ChannelServiceImpl<
     PgChannelsRepo,
@@ -508,6 +519,8 @@ pub(crate) struct ApiContext {
     pub frecency_storage: FrecencyPgStorage,
     /// Legacy channel list router state.
     pub channel_list_state: DssChannelListState,
+    /// Personal channel-category layout router state.
+    pub channel_category_state: DssChannelCategoryState,
     pub entity_access_service: Arc<EntityAccessService>,
     pub calendar_state: DssCalendarState,
     pub documents_state: DocumentsState,

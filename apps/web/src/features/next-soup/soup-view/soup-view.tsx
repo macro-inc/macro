@@ -98,6 +98,7 @@ import ChevronRightIcon from '@phosphor/caret-right.svg';
 import CheckIcon from '@phosphor/check.svg';
 import InfoIcon from '@phosphor/info.svg';
 import Spinner from '@phosphor/spinner.svg';
+import { useChannelCategoryLayoutQuery } from '@queries/channel/categories';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { debounce } from '@solid-primitives/scheduled';
 import { Button, cn, Layer, Tooltip } from '@ui';
@@ -120,6 +121,12 @@ import {
 import { Dynamic } from 'solid-js/web';
 import { Virtualizer, type VirtualizerHandle } from 'virtua/solid';
 import type { CacheSnapshot } from 'virtua/unstable_core';
+import {
+  ChannelCategoryControls,
+  ChannelCategorySectionsBefore,
+  ChannelCategoryTrailingSections,
+  MaybeChannelCategoryRowDnd,
+} from './channel-category-controls';
 import { SearchAskAiButton } from './search-ask-ai-button';
 import { SoupEntitySelectionToolbar } from './soup-entity-selection-toolbar';
 import { useSoupNavigationHotkeys } from './use-soup-navigation-hotkeys';
@@ -1195,6 +1202,45 @@ const SoupViewListContent = (props: SoupViewListProps) => {
   };
 
   const featuredCount = createMemo(() => featuredIds().length);
+  const categoryLayoutQuery = useChannelCategoryLayoutQuery();
+  const displayedRows = createMemo(() => {
+    const original = rows();
+    const layout = categoryLayoutQuery.data;
+    if (currentView() !== 'channels' || activeTab() !== 'recent' || !layout) {
+      return original;
+    }
+    const workspaceChannels = original.filter(
+      (row) =>
+        row.original.type === 'channel' &&
+        row.original.channelType !== 'direct_message'
+    );
+    const byId = new Map(
+      workspaceChannels.map((row) => [row.original.id, row])
+    );
+    const ordered = layout.categories.flatMap((category) =>
+      layout.placements.flatMap((placement) => {
+        if (placement.category_id !== category.id) return [];
+        const row = byId.get(placement.channel_id);
+        if (!row) return [];
+        byId.delete(placement.channel_id);
+        return [row];
+      })
+    );
+    // Joined non-DM channels absent from persisted placement are always
+    // presented as Uncategorized, without requiring a database backfill.
+    const explicitUncategorized = layout.placements.flatMap((placement) => {
+      if (placement.category_id !== null) return [];
+      const row = byId.get(placement.channel_id);
+      if (!row) return [];
+      byId.delete(placement.channel_id);
+      return [row];
+    });
+    const remaining = original.filter((row) => byId.has(row.original.id));
+    const dmsAndOther = original.filter(
+      (row) => !workspaceChannels.includes(row)
+    );
+    return [...ordered, ...explicitUncategorized, ...remaining, ...dmsAndOther];
+  });
 
   return (
     <MaybeSoupEntityActionDrawerManager>
@@ -1226,6 +1272,11 @@ const SoupViewListContent = (props: SoupViewListProps) => {
               />
             </Show>
             <StaticMarkdownContext>
+              <Show
+                when={currentView() === 'channels' && activeTab() === 'recent'}
+              >
+                <ChannelCategoryControls />
+              </Show>
               <Switch>
                 <Match
                   when={
@@ -1313,9 +1364,26 @@ const SoupViewListContent = (props: SoupViewListProps) => {
                         virtualizerRef={registerVirtualizerHandler}
                         onScrollBottom={debouncedFetchMore}
                         scrollBottomOffset={300}
-                        rows={rows()}
+                        rows={displayedRows()}
                       >
                         {(row, i) => {
+                          const categoryMode = () =>
+                            currentView() === 'channels' &&
+                            activeTab() === 'recent' &&
+                            row.original.type === 'channel' &&
+                            row.original.channelType !== 'direct_message';
+                          const previousCategoryChannelId = () => {
+                            if (!categoryMode()) return undefined;
+                            for (let index = i() - 1; index >= 0; index -= 1) {
+                              const previous = displayedRows()[index]?.original;
+                              if (
+                                previous?.type === 'channel' &&
+                                previous.channelType !== 'direct_message'
+                              )
+                                return previous.id;
+                            }
+                            return undefined;
+                          };
                           const timestamp = () => {
                             if (row.original.sortTs) return row.original.sortTs;
 
@@ -1336,6 +1404,12 @@ const SoupViewListContent = (props: SoupViewListProps) => {
 
                           return (
                             <>
+                              <Show when={categoryMode()}>
+                                <ChannelCategorySectionsBefore
+                                  channelId={row.original.id}
+                                  previousChannelId={previousCategoryChannelId()}
+                                />
+                              </Show>
                               <Show when={i() === 0 && featuredCount() > 0}>
                                 <SoupSectionHeader>
                                   <span class="truncate">Featured Results</span>
@@ -1433,82 +1507,117 @@ const SoupViewListContent = (props: SoupViewListProps) => {
                                   when={!row.group || row.group?.isExpanded()}
                                 >
                                   <SoupEntityContextMenu entity={row.original}>
-                                    <Dynamic
-                                      component={listEntityComponent()}
-                                      entity={row.original}
-                                      timestamp={timestamp()}
-                                      highlighted={row.isFocused()}
-                                      onMouseMove={() => {
-                                        if (isKeypressActive()) return;
-                                        if (panel.handle.isControllerSplit())
-                                          return;
-                                        soup.focus.setIndex(row.index);
-                                      }}
-                                      showUnrollNotifications={
-                                        row.original.type !== 'email' &&
-                                        soup.predicates.isActive('inbox') &&
-                                        !soup.predicates.isActive('noise')
+                                    <MaybeChannelCategoryRowDnd
+                                      enabled={
+                                        currentView() === 'channels' &&
+                                        activeTab() === 'recent' &&
+                                        row.original.type === 'channel' &&
+                                        row.original.channelType !==
+                                          'direct_message'
                                       }
-                                      isLastInGroup={(() => {
-                                        const next = rows()[i() + 1];
-                                        return !next || next.getIsGrouped();
-                                      })()}
-                                      checked={row.isSelected()}
-                                      onChecked={(
-                                        next: boolean,
-                                        shiftKey: boolean
-                                      ) =>
-                                        handleMultiSelectChecked({
-                                          entity: row.original,
-                                          entityIndex: i(),
-                                          next,
-                                          shiftKey: shiftKey ?? false,
-                                        })
+                                      channelId={row.original.id}
+                                      channelName={
+                                        'name' in row.original
+                                          ? String(
+                                              row.original.name ?? 'channel'
+                                            )
+                                          : 'channel'
                                       }
-                                      onClick={(event: MouseEvent) => {
-                                        onEntityClick({
-                                          type: 'entity',
-                                          entity: row.original,
-                                          event,
-                                          location: undefined,
-                                          rowIndex: row.index,
-                                        });
-                                      }}
-                                      onProjectClick={(
-                                        projectEntity,
-                                        event
-                                      ) => {
-                                        onEntityClick({
-                                          type: 'project',
+                                    >
+                                      <Dynamic
+                                        component={listEntityComponent()}
+                                        entity={row.original}
+                                        timestamp={timestamp()}
+                                        highlighted={row.isFocused()}
+                                        onMouseMove={() => {
+                                          if (isKeypressActive()) return;
+                                          if (panel.handle.isControllerSplit())
+                                            return;
+                                          soup.focus.setIndex(row.index);
+                                        }}
+                                        showUnrollNotifications={
+                                          row.original.type !== 'email' &&
+                                          soup.predicates.isActive('inbox') &&
+                                          !soup.predicates.isActive('noise')
+                                        }
+                                        isLastInGroup={(() => {
+                                          const next = rows()[i() + 1];
+                                          return !next || next.getIsGrouped();
+                                        })()}
+                                        checked={row.isSelected()}
+                                        onChecked={(
+                                          next: boolean,
+                                          shiftKey: boolean
+                                        ) =>
+                                          handleMultiSelectChecked({
+                                            entity: row.original,
+                                            entityIndex: i(),
+                                            next,
+                                            shiftKey: shiftKey ?? false,
+                                          })
+                                        }
+                                        onClick={(event: MouseEvent) => {
+                                          onEntityClick({
+                                            type: 'entity',
+                                            entity: row.original,
+                                            event,
+                                            location: undefined,
+                                            rowIndex: row.index,
+                                          });
+                                        }}
+                                        onProjectClick={(
                                           projectEntity,
-                                          entity: row.original,
-                                          event,
-                                          location: undefined,
-                                          rowIndex: row.index,
-                                        });
-                                      }}
-                                      onContentHitClick={(
-                                        e: PointerEvent | MouseEvent,
-                                        location?: SearchLocation
-                                      ) => {
-                                        onEntityClick({
-                                          type: 'entity',
-                                          entity: row.original,
-                                          event: e,
-                                          location,
-                                          rowIndex: row.index,
-                                        });
-                                      }}
-                                      entityRowConfig={{
-                                        swipeLeftColor: 'bg-success',
-                                        swipeLeftRevealedComponent: (
-                                          <CheckIcon class="size-8 text-panel" />
-                                        ),
-                                      }}
-                                    />
+                                          event
+                                        ) => {
+                                          onEntityClick({
+                                            type: 'project',
+                                            projectEntity,
+                                            entity: row.original,
+                                            event,
+                                            location: undefined,
+                                            rowIndex: row.index,
+                                          });
+                                        }}
+                                        onContentHitClick={(
+                                          e: PointerEvent | MouseEvent,
+                                          location?: SearchLocation
+                                        ) => {
+                                          onEntityClick({
+                                            type: 'entity',
+                                            entity: row.original,
+                                            event: e,
+                                            location,
+                                            rowIndex: row.index,
+                                          });
+                                        }}
+                                        entityRowConfig={{
+                                          swipeLeftColor: 'bg-success',
+                                          swipeLeftRevealedComponent: (
+                                            <CheckIcon class="size-8 text-panel" />
+                                          ),
+                                        }}
+                                      />
+                                    </MaybeChannelCategoryRowDnd>
                                   </SoupEntityContextMenu>
                                 </Match>
                               </Switch>
+                              <Show
+                                when={
+                                  categoryMode() &&
+                                  !displayedRows()
+                                    .slice(i() + 1)
+                                    .some(
+                                      (next) =>
+                                        next.original.type === 'channel' &&
+                                        next.original.channelType !==
+                                          'direct_message'
+                                    )
+                                }
+                              >
+                                <ChannelCategoryTrailingSections
+                                  lastChannelId={row.original.id}
+                                />
+                              </Show>
                               <Show
                                 when={
                                   i() === rows().length - 1 &&

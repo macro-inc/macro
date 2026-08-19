@@ -1776,6 +1776,38 @@ export type Channel = {
 };
 
 /**
+ * A personal channel category.
+ */
+export type ChannelCategory = {
+    /**
+     * Client-stable category id.
+     */
+    id: string;
+    /**
+     * Display name.
+     */
+    name: string;
+};
+
+/**
+ * Complete bounded personal channel layout.
+ */
+export type ChannelCategoryLayout = {
+    /**
+     * Categories in display order.
+     */
+    categories: Array<ChannelCategory>;
+    /**
+     * Explicit channel placements in display order within each category.
+     */
+    placements: Array<ChannelPlacement>;
+    /**
+     * Monotonic optimistic-concurrency revision. New layouts start at zero.
+     */
+    revision: number;
+};
+
+/**
  * Metadata for [`ChannelTopicEvent::Created`].
  */
 export type ChannelCreatedMetadata = {
@@ -2232,6 +2264,20 @@ export type ChannelParticipantRemovedMetadata = {
      * Users removed by this mutation.
      */
     removed_user_ids: Array<MacroUserIdStr>;
+};
+
+/**
+ * A channel's explicit place in the personal layout.
+ */
+export type ChannelPlacement = {
+    /**
+     * Category id, or `None` for Uncategorized.
+     */
+    category_id?: string | null;
+    /**
+     * Joined, non-DM channel id.
+     */
+    channel_id: string;
 };
 
 /**
@@ -9951,6 +9997,39 @@ export type PostChannelBotWebhookResponses = {
 };
 
 export type PostChannelBotWebhookResponse = PostChannelBotWebhookResponses[keyof PostChannelBotWebhookResponses];
+
+export type GetChannelCategoryLayoutData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/comms/channel-categories';
+};
+
+export type GetChannelCategoryLayoutResponses = {
+    200: ChannelCategoryLayout;
+};
+
+export type GetChannelCategoryLayoutResponse = GetChannelCategoryLayoutResponses[keyof GetChannelCategoryLayoutResponses];
+
+export type ReplaceChannelCategoryLayoutData = {
+    body: ChannelCategoryLayout;
+    path?: never;
+    query?: never;
+    url: '/comms/channel-categories';
+};
+
+export type ReplaceChannelCategoryLayoutErrors = {
+    400: string;
+    409: string;
+};
+
+export type ReplaceChannelCategoryLayoutError = ReplaceChannelCategoryLayoutErrors[keyof ReplaceChannelCategoryLayoutErrors];
+
+export type ReplaceChannelCategoryLayoutResponses = {
+    200: ChannelCategoryLayout;
+};
+
+export type ReplaceChannelCategoryLayoutResponse = ReplaceChannelCategoryLayoutResponses[keyof ReplaceChannelCategoryLayoutResponses];
 
 export type GetChannelsData = {
     body?: never;

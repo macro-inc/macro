@@ -4092,6 +4092,72 @@
         }
       }
     },
+    "/comms/channel-categories": {
+      "get": {
+        "tags": ["channels"],
+        "summary": "Get the authenticated user's personal channel-category layout.",
+        "operationId": "get_channel_category_layout",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChannelCategoryLayout"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": ["channels"],
+        "summary": "Replace the authenticated user's personal channel-category layout.",
+        "operationId": "replace_channel_category_layout",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChannelCategoryLayout"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChannelCategoryLayout"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/comms/channels": {
       "get": {
         "tags": ["channels"],
@@ -13611,6 +13677,48 @@
           }
         }
       },
+      "ChannelCategory": {
+        "type": "object",
+        "description": "A personal channel category.",
+        "required": ["id", "name"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Client-stable category id."
+          },
+          "name": {
+            "type": "string",
+            "description": "Display name."
+          }
+        }
+      },
+      "ChannelCategoryLayout": {
+        "type": "object",
+        "description": "Complete bounded personal channel layout.",
+        "required": ["revision", "categories", "placements"],
+        "properties": {
+          "categories": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ChannelCategory"
+            },
+            "description": "Categories in display order."
+          },
+          "placements": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ChannelPlacement"
+            },
+            "description": "Explicit channel placements in display order within each category."
+          },
+          "revision": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Monotonic optimistic-concurrency revision. New layouts start at zero."
+          }
+        }
+      },
       "ChannelCreatedMetadata": {
         "type": "object",
         "description": "Metadata for [`ChannelTopicEvent::Created`].",
@@ -14195,6 +14303,23 @@
               "$ref": "#/components/schemas/MacroUserIdStr"
             },
             "description": "Users removed by this mutation."
+          }
+        }
+      },
+      "ChannelPlacement": {
+        "type": "object",
+        "description": "A channel's explicit place in the personal layout.",
+        "required": ["channel_id"],
+        "properties": {
+          "category_id": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Category id, or `None` for Uncategorized."
+          },
+          "channel_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Joined, non-DM channel id."
           }
         }
       },

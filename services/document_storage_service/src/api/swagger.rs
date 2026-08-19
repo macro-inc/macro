@@ -215,6 +215,8 @@ use utoipa::OpenApi;
 
         // channel list (comms hex)
         channels::inbound::list_router::get_channels_handler,
+        channels::inbound::category_router::get_layout,
+        channels::inbound::category_router::put_layout,
 
         // channels
         channels::inbound::axum_router::create_channel_handler,
@@ -481,6 +483,9 @@ use utoipa::OpenApi;
             channels::inbound::list_router::ApiChannelListParticipant,
             channels::inbound::list_router::ApiChannelListType,
             channels::inbound::list_router::ApiParticipantListRole,
+            channels::domain::category::ChannelCategoryLayout,
+            channels::domain::category::ChannelCategory,
+            channels::domain::category::ChannelPlacement,
 
             // Channels
             ApiChannelMessagesPage,

@@ -77,6 +77,7 @@ import {
   prefetchUserInfo,
   useUserInfoQuery,
 } from '@queries/auth/user-info';
+import { useChannelCategoryAuthentication } from '@queries/channel/categories';
 import { useChatRenameWebsocketSync } from '@queries/chat';
 import { QuerySyncProvider } from '@queries/sync/SyncProvider';
 import { MutationUndoProvider } from '@queries/undo';
@@ -417,6 +418,8 @@ function UserInfoSideEffects() {
 
   // Set user info for observability and analytics
   const userInfo = useUserInfo();
+
+  useChannelCategoryAuthentication();
 
   useSoupBackfills(() => userInfo()?.id);
 

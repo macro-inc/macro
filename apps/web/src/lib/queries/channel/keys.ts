@@ -30,6 +30,7 @@ export const channelKeys = createQueryKeys('channel', {
   }),
   activity: null,
   listChannels: null,
+  categoryLayout: (userId: string) => ({ queryKey: [userId] }),
 });
 
 export const ChannelNonceKeys = {

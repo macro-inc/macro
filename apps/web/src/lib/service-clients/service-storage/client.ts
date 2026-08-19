@@ -176,6 +176,22 @@ function normalizeLocationResponseV3(response: LocationResponseV3) {
 }
 
 // the server is set to expire at 15 minutes, so expire just before that
+export interface ChannelCategory {
+  id: string;
+  name: string;
+}
+
+export interface ChannelPlacement {
+  channel_id: string;
+  category_id: string | null;
+}
+
+export interface ChannelCategoryLayout {
+  revision: number;
+  categories: ChannelCategory[];
+  placements: ChannelPlacement[];
+}
+
 const MINUTES_BEFORE_PRESIGNED_EXPIRES = 14;
 
 const dssHost = SERVER_HOSTS['document-storage-service'];
@@ -579,6 +595,19 @@ export const storageServiceClient = {
         }
       )
     ).map((result) => result);
+  },
+
+  async getChannelCategoryLayout() {
+    return await dssFetch<ChannelCategoryLayout>('/comms/channel-categories', {
+      method: 'GET',
+    });
+  },
+
+  async replaceChannelCategoryLayout(layout: ChannelCategoryLayout) {
+    return await dssFetch<ChannelCategoryLayout>('/comms/channel-categories', {
+      method: 'PUT',
+      body: JSON.stringify(layout),
+    });
   },
 
   async getBots() {

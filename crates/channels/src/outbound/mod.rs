@@ -6,6 +6,9 @@ pub mod connection_gateway_realtime;
 pub mod contacts_dispatcher;
 /// Notification adapter for channel notification side effects.
 pub mod notification_sender;
+/// PostgreSQL personal channel-category layout adapter.
+#[cfg(feature = "outbound")]
+pub mod pg_channel_category_repo;
 /// Postgres adapter for channel reference share-permission side effects.
 pub mod pg_channel_reference_share_permissions;
 /// Postgres repository for channels.

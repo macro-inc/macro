@@ -3213,6 +3213,117 @@ export const postChannelBotWebhookResponse = zod
   .describe('Response returned after posting a channel webhook message.');
 
 /**
+ * @summary Get the authenticated user's personal channel-category layout.
+ */
+export const getChannelCategoryLayoutResponse = zod
+  .object({
+    categories: zod
+      .array(
+        zod
+          .object({
+            id: zod.uuid().describe('Client-stable category id.'),
+            name: zod.string().describe('Display name.'),
+          })
+          .describe('A personal channel category.')
+      )
+      .describe('Categories in display order.'),
+    placements: zod
+      .array(
+        zod
+          .object({
+            category_id: zod
+              .uuid()
+              .nullish()
+              .describe('Category id, or `None` for Uncategorized.'),
+            channel_id: zod.uuid().describe('Joined, non-DM channel id.'),
+          })
+          .describe("A channel's explicit place in the personal layout.")
+      )
+      .describe(
+        'Explicit channel placements in display order within each category.'
+      ),
+    revision: zod
+      .number()
+      .describe(
+        'Monotonic optimistic-concurrency revision. New layouts start at zero.'
+      ),
+  })
+  .describe('Complete bounded personal channel layout.');
+
+/**
+ * @summary Replace the authenticated user's personal channel-category layout.
+ */
+export const replaceChannelCategoryLayoutBody = zod
+  .object({
+    categories: zod
+      .array(
+        zod
+          .object({
+            id: zod.uuid().describe('Client-stable category id.'),
+            name: zod.string().describe('Display name.'),
+          })
+          .describe('A personal channel category.')
+      )
+      .describe('Categories in display order.'),
+    placements: zod
+      .array(
+        zod
+          .object({
+            category_id: zod
+              .uuid()
+              .nullish()
+              .describe('Category id, or `None` for Uncategorized.'),
+            channel_id: zod.uuid().describe('Joined, non-DM channel id.'),
+          })
+          .describe("A channel's explicit place in the personal layout.")
+      )
+      .describe(
+        'Explicit channel placements in display order within each category.'
+      ),
+    revision: zod
+      .number()
+      .describe(
+        'Monotonic optimistic-concurrency revision. New layouts start at zero.'
+      ),
+  })
+  .describe('Complete bounded personal channel layout.');
+
+export const replaceChannelCategoryLayoutResponse = zod
+  .object({
+    categories: zod
+      .array(
+        zod
+          .object({
+            id: zod.uuid().describe('Client-stable category id.'),
+            name: zod.string().describe('Display name.'),
+          })
+          .describe('A personal channel category.')
+      )
+      .describe('Categories in display order.'),
+    placements: zod
+      .array(
+        zod
+          .object({
+            category_id: zod
+              .uuid()
+              .nullish()
+              .describe('Category id, or `None` for Uncategorized.'),
+            channel_id: zod.uuid().describe('Joined, non-DM channel id.'),
+          })
+          .describe("A channel's explicit place in the personal layout.")
+      )
+      .describe(
+        'Explicit channel placements in display order within each category.'
+      ),
+    revision: zod
+      .number()
+      .describe(
+        'Monotonic optimistic-concurrency revision. New layouts start at zero.'
+      ),
+  })
+  .describe('Complete bounded personal channel layout.');
+
+/**
  * @summary Handle channel list requests for `GET /comms/channels`.
  */
 export const getChannelsQueryLimitMin = 0;

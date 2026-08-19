@@ -4,6 +4,9 @@ pub mod attachment;
 /// Axum handler and router for channel messages.
 #[cfg(feature = "inbound")]
 pub mod axum_router;
+/// Personal channel-category HTTP adapter.
+#[cfg(feature = "inbound")]
+pub mod category_router;
 /// Axum handler and router for legacy channel list routes.
 #[cfg(all(feature = "inbound", feature = "list"))]
 pub mod list_router;
