@@ -22,7 +22,6 @@ import {
 import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
 import { useBlockAliasedName, useBlockId, useBlockName } from '@core/block';
 import { BlockLiveIndicators } from '@core/component/LiveIndicators';
-import { toast } from '@core/component/Toast/Toast';
 import {
   getShareDrawerRecipientInput,
   ShareTrigger,
@@ -34,7 +33,6 @@ import { isMobile } from '@core/mobile/isMobile';
 import { blockHotkeyScopeSignal } from '@core/signal/blockElement';
 import { copyBranchNameToClipboard } from '@core/util/branchName';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
-import { buildSimpleEntityUrl } from '@core/util/url';
 import Download from '@phosphor/download.svg';
 import GitBranch from '@phosphor/git-branch.svg';
 import IconLink from '@phosphor/link.svg';
@@ -64,15 +62,6 @@ export function TopBar(props: { name?: Accessor<string | undefined> } = {}) {
   const isTask = blockAliasedName === 'task';
   const isSkill = blockAliasedName === 'skill';
   const dispatchAgentActions = useDispatchAgentSplitFileActions();
-
-  const copyLink = () => {
-    const url = buildSimpleEntityUrl({ id: blockId, type: blockAliasedName });
-    navigator.clipboard.writeText(url);
-    toast.success('Link copied to clipboard.', {
-      subtext:
-        'Sending this link in a Macro message will automatically update permissions to include recipients.',
-    });
-  };
 
   const copyBranchName = () => copyBranchNameToClipboard(blockId);
 
@@ -104,6 +93,7 @@ export function TopBar(props: { name?: Accessor<string | undefined> } = {}) {
     ...(isTask
       ? ([
           {
+            group: 'sharing' as const,
             label: 'Copy Branch Name',
             icon: GitBranch,
             action: copyBranchName,
@@ -111,6 +101,7 @@ export function TopBar(props: { name?: Accessor<string | undefined> } = {}) {
         ] satisfies FileOperation[])
       : []),
     {
+      group: 'file',
       label: 'Download',
       icon: Download,
       action: downloadAsMarkdownText,
@@ -178,17 +169,12 @@ export function TopBar(props: { name?: Accessor<string | undefined> } = {}) {
       ),
     },
     {
+      group: 'sharing',
       label: 'Share',
       icon: IconLink,
       action: () => shareCtx.open(),
       buttonComponent: () => <ShareTrigger />,
       focusTarget: getShareDrawerRecipientInput,
-    },
-    {
-      label: 'Copy Link',
-      icon: IconLink,
-      action: copyLink,
-      condition: isMobile,
     },
   ];
 

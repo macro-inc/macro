@@ -264,6 +264,7 @@ function SplitLabelContextMenu(props: ParentProps) {
           <MenuItem
             icon={action.icon as Component<JSX.SvgSVGAttributes<SVGSVGElement>>}
             text={action.label}
+            hotkeyToken={action.hotkeyToken}
             onClick={() => action.action?.()}
           />
         }
@@ -273,7 +274,7 @@ function SplitLabelContextMenu(props: ParentProps) {
             icon={action.icon as Component<JSX.SvgSVGAttributes<SVGSVGElement>>}
             text={action.label}
           />
-          <ContextMenuContent submenu width="w-fit">
+          <ContextMenuContent submenu class="w-64">
             <For each={children()}>{item}</For>
           </ContextMenuContent>
         </ContextMenu.Sub>
@@ -305,7 +306,7 @@ function SplitLabelContextMenu(props: ParentProps) {
           {props.children}
         </ContextMenu.Trigger>
         <ContextMenu.Portal>
-          <ContextMenuContent width="w-fit">
+          <ContextMenuContent class="w-64">
             <For each={sections()}>
               {(section, index) => (
                 <>

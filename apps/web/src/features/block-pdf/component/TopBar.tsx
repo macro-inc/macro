@@ -162,6 +162,7 @@ export function TopBar() {
       action: () => printFile(),
     },
     {
+      group: 'file',
       label: 'Download',
       icon: DownloadIcon,
       action: download,
@@ -169,6 +170,7 @@ export function TopBar() {
     ...(fileType === 'docx'
       ? [
           {
+            group: 'file',
             label: 'Download DOCX',
             icon: DownloadIcon,
             action: downloadDocx,
@@ -214,6 +216,7 @@ export function TopBar() {
       ),
     },
     {
+      group: 'sharing',
       label: 'Share',
       icon: IconShared,
       action: () => shareCtx.open(),
