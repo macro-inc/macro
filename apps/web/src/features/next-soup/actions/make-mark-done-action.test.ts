@@ -309,6 +309,12 @@ describe('makeMarkDoneAction', () => {
     };
 
     await mutationOptions.mutationFn(variables);
+    expect(mocks.executeMarkEntitiesDone).toHaveBeenCalledWith({
+      emailIds: ['current'],
+      notificationIds: [],
+      notificationEntities: [{ type: 'email', id: 'current' }],
+      reminderIds: [],
+    });
     expect(variables.exactNotificationIds.current).toEqual([
       'authoritative-notification',
     ]);

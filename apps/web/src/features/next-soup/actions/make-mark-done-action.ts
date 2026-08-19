@@ -23,7 +23,6 @@ import ArrowCounterClockwise from '@phosphor-icons/core/regular/arrow-counter-cl
 import {
   type NotificationEntityRef,
   toNotificationEntityRef,
-  updateNotificationsForEntities,
 } from '@queries/notification/entity-mutations';
 import { type UndoHandle, useUndoableMutation } from '@queries/undo';
 import type { SoupState } from '../create-soup-state';
@@ -132,16 +131,7 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
       const authoritativeNotificationIds = await executeMarkEntitiesDone({
         emailIds: variables.emailIds,
         notificationIds: variables.exactNotificationIds.current,
-        markEntityNotificationsDone:
-          variables.notificationEntities.length > 0
-            ? async () =>
-                (
-                  await updateNotificationsForEntities({
-                    entities: variables.notificationEntities,
-                    operation: 'MARK_DONE',
-                  })
-                ).map((notification) => notification.id)
-            : undefined,
+        notificationEntities: variables.notificationEntities,
         reminderIds: variables.reminderIds,
       });
       variables.exactNotificationIds.current = [

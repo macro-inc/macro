@@ -66,6 +66,10 @@ import {
 } from '@notifications';
 import { queryClient } from '@queries/client';
 import { emailKeys } from '@queries/email/keys';
+import {
+  type NotificationEntityRef,
+  updateNotificationsForEntities,
+} from '@queries/notification/entity-mutations';
 import { notificationKeys } from '@queries/notification/keys';
 import {
   bulkMarkNotificationsAsDone,
@@ -1418,12 +1422,6 @@ export function applyEntitiesNotDoneOptimistic(args: {
 }
 
 /**
- * Fires archive, ID-scoped notification, optional entity-scoped notification,
- * and reminder completion writes. Returns the authoritative notification IDs
- * produced by the entity write. Throws on any failure; the caller owns rollback
- * through the context returned by `applyEntitiesDoneOptimistic`.
- */
-/**
  * Flip the reminders' own `completed` column. One PATCH each — the reminders
  * API has no bulk endpoint, and a mark-done selection is normally one row.
  */
@@ -1434,16 +1432,22 @@ function setRemindersCompleted(
   return reminderIds.map((id) => setReminderCompleted(id, completed));
 }
 
+/**
+ * Fires archive, selective ID-scoped notification, entity-scoped notification,
+ * and reminder completion writes. Returns the authoritative notification IDs
+ * produced by the entity write. Throws on any failure; the caller owns rollback
+ * through the context returned by `applyEntitiesDoneOptimistic`.
+ */
 export async function executeMarkEntitiesDone(args: {
   emailIds: string[];
   notificationIds: string[];
-  markEntityNotificationsDone?: () => Promise<string[]>;
+  notificationEntities?: NotificationEntityRef[];
   reminderIds?: string[];
 }): Promise<string[]> {
   const {
     emailIds,
     notificationIds,
-    markEntityNotificationsDone,
+    notificationEntities = [],
     reminderIds = [],
   } = args;
   await Promise.all([
@@ -1461,9 +1465,14 @@ export async function executeMarkEntitiesDone(args: {
     notificationIds.length > 0
       ? bulkMarkNotificationsAsDone(notificationIds)
       : Promise.resolve(),
-    markEntityNotificationsDone
-      ? markEntityNotificationsDone().then((notificationIds) => {
-          authoritativeNotificationIds = notificationIds;
+    notificationEntities.length > 0
+      ? updateNotificationsForEntities({
+          entities: notificationEntities,
+          operation: 'MARK_DONE',
+        }).then((notifications) => {
+          authoritativeNotificationIds = notifications.map(
+            (notification) => notification.id
+          );
         })
       : Promise.resolve(),
     ...setRemindersCompleted(reminderIds, true),
