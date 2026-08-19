@@ -15,7 +15,12 @@ const databaseSecurityGroupIds = config
   .map((securityGroupId) => securityGroupId.trim())
   .filter(Boolean);
 
-const datadogDbmAgentSecurityGroup = config.getBoolean('datadog_dbm_enabled')
+const datadogDbmEnabled = config.getBoolean('datadog_dbm_enabled') ?? false;
+const datadogDbmIpv4Cidrs = datadogDbmEnabled
+  ? config.requireObject<string[]>('datadog_dbm_ipv4_cidrs')
+  : [];
+
+const datadogDbmAgentSecurityGroup = datadogDbmEnabled
   ? new aws.ec2.SecurityGroup('datadog-dbm-agent-security-group', {
       name: `datadog-dbm-agent-${stack}`,
       description: `Datadog DBM agent security group for macro-db-${stack}`,
@@ -28,15 +33,35 @@ const datadogDbmAgentSecurityGroup = config.getBoolean('datadog_dbm_enabled')
   : undefined;
 
 if (datadogDbmAgentSecurityGroup) {
-  new aws.vpc.SecurityGroupEgressRule('datadog-dbm-agent-all-out', {
-    securityGroupId: datadogDbmAgentSecurityGroup.id,
-    description: 'Allow the Datadog DBM agent to reach Datadog and Postgres',
-    cidrIpv4: '0.0.0.0/0',
-    ipProtocol: '-1',
-    tags,
+  datadogDbmIpv4Cidrs.forEach((cidrIpv4, index) => {
+    new aws.vpc.SecurityGroupEgressRule(
+      `datadog-dbm-agent-https-out-${index}`,
+      {
+        securityGroupId: datadogDbmAgentSecurityGroup.id,
+        description: 'Allow HTTPS to Datadog US5 DBM intake endpoints',
+        cidrIpv4,
+        fromPort: 443,
+        toPort: 443,
+        ipProtocol: 'tcp',
+        tags,
+      }
+    );
   });
 
   databaseSecurityGroupIds.forEach((databaseSecurityGroupId, index) => {
+    new aws.vpc.SecurityGroupEgressRule(
+      `datadog-dbm-agent-postgres-out-${index}`,
+      {
+        securityGroupId: datadogDbmAgentSecurityGroup.id,
+        description: 'Allow the Datadog DBM agent to connect to Postgres',
+        referencedSecurityGroupId: databaseSecurityGroupId,
+        fromPort: RDS_PORT,
+        toPort: RDS_PORT,
+        ipProtocol: 'tcp',
+        tags,
+      }
+    );
+
     new aws.vpc.SecurityGroupIngressRule(
       `database-datadog-dbm-agent-in-${index}`,
       {
