@@ -4,9 +4,9 @@
 //! The flow is deliberately the plain webhook API driven as the bot acting
 //! for its owner: who am I (`/bots/me`), do I have a feed (list), is it
 //! mine and current (endpoint match), verify it if unverified, create it if
-//! missing. The one server-side affordance this leans on is `bot_feed` on
-//! create, which stamps the feed's `owner_bot_id` from the caller's
-//! credentials - the column trigger routing keys on.
+//! missing. It leans on no server-side affordance beyond that API: the feed
+//! is an ordinary webhook, scoped to this bot by an `ids` filter and found
+//! again by the namespace this daemon mints for it.
 //!
 //! Secrets are only ever returned at creation, so the daemon persists its
 //! feed's id and secret in a state file next to the config. Losing the file
@@ -15,6 +15,7 @@
 use std::path::{Path, PathBuf};
 
 use agent_trigger::domain::broker_events::AgentTriggerEventName;
+use bot_id::BotId;
 use bots::domain::models::Bot;
 use rootcause::prelude::ResultExt as _;
 use serde::{Deserialize, Serialize};
@@ -32,6 +33,15 @@ mod test;
 const BOT_TOKEN_HEADER: &str = "x-macro-bot-token";
 const BOT_SCOPE_HEADER: &str = "x-macro-bot-scope";
 const BOT_ACTING_USER_HEADER: &str = "x-macro-bot-for-macro-user-id";
+
+/// The namespace a daemon's feed carries: derived from its bot, so the feed
+/// can be found again without the server marking it as that bot's.
+///
+/// Takes the `BotId` rather than its rendering, so no other identifier can be
+/// mistaken for the bot this feed belongs to.
+fn feed_namespace(bot: BotId) -> String {
+    format!("agent-feed-{bot}")
+}
 
 /// Every event a trigger feed carries, straight from the topic's own
 /// vocabulary: a mention that should open a session, and a follow-up message
@@ -178,7 +188,7 @@ impl<S: FeedStateStore> FeedReconciler<S> {
                 self.http.get(format!("{}/bots/me", self.base)),
             )
             .await?;
-        let bot_id = me.id.to_string();
+        let bot = me.id;
 
         let list: ListWebhooksResponse = self
             .read(
@@ -189,7 +199,7 @@ impl<S: FeedStateStore> FeedReconciler<S> {
         let mine: Vec<&Webhook> = list
             .webhooks
             .iter()
-            .filter(|row| row.owner_bot_id.as_deref() == Some(bot_id.as_str()))
+            .filter(|row| row.namespace == feed_namespace(bot))
             .collect();
 
         // The remembered feed, when it still exists and points here.
@@ -226,18 +236,18 @@ impl<S: FeedStateStore> FeedReconciler<S> {
                 "create the trigger feed",
                 self.http
                     .post(format!("{}/webhook/webhooks", self.base))
-                    // `bot_feed` is what makes this the bot's own feed; the
-                    // owning bot comes from the credentials, never the body.
                     .json(&CreateWebhookRequest {
                         scope: WebhookScope::User,
-                        bot_feed: true,
-                        namespace: format!("agent-feed-{bot_id}"),
+                        namespace: feed_namespace(bot),
                         name: "Agent trigger feed".to_owned(),
                         endpoint_url: self.public_url.clone(),
                         headers: None,
+                        // Scoped to this bot: trigger events name the bot they
+                        // are for, so without this the feed would receive
+                        // every bot's triggers in channels its owner can see.
                         filters: vec![WebhookFilter {
                             events: trigger_events(),
-                            ids: None,
+                            ids: Some(vec![bot.to_string()]),
                         }],
                     }),
             )
@@ -247,7 +257,7 @@ impl<S: FeedStateStore> FeedReconciler<S> {
             webhook_id: created.id.clone(),
             signing_secret: created.signing_secret.clone(),
         })?;
-        tracing::info!(webhook_id = %created.id, bot = %bot_id, "trigger feed registered");
+        tracing::info!(webhook_id = %created.id, %bot, "trigger feed registered");
 
         Ok(FeedRegistration {
             webhook_id: created.id,

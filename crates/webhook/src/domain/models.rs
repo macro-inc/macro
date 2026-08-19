@@ -364,12 +364,6 @@ impl WebhookEndpointSchemePolicy {
 pub struct CreateWebhookRequest {
     /// Scope that owns the webhook.
     pub scope: WebhookScope,
-    /// Make this webhook the calling bot's trigger feed: it will receive
-    /// that bot's `agent_trigger.*` events and nothing else, and is excluded
-    /// from workspace event fan-out. Only a bot principal may set it; the
-    /// owning bot is taken from the caller's credentials, never the body.
-    #[serde(default)]
-    pub bot_feed: bool,
     /// Caller-chosen namespace, unique among the owning workspace's webhooks.
     /// Set at creation time only; it cannot be changed afterwards.
     pub namespace: String,
@@ -421,11 +415,6 @@ pub struct Webhook {
     pub id: WebhookId,
     /// Owning workspace id.
     pub workspace_id: String,
-    /// The agent bot this webhook belongs to, when it is a bot's trigger
-    /// feed. Bot-owned webhooks receive only their own bot's agent-trigger
-    /// events, and workspace matching never selects them.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub owner_bot_id: Option<String>,
     /// Caller-chosen namespace, unique among the owning workspace's webhooks.
     /// Set at creation time only; it cannot be changed afterwards.
     pub namespace: String,
@@ -481,9 +470,6 @@ pub struct CreateWebhookResponse {
     pub status: WebhookStatus,
     /// Whether the current endpoint configuration has passed validation.
     pub is_valid: bool,
-    /// The agent bot this webhook is the trigger feed of, when it is one.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub owner_bot_id: Option<String>,
     /// User that created the webhook.
     pub created_by_user_id: String,
     /// Creation timestamp.
@@ -508,7 +494,6 @@ impl From<Webhook> for CreateWebhookResponse {
             headers: webhook.headers,
             status: webhook.status,
             is_valid: webhook.is_valid,
-            owner_bot_id: webhook.owner_bot_id,
             created_by_user_id: webhook.created_by_user_id,
             created_at: webhook.created_at,
             updated_at: webhook.updated_at,

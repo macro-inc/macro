@@ -32,7 +32,6 @@ impl PgRepository {
 struct WebhookRow {
     id: String,
     workspace_id: String,
-    owner_bot_id: Option<String>,
     namespace: String,
     name: String,
     endpoint_url: String,
@@ -73,7 +72,6 @@ fn row_to_webhook(row: WebhookRow) -> Result<Webhook, sqlx::Error> {
     Ok(Webhook {
         id: row.id,
         workspace_id: row.workspace_id,
-        owner_bot_id: row.owner_bot_id,
         namespace: row.namespace,
         name: row.name,
         endpoint_url: row.endpoint_url,
@@ -96,7 +94,6 @@ async fn fetch_webhook(pool: &PgPool, webhook_id: &str) -> Result<Option<Webhook
         SELECT
             w.id,
             w.workspace_id,
-            w.owner_bot_id,
             w.namespace,
             w.name,
             w.endpoint_url,
@@ -167,7 +164,6 @@ impl WebhookRepo for PgRepository {
         &self,
         created_by_user_id: MacroUserIdStr<'static>,
         workspace_id: String,
-        owner_bot_id: Option<String>,
         request: CreateWebhookRequest,
         signing_secret: String,
         headers: Value,
@@ -180,15 +176,14 @@ impl WebhookRepo for PgRepository {
         let inserted = sqlx::query!(
             r#"
             INSERT INTO webhook (
-                id, workspace_id, owner_bot_id, namespace, name, endpoint_url, signing_secret,
+                id, workspace_id, namespace, name, endpoint_url, signing_secret,
                 headers, filters, status, is_valid, created_by_user_id
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, false, $11)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, false, $10)
             ON CONFLICT (workspace_id, namespace) WHERE deleted_at IS NULL DO NOTHING
             "#,
             webhook_id,
             workspace_id,
-            owner_bot_id,
             request.namespace,
             request.name,
             request.endpoint_url,
@@ -227,7 +222,6 @@ impl WebhookRepo for PgRepository {
             SELECT
                 w.id,
                 w.workspace_id,
-                w.owner_bot_id,
                 w.namespace,
                 w.name,
                 w.endpoint_url,
@@ -266,7 +260,6 @@ impl WebhookRepo for PgRepository {
             SELECT
                 w.id,
                 w.workspace_id,
-                w.owner_bot_id,
                 w.namespace,
                 w.name,
                 w.endpoint_url,
@@ -281,10 +274,6 @@ impl WebhookRepo for PgRepository {
                 w.filters
             FROM webhook w
             WHERE w.workspace_id = ANY($1)
-              -- A bot-owned webhook is its bot's trigger feed, never part of
-              -- workspace fan-out: matching it here would leak other
-              -- entities' events into an agent runtime.
-              AND w.owner_bot_id IS NULL
               AND w.deleted_at IS NULL
               AND w.status = 'active'
               AND w.is_valid
@@ -299,48 +288,6 @@ impl WebhookRepo for PgRepository {
             &workspace_ids,
             &event,
             &entity_id
-        )
-        .fetch_all(&self.pool)
-        .await?;
-
-        rows.into_iter().map(row_to_webhook).collect()
-    }
-
-    #[tracing::instrument(skip(self), err)]
-    async fn list_active_webhooks_for_bot(
-        &self,
-        bot_id: String,
-        event: String,
-    ) -> Result<Vec<Webhook>, Self::Err> {
-        let rows = sqlx::query_as!(
-            WebhookRow,
-            r#"
-            SELECT
-                w.id,
-                w.workspace_id,
-                w.owner_bot_id,
-                w.namespace,
-                w.name,
-                w.endpoint_url,
-                w.signing_secret,
-                w.headers,
-                w.status,
-                w.is_valid,
-                w.created_by_user_id,
-                w.created_at,
-                w.updated_at,
-                w.deleted_at,
-                w.filters
-            FROM webhook w
-            WHERE w.owner_bot_id = $1
-              AND w.deleted_at IS NULL
-              AND w.status = 'active'
-              AND w.is_valid
-              AND w.filters @> jsonb_build_array(jsonb_build_object('events', jsonb_build_array($2::text)))
-            ORDER BY w.id
-            "#,
-            &bot_id,
-            &event,
         )
         .fetch_all(&self.pool)
         .await?;

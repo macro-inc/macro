@@ -85,7 +85,6 @@ impl WebhookRepo for FakeRepo {
         &self,
         created_by_user_id: MacroUserIdStr<'static>,
         workspace_id: String,
-        _owner_bot_id: Option<String>,
         request: CreateWebhookRequest,
         _signing_secret: String,
         _headers: serde_json::Value,
@@ -129,14 +128,6 @@ impl WebhookRepo for FakeRepo {
             })
             .into_iter()
             .collect())
-    }
-
-    async fn list_active_webhooks_for_bot(
-        &self,
-        _bot_id: String,
-        _event: String,
-    ) -> Result<Vec<Webhook>, Self::Err> {
-        unimplemented!("not used by the webhook service")
     }
 
     async fn list_active_webhooks_matching_event(
@@ -387,7 +378,6 @@ fn valid_filters() -> WebhookFilters {
 
 fn create_request() -> CreateWebhookRequest {
     CreateWebhookRequest {
-        bot_feed: false,
         scope: WebhookScope::User,
         namespace: "files-hook".to_string(),
         name: "Files".to_string(),
@@ -419,7 +409,6 @@ fn webhook_from_create(
     Webhook {
         id: "wh_test".to_string(),
         workspace_id,
-        owner_bot_id: None,
         namespace: request.namespace,
         name: request.name,
         endpoint_url: request.endpoint_url,
@@ -467,7 +456,7 @@ async fn create_publishes_full_sanitized_snapshot() {
     ]));
 
     let webhook = service
-        .create_webhook(caller(), None, request)
+        .create_webhook(caller(), request)
         .await
         .expect("webhook should be created");
 
@@ -517,7 +506,7 @@ async fn create_request_validation_failure_publishes_nothing() {
     let mut request = create_request();
     request.name = " ".to_string();
 
-    assert_bad_request(service.create_webhook(caller(), None, request).await);
+    assert_bad_request(service.create_webhook(caller(), request).await);
     assert!(published.lock().unwrap().is_empty());
 }
 
@@ -532,7 +521,7 @@ async fn create_with_taken_namespace_fails_conflict_and_publishes_nothing() {
     );
 
     let result = service
-        .create_webhook(caller(), None, create_request())
+        .create_webhook(caller(), create_request())
         .await;
 
     assert!(matches!(
@@ -553,7 +542,7 @@ async fn create_with_blank_namespace_is_rejected() {
     let mut request = create_request();
     request.namespace = " ".to_string();
 
-    assert_bad_request(service.create_webhook(caller(), None, request).await);
+    assert_bad_request(service.create_webhook(caller(), request).await);
 }
 
 #[tokio::test]
@@ -566,7 +555,7 @@ async fn create_with_oversized_namespace_is_rejected() {
     let mut request = create_request();
     request.namespace = "n".repeat(129);
 
-    assert_bad_request(service.create_webhook(caller(), None, request).await);
+    assert_bad_request(service.create_webhook(caller(), request).await);
 }
 
 #[tokio::test]
@@ -597,7 +586,7 @@ async fn create_fails_bad_request_when_team_scope_user_has_no_team() {
     let mut request = create_request();
     request.scope = WebhookScope::Team;
 
-    let result = service.create_webhook(caller(), None, request).await;
+    let result = service.create_webhook(caller(), request).await;
 
     assert!(matches!(
         result,
@@ -618,7 +607,7 @@ async fn create_team_scope_repository_failure_publishes_nothing() {
     let mut request = create_request();
     request.scope = WebhookScope::Team;
 
-    let result = service.create_webhook(caller(), None, request).await;
+    let result = service.create_webhook(caller(), request).await;
 
     assert!(matches!(result, Err(WebhookError::Repo(_))));
     assert!(published.lock().unwrap().is_empty());
@@ -635,7 +624,7 @@ async fn create_repository_failure_publishes_nothing() {
     );
 
     let result = service
-        .create_webhook(caller(), None, create_request())
+        .create_webhook(caller(), create_request())
         .await;
 
     assert!(matches!(result, Err(WebhookError::Repo(_))));
@@ -651,7 +640,7 @@ async fn create_succeeds_when_event_scheduling_fails() {
     );
 
     let webhook = service
-        .create_webhook(caller(), None, create_request())
+        .create_webhook(caller(), create_request())
         .await
         .expect("event scheduling must not fail webhook creation");
 
@@ -1000,7 +989,7 @@ async fn invalid_http_endpoint_is_rejected() {
     let mut request = create_request();
     request.endpoint_url = "http://example.com/webhook".to_string();
 
-    assert_bad_request(service.create_webhook(caller(), None, request).await);
+    assert_bad_request(service.create_webhook(caller(), request).await);
 }
 
 #[tokio::test]
@@ -1023,7 +1012,7 @@ async fn local_addresses_are_allowed_when_policy_permits_them() {
         request.endpoint_url = endpoint_url.to_string();
 
         let webhook = service
-            .create_webhook(caller(), None, request)
+            .create_webhook(caller(), request)
             .await
             .expect("local address should be allowed");
 
@@ -1048,7 +1037,7 @@ async fn private_and_link_local_endpoints_are_rejected() {
         let mut request = create_request();
         request.endpoint_url = endpoint_url.to_string();
 
-        assert_bad_request(service.create_webhook(caller(), None, request).await);
+        assert_bad_request(service.create_webhook(caller(), request).await);
     }
 }
 
@@ -1060,7 +1049,7 @@ async fn empty_filters_list_is_rejected() {
     let mut request = create_request();
     request.filters = Vec::new();
 
-    assert_bad_request(service.create_webhook(caller(), None, request).await);
+    assert_bad_request(service.create_webhook(caller(), request).await);
 }
 
 #[tokio::test]
@@ -1074,7 +1063,7 @@ async fn filter_with_empty_events_is_rejected() {
         ids: None,
     }];
 
-    assert_bad_request(service.create_webhook(caller(), None, request).await);
+    assert_bad_request(service.create_webhook(caller(), request).await);
 }
 
 #[tokio::test]
@@ -1088,7 +1077,7 @@ async fn filter_with_empty_ids_is_rejected() {
         ids: Some(Vec::new()),
     }];
 
-    assert_bad_request(service.create_webhook(caller(), None, request).await);
+    assert_bad_request(service.create_webhook(caller(), request).await);
 }
 
 #[tokio::test]
@@ -1098,7 +1087,7 @@ async fn filter_without_ids_is_accepted() {
         WebhookServiceImpl::new(repo, FakeValidationClient::default(), NoopMacroEventBroker);
 
     let webhook = service
-        .create_webhook(caller(), None, create_request())
+        .create_webhook(caller(), create_request())
         .await
         .unwrap();
 
@@ -1118,7 +1107,7 @@ async fn filter_with_valid_ids_is_accepted() {
     let expected_filters = request.filters.clone();
 
     let webhook = service
-        .create_webhook(caller(), None, request)
+        .create_webhook(caller(), request)
         .await
         .unwrap();
 

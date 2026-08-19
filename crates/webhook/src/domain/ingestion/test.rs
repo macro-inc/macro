@@ -200,7 +200,6 @@ struct MockRepositoryState {
     fail_matching: bool,
     workspace_calls: Vec<Vec<MacroUserIdStr<'static>>>,
     match_calls: Vec<MatchCall>,
-    bot_match_calls: Vec<(String, String)>,
 }
 
 #[derive(Clone)]
@@ -218,7 +217,6 @@ impl MockRepository {
                 fail_matching: false,
                 workspace_calls: Vec::new(),
                 match_calls: Vec::new(),
-                bot_match_calls: Vec::new(),
             })),
         }
     }
@@ -247,7 +245,6 @@ impl WebhookRepo for MockRepository {
         &self,
         _created_by_user_id: MacroUserIdStr<'static>,
         _workspace_id: String,
-        _owner_bot_id: Option<String>,
         _request: CreateWebhookRequest,
         _signing_secret: String,
         _headers: Value,
@@ -278,19 +275,6 @@ impl WebhookRepo for MockRepository {
             event_name,
             entity_id,
         });
-        if state.fail_matching {
-            anyhow::bail!("webhook repository unavailable");
-        }
-        Ok(state.matching_webhooks.clone())
-    }
-
-    async fn list_active_webhooks_for_bot(
-        &self,
-        bot_id: String,
-        event: String,
-    ) -> Result<Vec<Webhook>, Self::Err> {
-        let mut state = lock(&self.state);
-        state.bot_match_calls.push((bot_id, event));
         if state.fail_matching {
             anyhow::bail!("webhook repository unavailable");
         }
@@ -379,7 +363,6 @@ fn webhook(id: &str, workspace_id: &str) -> Webhook {
     Webhook {
         id: id.to_string(),
         workspace_id: workspace_id.to_string(),
-        owner_bot_id: None,
         namespace: id.to_string(),
         name: id.to_string(),
         endpoint_url: "https://example.com/webhook".to_string(),
@@ -1346,11 +1329,11 @@ fn agent_trigger_event() -> Event<agent_trigger::domain::broker_events::AgentTri
 }
 
 #[tokio::test]
-async fn agent_trigger_events_route_by_bot_ownership_alone() {
+async fn agent_trigger_events_are_scoped_by_the_channel_but_named_by_the_bot() {
     let access = MockAccessService::with_users(vec![user_id(PERSONAL_WORKSPACE_ID)]);
     let repository = MockRepository::new(
         vec![PERSONAL_WORKSPACE_ID.to_string()],
-        vec![webhook("wh_bot_feed", PERSONAL_WORKSPACE_ID)],
+        vec![webhook("wh_agent_feed", PERSONAL_WORKSPACE_ID)],
     );
     let enqueuer = MockEnqueuer::default();
     let service = service(access.clone(), repository.clone(), enqueuer.clone());
@@ -1361,15 +1344,25 @@ async fn agent_trigger_events_route_by_bot_ownership_alone() {
         .await
         .expect("agent trigger events are ingested");
 
-    // Routed by the bot, never through entity access or workspace fan-out.
-    assert!(lock(&access.calls).is_empty());
-    let repository_state = lock(&repository.state);
-    assert!(repository_state.match_calls.is_empty());
-    assert!(repository_state.workspace_calls.is_empty());
     let bot_id = bot_id::BotId::new_from_uuid(uuid::Uuid::from_u128(0xB07)).to_string();
+    // Who may see it is decided by the channel the mention sits in - the same
+    // question a channel event asks - not by the bot.
     assert_eq!(
-        repository_state.bot_match_calls.as_slice(),
-        &[(bot_id.clone(), "agent_trigger.new".to_string())],
+        lock(&access.calls).as_slice(),
+        &[(uuid::Uuid::from_u128(1).to_string(), EntityType::Channel)],
+    );
+    let repository_state = lock(&repository.state);
+    // ...but the entity matched on is the bot, so a filter's `ids` scopes a
+    // subscriber to exactly one bot's triggers.
+    assert_eq!(repository_state.match_calls.len(), 1);
+    assert_eq!(repository_state.match_calls[0].entity_id, bot_id);
+    assert_eq!(
+        repository_state.match_calls[0].event_name,
+        "agent_trigger.new"
+    );
+    assert_eq!(
+        repository_state.match_calls[0].workspace_ids,
+        vec![PERSONAL_WORKSPACE_ID.to_string()]
     );
     drop(repository_state);
 

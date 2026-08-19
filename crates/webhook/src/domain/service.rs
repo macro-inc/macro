@@ -363,7 +363,6 @@ where
     async fn create_webhook(
         &self,
         caller: MacroUserIdStr<'static>,
-        owner_bot_id: Option<String>,
         request: CreateWebhookRequest,
     ) -> Result<Webhook, WebhookError> {
         validate_create_request(&request, self.endpoint_scheme_policy)?;
@@ -385,7 +384,6 @@ where
             .create_webhook(
                 caller,
                 workspace_id,
-                owner_bot_id,
                 request,
                 signing_secret,
                 headers,

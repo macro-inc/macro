@@ -379,8 +379,9 @@ fn normalized_event(
 /// Normalize one agent-trigger event.
 ///
 /// The entity - and the ordering key, mirroring the broker's partitioning -
-/// is the bot: a bot's runtime consumes its bot's whole trigger stream, in
-/// order, and nothing else's.
+/// is the bot: a subscriber consumes a bot's whole trigger stream, in order.
+/// Returned alongside is the channel the mention sits in, which is what says
+/// who may see the event at all.
 fn normalized_agent_trigger_event(
     event: &Event<AgentTriggerTopicEvent>,
 ) -> Result<(NormalizedWebhookEvent, String), WebhookEventIngestionError> {
@@ -388,12 +389,12 @@ fn normalized_agent_trigger_event(
         AgentTriggerEventName, ExistingAgentSessionEvent, NewAgentSessionEvent,
     };
 
-    let bot_id = match &event.event {
+    let (bot_id, channel_id) = match &event.event {
         AgentTriggerTopicEvent::New(NewAgentSessionEvent::TopLevelMentioned(mentioned)) => {
-            mentioned.bot_id
+            (mentioned.bot_id, mentioned.message.channel_id)
         }
         AgentTriggerTopicEvent::Existing(ExistingAgentSessionEvent::Channel(metadata)) => {
-            metadata.bot_id
+            (metadata.bot_id, metadata.message.channel_id)
         }
         // Both trigger enums are non-exhaustive on purpose; an unknown shape
         // has no bot to route to. Permanent, so the consumer skips it.
@@ -416,7 +417,7 @@ fn normalized_agent_trigger_event(
             &bot_id,
             broker_envelope,
         ),
-        bot_id,
+        channel_id.to_string(),
     ))
 }
 
@@ -462,14 +463,15 @@ where
         &self,
         event: Event<AgentTriggerTopicEvent>,
     ) -> Result<(), WebhookEventIngestionError> {
-        let (event, bot_id) = normalized_agent_trigger_event(&event)?;
-        // Routed by bot ownership, never by workspace access: the audience
-        // of a trigger event is exactly the runtime serving that bot.
-        let webhooks = self
+        let (event, channel_id) = normalized_agent_trigger_event(&event)?;
+        let accessors = self
+            .users_with_access(&channel_id, EntityType::Channel)
+            .await?;
+        let workspace_ids = self
             .repository
-            .list_active_webhooks_for_bot(bot_id, event.event_name.clone())
+            .resolve_workspace_ids(accessors)
             .await
-            .map_err(|error| WebhookEventIngestionError::Repository(error.into()))?;
-        self.enqueue_all(webhooks, event).await
+            .map_err(|error| WebhookEventIngestionError::WorkspaceResolution(error.into()))?;
+        self.match_and_enqueue(event, workspace_ids).await
     }
 }
