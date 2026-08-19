@@ -13,7 +13,10 @@ use crate::link_patch::{
     LinkPatchError, OptimisticLinkPatch, QueryRevalidation, apply_link_patches,
     deduplicate_patches, missing_patch_record,
 };
-use crate::normalize::{NormalizeError, RecordUpdates, normalize, project_hydration_response};
+use crate::normalize::{
+    DependencyCompleteness, NormalizeError, RecordUpdates, normalize, normalize_with_dependencies,
+    project_hydration_response,
+};
 use crate::query_inspection::{
     CachedQueryInstance, CachedQueryVariant, OwnerResolution, QueryInspection,
     QueryInspectionError, matches_variable_filters, prepare, recover_variants, resolve_owner,
@@ -77,6 +80,30 @@ pub enum ReadResult {
     Hit { data: Json },
     /// Not answerable; forward to the network.
     Miss,
+}
+
+/// Borrowed inputs for one network response write.
+#[derive(Debug, Clone, Copy)]
+pub struct NetworkWrite<'a> {
+    /// GraphQL operation document.
+    pub query: &'a str,
+    /// Selected operation name.
+    pub operation_name: Option<&'a str>,
+    /// Resolved operation variables.
+    pub variables: &'a serde_json::Map<String, Json>,
+    /// GraphQL response data.
+    pub data: &'a Json,
+    /// Optional opaque session identity witness.
+    pub identity: Option<&'a str>,
+}
+
+/// An active query whose dependencies should be installed by a network write.
+#[derive(Debug, Clone, Copy)]
+pub struct QueryRegistration<'a> {
+    /// Host-scoped active operation id.
+    pub op_id: OpId,
+    /// Read-only relations that change which normalized entities the query uses.
+    pub entity_resolvers: &'a [EntityResolver],
 }
 
 /// Result of writing a network response.
@@ -859,10 +886,51 @@ impl<S: Storage> Engine<S> {
         data: &Json,
         identity: Option<&str>,
     ) -> Result<WriteResult, EngineError<S::Error>> {
+        self.write_query_with_registration(
+            origin_op,
+            None,
+            NetworkWrite {
+                query,
+                operation_name,
+                variables,
+                data,
+                identity,
+            },
+        )
+        .await
+    }
+
+    /// Normalizes and stores a network response, installing the active query's
+    /// dependencies from the same response without denormalizing it again.
+    pub async fn write_query_with_registration(
+        &mut self,
+        origin_op: Option<OpId>,
+        registration: Option<QueryRegistration<'_>>,
+        input: NetworkWrite<'_>,
+    ) -> Result<WriteResult, EngineError<S::Error>> {
+        let NetworkWrite {
+            query,
+            operation_name,
+            variables,
+            data,
+            identity,
+        } = input;
         self.hydrate_optimistic().await?;
+        let entity_resolvers = EntityResolverLookup::compile(
+            registration.map_or(&[][..], |registration| registration.entity_resolvers),
+        )?;
         let doc = Self::document(&mut self.docs, query)?;
         let op = doc.operation(operation_name)?;
-        let updates = normalize(op, variables, data)?;
+        if registration.is_some() && op.kind != OperationKind::Query {
+            return Err(EngineError::Document(
+                DocumentError::UnsupportedOperationType(format!(
+                    "{:?} (dependency registration is query-only)",
+                    op.kind
+                )),
+            ));
+        }
+        let normalized = normalize_with_dependencies(op, variables, data, &entity_resolvers)?;
+        let updates = normalized.updates;
 
         let mut reset = false;
         if let Some(observed) = identity {
@@ -914,6 +982,16 @@ impl<S: Storage> Engine<S> {
         };
         if let Some(origin) = origin_op {
             affected_ops.remove(&origin);
+        }
+        if let Some(registration) = registration {
+            if normalized.completeness == DependencyCompleteness::Exact
+                && self.optimistic.is_empty()
+            {
+                self.deps
+                    .set_op_deps(registration.op_id, normalized.dependencies);
+            } else {
+                self.deps.set_op_broad(registration.op_id);
+            }
         }
         Ok(WriteResult {
             changed,
