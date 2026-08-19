@@ -4,8 +4,12 @@ name = "graphql_soup_filter_input"
 publish = false
 version = "0.1.0"
 
+[features]
+default = []
+server = ["dep:async-graphql"]
+
 [dependencies]
-async-graphql = { workspace = true }
+async-graphql = { workspace = true, optional = true }
 chrono = { workspace = true }
 document_sub_type = { path = "../document_sub_type", default-features = false }
 filter_ast = { path = "../filter_ast" }

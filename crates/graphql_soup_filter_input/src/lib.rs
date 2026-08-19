@@ -7,7 +7,10 @@
 
 use std::{str::FromStr, sync::Arc};
 
-use async_graphql::{Enum, ID};
+#[cfg(feature = "server")]
+use async_graphql::ID;
+#[cfg(not(feature = "server"))]
+type ID = String;
 use chrono::{DateTime, Utc};
 use document_sub_type::DocumentSubType;
 use filter_ast::Expr;
@@ -67,7 +70,7 @@ pub fn materialize_graphql_filter(value: Value) -> Result<EntityFilterAst, Mater
     validate_json_bounds(&value).map_err(MaterializeError::Bounds)?;
     serde_json::from_value::<GraphqlEntityFilterAst>(value)?
         .into_ast()
-        .map_err(|error| MaterializeError::Conversion(error.message))
+        .map_err(|error| MaterializeError::Conversion(error.to_string()))
 }
 
 /// Enforce cheap structural bounds before recursive deserialization or compilation.
@@ -111,14 +114,32 @@ fn validate_json_bounds(value: &Value) -> Result<(), String> {
     Ok(())
 }
 
+/// GraphQL-shape or materialization validation failure.
+#[derive(Debug, Error)]
+pub struct InputError(String);
+
+impl InputError {
+    fn new(message: impl Into<String>) -> Self {
+        Self(message.into())
+    }
+}
+
+impl std::fmt::Display for InputError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str(&self.0)
+    }
+}
+
+type InputResult<T> = Result<T, InputError>;
+
 /// Conversion from a GraphQL filter input tree into a domain filter expression.
 trait IntoFilterExpr<T>: Sized {
     /// Convert the input into a filter expression.
-    fn into_expr(self) -> async_graphql::Result<Expr<T>>;
+    fn into_expr(self) -> InputResult<Expr<T>>;
 }
 
 /// Convert an optional GraphQL expression into the shared tree representation.
-fn optional_tree<I, T>(input: Option<I>) -> async_graphql::Result<Option<Arc<Expr<T>>>>
+fn optional_tree<I, T>(input: Option<I>) -> InputResult<Option<Arc<Expr<T>>>>
 where
     I: IntoFilterExpr<T>,
 {
@@ -126,27 +147,25 @@ where
 }
 
 /// Parse a GraphQL id as a UUID with a field-specific error.
-fn parse_id(id: ID, field: &str) -> async_graphql::Result<Uuid> {
+fn parse_id(id: ID, field: &str) -> InputResult<Uuid> {
     let value = id.to_string();
     Uuid::parse_str(&value)
-        .map_err(|err| async_graphql::Error::new(format!("invalid {field} UUID `{value}`: {err}")))
+        .map_err(|err| InputError::new(format!("invalid {field} UUID `{value}`: {err}")))
 }
 
 /// Parse a Macro user id with a field-specific error.
-fn parse_macro_user_id(
-    value: String,
-    field: &str,
-) -> async_graphql::Result<MacroUserIdStr<'static>> {
+fn parse_macro_user_id(value: String, field: &str) -> InputResult<MacroUserIdStr<'static>> {
     MacroUserIdStr::parse_from_str(&value)
         .map(CowLike::into_owned)
-        .map_err(|err| async_graphql::Error::new(format!("invalid {field} `{value}`: {err}")))
+        .map_err(|err| InputError::new(format!("invalid {field} `{value}`: {err}")))
 }
 
 /// Define the recursive GraphQL and serde expression shape for one literal family.
 macro_rules! filter_expr_input {
     ($name:ident, $binary_name:ident, $literal:ty, $target:ty, $type_name:literal) => {
         #[doc = concat!("The two operands of a recursive `", $type_name, "` binary expression.")]
-        #[derive(async_graphql::InputObject, Serialize, Deserialize)]
+        #[cfg_attr(feature = "server", derive(async_graphql::InputObject))]
+        #[derive(Serialize, Deserialize)]
         #[serde(rename_all = "camelCase")]
         struct $binary_name {
             /// Left expression.
@@ -156,7 +175,8 @@ macro_rules! filter_expr_input {
         }
 
         #[doc = concat!("A recursive `", $type_name, "` filter expression.")]
-        #[derive(async_graphql::OneofObject, Serialize, Deserialize)]
+        #[cfg_attr(feature = "server", derive(async_graphql::OneofObject))]
+        #[derive(Serialize, Deserialize)]
         #[serde(rename_all = "camelCase")]
         enum $name {
             /// Both expressions must match.
@@ -170,7 +190,7 @@ macro_rules! filter_expr_input {
         }
 
         impl IntoFilterExpr<$target> for $name {
-            fn into_expr(self) -> async_graphql::Result<Expr<$target>> {
+            fn into_expr(self) -> InputResult<Expr<$target>> {
                 match self {
                     Self::And(exprs) => {
                         Ok(Expr::and(exprs.left.into_expr()?, exprs.right.into_expr()?))
@@ -195,7 +215,8 @@ filter_expr_input!(
 );
 
 /// GraphQL input for matching a property value on an entity.
-#[derive(async_graphql::InputObject, Serialize, Deserialize)]
+#[cfg_attr(feature = "server", derive(async_graphql::InputObject))]
+#[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct GraphqlFilterPropertiesLiteral {
     /// Property definition id to match.
@@ -207,7 +228,7 @@ struct GraphqlFilterPropertiesLiteral {
 }
 
 impl IntoFilterExpr<PropertiesLiteral> for GraphqlFilterPropertiesLiteral {
-    fn into_expr(self) -> async_graphql::Result<Expr<PropertiesLiteral>> {
+    fn into_expr(self) -> InputResult<Expr<PropertiesLiteral>> {
         Ok(Expr::val(PropertiesLiteral {
             property_definition_id: parse_id(self.property_definition_id, "propertyDefinitionId")?,
             entity_type: self
@@ -219,7 +240,8 @@ impl IntoFilterExpr<PropertiesLiteral> for GraphqlFilterPropertiesLiteral {
 }
 
 /// GraphQL input value used when matching a property.
-#[derive(async_graphql::OneofObject, Serialize, Deserialize)]
+#[cfg_attr(feature = "server", derive(async_graphql::OneofObject))]
+#[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 enum GraphqlFilterPropertyMatchValue {
     /// Select option id to match.
@@ -230,22 +252,22 @@ enum GraphqlFilterPropertyMatchValue {
 
 impl GraphqlFilterPropertyMatchValue {
     /// Convert this input into the domain representation.
-    fn into_ast(self) -> async_graphql::Result<PropertyMatchValue> {
+    fn into_ast(self) -> InputResult<PropertyMatchValue> {
         Ok(match self {
             Self::SelectOption(id) => {
                 PropertyMatchValue::SelectOption(parse_id(id, "selectOption")?)
             }
-            Self::EntityRef(value) => {
-                PropertyMatchValue::EntityRef(EntityRefId::new(value).map_err(|err| {
-                    async_graphql::Error::new(format!("invalid entityRef: {err}"))
-                })?)
-            }
+            Self::EntityRef(value) => PropertyMatchValue::EntityRef(
+                EntityRefId::new(value)
+                    .map_err(|err| InputError::new(format!("invalid entityRef: {err}")))?,
+            ),
         })
     }
 }
 
 /// An entity type supported by property filters.
-#[derive(Enum, Copy, Clone, Eq, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "server", derive(async_graphql::Enum))]
+#[derive(Copy, Clone, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 enum GraphqlFilterPropertyEntityType {
     /// Calendar event entity.
@@ -290,7 +312,8 @@ impl TryFrom<GraphqlFilterPropertyEntityType> for PropertyEntityType {
 }
 
 /// GraphQL input mirroring `item_filters::ast::EntityFilterAst`.
-#[derive(async_graphql::InputObject, Serialize, Deserialize)]
+#[cfg_attr(feature = "server", derive(async_graphql::InputObject))]
+#[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct GraphqlEntityFilterAst {
     /// The calendar event filter to apply.
@@ -321,11 +344,11 @@ pub struct GraphqlEntityFilterAst {
 
 impl GraphqlEntityFilterAst {
     /// Convert this value into the ast representation.
-    pub fn into_ast(self) -> async_graphql::Result<EntityFilterAst> {
+    pub fn into_ast(self) -> InputResult<EntityFilterAst> {
         let value = serde_json::to_value(&self).map_err(|error| {
-            async_graphql::Error::new(format!("failed to validate GraphQL filter input: {error}"))
+            InputError::new(format!("failed to validate GraphQL filter input: {error}"))
         })?;
-        validate_json_bounds(&value).map_err(async_graphql::Error::new)?;
+        validate_json_bounds(&value).map_err(InputError::new)?;
 
         Ok(EntityFilterAst {
             calendar_event_filter: optional_tree(self.calendar_event_filter)?,
@@ -364,7 +387,8 @@ filter_expr_input!(
 );
 
 /// GraphQL input representing a calendar event literal.
-#[derive(async_graphql::OneofObject, Serialize, Deserialize)]
+#[cfg_attr(feature = "server", derive(async_graphql::OneofObject))]
+#[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 enum GraphqlCalendarEventLiteral {
     /// Canonical event id.
@@ -386,14 +410,12 @@ enum GraphqlCalendarEventLiteral {
 }
 
 impl IntoFilterExpr<CalendarEventLiteral> for GraphqlCalendarEventLiteral {
-    fn into_expr(self) -> async_graphql::Result<Expr<CalendarEventLiteral>> {
+    fn into_expr(self) -> InputResult<Expr<CalendarEventLiteral>> {
         let parse_date = |value: String| {
             DateTime::parse_from_rfc3339(&value)
                 .map(|date| date.with_timezone(&Utc))
                 .map_err(|error| {
-                    async_graphql::Error::new(format!(
-                        "invalid RFC3339 calendar date `{value}`: {error}"
-                    ))
+                    InputError::new(format!("invalid RFC3339 calendar date `{value}`: {error}"))
                 })
         };
         Ok(Expr::val(match self {
@@ -472,7 +494,8 @@ filter_expr_input!(
     "ReminderFilterExpr"
 );
 /// GraphQL input representing the email filter ast.
-#[derive(async_graphql::InputObject, Serialize, Deserialize)]
+#[cfg_attr(feature = "server", derive(async_graphql::InputObject))]
+#[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct GraphqlEmailFilterAst {
     /// The tree.
@@ -483,7 +506,7 @@ struct GraphqlEmailFilterAst {
 
 impl GraphqlEmailFilterAst {
     /// Convert this value into the ast representation.
-    fn into_ast(self) -> async_graphql::Result<EmailFilterAst> {
+    fn into_ast(self) -> InputResult<EmailFilterAst> {
         Ok(EmailFilterAst {
             tree: optional_tree(self.tree)?,
             crm_scope: self.crm_scope.map(GraphqlCrmScope::into_ast).transpose()?,
@@ -492,7 +515,8 @@ impl GraphqlEmailFilterAst {
 }
 
 /// GraphQL input representing the crm scope.
-#[derive(async_graphql::OneofObject, Serialize, Deserialize)]
+#[cfg_attr(feature = "server", derive(async_graphql::OneofObject))]
+#[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 enum GraphqlCrmScope {
     /// The domains option.
@@ -503,22 +527,23 @@ enum GraphqlCrmScope {
 
 impl GraphqlCrmScope {
     /// Convert this value into the ast representation.
-    fn into_ast(self) -> async_graphql::Result<CrmScope> {
+    fn into_ast(self) -> InputResult<CrmScope> {
         match self {
-            Self::Domains(domains) if domains.is_empty() => Err(async_graphql::Error::new(
-                "CrmScope.domains cannot be empty",
-            )),
+            Self::Domains(domains) if domains.is_empty() => {
+                Err(InputError::new("CrmScope.domains cannot be empty"))
+            }
             Self::Domains(domains) => Ok(CrmScope::Domains(domains)),
-            Self::Addresses(addresses) if addresses.is_empty() => Err(async_graphql::Error::new(
-                "CrmScope.addresses cannot be empty",
-            )),
+            Self::Addresses(addresses) if addresses.is_empty() => {
+                Err(InputError::new("CrmScope.addresses cannot be empty"))
+            }
             Self::Addresses(addresses) => Ok(CrmScope::Addresses(addresses)),
         }
     }
 }
 
 /// GraphQL input representing the date literal.
-#[derive(async_graphql::OneofObject, Serialize, Deserialize)]
+#[cfg_attr(feature = "server", derive(async_graphql::OneofObject))]
+#[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 enum GraphqlDateLiteral {
     /// The gt option.
@@ -533,16 +558,14 @@ enum GraphqlDateLiteral {
 
 impl GraphqlDateLiteral {
     /// Parse an email address from a GraphQL string value.
-    fn parse(value: String) -> async_graphql::Result<DateTime<Utc>> {
+    fn parse(value: String) -> InputResult<DateTime<Utc>> {
         DateTime::parse_from_rfc3339(&value)
             .map(|dt| dt.with_timezone(&Utc))
-            .map_err(|err| {
-                async_graphql::Error::new(format!("invalid RFC3339 date `{value}`: {err}"))
-            })
+            .map_err(|err| InputError::new(format!("invalid RFC3339 date `{value}`: {err}")))
     }
 
     /// Convert this value into the ast representation.
-    fn into_ast(self) -> async_graphql::Result<DateLiteral> {
+    fn into_ast(self) -> InputResult<DateLiteral> {
         Ok(match self {
             Self::Gt(value) => DateLiteral::GreaterThan(Self::parse(value)?),
             Self::Lt(value) => DateLiteral::LessThan(Self::parse(value)?),
@@ -553,7 +576,8 @@ impl GraphqlDateLiteral {
 }
 
 /// GraphQL input representing the document literal.
-#[derive(async_graphql::OneofObject, Serialize, Deserialize)]
+#[cfg_attr(feature = "server", derive(async_graphql::OneofObject))]
+#[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 enum GraphqlDocumentLiteral {
     /// The file type option.
@@ -586,23 +610,20 @@ enum GraphqlDocumentLiteral {
 
 impl IntoFilterExpr<DocumentLiteral> for GraphqlDocumentLiteral {
     /// Convert this value into the expr representation.
-    fn into_expr(self) -> async_graphql::Result<Expr<DocumentLiteral>> {
+    fn into_expr(self) -> InputResult<Expr<DocumentLiteral>> {
         let literal = match self {
             Self::FileAssoc(value) => {
                 let (_, file_types) = item_filters::ast::document::parse_to_file_types(&value)
-                    .map_err(|err| async_graphql::Error::new(err.to_string()))?;
+                    .map_err(|err| InputError::new(err.to_string()))?;
                 return file_types
                     .map(|file_type| Expr::val(DocumentLiteral::FileType(file_type)))
                     .reduce(Expr::or)
-                    .ok_or_else(|| {
-                        async_graphql::Error::new("fileAssoc expansion cannot be empty")
-                    });
+                    .ok_or_else(|| InputError::new("fileAssoc expansion cannot be empty"));
             }
-            Self::FileType(value) => {
-                DocumentLiteral::FileType(FileType::from_str(&value).map_err(|err| {
-                    async_graphql::Error::new(format!("invalid fileType `{value}`: {err}"))
-                })?)
-            }
+            Self::FileType(value) => DocumentLiteral::FileType(
+                FileType::from_str(&value)
+                    .map_err(|err| InputError::new(format!("invalid fileType `{value}`: {err}")))?,
+            ),
             Self::Id(id) => DocumentLiteral::Id(parse_id(id, "id")?),
             Self::ProjectId(id) => DocumentLiteral::ProjectId(parse_id(id, "projectId")?),
             Self::Owner(owner) => DocumentLiteral::Owner(parse_macro_user_id(owner, "owner")?),
@@ -620,7 +641,8 @@ impl IntoFilterExpr<DocumentLiteral> for GraphqlDocumentLiteral {
 }
 
 /// GraphQL input representing the document sub type.
-#[derive(Enum, Copy, Clone, Eq, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "server", derive(async_graphql::Enum))]
+#[derive(Copy, Clone, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 enum GraphqlDocumentSubType {
     /// The task option.
@@ -643,7 +665,8 @@ impl GraphqlDocumentSubType {
 }
 
 /// GraphQL input representing the project literal.
-#[derive(async_graphql::OneofObject, Serialize, Deserialize)]
+#[cfg_attr(feature = "server", derive(async_graphql::OneofObject))]
+#[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 enum GraphqlProjectLiteral {
     /// The project id option.
@@ -666,7 +689,7 @@ enum GraphqlProjectLiteral {
 
 impl IntoFilterExpr<ProjectLiteral> for GraphqlProjectLiteral {
     /// Convert this value into the expr representation.
-    fn into_expr(self) -> async_graphql::Result<Expr<ProjectLiteral>> {
+    fn into_expr(self) -> InputResult<Expr<ProjectLiteral>> {
         let literal = match self {
             Self::ProjectId(id) => ProjectLiteral::ProjectId(parse_id(id, "projectId")?),
             Self::ProjectIdSelf(id) => {
@@ -684,7 +707,8 @@ impl IntoFilterExpr<ProjectLiteral> for GraphqlProjectLiteral {
 }
 
 /// GraphQL input representing the chat literal.
-#[derive(async_graphql::OneofObject, Serialize, Deserialize)]
+#[cfg_attr(feature = "server", derive(async_graphql::OneofObject))]
+#[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 enum GraphqlChatLiteral {
     /// The project id option.
@@ -709,7 +733,7 @@ enum GraphqlChatLiteral {
 
 impl IntoFilterExpr<ChatLiteral> for GraphqlChatLiteral {
     /// Convert this value into the expr representation.
-    fn into_expr(self) -> async_graphql::Result<Expr<ChatLiteral>> {
+    fn into_expr(self) -> InputResult<Expr<ChatLiteral>> {
         let literal = match self {
             Self::ProjectId(id) => ChatLiteral::ProjectId(parse_id(id, "projectId")?),
             Self::Role(role) => ChatLiteral::Role(role.into_model()),
@@ -726,7 +750,8 @@ impl IntoFilterExpr<ChatLiteral> for GraphqlChatLiteral {
 }
 
 /// GraphQL input representing the chat role.
-#[derive(Enum, Copy, Clone, Eq, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "server", derive(async_graphql::Enum))]
+#[derive(Copy, Clone, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 enum GraphqlChatRole {
     /// The user option.
@@ -749,7 +774,8 @@ impl GraphqlChatRole {
 }
 
 /// GraphQL input representing the email literal.
-#[derive(async_graphql::OneofObject, Serialize, Deserialize)]
+#[cfg_attr(feature = "server", derive(async_graphql::OneofObject))]
+#[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 enum GraphqlEmailLiteral {
     /// The sender option.
@@ -784,7 +810,7 @@ enum GraphqlEmailLiteral {
 
 impl IntoFilterExpr<EmailLiteral> for GraphqlEmailLiteral {
     /// Convert this value into the expr representation.
-    fn into_expr(self) -> async_graphql::Result<Expr<EmailLiteral>> {
+    fn into_expr(self) -> InputResult<Expr<EmailLiteral>> {
         let literal = match self {
             Self::Sender(value) => EmailLiteral::Sender(value.into_ast()?),
             Self::Cc(value) => EmailLiteral::Cc(value.into_ast()?),
@@ -806,7 +832,8 @@ impl IntoFilterExpr<EmailLiteral> for GraphqlEmailLiteral {
 }
 
 /// GraphQL input representing the email value.
-#[derive(async_graphql::OneofObject, Serialize, Deserialize)]
+#[cfg_attr(feature = "server", derive(async_graphql::OneofObject))]
+#[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 enum GraphqlEmailValue {
     /// The partial option.
@@ -819,16 +846,14 @@ enum GraphqlEmailValue {
 
 impl GraphqlEmailValue {
     /// Convert this value into the ast representation.
-    fn into_ast(self) -> async_graphql::Result<Email> {
+    fn into_ast(self) -> InputResult<Email> {
         Ok(match self {
             Self::Partial(value) => Email::Partial(value),
             Self::Complete(value) => Email::Complete(
                 EmailStr::parse_from_str(&value)
                     .map(CowLike::into_owned)
                     .map_err(|err| {
-                        async_graphql::Error::new(format!(
-                            "invalid complete email `{value}`: {err}"
-                        ))
+                        InputError::new(format!("invalid complete email `{value}`: {err}"))
                     })?,
             ),
             Self::Domain(value) => Email::Domain(value),
@@ -837,7 +862,8 @@ impl GraphqlEmailValue {
 }
 
 /// GraphQL input representing the shared email filter.
-#[derive(Enum, Copy, Clone, Eq, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "server", derive(async_graphql::Enum))]
+#[derive(Copy, Clone, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 enum GraphqlSharedEmailFilter {
     /// The exclude option.
@@ -860,7 +886,8 @@ impl GraphqlSharedEmailFilter {
 }
 
 /// GraphQL input representing the channel literal.
-#[derive(async_graphql::OneofObject, Serialize, Deserialize)]
+#[cfg_attr(feature = "server", derive(async_graphql::OneofObject))]
+#[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 enum GraphqlChannelLiteral {
     /// The thread id option.
@@ -891,7 +918,7 @@ enum GraphqlChannelLiteral {
 
 impl IntoFilterExpr<ChannelLiteral> for GraphqlChannelLiteral {
     /// Convert this value into the expr representation.
-    fn into_expr(self) -> async_graphql::Result<Expr<ChannelLiteral>> {
+    fn into_expr(self) -> InputResult<Expr<ChannelLiteral>> {
         let literal = match self {
             Self::ThreadId(id) => ChannelLiteral::ThreadId(parse_id(id, "threadId")?),
             Self::Mention(mention) => {
@@ -914,7 +941,8 @@ impl IntoFilterExpr<ChannelLiteral> for GraphqlChannelLiteral {
 }
 
 /// GraphQL input representing the channel type filter.
-#[derive(Enum, Copy, Clone, Eq, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "server", derive(async_graphql::Enum))]
+#[derive(Copy, Clone, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 enum GraphqlChannelTypeFilter {
     /// The public option.
@@ -940,7 +968,8 @@ impl GraphqlChannelTypeFilter {
 }
 
 /// GraphQL input representing the channel thread literal.
-#[derive(async_graphql::OneofObject, Serialize, Deserialize)]
+#[cfg_attr(feature = "server", derive(async_graphql::OneofObject))]
+#[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 enum GraphqlChannelThreadLiteral {
     /// The thread id option.
@@ -959,7 +988,7 @@ enum GraphqlChannelThreadLiteral {
 
 impl IntoFilterExpr<ChannelThreadLiteral> for GraphqlChannelThreadLiteral {
     /// Convert this value into the expr representation.
-    fn into_expr(self) -> async_graphql::Result<Expr<ChannelThreadLiteral>> {
+    fn into_expr(self) -> InputResult<Expr<ChannelThreadLiteral>> {
         let literal = match self {
             Self::ThreadId(id) => ChannelThreadLiteral::ThreadId(parse_id(id, "threadId")?),
             Self::ChannelId(id) => ChannelThreadLiteral::ChannelId(parse_id(id, "channelId")?),
@@ -977,7 +1006,8 @@ impl IntoFilterExpr<ChannelThreadLiteral> for GraphqlChannelThreadLiteral {
 }
 
 /// GraphQL input representing the call literal.
-#[derive(async_graphql::OneofObject, Serialize, Deserialize)]
+#[cfg_attr(feature = "server", derive(async_graphql::OneofObject))]
+#[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 enum GraphqlCallLiteral {
     /// The call id option.
@@ -994,7 +1024,7 @@ enum GraphqlCallLiteral {
 
 impl IntoFilterExpr<CallLiteral> for GraphqlCallLiteral {
     /// Convert this value into the expr representation.
-    fn into_expr(self) -> async_graphql::Result<Expr<CallLiteral>> {
+    fn into_expr(self) -> InputResult<Expr<CallLiteral>> {
         let literal = match self {
             Self::CallId(id) => CallLiteral::CallId(parse_id(id, "callId")?),
             Self::ChannelId(id) => CallLiteral::ChannelId(parse_id(id, "channelId")?),
@@ -1009,7 +1039,8 @@ impl IntoFilterExpr<CallLiteral> for GraphqlCallLiteral {
 }
 
 /// GraphQL input representing the call status.
-#[derive(Enum, Copy, Clone, Eq, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "server", derive(async_graphql::Enum))]
+#[derive(Copy, Clone, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 enum GraphqlCallStatus {
     /// The attended option.
@@ -1032,7 +1063,8 @@ impl GraphqlCallStatus {
 }
 
 /// GraphQL input representing the reminder literal.
-#[derive(async_graphql::OneofObject, Serialize, Deserialize)]
+#[cfg_attr(feature = "server", derive(async_graphql::OneofObject))]
+#[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 enum GraphqlReminderLiteral {
     /// Opt this query into reminders at all. Reminders are off by default, so
@@ -1052,12 +1084,12 @@ enum GraphqlReminderLiteral {
 
 impl IntoFilterExpr<ReminderLiteral> for GraphqlReminderLiteral {
     /// Convert this value into the expr representation.
-    fn into_expr(self) -> async_graphql::Result<Expr<ReminderLiteral>> {
+    fn into_expr(self) -> InputResult<Expr<ReminderLiteral>> {
         let literal = match self {
             // `include: false` is the default, not a literal — accepting it
             // would opt the query in, the opposite of what was asked.
             Self::Include(false) => {
-                return Err(async_graphql::Error::new(
+                return Err(InputError::new(
                     "reminder `include` must be true; omit the filter to exclude reminders",
                 ));
             }
@@ -1072,7 +1104,8 @@ impl IntoFilterExpr<ReminderLiteral> for GraphqlReminderLiteral {
 }
 
 /// GraphQL input representing the crm company literal.
-#[derive(async_graphql::OneofObject, Serialize, Deserialize)]
+#[cfg_attr(feature = "server", derive(async_graphql::OneofObject))]
+#[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 enum GraphqlCrmCompanyLiteral {
     /// The id option.
@@ -1083,7 +1116,7 @@ enum GraphqlCrmCompanyLiteral {
 
 impl IntoFilterExpr<CrmCompanyLiteral> for GraphqlCrmCompanyLiteral {
     /// Convert this value into the expr representation.
-    fn into_expr(self) -> async_graphql::Result<Expr<CrmCompanyLiteral>> {
+    fn into_expr(self) -> InputResult<Expr<CrmCompanyLiteral>> {
         let literal = match self {
             Self::Id(id) => CrmCompanyLiteral::Id(parse_id(id, "id")?),
             Self::Hidden(hidden) => CrmCompanyLiteral::Hidden(hidden),
@@ -1093,7 +1126,8 @@ impl IntoFilterExpr<CrmCompanyLiteral> for GraphqlCrmCompanyLiteral {
 }
 
 /// GraphQL input representing the foreign entity literal.
-#[derive(async_graphql::OneofObject, Serialize, Deserialize)]
+#[cfg_attr(feature = "server", derive(async_graphql::OneofObject))]
+#[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 enum GraphqlForeignEntityLiteral {
     /// The id option.
@@ -1112,14 +1146,14 @@ enum GraphqlForeignEntityLiteral {
 
 impl IntoFilterExpr<ForeignEntityLiteral> for GraphqlForeignEntityLiteral {
     /// Convert this value into the expr representation.
-    fn into_expr(self) -> async_graphql::Result<Expr<ForeignEntityLiteral>> {
+    fn into_expr(self) -> InputResult<Expr<ForeignEntityLiteral>> {
         let literal = match self {
             Self::Id(id) => ForeignEntityLiteral::Id(parse_id(id, "id")?),
             Self::ForeignEntityId(id) => ForeignEntityLiteral::ForeignEntityId(id),
             Self::ForeignEntitySource(source) => ForeignEntityLiteral::ForeignEntitySource(source),
             Self::IncludesMe(true) => ForeignEntityLiteral::IncludesMe,
             Self::IncludesMe(false) => {
-                return Err(async_graphql::Error::new(
+                return Err(InputError::new(
                     "ForeignEntityLiteral.includesMe must be true",
                 ));
             }
