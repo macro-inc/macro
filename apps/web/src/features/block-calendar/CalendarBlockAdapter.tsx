@@ -10,6 +10,7 @@ import { createMethodRegistration } from '@core/orchestrator';
 import { blockHandleSignal } from '@core/signal/load';
 import { fetchCalendarMentionPreview } from '@queries/calendar/mention-preview';
 import { useCalendarOccurrencesQuery } from '@queries/calendar/occurrences';
+import { useSearchParams } from '@solidjs/router';
 import { createMemo, createSignal, onMount, Show } from 'solid-js';
 import { CalendarFocusContextProvider } from './calendar-focus-target';
 import {
@@ -105,11 +106,28 @@ function CalendarBlockAdapter(props: CalendarBlockProps) {
   const userId = useUserId();
   const analytics = useAnalytics();
   const blockHandle = blockHandleSignal.get;
+  const [searchParams] = useSearchParams();
+  const searchParam = (value: string | string[] | undefined) =>
+    typeof value === 'string' && value.length > 0 ? value : undefined;
+  // In-app opens pass the target through split content props; a deep link
+  // (`/app/calendar/view?eventId=...`) carries it in the query string, which
+  // never reaches block props.
+  const initialAim: CalendarBlockProps = {
+    eventId:
+      typeof props.eventId === 'string' && props.eventId.length > 0
+        ? props.eventId
+        : searchParam(searchParams.eventId),
+    occurrenceKey:
+      typeof props.occurrenceKey === 'string'
+        ? props.occurrenceKey
+        : searchParam(searchParams.occurrenceKey),
+    range: props.range,
+  };
   let nextRequestId = 1;
   let latestRequestId = 0;
   const [targetRequest, setTargetRequest] = createSignal<
     CalendarBlockTargetRequest | undefined
-  >(targetRequestFromParams(props, nextRequestId++));
+  >(targetRequestFromParams(initialAim, nextRequestId++));
 
   // Preview resolution is async, so a stale answer must never clobber a
   // target the user has since re-aimed or cleared.
@@ -135,8 +153,12 @@ function CalendarBlockAdapter(props: CalendarBlockProps) {
     setTargetRequest(undefined);
   };
 
-  if (!targetRequest() && typeof props.eventId === 'string' && props.eventId) {
-    aimAtParams(props);
+  if (
+    !targetRequest() &&
+    typeof initialAim.eventId === 'string' &&
+    initialAim.eventId
+  ) {
+    aimAtParams(initialAim);
   }
 
   createMethodRegistration(blockHandle, {
