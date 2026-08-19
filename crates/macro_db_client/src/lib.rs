@@ -25,6 +25,7 @@ pub mod job;
 pub mod macro_user;
 pub mod macro_user_email_verification;
 pub mod macro_user_links;
+pub mod microsoft_oauth_grants;
 pub mod notification;
 pub mod organization;
 pub mod pins;
