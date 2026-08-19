@@ -4,6 +4,7 @@ use std::collections::HashMap;
 use std::num::NonZeroU32;
 
 use chrono::{DateTime, Utc};
+use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::EntityType;
 use uuid::Uuid;
 
@@ -22,6 +23,58 @@ pub struct ActivityFeedPage {
     /// Derived from the raw fetched rows *before* decode-skipping, so one
     /// bad row can never end pagination early.
     pub next: Option<(DateTime<Utc>, Uuid)>,
+}
+
+/// Announces durably recorded activities to realtime subscribers.
+///
+/// Fire-and-forget: implementations log failures instead of returning them,
+/// because delivery is best-effort by design — a missed push is recovered by
+/// the source event replaying (uncommitted offset) or by the client's next
+/// fetch, and the write path must not fail on announcement problems.
+pub trait ActivityRealtimePublisher: Send + Sync {
+    /// Announces recorded activities, grouped per subject by the adapter.
+    fn publish_recorded(&self, activities: &[Activity]) -> impl Future<Output = ()> + Send;
+}
+
+/// Resolves who may currently see an entity's activity.
+///
+/// Used at publish time to widen realtime delivery beyond the acting
+/// subject: entity timelines are watched by everyone with access to the
+/// entity, not only whoever acted.
+pub trait ActivityAudienceExpander: Send + Sync {
+    /// The adapter's error type.
+    type Err: std::error::Error + Send + Sync + 'static;
+
+    /// Returns all users with current access to the entity.
+    fn entity_audience(
+        &self,
+        entity_type: EntityType,
+        entity_id: &str,
+    ) -> impl Future<Output = Result<Vec<MacroUserIdStr<'static>>, Self::Err>> + Send;
+}
+
+/// Expander reporting an empty audience: delivery to the subject only.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct NoOpActivityAudienceExpander;
+
+impl ActivityAudienceExpander for NoOpActivityAudienceExpander {
+    type Err = std::convert::Infallible;
+
+    async fn entity_audience(
+        &self,
+        _entity_type: EntityType,
+        _entity_id: &str,
+    ) -> Result<Vec<MacroUserIdStr<'static>>, Self::Err> {
+        Ok(Vec::new())
+    }
+}
+
+/// Publisher that announces nothing.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct NoOpActivityRealtimePublisher;
+
+impl ActivityRealtimePublisher for NoOpActivityRealtimePublisher {
+    async fn publish_recorded(&self, _activities: &[Activity]) {}
 }
 
 /// Persists activities.

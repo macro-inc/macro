@@ -95,7 +95,9 @@ fn soup_response_schema_exposes_frontend_fields() {
         "type CompleteSubscriptionRoot {",
         "soupUpdates: [SoupPatch!]!",
         "notificationUpdates: GraphqlNotificationPatch!",
+        "activityUpdates: GraphqlActivityPatch!",
         "union GraphqlNotificationPatch = GraphqlNotification | GraphqlCacheDeletion",
+        "union GraphqlActivityPatch = GraphqlActivityEvent | GraphqlCacheDeletion",
         "type GraphqlNotification {",
         "metadata: GraphqlNotifEvent!",
     ] {

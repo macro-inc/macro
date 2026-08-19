@@ -4,6 +4,7 @@
     "activity": [
       "crates/activity",
       "crates/bot_id",
+      "crates/broadcast",
       "crates/channel_sender",
       "crates/cowlike",
       "crates/kafka_util",
@@ -896,6 +897,7 @@
       "crates/ai_usage",
       "crates/attachment",
       "crates/bot_id",
+      "crates/broadcast",
       "crates/channel_sender",
       "crates/chat",
       "crates/cowlike",
@@ -2852,6 +2854,7 @@
     "graphql_activity": [
       "crates/activity",
       "crates/bot_id",
+      "crates/broadcast",
       "crates/channel_sender",
       "crates/cowlike",
       "crates/document_sub_type",

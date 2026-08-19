@@ -12,11 +12,14 @@ checksum = "fe438c63458706e03479442743baae6c88256498e6431708f6dfc520a26515d3"
 name = "activity"
 version = "0.1.0"
 dependencies = [
+ "bot_id",
+ "broadcast",
  "channel_sender",
  "chrono",
  "kafka_util",
  "macro_db_migrator",
  "macro_event_broker",
+ "macro_event_topics",
  "macro_user_id",
  "model-entity",
  "rdkafka",
@@ -27,6 +30,7 @@ dependencies = [
  "sqlx",
  "strum 0.27.2",
  "tokio",
+ "tokio-retry",
  "tracing",
  "uuid",
  "workspace-hack",
@@ -6482,6 +6486,7 @@ version = "0.1.0"
 dependencies = [
  "activity",
  "async-graphql",
+ "async-stream",
  "chrono",
  "futures",
  "graphql_common",
@@ -6491,6 +6496,7 @@ dependencies = [
  "serde",
  "serde_json",
  "tokio",
+ "tokio-stream",
  "tracing",
  "uuid",
  "workspace-hack",

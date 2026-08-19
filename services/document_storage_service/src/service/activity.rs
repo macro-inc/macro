@@ -50,3 +50,40 @@ pub(crate) fn ingest(event: &ActivitySourceEvent) -> Ingest {
         ActivitySourceEvent::CallMacroEvent(e) => arm(e.event()),
     }
 }
+
+/// Realtime activity audience: everyone with current access to the entity,
+/// so entity timelines (side panels) update live for watchers, not only for
+/// the acting subject.
+pub(crate) struct EntityAccessActivityAudience<S> {
+    service: std::sync::Arc<S>,
+}
+
+impl<S> EntityAccessActivityAudience<S> {
+    pub(crate) fn new(service: std::sync::Arc<S>) -> Self {
+        Self { service }
+    }
+}
+
+impl<S> activity::ActivityAudienceExpander for EntityAccessActivityAudience<S>
+where
+    S: entity_access::domain::ports::EntityAccessService,
+{
+    type Err = entity_access::domain::models::AccessError;
+
+    async fn entity_audience(
+        &self,
+        entity_type: activity::EntityType,
+        entity_id: &str,
+    ) -> Result<Vec<macro_user_id::user_id::MacroUserIdStr<'static>>, Self::Err> {
+        match self
+            .service
+            .get_users_by_entity(entity_id, entity_type)
+            .await
+        {
+            // Entity kinds without an expandable audience report BadRequest;
+            // deliver those subject-only instead of surfacing an error.
+            Err(entity_access::domain::models::AccessError::BadRequest(_)) => Ok(Vec::new()),
+            result => result,
+        }
+    }
+}

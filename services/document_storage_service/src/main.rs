@@ -800,12 +800,23 @@ async fn main() -> anyhow::Result<()> {
     consumer_tracker.spawn({
         let cancellation_token = consumer_cancellation_token.clone();
         let activity_repo = activity::outbound::pg_activity_repo::PgActivityRepo::new(db.clone());
+        let activity_realtime = activity::KafkaActivityRealtimePublisher::new(
+            macro_event_broker.clone(),
+            crate::service::activity::EntityAccessActivityAudience::new(
+                entity_access_service.clone(),
+            ),
+        );
         async move {
             let consumer = activity::inbound::kafka_consumer::ActivityConsumer::<
                 _,
                 crate::service::activity::ActivitySourceEvent,
                 _,
-            >::new(activity_repo, crate::service::activity::ingest);
+                _,
+            >::new(
+                activity_repo,
+                crate::service::activity::ingest,
+                activity_realtime,
+            );
             loop {
                 if cancellation_token.is_cancelled() {
                     break;
@@ -988,6 +999,42 @@ async fn main() -> anyhow::Result<()> {
                     tracing::error!(
                         error = ?error,
                         "WebSocket notification consumer stopped"
+                    );
+                });
+
+                tokio::select! {
+                    biased;
+                    _ = cancellation_token.cancelled() => break,
+                    _ = tokio::time::sleep(Duration::from_secs(1)) => {}
+                }
+            }
+        }
+    });
+
+    let activity_realtime_service = Arc::new(activity::ActivityRealtimeConsumerService::new(
+        activity::ActivityTopicConsumer::from_env(config.kafka_brokers.as_ref()).map_err(
+            |error| anyhow::anyhow!("failed to create realtime activity topic consumer: {error:?}"),
+        )?,
+    ));
+    consumer_tracker.spawn({
+        let service = Arc::clone(&activity_realtime_service);
+        let cancellation_token = consumer_cancellation_token.clone();
+        async move {
+            loop {
+                let result = tokio::select! {
+                    biased;
+                    _ = cancellation_token.cancelled() => break,
+                    result = service.run() => result,
+                };
+
+                if cancellation_token.is_cancelled() {
+                    break;
+                }
+
+                let _ = result.inspect_err(|error| {
+                    tracing::error!(
+                        error = ?error,
+                        "realtime activity subscription consumer stopped"
                     );
                 });
 
@@ -1212,6 +1259,7 @@ async fn main() -> anyhow::Result<()> {
             soup_service,
             soup_realtime_service,
             websocket_notification_consumer_service,
+            activity_realtime_service,
         ),
         graphql_notification_reader,
         // GraphQL reads the activity log through the readonly pool; the

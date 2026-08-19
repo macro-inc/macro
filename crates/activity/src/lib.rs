@@ -17,17 +17,33 @@
 //! decoded event to the owning domain's mapping.
 //!
 //! Features: `outbound` (Postgres adapter), `consumer` (generic Kafka
-//! consumer); both on by default. The models are always available.
+//! consumer and realtime Kafka adapters), `realtime` (user-scoped realtime
+//! distribution); all on by default. The models and wire events are always
+//! available.
 
 pub mod domain;
 #[cfg(feature = "consumer")]
 pub mod inbound;
-#[cfg(feature = "outbound")]
+#[cfg(any(feature = "outbound", feature = "consumer"))]
 pub mod outbound;
 
+pub use domain::events::{ActivityMacroEvent, ActivityTopicEvent, ActivityWireRow};
 pub use domain::models::{
     Action, ActionDecodeError, Activity, ActivityRecord, ActivitySource, Actor, CallStart,
     CommonAction, DomainActivity, EntityType, Ingest, ParticipantChange, PropertyChange,
     RecordedAction, VIEW_ACTION_TAGS, activity_id, event_time,
 };
-pub use domain::ports::{ActivityFeedPage, ActivityReads, EntityActivityMap};
+pub use domain::ports::{
+    ActivityAudienceExpander, ActivityFeedPage, ActivityReads, ActivityRealtimePublisher,
+    EntityActivityMap, NoOpActivityAudienceExpander, NoOpActivityRealtimePublisher,
+};
+#[cfg(feature = "realtime")]
+pub use domain::realtime::{
+    ActivityRealtimeConsumerService, ActivitySubscription, ActivitySubscriptionExit,
+    ActivitySubscriptionService, ActivitySubscriptionUpdate, ActivityTopicEventConsumer,
+    NoOpActivitySubscriptionService,
+};
+#[cfg(all(feature = "consumer", feature = "realtime"))]
+pub use outbound::activity_topic_consumer::ActivityTopicConsumer;
+#[cfg(feature = "consumer")]
+pub use outbound::kafka_activity_realtime::KafkaActivityRealtimePublisher;

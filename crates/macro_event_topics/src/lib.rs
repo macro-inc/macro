@@ -71,6 +71,8 @@ topics! {
     MacroMentionsTopic => "macro.mentions",
     /// Notifications awaiting delivery through WebSocket connections.
     MacroNotificationsTopic => "macro.notifications",
+    /// Recorded activity rows awaiting delivery to realtime subscribers.
+    MacroActivityTopic => "macro.activity",
     /// AI chat lifecycle and message events.
     MacroChatsTopic => "macro.chats",
 }

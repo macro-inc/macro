@@ -20,7 +20,10 @@ mod feed;
 mod loaders;
 /// GraphQL objects for activity events and the typed action union.
 mod objects;
+/// Realtime activity subscription root and patch union.
+mod subscriptions;
 
+pub use activity::{ActivitySubscriptionService, NoOpActivitySubscriptionService};
 pub use feed::{
     ActivityFeedInput, DEFAULT_ACTIVITY_FEED_LIMIT, GraphqlActivityPage, MAX_ACTIVITY_FEED_LIMIT,
     resolve_activity_feed,
@@ -32,3 +35,4 @@ pub use loaders::{
     parse_activity_edge_limit,
 };
 pub use objects::{GraphqlActivityAction, GraphqlActivityEvent};
+pub use subscriptions::{ActivitySubscriptionRoot, GraphqlActivityPatch, subscribe_to_activity};

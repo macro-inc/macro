@@ -12,6 +12,9 @@
 //! host supervisor restarts the consumer from the last committed offset;
 //! deterministic activity ids make the replayed inserts idempotent.
 
+#[cfg(test)]
+mod test;
+
 use std::future::Future;
 use std::marker::PhantomData;
 
@@ -22,7 +25,10 @@ use rdkafka::message::{BorrowedMessage, Message as _};
 use rootcause::prelude::{Report, ResultExt as _};
 use tracing::Instrument as _;
 
-use crate::domain::{models::Ingest, ports::ActivityRepo};
+use crate::domain::{
+    models::Ingest,
+    ports::{ActivityRealtimePublisher, ActivityRepo},
+};
 
 /// Consumer group for activity materialization offsets.
 struct ActivityConsumerGroup;
@@ -36,31 +42,45 @@ impl GroupName for ActivityConsumerGroup {
 /// `C` is the host's declared event collection (`declare_topics!`); `ingest`
 /// is the host's dispatch from a decoded event to the owning domain's
 /// mapping.
-pub struct ActivityConsumer<R, C, F> {
+pub struct ActivityConsumer<R, C, F, P> {
     repo: R,
     ingest: F,
+    realtime: P,
     _events: PhantomData<fn() -> C>,
 }
 
-impl<R, C, F> ActivityConsumer<R, C, F>
+impl<R, C, F, P> ActivityConsumer<R, C, F, P>
 where
     R: ActivityRepo,
     C: MacroEventCollection + 'static,
     F: Fn(&C) -> Ingest + Send + Sync,
+    P: ActivityRealtimePublisher,
 {
-    /// Builds the consumer over an activity store and an event dispatcher.
-    pub fn new(repo: R, ingest: F) -> Self {
+    /// Builds the consumer over an activity store, an event dispatcher, and
+    /// a realtime announcer for durably inserted rows.
+    pub fn new(repo: R, ingest: F, realtime: P) -> Self {
         Self {
             repo,
             ingest,
+            realtime,
             _events: PhantomData,
         }
     }
 
-    /// Applies one decoded event to storage.
+    /// Applies one decoded event to storage, announcing inserted rows.
+    ///
+    /// The announcement is deliberately not transactional with the insert:
+    /// if it is lost (crash between insert and publish), the uncommitted
+    /// offset replays the source event, the deterministic ids no-op the
+    /// insert, and the announcement is published again; duplicates are
+    /// idempotent for subscribers (records keyed by id).
     async fn apply(&self, event: &C) -> Result<(), R::Err> {
         match (self.ingest)(event) {
-            Ingest::Insert(activities) => self.repo.insert_activities(&activities).await,
+            Ingest::Insert(activities) => {
+                self.repo.insert_activities(&activities).await?;
+                self.realtime.publish_recorded(&activities).await;
+                Ok(())
+            }
             Ingest::Purge(entities) => self.repo.purge_entities(&entities).await,
             Ingest::Ignore => Ok(()),
         }

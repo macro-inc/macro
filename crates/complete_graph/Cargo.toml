@@ -43,7 +43,7 @@ uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
-activity = { path = "../activity", default-features = false }
+activity = { path = "../activity", default-features = false, features = ["realtime"] }
 apollo-compiler = { workspace = true }
 chrono = { workspace = true }
 model_user = { path = "../model_user" }
