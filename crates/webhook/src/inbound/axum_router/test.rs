@@ -66,9 +66,7 @@ impl FakeService {
 impl Clone for ServiceCall {
     fn clone(&self) -> Self {
         match self {
-            Self::Create(user, request) => {
-                Self::Create(user.clone(), request.clone())
-            }
+            Self::Create(user, request) => Self::Create(user.clone(), request.clone()),
             Self::Get(user, id) => Self::Get(user.clone(), id.clone()),
             Self::List(user) => Self::List(user.clone()),
             Self::Patch(user, id, request) => {

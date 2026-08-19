@@ -17185,6 +17185,7 @@ dependencies = [
 name = "webhook"
 version = "0.1.0"
 dependencies = [
+ "agent_session",
  "agent_trigger",
  "anyhow",
  "axum",

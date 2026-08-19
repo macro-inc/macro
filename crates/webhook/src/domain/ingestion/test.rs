@@ -1302,7 +1302,8 @@ async fn entity_access_internal_error_is_transient() {
     assert!(error.is_transient());
 }
 
-fn agent_trigger_event() -> Event<agent_trigger::domain::broker_events::AgentTriggerTopicEvent> {
+fn agent_trigger_new_event() -> Event<agent_trigger::domain::broker_events::AgentTriggerTopicEvent>
+{
     use agent_trigger::domain::broker_events::{
         AgentBotMentionedEvent, AgentTriggerTopicEvent, NewAgentSessionEvent,
     };
@@ -1328,6 +1329,60 @@ fn agent_trigger_event() -> Event<agent_trigger::domain::broker_events::AgentTri
     ))
 }
 
+fn agent_trigger_existing_event()
+-> Event<agent_trigger::domain::broker_events::AgentTriggerTopicEvent> {
+    use agent_trigger::domain::broker_events::{
+        AgentTriggerTopicEvent, ChannelEventMetadata, ExistingAgentSessionEvent,
+    };
+    use channels::domain::broker_events::ChannelMessagePostedMetadata;
+    use channels::domain::models::ChannelType;
+
+    Event::new(AgentTriggerTopicEvent::Existing(
+        ExistingAgentSessionEvent::Channel(ChannelEventMetadata {
+            bot_id: bot_id::BotId::new_from_uuid(uuid::Uuid::from_u128(0xB07)),
+            session_id: agent_session::domain::model::AgentSessionId::TEST_A,
+            message: ChannelMessagePostedMetadata {
+                channel_id: uuid::Uuid::from_u128(1),
+                message_id: uuid::Uuid::from_u128(2),
+                thread_id: None,
+                sender: sender("macro|asker@example.com"),
+                triggered_by: None,
+                channel_type: ChannelType::Public,
+                content: "and now the other one".to_owned(),
+                mentions: vec![],
+                attachments: vec![],
+                created_at: timestamp(),
+            },
+        }),
+    ))
+}
+
+/// A follow-up on a session that exists asks the session, not the channel:
+/// the session carries its own grants, so whatever channel a later message
+/// landed in is incidental.
+#[tokio::test]
+async fn an_existing_session_trigger_is_gated_by_the_session() {
+    let access = MockAccessService::with_users(vec![user_id(PERSONAL_WORKSPACE_ID)]);
+    let repository = MockRepository::new(
+        vec![PERSONAL_WORKSPACE_ID.to_string()],
+        vec![webhook("wh_agent_feed", PERSONAL_WORKSPACE_ID)],
+    );
+    let service = service(access.clone(), repository.clone(), MockEnqueuer::default());
+
+    service
+        .ingest_agent_trigger_event(agent_trigger_existing_event())
+        .await
+        .expect("agent trigger events are ingested");
+
+    assert_eq!(
+        lock(&access.calls).as_slice(),
+        &[(
+            agent_session::domain::model::AgentSessionId::TEST_A.to_string(),
+            EntityType::AgentSession
+        )],
+    );
+}
+
 #[tokio::test]
 async fn agent_trigger_events_are_scoped_by_the_channel_but_named_by_the_bot() {
     let access = MockAccessService::with_users(vec![user_id(PERSONAL_WORKSPACE_ID)]);
@@ -1337,7 +1392,7 @@ async fn agent_trigger_events_are_scoped_by_the_channel_but_named_by_the_bot() {
     );
     let enqueuer = MockEnqueuer::default();
     let service = service(access.clone(), repository.clone(), enqueuer.clone());
-    let event = agent_trigger_event();
+    let event = agent_trigger_new_event();
 
     service
         .ingest_agent_trigger_event(event.clone())

@@ -520,9 +520,7 @@ async fn create_with_taken_namespace_fails_conflict_and_publishes_nothing() {
         event_broker,
     );
 
-    let result = service
-        .create_webhook(caller(), create_request())
-        .await;
+    let result = service.create_webhook(caller(), create_request()).await;
 
     assert!(matches!(
         result,
@@ -623,9 +621,7 @@ async fn create_repository_failure_publishes_nothing() {
         event_broker,
     );
 
-    let result = service
-        .create_webhook(caller(), create_request())
-        .await;
+    let result = service.create_webhook(caller(), create_request()).await;
 
     assert!(matches!(result, Err(WebhookError::Repo(_))));
     assert!(published.lock().unwrap().is_empty());
@@ -1106,10 +1102,7 @@ async fn filter_with_valid_ids_is_accepted() {
     }];
     let expected_filters = request.filters.clone();
 
-    let webhook = service
-        .create_webhook(caller(), request)
-        .await
-        .unwrap();
+    let webhook = service.create_webhook(caller(), request).await.unwrap();
 
     assert_eq!(webhook.filters, expected_filters);
 }

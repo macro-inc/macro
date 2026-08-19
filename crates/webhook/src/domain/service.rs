@@ -381,13 +381,7 @@ where
             .map_err(|err| WebhookError::Repo(err.into()))?;
         let mut webhook = match self
             .repo
-            .create_webhook(
-                caller,
-                workspace_id,
-                request,
-                signing_secret,
-                headers,
-            )
+            .create_webhook(caller, workspace_id, request, signing_secret, headers)
             .await
             .map_err(|err| WebhookError::Repo(err.into()))?
         {

@@ -376,26 +376,48 @@ fn normalized_event(
     }
 }
 
+/// Whose access decides who may see one trigger event.
+///
+/// Not the bot the event names: that is what a subscriber filters on, and a
+/// bot is not an entity anyone holds access to.
+struct TriggerAudience {
+    entity_id: String,
+    entity_type: EntityType,
+}
+
 /// Normalize one agent-trigger event.
 ///
 /// The entity - and the ordering key, mirroring the broker's partitioning -
 /// is the bot: a subscriber consumes a bot's whole trigger stream, in order.
-/// Returned alongside is the channel the mention sits in, which is what says
-/// who may see the event at all.
+/// Returned alongside is whose access gates it, which differs by shape.
+///
+/// A mention that opens a session has no session yet, so the channel it was
+/// posted in is the only thing to ask. Once a session exists it carries its
+/// own grants - its owner, and the channel it came from - so the session is
+/// the authoritative audience, and whatever channel a later message happened
+/// to land in is incidental to it.
 fn normalized_agent_trigger_event(
     event: &Event<AgentTriggerTopicEvent>,
-) -> Result<(NormalizedWebhookEvent, String), WebhookEventIngestionError> {
+) -> Result<(NormalizedWebhookEvent, TriggerAudience), WebhookEventIngestionError> {
     use agent_trigger::domain::broker_events::{
         AgentTriggerEventName, ExistingAgentSessionEvent, NewAgentSessionEvent,
     };
 
-    let (bot_id, channel_id) = match &event.event {
-        AgentTriggerTopicEvent::New(NewAgentSessionEvent::TopLevelMentioned(mentioned)) => {
-            (mentioned.bot_id, mentioned.message.channel_id)
-        }
-        AgentTriggerTopicEvent::Existing(ExistingAgentSessionEvent::Channel(metadata)) => {
-            (metadata.bot_id, metadata.message.channel_id)
-        }
+    let (bot_id, audience) = match &event.event {
+        AgentTriggerTopicEvent::New(NewAgentSessionEvent::TopLevelMentioned(mentioned)) => (
+            mentioned.bot_id,
+            TriggerAudience {
+                entity_id: mentioned.message.channel_id.to_string(),
+                entity_type: EntityType::Channel,
+            },
+        ),
+        AgentTriggerTopicEvent::Existing(ExistingAgentSessionEvent::Channel(metadata)) => (
+            metadata.bot_id,
+            TriggerAudience {
+                entity_id: metadata.session_id.to_string(),
+                entity_type: EntityType::AgentSession,
+            },
+        ),
         // Both trigger enums are non-exhaustive on purpose; an unknown shape
         // has no bot to route to. Permanent, so the consumer skips it.
         _ => {
@@ -417,7 +439,7 @@ fn normalized_agent_trigger_event(
             &bot_id,
             broker_envelope,
         ),
-        channel_id.to_string(),
+        audience,
     ))
 }
 
@@ -463,9 +485,9 @@ where
         &self,
         event: Event<AgentTriggerTopicEvent>,
     ) -> Result<(), WebhookEventIngestionError> {
-        let (event, channel_id) = normalized_agent_trigger_event(&event)?;
+        let (event, audience) = normalized_agent_trigger_event(&event)?;
         let accessors = self
-            .users_with_access(&channel_id, EntityType::Channel)
+            .users_with_access(&audience.entity_id, audience.entity_type)
             .await?;
         let workspace_ids = self
             .repository
