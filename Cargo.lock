@@ -81,6 +81,7 @@ dependencies = [
  "ctr",
  "ghash",
  "subtle",
+ "zeroize",
 ]
 
 [[package]]
@@ -117,17 +118,18 @@ dependencies = [
 
 [[package]]
 name = "agent-client-protocol"
-version = "1.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "882b815ffa67b023e1b40e7ea3bab3f05869654e8565d6811870c5545285e1d3"
+version = "2.0.0"
+source = "git+https://github.com/agentclientprotocol/rust-sdk?rev=8769d16d10e0c9fa7e662ee18424a4313b06ea88#8769d16d10e0c9fa7e662ee18424a4313b06ea88"
 dependencies = [
  "agent-client-protocol-derive",
  "agent-client-protocol-schema",
+ "async-io",
  "async-process",
  "blocking",
  "futures",
  "futures-concurrency",
  "rustc-hash 2.1.2",
+ "rustix 1.1.4",
  "schemars 1.2.1",
  "serde",
  "serde_json",
@@ -139,19 +141,18 @@ dependencies = [
 
 [[package]]
 name = "agent-client-protocol-derive"
-version = "1.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dd5ca63f112bd2459bcaf9eda0683b9ba95fc3b5e5fdd9036ca941c6a09345b1"
+version = "2.0.0"
+source = "git+https://github.com/agentclientprotocol/rust-sdk?rev=8769d16d10e0c9fa7e662ee18424a4313b06ea88#8769d16d10e0c9fa7e662ee18424a4313b06ea88"
 dependencies = [
  "quote",
- "syn 2.0.117",
+ "syn 3.0.3",
 ]
 
 [[package]]
 name = "agent-client-protocol-schema"
-version = "1.4.0"
+version = "1.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "06679e1542356341f4550ccfb16338b64f37f6af70de2105446ef6fbb078234c"
+checksum = "1c216d4b350cbc1b13f2b7d752af6698c8ba347be274275cb5a5c735da147066"
 dependencies = [
  "anyhow",
  "derive_more 2.1.1",
@@ -164,18 +165,216 @@ dependencies = [
 ]
 
 [[package]]
+name = "agent_fold"
+version = "0.1.0"
+dependencies = [
+ "agent-client-protocol",
+ "agent_runtime_protocol",
+ "clap",
+ "insta",
+ "macro_user_id",
+ "macro_uuid",
+ "non_empty",
+ "rootcause",
+ "serde",
+ "serde-wasm-bindgen",
+ "serde_json",
+ "specta",
+ "specta-serde",
+ "specta-typescript",
+ "strum 0.27.2",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "utoipa",
+ "wasm-bindgen",
+]
+
+[[package]]
+name = "agent_harness"
+version = "0.1.0"
+dependencies = [
+ "agent-client-protocol",
+ "agent_fold",
+ "agent_runtime_protocol",
+ "agent_session",
+ "agent_trigger",
+ "anyhow",
+ "base64 0.22.1",
+ "bot_id",
+ "channel_sender",
+ "channels",
+ "chrono",
+ "dashmap",
+ "futures",
+ "kafka_util",
+ "lexical_client",
+ "macro_env_var",
+ "macro_event_broker",
+ "macro_user_id",
+ "macro_uuid",
+ "mockall",
+ "reqwest 0.13.4",
+ "rootcause",
+ "rustls 0.23.40",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "thiserror 2.0.18",
+ "tokio",
+ "tokio-tungstenite 0.28.0",
+ "tokio-util",
+ "tracing",
+ "url",
+ "workspace-hack",
+]
+
+[[package]]
+name = "agent_harness_service"
+version = "0.1.0"
+dependencies = [
+ "agent_fold",
+ "agent_harness",
+ "agent_runtime_protocol",
+ "agent_session",
+ "agent_trigger",
+ "anyhow",
+ "aws-sdk-secretsmanager",
+ "aws-sdk-sqs",
+ "axum",
+ "bot_id",
+ "bots",
+ "channels",
+ "connection_gateway_client",
+ "contacts",
+ "database_env_vars",
+ "entity_access",
+ "kafka_util",
+ "lexical_client",
+ "macro_auth",
+ "macro_authorization",
+ "macro_aws_config",
+ "macro_config",
+ "macro_cors",
+ "macro_entrypoint",
+ "macro_env",
+ "macro_env_var",
+ "macro_event_broker",
+ "macro_queues",
+ "macro_service_urls",
+ "macro_uuid",
+ "notification",
+ "rdkafka",
+ "secretsmanager_client",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "tokio",
+ "tracing",
+ "utoipa",
+ "utoipa-swagger-ui",
+ "workspace-hack",
+]
+
+[[package]]
 name = "agent_runtime_protocol"
 version = "0.1.0"
 dependencies = [
  "agent-client-protocol",
  "axum",
  "futures",
+ "macro_uuid",
  "serde",
  "serde_json",
+ "specta",
+ "specta-serde",
+ "specta-typescript",
  "thiserror 2.0.18",
  "tokio",
  "tokio-tungstenite 0.28.0",
  "tracing",
+ "utoipa",
+]
+
+[[package]]
+name = "agent_session"
+version = "0.1.0"
+dependencies = [
+ "agent-client-protocol",
+ "agent_fold",
+ "agent_runtime_protocol",
+ "anyhow",
+ "axum",
+ "bots",
+ "chrono",
+ "clap",
+ "connection_gateway_client",
+ "dashmap",
+ "entity_access",
+ "entity_access_db_utils",
+ "macro_authorization",
+ "macro_db_migrator",
+ "macro_user_id",
+ "macro_uuid",
+ "mockall",
+ "model-entity",
+ "non_empty",
+ "rootcause",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "strum 0.27.2",
+ "thiserror 2.0.18",
+ "tokio",
+ "tokio-tungstenite 0.28.0",
+ "tracing",
+ "utoipa",
+ "workspace-hack",
+]
+
+[[package]]
+name = "agent_trigger"
+version = "0.1.0"
+dependencies = [
+ "agent_session",
+ "bot_id",
+ "channel_sender",
+ "channels",
+ "chrono",
+ "macro_event_broker",
+ "macro_event_topics",
+ "macro_user_id",
+ "macro_uuid",
+ "mockall",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "workspace-hack",
+]
+
+[[package]]
+name = "agent_trigger_service"
+version = "0.1.0"
+dependencies = [
+ "agent_session",
+ "agent_trigger",
+ "anyhow",
+ "bots",
+ "channels",
+ "database_env_vars",
+ "kafka_util",
+ "macro_config",
+ "macro_entrypoint",
+ "macro_env_var",
+ "macro_event_broker",
+ "rdkafka",
+ "serde_json",
+ "sqlx",
+ "tokio",
+ "tracing",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -1185,10 +1384,13 @@ dependencies = [
 name = "authentication_service"
 version = "0.1.0"
 dependencies = [
+ "aes-gcm",
  "analytics_client",
  "anyhow",
  "async-stripe",
  "async-stripe-webhook",
+ "async-trait",
+ "aws-sdk-kms",
  "aws-sdk-secretsmanager",
  "aws-sdk-sesv2",
  "aws-sdk-sqs",
@@ -1239,6 +1441,7 @@ dependencies = [
  "macro_uuid",
  "maud",
  "mention_utils",
+ "microsoft_oauth_grant_db_utils",
  "miniserde",
  "mobile_welcome_email_db_client",
  "mockall",
@@ -1283,6 +1486,7 @@ dependencies = [
  "utoipa-swagger-ui",
  "uuid",
  "workspace-hack",
+ "zeroize",
 ]
 
 [[package]]
@@ -1499,6 +1703,31 @@ version = "1.125.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4446bf0d1b00acf735257983201c5d80de6540ac3ec3f0b63648c64de0ce28e2"
 dependencies = [
+ "aws-credential-types",
+ "aws-runtime",
+ "aws-smithy-async",
+ "aws-smithy-http",
+ "aws-smithy-json",
+ "aws-smithy-observability",
+ "aws-smithy-runtime",
+ "aws-smithy-runtime-api",
+ "aws-smithy-types",
+ "aws-types",
+ "bytes",
+ "fastrand 2.4.1",
+ "http 0.2.12",
+ "http 1.4.0",
+ "regex-lite",
+ "tracing",
+]
+
+[[package]]
+name = "aws-sdk-kms"
+version = "1.109.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "35ae42a03fd0308c178015426a5e2ab0909a11f33c0efc56aea95caf92dc38b0"
+dependencies = [
+ "arc-swap",
  "aws-credential-types",
  "aws-runtime",
  "aws-smithy-async",
@@ -2419,6 +2648,7 @@ dependencies = [
  "macro_event_topics",
  "macro_user_id",
  "macro_uuid",
+ "mockall",
  "model-error-response",
  "rand 0.9.4",
  "rootcause",
@@ -2563,6 +2793,7 @@ version = "0.1.0"
 dependencies = [
  "apollo-compiler",
  "apollo-parser",
+ "chrono",
  "lru",
  "maybe_send",
  "pollster",
@@ -2574,26 +2805,14 @@ dependencies = [
 ]
 
 [[package]]
-name = "cache-sqlite"
-version = "0.1.0"
-dependencies = [
- "cache-core",
- "pollster",
- "rusqlite",
- "serde_json",
- "tempfile",
- "thiserror 2.0.18",
-]
-
-[[package]]
 name = "cache-turso"
 version = "0.1.0"
 dependencies = [
  "cache-core",
- "cache-sqlite",
  "maybe_send",
  "pollster",
  "serde_json",
+ "tempfile",
  "thiserror 2.0.18",
  "turso-opfs",
  "turso_core",
@@ -2602,7 +2821,7 @@ dependencies = [
 
 [[package]]
 name = "cache-wasm"
-version = "0.4.0"
+version = "0.4.2"
 dependencies = [
  "async-lock",
  "cache-core",
@@ -3671,7 +3890,6 @@ dependencies = [
  "bot_id",
  "either",
  "macro_user_id",
- "workspace-hack",
 ]
 
 [[package]]
@@ -5678,7 +5896,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -5755,12 +5973,6 @@ name = "fallible-iterator"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2acce4a10f12dc2fb14a218589d4f1f62ef011b2d0cc4b3cb1bba8e94da14649"
-
-[[package]]
-name = "fallible-streaming-iterator"
-version = "0.1.9"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7360491ce676a36bf9bb3c56c1aa791658183a54d2744120f27285738d90465a"
 
 [[package]]
 name = "fancy-regex"
@@ -6447,6 +6659,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0cc23270f6e1808e30a928bdc84dea0b9b4136a8bc82338574f23baf47bbd280"
 
 [[package]]
+name = "globset"
+version = "0.4.19"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e47d37d2ae4464254884b60ab7071be2b876a9c35b696bd018ddcc76847309cd"
+dependencies = [
+ "aho-corasick",
+ "bstr",
+ "log",
+ "regex-automata",
+ "regex-syntax",
+]
+
+[[package]]
 name = "gloo-timers"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6894,15 +7119,6 @@ dependencies = [
  "allocator-api2 0.2.21",
  "equivalent",
  "foldhash 0.2.0",
-]
-
-[[package]]
-name = "hashlink"
-version = "0.9.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6ba4ff7128dee98c7dc9794b6a411377e1404dba1c97deb8d1a55297bd25d8af"
-dependencies = [
- "hashbrown 0.14.5",
 ]
 
 [[package]]
@@ -7394,7 +7610,7 @@ dependencies = [
  "libc",
  "percent-encoding",
  "pin-project-lite",
- "socket2 0.5.10",
+ "socket2 0.6.3",
  "system-configuration",
  "tokio",
  "tower-service",
@@ -7886,6 +8102,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "insta"
+version = "1.48.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "86f0f8fee8c926415c58d6ae43a08523a26faccb2323f5e6b644fe7dd4ef6b82"
+dependencies = [
+ "console 0.16.4",
+ "globset",
+ "once_cell",
+ "similar",
+ "tempfile",
+ "walkdir",
+]
+
+[[package]]
 name = "instant"
 version = "0.1.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7972,7 +8202,7 @@ checksum = "3640c1c38b8e4e43584d8df18be5fc6b0aa314ce6ebf51b53313d4306cca8e46"
 dependencies = [
  "hermit-abi",
  "libc",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -8358,6 +8588,7 @@ dependencies = [
 name = "lexical_client"
 version = "0.1.0"
 dependencies = [
+ "agent_fold",
  "anyhow",
  "models_search",
  "reqwest 0.13.4",
@@ -8434,7 +8665,6 @@ version = "0.30.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2e99fb7a497b1e3339bc746195567ed8d3e24945ecd636e3619d20b9de9e9149"
 dependencies = [
- "cc",
  "pkg-config",
  "vcpkg",
 ]
@@ -9208,7 +9438,6 @@ dependencies = [
  "thiserror 2.0.18",
  "tracing",
  "utoipa",
- "workspace-hack",
 ]
 
 [[package]]
@@ -9217,7 +9446,6 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "uuid",
- "workspace-hack",
 ]
 
 [[package]]
@@ -9599,6 +9827,18 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.117",
+]
+
+[[package]]
+name = "microsoft_oauth_grant_db_utils"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "macro_db_migrator",
+ "sqlx",
+ "tokio",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -10263,7 +10503,6 @@ version = "0.1.0"
 dependencies = [
  "serde",
  "serde_json",
- "workspace-hack",
 ]
 
 [[package]]
@@ -10458,7 +10697,7 @@ version = "0.50.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7957b9740744892f114936ab4a57b3f487491bbeafaf8083688b16841a4240e5"
 dependencies = [
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -12122,7 +12361,7 @@ dependencies = [
  "quinn-udp",
  "rustc-hash 2.1.2",
  "rustls 0.23.40",
- "socket2 0.5.10",
+ "socket2 0.6.3",
  "thiserror 2.0.18",
  "tokio",
  "tracing",
@@ -12160,7 +12399,7 @@ dependencies = [
  "cfg_aliases",
  "libc",
  "once_cell",
- "socket2 0.5.10",
+ "socket2 0.6.3",
  "tracing",
  "windows-sys 0.59.0",
 ]
@@ -13026,20 +13265,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "rusqlite"
-version = "0.32.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7753b721174eb8ff87a9a0e799e2d7bc3749323e773db92e0984debb00019d6e"
-dependencies = [
- "bitflags 2.11.1",
- "fallible-iterator 0.3.0",
- "fallible-streaming-iterator",
- "hashlink 0.9.1",
- "libsqlite3-sys",
- "smallvec",
-]
-
-[[package]]
 name = "rust-embed"
 version = "8.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -13127,7 +13352,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys 0.12.1",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -13198,7 +13423,7 @@ dependencies = [
  "security-framework",
  "security-framework-sys",
  "webpki-root-certs",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -14272,6 +14497,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e3a9fe34e3e7a50316060351f37187a3f546bce95496156754b601a5fa71b76e"
 
 [[package]]
+name = "similar"
+version = "2.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bbbb5d9659141646ae647b42fe094daf6c6192d1620870b449d9557f748b2daa"
+
+[[package]]
 name = "simple_asn1"
 version = "0.6.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -14518,6 +14749,48 @@ dependencies = [
 ]
 
 [[package]]
+name = "specta"
+version = "2.0.0-rc.25"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "38f9a30cbcbb7011f1da7d73483983bf838af123883e45f2b36ed76328df9c50"
+dependencies = [
+ "rustc_version",
+ "serde_json",
+ "specta-macros",
+]
+
+[[package]]
+name = "specta-macros"
+version = "2.0.0-rc.25"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2ce14957ecc2897f1f848b8255b6531d13ddf49cbcf506b7c2c9fb1d005593bb"
+dependencies = [
+ "Inflector",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.117",
+]
+
+[[package]]
+name = "specta-serde"
+version = "0.0.12"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ee8a72b755ddb8949fd8f17c5db43f0e8a806ea587d9bc602ee3f73240c00029"
+dependencies = [
+ "specta",
+ "specta-macros",
+]
+
+[[package]]
+name = "specta-typescript"
+version = "0.0.12"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "639404ee95557f2f8b7e4cb773ffefd45304c7ab8ba21ac83b69051595e083c0"
+dependencies = [
+ "specta",
+]
+
+[[package]]
 name = "spin"
 version = "0.9.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -14573,7 +14846,7 @@ dependencies = [
  "futures-io",
  "futures-util",
  "hashbrown 0.15.5",
- "hashlink 0.10.0",
+ "hashlink",
  "indexmap 2.14.0",
  "log",
  "memchr",
@@ -15332,7 +15605,7 @@ dependencies = [
  "getrandom 0.4.2",
  "once_cell",
  "rustix 1.1.4",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -16970,7 +17243,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.48.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -17506,6 +17779,7 @@ dependencies = [
 name = "workspace-hack"
 version = "0.1.0"
 dependencies = [
+ "aes-gcm",
  "ahash",
  "aho-corasick",
  "aws-config",
@@ -17534,6 +17808,8 @@ dependencies = [
  "crypto-bigint",
  "crypto-common 0.1.6",
  "data-encoding",
+ "derive_more 2.1.1",
+ "derive_more-impl",
  "digest 0.10.7",
  "doppleganger",
  "doppleganger-core",
@@ -17549,6 +17825,7 @@ dependencies = [
  "futures-core",
  "futures-executor",
  "futures-io",
+ "futures-lite 2.6.1",
  "futures-sink",
  "futures-task",
  "futures-util",
@@ -17616,6 +17893,7 @@ dependencies = [
  "serde_core",
  "serde_json",
  "serde_with",
+ "serde_with_macros",
  "sha1 0.10.6",
  "sha2 0.10.9",
  "simd-adler32",

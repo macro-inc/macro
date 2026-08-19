@@ -10,7 +10,8 @@ use std::future::Future;
 use uuid::Uuid;
 
 /// Bot repository.
-pub trait BotRepo: Clone + Send + Sync + 'static {
+#[cfg_attr(feature = "test-utils", mockall::automock(type Err = anyhow::Error;))]
+pub trait BotRepo: Send + Sync + 'static {
     /// Repository error.
     type Err: Into<anyhow::Error> + Send;
 
@@ -139,7 +140,8 @@ pub trait BotRepo: Clone + Send + Sync + 'static {
 }
 
 /// Bot service.
-pub trait BotService: Clone + Send + Sync + 'static {
+#[cfg_attr(feature = "test-utils", mockall::automock)]
+pub trait BotService: Send + Sync + 'static {
     /// Create a bot owned by the caller or a team they administer.
     fn create_bot(
         &self,

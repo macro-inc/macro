@@ -30,4 +30,5 @@ fn all_topic_names_includes_declared_topics() {
     assert!(all_topic_names().contains(&MacroMentionsTopic::TOPIC_STR));
     assert!(all_topic_names().contains(&MacroNotificationsTopic::TOPIC_STR));
     assert!(all_topic_names().contains(&MacroChatsTopic::TOPIC_STR));
+    assert!(all_topic_names().contains(&MacroAgentSessionsTopic::TOPIC_STR));
 }

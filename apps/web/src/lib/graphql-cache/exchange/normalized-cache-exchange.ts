@@ -44,6 +44,7 @@ import {
   Kind,
   type OperationDefinitionNode,
   parse,
+  visit,
 } from 'graphql';
 import { match } from 'ts-pattern';
 import {
@@ -89,6 +90,10 @@ const AFFECTED_READ_CONTEXT_KEY = 'normalizedCacheAffectedRead';
 /** Prevents a post-network dependency refresh from forwarding the API again. */
 const REPLACEMENT_REGISTRATION_ONLY_CONTEXT_KEY =
   'normalizedCacheReplacementRegistrationOnly';
+/** Marks a query as network-to-cache hydration with a projected result. */
+export const HYDRATE_ONLY_CONTEXT_KEY = 'normalizedCacheHydrateOnly';
+/** Retains the client-annotated document while the transport uses a stripped copy. */
+const HYDRATION_DOCUMENT_CONTEXT_KEY = 'normalizedCacheHydrationDocument';
 const QUEUE_REQUEST_TIMEOUT_MS = 60_000;
 const QUEUE_LEASE_MS = 5 * 60_000;
 const EMPTY_QUEUE_POLL_MS = 30_000;
@@ -124,6 +129,51 @@ function queryText(op: Operation): string {
     queryTextCache.set(doc, text);
   }
   return text;
+}
+
+function hydrationDocument(op: Operation): DocumentNode | undefined {
+  const document: unknown = op.context[HYDRATION_DOCUMENT_CONTEXT_KEY];
+  return document && typeof document === 'object'
+    ? (document as DocumentNode)
+    : undefined;
+}
+
+function cacheQueryText(op: Operation): string {
+  const document = hydrationDocument(op);
+  if (!document) return queryText(op);
+  let text = queryTextCache.get(document);
+  if (text === undefined) {
+    text = stringifyDocument(document);
+    queryTextCache.set(document, text);
+  }
+  return text;
+}
+
+function isHydrateOnly(op: Operation): boolean {
+  return op.context[HYDRATE_ONLY_CONTEXT_KEY] === true;
+}
+
+const transportDocumentCache = new WeakMap<object, DocumentNode>();
+
+function hydrationTransportOperation(op: Operation): Operation {
+  let document = transportDocumentCache.get(op.query);
+  if (!document) {
+    document = visit(op.query, {
+      Directive(node) {
+        return node.name.value === 'cacheOnly' ? null : undefined;
+      },
+    });
+    transportDocumentCache.set(op.query, document);
+  }
+  return makeOperation(
+    op.kind,
+    { ...op, query: document },
+    {
+      ...op.context,
+      requestPolicy: 'network-only',
+      [HYDRATION_DOCUMENT_CONTEXT_KEY]: op.query,
+    }
+  );
 }
 
 function operationName(op: Operation): string | undefined {
@@ -744,6 +794,10 @@ export function normalizedCacheExchange(
       async function readThenRoute(
         op: Operation
       ): Promise<OperationResult | undefined> {
+        if (isHydrateOnly(op)) {
+          enqueueForward(hydrationTransportOperation(op));
+          return undefined;
+        }
         const policy = op.context.requestPolicy;
         if (policy === 'network-only') {
           dependencyRefreshOps.add(op.key);
@@ -941,6 +995,32 @@ export function normalizedCacheExchange(
               subscriptionEffectChains.delete(op.key);
             }
           }
+        } else if (op.kind === 'query' && isHydrateOnly(op)) {
+          if (result.data == null) return result;
+          try {
+            const hydration = await host.hydrateQuery({
+              query: cacheQueryText(op),
+              operationName: operationName(op),
+              variables: op.variables as Record<string, unknown> | undefined,
+              data: result.data,
+              identity: options.extractIdentity?.(result.data),
+              entityResolvers,
+            });
+            return {
+              ...result,
+              data: hydration.kind === 'data' ? hydration.data : undefined,
+            };
+          } catch (error) {
+            options.onCacheError?.(error, op);
+            return {
+              ...result,
+              data: undefined,
+              error: new CombinedError({
+                networkError:
+                  error instanceof Error ? error : new Error(String(error)),
+              }),
+            };
+          }
         } else if (op.kind === 'query') {
           const releaseTurn = await acquireQueryResultTurn(op.key);
           try {
@@ -1114,7 +1194,7 @@ export function normalizedCacheExchange(
         shared,
         filter((op) => op.kind === 'query'),
         mergeMap((op) => {
-          activeOps.set(op.key, op);
+          if (!isHydrateOnly(op)) activeOps.set(op.key, op);
           return pipe(
             fromPromise(readThenRoute(op)),
             mergeMap((result) =>

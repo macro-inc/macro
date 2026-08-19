@@ -9,14 +9,6 @@
  */
 
 /**
- * Ordered from least to most access top -> bottom
- */
-export type AccessLevel = 'view' | 'comment' | 'edit' | 'owner';
-/**
- * Which tag set a tag belongs to, relative to the caller.
- */
-export type TagScope = 'personal' | 'team';
-/**
  * Content of a bash code execution response - either a result or an error
  */
 export type BashCodeExecutionContent =
@@ -50,70 +42,11 @@ export type ToolPropertyTargetEntityType =
   | 'user'
   | 'company';
 /**
- * Viewer-relative attendance status for a call record.
- * Serializes as `ATTENDED`, `MISSED`, or `UNATTENDED`.
+ * How search tools match query terms. Restricted to partial/exact — the
+ * backend also supports regexp and an internal query mode, but those are not
+ * offered to the model.
  */
-export type CallStatus = 'ATTENDED' | 'MISSED' | 'UNATTENDED';
-/**
- * Type of channel timeline window to read.
- */
-export type ChannelMessagesWindowType =
-  | 'latest'
-  | 'timeRange'
-  | 'aroundMessage'
-  | 'page'
-  | 'messages';
-/**
- * Which part of a thread to read.
- */
-export type ChannelThreadWindowType = 'allIfSmall' | 'latest' | 'aroundReply';
-/**
- * A requested change to an event's video conference.
- */
-export type ConferenceChangeInput = 'google_meet' | 'remove';
-/**
- * The content of the document
- */
-export type Content =
-  | {
-      text: string;
-    }
-  | {
-      markdown: MarkdownNode[];
-    };
-/**
- * A single node of a markdown document as seen by the AI.
- */
-export type MarkdownNode =
-  | {
-      /**
-       * Human readable content
-       */
-      content: string;
-      /**
-       * The node id
-       */
-      nodeId: string;
-      /**
-       * The style on the node, h1, paragraph, code, etc.
-       */
-      tag: string;
-      type: 'generic';
-    }
-  | {
-      type: 'staticImage';
-      /**
-       * URL the image can be fetched from.
-       */
-      url: string;
-    }
-  | {
-      /**
-       * The DSS id of the image. Use the read tool with this id to read it.
-       */
-      id: string;
-      type: 'dssImage';
-    };
+export type SearchMatchType = 'partial' | 'exact';
 export type UnifiedSearchIndex =
   | 'documents'
   | 'chats'
@@ -122,52 +55,88 @@ export type UnifiedSearchIndex =
   | 'projects'
   | 'call_records';
 /**
- * How search tools match query terms. Restricted to partial/exact — the
- * backend also supports regexp and an internal query mode, but those are not
- * offered to the model.
+ * Which tag set a tag belongs to, relative to the caller.
  */
-export type SearchMatchType = 'partial' | 'exact';
+export type TagScope = 'personal' | 'team';
 /**
  * How multiple tag filters combine when filtering items.
  */
 export type TagMatch = 'any' | 'all';
-export type ContentType =
-  | 'channel'
-  | 'channel-message'
-  | 'chat-thread'
-  | 'chat-message'
-  | 'project';
+/**
+ * A search result annotated with the caller-visible tags on the item.
+ */
+export type TaggedSearchResult = {
+  /**
+   * Tags on this item visible to the user.
+   */
+  tags?: AppliedTag[];
+} & TaggedSearchResult1;
+export type TaggedSearchResult1 =
+  | (DocumentSearchResponseItemWithMetadata & {
+      type: 'document';
+    })
+  | (ChatSearchResponseItemWithMetadata & {
+      type: 'chat';
+    })
+  | (EmailSearchResponseItemWithMetadata & {
+      type: 'email';
+    })
+  | (ChannelMessageSearchResponseItem & {
+      type: 'channelMessage';
+    })
+  | (ChannelNameSearchResponseItem & {
+      type: 'channel';
+    })
+  | (ProjectSearchResponseItemWithMetadata & {
+      type: 'project';
+    })
+  | (CallRecordSearchResponseItemWithMetadata & {
+      type: 'call';
+    })
+  | (CrmCompanySearchResponseItem & {
+      type: 'company';
+    });
+/**
+ * The document sub type enum represents all values of document sub types.
+ * These values should match the `document_sub_type_value` table in macrodb.
+ */
+export type DocumentSubType = 'task' | 'snippet' | 'skill';
+/**
+ * Viewer-relative attendance status for a call record.
+ * Serializes as `ATTENDED`, `MISSED`, or `UNATTENDED`.
+ */
+export type CallStatus = 'ATTENDED' | 'MISSED' | 'UNATTENDED';
 /**
  * The mutually exclusive time shape supplied to calendar tools.
  */
 export type EventTimeInput =
   | {
       /**
-       * Exclusive end instant, RFC 3339 UTC. Must be after the start.
-       */
-      endsAt: string;
-      kind: 'timed';
-      /**
        * Inclusive start instant, RFC 3339 UTC (e.g. 2026-08-20T17:00:00Z).
        */
       startsAt: string;
+      /**
+       * Exclusive end instant, RFC 3339 UTC. Must be after the start.
+       */
+      endsAt: string;
       /**
        * IANA time zone the event was scheduled in (e.g.
        * America/New_York). Recurring events expand in this zone.
        */
       timeZone?: string | null;
+      kind: 'timed';
     }
   | {
+      /**
+       * Inclusive local start date (YYYY-MM-DD).
+       */
+      startDate: string;
       /**
        * Exclusive local end date (YYYY-MM-DD); the day after the last
        * covered day, so a one-day event ends the next date.
        */
       endDate: string;
       kind: 'allDay';
-      /**
-       * Inclusive local start date (YYYY-MM-DD).
-       */
-      startDate: string;
     };
 /**
  * External systems items can be imported from.
@@ -217,23 +186,25 @@ export type TagColor =
  */
 export type DeletionScopeInput = 'all' | 'this_event' | 'this_and_following';
 /**
- * Where document content is, or is expected to be, read from.
+ * Entity types that can be returned by the list entities AI tool.
  */
-export type DocumentContentLocation =
-  | 'object_storage'
-  | 'sync_service'
-  | 'docx_bom_parts'
-  | 'converted_pdf'
-  | 'unknown';
+export type ItemType =
+  | 'calendar_event'
+  | 'document'
+  | 'ai_chat'
+  | 'project'
+  | 'email'
+  | 'channel'
+  | 'channel_thread'
+  | 'call'
+  | 'foreign_entity';
 /**
- * API-visible content lifecycle state derived from current document metadata.
+ * Sort order for the list entities AI tool.
  */
-export type DocumentContentState = 'unknown' | 'pending' | 'ready';
-/**
- * The document sub type enum represents all values of document sub types.
- * These values should match the `document_sub_type_value` table in macrodb.
- */
-export type DocumentSubType = 'task' | 'snippet' | 'skill';
+export type SortBy =
+  | 'recently_viewed'
+  | 'recently_updated'
+  | 'recently_created';
 export type EmailPreset = 'signal';
 /**
  * Item returned by the list entities AI tool.
@@ -241,29 +212,29 @@ export type EmailPreset = 'signal';
 export type EntityItem =
   | {
       /**
-       * Which conferencing system backs the join URL.
-       */
-      conferenceProvider?: string | null;
-      /**
-       * Optional conference join URL.
-       */
-      conferenceUrl?: string | null;
-      /**
        * Calendar event id.
        */
       id: string;
       /**
-       * Optional location.
+       * Event title.
        */
-      location?: string | null;
+      title: string;
       /**
        * Event status.
        */
       status: string;
       /**
-       * Tags on the event visible to the user.
+       * Optional location.
        */
-      tags?: AppliedTag[];
+      location?: string | null;
+      /**
+       * Optional conference join URL.
+       */
+      conferenceUrl?: string | null;
+      /**
+       * Which conferencing system backs the join URL.
+       */
+      conferenceProvider?: string | null;
       /**
        * Canonical timed or all-day span.
        */
@@ -271,16 +242,12 @@ export type EntityItem =
         [k: string]: unknown;
       };
       /**
-       * Event title.
+       * Tags on the event visible to the user.
        */
-      title: string;
+      tags?: AppliedTag[];
       type: 'calendarEvent';
     }
   | {
-      /**
-       * The document's file type (e.g. md, pdf, docx), when known.
-       */
-      fileType?: string | null;
       /**
        * Document id.
        */
@@ -289,6 +256,10 @@ export type EntityItem =
        * Document name.
        */
       name: string;
+      /**
+       * The document's file type (e.g. md, pdf, docx), when known.
+       */
+      fileType?: string | null;
       /**
        * The document's sub type: "task" for Macro tasks, "snippet" for snippets,
        * "skill" for skills.
@@ -336,33 +307,33 @@ export type EntityItem =
        */
       id: string;
       /**
-       * Whether the thread currently belongs in the inbox.
+       * Email subject, when present.
        */
-      inboxVisible: boolean;
-      /**
-       * Whether the thread contains a draft.
-       */
-      isDraft: boolean;
-      /**
-       * Whether the thread has been read.
-       */
-      isRead: boolean;
-      /**
-       * Sender email address, when present.
-       */
-      senderEmail?: string | null;
-      /**
-       * Sender display name, when present.
-       */
-      senderName?: string | null;
+      subject?: string | null;
       /**
        * Preview text from the thread's latest relevant message.
        */
       snippet?: string | null;
       /**
-       * Email subject, when present.
+       * Sender display name, when present.
        */
-      subject?: string | null;
+      senderName?: string | null;
+      /**
+       * Sender email address, when present.
+       */
+      senderEmail?: string | null;
+      /**
+       * Whether the thread currently belongs in the inbox.
+       */
+      inboxVisible: boolean;
+      /**
+       * Whether the thread has been read.
+       */
+      isRead: boolean;
+      /**
+       * Whether the thread contains a draft.
+       */
+      isDraft: boolean;
       /**
        * Tags on the thread visible to the user.
        */
@@ -382,24 +353,24 @@ export type EntityItem =
     }
   | {
       /**
-       * Channel id containing the thread.
-       */
-      channelId: string;
-      /**
        * Parent message id for the thread.
        */
       id: string;
+      /**
+       * Channel id containing the thread.
+       */
+      channelId: string;
       type: 'channelThread';
     }
   | {
       /**
-       * User or actor that created the call.
-       */
-      createdBy: string;
-      /**
        * Call id.
        */
       id: string;
+      /**
+       * User or actor that created the call.
+       */
+      createdBy: string;
       /**
        * Tags on the call visible to the user.
        */
@@ -407,6 +378,10 @@ export type EntityItem =
       type: 'call';
     }
   | {
+      /**
+       * Foreign entity row id.
+       */
+      id: string;
       /**
        * Provider-specific foreign entity id.
        */
@@ -416,10 +391,6 @@ export type EntityItem =
        */
       foreignEntitySource: string;
       /**
-       * Foreign entity row id.
-       */
-      id: string;
-      /**
        * Foreign entity metadata.
        */
       metadata: {
@@ -428,25 +399,20 @@ export type EntityItem =
       type: 'foreignEntity';
     };
 /**
- * Entity types that can be returned by the list entities AI tool.
+ * User-facing notification categories used for list filtering.
  */
-export type ItemType =
-  | 'calendar_event'
-  | 'document'
-  | 'ai_chat'
-  | 'project'
+export type NotificationCategory =
   | 'email'
+  | 'message'
   | 'channel'
-  | 'channel_thread'
+  | 'document'
+  | 'project'
+  | 'chat'
   | 'call'
-  | 'foreign_entity';
-/**
- * Sort order for the list entities AI tool.
- */
-export type SortBy =
-  | 'recently_viewed'
-  | 'recently_updated'
-  | 'recently_created';
+  | 'task'
+  | 'github'
+  | 'reminder'
+  | 'calendar';
 /**
  * Canonical entity types accepted by the notification-listing tool.
  *
@@ -471,32 +437,9 @@ export type NotificationEntityType =
   | 'reminder'
   | 'skill';
 /**
- * User-facing notification categories used for list filtering.
- */
-export type NotificationCategory =
-  | 'email'
-  | 'message'
-  | 'channel'
-  | 'document'
-  | 'project'
-  | 'chat'
-  | 'call'
-  | 'task'
-  | 'github'
-  | 'reminder'
-  | 'calendar';
-/**
  * The kind of entity to move.
  */
 export type MoveableEntityType = 'document' | 'chat' | 'email' | 'project';
-/**
- * Direction for reading more messages around a cursor.
- */
-export type PageDirection = 'older' | 'newer';
-/**
- * The kind of an item inside a project.
- */
-export type ProjectItemType = 'document' | 'chat' | 'project';
 /**
  * Position of a channel message.
  */
@@ -509,69 +452,100 @@ export type ToolOmissionKind =
   | 'newerMessages'
   | 'threadReplies'
   | 'truncatedContent';
-export type ReadThreadReadContent =
+/**
+ * Type of channel timeline window to read.
+ */
+export type ChannelMessagesWindowType =
+  | 'latest'
+  | 'timeRange'
+  | 'aroundMessage'
+  | 'page'
+  | 'messages';
+/**
+ * Direction for reading more messages around a cursor.
+ */
+export type PageDirection = 'older' | 'newer';
+/**
+ * Which part of a thread to read.
+ */
+export type ChannelThreadWindowType = 'allIfSmall' | 'latest' | 'aroundReply';
+/**
+ * The content of the document
+ */
+export type Content =
   | {
-      channel_id: string;
-      channel_name?: string | null;
-      transcript: string;
-      type: 'channel';
+      text: string;
     }
   | {
-      conversation: ConversationRecord[];
-      type: 'chat';
-    }
-  | {
-      formatted_preview: string;
-      type: 'itemPreviews';
+      markdown: MarkdownNode[];
     };
 /**
- * A single search result from web search
+ * A single node of a markdown document as seen by the AI.
  */
-export type SearchResult = {
-  encrypted_content?: string | null;
-  page_age?: string | null;
-  title: string;
-  type: 'web_search_result';
-  url: string;
-};
+export type MarkdownNode =
+  | {
+      /**
+       * The node id
+       */
+      nodeId: string;
+      /**
+       * Human readable content
+       */
+      content: string;
+      /**
+       * The style on the node, h1, paragraph, code, etc.
+       */
+      tag: string;
+      type: 'generic';
+    }
+  | {
+      /**
+       * URL the image can be fetched from.
+       */
+      url: string;
+      type: 'staticImage';
+    }
+  | {
+      /**
+       * The DSS id of the image. Use the read tool with this id to read it.
+       */
+      id: string;
+      type: 'dssImage';
+    };
+/**
+ * API-visible content lifecycle state derived from current document metadata.
+ */
+export type DocumentContentState = 'unknown' | 'pending' | 'ready';
+/**
+ * Where document content is, or is expected to be, read from.
+ */
+export type DocumentContentLocation =
+  | 'object_storage'
+  | 'sync_service'
+  | 'docx_bom_parts'
+  | 'converted_pdf'
+  | 'unknown';
+/**
+ * Ordered from least to most access top -> bottom
+ */
+export type AccessLevel = 'view' | 'comment' | 'edit' | 'owner';
+/**
+ * The kind of an item inside a project.
+ */
+export type ProjectItemType = 'document' | 'chat' | 'project';
 /**
  * How search terms are matched against skill names.
  */
 export type SearchSkillsMatchType = 'partial' | 'exact';
 /**
- * A search result annotated with the caller-visible tags on the item.
+ * User tools are pending until a user executes them
  */
-export type TaggedSearchResult = {
-  /**
-   * Tags on this item visible to the user.
-   */
-  tags?: AppliedTag[];
-} & TaggedSearchResult1;
-export type TaggedSearchResult1 =
-  | (DocumentSearchResponseItemWithMetadata & {
-      type: 'document';
-    })
-  | (ChatSearchResponseItemWithMetadata & {
-      type: 'chat';
-    })
-  | (EmailSearchResponseItemWithMetadata & {
-      type: 'email';
-    })
-  | (ChannelMessageSearchResponseItem & {
-      type: 'channelMessage';
-    })
-  | (ChannelNameSearchResponseItem & {
-      type: 'channel';
-    })
-  | (ProjectSearchResponseItemWithMetadata & {
-      type: 'project';
-    })
-  | (CallRecordSearchResponseItemWithMetadata & {
-      type: 'call';
-    })
-  | (CrmCompanySearchResponseItem & {
-      type: 'company';
-    });
+export type UserToolResponse =
+  | 'PendingUserExecution'
+  | 'Rejected'
+  | {
+      UserAction: SendEmailResponse;
+    };
 /**
  * Response from the SendEmail tool.
  */
@@ -625,14 +599,9 @@ export type TextEditorCodeExecutionContent =
  */
 export type UpdateScopeInput = 'all' | 'this_event';
 /**
- * User tools are pending until a user executes them
+ * A requested change to an event's video conference.
  */
-export type UserToolResponse =
-  | 'PendingUserExecution'
-  | 'Rejected'
-  | {
-      UserAction: SendEmailResponse;
-    };
+export type ConferenceChangeInput = 'google_meet' | 'remove';
 /**
  * Content of a web fetch response - either a successful result or an error
  */
@@ -648,13 +617,13 @@ export type WebFetchContent =
  */
 export type WebFetchSource =
   | {
-      data: string;
       media_type: string;
+      data: string;
       type: 'text';
     }
   | {
-      data: string;
       media_type: string;
+      data: string;
       type: 'base64';
     };
 /**
@@ -673,30 +642,38 @@ export type WebFetchErrorCode =
  * Content of a web search response — either search results or an error.
  */
 export type WebSearchContent = SearchResult[] | WebSearchToolError;
+/**
+ * A single search result from web search
+ */
+export type SearchResult = {
+  title: string;
+  url: string;
+  encrypted_content?: string | null;
+  page_age?: string | null;
+  type: 'web_search_result';
+};
+export type ContentType =
+  | 'channel'
+  | 'channel-message'
+  | 'chat-thread'
+  | 'chat-message'
+  | 'project';
+export type ReadThreadReadContent =
+  | {
+      channel_id: string;
+      channel_name?: string | null;
+      transcript: string;
+      type: 'channel';
+    }
+  | {
+      conversation: ConversationRecord[];
+      type: 'chat';
+    }
+  | {
+      formatted_preview: string;
+      type: 'itemPreviews';
+    };
 
-/**
- * A tag applied to an item, resolved to its human-readable label.
- */
-export interface AppliedTag {
-  /**
-   * The tag's label.
-   */
-  label: string;
-  scope: TagScope;
-}
-/**
- * An attendee supplied to a calendar tool.
- */
-export interface AttendeeInput {
-  /**
-   * The attendee's email address.
-   */
-  email: string;
-  /**
-   * Whether attendance is optional for this attendee. Defaults to required.
-   */
-  isOptional?: boolean;
-}
 /**
  * Execute a bash command in a sandboxed environment using Claude's built-in code execution tool.
  */
@@ -707,25 +684,32 @@ export interface BashCodeExecution {
   input: string;
 }
 /**
+ * Response from bash_code_execution tool
+ */
+export interface BashCodeExecutionResponse {
+  tool_use_id: string;
+  content: BashCodeExecutionContent;
+}
+/**
  * Successful bash code execution result
  */
 export interface BashCodeExecutionResult {
   /**
-   * Files generated during execution
+   * Standard output from the command
    */
-  content?: CodeExecutionFile[] | null;
-  /**
-   * Exit code (0 for success, non-zero for failure)
-   */
-  return_code: number;
+  stdout: string;
   /**
    * Standard error from the command
    */
   stderr: string;
   /**
-   * Standard output from the command
+   * Exit code (0 for success, non-zero for failure)
    */
-  stdout: string;
+  return_code: number;
+  /**
+   * Files generated during execution
+   */
+  content?: CodeExecutionFile[] | null;
 }
 /**
  * A file generated during code execution
@@ -743,13 +727,6 @@ export interface BashCodeExecutionToolError {
   error_code: CodeExecutionErrorCode;
 }
 /**
- * Response from bash_code_execution tool
- */
-export interface BashCodeExecutionResponse {
-  content: BashCodeExecutionContent;
-  tool_use_id: string;
-}
-/**
  * Apply one multi-select option delta — most often a tag — to many entities in a single call. Use this instead of calling SetEntityProperty once per entity when the user asks to tag or label a set of items at once (e.g. "tag the last 50 emails as Follow-up"). Provide the property_definition_id (a tag set's propertyDefinitionId from ListTags) and the option ids to add and/or remove (a tag's option id from ListTags). The same add_option_ids/remove_option_ids delta is applied to every entity, composing atomically with concurrent edits per entity.
  *
  * Only for multi-select or tag properties; for other value types, or a single entity, use SetEntityProperty. Up to 200 entities per call — split larger sets across multiple calls.
@@ -757,11 +734,6 @@ export interface BashCodeExecutionResponse {
  * Best-effort: each entity is handled independently. Entities you don't have edit access to are reported with status 'skipped_no_permission' and left unchanged, entities that can't take the property are 'failed', and the rest are 'applied' — one call never fails wholesale because a few entities were not editable. Inspect the per-entity results and the summary to see what happened.
  */
 export interface BulkSetEntityPropertyOptions {
-  /**
-   * Options to add to every entity (e.g. a tag's option id from ListTags),
-   * deduped against each entity's current value.
-   */
-  add_option_ids?: string[] | null;
   /**
    * The entities to update (up to 200). Entities the user can't edit are skipped.
    */
@@ -772,6 +744,11 @@ export interface BulkSetEntityPropertyOptions {
    */
   property_definition_id: string;
   /**
+   * Options to add to every entity (e.g. a tag's option id from ListTags),
+   * deduped against each entity's current value.
+   */
+  add_option_ids?: string[] | null;
+  /**
    * Options to remove from every entity. Removing an absent option is a no-op.
    */
   remove_option_ids?: string[] | null;
@@ -780,11 +757,11 @@ export interface BulkSetEntityPropertyOptions {
  * One entity targeted by a bulk option update.
  */
 export interface BulkTargetEntity {
+  entity_type: ToolPropertyTargetEntityType;
   /**
    * The id of the entity.
    */
   entity_id: string;
-  entity_type: ToolPropertyTargetEntityType;
 }
 /**
  * Response from the BulkSetEntityPropertyOptions tool.
@@ -804,584 +781,31 @@ export interface BulkSetEntityPropertyOptionsResponse {
  */
 export interface BulkSetEntityPropertyOptionsResult {
   /**
-   * The entity's id this result is for.
-   */
-  entityId: string;
-  /**
    * The entity's type this result is for.
    */
   entityType: string;
   /**
-   * A human-readable reason, present only when the status is failed.
+   * The entity's id this result is for.
    */
-  error?: string | null;
+  entityId: string;
   /**
    * One of: applied, skipped_no_permission, failed.
    */
   status: string;
-}
-/**
- * One calendar event occurrence in the requested window.
- */
-export interface CalendarEventListItem {
   /**
-   * Total number of attendees.
+   * A human-readable reason, present only when the status is failed.
    */
-  attendeeCount: number;
-  /**
-   * Attendees, capped at 20; `attendee_count` has the full number.
-   */
-  attendees: ToolEventAttendee[];
-  /**
-   * Calendar the event belongs to, when known.
-   */
-  calendarId?: string | null;
-  /**
-   * Conference join URL, when a conference is attached.
-   */
-  conferenceUrl?: string | null;
-  /**
-   * Event body, truncated for brevity.
-   */
-  description?: string | null;
-  /**
-   * Exclusive occurrence end: RFC 3339 UTC instant, or YYYY-MM-DD for
-   * all-day events.
-   */
-  end: string;
-  /**
-   * Macro calendar event id, used by UpdateCalendarEvent and
-   * DeleteCalendarEvent. Recurring events repeat it across occurrences.
-   */
-  eventId: string;
-  /**
-   * Whether the event covers whole days.
-   */
-  isAllDay: boolean;
-  /**
-   * Whether the user's calendar prohibits modifying this event.
-   */
-  isReadOnly: boolean;
-  /**
-   * Whether this occurrence belongs to a recurring series.
-   */
-  isRecurring: boolean;
-  /**
-   * Location label, when set.
-   */
-  location?: string | null;
-  /**
-   * The user's own RSVP on this event, when they are an attendee.
-   */
-  myResponse?: string | null;
-  /**
-   * Organizer email address, when known.
-   */
-  organizerEmail?: string | null;
-  /**
-   * Occurrence key identifying this instance within its recurring series;
-   * pass as `recurrenceId` for occurrence-scoped updates and deletions.
-   */
-  recurrenceId?: string | null;
-  /**
-   * Occurrence start: RFC 3339 UTC instant, or YYYY-MM-DD for all-day
-   * events.
-   */
-  start: string;
-  /**
-   * Event status: confirmed or tentative.
-   */
-  status: string;
-  /**
-   * IANA time zone the event was scheduled in, when known.
-   */
-  timeZone?: string | null;
-  /**
-   * Display title.
-   */
-  title: string;
-}
-/**
- * An attendee of a calendar event, as returned by calendar tools.
- */
-export interface ToolEventAttendee {
-  /**
-   * Attendee email address.
-   */
-  email: string;
-  /**
-   * Whether attendance is optional.
-   */
-  isOptional: boolean;
-  /**
-   * Whether this attendee organized the event.
-   */
-  isOrganizer: boolean;
-  /**
-   * RSVP state: needs_action, accepted, declined, or tentative.
-   */
-  responseStatus: string;
-}
-export interface CallRecordMetadata {
-  attended: boolean;
-  channel_name?: string | null;
-  created_by: string;
-  duration_ms: number;
-  ended_at: string;
-  started_at: string;
-  status: CallStatus;
-  updated_at: string;
-}
-export interface CallRecordSearchResponseItemWithMetadata {
-  call_id: string;
-  call_search_results: CallRecordSearchResult[];
-  channel_id: string;
-  id: string;
-  /**
-   * `None` if the call has been deleted.
-   */
-  metadata?: CallRecordMetadata | null;
-  name?: string | null;
-  owner_id: string;
-  participant_ids: string[];
-}
-export interface CallRecordSearchResult {
-  ended_at?: string | null;
-  highlight: SearchHighlight;
-  score?: number | null;
-  sequence_num?: number | null;
-  speaker_id?: string | null;
-  started_at?: string | null;
-  transcript_id?: string | null;
-}
-export interface SearchHighlight {
-  /**
-   * The highlight match on the bcc (email only)
-   */
-  bcc?: string[];
-  /**
-   * The highlight match on the cc (email only)
-   */
-  cc?: string[];
-  /**
-   * The highlight match on the content field
-   */
-  content?: string[];
-  /**
-   * The highlight match on the name field
-   */
-  name?: string | null;
-  /**
-   * The highlight match on the recipients (email only)
-   */
-  recipients?: string[];
-  /**
-   * The highlight match on the sender (email only)
-   */
-  sender?: string | null;
-  /**
-   * The highlight match on the user (owner) of the entity
-   */
-  user_id?: string | null;
-}
-/**
- * A single channel-message content hit in the unified search response.
- * One item per matching message, timestamped by the message itself, so the
- * unified sort interleaves channel messages with other entity types by
- * their own recency.
- */
-export interface ChannelMessageSearchResponseItem {
-  /**
-   * The id of the channel the message belongs to
-   */
-  channel_id: string;
-  /**
-   * The type of channel
-   */
-  channel_type: string;
-  /**
-   * When the channel message was created
-   */
-  created_at: string;
-  /**
-   * When the channel message was deleted, if it has been
-   */
-  deleted_at?: string | null;
-  highlight: SearchHighlight;
-  /**
-   * Standardized id field shared by all item types; the channel id.
-   */
-  id: string;
-  /**
-   * The channel message id
-   */
-  message_id: string;
-  /**
-   * we don't store this for channels atm but keeping it here for consistency
-   */
-  owner_id?: string | null;
-  /**
-   * The score of the result
-   */
-  score?: number | null;
-  /**
-   * The sender id
-   */
-  sender_id: string;
-  /**
-   * The channel message thread id
-   */
-  thread_id?: string | null;
-  /**
-   * When the channel message was last updated
-   */
-  updated_at: string;
-}
-/**
- * Metadata for a channel fetched from the database
- */
-export interface ChannelMetadata {
-  created_at: string;
-  interacted_at?: string | null;
-  updated_at: string;
-  viewed_at?: string | null;
-}
-/**
- * A channel-name search hit.
- */
-export interface ChannelNameSearchResponseItem {
-  /**
-   * The channel id.
-   */
-  channel_id: string;
-  /**
-   * The type of channel.
-   */
-  channel_type: string;
-  highlight: SearchHighlight;
-  /**
-   * Standardized id field shared by all item types; the channel id.
-   */
-  id: string;
-  /**
-   * Metadata for the channel.
-   */
-  metadata?: ChannelMetadata | null;
-  /**
-   * The channel owner.
-   */
-  owner_id?: string | null;
-  /**
-   * The score of the result.
-   */
-  score?: number | null;
-}
-/**
- * A single message in the tool response.
- */
-export interface ChatMessagePreview {
-  /**
-   * IDs of attachments referenced by this message.
-   */
-  attachmentIds: string[];
-  /**
-   * The text content of the message.
-   */
-  content: string;
-  /**
-   * The role of the message author (user, assistant, or system).
-   */
-  role: string;
-}
-/**
- * A chat match for a given message id
- */
-export interface ChatMessageSearchResult {
-  /**
-   * The chat message id for the chat
-   * This is only present if the search match was on the chat message content
-   */
-  chat_message_id?: string | null;
-  highlight: SearchHighlight;
-  /**
-   * The role of the chat message
-   * This is only present if the search match was on the chat message content
-   */
-  role?: string | null;
-  /**
-   * The score of the result
-   */
-  score?: number | null;
-}
-/**
- * Metadata for a chat fetched from the database
- */
-export interface ChatMetadata {
-  created_at: string;
-  deleted_at?: string | null;
-  project_id?: string | null;
-  updated_at: string;
-  viewed_at?: string | null;
-}
-/**
- * ChatSearchResponse object with channel metadata we fetch from macrodb. we don't store these
- * timestamps in opensearch as they would require us to update each chat message record for the chat
- * every time the chat updates (specifically for updated_at and viewed_at)
- */
-export interface ChatSearchResponseItemWithMetadata {
-  /**
-   * The id of the chat
-   */
-  chat_id: string;
-  /**
-   * The search results for the chat
-   * This may be empty if the search result match was on the chat title only
-   */
-  chat_search_results: ChatMessageSearchResult[];
-  /**
-   * Standardized fields that all item types will share.
-   * These field names are being aligned across all item types
-   * for consistency in our data model.
-   */
-  id: string;
-  /**
-   * Metadata from the database. None if the chat doesn't exist in the database.
-   */
-  metadata?: ChatMetadata | null;
-  name: string;
-  owner_id: string;
-  /**
-   * The id of the creator of the chat
-   */
-  user_id: string;
-}
-/**
- * Citations configuration for web fetch
- */
-export interface CitationsConfig {
-  enabled: boolean;
-}
-/**
- * A single comment in a thread.
- */
-export interface Comment {
-  /**
-   * The unique id of the comment.
-   */
-  commentId: number;
-  /**
-   * When the comment was created.
-   */
-  createdAt?: string | null;
-  /**
-   * When the comment was deleted, if ever.
-   */
-  deletedAt?: string | null;
-  /**
-   * Arbitrary comment metadata.
-   */
-  metadata?: {
-    [k: string]: unknown;
-  };
-  /**
-   * Ordering position within the thread.
-   */
-  order?: number | null;
-  /**
-   * The user id of the comment owner.
-   */
-  owner: string;
-  /**
-   * Sender display string.
-   */
-  sender?: string | null;
-  /**
-   * Comment body.
-   */
-  text: string;
-  /**
-   * The thread this comment belongs to.
-   */
-  threadId: number;
-  /**
-   * When the comment was last updated.
-   */
-  updatedAt?: string | null;
-}
-/**
- * A thread bundled together with its ordered comments.
- */
-export interface CommentThread {
-  /**
-   * The comments in the thread, ordered by `createdAt` ASC.
-   */
-  comments: Comment[];
-  thread: Thread;
-}
-/**
- * A comment thread attached to a document.
- */
-export interface Thread {
-  /**
-   * When the thread was created.
-   */
-  createdAt?: string | null;
-  /**
-   * When the thread was deleted, if ever.
-   */
-  deletedAt?: string | null;
-  /**
-   * The document the thread is attached to.
-   */
-  documentId: string;
-  /**
-   * Arbitrary thread metadata.
-   */
-  metadata?: {
-    [k: string]: unknown;
-  };
-  /**
-   * The user id of the thread owner.
-   */
-  owner: string;
-  /**
-   * Whether the thread has been resolved.
-   */
-  resolved: boolean;
-  /**
-   * The unique id of the thread.
-   */
-  threadId: number;
-  /**
-   * When the thread was last updated.
-   */
-  updatedAt?: string | null;
-}
-/**
- * A contact belonging to the company.
- */
-export interface CompanyContactItem {
-  /**
-   * The contact's email address.
-   */
-  email: string;
-  /**
-   * The CRM contact id.
-   */
-  id: string;
-  /**
-   * Most recent known interaction with this contact.
-   */
-  lastInteraction: string;
-  /**
-   * The contact's display name, when known.
-   */
-  name?: string | null;
-}
-/**
- * A CRM company row returned by [`ListCompanies`].
- */
-export interface CompanyListItem {
-  /**
-   * The company's email domains, primary domain first.
-   */
-  domains: string[];
-  /**
-   * Whether the company is hidden from the team's CRM listings.
-   */
-  hidden: boolean;
-  /**
-   * The CRM company id. Use with GetCompany, GetEntityProperties /
-   * SetEntityProperty (entity_type=company).
-   */
-  id: string;
-  /**
-   * Most recent known email interaction with this company.
-   */
-  lastInteraction: string;
-  /**
-   * Company display name, when resolved.
-   */
-  name?: string | null;
-  /**
-   * Macro user id of the company's owner, if set.
-   */
-  ownerUserId?: string | null;
-  /**
-   * The company's revenue (dollars), if set.
-   */
-  revenue?: number | null;
-  /**
-   * The company's pipeline stage, if set.
-   */
-  stage?: ToolCompanyStage | null;
-}
-/**
- * A company's pipeline stage: the select option id currently set plus its
- * human-readable label.
- */
-export interface ToolCompanyStage {
-  /**
-   * The stage's display label (e.g. "Lead", "Customer").
-   */
-  label: string;
-  /**
-   * The stage property option id (usable with SetEntityProperty).
-   */
-  optionId: string;
-}
-/**
- * A property attached to the company (builtin or custom).
- */
-export interface CompanyPropertyItem {
-  /**
-   * The current value, if set.
-   */
-  currentValue?: {
-    [k: string]: unknown;
-  };
-  /**
-   * The data type (boolean, date, number, string, select_string, select_number, tag, entity, link).
-   */
-  dataType: string;
-  /**
-   * Human-readable property name.
-   */
-  displayName: string;
-  /**
-   * Whether the property supports multiple values.
-   */
-  isMultiSelect: boolean;
-  /**
-   * Whether this is a system-defined property.
-   */
-  isSystem: boolean;
-  /**
-   * Available options for select-type properties.
-   */
-  options: CompanyPropertyOption[];
-  /**
-   * The property definition id. Use with SetEntityProperty (entity_type=company).
-   */
-  propertyDefinitionId: string;
-}
-/**
- * An option available on a select-type company property.
- */
-export interface CompanyPropertyOption {
-  /**
-   * The option's display value.
-   */
-  displayValue: string;
-  /**
-   * The option id to use when setting select values via SetEntityProperty.
-   */
-  id: string;
+  error?: string | null;
 }
 /**
  * Search items by their content: document body text; email subject/body/sender/recipient/cc/bcc and the display names on those addresses; chat messages; call transcripts. This is keyword search, not semantic search: queries only match literal words/tokens, prefixes, or exact quoted terms that appear in the indexed content. Use this for targeted keyword/content lookup, not for activity-summary questions like "what happened today", "what's going on", "catch me up", or "what happened in standup today"; those should start with ListEntities using time/type/channel filters. Whitespace-separated terms are ANDed. For documents and emails, every term must match somewhere in the document — different terms can appear in different chunks/pages or different fields. For documents and emails specifically, each single-word term is matched as a prefix (so `scri` matches `script`); for emails the prefix expansion also runs against the local-part of address fields. For chats, channels, and call transcripts the whole query is matched as a single adjacent phrase prefix — so pass 1-3 targeted keywords drawn from words that would literally appear in the content, not the user's natural-language description; long phrases will not match. Matching defaults to prefix; set matchType to 'exact' to match whole tokens/phrases with no prefix expansion (e.g. an exact word, identifier, or full email address). Wrap a multi-word phrase in double quotes to keep it together as one adjacent phrase. If the user's request combines a person with a topic, run separate searches rather than one combined query. Leave entityTypes empty by default; only filter when the user explicitly scopes to a type. Results for documents, emails, AI chats, projects, and call records include the tags visible to the user as {label, scope} pairs; to restrict a search to tagged items, pass the tag labels in the tags argument (ListTags shows which tags exist).
  */
 export interface ContentSearch {
+  /**
+   * The text to search. Pass 1-3 keywords drawn from words that would literally appear in the content, not the user's natural-language description. Whitespace-separated terms are ANDed. For documents, every term must appear somewhere in the document (different chunks/pages are fine). For emails each term is matched across subject/body/sender/recipient. For chats/channels/calls the whole query is matched as a single adjacent phrase prefix, so long phrases will not match. Wrap a multi-word phrase in double quotes to match it as one phrase. Use matchType 'exact' for whole-token (or full email address) matching instead of prefix.
+   */
+  query: string;
+  matchType?: SearchMatchType & string;
   /**
    * Which types of items to search. Leave empty (the default) to search all types — this is almost always what you want. Only set this when the user's request clearly targets one or more specific types. Examples: ['documents'], ['emails', 'documents'], ['channels'], ['call_records'].
    */
@@ -1390,11 +814,6 @@ export interface ContentSearch {
    * Restrict email results to a single connected inbox, given as that inbox's email address (from ListInboxes). Omit to search every inbox the user can access. Only set this when the user scopes the request to a specific mailbox. Only affects email results.
    */
   inbox?: string | null;
-  matchType?: SearchMatchType & string;
-  /**
-   * The text to search. Pass 1-3 keywords drawn from words that would literally appear in the content, not the user's natural-language description. Whitespace-separated terms are ANDed. For documents, every term must appear somewhere in the document (different chunks/pages are fine). For emails each term is matched across subject/body/sender/recipient. For chats/channels/calls the whole query is matched as a single adjacent phrase prefix, so long phrases will not match. Wrap a multi-word phrase in double quotes to match it as one phrase. Use matchType 'exact' for whole-token (or full email address) matching instead of prefix.
-   */
-  query: string;
   /**
    * Restrict results to items carrying the given tags — any of them by default, every one of them with tagsMatch="all". Each entry names a tag by its label, matched case-insensitively against the user's own tags; only set scope ("personal" or "team") when the user distinguishes between their personal and team tags. An unknown label fails with the list of available tags — call ListTags first when unsure what tags exist. Only taggable items (documents, emails, AI chats, projects, call records) can match, so channels are dropped while a tag filter is active.
    */
@@ -1414,15 +833,515 @@ export interface TagFilter {
    */
   scope?: TagScope | null;
 }
-export interface ConversationRecord {
-  chat_id: string;
-  messages: MessageWithAttachments[];
-  title: string;
+export interface SearchToolResponse {
+  results: TaggedSearchResult[];
 }
-export interface MessageWithAttachments {
-  attachmentIds: string[];
-  content: string;
-  date: string;
+/**
+ * A tag applied to an item, resolved to its human-readable label.
+ */
+export interface AppliedTag {
+  /**
+   * The tag's label.
+   */
+  label: string;
+  scope: TagScope;
+}
+/**
+ * DocumentSearchResponseItem object with document metadata we fetch from macrodb. we don't store these
+ * timestamps in opensearch as they would require us to update document page record
+ * every time the document updates (specifically for updated_at and viewed_at)
+ */
+export interface DocumentSearchResponseItemWithMetadata {
+  /**
+   * Metadata from the database. None if the document doesn't exist in the database.
+   */
+  metadata?: DocumentMetadata | null;
+  /**
+   * Standardized fields that all item types will share.
+   * These field names are being aligned across all item types
+   * for consistency in our data model.
+   */
+  id: string;
+  name: string;
+  owner_id: string;
+  /**
+   * The id of the document
+   */
+  document_id: string;
+  /**
+   * The name of the document
+   */
+  document_name: string;
+  /**
+   * The file type of the document
+   */
+  file_type?: string | null;
+  /**
+   * The sub type of the document if present.
+   */
+  sub_type?: DocumentSubType | null;
+  /**
+   * The search results for the document
+   * This may be empty if the search result match was on the document name only
+   */
+  document_search_results: DocumentSearchResult[];
+}
+/**
+ * Metadata for a document fetched from the database
+ */
+export interface DocumentMetadata {
+  created_at: string;
+  updated_at: string;
+  viewed_at?: string | null;
+  project_id?: string | null;
+  deleted_at?: string | null;
+}
+/**
+ * A document match for a given node
+ */
+export interface DocumentSearchResult {
+  /**
+   * The node id for the document.
+   * This is only useful for markdown at the moment
+   * This will only be provided if the match was on content
+   */
+  node_id?: string | null;
+  highlight: SearchHighlight;
+  /**
+   * The raw content of the document.
+   * This is only included for markdown files and will be the raw json node of the match
+   */
+  raw_content?: string | null;
+  /**
+   * The score of the result
+   */
+  score?: number | null;
+}
+export interface SearchHighlight {
+  /**
+   * The highlight match on the name field
+   */
+  name?: string | null;
+  /**
+   * The highlight match on the content field
+   */
+  content?: string[];
+  /**
+   * The highlight match on the user (owner) of the entity
+   */
+  user_id?: string | null;
+  /**
+   * The highlight match on the sender (email only)
+   */
+  sender?: string | null;
+  /**
+   * The highlight match on the recipients (email only)
+   */
+  recipients?: string[];
+  /**
+   * The highlight match on the cc (email only)
+   */
+  cc?: string[];
+  /**
+   * The highlight match on the bcc (email only)
+   */
+  bcc?: string[];
+}
+/**
+ * ChatSearchResponse object with channel metadata we fetch from macrodb. we don't store these
+ * timestamps in opensearch as they would require us to update each chat message record for the chat
+ * every time the chat updates (specifically for updated_at and viewed_at)
+ */
+export interface ChatSearchResponseItemWithMetadata {
+  /**
+   * Metadata from the database. None if the chat doesn't exist in the database.
+   */
+  metadata?: ChatMetadata | null;
+  /**
+   * Standardized fields that all item types will share.
+   * These field names are being aligned across all item types
+   * for consistency in our data model.
+   */
+  id: string;
+  name: string;
+  owner_id: string;
+  /**
+   * The id of the chat
+   */
+  chat_id: string;
+  /**
+   * The id of the creator of the chat
+   */
+  user_id: string;
+  /**
+   * The search results for the chat
+   * This may be empty if the search result match was on the chat title only
+   */
+  chat_search_results: ChatMessageSearchResult[];
+}
+/**
+ * Metadata for a chat fetched from the database
+ */
+export interface ChatMetadata {
+  created_at: string;
+  updated_at: string;
+  viewed_at?: string | null;
+  project_id?: string | null;
+  deleted_at?: string | null;
+}
+/**
+ * A chat match for a given message id
+ */
+export interface ChatMessageSearchResult {
+  /**
+   * The chat message id for the chat
+   * This is only present if the search match was on the chat message content
+   */
+  chat_message_id?: string | null;
+  /**
+   * The role of the chat message
+   * This is only present if the search match was on the chat message content
+   */
+  role?: string | null;
+  highlight: SearchHighlight;
+  /**
+   * The score of the result
+   */
+  score?: number | null;
+}
+/**
+ * EmailSearchResponseItem object with email metadata we fetch from email service. we don't store these
+ * timestamps in opensearch as they would require us to update each email message record for the thread
+ * every time the thread updates (specifically for updated_at and viewed_at)
+ */
+export interface EmailSearchResponseItemWithMetadata {
+  created_at: string;
+  updated_at: string;
+  viewed_at?: string | null;
+  snippet?: string | null;
+  is_read: boolean;
+  inbox_visible: boolean;
+  is_draft: boolean;
+  is_important: boolean;
+  /**
+   * Standardized fields that all item types will share.
+   * These field names are being aligned across all item types
+   * for consistency in our data model.
+   */
+  id: string;
+  /**
+   * Subject of the email thread
+   */
+  name?: string | null;
+  owner_id: string;
+  /**
+   * The subject of the email
+   * This is only present if the search result is on the message content
+   */
+  subject?: string | null;
+  /**
+   * The id of the email thread
+   */
+  thread_id: string;
+  /**
+   * The id of the owner of the email thread
+   */
+  user_id: string;
+  /**
+   * The inbox that owns the thread. Drives the multi-inbox indicator
+   * when the caller has more than one inbox.
+   */
+  link_id: string;
+  /**
+   * The search results for the document
+   * This may be empty if the search result match was on the email subject only
+   */
+  email_message_search_results: EmailSearchResult[];
+  /**
+   * The participants (senders) in this email thread
+   */
+  participants: EmailSearchParticipant[];
+}
+/**
+ * A email message match for a given thread id
+ */
+export interface EmailSearchResult {
+  /**
+   * The email message id.
+   * This is only present if the search result is on the message content
+   */
+  message_id?: string | null;
+  /**
+   * The sender.
+   * If the match is on the subject, the sender is the latest sender on the thread.
+   */
+  sender: string;
+  /**
+   * The pretty sender.
+   * If the match is on the subject, the pretty sender is the latest sender on the thread.
+   * This could be the sender's email if there is no contact name for the sender.
+   */
+  pretty_sender: string;
+  /**
+   * This is only present if the search result is on the message content
+   */
+  recipients: string[];
+  /**
+   * This is only present if the search result is on the message content
+   */
+  cc: string[];
+  /**
+   * This is only present if the search result is on the message content
+   */
+  bcc: string[];
+  /**
+   * This is only present if the search result is on the message content
+   */
+  labels: string[];
+  /**
+   * When the email message was sent
+   * This is only present if the search result is on the message content
+   */
+  sent_at?: string | null;
+  highlight: SearchHighlight;
+  /**
+   * The score of the result
+   */
+  score?: number | null;
+}
+/**
+ * A participant (sender) in an email thread
+ */
+export interface EmailSearchParticipant {
+  email: string;
+  name?: string | null;
+}
+/**
+ * A single channel-message content hit in the unified search response.
+ * One item per matching message, timestamped by the message itself, so the
+ * unified sort interleaves channel messages with other entity types by
+ * their own recency.
+ */
+export interface ChannelMessageSearchResponseItem {
+  /**
+   * Standardized id field shared by all item types; the channel id.
+   */
+  id: string;
+  /**
+   * we don't store this for channels atm but keeping it here for consistency
+   */
+  owner_id?: string | null;
+  /**
+   * The type of channel
+   */
+  channel_type: string;
+  /**
+   * The id of the channel the message belongs to
+   */
+  channel_id: string;
+  /**
+   * The channel message id
+   */
+  message_id: string;
+  /**
+   * The channel message thread id
+   */
+  thread_id?: string | null;
+  /**
+   * The sender id
+   */
+  sender_id: string;
+  /**
+   * When the channel message was created
+   */
+  created_at: string;
+  /**
+   * When the channel message was last updated
+   */
+  updated_at: string;
+  /**
+   * When the channel message was deleted, if it has been
+   */
+  deleted_at?: string | null;
+  highlight: SearchHighlight;
+  /**
+   * The score of the result
+   */
+  score?: number | null;
+}
+/**
+ * A channel-name search hit.
+ */
+export interface ChannelNameSearchResponseItem {
+  /**
+   * Metadata for the channel.
+   */
+  metadata?: ChannelMetadata | null;
+  /**
+   * Standardized id field shared by all item types; the channel id.
+   */
+  id: string;
+  /**
+   * The channel owner.
+   */
+  owner_id?: string | null;
+  /**
+   * The type of channel.
+   */
+  channel_type: string;
+  /**
+   * The channel id.
+   */
+  channel_id: string;
+  highlight: SearchHighlight;
+  /**
+   * The score of the result.
+   */
+  score?: number | null;
+}
+/**
+ * Metadata for a channel fetched from the database
+ */
+export interface ChannelMetadata {
+  created_at: string;
+  updated_at: string;
+  viewed_at?: string | null;
+  interacted_at?: string | null;
+}
+/**
+ * ProjectSearchResponseItem object with project metadata we fetch from macrodb.
+ * The index carries created_at/updated_at for ranking, but viewed_at is
+ * per-user and deleted_at changes without a reindex, so metadata stays
+ * database-sourced.
+ */
+export interface ProjectSearchResponseItemWithMetadata {
+  /**
+   * Metadata from the database. None if the project doesn't exist in the database.
+   */
+  metadata?: ProjectMetadata | null;
+  /**
+   * Standardized fields that all item types will share.
+   * These field names are being aligned across all item types
+   * for consistency in our data model.
+   */
+  id: string;
+  name: string;
+  owner_id: string;
+  updated_at: string;
+  created_at: string;
+  project_search_results: ProjectSearchResult[];
+}
+/**
+ * Metadata for a project fetched from the database
+ */
+export interface ProjectMetadata {
+  created_at: string;
+  updated_at: string;
+  viewed_at?: string | null;
+  parent_project_id?: string | null;
+  deleted_at?: string | null;
+}
+export interface ProjectSearchResult {
+  highlight: SearchHighlight;
+  /**
+   * The score of the result
+   */
+  score?: number | null;
+}
+export interface CallRecordSearchResponseItemWithMetadata {
+  /**
+   * `None` if the call has been deleted.
+   */
+  metadata?: CallRecordMetadata | null;
+  id: string;
+  name?: string | null;
+  owner_id: string;
+  call_id: string;
+  channel_id: string;
+  participant_ids: string[];
+  call_search_results: CallRecordSearchResult[];
+}
+export interface CallRecordMetadata {
+  created_by: string;
+  started_at: string;
+  ended_at: string;
+  duration_ms: number;
+  updated_at: string;
+  channel_name?: string | null;
+  status: CallStatus;
+  attended: boolean;
+}
+export interface CallRecordSearchResult {
+  transcript_id?: string | null;
+  speaker_id?: string | null;
+  sequence_num?: number | null;
+  started_at?: string | null;
+  ended_at?: string | null;
+  highlight: SearchHighlight;
+  score?: number | null;
+}
+/**
+ * A CRM company match in unified search results. Carries the display
+ * metadata resolved from the primary domain plus the highlighted name.
+ */
+export interface CrmCompanySearchResponseItem {
+  /**
+   * The id of the company.
+   */
+  id: string;
+  /**
+   * The id of the team that owns this company record.
+   */
+  teamId: string;
+  /**
+   * Display name from the primary domain's directory entry.
+   */
+  name?: string | null;
+  /**
+   * `name` with matched spans wrapped in `<macro_em>…</macro_em>`.
+   */
+  nameHighlighted?: string | null;
+  /**
+   * Display description from the primary domain's directory entry.
+   */
+  description?: string | null;
+  /**
+   * Whether the company is hidden from CRM listings.
+   */
+  hidden: boolean;
+  /**
+   * When the company was created.
+   */
+  createdAt: string;
+  /**
+   * When the company was last updated (the sort key).
+   */
+  updatedAt: string;
+  /**
+   * Domains associated with this company, primary first.
+   */
+  domains: CrmCompanySearchDomain[];
+}
+/**
+ * A CRM domain attached to a company in search results.
+ */
+export interface CrmCompanySearchDomain {
+  /**
+   * The id of the domain record.
+   */
+  id: string;
+  /**
+   * The id of the company the domain belongs to.
+   */
+  companyId: string;
+  /**
+   * The domain (lowercased, e.g. "acme.com").
+   */
+  domain: string;
+  /**
+   * When the domain record was created.
+   */
+  createdAt: string;
 }
 /**
  * Create an event on the user's calendar, inviting any listed attendees through Google Calendar. The event is written to Google immediately, so attendees receive invitations the moment it is created — confirm details with the user before creating events with attendees.
@@ -1431,17 +1350,10 @@ export interface MessageWithAttachments {
  */
 export interface CreateCalendarEvent {
   /**
-   * Attach a freshly generated Google Meet video conference to the event.
+   * The event title.
    */
-  addGoogleMeet?: boolean;
-  /**
-   * Attendees to invite by email. They are notified by Google Calendar as soon as the event is created. Omit for a solo event.
-   */
-  attendees?: AttendeeInput[];
-  /**
-   * Calendar to create the event on, from ListCalendars. Omit to use the user's primary calendar.
-   */
-  calendarId?: string | null;
+  title: string;
+  time: EventTimeInput;
   /**
    * Optional event body/description.
    */
@@ -1451,14 +1363,130 @@ export interface CreateCalendarEvent {
    */
   location?: string | null;
   /**
+   * Attendees to invite by email. They are notified by Google Calendar as soon as the event is created. Omit for a solo event.
+   */
+  attendees?: AttendeeInput[];
+  /**
    * Raw RFC 5545 recurrence lines (RRULE, RDATE, EXDATE), e.g. ["RRULE:FREQ=WEEKLY;BYDAY=MO,WE"]. Omit for a one-off event.
    */
   recurrenceLines?: string[];
-  time: EventTimeInput;
   /**
-   * The event title.
+   * Calendar to create the event on, from ListCalendars. Omit to use the user's primary calendar.
+   */
+  calendarId?: string | null;
+  /**
+   * Attach a freshly generated Google Meet video conference to the event.
+   */
+  addGoogleMeet?: boolean;
+}
+/**
+ * An attendee supplied to a calendar tool.
+ */
+export interface AttendeeInput {
+  /**
+   * The attendee's email address.
+   */
+  email: string;
+  /**
+   * Whether attendance is optional for this attendee. Defaults to required.
+   */
+  isOptional?: boolean;
+}
+/**
+ * A calendar event as returned by the create and update tools.
+ */
+export interface ToolCalendarEvent {
+  /**
+   * Macro calendar event id, used by UpdateCalendarEvent and
+   * DeleteCalendarEvent.
+   */
+  eventId: string;
+  /**
+   * Display title.
    */
   title: string;
+  /**
+   * Event start: RFC 3339 UTC instant, or YYYY-MM-DD for all-day events.
+   */
+  start: string;
+  /**
+   * Exclusive event end: RFC 3339 UTC instant, or YYYY-MM-DD for all-day
+   * events.
+   */
+  end: string;
+  /**
+   * Whether the event covers whole days.
+   */
+  isAllDay: boolean;
+  /**
+   * IANA time zone the event was scheduled in, when known.
+   */
+  timeZone?: string | null;
+  /**
+   * Location label, when set.
+   */
+  location?: string | null;
+  /**
+   * Event body, truncated for brevity.
+   */
+  description?: string | null;
+  /**
+   * Event status: confirmed, tentative, or cancelled.
+   */
+  status: string;
+  /**
+   * Whether the event recurs.
+   */
+  isRecurring: boolean;
+  /**
+   * Raw RFC 5545 recurrence properties, when the event recurs.
+   */
+  recurrenceLines: string[];
+  /**
+   * Attendees, capped at 20; `attendee_count` has the full number.
+   */
+  attendees: ToolEventAttendee[];
+  /**
+   * Total number of attendees.
+   */
+  attendeeCount: number;
+  /**
+   * Organizer email address, when known.
+   */
+  organizerEmail?: string | null;
+  /**
+   * Conference join URL, when a conference is attached.
+   */
+  conferenceUrl?: string | null;
+  /**
+   * Whether the user's calendar prohibits modifying this event.
+   */
+  isReadOnly: boolean;
+  /**
+   * Calendar the event belongs to, when known.
+   */
+  calendarId?: string | null;
+}
+/**
+ * An attendee of a calendar event, as returned by calendar tools.
+ */
+export interface ToolEventAttendee {
+  /**
+   * Attendee email address.
+   */
+  email: string;
+  /**
+   * RSVP state: needs_action, accepted, declined, or tentative.
+   */
+  responseStatus: string;
+  /**
+   * Whether this attendee organized the event.
+   */
+  isOrganizer: boolean;
+  /**
+   * Whether attendance is optional.
+   */
+  isOptional: boolean;
 }
 /**
  * Create a plaintext document.
@@ -1498,43 +1526,57 @@ export interface CreateDocumentResponse {
  * Track an external item (Linear issue, Notion page, Slack channel) in the import ledger. Use status `staged` to propose an item for import BEFORE creating anything; use status `imported` (with entityId) only to record a Macro entity you already created from the item. The response tells you when the item was already imported by the user or a teammate — in that case do NOT create a duplicate; point the user at the existing entity instead.
  */
 export interface CreateImportEntity {
-  /**
-   * The id of the Macro entity you created, required when status is `imported`. The entity type is fixed by source: linear → task, notion → md (document), slack → channel.
-   */
-  entityId?: string | null;
+  source: ImportSource;
   /**
    * Stable id of the item in the source system: the Linear issue identifier (e.g. `ENG-142`), the Notion page URL or id, or the Slack channel id (e.g. `C0123456789`, falling back to the channel name).
    */
   foreignId: string;
+  status: CreateImportStatus;
   /**
    * Metadata describing the item. Linear: {identifier, title, description?, status?, priority?, assignee?, assignee_email?, url?}. Notion: {title, url?, summary?} — never include page content. Slack: {name, channel_id?, purpose?, participants?: [{name, email?}]}.
    */
   metadata: {
     [k: string]: unknown;
   };
-  source: ImportSource;
-  status: CreateImportStatus;
+  /**
+   * The id of the Macro entity you created, required when status is `imported`. The entity type is fixed by source: linear → task, notion → md (document), slack → channel.
+   */
+  entityId?: string | null;
 }
 /**
  * Response from tracking an item.
  */
 export interface CreateImportEntityResponse {
-  entity: ImportEntityView;
-  /**
-   * What to do with this outcome.
-   */
-  message: string;
   /**
    * What happened: `staged`, `recorded_imported`, `already_imported`,
    * `already_imported_by_teammate`, `previously_declined`, or
    * `import_in_progress`.
    */
   outcome: string;
+  entity: ImportEntityView;
+  /**
+   * What to do with this outcome.
+   */
+  message: string;
 }
 /**
  * Compact row view returned by import tools.
  */
 export interface ImportEntityView {
+  /**
+   * Ledger row id (use with DeleteImportEntity).
+   */
+  id: string;
+  source: ImportSource;
+  /**
+   * Stable id in the source system.
+   */
+  foreignId: string;
+  status: ImportStatus;
+  /**
+   * A human label from the metadata (title / channel name).
+   */
+  label: string;
   /**
    * The Macro entity it became, when imported.
    */
@@ -1544,36 +1586,22 @@ export interface ImportEntityView {
    */
   entityType?: string | null;
   /**
-   * Stable id in the source system.
-   */
-  foreignId: string;
-  /**
-   * Ledger row id (use with DeleteImportEntity).
-   */
-  id: string;
-  /**
    * Whether the row belongs to a teammate (team-imported), not the user.
    */
   importedByTeammate: boolean;
-  /**
-   * A human label from the metadata (title / channel name).
-   */
-  label: string;
-  source: ImportSource;
-  status: ImportStatus;
 }
 /**
  * Create a project — shown as a folder in the app UI. Documents, AI chats, email threads, and other projects can be placed inside it.
  */
 export interface CreateProject {
   /**
-   * The id of an existing project to nest the new project inside. Requires edit access to that project. Omit to create the project at the top level.
-   */
-  parentProjectId?: string | null;
-  /**
    * The name of the project.
    */
   projectName: string;
+  /**
+   * The id of an existing project to nest the new project inside. Requires edit access to that project. Omit to create the project at the top level.
+   */
+  parentProjectId?: string | null;
 }
 /**
  * The create project response.
@@ -1626,37 +1654,83 @@ export interface CreateReminder {
    */
   description: string;
   /**
-   * Id of the thing the reminder is about, as a UUID. Must be the id of an entity of entityType — for a channel_thread row that means its channelId, not its own id. Requires entityType.
+   * When to fire, as an RFC 3339 timestamp in UTC (e.g. "2026-08-08T14:00:00Z"). Must be in the future. Seconds are dropped, so a reminder fires on the minute. Convert from the user's local timezone before sending — see "Times are UTC" in the tool description.
    */
-  entityId?: string | null;
+  remindAt: string;
   /**
    * Type of the thing the reminder is about — one of document, ai_chat, project, email, channel, call, calendar_event. Requires entityId; omit both for a standalone reminder.
    */
   entityType?: ReminderEntityType | null;
   /**
-   * When to fire, as an RFC 3339 timestamp in UTC (e.g. "2026-08-08T14:00:00Z"). Must be in the future. Seconds are dropped, so a reminder fires on the minute. Convert from the user's local timezone before sending — see "Times are UTC" in the tool description.
+   * Id of the thing the reminder is about, as a UUID. Must be the id of an entity of entityType — for a channel_thread row that means its channelId, not its own id. Requires entityType.
    */
-  remindAt: string;
+  entityId?: string | null;
+}
+/**
+ * A reminder as the model sees it.
+ */
+export interface ToolReminder {
+  /**
+   * The reminder's id. Pass this to UpdateReminder or DeleteReminder.
+   */
+  id: string;
+  /**
+   * What the user wanted to be reminded about.
+   */
+  description: string;
+  /**
+   * When the reminder fires next, RFC 3339 in UTC. The user thinks in their
+   * own timezone — convert before quoting this back to them.
+   */
+  nextRunAt: string;
+  /**
+   * Whether `nextRunAt` has already passed, evaluated against the server
+   * clock. An overdue reminder is one the user has been notified about and
+   * has not dealt with yet.
+   */
+  overdue: boolean;
+  /**
+   * For a repeating reminder, its cron expression and timezone. Absent on a
+   * one-shot, which is everything this toolset can create.
+   */
+  recurrence?: string | null;
+  /**
+   * The type of thing the reminder is about, when it is about something and
+   * that type is one these tools name. The app can attach a reminder to
+   * kinds of thing this list does not cover, so `entityId` may be present
+   * with no `entityType` beside it — the reminder is about something, but
+   * not something these tools can name or filter on.
+   */
+  entityType?: ReminderEntityType | null;
+  /**
+   * The id of the thing the reminder is about.
+   */
+  entityId?: string | null;
+  /**
+   * Whether the user has marked the reminder as dealt with.
+   */
+  completed: boolean;
+  /**
+   * Whether the reminder will fire at all. A disabled reminder keeps its
+   * schedule but is skipped by the dispatcher.
+   */
+  enabled: boolean;
 }
 /**
  * Create a new tag — a colored label the user can apply to documents, emails, tasks, AI chats, and projects — in the user's personal set or their team's shared set. The set is provisioned automatically the first time a tag is created. Tags are matched by label, so call ListTags first and avoid creating one whose label duplicates an existing tag in the same set. Returns the new tag's id and its set's propertyDefinitionId, which you can pass straight to SetEntityProperty (add_option_ids) to apply the tag to an item. Use this only to create a brand-new tag; to apply an existing tag to an item, use ListTags then SetEntityProperty instead.
  */
 export interface CreateTag {
-  color: TagColor;
   /**
    * The tag's label, e.g. "Urgent" or "Follow-up".
    */
   label: string;
+  color: TagColor;
   scope?: TagScope & string;
 }
 /**
  * Response from the [`CreateTag`] tool.
  */
 export interface CreateTagResponse {
-  /**
-   * The tag's color, when set.
-   */
-  color?: string | null;
   /**
    * The new tag's option id. Use it with SetEntityProperty to apply or remove the tag.
    */
@@ -1665,6 +1739,10 @@ export interface CreateTagResponse {
    * The tag's label.
    */
   label: string;
+  /**
+   * The tag's color, when set.
+   */
+  color?: string | null;
   /**
    * The tag set's property definition id. Use it as propertyDefinitionId with SetEntityProperty.
    */
@@ -1676,69 +1754,6 @@ export interface CreateTagResponse {
   summary: string;
 }
 /**
- * A CRM domain attached to a company in search results.
- */
-export interface CrmCompanySearchDomain {
-  /**
-   * The id of the company the domain belongs to.
-   */
-  companyId: string;
-  /**
-   * When the domain record was created.
-   */
-  createdAt: string;
-  /**
-   * The domain (lowercased, e.g. "acme.com").
-   */
-  domain: string;
-  /**
-   * The id of the domain record.
-   */
-  id: string;
-}
-/**
- * A CRM company match in unified search results. Carries the display
- * metadata resolved from the primary domain plus the highlighted name.
- */
-export interface CrmCompanySearchResponseItem {
-  /**
-   * When the company was created.
-   */
-  createdAt: string;
-  /**
-   * Display description from the primary domain's directory entry.
-   */
-  description?: string | null;
-  /**
-   * Domains associated with this company, primary first.
-   */
-  domains: CrmCompanySearchDomain[];
-  /**
-   * Whether the company is hidden from CRM listings.
-   */
-  hidden: boolean;
-  /**
-   * The id of the company.
-   */
-  id: string;
-  /**
-   * Display name from the primary domain's directory entry.
-   */
-  name?: string | null;
-  /**
-   * `name` with matched spans wrapped in `<macro_em>…</macro_em>`.
-   */
-  nameHighlighted?: string | null;
-  /**
-   * The id of the team that owns this company record.
-   */
-  teamId: string;
-  /**
-   * When the company was last updated (the sort key).
-   */
-  updatedAt: string;
-}
-/**
  * Delete an event from the user's calendar. The deletion is written to Google immediately and attendees are notified, so confirm with the user before deleting — it cannot be undone. Get the `eventId` from ListCalendarEvents.
  *
  * For recurring events, `scope` controls how much is removed: "all" (default) removes the whole series, "this_event" removes one occurrence, and "this_and_following" ends the series from an occurrence onward. The scoped variants require `recurrenceId` from the targeted occurrence's ListCalendarEvents entry.
@@ -1748,11 +1763,11 @@ export interface DeleteCalendarEvent {
    * The event's id, from ListCalendarEvents or CreateCalendarEvent.
    */
   eventId: string;
+  scope?: DeletionScopeInput;
   /**
    * The `recurrenceId` of the targeted occurrence, from its ListCalendarEvents entry. Required for "this_event" and "this_and_following".
    */
   recurrenceId?: string | null;
-  scope?: DeletionScopeInput;
 }
 /**
  * Response from the DeleteCalendarEvent tool.
@@ -1831,13 +1846,13 @@ export interface DeleteTag {
  */
 export interface DeleteTagResponse {
   /**
-   * Human-readable summary.
-   */
-  message: string;
-  /**
    * Whether the tag was deleted.
    */
   success: boolean;
+  /**
+   * Human-readable summary.
+   */
+  message: string;
 }
 /**
  * Present results to the user as a rich view. The `view` argument is a dynamic-UI view object (a title plus an ordered list of widgets) following the dynamic-UI schema provided to you. The view is rendered immediately in the chat; this tool returns as soon as it is dispatched.
@@ -1854,87 +1869,6 @@ export interface DisplayResultsResponse {
   message: string;
 }
 /**
- * API-visible content lifecycle and location metadata.
- */
-export interface DocumentContent {
-  /**
-   * The content location, when known.
-   */
-  location?: DocumentContentLocation | null;
-  state: DocumentContentState;
-}
-/**
- * Metadata for a document fetched from the database
- */
-export interface DocumentMetadata {
-  created_at: string;
-  deleted_at?: string | null;
-  project_id?: string | null;
-  updated_at: string;
-  viewed_at?: string | null;
-}
-/**
- * DocumentSearchResponseItem object with document metadata we fetch from macrodb. we don't store these
- * timestamps in opensearch as they would require us to update document page record
- * every time the document updates (specifically for updated_at and viewed_at)
- */
-export interface DocumentSearchResponseItemWithMetadata {
-  /**
-   * The id of the document
-   */
-  document_id: string;
-  /**
-   * The name of the document
-   */
-  document_name: string;
-  /**
-   * The search results for the document
-   * This may be empty if the search result match was on the document name only
-   */
-  document_search_results: DocumentSearchResult[];
-  /**
-   * The file type of the document
-   */
-  file_type?: string | null;
-  /**
-   * Standardized fields that all item types will share.
-   * These field names are being aligned across all item types
-   * for consistency in our data model.
-   */
-  id: string;
-  /**
-   * Metadata from the database. None if the document doesn't exist in the database.
-   */
-  metadata?: DocumentMetadata | null;
-  name: string;
-  owner_id: string;
-  /**
-   * The sub type of the document if present.
-   */
-  sub_type?: DocumentSubType | null;
-}
-/**
- * A document match for a given node
- */
-export interface DocumentSearchResult {
-  highlight: SearchHighlight;
-  /**
-   * The node id for the document.
-   * This is only useful for markdown at the moment
-   * This will only be provided if the match was on content
-   */
-  node_id?: string | null;
-  /**
-   * The raw content of the document.
-   * This is only included for markdown files and will be the raw json node of the match
-   */
-  raw_content?: string | null;
-  /**
-   * The score of the result
-   */
-  score?: number | null;
-}
-/**
  * Apply AI-driven edits to a Macro markdown document in place -- rewriting, inserting, formatting, or restructuring. Markdown documents only: these are authored in Macro's collaborative editor, and are the only documents whose content this tool can rewrite. Uploaded files -- PDFs, DOCX, spreadsheets, images, source files such as .py or .ts -- are readable but not editable, and are rejected. If the response contains a `clarification` field, invoke again with the requested info appended to `instructions`. To insert mention(s), include each person's userId and email. To insert document-card(s), include each document's documentId and documentName.
  */
 export interface EditDocument {
@@ -1949,44 +1883,40 @@ export interface EditDocument {
 }
 export interface EditDocumentResponse {
   /**
-   * If present, invoke this tool again with this information appended to `instructions`.
-   */
-  clarification?: string | null;
-  /**
    * A short outcome for the model -- whether the edit was applied or
    * interrupted -- never the underlying list of edit operations.
    */
   summary: string;
+  /**
+   * If present, invoke this tool again with this information appended to `instructions`.
+   */
+  clarification?: string | null;
 }
 /**
  * Rename or recolor an existing tag in the user's personal set or their team's shared set. The tag's id is preserved, so the change is reflected everywhere the tag is already applied — no item loses the tag. Provide the tag's `id` and its set's `property_definition_id` (both from ListTags) plus a new `label` and/or `color`; omit whichever you want to leave unchanged. This edits the tag itself; to change which tags are on a specific item, use SetEntityProperty instead.
  */
 export interface EditTag {
   /**
-   * A new color for the tag, chosen from the fixed tag palette. Omit to keep the current color.
-   */
-  color?: TagColor | null;
-  /**
    * The tag's option id (the `id` field from a ListTags result).
    */
   id: string;
+  /**
+   * The tag set's property definition id (the `propertyDefinitionId` of the ListTags set that contains this tag).
+   */
+  property_definition_id: string;
   /**
    * A new label for the tag. Omit to keep the current label.
    */
   label?: string | null;
   /**
-   * The tag set's property definition id (the `propertyDefinitionId` of the ListTags set that contains this tag).
+   * A new color for the tag, chosen from the fixed tag palette. Omit to keep the current color.
    */
-  property_definition_id: string;
+  color?: TagColor | null;
 }
 /**
  * Response from the [`EditTag`] tool.
  */
 export interface EditTagResponse {
-  /**
-   * The tag's color after the edit, when set.
-   */
-  color?: string | null;
   /**
    * The tag's option id (unchanged).
    */
@@ -1996,6 +1926,10 @@ export interface EditTagResponse {
    */
   label: string;
   /**
+   * The tag's color after the edit, when set.
+   */
+  color?: string | null;
+  /**
    * The tag set's property definition id.
    */
   propertyDefinitionId: string;
@@ -2003,126 +1937,6 @@ export interface EditTagResponse {
    * Human-readable summary.
    */
   summary: string;
-}
-/**
- * A recipient for an email.
- */
-export interface EmailRecipient {
-  /**
-   * The recipient's email address.
-   */
-  email: string;
-  /**
-   * The recipient's display name (optional).
-   */
-  name?: string | null;
-}
-/**
- * A participant (sender) in an email thread
- */
-export interface EmailSearchParticipant {
-  email: string;
-  name?: string | null;
-}
-/**
- * EmailSearchResponseItem object with email metadata we fetch from email service. we don't store these
- * timestamps in opensearch as they would require us to update each email message record for the thread
- * every time the thread updates (specifically for updated_at and viewed_at)
- */
-export interface EmailSearchResponseItemWithMetadata {
-  created_at: string;
-  /**
-   * The search results for the document
-   * This may be empty if the search result match was on the email subject only
-   */
-  email_message_search_results: EmailSearchResult[];
-  /**
-   * Standardized fields that all item types will share.
-   * These field names are being aligned across all item types
-   * for consistency in our data model.
-   */
-  id: string;
-  inbox_visible: boolean;
-  is_draft: boolean;
-  is_important: boolean;
-  is_read: boolean;
-  /**
-   * The inbox that owns the thread. Drives the multi-inbox indicator
-   * when the caller has more than one inbox.
-   */
-  link_id: string;
-  /**
-   * Subject of the email thread
-   */
-  name?: string | null;
-  owner_id: string;
-  /**
-   * The participants (senders) in this email thread
-   */
-  participants: EmailSearchParticipant[];
-  snippet?: string | null;
-  /**
-   * The subject of the email
-   * This is only present if the search result is on the message content
-   */
-  subject?: string | null;
-  /**
-   * The id of the email thread
-   */
-  thread_id: string;
-  updated_at: string;
-  /**
-   * The id of the owner of the email thread
-   */
-  user_id: string;
-  viewed_at?: string | null;
-}
-/**
- * A email message match for a given thread id
- */
-export interface EmailSearchResult {
-  /**
-   * This is only present if the search result is on the message content
-   */
-  bcc: string[];
-  /**
-   * This is only present if the search result is on the message content
-   */
-  cc: string[];
-  highlight: SearchHighlight;
-  /**
-   * This is only present if the search result is on the message content
-   */
-  labels: string[];
-  /**
-   * The email message id.
-   * This is only present if the search result is on the message content
-   */
-  message_id?: string | null;
-  /**
-   * The pretty sender.
-   * If the match is on the subject, the pretty sender is the latest sender on the thread.
-   * This could be the sender's email if there is no contact name for the sender.
-   */
-  pretty_sender: string;
-  /**
-   * This is only present if the search result is on the message content
-   */
-  recipients: string[];
-  /**
-   * The score of the result
-   */
-  score?: number | null;
-  /**
-   * The sender.
-   * If the match is on the subject, the sender is the latest sender on the thread.
-   */
-  sender: string;
-  /**
-   * When the email message was sent
-   * This is only present if the search result is on the message content
-   */
-  sent_at?: string | null;
 }
 /**
  * Fetch one of the team's CRM companies by id, with its domains, contacts, pipeline Stage / Owner / Revenue, and all attached property values (including custom properties and the valid stage options). Use ListCompanies to find company ids. To change a property (move stage, set owner/revenue, or edit a custom property) call SetEntityProperty with entity_type=company, the company id, and a property_definition_id / option id from this response.
@@ -2138,9 +1952,13 @@ export interface GetCompany {
  */
 export interface GetCompanyResponse {
   /**
-   * Contacts attached to this company.
+   * The CRM company id.
    */
-  contacts: CompanyContactItem[];
+  id: string;
+  /**
+   * Company display name, when resolved.
+   */
+  name?: string | null;
   /**
    * Short company description, when resolved.
    */
@@ -2150,6 +1968,10 @@ export interface GetCompanyResponse {
    */
   domains: string[];
   /**
+   * Whether the company is hidden from the team's CRM listings.
+   */
+  hidden: boolean;
+  /**
    * Whether team-wide email sharing is enabled for this company.
    */
   emailSync: boolean;
@@ -2158,42 +1980,117 @@ export interface GetCompanyResponse {
    */
   firstInteraction: string;
   /**
-   * Whether the company is hidden from the team's CRM listings.
-   */
-  hidden: boolean;
-  /**
-   * The CRM company id.
-   */
-  id: string;
-  /**
    * Most recent known email interaction with this company.
    */
   lastInteraction: string;
   /**
-   * Company display name, when resolved.
+   * The company's pipeline stage, if set.
    */
-  name?: string | null;
+  stage?: ToolCompanyStage | null;
   /**
    * Macro user id of the company's owner, if set.
    */
   ownerUserId?: string | null;
+  /**
+   * The company's revenue (dollars), if set.
+   */
+  revenue?: number | null;
+  /**
+   * Contacts attached to this company.
+   */
+  contacts: CompanyContactItem[];
   /**
    * All properties attached to this company (builtin Stage / Owner /
    * Revenue plus custom ones), with current values and select options.
    */
   properties: CompanyPropertyItem[];
   /**
-   * The company's revenue (dollars), if set.
-   */
-  revenue?: number | null;
-  /**
-   * The company's pipeline stage, if set.
-   */
-  stage?: ToolCompanyStage | null;
-  /**
    * Human-readable summary.
    */
   summary: string;
+}
+/**
+ * A company's pipeline stage: the select option id currently set plus its
+ * human-readable label.
+ */
+export interface ToolCompanyStage {
+  /**
+   * The stage property option id (usable with SetEntityProperty).
+   */
+  optionId: string;
+  /**
+   * The stage's display label (e.g. "Lead", "Customer").
+   */
+  label: string;
+}
+/**
+ * A contact belonging to the company.
+ */
+export interface CompanyContactItem {
+  /**
+   * The CRM contact id.
+   */
+  id: string;
+  /**
+   * The contact's email address.
+   */
+  email: string;
+  /**
+   * The contact's display name, when known.
+   */
+  name?: string | null;
+  /**
+   * Most recent known interaction with this contact.
+   */
+  lastInteraction: string;
+}
+/**
+ * A property attached to the company (builtin or custom).
+ */
+export interface CompanyPropertyItem {
+  /**
+   * The property definition id. Use with SetEntityProperty (entity_type=company).
+   */
+  propertyDefinitionId: string;
+  /**
+   * Human-readable property name.
+   */
+  displayName: string;
+  /**
+   * The data type (boolean, date, number, string, select_string, select_number, tag, entity, link).
+   */
+  dataType: string;
+  /**
+   * Whether the property supports multiple values.
+   */
+  isMultiSelect: boolean;
+  /**
+   * Whether this is a system-defined property.
+   */
+  isSystem: boolean;
+  /**
+   * The current value, if set.
+   */
+  currentValue?: {
+    [k: string]: unknown;
+  };
+  /**
+   * Available options for select-type properties.
+   */
+  options: CompanyPropertyOption[];
+}
+/**
+ * An option available on a select-type company property.
+ */
+export interface CompanyPropertyOption {
+  /**
+   * The option id to use when setting select values via SetEntityProperty.
+   */
+  id: string;
+  /**
+   * The option's display value.
+   */
+  displayValue: string;
 }
 /**
  * Get all properties attached to an entity (document, project, CRM company, etc.). Tasks are targeted as entity_type=document. Returns property definitions with their current values and available options for select-type properties. Select and tag values also come back resolved as human-readable labels in currentValueLabels. Tags are properties with dataType "tag"; only tags visible to the user (their own and their team's) are returned. Use ListTags to see every tag available to the user, and SetEntityProperty with the tag definition id and add_option_ids/remove_option_ids to apply or remove tags. For task documents, system properties (Assignees, Status, Priority, Due Date, etc.) are always present — you can update them directly with SetEntityProperty using well-known IDs without calling this first. For CRM companies (entity_type=company, entity_id=the company UUID), this returns the builtin Stage / Owner / Revenue properties (with the team's stage options) plus any custom company properties.
@@ -2223,6 +2120,26 @@ export interface GetEntityPropertiesResponse {
  */
 export interface ToolPropertyItem {
   /**
+   * The property definition ID. Use this when calling SetEntityProperty.
+   */
+  propertyDefinitionId: string;
+  /**
+   * Human-readable name of the property.
+   */
+  displayName: string;
+  /**
+   * The data type (boolean, date, number, string, select_number, select_string, tag, entity, link).
+   */
+  dataType: string;
+  /**
+   * Whether this property supports multiple values.
+   */
+  isMultiSelect: boolean;
+  /**
+   * Whether this is a system-defined property.
+   */
+  isSystem: boolean;
+  /**
    * The current value, if set.
    */
   currentValue?: {
@@ -2234,38 +2151,22 @@ export interface ToolPropertyItem {
    */
   currentValueLabels?: string[] | null;
   /**
-   * The data type (boolean, date, number, string, select_number, select_string, tag, entity, link).
+   * For tag properties, whether this is the user's personal set or a team set.
    */
-  dataType: string;
-  /**
-   * Human-readable name of the property.
-   */
-  displayName: string;
-  /**
-   * Whether this property supports multiple values.
-   */
-  isMultiSelect: boolean;
-  /**
-   * Whether this is a system-defined property.
-   */
-  isSystem: boolean;
+  scope?: TagScope | null;
   /**
    * Available options for select-type properties.
    */
   options?: ToolPropertyOption[];
-  /**
-   * The property definition ID. Use this when calling SetEntityProperty.
-   */
-  propertyDefinitionId: string;
-  /**
-   * For tag properties, whether this is the user's personal set or a team set.
-   */
-  scope?: TagScope | null;
 }
 /**
  * A property option in the tool response.
  */
 export interface ToolPropertyOption {
+  /**
+   * The option ID to use when setting select values.
+   */
+  id: string;
   /**
    * Display order.
    */
@@ -2274,28 +2175,28 @@ export interface ToolPropertyOption {
    * The display value of this option.
    */
   displayValue: string;
-  /**
-   * The option ID to use when setting select values.
-   */
-  id: string;
 }
 /**
  * Retrieve an email thread and its messages. Returns the thread metadata, the labels applied to the thread (e.g. INBOX, UNREAD, STARRED, and any custom labels), and message contents including sender, recipients, subject, body text, and the labels on each individual message. Use this to read the contents of a specific email conversation or to see which labels a thread or message has.
  */
 export interface GetThread {
   /**
-   * Maximum number of messages to return (default 10).
-   */
-  limit?: number | null;
-  /**
    * The ID of the email thread to retrieve.
    */
   threadId: string;
+  /**
+   * Maximum number of messages to return (default 10).
+   */
+  limit?: number | null;
 }
 /**
  * Response from the GetThread tool.
  */
 export interface GetThreadResponse {
+  /**
+   * The thread's unique identifier.
+   */
+  threadId: string;
   /**
    * Whether the thread has been read.
    */
@@ -2313,47 +2214,43 @@ export interface GetThreadResponse {
    * A human-readable summary.
    */
   summary: string;
-  /**
-   * The thread's unique identifier.
-   */
-  threadId: string;
 }
 /**
  * A simplified message for tool output.
  */
 export interface ToolMessage {
   /**
-   * The parsed plaintext body (reply/forwarded content stripped, HTML converted).
-   */
-  bodyParsed?: string | null;
-  /**
-   * The Cc recipients.
-   */
-  cc: ToolContact[];
-  /**
-   * When the message was received/sent.
-   */
-  date?: string | null;
-  /**
-   * The sender's email and name.
-   */
-  from?: ToolContact | null;
-  /**
    * The message's unique identifier.
    */
   id: string;
-  /**
-   * The labels on this message (e.g. INBOX, UNREAD, STARRED, and any custom labels).
-   */
-  labels: string[];
   /**
    * The message subject.
    */
   subject?: string | null;
   /**
+   * The sender's email and name.
+   */
+  from?: ToolContact | null;
+  /**
    * The To recipients.
    */
   to: ToolContact[];
+  /**
+   * The Cc recipients.
+   */
+  cc: ToolContact[];
+  /**
+   * The parsed plaintext body (reply/forwarded content stripped, HTML converted).
+   */
+  bodyParsed?: string | null;
+  /**
+   * When the message was received/sent.
+   */
+  date?: string | null;
+  /**
+   * The labels on this message (e.g. INBOX, UNREAD, STARRED, and any custom labels).
+   */
+  labels: string[];
 }
 /**
  * A simplified contact for tool output.
@@ -2381,17 +2278,17 @@ export interface ImportNotionPage {
  * Response from importing one Notion page.
  */
 export interface ImportNotionPageResponse {
-  entity: ImportEntityView;
-  /**
-   * Human-readable result and next action.
-   */
-  message: string;
   /**
    * What happened: `imported`, `already_imported`,
    * `already_imported_by_teammate`, `previously_declined`, or
    * `import_in_progress`.
    */
   outcome: string;
+  entity: ImportEntityView;
+  /**
+   * Human-readable result and next action.
+   */
+  message: string;
 }
 /**
  * List the user's calendar events between two instants, across every calendar they have connected. Returns one entry per occurrence (a recurring event appears once per instance in the window), soonest first, with the `eventId` needed by UpdateCalendarEvent and DeleteCalendarEvent.
@@ -2400,13 +2297,13 @@ export interface ImportNotionPageResponse {
  */
 export interface ListCalendarEvents {
   /**
-   * Exclusive window end, RFC 3339 UTC. Must be after start.
-   */
-  end: string;
-  /**
    * Inclusive window start, RFC 3339 UTC (e.g. 2026-08-20T00:00:00Z).
    */
   start: string;
+  /**
+   * Exclusive window end, RFC 3339 UTC. Must be after start.
+   */
+  end: string;
 }
 /**
  * Response from the ListCalendarEvents tool.
@@ -2417,19 +2314,100 @@ export interface ListCalendarEventsResponse {
    */
   events: CalendarEventListItem[];
   /**
-   * A human-readable summary of the result.
+   * Whether the window held more occurrences than were returned; narrow
+   * the window to see the rest.
    */
-  summary: string;
+  truncated: boolean;
   /**
    * `syncing` while any connected calendar is still ingesting — results
    * may be incomplete — or `ready`.
    */
   syncStatus: string;
   /**
-   * Whether the window held more occurrences than were returned; narrow
-   * the window to see the rest.
+   * A human-readable summary of the result.
    */
-  truncated: boolean;
+  summary: string;
+}
+/**
+ * One calendar event occurrence in the requested window.
+ */
+export interface CalendarEventListItem {
+  /**
+   * Macro calendar event id, used by UpdateCalendarEvent and
+   * DeleteCalendarEvent. Recurring events repeat it across occurrences.
+   */
+  eventId: string;
+  /**
+   * Display title.
+   */
+  title: string;
+  /**
+   * Occurrence start: RFC 3339 UTC instant, or YYYY-MM-DD for all-day
+   * events.
+   */
+  start: string;
+  /**
+   * Exclusive occurrence end: RFC 3339 UTC instant, or YYYY-MM-DD for
+   * all-day events.
+   */
+  end: string;
+  /**
+   * Whether the event covers whole days.
+   */
+  isAllDay: boolean;
+  /**
+   * IANA time zone the event was scheduled in, when known.
+   */
+  timeZone?: string | null;
+  /**
+   * Location label, when set.
+   */
+  location?: string | null;
+  /**
+   * Event body, truncated for brevity.
+   */
+  description?: string | null;
+  /**
+   * Event status: confirmed or tentative.
+   */
+  status: string;
+  /**
+   * Whether this occurrence belongs to a recurring series.
+   */
+  isRecurring: boolean;
+  /**
+   * Occurrence key identifying this instance within its recurring series;
+   * pass as `recurrenceId` for occurrence-scoped updates and deletions.
+   */
+  recurrenceId?: string | null;
+  /**
+   * Attendees, capped at 20; `attendee_count` has the full number.
+   */
+  attendees: ToolEventAttendee[];
+  /**
+   * Total number of attendees.
+   */
+  attendeeCount: number;
+  /**
+   * The user's own RSVP on this event, when they are an attendee.
+   */
+  myResponse?: string | null;
+  /**
+   * Organizer email address, when known.
+   */
+  organizerEmail?: string | null;
+  /**
+   * Conference join URL, when a conference is attached.
+   */
+  conferenceUrl?: string | null;
+  /**
+   * Whether the user's calendar prohibits modifying this event.
+   */
+  isReadOnly: boolean;
+  /**
+   * Calendar the event belongs to, when known.
+   */
+  calendarId?: string | null;
 }
 /**
  * List the calendars the user can see across their connected inboxes, with each calendar's `calendarId`, display name, owning inbox address, and whether it is primary and writable.
@@ -2460,6 +2438,10 @@ export interface ToolCalendar {
    */
   calendarId: string;
   /**
+   * Provider display name.
+   */
+  name: string;
+  /**
    * Connected inbox address the calendar belongs to.
    */
   emailAddress: string;
@@ -2472,27 +2454,11 @@ export interface ToolCalendar {
    * Whether events can be created and modified on this calendar.
    */
   isWritable: boolean;
-  /**
-   * Provider display name.
-   */
-  name: string;
 }
 /**
  * List the CRM companies tracked by the authenticated user's team, sorted by most recent interaction. Each row includes the company id, name, domains, last interaction time, and its pipeline Stage / Owner / Revenue properties when set. Use the filters to narrow results: `search` for name/domain text, `stage` for pipeline stage, `owner_user_id` for companies owned by a user. Use GetCompany for one company's full details (contacts + all properties), and SetEntityProperty with entity_type=company to move stages or update owner/revenue/custom properties.
  */
 export interface ListCompanies {
-  /**
-   * Also include companies hidden from the CRM. Defaults to false. Requires team admin or owner role.
-   */
-  include_hidden?: boolean | null;
-  /**
-   * Maximum number of companies to return. Defaults to 50; max 200.
-   */
-  limit?: number | null;
-  /**
-   * Filter to companies whose Owner property is this Macro user id (e.g. "macro|user@example.com"). Use ListTeamMembers to find user ids.
-   */
-  owner_user_id?: string | null;
   /**
    * Case-insensitive substring matched against company names and domains (e.g. "acme" matches "Acme Corp" and "acme.com").
    */
@@ -2501,6 +2467,18 @@ export interface ListCompanies {
    * Filter to companies in this pipeline stage. Accepts a stage label matched case-insensitively (e.g. "lead", "Customer" — teams may have custom stage names) or a stage option UUID.
    */
   stage?: string | null;
+  /**
+   * Filter to companies whose Owner property is this Macro user id (e.g. "macro|user@example.com"). Use ListTeamMembers to find user ids.
+   */
+  owner_user_id?: string | null;
+  /**
+   * Also include companies hidden from the CRM. Defaults to false. Requires team admin or owner role.
+   */
+  include_hidden?: boolean | null;
+  /**
+   * Maximum number of companies to return. Defaults to 50; max 200.
+   */
+  limit?: number | null;
 }
 /**
  * Response from the [`ListCompanies`] tool.
@@ -2516,19 +2494,78 @@ export interface ListCompaniesResponse {
   summary: string;
 }
 /**
+ * A CRM company row returned by [`ListCompanies`].
+ */
+export interface CompanyListItem {
+  /**
+   * The CRM company id. Use with GetCompany, GetEntityProperties /
+   * SetEntityProperty (entity_type=company).
+   */
+  id: string;
+  /**
+   * Company display name, when resolved.
+   */
+  name?: string | null;
+  /**
+   * The company's email domains, primary domain first.
+   */
+  domains: string[];
+  /**
+   * Whether the company is hidden from the team's CRM listings.
+   */
+  hidden: boolean;
+  /**
+   * Most recent known email interaction with this company.
+   */
+  lastInteraction: string;
+  /**
+   * The company's pipeline stage, if set.
+   */
+  stage?: ToolCompanyStage | null;
+  /**
+   * Macro user id of the company's owner, if set.
+   */
+  ownerUserId?: string | null;
+  /**
+   * The company's revenue (dollars), if set.
+   */
+  revenue?: number | null;
+}
+/**
  * Browse the user's Macro workspace to see recent items they have access to. Returns Macro documents, AI conversations, projects, emails, chat channels, call records, and foreign entities. Use this to get an overview of what the user has been working on or to find items by type. Start here for activity-summary questions such as "what happened today", "what's going on", "catch me up", or "what happened in standup today"; apply precise time, type, channel, or mailbox filters when the user gives that scope. For Macro task requests such as "list my tasks", "tasks assigned to me", or "tasks I completed yesterday", prefer this tool over external task trackers such as Linear unless the user explicitly asks for Linear. Macro tasks are document items with df subtype {"l":{"dst":"task"}} and includeTypes ["document"]. Filter task Status and Assignees through propf using entity_type TASK: Status property 00000001-0000-0000-0000-000000000002, Completed option 00000001-0000-0000-0002-000000000004, Assignees property 00000001-0000-0000-0000-000000000001. The current user's assignee entity id is their Macro user id, usually macro|<their email address from context>. For "completed yesterday", combine status Completed, assigned-to-me, and a df updatedAt yesterday window with ua gte/lt ISO timestamps. Returned documents, AI chats, projects, emails, and call records include the tags visible to the user as {label, scope} pairs. To filter by tag (e.g. "my items tagged bug-report"), pass the tag labels in the tags argument — ListTags shows which tags exist. For finding specific items by name or content, use the search tool instead.
  */
 export interface ListEntities {
   /**
-   * Full soup AST call filter (callf).
+   * Filter returned items to specific item types. If not provided, returns all types. Example: ["document", "email"] returns only documents and emails. Macro tasks are returned as document items, so use includeTypes=["document"] with df subtype task for task requests. This is folded into the AST and applied as part of cursor-level filtering.
    */
-  callf?: {
+  includeTypes?: ItemType[] | null;
+  sortBy?: SortBy;
+  /**
+   * Full soup AST document filter (df). Use the same shape as /items/soup/ast, e.g. {"l":{"id":"..."}}. For Macro tasks, use {"l":{"dst":"task"}}; for skills, {"l":{"dst":"skill"}}. For "completed yesterday", AND the task subtype with updatedAt bounds, e.g. {"&":[{"l":{"dst":"task"}},{"&":[{"l":{"ua":{"gte":"<start>"}}},{"l":{"ua":{"lt":"<end>"}}}]}]} using ISO timestamps.
+   */
+  df?: {
+    [k: string]: unknown;
+  };
+  /**
+   * Full soup AST project filter (pf).
+   */
+  pf?: {
     [k: string]: unknown;
   };
   /**
    * Full soup AST AI chat filter (cf).
    */
   cf?: {
+    [k: string]: unknown;
+  };
+  /**
+   * High-level email filter preset. Use "signal" for signal emails. Signal emails and important emails are synonymous: if the user asks for important emails, use emailPreset="signal". This expands to the email AST {"&":[{"l":{"Importance":true}},{"l":{"Shared":"exclude"}}]} and defaults results to emails if includeTypes is omitted.
+   */
+  emailPreset?: EmailPreset | null;
+  /**
+   * Advanced full soup AST email filter (ef). Prefer emailPreset="signal" for common requests. Signal emails and important emails are synonymous; they use {"&":[{"l":{"Importance":true}},{"l":{"Shared":"exclude"}}]}. Supports filtering by thread timestamp: {"l":{"ca":{"gte":"<start>"}}} matches created_at, {"l":{"ua":{"gte":"<start>","lt":"<end>"}}} matches updated_at, using ISO timestamps with gt/lt/gte/lte comparators. For "emails from the last 7 days", AND a ua (or ca) gte bound set to 7 days before now, e.g. {"l":{"ua":{"gte":"<7-days-ago-ISO>"}}}.
+   */
+  ef?: {
     [k: string]: unknown;
   };
   /**
@@ -2544,49 +2581,15 @@ export interface ListEntities {
     [k: string]: unknown;
   };
   /**
-   * Full soup AST document filter (df). Use the same shape as /items/soup/ast, e.g. {"l":{"id":"..."}}. For Macro tasks, use {"l":{"dst":"task"}}; for skills, {"l":{"dst":"skill"}}. For "completed yesterday", AND the task subtype with updatedAt bounds, e.g. {"&":[{"l":{"dst":"task"}},{"&":[{"l":{"ua":{"gte":"<start>"}}},{"l":{"ua":{"lt":"<end>"}}}]}]} using ISO timestamps.
+   * Full soup AST call filter (callf).
    */
-  df?: {
+  callf?: {
     [k: string]: unknown;
   };
-  /**
-   * Advanced full soup AST email filter (ef). Prefer emailPreset="signal" for common requests. Signal emails and important emails are synonymous; they use {"&":[{"l":{"Importance":true}},{"l":{"Shared":"exclude"}}]}. Supports filtering by thread timestamp: {"l":{"ca":{"gte":"<start>"}}} matches created_at, {"l":{"ua":{"gte":"<start>","lt":"<end>"}}} matches updated_at, using ISO timestamps with gt/lt/gte/lte comparators. For "emails from the last 7 days", AND a ua (or ca) gte bound set to 7 days before now, e.g. {"l":{"ua":{"gte":"<7-days-ago-ISO>"}}}.
-   */
-  ef?: {
-    [k: string]: unknown;
-  };
-  /**
-   * High-level email filter preset. Use "signal" for signal emails. Signal emails and important emails are synonymous: if the user asks for important emails, use emailPreset="signal". This expands to the email AST {"&":[{"l":{"Importance":true}},{"l":{"Shared":"exclude"}}]} and defaults results to emails if includeTypes is omitted.
-   */
-  emailPreset?: EmailPreset | null;
-  /**
-   * Which mailbox view to hydrate previews from for email results. Valid values: inbox (default), sent, drafts, starred, all, important, other, or user:<label>.
-   *
-   * When the user asks about signal or important emails, use emailView="inbox" together with emailPreset="signal" — do not set emailView="important" in that case. Only override the default when the user explicitly asks for a specific mailbox or label view (e.g. "sent", "drafts", "my Foo label").
-   */
-  emailView?: string | null;
   /**
    * Full soup AST foreign entity filter (fef).
    */
   fef?: {
-    [k: string]: unknown;
-  };
-  /**
-   * Restrict email results to a single connected inbox, given as that inbox's email address. Omit to span every inbox the user can access (their own plus any delegated to them). Only set this when the user scopes the request to a specific mailbox (e.g. "my work inbox", "the shared inbox"); call ListInboxes first to get the exact address. Only affects email results.
-   */
-  inbox?: string | null;
-  /**
-   * Filter returned items to specific item types. If not provided, returns all types. Example: ["document", "email"] returns only documents and emails. Macro tasks are returned as document items, so use includeTypes=["document"] with df subtype task for task requests. This is folded into the AST and applied as part of cursor-level filtering.
-   */
-  includeTypes?: ItemType[] | null;
-  /**
-   * Maximum number of items to return. Defaults to 50; max 500.
-   */
-  limit?: number | null;
-  /**
-   * Full soup AST project filter (pf).
-   */
-  pf?: {
     [k: string]: unknown;
   };
   /**
@@ -2595,12 +2598,25 @@ export interface ListEntities {
   propf?: {
     [k: string]: unknown;
   };
-  sortBy?: SortBy;
+  /**
+   * Which mailbox view to hydrate previews from for email results. Valid values: inbox (default), sent, drafts, starred, all, important, other, or user:<label>.
+   *
+   * When the user asks about signal or important emails, use emailView="inbox" together with emailPreset="signal" — do not set emailView="important" in that case. Only override the default when the user explicitly asks for a specific mailbox or label view (e.g. "sent", "drafts", "my Foo label").
+   */
+  emailView?: string | null;
+  /**
+   * Restrict email results to a single connected inbox, given as that inbox's email address. Omit to span every inbox the user can access (their own plus any delegated to them). Only set this when the user scopes the request to a specific mailbox (e.g. "my work inbox", "the shared inbox"); call ListInboxes first to get the exact address. Only affects email results.
+   */
+  inbox?: string | null;
   /**
    * Filter results to items carrying the given tags — any of them by default, every one of them with tagsMatch="all". Each entry names a tag by its label, matched case-insensitively against the user's own tags; only set scope ("personal" or "team") when the user distinguishes between their personal and team tags. An unknown label fails with the list of available tags — call ListTags first when unsure what tags exist. Only taggable items (documents, tasks, projects, emails, AI chats, call records) can match a tag filter. Prefer this over hand-building a propf filter for tags.
    */
   tags?: TagFilter[] | null;
   tagsMatch?: TagMatch;
+  /**
+   * Maximum number of items to return. Defaults to 50; max 500.
+   */
+  limit?: number | null;
 }
 /**
  * Response returned by the list entities AI tool.
@@ -2666,15 +2682,15 @@ export interface ToolInbox {
    */
   emailAddress: string;
   /**
-   * Whether this inbox belongs to another user and was delegated to the
-   * caller (versus one of the caller's own connected inboxes).
-   */
-  isDelegated: boolean;
-  /**
    * Whether this is the caller's primary (default) inbox — the one email
    * tools use when no inbox is specified.
    */
   isPrimary: boolean;
+  /**
+   * Whether this inbox belongs to another user and was delegated to the
+   * caller (versus one of the caller's own connected inboxes).
+   */
+  isDelegated: boolean;
 }
 /**
  * List the user's Gmail labels. Returns both system labels (INBOX, SENT, DRAFTS, UNREAD, STARRED, TRASH, SPAM, IMPORTANT, CATEGORY_PERSONAL, CATEGORY_SOCIAL, CATEGORY_PROMOTIONS, CATEGORY_UPDATES, CATEGORY_FORUMS, etc.) and any custom user-created labels. Each label has a UUID `id` and a `name`.
@@ -2696,16 +2712,16 @@ export interface ToolInbox {
  */
 export interface ListLabels {
   /**
-   * Restrict to a specific inbox by its email address (from ListInboxes).
-   * Omit to use the primary inbox. Ignored when `thread_id` is set.
-   */
-  inbox?: string | null;
-  /**
    * List the labels of the inbox that owns this thread. Use this when you
    * intend to add or remove a label on a specific thread so the label ids
    * match that thread's inbox. Takes precedence over `inbox`.
    */
   thread_id?: string | null;
+  /**
+   * Restrict to a specific inbox by its email address (from ListInboxes).
+   * Omit to use the primary inbox. Ignored when `thread_id` is set.
+   */
+  inbox?: string | null;
 }
 /**
  * Response from the ListLabels tool.
@@ -2742,25 +2758,25 @@ export interface ToolLabel {
  */
 export interface ListNotifications {
   /**
+   * Maximum number of notifications to return. Defaults to 20, max 50.
+   */
+  limit?: number | null;
+  /**
    * Filter by done status. If omitted, only not-done notifications are returned. Set true for done notifications, false for not-done notifications.
    */
   done?: boolean | null;
   /**
-   * Filter to notifications for specific entities. Pair each id with its canonical entityType to avoid ambiguity. Example: [{"entityType":"email_thread","id":"..."}] returns notifications for one email thread.
+   * Filter by seen status. If omitted, both seen and unseen notifications are returned. Set true for seen notifications, false for unseen notifications.
    */
-  entities?: NotificationEntityFilter[] | null;
+  seen?: boolean | null;
   /**
    * Filter to specific notification item types. If omitted, returns all types. Example: ["email", "message"] returns only email and message notifications.
    */
   includeTypes?: NotificationCategory[] | null;
   /**
-   * Maximum number of notifications to return. Defaults to 20, max 50.
+   * Filter to notifications for specific entities. Pair each id with its canonical entityType to avoid ambiguity. Example: [{"entityType":"email_thread","id":"..."}] returns notifications for one email thread.
    */
-  limit?: number | null;
-  /**
-   * Filter by seen status. If omitted, both seen and unseen notifications are returned. Set true for seen notifications, false for unseen notifications.
-   */
-  seen?: boolean | null;
+  entities?: NotificationEntityFilter[] | null;
 }
 /**
  * User-facing reference to one specific entity to filter notifications by.
@@ -2777,52 +2793,52 @@ export interface NotificationEntityFilter {
  */
 export interface ListNotificationsResponse {
   /**
-   * Whether there are more notifications available.
-   */
-  hasMore: boolean;
-  /**
    * The list of notifications.
    */
   notifications: NotificationItem[];
+  /**
+   * Whether there are more notifications available.
+   */
+  hasMore: boolean;
 }
 /**
  * A single notification item in the list response.
  */
 export interface NotificationItem {
   /**
-   * When the notification was created (ISO 8601).
+   * The notification ID.
    */
-  createdAt: string;
-  /**
-   * Whether the notification is marked as done.
-   */
-  done: boolean;
-  /**
-   * The ID of the entity this notification is about.
-   */
-  entityId: string;
-  /**
-   * The type of entity this notification is about (e.g. "channel", "document").
-   */
-  entityType: string;
+  id: string;
   /**
    * The notification event type (e.g. "channel_mention").
    */
   eventType: string;
   /**
-   * The notification ID.
+   * The type of entity this notification is about (e.g. "channel", "document").
    */
-  id: string;
+  entityType: string;
+  /**
+   * The ID of the entity this notification is about.
+   */
+  entityId: string;
+  /**
+   * Whether the notification has been seen.
+   */
+  seen: boolean;
+  /**
+   * Whether the notification is marked as done.
+   */
+  done: boolean;
+  /**
+   * When the notification was created (ISO 8601).
+   */
+  createdAt: string;
   /**
    * The notification metadata/payload.
    */
   metadata: {
     [k: string]: unknown;
   };
-  /**
-   * Whether the notification has been seen.
-   */
-  seen: boolean;
   /**
    * The user ID of the sender, if any.
    */
@@ -2844,29 +2860,29 @@ export interface NotificationItem {
  */
 export interface ListReminders {
   /**
-   * Filter on whether the user has marked the reminder done. Defaults to false — only reminders still outstanding. Set true for ones already dealt with.
+   * Return only these reminders, by id. Use this to re-read a reminder you already know the id of. Omit to list all of them.
    */
-  completed?: boolean | null;
-  /**
-   * Return only reminders attached to the thing with this id. Requires entityType.
-   */
-  entityId?: string | null;
+  reminderIds?: string[] | null;
   /**
    * Return only reminders attached to a thing of this type. Requires entityId.
    */
   entityType?: ReminderEntityType | null;
   /**
-   * Maximum number of reminders to return. Defaults to 20, capped at 100.
+   * Return only reminders attached to the thing with this id. Requires entityType.
    */
-  limit?: number | null;
+  entityId?: string | null;
+  /**
+   * Filter on whether the user has marked the reminder done. Defaults to false — only reminders still outstanding. Set true for ones already dealt with.
+   */
+  completed?: boolean | null;
   /**
    * Filter on whether the reminder has already fired. True returns only reminders past their time, false only ones still upcoming. Omit for both.
    */
   overdue?: boolean | null;
   /**
-   * Return only these reminders, by id. Use this to re-read a reminder you already know the id of. Omit to list all of them.
+   * Maximum number of reminders to return. Defaults to 20, capped at 100.
    */
-  reminderIds?: string[] | null;
+  limit?: number | null;
 }
 /**
  * Response from the ListReminders tool.
@@ -2880,56 +2896,6 @@ export interface ListRemindersResponse {
    * A human-readable summary of what came back.
    */
   summary: string;
-}
-/**
- * A reminder as the model sees it.
- */
-export interface ToolReminder {
-  /**
-   * Whether the user has marked the reminder as dealt with.
-   */
-  completed: boolean;
-  /**
-   * What the user wanted to be reminded about.
-   */
-  description: string;
-  /**
-   * Whether the reminder will fire at all. A disabled reminder keeps its
-   * schedule but is skipped by the dispatcher.
-   */
-  enabled: boolean;
-  /**
-   * The id of the thing the reminder is about.
-   */
-  entityId?: string | null;
-  /**
-   * The type of thing the reminder is about, when it is about something and
-   * that type is one these tools name. The app can attach a reminder to
-   * kinds of thing this list does not cover, so `entityId` may be present
-   * with no `entityType` beside it — the reminder is about something, but
-   * not something these tools can name or filter on.
-   */
-  entityType?: ReminderEntityType | null;
-  /**
-   * The reminder's id. Pass this to UpdateReminder or DeleteReminder.
-   */
-  id: string;
-  /**
-   * When the reminder fires next, RFC 3339 in UTC. The user thinks in their
-   * own timezone — convert before quoting this back to them.
-   */
-  nextRunAt: string;
-  /**
-   * Whether `nextRunAt` has already passed, evaluated against the server
-   * clock. An overdue reminder is one the user has been notified about and
-   * has not dealt with yet.
-   */
-  overdue: boolean;
-  /**
-   * For a repeating reminder, its cron expression and timezone. Absent on a
-   * one-shot, which is everything this toolset can create.
-   */
-  recurrence?: string | null;
 }
 /**
  * List the skills the user can access, most recently updated first. Skills are markdown documents containing instructions for AI to read and follow; after finding a relevant skill, read its instructions with ReadContent using the returned document id. Use this to discover what skills exist; when looking for a specific skill by name, prefer SearchSkills.
@@ -2971,24 +2937,24 @@ export type ListTags = {};
  */
 export interface ListTagsResponse {
   /**
-   * Human-readable summary.
-   */
-  summary: string;
-  /**
    * The tag sets available to the caller.
    */
   tagSets: ToolTagSet[];
+  /**
+   * Human-readable summary.
+   */
+  summary: string;
 }
 /**
  * One tag set available to the caller.
  */
 export interface ToolTagSet {
+  scope: TagScope;
   /**
    * The tag property definition id. Use it as propertyDefinitionId when
    * calling SetEntityProperty to apply or remove one of this set's tags.
    */
   propertyDefinitionId: string;
-  scope: TagScope;
   /**
    * The tags in this set.
    */
@@ -2999,10 +2965,6 @@ export interface ToolTagSet {
  */
 export interface ToolTag {
   /**
-   * The tag's display color, when set.
-   */
-  color?: string | null;
-  /**
    * The tag's option id. Use it with SetEntityProperty to apply or remove the tag.
    */
   id: string;
@@ -3010,6 +2972,10 @@ export interface ToolTag {
    * The tag's human-readable label.
    */
   label: string;
+  /**
+   * The tag's display color, when set.
+   */
+  color?: string | null;
 }
 /**
  * List the current members and pending invites for the authenticated user's team. Requires the caller to be a team member. The returned roles (owner/admin/member) are app permission levels only, not job titles — they say nothing about the org chart. Never infer that someone is a founder, an executive, or the company's owner from their workspace role.
@@ -3020,13 +2986,27 @@ export type ListTeamMembers = {};
  */
 export interface ListTeamMembersResponse {
   /**
-   * Pending team invites.
-   */
-  invited: ToolTeamInvite[];
-  /**
    * Current accepted team members.
    */
   members: ToolTeamMember[];
+  /**
+   * Pending team invites.
+   */
+  invited: ToolTeamInvite[];
+}
+/**
+ * A current team member returned by [`ListTeamMembers`].
+ */
+export interface ToolTeamMember {
+  /**
+   * The user's Macro user id.
+   */
+  userId: string;
+  /**
+   * The user's workspace permission role (owner/admin/member). An app
+   * permission level, not a job title or evidence of company ownership.
+   */
+  role: string;
 }
 /**
  * A pending team invite returned by [`ListTeamMembers`].
@@ -3041,20 +3021,6 @@ export interface ToolTeamInvite {
    * will receive. An app permission level, not a job title.
    */
   role: string;
-}
-/**
- * A current team member returned by [`ListTeamMembers`].
- */
-export interface ToolTeamMember {
-  /**
-   * The user's workspace permission role (owner/admin/member). An app
-   * permission level, not a job title or evidence of company ownership.
-   */
-  role: string;
-  /**
-   * The user's Macro user id.
-   */
-  userId: string;
 }
 /**
  * Load tools by name (from `SearchTools` results) so you can call them. After loading, invoke each tool by its name. Only load the tools you actually need.
@@ -3085,39 +3051,39 @@ export interface LoadToolsResponse {
  */
 export interface ToolMatch {
   /**
-   * What the tool does.
-   */
-  description: string;
-  /**
    * The exact name to call the tool by.
    */
   name: string;
+  /**
+   * What the tool does.
+   */
+  description: string;
 }
 /**
  * Mark one or more notifications as done or not done for the current user. Use this when the user has completed the action associated with a notification.
  */
 export interface MarkNotificationsDone {
   /**
-   * Whether to mark as done (true) or not done (false).
-   */
-  done: boolean;
-  /**
    * The IDs of the notifications to update.
    */
   notificationIds: string[];
+  /**
+   * Whether to mark as done (true) or not done (false).
+   */
+  done: boolean;
 }
 /**
  * Response from marking notifications as seen or done.
  */
 export interface MarkNotificationsResponse {
   /**
-   * The number of notifications updated.
-   */
-  count: number;
-  /**
    * Whether the operation succeeded.
    */
   success: boolean;
+  /**
+   * The number of notifications updated.
+   */
+  count: number;
 }
 /**
  * Mark one or more notifications as seen for the current user. Use this when the user has viewed notifications but hasn't acted on them yet.
@@ -3132,11 +3098,11 @@ export interface MarkNotificationsSeen {
  * Move a document, AI chat, email thread, or project into another project (projects are shown as folders in the app UI), or move it out to the top level. Requires edit access to the destination project. Moving a document or email thread requires edit access to it; moving an AI chat or a project requires owning it.
  */
 export interface MoveToProject {
+  entityType: MoveableEntityType;
   /**
    * The id of the entity to move.
    */
   entityId: string;
-  entityType: MoveableEntityType;
   /**
    * The id of the destination project. Omit to move the entity out of its current project to the top level.
    */
@@ -3147,18 +3113,23 @@ export interface MoveToProject {
  */
 export interface MoveToProjectResponse {
   /**
-   * A human-readable result message.
-   */
-  message: string;
-  /**
    * Whether the move succeeded.
    */
   success: boolean;
+  /**
+   * A human-readable result message.
+   */
+  message: string;
 }
 /**
  * Search items by their name or title: document name, email subject, chat title, channel name, project name, or call-record name. This is keyword search, not semantic search: queries only match literal words/tokens, prefixes, or exact quoted terms that appear in the indexed title/name. Use this for targeted name/title lookup, not for activity-summary questions like "what happened today", "what's going on", "catch me up", or "what happened in standup today"; those should start with ListEntities using time/type/channel filters. For emails, whitespace-separated terms are ANDed and each is a prefix match against the subject. For all other types the whole query is matched as a single adjacent phrase prefix — so pass 1-3 targeted keywords drawn from words that would literally appear in the title, not the user's natural-language description; long phrases will not match. Matching defaults to prefix; set matchType to 'exact' to match whole tokens/phrases with no prefix expansion. Wrap a multi-word phrase in double quotes to keep it together as one adjacent phrase. If the user's request combines a person with a topic, run separate searches (NameSearch for the person, ContentSearch for the topic) rather than one combined query. Leave entityTypes empty by default; only filter when the user explicitly scopes to a type. Results for documents, emails, AI chats, projects, and call records include the tags visible to the user as {label, scope} pairs; to restrict a search to tagged items, pass the tag labels in the tags argument (ListTags shows which tags exist).
  */
 export interface NameSearch {
+  /**
+   * The name or title to search. Pass 1-3 keywords drawn from words that would literally appear in the title, not the user's natural-language description. Whitespace-separated terms are ANDed. For non-email types the whole query is matched as a single adjacent phrase prefix, so long phrases will not match. For emails each term is matched against the subject. Wrap a multi-word phrase in double quotes to match it as one phrase. Use matchType 'exact' for whole-token matching instead of prefix.
+   */
+  name: string;
+  matchType?: SearchMatchType & string;
   /**
    * Which types of items to search. Leave empty (the default) to search all types — this is almost always what you want. Only set this when the user's request clearly targets one or more specific types. Examples: ['documents'], ['emails', 'documents'], ['channels'], ['call_records'].
    */
@@ -3167,78 +3138,11 @@ export interface NameSearch {
    * Restrict email results to a single connected inbox, given as that inbox's email address (from ListInboxes). Omit to search every inbox the user can access. Only set this when the user scopes the request to a specific mailbox. Only affects email results.
    */
   inbox?: string | null;
-  matchType?: SearchMatchType & string;
-  /**
-   * The name or title to search. Pass 1-3 keywords drawn from words that would literally appear in the title, not the user's natural-language description. Whitespace-separated terms are ANDed. For non-email types the whole query is matched as a single adjacent phrase prefix, so long phrases will not match. For emails each term is matched against the subject. Wrap a multi-word phrase in double quotes to match it as one phrase. Use matchType 'exact' for whole-token matching instead of prefix.
-   */
-  name: string;
   /**
    * Restrict results to items carrying the given tags — any of them by default, every one of them with tagsMatch="all". Each entry names a tag by its label, matched case-insensitively against the user's own tags; only set scope ("personal" or "team") when the user distinguishes between their personal and team tags. An unknown label fails with the list of available tags — call ListTags first when unsure what tags exist. Only taggable items (documents, emails, AI chats, projects, call records) can match, so channels are dropped while a tag filter is active.
    */
   tags?: TagFilter[] | null;
   tagsMatch?: TagMatch;
-}
-/**
- * A single item inside a project.
- */
-export interface ProjectItem {
-  /**
-   * The file type, for documents (e.g. md, pdf, docx).
-   */
-  fileType?: string | null;
-  /**
-   * The id of the item.
-   */
-  id: string;
-  itemType: ProjectItemType;
-  /**
-   * The display name of the item.
-   */
-  name: string;
-  /**
-   * When the item was last updated.
-   */
-  updatedAt?: string | null;
-}
-/**
- * Metadata for a project fetched from the database
- */
-export interface ProjectMetadata {
-  created_at: string;
-  deleted_at?: string | null;
-  parent_project_id?: string | null;
-  updated_at: string;
-  viewed_at?: string | null;
-}
-/**
- * ProjectSearchResponseItem object with project metadata we fetch from macrodb.
- * The index carries created_at/updated_at for ranking, but viewed_at is
- * per-user and deleted_at changes without a reindex, so metadata stays
- * database-sourced.
- */
-export interface ProjectSearchResponseItemWithMetadata {
-  created_at: string;
-  /**
-   * Standardized fields that all item types will share.
-   * These field names are being aligned across all item types
-   * for consistency in our data model.
-   */
-  id: string;
-  /**
-   * Metadata from the database. None if the project doesn't exist in the database.
-   */
-  metadata?: ProjectMetadata | null;
-  name: string;
-  owner_id: string;
-  project_search_results: ProjectSearchResult[];
-  updated_at: string;
-}
-export interface ProjectSearchResult {
-  highlight: SearchHighlight;
-  /**
-   * The score of the result
-   */
-  score?: number | null;
 }
 /**
  * Retrieve the transcript for a specific call record. Use ListEntities with includeTypes: ["call"] first to find the callId. Only the transcript is returned — other metadata (participants, duration, etc.) is already available from ListEntities. In transcript segments, speakerId is the associated user/track, not guaranteed speaker identity; use diarizedSpeakerId to distinguish actual voices, and treat different diarizedSpeakerIds as potentially different speakers even if speakerId is the caller/"you".
@@ -3278,21 +3182,6 @@ export interface ReadCallRecordResponse {
  */
 export interface TranscriptSegment {
   /**
-   * The transcribed text.
-   */
-  content: string;
-  /**
-   * Stable per-speaker identifier produced by diarization, when available.
-   * Distinguishes multiple speakers sharing one audio track. Different
-   * diarized IDs should be treated as potentially different actual speakers,
-   * even if they share the same `speaker_id`.
-   */
-  diarizedSpeakerId?: string | null;
-  /**
-   * When the speaker stopped (if known).
-   */
-  endedAt?: string | null;
-  /**
    * The user id associated with the segment's audio track/participant.
    *
    * This is not guaranteed to be the human who spoke. Use
@@ -3302,42 +3191,57 @@ export interface TranscriptSegment {
    */
   speakerId: string;
   /**
+   * Stable per-speaker identifier produced by diarization, when available.
+   * Distinguishes multiple speakers sharing one audio track. Different
+   * diarized IDs should be treated as potentially different actual speakers,
+   * even if they share the same `speaker_id`.
+   */
+  diarizedSpeakerId?: string | null;
+  /**
+   * The transcribed text.
+   */
+  content: string;
+  /**
    * When the speaker started this segment.
    */
   startedAt: string;
+  /**
+   * When the speaker stopped (if known).
+   */
+  endedAt?: string | null;
 }
 /**
  * Read the local channel and thread context around one message id. If the id is a thread reply, this resolves the parent, returns nearby top-level channel messages, and returns nearby replies around the anchor reply.
  */
 export interface ReadChannelMessageContext {
   /**
-   * Approximate number of newer top-level messages to include. Defaults to 3.
-   */
-  channelAfter?: number | null;
-  /**
-   * Approximate number of older top-level messages to include. Defaults to 3.
-   */
-  channelBefore?: number | null;
-  /**
    * Channel id containing the message.
    */
   channelId: string;
-  /**
-   * Maximum characters to return per message/reply. Defaults to 4000, maximum 16000.
-   */
-  maxCharsPerMessage?: number | null;
   /**
    * Message id to anchor the context. May be top-level or a thread reply.
    */
   messageId: string;
   /**
-   * Number of replies after a reply anchor to include. Defaults to 10, maximum 50.
+   * Approximate number of older top-level messages to include. Defaults to 3.
    */
-  threadAfter?: number | null;
+  channelBefore?: number | null;
+  /**
+   * Approximate number of newer top-level messages to include. Defaults to 3.
+   */
+  channelAfter?: number | null;
   /**
    * Number of replies before a reply anchor to include. Defaults to 10, maximum 50.
    */
   threadBefore?: number | null;
+  /**
+   * Number of replies after a reply anchor to include. Defaults to 10, maximum 50.
+   */
+  threadAfter?: number | null;
+  /**
+   * Maximum characters to return per message/reply. Defaults to 4000, maximum 16000.
+   */
+  maxCharsPerMessage?: number | null;
 }
 /**
  * Response from `ReadChannelMessageContext`.
@@ -3346,62 +3250,66 @@ export interface ReadChannelMessageContextResponse {
   anchor: ToolResolvedMessage;
   channelContext: ToolChannelMessageContextWindow;
   /**
-   * Information about omitted or truncated content.
-   */
-  omissions: ToolOmission[];
-  /**
    * Nearby thread replies when the requested message is a reply.
    */
   threadContext?: ToolThreadReplyContextWindow | null;
+  /**
+   * Information about omitted or truncated content.
+   */
+  omissions: ToolOmission[];
 }
 /**
  * Resolution details for a requested message id.
  */
 export interface ToolResolvedMessage {
   /**
-   * Channel id.
-   */
-  channelId: string;
-  /**
-   * When the requested message was created.
-   */
-  createdAt: string;
-  kind: ToolMessageKind;
-  /**
    * Requested message id.
    */
   messageId: string;
   /**
+   * Channel id.
+   */
+  channelId: string;
+  kind: ToolMessageKind;
+  /**
    * Parent thread id. Equals `message_id` for top-level messages.
    */
   threadId: string;
+  /**
+   * When the requested message was created.
+   */
+  createdAt: string;
 }
 /**
  * Top-level channel context around an anchor or thread parent.
  */
 export interface ToolChannelMessageContextWindow {
   /**
-   * Newer top-level messages after the anchor/parent, in chronological order.
-   */
-  after: ToolChannelMessage[];
-  anchorOrParent: ToolChannelMessage;
-  /**
    * Older top-level messages before the anchor/parent, in chronological order.
    */
   before: ToolChannelMessage[];
+  anchorOrParent: ToolChannelMessage;
+  /**
+   * Newer top-level messages after the anchor/parent, in chronological order.
+   */
+  after: ToolChannelMessage[];
 }
 /**
  * A compact top-level channel message returned by channel AI tools.
  */
 export interface ToolChannelMessage {
   /**
-   * Attachments on this message.
+   * Message id.
    */
-  attachments: ToolAttachment[];
+  id: string;
   /**
    * Channel id.
    */
   channelId: string;
+  /**
+   * Sender user id.
+   */
+  senderId: string;
   /**
    * Message content, possibly truncated.
    */
@@ -3415,51 +3323,96 @@ export interface ToolChannelMessage {
    */
   createdAt: string;
   /**
-   * When the message was deleted, if ever.
+   * When the message was last updated.
    */
-  deletedAt?: string | null;
+  updatedAt: string;
   /**
    * When the message was edited, if ever.
    */
   editedAt?: string | null;
   /**
-   * Message id.
+   * When the message was deleted, if ever.
    */
-  id: string;
+  deletedAt?: string | null;
+  thread: ToolThreadSummary;
   /**
    * Reactions on this message.
    */
   reactions: ToolReaction[];
   /**
+   * Attachments on this message.
+   */
+  attachments: ToolAttachment[];
+}
+/**
+ * Thread metadata attached to a top-level message.
+ */
+export interface ToolThreadSummary {
+  /**
+   * Parent thread id. This equals the top-level message id.
+   */
+  threadId: string;
+  /**
+   * Total number of replies in the thread.
+   */
+  replyCount: number;
+  /**
+   * Timestamp of the latest reply, if any.
+   */
+  latestReplyAt?: string | null;
+  /**
+   * Preview replies, when requested.
+   */
+  preview?: ToolThreadReply[] | null;
+  /**
+   * Reply count not included in `preview`.
+   */
+  omittedReplyCount: number;
+}
+/**
+ * A compact thread reply returned by channel AI tools.
+ */
+export interface ToolThreadReply {
+  /**
+   * Reply message id.
+   */
+  id: string;
+  /**
+   * Parent thread id.
+   */
+  threadId: string;
+  /**
    * Sender user id.
    */
   senderId: string;
-  thread: ToolThreadSummary;
   /**
-   * When the message was last updated.
+   * Reply content, possibly truncated.
    */
-  updatedAt: string;
-}
-/**
- * A compact attachment reference on a message.
- */
-export interface ToolAttachment {
+  content: string;
   /**
-   * When the attachment was created.
+   * Whether the reply content was truncated.
+   */
+  contentTruncated: boolean;
+  /**
+   * When the reply was created.
    */
   createdAt: string;
   /**
-   * Attached entity id.
+   * When the reply was last updated.
    */
-  entityId: string;
+  updatedAt: string;
   /**
-   * Attached entity type.
+   * When the reply was edited, if ever.
    */
-  entityType: string;
+  editedAt?: string | null;
   /**
-   * Attachment id.
+   * Reactions on this reply.
    */
-  id: string;
+  reactions: ToolReaction[];
+  /**
+   * Attachments on this reply.
+   */
+  attachments: ToolAttachment[];
 }
 /**
  * A reaction summary on a message.
@@ -3475,87 +3428,60 @@ export interface ToolReaction {
   users: string[];
 }
 /**
- * Thread metadata attached to a top-level message.
+ * A compact attachment reference on a message.
  */
-export interface ToolThreadSummary {
+export interface ToolAttachment {
   /**
-   * Timestamp of the latest reply, if any.
-   */
-  latestReplyAt?: string | null;
-  /**
-   * Reply count not included in `preview`.
-   */
-  omittedReplyCount: number;
-  /**
-   * Preview replies, when requested.
-   */
-  preview?: ToolThreadReply[] | null;
-  /**
-   * Total number of replies in the thread.
-   */
-  replyCount: number;
-  /**
-   * Parent thread id. This equals the top-level message id.
-   */
-  threadId: string;
-}
-/**
- * A compact thread reply returned by channel AI tools.
- */
-export interface ToolThreadReply {
-  /**
-   * Attachments on this reply.
-   */
-  attachments: ToolAttachment[];
-  /**
-   * Reply content, possibly truncated.
-   */
-  content: string;
-  /**
-   * Whether the reply content was truncated.
-   */
-  contentTruncated: boolean;
-  /**
-   * When the reply was created.
-   */
-  createdAt: string;
-  /**
-   * When the reply was edited, if ever.
-   */
-  editedAt?: string | null;
-  /**
-   * Reply message id.
+   * Attachment id.
    */
   id: string;
   /**
-   * Reactions on this reply.
+   * Attached entity type.
    */
-  reactions: ToolReaction[];
+  entityType: string;
   /**
-   * Sender user id.
+   * Attached entity id.
    */
-  senderId: string;
+  entityId: string;
+  /**
+   * When the attachment was created.
+   */
+  createdAt: string;
+}
+/**
+ * Thread reply context around a reply anchor.
+ */
+export interface ToolThreadReplyContextWindow {
   /**
    * Parent thread id.
    */
   threadId: string;
+  parent: ToolChannelMessage;
   /**
-   * When the reply was last updated.
+   * Replies before the anchor reply, in chronological order.
    */
-  updatedAt: string;
+  repliesBefore: ToolThreadReply[];
+  /**
+   * Anchor reply, when the requested message was a thread reply.
+   */
+  anchorReply?: ToolThreadReply | null;
+  /**
+   * Replies after the anchor reply, in chronological order.
+   */
+  repliesAfter: ToolThreadReply[];
+  /**
+   * Number of earlier replies omitted from this context window.
+   */
+  omittedBefore: number;
+  /**
+   * Number of later replies omitted from this context window.
+   */
+  omittedAfter: number;
 }
 /**
  * Information about content omitted from a tool response.
  */
 export interface ToolOmission {
-  /**
-   * Number of omitted items, when known.
-   */
-  count?: number | null;
-  /**
-   * Cursor that can be used to continue reading, when available.
-   */
-  cursor?: string | null;
   kind: ToolOmissionKind;
   /**
    * Message id associated with the omission, when applicable.
@@ -3565,36 +3491,14 @@ export interface ToolOmission {
    * Thread id associated with the omission, when applicable.
    */
   threadId?: string | null;
-}
-/**
- * Thread reply context around a reply anchor.
- */
-export interface ToolThreadReplyContextWindow {
   /**
-   * Anchor reply, when the requested message was a thread reply.
+   * Number of omitted items, when known.
    */
-  anchorReply?: ToolThreadReply | null;
+  count?: number | null;
   /**
-   * Number of later replies omitted from this context window.
+   * Cursor that can be used to continue reading, when available.
    */
-  omittedAfter: number;
-  /**
-   * Number of earlier replies omitted from this context window.
-   */
-  omittedBefore: number;
-  parent: ToolChannelMessage;
-  /**
-   * Replies after the anchor reply, in chronological order.
-   */
-  repliesAfter: ToolThreadReply[];
-  /**
-   * Replies before the anchor reply, in chronological order.
-   */
-  repliesBefore: ToolThreadReply[];
-  /**
-   * Parent thread id.
-   */
-  threadId: string;
+  cursor?: string | null;
 }
 /**
  * Read a small structured window of top-level messages from a channel. Use this for latest messages, bounded time ranges, cursor continuation, or a window around a message. For full thread replies, use ReadChannelThread.
@@ -3604,6 +3508,19 @@ export interface ReadChannelMessages {
    * Channel id to read.
    */
   channelId: string;
+  windowType: ChannelMessagesWindowType;
+  /**
+   * Inclusive lower bound for activity timestamps. Required when windowType is timeRange.
+   */
+  from?: string | null;
+  /**
+   * Exclusive upper bound for activity timestamps. Required when windowType is timeRange.
+   */
+  to?: string | null;
+  /**
+   * Anchor message id. Required when windowType is aroundMessage.
+   */
+  messageId?: string | null;
   /**
    * Opaque cursor returned by this tool. Required when windowType is page.
    */
@@ -3613,34 +3530,21 @@ export interface ReadChannelMessages {
    */
   direction?: PageDirection | null;
   /**
-   * Inclusive lower bound for activity timestamps. Required when windowType is timeRange.
+   * Top-level message ids to read. Required when windowType is messages.
    */
-  from?: string | null;
-  /**
-   * Whether to include thread preview replies on returned top-level messages. Defaults to true.
-   */
-  includeThreadPreviews?: boolean | null;
+  messageIds?: string[];
   /**
    * Maximum number of top-level messages to return. Defaults to 25, maximum 100.
    */
   limit?: number | null;
   /**
+   * Whether to include thread preview replies on returned top-level messages. Defaults to true.
+   */
+  includeThreadPreviews?: boolean | null;
+  /**
    * Maximum characters to return per message/reply. Defaults to 4000, maximum 16000.
    */
   maxCharsPerMessage?: number | null;
-  /**
-   * Anchor message id. Required when windowType is aroundMessage.
-   */
-  messageId?: string | null;
-  /**
-   * Top-level message ids to read. Required when windowType is messages.
-   */
-  messageIds?: string[];
-  /**
-   * Exclusive upper bound for activity timestamps. Required when windowType is timeRange.
-   */
-  to?: string | null;
-  windowType: ChannelMessagesWindowType;
 }
 /**
  * Response from `ReadChannelMessages`.
@@ -3650,6 +3554,7 @@ export interface ReadChannelMessagesResponse {
    * Channel id that was read.
    */
   channelId: string;
+  window: ResolvedChannelMessagesWindow;
   /**
    * Top-level channel messages in chronological order.
    */
@@ -3659,95 +3564,113 @@ export interface ReadChannelMessagesResponse {
    * Information about omitted or truncated content.
    */
   omissions: ToolOmission[];
-  window: ResolvedChannelMessagesWindow;
+}
+/**
+ * Resolved window metadata echoed in the response.
+ */
+export interface ResolvedChannelMessagesWindow {
+  windowType: ChannelMessagesWindowType;
+  /**
+   * Inclusive lower bound for activity timestamps, for time range windows.
+   */
+  from?: string | null;
+  /**
+   * Exclusive upper bound for activity timestamps, for time range windows.
+   */
+  to?: string | null;
+  /**
+   * Anchor message id for around-message windows.
+   */
+  messageId?: string | null;
+  /**
+   * Cursor direction for page windows.
+   */
+  direction?: PageDirection | null;
+  /**
+   * Requested message ids for messages windows.
+   */
+  messageIds: string[];
 }
 /**
  * Navigation cursors and continuation hints for a bounded result.
  */
 export interface ToolNavigation {
   /**
-   * Whether newer messages are known to exist.
+   * Cursor for reading older items, if available.
    */
-  hasMoreNewer: boolean;
-  /**
-   * Whether an older cursor was returned.
-   */
-  hasMoreOlder: boolean;
+  olderCursor?: string | null;
   /**
    * Cursor for reading newer items, if available.
    */
   newerCursor?: string | null;
   /**
-   * Cursor for reading older items, if available.
+   * Whether an older cursor was returned.
    */
-  olderCursor?: string | null;
-}
-/**
- * Resolved window metadata echoed in the response.
- */
-export interface ResolvedChannelMessagesWindow {
+  hasMoreOlder: boolean;
   /**
-   * Cursor direction for page windows.
+   * Whether newer messages are known to exist.
    */
-  direction?: PageDirection | null;
-  /**
-   * Inclusive lower bound for activity timestamps, for time range windows.
-   */
-  from?: string | null;
-  /**
-   * Anchor message id for around-message windows.
-   */
-  messageId?: string | null;
-  /**
-   * Requested message ids for messages windows.
-   */
-  messageIds: string[];
-  /**
-   * Exclusive upper bound for activity timestamps, for time range windows.
-   */
-  to?: string | null;
-  windowType: ChannelMessagesWindowType;
+  hasMoreNewer: boolean;
 }
 /**
  * Read replies from a channel message thread. The messageId may be either the top-level parent message id or any reply id in the thread. Use this after ReadChannelMessages or ContentSearch finds a relevant threaded discussion.
  */
 export interface ReadChannelThread {
   /**
-   * Number of replies after replyId for aroundReply windows. Defaults to 10, maximum 50.
-   */
-  after?: number | null;
-  /**
-   * Number of replies before replyId for aroundReply windows. Defaults to 10, maximum 50.
-   */
-  before?: number | null;
-  /**
    * Channel id containing the thread.
    */
   channelId: string;
-  /**
-   * Whether to include nearby top-level channel messages around the parent. Defaults to false.
-   */
-  includeChannelContext?: boolean | null;
-  /**
-   * Maximum number of replies to return for latest/all-if-small windows. Defaults to 25, maximum 100.
-   */
-  limit?: number | null;
-  /**
-   * Maximum characters to return per message/reply. Defaults to 4000, maximum 16000.
-   */
-  maxCharsPerMessage?: number | null;
   /**
    * Parent message id or any reply id in the thread.
    */
   messageId: string;
   /**
+   * Thread window to read: latest, allIfSmall, or aroundReply. Defaults to latest.
+   */
+  windowType?: ChannelThreadWindowType | null;
+  /**
    * Reply id to center around. Required when windowType is aroundReply.
    */
   replyId?: string | null;
   /**
-   * Thread window to read: latest, allIfSmall, or aroundReply. Defaults to latest.
+   * Number of replies before replyId for aroundReply windows. Defaults to 10, maximum 50.
    */
-  windowType?: ChannelThreadWindowType | null;
+  before?: number | null;
+  /**
+   * Number of replies after replyId for aroundReply windows. Defaults to 10, maximum 50.
+   */
+  after?: number | null;
+  /**
+   * Maximum number of replies to return for latest/all-if-small windows. Defaults to 25, maximum 100.
+   */
+  limit?: number | null;
+  /**
+   * Whether to include nearby top-level channel messages around the parent. Defaults to false.
+   */
+  includeChannelContext?: boolean | null;
+  /**
+   * Maximum characters to return per message/reply. Defaults to 4000, maximum 16000.
+   */
+  maxCharsPerMessage?: number | null;
+}
+/**
+ * Response from `ReadChannelThread`.
+ */
+export interface ReadChannelThreadResponse {
+  anchor: ToolResolvedMessage;
+  thread: ReadChannelThreadInfo;
+  /**
+   * Replies returned for the requested window, in chronological order.
+   */
+  replies: ToolThreadReply[];
+  /**
+   * Nearby top-level channel messages around the parent, when requested.
+   */
+  channelContext?: ToolChannelMessage[] | null;
+  /**
+   * Information about omitted or truncated content.
+   */
+  omissions: ToolOmission[];
 }
 /**
  * Metadata about the thread being read.
@@ -3758,37 +3681,18 @@ export interface ReadChannelThreadInfo {
    */
   channelId: string;
   /**
-   * Timestamp of the latest reply, if any.
+   * Thread id, equal to the top-level parent message id.
    */
-  latestReplyAt?: string | null;
+  threadId: string;
   parent: ToolChannelMessage;
   /**
    * Total number of replies in this thread.
    */
   replyCount: number;
   /**
-   * Thread id, equal to the top-level parent message id.
+   * Timestamp of the latest reply, if any.
    */
-  threadId: string;
-}
-/**
- * Response from `ReadChannelThread`.
- */
-export interface ReadChannelThreadResponse {
-  anchor: ToolResolvedMessage;
-  /**
-   * Nearby top-level channel messages around the parent, when requested.
-   */
-  channelContext?: ToolChannelMessage[] | null;
-  /**
-   * Information about omitted or truncated content.
-   */
-  omissions: ToolOmission[];
-  /**
-   * Replies returned for the requested window, in chronological order.
-   */
-  replies: ToolThreadReply[];
-  thread: ReadChannelThreadInfo;
+  latestReplyAt?: string | null;
 }
 /**
  * Retrieve a chat thread's message history by its ID. Returns the conversation title and messages with their roles, content, and attachment references.
@@ -3808,13 +3712,30 @@ export interface ReadChatResponse {
    */
   chatId: string;
   /**
-   * The messages in the chat.
-   */
-  messages: ChatMessagePreview[];
-  /**
    * The chat title.
    */
   title: string;
+  /**
+   * The messages in the chat.
+   */
+  messages: ChatMessagePreview[];
+}
+/**
+ * A single message in the tool response.
+ */
+export interface ChatMessagePreview {
+  /**
+   * The role of the message author (user, assistant, or system).
+   */
+  role: string;
+  /**
+   * The text content of the message.
+   */
+  content: string;
+  /**
+   * IDs of attachments referenced by this message.
+   */
+  attachmentIds: string[];
 }
 /**
  * Retrieve a documents content
@@ -3826,107 +3747,107 @@ export interface ReadContent {
   documentId: string;
 }
 export interface ReadContentResponse {
+  content: Content;
   /**
    * Any comments on the document
    */
   comments: CommentThread[];
-  content: Content;
 }
 /**
- * Full document metadata plus content lifecycle metadata.
+ * A thread bundled together with its ordered comments.
  */
-export interface ReadDocumentMetadata {
+export interface CommentThread {
+  thread: Thread;
   /**
-   * If the document is a "task" the branch name of the document will be provided.
+   * The comments in the thread, ordered by `createdAt` ASC.
    */
-  branchName?: string | null;
+  comments: Comment[];
+}
+/**
+ * A comment thread attached to a document.
+ */
+export interface Thread {
   /**
-   * The id of the document this document branched from
+   * The unique id of the thread.
    */
-  branchedFromId?: string | null;
+  threadId: number;
   /**
-   * The id of the version this document branched from
-   * This could be either DocumentInstance or DocumentBom id depending on
-   * the file type
-   */
-  branchedFromVersionId?: number | null;
-  content: DocumentContent;
-  /**
-   * The time the document was created
-   */
-  createdAt?: string | null;
-  /**
-   * The time the document was deleted
-   */
-  deletedAt?: string | null;
-  /**
-   * If the document is a DOCX document and unzipped, the document_bom will be present
-   */
-  documentBom?: {
-    [k: string]: unknown;
-  };
-  /**
-   * The id of the document family this document belongs to
-   */
-  documentFamilyId?: number | null;
-  /**
-   * The document id
-   */
-  documentId: string;
-  /**
-   * The name of the document
-   */
-  documentName: string;
-  /**
-   * The version of the document
-   * This could be the document_instance_id or document_bom_id depending on
-   * the file type
-   */
-  documentVersionId: number;
-  /**
-   * The file type of the document (file extension)
-   */
-  fileType?: string | null;
-  /**
-   * The modification data for the document instance.
-   * This is only used for PDF documents.
-   */
-  modificationData?: {
-    [k: string]: unknown;
-  };
-  /**
-   * The owner of the document
+   * The user id of the thread owner.
    */
   owner: string;
   /**
-   * The id of the project that this document belongs to
+   * Whether the thread has been resolved.
    */
-  projectId?: string | null;
+  resolved: boolean;
   /**
-   * The name of the project that this document belongs to
+   * The document the thread is attached to.
    */
-  projectName?: string | null;
+  documentId: string;
   /**
-   * If the document is a PDF, this is the SHA of the pdf
-   * If the document is a DOCX, this will not be present
+   * When the thread was created.
    */
-  sha?: string | null;
+  createdAt?: string | null;
   /**
-   * The sub type of the document if present.
-   */
-  subType?: DocumentSubType | null;
-  /**
-   * The team this task number is scoped to, for task documents.
-   */
-  teamId?: string | null;
-  /**
-   * The task number assigned within the team, for task documents.
-   */
-  teamTaskId?: number | null;
-  /**
-   * The time the document instance / document BOM was updated
+   * When the thread was last updated.
    */
   updatedAt?: string | null;
+  /**
+   * When the thread was deleted, if ever.
+   */
+  deletedAt?: string | null;
+  /**
+   * Arbitrary thread metadata.
+   */
+  metadata?: {
+    [k: string]: unknown;
+  };
+}
+/**
+ * A single comment in a thread.
+ */
+export interface Comment {
+  /**
+   * The unique id of the comment.
+   */
+  commentId: number;
+  /**
+   * The thread this comment belongs to.
+   */
+  threadId: number;
+  /**
+   * Ordering position within the thread.
+   */
+  order?: number | null;
+  /**
+   * The user id of the comment owner.
+   */
+  owner: string;
+  /**
+   * Sender display string.
+   */
+  sender?: string | null;
+  /**
+   * Comment body.
+   */
+  text: string;
+  /**
+   * Arbitrary comment metadata.
+   */
+  metadata?: {
+    [k: string]: unknown;
+  };
+  /**
+   * When the comment was created.
+   */
+  createdAt?: string | null;
+  /**
+   * When the comment was last updated.
+   */
+  updatedAt?: string | null;
+  /**
+   * When the comment was deleted, if ever.
+   */
+  deletedAt?: string | null;
 }
 /**
  * Retrieve a documents metadata
@@ -3942,6 +3863,112 @@ export interface ReadMetadataResponse {
   userAccessLevel: AccessLevel;
 }
 /**
+ * Full document metadata plus content lifecycle metadata.
+ */
+export interface ReadDocumentMetadata {
+  /**
+   * The document id
+   */
+  documentId: string;
+  /**
+   * The version of the document
+   * This could be the document_instance_id or document_bom_id depending on
+   * the file type
+   */
+  documentVersionId: number;
+  /**
+   * The owner of the document
+   */
+  owner: string;
+  /**
+   * The name of the document
+   */
+  documentName: string;
+  /**
+   * The file type of the document (file extension)
+   */
+  fileType?: string | null;
+  /**
+   * If the document is a PDF, this is the SHA of the pdf
+   * If the document is a DOCX, this will not be present
+   */
+  sha?: string | null;
+  /**
+   * The id of the project that this document belongs to
+   */
+  projectId?: string | null;
+  /**
+   * The name of the project that this document belongs to
+   */
+  projectName?: string | null;
+  /**
+   * The id of the document this document branched from
+   */
+  branchedFromId?: string | null;
+  /**
+   * The id of the version this document branched from
+   * This could be either DocumentInstance or DocumentBom id depending on
+   * the file type
+   */
+  branchedFromVersionId?: number | null;
+  /**
+   * The id of the document family this document belongs to
+   */
+  documentFamilyId?: number | null;
+  /**
+   * If the document is a DOCX document and unzipped, the document_bom will be present
+   */
+  documentBom?: {
+    [k: string]: unknown;
+  };
+  /**
+   * The modification data for the document instance.
+   * This is only used for PDF documents.
+   */
+  modificationData?: {
+    [k: string]: unknown;
+  };
+  /**
+   * The time the document was created
+   */
+  createdAt?: string | null;
+  /**
+   * The time the document instance / document BOM was updated
+   */
+  updatedAt?: string | null;
+  /**
+   * The time the document was deleted
+   */
+  deletedAt?: string | null;
+  /**
+   * The sub type of the document if present.
+   */
+  subType?: DocumentSubType | null;
+  /**
+   * The team this task number is scoped to, for task documents.
+   */
+  teamId?: string | null;
+  /**
+   * The task number assigned within the team, for task documents.
+   */
+  teamTaskId?: number | null;
+  content: DocumentContent;
+  /**
+   * If the document is a "task" the branch name of the document will be provided.
+   */
+  branchName?: string | null;
+}
+/**
+ * API-visible content lifecycle and location metadata.
+ */
+export interface DocumentContent {
+  state: DocumentContentState;
+  /**
+   * The content location, when known.
+   */
+  location?: DocumentContentLocation | null;
+}
+/**
  * List the direct contents of a project (shown as a folder in the app UI): its documents, AI chats, and nested projects. Requires view access to the project. Email threads filed into the project are not included.
  */
 export interface ReadProject {
@@ -3955,14 +3982,6 @@ export interface ReadProject {
  */
 export interface ReadProjectResponse {
   /**
-   * The project's direct children in display order.
-   */
-  items: ProjectItem[];
-  /**
-   * The id of the parent project, if this project is nested.
-   */
-  parentProjectId?: string | null;
-  /**
    * The id of the project.
    */
   projectId: string;
@@ -3970,24 +3989,36 @@ export interface ReadProjectResponse {
    * The name of the project.
    */
   projectName: string;
-}
-export interface ReadResponse {
-  content: ReadThreadReadContent;
+  /**
+   * The id of the parent project, if this project is nested.
+   */
+  parentProjectId?: string | null;
+  /**
+   * The project's direct children in display order.
+   */
+  items: ProjectItem[];
 }
 /**
- * Read threaded content by ID(s). Supports reading channels, chats, and projects by their respective IDs. Use this tool when you need to retrieve the full content of a specific item(s). For documents, use ReadContent or ReadMetadata instead.
- *     Channel transcripts only include the latest 150 messages. Use 'messages_since' to see messages in a different time window.
+ * A single item inside a project.
  */
-export interface ReadThread {
-  contentType: ContentType;
+export interface ProjectItem {
   /**
-   * ID(s) of the content to read. IMPORTANT: channel-message, chat-message, and content types support MULTIPLE ids! For all other content types (channel, chat-thread) provide a single id.
+   * The id of the item.
    */
-  ids: string[];
+  id: string;
+  itemType: ProjectItemType;
   /**
-   * A local datetime of the earliest message to include in a channel transcript following ISO 8601 format, only applicable to channels
+   * The display name of the item.
    */
-  messagesSince?: string | null;
+  name: string;
+  /**
+   * The file type, for documents (e.g. md, pdf, docx).
+   */
+  fileType?: string | null;
+  /**
+   * When the item was last updated.
+   */
+  updatedAt?: string | null;
 }
 /**
  * Rename a document. Requires edit access to the document.
@@ -4007,6 +4038,10 @@ export interface RenameDocument {
  */
 export interface RenameDocumentResponse {
   /**
+   * Whether the rename succeeded.
+   */
+  success: boolean;
+  /**
    * The id of the renamed document.
    */
   documentId: string;
@@ -4014,20 +4049,16 @@ export interface RenameDocumentResponse {
    * A human-readable result message.
    */
   message: string;
-  /**
-   * Whether the rename succeeded.
-   */
-  success: boolean;
 }
 /**
  * Search the user's skills by name. Skills are markdown documents containing instructions for AI to read and follow; when the user references a skill (or a request matches one), find it with this tool and then read its instructions with ReadContent using the returned document id. This is keyword search against skill names: pass 1-3 targeted keywords that would literally appear in the skill's name, not a natural-language description. Matching defaults to prefix; set matchType to 'exact' for whole-token matching. Only skills the user can access are returned, most recently updated first.
  */
 export interface SearchSkills {
-  matchType?: SearchSkillsMatchType;
   /**
    * The skill name to search. Pass 1-3 keywords drawn from words that would literally appear in the skill's name. The whole query is matched as a single adjacent phrase prefix, so long phrases will not match.
    */
   name: string;
+  matchType?: SearchSkillsMatchType;
 }
 /**
  * Response for a skill search.
@@ -4037,9 +4068,6 @@ export interface SearchSkillsResponse {
    * The matched skills, most recently updated first.
    */
   results: SkillSearchResult[];
-}
-export interface SearchToolResponse {
-  results: TaggedSearchResult[];
 }
 /**
  * Find tools from connected integrations (e.g. Slack, Gmail, Linear, GitHub) by keyword. The top matches are loaded automatically: call them by exact name on your next step. Matches past the auto-load cap come back under `additional_matches` and need `LoadTools` first. Searching is cheap, so cast a wide net.
@@ -4057,15 +4085,15 @@ export interface SearchTools {
  */
 export interface SearchToolsResponse {
   /**
-   * Matches past the auto-load cap, ranked. Not callable yet — pass a name
-   * to `LoadTools` if one of these is the tool you need.
-   */
-  additional_matches: ToolMatch[];
-  /**
    * Top matches, ranked by relevance. These are loaded: call them by exact
    * name on the next step.
    */
   results: ToolMatch[];
+  /**
+   * Matches past the auto-load cap, ranked. Not callable yet — pass a name
+   * to `LoadTools` if one of these is the tool you need.
+   */
+  additional_matches: ToolMatch[];
 }
 /**
  * Learn what Macro is and how it works. Call this whenever the user asks an open-ended question about Macro itself — what it is, what it's for, what it can do, or how to do something in Macro — instead of answering from memory (your training data may be stale). Takes no arguments. Returns an overview of Macro and a map of links into the official docs at docs.macro.com; every docs page is readable as Markdown (append `.md` to its URL), so follow up with WebFetch on the relevant page for details and cite it.
@@ -4085,13 +4113,13 @@ export interface SelfKnowledgeResponse {
  */
 export interface SendChannelMessage {
   /**
-   * The channel id to send the message to
-   */
-  channel_id: string;
-  /**
    * Message content in macro markdown format. This uses the same syntax as markdown documents
    */
   content: string;
+  /**
+   * The channel id to send the message to
+   */
+  channel_id: string;
   /**
    * An optional thread id to reply too
    */
@@ -4106,9 +4134,9 @@ export interface SendChannelMessageResponse {
  */
 export interface SendEmail {
   /**
-   * Blind carbon copy recipients (optional).
+   * The subject line of the email.
    */
-  bcc?: EmailRecipient[];
+  subject: string;
   /**
    * The body of the email. Written as Markdown by the AI and rendered in
    * the draft composer. At send time the frontend replaces this with the
@@ -4117,9 +4145,22 @@ export interface SendEmail {
    */
   body: string;
   /**
+   * The primary recipients (To field).
+   */
+  to: EmailRecipient[];
+  /**
    * Carbon copy recipients (optional).
    */
   cc?: EmailRecipient[];
+  /**
+   * Blind carbon copy recipients (optional).
+   */
+  bcc?: EmailRecipient[];
+  /**
+   * The ID of a message to reply to (optional). When set, the email is
+   * sent as a reply within the same thread.
+   */
+  replyingToId?: string | null;
   /**
    * Per-message signature override, set by the composer's signature preview —
    * not normally by you. Omit to use the inbox's default policy (always on a
@@ -4127,19 +4168,19 @@ export interface SendEmail {
    * excludes the signature for this one email.
    */
   includeSignature?: boolean | null;
+}
+/**
+ * A recipient for an email.
+ */
+export interface EmailRecipient {
   /**
-   * The ID of a message to reply to (optional). When set, the email is
-   * sent as a reply within the same thread.
+   * The recipient's email address.
    */
-  replyingToId?: string | null;
+  email: string;
   /**
-   * The subject line of the email.
+   * The recipient's display name (optional).
    */
-  subject: string;
-  /**
-   * The primary recipients (To field).
-   */
-  to: EmailRecipient[];
+  name?: string | null;
 }
 /**
  * Set or update a property value on an entity (document, project, etc.). Tasks are targeted as entity_type='document'. Provide the property_definition_id and exactly one value field matching the property's data type.
@@ -4165,9 +4206,14 @@ export interface SendEmail {
  */
 export interface SetEntityProperty {
   /**
-   * For multi-select properties (including tags): add these options to the current value atomically without touching other options. Cannot be combined with other value fields.
+   * The ID of the entity to update.
    */
-  add_option_ids?: string[] | null;
+  entity_id: string;
+  entity_type: ToolPropertyTargetEntityType;
+  /**
+   * The property definition ID. Get this from GetEntityProperties results.
+   */
+  property_definition_id: string;
   /**
    * For boolean properties.
    */
@@ -4177,30 +4223,13 @@ export interface SetEntityProperty {
    */
   date_value?: string | null;
   /**
-   * The ID of the entity to update.
-   */
-  entity_id: string;
-  /**
-   * For single entity reference properties.
-   */
-  entity_ref?: ToolEntityRef | null;
-  /**
-   * For multi entity reference properties.
-   */
-  entity_refs?: ToolEntityRef[] | null;
-  entity_type: ToolPropertyTargetEntityType;
-  /**
-   * For single link properties.
-   */
-  link_url?: string | null;
-  /**
-   * For multi link properties.
-   */
-  link_urls?: string[] | null;
-  /**
    * For number properties.
    */
   number_value?: number | null;
+  /**
+   * For string properties.
+   */
+  string_value?: string | null;
   /**
    * For single-select properties. The option UUID from available options.
    */
@@ -4210,28 +4239,40 @@ export interface SetEntityProperty {
    */
   option_ids?: string[] | null;
   /**
-   * The property definition ID. Get this from GetEntityProperties results.
+   * For multi-select properties (including tags): add these options to the current value atomically without touching other options. Cannot be combined with other value fields.
    */
-  property_definition_id: string;
+  add_option_ids?: string[] | null;
   /**
    * For multi-select properties (including tags): remove these options from the current value atomically without touching other options. Removing an absent option is a no-op. Cannot be combined with other value fields.
    */
   remove_option_ids?: string[] | null;
   /**
-   * For string properties.
+   * For single entity reference properties.
    */
-  string_value?: string | null;
+  entity_ref?: ToolEntityRef | null;
+  /**
+   * For multi entity reference properties.
+   */
+  entity_refs?: ToolEntityRef[] | null;
+  /**
+   * For single link properties.
+   */
+  link_url?: string | null;
+  /**
+   * For multi link properties.
+   */
+  link_urls?: string[] | null;
 }
 export interface ToolEntityRef {
-  entityId: string;
   entityType: ToolEntityType;
+  entityId: string;
 }
 /**
  * Response from the SetEntityProperty tool.
  */
 export interface SetEntityPropertyResponse {
-  message: string;
   success: boolean;
+  message: string;
 }
 /**
  * Delegate a task to a subagent that can independently use tools to research and complete it. The subagent has access to search, documents, properties, calls, and channel tools. Use this for tasks that require multiple tool calls or independent research.
@@ -4255,46 +4296,29 @@ export interface TextEditorCodeExecution {
   input: string;
 }
 /**
+ * Response from text_editor_code_execution tool
+ */
+export interface TextEditorCodeExecutionResponse {
+  tool_use_id: string;
+  content: TextEditorCodeExecutionContent;
+}
+/**
  * Result from text editor operations (view, create, str_replace)
  * Fields are optional as different operations return different fields
  */
 export interface TextEditorCodeExecutionResult {
   /**
-   * File content (for view operations)
-   */
-  content?: string | null;
-  /**
    * Type of file (e.g., "text")
    */
   file_type?: string | null;
   /**
-   * Whether the file already existed (true = update, false = create)
+   * File content (for view operations)
    */
-  is_file_update?: boolean | null;
-  /**
-   * Diff lines (prefixed with +/-)
-   */
-  lines?: string[] | null;
-  /**
-   * Number of new lines
-   */
-  newLines?: number | null;
-  /**
-   * New content start line
-   */
-  newStart?: number | null;
+  content?: string | null;
   /**
    * Number of lines returned
    */
   numLines?: number | null;
-  /**
-   * Number of old lines changed
-   */
-  oldLines?: number | null;
-  /**
-   * Old content start line
-   */
-  oldStart?: number | null;
   /**
    * Starting line number
    */
@@ -4303,94 +4327,36 @@ export interface TextEditorCodeExecutionResult {
    * Total lines in file
    */
   totalLines?: number | null;
+  /**
+   * Whether the file already existed (true = update, false = create)
+   */
+  is_file_update?: boolean | null;
+  /**
+   * Old content start line
+   */
+  oldStart?: number | null;
+  /**
+   * Number of old lines changed
+   */
+  oldLines?: number | null;
+  /**
+   * New content start line
+   */
+  newStart?: number | null;
+  /**
+   * Number of new lines
+   */
+  newLines?: number | null;
+  /**
+   * Diff lines (prefixed with +/-)
+   */
+  lines?: string[] | null;
 }
 /**
  * Error from text editor code execution
  */
 export interface TextEditorCodeExecutionToolError {
   error_code: CodeExecutionErrorCode;
-}
-/**
- * Response from text_editor_code_execution tool
- */
-export interface TextEditorCodeExecutionResponse {
-  content: TextEditorCodeExecutionContent;
-  tool_use_id: string;
-}
-/**
- * A calendar event as returned by the create and update tools.
- */
-export interface ToolCalendarEvent {
-  /**
-   * Total number of attendees.
-   */
-  attendeeCount: number;
-  /**
-   * Attendees, capped at 20; `attendee_count` has the full number.
-   */
-  attendees: ToolEventAttendee[];
-  /**
-   * Calendar the event belongs to, when known.
-   */
-  calendarId?: string | null;
-  /**
-   * Conference join URL, when a conference is attached.
-   */
-  conferenceUrl?: string | null;
-  /**
-   * Event body, truncated for brevity.
-   */
-  description?: string | null;
-  /**
-   * Exclusive event end: RFC 3339 UTC instant, or YYYY-MM-DD for all-day
-   * events.
-   */
-  end: string;
-  /**
-   * Macro calendar event id, used by UpdateCalendarEvent and
-   * DeleteCalendarEvent.
-   */
-  eventId: string;
-  /**
-   * Whether the event covers whole days.
-   */
-  isAllDay: boolean;
-  /**
-   * Whether the user's calendar prohibits modifying this event.
-   */
-  isReadOnly: boolean;
-  /**
-   * Whether the event recurs.
-   */
-  isRecurring: boolean;
-  /**
-   * Location label, when set.
-   */
-  location?: string | null;
-  /**
-   * Organizer email address, when known.
-   */
-  organizerEmail?: string | null;
-  /**
-   * Raw RFC 5545 recurrence properties, when the event recurs.
-   */
-  recurrenceLines: string[];
-  /**
-   * Event start: RFC 3339 UTC instant, or YYYY-MM-DD for all-day events.
-   */
-  start: string;
-  /**
-   * Event status: confirmed, tentative, or cancelled.
-   */
-  status: string;
-  /**
-   * IANA time zone the event was scheduled in, when known.
-   */
-  timeZone?: string | null;
-  /**
-   * Display title.
-   */
-  title: string;
 }
 /**
  * Update an existing calendar event. Only the supplied fields change; omitted fields keep their current values. The change is written to Google immediately and attendees are notified of it, so confirm details with the user first. Get the `eventId` from ListCalendarEvents.
@@ -4401,42 +4367,42 @@ export interface ToolCalendarEvent {
  */
 export interface UpdateCalendarEvent {
   /**
-   * Replacement attendee list — replaces all current attendees, so include everyone who should remain. Omit to leave attendees unchanged.
-   */
-  attendees?: AttendeeInput[] | null;
-  /**
-   * Change the event's video conference: "google_meet" attaches a fresh Google Meet, "remove" detaches the current conference. Omit to leave it untouched.
-   */
-  conference?: ConferenceChangeInput | null;
-  /**
-   * Replacement event body/description. An empty string clears it; omit to keep the current one.
-   */
-  description?: string | null;
-  /**
    * The event's id, from ListCalendarEvents or CreateCalendarEvent.
    */
   eventId: string;
-  /**
-   * Replacement location label. An empty string clears it; omit to keep the current one.
-   */
-  location?: string | null;
+  scope: UpdateScopeInput;
   /**
    * The `recurrenceId` of the targeted occurrence, from its ListCalendarEvents entry. Required for "this_event"; omit for "all".
    */
   recurrenceId?: string | null;
   /**
-   * Replacement RFC 5545 recurrence lines. An empty list makes the event one-off; omit to keep the current recurrence. Only valid with scope "all".
+   * Replacement title. Omit to keep the current title.
    */
-  recurrenceLines?: string[] | null;
-  scope: UpdateScopeInput;
+  title?: string | null;
+  /**
+   * Replacement event body/description. An empty string clears it; omit to keep the current one.
+   */
+  description?: string | null;
+  /**
+   * Replacement location label. An empty string clears it; omit to keep the current one.
+   */
+  location?: string | null;
   /**
    * Replacement time: a timed span with `kind` "timed" (startsAt, endsAt, optional timeZone) or whole days with `kind` "allDay" (startDate, exclusive endDate). Omit to keep the current time.
    */
   time?: EventTimeInput | null;
   /**
-   * Replacement title. Omit to keep the current title.
+   * Replacement attendee list — replaces all current attendees, so include everyone who should remain. Omit to leave attendees unchanged.
    */
-  title?: string | null;
+  attendees?: AttendeeInput[] | null;
+  /**
+   * Replacement RFC 5545 recurrence lines. An empty list makes the event one-off; omit to keep the current recurrence. Only valid with scope "all".
+   */
+  recurrenceLines?: string[] | null;
+  /**
+   * Change the event's video conference: "google_meet" attaches a fresh Google Meet, "remove" detaches the current conference. Omit to leave it untouched.
+   */
+  conference?: ConferenceChangeInput | null;
 }
 /**
  * Change one of the current user's reminders: reword it, move when it fires, or mark it done. Get the `reminderId` from ListReminders or CreateReminder.
@@ -4463,9 +4429,9 @@ export interface UpdateCalendarEvent {
  */
 export interface UpdateReminder {
   /**
-   * Mark the reminder as dealt with (true) or put it back on the active list (false).
+   * The id of the reminder to change.
    */
-  completed?: boolean | null;
+  reminderId: string;
   /**
    * Replacement reminder text. Max 2000 characters.
    */
@@ -4475,9 +4441,9 @@ export interface UpdateReminder {
    */
   remindAt?: string | null;
   /**
-   * The id of the reminder to change.
+   * Mark the reminder as dealt with (true) or put it back on the active list (false).
    */
-  reminderId: string;
+  completed?: boolean | null;
 }
 /**
  * Add or remove a single label from every message in a Gmail thread. In Gmail, nearly all inbox operations are just label add/remove operations, so this tool is the primitive for archiving, marking read/unread, starring, trashing, marking important/spam, and applying or removing custom labels.
@@ -4499,30 +4465,30 @@ export interface UpdateReminder {
  */
 export interface UpdateThreadLabels {
   /**
-   * Whether to add (true) or remove (false) the label from every message in the thread.
+   * The ID of the email thread to modify. Same UUID returned by ListEntities, search, or GetThread.
    */
-  add: boolean;
+  thread_id: string;
   /**
    * The UUID of the label to add or remove. Obtain this by calling ListLabels and looking up the label by name — do not pass the label name here.
    */
   label_id: string;
   /**
-   * The ID of the email thread to modify. Same UUID returned by ListEntities, search, or GetThread.
+   * Whether to add (true) or remove (false) the label from every message in the thread.
    */
-  thread_id: string;
+  add: boolean;
 }
 /**
  * Response from the UpdateThreadLabels tool.
  */
 export interface UpdateThreadLabelsResponse {
   /**
-   * The number of messages that failed to update.
-   */
-  failedCount: number;
-  /**
    * The number of messages successfully updated.
    */
   successfulCount: number;
+  /**
+   * The number of messages that failed to update.
+   */
+  failedCount: number;
   /**
    * A human-readable summary of the operation.
    */
@@ -4538,45 +4504,51 @@ export interface WebFetch {
   input: string;
 }
 /**
+ * Web fetch tool response content returned by Claude when using the web_fetch tool
+ */
+export interface WebFetchResponse {
+  tool_use_id: string;
+  content: WebFetchContent;
+}
+/**
  * Successful web fetch result containing the fetched content
  */
 export interface WebFetchResult {
+  /**
+   * The URL that was fetched
+   */
+  url: string;
   content: WebFetchDocument;
   /**
    * Timestamp when the content was retrieved
    */
   retrieved_at: string;
-  /**
-   * The URL that was fetched
-   */
-  url: string;
 }
 /**
  * Document content from a web fetch
  */
 export interface WebFetchDocument {
-  /**
-   * Optional citations configuration
-   */
-  citations?: CitationsConfig | null;
   source: WebFetchSource;
   /**
    * Optional title of the document
    */
   title?: string | null;
+  /**
+   * Optional citations configuration
+   */
+  citations?: CitationsConfig | null;
+}
+/**
+ * Citations configuration for web fetch
+ */
+export interface CitationsConfig {
+  enabled: boolean;
 }
 /**
  * Error returned when web fetch fails
  */
 export interface WebFetchToolError {
   error_code: WebFetchErrorCode;
-}
-/**
- * Web fetch tool response content returned by Claude when using the web_fetch tool
- */
-export interface WebFetchResponse {
-  content: WebFetchContent;
-  tool_use_id: string;
 }
 /**
  * Search the web for information using Claude's built-in web search tool.
@@ -4588,16 +4560,44 @@ export interface WebSearch {
   input: string;
 }
 /**
- * Error returned when web search fails
- */
-export interface WebSearchToolError {
-  error_code: string;
-  type: string;
-}
-/**
  * Web search response content returned by Claude when using the web_search tool
  */
 export interface WebSearchResponse {
   content: WebSearchContent;
   tool_use_id: string;
+}
+/**
+ * Error returned when web search fails
+ */
+export interface WebSearchToolError {
+  type: string;
+  error_code: string;
+}
+/**
+ * Read threaded content by ID(s). Supports reading channels, chats, and projects by their respective IDs. Use this tool when you need to retrieve the full content of a specific item(s). For documents, use ReadContent or ReadMetadata instead.
+ *     Channel transcripts only include the latest 150 messages. Use 'messages_since' to see messages in a different time window.
+ */
+export interface ReadThread {
+  contentType: ContentType;
+  /**
+   * ID(s) of the content to read. IMPORTANT: channel-message, chat-message, and content types support MULTIPLE ids! For all other content types (channel, chat-thread) provide a single id.
+   */
+  ids: string[];
+  /**
+   * A local datetime of the earliest message to include in a channel transcript following ISO 8601 format, only applicable to channels
+   */
+  messagesSince?: string | null;
+}
+export interface ReadResponse {
+  content: ReadThreadReadContent;
+}
+export interface ConversationRecord {
+  chat_id: string;
+  title: string;
+  messages: MessageWithAttachments[];
+}
+export interface MessageWithAttachments {
+  content: string;
+  date: string;
+  attachmentIds: string[];
 }

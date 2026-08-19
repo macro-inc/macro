@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use agent_client_protocol::Channel as AcpChannel;
-use agent_client_protocol::RawJsonRpcMessage;
+use agent_client_protocol::{RawJsonRpcMessage, TransportFrame};
 use futures::StreamExt;
 use serde_json::json;
 use tokio::sync::Mutex;
@@ -25,6 +25,15 @@ fn connections() -> (ServerConnection, RuntimeConnection, Events) {
     let (server, _server_acp) = ServerConnection::connect(server_channel, events.clone());
     let (runtime, _runtime_acp) = RuntimeConnection::connect(runtime_channel);
     (server, runtime, events)
+}
+
+/// Unwrap a frame this test knows is a single valid message - the only shape
+/// anything on either side of this relay ever sends.
+fn expect_single(frame: TransportFrame) -> RawJsonRpcMessage {
+    match frame {
+        TransportFrame::Single(message) => message,
+        other => panic!("expected a single message, got {other:?}"),
+    }
 }
 
 /// Connect a server/runtime pair, keeping both ACP channels.
@@ -83,13 +92,17 @@ async fn acp_channels_carry_raw_sdk_messages_in_both_directions() {
         agent_client_protocol::schema::v1::RequestId::Number(1),
     )
     .unwrap();
-    server_acp.tx.unbounded_send(Ok(initialize)).unwrap();
+    server_acp
+        .tx
+        .unbounded_send(TransportFrame::Single(initialize))
+        .unwrap();
 
-    let delivered = timeout(Duration::from_secs(1), runtime_acp.rx.next())
-        .await
-        .expect("ACP request should not hang")
-        .expect("ACP channel should remain open")
-        .expect("ACP request should be valid");
+    let delivered = expect_single(
+        timeout(Duration::from_secs(1), runtime_acp.rx.next())
+            .await
+            .expect("ACP request should not hang")
+            .expect("ACP channel should remain open"),
+    );
     assert_eq!(
         serde_json::to_value(delivered).unwrap(),
         json!({
@@ -102,16 +115,17 @@ async fn acp_channels_carry_raw_sdk_messages_in_both_directions() {
 
     runtime_acp
         .tx
-        .unbounded_send(Ok(RawJsonRpcMessage::response(
+        .unbounded_send(TransportFrame::Single(RawJsonRpcMessage::response(
             agent_client_protocol::schema::v1::RequestId::Number(1),
             Ok(json!({ "protocolVersion": 1 })),
         )))
         .unwrap();
-    let response = timeout(Duration::from_secs(1), server_acp.rx.next())
-        .await
-        .expect("ACP response should not hang")
-        .expect("ACP channel should remain open")
-        .expect("ACP response should be valid");
+    let response = expect_single(
+        timeout(Duration::from_secs(1), server_acp.rx.next())
+            .await
+            .expect("ACP response should not hang")
+            .expect("ACP channel should remain open"),
+    );
     assert_eq!(
         serde_json::to_value(response).unwrap(),
         json!({

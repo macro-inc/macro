@@ -349,12 +349,15 @@ function EventDetailsPopover(props: EventDetailsPopoverProps) {
           <Popover.Content
             class="portal-scope z-modal max-w-[calc(100vw-2rem)] outline-none"
             onInteractOutside={(event) => {
-              // FullCalendar selects on click (pointer release), so dismissing on
-              // pointer down would briefly close the popover before reopening it.
+              // FullCalendar and external calendar target controls select on
+              // click (pointer release), so dismissing on pointer down would
+              // briefly close the popover before navigation finishes.
               const target = event.detail.originalEvent.target;
               if (
                 target instanceof Element &&
-                target.closest('.fc-event') !== null
+                (target.closest('.fc-event') !== null ||
+                  target.closest('[data-calendar-event-target-navigation]') !==
+                    null)
               ) {
                 event.preventDefault();
               }

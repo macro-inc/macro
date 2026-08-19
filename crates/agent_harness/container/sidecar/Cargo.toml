@@ -1,0 +1,26 @@
+[package]
+name = "acp-sidecar"
+version = "0.1.0"
+edition = "2024"
+
+# Standalone separate crate for our proxy
+[workspace]
+
+[dependencies]
+axum = { version = "0.8", features = ["ws"] }
+clap = { version = "4", features = ["derive", "env"] }
+futures-util = "0.3"
+tokio = { version = "1", features = [
+  "io-util",
+  "macros",
+  "net",
+  "process",
+  "rt-multi-thread",
+  "sync",
+] }
+tracing = "0.1"
+tracing-subscriber = "0.3"
+
+[dev-dependencies]
+tokio = { version = "1", features = ["time"] }
+tokio-tungstenite = "0.28"

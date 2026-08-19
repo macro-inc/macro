@@ -143,7 +143,8 @@ describe('cache telemetry privacy contract', () => {
     const cases = {
       init: 'initialization',
       read: 'read',
-      'read-records': 'read',
+      'read-records-by-keys': 'read',
+      search: 'read',
       write: 'write',
       'enqueue-optimistic-mutation': 'transaction',
       'inspect-query-variants': 'inspection',

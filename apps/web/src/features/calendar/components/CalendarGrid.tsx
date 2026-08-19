@@ -3,7 +3,6 @@ import {
   type FullCalendarContextValue,
   useFullCalendar,
 } from '@app/lib/fullcalendar-solid';
-import { isMobile } from '@core/mobile/isMobile';
 import type {
   DateSelectArg,
   DatesSetArg,
@@ -90,6 +89,10 @@ export interface CalendarGridHandle extends FullCalendarContextValue {
 
 export interface CalendarGridSettings {
   initialView: CalendarPeriodView;
+  /** Consecutive visible days for time-grid embeds. */
+  dayCount?: number;
+  showDayHeaders?: boolean;
+  showAllDaySlot?: boolean;
   showWeekends: boolean;
   weekStartsOn: CalendarWeekStart;
   timeFormat: CalendarTimeFormat;
@@ -197,6 +200,14 @@ export function CalendarGrid(props: CalendarGridProps) {
       ]}
       initialView={props.settings.initialView}
       initialDate={props.initialDate}
+      dayCount={props.settings.dayCount}
+      dateIncrement={
+        props.settings.dayCount === undefined
+          ? undefined
+          : { days: props.settings.dayCount }
+      }
+      dayHeaders={props.settings.showDayHeaders ?? true}
+      allDaySlot={props.settings.showAllDaySlot ?? true}
       height="100%"
       expandRows
       fixedWeekCount={false}
@@ -232,16 +243,23 @@ export function CalendarGrid(props: CalendarGridProps) {
           eventByRenderId(calendarEventRenderId(change.event))
         )
       }
-      selectable={props.selection.onDateSelect !== undefined && !isMobile()}
+      selectable={props.selection.onDateSelect !== undefined}
       unselectAuto={false}
       selectMirror
       selectMinDistance={5}
       select={(selection) => props.selection.onDateSelect?.(selection)}
-      eventClick={({ el, event, jsEvent }) => {
-        jsEvent.preventDefault();
-        const selectedEvent = eventByRenderId(calendarEventRenderId(event));
-        if (selectedEvent) props.selection.onEventSelect?.(selectedEvent, el);
-      }}
+      eventClick={
+        props.selection.onEventSelect
+          ? ({ el, event, jsEvent }) => {
+              jsEvent.preventDefault();
+              const selectedEvent = eventByRenderId(
+                calendarEventRenderId(event)
+              );
+              if (selectedEvent)
+                props.selection.onEventSelect?.(selectedEvent, el);
+            }
+          : undefined
+      }
       eventDidMount={({ el, event, isMirror }) => {
         const eventId = calendarEventRenderId(event);
         const calendarEvent = eventByRenderId(eventId);
@@ -281,12 +299,14 @@ export function CalendarGrid(props: CalendarGridProps) {
       <FullCalendar.DayHeaderContent>
         {({ date, text, view }) => {
           if (view.type === 'timeGridWeek' || view.type === 'timeGridDay') {
-            const weekday =
-              view.type === 'timeGridDay'
-                ? formatWeekdayHeader.short(date)
-                : formatWeekdayHeader[
-                    props.settings.useNarrowDayHeaders ? 'narrow' : 'short'
-                  ](date);
+            const isSingleDayView =
+              view.type === 'timeGridDay' &&
+              (props.settings.dayCount ?? 1) === 1;
+            const weekday = isSingleDayView
+              ? formatWeekdayHeader.short(date)
+              : formatWeekdayHeader[
+                  props.settings.useNarrowDayHeaders ? 'narrow' : 'short'
+                ](date);
 
             return (
               <>

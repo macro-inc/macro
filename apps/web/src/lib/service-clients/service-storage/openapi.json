@@ -7905,7 +7905,8 @@
                 "crm_company",
                 "crm_contact",
                 "reminder",
-                "skill"
+                "skill",
+                "agent_session"
               ]
             }
           },
@@ -9719,7 +9720,8 @@
                 "crm_company",
                 "crm_contact",
                 "reminder",
-                "skill"
+                "skill",
+                "agent_session"
               ]
             }
           },
@@ -11078,7 +11080,8 @@
                   "crm_company",
                   "crm_contact",
                   "reminder",
-                  "skill"
+                  "skill",
+                  "agent_session"
                 ]
               }
             ],
@@ -12558,7 +12561,8 @@
           "name",
           "handle",
           "created_at",
-          "updated_at"
+          "updated_at",
+          "has_agent"
         ],
         "properties": {
           "avatar_url": {
@@ -12586,6 +12590,10 @@
           "handle": {
             "type": "string",
             "description": "Stable handle."
+          },
+          "has_agent": {
+            "type": "boolean",
+            "description": "Whether mentioning this bot opens a sandboxed coding-agent session."
           },
           "id": {
             "$ref": "#/components/schemas/BotId",
@@ -15320,7 +15328,8 @@
                   "crm_company",
                   "crm_contact",
                   "reminder",
-                  "skill"
+                  "skill",
+                  "agent_session"
                 ]
               }
             ],
@@ -17941,7 +17950,8 @@
                   "crm_company",
                   "crm_contact",
                   "reminder",
-                  "skill"
+                  "skill",
+                  "agent_session"
                 ]
               }
             ],
@@ -17988,7 +17998,8 @@
                   "crm_company",
                   "crm_contact",
                   "reminder",
-                  "skill"
+                  "skill",
+                  "agent_session"
                 ]
               }
             ],
@@ -21290,7 +21301,8 @@
                   "crm_company",
                   "crm_contact",
                   "reminder",
-                  "skill"
+                  "skill",
+                  "agent_session"
                 ]
               }
             ],
@@ -23315,7 +23327,8 @@
                   "crm_company",
                   "crm_contact",
                   "reminder",
-                  "skill"
+                  "skill",
+                  "agent_session"
                 ]
               }
             ],

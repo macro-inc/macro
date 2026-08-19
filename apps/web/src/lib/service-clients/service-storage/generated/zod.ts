@@ -682,6 +682,11 @@ export const getSelfBotResponse = zod
       .describe('Soft-delete timestamp.'),
     description: zod.string().nullish().describe('Optional description.'),
     handle: zod.string().describe('Stable handle.'),
+    has_agent: zod
+      .boolean()
+      .describe(
+        'Whether mentioning this bot opens a sandboxed coding-agent session.'
+      ),
     id: zod.string(),
     kind: zod.enum(['owned', 'system']).describe('Bot kind.'),
     name: zod.string().describe('Display name.'),
@@ -7450,6 +7455,7 @@ export const listFavoritesResponse = zod
                 'crm_contact',
                 'reminder',
                 'skill',
+                'agent_session',
               ])
               .describe('The type of an entity in Macro')
               .describe('The type of the favorited entity.'),
@@ -7495,6 +7501,7 @@ export const addFavoriteBody = zod
         'crm_contact',
         'reminder',
         'skill',
+        'agent_session',
       ])
       .describe('The type of an entity in Macro')
       .describe('The type of the entity to favorite.'),
@@ -7541,6 +7548,7 @@ export const addFavoriteResponse = zod
         'crm_contact',
         'reminder',
         'skill',
+        'agent_session',
       ])
       .describe('The type of an entity in Macro')
       .describe('The type of the favorited entity.'),
@@ -7584,6 +7592,7 @@ export const reorderFavoritesBody = zod
                 'crm_contact',
                 'reminder',
                 'skill',
+                'agent_session',
               ])
               .describe('The type of an entity in Macro')
               .describe('The type of the favorited entity.'),
@@ -7620,6 +7629,7 @@ export const removeFavoriteByEntityParams = zod.object({
       'crm_contact',
       'reminder',
       'skill',
+      'agent_session',
     ])
     .describe('The type of the favorited entity.'),
   entity_id: zod.string().describe('The id of the favorited entity.'),
@@ -10772,6 +10782,7 @@ export const getItemsSoupResponse = zod
                                 'crm_contact',
                                 'reminder',
                                 'skill',
+                                'agent_session',
                               ])
                               .describe('The type of an entity in Macro')
                               .describe("The referenced entity's type."),
@@ -14406,6 +14417,7 @@ export const postItemsSoupResponse = zod
                                 'crm_contact',
                                 'reminder',
                                 'skill',
+                                'agent_session',
                               ])
                               .describe('The type of an entity in Macro')
                               .describe("The referenced entity's type."),
@@ -17506,6 +17518,7 @@ export const postItemsSoupAstResponse = zod
                                 'crm_contact',
                                 'reminder',
                                 'skill',
+                                'agent_session',
                               ])
                               .describe('The type of an entity in Macro')
                               .describe("The referenced entity's type."),
@@ -20957,6 +20970,7 @@ export const postItemsSoupAstGroupedResponse = zod
                                       'crm_contact',
                                       'reminder',
                                       'skill',
+                                      'agent_session',
                                     ])
                                     .describe('The type of an entity in Macro')
                                     .describe("The referenced entity's type."),
@@ -24060,6 +24074,7 @@ export const postItemsSoupAstGroupedResponse = zod
                                       'crm_contact',
                                       'reminder',
                                       'skill',
+                                      'agent_session',
                                     ])
                                     .describe('The type of an entity in Macro')
                                     .describe("The referenced entity's type."),
@@ -26120,6 +26135,7 @@ export const listRemindersQueryParams = zod.object({
       'crm_contact',
       'reminder',
       'skill',
+      'agent_session',
     ])
     .optional()
     .describe(
@@ -26202,6 +26218,7 @@ export const listRemindersResponse = zod
                     'crm_contact',
                     'reminder',
                     'skill',
+                    'agent_session',
                   ])
                   .describe('The type of an entity in Macro'),
               ])
@@ -26287,6 +26304,7 @@ export const createReminderBody = zod
             'crm_contact',
             'reminder',
             'skill',
+            'agent_session',
           ])
           .describe('The type of an entity in Macro'),
       ])
@@ -26369,6 +26387,7 @@ export const getReminderResponse = zod
             'crm_contact',
             'reminder',
             'skill',
+            'agent_session',
           ])
           .describe('The type of an entity in Macro'),
       ])
@@ -26511,6 +26530,7 @@ export const updateReminderResponse = zod
             'crm_contact',
             'reminder',
             'skill',
+            'agent_session',
           ])
           .describe('The type of an entity in Macro'),
       ])

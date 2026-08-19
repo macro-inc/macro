@@ -28,15 +28,18 @@ rate_limit = []
 return_passwordless_code = []
 
 [dependencies]
+aes-gcm = { workspace = true }
 calendar_events = { path = "../../crates/calendar_events" }
 analytics_client = { path = "../../crates/analytics_client" }
 anyhow = { workspace = true }
+async-trait = { workspace = true }
 async-stripe = { workspace = true, default-features = false, features = [
   "billing",
   "checkout",
   "runtime-tokio-hyper-rustls-webpki",
 ] }
 async-stripe-webhook = { version = "1.0.0-alpha.4", default-features = false }
+aws-sdk-kms = { workspace = true }
 aws-sdk-secretsmanager = { workspace = true }
 aws-sdk-sesv2 = { workspace = true }
 aws-sdk-sqs = { workspace = true }
@@ -104,6 +107,7 @@ macro_user_id = { path = "../../crates/macro_user_id" }
 macro_uuid = { path = "../../crates/macro_uuid" }
 maud = { version = "0.27.0" }
 miniserde = "0.1.45"
+microsoft_oauth_grant_db_utils = { path = "../../crates/microsoft_oauth_grant_db_utils" }
 mobile_welcome_email_db_client = { path = "../../crates/mobile_welcome_email_db_client" }
 mockall = { workspace = true }
 model = { path = "../../crates/model" }
@@ -149,6 +153,7 @@ user_quota = { path = "../../crates/user_quota" }
 utoipa = { workspace = true }
 utoipa-swagger-ui = { workspace = true }
 uuid = { workspace = true }
+zeroize = { workspace = true }
 doppler-config = { workspace = true }
 workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
 database_env_vars = { path = "../../crates/database_env_vars" }

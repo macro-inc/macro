@@ -27,6 +27,7 @@ struct MockRepo {
     thread_access_calls: Arc<AtomicUsize>,
     owned_email_thread_ids: Arc<Mutex<Vec<Uuid>>>,
     call_access: Arc<Mutex<Option<AccessLevel>>>,
+    agent_session_access: Arc<Mutex<Option<AccessLevel>>>,
     reminder_access: Arc<Mutex<Option<AccessLevel>>>,
     team_entity_access: Arc<Mutex<Option<AccessLevel>>>,
     team_entity_access_calls: Arc<AtomicUsize>,
@@ -61,6 +62,7 @@ impl MockRepo {
             thread_access_calls: Arc::new(AtomicUsize::new(0)),
             owned_email_thread_ids: Arc::new(Mutex::new(Vec::new())),
             call_access: Arc::new(Mutex::new(None)),
+            agent_session_access: Arc::new(Mutex::new(None)),
             reminder_access: Arc::new(Mutex::new(None)),
             team_entity_access: Arc::new(Mutex::new(None)),
             team_entity_access_calls: Arc::new(AtomicUsize::new(0)),
@@ -118,6 +120,11 @@ impl MockRepo {
 
     fn with_reminder_access(mut self, level: AccessLevel) -> Self {
         self.reminder_access = Arc::new(Mutex::new(Some(level)));
+        self
+    }
+
+    fn with_agent_session_access(mut self, level: AccessLevel) -> Self {
+        self.agent_session_access = Arc::new(Mutex::new(Some(level)));
         self
     }
 
@@ -286,6 +293,14 @@ impl AccessRepository for MockRepo {
         _user_id: Option<&MacroUserId<Lowercase<'_>>>,
     ) -> Result<Option<AccessLevel>, AccessError> {
         Ok(*self.call_access.lock().await)
+    }
+
+    async fn get_agent_session_access(
+        &self,
+        _agent_session_id: &str,
+        _user_id: Option<&MacroUserId<Lowercase<'_>>>,
+    ) -> Result<Option<AccessLevel>, AccessError> {
+        Ok(*self.agent_session_access.lock().await)
     }
 
     async fn get_reminder_access(
@@ -681,6 +696,47 @@ async fn test_get_entity_permission_document_no_access_returns_unauthorized() {
 
     let result = service
         .get_entity_permission(Some(&user_id), "doc-1", EntityType::Document, None)
+        .await;
+
+    assert!(matches!(result, Err(AccessError::Unauthorized)));
+}
+
+#[tokio::test]
+async fn test_get_entity_permission_agent_session_returns_access_level() {
+    let repo = MockRepo::new().with_agent_session_access(AccessLevel::Owner);
+    let service = EntityAccessServiceImpl::new(repo);
+    let user_id = test_user_id();
+
+    let result = service
+        .get_entity_permission(
+            Some(&user_id),
+            "0198a805-3e22-75b2-97eb-d9c6b91accb0",
+            EntityType::AgentSession,
+            None,
+        )
+        .await
+        .unwrap();
+
+    assert!(matches!(
+        result,
+        EntityPermission::AccessLevel {
+            access_level: AccessLevel::Owner
+        }
+    ));
+}
+
+#[tokio::test]
+async fn test_get_entity_permission_agent_session_no_access_returns_unauthorized() {
+    let service = EntityAccessServiceImpl::new(MockRepo::new());
+    let user_id = test_user_id();
+
+    let result = service
+        .get_entity_permission(
+            Some(&user_id),
+            "0198a805-3e22-75b2-97eb-d9c6b91accb0",
+            EntityType::AgentSession,
+            None,
+        )
         .await;
 
     assert!(matches!(result, Err(AccessError::Unauthorized)));

@@ -1,0 +1,60 @@
+[package]
+edition = "2024"
+name = "agent_harness_service"
+publish = false
+version = "0.1.0"
+
+[[bin]]
+name = "agent_harness_service"
+path = "src/main.rs"
+
+[[bin]]
+name = "agent_harness_service_openapi"
+path = "src/openapi.rs"
+
+[dependencies]
+agent_fold = { path = "../../crates/agent_fold" }
+agent_harness = { path = "../../crates/agent_harness" }
+agent_runtime_protocol = { path = "../../crates/agent_runtime_protocol", features = ["utoipa"] }
+agent_session = { path = "../../crates/agent_session" }
+agent_trigger = { path = "../../crates/agent_trigger" }
+aws-sdk-sqs = { workspace = true }
+bot_id = { path = "../../crates/bot_id" }
+bots = { path = "../../crates/bots" }
+connection_gateway_client = { path = "../../crates/connection_gateway_client" }
+database_env_vars = { path = "../../crates/database_env_vars" }
+entity_access = { path = "../../crates/entity_access" }
+contacts = { path = "../../crates/contacts" }
+macro_aws_config = { path = "../../crates/macro_aws_config" }
+macro_event_broker = { path = "../../crates/macro_event_broker", features = ["outbound"] }
+macro_queues = { path = "../../crates/macro_queues" }
+lexical_client = { path = "../../crates/lexical_client" }
+macro_service_urls = { path = "../../crates/macro_service_urls" }
+notification = { path = "../../crates/notification" }
+rdkafka = { workspace = true }
+channels = { path = "../../crates/channels", features = ["ports", "outbound"] }
+anyhow = { workspace = true }
+axum = { workspace = true }
+aws-sdk-secretsmanager = { workspace = true }
+kafka_util = { path = "../../crates/kafka_util" }
+macro_auth = { path = "../../crates/macro_auth" }
+macro_authorization = { path = "../../crates/macro_authorization", default-features = false, features = [
+  "axum",
+  "outbound",
+  "postgres",
+] }
+macro_cors = { path = "../../crates/macro_cors" }
+secretsmanager_client = { path = "../../crates/secretsmanager_client" }
+serde_json = { workspace = true }
+utoipa = { workspace = true }
+utoipa-swagger-ui = { workspace = true }
+macro_config = { path = "../../crates/macro_config" }
+macro_entrypoint = { path = "../../crates/macro_entrypoint" }
+macro_env = { path = "../../crates/macro_env" }
+macro_env_var = { path = "../../crates/macro_env_var" }
+macro_uuid = { path = "../../crates/macro_uuid" }
+serde = { workspace = true }
+sqlx = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+tracing = { workspace = true }
+workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }

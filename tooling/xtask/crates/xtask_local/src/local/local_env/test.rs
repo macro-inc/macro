@@ -183,6 +183,10 @@ fn emits_in_network_service_url_overrides() {
             "OVERRIDE_DOCUMENT_STORAGE_SERVICE_URL",
             "http://document-storage-service:8080",
         ),
+        (
+            "OVERRIDE_LEXICAL_SERVICE_URL",
+            "http://lexical-service:8096",
+        ),
     ] {
         assert_eq!(env.get(key).map(String::as_str), Some(expected));
     }

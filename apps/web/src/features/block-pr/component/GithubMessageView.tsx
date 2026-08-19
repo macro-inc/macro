@@ -106,6 +106,7 @@ function toThreadRowMessage(
   return {
     ...message,
     channel_id: '',
+    content: message.content ?? '',
     sender: {
       type: 'bot',
       id: `github:${login}`,

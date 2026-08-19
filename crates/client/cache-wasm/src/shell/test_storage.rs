@@ -2,6 +2,7 @@ use cache_core::queue::{
     ClaimedMutation, MutationClaimRequest, MutationClaimToken, MutationId, NewQueuedMutation,
     QueuedMutation,
 };
+use cache_core::search::{SearchCursor, SearchDocument, SearchProfile};
 use cache_core::store::{QueueDiagnostics, Storage};
 use cache_core::value::{EntityKey, Record};
 use cache_turso::{PhysicalResetReason, TursoStorage, TursoStorageError};
@@ -68,13 +69,23 @@ impl Storage for BrowserStorage {
         self.inner.delete_batch(keys).await
     }
 
-    async fn scan_records(
+    async fn load_search_documents(
         &self,
-        type_names: &[String],
-        after: Option<&EntityKey<'static>>,
+        profile: SearchProfile,
+    ) -> Result<Vec<SearchDocument>, Self::Error> {
+        self.inner.load_search_documents(profile).await
+    }
+
+    async fn browse_search_documents(
+        &self,
+        profile: SearchProfile,
+        bucket: &str,
+        after: Option<&SearchCursor>,
         limit: usize,
-    ) -> Result<Vec<(EntityKey<'static>, Record)>, Self::Error> {
-        self.inner.scan_records(type_names, after, limit).await
+    ) -> Result<Vec<SearchDocument>, Self::Error> {
+        self.inner
+            .browse_search_documents(profile, bucket, after, limit)
+            .await
     }
 
     async fn enqueue_mutation(

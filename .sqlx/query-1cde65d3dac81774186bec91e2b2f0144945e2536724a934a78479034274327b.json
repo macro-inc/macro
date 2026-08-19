@@ -1,0 +1,46 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                agent_session_id,\n                user_id AS \"user_id: MacroUserIdStr\",\n                direction,\n                content,\n                created_at\n            FROM agent_session_log\n            WHERE agent_session_id = $1\n            ORDER BY created_at ASC, id ASC\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "agent_session_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "user_id: MacroUserIdStr",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "direction",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "content",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 4,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "1cde65d3dac81774186bec91e2b2f0144945e2536724a934a78479034274327b"
+}

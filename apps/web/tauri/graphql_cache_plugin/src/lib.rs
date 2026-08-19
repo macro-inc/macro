@@ -2,7 +2,7 @@
 //!
 //! The webview counterpart of the browser worker glue in
 //! `apps/web/src/lib/graphql-cache/`: the engine (`cache-core` over
-//! `cache-sqlite`) lives in the Tauri host process behind an async mutex
+//! `cache-turso`) lives in the Tauri host process behind an async mutex
 //! (`Storage` futures are `MaybeSend`, so `Send` on native) — one shared
 //! instance across all webviews/windows, never webview storage.
 //! Webviews talk to it through the commands in [`commands`] (registered
@@ -73,6 +73,18 @@ struct InitializedCache {
 /// with `.manage(CacheState::default())` in the app builder.
 #[derive(Default)]
 pub struct CacheState(Mutex<Option<InitializedCache>>);
+
+impl CacheState {
+    /// Takes the initialized cache and explicitly closes its Turso connection.
+    pub fn shutdown(&self) -> Result<(), String> {
+        let cache = self
+            .0
+            .lock()
+            .map_err(|_| "graphql cache state poisoned".to_string())?
+            .take();
+        cache.map_or(Ok(()), |cache| cache.handle.shutdown())
+    }
+}
 
 fn emit_ops_affected<R: Runtime>(app: &AppHandle<R>, op_ids: &[String], keys: &[String]) {
     if op_ids.is_empty() {

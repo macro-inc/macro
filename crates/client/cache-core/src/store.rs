@@ -1,7 +1,7 @@
 //! Storage abstraction: the cold tier behind the in-memory hot tier.
 //!
-//! Implementations: in-memory (tests), Turso over OPFS (browser), and SQLite
-//! (Tauri native). Futures are [`MaybeSend`]: `Send` on native targets (so
+//! Implementations: in-memory (tests) and Turso over OPFS (browser) or native
+//! filesystem IO (Tauri). Futures are [`MaybeSend`]: `Send` on native targets (so
 //! hosts can drive the engine from a multi-threaded runtime), unbounded on
 //! wasm — wasm futures aren't
 //! `Send`.
@@ -10,10 +10,13 @@ use crate::queue::{
     ClaimedMutation, MutationClaimRequest, MutationClaimToken, MutationId, NewQueuedMutation,
     QueuedMutation,
 };
+use crate::search::{SearchCursor, SearchDocument, SearchProfile, project_search_documents};
 use crate::value::{EntityKey, Record};
 use maybe_send::MaybeSend;
 use std::collections::{BTreeMap, HashMap};
 use std::convert::Infallible;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 /// Whether a storage implementation can provide queue diagnostics.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -59,14 +62,25 @@ pub trait Storage: MaybeSend {
         keys: &[EntityKey<'static>],
     ) -> impl Future<Output = Result<(), Self::Error>> + MaybeSend;
 
-    /// Scans normalized records of the requested concrete types in ascending
-    /// entity-key order. `after` is exclusive.
-    fn scan_records(
+    /// Loads the compact catalog for text search. This must read only the
+    /// derived search table, never normalized record payloads.
+    fn load_search_documents(
         &self,
-        type_names: &[String],
-        after: Option<&EntityKey<'static>>,
-        limit: usize,
-    ) -> impl Future<Output = Result<Vec<(EntityKey<'static>, Record)>, Self::Error>> + MaybeSend;
+        _profile: SearchProfile,
+    ) -> impl Future<Output = Result<Vec<SearchDocument>, Self::Error>> + MaybeSend {
+        async { Ok(Vec::new()) }
+    }
+
+    /// Reads one bucket in indexed recent order. `after` is exclusive.
+    fn browse_search_documents(
+        &self,
+        _profile: SearchProfile,
+        _bucket: &str,
+        _after: Option<&SearchCursor>,
+        _limit: usize,
+    ) -> impl Future<Output = Result<Vec<SearchDocument>, Self::Error>> + MaybeSend {
+        async { Ok(Vec::new()) }
+    }
 
     /// Atomically appends a mutation and its optimistic layer to the queue.
     fn enqueue_mutation(
@@ -134,6 +148,7 @@ pub trait Storage: MaybeSend {
 #[derive(Clone, Debug, Default)]
 pub struct InMemoryStorage {
     records: HashMap<EntityKey<'static>, Record>,
+    search_documents: HashMap<(SearchProfile, EntityKey<'static>), SearchDocument>,
     mutations: BTreeMap<
         MutationId,
         (
@@ -142,6 +157,8 @@ pub struct InMemoryStorage {
         ),
     >,
     next_mutation_id: MutationId,
+    record_get_count: Arc<AtomicUsize>,
+    search_catalog_load_count: Arc<AtomicUsize>,
 }
 
 impl InMemoryStorage {
@@ -156,12 +173,23 @@ impl InMemoryStorage {
     pub fn is_empty(&self) -> bool {
         self.records.is_empty()
     }
+
+    /// Number of normalized-record get calls (test diagnostics).
+    pub fn record_get_count(&self) -> usize {
+        self.record_get_count.load(Ordering::Relaxed)
+    }
+
+    /// Number of compact catalog loads (test diagnostics).
+    pub fn search_catalog_load_count(&self) -> usize {
+        self.search_catalog_load_count.load(Ordering::Relaxed)
+    }
 }
 
 impl Storage for InMemoryStorage {
     type Error = Infallible;
 
     async fn get_batch(&self, keys: &[EntityKey<'_>]) -> Result<Vec<Option<Record>>, Self::Error> {
+        self.record_get_count.fetch_add(1, Ordering::Relaxed);
         Ok(keys.iter().map(|k| self.records.get(k).cloned()).collect())
     }
 
@@ -169,44 +197,68 @@ impl Storage for InMemoryStorage {
         &mut self,
         entries: Vec<(EntityKey<'static>, Record)>,
     ) -> Result<(), Self::Error> {
-        for (k, v) in entries {
-            self.records.insert(k, v);
+        for (key, record) in entries {
+            self.search_documents
+                .retain(|(_, existing_key), _| existing_key != &key);
+            for document in project_search_documents(&key, &record) {
+                self.search_documents
+                    .insert((document.profile, key.clone()), document);
+            }
+            self.records.insert(key, record);
         }
         Ok(())
     }
 
     async fn delete_batch(&mut self, keys: &[EntityKey<'static>]) -> Result<(), Self::Error> {
-        for k in keys {
-            self.records.remove(k);
+        for key in keys {
+            self.records.remove(key);
+            self.search_documents
+                .retain(|(_, existing_key), _| existing_key != key);
         }
         Ok(())
     }
 
-    async fn scan_records(
+    async fn load_search_documents(
         &self,
-        type_names: &[String],
-        after: Option<&EntityKey<'static>>,
-        limit: usize,
-    ) -> Result<Vec<(EntityKey<'static>, Record)>, Self::Error> {
-        if limit == 0 || type_names.is_empty() {
-            return Ok(Vec::new());
-        }
-        let type_names: std::collections::HashSet<_> =
-            type_names.iter().map(String::as_str).collect();
-        let mut records: Vec<_> = self
-            .records
+        profile: SearchProfile,
+    ) -> Result<Vec<SearchDocument>, Self::Error> {
+        self.search_catalog_load_count
+            .fetch_add(1, Ordering::Relaxed);
+        Ok(self
+            .search_documents
             .iter()
-            .filter(|(key, _)| after.as_ref().is_none_or(|after| *key > after))
-            .filter(|(key, _)| {
-                key.0
-                    .split_once(':')
-                    .is_some_and(|(type_name, _)| type_names.contains(type_name))
+            .filter(|((candidate, _), _)| *candidate == profile)
+            .map(|(_, document)| document.clone())
+            .collect())
+    }
+
+    async fn browse_search_documents(
+        &self,
+        profile: SearchProfile,
+        bucket: &str,
+        after: Option<&SearchCursor>,
+        limit: usize,
+    ) -> Result<Vec<SearchDocument>, Self::Error> {
+        let mut documents: Vec<_> = self
+            .search_documents
+            .values()
+            .filter(|document| document.profile == profile && document.bucket == bucket)
+            .filter(|document| {
+                after.is_none_or(|cursor| {
+                    document.timestamp_ms < cursor.timestamp_ms
+                        || (document.timestamp_ms == cursor.timestamp_ms
+                            && crate::search::compare_record_keys(
+                                &document.record_key,
+                                &cursor.record_key,
+                            )
+                            .is_gt())
+                })
             })
-            .map(|(key, record)| (key.clone(), record.clone()))
+            .cloned()
             .collect();
-        records.sort_by(|(left, _), (right, _)| left.cmp(right));
-        records.truncate(limit);
-        Ok(records)
+        documents.sort_by(crate::search::compare_recent);
+        documents.truncate(limit);
+        Ok(documents)
     }
 
     async fn enqueue_mutation(
@@ -310,6 +362,12 @@ impl Storage for InMemoryStorage {
             return Ok(false);
         }
         for (key, record) in entries {
+            self.search_documents
+                .retain(|(_, existing_key), _| existing_key != &key);
+            for document in project_search_documents(&key, &record) {
+                self.search_documents
+                    .insert((document.profile, key.clone()), document);
+            }
             self.records.insert(key, record);
         }
         self.mutations.remove(&id);
@@ -333,6 +391,7 @@ impl Storage for InMemoryStorage {
 
     async fn clear(&mut self) -> Result<(), Self::Error> {
         self.records.clear();
+        self.search_documents.clear();
         self.mutations.clear();
         Ok(())
     }

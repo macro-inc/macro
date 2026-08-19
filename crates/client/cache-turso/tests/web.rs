@@ -174,13 +174,10 @@ async fn incompatible_opfs_initialization_exposes_reset_only_and_cannot_preserve
         TursoStorage::from_opfs_session(session.connect().unwrap(), "browser-scope").unwrap();
     assert_eq!(
         storage
-            .scan_records(&["Type".into(), "Type0".into()], None, 10)
+            .get_batch(&[key("Type0:1"), key("Type:9")])
             .await
-            .unwrap()
-            .into_iter()
-            .map(|(key, _)| key.as_ref().to_owned())
-            .collect::<Vec<_>>(),
-        vec!["Type0:1", "Type:9"]
+            .unwrap(),
+        [Some(record("prefix")), Some(record("ordinary"))]
     );
     assert_eq!(
         storage.load_mutation_queue().await.unwrap()[0].id,

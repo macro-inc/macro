@@ -1941,6 +1941,10 @@ enum GraphqlEntityType {
 	AI skill entity (skill document or built-in system skill).
 	"""
 	SKILL
+	"""
+	AI coding agent session entity.
+	"""
+	AGENT_SESSION
 }
 
 """
