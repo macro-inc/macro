@@ -3,6 +3,7 @@ import { useCalendarUiFlag } from '@app/features/calendar/hooks/use-calendar-ui-
 import { isCalendarRangeSupported } from '@app/features/calendar/utils/calendar-supported-range';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { usePosthog } from '@app/lib/analytics/posthog';
+import { globalSplitManager } from '@app/signal/splitLayout';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { LoadingBlock } from '@core/component/LoadingBlock';
 import { useUserId } from '@core/context/user';
@@ -111,15 +112,24 @@ function CalendarBlockAdapter(props: CalendarBlockProps) {
     typeof value === 'string' && value.length > 0 ? value : undefined;
   // In-app opens pass the target through split content props, but a deep
   // link carries it in the query string, which never reaches block props.
+  // Query params are only trusted for a single-split URL, mirroring the
+  // channel block's deep-link guard.
+  const queryAim =
+    globalSplitManager()?.splits().length === 1
+      ? {
+          eventId: searchParam(searchParams.eventId),
+          occurrenceKey: searchParam(searchParams.occurrenceKey),
+        }
+      : {};
   const initialAim: CalendarBlockProps = {
     eventId:
       typeof props.eventId === 'string' && props.eventId.length > 0
         ? props.eventId
-        : searchParam(searchParams.eventId),
+        : queryAim.eventId,
     occurrenceKey:
       typeof props.occurrenceKey === 'string' && props.occurrenceKey.length > 0
         ? props.occurrenceKey
-        : searchParam(searchParams.occurrenceKey),
+        : queryAim.occurrenceKey,
     range: props.range,
   };
   let nextRequestId = 1;
