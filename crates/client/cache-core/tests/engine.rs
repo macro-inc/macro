@@ -355,6 +355,43 @@ fn incomplete_registered_write_is_conservatively_affected() {
             .await
             .unwrap();
         assert_eq!(write.affected_ops, [1].into());
+
+        engine
+            .write_query_with_registration(
+                Some(1),
+                Some(QueryRegistration {
+                    op_id: 1,
+                    entity_resolvers: &[],
+                }),
+                NetworkWrite {
+                    query: QUERY,
+                    operation_name: Some("Soup"),
+                    variables: &vars(10),
+                    data: &page(&[("doc-1", "Complete")]),
+                    identity: None,
+                },
+            )
+            .await
+            .unwrap();
+        let write = engine
+            .write_query(
+                Some(2),
+                UPDATE_NOTIFICATIONS_MUTATION,
+                Some("UpdateNotifications"),
+                &notification_variables,
+                &json!({
+                    "updateNotifications": [{
+                        "__typename": "GraphqlNotification",
+                        "id": "another-unrelated-notification",
+                        "seen": true,
+                        "viewedAt": null
+                    }]
+                }),
+                None,
+            )
+            .await
+            .unwrap();
+        assert!(write.affected_ops.is_empty());
     });
 }
 
