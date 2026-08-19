@@ -1,6 +1,7 @@
 use cache_core::{
     engine::{BeginOptimisticWrite, Engine},
     predicate::{PredicateQueryResult, ProjectionIncompleteKind, ProjectionMutation},
+    queue::{MutationClaimRequest, MutationClaimToken, MutationId},
     store::InMemoryStorage,
     value::{EntityKey, Record},
 };
@@ -61,11 +62,21 @@ fn query(owner: &str) -> ValidatedIndexQuery {
     .unwrap()
 }
 
-async fn begin_with_projection(
-    engine: &mut Engine<InMemoryStorage>,
-    projection_mutations: Vec<OptimisticProjectionMutation>,
-) {
-    let data = serde_json::json!({
+const OPTIMISTIC_MUTATION: &str = r#"
+    mutation SetEntityProperty($input: SetEntityPropertyInput!) {
+      setEntityProperty(input: $input) {
+        id
+        displayName
+        value {
+          __typename
+          ... on GraphqlStringPropertyValue { stringValue: value }
+        }
+      }
+    }
+"#;
+
+fn optimistic_data() -> serde_json::Value {
+    serde_json::json!({
         "setEntityProperty": {
             "id": "prop-1",
             "displayName": "Status",
@@ -74,7 +85,10 @@ async fn begin_with_projection(
                 "stringValue": "doing"
             }
         }
-    });
+    })
+}
+
+fn optimistic_variables() -> serde_json::Map<String, serde_json::Value> {
     let serde_json::Value::Object(variables) = serde_json::json!({
         "input": {
             "entityType": "DOCUMENT",
@@ -85,25 +99,21 @@ async fn begin_with_projection(
     }) else {
         unreachable!()
     };
+    variables
+}
+
+async fn begin_with_projection(
+    engine: &mut Engine<InMemoryStorage>,
+    projection_mutations: Vec<OptimisticProjectionMutation>,
+) -> MutationId {
     engine
         .begin_optimistic_write_with_projections(
             None,
             BeginOptimisticWrite {
-                query: r#"
-                    mutation SetEntityProperty($input: SetEntityPropertyInput!) {
-                      setEntityProperty(input: $input) {
-                        id
-                        displayName
-                        value {
-                          __typename
-                          ... on GraphqlStringPropertyValue { stringValue: value }
-                        }
-                      }
-                    }
-                "#,
+                query: OPTIMISTIC_MUTATION,
                 operation_name: Some("SetEntityProperty"),
-                variables: &variables,
-                data: &data,
+                variables: &optimistic_variables(),
+                data: &optimistic_data(),
                 link_patches: &[],
                 revalidations: &[],
                 created_at_ms: 1,
@@ -111,7 +121,8 @@ async fn begin_with_projection(
             projection_mutations,
         )
         .await
-        .unwrap();
+        .unwrap()
+        .0
 }
 
 #[test]
@@ -278,6 +289,90 @@ fn optimistic_fact_patches_update_membership_and_sort_facts() {
                 .await
                 .unwrap(),
             PredicateQueryResult::Optimistic(vec![record_key()])
+        );
+    });
+}
+
+#[test]
+fn optimistic_projection_rolls_back_and_settles_to_authoritative_facts() {
+    pollster::block_on(async {
+        let mut engine = Engine::new(InMemoryStorage::new());
+        let entity_key = EntityKey::entity("GraphqlSoupDocument", &["doc-1"]);
+        engine
+            .put_records_with_projections(
+                None,
+                vec![(entity_key, Record::default())],
+                vec![ProjectionMutation::Replace(projection("owner-1"))],
+            )
+            .await
+            .unwrap();
+        let transaction = begin_with_projection(
+            &mut engine,
+            vec![OptimisticProjectionMutation::Replace(projection("owner-2"))],
+        )
+        .await;
+        let claim = engine
+            .claim_next_mutation(MutationClaimRequest {
+                owner: "runner".to_owned(),
+                now_ms: 1,
+                lease_expires_at_ms: 100,
+            })
+            .await
+            .unwrap()
+            .unwrap();
+        engine
+            .rollback_optimistic_write(
+                transaction,
+                MutationClaimToken {
+                    owner: "runner".to_owned(),
+                    generation: claim.lease_generation,
+                },
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            engine
+                .query_predicate_index(&query("owner-1"))
+                .await
+                .unwrap(),
+            PredicateQueryResult::Complete(vec![record_key()])
+        );
+
+        let transaction = begin_with_projection(
+            &mut engine,
+            vec![OptimisticProjectionMutation::Replace(projection("owner-2"))],
+        )
+        .await;
+        let claim = engine
+            .claim_next_mutation(MutationClaimRequest {
+                owner: "runner".to_owned(),
+                now_ms: 101,
+                lease_expires_at_ms: 200,
+            })
+            .await
+            .unwrap()
+            .unwrap();
+        engine
+            .commit_optimistic_write_with_projections(
+                transaction,
+                MutationClaimToken {
+                    owner: "runner".to_owned(),
+                    generation: claim.lease_generation,
+                },
+                OPTIMISTIC_MUTATION,
+                Some("SetEntityProperty"),
+                &optimistic_variables(),
+                &optimistic_data(),
+                vec![ProjectionMutation::Replace(projection("owner-3"))],
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            engine
+                .query_predicate_index(&query("owner-3"))
+                .await
+                .unwrap(),
+            PredicateQueryResult::Complete(vec![record_key()])
         );
     });
 }
