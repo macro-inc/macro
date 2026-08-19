@@ -16,9 +16,6 @@ const databaseSecurityGroupIds = config
   .filter(Boolean);
 
 const datadogDbmEnabled = config.getBoolean('datadog_dbm_enabled') ?? false;
-const datadogDbmIpv4Cidrs = datadogDbmEnabled
-  ? config.requireObject<string[]>('datadog_dbm_ipv4_cidrs')
-  : [];
 
 const datadogDbmAgentSecurityGroup = datadogDbmEnabled
   ? new aws.ec2.SecurityGroup('datadog-dbm-agent-security-group', {
@@ -33,19 +30,22 @@ const datadogDbmAgentSecurityGroup = datadogDbmEnabled
   : undefined;
 
 if (datadogDbmAgentSecurityGroup) {
-  datadogDbmIpv4Cidrs.forEach((cidrIpv4, index) => {
-    new aws.vpc.SecurityGroupEgressRule(
-      `datadog-dbm-agent-https-out-${index}`,
-      {
-        securityGroupId: datadogDbmAgentSecurityGroup.id,
-        description: 'Allow HTTPS to Datadog US5 DBM intake endpoints',
-        cidrIpv4,
-        fromPort: 443,
-        toPort: 443,
-        ipProtocol: 'tcp',
-        tags,
-      }
-    );
+  new aws.vpc.SecurityGroupEgressRule('datadog-dbm-agent-all-out', {
+    securityGroupId: datadogDbmAgentSecurityGroup.id,
+    description: 'Allow outbound traffic for the Datadog DBM agent',
+    cidrIpv4: '0.0.0.0/0',
+    ipProtocol: '-1',
+    tags,
+  });
+
+  new aws.vpc.SecurityGroupIngressRule('datadog-dbm-agent-postgres-in', {
+    securityGroupId: datadogDbmAgentSecurityGroup.id,
+    description: 'Allow Postgres between resources using the Datadog DBM group',
+    referencedSecurityGroupId: datadogDbmAgentSecurityGroup.id,
+    fromPort: RDS_PORT,
+    toPort: RDS_PORT,
+    ipProtocol: 'tcp',
+    tags,
   });
 
   databaseSecurityGroupIds.forEach((databaseSecurityGroupId, index) => {
@@ -78,6 +78,10 @@ if (datadogDbmAgentSecurityGroup) {
 }
 
 export const datadogDbmAgentSecurityGroupId = datadogDbmAgentSecurityGroup?.id;
+
+const databaseVpcSecurityGroupIds = datadogDbmAgentSecurityGroup
+  ? [...databaseSecurityGroupIds, datadogDbmAgentSecurityGroup.id]
+  : databaseSecurityGroupIds;
 
 // db password
 const password = aws.secretsmanager
@@ -212,7 +216,7 @@ const database = new aws.rds.Instance(
     ),
     dbName: 'macrodb',
     dbSubnetGroupName: config.require('subnet_group_name'),
-    vpcSecurityGroupIds: databaseSecurityGroupIds,
+    vpcSecurityGroupIds: databaseVpcSecurityGroupIds,
     publiclyAccessible: true,
     skipFinalSnapshot: stack !== 'prod', // we only want to skip final snapshot for non-prod
     finalSnapshotIdentifier:
@@ -257,7 +261,7 @@ const readReplica = new aws.rds.Instance(
       'performance_insights_kms_key_id'
     ),
     publiclyAccessible: true,
-    vpcSecurityGroupIds: databaseSecurityGroupIds,
+    vpcSecurityGroupIds: databaseVpcSecurityGroupIds,
     parameterGroupName: pulumi.interpolate`${originalParameterGroup.name}`,
     enabledCloudwatchLogsExports:
       stack === 'prod' ? ['postgresql', 'upgrade'] : undefined,

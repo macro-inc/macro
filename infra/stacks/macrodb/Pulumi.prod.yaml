@@ -17,15 +17,6 @@ config:
   macrodb:subnet_group_name: macro-db-prod-stack-macrodbinstancesubnetgroup483984b1-ny9ca5kliq6z
   macrodb:security_group_ids: sg-0997207417c39f5b3
   macrodb:datadog_dbm_enabled: true
-  # Union of the IPv4 ranges in the US5 `agents` and `apm` sections. The DBM
-  # intake endpoints are in `apm`. Source version 24, modified 2026-02-02:
-  # https://ip-ranges.us5.datadoghq.com/
-  macrodb:datadog_dbm_ipv4_cidrs:
-    - 34.110.187.75/32
-    - 34.117.129.254/32
-    - 34.149.66.128/26
-    - 34.160.125.158/32
-    - 35.190.51.116/32
   macrodb:monitoring_interval: 60
   macrodb:rds_monitoring_role_arn: arn:aws:iam::569036502058:role/rds-monitoring-role
   macrodb:backup_retention_days: 6
