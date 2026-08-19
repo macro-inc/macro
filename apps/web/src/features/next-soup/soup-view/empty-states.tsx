@@ -143,6 +143,27 @@ export function EmptyState(props: {
         </EmptyStatePanel>
       </Match>
 
+      {/* The Reminders tab is not an email surface, so it sits above the
+          connect-email gate — its empty copy is the same with or without a
+          linked inbox. */}
+      <Match
+        when={props.listView === 'inbox' && soup.activeTab() === 'reminders'}
+      >
+        <EmptyStatePanel
+          graphic={EmptyStateInboxTrayGraphic}
+          title="No scheduled reminders"
+          description={
+            <>
+              Reminders you schedule wait here until they fire into Signal. Set
+              one on anything in Macro by selecting it and pressing{' '}
+              <HotkeyCap>h</HotkeyCap>, or with the option in its right-click
+              menu.
+            </>
+          }
+          documentationUrl={`${DOCS_BASE}/product/inbox`}
+        />
+      </Match>
+
       <Match when={props.listView === 'inbox' && !emailActive()}>
         <EmptyStatePanel
           graphic={EmptyStateInboxTrayGraphic}

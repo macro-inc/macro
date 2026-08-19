@@ -26,6 +26,9 @@ import type { SoupState } from '../create-soup-state';
 const VALID_MARK_DONE_LIST_VIEWS: `${ListView}-${string}`[] = [
   'inbox-signal',
   'inbox-noise',
+  // Marking a pending reminder done cancels it before it fires — same as the
+  // standalone Reminders view's Scheduled tab below.
+  'inbox-reminders',
   'mail-important',
   'mail-all',
   'mail-noise',

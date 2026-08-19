@@ -16,6 +16,7 @@ import {
 import {
   getSoupEntityById,
   optimisticUpdateSoupEntity,
+  refetchSoupEntity,
 } from '@queries/soup/cache';
 import { mergeRefs } from '@solid-primitives/refs';
 import {
@@ -85,7 +86,14 @@ export function ReminderComposerModal() {
   const [query, setQuery] = createSignal('');
   const [selectedIndex, setSelectedIndex] = createSignal(0);
 
-  const createReminder = useCreateReminderMutation();
+  // Nothing else brings a new reminder into Soup: the service emits no
+  // websocket event on create (its only outbound signals are the dispatch
+  // queue and the notification when a reminder fires), so without this fetch
+  // the Scheduled/Pending lists only learn about the reminder on their next
+  // full fetch.
+  const createReminder = useCreateReminderMutation({
+    onSuccess: (reminder) => void refetchSoupEntity(reminder.id, 'reminder'),
+  });
   // Soup rows come from the normalized soup cache, not the reminders queries,
   // so the mutation's own invalidation leaves an edited row reading its old
   // description and firing time until a reload. Applying the response is not an

@@ -108,9 +108,10 @@ const getInboxSignalFilters = () => {
       emailShared: 'exclude',
       // Reminders are off by default server-side rather than excluded by
       // `defineQueryFilters` (there is no `remf` entry in ID_FIELD_NAMES), so
-      // this literal is the only thing that surfaces them — and Signal is the
-      // only view that sends it. Behind the flag so an unflagged user never
-      // pays for the reminders lookup on every Signal fetch.
+      // this literal is the only thing that surfaces them; the inbox Reminders
+      // tab below sends it too, for the not-yet-fired slice. Behind the flag
+      // so an unflagged user never pays for the reminders lookup on every
+      // Signal fetch.
       ...(ENABLE_REMINDERS() ? { includeReminders: true } : {}),
       // Calendar events with a not-done notification (a fired event alarm).
       // Referencing `calf` opts the calendar arm into the signal query, which
@@ -179,6 +180,22 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
         },
         clientFilters: { and: ['explicit-noise'] },
         groupBy: ENABLE_NEW_INBOX() ? 'date' : undefined,
+      }),
+      // Pending reminders only: scheduled but not yet fired. A fired reminder
+      // has already hit the inbox — Signal surfaces it through its not-done
+      // notification — so this tab is the forward-looking complement: what is
+      // coming, not what is due. Soonest first, since "newest first" on future
+      // dates would put December above tomorrow.
+      reminders: () => ({
+        filters: defineQueryFilters({
+          include: {
+            includeReminders: true,
+            reminderCompleted: false,
+            reminderFired: false,
+          },
+        }),
+        clientFilters: { and: ['reminders-scheduled'] },
+        sortDirection: 'asc',
       }),
     },
   },
