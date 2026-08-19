@@ -2,10 +2,14 @@ use std::fmt;
 
 use ::axum::http::StatusCode;
 use bot_id::BotId;
+use macro_user_id::email::ReadEmailParts;
 
 use crate::{BotAuthentication, MacroAuthorization, MacroUserAuthentication};
 
 use super::{ActingEntity, MacroAuthorizationRejection, rejection, status_rejection};
+
+/// The email domain that identifies a Macro employee account.
+const MACRO_EMPLOYEE_EMAIL_DOMAIN: &str = "macro.com";
 
 /// An endpoint's authorization policy: which authenticated principals the
 /// endpoint admits and the narrowed authorization type its handler receives.
@@ -40,6 +44,13 @@ pub struct ActingUser;
 
 /// Admits only directly authenticated users.
 pub struct UserOnly;
+
+/// Admits only directly authenticated users with an `@macro.com` email.
+///
+/// This is for internal-only functionality exposed through user-facing
+/// transports. The domain must be exactly `macro.com`; subdomains and
+/// lookalike domains are rejected with `403 Forbidden`.
+pub struct MacroEmployeeOnly;
 
 /// Admits directly authenticated users and authenticated bots.
 pub struct UserOrBot;
@@ -287,6 +298,30 @@ impl AuthorizationPolicy for UserOnly {
     }
 }
 
+impl AuthorizationPolicy for MacroEmployeeOnly {
+    type Output = MacroUserAuthentication;
+    type ActingEntity<'a> = &'a str;
+
+    fn narrow(
+        authorization: MacroAuthorization,
+    ) -> Result<Self::Output, MacroAuthorizationRejection> {
+        match authorization {
+            MacroAuthorization::User(user)
+                if user.macro_user_id.email_part().domain_part() == MACRO_EMPLOYEE_EMAIL_DOMAIN =>
+            {
+                Ok(user)
+            }
+            MacroAuthorization::User(_)
+            | MacroAuthorization::Bot(_)
+            | MacroAuthorization::Internal(_) => Err(forbidden()),
+        }
+    }
+
+    fn acting_entity(output: &Self::Output) -> Self::ActingEntity<'_> {
+        output.macro_user_id.as_ref()
+    }
+}
+
 impl AuthorizationPolicy for UserOrBot {
     type Output = UserOrBotAuthorization;
     type ActingEntity<'a> = UserOrBotEntity<'a>;
@@ -373,6 +408,7 @@ mod sealed {
     impl Sealed for super::UserOrInternalService {}
     impl Sealed for super::ActingUser {}
     impl Sealed for super::UserOnly {}
+    impl Sealed for super::MacroEmployeeOnly {}
     impl Sealed for super::UserOrBot {}
     impl Sealed for super::BotOnly {}
     impl Sealed for super::InternalOnly {}

@@ -25,6 +25,7 @@ use crate::{
 };
 
 const VALID_USER_ID: &str = "macro|valid@example.com";
+const EMPLOYEE_USER_ID: &str = "macro|employee@macro.com";
 const COOKIE_USER_ID: &str = "macro|cookie@example.com";
 const QUERY_USER_ID: &str = "macro|query@example.com";
 const BEARER_USER_ID: &str = "macro|bearer@example.com";
@@ -72,6 +73,7 @@ impl MacroAuthorizationService for FakeAuthorizationService {
 
         match jwt {
             "valid" => Ok(user_context(VALID_USER_ID, None)),
+            "employee" => Ok(user_context(EMPLOYEE_USER_ID, None)),
             "cookie" => Ok(user_context(COOKIE_USER_ID, None)),
             "query" => Ok(user_context(QUERY_USER_ID, None)),
             "bearer" => Ok(user_context(BEARER_USER_ID, None)),
@@ -347,6 +349,10 @@ fn test_router() -> (Router, FakeAuthorizationService) {
         )
         .route("/required/acting-user", get(policy_handler::<ActingUser>))
         .route("/required/user-only", get(policy_handler::<UserOnly>))
+        .route(
+            "/required/macro-employee-only",
+            get(policy_handler::<MacroEmployeeOnly>),
+        )
         .route("/required/user-or-bot", get(policy_handler::<UserOrBot>))
         .route("/required/bot-only", get(policy_handler::<BotOnly>))
         .route(
@@ -372,6 +378,10 @@ fn test_router() -> (Router, FakeAuthorizationService) {
         .route(
             "/optional/user-only",
             get(optional_policy_handler::<UserOnly>),
+        )
+        .route(
+            "/optional/macro-employee-only",
+            get(optional_policy_handler::<MacroEmployeeOnly>),
         )
         .route(
             "/optional/user-or-bot",
@@ -1495,6 +1505,7 @@ async fn every_combination_of_multiple_explicit_credential_types_is_ambiguous() 
         "/required/user-or-internal-service",
         "/required/acting-user",
         "/required/user-only",
+        "/required/macro-employee-only",
         "/required/user-or-bot",
         "/required/bot-only",
         "/required/internal-only",
@@ -1503,6 +1514,7 @@ async fn every_combination_of_multiple_explicit_credential_types_is_ambiguous() 
         "/optional/user-or-internal-service",
         "/optional/acting-user",
         "/optional/user-only",
+        "/optional/macro-employee-only",
         "/optional/user-or-bot",
         "/optional/bot-only",
         "/optional/internal-only",
@@ -1676,6 +1688,17 @@ async fn required_policy_matrix_enforces_principal_and_acting_user_contracts() {
             ],
         ),
         (
+            "/required/macro-employee-only",
+            [
+                StatusCode::FORBIDDEN,
+                StatusCode::FORBIDDEN,
+                StatusCode::FORBIDDEN,
+                StatusCode::FORBIDDEN,
+                StatusCode::FORBIDDEN,
+                StatusCode::UNAUTHORIZED,
+            ],
+        ),
+        (
             "/required/user-or-bot",
             [
                 StatusCode::OK,
@@ -1772,6 +1795,17 @@ async fn optional_policy_matrix_enforces_credentials_but_allows_anonymous_reques
             ],
         ),
         (
+            "/optional/macro-employee-only",
+            [
+                StatusCode::FORBIDDEN,
+                StatusCode::FORBIDDEN,
+                StatusCode::FORBIDDEN,
+                StatusCode::FORBIDDEN,
+                StatusCode::FORBIDDEN,
+                StatusCode::OK,
+            ],
+        ),
+        (
             "/optional/user-or-bot",
             [
                 StatusCode::OK,
@@ -1847,6 +1881,62 @@ async fn assert_policy_matrix<const N: usize>(policies: [(&str, [StatusCode; 6])
     }
 }
 
+#[tokio::test]
+async fn macro_employee_only_admits_macro_com_users_and_forbids_other_domains() {
+    let (router, service) = test_router();
+
+    let employee_request = empty_body(
+        request("/required/macro-employee-only").header("authorization", "Bearer employee"),
+    );
+    let (status, body) = send(&router, employee_request).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body, json!({ "acting_entity": EMPLOYEE_USER_ID }));
+
+    let external_request = empty_body(
+        request("/required/macro-employee-only").header("authorization", "Bearer valid"),
+    );
+    let (status, body) = send(&router, external_request).await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    assert_eq!(body, json!({ "message": "forbidden" }));
+
+    assert_eq!(
+        service.calls(),
+        [
+            AuthorizationCall::Jwt("employee".to_string()),
+            AuthorizationCall::Jwt("valid".to_string()),
+        ]
+    );
+}
+
+#[test]
+fn macro_employee_only_requires_the_exact_macro_com_domain() {
+    let admitted = [
+        "macro|employee@macro.com",
+        "macro|employee+tag@macro.com",
+        "macro|Employee@MACRO.COM",
+    ];
+    for user_id in admitted {
+        let authorization = MacroAuthorization::User(macro_user_authentication(user_id));
+        assert!(
+            MacroEmployeeOnly::narrow(authorization).is_ok(),
+            "{user_id} should be admitted"
+        );
+    }
+
+    let rejected = [
+        "macro|employee@dev.macro.com",
+        "macro|employee@notmacro.com",
+        "macro|employee@macro.com.evil.example",
+        "macro|employee@macro.co",
+    ];
+    for user_id in rejected {
+        let authorization = MacroAuthorization::User(macro_user_authentication(user_id));
+        let rejection = MacroEmployeeOnly::narrow(authorization)
+            .expect_err(&format!("{user_id} should be rejected"));
+        assert_eq!(rejection.status, StatusCode::FORBIDDEN);
+    }
+}
+
 #[test]
 fn policies_report_typed_acting_entity_variants_with_display_parity() {
     let user = macro_user_authentication(VALID_USER_ID);
@@ -1896,6 +1986,15 @@ fn policies_report_typed_acting_entity_variants_with_display_parity() {
     let user_only = UserOnly::narrow(MacroAuthorization::User(user.clone())).unwrap();
     assert_eq!(UserOnly::acting_entity(&user_only), VALID_USER_ID);
     assert_display_parity::<UserOnly>(MacroAuthorization::User(user));
+
+    let employee = macro_user_authentication(EMPLOYEE_USER_ID);
+    let macro_employee =
+        MacroEmployeeOnly::narrow(MacroAuthorization::User(employee.clone())).unwrap();
+    assert_eq!(
+        MacroEmployeeOnly::acting_entity(&macro_employee),
+        EMPLOYEE_USER_ID
+    );
+    assert_display_parity::<MacroEmployeeOnly>(MacroAuthorization::User(employee));
 
     let bot_only = BotOnly::narrow(bot_principal.clone()).unwrap();
     assert_eq!(BotOnly::acting_entity(&bot_only), BOT_ID);

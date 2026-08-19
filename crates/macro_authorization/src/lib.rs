@@ -20,6 +20,7 @@
 //! | [`UserOrInternalService`] | User or internal service, with optional acting user | [`UserOrInternalServiceAuthorization`] |
 //! | [`ActingUser`] | Any principal with an acting user | [`ActingUserAuthorization`] |
 //! | [`UserOnly`] | Directly authenticated user | [`MacroUserAuthentication`] |
+//! | [`MacroEmployeeOnly`] | Directly authenticated user with an `@macro.com` email | [`MacroUserAuthentication`] |
 //! | [`UserOrBot`] | Directly authenticated user or bot | [`UserOrBotAuthorization`] |
 //! | [`BotOnly`] | Bot, with optional acting user | [`BotAuthentication`] |
 //! | [`InternalOnly`] | Internal service, with optional acting user | [`InternalAuthorization`] |
@@ -74,10 +75,10 @@ pub use inbound::{
     INTERNAL_MACRO_ORGANIZATION_ID_HEADER, INTERNAL_MACRO_USER_ID_HEADER, InternalAuthorization,
     InternalEntity, InternalOnly, LEGACY_DSS_INTERNAL_API_KEY_HEADER,
     LEGACY_DSS_INTERNAL_MACRO_USER_ID_HEADER, MacroAuthorizationExtractor,
-    MacroAuthorizationRejection, MacroAuthorizationState, OptionalMacroAuthorizationExtractor,
-    UserOnly, UserOrBot, UserOrBotAuthorization, UserOrBotEntity, UserOrInternal,
-    UserOrInternalAuthorization, UserOrInternalCaller, UserOrInternalEntity, UserOrInternalService,
-    UserOrInternalServiceAuthorization,
+    MacroAuthorizationRejection, MacroAuthorizationState, MacroEmployeeOnly,
+    OptionalMacroAuthorizationExtractor, UserOnly, UserOrBot, UserOrBotAuthorization,
+    UserOrBotEntity, UserOrInternal, UserOrInternalAuthorization, UserOrInternalCaller,
+    UserOrInternalEntity, UserOrInternalService, UserOrInternalServiceAuthorization,
 };
 /// JWT validation adapters for user-authenticated and internal-only services.
 #[cfg(feature = "outbound")]
