@@ -231,7 +231,9 @@ export function SidebarActiveCallWidget(props: {
                         >
                           <ChannelCallBadge
                             channel={channel()}
-                            letters={channelLetters().get(call.channelId) ?? '?'}
+                            letters={
+                              channelLetters().get(call.channelId) ?? '?'
+                            }
                             slim={false}
                           />
                           <span class="text-sm font-medium truncate">
