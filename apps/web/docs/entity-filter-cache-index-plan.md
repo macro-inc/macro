@@ -38,7 +38,7 @@ Relevant code:
 - `crates/item_filters/src/ast.rs` defines the materialized domain AST used by authoritative Soup filtering.
 - `apps/web/src/lib/queries/soup/items.ts` is the first integration point.
 
-Extract a lightweight, reusable representation of the GraphQL variables shape and its materialization rules. It must be usable by both the GraphQL adapter and `cache-wasm` without making the browser depend on the GraphQL server crate or Axum.
+Extract a lightweight, reusable representation of the GraphQL variables shape and its materialization rules. It must be usable by both the GraphQL server adapter and the browser-side `soup-filter-cache-adapter` without depending on Axum or the GraphQL server runtime.
 
 The canonical flow is:
 
@@ -141,9 +141,10 @@ These are deferred product capabilities, not silently false predicates.
                                 │
                              Turso/OPFS
 
-cache-wasm
+soup-filter-cache-adapter
   parse the shared GraphQL input, materialize it, run profile eligibility,
-  compile it, and pass only a generic query to cache-core
+  derive authoritative/optimistic projections, and pass generic IR through
+  cache-wasm to cache-core
 ```
 
 ### Dependency rules
@@ -154,7 +155,8 @@ cache-wasm
 - `soup-filter-projection` owns business-specific direct fact generation and may depend on Soup/domain models and `item-filter-index`; it must not depend on cache or Turso crates.
 - `cache-core` may depend on `predicate-index`; it must not know Soup entity or literal semantics.
 - `cache-turso` persists and executes generic index operations only. It must not know GraphQL typenames, Soup entity types, or filter literals.
-- `cache-wasm` is the composition root and may wire GraphQL input materialization and the item-filter compiler to the generic cache engine.
+- `soup-filter-cache-adapter` owns browser-side GraphQL Soup materialization, compilation, typename recognition, and projection derivation. It emits only generic predicate/projection IR.
+- `cache-wasm` is a thin browser composition shell. It may link the Soup adapter into the same WASM binary, but cache engine behavior must operate only on generic predicate/projection IR and must not implement Soup policy.
 - Authorization remains server-side. The local index only evaluates projections delivered through an identity-scoped authorized cache.
 
 ## Phase 0: Audit request shapes and set success criteria
@@ -455,7 +457,8 @@ After each successful verification step, follow repository policy and create a J
 - No text, group, proof, dynamic-time, or winner-selection machinery exists before a supported family requires it.
 - Generic cache orchestration lives in `cache-core`.
 - Generic persistence and query execution live in `cache-turso`.
-- Browser shell code performs GraphQL transport materialization and composition only.
+- `soup-filter-cache-adapter` owns GraphQL Soup transport materialization and business projection policy.
+- Browser cache shell code only wires adapter output into generic cache APIs; no Soup typename, field, literal, or projection vocabulary switch exists there.
 - Dirty or uncertain local state always falls back to the network.
 - Authorization remains server-side; local indexing does not grant access or widen the cached corpus.
 - The first implementation returns a verified local page through `useSoupAstItemsQuery` before semantic expansion begins.

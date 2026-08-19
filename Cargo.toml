@@ -112,7 +112,7 @@ members = [
   "tooling/notification_sandbox",
   "tooling/seed_cli",
   "tooling/xtask",
-  "tooling/xtask/crates/*",
+  "tooling/xtask/crates/*", "crates/soup_filter_cache_adapter",
 ]
 
 [workspace.dependencies]

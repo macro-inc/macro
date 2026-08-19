@@ -29,19 +29,14 @@ cache-core = { path = "../cache-core" }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 async-lock = { workspace = true }
-base64 = { workspace = true }
 cache-turso = { path = "../cache-turso" }
-chrono = { workspace = true }
-graphql_soup_filter_input = { path = "../../graphql_soup_filter_input" }
-item-filter-index = { path = "../../item_filter_index" }
 predicate-index = { path = "../../predicate_index" }
-soup-filter-projection = { path = "../../soup_filter_projection", default-features = false }
+soup-filter-cache-adapter = { path = "../../soup_filter_cache_adapter" }
 js-sys = { workspace = true }
 serde = { workspace = true }
 serde-wasm-bindgen = { workspace = true }
 serde_json = { workspace = true }
 turso-opfs = { path = "../turso-opfs" }
-uuid = { workspace = true }
 wasm-bindgen = { workspace = true }
 wasm-bindgen-futures = { workspace = true }
 
