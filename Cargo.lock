@@ -2812,6 +2812,7 @@ dependencies = [
  "cache-core",
  "maybe_send",
  "pollster",
+ "predicate-index",
  "serde_json",
  "tempfile",
  "thiserror 2.0.18",
