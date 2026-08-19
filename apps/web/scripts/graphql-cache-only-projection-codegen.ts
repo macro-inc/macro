@@ -1,13 +1,12 @@
 import type { PluginFunction } from '@graphql-codegen/plugin-helpers';
 import {
   type DefinitionNode,
+  type FieldNode,
   type FragmentDefinitionNode,
   type GraphQLCompositeType,
   type GraphQLObjectType,
   type GraphQLOutputType,
   type GraphQLSchema,
-  type OperationDefinitionNode,
-  type SelectionSetNode,
   getNamedType,
   isCompositeType,
   isEnumType,
@@ -16,6 +15,8 @@ import {
   isNonNullType,
   isObjectType,
   isScalarType,
+  type OperationDefinitionNode,
+  type SelectionSetNode,
 } from 'graphql';
 import { match } from 'ts-pattern';
 
@@ -135,99 +136,136 @@ function typeConditionApplies(
     : schema.isSubType(condition, concreteType);
 }
 
+type SelectionSetContext = {
+  selectionSet: SelectionSetNode;
+  activeFragments: Set<string>;
+};
+
+type FieldContext = {
+  field: FieldNode;
+  scope: GraphQLCompositeType;
+  activeFragments: Set<string>;
+};
+
 function renderSelectionSetForObject(
   schema: GraphQLSchema,
   parent: GraphQLCompositeType,
   concreteType: GraphQLObjectType,
-  selectionSet: SelectionSetNode,
-  fragments: ReadonlyMap<string, FragmentDefinitionNode>,
-  activeFragments = new Set<string>()
+  selectionSets: readonly SelectionSetContext[],
+  fragments: ReadonlyMap<string, FragmentDefinitionNode>
 ): string | undefined {
-  const properties = new Set<string>();
+  const fieldsByResponseKey = new Map<string, FieldContext[]>();
 
   const renderSelections = (
     scope: GraphQLCompositeType,
-    selections: SelectionSetNode
+    selections: SelectionSetNode,
+    activeFragments: Set<string>
   ): void => {
     for (const selection of selections.selections) {
-      if (selection.kind === 'Field') {
-        if (isCacheOnly(selection.directives)) continue;
-        const responseKey = selection.alias?.value ?? selection.name.value;
-        if (selection.name.value === '__typename') {
-          properties.add(
-            `${JSON.stringify(responseKey)}: ${JSON.stringify(concreteType.name)}`
-          );
-          continue;
-        }
-        if (!isObjectType(scope) && !isInterfaceType(scope)) {
-          throw new Error(
-            `@cacheOnly projection requires fields beneath ${scope.name} to use fragments`
-          );
-        }
-        const field = scope.getFields()[selection.name.value];
-        if (!field) {
-          throw new Error(
-            `@cacheOnly projection references unknown field ${scope.name}.${selection.name.value}`
-          );
-        }
-        const namedType = getNamedType(field.type);
-        let projectedType: string;
-        if (isCompositeType(namedType)) {
-          if (!selection.selectionSet) continue;
-          const nested = renderSelectionSet(
+      match(selection)
+        .with({ kind: 'Field' }, (field) => {
+          if (isCacheOnly(field.directives)) return;
+          const responseKey = field.alias?.value ?? field.name.value;
+          const fields = fieldsByResponseKey.get(responseKey) ?? [];
+          fields.push({
+            field,
+            scope,
+            activeFragments: new Set(activeFragments),
+          });
+          fieldsByResponseKey.set(responseKey, fields);
+        })
+        .with({ kind: 'FragmentSpread' }, (fragmentSpread) => {
+          const fragmentName = fragmentSpread.name.value;
+          const fragment = fragments.get(fragmentName);
+          if (!fragment) throw new Error(`unknown fragment ${fragmentName}`);
+          if (activeFragments.has(fragmentName)) return;
+
+          const condition = compositeType(
             schema,
-            namedType,
-            selection.selectionSet,
-            fragments
+            fragment.typeCondition.name.value
           );
-          if (!nested) continue;
-          projectedType = wrapType(field.type, nested);
-        } else {
-          projectedType = wrapType(field.type, namedTypeScriptType(namedType));
-        }
-        properties.add(`${JSON.stringify(responseKey)}: ${projectedType}`);
-        continue;
-      }
+          if (!typeConditionApplies(schema, condition, concreteType)) return;
 
-      const fragment =
-        selection.kind === 'FragmentSpread'
-          ? fragments.get(selection.name.value)
-          : undefined;
-      if (selection.kind === 'FragmentSpread' && !fragment) {
-        throw new Error(`unknown fragment ${selection.name.value}`);
-      }
-      const fragmentName = fragment?.name.value;
-      if (fragmentName && activeFragments.has(fragmentName)) continue;
-      const conditionName =
-        selection.kind === 'InlineFragment'
-          ? selection.typeCondition?.name.value
-          : fragment?.typeCondition.name.value;
-      const condition = conditionName
-        ? compositeType(schema, conditionName)
-        : scope;
-      if (!typeConditionApplies(schema, condition, concreteType)) continue;
-
-      if (fragmentName) activeFragments.add(fragmentName);
-      renderSelections(
-        condition,
-        selection.kind === 'InlineFragment'
-          ? selection.selectionSet
-          : fragment!.selectionSet
-      );
-      if (fragmentName) activeFragments.delete(fragmentName);
+          activeFragments.add(fragmentName);
+          renderSelections(condition, fragment.selectionSet, activeFragments);
+          activeFragments.delete(fragmentName);
+        })
+        .with({ kind: 'InlineFragment' }, (inlineFragment) => {
+          const condition = inlineFragment.typeCondition
+            ? compositeType(schema, inlineFragment.typeCondition.name.value)
+            : scope;
+          if (!typeConditionApplies(schema, condition, concreteType)) return;
+          renderSelections(
+            condition,
+            inlineFragment.selectionSet,
+            activeFragments
+          );
+        })
+        .exhaustive();
     }
   };
 
-  renderSelections(parent, selectionSet);
-  return properties.size > 0
-    ? `{ ${Array.from(properties).join('; ')} }`
-    : undefined;
+  for (const { selectionSet, activeFragments } of selectionSets) {
+    renderSelections(parent, selectionSet, activeFragments);
+  }
+
+  const properties: string[] = [];
+  for (const [responseKey, fieldContexts] of fieldsByResponseKey) {
+    const first = fieldContexts[0];
+    if (!first) continue;
+    if (first.field.name.value === '__typename') {
+      properties.push(
+        `${JSON.stringify(responseKey)}: ${JSON.stringify(concreteType.name)}`
+      );
+      continue;
+    }
+    if (!isObjectType(first.scope) && !isInterfaceType(first.scope)) {
+      throw new Error(
+        `@cacheOnly projection requires fields beneath ${first.scope.name} to use fragments`
+      );
+    }
+    const field = first.scope.getFields()[first.field.name.value];
+    if (!field) {
+      throw new Error(
+        `@cacheOnly projection references unknown field ${first.scope.name}.${first.field.name.value}`
+      );
+    }
+    const namedType = getNamedType(field.type);
+    let projectedType: string;
+    if (isCompositeType(namedType)) {
+      const nestedSelectionSets = fieldContexts.flatMap(
+        ({ field: selectedField, activeFragments }) =>
+          selectedField.selectionSet
+            ? [
+                {
+                  selectionSet: selectedField.selectionSet,
+                  activeFragments,
+                },
+              ]
+            : []
+      );
+      if (nestedSelectionSets.length === 0) continue;
+      const nested = renderSelectionSet(
+        schema,
+        namedType,
+        nestedSelectionSets,
+        fragments
+      );
+      if (!nested) continue;
+      projectedType = wrapType(field.type, nested);
+    } else {
+      projectedType = wrapType(field.type, namedTypeScriptType(namedType));
+    }
+    properties.push(`${JSON.stringify(responseKey)}: ${projectedType}`);
+  }
+
+  return properties.length > 0 ? `{ ${properties.join('; ')} }` : undefined;
 }
 
 function renderSelectionSet(
   schema: GraphQLSchema,
   parent: GraphQLCompositeType,
-  selectionSet: SelectionSetNode,
+  selectionSets: readonly SelectionSetContext[],
   fragments: ReadonlyMap<string, FragmentDefinitionNode>
 ): string | undefined {
   const projections = possibleObjectTypes(schema, parent).map((concreteType) =>
@@ -235,7 +273,7 @@ function renderSelectionSet(
       schema,
       parent,
       concreteType,
-      selectionSet,
+      selectionSets,
       fragments
     )
   );
@@ -267,7 +305,12 @@ export const plugin: PluginFunction = (schema, documents) => {
     const projection = renderSelectionSet(
       schema,
       operationRoot(schema, definition),
-      definition.selectionSet,
+      [
+        {
+          selectionSet: definition.selectionSet,
+          activeFragments: new Set(),
+        },
+      ],
       fragments
     );
     output.push(

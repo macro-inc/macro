@@ -5,7 +5,7 @@ import { plugin } from './graphql-cache-only-projection-codegen';
 const schema = buildSchema(`
   directive @cacheOnly on FIELD
   type Query { page: Page!, node: Node!, property: Property! }
-  type Page { items: [Item!]!, nextCursor: String }
+  type Page { items: [Item!]!, nextCursor: String, related: Page }
   interface Node { id: ID! }
   type Item implements Node { id: ID!, label: String! }
   type Other implements Node { id: ID!, count: Int! }
@@ -65,6 +65,57 @@ describe('@cacheOnly result codegen', () => {
 
     expect(output).toBe(
       'export type NamedFragmentHydrationResult = { "page": { "nextCursor": string | null } };'
+    );
+  });
+
+  it('merges fields selected directly and through a fragment by response key', async () => {
+    const document = parse(`
+      query MergedFieldHydration {
+        page {
+          items { id }
+          ...PageItemLabel
+          nextCursor @cacheOnly
+        }
+      }
+      fragment PageItemLabel on Page {
+        items { label }
+      }
+    `);
+
+    const output = await plugin(
+      schema,
+      [{ document, location: 'test.graphql' }],
+      {},
+      {} as never
+    );
+
+    expect(output).toBe(
+      'export type MergedFieldHydrationResult = { "page": { "items": Array<{ "id": string; "label": string }> } };'
+    );
+    expect(output.match(/"items":/g)).toHaveLength(1);
+  });
+
+  it('keeps the fragment cycle guard during nested field rendering', async () => {
+    const document = parse(`
+      query RecursiveFragmentHydration {
+        page { ...RecursivePageFields }
+      }
+      fragment RecursivePageFields on Page {
+        items @cacheOnly { id }
+        nextCursor
+        related { ...RecursivePageFields }
+      }
+    `);
+
+    const output = await plugin(
+      schema,
+      [{ document, location: 'test.graphql' }],
+      {},
+      {} as never
+    );
+
+    expect(output).toBe(
+      'export type RecursiveFragmentHydrationResult = { "page": { "nextCursor": string | null } };'
     );
   });
 
