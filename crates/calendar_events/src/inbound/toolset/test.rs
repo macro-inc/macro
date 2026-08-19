@@ -1,7 +1,7 @@
 use std::sync::Mutex;
 
 use ai_toolset::schema::generate_validated_input_schema;
-use ai_toolset::{AsyncTool, RequestContext, ServiceContext};
+use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolSet};
 use chrono::{NaiveDate, TimeZone, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;
@@ -9,8 +9,9 @@ use uuid::Uuid;
 use super::*;
 use crate::domain::models::{
     AttendeeResponseStatus, CalendarAttendee, CalendarEventDraft, CalendarEventPatch,
-    CalendarOccurrence, CalendarSyncStatus, ConferenceChange, EventReminders, EventStatus,
-    EventTransparency, EventVisibility, OccurrenceRange, VisibleCalendar,
+    CalendarOccurrence, CalendarSyncStatus, ConferenceChange, EventReminderOverride,
+    EventReminders, EventStatus, EventTransparency, EventVisibility, OccurrenceRange,
+    VisibleCalendar,
 };
 use crate::domain::ports::{
     CalendarDeletionScope, CalendarMutationError, CalendarMutationService,
@@ -274,6 +275,49 @@ fn empty_occurrences() -> MockOccurrences {
     }
 }
 
+fn create_tool_args() -> serde_json::Value {
+    serde_json::json!({
+        "title": "Design review",
+        "time": {
+            "kind": "timed",
+            "startsAt": "2026-08-20T17:00:00Z",
+            "endsAt": "2026-08-20T18:00:00Z",
+            "timeZone": "America/New_York"
+        },
+        "attendees": [],
+        "recurrenceLines": [],
+        "addGoogleMeet": false
+    })
+}
+
+#[tokio::test]
+async fn ai_toolset_defers_create_without_mutating_calendar() {
+    let (mutations, context) = context(MockMutations::default(), empty_occurrences());
+    let args = create_tool_args();
+    let pending = calendar_toolset()
+        .try_tool_call(context.0, request_context(), "CreateCalendarEvent", &args)
+        .await
+        .unwrap()
+        .unwrap();
+
+    assert_eq!(pending, serde_json::json!("PendingUserExecution"));
+    assert!(mutations.created.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn mcp_toolset_executes_create_directly() {
+    let (mutations, context) = context(MockMutations::default(), empty_occurrences());
+    let args = create_tool_args();
+    let event = mcp_toolset()
+        .try_tool_call(context.0, request_context(), "CreateCalendarEvent", &args)
+        .await
+        .unwrap()
+        .unwrap();
+
+    assert_eq!(event["eventId"], Uuid::from_u128(7).to_string());
+    assert_eq!(mutations.created.lock().unwrap().len(), 1);
+}
+
 #[tokio::test]
 async fn create_converts_input_into_a_domain_draft() {
     let (mutations, context) = context(MockMutations::default(), empty_occurrences());
@@ -293,6 +337,13 @@ async fn create_converts_input_into_a_domain_draft() {
         }],
         recurrence_lines: vec!["RRULE:FREQ=WEEKLY".to_string()],
         calendar_id: Some(calendar_id),
+        reminders: Some(EventRemindersInput {
+            use_default: false,
+            overrides: vec![EventReminderOverrideInput {
+                method: "popup".to_string(),
+                minutes: 15,
+            }],
+        }),
         add_google_meet: true,
     };
     let response = tool.call(context, request_context()).await.unwrap();
@@ -310,6 +361,16 @@ async fn create_converts_input_into_a_domain_draft() {
         vec!["RRULE:FREQ=WEEKLY".to_string()]
     );
     assert_eq!(draft.conference, Some(ConferenceChange::GoogleMeet));
+    assert_eq!(
+        draft.reminders,
+        Some(EventReminders {
+            use_default: false,
+            overrides: vec![EventReminderOverride {
+                method: "popup".to_string(),
+                minutes: 15,
+            }],
+        })
+    );
     assert!(matches!(draft.time, EventTime::AllDay { .. }));
 }
 
@@ -333,6 +394,7 @@ async fn create_surfaces_missing_calendar_as_an_actionable_error() {
         attendees: Vec::new(),
         recurrence_lines: Vec::new(),
         calendar_id: None,
+        reminders: None,
         add_google_meet: false,
     };
     let error = tool.call(context, request_context()).await.unwrap_err();
