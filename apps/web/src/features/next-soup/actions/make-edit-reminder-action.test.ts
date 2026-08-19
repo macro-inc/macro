@@ -11,9 +11,8 @@ vi.mock('@app/features/reminders/reminder-composer', () => ({
   openReminderEditor: mocks.openReminderEditor,
 }));
 
-// The reference name comes from the preview cache the row already populated.
 vi.mock('@queries/preview', () => ({
-  getCachedItemPreview: () => mocks.cachedPreview,
+  getItemPreview: async () => mocks.cachedPreview,
   isAccessiblePreviewItem: (item: { access?: string } | undefined) =>
     item?.access === 'access',
 }));
@@ -102,10 +101,10 @@ describe('makeEditReminderAction', () => {
   // Blanking the description in the editor means "name it after what it is
   // about", exactly as it does when creating — so the name has to travel with
   // the draft.
-  it('carries the reference name as the blank-description fallback', () => {
+  it('carries the reference name as the blank-description fallback', async () => {
     mocks.cachedPreview = { rawName: 'Q3 Contract', access: 'access' };
 
-    makeEditReminderAction().execute([
+    await makeEditReminderAction().execute([
       reminder({ referencedEntity: { id: 'doc-1', type: 'document' } }),
     ]);
 
@@ -114,10 +113,10 @@ describe('makeEditReminderAction', () => {
     );
   });
 
-  it('falls back to how lists label an unnamed reference', () => {
+  it('falls back to how lists label an unnamed reference', async () => {
     mocks.cachedPreview = { rawName: '', access: 'access' };
 
-    makeEditReminderAction().execute([
+    await makeEditReminderAction().execute([
       reminder({ referencedEntity: { id: 'thread-1', type: 'email' } }),
     ]);
 
@@ -136,10 +135,10 @@ describe('makeEditReminderAction', () => {
     );
   });
 
-  it('carries no fallback when the reference is not cached', () => {
+  it('carries no fallback when the reference preview is unavailable', async () => {
     mocks.cachedPreview = undefined;
 
-    makeEditReminderAction().execute([
+    await makeEditReminderAction().execute([
       reminder({ referencedEntity: { id: 'doc-1', type: 'document' } }),
     ]);
 
@@ -148,10 +147,10 @@ describe('makeEditReminderAction', () => {
     );
   });
 
-  it('carries no fallback when the reference is inaccessible', () => {
+  it('carries no fallback when the reference is inaccessible', async () => {
     mocks.cachedPreview = { rawName: 'Secret', access: 'no_access' };
 
-    makeEditReminderAction().execute([
+    await makeEditReminderAction().execute([
       reminder({ referencedEntity: { id: 'doc-1', type: 'document' } }),
     ]);
 

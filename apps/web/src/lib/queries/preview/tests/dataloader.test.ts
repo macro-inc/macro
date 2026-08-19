@@ -3,7 +3,7 @@ import type { PreviewItem } from '../types';
 
 const fetchPreviewBatch = vi.fn();
 
-vi.mock('../fetchers', () => ({
+vi.mock('../transport', () => ({
   fetchPreviewBatch: (...args: unknown[]) => fetchPreviewBatch(...args),
 }));
 

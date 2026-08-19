@@ -77,7 +77,7 @@ const EMPTY_DATA = {
 const NIL_FILTERS = {
   calendarEventFilter: { literal: { id: NIL_ENTITY_ID } },
   documentFilter: { literal: { id: NIL_ENTITY_ID } },
-  projectFilter: { literal: { projectIdSelf: NIL_ENTITY_ID } },
+  projectFilter: { literal: { projectId: NIL_ENTITY_ID } },
   chatFilter: { literal: { chatId: NIL_ENTITY_ID } },
   emailFilter: { tree: { literal: { threadId: NIL_ENTITY_ID } } },
   channelFilter: { literal: { channelId: NIL_ENTITY_ID } },

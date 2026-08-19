@@ -2,29 +2,26 @@ import { openReminderEditor } from '@app/features/reminders/reminder-composer';
 import { reminderDescriptionForReference } from '@app/features/reminders/reminder-schedule';
 import { ENABLE_REMINDERS } from '@core/constant/featureFlags';
 import type { EntityData, ReminderEntity } from '@entity';
-import {
-  getCachedItemPreview,
-  isAccessiblePreviewItem,
-} from '@queries/preview';
+import { getItemPreview, isAccessiblePreviewItem } from '@queries/preview';
 import type { SoupState } from '../create-soup-state';
 
-/**
- * The description this reminder would get if it were being created now, for a
- * blank description to fall back to.
- *
- * Read from the preview cache rather than fetched: the row the editor was
- * opened from has already rendered this name, so it is cached. A miss returns
- * undefined and the editor keeps the existing description instead — better than
- * blocking on a request to answer a question the user may not even ask.
- */
-function fallbackDescriptionFor(entity: ReminderEntity): string | undefined {
+/** The description a referenced reminder gets when its description is blank. */
+async function fallbackDescriptionFor(
+  entity: ReminderEntity
+): Promise<string | undefined> {
   const reference = entity.referencedEntity;
   if (!reference) return undefined;
 
-  const cached = getCachedItemPreview(reference.id);
-  if (!cached || !isAccessiblePreviewItem(cached)) return undefined;
-
-  return reminderDescriptionForReference(cached.rawName, reference.type);
+  try {
+    const preview = await getItemPreview({
+      id: reference.id,
+      type: reference.type,
+    });
+    if (!isAccessiblePreviewItem(preview)) return undefined;
+    return reminderDescriptionForReference(preview.rawName, reference.type);
+  } catch {
+    return undefined;
+  }
 }
 
 /**
@@ -45,25 +42,32 @@ export const makeEditReminderAction = () => {
     entity.type === 'reminder' &&
     entity.scheduleType === 'once';
 
-  const execute = (entities: EntityData[]) => {
+  const execute = (entities: EntityData[]): void | Promise<void> => {
     const [entity] = entities;
     // Re-checked rather than assumed: a stale command-menu entry could
     // otherwise still fire against a row that has since changed.
     if (!entity || entity.type !== 'reminder' || !canExecute(entity)) return;
 
-    openReminderEditor({
-      id: entity.id,
-      description: entity.description,
-      remindAt: new Date(entity.nextRunAt),
-      completed: entity.completedAt != null,
-      fallbackDescription: fallbackDescriptionFor(entity),
-    });
+    const openEditor = (fallbackDescription?: string) => {
+      openReminderEditor({
+        id: entity.id,
+        description: entity.description,
+        remindAt: new Date(entity.nextRunAt),
+        completed: entity.completedAt != null,
+        fallbackDescription,
+      });
+    };
+    if (!entity.referencedEntity) {
+      openEditor();
+      return;
+    }
+    return fallbackDescriptionFor(entity).then(openEditor);
   };
 
   const executeWithSoup = async (entities: EntityData[], _soup: SoupState) => {
     // Opening the composer doesn't change the list, so selection and focus are
     // left where they are.
-    execute(entities);
+    await execute(entities);
   };
 
   return { canExecute, execute, executeWithSoup };

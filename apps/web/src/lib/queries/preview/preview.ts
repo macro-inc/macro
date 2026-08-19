@@ -146,10 +146,6 @@ function getPreviewData(itemId: string): PreviewItem | undefined {
   );
 }
 
-export function getCachedItemPreview(itemId: string): PreviewItem | undefined {
-  return getPreviewData(itemId);
-}
-
 /** Directly update preview data in the cache without refetching */
 function setPreviewData(itemId: string, updater: Setter<PreviewItem>) {
   return queryClient.setQueryData<PreviewItem>(

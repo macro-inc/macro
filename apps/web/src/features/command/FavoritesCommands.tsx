@@ -1,12 +1,15 @@
 import { FavoriteIcon } from '@app/features/favorites/FavoriteIcon';
-import { favoriteDisplayName, favoriteSplitContent } from '@app/util/favorites';
+import {
+  favoriteSplitContent,
+  useFavoriteDisplayName,
+} from '@app/util/favorites';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { createHotkeyGroup, registerHotkey } from '@core/hotkey/hotkeys';
 import { registerScope } from '@core/hotkey/utils';
 import Star from '@phosphor/star.svg';
 import { useFavoritesData } from '@queries/favorites/favorites';
 import type { Favorite } from '@service-storage/generated/schemas/favorite';
-import { createEffect, onCleanup } from 'solid-js';
+import { For, onCleanup } from 'solid-js';
 import { CommandState } from './state';
 
 /** Command scope for the favorites sub-view of the command menu. */
@@ -19,6 +22,31 @@ registerScope({
 });
 
 const FAVORITES_KEYWORDS = ['favorites', 'favorite', 'starred', 'pinned'];
+
+type FavoriteCommandProps = {
+  favorite: Favorite;
+  openFavorite: (favorite: Favorite) => void;
+};
+
+function FavoriteCommand(props: FavoriteCommandProps) {
+  const displayName = useFavoriteDisplayName(props.favorite);
+  const registration = registerHotkey({
+    scopeId: FAVORITES_COMMAND_SCOPE,
+    description: () => displayName(),
+    keyDownHandler: () => {
+      props.openFavorite(props.favorite);
+      return true;
+    },
+    commandPaletteIcon: (iconProps) => (
+      <FavoriteIcon favorite={props.favorite} class={iconProps.class} />
+    ),
+    // These entries intentionally have no bare-digit hotkey, so typing in the
+    // command search remains available while this scope is active.
+    runWithInputFocused: true,
+  });
+  onCleanup(registration.dispose);
+  return null;
+}
 
 /**
  * Registers the "Favorites" command-menu command and keeps the per-favorite
@@ -36,27 +64,21 @@ export function FavoritesCommands() {
     openWithSplit(favoriteSplitContent(favorite), {
       referredFrom: 'kommand-menu',
     });
-    // Close the menu and clear the query once a favorite is opened.
     CommandState.close();
     CommandState.setQuery('');
   };
 
   const staticGroup = createHotkeyGroup();
-  const dynamicGroup = createHotkeyGroup();
-
   staticGroup.addDisposer(
     CommandState.registerCommandScopePlaceholder(
       FAVORITES_COMMAND_SCOPE,
       'Open favorite...'
     )
   );
-
   staticGroup.add(
     registerHotkey({
       scopeId: 'global',
       description: 'Favorites',
-      // An empty sub-view is a dead end, so hide the command until the user
-      // has favorites.
       condition: () => (favoritesData()?.favorites.length ?? 0) > 0,
       keyDownHandler: () => true,
       activateCommandScopeId: FAVORITES_COMMAND_SCOPE,
@@ -65,47 +87,13 @@ export function FavoritesCommands() {
     })
   );
 
-  const registerFavorites = (list: Favorite[]) => {
-    // Registered without a hotkey: bare digits would fight type-to-filter in
-    // the sub-view's search input. The entries are still listed and openable
-    // via arrow/enter or click (the handler runs with `e` undefined).
-    // `runWithInputFocused` is required even without a hotkey: entering the
-    // sub-view captures its commands while the menu's search input has focus,
-    // and the capture filter drops commands without this flag.
-    list.forEach((favorite) => {
-      dynamicGroup.add(
-        registerHotkey({
-          scopeId: FAVORITES_COMMAND_SCOPE,
-          // A callback so each render re-reads the preview cache, where
-          // names resolve (and renames land), warmed by the sidebar's
-          // favorite rows.
-          description: () => favoriteDisplayName(favorite),
-          keyDownHandler: () => {
-            openFavorite(favorite);
-            return true;
-          },
-          commandPaletteIcon: (props) => (
-            <FavoriteIcon favorite={favorite} class={props.class} />
-          ),
-          runWithInputFocused: true,
-        })
-      );
-    });
-  };
+  onCleanup(staticGroup.dispose);
 
-  // Hotkey registrations are non-reactive, so sync them with the favorites
-  // data: dispose and re-register the per-favorite commands on every change.
-  createEffect(() => {
-    const data = favoritesData();
-    dynamicGroup.dispose();
-    if (!data) return;
-    registerFavorites(data.favorites);
-  });
-
-  onCleanup(() => {
-    dynamicGroup.dispose();
-    staticGroup.dispose();
-  });
-
-  return null;
+  return (
+    <For each={favoritesData()?.favorites ?? []}>
+      {(favorite) => (
+        <FavoriteCommand favorite={favorite} openFavorite={openFavorite} />
+      )}
+    </For>
+  );
 }

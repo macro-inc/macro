@@ -126,6 +126,7 @@ const FIELD_CONFIG: Record<
   chatSeen: { target: 'cf', field: 'ns' },
   chatDone: { target: 'cf', field: 'nd' },
   folderId: { target: 'pf', field: 'pid' },
+  folderIdSelf: { target: 'pf', field: 'pids' },
   folderOwnerId: { target: 'pf', field: 'o' },
   folderSeen: { target: 'pf', field: 'ns' },
   folderDone: { target: 'pf', field: 'nd' },

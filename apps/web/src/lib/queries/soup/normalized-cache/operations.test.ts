@@ -2,12 +2,25 @@
  * @vitest-environment jsdom
  */
 
+import * as featureFlags from '@core/constant/featureFlags';
 import type { UnifiedSearchResponseItem } from '@service-search/generated/models';
 import type { SoupApiItem } from '@service-storage/generated/schemas';
 import type { SoupPage } from '@service-storage/generated/schemas/soupPage';
 import type { InfiniteData } from '@tanstack/solid-query';
 import { QueryClient } from '@tanstack/solid-query';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+const { fetchGraphqlSoupMock, getSoupItemsMock } = vi.hoisted(() => ({
+  fetchGraphqlSoupMock: vi.fn(),
+  getSoupItemsMock: vi.fn(),
+}));
+
+vi.mock('@service-storage/graphql-soup', () => ({
+  fetchGraphqlSoup: fetchGraphqlSoupMock,
+}));
+vi.mock('@service-storage/client', () => ({
+  storageServiceClient: { getSoupItems: getSoupItemsMock },
+}));
 
 let testQueryClient: QueryClient;
 
@@ -50,6 +63,7 @@ import {
   insertSoupEntity,
   optimisticUpdateSoupEntity,
   optimisticUpdateSoupItemUpdatedAt,
+  refetchSoupEntity,
   removeSearchEntities,
   removeSoupEntities,
   removeSoupEntitiesFromDoneFilteredQueries,
@@ -177,6 +191,7 @@ function getSearchQuery() {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.restoreAllMocks();
   testQueryClient = new QueryClient({
     defaultOptions: {
       queries: { retry: false },
@@ -198,6 +213,82 @@ describe('getSoupItemId', () => {
 
   it('returns data.channel.id for channel tag', () => {
     expect(getSoupItemId(mockChannelItem('ch-456'))).toBe('ch-456');
+  });
+});
+
+describe('refetchSoupEntity transport', () => {
+  it('warms Soup through GraphQL when GraphQL Soup is enabled', async () => {
+    vi.spyOn(featureFlags, 'ENABLE_GRAPHQL_SOUP').mockReturnValue(true);
+    fetchGraphqlSoupMock.mockResolvedValue({ items: [] });
+
+    await refetchSoupEntity('doc-1', 'document');
+
+    expect(fetchGraphqlSoupMock).toHaveBeenCalledWith(
+      expect.anything(),
+      {
+        input: expect.objectContaining({
+          initial: expect.objectContaining({
+            filters: expect.objectContaining({
+              documentFilter: { literal: { id: 'doc-1' } },
+            }),
+          }),
+        }),
+      },
+      { allowOfflineFallback: false }
+    );
+    expect(getSoupItemsMock).not.toHaveBeenCalled();
+  });
+
+  it('keeps calendar warming on REST because the GraphQL mapper omits calendars', async () => {
+    vi.spyOn(featureFlags, 'ENABLE_GRAPHQL_SOUP').mockReturnValue(true);
+    getSoupItemsMock.mockResolvedValue({
+      isErr: () => false,
+      value: { items: [] },
+    });
+
+    await refetchSoupEntity('calendar-1', 'calendarEvent');
+
+    expect(getSoupItemsMock).toHaveBeenCalled();
+    expect(fetchGraphqlSoupMock).not.toHaveBeenCalled();
+  });
+
+  it('retains includeRoot project refetches on REST when GraphQL Soup is enabled', async () => {
+    vi.spyOn(featureFlags, 'ENABLE_GRAPHQL_SOUP').mockReturnValue(true);
+    getSoupItemsMock.mockResolvedValue({
+      isErr: () => false,
+      value: { items: [] },
+    });
+
+    await refetchSoupEntity('project-1', 'project', { includeRoot: true });
+
+    expect(getSoupItemsMock).toHaveBeenCalledWith({
+      params: {},
+      body: expect.objectContaining({
+        project_filters: {
+          project_ids: ['project-1'],
+          include_root: true,
+        },
+      }),
+    });
+    expect(fetchGraphqlSoupMock).not.toHaveBeenCalled();
+  });
+
+  it('retains the REST refetch when GraphQL Soup is disabled', async () => {
+    vi.spyOn(featureFlags, 'ENABLE_GRAPHQL_SOUP').mockReturnValue(false);
+    getSoupItemsMock.mockResolvedValue({
+      isErr: () => false,
+      value: { items: [] },
+    });
+
+    await refetchSoupEntity('doc-1', 'document');
+
+    expect(getSoupItemsMock).toHaveBeenCalledWith({
+      params: {},
+      body: expect.objectContaining({
+        document_filters: { document_ids: ['doc-1'] },
+      }),
+    });
+    expect(fetchGraphqlSoupMock).not.toHaveBeenCalled();
   });
 });
 

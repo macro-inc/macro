@@ -55,6 +55,8 @@ export type ArrayFieldFilters = {
   chatOwnerId?: string[];
   chatProjectId?: string[];
   folderId?: string[];
+  /** Matches projects by their own id rather than projects whose parent has this id. */
+  folderIdSelf?: string[];
   folderOwnerId?: string[];
   callId?: string[];
   callChannelId?: string[];

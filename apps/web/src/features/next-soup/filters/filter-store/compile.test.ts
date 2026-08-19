@@ -51,6 +51,21 @@ describe('compileToAst', () => {
     expect(ast.calf).toEqual({ l: { id: 'event-1' } });
   });
 
+  it('compiles exact project ids separately from child-project filters', () => {
+    const ast = compileToAst(
+      queryStateFrom({
+        include: {
+          folderId: ['parent-1'],
+          folderIdSelf: ['project-1'],
+        },
+      })
+    );
+
+    expect(ast.pf).toEqual({
+      '&': [{ l: { pid: 'parent-1' } }, { l: { pids: 'project-1' } }],
+    });
+  });
+
   it('keeps existing flat include and exclude document filters unchanged', () => {
     const state: QueryState = {
       include: {
