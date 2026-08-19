@@ -13,6 +13,9 @@ import type { WebhookStatus } from './webhookStatus';
 
 /**
  * Webhook returned after creation, including its signing secret.
+
+A two-way wire contract: API clients deserialize this type from the
+response the server serializes, so both derives are load-bearing.
  */
 export interface CreateWebhookResponse {
   /** Creation timestamp. */

@@ -13,5 +13,9 @@ A wrapper around the operation rather than the bare enum so that fields
 which are about the request rather than the operation have somewhere to go.
 The acting user is deliberately not one of them: it comes from the caller's
 credentials, so that a caller cannot attribute an operation to someone else.
+
+A two-way wire contract: API clients (the self-hosted `coding_agent_worker`
+daemon among them) serialize this type to build the request the server
+deserializes, so both derives are load-bearing.
  */
 export type ControlRequest = AgentAction;

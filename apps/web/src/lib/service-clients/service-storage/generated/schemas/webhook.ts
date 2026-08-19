@@ -13,6 +13,9 @@ import type { WebhookStatus } from './webhookStatus';
 
 /**
  * Webhook row returned by application APIs.
+
+A two-way wire contract: API clients deserialize this type from the
+response the server serializes, so both derives are load-bearing.
  */
 export interface Webhook {
   /** Creation timestamp. */

@@ -18057,7 +18057,7 @@ dependencies = [
  "hakari",
  "serde",
  "serde_json",
- "toml 0.5.11",
+ "toml 0.8.23",
  "xtask_graph",
 ]
 

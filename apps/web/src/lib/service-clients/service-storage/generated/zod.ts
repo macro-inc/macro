@@ -713,7 +713,9 @@ export const getSelfBotResponse = zod
       .optional(),
     updated_at: zod.iso.datetime({}).describe('Update timestamp.'),
   })
-  .describe('Bot row.');
+  .describe(
+    'Bot row.\n\nA two-way wire contract: it is the body of `GET \/bots\/me`, which API\nclients (the self-hosted `coding_agent_worker` daemon among them)\ndeserialize, so both derives are load-bearing.'
+  );
 
 /**
  * @summary Handler for `GET /bots/{bot_id}/channels`.
@@ -2287,6 +2289,12 @@ export const createChannelScopedBotBody = zod
     avatar_url: zod.string().nullish().describe('Optional avatar URL.'),
     description: zod.string().nullish().describe('Optional description.'),
     handle: zod.string().describe('Stable handle.'),
+    has_agent: zod
+      .boolean()
+      .nullish()
+      .describe(
+        'Whether mentioning this bot opens a sandboxed coding-agent session. Defaults to false.'
+      ),
     name: zod.string().describe('Display name.'),
     team_id: zod
       .uuid()
@@ -27006,14 +27014,16 @@ export const listWebhooksResponse = zod
             updated_at: zod.iso.datetime({}).describe('Update timestamp.'),
             workspace_id: zod.string().describe('Owning workspace id.'),
           })
-          .describe('Webhook row returned by application APIs.')
+          .describe(
+            'Webhook row returned by application APIs.\n\nA two-way wire contract: API clients deserialize this type from the\nresponse the server serializes, so both derives are load-bearing.'
+          )
       )
       .describe(
         "The caller's webhooks, newest first. Signing secrets are omitted."
       ),
   })
   .describe(
-    'Webhooks visible to the caller across their personal and team workspaces.'
+    'Webhooks visible to the caller across their personal and team workspaces.\n\nA two-way wire contract: API clients deserialize this type from the\nresponse the server serializes, so both derives are load-bearing.'
   );
 
 /**
@@ -27052,9 +27062,13 @@ export const createWebhookBody = zod
       ),
     scope: zod
       .enum(['user', 'team'])
-      .describe('Scope that owns a newly-created webhook.'),
+      .describe(
+        'Scope that owns a newly-created webhook.\n\nA two-way wire contract: it is part of [`CreateWebhookRequest`], which API\nclients serialize, so both derives are load-bearing.'
+      ),
   })
-  .describe('Request to create a webhook.');
+  .describe(
+    'Request to create a webhook.\n\nA two-way wire contract: API clients (the self-hosted `coding_agent_worker`\ndaemon, which registers its own trigger feed at boot) serialize this type\nto build the request the server deserializes, so both derives are\nload-bearing.'
+  );
 
 /**
  * @summary Get a webhook.
@@ -27110,7 +27124,9 @@ export const getWebhookResponse = zod
     updated_at: zod.iso.datetime({}).describe('Update timestamp.'),
     workspace_id: zod.string().describe('Owning workspace id.'),
   })
-  .describe('Webhook row returned by application APIs.');
+  .describe(
+    'Webhook row returned by application APIs.\n\nA two-way wire contract: API clients deserialize this type from the\nresponse the server serializes, so both derives are load-bearing.'
+  );
 
 /**
  * @summary Delete a webhook.
@@ -27218,7 +27234,9 @@ export const patchWebhookResponse = zod
     updated_at: zod.iso.datetime({}).describe('Update timestamp.'),
     workspace_id: zod.string().describe('Owning workspace id.'),
   })
-  .describe('Webhook row returned by application APIs.');
+  .describe(
+    'Webhook row returned by application APIs.\n\nA two-way wire contract: API clients deserialize this type from the\nresponse the server serializes, so both derives are load-bearing.'
+  );
 
 /**
  * @summary Validate a webhook endpoint.

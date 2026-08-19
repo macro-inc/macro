@@ -6,12 +6,16 @@
  */
 import type { AgentSessionResponseAcpSessionId } from './agentSessionResponseAcpSessionId';
 import type { AgentSessionResponseOriginatingMessageId } from './agentSessionResponseOriginatingMessageId';
+import type { AgentSessionResponseRepoUrl } from './agentSessionResponseRepoUrl';
 import type { AgentSessionResponseThreadChannelId } from './agentSessionResponseThreadChannelId';
 import type { AgentSessionResponseThreadId } from './agentSessionResponseThreadId';
 import type { SessionStatusDto } from './sessionStatusDto';
 
 /**
  * Response body describing an agent session.
+
+A two-way wire contract: API clients deserialize this type from the
+response the server serializes, so both derives are load-bearing.
  */
 export interface AgentSessionResponse {
   /** The ACP session id, if one exists. */
@@ -32,8 +36,8 @@ export interface AgentSessionResponse {
   originatingMessageId?: AgentSessionResponseOriginatingMessageId;
   /** The user who created and owns the session. */
   ownerId: string;
-  /** The repository the session works with. */
-  repoUrl: string;
+  /** The repository the session works with, when one was stated. */
+  repoUrl?: AgentSessionResponseRepoUrl;
   /** The session's status. */
   status: SessionStatusDto;
   /** The channel `thread_id` lives in, when the session was spawned from a
@@ -41,4 +45,6 @@ thread. */
   threadChannelId?: AgentSessionResponseThreadChannelId;
   /** The root message of the thread the session was created from, if any. */
   threadId?: AgentSessionResponseThreadId;
+  /** The directory the session's harness runs in on its runtime. */
+  workspace: string;
 }
