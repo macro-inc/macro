@@ -1073,6 +1073,17 @@ impl Storage for TursoStorage {
         claim: MutationClaimToken,
         entries: Vec<(EntityKey<'static>, Record)>,
     ) -> Result<bool, Self::Error> {
+        self.complete_mutation_with_projections(id, claim, entries, Vec::new())
+            .await
+    }
+
+    async fn complete_mutation_with_projections(
+        &mut self,
+        id: MutationId,
+        claim: MutationClaimToken,
+        entries: Vec<(EntityKey<'static>, Record)>,
+        projections: Vec<ProjectionMutation>,
+    ) -> Result<bool, Self::Error> {
         self.require_healthy()?;
         let result = (|| {
             let sql_id = mutation_id_to_sql(id)?;
@@ -1102,6 +1113,7 @@ impl Storage for TursoStorage {
                     }
                 }
                 write_search_documents(&connection, &entries)?;
+                write_projection_mutations(&connection, projections)?;
                 require_changed(
                     driver::execute(
                         &connection,

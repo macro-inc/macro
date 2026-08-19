@@ -1316,6 +1316,29 @@ impl<S: Storage> Engine<S> {
         variables: &serde_json::Map<String, Json>,
         data: &Json,
     ) -> Result<WriteResult, EngineError<S::Error>> {
+        self.commit_optimistic_write_with_projections(
+            transaction,
+            claim,
+            query,
+            operation_name,
+            variables,
+            data,
+            Vec::new(),
+        )
+        .await
+    }
+
+    /// Settles an optimistic write with atomic generic projection replacement.
+    pub async fn commit_optimistic_write_with_projections(
+        &mut self,
+        transaction: OptimisticTransactionId,
+        claim: MutationClaimToken,
+        query: &str,
+        operation_name: Option<&str>,
+        variables: &serde_json::Map<String, Json>,
+        data: &Json,
+        projections: Vec<ProjectionMutation>,
+    ) -> Result<WriteResult, EngineError<S::Error>> {
         self.hydrate_optimistic().await?;
         let index = self
             .optimistic
@@ -1344,7 +1367,7 @@ impl<S: Storage> Engine<S> {
         let (durable_changed, entries) = stage_updates(&bases, updates);
         if !self
             .storage
-            .complete_mutation(transaction, claim, entries.clone())
+            .complete_mutation_with_projections(transaction, claim, entries.clone(), projections)
             .await
             .map_err(EngineError::Storage)?
         {

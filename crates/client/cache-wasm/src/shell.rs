@@ -1353,23 +1353,17 @@ impl CacheEngine {
             let projections = projection_mutations(&data);
             let result = state
                 .engine_mut()?
-                .commit_optimistic_write(
+                .commit_optimistic_write_with_projections(
                     transaction,
                     claim,
                     &query,
                     operation_name.as_deref(),
                     &vars,
                     &data,
+                    projections,
                 )
                 .await;
             let result = state.engine_result(result)?;
-            if !projections.is_empty() {
-                let projection_result = state
-                    .engine_mut()?
-                    .put_records_with_projections(None, Vec::new(), projections)
-                    .await;
-                state.engine_result(projection_result)?;
-            }
             to_js(&JsWriteResult {
                 changed: result
                     .changed

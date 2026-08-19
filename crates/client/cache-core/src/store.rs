@@ -150,6 +150,23 @@ pub trait Storage: MaybeSend {
         entries: Vec<(EntityKey<'static>, Record)>,
     ) -> impl Future<Output = Result<bool, Self::Error>> + MaybeSend;
 
+    /// Atomically settles a mutation with real records and projection changes.
+    fn complete_mutation_with_projections(
+        &mut self,
+        id: MutationId,
+        claim: MutationClaimToken,
+        entries: Vec<(EntityKey<'static>, Record)>,
+        projections: Vec<ProjectionMutation>,
+    ) -> impl Future<Output = Result<bool, Self::Error>> + MaybeSend {
+        async move {
+            assert!(
+                projections.is_empty(),
+                "storage must implement atomic projection settlement"
+            );
+            self.complete_mutation(id, claim, entries).await
+        }
+    }
+
     /// Atomically removes a permanently failed mutation and its optimistic
     /// layer. Returns `false` when the claim is stale.
     fn discard_mutation(
@@ -385,6 +402,17 @@ impl Storage for InMemoryStorage {
         claim: MutationClaimToken,
         entries: Vec<(EntityKey<'static>, Record)>,
     ) -> Result<bool, Self::Error> {
+        self.complete_mutation_with_projections(id, claim, entries, Vec::new())
+            .await
+    }
+
+    async fn complete_mutation_with_projections(
+        &mut self,
+        id: MutationId,
+        claim: MutationClaimToken,
+        entries: Vec<(EntityKey<'static>, Record)>,
+        projections: Vec<ProjectionMutation>,
+    ) -> Result<bool, Self::Error> {
         let Some((mutation, _)) = self.mutations.get(&id) else {
             return Ok(false);
         };
@@ -400,6 +428,7 @@ impl Storage for InMemoryStorage {
             }
             self.records.insert(key, record);
         }
+        apply_in_memory_projection_mutations(&mut self.projections, projections);
         self.mutations.remove(&id);
         Ok(true)
     }
