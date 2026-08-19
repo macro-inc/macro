@@ -26,9 +26,15 @@ impl MailboxSyncClient for GmailApiClientRepository {
         access_token: &AccessToken,
         cursor: &SyncCursor,
     ) -> Result<ChangeBatch, EmailApiError> {
+        let SyncCursor::Gmail(history_id) = cursor else {
+            return Err(EmailApiError::Permanent {
+                message: "Gmail cannot consume an Outlook synchronization cursor".to_string(),
+            });
+        };
+
         let history = self
             .client
-            .get_history(access_token.expose_secret(), cursor.as_str())
+            .get_history(access_token.expose_secret(), history_id)
             .await
             .map_err(map_history_error)?;
         Ok(map_history_list_response_to_changes(history))

@@ -34,6 +34,10 @@ pub async fn count_existing_in_progress_user_links_for_user(
     Ok(count.unwrap_or(0))
 }
 
+/// Creates a provider-unspecified integration link.
+///
+/// Existing callers use this operation for non-email integrations. The database provider is
+/// written explicitly as Gmail to preserve the historical default.
 pub async fn create_in_progress_user_link(
     db: &sqlx::Pool<sqlx::Postgres>,
     macro_user_id: &str,
@@ -43,8 +47,8 @@ pub async fn create_in_progress_user_link(
 
     sqlx::query!(
         r#"
-            INSERT INTO in_progress_user_link (id, macro_user_id)
-            VALUES ($1, $2)
+            INSERT INTO in_progress_user_link (id, macro_user_id, provider)
+            VALUES ($1, $2, 'GMAIL')
         "#,
         &link_id,
         &macro_user_id
@@ -69,13 +73,36 @@ pub async fn create_in_progress_google_link(
             INSERT INTO in_progress_user_link (
                 id,
                 macro_user_id,
+                provider,
                 requested_google_scopes
             )
-            VALUES ($1, $2, $3)
+            VALUES ($1, $2, 'GMAIL', $3)
         "#,
         &link_id,
         &macro_user_id,
         requested_google_scopes
+    )
+    .execute(db)
+    .await?;
+
+    Ok(link_id)
+}
+
+/// Creates an in-progress Outlook link.
+pub async fn create_in_progress_outlook_link(
+    db: &sqlx::Pool<sqlx::Postgres>,
+    macro_user_id: &str,
+) -> anyhow::Result<Uuid> {
+    let macro_user_id = macro_uuid::string_to_uuid(macro_user_id)?;
+    let link_id = macro_uuid::generate_uuid_v7();
+
+    sqlx::query!(
+        r#"
+            INSERT INTO in_progress_user_link (id, macro_user_id, provider)
+            VALUES ($1, $2, 'OUTLOOK')
+        "#,
+        &link_id,
+        &macro_user_id
     )
     .execute(db)
     .await?;
@@ -146,13 +173,27 @@ pub async fn get_macro_user_id_by_link_id(
     Ok(link)
 }
 
+/// Provider selected for a pending email link.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, sqlx::Type)]
+#[sqlx(type_name = "email_user_provider_enum", rename_all = "UPPERCASE")]
+pub enum InProgressUserLinkProvider {
+    /// Google Gmail.
+    Gmail,
+    /// Microsoft Outlook.
+    Outlook,
+}
+
 pub struct InProgressUserLink {
     pub macro_user_id: Uuid,
     pub linked_email: Option<String>,
-    /// Scopes Macro placed on the authorization request.
+    /// Email provider selected when the pending link was created.
+    pub provider: InProgressUserLinkProvider,
+    /// Scopes Macro placed on the Google authorization request.
     pub requested_google_scopes: Vec<String>,
     /// Actual scopes returned by Google's token exchange.
     pub granted_google_scopes: Vec<String>,
+    /// Actual scopes returned by Microsoft's token exchange.
+    pub granted_microsoft_scopes: Vec<String>,
 }
 
 pub async fn get_in_progress_user_link(
@@ -164,8 +205,10 @@ pub async fn get_in_progress_user_link(
             SELECT
                 macro_user_id,
                 linked_email,
+                provider AS "provider: InProgressUserLinkProvider",
                 requested_google_scopes,
-                granted_google_scopes
+                granted_google_scopes,
+                granted_microsoft_scopes
             FROM
                 in_progress_user_link
             WHERE
@@ -179,8 +222,10 @@ pub async fn get_in_progress_user_link(
     Ok(InProgressUserLink {
         macro_user_id: row.macro_user_id,
         linked_email: row.linked_email,
+        provider: row.provider,
         requested_google_scopes: row.requested_google_scopes,
         granted_google_scopes: row.granted_google_scopes,
+        granted_microsoft_scopes: row.granted_microsoft_scopes,
     })
 }
 
@@ -197,6 +242,7 @@ pub async fn set_linked_google_grant(
             SET linked_email = $1,
                 granted_google_scopes = $2
             WHERE id = $3
+              AND provider = 'GMAIL'
         "#,
         linked_email,
         granted_google_scopes,
@@ -206,7 +252,36 @@ pub async fn set_linked_google_grant(
     .await?;
 
     if result.rows_affected() == 0 {
-        anyhow::bail!("in_progress_user_link not found for link_id={link_id}");
+        anyhow::bail!("Google in_progress_user_link not found for link_id={link_id}");
+    }
+
+    Ok(())
+}
+
+/// Records the identity and actual scopes returned by Microsoft's OAuth callback.
+pub async fn set_linked_microsoft_grant(
+    db: &sqlx::Pool<sqlx::Postgres>,
+    link_id: &uuid::Uuid,
+    linked_email: &str,
+    granted_microsoft_scopes: &[String],
+) -> anyhow::Result<()> {
+    let result = sqlx::query!(
+        r#"
+            UPDATE in_progress_user_link
+            SET linked_email = $1,
+                granted_microsoft_scopes = $2
+            WHERE id = $3
+              AND provider = 'OUTLOOK'
+        "#,
+        linked_email,
+        granted_microsoft_scopes,
+        link_id
+    )
+    .execute(db)
+    .await?;
+
+    if result.rows_affected() == 0 {
+        anyhow::bail!("Outlook in_progress_user_link not found for link_id={link_id}");
     }
 
     Ok(())

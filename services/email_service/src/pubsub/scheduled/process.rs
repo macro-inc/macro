@@ -151,6 +151,7 @@ async fn process_scheduled_message_inner(
         message: message_to_send.clone(),
         from: sender_contact,
         parent_message_id,
+        parent_provider_message_id: None,
         references,
     };
     let sent_ids = ctx

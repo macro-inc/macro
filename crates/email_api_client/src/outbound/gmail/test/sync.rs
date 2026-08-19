@@ -61,6 +61,24 @@ async fn paginates_and_partitions_history() {
 }
 
 #[tokio::test]
+async fn rejects_an_outlook_cursor_before_calling_gmail() {
+    let (server, repository) = repository().await;
+
+    assert_eq!(
+        repository
+            .list_changes(
+                &AccessToken::new("token"),
+                &SyncCursor::outlook("graph-delta-cursor"),
+            )
+            .await,
+        Err(EmailApiError::Permanent {
+            message: "Gmail cannot consume an Outlook synchronization cursor".to_string(),
+        })
+    );
+    assert!(server.received_requests().await.unwrap().is_empty());
+}
+
+#[tokio::test]
 async fn only_history_not_found_is_an_outdated_cursor() {
     let (server, repository) = repository().await;
     Mock::given(method("GET"))

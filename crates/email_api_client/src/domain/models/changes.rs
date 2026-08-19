@@ -7,6 +7,8 @@ use serde::{Deserialize, Serialize};
 pub enum SyncCursor {
     /// A Gmail history identifier.
     Gmail(String),
+    /// An opaque Microsoft Graph delta cursor.
+    Outlook(String),
 }
 
 impl SyncCursor {
@@ -15,10 +17,15 @@ impl SyncCursor {
         Self::Gmail(history_id.into())
     }
 
+    /// Creates an Outlook synchronization cursor.
+    pub fn outlook(delta_cursor: impl Into<String>) -> Self {
+        Self::Outlook(delta_cursor.into())
+    }
+
     /// Returns the provider cursor's opaque value.
     pub fn as_str(&self) -> &str {
         match self {
-            Self::Gmail(history_id) => history_id,
+            Self::Gmail(cursor) | Self::Outlook(cursor) => cursor,
         }
     }
 }

@@ -7,6 +7,7 @@ pub mod labels;
 pub mod links;
 pub mod links_history;
 pub mod messages;
+pub mod outlook_sync_state;
 pub mod parse;
 pub mod settings;
 pub mod sfs_mappings;

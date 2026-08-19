@@ -24,8 +24,10 @@ async fn set_linked_email_then_get(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let pre = get_in_progress_user_link(&pool, &link_id).await?;
     assert_eq!(pre.macro_user_id, macro_user_id);
     assert!(pre.linked_email.is_none());
+    assert_eq!(pre.provider, InProgressUserLinkProvider::Gmail);
     assert!(pre.requested_google_scopes.is_empty());
     assert!(pre.granted_google_scopes.is_empty());
+    assert!(pre.granted_microsoft_scopes.is_empty());
 
     set_linked_email(&pool, &link_id, "linked@example.com").await?;
 
@@ -50,9 +52,52 @@ async fn google_link_records_requested_and_granted_scopes(
     set_linked_google_grant(&pool, &link_id, "linked@example.com", &granted).await?;
 
     let link = get_in_progress_user_link(&pool, &link_id).await?;
+    assert_eq!(link.provider, InProgressUserLinkProvider::Gmail);
     assert_eq!(link.requested_google_scopes, requested);
     assert_eq!(link.granted_google_scopes, granted);
     assert_eq!(link.linked_email.as_deref(), Some("linked@example.com"));
+
+    Ok(())
+}
+
+#[sqlx::test]
+async fn outlook_link_records_provider_and_latest_microsoft_grant(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let macro_user_id = macro_uuid::generate_uuid_v7();
+    insert_macro_user(&pool, macro_user_id).await?;
+
+    let link_id = create_in_progress_outlook_link(&pool, &macro_user_id.to_string()).await?;
+    let initial = get_in_progress_user_link(&pool, &link_id).await?;
+    assert_eq!(initial.provider, InProgressUserLinkProvider::Outlook);
+    assert!(initial.granted_microsoft_scopes.is_empty());
+
+    set_linked_microsoft_grant(
+        &pool,
+        &link_id,
+        "first@example.com",
+        &["Mail.Read".to_string()],
+    )
+    .await?;
+    let latest_scopes = vec!["Mail.ReadWrite".to_string(), "Mail.Send".to_string()];
+    set_linked_microsoft_grant(&pool, &link_id, "latest@example.com", &latest_scopes).await?;
+
+    let link = get_in_progress_user_link(&pool, &link_id).await?;
+    assert_eq!(link.provider, InProgressUserLinkProvider::Outlook);
+    assert_eq!(link.linked_email.as_deref(), Some("latest@example.com"));
+    assert_eq!(link.granted_microsoft_scopes, latest_scopes);
+    assert!(link.requested_google_scopes.is_empty());
+    assert!(link.granted_google_scopes.is_empty());
+
+    let error = set_linked_google_grant(
+        &pool,
+        &link_id,
+        "wrong-provider@example.com",
+        &["gmail".to_string()],
+    )
+    .await
+    .expect_err("Google grant setter must reject an Outlook pending link");
+    assert!(error.to_string().contains("Google in_progress_user_link"));
 
     Ok(())
 }

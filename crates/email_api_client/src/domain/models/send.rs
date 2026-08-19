@@ -15,8 +15,10 @@ pub struct SendRequest {
     pub message: MessageToSend,
     /// Sender shown in the message's `From` header.
     pub from: ContactInfo,
-    /// Global message identifier of the direct parent message.
+    /// Global RFC Message-ID of the direct parent message.
     pub parent_message_id: Option<String>,
+    /// Provider identifier of the direct parent message, when known.
+    pub parent_provider_message_id: Option<String>,
     /// Global message identifiers that describe the reply chain.
     pub references: Option<Vec<String>>,
 }

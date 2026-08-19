@@ -40,12 +40,32 @@ pub struct ProviderSubscription {
     pub cursor: SyncCursor,
     /// Instant at which the provider expires the subscription.
     pub expires_at: DateTime<Utc>,
+    /// Provider-assigned subscription identifier, when the provider exposes one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub provider_subscription_id: Option<String>,
 }
 
 impl ProviderSubscription {
     /// Creates a provider subscription.
     pub fn new(cursor: SyncCursor, expires_at: DateTime<Utc>) -> Self {
-        Self { cursor, expires_at }
+        Self {
+            cursor,
+            expires_at,
+            provider_subscription_id: None,
+        }
+    }
+
+    /// Creates a provider subscription that has a provider-assigned identifier.
+    pub fn with_provider_subscription_id(
+        cursor: SyncCursor,
+        expires_at: DateTime<Utc>,
+        provider_subscription_id: impl Into<String>,
+    ) -> Self {
+        Self {
+            cursor,
+            expires_at,
+            provider_subscription_id: Some(provider_subscription_id.into()),
+        }
     }
 }
 

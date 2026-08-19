@@ -40,6 +40,7 @@ fn mime_contains_recipients_threading_bodies_and_attachments() {
         },
         from: contact("sender@example.com", "Sender"),
         parent_message_id: Some("parent@example.com".to_string()),
+        parent_provider_message_id: None,
         references: Some(vec![
             "root@example.com".to_string(),
             "parent@example.com".to_string(),

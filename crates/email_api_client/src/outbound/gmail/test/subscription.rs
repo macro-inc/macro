@@ -6,7 +6,7 @@ use gmail_client::GmailClient;
 use wiremock::matchers::{method, path};
 use wiremock::{Mock, MockServer, Request, Respond, ResponseTemplate};
 
-use crate::domain::models::{AccessToken, EmailApiError, SyncCursor};
+use crate::domain::models::{AccessToken, EmailApiError, ProviderSubscription, SyncCursor};
 use crate::domain::ports::MailboxSubscriptionClient;
 use crate::outbound::gmail::GmailApiClientRepository;
 
@@ -69,6 +69,35 @@ async fn maps_successful_watch_to_subscription() {
         Utc.timestamp_millis_opt(1_893_456_000_000)
             .single()
             .unwrap()
+    );
+    assert_eq!(subscription.provider_subscription_id, None);
+    assert_eq!(
+        serde_json::to_string(&subscription).unwrap(),
+        r#"{"cursor":{"Gmail":"987654321"},"expires_at":"2030-01-01T00:00:00Z"}"#
+    );
+}
+
+#[test]
+fn provider_subscription_id_is_optional_and_round_trips() {
+    let json = r#"{"cursor":{"Outlook":"delta-cursor"},"expires_at":"2030-01-01T00:00:00Z","provider_subscription_id":"graph-subscription"}"#;
+    let subscription = ProviderSubscription::with_provider_subscription_id(
+        SyncCursor::outlook("delta-cursor"),
+        Utc.with_ymd_and_hms(2030, 1, 1, 0, 0, 0).unwrap(),
+        "graph-subscription",
+    );
+
+    assert_eq!(serde_json::to_string(&subscription).unwrap(), json);
+    assert_eq!(
+        serde_json::from_str::<ProviderSubscription>(json).unwrap(),
+        subscription
+    );
+
+    let legacy_json = r#"{"cursor":{"Gmail":"987654321"},"expires_at":"2030-01-01T00:00:00Z"}"#;
+    assert_eq!(
+        serde_json::from_str::<ProviderSubscription>(legacy_json)
+            .unwrap()
+            .provider_subscription_id,
+        None
     );
 }
 

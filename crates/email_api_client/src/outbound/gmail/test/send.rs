@@ -64,6 +64,7 @@ async fn builds_posts_and_returns_provider_ids() {
             photo_url: None,
         },
         parent_message_id: Some("parent@example.com".to_string()),
+        parent_provider_message_id: None,
         references: Some(vec!["root@example.com".to_string()]),
     };
 

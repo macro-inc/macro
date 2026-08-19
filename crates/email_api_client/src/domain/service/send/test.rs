@@ -91,6 +91,7 @@ fn send_request() -> SendRequest {
             photo_url: None,
         },
         parent_message_id: None,
+        parent_provider_message_id: None,
         references: None,
     }
 }
