@@ -87,7 +87,7 @@ import {
 const QUEUE_ATTEMPT_CONTEXT_KEY = 'normalizedCacheQueueAttempt';
 /** Marks dependency-pushed reads as latency-sensitive worker work. */
 const AFFECTED_READ_CONTEXT_KEY = 'normalizedCacheAffectedRead';
-/** Prevents a post-network dependency refresh from forwarding the API again. */
+/** Prevents a replacement-registration cache read from forwarding the API again. */
 const REPLACEMENT_REGISTRATION_ONLY_CONTEXT_KEY =
   'normalizedCacheReplacementRegistrationOnly';
 /** Marks a query as network-to-cache hydration with a projected result. */
