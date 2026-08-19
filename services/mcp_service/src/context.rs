@@ -154,7 +154,7 @@ async fn build_tool_context(args: ToolContextBuildArgs<'_>) -> anyhow::Result<To
     let ai_editing_worker_url = AiEditingWorkerUrl::new()?.to_string();
 
     let search_service_client =
-        SearchServiceClient::new(document_storage_service_auth_key, dss_url);
+        SearchServiceClient::new(document_storage_service_auth_key, dss_url.clone());
 
     let lexical_client = Arc::new(lexical_client::LexicalClient::new(
         config.internal_api_key.to_string(),
@@ -389,6 +389,12 @@ async fn build_tool_context(args: ToolContextBuildArgs<'_>) -> anyhow::Result<To
         import_tool_context: ToolImportToolContext::unwired(),
         chat_tool_context,
         channel_tool_context,
+        bot_tool_context: ai_tools::build_bot_tool_context(
+            db.clone(),
+            ai_tools::ToolBotEventBroker::Real(macro_event_broker.clone()),
+            entity_access_service.clone(),
+            dss_url,
+        ),
         project_tool_context,
         team_tool_context: ai_tools::build_team_tool_context(db.clone()),
         crm_tool_context: ai_tools::build_crm_tool_context(db.clone()),

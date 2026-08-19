@@ -585,6 +585,12 @@ async fn main() -> anyhow::Result<()> {
         ),
         chat_tool_context,
         channel_tool_context,
+        bot_tool_context: ai_tools::build_bot_tool_context(
+            db.clone(),
+            ai_tools::ToolBotEventBroker::Real(macro_event_broker.clone()),
+            entity_access_service.clone(),
+            DocumentStorageServiceUrl::new()?.to_string(),
+        ),
         project_tool_context,
         team_tool_context: ai_tools::build_team_tool_context(db.clone()),
         crm_tool_context: ai_tools::build_crm_tool_context(db.clone()),

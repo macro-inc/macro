@@ -5,6 +5,7 @@ use super::models::{
     BotTokenCandidate, CreateBotRequest, CreateBotTokenRequest, CreateBotTokenResponse,
     CreateChannelScopedBotRequest, CreateChannelScopedBotResponse, PatchBotRequest,
 };
+use entity_access::domain::models::{EntityAccessReceipt, MemberParticipantRole};
 use macro_user_id::user_id::MacroUserIdStr;
 use std::future::Future;
 use uuid::Uuid;
@@ -191,8 +192,7 @@ pub trait BotService: Send + Sync + 'static {
     /// Add an owned/team-available bot to a channel.
     fn add_bot_to_channel(
         &self,
-        caller: MacroUserIdStr<'static>,
-        channel_id: Uuid,
+        access: EntityAccessReceipt<MemberParticipantRole>,
         bot_id: BotId,
     ) -> impl Future<Output = Result<(), BotError>> + Send;
 

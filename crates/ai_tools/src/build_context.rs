@@ -412,6 +412,12 @@ pub async fn build_tool_service_context_from_env(
         import_tool_context: ToolImportToolContext::unwired(),
         chat_tool_context,
         channel_tool_context,
+        bot_tool_context: crate::tool_context::build_bot_tool_context(
+            pool.clone(),
+            crate::tool_context::ToolBotEventBroker::Real(macro_event_broker.clone()),
+            entity_access_service.clone(),
+            document_storage_service_url,
+        ),
         project_tool_context,
         team_tool_context: crate::tool_context::build_team_tool_context(pool.clone()),
         crm_tool_context: crate::tool_context::build_crm_tool_context(pool.clone()),

@@ -478,6 +478,7 @@ dependencies = [
  "aws-sdk-secretsmanager",
  "aws-sdk-sqs",
  "axum",
+ "bots",
  "calendar_events",
  "call",
  "channels",
@@ -2635,7 +2636,9 @@ dependencies = [
 name = "bots"
 version = "0.1.0"
 dependencies = [
+ "ai_toolset",
  "anyhow",
+ "async-trait",
  "axum",
  "bot_id",
  "channels",
@@ -2652,6 +2655,7 @@ dependencies = [
  "model-error-response",
  "rand 0.9.4",
  "rootcause",
+ "schemars 1.2.1",
  "serde",
  "serde_json",
  "sqlx",

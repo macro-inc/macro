@@ -6,6 +6,15 @@ import {
 import { Dynamic } from 'solid-js/web';
 import { bashCodeExecutionHandler } from './BashCodeExecution';
 import {
+  configureBotHandler,
+  createBotHandler,
+  deleteBotHandler,
+  getBotWebhooksHandler,
+  issueBotCredentialHandler,
+  listBotsHandler,
+  manageBotChannelAccessHandler,
+} from './Bots';
+import {
   createCalendarEventHandler,
   deleteCalendarEventHandler,
   listCalendarEventsHandler,
@@ -82,6 +91,13 @@ import { webFetchHandler } from './WebFetch';
 import { webSearchHandler } from './WebSearch';
 
 const toolHandlers: ToolHandlerMap<RenderContext> = {
+  ConfigureBot: configureBotHandler,
+  CreateBot: createBotHandler,
+  DeleteBot: deleteBotHandler,
+  GetBotWebhooks: getBotWebhooksHandler,
+  IssueBotCredential: issueBotCredentialHandler,
+  ListBots: listBotsHandler,
+  ManageBotChannelAccess: manageBotChannelAccessHandler,
   CreateCalendarEvent: createCalendarEventHandler,
   UpdateCalendarEvent: updateCalendarEventHandler,
   DeleteCalendarEvent: deleteCalendarEventHandler,

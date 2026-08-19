@@ -248,6 +248,12 @@ pub async fn build_tool_service_context(
             pool.clone(),
             Arc::new(lexical_client),
         ),
+        bot_tool_context: ai_tools::build_bot_tool_context(
+            pool.clone(),
+            ai_tools::ToolBotEventBroker::NoOp(Default::default()),
+            entity_access_service.clone(),
+            config.document_storage_service_url.clone(),
+        ),
         team_tool_context: ai_tools::build_team_tool_context(pool.clone()),
         crm_tool_context: ai_tools::build_crm_tool_context(pool.clone()),
         skill_tool_context,

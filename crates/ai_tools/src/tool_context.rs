@@ -1,5 +1,9 @@
 use anthropic::toolset::AnthropicToolContext;
 use axum::extract::FromRef;
+use bots::{
+    domain::service::BotServiceImpl, inbound::toolset::BotToolContext,
+    outbound::pg_bots_repo::PgBotsRepo,
+};
 use calendar_events::inbound::toolset::CalendarToolContext;
 use call::domain::models::{CallError, CallWebhookEvent, EgressS3Config};
 use call::domain::ports::CallRtcClient;
@@ -35,7 +39,10 @@ use foreign_entity::{
     outbound::pg_foreign_entity_repo::PgForeignEntityRepo,
 };
 use lexical_mention_extractor::LexicalMentionExtractor;
-use macro_event_broker::{KafkaEventPublisher, MacroEventBrokerService};
+use macro_event_broker::{
+    EventBrokerError, KafkaEventPublisher, MacroEvent, MacroEventBroker, MacroEventBrokerService,
+    NoopMacroEventBroker,
+};
 use macro_user_id::user_id::MacroUserIdStr;
 use notification::domain::service::SqsNotificationIngress;
 use notification::inbound::ai_tool::NotificationToolContext;
@@ -88,6 +95,51 @@ pub type ToolEmailService = EmailServiceImpl<
 /// Event broker used by AI tools, with spawned publish tasks tracked for
 /// graceful shutdown by the hosting process.
 pub type ToolEventBroker = MacroEventBrokerService<KafkaEventPublisher, TaskTracker>;
+
+/// Event broker used by bot tools across hosts that either do or do not have
+/// Kafka lifecycle publishing configured.
+#[derive(Clone)]
+pub enum ToolBotEventBroker {
+    /// Publish bot lifecycle events through the shared Kafka broker.
+    Real(ToolEventBroker),
+    /// Drop lifecycle events in hosts that do not configure Kafka.
+    NoOp(NoopMacroEventBroker),
+}
+
+impl MacroEventBroker for ToolBotEventBroker {
+    fn send_event<E: MacroEvent + ?Sized>(
+        &self,
+        event: &E,
+    ) -> Result<tokio::task::JoinHandle<Result<(), EventBrokerError>>, EventBrokerError> {
+        match self {
+            Self::Real(broker) => broker.send_event(event),
+            Self::NoOp(broker) => broker.send_event(event),
+        }
+    }
+}
+
+/// Concrete bot domain service used by AI tools.
+pub type ToolBotService = BotServiceImpl<PgBotsRepo, ToolBotEventBroker>;
+
+/// Bot-management AI tool context.
+pub type ToolBotToolContext = BotToolContext<ToolBotService, ToolEntityAccessService>;
+
+/// Build bot-management tools over the canonical Postgres repository and
+/// entity-access service.
+pub fn build_bot_tool_context(
+    pool: sqlx::PgPool,
+    event_broker: ToolBotEventBroker,
+    entity_access_service: Arc<ToolEntityAccessService>,
+    document_storage_service_url: String,
+) -> ToolBotToolContext {
+    BotToolContext {
+        service: Arc::new(BotServiceImpl::new(PgBotsRepo::new(pool), event_broker)),
+        entity_access_service,
+        document_storage_service_url: document_storage_service_url
+            .trim_end_matches('/')
+            .to_string(),
+    }
+}
 
 /// Type alias for the send-capable email service implementation used by user
 /// tools. Carries the real event broker: these tools mutate email state, and
@@ -1211,6 +1263,7 @@ pub struct ToolServiceContext {
     #[from_ref(skip)]
     pub chat_tool_context: ToolChatToolContext,
     pub channel_tool_context: ToolChannelToolContext,
+    pub bot_tool_context: ToolBotToolContext,
     pub project_tool_context: ToolProjectToolContext,
     pub team_tool_context: ToolTeamToolContext,
     pub crm_tool_context: ToolCrmToolContext,
