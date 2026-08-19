@@ -60,6 +60,21 @@ pub trait Storage: MaybeSend {
         entries: Vec<(EntityKey<'static>, Record)>,
     ) -> impl Future<Output = Result<(), Self::Error>> + MaybeSend;
 
+    /// Atomically upserts records and generic projection lifecycle changes.
+    fn put_batch_with_projections(
+        &mut self,
+        entries: Vec<(EntityKey<'static>, Record)>,
+        projections: Vec<ProjectionMutation>,
+    ) -> impl Future<Output = Result<(), Self::Error>> + MaybeSend {
+        async move {
+            assert!(
+                projections.is_empty(),
+                "storage must implement atomic projection writes"
+            );
+            self.put_batch(entries).await
+        }
+    }
+
     /// Deletes records (absent keys are ignored).
     fn delete_batch(
         &mut self,
@@ -211,6 +226,16 @@ impl Storage for InMemoryStorage {
             }
             self.records.insert(key, record);
         }
+        Ok(())
+    }
+
+    async fn put_batch_with_projections(
+        &mut self,
+        entries: Vec<(EntityKey<'static>, Record)>,
+        projections: Vec<ProjectionMutation>,
+    ) -> Result<(), Self::Error> {
+        self.put_batch(entries).await?;
+        apply_in_memory_projection_mutations(&mut self.projections, projections);
         Ok(())
     }
 
@@ -404,44 +429,6 @@ impl Storage for InMemoryStorage {
 }
 
 impl PredicateIndexStorage for InMemoryStorage {
-    async fn put_batch_with_projections(
-        &mut self,
-        entries: Vec<(EntityKey<'static>, Record)>,
-        projections: Vec<ProjectionMutation>,
-    ) -> Result<(), Self::Error> {
-        self.put_batch(entries).await?;
-        for mutation in projections {
-            match mutation {
-                ProjectionMutation::Replace(document) => {
-                    self.projections.insert(
-                        document.record_key.clone(),
-                        ProjectionState::Complete(document),
-                    );
-                }
-                ProjectionMutation::MarkIncomplete {
-                    record_key,
-                    profile,
-                    partition,
-                    kind,
-                } => {
-                    self.projections.insert(
-                        record_key.clone(),
-                        ProjectionState::Incomplete {
-                            record_key,
-                            profile,
-                            partition,
-                            kind,
-                        },
-                    );
-                }
-                ProjectionMutation::Delete(record_key) => {
-                    self.projections.remove(&record_key);
-                }
-            }
-        }
-        Ok(())
-    }
-
     async fn delete_batch_with_projections(
         &mut self,
         keys: &[EntityKey<'static>],
@@ -486,6 +473,41 @@ impl PredicateIndexStorage for InMemoryStorage {
                 .map(|hit| hit.record_key)
                 .collect(),
         ))
+    }
+}
+
+fn apply_in_memory_projection_mutations(
+    projections: &mut HashMap<PredicateRecordKey, ProjectionState>,
+    mutations: Vec<ProjectionMutation>,
+) {
+    for mutation in mutations {
+        match mutation {
+            ProjectionMutation::Replace(document) => {
+                projections.insert(
+                    document.record_key.clone(),
+                    ProjectionState::Complete(document),
+                );
+            }
+            ProjectionMutation::MarkIncomplete {
+                record_key,
+                profile,
+                partition,
+                kind,
+            } => {
+                projections.insert(
+                    record_key.clone(),
+                    ProjectionState::Incomplete {
+                        record_key,
+                        profile,
+                        partition,
+                        kind,
+                    },
+                );
+            }
+            ProjectionMutation::Delete(record_key) => {
+                projections.remove(&record_key);
+            }
+        }
     }
 }
 

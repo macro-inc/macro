@@ -1,9 +1,6 @@
 //! Generic predicate-projection lifecycle and exact-query storage port.
 
-use crate::{
-    store::Storage,
-    value::{EntityKey, Record},
-};
+use crate::{store::Storage, value::EntityKey};
 use maybe_send::MaybeSend;
 use predicate_index::{IndexDocument, Profile, RecordKey, Token, ValidatedIndexQuery};
 use serde::{Deserialize, Serialize};
@@ -104,13 +101,6 @@ pub enum PredicateQueryResult {
 
 /// Storage capability for atomic normalized-record and generic-projection changes.
 pub trait PredicateIndexStorage: Storage {
-    /// Atomically upsert normalized records and apply projection lifecycle changes.
-    fn put_batch_with_projections(
-        &mut self,
-        entries: Vec<(EntityKey<'static>, Record)>,
-        projections: Vec<ProjectionMutation>,
-    ) -> impl Future<Output = Result<(), Self::Error>> + MaybeSend;
-
     /// Atomically delete normalized records and their projection state.
     fn delete_batch_with_projections(
         &mut self,

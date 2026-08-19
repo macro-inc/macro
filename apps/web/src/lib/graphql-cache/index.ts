@@ -57,6 +57,8 @@ export type {
   CacheRequest,
   CacheResponse,
   EnqueueOptimisticMutationResult,
+  EntityFilterCacheArgs,
+  EntityFilterCacheResult,
   InitialMutationClaim,
   MutationSettlement,
   OptimisticWriteResult,

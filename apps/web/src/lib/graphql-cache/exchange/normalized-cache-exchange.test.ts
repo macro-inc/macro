@@ -267,6 +267,9 @@ function makeFakeHost(): FakeHost {
     async search() {
       return { documents: [], nextCursor: null };
     },
+    async entityFilter() {
+      return { kind: 'unsupported' };
+    },
     async writeQuery(args): Promise<WriteResult> {
       host.writes.push({
         opKey: args.opKey,

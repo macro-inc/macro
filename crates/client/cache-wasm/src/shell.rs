@@ -1,4 +1,5 @@
 use async_lock::Mutex;
+use base64::{Engine as _, engine::general_purpose::STANDARD_NO_PAD};
 use cache_core::codec::cache_database_name;
 use cache_core::deps::OpId;
 use cache_core::engine::{
@@ -7,6 +8,7 @@ use cache_core::engine::{
 };
 use cache_core::entity_resolver::EntityResolver;
 use cache_core::link_patch::{OptimisticLinkPatch, QueryRevalidation};
+use cache_core::predicate::{PredicateQueryResult, ProjectionIncompleteKind, ProjectionMutation};
 use cache_core::query_inspection::QueryInspection;
 use cache_core::queue::{ClaimedMutation, MutationClaimRequest, MutationClaimToken};
 use cache_core::record_selection::RecordSelection;
@@ -16,6 +18,13 @@ use cache_core::value::EntityKey;
 use cache_turso::{
     PhysicalResetReason, TursoStorage, TursoStorageCloseOutcome, TursoStorageError,
     TursoStorageOpenOutcome,
+};
+use graphql_soup_filter_input::materialize_graphql_filter;
+use item_filter_index::{
+    LocalCompileOutcome, SoupFlatRequest, SoupIndexSort, compile_soup_flat_v1, vocabulary,
+};
+use predicate_index::{
+    ExactFact, ExactValue, IndexDocument, IntegerFact, Profile, RecordKey, SortDirection, Token,
 };
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
@@ -248,6 +257,173 @@ fn unwrap_storage(storage: BrowserStorage) -> TursoStorage {
 #[cfg(test)]
 fn unwrap_storage(storage: BrowserStorage) -> TursoStorage {
     storage.into_inner()
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct JsEntityFilterRequest {
+    filters: serde_json::Value,
+    sort_method: String,
+    sort_direction: String,
+    limit: u16,
+}
+
+#[derive(Serialize)]
+#[serde(tag = "kind", rename_all = "kebab-case")]
+enum JsEntityFilterResult {
+    Complete { keys: Vec<String> },
+    Unsupported,
+    Incomplete,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct WireProjection {
+    profile: String,
+    partition: String,
+    exact_facts: Vec<WireExactFact>,
+    integer_facts: Vec<WireIntegerFact>,
+    sort_facts: Vec<WireIntegerFact>,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct WireExactFact {
+    attribute: String,
+    value: String,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct WireIntegerFact {
+    attribute: String,
+    value: String,
+}
+
+fn projection_mutations(data: &serde_json::Value) -> Vec<ProjectionMutation> {
+    fn walk(value: &serde_json::Value, mutations: &mut HashMap<String, ProjectionMutation>) {
+        match value {
+            serde_json::Value::Array(values) => {
+                for value in values {
+                    walk(value, mutations);
+                }
+            }
+            serde_json::Value::Object(object) => {
+                let typename = object.get("__typename").and_then(|value| value.as_str());
+                let id = object.get("id").and_then(|value| value.as_str());
+                if let (Some(typename), Some(id)) = (typename, id)
+                    && let Some(partition) = projection_partition(typename)
+                {
+                    let key_text = format!("{typename}:{id}");
+                    if let Ok(record_key) = RecordKey::new(key_text.clone()) {
+                        let mutation = match object.get("filterProjection") {
+                            Some(value) => {
+                                parse_projection(record_key.clone(), partition.clone(), value)
+                                    .unwrap_or_else(|| ProjectionMutation::MarkIncomplete {
+                                        record_key,
+                                        profile: vocabulary::profile(),
+                                        partition,
+                                        kind: ProjectionIncompleteKind::IncompatibleVersion,
+                                    })
+                            }
+                            None => ProjectionMutation::MarkIncomplete {
+                                record_key,
+                                profile: vocabulary::profile(),
+                                partition,
+                                kind: ProjectionIncompleteKind::Dirty,
+                            },
+                        };
+                        let replace = matches!(mutation, ProjectionMutation::Replace(_));
+                        if replace
+                            || !matches!(
+                                mutations.get(&key_text),
+                                Some(ProjectionMutation::Replace(_))
+                            )
+                        {
+                            mutations.insert(key_text, mutation);
+                        }
+                    }
+                }
+                for value in object.values() {
+                    walk(value, mutations);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    let mut mutations = HashMap::new();
+    walk(data, &mut mutations);
+    mutations.into_values().collect()
+}
+
+fn projection_partition(typename: &str) -> Option<Token> {
+    match typename {
+        "GraphqlSoupDocument" => Some(vocabulary::document_partition()),
+        "GraphqlSoupProject" => Some(vocabulary::project_partition()),
+        "GraphqlSoupChat" => Some(vocabulary::chat_partition()),
+        _ => None,
+    }
+}
+
+fn dirty_projection_mutations(keys: &[String]) -> Vec<ProjectionMutation> {
+    keys.iter()
+        .filter_map(|key| {
+            let (typename, _) = key.split_once(':')?;
+            let partition = projection_partition(typename)?;
+            Some(ProjectionMutation::MarkIncomplete {
+                record_key: RecordKey::new(key.clone()).ok()?,
+                profile: vocabulary::profile(),
+                partition,
+                kind: ProjectionIncompleteKind::Dirty,
+            })
+        })
+        .collect()
+}
+
+fn parse_projection(
+    record_key: RecordKey,
+    expected_partition: Token,
+    value: &serde_json::Value,
+) -> Option<ProjectionMutation> {
+    let projection: WireProjection = serde_json::from_value(value.clone()).ok()?;
+    if projection.profile != item_filter_index::SOUP_FLAT_V1
+        || projection.partition != expected_partition.as_str()
+    {
+        return None;
+    }
+    let token = |value: String| Token::new(value).ok();
+    let exact_facts = projection
+        .exact_facts
+        .into_iter()
+        .map(|fact| {
+            Some(ExactFact {
+                attribute: token(fact.attribute)?,
+                value: ExactValue::new(STANDARD_NO_PAD.decode(fact.value).ok()?).ok()?,
+            })
+        })
+        .collect::<Option<Vec<_>>>()?;
+    let integers = |facts: Vec<WireIntegerFact>| {
+        facts
+            .into_iter()
+            .map(|fact| {
+                Some(IntegerFact {
+                    attribute: token(fact.attribute)?,
+                    value: fact.value.parse().ok()?,
+                })
+            })
+            .collect::<Option<Vec<_>>>()
+    };
+    let document = IndexDocument {
+        record_key,
+        profile: Profile::new(Token::new(projection.profile).ok()?),
+        partition: expected_partition,
+        exact_facts,
+        integer_facts: integers(projection.integer_facts)?,
+        sort_facts: integers(projection.sort_facts)?,
+    };
+    document.validate().ok()?;
+    Some(ProjectionMutation::Replace(document))
 }
 
 struct CacheState {
@@ -805,6 +981,55 @@ impl CacheEngine {
         })
     }
 
+    /// Evaluates one exact `soup-flat-v1` GraphQL filter request.
+    #[wasm_bindgen(js_name = entityFilter)]
+    pub fn entity_filter(&self, request: JsValue) -> js_sys::Promise {
+        let state = self.state.clone();
+        future_to_promise(async move {
+            let mut state = state.lock().await;
+            state.ensure_callable()?;
+            let request: JsEntityFilterRequest =
+                serde_wasm_bindgen::from_value(request).map_err(err_js)?;
+            let ast = materialize_graphql_filter(request.filters).map_err(err_js)?;
+            let sort = match request.sort_method.as_str() {
+                "CREATED_AT" => SoupIndexSort::CreatedAt,
+                "UPDATED_AT" => SoupIndexSort::UpdatedAt,
+                _ => SoupIndexSort::Unsupported,
+            };
+            let direction = match request.sort_direction.as_str() {
+                "ASC" => SortDirection::Asc,
+                "DESC" => SortDirection::Desc,
+                _ => return Err(err_js("invalid entity-filter sort direction")),
+            };
+            let outcome = compile_soup_flat_v1(
+                &ast,
+                SoupFlatRequest {
+                    sort,
+                    direction,
+                    limit: request.limit,
+                    has_cursor: false,
+                },
+            )
+            .map_err(err_js)?;
+            let result = match outcome {
+                LocalCompileOutcome::Unsupported(_) => JsEntityFilterResult::Unsupported,
+                LocalCompileOutcome::Supported(query) => {
+                    let result = state.engine_mut()?.query_predicate_index(&query).await;
+                    match state.engine_result(result)? {
+                        PredicateQueryResult::Complete(keys) => JsEntityFilterResult::Complete {
+                            keys: keys
+                                .into_iter()
+                                .map(|key| key.as_str().to_owned())
+                                .collect(),
+                        },
+                        PredicateQueryResult::Incomplete => JsEntityFilterResult::Incomplete,
+                    }
+                }
+            };
+            to_js(&result)
+        })
+    }
+
     /// Normalizes and stores a network response. Resolves to
     /// `{changed: string[], affectedOps: string[], reset: boolean}` —
     /// `affectedOps` are the registered operation ids (excluding
@@ -837,9 +1062,10 @@ impl CacheEngine {
                 let op_id = ops.borrow_mut().intern(&registration.op_id);
                 (op_id, registration.entity_resolvers)
             });
+            let projections = projection_mutations(&data);
             let result = state
                 .engine_mut()?
-                .write_query_with_registration(
+                .write_query_with_registration_and_projections(
                     origin,
                     registration
                         .as_ref()
@@ -854,6 +1080,7 @@ impl CacheEngine {
                         data: &data,
                         identity: identity.as_deref(),
                     },
+                    projections,
                 )
                 .await;
             let result = state.engine_result(result)?;
@@ -888,14 +1115,16 @@ impl CacheEngine {
             state.ensure_callable()?;
             let variables = parse_variables(variables)?;
             let data: serde_json::Value = serde_wasm_bindgen::from_value(data).map_err(err_js)?;
+            let projections = projection_mutations(&data);
             let result = state
                 .engine_mut()?
-                .hydrate_query(
+                .hydrate_query_with_projections(
                     &query,
                     operation_name.as_deref(),
                     &variables,
                     &data,
                     identity.as_deref(),
+                    projections,
                 )
                 .await;
             let result = state.engine_result(result)?;
@@ -1121,6 +1350,7 @@ impl CacheEngine {
             };
             let vars = parse_variables(variables)?;
             let data: serde_json::Value = serde_wasm_bindgen::from_value(data).map_err(err_js)?;
+            let projections = projection_mutations(&data);
             let result = state
                 .engine_mut()?
                 .commit_optimistic_write(
@@ -1133,6 +1363,13 @@ impl CacheEngine {
                 )
                 .await;
             let result = state.engine_result(result)?;
+            if !projections.is_empty() {
+                let projection_result = state
+                    .engine_mut()?
+                    .put_records_with_projections(None, Vec::new(), projections)
+                    .await;
+                state.engine_result(projection_result)?;
+            }
             to_js(&JsWriteResult {
                 changed: result
                     .changed
@@ -1193,6 +1430,14 @@ impl CacheEngine {
         future_to_promise(async move {
             let mut state = state.lock().await;
             state.ensure_callable()?;
+            let projections = dirty_projection_mutations(&keys);
+            if !projections.is_empty() {
+                let result = state
+                    .engine_mut()?
+                    .mark_projections_incomplete(projections)
+                    .await;
+                state.engine_result(result)?;
+            }
             let keys: Vec<EntityKey<'static>> =
                 keys.into_iter().map(|key| EntityKey(key.into())).collect();
             let affected = state.engine_mut()?.invalidate_keys(keys.iter());
@@ -1209,9 +1454,16 @@ impl CacheEngine {
         future_to_promise(async move {
             let mut state = state.lock().await;
             state.ensure_callable()?;
+            let projection_keys = keys
+                .iter()
+                .filter_map(|key| RecordKey::new(key.clone()).ok())
+                .collect::<Vec<_>>();
             let keys: Vec<EntityKey<'static>> =
                 keys.into_iter().map(|key| EntityKey(key.into())).collect();
-            let result = state.engine_mut()?.delete_keys(&keys).await;
+            let result = state
+                .engine_mut()?
+                .delete_keys_with_projections(&keys, &projection_keys)
+                .await;
             let affected = state.engine_result(result)?;
             to_js(&ops.borrow().names(affected))
         })

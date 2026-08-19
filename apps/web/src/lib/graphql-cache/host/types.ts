@@ -13,6 +13,8 @@ import type {
   CacheReadPriority,
   ClaimedMutation,
   EnqueueOptimisticMutationResult,
+  EntityFilterCacheArgs,
+  EntityFilterCacheResult,
   HydrationResult,
   MutationClaim,
   MutationSettlement,
@@ -88,6 +90,8 @@ export interface CacheHost {
   ): Promise<SelectedRecordByKeyWire[]>;
   /** Searches the compact write-through materialized projection. */
   search(args: SearchCacheArgs): Promise<SearchCachePage>;
+  /** Evaluates an exact initial Soup filter page over complete local projections. */
+  entityFilter(args: EntityFilterCacheArgs): Promise<EntityFilterCacheResult>;
   writeQuery(args: CacheWriteArgs): Promise<WriteResult>;
   /** Stores a query response and returns only fields not marked `@cacheOnly`. */
   hydrateQuery(args: Omit<CacheWriteArgs, 'opKey'>): Promise<HydrationResult>;

@@ -10,6 +10,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { makeSubject } from 'wonka';
 
 const getGraphqlSoupClientMock = vi.hoisted(() => vi.fn());
+const getGraphqlSoupCacheHostMock = vi.hoisted(() => vi.fn());
+const entityFilterMock = vi.hoisted(() => vi.fn());
+const readRecordsByKeysMock = vi.hoisted(() => vi.fn());
 const mapGraphqlSoupPageMock = vi.hoisted(() => vi.fn((data) => data));
 const mapSoupPageToEntityListMock = vi.hoisted(() =>
   vi.fn((page) => page.items)
@@ -23,8 +26,15 @@ vi.mock('@queries/storage/instructions-md', () => ({
   useInstructionsMdIdQuery: vi.fn(() => ({})),
 }));
 
+vi.mock('@app/lib/graphql-cache', () => ({
+  selectRecords: vi.fn(() => ({})),
+  readRecordsByKeys: readRecordsByKeysMock,
+}));
+
 vi.mock('@service-storage/graphql-soup', () => ({
   getGraphqlSoupClient: getGraphqlSoupClientMock,
+  getGraphqlSoupCacheHost: getGraphqlSoupCacheHostMock,
+  mapGraphqlSoupItem: vi.fn((item) => item),
   mapGraphqlSoupPage: mapGraphqlSoupPageMock,
 }));
 
@@ -78,6 +88,48 @@ function makeFakeClient(): {
 describe('createGraphqlSoupAstItemsQuery', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    getGraphqlSoupCacheHostMock.mockReturnValue(undefined);
+  });
+
+  it('uses a complete local page as placeholder while authoritative network continues', async () => {
+    const fake = makeFakeClient();
+    getGraphqlSoupClientMock.mockReturnValue(fake.client);
+    getGraphqlSoupCacheHostMock.mockReturnValue({ entityFilter: entityFilterMock });
+    entityFilterMock.mockResolvedValue({
+      kind: 'complete',
+      keys: ['GraphqlSoupDocument:task-1'],
+    });
+    readRecordsByKeysMock.mockResolvedValue([
+      {
+        recordKey: 'GraphqlSoupDocument:task-1',
+        record: { id: 'task-1', type: 'document', name: 'Local task' },
+      },
+    ]);
+
+    await new Promise<void>((resolve) => {
+      createRoot((dispose) => {
+        const query = createGraphqlSoupAstItemsQuery(
+          () => ({ params: {}, body: {} }) as never,
+          () => ({ enabled: true })
+        );
+
+        expect(fake.executions).toHaveLength(1);
+        void vi.waitFor(() => {
+          expect(query.isPlaceholderData()).toBe(true);
+          expect(query.data()?.entities[0]?.name).toBe('Local task');
+        }).then(() => {
+          fake.executions[0]?.next({
+            items: [{ id: 'task-1', type: 'document', name: 'Network task' }],
+            next_cursor: null,
+          });
+          expect(query.isPlaceholderData()).toBe(false);
+          expect(query.data()?.entities[0]?.name).toBe('Network task');
+          dispose();
+          resolve();
+        });
+      });
+    });
+    expect(entityFilterMock).toHaveBeenCalled();
   });
 
   it('retains identical page projections across cache re-executions', () => {

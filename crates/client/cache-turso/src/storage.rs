@@ -758,6 +758,38 @@ impl Storage for TursoStorage {
         self.latch_result(result)
     }
 
+    async fn put_batch_with_projections(
+        &mut self,
+        entries: Vec<(EntityKey<'static>, Record)>,
+        projections: Vec<ProjectionMutation>,
+    ) -> Result<(), Self::Error> {
+        self.require_healthy()?;
+        let result = (|| {
+            let entries = prepare_records(entries)?;
+            let connection = self.connection();
+            driver::write_transaction(&connection, || {
+                let mut statement = driver::prepare(&connection, RECORD_UPSERT)?;
+                for (index, entry) in entries.iter().enumerate() {
+                    require_changed(
+                        driver::execute_prepared(
+                            &mut statement,
+                            vec![
+                                text(&entry.key.typename),
+                                text(&entry.key.id),
+                                Value::from_blob(entry.value.clone()),
+                            ],
+                        )?,
+                        1,
+                    )?;
+                    self.fault_after(TestFaultSite::Put, index)?;
+                }
+                write_search_documents(&connection, &entries)?;
+                write_projection_mutations(&connection, projections)
+            })
+        })();
+        self.latch_result(result)
+    }
+
     async fn delete_batch(&mut self, keys: &[EntityKey<'static>]) -> Result<(), Self::Error> {
         self.require_healthy()?;
         let result = (|| {
@@ -1135,38 +1167,6 @@ impl Storage for TursoStorage {
 }
 
 impl PredicateIndexStorage for TursoStorage {
-    async fn put_batch_with_projections(
-        &mut self,
-        entries: Vec<(EntityKey<'static>, Record)>,
-        projections: Vec<ProjectionMutation>,
-    ) -> Result<(), Self::Error> {
-        self.require_healthy()?;
-        let result = (|| {
-            let entries = prepare_records(entries)?;
-            let connection = self.connection();
-            driver::write_transaction(&connection, || {
-                let mut statement = driver::prepare(&connection, RECORD_UPSERT)?;
-                for (index, entry) in entries.iter().enumerate() {
-                    require_changed(
-                        driver::execute_prepared(
-                            &mut statement,
-                            vec![
-                                text(&entry.key.typename),
-                                text(&entry.key.id),
-                                Value::from_blob(entry.value.clone()),
-                            ],
-                        )?,
-                        1,
-                    )?;
-                    self.fault_after(TestFaultSite::Put, index)?;
-                }
-                write_search_documents(&connection, &entries)?;
-                write_projection_mutations(&connection, projections)
-            })
-        })();
-        self.latch_result(result)
-    }
-
     async fn delete_batch_with_projections(
         &mut self,
         keys: &[EntityKey<'static>],

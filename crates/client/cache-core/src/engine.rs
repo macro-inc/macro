@@ -910,6 +910,23 @@ impl<S: Storage> Engine<S> {
         registration: Option<QueryRegistration<'_>>,
         input: NetworkWrite<'_>,
     ) -> Result<WriteResult, EngineError<S::Error>> {
+        self.write_query_with_registration_and_projections(
+            origin_op,
+            registration,
+            input,
+            Vec::new(),
+        )
+        .await
+    }
+
+    /// Normalizes records and atomically applies caller-composed generic projections.
+    pub async fn write_query_with_registration_and_projections(
+        &mut self,
+        origin_op: Option<OpId>,
+        registration: Option<QueryRegistration<'_>>,
+        input: NetworkWrite<'_>,
+        projections: Vec<ProjectionMutation>,
+    ) -> Result<WriteResult, EngineError<S::Error>> {
         let NetworkWrite {
             query,
             operation_name,
@@ -958,7 +975,7 @@ impl<S: Storage> Engine<S> {
         candidates.extend(updates.keys().cloned());
         let bases_before = self.load_bases(&candidates).await?;
         let before = effective_records(&bases_before, &self.optimistic, &candidates);
-        let changed = self.persist_updates(updates).await?;
+        let changed = self.persist_updates(updates, projections).await?;
 
         if !self.optimistic.is_empty() {
             let queued = self
@@ -1015,6 +1032,27 @@ impl<S: Storage> Engine<S> {
         data: &Json,
         identity: Option<&str>,
     ) -> Result<HydrationWriteResult, EngineError<S::Error>> {
+        self.hydrate_query_with_projections(
+            query,
+            operation_name,
+            variables,
+            data,
+            identity,
+            Vec::new(),
+        )
+        .await
+    }
+
+    /// Hydrates a response while atomically maintaining generic projections.
+    pub async fn hydrate_query_with_projections(
+        &mut self,
+        query: &str,
+        operation_name: Option<&str>,
+        variables: &serde_json::Map<String, Json>,
+        data: &Json,
+        identity: Option<&str>,
+        projections: Vec<ProjectionMutation>,
+    ) -> Result<HydrationWriteResult, EngineError<S::Error>> {
         let projected = {
             let doc = Self::document(&mut self.docs, query)?;
             let op = doc.operation(operation_name)?;
@@ -1029,7 +1067,18 @@ impl<S: Storage> Engine<S> {
             project_hydration_response(op, data)?
         };
         let write_result = self
-            .write_query(None, query, operation_name, variables, data, identity)
+            .write_query_with_registration_and_projections(
+                None,
+                None,
+                NetworkWrite {
+                    query,
+                    operation_name,
+                    variables,
+                    data,
+                    identity,
+                },
+                projections,
+            )
             .await?;
         Ok(HydrationWriteResult {
             write_result,
@@ -1042,6 +1091,7 @@ impl<S: Storage> Engine<S> {
     async fn persist_updates(
         &mut self,
         updates: RecordUpdates,
+        projections: Vec<ProjectionMutation>,
     ) -> Result<BTreeSet<EntityKey<'static>>, EngineError<S::Error>> {
         // Load current values (hot tier, then storage) so merges detect real
         // changes. Merges are staged in a plain map, NOT the LRU: a batch
@@ -1095,7 +1145,7 @@ impl<S: Storage> Engine<S> {
         // keeps storage authoritative even if the hot tier evicted them
         // between loads).
         self.storage
-            .put_batch(to_persist.clone())
+            .put_batch_with_projections(to_persist.clone(), projections)
             .await
             .map_err(EngineError::Storage)?;
         self.update_loaded_search_catalogs(&to_persist);
@@ -1692,9 +1742,13 @@ impl<S: PredicateIndexStorage> Engine<S> {
 
     /// Execute a complete generic exact-index query.
     pub async fn query_predicate_index(
-        &self,
+        &mut self,
         query: &ValidatedIndexQuery,
     ) -> Result<PredicateQueryResult, EngineError<S::Error>> {
+        self.hydrate_optimistic().await?;
+        if !self.optimistic.is_empty() {
+            return Ok(PredicateQueryResult::Incomplete);
+        }
         self.storage
             .query_predicate_index(query)
             .await

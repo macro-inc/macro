@@ -2823,12 +2823,16 @@ dependencies = [
 
 [[package]]
 name = "cache-wasm"
-version = "0.4.2"
+version = "0.5.0"
 dependencies = [
  "async-lock",
+ "base64 0.22.1",
  "cache-core",
  "cache-turso",
+ "graphql_soup_filter_input",
+ "item-filter-index",
  "js-sys",
+ "predicate-index",
  "serde",
  "serde-wasm-bindgen",
  "serde_json",
