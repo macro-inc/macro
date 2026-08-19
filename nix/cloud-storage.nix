@@ -338,6 +338,11 @@
 
       deployServiceBinaryDefinitions = [
         {
+          serviceName = "agent-harness-service";
+          packageName = "agent_harness_service";
+          binaries = [ "agent_harness_service" ];
+        }
+        {
           serviceName = "agent-schedule-service";
           packageName = "scheduled_action";
           binaries = [ "service" ];
