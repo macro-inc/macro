@@ -63,6 +63,7 @@ describe('getSubjectText', () => {
     expect(getSubjectText(messageWithSubject(undefined), 'reply-all')).toBe(
       'Re:'
     );
+    expect(getSubjectText(messageWithSubject(null), 'reply-all')).toBe('Re:');
   });
 
   it('uses a bare Fwd: prefix for a subjectless message on forward', () => {
