@@ -5,6 +5,7 @@ import type { CalendarEventFormController } from './create-calendar-event-form-c
 import { EventDateTimeRangeFields } from './EventDateTimeRangeFields';
 import {
   EventComposerCalendarPill,
+  EventComposerConferencePill,
   EventComposerGuestsPill,
   EventComposerLocationPill,
   EventComposerRecurrencePill,
@@ -157,6 +158,16 @@ export function EventForm(props: EventFormProps) {
               onChange={controller.setSelectedGuests}
               disabled={props.pending}
               readOnly={fieldIsReadOnly('guests')}
+            />
+            <EventComposerConferencePill
+              value={state().conference}
+              canKeepExisting={
+                controller.initialConferenceChoice() === 'existing'
+              }
+              onChange={(conference) =>
+                controller.setField('conference', conference)
+              }
+              disabled={fieldIsDisabled('conference')}
             />
             <EventComposerLocationPill
               value={state().location}

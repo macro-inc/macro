@@ -47,9 +47,8 @@ export interface CalendarEvent {
   /** Direct conference join URL, when available. */
   conferenceUrl?: string;
   /**
-   * Which conferencing system backs `conferenceUrl`. Only `google_meet` is
-   * one Macro can attach and detach; anything else is shown for joining but
-   * never rewritten.
+   * Which conferencing system backs `conferenceUrl`. Macro can generate a
+   * Google Meet; other conferencing is preserved unless explicitly replaced.
    */
   conferenceProvider?: ConferenceProvider;
   /** Event organizer display name. */
