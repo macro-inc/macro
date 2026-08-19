@@ -67,10 +67,8 @@ where
     {
         let connection = RuntimeConnection::connect(carrier);
 
-        // Replacing drops the old connection's handle. Its router keeps running
-        // until its socket closes, and the sessions on it fail their next
-        // action - which rebinds them here.
-        if self.connections.insert(bot, connection).is_some() {
+        if let Some(displaced) = self.connections.insert(bot, connection) {
+            displaced.evict();
             tracing::info!(%bot, "a redialed runtime replaced this bot's connection");
         }
     }

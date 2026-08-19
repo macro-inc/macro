@@ -220,6 +220,23 @@ async fn a_session_binding_after_the_runtime_reported_ready_is_told_so() {
 }
 
 #[tokio::test]
+async fn evicting_ends_the_sessions_a_displaced_connection_was_carrying() {
+    let connection = RuntimeConnection::connect(SilentSocket);
+    let attachment = connection.bind(AgentSessionId::TEST_A).await;
+    let (_outbound, mut inbound) = attachment.connector.split();
+
+    // `SilentSocket` never closes, which is the case eviction exists for: a
+    // displaced runtime whose socket is still perfectly healthy. Nothing else
+    // would ever end this connection.
+    connection.evict();
+
+    assert!(
+        inbound.recv().await.is_none(),
+        "the displaced session's queue should be closed at once"
+    );
+}
+
+#[tokio::test]
 async fn only_one_session_is_asked_to_run_the_handshake() {
     let connection = RuntimeConnection::connect(SilentSocket);
     connection

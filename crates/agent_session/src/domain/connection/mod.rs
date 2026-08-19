@@ -19,8 +19,8 @@
 //! session id, and system events belong to the connection itself.
 
 use std::collections::HashMap;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, OnceLock};
 
 use agent_client_protocol::RawJsonRpcMessage;
 use agent_client_protocol::schema::v1::{RequestId, Response, SessionId};
@@ -170,6 +170,7 @@ pub struct RuntimeConnection<Sender> {
     runtime_ready: AtomicBool,
     bound: Bound,
     routes: Mutex<Routes>,
+    router: OnceLock<tokio::task::AbortHandle>,
 }
 
 impl<Sender> RuntimeConnection<Sender>
@@ -193,11 +194,19 @@ where
             runtime_ready: AtomicBool::new(false),
             bound: DashMap::new(),
             routes: Mutex::new(Routes::default()),
+            router: OnceLock::new(),
         });
-        // Routing runs for as long as the carrier does; it ends by itself when
-        // the far side closes, which closes every bound session's queue.
-        tokio::spawn(Arc::clone(&connection).route_inbound(inbound));
+        let router = tokio::spawn(Arc::clone(&connection).route_inbound(inbound));
+        let _ = connection.router.set(router.abort_handle());
         connection
+    }
+
+    /// Stop serving this connection: it has been displaced by a newer dial.
+    pub fn evict(&self) {
+        self.bound.clear();
+        if let Some(router) = self.router.get() {
+            router.abort();
+        }
     }
 
     /// The gate every session on this connection shares.

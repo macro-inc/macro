@@ -142,12 +142,15 @@ pub(crate) struct WebSocketWire<Rx> {
 }
 
 /// The sending half: serializes and hands the text to the pump's write half.
-pub(crate) struct WebSocketSender<Tx> {
+///
+/// Not parameterized by the message type: the wire carries JSON text, so any
+/// serializable message can go out on it, and which one does is the caller's
+/// business rather than this half's.
+pub(crate) struct WebSocketSender {
     outgoing: mpsc::UnboundedSender<String>,
-    message: std::marker::PhantomData<fn(Tx)>,
 }
 
-impl<Tx> TransportSender<Tx> for WebSocketSender<Tx>
+impl<Tx> TransportSender<Tx> for WebSocketSender
 where
     Tx: Serialize + Send + Sync + 'static,
 {
@@ -165,14 +168,13 @@ where
     Tx: Serialize + Send + Sync + 'static,
     Rx: Send + 'static,
 {
-    type Sender = WebSocketSender<Tx>;
+    type Sender = WebSocketSender;
     type Receiver = mpsc::UnboundedReceiver<Rx>;
 
     fn split(self) -> (Self::Sender, Self::Receiver) {
         (
             WebSocketSender {
                 outgoing: self.outgoing,
-                message: std::marker::PhantomData,
             },
             self.incoming,
         )
