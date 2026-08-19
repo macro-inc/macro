@@ -106,6 +106,7 @@
               "AI/mcp/tools/mark-notifications-seen",
               "AI/mcp/tools/move-to-project",
               "AI/mcp/tools/name-search",
+              "AI/mcp/tools/read-activity",
               "AI/mcp/tools/read-call-record",
               "AI/mcp/tools/read-channel-message-context",
               "AI/mcp/tools/read-channel-messages",
