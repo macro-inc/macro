@@ -41,6 +41,13 @@ Supported partition literals:
 Every reachable literal may be combined with GraphQL expression fields `and`,
 `or`, and `not`. No unsupported reachable leaf is ignored.
 
+Optimistic Document, Project, and Chat payloads are projected as durable ordered
+replacement, direct-field patch, or deletion overlays. Missing optimistic
+`updatedAt` values use the queue enqueue time provisionally and are replaced by
+the authoritative timestamp on settlement. Query-relevant uncertainty, more
+than 128 distinct optimistically touched records, or a required overfetch above
+the 500-record query bound causes exact network fallback.
+
 ## Conservative unsupported-partition exclusion
 
 The frontend's `defineQueryFilters` mechanically excludes unreferenced entity

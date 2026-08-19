@@ -25,7 +25,7 @@ The predicate index is justified only when arbitrary supported GraphQL ASTs must
 7. The first support profile is `soup-flat-v1`, defined below. Expansion is profile-versioned and driven by measured frontend request shapes.
 8. Browser Turso/OPFS is the only persistence target. `cache-sqlite` and Tauri are out of scope.
 9. The server remains corpus, authorization, and pagination authority. The first local API returns only an initial placeholder page and has no local continuation cursor.
-10. Optimistic updates are not locally reprojected in the first profile. A potentially relevant optimistic update makes the affected local scope incomplete until authoritative replacement data arrives.
+10. Supported optimistic direct-field updates are durably reprojected as ordered overlays. Deterministic overlays remain locally queryable offline; query-relevant uncertainty falls back until authoritative settlement.
 11. The existing fuzzy Quick Access search remains separate.
 12. Filter semantics remain isolated from cache and storage implementation details.
 
@@ -120,7 +120,7 @@ The compiler may recognize positive nil-ID exclusion sentinels for unsupported p
 - substring text matching;
 - `ViewedAt` and `ViewedUpdated` sorting;
 - local cursor pagination;
-- locally projected optimistic state.
+- relation-backed or otherwise non-deterministic optimistic projection state.
 
 These are deferred product capabilities, not silently false predicates.
 
@@ -286,7 +286,8 @@ Rules:
 - a potentially relevant update without a valid replacement projection removes queryable facts and marks the record dirty;
 - deletion removes the projection;
 - cache clear removes all projections;
-- optimistic writes affecting a supported partition mark it incomplete until settlement supplies authoritative projection data;
+- deterministic optimistic direct-field writes persist ordered replacement, patch, or deletion overlays alongside the mutation queue;
+- uncertain optimistic writes fall back only when their partition/attribute dependencies intersect the query;
 - any dirty, missing, or incompatible record in a queried partition returns `Incomplete`;
 - unsupported compilation fails before entering `cache-core`.
 
@@ -380,7 +381,8 @@ For every `soup-flat-v1` literal:
 - record and projection writes are atomic;
 - stale facts disappear on replacement;
 - delete and clear cascade;
-- dirty/missing/incompatible and optimistic states fall back;
+- dirty/missing/incompatible and query-relevant uncertain optimistic states fall back;
+- deterministic optimistic create, patch, and delete overlays survive restart and preserve top-N ordering;
 - physical browser-schema reset remains safe.
 
 ### Performance and frontend tests

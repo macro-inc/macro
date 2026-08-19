@@ -5,10 +5,11 @@ use std::str::FromStr;
 
 use item_filter_index::vocabulary;
 use model_file_type::FileType;
+#[cfg(feature = "models")]
 use models_soup::{chat::SoupChat, document::SoupDocument, item::SoupItem, project::SoupProject};
 use predicate_index::{
-    ExactFact, ExactValue, IndexDocument, IntegerFact, RecordKey, Token, ValidationError,
-    utc_timestamp_micros,
+    ExactAttributePatch, ExactFact, ExactValue, IndexDocument, IntegerAttributePatch, IntegerFact,
+    OptimisticProjectionMutation, RecordKey, Token, ValidationError, utc_timestamp_micros,
 };
 use thiserror::Error;
 
@@ -26,7 +27,167 @@ pub enum ProjectionError {
     Validation(#[from] ValidationError),
 }
 
+/// Supported direct-field Soup entity kind.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SoupFlatEntityKind {
+    /// Document projection.
+    Document,
+    /// Project projection.
+    Project,
+    /// Chat projection.
+    Chat,
+}
+
+impl SoupFlatEntityKind {
+    fn partition(self) -> Token {
+        match self {
+            Self::Document => vocabulary::document_partition(),
+            Self::Project => vocabulary::project_partition(),
+            Self::Chat => vocabulary::chat_partition(),
+        }
+    }
+}
+
+/// Complete direct fields needed to create an optimistic `soup-flat-v1` projection.
+#[derive(Debug, Clone)]
+pub struct DirectProjectionInput {
+    /// Normalized record key.
+    pub record_key: RecordKey,
+    /// Supported Soup entity kind.
+    pub kind: SoupFlatEntityKind,
+    /// Entity UUID.
+    pub id: uuid::Uuid,
+    /// Canonical owner identifier.
+    pub owner: String,
+    /// Project or parent UUID, when present.
+    pub project_id: Option<uuid::Uuid>,
+    /// Document file type, when present. Ignored for other kinds.
+    pub file_type: Option<String>,
+    /// Creation timestamp.
+    pub created_at: chrono::DateTime<chrono::Utc>,
+    /// Effective optimistic update timestamp.
+    pub updated_at: chrono::DateTime<chrono::Utc>,
+}
+
+/// Partial direct fields changed by one optimistic mutation.
+#[derive(Debug, Clone)]
+pub struct DirectProjectionPatchInput {
+    /// Normalized record key.
+    pub record_key: RecordKey,
+    /// Supported Soup entity kind.
+    pub kind: SoupFlatEntityKind,
+    /// Replacement owner when supplied.
+    pub owner: Option<String>,
+    /// Replacement project/parent value. Outer `None` means unchanged.
+    pub project_id: Option<Option<uuid::Uuid>>,
+    /// Replacement document file type. Outer `None` means unchanged.
+    pub file_type: Option<Option<String>>,
+    /// Replacement creation timestamp when supplied.
+    pub created_at: Option<chrono::DateTime<chrono::Utc>>,
+    /// Effective optimistic update timestamp.
+    pub updated_at: chrono::DateTime<chrono::Utc>,
+}
+
+/// Generate a complete optimistic projection from direct Soup fields.
+pub fn project_direct_fields(
+    input: DirectProjectionInput,
+) -> Result<IndexDocument, ProjectionError> {
+    let mut exact_facts = common_exact_facts(input.id, input.owner)?;
+    if let Some(project_id) = input.project_id {
+        exact_facts.push(uuid_fact(vocabulary::project_id(), project_id)?);
+    }
+    if input.kind == SoupFlatEntityKind::Document
+        && let Some(file_type) = input.file_type
+    {
+        let canonical = FileType::from_str(&file_type)
+            .map_err(|_| ProjectionError::InvalidFileType(file_type))?
+            .to_string();
+        exact_facts.push(utf8_fact(vocabulary::file_type(), canonical)?);
+    }
+    projection(
+        input.record_key,
+        input.kind.partition(),
+        exact_facts,
+        input.created_at,
+        input.updated_at,
+    )
+}
+
+/// Generate a generic optimistic patch from partial direct Soup fields.
+pub fn patch_direct_fields(
+    input: DirectProjectionPatchInput,
+) -> Result<OptimisticProjectionMutation, ProjectionError> {
+    let mut exact = Vec::new();
+    if let Some(owner) = input.owner {
+        exact.push(ExactAttributePatch {
+            attribute: vocabulary::owner(),
+            values: vec![ExactValue::utf8(owner)?],
+        });
+    }
+    if let Some(project_id) = input.project_id {
+        exact.push(ExactAttributePatch {
+            attribute: vocabulary::project_id(),
+            values: project_id
+                .map(|project_id| ExactValue::new(project_id.as_bytes()))
+                .transpose()?
+                .into_iter()
+                .collect(),
+        });
+    }
+    if input.kind == SoupFlatEntityKind::Document
+        && let Some(file_type) = input.file_type
+    {
+        let values = file_type
+            .map(|file_type| -> Result<ExactValue, ProjectionError> {
+                let canonical = FileType::from_str(&file_type)
+                    .map_err(|_| ProjectionError::InvalidFileType(file_type))?
+                    .to_string();
+                Ok(ExactValue::utf8(canonical)?)
+            })
+            .transpose()?
+            .into_iter()
+            .collect();
+        exact.push(ExactAttributePatch {
+            attribute: vocabulary::file_type(),
+            values,
+        });
+    }
+
+    let mut integers = Vec::new();
+    let mut sorts = Vec::new();
+    if let Some(created_at) = input.created_at {
+        let value = utc_timestamp_micros(created_at);
+        integers.push(IntegerAttributePatch {
+            attribute: vocabulary::created_at(),
+            values: vec![value],
+        });
+        sorts.push(IntegerFact {
+            attribute: vocabulary::created_at(),
+            value,
+        });
+    }
+    let updated_at = utc_timestamp_micros(input.updated_at);
+    integers.push(IntegerAttributePatch {
+        attribute: vocabulary::updated_at(),
+        values: vec![updated_at],
+    });
+    sorts.push(IntegerFact {
+        attribute: vocabulary::updated_at(),
+        value: updated_at,
+    });
+
+    Ok(OptimisticProjectionMutation::Patch {
+        record_key: input.record_key,
+        profile: vocabulary::profile(),
+        partition: input.kind.partition(),
+        exact,
+        integers,
+        sorts,
+    })
+}
+
 /// Project a supported authoritative Soup item using a caller-supplied normalized key.
+#[cfg(feature = "models")]
 ///
 /// Deferred entity variants return `None` and are never represented as complete
 /// `soup-flat-v1` index documents.
@@ -50,66 +211,57 @@ pub fn project_soup_item<T>(
 }
 
 /// Project direct Document fields required by `soup-flat-v1`.
+#[cfg(feature = "models")]
 pub fn project_document<T>(
     record_key: RecordKey,
     document: &SoupDocument<T>,
 ) -> Result<IndexDocument, ProjectionError> {
-    let mut exact_facts = common_exact_facts(document.id, document.owner_id.to_string())?;
-    if let Some(project_id) = document.project_id {
-        exact_facts.push(uuid_fact(vocabulary::project_id(), project_id)?);
-    }
-    if let Some(file_type) = document.file_type.as_deref() {
-        let canonical = FileType::from_str(file_type)
-            .map_err(|_| ProjectionError::InvalidFileType(file_type.to_owned()))?
-            .to_string();
-        exact_facts.push(utf8_fact(vocabulary::file_type(), canonical)?);
-    }
-
-    projection(
+    project_direct_fields(DirectProjectionInput {
         record_key,
-        vocabulary::document_partition(),
-        exact_facts,
-        document.created_at,
-        document.updated_at,
-    )
+        kind: SoupFlatEntityKind::Document,
+        id: document.id,
+        owner: document.owner_id.to_string(),
+        project_id: document.project_id,
+        file_type: document.file_type.clone(),
+        created_at: document.created_at,
+        updated_at: document.updated_at,
+    })
 }
 
 /// Project direct Project fields required by `soup-flat-v1`.
+#[cfg(feature = "models")]
 pub fn project_project<T>(
     record_key: RecordKey,
     project: &SoupProject<T>,
 ) -> Result<IndexDocument, ProjectionError> {
-    let mut exact_facts = common_exact_facts(project.id, project.owner_id.to_string())?;
-    if let Some(parent_id) = project.parent_id {
-        exact_facts.push(uuid_fact(vocabulary::project_id(), parent_id)?);
-    }
-
-    projection(
+    project_direct_fields(DirectProjectionInput {
         record_key,
-        vocabulary::project_partition(),
-        exact_facts,
-        project.created_at,
-        project.updated_at,
-    )
+        kind: SoupFlatEntityKind::Project,
+        id: project.id,
+        owner: project.owner_id.to_string(),
+        project_id: project.parent_id,
+        file_type: None,
+        created_at: project.created_at,
+        updated_at: project.updated_at,
+    })
 }
 
 /// Project direct Chat fields required by `soup-flat-v1`.
+#[cfg(feature = "models")]
 pub fn project_chat<T>(
     record_key: RecordKey,
     chat: &SoupChat<T>,
 ) -> Result<IndexDocument, ProjectionError> {
-    let mut exact_facts = common_exact_facts(chat.id, chat.owner_id.to_string())?;
-    if let Some(project_id) = chat.project_id {
-        exact_facts.push(uuid_fact(vocabulary::project_id(), project_id)?);
-    }
-
-    projection(
+    project_direct_fields(DirectProjectionInput {
         record_key,
-        vocabulary::chat_partition(),
-        exact_facts,
-        chat.created_at,
-        chat.updated_at,
-    )
+        kind: SoupFlatEntityKind::Chat,
+        id: chat.id,
+        owner: chat.owner_id.to_string(),
+        project_id: chat.project_id,
+        file_type: None,
+        created_at: chat.created_at,
+        updated_at: chat.updated_at,
+    })
 }
 
 fn common_exact_facts(id: uuid::Uuid, owner: String) -> Result<Vec<ExactFact>, ValidationError> {

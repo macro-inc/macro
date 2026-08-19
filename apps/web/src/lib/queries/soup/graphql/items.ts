@@ -86,8 +86,7 @@ export function createGraphqlSoupAstItemsQuery(
   const firstPageInput = createMemo(() => inputForCursor(null));
   const isSupported = () => firstPageInput() !== undefined;
   const [localPlaceholder, setLocalPlaceholder] = createSignal<
-    | { data: SoupAstItemsData; optimistic: boolean }
-    | undefined
+    { data: SoupAstItemsData; optimistic: boolean } | undefined
   >();
   const [cacheRevision, setCacheRevision] = createSignal(0);
   const soupItemSelection = selectRecords(SoupItemFieldsFragmentDoc);
@@ -218,7 +217,9 @@ export function createGraphqlSoupAstItemsQuery(
     isFetchingNextPage: () => query.isFetchingNextPage,
     isPlaceholderData: () => {
       const local = localPlaceholder();
-      return local !== undefined && (query.data === undefined || local.optimistic);
+      return (
+        local !== undefined && (query.data === undefined || local.optimistic)
+      );
     },
     hasNextPage: () => query.hasNextPage,
     fetchNextPage: async () => {

@@ -23,16 +23,18 @@ use graphql_soup_filter_input::materialize_graphql_filter;
 use item_filter_index::{
     LocalCompileOutcome, SoupFlatRequest, SoupIndexSort, compile_soup_flat_v1, vocabulary,
 };
-use model_file_type::FileType;
 use predicate_index::{
-    ExactAttributePatch, ExactFact, ExactValue, IndexDocument, IntegerAttributePatch, IntegerFact,
-    OptimisticProjectionMutation, Profile, RecordKey, SortDirection, Token,
+    ExactFact, ExactValue, IndexDocument, IntegerFact, OptimisticProjectionMutation, Profile,
+    RecordKey, SortDirection, Token,
 };
 use serde::{Deserialize, Serialize};
+use soup_filter_projection::{
+    DirectProjectionInput, DirectProjectionPatchInput, SoupFlatEntityKind, patch_direct_fields,
+    project_direct_fields,
+};
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
-use std::str::FromStr;
 use turso_opfs::{OpenResult, OpfsOwner};
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::future_to_promise;
@@ -449,177 +451,102 @@ fn optimistic_projection_for_object(
         };
     }
 
-    if let Some(document) = complete_optimistic_projection(
-        record_key.clone(),
-        partition.clone(),
-        object,
-        created_at_ms,
-    )? {
-        return Some(OptimisticProjectionMutation::Replace(document));
-    }
-
-    let mut exact = Vec::new();
-    if let Some(owner) = object.get("ownerId") {
-        exact.push(ExactAttributePatch {
-            attribute: vocabulary::owner(),
-            values: vec![ExactValue::utf8(owner.as_str()?).ok()?],
-        });
-    }
-    let project_field = if partition == vocabulary::project_partition() {
+    let kind = projection_kind(&partition)?;
+    let project_field = if kind == SoupFlatEntityKind::Project {
         "parentId"
     } else {
         "projectId"
     };
-    if let Some(project) = object.get(project_field) {
-        exact.push(ExactAttributePatch {
-            attribute: vocabulary::project_id(),
-            values: optional_uuid_exact_values(project)?,
-        });
-    }
-    if partition == vocabulary::document_partition()
-        && let Some(file_type) = object.get("fileType")
+    let updated_at = match object.get("updatedAt") {
+        Some(value) => graphql_timestamp(value)?,
+        None => chrono::DateTime::from_timestamp_millis(created_at_ms)?,
+    };
+    let required_optional_fields_present = object.contains_key(project_field)
+        && (kind != SoupFlatEntityKind::Document || object.contains_key("fileType"));
+    if required_optional_fields_present
+        && object.contains_key("ownerId")
+        && object.contains_key("createdAt")
     {
-        let values = match file_type {
-            serde_json::Value::Null => Vec::new(),
-            serde_json::Value::String(value) => {
-                vec![ExactValue::utf8(FileType::from_str(value).ok()?.to_string()).ok()?]
+        return Some(OptimisticProjectionMutation::Replace(
+            project_direct_fields(DirectProjectionInput {
+                record_key,
+                kind,
+                id: uuid::Uuid::parse_str(object.get("id")?.as_str()?).ok()?,
+                owner: object.get("ownerId")?.as_str()?.to_owned(),
+                project_id: optional_uuid(object.get(project_field)?)?,
+                file_type: if kind == SoupFlatEntityKind::Document {
+                    optional_string(object.get("fileType")?)?
+                } else {
+                    None
+                },
+                created_at: graphql_timestamp(object.get("createdAt")?)?,
+                updated_at,
+            })
+            .ok()?,
+        ));
+    }
+
+    patch_direct_fields(DirectProjectionPatchInput {
+        record_key,
+        kind,
+        owner: match object.get("ownerId") {
+            Some(value) => Some(value.as_str()?.to_owned()),
+            None => None,
+        },
+        project_id: match object.get(project_field) {
+            Some(value) => Some(optional_uuid(value)?),
+            None => None,
+        },
+        file_type: if kind == SoupFlatEntityKind::Document {
+            match object.get("fileType") {
+                Some(value) => Some(optional_string(value)?),
+                None => None,
             }
-            _ => return None,
-        };
-        exact.push(ExactAttributePatch {
-            attribute: vocabulary::file_type(),
-            values,
-        });
-    }
-
-    let mut integers = Vec::new();
-    let mut sorts = Vec::new();
-    if let Some(created_at) = object.get("createdAt") {
-        let value = graphql_timestamp_micros(created_at)?;
-        integers.push(IntegerAttributePatch {
-            attribute: vocabulary::created_at(),
-            values: vec![value],
-        });
-        sorts.push(IntegerFact {
-            attribute: vocabulary::created_at(),
-            value,
-        });
-    }
-    let updated_at = match object.get("updatedAt") {
-        Some(value) => graphql_timestamp_micros(value)?,
-        None => created_at_ms.saturating_mul(1_000),
-    };
-    integers.push(IntegerAttributePatch {
-        attribute: vocabulary::updated_at(),
-        values: vec![updated_at],
-    });
-    sorts.push(IntegerFact {
-        attribute: vocabulary::updated_at(),
-        value: updated_at,
-    });
-
-    Some(OptimisticProjectionMutation::Patch {
-        record_key,
-        profile: vocabulary::profile(),
-        partition,
-        exact,
-        integers,
-        sorts,
+        } else {
+            None
+        },
+        created_at: match object.get("createdAt") {
+            Some(value) => Some(graphql_timestamp(value)?),
+            None => None,
+        },
+        updated_at,
     })
+    .ok()
 }
 
-fn complete_optimistic_projection(
-    record_key: RecordKey,
-    partition: Token,
-    object: &serde_json::Map<String, serde_json::Value>,
-    created_at_ms: i64,
-) -> Option<Option<IndexDocument>> {
-    let required_optional_fields_present = if partition == vocabulary::document_partition() {
-        object.contains_key("projectId") && object.contains_key("fileType")
-    } else if partition == vocabulary::project_partition() {
-        object.contains_key("parentId")
+fn projection_kind(partition: &Token) -> Option<SoupFlatEntityKind> {
+    if partition == &vocabulary::document_partition() {
+        Some(SoupFlatEntityKind::Document)
+    } else if partition == &vocabulary::project_partition() {
+        Some(SoupFlatEntityKind::Project)
+    } else if partition == &vocabulary::chat_partition() {
+        Some(SoupFlatEntityKind::Chat)
     } else {
-        object.contains_key("projectId")
-    };
-    if !required_optional_fields_present
-        || !object.contains_key("ownerId")
-        || !object.contains_key("createdAt")
-    {
-        return Some(None);
+        None
     }
-
-    let id = uuid::Uuid::parse_str(object.get("id")?.as_str()?).ok()?;
-    let owner = object.get("ownerId")?.as_str()?;
-    let created_at = graphql_timestamp_micros(object.get("createdAt")?)?;
-    let updated_at = match object.get("updatedAt") {
-        Some(value) => graphql_timestamp_micros(value)?,
-        None => created_at_ms.saturating_mul(1_000),
-    };
-    let mut exact_facts = vec![
-        ExactFact {
-            attribute: vocabulary::id(),
-            value: ExactValue::new(id.as_bytes()).ok()?,
-        },
-        ExactFact {
-            attribute: vocabulary::owner(),
-            value: ExactValue::utf8(owner).ok()?,
-        },
-    ];
-    let project_field = if partition == vocabulary::project_partition() {
-        "parentId"
-    } else {
-        "projectId"
-    };
-    for value in optional_uuid_exact_values(object.get(project_field)?)? {
-        exact_facts.push(ExactFact {
-            attribute: vocabulary::project_id(),
-            value,
-        });
-    }
-    if partition == vocabulary::document_partition()
-        && let Some(value) = object.get("fileType")
-        && !value.is_null()
-    {
-        exact_facts.push(ExactFact {
-            attribute: vocabulary::file_type(),
-            value: ExactValue::utf8(FileType::from_str(value.as_str()?).ok()?.to_string()).ok()?,
-        });
-    }
-    let created_fact = IntegerFact {
-        attribute: vocabulary::created_at(),
-        value: created_at,
-    };
-    let updated_fact = IntegerFact {
-        attribute: vocabulary::updated_at(),
-        value: updated_at,
-    };
-    let document = IndexDocument {
-        record_key,
-        profile: vocabulary::profile(),
-        partition,
-        exact_facts,
-        integer_facts: vec![created_fact.clone(), updated_fact.clone()],
-        sort_facts: vec![created_fact, updated_fact],
-    };
-    document.validate().ok()?;
-    Some(Some(document))
 }
 
-fn optional_uuid_exact_values(value: &serde_json::Value) -> Option<Vec<ExactValue>> {
+fn optional_uuid(value: &serde_json::Value) -> Option<Option<uuid::Uuid>> {
     match value {
-        serde_json::Value::Null => Some(Vec::new()),
-        serde_json::Value::String(value) => Some(vec![
-            ExactValue::new(uuid::Uuid::parse_str(value).ok()?.as_bytes()).ok()?,
-        ]),
+        serde_json::Value::Null => Some(None),
+        serde_json::Value::String(value) => Some(Some(uuid::Uuid::parse_str(value).ok()?)),
         _ => None,
     }
 }
 
-fn graphql_timestamp_micros(value: &serde_json::Value) -> Option<i64> {
+fn optional_string(value: &serde_json::Value) -> Option<Option<String>> {
+    match value {
+        serde_json::Value::Null => Some(None),
+        serde_json::Value::String(value) => Some(Some(value.clone())),
+        _ => None,
+    }
+}
+
+fn graphql_timestamp(value: &serde_json::Value) -> Option<chrono::DateTime<chrono::Utc>> {
     Some(
         chrono::DateTime::parse_from_rfc3339(value.as_str()?)
             .ok()?
-            .timestamp_micros(),
+            .with_timezone(&chrono::Utc),
     )
 }
 

@@ -1908,7 +1908,8 @@ impl<S: PredicateIndexStorage> Engine<S> {
             PredicateQueryResult::Incomplete => return Ok(PredicateQueryResult::Incomplete),
         };
 
-        let mut keys = base_keys.into_iter().collect::<BTreeSet<_>>();
+        let base_keys = base_keys.into_iter().collect::<BTreeSet<_>>();
+        let mut keys = base_keys.clone();
         keys.extend(touched.iter().cloned());
         let keys = keys.into_iter().collect::<Vec<_>>();
         let loaded = self
@@ -1917,6 +1918,13 @@ impl<S: PredicateIndexStorage> Engine<S> {
             .await
             .map_err(EngineError::Storage)?;
         if loaded.len() != keys.len() {
+            return Ok(PredicateQueryResult::Incomplete);
+        }
+        if keys
+            .iter()
+            .zip(&loaded)
+            .any(|(key, document)| base_keys.contains(key) && document.is_none())
+        {
             return Ok(PredicateQueryResult::Incomplete);
         }
         let mut documents = keys

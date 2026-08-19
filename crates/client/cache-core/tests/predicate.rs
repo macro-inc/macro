@@ -23,8 +23,12 @@ fn record_key() -> RecordKey {
 }
 
 fn projection(owner: &str) -> IndexDocument {
+    projection_for(record_key(), owner, 10)
+}
+
+fn projection_for(record_key: RecordKey, owner: &str, updated_at: i64) -> IndexDocument {
     IndexDocument {
-        record_key: record_key(),
+        record_key,
         profile: profile(),
         partition: token("document"),
         exact_facts: vec![ExactFact {
@@ -34,7 +38,7 @@ fn projection(owner: &str) -> IndexDocument {
         integer_facts: vec![],
         sort_facts: vec![IntegerFact {
             attribute: token("updated-at"),
-            value: 10,
+            value: updated_at,
         }],
     }
 }
@@ -274,6 +278,56 @@ fn optimistic_fact_patches_update_membership_and_sort_facts() {
                 .await
                 .unwrap(),
             PredicateQueryResult::Optimistic(vec![record_key()])
+        );
+    });
+}
+
+#[test]
+fn optimistic_deletion_overfetches_authoritative_replacement_candidates() {
+    pollster::block_on(async {
+        let mut engine = Engine::new(InMemoryStorage::new());
+        let first = RecordKey::new("GraphqlSoupDocument:doc-1").unwrap();
+        let second = RecordKey::new("GraphqlSoupDocument:doc-2").unwrap();
+        engine
+            .put_records_with_projections(
+                None,
+                vec![
+                    (
+                        EntityKey::entity("GraphqlSoupDocument", &["doc-1"]),
+                        Record::default(),
+                    ),
+                    (
+                        EntityKey::entity("GraphqlSoupDocument", &["doc-2"]),
+                        Record::default(),
+                    ),
+                ],
+                vec![
+                    ProjectionMutation::Replace(projection_for(first.clone(), "owner-1", 30)),
+                    ProjectionMutation::Replace(projection_for(second.clone(), "owner-1", 20)),
+                ],
+            )
+            .await
+            .unwrap();
+        let mut one = query("owner-1").as_query().clone();
+        one.limit = 1;
+        let one = ValidatedIndexQuery::new(one).unwrap();
+        assert_eq!(
+            engine.query_predicate_index(&one).await.unwrap(),
+            PredicateQueryResult::Complete(vec![first.clone()])
+        );
+
+        begin_with_projection(
+            &mut engine,
+            vec![OptimisticProjectionMutation::Delete {
+                record_key: first,
+                profile: profile(),
+                partition: token("document"),
+            }],
+        )
+        .await;
+        assert_eq!(
+            engine.query_predicate_index(&one).await.unwrap(),
+            PredicateQueryResult::Optimistic(vec![second])
         );
     });
 }

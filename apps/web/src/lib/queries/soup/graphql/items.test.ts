@@ -141,7 +141,7 @@ describe('createGraphqlSoupAstItemsQuery', () => {
   it('keeps an optimistic local page until cache settlement', async () => {
     const fake = makeFakeClient();
     getGraphqlSoupClientMock.mockReturnValue(fake.client);
-    let notifyCacheChanged = () => undefined;
+    let notifyCacheChanged: () => void = () => undefined;
     getGraphqlSoupCacheHostMock.mockReturnValue({
       entityFilter: entityFilterMock,
       onCacheChanged: (callback: () => void) => {
