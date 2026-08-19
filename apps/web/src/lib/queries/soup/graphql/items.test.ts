@@ -96,10 +96,12 @@ describe('createGraphqlSoupAstItemsQuery', () => {
     getGraphqlSoupClientMock.mockReturnValue(fake.client);
     getGraphqlSoupCacheHostMock.mockReturnValue({
       entityFilter: entityFilterMock,
+      onCacheChanged: () => () => undefined,
     });
     entityFilterMock.mockResolvedValue({
       kind: 'complete',
       keys: ['GraphqlSoupDocument:task-1'],
+      optimistic: false,
     });
     readRecordsByKeysMock.mockResolvedValue([
       {
@@ -134,6 +136,67 @@ describe('createGraphqlSoupAstItemsQuery', () => {
       });
     });
     expect(entityFilterMock).toHaveBeenCalled();
+  });
+
+  it('keeps an optimistic local page until cache settlement', async () => {
+    const fake = makeFakeClient();
+    getGraphqlSoupClientMock.mockReturnValue(fake.client);
+    let notifyCacheChanged = () => undefined;
+    getGraphqlSoupCacheHostMock.mockReturnValue({
+      entityFilter: entityFilterMock,
+      onCacheChanged: (callback: () => void) => {
+        notifyCacheChanged = callback;
+        return () => undefined;
+      },
+    });
+    entityFilterMock
+      .mockResolvedValueOnce({
+        kind: 'complete',
+        keys: ['GraphqlSoupDocument:task-1'],
+        optimistic: true,
+      })
+      .mockResolvedValueOnce({
+        kind: 'complete',
+        keys: ['GraphqlSoupDocument:task-1'],
+        optimistic: false,
+      });
+    readRecordsByKeysMock.mockResolvedValue([
+      {
+        recordKey: 'GraphqlSoupDocument:task-1',
+        record: { id: 'task-1', type: 'document', name: 'Optimistic task' },
+      },
+    ]);
+
+    await new Promise<void>((resolve) => {
+      createRoot((dispose) => {
+        const query = createGraphqlSoupAstItemsQuery(
+          () => ({ params: {}, body: {} }) as never,
+          () => ({ enabled: true })
+        );
+
+        void vi
+          .waitFor(() => {
+            expect(query.data()?.entities[0]?.name).toBe('Optimistic task');
+            expect(query.isPlaceholderData()).toBe(true);
+          })
+          .then(async () => {
+            fake.executions[0]?.next({
+              items: [{ id: 'task-1', type: 'document', name: 'Network task' }],
+              next_cursor: null,
+            });
+            expect(query.data()?.entities[0]?.name).toBe('Optimistic task');
+
+            notifyCacheChanged();
+            await vi.waitFor(() => {
+              expect(entityFilterMock).toHaveBeenCalledTimes(2);
+              expect(query.data()?.entities[0]?.name).toBe('Network task');
+              expect(query.isPlaceholderData()).toBe(false);
+            });
+            dispose();
+            resolve();
+          });
+      });
+    });
   });
 
   it('retains identical page projections across cache re-executions', () => {

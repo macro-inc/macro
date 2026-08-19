@@ -1,6 +1,7 @@
 #![cfg(not(target_arch = "wasm32"))]
 
 use cache_core::{
+    engine::{BeginOptimisticWrite, Engine},
     predicate::{
         PredicateIndexStorage, PredicateQueryResult, ProjectionIncompleteKind, ProjectionMutation,
     },
@@ -9,9 +10,9 @@ use cache_core::{
 };
 use cache_turso::TursoStorage;
 use predicate_index::{
-    ExactFact, ExactValue, IndexDocument, IndexQuery, IntegerFact, PartitionPredicate,
-    PredicateExpr, Profile, RangeBound, RecordKey, SortDirection, Token, ValidatedIndexQuery,
-    evaluate_reference,
+    ExactFact, ExactValue, IndexDocument, IndexQuery, IntegerFact, OptimisticProjectionMutation,
+    PartitionPredicate, PredicateExpr, Profile, RangeBound, RecordKey, SortDirection, Token,
+    ValidatedIndexQuery, evaluate_reference,
 };
 
 fn token(value: &str) -> Token {
@@ -175,6 +176,86 @@ fn turso_matches_reference_and_lifecycle_is_exact() {
         assert_eq!(
             storage.query_predicate_index(&query).await.unwrap(),
             PredicateQueryResult::Complete(vec![])
+        );
+    });
+}
+
+#[test]
+fn turso_rehydrates_and_queries_durable_optimistic_projection_layers() {
+    pollster::block_on(async {
+        let storage = TursoStorage::open_in_memory("predicate-optimistic").unwrap();
+        let mut engine = Engine::new(storage);
+        let base = document("GraphqlSoupDocument:1", "owner-1", 10, None);
+        engine
+            .put_records_with_projections(
+                None,
+                vec![(
+                    EntityKey::entity("GraphqlSoupDocument", &["1"]),
+                    Record::default(),
+                )],
+                vec![ProjectionMutation::Replace(base)],
+            )
+            .await
+            .unwrap();
+        let data = serde_json::json!({
+            "setEntityProperty": {
+                "id": "prop-1",
+                "displayName": "Status",
+                "value": {
+                    "__typename": "GraphqlStringPropertyValue",
+                    "stringValue": "doing"
+                }
+            }
+        });
+        let serde_json::Value::Object(variables) = serde_json::json!({
+            "input": {
+                "entityType": "DOCUMENT",
+                "entityId": "doc-1",
+                "propertyDefinitionId": "def-1",
+                "value": { "string": "doing" }
+            }
+        }) else {
+            unreachable!()
+        };
+        engine
+            .begin_optimistic_write_with_projections(
+                None,
+                BeginOptimisticWrite {
+                    query: r#"
+                        mutation SetEntityProperty($input: SetEntityPropertyInput!) {
+                          setEntityProperty(input: $input) {
+                            id
+                            displayName
+                            value {
+                              __typename
+                              ... on GraphqlStringPropertyValue { stringValue: value }
+                            }
+                          }
+                        }
+                    "#,
+                    operation_name: Some("SetEntityProperty"),
+                    variables: &variables,
+                    data: &data,
+                    link_patches: &[],
+                    revalidations: &[],
+                    created_at_ms: 1,
+                },
+                vec![OptimisticProjectionMutation::Replace(document(
+                    "GraphqlSoupDocument:1",
+                    "owner-1",
+                    20,
+                    None,
+                ))],
+            )
+            .await
+            .unwrap();
+
+        let mut reopened = Engine::new(engine.into_storage());
+        assert_eq!(
+            reopened.query_predicate_index(&query()).await.unwrap(),
+            PredicateQueryResult::Optimistic(vec![
+                RecordKey::new("GraphqlSoupDocument:1").unwrap()
+            ])
         );
     });
 }

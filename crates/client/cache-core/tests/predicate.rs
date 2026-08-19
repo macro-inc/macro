@@ -5,9 +5,9 @@ use cache_core::{
     value::{EntityKey, Record},
 };
 use predicate_index::{
-    ExactFact, ExactValue, IndexDocument, IndexQuery, IntegerFact, OptimisticProjectionMutation,
-    PartitionPredicate, PredicateExpr, Profile, RecordKey, SortDirection, Token,
-    ValidatedIndexQuery,
+    ExactAttributePatch, ExactFact, ExactValue, IndexDocument, IndexQuery, IntegerAttributePatch,
+    IntegerFact, OptimisticProjectionMutation, PartitionPredicate, PredicateExpr, Profile,
+    RecordKey, SortDirection, Token, ValidatedIndexQuery,
 };
 
 fn token(value: &str) -> Token {
@@ -204,14 +204,14 @@ fn optimistic_projection_layers_are_queryable_offline_and_survive_restart() {
                 .query_predicate_index(&query("owner-1"))
                 .await
                 .unwrap(),
-            PredicateQueryResult::Complete(vec![])
+            PredicateQueryResult::Optimistic(vec![])
         );
         assert_eq!(
             engine
                 .query_predicate_index(&query("owner-2"))
                 .await
                 .unwrap(),
-            PredicateQueryResult::Complete(vec![record_key()])
+            PredicateQueryResult::Optimistic(vec![record_key()])
         );
 
         let storage = engine.into_storage();
@@ -221,7 +221,59 @@ fn optimistic_projection_layers_are_queryable_offline_and_survive_restart() {
                 .query_predicate_index(&query("owner-2"))
                 .await
                 .unwrap(),
-            PredicateQueryResult::Complete(vec![record_key()])
+            PredicateQueryResult::Optimistic(vec![record_key()])
+        );
+    });
+}
+
+#[test]
+fn optimistic_fact_patches_update_membership_and_sort_facts() {
+    pollster::block_on(async {
+        let mut engine = Engine::new(InMemoryStorage::new());
+        let entity_key = EntityKey::entity("GraphqlSoupDocument", &["doc-1"]);
+        engine
+            .put_records_with_projections(
+                None,
+                vec![(entity_key, Record::default())],
+                vec![ProjectionMutation::Replace(projection("owner-1"))],
+            )
+            .await
+            .unwrap();
+        begin_with_projection(
+            &mut engine,
+            vec![OptimisticProjectionMutation::Patch {
+                record_key: record_key(),
+                profile: profile(),
+                partition: token("document"),
+                exact: vec![ExactAttributePatch {
+                    attribute: token("owner"),
+                    values: vec![ExactValue::utf8("owner-2").unwrap()],
+                }],
+                integers: vec![IntegerAttributePatch {
+                    attribute: token("updated-at"),
+                    values: vec![20],
+                }],
+                sorts: vec![IntegerFact {
+                    attribute: token("updated-at"),
+                    value: 20,
+                }],
+            }],
+        )
+        .await;
+
+        assert_eq!(
+            engine
+                .query_predicate_index(&query("owner-1"))
+                .await
+                .unwrap(),
+            PredicateQueryResult::Optimistic(vec![])
+        );
+        assert_eq!(
+            engine
+                .query_predicate_index(&query("owner-2"))
+                .await
+                .unwrap(),
+            PredicateQueryResult::Optimistic(vec![record_key()])
         );
     });
 }
@@ -254,7 +306,7 @@ fn optimistic_delete_and_query_scoped_uncertainty_are_composed() {
                 .query_predicate_index(&query("owner-1"))
                 .await
                 .unwrap(),
-            PredicateQueryResult::Complete(vec![record_key()])
+            PredicateQueryResult::Optimistic(vec![record_key()])
         );
 
         begin_with_projection(
@@ -290,7 +342,7 @@ fn optimistic_delete_and_query_scoped_uncertainty_are_composed() {
                 .query_predicate_index(&query("owner-1"))
                 .await
                 .unwrap(),
-            PredicateQueryResult::Complete(vec![])
+            PredicateQueryResult::Optimistic(vec![])
         );
     });
 }

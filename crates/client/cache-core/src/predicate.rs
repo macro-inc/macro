@@ -93,8 +93,10 @@ impl ProjectionMutation {
 /// Result of exact local index execution.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PredicateQueryResult {
-    /// Every known record in the queried profile/partitions was complete.
+    /// Every known authoritative record in the queried profile/partitions was complete.
     Complete(Vec<RecordKey>),
+    /// Complete effective result including one or more durable optimistic layers.
+    Optimistic(Vec<RecordKey>),
     /// At least one relevant projection was dirty, missing, or incompatible.
     Incomplete,
 }

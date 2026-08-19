@@ -60,7 +60,7 @@ export type EntityFilterCacheArgs = {
 };
 
 export type EntityFilterCacheResult =
-  | { kind: 'complete'; keys: string[] }
+  | { kind: 'complete'; keys: string[]; optimistic: boolean }
   | { kind: 'unsupported' }
   | { kind: 'incomplete' };
 

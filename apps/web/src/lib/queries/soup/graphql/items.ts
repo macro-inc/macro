@@ -29,6 +29,7 @@ import {
   createMemo,
   createSignal,
   on,
+  onCleanup,
 } from 'solid-js';
 import type { SoupAstBody, SoupAstItemsData, SoupAstParams } from '../items';
 import { mapSoupPageToEntityList } from '../transform-utils';
@@ -85,12 +86,24 @@ export function createGraphqlSoupAstItemsQuery(
   const firstPageInput = createMemo(() => inputForCursor(null));
   const isSupported = () => firstPageInput() !== undefined;
   const [localPlaceholder, setLocalPlaceholder] = createSignal<
-    SoupAstItemsData | undefined
+    | { data: SoupAstItemsData; optimistic: boolean }
+    | undefined
   >();
+  const [cacheRevision, setCacheRevision] = createSignal(0);
   const soupItemSelection = selectRecords(SoupItemFieldsFragmentDoc);
   let localRequest = 0;
 
   createEffect(() => {
+    const host = getGraphqlSoupCacheHost();
+    if (!host) return;
+    const unsubscribe = host.onCacheChanged(() => {
+      setCacheRevision((revision) => revision + 1);
+    });
+    onCleanup(unsubscribe);
+  });
+
+  createEffect(() => {
+    cacheRevision();
     const requestId = ++localRequest;
     setLocalPlaceholder(undefined);
     const input = firstPageInput();
@@ -125,15 +138,18 @@ export function createGraphqlSoupAstItemsQuery(
         });
         if (items.length !== result.keys.length) return;
         setLocalPlaceholder({
-          entities: mapSoupPageToEntityList(
-            { items, next_cursor: undefined },
-            {
-              instructionsIdQuery,
-              showSupportedForeignEntities:
-                queryOptions.showSupportedForeignEntities,
-            }
-          ),
-          groups: undefined,
+          optimistic: result.optimistic,
+          data: {
+            entities: mapSoupPageToEntityList(
+              { items, next_cursor: undefined },
+              {
+                instructionsIdQuery,
+                showSupportedForeignEntities:
+                  queryOptions.showSupportedForeignEntities,
+              }
+            ),
+            groups: undefined,
+          },
         });
       })
       .catch(() => {
@@ -190,15 +206,20 @@ export function createGraphqlSoupAstItemsQuery(
   );
 
   return {
-    data: () => query.data ?? localPlaceholder(),
+    data: () => {
+      const local = localPlaceholder();
+      return local?.optimistic ? local.data : (query.data ?? local?.data);
+    },
     error,
     isSupported,
     isEnabled: () => query.isEnabled,
     isLoading: () => query.isLoading && localPlaceholder() === undefined,
     isFetching: () => query.isFetching,
     isFetchingNextPage: () => query.isFetchingNextPage,
-    isPlaceholderData: () =>
-      query.data === undefined && localPlaceholder() !== undefined,
+    isPlaceholderData: () => {
+      const local = localPlaceholder();
+      return local !== undefined && (query.data === undefined || local.optimistic);
+    },
     hasNextPage: () => query.hasNextPage,
     fetchNextPage: async () => {
       await query.fetchNextPage();

@@ -274,7 +274,7 @@ struct JsEntityFilterRequest {
 #[derive(Serialize)]
 #[serde(tag = "kind", rename_all = "kebab-case")]
 enum JsEntityFilterResult {
-    Complete { keys: Vec<String> },
+    Complete { keys: Vec<String>, optimistic: bool },
     Unsupported,
     Incomplete,
 }
@@ -1287,6 +1287,14 @@ impl CacheEngine {
                                 .into_iter()
                                 .map(|key| key.as_str().to_owned())
                                 .collect(),
+                            optimistic: false,
+                        },
+                        PredicateQueryResult::Optimistic(keys) => JsEntityFilterResult::Complete {
+                            keys: keys
+                                .into_iter()
+                                .map(|key| key.as_str().to_owned())
+                                .collect(),
+                            optimistic: true,
                         },
                         PredicateQueryResult::Incomplete => JsEntityFilterResult::Incomplete,
                     }

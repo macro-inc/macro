@@ -1904,7 +1904,7 @@ impl<S: PredicateIndexStorage> Engine<S> {
             .await
             .map_err(EngineError::Storage)?
         {
-            PredicateQueryResult::Complete(keys) => keys,
+            PredicateQueryResult::Complete(keys) | PredicateQueryResult::Optimistic(keys) => keys,
             PredicateQueryResult::Incomplete => return Ok(PredicateQueryResult::Incomplete),
         };
 
@@ -1989,7 +1989,7 @@ impl<S: PredicateIndexStorage> Engine<S> {
                 }
             }
         }
-        Ok(PredicateQueryResult::Complete(
+        Ok(PredicateQueryResult::Optimistic(
             evaluate_reference(
                 query,
                 &documents.into_values().collect::<Vec<IndexDocument>>(),
