@@ -28,15 +28,18 @@ rate_limit = []
 return_passwordless_code = []
 
 [dependencies]
+aes-gcm = { workspace = true }
 calendar_events = { path = "../../crates/calendar_events" }
 analytics_client = { path = "../../crates/analytics_client" }
 anyhow = { workspace = true }
+async-trait = { workspace = true }
 async-stripe = { workspace = true, default-features = false, features = [
   "billing",
   "checkout",
   "runtime-tokio-hyper-rustls-webpki",
 ] }
 async-stripe-webhook = { version = "1.0.0-alpha.4", default-features = false }
+aws-sdk-kms = { workspace = true }
 aws-sdk-secretsmanager = { workspace = true }
 aws-sdk-sesv2 = { workspace = true }
 aws-sdk-sqs = { workspace = true }
@@ -149,6 +152,7 @@ user_quota = { path = "../../crates/user_quota" }
 utoipa = { workspace = true }
 utoipa-swagger-ui = { workspace = true }
 uuid = { workspace = true }
+zeroize = { workspace = true }
 doppler-config = { workspace = true }
 workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
 database_env_vars = { path = "../../crates/database_env_vars" }

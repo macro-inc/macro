@@ -15,6 +15,7 @@ publish = false
 
 ### BEGIN HAKARI SECTION
 [dependencies]
+aes-gcm = { version = "0.10", features = ["zeroize"] }
 ahash = { version = "0.8" }
 aho-corasick = { version = "1" }
 aws-config = { version = "1", features = ["behavior-version-latest"] }
@@ -142,6 +143,7 @@ zerocopy = { version = "0.8", default-features = false, features = ["derive", "s
 zeroize = { version = "1", features = ["derive"] }
 
 [build-dependencies]
+aes-gcm = { version = "0.10", features = ["zeroize"] }
 ahash = { version = "0.8" }
 aho-corasick = { version = "1" }
 aws-config = { version = "1", features = ["behavior-version-latest"] }
