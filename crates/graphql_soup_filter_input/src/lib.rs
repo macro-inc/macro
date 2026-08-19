@@ -187,9 +187,9 @@ macro_rules! filter_expr_input {
 }
 
 filter_expr_input!(
-    GraphqlPropertiesExpr,
-    GraphqlPropertiesBinaryExpr,
-    GraphqlPropertiesLiteral,
+    GraphqlFilterPropertiesExpr,
+    GraphqlFilterPropertiesBinaryExpr,
+    GraphqlFilterPropertiesLiteral,
     PropertiesLiteral,
     "PropertiesFilterExpr"
 );
@@ -197,16 +197,16 @@ filter_expr_input!(
 /// GraphQL input for matching a property value on an entity.
 #[derive(async_graphql::InputObject, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct GraphqlPropertiesLiteral {
+struct GraphqlFilterPropertiesLiteral {
     /// Property definition id to match.
     property_definition_id: ID,
     /// Optional entity type scope for the property match.
-    entity_type: Option<GraphqlPropertyEntityType>,
+    entity_type: Option<GraphqlFilterPropertyEntityType>,
     /// Value to compare against the property.
-    value: GraphqlPropertyMatchValue,
+    value: GraphqlFilterPropertyMatchValue,
 }
 
-impl IntoFilterExpr<PropertiesLiteral> for GraphqlPropertiesLiteral {
+impl IntoFilterExpr<PropertiesLiteral> for GraphqlFilterPropertiesLiteral {
     fn into_expr(self) -> async_graphql::Result<Expr<PropertiesLiteral>> {
         Ok(Expr::val(PropertiesLiteral {
             property_definition_id: parse_id(self.property_definition_id, "propertyDefinitionId")?,
@@ -221,14 +221,14 @@ impl IntoFilterExpr<PropertiesLiteral> for GraphqlPropertiesLiteral {
 /// GraphQL input value used when matching a property.
 #[derive(async_graphql::OneofObject, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-enum GraphqlPropertyMatchValue {
+enum GraphqlFilterPropertyMatchValue {
     /// Select option id to match.
     SelectOption(ID),
     /// Entity reference id to match.
     EntityRef(String),
 }
 
-impl GraphqlPropertyMatchValue {
+impl GraphqlFilterPropertyMatchValue {
     /// Convert this input into the domain representation.
     fn into_ast(self) -> async_graphql::Result<PropertyMatchValue> {
         Ok(match self {
@@ -247,7 +247,7 @@ impl GraphqlPropertyMatchValue {
 /// An entity type supported by property filters.
 #[derive(Enum, Copy, Clone, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
-enum GraphqlPropertyEntityType {
+enum GraphqlFilterPropertyEntityType {
     /// Calendar event entity.
     CalendarEvent,
     /// Call record entity.
@@ -270,21 +270,21 @@ enum GraphqlPropertyEntityType {
     User,
 }
 
-impl TryFrom<GraphqlPropertyEntityType> for PropertyEntityType {
-    type Error = GraphqlPropertyEntityType;
+impl TryFrom<GraphqlFilterPropertyEntityType> for PropertyEntityType {
+    type Error = GraphqlFilterPropertyEntityType;
 
-    fn try_from(value: GraphqlPropertyEntityType) -> Result<Self, Self::Error> {
+    fn try_from(value: GraphqlFilterPropertyEntityType) -> Result<Self, Self::Error> {
         Ok(match value {
-            GraphqlPropertyEntityType::CalendarEvent => Self::CalendarEvent,
-            GraphqlPropertyEntityType::Channel => Self::Channel,
-            GraphqlPropertyEntityType::Chat => Self::Chat,
-            GraphqlPropertyEntityType::Company => Self::Company,
-            GraphqlPropertyEntityType::Document => Self::Document,
-            GraphqlPropertyEntityType::Project => Self::Project,
-            GraphqlPropertyEntityType::Task => Self::Task,
-            GraphqlPropertyEntityType::Thread => Self::Thread,
-            GraphqlPropertyEntityType::User => Self::User,
-            other @ GraphqlPropertyEntityType::CallRecord => return Err(other),
+            GraphqlFilterPropertyEntityType::CalendarEvent => Self::CalendarEvent,
+            GraphqlFilterPropertyEntityType::Channel => Self::Channel,
+            GraphqlFilterPropertyEntityType::Chat => Self::Chat,
+            GraphqlFilterPropertyEntityType::Company => Self::Company,
+            GraphqlFilterPropertyEntityType::Document => Self::Document,
+            GraphqlFilterPropertyEntityType::Project => Self::Project,
+            GraphqlFilterPropertyEntityType::Task => Self::Task,
+            GraphqlFilterPropertyEntityType::Thread => Self::Thread,
+            GraphqlFilterPropertyEntityType::User => Self::User,
+            other @ GraphqlFilterPropertyEntityType::CallRecord => return Err(other),
         })
     }
 }
@@ -316,7 +316,7 @@ pub struct GraphqlEntityFilterAst {
     /// The reminder filter to apply.
     reminder_filter: Option<GraphqlReminderExpr>,
     /// The properties filter to apply.
-    properties_filter: Option<GraphqlPropertiesExpr>,
+    properties_filter: Option<GraphqlFilterPropertiesExpr>,
 }
 
 impl GraphqlEntityFilterAst {

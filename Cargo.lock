@@ -6867,6 +6867,7 @@ dependencies = [
  "async-stream",
  "axum",
  "axum-extra",
+ "base64 0.22.1",
  "chrono",
  "document_sub_type",
  "either",
@@ -6887,10 +6888,12 @@ dependencies = [
  "models_pagination",
  "models_properties",
  "models_soup",
+ "predicate-index",
  "rootcause",
  "serde",
  "serde_json",
  "soup",
+ "soup-filter-projection",
  "soup_realtime",
  "tokio",
  "uuid",
@@ -14749,6 +14752,21 @@ dependencies = [
  "tower 0.5.3",
  "tracing",
  "utoipa",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
+name = "soup-filter-projection"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "item-filter-index",
+ "macro_user_id",
+ "model_file_type",
+ "models_soup",
+ "predicate-index",
+ "thiserror 2.0.18",
  "uuid",
  "workspace-hack",
 ]

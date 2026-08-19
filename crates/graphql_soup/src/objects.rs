@@ -3,6 +3,7 @@ use std::marker::PhantomData;
 use async_graphql::{
     Context, ID, Interface, Json, Object, ObjectType, OutputType, SimpleObject, Union,
 };
+use base64::{Engine, engine::general_purpose::STANDARD_NO_PAD};
 use graphql_common::{
     GraphqlCacheDeletion, GraphqlEntity, GraphqlEntityType, GraphqlSoupEntityType,
 };
@@ -27,8 +28,10 @@ use models_soup::{
     project::SoupProject,
     reminder::{SoupReminder, SoupReminderSchedule},
 };
+use predicate_index::{IndexDocument, RecordKey};
 use serde_json::Value;
 use soup::domain::models::{EnrichedSoupItem, SoupPropertiesField, grouping::NestedSoupGroups};
+use soup_filter_projection::{project_chat, project_document, project_project};
 use soup_realtime::domain::models::Patch;
 use uuid::Uuid;
 
@@ -512,6 +515,71 @@ where
     }
 }
 
+/// Generic exact posting in a versioned Soup filter projection.
+#[derive(SimpleObject)]
+struct GraphqlFilterExactFact {
+    /// Opaque profile-owned attribute token.
+    attribute: String,
+    /// Unpadded base64 encoding of the canonical exact-value bytes.
+    value: String,
+}
+
+/// Generic ordered integer fact in a versioned Soup filter projection.
+#[derive(SimpleObject)]
+struct GraphqlFilterIntegerFact {
+    /// Opaque profile-owned attribute token.
+    attribute: String,
+    /// Signed 64-bit value encoded as decimal to avoid GraphQL `Int` truncation.
+    value: String,
+}
+
+/// Required, versioned generic facts for exact local Soup filtering.
+#[derive(SimpleObject)]
+struct GraphqlSoupFilterProjection {
+    /// Projection/compiler compatibility profile.
+    profile: String,
+    /// Opaque profile-owned partition token.
+    partition: String,
+    /// Complete exact-fact array for this profile.
+    exact_facts: Vec<GraphqlFilterExactFact>,
+    /// Complete ordered-integer array for this profile.
+    integer_facts: Vec<GraphqlFilterIntegerFact>,
+    /// Complete sort-fact array for this profile.
+    sort_facts: Vec<GraphqlFilterIntegerFact>,
+}
+
+impl From<IndexDocument> for GraphqlSoupFilterProjection {
+    fn from(document: IndexDocument) -> Self {
+        let integer_fact = |fact: predicate_index::IntegerFact| GraphqlFilterIntegerFact {
+            attribute: fact.attribute.as_str().to_owned(),
+            value: fact.value.to_string(),
+        };
+        Self {
+            profile: document.profile.token().as_str().to_owned(),
+            partition: document.partition.as_str().to_owned(),
+            exact_facts: document
+                .exact_facts
+                .into_iter()
+                .map(|fact| GraphqlFilterExactFact {
+                    attribute: fact.attribute.as_str().to_owned(),
+                    value: STANDARD_NO_PAD.encode(fact.value.as_bytes()),
+                })
+                .collect(),
+            integer_facts: document
+                .integer_facts
+                .into_iter()
+                .map(integer_fact)
+                .collect(),
+            sort_facts: document.sort_facts.into_iter().map(integer_fact).collect(),
+        }
+    }
+}
+
+fn projection_record_key(type_name: &str, id: Uuid) -> async_graphql::Result<RecordKey> {
+    RecordKey::new(format!("{type_name}:{id}"))
+        .map_err(|error| async_graphql::Error::new(error.to_string()))
+}
+
 /// GraphQL document entity.
 pub struct GraphqlSoupDocument<E: SoupEntityEdges>(SoupDocument<()>, E, Option<f64>);
 
@@ -597,6 +665,14 @@ where
             .sub_type
             .as_ref()
             .map(GraphqlSoupDocumentSubType::new)
+    }
+
+    /// Complete generic facts for the active exact-filter profile.
+    async fn filter_projection(&self) -> async_graphql::Result<GraphqlSoupFilterProjection> {
+        let key = projection_record_key("GraphqlSoupDocument", self.0.id)?;
+        project_document(key, &self.0)
+            .map(Into::into)
+            .map_err(|error| async_graphql::Error::new(error.to_string()))
     }
 
     #[graphql(flatten)]
@@ -737,6 +813,14 @@ where
         self.0.deleted_at.map(|ts| ts.to_rfc3339())
     }
 
+    /// Complete generic facts for the active exact-filter profile.
+    async fn filter_projection(&self) -> async_graphql::Result<GraphqlSoupFilterProjection> {
+        let key = projection_record_key("GraphqlSoupChat", self.0.id)?;
+        project_chat(key, &self.0)
+            .map(Into::into)
+            .map_err(|error| async_graphql::Error::new(error.to_string()))
+    }
+
     #[graphql(flatten)]
     /// The edges.
     async fn edges(&self) -> E {
@@ -821,6 +905,14 @@ where
     /// The deleted timestamp in RFC 3339 format.
     async fn deleted_at(&self) -> Option<String> {
         self.0.deleted_at.map(|ts| ts.to_rfc3339())
+    }
+
+    /// Complete generic facts for the active exact-filter profile.
+    async fn filter_projection(&self) -> async_graphql::Result<GraphqlSoupFilterProjection> {
+        let key = projection_record_key("GraphqlSoupProject", self.0.id)?;
+        project_project(key, &self.0)
+            .map(Into::into)
+            .map_err(|error| async_graphql::Error::new(error.to_string()))
     }
 
     #[graphql(flatten)]
