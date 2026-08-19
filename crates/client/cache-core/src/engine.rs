@@ -1407,6 +1407,7 @@ impl<S: Storage> Engine<S> {
     }
 
     /// Settles an optimistic write with atomic generic projection replacement.
+    #[allow(clippy::too_many_arguments)]
     pub async fn commit_optimistic_write_with_projections(
         &mut self,
         transaction: OptimisticTransactionId,
