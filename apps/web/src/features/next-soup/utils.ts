@@ -66,6 +66,10 @@ import {
 } from '@notifications';
 import { queryClient } from '@queries/client';
 import { emailKeys } from '@queries/email/keys';
+import {
+  type NotificationEntityRef,
+  updateNotificationsForEntities,
+} from '@queries/notification/entity-mutations';
 import { notificationKeys } from '@queries/notification/keys';
 import {
   bulkMarkNotificationsAsDone,
@@ -1418,11 +1422,6 @@ export function applyEntitiesNotDoneOptimistic(args: {
 }
 
 /**
- * Fires the archive + bulk-done APIs for the given ids. Throws on any
- * failure; caller is responsible for rollback via the context returned by
- * `applyEntitiesDoneOptimistic`.
- */
-/**
  * Flip the reminders' own `completed` column. One PATCH each — the reminders
  * API has no bulk endpoint, and a mark-done selection is normally one row.
  */
@@ -1433,17 +1432,30 @@ function setRemindersCompleted(
   return reminderIds.map((id) => setReminderCompleted(id, completed));
 }
 
+/**
+ * Fires archive, selective ID-scoped notification, entity-scoped notification,
+ * and reminder completion writes. Returns the authoritative notification IDs
+ * produced by the entity write. Throws on any failure; the caller owns rollback
+ * through the context returned by `applyEntitiesDoneOptimistic`.
+ */
 export async function executeMarkEntitiesDone(args: {
   emailIds: string[];
   notificationIds: string[];
+  notificationEntities?: NotificationEntityRef[];
   reminderIds?: string[];
-}): Promise<void> {
-  const { emailIds, notificationIds, reminderIds = [] } = args;
+}): Promise<string[]> {
+  const {
+    emailIds,
+    notificationIds,
+    notificationEntities = [],
+    reminderIds = [],
+  } = args;
   await Promise.all([
     queryClient.cancelQueries({ queryKey: queryKeys.all.email }),
     queryClient.cancelQueries({ queryKey: notificationKeys.user._def }),
   ]);
 
+  let authoritativeNotificationIds: string[] = [];
   const results = await Promise.allSettled([
     ...emailIds.map((id) =>
       throwOnErr(
@@ -1452,6 +1464,16 @@ export async function executeMarkEntitiesDone(args: {
     ),
     notificationIds.length > 0
       ? bulkMarkNotificationsAsDone(notificationIds)
+      : Promise.resolve(),
+    notificationEntities.length > 0
+      ? updateNotificationsForEntities({
+          entities: notificationEntities,
+          operation: 'MARK_DONE',
+        }).then((notifications) => {
+          authoritativeNotificationIds = notifications.map(
+            (notification) => notification.id
+          );
+        })
       : Promise.resolve(),
     ...setRemindersCompleted(reminderIds, true),
   ]);
@@ -1487,6 +1509,8 @@ export async function executeMarkEntitiesDone(args: {
     }),
     ...emailIds.map((id) => invalidateSoupEntity(id)),
   ]);
+
+  return authoritativeNotificationIds;
 }
 
 /**

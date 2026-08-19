@@ -59,7 +59,7 @@ function PrBlockContent(props: { foreignEntityId: string }) {
     <div class="size-full overflow-hidden flex flex-col relative">
       <DebouncedNotificationReadMarker
         notificationSource={notificationSource}
-        entity={{ id: props.foreignEntityId }}
+        entity={{ type: 'foreign_entity', id: props.foreignEntityId }}
       />
       <SidePanel.Layout>
         <PrSidePanelSections enrichment={pullRequest} />

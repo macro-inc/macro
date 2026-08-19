@@ -6656,7 +6656,7 @@ export type SimpleMention = {
 };
 
 /**
- * API representation of a soup item with its frecency score.
+ * API representation of a soup item with its per-viewer enrichments.
  */
 export type SoupApiItem = SoupItem & {
     frecency_score: number;
@@ -6664,6 +6664,12 @@ export type SoupApiItem = SoupItem & {
      * Whether the requesting user has favorited this entity.
      */
     is_favorited: boolean;
+    /**
+     * The caller's latest own mutation of this entity, present only when the
+     * page was ordered by `touched_by_me`. Clients keep the touched feed
+     * ordered on this value, so it can be bumped optimistically.
+     */
+    touched_at?: string | null;
 };
 
 /**

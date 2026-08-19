@@ -323,6 +323,10 @@ export type CacheRequest = { id: number } & (
   | {
       kind: 'write';
       originOpId?: string;
+      registration?: {
+        opId: string;
+        entityResolvers?: readonly EntityResolverWire[];
+      };
       query: string;
       operationName?: string;
       variables?: Record<string, unknown>;

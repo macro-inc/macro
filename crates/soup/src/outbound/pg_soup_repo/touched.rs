@@ -176,8 +176,7 @@ fn included_types(req: &TouchedSoupRequest<'_>) -> Vec<&'static str> {
     {
         types.push(EntityType::Chat.into());
     }
-    if req.include_projects
-        && !project_filter_is_impossible(req.filter.and_then(|f| f.project_filter.as_deref()))
+    if !project_filter_is_impossible(req.filter.and_then(|f| f.project_filter.as_deref()))
         && properties_filter_can_apply_to(props, &[PropertyEntityType::Project])
     {
         types.push(EntityType::Project.into());

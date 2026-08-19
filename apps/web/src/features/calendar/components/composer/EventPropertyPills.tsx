@@ -9,6 +9,7 @@ import MagnifyingGlassIcon from '@phosphor/magnifying-glass.svg';
 import MapPinIcon from '@phosphor/map-pin.svg';
 import RepeatIcon from '@phosphor/repeat.svg';
 import UsersIcon from '@phosphor/users.svg';
+import VideoCameraIcon from '@phosphor/video-camera.svg';
 import { OptionCheckBox } from '@property/editors/selectors/OptionCheckBox';
 import { cn, Layer, Select, Tooltip } from '@ui';
 import * as EmailValidator from 'email-validator';
@@ -28,6 +29,7 @@ import {
 } from '../../utils/event-reminders';
 import {
   type EventEditorCalendarOption,
+  type EventEditorConferenceChoice,
   type EventEditorGuestOption,
   guestEmail,
   type SelectedEventEditorGuest,
@@ -545,6 +547,83 @@ export function EventComposerLocationPill(
         </Layer>
       </Popover.Portal>
     </Popover>
+  );
+}
+
+interface EventComposerConferenceOption {
+  value: EventEditorConferenceChoice;
+  label: string;
+}
+
+const GOOGLE_MEET_OPTION: EventComposerConferenceOption = {
+  value: 'google_meet',
+  label: 'Google Meet',
+};
+const NO_CONFERENCING_OPTION: EventComposerConferenceOption = {
+  value: 'none',
+  label: 'No meeting link',
+};
+const EXISTING_CONFERENCING_OPTION: EventComposerConferenceOption = {
+  value: 'existing',
+  label: 'Current conferencing',
+};
+
+export interface EventComposerConferencePillProps {
+  value: EventEditorConferenceChoice;
+  canKeepExisting: boolean;
+  onChange: (value: EventEditorConferenceChoice) => void;
+  disabled?: boolean;
+}
+
+/** Compact selector for adding, replacing, or removing video conferencing. */
+export function EventComposerConferencePill(
+  props: EventComposerConferencePillProps
+) {
+  const options = createMemo(() => [
+    NO_CONFERENCING_OPTION,
+    ...(props.canKeepExisting ? [EXISTING_CONFERENCING_OPTION] : []),
+    GOOGLE_MEET_OPTION,
+  ]);
+  const selectedOption = () =>
+    options().find((option) => option.value === props.value) ?? options()[0];
+
+  return (
+    <Select<EventComposerConferenceOption>
+      options={options()}
+      value={selectedOption()}
+      onChange={(option) => option && props.onChange(option.value)}
+      optionValue="value"
+      optionTextValue="label"
+      disabled={props.disabled}
+    >
+      <Tooltip label="Set event video conferencing" placement="bottom">
+        <Select.Trigger
+          aria-label="Video conferencing"
+          class={cn(PROPERTY_TRIGGER_CLASS, 'max-w-48 overflow-hidden')}
+        >
+          <VideoCameraIcon class="size-3.5 shrink-0 text-ink-extra-muted" />
+          <Select.Value<EventComposerConferenceOption>>
+            {(selectState) => (
+              <span
+                class={cn(
+                  'truncate',
+                  PROPERTY_VALUE_CLASS,
+                  props.value === 'none' && 'text-ink-extra-muted'
+                )}
+              >
+                {props.value === 'none'
+                  ? 'Add meeting link'
+                  : selectState.selectedOption().label}
+              </span>
+            )}
+          </Select.Value>
+          <Select.Icon />
+        </Select.Trigger>
+      </Tooltip>
+      <Select.Content>
+        <Select.Listbox />
+      </Select.Content>
+    </Select>
   );
 }
 

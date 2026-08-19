@@ -353,9 +353,18 @@ describe('createWorkerCacheHost', () => {
       }),
       host.writeQuery({
         opKey: 8,
+        registerDependencies: true,
         query: 'query Read { user { id } }',
         data: { user: { id: 'user-1' } },
         identity: 'user-1',
+        entityResolvers: [
+          {
+            parentType: 'GraphqlUser',
+            fieldName: 'emailThread',
+            targetType: 'GraphqlSoupEmailThread',
+            argumentPath: ['input', 'threadId'],
+          },
+        ],
       }),
       host.enqueueOptimisticMutation(
         {
@@ -436,7 +445,18 @@ describe('createWorkerCacheHost', () => {
       },
     });
     expect(requests[4]).toEqual(
-      expect.objectContaining({ originOpId: `${CLIENT_ID}:8` })
+      expect.objectContaining({
+        originOpId: `${CLIENT_ID}:8`,
+        registration: {
+          opId: `${CLIENT_ID}:8`,
+          entityResolvers: [
+            expect.objectContaining({
+              parentType: 'GraphqlUser',
+              fieldName: 'emailThread',
+            }),
+          ],
+        },
+      })
     );
     expect(requests[5]).toEqual(
       expect.objectContaining({
@@ -752,7 +772,12 @@ describe('createWorkerCacheHost', () => {
 
     await Promise.all([
       host.readQuery({ opKey: 7, query: 'query Seven { seven }' }),
-      host.readQuery({ opKey: 9, query: 'query Nine { nine }' }),
+      host.writeQuery({
+        opKey: 9,
+        registerDependencies: true,
+        query: 'query Nine { nine }',
+        data: { nine: 9 },
+      }),
       host.readQuery({ query: 'query Untracked { untracked }' }),
     ]);
     const adapter = requireAdapter();

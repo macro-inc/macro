@@ -5,6 +5,7 @@ import type { EntityData } from '@entity';
 import { useQueryClient } from '@queries/client';
 import { groupedCacheVersion } from '@queries/soup/cache';
 import {
+  groupedSortMethod,
   parseGroupMeta,
   serializeGroupByField,
 } from '@queries/soup/grouped/api';
@@ -52,14 +53,7 @@ export type GroupQueryData = {
 type CreateGroupedSoupQueriesArgs = {
   initialPage: Accessor<InitialGroupPage | undefined>;
   groupByField: Accessor<GroupByField | undefined>;
-  soupParams: Accessor<
-    Omit<SoupParams, 'sort_method'> & {
-      sort_method: Exclude<
-        SoupParams['sort_method'],
-        'frecency' | 'touched_by_me'
-      >;
-    }
-  >;
+  soupParams: Accessor<SoupParams>;
   soupBody: Accessor<SoupAstBody>;
   /** True only when the live GraphQL grouped parent query owns the view. */
   graphqlReactive: Accessor<boolean>;
@@ -158,7 +152,7 @@ export function createGroupedSoupQueries(args: CreateGroupedSoupQueriesArgs) {
                 group_by: serializeGroupByField(field),
                 group_key: group.key,
                 limit: args.soupParams().limit,
-                sort_method: args.soupParams().sort_method ?? undefined,
+                sort_method: groupedSortMethod(args.soupParams().sort_method),
               },
               body: args.soupBody(),
             })

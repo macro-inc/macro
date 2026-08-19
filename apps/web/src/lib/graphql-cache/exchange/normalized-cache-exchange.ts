@@ -87,7 +87,7 @@ import {
 const QUEUE_ATTEMPT_CONTEXT_KEY = 'normalizedCacheQueueAttempt';
 /** Marks dependency-pushed reads as latency-sensitive worker work. */
 const AFFECTED_READ_CONTEXT_KEY = 'normalizedCacheAffectedRead';
-/** Prevents a post-network dependency refresh from forwarding the API again. */
+/** Prevents a replacement-registration cache read from forwarding the API again. */
 const REPLACEMENT_REGISTRATION_ONLY_CONTEXT_KEY =
   'normalizedCacheReplacementRegistrationOnly';
 /** Marks a query as network-to-cache hydration with a projected result. */
@@ -384,12 +384,6 @@ export function normalizedCacheExchange(
   return ({ forward, client }) => {
     /** Operations registered with the host, for push-driven re-execution. */
     const activeOps = new Map<number, Operation>();
-    /**
-     * Network-bound queries whose initial cache read could not register their
-     * complete normalized dependencies. Refresh these after write-through so
-     * later optimistic entity writes can affect the active operation.
-     */
-    const dependencyRefreshOps = new Set<number>();
     type RetainedReplacementFallback = {
       version: number;
       writeArgs: Parameters<CacheHost['writeQuery']>[0];
@@ -501,7 +495,10 @@ export function normalizedCacheExchange(
         ) {
           retained.readyPending = false;
           try {
-            await host.writeQuery(retained.writeArgs);
+            await host.writeQuery({
+              ...retained.writeArgs,
+              registerDependencies: true,
+            });
             if (
               queryStates.get(key) !== state ||
               state.retainedReplacementFallback !== retained ||
@@ -510,15 +507,6 @@ export function normalizedCacheExchange(
             ) {
               return;
             }
-            // Register the complete normalized dependency set directly. This
-            // cannot enqueue another API request or replay the old cache RPC.
-            await host.readQuery({
-              opKey: retained.writeArgs.opKey,
-              query: retained.writeArgs.query,
-              operationName: retained.writeArgs.operationName,
-              variables: retained.writeArgs.variables,
-              entityResolvers: retained.writeArgs.entityResolvers,
-            });
             if (
               queryStates.get(key) !== state ||
               state.retainedReplacementFallback !== retained ||
@@ -527,7 +515,6 @@ export function normalizedCacheExchange(
               return;
             }
             state.retainedReplacementFallback = undefined;
-            dependencyRefreshOps.delete(key);
             state.replacementFallback = false;
             state.deferredAffected = false;
             state.completedReplacementFallback = false;
@@ -800,7 +787,6 @@ export function normalizedCacheExchange(
         }
         const policy = op.context.requestPolicy;
         if (policy === 'network-only') {
-          dependencyRefreshOps.add(op.key);
           enqueueQueryForward(op);
           return undefined;
         }
@@ -824,7 +810,6 @@ export function normalizedCacheExchange(
           if (policy === 'cache-only') {
             return cacheResult(op, undefined, false);
           }
-          dependencyRefreshOps.add(op.key);
         } catch (error) {
           options.onCacheError?.(error, op);
           if (isOwnerEpochLostError(error)) {
@@ -1042,6 +1027,7 @@ export function normalizedCacheExchange(
                 ...readArgs,
                 data: result.data,
                 identity: options.extractIdentity?.(result.data),
+                registerDependencies: activeOps.has(op.key),
               };
               const retained: RetainedReplacementFallback | undefined =
                 result.error === undefined &&
@@ -1063,16 +1049,8 @@ export function normalizedCacheExchange(
               }
               try {
                 await host.writeQuery(writeArgs);
-                if (
-                  activeOps.has(op.key) &&
-                  (dependencyRefreshOps.has(op.key) || state.deferredAffected)
-                ) {
-                  // A miss or replacement fallback needs one successful read
-                  // on the current generation after network write-through.
-                  await host.readQuery(readArgs);
-                  dependencyRefreshOps.delete(op.key);
-                  state.networkRegistrationSatisfied = true;
-                }
+                state.networkRegistrationSatisfied =
+                  writeArgs.registerDependencies;
                 if (state.retainedReplacementFallback === retained) {
                   state.retainedReplacementFallback = undefined;
                 }
@@ -1081,7 +1059,6 @@ export function normalizedCacheExchange(
               }
             }
             if (result.hasNext !== true) {
-              dependencyRefreshOps.delete(op.key);
               const registrationSatisfied = state.networkRegistrationSatisfied;
               state.networkRegistrationSatisfied = false;
               finishNetworkQuery(op.key, registrationSatisfied);
@@ -1226,7 +1203,6 @@ export function normalizedCacheExchange(
         tap((op) => {
           if (op.kind === 'teardown') {
             activeOps.delete(op.key);
-            dependencyRefreshOps.delete(op.key);
             queryStates.delete(op.key);
             host.teardown(op.key).catch(() => undefined);
           }

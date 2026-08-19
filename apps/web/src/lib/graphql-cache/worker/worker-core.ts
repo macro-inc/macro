@@ -393,7 +393,10 @@ export class CacheWorkerCore {
       .with({ kind: 'write' }, async (request) => {
         const engine = this.requireEngine();
         const result = await engine.writeQuery(
-          request.originOpId,
+          {
+            originOpId: request.originOpId,
+            registration: request.registration,
+          },
           request.query,
           request.operationName,
           request.variables,

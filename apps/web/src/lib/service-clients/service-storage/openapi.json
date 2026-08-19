@@ -21869,11 +21869,16 @@
               "is_favorited": {
                 "type": "boolean",
                 "description": "Whether the requesting user has favorited this entity."
+              },
+              "touched_at": {
+                "type": ["string", "null"],
+                "format": "date-time",
+                "description": "The caller's latest own mutation of this entity, present only when the\npage was ordered by `touched_by_me`. Clients keep the touched feed\nordered on this value, so it can be bumped optimistically."
               }
             }
           }
         ],
-        "description": "API representation of a soup item with its frecency score."
+        "description": "API representation of a soup item with its per-viewer enrichments."
       },
       "SoupApiSort": {
         "type": "string",

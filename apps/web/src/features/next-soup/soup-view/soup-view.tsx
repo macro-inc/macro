@@ -235,6 +235,13 @@ interface SoupViewProps {
   initialGroupBy?: string;
   disableLocalSearch?: boolean;
   /**
+   * Client sort ids applied when the user has no persisted sort preference.
+   * Defaults to `['updated_at']`. Pass `[]` for views whose ordering is the
+   * server's (e.g. Recent's touched-by-me order) so rows render as paged —
+   * an explicit user sort still wins once chosen.
+   */
+  initialClientSort?: string[];
+  /**
    * Client-side entities to merge into the soup results. Useful for entity
    * types (e.g. automation) that don't come back from the soup API.
    * Visibility is controlled by the active client filter set — use a tab
@@ -357,7 +364,7 @@ export const SoupView = (props: SoupViewProps) => {
 
       let initialSortIds = initialCrmView?.sort ?? sortPref();
       if (initialSortIds.length === 0) {
-        initialSortIds = ['updated_at'];
+        initialSortIds = props.initialClientSort ?? ['updated_at'];
       }
 
       const persistedViewActiveTab = isListViewID(contentId)

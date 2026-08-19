@@ -10,6 +10,7 @@ import type { Query } from '@app/features/next-soup/filters/filter-store/types';
 import { getViewPreset } from '@app/features/next-soup/sidebar/soup-filter-presets';
 import { NonMemberChannelPreview } from '@app/features/next-soup/soup-view/non-member-channel-preview';
 import { SoupView } from '@app/features/next-soup/soup-view/soup-view';
+import { useRecentViewFlag } from '@app/features/next-soup/use-recent-view-flag';
 import { SettingsPanelComponentWrapper } from '@app/features/settings/Settings';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { usePosthog } from '@app/lib/analytics/posthog';
@@ -177,6 +178,47 @@ registerComponent(
     );
   })
 );
+
+registerComponent('recent', withAuth(RecentViewWrapper));
+
+function TrackedRecentView() {
+  usePageViewTracking('recent');
+  const preset = getViewPreset('recent');
+  return (
+    <SoupView
+      viewName="Recent"
+      initialFilters={preset?.filters}
+      initialClientFilters={preset?.clientFilters}
+      // Rows carry the server's touched_at, so sorting on it preserves
+      // the touched-by-me order and lets optimistic bumps reorder locally.
+      initialClientSort={['touched_at']}
+      disableLocalSearch
+    />
+  );
+}
+
+function RecentViewWrapper() {
+  const recentViewEnabled = useRecentViewFlag();
+  const posthog = usePosthog();
+
+  // Registered even when the flag is off so a bookmarked /recent or a
+  // restored split recovers to the inbox instead of an empty split, and the
+  // touched query is never issued. The redirect replaces the split
+  // irreversibly, so it must wait for PostHog to actually answer — on a
+  // fresh reload the flag reads false until flags load.
+  return (
+    <Show
+      when={recentViewEnabled()}
+      fallback={
+        <Show when={posthog.flagsLoaded()}>
+          <RedirectSplit to={{ type: 'component', id: 'inbox' }} />
+        </Show>
+      }
+    >
+      <TrackedRecentView />
+    </Show>
+  );
+}
 
 const MyActivityView = lazy(() =>
   import('@app/features/activity/my-activity-view').then((module) => ({

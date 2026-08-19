@@ -17,6 +17,7 @@ import {
   requestInboxFilter,
 } from '@app/features/next-soup/soup-view/inbox-filter-controllers';
 import { requestSearchFocus } from '@app/features/next-soup/soup-view/search-controllers';
+import { useRecentViewFlag } from '@app/features/next-soup/use-recent-view-flag';
 import {
   InviteModal,
   setInviteModalOpen,
@@ -414,11 +415,13 @@ export const GoToHotkeys = () => {
   const gettingStartedEnabled = useGettingStartedEnabled();
   const calendarUiEnabled = useCalendarUiFlag();
   const activityFeedEnabled = useActivityFeedFlag();
+  const recentViewEnabled = useRecentViewFlag();
   const links = createMemo((): SidebarItem[] =>
     buildSidebarLinks(
       gettingStartedEnabled(),
       calendarUiEnabled(),
-      activityFeedEnabled()
+      activityFeedEnabled(),
+      recentViewEnabled()
     )
   );
 
@@ -1034,6 +1037,17 @@ const ACTIVITY_LINK: SidebarItem = {
   hotkeyToken: TOKENS.sidebar.goTo.activity,
 };
 
+const RECENT_LINK: SidebarItem = {
+  id: 'recent',
+  label: 'Recent',
+  href: LIST_VIEW_PATHS.recent,
+  icon: AnimatedActivityIcon,
+  // `r` is Calendar and `e`/`c`/`t` are taken; `n` is the only letter of
+  // "recent" that is not already a sidebar destination.
+  hotkey: 'n',
+  hotkeyToken: TOKENS.sidebar.goTo.recent,
+};
+
 const REMINDERS_LINK: SidebarItem = {
   id: 'reminders',
   label: 'Reminders',
@@ -1061,7 +1075,8 @@ const REMINDERS_LINK: SidebarItem = {
 const buildSidebarLinks = (
   showGettingStarted: boolean,
   showCalendar: boolean,
-  showActivity: boolean
+  showActivity: boolean,
+  showRecent: boolean
 ): SidebarItem[] => {
   let links: SidebarItem[] = [
     DASHBOARD_LINK,
@@ -1069,8 +1084,15 @@ const buildSidebarLinks = (
     ...SIDEBAR_LINKS.filter((link) => showCalendar || link.id !== 'calendar'),
   ];
 
-  if (showActivity) {
+  if (showRecent) {
+    // Directly below Inbox; Activity and Reminders anchor after it.
     const idx = links.findIndex((link) => link.id === 'inbox');
+    links = [...links.slice(0, idx + 1), RECENT_LINK, ...links.slice(idx + 1)];
+  }
+
+  if (showActivity) {
+    const anchorId = showRecent ? 'recent' : 'inbox';
+    const idx = links.findIndex((link) => link.id === anchorId);
     links = [
       ...links.slice(0, idx + 1),
       ACTIVITY_LINK,
@@ -1079,8 +1101,12 @@ const buildSidebarLinks = (
   }
 
   if (ENABLE_REMINDERS()) {
-    // Directly below Activity, or below Inbox when Activity is off.
-    const anchorId = showActivity ? 'activity' : 'inbox';
+    // Directly below Activity, or below Recent/Inbox when Activity is off.
+    const anchorId = showActivity
+      ? 'activity'
+      : showRecent
+        ? 'recent'
+        : 'inbox';
     const idx = links.findIndex((l) => l.id === anchorId);
     links = [
       ...links.slice(0, idx + 1),
@@ -1166,11 +1192,13 @@ export const AppSidebar = (props: AppSidebarProps) => {
   const gettingStartedEnabled = useGettingStartedEnabled();
   const calendarUiEnabled = useCalendarUiFlag();
   const activityFeedEnabled = useActivityFeedFlag();
+  const recentViewEnabled = useRecentViewFlag();
   const allLinks = createMemo((): SidebarItem[] =>
     buildSidebarLinks(
       gettingStartedEnabled(),
       calendarUiEnabled(),
-      activityFeedEnabled()
+      activityFeedEnabled(),
+      recentViewEnabled()
     )
   );
 
@@ -1346,7 +1374,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
   // lives in the collapsible Workspace section. `findLink` drops ids that
   // `buildSidebarLinks` gated out, so flag-gated rows need no filter here.
   const topLinks = createMemo(() =>
-    ['home', 'getting-started', 'inbox', 'activity', 'reminders']
+    ['home', 'getting-started', 'inbox', 'recent', 'activity', 'reminders']
       .filter(
         (id) => id !== 'getting-started' || !gettingStartedVisibility.hidden()
       )

@@ -228,3 +228,37 @@ describe('tab lists and filter presets agree', () => {
     );
   });
 });
+
+describe('recent view preset', () => {
+  it('forces the touched-by-me server sort', () => {
+    expect(getViewPreset('recent')?.sortMethod).toBe('touched_by_me');
+  });
+
+  it('never compiles channel or email filter trees', () => {
+    // The touched-by-me query rejects channel/email trees with a 400, so
+    // even the NIL-id opt-in trees other views send must be absent.
+    const filters = getViewPreset('recent')?.filters;
+    const ast = compileToAst(queryStateFrom(filters!));
+    expect(ast.chanf).toBeUndefined();
+    expect(ast.ef).toBeUndefined();
+    expect(ast.emailView).toBeUndefined();
+  });
+
+  it('keeps documents, chats, and folders unrestricted', () => {
+    const filters = getViewPreset('recent')?.filters;
+    expect(filters?.include?.documentId).toBeUndefined();
+    expect(filters?.include?.chatId).toBeUndefined();
+    expect(filters?.include?.folderId).toBeUndefined();
+  });
+
+  it('excludes the types the touched feed can never return', () => {
+    const filters = getViewPreset('recent')?.filters;
+    const ast = compileToAst(queryStateFrom(filters!));
+    // Calendar events, CRM companies, foreign entities, and channel threads
+    // keep their match-nothing trees; the touched query ignores them.
+    expect(ast.calf).toBeDefined();
+    expect(ast.ccf).toBeDefined();
+    expect(ast.fef).toBeDefined();
+    expect(ast.cthf).toBeDefined();
+  });
+});

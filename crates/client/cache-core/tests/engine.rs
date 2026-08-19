@@ -1,7 +1,7 @@
 //! Engine-level tests: read/write flow, hot-tier eviction falling back to
 //! storage, dependency-driven re-execution, teardown, clear.
 
-use cache_core::engine::{Engine, ReadResult};
+use cache_core::engine::{Engine, NetworkWrite, QueryRegistration, ReadResult};
 use cache_core::store::InMemoryStorage;
 use pollster::block_on;
 use serde_json::{Value as Json, json};
@@ -230,10 +230,11 @@ fn cross_operation_invalidation() {
         let mut engine = Engine::new(InMemoryStorage::new());
 
         // Op 1: limit 10; Op 2: limit 20 — different root fields, shared
-        // entity doc-1.
+        // entity doc-1. Seed first so registration must include records that
+        // the registered write itself does not change.
         engine
             .write_query(
-                Some(1),
+                None,
                 QUERY,
                 Some("Soup"),
                 &vars(10),
@@ -242,10 +243,24 @@ fn cross_operation_invalidation() {
             )
             .await
             .unwrap();
-        engine
-            .read_query(Some(1), QUERY, Some("Soup"), &vars(10))
+        let registered = engine
+            .write_query_with_registration(
+                Some(1),
+                Some(QueryRegistration {
+                    op_id: 1,
+                    entity_resolvers: &[],
+                }),
+                NetworkWrite {
+                    query: QUERY,
+                    operation_name: Some("Soup"),
+                    variables: &vars(10),
+                    data: &page(&[("doc-1", "A")]),
+                    identity: None,
+                },
+            )
             .await
             .unwrap();
+        assert!(registered.changed.is_empty());
 
         // Op 2's response renames doc-1 → op 1 must be re-executed.
         let write = engine
@@ -300,6 +315,95 @@ fn cross_operation_invalidation() {
             .await
             .unwrap();
         assert!(!write.changed.is_empty());
+        assert!(write.affected_ops.is_empty());
+    });
+}
+
+#[test]
+fn incomplete_registered_write_is_conservatively_affected() {
+    block_on(async {
+        let mut engine = Engine::new(InMemoryStorage::new());
+        engine
+            .write_query_with_registration(
+                Some(1),
+                Some(QueryRegistration {
+                    op_id: 1,
+                    entity_resolvers: &[],
+                }),
+                NetworkWrite {
+                    query: QUERY,
+                    operation_name: Some("Soup"),
+                    variables: &vars(10),
+                    data: &json!({ "user": { "id": "user-1" } }),
+                    identity: None,
+                },
+            )
+            .await
+            .unwrap();
+
+        let Json::Object(notification_variables) = json!({
+            "input": {
+                "notificationIds": ["unrelated-notification"],
+                "operation": "MARK_SEEN"
+            }
+        }) else {
+            unreachable!()
+        };
+        let write = engine
+            .write_query(
+                Some(2),
+                UPDATE_NOTIFICATIONS_MUTATION,
+                Some("UpdateNotifications"),
+                &notification_variables,
+                &json!({
+                    "updateNotifications": [{
+                        "__typename": "GraphqlNotification",
+                        "id": "unrelated-notification",
+                        "seen": true,
+                        "viewedAt": null
+                    }]
+                }),
+                None,
+            )
+            .await
+            .unwrap();
+        assert_eq!(write.affected_ops, [1].into());
+
+        engine
+            .write_query_with_registration(
+                Some(1),
+                Some(QueryRegistration {
+                    op_id: 1,
+                    entity_resolvers: &[],
+                }),
+                NetworkWrite {
+                    query: QUERY,
+                    operation_name: Some("Soup"),
+                    variables: &vars(10),
+                    data: &page(&[("doc-1", "Complete")]),
+                    identity: None,
+                },
+            )
+            .await
+            .unwrap();
+        let write = engine
+            .write_query(
+                Some(2),
+                UPDATE_NOTIFICATIONS_MUTATION,
+                Some("UpdateNotifications"),
+                &notification_variables,
+                &json!({
+                    "updateNotifications": [{
+                        "__typename": "GraphqlNotification",
+                        "id": "another-unrelated-notification",
+                        "seen": true,
+                        "viewedAt": null
+                    }]
+                }),
+                None,
+            )
+            .await
+            .unwrap();
         assert!(write.affected_ops.is_empty());
     });
 }

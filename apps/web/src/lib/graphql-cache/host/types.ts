@@ -56,6 +56,8 @@ export type InspectQueryVariantsArgs = Omit<
 
 export interface CacheWriteArgs extends Omit<CacheReadArgs, 'priority'> {
   data: unknown;
+  /** Installs this active query's dependencies from the normalized response. */
+  registerDependencies?: boolean;
   /** Opaque session tag; see protocol.ts `identity`. */
   identity?: string;
 }

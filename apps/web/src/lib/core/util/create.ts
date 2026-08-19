@@ -66,7 +66,7 @@ export async function createMarkdownFile(
     name: args?.title ?? '',
     fileType: 'md',
   });
-  refetchSoupEntity(documentId, 'document');
+  refetchSoupEntity(documentId, 'document', { ownTouch: true });
 
   analytics.track('create_entity', {
     entityType: 'md',
@@ -162,7 +162,7 @@ async function createTaskResponse(args?: CreateTaskArgs) {
     fileType: 'md',
     subType: { type: 'task', is_completed: false },
   });
-  refetchSoupEntity(documentId, 'document');
+  refetchSoupEntity(documentId, 'document', { ownTouch: true });
 
   analytics.track('create_entity', {
     entityType: 'task',
@@ -221,7 +221,7 @@ export async function createSnippet(
     fileType: 'md',
     subType: { type: 'snippet' },
   });
-  refetchSoupEntity(documentId, 'document');
+  refetchSoupEntity(documentId, 'document', { ownTouch: true });
 
   analytics.track('create_entity', {
     entityType: 'snippet',
@@ -269,7 +269,7 @@ export async function createSkill(
     fileType: 'md',
     subType: { type: 'skill' },
   });
-  refetchSoupEntity(documentId, 'document');
+  refetchSoupEntity(documentId, 'document', { ownTouch: true });
 
   analytics.track('create_entity', {
     entityType: 'skill',
@@ -361,7 +361,9 @@ export async function createCodeFileFromText({
     name: title ?? 'New Code File',
     fileType: finalExtension,
   });
-  refetchSoupEntity(document.metadata.documentId, 'document');
+  refetchSoupEntity(document.metadata.documentId, 'document', {
+    ownTouch: true,
+  });
 
   analytics.track('create_entity', {
     entityType: 'code',
@@ -411,7 +413,7 @@ export async function createCanvasFileFromJsonString(args: {
     name: title ?? 'New Canvas',
     fileType: 'canvas',
   });
-  refetchSoupEntity(canvas.metadata.documentId, 'document');
+  refetchSoupEntity(canvas.metadata.documentId, 'document', { ownTouch: true });
 
   analytics.track('create_entity', {
     entityType: 'canvas',
@@ -448,7 +450,7 @@ export async function createChat(
     itemType: 'chat',
     name: args?.name ?? DEFAULT_CHAT_NAME,
   });
-  refetchSoupEntity(chat.id, 'chat');
+  refetchSoupEntity(chat.id, 'chat', { ownTouch: true });
 
   analytics.track('create_entity', {
     entityType: 'chat',

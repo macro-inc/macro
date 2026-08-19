@@ -11,6 +11,7 @@ import {
   optimisticUpdateSoupEntity,
   type SoupTransaction,
 } from '@queries/soup/cache';
+import { ownTouchStamp } from '@queries/soup/normalized-cache/own-touch';
 import { type MutationCallbacks, withCallbacks } from '@queries/utils';
 import type { CallRecord } from '@service-call/client';
 import type { ApiChannelWithLatest } from '@service-storage/channel-list-types';
@@ -185,6 +186,7 @@ const renameDssSetData = (
   entities: EntityRenameOptimisticInfo[]
 ): SoupTransactionMap => {
   const txns: SoupTransactionMap = new Map();
+  // A rename is an Edited activity, i.e. a touch (own-touch.ts).
   for (const { id, itemType, newName } of entities) {
     const current = getSoupEntityById(id);
     const score = current?.frecency_score ?? 0;
@@ -195,6 +197,7 @@ const renameDssSetData = (
           tag: 'channel',
           data: { channel: { id, name: newName } },
           frecency_score: score,
+          touched_at: ownTouchStamp(id),
         })
       );
     } else if (itemType === 'call') {
@@ -225,6 +228,7 @@ const renameDssSetData = (
           tag: itemType,
           data: { id, name: newName },
           frecency_score: score,
+          touched_at: ownTouchStamp(id),
         })
       );
     }

@@ -210,9 +210,12 @@ the engine directly from its multi-threaded runtime, and unbounded on wasm.
 
 - On operation: RPC `readQuery` → full hit: emit (stale-flagged if
   `cache-and-network`, then forward to network); partial/miss: forward.
-- On network result: RPC `writeQuery`; engine returns the set of changed
-  record keys; exchange re-executes affected active operations (mirrors
-  graphcache `cache-and-network` re-emission behavior).
+- On network result: RPC `writeQuery`; normalization captures every record the
+  response traverses and installs the active operation's dependencies in the
+  same write. Complete responses register exact keys; uncertain responses are
+  conservatively affected by every visible change until a later exact read or
+  write. No post-write denormalizing read is performed. The engine returns the
+  changed record keys and the exchange re-executes affected active operations.
 - Hydration-only operations skip cache reads and active-operation registration.
   Client-only `@cacheOnly` fields are fetched and normalized but omitted from
   the result returned across the worker/Tauri boundary. The directive is

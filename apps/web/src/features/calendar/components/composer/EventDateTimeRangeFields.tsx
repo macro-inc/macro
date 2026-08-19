@@ -23,6 +23,119 @@ function formatTime(value: string) {
   return timeLabelFormatter.format(new Date(2000, 0, 1, hour, minute));
 }
 
+interface EventDateTimeDropdownProps {
+  id: string;
+  label: 'Start' | 'End';
+  value: string;
+  allDay: boolean;
+  onDateChange: (value: string) => void;
+  onTimeChange: (value: string) => void;
+  fieldDisabled?: boolean;
+  invalid?: boolean;
+  describedBy?: string;
+  placement: 'bottom-start' | 'bottom-end';
+}
+
+function EventDateTimeDropdown(props: EventDateTimeDropdownProps) {
+  const [open, setOpen] = createSignal(false);
+  const parts = () => splitLocalDateTime(props.value);
+  const selectedDate = () => parseLocalDate(parts().date);
+  const label = () => {
+    const date = selectedDate();
+    const dateLabel = date
+      ? dateLabelFormatter.format(date)
+      : `${props.label} date`;
+    return props.allDay
+      ? dateLabel
+      : `${dateLabel} ${formatTime(parts().time)}`;
+  };
+
+  return (
+    <Popover
+      open={open() && !props.fieldDisabled}
+      onOpenChange={(nextOpen) => setOpen(!props.fieldDisabled && nextOpen)}
+      placement={props.placement}
+      gutter={4}
+      flip
+      slide
+    >
+      <Popover.Trigger
+        disabled={props.fieldDisabled}
+        aria-label={`Edit event ${props.label.toLowerCase()} date and time`}
+        aria-invalid={props.invalid || undefined}
+        aria-describedby={props.describedBy}
+        class={cn(
+          'group inline-flex h-7 w-fit max-w-48 min-w-0 items-center justify-between gap-1.5 rounded-lg border border-edge-muted bg-surface px-2 py-1 text-left text-xs leading-tight text-ink-muted hover:bg-hover hover:text-ink focus-visible:bg-active focus-visible:text-ink focus-visible:ring-accent/10 data-expanded:bg-hover data-expanded:text-ink',
+          open() && 'bg-hover text-ink',
+          props.invalid &&
+            'border-failure text-failure hover:text-failure focus-visible:text-failure data-expanded:text-failure'
+        )}
+      >
+        <CalendarBlankIcon
+          class={cn(
+            'size-3.5 shrink-0',
+            props.invalid
+              ? 'text-failure'
+              : 'text-ink-extra-muted group-hover:text-ink-muted group-focus-visible:text-ink-muted'
+          )}
+        />
+        <span class="min-w-0 flex-1 truncate">{label()}</span>
+        <CaretDownIcon
+          class={cn(
+            'size-3 shrink-0',
+            props.invalid
+              ? 'text-failure'
+              : 'text-ink-extra-muted group-hover:text-ink-muted group-focus-visible:text-ink-muted'
+          )}
+        />
+      </Popover.Trigger>
+
+      <Popover.Portal>
+        <Layer depth={3}>
+          <Popover.Content
+            class="portal-scope z-action-menu w-72 max-w-[calc(100vw-1rem)] overflow-hidden rounded-xl border border-edge bg-menu shadow-menu menu-open-animation"
+            on:keydown={(event: KeyboardEvent) => {
+              if (event.key !== 'Escape') return;
+              event.preventDefault();
+              event.stopPropagation();
+              setOpen(false);
+            }}
+            onOpenAutoFocus={(event) => event.preventDefault()}
+            onCloseAutoFocus={(event) => event.preventDefault()}
+          >
+            <Popover.Title class="px-3 pt-3 text-xs font-medium text-ink">
+              {props.label} {props.allDay ? 'date' : 'date and time'}
+            </Popover.Title>
+            <div class="p-3">
+              <Calendar
+                required
+                fixedWeeks
+                value={selectedDate()}
+                onValueChange={(date) => {
+                  if (!date || props.fieldDisabled) return;
+                  props.onDateChange(formatLocalDate(date));
+                }}
+              />
+            </div>
+
+            <div class="border-t border-edge p-3">
+              <div class={cn(props.allDay && 'opacity-50')}>
+                <EventTimeInput
+                  id={props.id}
+                  label={`${props.label} time`}
+                  value={parts().time}
+                  onChange={props.onTimeChange}
+                  disabled={props.fieldDisabled || props.allDay}
+                />
+              </div>
+            </div>
+          </Popover.Content>
+        </Layer>
+      </Popover.Portal>
+    </Popover>
+  );
+}
+
 export interface EventDateTimeRangeFieldsProps {
   start: string;
   end: string;
@@ -37,159 +150,66 @@ export interface EventDateTimeRangeFieldsProps {
   describedBy?: string;
 }
 
-/** Combined date-range display with start/end calendar and time controls. */
+/** Separate start/end date-time dropdowns joined by a directional arrow. */
 export function EventDateTimeRangeFields(props: EventDateTimeRangeFieldsProps) {
   const fieldId = createUniqueId();
-  const [open, setOpen] = createSignal(false);
-  let trigger: HTMLButtonElement | undefined;
-
-  const startParts = () => splitLocalDateTime(props.start);
-  const endParts = () => splitLocalDateTime(props.end);
-  const startDate = () => parseLocalDate(startParts().date);
-  const endDate = () => parseLocalDate(endParts().date);
-  const disabled = () =>
-    props.startDisabled && props.endDisabled && props.allDayDisabled;
-  const rangeLabel = () => {
-    const start = startDate();
-    const end = endDate();
-    const startLabel = start ? dateLabelFormatter.format(start) : 'Start date';
-    const endLabel = end ? dateLabelFormatter.format(end) : 'End date';
-    if (props.allDay) return `${startLabel} – ${endLabel}`;
-    return `${startLabel} ${formatTime(startParts().time)} – ${endLabel} ${formatTime(endParts().time)}`;
-  };
 
   return (
-    <Popover
-      anchorRef={() => trigger}
-      open={open() && !disabled()}
-      onOpenChange={(nextOpen) => setOpen(!disabled() && nextOpen)}
-      placement="bottom-start"
-      gutter={4}
-      flip
-      slide
-    >
-      <button
-        ref={trigger}
-        type="button"
-        disabled={disabled()}
-        aria-label="Edit event date and time range"
-        aria-expanded={open()}
-        aria-haspopup="dialog"
-        aria-invalid={props.invalid || undefined}
-        aria-describedby={props.describedBy}
-        class={cn(
-          'group inline-flex min-h-8 w-fit max-w-full self-start items-center gap-2 rounded-lg bg-transparent px-2 text-left text-xs text-ink-muted transition-colors hover:bg-hover hover:text-ink focus-visible:text-ink focus-visible:ring focus-visible:ring-accent/10',
-          open() && 'bg-hover',
-          props.invalid && 'text-failure'
-        )}
-        onClick={() => setOpen((current) => !current)}
-      >
-        <CalendarBlankIcon
+    <div class="flex w-full items-center justify-between gap-3">
+      <div class="flex min-w-0 items-center gap-2">
+        <EventDateTimeDropdown
+          id={`composer-start-time-${fieldId}`}
+          label="Start"
+          value={props.start}
+          allDay={props.allDay}
+          onDateChange={(date) =>
+            props.onStartChange(
+              props.allDay ? date : withLocalDate(props.start, date)
+            )
+          }
+          onTimeChange={(time) =>
+            props.onStartChange(withLocalTime(props.start, time))
+          }
+          fieldDisabled={props.startDisabled}
+          invalid={props.invalid}
+          describedBy={props.describedBy}
+          placement="bottom-start"
+        />
+        <ArrowRightIcon
+          aria-label="to"
           class={cn(
-            'size-3.5 shrink-0',
-            props.invalid
-              ? 'text-failure'
-              : 'text-ink-extra-muted group-hover:text-ink-muted group-focus-visible:text-ink-muted'
+            'size-3.5 shrink-0 text-ink-extra-muted',
+            props.invalid && 'text-failure'
           )}
         />
-        <span class="min-w-0 truncate">{rangeLabel()}</span>
-        <CaretDownIcon class="size-3 shrink-0 text-ink-extra-muted group-hover:text-ink-muted group-focus-visible:text-ink-muted" />
-      </button>
-
-      <Popover.Portal>
-        <Layer depth={3}>
-          <Popover.Content
-            class="portal-scope z-action-menu w-[38rem] max-w-[calc(100vw-1rem)] overflow-hidden rounded-xl border border-edge bg-menu shadow-menu menu-open-animation"
-            on:keydown={(event: KeyboardEvent) => {
-              if (event.key !== 'Escape') return;
-              event.preventDefault();
-              event.stopPropagation();
-              setOpen(false);
-            }}
-            onOpenAutoFocus={(event) => event.preventDefault()}
-            onCloseAutoFocus={(event) => event.preventDefault()}
-          >
-            <Popover.Title class="sr-only">
-              Choose event date and time range
-            </Popover.Title>
-            <div class="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-start">
-              <div class="min-w-0 p-3">
-                <Calendar
-                  required
-                  fixedWeeks
-                  value={startDate()}
-                  onValueChange={(date) => {
-                    if (!date || props.startDisabled) return;
-                    const nextDate = formatLocalDate(date);
-                    props.onStartChange(
-                      props.allDay
-                        ? nextDate
-                        : withLocalDate(props.start, nextDate)
-                    );
-                  }}
-                />
-              </div>
-              <ArrowRightIcon
-                aria-label="to"
-                class="mt-[1.125rem] size-4 shrink-0 text-ink-extra-muted"
-              />
-              <div class="min-w-0 p-3">
-                <Calendar
-                  required
-                  fixedWeeks
-                  value={endDate()}
-                  onValueChange={(date) => {
-                    if (!date || props.endDisabled) return;
-                    const nextDate = formatLocalDate(date);
-                    props.onEndChange(
-                      props.allDay
-                        ? nextDate
-                        : withLocalDate(props.end, nextDate)
-                    );
-                  }}
-                />
-              </div>
-            </div>
-
-            <div class="border-t border-edge p-3">
-              <div class="grid grid-cols-2 gap-3">
-                <div class={cn(props.allDay && 'opacity-50')}>
-                  <EventTimeInput
-                    id={`composer-start-time-${fieldId}`}
-                    label="Start time"
-                    value={startParts().time}
-                    onChange={(time) =>
-                      props.onStartChange(withLocalTime(props.start, time))
-                    }
-                    disabled={props.startDisabled || props.allDay}
-                  />
-                </div>
-                <div class={cn(props.allDay && 'opacity-50')}>
-                  <EventTimeInput
-                    id={`composer-end-time-${fieldId}`}
-                    label="End time"
-                    value={endParts().time}
-                    onChange={(time) =>
-                      props.onEndChange(withLocalTime(props.end, time))
-                    }
-                    disabled={props.endDisabled || props.allDay}
-                  />
-                </div>
-              </div>
-              <div class="mt-3 flex items-center gap-2">
-                <ToggleSwitch
-                  checked={props.allDay}
-                  disabled={props.allDayDisabled}
-                  onChange={props.onAllDayChange}
-                  size="sm"
-                  aria-label="All day"
-                />
-                <span class="text-xs text-ink-muted">All day</span>
-              </div>
-            </div>
-          </Popover.Content>
-        </Layer>
-      </Popover.Portal>
-    </Popover>
+        <EventDateTimeDropdown
+          id={`composer-end-time-${fieldId}`}
+          label="End"
+          value={props.end}
+          allDay={props.allDay}
+          onDateChange={(date) =>
+            props.onEndChange(
+              props.allDay ? date : withLocalDate(props.end, date)
+            )
+          }
+          onTimeChange={(time) =>
+            props.onEndChange(withLocalTime(props.end, time))
+          }
+          fieldDisabled={props.endDisabled}
+          invalid={props.invalid}
+          describedBy={props.describedBy}
+          placement="bottom-end"
+        />
+      </div>
+      <ToggleSwitch
+        checked={props.allDay}
+        disabled={props.allDayDisabled}
+        onChange={props.onAllDayChange}
+        size="sm"
+        label="All day"
+        labelClass="whitespace-nowrap text-xs text-ink-muted"
+        class="shrink-0"
+      />
+    </div>
   );
 }

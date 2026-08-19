@@ -191,6 +191,13 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
       await ready;
       return await request<WriteResult>('graphql_cache_write', {
         originOpId: args.opKey === undefined ? undefined : opId(args.opKey),
+        registration:
+          args.registerDependencies && args.opKey !== undefined
+            ? {
+                opId: opId(args.opKey),
+                entityResolvers: args.entityResolvers,
+              }
+            : undefined,
         query: args.query,
         operationName: args.operationName,
         variables: args.variables,

@@ -526,6 +526,8 @@ function mapSortMethod(
       return 'VIEWED_UPDATED';
     case 'frecency':
       return unsupported('sort_method frecency');
+    case 'touched_by_me':
+      return unsupported('sort_method touched_by_me');
     case undefined:
       return undefined;
   }

@@ -11,7 +11,7 @@
 
 use crate::engine::{
     ClaimedMutationWire, EngineHandle, EnqueueOptimisticMutationResultWire, ReadResultWire,
-    WriteResultWire,
+    WriteRegistration, WriteRequest, WriteResultWire,
 };
 use crate::{
     CacheState, InitializedCache, emit_cache_changed, emit_mutation_settled, emit_ops_affected,
@@ -120,6 +120,17 @@ pub async fn graphql_cache_search(
     engine_handle(&state)?.search(request).await
 }
 
+/// Active-query registration installed by a network write.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WriteRegistrationWire {
+    /// Host operation id.
+    pub op_id: String,
+    /// Synthetic read relations used by the query.
+    #[serde(default)]
+    pub entity_resolvers: Vec<EntityResolver>,
+}
+
 /// Normalizes and stores a network response; broadcasts affected operations
 /// to every webview.
 #[tauri::command]
@@ -127,6 +138,7 @@ pub async fn graphql_cache_write<R: Runtime>(
     app: AppHandle<R>,
     state: State<'_, CacheState>,
     origin_op_id: Option<String>,
+    registration: Option<WriteRegistrationWire>,
     query: String,
     operation_name: Option<String>,
     variables: Option<Variables>,
@@ -134,14 +146,18 @@ pub async fn graphql_cache_write<R: Runtime>(
     identity: Option<String>,
 ) -> Result<WriteResultWire, String> {
     let result = engine_handle(&state)?
-        .write(
+        .write(WriteRequest {
             origin_op_id,
+            registration: registration.map(|registration| WriteRegistration {
+                op_id: registration.op_id,
+                entity_resolvers: registration.entity_resolvers,
+            }),
             query,
             operation_name,
-            variables.unwrap_or_default(),
+            variables: variables.unwrap_or_default(),
             data,
             identity,
-        )
+        })
         .await?;
     emit_ops_affected(&app, &result.affected_ops, &result.changed);
     emit_cache_changed(&app);

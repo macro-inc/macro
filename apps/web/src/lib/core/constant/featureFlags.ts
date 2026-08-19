@@ -687,3 +687,12 @@ export function ENABLE_CHAT_V3_AGENTS(): boolean {
     analytics.posthog.isFeatureEnabled(ENABLE_CHAT_V3_AGENTS_FLAG) ?? false
   );
 }
+
+// The Recent view: the touched-by-me feed (everything the viewer mutated,
+// newest own-touch first). Gates the view (the route redirects to the inbox
+// when off) and its sidebar entry. PostHog-gated with a dev-mode default;
+// override with VITE_ENABLE_RECENT_VIEW.
+export const ENABLE_RECENT_VIEW_FLAG = 'enable-recent-view';
+export const ENABLE_RECENT_VIEW_OVERRIDE =
+  getFeatureFlagOverride('ENABLE_RECENT_VIEW') ??
+  (DEV_MODE_ENV ? true : undefined);
