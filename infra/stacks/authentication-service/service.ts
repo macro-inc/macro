@@ -320,10 +320,6 @@ export class AuthenticationService extends pulumi.ComponentResource {
               memory: 718, //1024 - (256 + 50)
               environment: [
                 { name: 'BASE_URL', value: this.domain },
-                {
-                  name: 'MICROSOFT_TOKEN_KMS_KEY_ID',
-                  value: microsoftTokenKmsKey.arn,
-                },
                 ...(containerEnvVars ?? []),
               ],
               secrets: [...dopplerEcsEnvironment.containerSecrets],

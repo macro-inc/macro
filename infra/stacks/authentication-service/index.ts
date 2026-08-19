@@ -156,8 +156,7 @@ const service = new AuthenticationService('authentication-service', {
   containerEnvVars: [
     // Configure MICROSOFT_CLIENT_ID, MICROSOFT_CLIENT_SECRET, and
     // MICROSOFT_TENANT_ID together in the authentication_service Doppler
-    // config. Pulumi injects the per-stack key ARN directly as
-    // MICROSOFT_TOKEN_KMS_KEY_ID; do not duplicate it in Doppler.
+    // config.
     { name: 'ENVIRONMENT', value: stack },
     { name: 'DOPPLER_PROJECT', value: 'authentication_service' },
     // OpenTelemetry / Datadog tracing configuration
