@@ -243,6 +243,8 @@ export function createNotificationSource(
     setMutedEntities(reconcile(mutedEntities));
   });
 
+  // TODO(dev-rb/notifications): Verify whether document-mention suppression is
+  // still required, and remove this source-based cleanup when it is not.
   if (!ENABLE_DOCUMENT_MENTION_NOTIFICATIONS) {
     createEffect(() => {
       const toDiscard = notifications().filter(
