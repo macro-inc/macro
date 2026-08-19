@@ -1,0 +1,18 @@
+[package]
+edition = "2024"
+name = "graphql_soup_filter_input"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+async-graphql = { workspace = true }
+chrono = { workspace = true }
+document_sub_type = { path = "../document_sub_type", default-features = false }
+filter_ast = { path = "../filter_ast" }
+item_filters = { path = "../item_filters", default-features = false }
+macro_user_id = { path = "../macro_user_id" }
+model_file_type = { path = "../model_file_type" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+uuid = { workspace = true, features = ["js"] }

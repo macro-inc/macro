@@ -38,6 +38,7 @@ members = [
   "crates/graphql_permission",
   "crates/graphql_properties",
   "crates/graphql_soup",
+  "crates/graphql_soup_filter_input",
   "crates/import",
   "crates/integration_tests/local_e2e",
   "crates/loops_client",

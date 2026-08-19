@@ -72,6 +72,11 @@ workspace-members = [
     # anyhow, either, nom, tracing, thiserror - is contributed by dozens of
     # other members anyway, so the deploy dependency layers are unchanged.
     "agent_fold",
+    "graphql_soup_filter_input",
+    "item_filters",
+    "filter_ast",
+    "document_sub_type",
+    "model_file_type",
     "macro_user_id",
     "macro_uuid",
     "non_empty",

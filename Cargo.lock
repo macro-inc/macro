@@ -4958,7 +4958,6 @@ dependencies = [
  "strum 0.27.2",
  "thiserror 2.0.18",
  "utoipa",
- "workspace-hack",
 ]
 
 [[package]]
@@ -6082,7 +6081,6 @@ version = "0.1.0"
 dependencies = [
  "recursion",
  "serde",
- "workspace-hack",
 ]
 
 [[package]]
@@ -6879,6 +6877,7 @@ dependencies = [
  "graphql_common",
  "graphql_email",
  "graphql_permission",
+ "graphql_soup_filter_input",
  "item_filters",
  "macro_authorization",
  "macro_user_id",
@@ -6896,6 +6895,23 @@ dependencies = [
  "tokio",
  "uuid",
  "workspace-hack",
+]
+
+[[package]]
+name = "graphql_soup_filter_input"
+version = "0.1.0"
+dependencies = [
+ "async-graphql",
+ "chrono",
+ "document_sub_type",
+ "filter_ast",
+ "item_filters",
+ "macro_user_id",
+ "model_file_type",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "uuid",
 ]
 
 [[package]]
@@ -8232,7 +8248,6 @@ dependencies = [
  "thiserror 2.0.18",
  "utoipa",
  "uuid",
- "workspace-hack",
 ]
 
 [[package]]
@@ -10050,7 +10065,6 @@ dependencies = [
  "strum 0.27.2",
  "thiserror 2.0.18",
  "utoipa",
- "workspace-hack",
 ]
 
 [[package]]
