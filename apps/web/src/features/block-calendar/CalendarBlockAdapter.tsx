@@ -78,9 +78,20 @@ function CalendarBlockAdapter(props: CalendarBlockProps) {
       };
     }
   );
+  // A cold `.data` read suspends the nearest <Suspense>, which is the one
+  // wrapping each calendar page: the first aim of a session enables this
+  // query, so reading it unguarded blanks the whole grid for the length of
+  // the fetch and remounts it. There is no target to resolve until the
+  // occurrences land anyway.
   const focusTarget = createMemo(() => {
     const request = targetRequest();
-    if (!request || occurrencesQuery.isPlaceholderData) return undefined;
+    if (
+      !request ||
+      occurrencesQuery.isLoading ||
+      occurrencesQuery.isPlaceholderData
+    ) {
+      return undefined;
+    }
     return resolveCalendarBlockTarget(
       occurrencesQuery.data?.items ?? [],
       request
