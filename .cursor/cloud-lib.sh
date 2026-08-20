@@ -11,7 +11,6 @@ LOG_DIR="${HOME}/.cursor-cloud"
 MACRODB_URL='postgres://user:password@localhost:5432/macrodb'
 DOCKER_SOCK='/var/run/docker.sock'
 NIX_BIN='/nix/var/nix/profiles/default/bin/nix'
-NIX_DAEMON='/nix/var/nix/profiles/default/bin/nix-daemon'
 NIX_SOCK='/nix/var/nix/daemon-socket/socket'
 export DATABASE_URL="${MACRODB_URL}"
 
@@ -25,7 +24,7 @@ ensure_nix_daemon() {
   # them. Remove the stale entry only after a real store probe has failed.
   sudo rm -f "${NIX_SOCK}"
   : >"${LOG_DIR}/nix-daemon.log"
-  sudo setsid "${NIX_DAEMON}" >>"${LOG_DIR}/nix-daemon.log" 2>&1 </dev/null &
+  sudo setsid "${NIX_BIN}" daemon >>"${LOG_DIR}/nix-daemon.log" 2>&1 </dev/null &
   local n=0
   while [ "${n}" -lt 30 ]; do
     if "${NIX_BIN}" ping-store >/dev/null 2>&1; then
