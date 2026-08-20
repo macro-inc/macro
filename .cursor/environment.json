@@ -1,0 +1,5 @@
+{
+  "name": "macro",
+  "install": "bash .cursor/install.sh",
+  "start": "bash .cursor/start.sh"
+}
