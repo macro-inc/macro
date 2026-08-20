@@ -103,6 +103,7 @@ import type { GetAttachmentReferencesResponse } from './generated/schemas/getAtt
 import type { GetBatchChannelPreviewRequest } from './generated/schemas/getBatchChannelPreviewRequest';
 import type { GetBatchChannelPreviewResponse } from './generated/schemas/getBatchChannelPreviewResponse';
 import type { GetBatchProjectPreviewResponse } from './generated/schemas/getBatchProjectPreviewResponse';
+import type { GetContactByEmailParams } from './generated/schemas/getContactByEmailParams';
 import type { GetDocumentPermissionsResponseDataV2 } from './generated/schemas/getDocumentPermissionsResponseDataV2';
 import type { GetDocumentProcessingResultResponse } from './generated/schemas/getDocumentProcessingResultResponse';
 import type { GetDocumentResponseData } from './generated/schemas/getDocumentResponseData';
@@ -2468,6 +2469,16 @@ export const storageServiceClient = {
     return await dssFetch<CrmContactResponse>(`/crm/contacts/${contactId}`, {
       method: 'GET',
     });
+  },
+  async getContactByEmail({
+    email,
+    signal,
+  }: GetContactByEmailParams & { signal?: AbortSignal }) {
+    const query = new URLSearchParams({ email });
+    return await dssFetch<CrmContactResponse>(
+      `/crm/contacts/by-email?${query.toString()}`,
+      { method: 'GET', signal }
+    );
   },
   async setContactName({
     contactId,

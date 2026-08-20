@@ -24,6 +24,10 @@ pub mod list_company_contacts;
 /// rows; admin/owner reach hidden contacts (and hidden parent companies).
 pub mod get_contact;
 
+/// Fetch a single CRM contact by email in the caller's team. Role-aware:
+/// members 404 on hidden rows; admin/owner reach hidden contacts.
+pub mod get_contact_by_email;
+
 /// Fetch a single CRM company by id, hydrated with domains and contacts.
 pub mod get_company;
 
@@ -140,6 +144,10 @@ where
             "/companies/{company_id}/contacts",
             get(list_company_contacts::handler::<C, Eas, Auth>)
                 .post(create_contact::handler::<C, Eas, Auth>),
+        )
+        .route(
+            "/contacts/by-email",
+            get(get_contact_by_email::handler::<C, Eas, Auth>),
         )
         .route(
             "/contacts/{contact_id}",

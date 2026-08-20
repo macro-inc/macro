@@ -1,13 +1,37 @@
 import { throwOnErr } from '@core/util/result';
 import { storageServiceClient } from '@service-storage/client';
 import type { CrmContactResponse } from '@service-storage/generated/schemas/crmContactResponse';
-import { useMutation, useQuery } from '@tanstack/solid-query';
+import { queryOptions, useMutation, useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
 import { queryClient } from '../client';
 import { soupKeys } from '../soup/keys';
 import { crmKeys } from './keys';
 
 const CONTACT_STALE_TIME = 60 * 1000;
+
+function crmContactByEmailQueryOptions(email: string) {
+  const normalizedEmail = email.trim().toLowerCase();
+  return queryOptions({
+    queryKey: crmKeys.contactByEmail(normalizedEmail).queryKey,
+    queryFn: ({ signal }) =>
+      throwOnErr(() =>
+        storageServiceClient.getContactByEmail({
+          email: normalizedEmail,
+          signal,
+        })
+      ),
+    staleTime: CONTACT_STALE_TIME,
+  });
+}
+
+/** Resolves a team CRM contact by email and primes its detail cache. */
+export async function fetchCrmContactByEmail(email: string) {
+  const contact = await queryClient.fetchQuery(
+    crmContactByEmailQueryOptions(email)
+  );
+  queryClient.setQueryData(crmKeys.contact(contact.id).queryKey, contact);
+  return contact;
+}
 
 /**
  * Fetches a single CRM contact by id via `GET /crm/contacts/{id}`.
