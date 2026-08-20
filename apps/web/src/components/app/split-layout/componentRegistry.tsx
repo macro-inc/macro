@@ -552,7 +552,9 @@ registerComponent('email-compose', (params) => {
   // mailto: links land here as `component/email-compose?to=a@x.com,b@y.com`.
   const toParam = new URLSearchParams(window.location.search).get('to');
   const paramsInitialTo = Array.isArray(params.initialTo)
-    ? params.initialTo.filter((value): value is string => typeof value === 'string')
+    ? params.initialTo.filter(
+        (value): value is string => typeof value === 'string'
+      )
     : undefined;
   const initialTo =
     paramsInitialTo ??
@@ -560,7 +562,8 @@ registerComponent('email-compose', (params) => {
       ?.split(',')
       .map((e) => e.trim())
       .filter(Boolean);
-  const draftID = typeof params.draftID === 'string' ? params.draftID : undefined;
+  const draftID =
+    typeof params.draftID === 'string' ? params.draftID : undefined;
   return <EmailCompose draftID={draftID} initialTo={initialTo} />;
 });
 registerComponent('task-compose', (params) => {
