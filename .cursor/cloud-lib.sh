@@ -16,7 +16,23 @@ export DATABASE_URL="${MACRODB_URL}"
 
 mkdir -p "${LOG_DIR}" "${TARGET_CACHE}" "${FRONTEND_CACHE}" "${MACRO_STACK_SNAPSHOT_DIR}"
 
+ensure_nix_installed() {
+  if [ -x "${NIX_BIN}" ]; then
+    return 0
+  fi
+  echo "cursor-cloud: installing Determinate Nix"
+  curl --retry 5 --retry-delay 2 --retry-all-errors -fsSL \
+    https://install.determinate.systems/nix |
+    sudo sh -s -- install linux \
+      --init none \
+      --no-confirm \
+      --extra-conf "trusted-users = root $(id -un)" \
+      --extra-conf "sandbox = false"
+  test -x "${NIX_BIN}"
+}
+
 ensure_nix_daemon() {
+  ensure_nix_installed
   if "${NIX_BIN}" ping-store >/dev/null 2>&1; then
     return 0
   fi
