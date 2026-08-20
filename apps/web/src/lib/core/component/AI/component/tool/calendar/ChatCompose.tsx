@@ -138,6 +138,7 @@ function CalendarChatComposeContent(props: CalendarChatComposeProps) {
   const ownerGateDisabled = () => !chatQuery.isSuccess || !isOwner();
   const showOwnerDisabledMessage = () => chatQuery.isSuccess && !isOwner();
   const interactionLocked = () =>
+    toolFinalized ||
     ownerGateDisabled() ||
     props.streamLocked === true ||
     operation() !== undefined;
@@ -275,6 +276,7 @@ function CalendarChatComposeContent(props: CalendarChatComposeProps) {
     }
 
     toolFinalized = true;
+    setOperation(undefined);
     updateLocalResponse(result.value as CreateCalendarEventResponse, args);
     void invalidateCalendarOccurrences();
     toast.success('Calendar event created');
@@ -298,6 +300,7 @@ function CalendarChatComposeContent(props: CalendarChatComposeProps) {
     }
 
     toolFinalized = true;
+    setOperation(undefined);
     updateLocalResponse('Rejected');
   }
 
@@ -319,6 +322,7 @@ function CalendarChatComposeContent(props: CalendarChatComposeProps) {
         <EventForm
           controller={controller}
           disabled={
+            toolFinalized ||
             ownerGateDisabled() ||
             props.streamLocked === true ||
             operation() === 'reject'
