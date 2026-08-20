@@ -11,6 +11,8 @@ STACK_SNAPSHOT_IMAGE='macro-cloud-stack-snapshot:prepared'
 LOG_DIR="${HOME}/.cursor-cloud"
 MACRODB_URL='postgres://user:password@localhost:5432/macrodb'
 DOCKER_SOCK='/var/run/docker.sock'
+DOCKER_IPTABLES_BACKEND='/usr/sbin/iptables-legacy'
+DOCKER_IP6TABLES_BACKEND='/usr/sbin/ip6tables-legacy'
 NIX_BIN='/nix/var/nix/profiles/default/bin/nix'
 NIX_SOCK='/nix/var/nix/daemon-socket/socket'
 export DATABASE_URL="${MACRODB_URL}"
@@ -78,7 +80,56 @@ ensure_nix_daemon() {
   return 1
 }
 
+ensure_docker_iptables_backend() {
+  local current_backend
+  current_backend="$(readlink -f /etc/alternatives/iptables 2>/dev/null || true)"
+  local legacy_forward_policy
+  legacy_forward_policy="$(
+    sudo "${DOCKER_IPTABLES_BACKEND}" -S FORWARD 2>/dev/null |
+      sed -n 's/^-P FORWARD //p'
+  )"
+
+  # region agent log
+  agent_debug_log "E" ".cursor/cloud-lib.sh:ensure_docker_iptables_backend:before" \
+    "inspected Docker iptables backend" \
+    "current=${current_backend:-missing}" \
+    "desired=${DOCKER_IPTABLES_BACKEND}" \
+    "legacy_forward_policy=${legacy_forward_policy:-missing}"
+  # endregion
+
+  test -x "${DOCKER_IPTABLES_BACKEND}"
+  test -x "${DOCKER_IP6TABLES_BACKEND}"
+
+  # The cloud image can preserve a legacy FORWARD DROP policy while apt selects
+  # iptables-nft. Make Docker program the enforcing legacy table instead of
+  # opening FORWARD or bypassing Docker's per-network isolation chains.
+  if [ "${current_backend}" != "${DOCKER_IPTABLES_BACKEND}" ]; then
+    sudo /usr/bin/update-alternatives \
+      --set iptables "${DOCKER_IPTABLES_BACKEND}"
+  fi
+  if [ "$(readlink -f /etc/alternatives/ip6tables 2>/dev/null || true)" \
+    != "${DOCKER_IP6TABLES_BACKEND}" ]; then
+    sudo /usr/bin/update-alternatives \
+      --set ip6tables "${DOCKER_IP6TABLES_BACKEND}"
+  fi
+
+  current_backend="$(readlink -f /etc/alternatives/iptables)"
+  local current_ip6_backend
+  current_ip6_backend="$(readlink -f /etc/alternatives/ip6tables)"
+  test "${current_backend}" = "${DOCKER_IPTABLES_BACKEND}"
+  test "${current_ip6_backend}" = "${DOCKER_IP6TABLES_BACKEND}"
+
+  # region agent log
+  agent_debug_log "E" ".cursor/cloud-lib.sh:ensure_docker_iptables_backend:after" \
+    "reconciled Docker iptables backend" \
+    "current=${current_backend}" \
+    "current_ip6=${current_ip6_backend}" \
+    "forward_policy_unchanged=${legacy_forward_policy:-missing}"
+  # endregion
+}
+
 ensure_dockerd() {
+  ensure_docker_iptables_backend
   local storage_driver='vfs'
   local storage_args=()
   if [ -x /usr/bin/fuse-overlayfs ]; then
