@@ -272,9 +272,7 @@ impl From<SessionStatusDto> for SessionStatus {
 /// The acting user is deliberately not one of them: it comes from the caller's
 /// credentials, so that a caller cannot attribute an operation to someone else.
 ///
-/// A two-way wire contract: API clients (the self-hosted `coding_agent_worker`
-/// daemon among them) serialize this type to build the request the server
-/// deserializes, so both derives are load-bearing.
+/// Clients serialize this, so both derives are used.
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ControlRequest {
@@ -285,8 +283,7 @@ pub struct ControlRequest {
 
 /// Response body describing an agent session.
 ///
-/// A two-way wire contract: API clients deserialize this type from the
-/// response the server serializes, so both derives are load-bearing.
+/// Clients deserialize this, so both derives are used.
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct AgentSessionResponse {
@@ -666,9 +663,7 @@ where
 
 /// Request body for `POST /agent-sessions`.
 ///
-/// A two-way wire contract: API clients (the self-hosted `coding_agent_worker`
-/// daemon among them) serialize this type to build the request the server
-/// deserializes, so both derives are load-bearing.
+/// Clients serialize this, so both derives are used.
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateAgentSessionRequest {
@@ -697,8 +692,7 @@ pub struct CreateAgentSessionRequest {
 
 /// The triggering mention on a create request.
 ///
-/// A two-way wire contract: API clients serialize this type as part of
-/// [`CreateAgentSessionRequest`], so both derives are load-bearing.
+/// Clients serialize this, so both derives are used.
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateSessionThread {
@@ -716,8 +710,7 @@ pub struct CreateSessionThread {
 
 /// Response body for `POST /agent-sessions`.
 ///
-/// A two-way wire contract: API clients deserialize this type from the
-/// response the server serializes, so both derives are load-bearing.
+/// Clients deserialize this, so both derives are used.
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateAgentSessionResponse {
@@ -732,9 +725,7 @@ const THREAD_SESSION_EXISTS_MESSAGE: &str = "this bot already has a session for 
 /// Body of the 409 answered by `POST /agent-sessions` when the request's
 /// thread already routes to one of this bot's sessions.
 ///
-/// A two-way wire contract: API clients deserialize this to recover the
-/// existing session and resume it instead of treating the create as lost, so
-/// both derives are load-bearing.
+/// Clients deserialize this, so both derives are used.
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ThreadSessionExistsResponse {

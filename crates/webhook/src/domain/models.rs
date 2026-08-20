@@ -319,8 +319,7 @@ impl std::str::FromStr for WebhookStatus {
 
 /// Scope that owns a newly-created webhook.
 ///
-/// A two-way wire contract: it is part of [`CreateWebhookRequest`], which API
-/// clients serialize, so both derives are load-bearing.
+/// Clients serialize this, so both derives are used.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 #[serde(rename_all = "snake_case")]
@@ -355,10 +354,7 @@ impl WebhookEndpointSchemePolicy {
 
 /// Request to create a webhook.
 ///
-/// A two-way wire contract: API clients (the self-hosted `coding_agent_worker`
-/// daemon, which registers its own trigger feed at boot) serialize this type
-/// to build the request the server deserializes, so both derives are
-/// load-bearing.
+/// Clients serialize this, so both derives are used.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 pub struct CreateWebhookRequest {
@@ -406,8 +402,7 @@ pub enum CreateWebhookOutcome {
 
 /// Webhook row returned by application APIs.
 ///
-/// A two-way wire contract: API clients deserialize this type from the
-/// response the server serializes, so both derives are load-bearing.
+/// Clients deserialize this, so both derives are used.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 pub struct Webhook {
@@ -446,8 +441,7 @@ pub struct Webhook {
 
 /// Webhook returned after creation, including its signing secret.
 ///
-/// A two-way wire contract: API clients deserialize this type from the
-/// response the server serializes, so both derives are load-bearing.
+/// Clients deserialize this, so both derives are used.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 pub struct CreateWebhookResponse {
@@ -505,8 +499,7 @@ impl From<Webhook> for CreateWebhookResponse {
 
 /// Webhooks visible to the caller across their personal and team workspaces.
 ///
-/// A two-way wire contract: API clients deserialize this type from the
-/// response the server serializes, so both derives are load-bearing.
+/// Clients deserialize this, so both derives are used.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 pub struct ListWebhooksResponse {
