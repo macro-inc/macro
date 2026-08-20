@@ -23,7 +23,7 @@ export class CrmNamespace {
 
   /** Resolve a CRM contact by email in the caller's current team, if present. */
   async contactByEmail(email: string): Promise<Contact | undefined> {
-    const contact = unwrap(
+    const { contact } = unwrap(
       await this.client.storage.getContactByEmail({
         query: { email },
       }),

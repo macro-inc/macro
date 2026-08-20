@@ -5,7 +5,7 @@ use entity_access::{
 };
 use macro_authorization::MacroAuthorizationService;
 use model_error_response::ErrorResponse;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use utoipa::{IntoParams, ToSchema};
 
 use crate::domain::{auth::CrmTeamReceipt, model::CrmError, service::CrmService};
@@ -19,10 +19,17 @@ pub struct GetContactByEmailParams {
     pub email: String,
 }
 
-/// Look up a CRM contact by email in the caller's team. Returns JSON `null`
-/// when no visible contact exists. Any team member may resolve a visible
-/// contact; admin/owner callers may also resolve hidden contacts and contacts
-/// under hidden companies.
+/// Response from looking up a CRM contact by email.
+#[derive(Debug, Serialize, ToSchema)]
+pub struct GetContactByEmailResponse {
+    /// The matching contact, or `null` when none is visible.
+    pub contact: Option<CrmContactResponse>,
+}
+
+/// Look up a CRM contact by email in the caller's team. Returns a null
+/// `contact` when no visible contact exists. Any team member may resolve a
+/// visible contact; admin/owner callers may also resolve hidden contacts and
+/// contacts under hidden companies.
 #[utoipa::path(
     get,
     path = "/crm/contacts/by-email",
@@ -31,8 +38,8 @@ pub struct GetContactByEmailParams {
     responses(
         (
             status = 200,
-            body = Option<CrmContactResponse>,
-            description = "The matching contact, or JSON null when none is visible."
+            body = GetContactByEmailResponse,
+            description = "The matching contact, or a null contact when none is visible."
         ),
         (status = 400, body = ErrorResponse),
         (status = 401, body = ErrorResponse),
@@ -44,7 +51,7 @@ pub async fn handler<C: CrmService, Eas: EntityAccessService, Auth: MacroAuthori
     access: MacroUserTeamExtractorV2<MemberTeamRole, Eas, Auth>,
     State(state): State<CrmRouterState<C, Eas, Auth>>,
     Query(params): Query<GetContactByEmailParams>,
-) -> Result<Json<Option<CrmContactResponse>>, CrmError> {
+) -> Result<Json<GetContactByEmailResponse>, CrmError> {
     let receipt = CrmTeamReceipt::from_team_receipt(access.entity_access_receipt)?;
     let contact = state
         .service
@@ -52,5 +59,5 @@ pub async fn handler<C: CrmService, Eas: EntityAccessService, Auth: MacroAuthori
         .await?
         .map(Into::into);
 
-    Ok(Json(contact))
+    Ok(Json(GetContactByEmailResponse { contact }))
 }

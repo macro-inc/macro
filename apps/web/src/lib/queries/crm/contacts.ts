@@ -14,7 +14,7 @@ function crmContactByEmailQueryOptions(teamId: string, email: string) {
   return queryOptions({
     queryKey: crmKeys.contactByEmail(teamId, normalizedEmail).queryKey,
     queryFn: async ({ signal }) => {
-      const contact = await throwOnErr(() =>
+      const { contact } = await throwOnErr(() =>
         storageServiceClient.getContactByEmail({
           email: normalizedEmail,
           signal,

@@ -4048,10 +4048,10 @@ export const setCrmCompanyNameBody = zod
   .describe('Request body for `PUT \/companies\/{company_id}\/name`.');
 
 /**
- * @summary Look up a CRM contact by email in the caller's team. Returns JSON `null`
-when no visible contact exists. Any team member may resolve a visible
-contact; admin/owner callers may also resolve hidden contacts and contacts
-under hidden companies.
+ * @summary Look up a CRM contact by email in the caller's team. Returns a null
+`contact` when no visible contact exists. Any team member may resolve a
+visible contact; admin/owner callers may also resolve hidden contacts and
+contacts under hidden companies.
  */
 export const getContactByEmailQueryParams = zod.object({
   email: zod
@@ -4059,41 +4059,47 @@ export const getContactByEmailQueryParams = zod.object({
     .describe("The contact email to resolve within the caller's team."),
 });
 
-export const getContactByEmailResponse = zod.union([
-  zod.null(),
-  zod
-    .object({
-      companyId: zod
-        .uuid()
-        .describe('The id of the company the contact belongs to.'),
-      createdAt: zod.iso
-        .datetime({})
-        .describe('When the contact record was created.'),
-      email: zod.string().describe("The contact's email address."),
-      firstInteraction: zod.iso
-        .datetime({})
-        .describe('Earliest known interaction with this contact.'),
-      hidden: zod
-        .boolean()
-        .describe(
-          'Whether the contact is hidden from CRM listings for the\nrequesting team. Non-admin viewers never see `hidden = true`\nrows (the endpoint filters them out); admin\/owner callers see\nhidden contacts so they can render the right toggle state.'
-        ),
-      id: zod.uuid().describe('The id of the contact record.'),
-      lastInteraction: zod.iso
-        .datetime({})
-        .describe('Most recent known interaction with this contact.'),
-      name: zod
-        .string()
-        .nullish()
-        .describe('Display name observed for the contact, if any.'),
-      updatedAt: zod.iso
-        .datetime({})
-        .describe('When the contact record was last updated.'),
-    })
-    .describe(
-      'A CRM contact as returned by `GET \/crm\/companies\/{company_id}\/contacts`.'
-    ),
-]);
+export const getContactByEmailResponse = zod
+  .object({
+    contact: zod
+      .union([
+        zod.null(),
+        zod
+          .object({
+            companyId: zod
+              .uuid()
+              .describe('The id of the company the contact belongs to.'),
+            createdAt: zod.iso
+              .datetime({})
+              .describe('When the contact record was created.'),
+            email: zod.string().describe("The contact's email address."),
+            firstInteraction: zod.iso
+              .datetime({})
+              .describe('Earliest known interaction with this contact.'),
+            hidden: zod
+              .boolean()
+              .describe(
+                'Whether the contact is hidden from CRM listings for the\nrequesting team. Non-admin viewers never see `hidden = true`\nrows (the endpoint filters them out); admin\/owner callers see\nhidden contacts so they can render the right toggle state.'
+              ),
+            id: zod.uuid().describe('The id of the contact record.'),
+            lastInteraction: zod.iso
+              .datetime({})
+              .describe('Most recent known interaction with this contact.'),
+            name: zod
+              .string()
+              .nullish()
+              .describe('Display name observed for the contact, if any.'),
+            updatedAt: zod.iso
+              .datetime({})
+              .describe('When the contact record was last updated.'),
+          })
+          .describe(
+            'A CRM contact as returned by `GET \/crm\/companies\/{company_id}\/contacts`.'
+          ),
+      ])
+      .optional(),
+  })
+  .describe('Response from looking up a CRM contact by email.');
 
 /**
  * @summary Fetch a single CRM contact by id. Access is enforced by

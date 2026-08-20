@@ -4972,7 +4972,7 @@
     "/crm/contacts/by-email": {
       "get": {
         "tags": ["crm::inbound::axum_router::get_contact_by_email"],
-        "summary": "Look up a CRM contact by email in the caller's team. Returns JSON `null`\nwhen no visible contact exists. Any team member may resolve a visible\ncontact; admin/owner callers may also resolve hidden contacts and contacts\nunder hidden companies.",
+        "summary": "Look up a CRM contact by email in the caller's team. Returns a null\n`contact` when no visible contact exists. Any team member may resolve a\nvisible contact; admin/owner callers may also resolve hidden contacts and\ncontacts under hidden companies.",
         "operationId": "get_contact_by_email",
         "parameters": [
           {
@@ -4987,18 +4987,11 @@
         ],
         "responses": {
           "200": {
-            "description": "The matching contact, or JSON null when none is visible.",
+            "description": "The matching contact, or a null contact when none is visible.",
             "content": {
               "application/json": {
                 "schema": {
-                  "oneOf": [
-                    {
-                      "type": "null"
-                    },
-                    {
-                      "$ref": "#/components/schemas/CrmContactResponse"
-                    }
-                  ]
+                  "$ref": "#/components/schemas/GetContactByEmailResponse"
                 }
               }
             }
@@ -18854,6 +18847,23 @@
             "items": {
               "$ref": "#/components/schemas/ProjectPreview"
             }
+          }
+        }
+      },
+      "GetContactByEmailResponse": {
+        "type": "object",
+        "description": "Response from looking up a CRM contact by email.",
+        "properties": {
+          "contact": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/CrmContactResponse",
+                "description": "The matching contact, or `null` when none is visible."
+              }
+            ]
           }
         }
       },

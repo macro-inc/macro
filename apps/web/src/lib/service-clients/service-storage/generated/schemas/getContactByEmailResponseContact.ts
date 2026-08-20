@@ -6,4 +6,4 @@
  */
 import type { CrmContactResponse } from './crmContactResponse';
 
-export type GetContactByEmail200 = null | CrmContactResponse;
+export type GetContactByEmailResponseContact = null | CrmContactResponse;

@@ -4951,6 +4951,13 @@ export type GetBatchProjectPreviewResponse = {
     previews: Array<ProjectPreview>;
 };
 
+/**
+ * Response from looking up a CRM contact by email.
+ */
+export type GetContactByEmailResponse = {
+    contact?: null | CrmContactResponse;
+};
+
 export type GetDocumentKeyResponse = {
     /**
      * Data to be returned
@@ -10314,12 +10321,12 @@ export type GetContactByEmailError = GetContactByEmailErrors[keyof GetContactByE
 
 export type GetContactByEmailResponses = {
     /**
-     * The matching contact, or JSON null when none is visible.
+     * The matching contact, or a null contact when none is visible.
      */
-    200: null | CrmContactResponse;
+    200: GetContactByEmailResponse;
 };
 
-export type GetContactByEmailResponse = GetContactByEmailResponses[keyof GetContactByEmailResponses];
+export type GetContactByEmailResponse2 = GetContactByEmailResponses[keyof GetContactByEmailResponses];
 
 export type GetContactData = {
     body?: never;
