@@ -59,11 +59,15 @@ if ! wait_for "docker daemon" 90 sudo docker info; then
   ps -ef | grep -E '[d]ockerd|[c]ontainerd' >&2 || true
   exit 1
 fi
-# Group membership from the image does not apply until a new login; world-write
-# the socket so the ubuntu user can talk to dockerd without `sudo`.
-if [ -S /var/run/docker.sock ]; then
-  sudo chmod 666 /var/run/docker.sock
-elif [ -S /run/docker.sock ]; then
-  sudo chmod 666 /run/docker.sock
-  sudo ln -sfn /run/docker.sock /var/run/docker.sock
+# Group membership from the image does not apply until a new login. Always
+# chmod as root (do not `test -S` as ubuntu first — a 0600 root socket is
+# invisible to that check in some setups) so the ubuntu user can docker(1)
+# without sudo.
+sudo sh -c 'chmod 666 /var/run/docker.sock /run/docker.sock 2>/dev/null || true'
+ls -la /var/run/docker.sock /run/docker.sock || true
+if ! wait_for "docker as ubuntu" 15 docker info; then
+  echo "cursor-cloud start: ubuntu docker info failed after chmod" >&2
+  ls -la /var/run/docker.sock /run/docker.sock >&2 || true
+  id >&2
+  exit 1
 fi
