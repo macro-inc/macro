@@ -29,7 +29,7 @@ function renderGate<Data>(result: EntityLoadResult<Data>): HTMLElement {
   const disposeRender = render(
     () => (
       <EntityLoadGate result={result}>
-        {(data) => <div>Loaded: {String(data)}</div>}
+        <div>Loaded</div>
       </EntityLoadGate>
     ),
     container
@@ -47,14 +47,45 @@ afterEach(() => {
 });
 
 describe('EntityLoadGate', () => {
-  it('passes successful data to its child', () => {
+  it('renders its child after data loads', () => {
     const container = renderGate({
       data: () => 'channel data',
       error: () => null,
       isPending: () => false,
     });
 
-    expect(container.textContent).toBe('Loaded: channel data');
+    expect(container.textContent).toBe('Loaded');
+  });
+
+  it('does not mount its child while data is pending', () => {
+    let childMounted = false;
+    const Child = () => {
+      childMounted = true;
+      return <div>Loaded</div>;
+    };
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const disposeRender = render(
+      () => (
+        <EntityLoadGate
+          result={{
+            data: () => undefined,
+            error: () => null,
+            isPending: () => true,
+          }}
+        >
+          <Child />
+        </EntityLoadGate>
+      ),
+      container
+    );
+    dispose = () => {
+      disposeRender();
+      container.remove();
+    };
+
+    expect(childMounted).toBe(false);
+    expect(container.textContent).toBe('Loading');
   });
 
   it('renders loading while data is pending', () => {

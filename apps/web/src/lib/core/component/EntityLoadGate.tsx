@@ -13,7 +13,7 @@ export type EntityLoadResult<Data> = {
 
 type EntityLoadGateProps<Data> = {
   result: EntityLoadResult<Data>;
-  children: (data: Data) => JSX.Element;
+  children: JSX.Element;
 };
 
 function getErrorCode(error: unknown): string | null {
@@ -23,48 +23,40 @@ function getErrorCode(error: unknown): string | null {
   return null;
 }
 
-function EntityLoadGateInner<Data>(props: EntityLoadGateProps<Data>) {
+/** Renders entity content or the appropriate loading and access-error view. */
+export function EntityLoadGate<Data>(props: EntityLoadGateProps<Data>) {
   const errorCode = () => getErrorCode(props.result.error());
 
   return (
-    <Switch
-      fallback={
-        <div class="flex flex-col items-center justify-center h-full text-lg">
-          Sorry, an unexpected error has occurred.
-        </div>
-      }
-    >
-      <Match
-        when={errorCode() === 'UNAUTHORIZED' || errorCode() === 'FORBIDDEN'}
-      >
-        <Unauthorized />
-      </Match>
-      <Match when={errorCode() === 'NOT_FOUND'}>
-        <NotFound />
-      </Match>
-      <Match when={errorCode() === 'GONE'}>
-        <Gone />
-      </Match>
-      <Match when={props.result.error()}>
-        <div class="flex flex-col items-center justify-center h-full text-lg">
-          Sorry, an unexpected error has occurred.
-        </div>
-      </Match>
-      <Match when={props.result.isPending()}>
-        <LoadingBlock />
-      </Match>
-      <Match when={props.result.data()} keyed>
-        {(data) => props.children(data)}
-      </Match>
-    </Switch>
-  );
-}
-
-/** Renders entity data or the appropriate loading and access-error view. */
-export function EntityLoadGate<Data>(props: EntityLoadGateProps<Data>) {
-  return (
     <Suspense fallback={<LoadingBlock />}>
-      <EntityLoadGateInner {...props} />
+      <Switch
+        fallback={
+          <div class="flex flex-col items-center justify-center h-full text-lg">
+            Sorry, an unexpected error has occurred.
+          </div>
+        }
+      >
+        <Match
+          when={errorCode() === 'UNAUTHORIZED' || errorCode() === 'FORBIDDEN'}
+        >
+          <Unauthorized />
+        </Match>
+        <Match when={errorCode() === 'NOT_FOUND'}>
+          <NotFound />
+        </Match>
+        <Match when={errorCode() === 'GONE'}>
+          <Gone />
+        </Match>
+        <Match when={props.result.error()}>
+          <div class="flex flex-col items-center justify-center h-full text-lg">
+            Sorry, an unexpected error has occurred.
+          </div>
+        </Match>
+        <Match when={props.result.isPending()}>
+          <LoadingBlock />
+        </Match>
+        <Match when={props.result.data()}>{props.children}</Match>
+      </Switch>
     </Suspense>
   );
 }
