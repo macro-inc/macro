@@ -86,6 +86,25 @@ describe('unreadFilterFn', () => {
   });
 
   describe('mixed scenarios', () => {
+    it('treats an unviewed document mention as an unread channel notification', () => {
+      const entity: WithNotification<EntityData> = {
+        type: 'channel',
+        notifications: () => [
+          {
+            entity_type: 'channel',
+            viewed_at: null,
+            done: false,
+            notification_metadata: {
+              tag: 'document_mention',
+              content: { messageId: 'message-1' },
+            },
+          } as any,
+        ],
+      } as any;
+
+      expect(unreadFilterFn(entity)).toBe(true);
+    });
+
     it('handles entity with multiple unviewed notifications', () => {
       const entity: WithNotification<EntityData> = {
         type: 'channel',
