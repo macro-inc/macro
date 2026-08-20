@@ -82,7 +82,7 @@ final class CallVideoOverlayController: NSObject, UIGestureRecognizerDelegate, U
     private let primaryInitialsLabel = UILabel()
     private let primaryEmptyStateLabel = UILabel()
     private let primaryParticipantLabel = UILabel()
-    private let stripScrollView = UIScrollView()
+    private let stripScrollView = TileStripScrollView()
     private let stripStackView = UIStackView()
     private let localTileView = RemoteVideoTileView(isMirrored: true)
     private let controlsView = UIStackView()
@@ -1529,6 +1529,16 @@ private final class RemoteVideoTileView: UIControl {
 /// leaves `.possible` and never cancels or delays anything; it just counts
 /// touches so the apply pipeline can defer structural mutations while a finger
 /// is down without every touchable view needing its own bookkeeping.
+/// The participant strip is wall-to-wall UIControl tiles, and
+/// `UIScrollView.touchesShouldCancel(in:)` returns false for UIControls by
+/// default — so with `delaysContentTouches = false` a drag that starts on a
+/// tile is owned by the tile's tracking forever and the strip cannot scroll.
+/// Let the pan steal the touch: the tile gets `cancelTracking` (no
+/// touch-up-inside, so no accidental pin) and the scroll proceeds.
+private final class TileStripScrollView: UIScrollView {
+    override func touchesShouldCancel(in view: UIView) -> Bool { true }
+}
+
 private final class OverlayTouchGateRecognizer: UIGestureRecognizer {
     private var activeTouchCount = 0
     var onAllTouchesResolved: (() -> Void)?
