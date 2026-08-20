@@ -14,7 +14,7 @@ type CalendarEventListItem = NamedTool<
   'response'
 >['data']['events'][number];
 
-type ToolCalendarEvent = NamedTool<'CreateCalendarEvent', 'response'>['data'];
+type ToolCalendarEvent = NamedTool<'UpdateCalendarEvent', 'response'>['data'];
 
 type ToolCalendar = NamedTool<
   'ListCalendars',
@@ -83,6 +83,16 @@ const EventDetails = (props: { event: ToolCalendarEvent }) => (
   </Tool.List>
 );
 
+const mutationEvent = (
+  name: 'CreateCalendarEvent' | 'UpdateCalendarEvent',
+  response: unknown
+): ToolCalendarEvent | undefined => {
+  if (typeof response !== 'object' || response === null) return undefined;
+  if (name === 'UpdateCalendarEvent') return response as ToolCalendarEvent;
+  if ('UserAction' in response) return response.UserAction as ToolCalendarEvent;
+  return undefined;
+};
+
 const mutationRenderer = (
   name: 'CreateCalendarEvent' | 'UpdateCalendarEvent',
   icon: typeof CalendarPlus,
@@ -92,7 +102,7 @@ const mutationRenderer = (
     name,
     render: (ctx) => {
       const [isExpanded, setIsExpanded] = createSignal(false);
-      const event = () => ctx.response?.data as ToolCalendarEvent | undefined;
+      const event = () => mutationEvent(name, ctx.response?.data);
       const callLabel = () => {
         const scope = (ctx.tool.data as { scope?: string }).scope;
         return scope === 'this_event' ? `${label} occurrence` : label;
