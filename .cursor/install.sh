@@ -68,7 +68,7 @@ build_frontend_artifact() {
 
 cleanup_stack() {
   cd "${WORKSPACE_ROOT}"
-  just --quiet stack down
+  timeout --kill-after=10s 2m just --quiet stack down
 }
 
 cleanup_stack_best_effort() {
