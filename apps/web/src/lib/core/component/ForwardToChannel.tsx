@@ -209,7 +209,11 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
       if (!isModEnter(e)) {
         return false;
       }
-      handleSubmit();
+      // Holding the shortcut repeats keydown; swallow the repeats rather than
+      // letting them fall through to a newline, but only submit on the first.
+      if (!e.repeat) {
+        handleSubmit();
+      }
       e.preventDefault();
       return true;
     },
@@ -428,6 +432,9 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
       return;
     }
     e.preventDefault();
+    if (e.repeat) {
+      return;
+    }
     handleSubmit();
   };
 
