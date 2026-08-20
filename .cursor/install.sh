@@ -14,11 +14,17 @@ ensure_apt_packages() {
       missing+=("${pkg}")
     fi
   done
-  if [ "${#missing[@]}" -eq 0 ]; then
-    return 0
+  # Do not replace Docker CE on bases that already provide a complete engine.
+  if [ ! -x /usr/bin/docker ] || [ ! -x /usr/bin/dockerd ]; then
+    missing+=(docker.io docker-buildx docker-compose-v2)
   fi
-  sudo DEBIAN_FRONTEND=noninteractive apt-get update -qq
-  sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends "${missing[@]}"
+  if [ "${#missing[@]}" -ne 0 ]; then
+    sudo DEBIAN_FRONTEND=noninteractive apt-get update -qq
+    sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends "${missing[@]}"
+  fi
+  test -x /usr/bin/dockerd
+  /usr/bin/docker buildx version
+  /usr/bin/docker compose version
 }
 
 crate_env_paths() {
