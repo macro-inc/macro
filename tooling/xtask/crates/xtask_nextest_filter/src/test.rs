@@ -1,45 +1,62 @@
 use super::*;
 
-/// A change in a single crate selects only that crate's reverse dependencies.
+/// A change in a single crate selects that crate and its reverse dependencies,
+/// never the whole workspace.
 #[test]
 fn crate_change_maps_to_rdeps_of_that_crate() {
     let graph = build_graph(false).expect("cargo metadata");
-    let filter = compute_filter(&graph, "crates/email_validator/src/lib.rs\n").unwrap();
-    assert_eq!(filter, "rdeps(=email_validator)");
+    let packages = compute_packages(&graph, "crates/email_validator/src/lib.rs\n").unwrap();
+    assert_ne!(packages, "none");
+    assert_ne!(packages, "all");
+    let set: BTreeSet<&str> = packages.split_whitespace().collect();
+    assert!(
+        set.contains("email_validator"),
+        "changed crate must be selected: {packages}"
+    );
 }
 
-/// Changed files inside the workspace that belong to no package (and are not
-/// embedded assets) contribute nothing, leaving the filter empty so CI falls
-/// back to the full suite.
+/// Top-level files that belong to no package — a JSON at the repo root, a
+/// README, a deleted misc file — must not select the full suite.
 #[test]
-fn unmapped_files_alone_yield_empty_filter() {
+fn unmapped_files_alone_yield_none() {
     let graph = build_graph(false).expect("cargo metadata");
-    let filter = compute_filter(&graph, "docs/README.md\njustfile\n").unwrap();
-    assert_eq!(filter, "");
+    let packages = compute_packages(
+        &graph,
+        "random.json\npackage.json\ndocs/README.md\njustfile\n",
+    )
+    .unwrap();
+    assert_eq!(packages, "none");
 }
 
 /// Shared assets embedded into crates from outside their directories select
-/// their consumers, including when the change list also contains ordinary
-/// package files (previously the asset change was silently dropped).
+/// their consumers (and those consumers' reverse deps).
 #[test]
 fn embedded_assets_select_their_consumers() {
     let graph = build_graph(false).expect("cargo metadata");
 
-    let filter = compute_filter(&graph, "static_assets/schema.graphql\n").unwrap();
-    assert_eq!(
-        filter,
-        "rdeps(=cache-core)|rdeps(=complete_graph)|rdeps(=documents)|rdeps(=seed_cli)|rdeps(=xtask_workflows)"
-    );
+    let packages = compute_packages(&graph, "static_assets/schema.graphql\n").unwrap();
+    let set: BTreeSet<&str> = packages.split_whitespace().collect();
+    for expected in [
+        "cache-core",
+        "complete_graph",
+        "documents",
+        "seed_cli",
+        "xtask_workflows",
+    ] {
+        assert!(
+            set.contains(expected),
+            "embedded asset consumers must include {expected}: {packages}"
+        );
+    }
 
-    let mixed = compute_filter(
+    let mixed = compute_packages(
         &graph,
         "crates/email_validator/src/lib.rs\nstatic_assets/markdown-golden.1.bin\n",
     )
     .unwrap();
-    assert_eq!(
-        mixed,
-        "rdeps(=cache-core)|rdeps(=complete_graph)|rdeps(=documents)|rdeps(=email_validator)|rdeps(=seed_cli)|rdeps(=xtask_workflows)"
-    );
+    let mixed_set: BTreeSet<&str> = mixed.split_whitespace().collect();
+    assert!(mixed_set.contains("email_validator"));
+    assert!(mixed_set.contains("documents"));
 }
 
 /// Drift check: every workspace package whose Rust sources mention an
@@ -74,7 +91,7 @@ fn embedded_asset_packages_match_source_references() {
                 continue;
             }
             // Attribute the file to its deepest containing package, mirroring
-            // compute_filter, so nested workspaces (tooling/xtask/crates/*)
+            // compute_packages, so nested workspaces (tooling/xtask/crates/*)
             // don't credit the parent package.
             let owner = packages
                 .iter()

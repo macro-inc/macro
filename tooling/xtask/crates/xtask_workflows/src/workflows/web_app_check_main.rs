@@ -176,6 +176,10 @@ fn checkout(name: &str, full_history: bool) -> Step<Use> {
 fn paths_filter() -> Step<Use> {
     let artifact_paths = crate::workflows::web_artifact_paths::yaml_list("  ");
 
+    // `api_changed` is only the inputs to `bun run gen-api`. xtask, flake.nix,
+    // the Nix dev-shell action, and this workflow file do not change OpenAPI
+    // output, so they must not start Typecheck (which compiles the schema
+    // binaries). Workflow YAML drift is `check generated workflows`.
     Step::new("Filter changed paths")
         .uses(
             "dorny",
@@ -186,7 +190,7 @@ fn paths_filter() -> Step<Use> {
         .add_with((
             "filters",
             format!(
-                "should_run:\n{artifact_paths}  - 'services/lexical-service/**'\n  - '.github/actions/setup-nix-dev-shell/**'\n  - '.github/actions/setup-reqs-web/**'\n  - '.github/workflows/web-app-check-main.yml'\napi_changed:\n  - 'crates/**/*.rs'\n  - 'services/**/*.rs'\n  - 'tooling/xtask/**/*.rs'\n  - 'Cargo.toml'\n  - 'Cargo.lock'\n  - 'flake.nix'\n  - 'flake.lock'\n  - 'apps/web/scripts/generate-api-schema.ts'\n  - 'apps/web/scripts/services.ts'\n  - '.github/actions/setup-nix-dev-shell/**'\n  - '.github/actions/setup-reqs-web/**'\n  - '.github/workflows/web-app-check-main.yml'\n"
+                "should_run:\n{artifact_paths}  - 'services/lexical-service/**'\n  - '.github/actions/setup-nix-dev-shell/**'\n  - '.github/actions/setup-reqs-web/**'\napi_changed:\n  - 'crates/**/*.rs'\n  - 'services/**/*.rs'\n  - 'Cargo.toml'\n  - 'Cargo.lock'\n  - 'apps/web/scripts/generate-api-schema.ts'\n  - 'apps/web/scripts/services.ts'\n  - '.github/actions/setup-reqs-web/**'\n"
             ),
         ))
 }

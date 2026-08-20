@@ -1,20 +1,28 @@
 //! `cargo x nextest-filter <changed-files-path>`
 //!
-//! Computes the cargo-nextest package filter for Rust CI.
+//! Computes the set of workspace packages cargo nextest / clippy should run
+//! for Rust CI.
 //!
 //! Input is a newline-delimited file of paths relative to the repository root
 //! (typically `git diff --name-only ...`). For each changed path inside the
 //! Rust workspace, find the deepest workspace package containing that
 //! path using Cargo's own workspace metadata via guppy. Shared files that
 //! crates embed from outside their own directory are mapped through
-//! [`EMBEDDED_ASSET_PACKAGES`]. The resulting nextest expression runs tests
-//! for reverse dependencies of every changed package.
+//! [`EMBEDDED_ASSET_PACKAGES`]. The result is the changed packages plus every
+//! workspace reverse dependency, so a leaf-crate PR compiles that crate (and
+//! its dependents) instead of the whole workspace.
+//!
+//! Stdout is one of:
+//! - `none` — no changed file mapped to a package (a top-level JSON, a Nix
+//!   shell tweak, docs, …). CI must not treat this as "run everything".
+//! - space-separated package names — pass each as `cargo nextest run -p` /
+//!   `cargo clippy -p`.
 
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
-use guppy::graph::PackageGraph;
+use guppy::graph::{DependencyDirection, PackageGraph};
 use xtask_graph::build_graph;
 
 #[cfg(test)]
@@ -58,16 +66,28 @@ fn run(graph: &PackageGraph, changed_files_path: &Path) -> Result<()> {
         )
     })?;
 
-    let filter = compute_filter(graph, &changed_files)?;
-    println!("{filter}");
+    let packages = compute_packages(graph, &changed_files)?;
+    println!("{packages}");
     Ok(())
 }
 
 /// Map each changed path to its owning workspace package (or embedded-asset
-/// consumers) and combine them into one nextest filterset expression. An
-/// empty result means no changed file mapped to a package; CI treats that as
-/// "run everything".
-fn compute_filter(graph: &PackageGraph, changed_files: &str) -> Result<String> {
+/// consumers) and expand to reverse dependencies. Unmapped files contribute
+/// nothing; if nothing maps, the result is the token none so CI skips tests
+/// instead of falling back to the full suite.
+fn compute_packages(graph: &PackageGraph, changed_files: &str) -> Result<String> {
+    let changed = changed_workspace_packages(graph, changed_files)?;
+    if changed.is_empty() {
+        return Ok("none".to_owned());
+    }
+    let expanded = expand_rdeps(graph, &changed)?;
+    Ok(expanded.into_iter().collect::<Vec<_>>().join(" "))
+}
+
+fn changed_workspace_packages(
+    graph: &PackageGraph,
+    changed_files: &str,
+) -> Result<BTreeSet<String>> {
     let workspace = graph.workspace();
     let ws_root = workspace.root();
     let repo_root = ws_root;
@@ -121,15 +141,22 @@ fn compute_filter(graph: &PackageGraph, changed_files: &str) -> Result<String> {
         }
     }
 
-    Ok(changed_packages
-        .into_iter()
-        .map(|name| format!("rdeps(={})", escape_nextest_name(&name)))
-        .collect::<Vec<_>>()
-        .join("|"))
+    Ok(changed_packages)
 }
 
-fn escape_nextest_name(name: &str) -> String {
-    name.replace('\\', "\\\\")
-        .replace(')', "\\)")
-        .replace(',', "\\,")
+fn expand_rdeps(graph: &PackageGraph, changed: &BTreeSet<String>) -> Result<BTreeSet<String>> {
+    let mut ids = Vec::new();
+    for name in changed {
+        let pkg = graph
+            .workspace()
+            .member_by_name(name)
+            .with_context(|| format!("workspace member `{name}` not found"))?;
+        ids.push(pkg.id().clone());
+    }
+    let set = graph.query_reverse(ids.iter())?.resolve();
+    Ok(set
+        .packages(DependencyDirection::Reverse)
+        .filter(|package| package.in_workspace())
+        .map(|package| package.name().to_owned())
+        .collect())
 }
