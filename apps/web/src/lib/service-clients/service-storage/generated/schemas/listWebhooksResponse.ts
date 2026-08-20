@@ -9,8 +9,7 @@ import type { Webhook } from './webhook';
 /**
  * Webhooks visible to the caller across their personal and team workspaces.
 
-A two-way wire contract: API clients deserialize this type from the
-response the server serializes, so both derives are load-bearing.
+Clients deserialize this, so both derives are used.
  */
 export interface ListWebhooksResponse {
   /** The caller's webhooks, newest first. Signing secrets are omitted. */

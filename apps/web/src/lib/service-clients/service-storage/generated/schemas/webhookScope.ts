@@ -8,8 +8,7 @@
 /**
  * Scope that owns a newly-created webhook.
 
-A two-way wire contract: it is part of [`CreateWebhookRequest`], which API
-clients serialize, so both derives are load-bearing.
+Clients serialize this, so both derives are used.
  */
 export type WebhookScope = (typeof WebhookScope)[keyof typeof WebhookScope];
 

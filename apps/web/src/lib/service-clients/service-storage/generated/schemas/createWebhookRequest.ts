@@ -12,10 +12,7 @@ import type { WebhookScope } from './webhookScope';
 /**
  * Request to create a webhook.
 
-A two-way wire contract: API clients (the self-hosted `coding_agent_worker`
-daemon, which registers its own trigger feed at boot) serialize this type
-to build the request the server deserializes, so both derives are
-load-bearing.
+Clients serialize this, so both derives are used.
  */
 export interface CreateWebhookRequest {
   /** Endpoint URL. HTTPS is required outside local environments. */

@@ -713,9 +713,7 @@ export const getSelfBotResponse = zod
       .optional(),
     updated_at: zod.iso.datetime({}).describe('Update timestamp.'),
   })
-  .describe(
-    'Bot row.\n\nA two-way wire contract: it is the body of `GET \/bots\/me`, which API\nclients (the self-hosted `coding_agent_worker` daemon among them)\ndeserialize, so both derives are load-bearing.'
-  );
+  .describe('Bot row.\n\nClients deserialize this, so both derives are used.');
 
 /**
  * @summary Handler for `GET /bots/{bot_id}/channels`.
@@ -27015,7 +27013,7 @@ export const listWebhooksResponse = zod
             workspace_id: zod.string().describe('Owning workspace id.'),
           })
           .describe(
-            'Webhook row returned by application APIs.\n\nA two-way wire contract: API clients deserialize this type from the\nresponse the server serializes, so both derives are load-bearing.'
+            'Webhook row returned by application APIs.\n\nClients deserialize this, so both derives are used.'
           )
       )
       .describe(
@@ -27023,7 +27021,7 @@ export const listWebhooksResponse = zod
       ),
   })
   .describe(
-    'Webhooks visible to the caller across their personal and team workspaces.\n\nA two-way wire contract: API clients deserialize this type from the\nresponse the server serializes, so both derives are load-bearing.'
+    'Webhooks visible to the caller across their personal and team workspaces.\n\nClients deserialize this, so both derives are used.'
   );
 
 /**
@@ -27063,11 +27061,11 @@ export const createWebhookBody = zod
     scope: zod
       .enum(['user', 'team'])
       .describe(
-        'Scope that owns a newly-created webhook.\n\nA two-way wire contract: it is part of [`CreateWebhookRequest`], which API\nclients serialize, so both derives are load-bearing.'
+        'Scope that owns a newly-created webhook.\n\nClients serialize this, so both derives are used.'
       ),
   })
   .describe(
-    'Request to create a webhook.\n\nA two-way wire contract: API clients (the self-hosted `coding_agent_worker`\ndaemon, which registers its own trigger feed at boot) serialize this type\nto build the request the server deserializes, so both derives are\nload-bearing.'
+    'Request to create a webhook.\n\nClients serialize this, so both derives are used.'
   );
 
 /**
@@ -27125,7 +27123,7 @@ export const getWebhookResponse = zod
     workspace_id: zod.string().describe('Owning workspace id.'),
   })
   .describe(
-    'Webhook row returned by application APIs.\n\nA two-way wire contract: API clients deserialize this type from the\nresponse the server serializes, so both derives are load-bearing.'
+    'Webhook row returned by application APIs.\n\nClients deserialize this, so both derives are used.'
   );
 
 /**
@@ -27235,7 +27233,7 @@ export const patchWebhookResponse = zod
     workspace_id: zod.string().describe('Owning workspace id.'),
   })
   .describe(
-    'Webhook row returned by application APIs.\n\nA two-way wire contract: API clients deserialize this type from the\nresponse the server serializes, so both derives are load-bearing.'
+    'Webhook row returned by application APIs.\n\nClients deserialize this, so both derives are used.'
   );
 
 /**

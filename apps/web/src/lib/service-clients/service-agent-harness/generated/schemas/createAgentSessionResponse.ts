@@ -9,8 +9,7 @@ import type { AgentSessionResponse } from './agentSessionResponse';
 /**
  * Response body for `POST /agent-sessions`.
 
-A two-way wire contract: API clients deserialize this type from the
-response the server serializes, so both derives are load-bearing.
+Clients deserialize this, so both derives are used.
  */
 export interface CreateAgentSessionResponse {
   /** The created session. */

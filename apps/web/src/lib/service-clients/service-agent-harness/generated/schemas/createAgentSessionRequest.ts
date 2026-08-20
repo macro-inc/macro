@@ -12,9 +12,7 @@ import type { CreateAgentSessionRequestThread } from './createAgentSessionReques
 /**
  * Request body for `POST /agent-sessions`.
 
-A two-way wire contract: API clients (the self-hosted `coding_agent_worker`
-daemon among them) serialize this type to build the request the server
-deserializes, so both derives are load-bearing.
+Clients serialize this, so both derives are used.
  */
 export interface CreateAgentSessionRequest {
   /** Bot the session runs for. Bot callers may omit it (their own identity

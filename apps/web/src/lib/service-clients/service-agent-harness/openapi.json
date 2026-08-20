@@ -463,7 +463,7 @@
       },
       "AgentSessionResponse": {
         "type": "object",
-        "description": "Response body describing an agent session.\n\nA two-way wire contract: API clients deserialize this type from the\nresponse the server serializes, so both derives are load-bearing.",
+        "description": "Response body describing an agent session.\n\nClients deserialize this, so both derives are used.",
         "required": [
           "id",
           "ownerId",
@@ -562,11 +562,11 @@
             "description": "The operation to perform."
           }
         ],
-        "description": "Request body for a control operation on a live session.\n\nA wrapper around the operation rather than the bare enum so that fields\nwhich are about the request rather than the operation have somewhere to go.\nThe acting user is deliberately not one of them: it comes from the caller's\ncredentials, so that a caller cannot attribute an operation to someone else.\n\nA two-way wire contract: API clients (the self-hosted `coding_agent_worker`\ndaemon among them) serialize this type to build the request the server\ndeserializes, so both derives are load-bearing."
+        "description": "Request body for a control operation on a live session.\n\nA wrapper around the operation rather than the bare enum so that fields\nwhich are about the request rather than the operation have somewhere to go.\nThe acting user is deliberately not one of them: it comes from the caller's\ncredentials, so that a caller cannot attribute an operation to someone else.\n\nClients serialize this, so both derives are used."
       },
       "CreateAgentSessionRequest": {
         "type": "object",
-        "description": "Request body for `POST /agent-sessions`.\n\nA two-way wire contract: API clients (the self-hosted `coding_agent_worker`\ndaemon among them) serialize this type to build the request the server\ndeserializes, so both derives are load-bearing.",
+        "description": "Request body for `POST /agent-sessions`.\n\nClients serialize this, so both derives are used.",
         "required": ["workspace"],
         "properties": {
           "botId": {
@@ -601,7 +601,7 @@
       },
       "CreateAgentSessionResponse": {
         "type": "object",
-        "description": "Response body for `POST /agent-sessions`.\n\nA two-way wire contract: API clients deserialize this type from the\nresponse the server serializes, so both derives are load-bearing.",
+        "description": "Response body for `POST /agent-sessions`.\n\nClients deserialize this, so both derives are used.",
         "required": ["session"],
         "properties": {
           "session": {
@@ -612,7 +612,7 @@
       },
       "CreateSessionThread": {
         "type": "object",
-        "description": "The triggering mention on a create request.\n\nA two-way wire contract: API clients serialize this type as part of\n[`CreateAgentSessionRequest`], so both derives are load-bearing.",
+        "description": "The triggering mention on a create request.\n\nClients serialize this, so both derives are used.",
         "required": ["channelId", "messageId"],
         "properties": {
           "channelId": {

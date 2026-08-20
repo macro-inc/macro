@@ -9,8 +9,7 @@ import type { CreateSessionThreadThreadId } from './createSessionThreadThreadId'
 /**
  * The triggering mention on a create request.
 
-A two-way wire contract: API clients serialize this type as part of
-[`CreateAgentSessionRequest`], so both derives are load-bearing.
+Clients serialize this, so both derives are used.
  */
 export interface CreateSessionThread {
   /** Channel the mentioning message was posted in. */

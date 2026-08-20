@@ -14,8 +14,7 @@ import type { SessionStatusDto } from './sessionStatusDto';
 /**
  * Response body describing an agent session.
 
-A two-way wire contract: API clients deserialize this type from the
-response the server serializes, so both derives are load-bearing.
+Clients deserialize this, so both derives are used.
  */
 export interface AgentSessionResponse {
   /** The ACP session id, if one exists. */
