@@ -91,6 +91,12 @@ cargo fmt                   # format
 just clippy                 # extra lints / best practices
 ```
 
+### Pull requests
+
+- Titles use Conventional Commits: `type(scope): short description` (see CONTRIBUTING.md).
+- Bodies: a short summary of what changed and why. No test-plan checklists or generated boilerplate.
+- Link walkthrough videos as markdown links. Do not embed HTML video/img artifact cards.
+
 ### Database Management
 
 ```bash
