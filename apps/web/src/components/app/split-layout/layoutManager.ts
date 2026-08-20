@@ -510,8 +510,9 @@ export type SplitHandle<TMeta extends ComponentMeta = ComponentMeta> = {
   goBack: () => void;
   /**
    * Jump back to the nearest earlier history entry matching `predicate`,
-   * skipping the entries in between. Returns false — navigating nowhere — when
-   * no earlier entry matches.
+   * skipping the entries in between. Entries whose content another split
+   * already displays are skipped too, since this split cannot mount them.
+   * Returns false — navigating nowhere — when no earlier entry qualifies.
    */
   goBackTo: (predicate: (content: SplitContent) => boolean) => boolean;
   close: () => void;
@@ -912,12 +913,21 @@ export function createSplitLayout(
     }
 
     const split = state.splits[i];
+    const otherSplits = state.splits.filter((s) => s.id !== split.id);
     const result = { moved: false };
 
     batch(() => {
       captureCurrentEntryState(split);
 
-      const prev = split.history.backTo(predicate);
+      // Entries whose content another split already displays are not
+      // candidates: `reattach` refuses them, which would strand the history
+      // index on an entry the split never mounted. Skipping them here keeps
+      // the index and the mounted content in step, and lets the search carry
+      // on to an entry that can actually be shown.
+      const prev = split.history.backTo(
+        (content) =>
+          predicate(content) && !isDuplicateSplit(otherSplits, content)
+      );
       if (!prev) return;
 
       result.moved = true;

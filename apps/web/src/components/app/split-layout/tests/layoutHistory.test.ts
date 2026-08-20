@@ -91,6 +91,9 @@ describe('createHistory', () => {
       history.push({ value: 'doc' });
       history.push({ value: 'inbox' });
       history.push({ value: 'thread' });
+      history.push({ value: 'inbox' });
+      // Sitting on 'inbox' at index 1, with another 'inbox' ahead at index 3.
+      history.back();
       history.back();
 
       expect(history.backTo((item) => item.value === 'inbox')).toBe(null);
