@@ -19,29 +19,6 @@ export DATABASE_URL="${MACRODB_URL}"
 
 mkdir -p "${LOG_DIR}" "${TARGET_CACHE}" "${FRONTEND_CACHE}" "${MACRO_STACK_SNAPSHOT_DIR}"
 
-agent_debug_log() {
-  local hypothesis_id="$1"
-  local location="$2"
-  local message="$3"
-  shift 3
-  python3 - "${hypothesis_id}" "${location}" "${message}" "$@" <<'PY'
-import json
-import sys
-import time
-
-hypothesis_id, location, message, *pairs = sys.argv[1:]
-data = dict(pair.split("=", 1) for pair in pairs)
-with open("/opt/cursor/logs/debug.log", "a", encoding="utf-8") as log:
-    log.write(json.dumps({
-        "hypothesisId": hypothesis_id,
-        "location": location,
-        "message": message,
-        "data": data,
-        "timestamp": int(time.time() * 1000),
-    }) + "\n")
-PY
-}
-
 ensure_nix_installed() {
   if [ -x "${NIX_BIN}" ]; then
     return 0
@@ -87,19 +64,6 @@ ensure_docker_iptables_backend() {
   desired_ip6_backend="$(readlink -f "${DOCKER_IP6TABLES_BACKEND}")"
   local current_backend
   current_backend="$(readlink -f /etc/alternatives/iptables 2>/dev/null || true)"
-  local legacy_forward_policy
-  legacy_forward_policy="$(
-    sudo "${DOCKER_IPTABLES_BACKEND}" -S FORWARD 2>/dev/null |
-      sed -n 's/^-P FORWARD //p'
-  )"
-
-  # region agent log
-  agent_debug_log "E" ".cursor/cloud-lib.sh:ensure_docker_iptables_backend:before" \
-    "inspected Docker iptables backend" \
-    "current=${current_backend:-missing}" \
-    "desired=${desired_backend}" \
-    "legacy_forward_policy=${legacy_forward_policy:-missing}"
-  # endregion
 
   test -x "${DOCKER_IPTABLES_BACKEND}"
   test -x "${DOCKER_IP6TABLES_BACKEND}"
@@ -122,14 +86,6 @@ ensure_docker_iptables_backend() {
   current_ip6_backend="$(readlink -f /etc/alternatives/ip6tables)"
   test "${current_backend}" = "${desired_backend}"
   test "${current_ip6_backend}" = "${desired_ip6_backend}"
-
-  # region agent log
-  agent_debug_log "E" ".cursor/cloud-lib.sh:ensure_docker_iptables_backend:after" \
-    "reconciled Docker iptables backend" \
-    "current=${current_backend}" \
-    "current_ip6=${current_ip6_backend}" \
-    "forward_policy_unchanged=${legacy_forward_policy:-missing}"
-  # endregion
 }
 
 ensure_dockerd() {
