@@ -104,33 +104,10 @@ print(snapshot["dir"])
 ' <<<"${snapshot_json}")
   local snapshot_key="${snapshot_fields[0]}"
   local snapshot_dir="${snapshot_fields[1]}"
-  local snapshot_bytes
-  snapshot_bytes="$(du -sb "${snapshot_dir}" | awk '{print $1}')"
-
-  # region agent log
-  agent_debug_log "A,C" ".cursor/install.sh:prepare_durable_stack" \
-    "prepared filesystem snapshot" \
-    "home=${HOME}" \
-    "root=${MACRO_STACK_SNAPSHOT_DIR}" \
-    "key=${snapshot_key}" \
-    "dir=${snapshot_dir}" \
-    "bytes=${snapshot_bytes}"
-  # endregion
 
   bake_stack_snapshot_image "${snapshot_key}" "${snapshot_dir}"
   local image_id
-  local image_size
   image_id="$(docker image inspect --format '{{.Id}}' "${STACK_SNAPSHOT_IMAGE}")"
-  image_size="$(docker image inspect --format '{{.Size}}' "${STACK_SNAPSHOT_IMAGE}")"
-
-  # region agent log
-  agent_debug_log "B" ".cursor/install.sh:prepare_durable_stack" \
-    "baked filesystem snapshot into Docker image" \
-    "key=${snapshot_key}" \
-    "image=${STACK_SNAPSHOT_IMAGE}" \
-    "image_id=${image_id}" \
-    "image_size=${image_size}"
-  # endregion
 
   echo "cursor-cloud install: stack snapshot ${snapshot_key} at ${snapshot_dir}"
   echo "cursor-cloud install: stack snapshot image ${STACK_SNAPSHOT_IMAGE} (${image_id})"
