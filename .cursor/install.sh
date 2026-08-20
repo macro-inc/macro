@@ -20,7 +20,10 @@ ensure_apt_packages() {
   fi
   if [ "${#missing[@]}" -ne 0 ]; then
     sudo DEBIAN_FRONTEND=noninteractive apt-get update -qq
-    sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends "${missing[@]}"
+    sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+      -o Dpkg::Options::=--force-confdef \
+      -o Dpkg::Options::=--force-confold \
+      "${missing[@]}"
   fi
   test -x /usr/bin/dockerd
   /usr/bin/docker buildx version
