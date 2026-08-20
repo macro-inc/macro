@@ -276,9 +276,7 @@ function MobileRender(
         <MobileDrawer.Overlay class="fixed inset-0 z-modal-overlay bg-modal-overlay pattern-diagonal-4 pattern-edge-muted" />
         <MobileDrawer.Content aria-label="File actions">
           <MobileDrawer.Handle />
-          {/* Scrolls when the sections outgrow the drawer's max height; the
-              handle stays pinned so drag-to-dismiss remains reachable. */}
-          <div class="flex flex-col min-h-0 flex-auto overflow-y-auto">
+          <MobileDrawer.ScrollBody>
             <Show when={props.views}>
               {(views) => (
                 <>
@@ -334,7 +332,7 @@ function MobileRender(
                 </>
               )}
             </For>
-          </div>
+          </MobileDrawer.ScrollBody>
         </MobileDrawer.Content>
       </MobileDrawer.Portal>
     </MobileDrawer>
