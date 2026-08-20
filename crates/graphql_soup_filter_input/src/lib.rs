@@ -9,6 +9,8 @@ use std::{str::FromStr, sync::Arc};
 
 #[cfg(feature = "server")]
 use async_graphql::ID;
+#[cfg(feature = "server")]
+use graphql_common::GraphqlPropertyEntityType;
 #[cfg(not(feature = "server"))]
 type ID = String;
 use chrono::{DateTime, Utc};
@@ -69,7 +71,7 @@ pub enum MaterializeError {
 pub fn materialize_graphql_filter(value: Value) -> Result<EntityFilterAst, MaterializeError> {
     validate_json_bounds(&value).map_err(MaterializeError::Bounds)?;
     serde_json::from_value::<GraphqlEntityFilterAst>(value)?
-        .into_ast()
+        .into_ast_unchecked()
         .map_err(|error| MaterializeError::Conversion(error.to_string()))
 }
 
@@ -222,7 +224,7 @@ struct GraphqlFilterPropertiesLiteral {
     /// Property definition id to match.
     property_definition_id: ID,
     /// Optional entity type scope for the property match.
-    entity_type: Option<GraphqlFilterPropertyEntityType>,
+    entity_type: Option<GraphqlPropertyEntityType>,
     /// Value to compare against the property.
     value: GraphqlFilterPropertyMatchValue,
 }
@@ -233,7 +235,11 @@ impl IntoFilterExpr<PropertiesLiteral> for GraphqlFilterPropertiesLiteral {
             property_definition_id: parse_id(self.property_definition_id, "propertyDefinitionId")?,
             entity_type: self
                 .entity_type
-                .and_then(|entity_type| PropertyEntityType::try_from(entity_type).ok()),
+                .map(PropertyEntityType::try_from)
+                .transpose()
+                .map_err(|entity_type| {
+                    InputError::new(format!("unsupported entityType {entity_type:?}"))
+                })?,
             value: self.value.into_ast()?,
         }))
     }
@@ -247,7 +253,7 @@ enum GraphqlFilterPropertyMatchValue {
     /// Select option id to match.
     SelectOption(ID),
     /// Entity reference id to match.
-    EntityRef(String),
+    EntityRef(ID),
 }
 
 impl GraphqlFilterPropertyMatchValue {
@@ -258,18 +264,18 @@ impl GraphqlFilterPropertyMatchValue {
                 PropertyMatchValue::SelectOption(parse_id(id, "selectOption")?)
             }
             Self::EntityRef(value) => PropertyMatchValue::EntityRef(
-                EntityRefId::new(value)
+                EntityRefId::new(value.to_string())
                     .map_err(|err| InputError::new(format!("invalid entityRef: {err}")))?,
             ),
         })
     }
 }
 
-/// An entity type supported by property filters.
-#[cfg_attr(feature = "server", derive(async_graphql::Enum))]
-#[derive(Copy, Clone, Eq, PartialEq, Serialize, Deserialize)]
+/// An entity type supported by property filters in browser-only materialization.
+#[cfg(not(feature = "server"))]
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
-enum GraphqlFilterPropertyEntityType {
+enum GraphqlPropertyEntityType {
     /// Calendar event entity.
     CalendarEvent,
     /// Call record entity.
@@ -292,21 +298,22 @@ enum GraphqlFilterPropertyEntityType {
     User,
 }
 
-impl TryFrom<GraphqlFilterPropertyEntityType> for PropertyEntityType {
-    type Error = GraphqlFilterPropertyEntityType;
+#[cfg(not(feature = "server"))]
+impl TryFrom<GraphqlPropertyEntityType> for PropertyEntityType {
+    type Error = GraphqlPropertyEntityType;
 
-    fn try_from(value: GraphqlFilterPropertyEntityType) -> Result<Self, Self::Error> {
+    fn try_from(value: GraphqlPropertyEntityType) -> Result<Self, Self::Error> {
         Ok(match value {
-            GraphqlFilterPropertyEntityType::CalendarEvent => Self::CalendarEvent,
-            GraphqlFilterPropertyEntityType::Channel => Self::Channel,
-            GraphqlFilterPropertyEntityType::Chat => Self::Chat,
-            GraphqlFilterPropertyEntityType::Company => Self::Company,
-            GraphqlFilterPropertyEntityType::Document => Self::Document,
-            GraphqlFilterPropertyEntityType::Project => Self::Project,
-            GraphqlFilterPropertyEntityType::Task => Self::Task,
-            GraphqlFilterPropertyEntityType::Thread => Self::Thread,
-            GraphqlFilterPropertyEntityType::User => Self::User,
-            other @ GraphqlFilterPropertyEntityType::CallRecord => return Err(other),
+            GraphqlPropertyEntityType::CalendarEvent => Self::CalendarEvent,
+            GraphqlPropertyEntityType::Channel => Self::Channel,
+            GraphqlPropertyEntityType::Chat => Self::Chat,
+            GraphqlPropertyEntityType::Company => Self::Company,
+            GraphqlPropertyEntityType::Document => Self::Document,
+            GraphqlPropertyEntityType::Project => Self::Project,
+            GraphqlPropertyEntityType::Task => Self::Task,
+            GraphqlPropertyEntityType::Thread => Self::Thread,
+            GraphqlPropertyEntityType::User => Self::User,
+            other @ GraphqlPropertyEntityType::CallRecord => return Err(other),
         })
     }
 }
@@ -349,7 +356,11 @@ impl GraphqlEntityFilterAst {
             InputError::new(format!("failed to validate GraphQL filter input: {error}"))
         })?;
         validate_json_bounds(&value).map_err(InputError::new)?;
+        self.into_ast_unchecked()
+    }
 
+    /// Convert an input whose serialized representation already passed ingress bounds.
+    fn into_ast_unchecked(self) -> InputResult<EntityFilterAst> {
         Ok(EntityFilterAst {
             calendar_event_filter: optional_tree(self.calendar_event_filter)?,
             document_filter: optional_tree(self.document_filter)?,

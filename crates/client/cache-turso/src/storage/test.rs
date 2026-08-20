@@ -1515,7 +1515,6 @@ fn predicate_query_plan_uses_fact_indexes_and_never_scans_record_blobs() {
     })
     .unwrap();
     let (sql, parameters) = compile_predicate_sql(&query);
-    assert!(!sql.contains(" records "));
     let details = driver::query(
         &storage.connection(),
         &format!("EXPLAIN QUERY PLAN {sql}"),

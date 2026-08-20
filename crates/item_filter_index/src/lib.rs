@@ -250,15 +250,15 @@ pub fn compile_soup_flat_v1(
         partitions: vec![
             PartitionPredicate {
                 partition: vocabulary::document_partition(),
-                predicate: compile_expr(ast.document_filter.as_deref(), compile_document_literal),
+                predicate: compile_expr(ast.document_filter.as_deref(), compile_document_literal)?,
             },
             PartitionPredicate {
                 partition: vocabulary::project_partition(),
-                predicate: compile_expr(ast.project_filter.as_deref(), compile_project_literal),
+                predicate: compile_expr(ast.project_filter.as_deref(), compile_project_literal)?,
             },
             PartitionPredicate {
                 partition: vocabulary::chat_partition(),
-                predicate: compile_expr(ast.chat_filter.as_deref(), compile_chat_literal),
+                predicate: compile_expr(ast.chat_filter.as_deref(), compile_chat_literal)?,
             },
         ],
         sort_attribute,
@@ -340,57 +340,63 @@ fn supported_chat_literal(literal: &ChatLiteral) -> bool {
 
 fn compile_expr<T>(
     expr: Option<&Expr<T>>,
-    literal: impl Fn(&T) -> PredicateExpr + Copy,
-) -> PredicateExpr {
-    match expr {
+    literal: impl Fn(&T) -> Result<PredicateExpr, CompileError> + Copy,
+) -> Result<PredicateExpr, CompileError> {
+    Ok(match expr {
         None => PredicateExpr::All,
-        Some(Expr::Literal(value)) => literal(value),
+        Some(Expr::Literal(value)) => literal(value)?,
         Some(Expr::And(left, right)) => PredicateExpr::And(
-            Box::new(compile_expr(Some(left), literal)),
-            Box::new(compile_expr(Some(right), literal)),
+            Box::new(compile_expr(Some(left), literal)?),
+            Box::new(compile_expr(Some(right), literal)?),
         ),
         Some(Expr::Or(left, right)) => PredicateExpr::Or(
-            Box::new(compile_expr(Some(left), literal)),
-            Box::new(compile_expr(Some(right), literal)),
+            Box::new(compile_expr(Some(left), literal)?),
+            Box::new(compile_expr(Some(right), literal)?),
         ),
-        Some(Expr::Not(expr)) => PredicateExpr::Not(Box::new(compile_expr(Some(expr), literal))),
-    }
+        Some(Expr::Not(expr)) => PredicateExpr::Not(Box::new(compile_expr(Some(expr), literal)?)),
+    })
 }
 
-fn compile_document_literal(literal: &DocumentLiteral) -> PredicateExpr {
-    match literal {
+fn compile_document_literal(literal: &DocumentLiteral) -> Result<PredicateExpr, CompileError> {
+    Ok(match literal {
         DocumentLiteral::Id(id) => exact_uuid(vocabulary::id(), id),
         DocumentLiteral::FileType(file_type) => {
-            exact_utf8(vocabulary::file_type(), file_type.to_string())
+            return exact_utf8(vocabulary::file_type(), file_type.to_string());
         }
         DocumentLiteral::ProjectId(id) => exact_uuid(vocabulary::project_id(), id),
-        DocumentLiteral::Owner(owner) => exact_utf8(vocabulary::owner(), owner.to_string()),
+        DocumentLiteral::Owner(owner) => {
+            return exact_utf8(vocabulary::owner(), owner.to_string());
+        }
         DocumentLiteral::CreatedAt(date) => date_expr(vocabulary::created_at(), date),
         DocumentLiteral::UpdatedAt(date) => date_expr(vocabulary::updated_at(), date),
         _ => unreachable!("eligibility checked document literal"),
-    }
+    })
 }
 
-fn compile_project_literal(literal: &ProjectLiteral) -> PredicateExpr {
-    match literal {
+fn compile_project_literal(literal: &ProjectLiteral) -> Result<PredicateExpr, CompileError> {
+    Ok(match literal {
         ProjectLiteral::ProjectId(id) => exact_uuid(vocabulary::project_id(), id),
         ProjectLiteral::ProjectIdSelf(id) => exact_uuid(vocabulary::id(), id),
-        ProjectLiteral::Owner(owner) => exact_utf8(vocabulary::owner(), owner.to_string()),
+        ProjectLiteral::Owner(owner) => {
+            return exact_utf8(vocabulary::owner(), owner.to_string());
+        }
         ProjectLiteral::CreatedAt(date) => date_expr(vocabulary::created_at(), date),
         ProjectLiteral::UpdatedAt(date) => date_expr(vocabulary::updated_at(), date),
         _ => unreachable!("eligibility checked project literal"),
-    }
+    })
 }
 
-fn compile_chat_literal(literal: &ChatLiteral) -> PredicateExpr {
-    match literal {
+fn compile_chat_literal(literal: &ChatLiteral) -> Result<PredicateExpr, CompileError> {
+    Ok(match literal {
         ChatLiteral::ChatId(id) => exact_uuid(vocabulary::id(), id),
         ChatLiteral::ProjectId(id) => exact_uuid(vocabulary::project_id(), id),
-        ChatLiteral::Owner(owner) => exact_utf8(vocabulary::owner(), owner.to_string()),
+        ChatLiteral::Owner(owner) => {
+            return exact_utf8(vocabulary::owner(), owner.to_string());
+        }
         ChatLiteral::CreatedAt(date) => date_expr(vocabulary::created_at(), date),
         ChatLiteral::UpdatedAt(date) => date_expr(vocabulary::updated_at(), date),
         _ => unreachable!("eligibility checked chat literal"),
-    }
+    })
 }
 
 fn exact_uuid(attribute: Token, value: &Uuid) -> PredicateExpr {
@@ -400,11 +406,11 @@ fn exact_uuid(attribute: Token, value: &Uuid) -> PredicateExpr {
     }
 }
 
-fn exact_utf8(attribute: Token, value: impl AsRef<str>) -> PredicateExpr {
-    PredicateExpr::Exact {
+fn exact_utf8(attribute: Token, value: impl AsRef<str>) -> Result<PredicateExpr, CompileError> {
+    Ok(PredicateExpr::Exact {
         attribute,
-        value: ExactValue::utf8(value).expect("materializer bounded GraphQL strings"),
-    }
+        value: ExactValue::utf8(value)?,
+    })
 }
 
 fn date_expr(attribute: Token, date: &DateLiteral) -> PredicateExpr {

@@ -1217,47 +1217,9 @@ impl<S: Storage> Engine<S> {
             IdentityState::NotHydrated | IdentityState::Missing => None,
         };
         for mutation in &projection_mutations {
-            match mutation {
-                OptimisticProjectionMutation::Replace(document) => document
-                    .validate()
-                    .map_err(|error| EngineError::InvalidOptimisticProjection(error.to_string()))?,
-                OptimisticProjectionMutation::Patch {
-                    exact,
-                    integers,
-                    sorts,
-                    ..
-                } => {
-                    let mut attributes = BTreeSet::new();
-                    if exact
-                        .iter()
-                        .any(|patch| !attributes.insert(patch.attribute.clone()))
-                    {
-                        return Err(EngineError::InvalidOptimisticProjection(
-                            "duplicate exact patch attribute".to_string(),
-                        ));
-                    }
-                    attributes.clear();
-                    if integers
-                        .iter()
-                        .any(|patch| !attributes.insert(patch.attribute.clone()))
-                    {
-                        return Err(EngineError::InvalidOptimisticProjection(
-                            "duplicate integer patch attribute".to_string(),
-                        ));
-                    }
-                    attributes.clear();
-                    if sorts
-                        .iter()
-                        .any(|fact| !attributes.insert(fact.attribute.clone()))
-                    {
-                        return Err(EngineError::InvalidOptimisticProjection(
-                            "duplicate sort patch attribute".to_string(),
-                        ));
-                    }
-                }
-                OptimisticProjectionMutation::Delete { .. }
-                | OptimisticProjectionMutation::Unknown { .. } => {}
-            }
+            mutation
+                .validate()
+                .map_err(|error| EngineError::InvalidOptimisticProjection(error.to_string()))?;
         }
         let source = OptimisticSource {
             mutation_data: data.clone(),
@@ -1787,22 +1749,15 @@ impl<S: PredicateIndexStorage> Engine<S> {
         entries: Vec<(EntityKey<'static>, Record)>,
         projections: Vec<ProjectionMutation>,
     ) -> Result<WriteResult, EngineError<S::Error>> {
-        let changed = entries
-            .iter()
-            .map(|(key, _)| key.clone())
-            .collect::<BTreeSet<_>>();
-        self.storage
-            .put_batch_with_projections(entries.clone(), projections)
-            .await
-            .map_err(EngineError::Storage)?;
+        let mut updates = RecordUpdates::new();
         for (key, record) in entries {
-            self.hot.put(key, record);
+            updates.entry(key).or_default().merge(record);
         }
+        let changed = self.persist_updates(updates, projections).await?;
         let mut affected_ops = self.deps.ops_for_keys(changed.iter());
         if let Some(origin_op) = origin_op {
             affected_ops.remove(&origin_op);
         }
-        self.search_catalogs.clear();
         Ok(WriteResult {
             changed,
             affected_ops,
@@ -1861,6 +1816,11 @@ impl<S: PredicateIndexStorage> Engine<S> {
                 .query_predicate_index(query)
                 .await
                 .map_err(EngineError::Storage);
+        }
+        for mutation in &projection_mutations {
+            mutation
+                .validate()
+                .map_err(|error| EngineError::InvalidOptimisticProjection(error.to_string()))?;
         }
         let mut uncertain = BTreeSet::new();
         for mutation in &projection_mutations {

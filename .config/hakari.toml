@@ -83,6 +83,9 @@ workspace-members = [
     "macro_uuid",
     "non_empty",
     "cowlike",
+    # soup-filter-projection is intentionally absent: its wasm-facing adapter
+    # disables the native-only default `models` feature, so the crate itself
+    # does not pull workspace-hack into wasm dependency traversal.
     "soup-filter-cache-adapter",
 ]
 

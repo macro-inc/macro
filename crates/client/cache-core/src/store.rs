@@ -65,15 +65,7 @@ pub trait Storage: MaybeSend {
         &mut self,
         entries: Vec<(EntityKey<'static>, Record)>,
         projections: Vec<ProjectionMutation>,
-    ) -> impl Future<Output = Result<(), Self::Error>> + MaybeSend {
-        async move {
-            assert!(
-                projections.is_empty(),
-                "storage must implement atomic projection writes"
-            );
-            self.put_batch(entries).await
-        }
-    }
+    ) -> impl Future<Output = Result<(), Self::Error>> + MaybeSend;
 
     /// Deletes records (absent keys are ignored).
     fn delete_batch(
@@ -157,15 +149,7 @@ pub trait Storage: MaybeSend {
         claim: MutationClaimToken,
         entries: Vec<(EntityKey<'static>, Record)>,
         projections: Vec<ProjectionMutation>,
-    ) -> impl Future<Output = Result<bool, Self::Error>> + MaybeSend {
-        async move {
-            assert!(
-                projections.is_empty(),
-                "storage must implement atomic projection settlement"
-            );
-            self.complete_mutation(id, claim, entries).await
-        }
-    }
+    ) -> impl Future<Output = Result<bool, Self::Error>> + MaybeSend;
 
     /// Atomically removes a permanently failed mutation and its optimistic
     /// layer. Returns `false` when the claim is stale.

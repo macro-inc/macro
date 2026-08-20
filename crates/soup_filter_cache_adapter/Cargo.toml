@@ -8,6 +8,7 @@ version = "0.1.0"
 cache-core = { path = "../client/cache-core" }
 chrono = { workspace = true }
 graphql_soup_filter_input = { path = "../graphql_soup_filter_input" }
+indexmap = { workspace = true }
 item-filter-index = { path = "../item_filter_index" }
 predicate-index = { path = "../predicate_index" }
 serde_json = { workspace = true }

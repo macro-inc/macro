@@ -73,3 +73,29 @@ fn rejects_oversized_strings_before_domain_parsing() {
 
     assert!(matches!(error, MaterializeError::Bounds(_)));
 }
+
+#[test]
+fn property_entity_type_conversion_rejects_unsupported_variants() {
+    let property_filter = |entity_type| {
+        json!({
+            "propertiesFilter": {
+                "literal": {
+                    "propertyDefinitionId": "00000000-0000-0000-0000-000000000001",
+                    "entityType": entity_type,
+                    "value": {
+                        "entityRef": "00000000-0000-0000-0000-000000000002"
+                    }
+                }
+            }
+        })
+    };
+
+    let error = materialize_graphql_filter(property_filter(json!("CALL_RECORD"))).unwrap_err();
+    assert!(matches!(error, MaterializeError::Conversion(_)));
+
+    let ast = materialize_graphql_filter(property_filter(Value::Null)).unwrap();
+    let Some(Expr::Literal(literal)) = ast.properties_filter.as_deref() else {
+        panic!("expected property literal")
+    };
+    assert!(literal.entity_type.is_none());
+}

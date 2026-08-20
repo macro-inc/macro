@@ -17,6 +17,7 @@ const mapGraphqlSoupPageMock = vi.hoisted(() => vi.fn((data) => data));
 const mapSoupPageToEntityListMock = vi.hoisted(() =>
   vi.fn((page) => page.items)
 );
+const makeGraphqlSoupInputMock = vi.hoisted(() => vi.fn());
 
 vi.mock('@macro-inc/observability', () => ({
   Telemetry: { error: vi.fn() },
@@ -39,7 +40,7 @@ vi.mock('@service-storage/graphql-soup', () => ({
 }));
 
 vi.mock('./ast', () => ({
-  makeGraphqlSoupInput: vi.fn(() => ({ initial: { limit: 50 } })),
+  makeGraphqlSoupInput: makeGraphqlSoupInputMock,
 }));
 
 vi.mock('../transform-utils', () => ({
@@ -89,6 +90,30 @@ describe('createGraphqlSoupAstItemsQuery', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     getGraphqlSoupCacheHostMock.mockReturnValue(undefined);
+    makeGraphqlSoupInputMock.mockReturnValue({
+      initial: { limit: 50, sortMethod: 'UPDATED_AT' },
+    });
+  });
+
+  it('does not run the local filter for the implicit VIEWED_AT sort', () => {
+    const fake = makeFakeClient();
+    getGraphqlSoupClientMock.mockReturnValue(fake.client);
+    getGraphqlSoupCacheHostMock.mockReturnValue({
+      entityFilter: entityFilterMock,
+      onCacheChanged: () => () => undefined,
+    });
+    makeGraphqlSoupInputMock.mockReturnValue({ initial: { limit: 50 } });
+
+    createRoot((dispose) => {
+      createGraphqlSoupAstItemsQuery(
+        () => ({ params: {}, body: {} }) as never,
+        () => ({ enabled: true })
+      );
+
+      expect(fake.executions).toHaveLength(1);
+      expect(entityFilterMock).not.toHaveBeenCalled();
+      dispose();
+    });
   });
 
   it('uses a complete local page as placeholder while authoritative network continues', async () => {

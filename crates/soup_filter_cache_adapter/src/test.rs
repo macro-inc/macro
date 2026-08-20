@@ -55,11 +55,18 @@ fn optimistic_soup_payloads_compile_to_durable_projection_layers() {
 
     let deletion = optimistic_projection_mutations(
         &serde_json::json!({
-            "delete": {
-                "__typename": "GraphqlCacheDeletion",
-                "graphqlTypeName": "GraphqlSoupChat",
-                "entityId": "00000000-0000-0000-0000-000000000004"
-            }
+            "result": [
+                {
+                    "__typename": "GraphqlCacheDeletion",
+                    "graphqlTypeName": "GraphqlSoupChat",
+                    "entityId": "00000000-0000-0000-0000-000000000004"
+                },
+                {
+                    "__typename": "GraphqlSoupChat",
+                    "id": "00000000-0000-0000-0000-000000000004",
+                    "projectId": null
+                }
+            ]
         }),
         789,
     );
@@ -67,6 +74,51 @@ fn optimistic_soup_payloads_compile_to_durable_projection_layers() {
         deletion.as_slice(),
         [OptimisticProjectionMutation::Delete { .. }]
     ));
+}
+
+#[test]
+fn optimistic_mutations_keep_first_seen_order_and_deletion_precedence() {
+    let mutations = optimistic_projection_mutations(
+        &serde_json::json!({
+            "result": [
+                {
+                    "__typename": "GraphqlSoupChat",
+                    "id": "00000000-0000-0000-0000-000000000004",
+                    "projectId": null
+                },
+                {
+                    "__typename": "GraphqlSoupDocument",
+                    "id": "00000000-0000-0000-0000-000000000005",
+                    "projectId": null
+                },
+                {
+                    "__typename": "GraphqlCacheDeletion",
+                    "graphqlTypeName": "GraphqlSoupChat",
+                    "entityId": "00000000-0000-0000-0000-000000000004"
+                },
+                {
+                    "__typename": "GraphqlSoupChat",
+                    "id": "00000000-0000-0000-0000-000000000004",
+                    "projectId": "00000000-0000-0000-0000-000000000006"
+                }
+            ]
+        }),
+        789,
+    );
+
+    assert_eq!(mutations.len(), 2);
+    assert_eq!(
+        mutations[0].record_key().as_str(),
+        "GraphqlSoupChat:00000000-0000-0000-0000-000000000004"
+    );
+    assert!(matches!(
+        mutations[0],
+        OptimisticProjectionMutation::Delete { .. }
+    ));
+    assert_eq!(
+        mutations[1].record_key().as_str(),
+        "GraphqlSoupDocument:00000000-0000-0000-0000-000000000005"
+    );
 }
 
 #[test]

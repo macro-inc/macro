@@ -5,6 +5,7 @@ publish = false
 version = "0.1.0"
 
 [features]
+# Native-only model adapters. Wasm-facing dependents must disable default features.
 default = ["models"]
 models = ["dep:models_soup", "dep:workspace-hack"]
 

@@ -156,6 +156,44 @@ fn deserialization_cannot_bypass_validation() {
         }))
         .is_err()
     );
+
+    let partition = token("document");
+    let profile = Profile::new(token("soup-flat-v1"));
+    let query = ValidatedIndexQuery::new(IndexQuery {
+        profile: profile.clone(),
+        partitions: vec![PartitionPredicate {
+            partition: partition.clone(),
+            predicate: PredicateExpr::Exact {
+                attribute: token("owner"),
+                value: exact("user-1"),
+            },
+        }],
+        sort_attribute: token("updated-at"),
+        sort_direction: SortDirection::Asc,
+        tie_break_direction: SortDirection::Asc,
+        limit: 20,
+    })
+    .unwrap();
+    assert!(query.includes_scope(&profile, &partition));
+    assert!(!query.includes_scope(&profile, &token("project")));
+
+    let unknown = |affected_attributes| OptimisticProjectionMutation::Unknown {
+        record_key: RecordKey::new("Document:1").unwrap(),
+        profile: profile.clone(),
+        partition: partition.clone(),
+        affected_attributes,
+    };
+    assert!(unknown(Vec::new()).makes_query_uncertain(&query));
+    assert!(!unknown(vec![token("file-type")]).makes_query_uncertain(&query));
+
+    let mut too_deep = PredicateExpr::All;
+    for _ in 0..MAX_EXPRESSION_DEPTH {
+        too_deep = PredicateExpr::Not(Box::new(too_deep));
+    }
+    assert_eq!(
+        too_deep.validate_and_simplify(),
+        Err(ValidationError::ExpressionDepth)
+    );
 }
 
 #[test]

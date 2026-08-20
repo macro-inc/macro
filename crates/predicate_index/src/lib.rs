@@ -371,22 +371,16 @@ impl ValidatedIndexQuery {
     /// The sort attribute is always a dependency. Predicate attributes are
     /// collected without expanding the Boolean expression.
     pub fn depends_on_attribute(&self, partition: &Token, attribute: &Token) -> bool {
-        if !self
+        let Some(candidate) = self
             .0
             .partitions
             .iter()
-            .any(|candidate| candidate.partition == *partition)
-        {
-            return false;
-        }
-        if self.0.sort_attribute == *attribute {
-            return true;
-        }
-        self.0
-            .partitions
-            .iter()
             .find(|candidate| candidate.partition == *partition)
-            .is_some_and(|candidate| expression_depends_on(&candidate.predicate, attribute))
+        else {
+            return false;
+        };
+        self.0.sort_attribute == *attribute
+            || expression_depends_on(&candidate.predicate, attribute)
     }
 }
 
@@ -454,6 +448,43 @@ pub struct IntegerAttributePatch {
 }
 
 impl OptimisticProjectionMutation {
+    /// Validate the optimistic projection payload.
+    pub fn validate(&self) -> Result<(), ValidationError> {
+        let Self::Patch {
+            exact,
+            integers,
+            sorts,
+            ..
+        } = self
+        else {
+            return match self {
+                Self::Replace(document) => document.validate(),
+                Self::Delete { .. } | Self::Unknown { .. } => Ok(()),
+                Self::Patch { .. } => unreachable!(),
+            };
+        };
+
+        let mut attributes = HashSet::new();
+        if exact
+            .iter()
+            .any(|patch| !attributes.insert(&patch.attribute))
+        {
+            return Err(ValidationError::DuplicateExactPatchAttribute);
+        }
+        attributes.clear();
+        if integers
+            .iter()
+            .any(|patch| !attributes.insert(&patch.attribute))
+        {
+            return Err(ValidationError::DuplicateIntegerPatchAttribute);
+        }
+        attributes.clear();
+        if sorts.iter().any(|fact| !attributes.insert(&fact.attribute)) {
+            return Err(ValidationError::DuplicateSortPatchAttribute);
+        }
+        Ok(())
+    }
+
     /// Read the affected normalized record key.
     pub fn record_key(&self) -> &RecordKey {
         match self {
@@ -530,6 +561,15 @@ pub enum ValidationError {
     /// A document has more than one sort value for an attribute.
     #[error("duplicate sort fact attribute")]
     DuplicateSortFact,
+    /// An optimistic patch repeats an exact attribute.
+    #[error("duplicate exact patch attribute")]
+    DuplicateExactPatchAttribute,
+    /// An optimistic patch repeats an integer attribute.
+    #[error("duplicate integer patch attribute")]
+    DuplicateIntegerPatchAttribute,
+    /// An optimistic patch repeats a sort attribute.
+    #[error("duplicate sort patch attribute")]
+    DuplicateSortPatchAttribute,
     /// A query has no partition universes.
     #[error("index query has no partitions")]
     NoPartitions,

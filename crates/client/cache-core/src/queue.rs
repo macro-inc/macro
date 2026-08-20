@@ -66,7 +66,7 @@ impl StoredMutation {
 }
 
 /// Current version of the durable optimistic source envelope.
-pub const OPTIMISTIC_SOURCE_VERSION: u8 = 2;
+pub const OPTIMISTIC_SOURCE_VERSION: u8 = 3;
 
 const OPTIMISTIC_SOURCE_ENVELOPE_PREFIX: &str = "@macro-cache/optimistic-source:";
 
@@ -96,8 +96,18 @@ struct OptimisticSourceEnvelope {
     link_patches: Vec<OptimisticLinkPatch>,
     #[serde(default)]
     revalidations: Vec<QueryRevalidation>,
-    #[serde(default)]
     projection_mutations: Vec<OptimisticProjectionMutation>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+struct OptimisticSourceEnvelopeV2 {
+    version: u8,
+    mutation_data: Json,
+    #[serde(default)]
+    link_patches: Vec<OptimisticLinkPatch>,
+    #[serde(default)]
+    revalidations: Vec<QueryRevalidation>,
 }
 
 /// Encodes an optimistic source with a reserved prefix and versioned JSON envelope.
@@ -126,20 +136,35 @@ pub fn decode_optimistic_source(value: &str) -> Result<OptimisticSource, String>
             projection_mutations: Vec::new(),
         });
     };
-    let envelope: OptimisticSourceEnvelope =
-        serde_json::from_str(envelope).map_err(|error| error.to_string())?;
-    if envelope.version != OPTIMISTIC_SOURCE_VERSION {
-        return Err(format!(
-            "unsupported optimistic source version {}",
-            envelope.version
-        ));
+    let value: Json = serde_json::from_str(envelope).map_err(|error| error.to_string())?;
+    let version = value
+        .get("version")
+        .and_then(Json::as_u64)
+        .ok_or_else(|| "optimistic source version is missing or invalid".to_string())?;
+    match version {
+        2 => {
+            let envelope: OptimisticSourceEnvelopeV2 =
+                serde_json::from_value(value).map_err(|error| error.to_string())?;
+            debug_assert_eq!(envelope.version, 2);
+            Ok(OptimisticSource {
+                mutation_data: envelope.mutation_data,
+                link_patches: envelope.link_patches,
+                revalidations: envelope.revalidations,
+                projection_mutations: Vec::new(),
+            })
+        }
+        version if version == u64::from(OPTIMISTIC_SOURCE_VERSION) => {
+            let envelope: OptimisticSourceEnvelope =
+                serde_json::from_value(value).map_err(|error| error.to_string())?;
+            Ok(OptimisticSource {
+                mutation_data: envelope.mutation_data,
+                link_patches: envelope.link_patches,
+                revalidations: envelope.revalidations,
+                projection_mutations: envelope.projection_mutations,
+            })
+        }
+        version => Err(format!("unsupported optimistic source version {version}")),
     }
-    Ok(OptimisticSource {
-        mutation_data: envelope.mutation_data,
-        link_patches: envelope.link_patches,
-        revalidations: envelope.revalidations,
-        projection_mutations: envelope.projection_mutations,
-    })
 }
 
 /// One durable optimistic layer paired one-to-one with a queued mutation.

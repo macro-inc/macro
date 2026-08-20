@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use filter_ast::Expr;
 use item_filters::ast::{
-    EntityFilterAst,
+    CrmScope, EntityFilterAst,
     calendar_event::CalendarEventLiteral,
     call::CallLiteral,
     channel::{ChannelLiteral, ChannelThreadLiteral},
@@ -11,6 +11,7 @@ use item_filters::ast::{
     document::DocumentLiteral,
     email::EmailLiteral,
     foreign_entity::ForeignEntityLiteral,
+    properties::{PropertiesLiteral, PropertyMatchValue},
 };
 use predicate_index::{PredicateExpr, RangeBound};
 
@@ -146,6 +147,25 @@ fn every_deferred_partition_must_be_proven_empty() {
     assert_eq!(
         check_soup_flat_v1(&ast, request()),
         Eligibility::Unsupported(UnsupportedReason::Partition("reminder"))
+    );
+
+    let mut ast = excluded_deferred_partitions();
+    ast.properties_filter = Some(Arc::new(Expr::val(PropertiesLiteral {
+        property_definition_id: Uuid::nil(),
+        entity_type: None,
+        value: PropertyMatchValue::SelectOption(Uuid::nil()),
+    })));
+    assert_eq!(
+        check_soup_flat_v1(&ast, request()),
+        Eligibility::Unsupported(UnsupportedReason::GlobalProperties)
+    );
+
+    let mut ast = excluded_deferred_partitions();
+    ast.email_filter.tree = None;
+    ast.email_filter.crm_scope = Some(CrmScope::Domains(vec!["example.com".to_owned()]));
+    assert_eq!(
+        check_soup_flat_v1(&ast, request()),
+        Eligibility::Unsupported(UnsupportedReason::Partition("email"))
     );
 }
 

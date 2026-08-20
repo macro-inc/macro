@@ -77,7 +77,7 @@ const SEARCH_UPSERT: &str = "INSERT INTO search_documents (profile, __typename, 
 const SEARCH_LOAD: &str = "SELECT __typename, id, bucket, search_text, timestamp_ms, source_hash FROM search_documents WHERE profile = ?1";
 const SEARCH_BROWSE: &str = "SELECT __typename, id, bucket, search_text, timestamp_ms, source_hash FROM search_documents INDEXED BY search_documents_browse_idx WHERE profile = ?1 AND bucket = ?2 ORDER BY timestamp_ms DESC, __typename ASC, id ASC LIMIT ?3";
 const SEARCH_BROWSE_AFTER: &str = "SELECT __typename, id, bucket, search_text, timestamp_ms, source_hash FROM search_documents INDEXED BY search_documents_browse_idx WHERE profile = ?1 AND bucket = ?2 AND (timestamp_ms < ?3 OR (timestamp_ms = ?3 AND (__typename > ?4 OR (__typename = ?4 AND id > ?5)))) ORDER BY timestamp_ms DESC, __typename ASC, id ASC LIMIT ?6";
-const INDEX_DOCUMENT_UPSERT: &str = "INSERT INTO index_documents (record_key, profile, partition, state) VALUES (?1, ?2, ?3, ?4) ON CONFLICT (record_key) DO UPDATE SET profile = excluded.profile, partition = excluded.partition, state = excluded.state";
+const INDEX_DOCUMENT_UPSERT: &str = "INSERT INTO index_documents (record_key, profile, partition, state) VALUES (?1, ?2, ?3, ?4) ON CONFLICT (record_key) DO UPDATE SET profile = excluded.profile, partition = excluded.partition, state = excluded.state RETURNING id";
 const INDEX_DOCUMENT_ID: &str = "SELECT id FROM index_documents WHERE record_key = ?1";
 const INDEX_DOCUMENT_DELETE: &str = "DELETE FROM index_documents WHERE record_key = ?1";
 const INDEX_FACTS_DELETE: [&str; 3] = [
@@ -1270,14 +1270,13 @@ fn write_projection_mutations(
         match mutation {
             ProjectionMutation::Replace(document) => {
                 document.validate().map_err(|_| invariant())?;
-                upsert_index_document(
+                let document_id = upsert_index_document(
                     connection,
                     &document.record_key,
                     &document.profile,
                     &document.partition,
                     0,
                 )?;
-                let document_id = index_document_id(connection, &document.record_key)?;
                 delete_index_facts(connection, document_id)?;
                 for fact in document.exact_facts {
                     require_changed(
@@ -1328,14 +1327,13 @@ fn write_projection_mutations(
                 partition,
                 kind,
             } => {
-                upsert_index_document(
+                let document_id = upsert_index_document(
                     connection,
                     &record_key,
                     &profile,
                     &partition,
                     projection_state_code(kind),
                 )?;
-                let document_id = index_document_id(connection, &record_key)?;
                 delete_index_facts(connection, document_id)?;
             }
             ProjectionMutation::Delete(record_key) => {
@@ -1359,30 +1357,16 @@ fn upsert_index_document(
     profile: &Profile,
     partition: &Token,
     state: i64,
-) -> Result<(), TursoStorageError> {
-    require_changed(
-        driver::execute(
-            connection,
-            INDEX_DOCUMENT_UPSERT,
-            vec![
-                text(record_key.as_str()),
-                text(profile.token().as_str()),
-                text(partition.as_str()),
-                Value::from_i64(state),
-            ],
-        )?,
-        1,
-    )
-}
-
-fn index_document_id(
-    connection: &Arc<Connection>,
-    record_key: &PredicateRecordKey,
 ) -> Result<i64, TursoStorageError> {
     let rows = driver::query(
         connection,
-        INDEX_DOCUMENT_ID,
-        vec![text(record_key.as_str())],
+        INDEX_DOCUMENT_UPSERT,
+        vec![
+            text(record_key.as_str()),
+            text(profile.token().as_str()),
+            text(partition.as_str()),
+            Value::from_i64(state),
+        ],
     )?;
     match rows.as_slice() {
         [row] if row.len() == 1 => required_i64(row, 0),
@@ -1519,7 +1503,7 @@ fn load_index_documents(
     for document in documents.values() {
         document.validate().map_err(|_| invariant())?;
     }
-    Ok(keys.iter().map(|key| documents.remove(key)).collect())
+    Ok(keys.iter().map(|key| documents.get(key).cloned()).collect())
 }
 
 fn predicate_scope_is_incomplete(
@@ -1761,6 +1745,12 @@ fn initialize(
         SEARCH_LOAD,
         SEARCH_BROWSE,
         SEARCH_BROWSE_AFTER,
+        INDEX_DOCUMENT_UPSERT,
+        INDEX_DOCUMENT_ID,
+        INDEX_DOCUMENT_DELETE,
+        EXACT_FACT_INSERT,
+        INTEGER_FACT_INSERT,
+        SORT_FACT_INSERT,
         QUEUE_INSERT,
         LAYER_INSERT,
         QUEUE_SELECT,
@@ -1770,6 +1760,9 @@ fn initialize(
         REQUIRE_LAYER_SELECT,
         QUEUE_DIAGNOSTICS_SELECT,
     ] {
+        driver::validate(connection, sql).map_err(TursoStorageError::initialization)?;
+    }
+    for sql in INDEX_FACTS_DELETE {
         driver::validate(connection, sql).map_err(TursoStorageError::initialization)?;
     }
     validate_queue_consistency(connection)

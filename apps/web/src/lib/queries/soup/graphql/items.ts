@@ -113,7 +113,8 @@ export function createGraphqlSoupAstItemsQuery(
     const initial = input.initial;
     if (!initial) return;
     const filters = initial.filters ?? {};
-    const sortMethod = initial.sortMethod ?? 'VIEWED_AT';
+    const sortMethod = initial.sortMethod;
+    if (!sortMethod || sortMethod === 'VIEWED_AT') return;
     const sortDirection = initial.sortDirection ?? 'DESC';
     const limit = initial.limit ?? 20;
 

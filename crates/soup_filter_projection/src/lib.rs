@@ -186,8 +186,8 @@ pub fn patch_direct_fields(
     })
 }
 
-/// Project a supported authoritative Soup item using a caller-supplied normalized key.
 #[cfg(feature = "models")]
+/// Project a supported authoritative Soup item using a caller-supplied normalized key.
 ///
 /// Deferred entity variants return `None` and are never represented as complete
 /// `soup-flat-v1` index documents.

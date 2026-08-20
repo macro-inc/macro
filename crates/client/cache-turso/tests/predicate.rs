@@ -95,13 +95,8 @@ fn turso_matches_reference_and_lifecycle_is_exact() {
         let entries = documents
             .iter()
             .map(|document| {
-                (
-                    EntityKey::entity(
-                        document.record_key.as_str().split(':').next().unwrap(),
-                        &[document.record_key.as_str().split_once(':').unwrap().1],
-                    ),
-                    Record::default(),
-                )
+                let (typename, id) = document.record_key.as_str().split_once(':').unwrap();
+                (EntityKey::entity(typename, &[id]), Record::default())
             })
             .collect();
         storage
@@ -115,6 +110,18 @@ fn turso_matches_reference_and_lifecycle_is_exact() {
             )
             .await
             .unwrap();
+
+        let repeated_key = documents[0].record_key.clone();
+        assert_eq!(
+            storage
+                .get_index_documents(&[repeated_key.clone(), repeated_key])
+                .await
+                .unwrap()
+                .iter()
+                .filter(|document| document.is_some())
+                .count(),
+            2
+        );
 
         let query = query();
         let expected = evaluate_reference(&query, &documents)

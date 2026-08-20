@@ -6,6 +6,7 @@
 
 use cache_core::predicate::{ProjectionIncompleteKind, ProjectionMutation};
 use graphql_soup_filter_input::materialize_graphql_filter;
+use indexmap::IndexMap;
 use item_filter_index::{
     LocalCompileOutcome, SoupFlatRequest, SoupIndexSort, compile_soup_flat_v1, vocabulary,
 };
@@ -134,7 +135,7 @@ pub fn optimistic_projection_mutations(
     fn walk(
         value: &serde_json::Value,
         created_at_ms: i64,
-        mutations: &mut HashMap<String, OptimisticProjectionMutation>,
+        mutations: &mut IndexMap<String, OptimisticProjectionMutation>,
     ) {
         match value {
             serde_json::Value::Array(values) => {
@@ -185,7 +186,12 @@ pub fn optimistic_projection_mutations(
                             partition,
                             affected_attributes: Vec::new(),
                         });
-                        mutations.insert(key_text, mutation);
+                        if !matches!(
+                            mutations.get(&key_text),
+                            Some(OptimisticProjectionMutation::Delete { .. })
+                        ) {
+                            mutations.insert(key_text, mutation);
+                        }
                     }
                 }
                 for value in object.values() {
@@ -196,7 +202,7 @@ pub fn optimistic_projection_mutations(
         }
     }
 
-    let mut mutations = HashMap::new();
+    let mut mutations = IndexMap::new();
     walk(data, created_at_ms, &mut mutations);
     mutations.into_values().collect()
 }

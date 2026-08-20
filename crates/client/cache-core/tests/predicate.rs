@@ -1,14 +1,15 @@
 use cache_core::{
-    engine::{BeginOptimisticWrite, Engine},
+    engine::{BeginOptimisticWrite, Engine, EngineError},
     predicate::{PredicateQueryResult, ProjectionIncompleteKind, ProjectionMutation},
     queue::{MutationClaimRequest, MutationClaimToken, MutationId},
-    store::InMemoryStorage,
-    value::{EntityKey, Record},
+    store::{InMemoryStorage, Storage},
+    value::{CacheValue, EntityKey, Record},
 };
 use predicate_index::{
     ExactAttributePatch, ExactFact, ExactValue, IndexDocument, IndexQuery, IntegerAttributePatch,
-    IntegerFact, OptimisticProjectionMutation, PartitionPredicate, PredicateExpr, Profile,
-    RecordKey, SortDirection, Token, ValidatedIndexQuery,
+    IntegerFact, MAX_OPTIMISTIC_RECORDS_PER_QUERY, MAX_QUERY_LIMIT, OptimisticProjectionMutation,
+    PartitionPredicate, PredicateExpr, Profile, RecordKey, SortDirection, Token,
+    ValidatedIndexQuery,
 };
 
 fn token(value: &str) -> Token {
@@ -102,10 +103,10 @@ fn optimistic_variables() -> serde_json::Map<String, serde_json::Value> {
     variables
 }
 
-async fn begin_with_projection(
+async fn try_begin_with_projection(
     engine: &mut Engine<InMemoryStorage>,
     projection_mutations: Vec<OptimisticProjectionMutation>,
-) -> MutationId {
+) -> Result<MutationId, EngineError<std::convert::Infallible>> {
     engine
         .begin_optimistic_write_with_projections(
             None,
@@ -121,8 +122,16 @@ async fn begin_with_projection(
             projection_mutations,
         )
         .await
+        .map(|result| result.0)
+}
+
+async fn begin_with_projection(
+    engine: &mut Engine<InMemoryStorage>,
+    projection_mutations: Vec<OptimisticProjectionMutation>,
+) -> MutationId {
+    try_begin_with_projection(engine, projection_mutations)
+        .await
         .unwrap()
-        .0
 }
 
 #[test]
@@ -192,6 +201,159 @@ fn replacement_removes_stale_facts_and_incomplete_states_fall_back() {
                 .await
                 .unwrap();
         }
+
+        for mutation in [
+            OptimisticProjectionMutation::Patch {
+                record_key: record_key(),
+                profile: profile(),
+                partition: token("document"),
+                exact: vec![
+                    ExactAttributePatch {
+                        attribute: token("owner"),
+                        values: vec![],
+                    },
+                    ExactAttributePatch {
+                        attribute: token("owner"),
+                        values: vec![],
+                    },
+                ],
+                integers: vec![],
+                sorts: vec![],
+            },
+            OptimisticProjectionMutation::Patch {
+                record_key: record_key(),
+                profile: profile(),
+                partition: token("document"),
+                exact: vec![],
+                integers: vec![
+                    IntegerAttributePatch {
+                        attribute: token("updated-at"),
+                        values: vec![],
+                    },
+                    IntegerAttributePatch {
+                        attribute: token("updated-at"),
+                        values: vec![],
+                    },
+                ],
+                sorts: vec![],
+            },
+            OptimisticProjectionMutation::Patch {
+                record_key: record_key(),
+                profile: profile(),
+                partition: token("document"),
+                exact: vec![],
+                integers: vec![],
+                sorts: vec![
+                    IntegerFact {
+                        attribute: token("updated-at"),
+                        value: 1,
+                    },
+                    IntegerFact {
+                        attribute: token("updated-at"),
+                        value: 2,
+                    },
+                ],
+            },
+        ] {
+            assert!(matches!(
+                try_begin_with_projection(&mut engine, vec![mutation]).await,
+                Err(EngineError::InvalidOptimisticProjection(_))
+            ));
+        }
+
+        let mut too_many_engine = Engine::new(InMemoryStorage::new());
+        begin_with_projection(
+            &mut too_many_engine,
+            (0..=MAX_OPTIMISTIC_RECORDS_PER_QUERY)
+                .map(|index| {
+                    OptimisticProjectionMutation::Replace(projection_for(
+                        RecordKey::new(format!("GraphqlSoupDocument:doc-{index}")).unwrap(),
+                        "owner-1",
+                        index as i64,
+                    ))
+                })
+                .collect(),
+        )
+        .await;
+        assert_eq!(
+            too_many_engine
+                .query_predicate_index(&query("owner-1"))
+                .await
+                .unwrap(),
+            PredicateQueryResult::Incomplete
+        );
+
+        let mut expanded_limit_engine = Engine::new(InMemoryStorage::new());
+        begin_with_projection(
+            &mut expanded_limit_engine,
+            vec![OptimisticProjectionMutation::Replace(projection("owner-1"))],
+        )
+        .await;
+        let mut maximum_query = query("owner-1").as_query().clone();
+        maximum_query.limit = MAX_QUERY_LIMIT;
+        assert_eq!(
+            expanded_limit_engine
+                .query_predicate_index(&ValidatedIndexQuery::new(maximum_query).unwrap())
+                .await
+                .unwrap(),
+            PredicateQueryResult::Incomplete
+        );
+    });
+}
+
+#[test]
+fn direct_projection_writes_merge_partial_records_and_report_real_changes() {
+    pollster::block_on(async {
+        let mut engine = Engine::new(InMemoryStorage::new());
+        let entity_key = EntityKey::entity("GraphqlSoupDocument", &["doc-1"]);
+        let mut base = Record::default();
+        base.fields.insert(
+            "__typename".into(),
+            CacheValue::String("GraphqlSoupDocument".into()),
+        );
+        base.fields
+            .insert("name".into(), CacheValue::String("Document".into()));
+        engine
+            .put_records_with_projections(
+                None,
+                vec![(entity_key.clone(), base)],
+                vec![ProjectionMutation::Replace(projection("owner-1"))],
+            )
+            .await
+            .unwrap();
+
+        let mut partial = Record::default();
+        partial
+            .fields
+            .insert("name".into(), CacheValue::String("Document".into()));
+        let result = engine
+            .put_records_with_projections(
+                None,
+                vec![(entity_key.clone(), partial)],
+                vec![ProjectionMutation::Replace(projection("owner-2"))],
+            )
+            .await
+            .unwrap();
+        assert!(result.changed.is_empty());
+        assert_eq!(
+            engine
+                .query_predicate_index(&query("owner-2"))
+                .await
+                .unwrap(),
+            PredicateQueryResult::Complete(vec![record_key()])
+        );
+        let stored = engine
+            .storage()
+            .get_batch(&[entity_key])
+            .await
+            .unwrap()
+            .pop()
+            .flatten()
+            .unwrap();
+        assert_eq!(
+            stored.fields.get("__typename"),
+            Some(&CacheValue::String("GraphqlSoupDocument".into()))
+        );
     });
 }
 
@@ -245,12 +407,24 @@ fn optimistic_projection_layers_are_queryable_offline_and_survive_restart() {
 fn optimistic_fact_patches_update_membership_and_sort_facts() {
     pollster::block_on(async {
         let mut engine = Engine::new(InMemoryStorage::new());
-        let entity_key = EntityKey::entity("GraphqlSoupDocument", &["doc-1"]);
+        let second_key = RecordKey::new("GraphqlSoupDocument:doc-2").unwrap();
         engine
             .put_records_with_projections(
                 None,
-                vec![(entity_key, Record::default())],
-                vec![ProjectionMutation::Replace(projection("owner-1"))],
+                vec![
+                    (
+                        EntityKey::entity("GraphqlSoupDocument", &["doc-1"]),
+                        Record::default(),
+                    ),
+                    (
+                        EntityKey::entity("GraphqlSoupDocument", &["doc-2"]),
+                        Record::default(),
+                    ),
+                ],
+                vec![
+                    ProjectionMutation::Replace(projection("owner-1")),
+                    ProjectionMutation::Replace(projection_for(second_key.clone(), "owner-2", 15)),
+                ],
             )
             .await
             .unwrap();
@@ -288,7 +462,7 @@ fn optimistic_fact_patches_update_membership_and_sort_facts() {
                 .query_predicate_index(&query("owner-2"))
                 .await
                 .unwrap(),
-            PredicateQueryResult::Optimistic(vec![record_key()])
+            PredicateQueryResult::Optimistic(vec![record_key(), second_key])
         );
     });
 }
