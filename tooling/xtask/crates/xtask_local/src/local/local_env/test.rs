@@ -256,3 +256,37 @@ fn fusionauth_public_url_uses_the_instance_host_port() {
         Some(named_public_url.as_str())
     );
 }
+
+/// Real integration secrets must be seeded in the boot stubs (BELOW Doppler),
+/// never in `to_env` (ABOVE it). These two were originally written by
+/// `AgentHarnessEnv` as empty strings in `to_env`, which blanked the real
+/// values a developer's Doppler config supplies — the harness then ran without
+/// managed sandboxes on every stack that did not also export them by hand.
+///
+/// Seeded (not omitted) so the process-env overlay, which only replaces keys
+/// already present, can still override them from the shell.
+#[test]
+fn harness_secrets_are_stubs_that_doppler_can_override() {
+    let instance = Instance::derive(None, None).expect("default instance derives");
+    let local = LocalEnv::for_instance(Mode::Local, &instance, true);
+    let authoritative = local.to_env();
+    let stubs = local.boot_stub_env();
+    for key in ["DAYTONA_API_KEY", "GITHUB_TOKEN"] {
+        assert_eq!(
+            stubs.get(key).map(String::as_str),
+            Some(""),
+            "{key} must be seeded empty in the boot stubs so Doppler wins and \
+             the process-env overlay can still replace it"
+        );
+        assert!(
+            !authoritative.contains_key(key),
+            "{key} in to_env would overwrite Doppler's real value with a stub"
+        );
+    }
+    // The snapshot name is deterministic local plumbing, so it stays
+    // authoritative — the contrast the two layers are for.
+    assert_eq!(
+        authoritative.get("DAYTONA_SNAPSHOT").map(String::as_str),
+        Some("macro-agent-harness")
+    );
+}

@@ -250,11 +250,14 @@ impl MailEnv {
 }
 
 /// The agent harness: which bot it answers for, and the Daytona sandbox
-/// credentials.
+/// snapshot it launches from.
 ///
 /// The bot id and snapshot name are deterministic (the bot is seeded by
-/// migration). The two secrets are seeded empty so the process-env overlay can
-/// replace them; the harness refuses to start unless both are supplied.
+/// migration), so they belong here: local plumbing, layered above Doppler.
+/// Their two companion secrets — `DAYTONA_API_KEY` and `GITHUB_TOKEN` — are
+/// NOT written here. Those are real integration values, so they are seeded in
+/// [`BootStubEnv`] below Doppler instead, where a developer's Doppler config
+/// wins over the stub. The harness refuses to start unless both are supplied.
 struct AgentHarnessEnv {
     bot_id: &'static str,
     snapshot: &'static str,
@@ -272,8 +275,6 @@ impl AgentHarnessEnv {
     fn write(&self, env: &mut BTreeMap<String, String>) {
         env.insert("HARNESS_BOT_ID".into(), self.bot_id.into());
         env.insert("DAYTONA_SNAPSHOT".into(), self.snapshot.into());
-        env.insert("DAYTONA_API_KEY".into(), String::new());
-        env.insert("GITHUB_TOKEN".into(), String::new());
     }
 }
 
@@ -404,6 +405,14 @@ struct BootStubEnv;
 
 impl BootStubEnv {
     fn write(&self, env: &mut BTreeMap<String, String>) {
+        // agent_harness_service's managed sandboxes. Seeded (not omitted) so
+        // the process-env overlay — which only replaces keys already present —
+        // can still override them from the shell; seeded HERE rather than in
+        // `AgentHarnessEnv` so Doppler's real values win, which is the whole
+        // point of this layer. Trigger processing and external sessions run
+        // fine without either.
+        env.insert("DAYTONA_API_KEY".into(), String::new());
+        env.insert("GITHUB_TOKEN".into(), String::new());
         // connection_gateway config reads `REDIS_HOST` (a Redis URL, not a
         // hostname — see `redis::Client::open`).
         env.insert("REDIS_HOST".into(), "redis://redis:6379".into());

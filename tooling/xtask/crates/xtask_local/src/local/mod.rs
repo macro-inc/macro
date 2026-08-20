@@ -264,9 +264,11 @@ pub fn run_stack(mode: Mode, args: &cli::RunArgs) -> Result<()> {
     // DynamoDB/OpenSearch connection refused).
     bring_up_infra(&stage, mode, &instance, &env, InfraInit::Full)?;
     bring_up_app(&stage, mode, &instance, &env)?;
+    // Best-effort: a tunnel that won't come up costs webhook delivery to host
+    // receivers, nothing else, so it warns instead of failing the whole run.
     let _sdk_webhook_tunnel = (mode == Mode::Local && !stage.is_dry_run())
-        .then(|| sdk_webhook::start(&instance))
-        .transpose()?;
+        .then(|| sdk_webhook::start_or_warn(&stage, &instance))
+        .flatten();
 
     // No restart-to-reload step: the teardown means `up` always creates fresh
     // containers, which start on the just-built binaries bind-mounted at
