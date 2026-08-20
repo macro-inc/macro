@@ -49,11 +49,6 @@ RUN cd services/sync-service && worker-build --profile sync-service-release
 # worker, the wrangler config, and the D1 migrations — nothing else.
 FROM node:22-bookworm-slim
 
-# curl for the compose healthcheck; ca-certificates for wrangler's TLS.
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends curl ca-certificates && \
-    rm -rf /var/lib/apt/lists/*
-
 WORKDIR /app
 
 COPY services/sync-service/package.json services/sync-service/package-lock.json ./

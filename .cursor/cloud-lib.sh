@@ -72,8 +72,7 @@ workspace_group() {
 }
 
 # Move /workspace/target into $HOME (same filesystem: rename). Recreate the
-# symlink after every checkout so cargo and `just stack --no-build` still
-# look at the default path.
+# symlink after every checkout so Cargo's incremental cache survives it.
 ensure_persistent_caches() {
   mkdir -p "${TARGET_CACHE}" "${FRONTEND_CACHE}" "${MACRO_STACK_SNAPSHOT_DIR}"
 
@@ -105,32 +104,4 @@ ensure_persistent_caches() {
   if [ -d "${WORKSPACE_ROOT}/infra/local/generated/.snapshots" ]; then
     cp -a "${WORKSPACE_ROOT}/infra/local/generated/.snapshots/." "${MACRO_STACK_SNAPSHOT_DIR}/"
   fi
-}
-
-required_zig_bins() {
-  awk '/cargo_bin: "/ { gsub(/[",]/, "", $2); print $2 }' \
-    "${WORKSPACE_ROOT}/tooling/xtask/crates/xtask_local/src/local/inventory.rs"
-}
-
-app_artifacts_ready() {
-  local dir="${WORKSPACE_ROOT}/target/x86_64-unknown-linux-gnu/debug"
-  local bin
-  while IFS= read -r bin; do
-    [ -z "${bin}" ] && continue
-    [ -x "${dir}/${bin}" ] || return 1
-  done < <(required_zig_bins)
-  [ -f /workspace/apps/web/dist/index.html ]
-}
-
-# Host `cargo test --no-run` output. Skip that compile when the cache already
-# has the binaries (warm snapshot / second install).
-host_test_bins_ready() {
-  shopt -s nullglob
-  local bins=("${WORKSPACE_ROOT}"/target/debug/deps/macro_db_client-*)
-  shopt -u nullglob
-  local f
-  for f in "${bins[@]}"; do
-    [ -x "${f}" ] && return 0
-  done
-  return 1
 }

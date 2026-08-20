@@ -45,20 +45,47 @@ ensure_test_envs() {
   done < <(crate_env_paths)
 }
 
-build_app_artifacts() {
-  cargo build -p xtask_local --features local-stack
-  cargo run --quiet --manifest-path Cargo.toml -p xtask_local --features local-stack -- zigbuild
-  cargo run --quiet --manifest-path Cargo.toml -p xtask_local --features local-stack -- runtime-image
+build_frontend_artifact() {
   bun install --frozen-lockfile
   (
     cd "${WORKSPACE_ROOT}/apps/web"
     MODE=development NODE_ENV=production VITE_LOCAL_SERVERS=ALL VITE_LOCAL_BACKEND_ORIGIN=same-origin \
       bun run --bun build
   )
-  if [ -f "${WORKSPACE_ROOT}/apps/web/dist/index.html" ]; then
-    mkdir -p "${FRONTEND_CACHE}"
-    cp -a "${WORKSPACE_ROOT}/apps/web/dist/." "${FRONTEND_CACHE}/"
-  fi
+  test -f "${WORKSPACE_ROOT}/apps/web/dist/index.html"
+  mkdir -p "${FRONTEND_CACHE}"
+  cp -a "${WORKSPACE_ROOT}/apps/web/dist/." "${FRONTEND_CACHE}/"
+}
+
+cleanup_stack() {
+  cd "${WORKSPACE_ROOT}"
+  just --quiet stack down
+}
+
+cleanup_stack_best_effort() {
+  cleanup_stack >/dev/null 2>&1 || true
+}
+
+prepare_durable_stack() {
+  # `infra-only` is the existing finite CI bake mode: it materializes every
+  # Compose image, initializes the real infra, and saves/restores the
+  # content-addressed volume snapshot without starting secret-dependent apps.
+  just stack up \
+    --infra-only \
+    --no-doppler \
+    --build-aux-services \
+    --json
+
+  just --quiet stack snapshot --json | python3 -c '
+import json
+import sys
+
+snapshot = json.load(sys.stdin)
+key = snapshot["key"]
+if not snapshot["present"]:
+    raise SystemExit(f"stack snapshot missing for key {key}")
+print(f"cursor-cloud install: stack snapshot {key}")
+'
 }
 
 if ! in_pinned_nix_shell; then
@@ -75,25 +102,26 @@ docker pull redis/redis-stack:latest
 
 cd "${WORKSPACE_ROOT}"
 just run_dbs -d
+trap cleanup_stack_best_effort EXIT
 
 ensure_test_envs
 
 just initialize_dbs
 cargo fetch --locked
-if host_test_bins_ready; then
-  echo "cursor-cloud install: test bins cached"
-else
-  unset SQLX_OFFLINE
-  cargo test --no-run -p macro_db_client
-fi
+unset SQLX_OFFLINE
+cargo test --no-run -p macro_db_client
 
 echo "cursor-cloud install: test-ready"
 
-# Do not start the product stack. Aux Dockerfiles rebuild on a missing image
-# and have failed this environment with Debian apt 400.
-if app_artifacts_ready; then
-  echo "cursor-cloud install: app-artifacts cached"
-else
-  build_app_artifacts
-  echo "cursor-cloud install: app-artifacts"
-fi
+# Build tools own cache validity: Bun, Cargo, and BuildKit compare the current
+# source/lock/toolchain inputs instead of trusting surviving files or image tags.
+build_frontend_artifact
+echo "cursor-cloud install: frontend artifact"
+
+# The bake primitive builds the runtime image and complete Rust binary inventory
+# before initializing and snapshotting infra.
+prepare_durable_stack
+cleanup_stack
+trap - EXIT
+
+echo "cursor-cloud install: durable stack ready"
