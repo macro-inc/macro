@@ -65,9 +65,14 @@ export const htmlToSnippetText = (html: string): string => {
 /**
  * Preview text for a message, preferring the plain-text body. Newlines there
  * are already whitespace, so collapsing is enough.
+ *
+ * A plain-text body that is only whitespace is truthy but collapses to the
+ * empty string, so it falls through to the HTML body rather than rendering a
+ * blank preview.
  */
 export const messageSnippet = (message: ApiMessage): string => {
-  if (message.body_text) return collapseWhitespace(message.body_text);
+  const text = message.body_text ? collapseWhitespace(message.body_text) : '';
+  if (text) return text;
   if (message.body_html_sanitized) {
     return htmlToSnippetText(message.body_html_sanitized);
   }
