@@ -317,10 +317,10 @@ don't inject it directly into the error message.
 
 ## Cursor Cloud specific instructions
 
-Environment scripts are `.cursor/install.sh` (durable files) and `.cursor/start.sh` (dockerd, then Postgres and Redis).
+Environment scripts are `.cursor/install.sh` (durable files), `.cursor/start.sh` (dockerd, then Postgres and Redis), and `.cursor/stack.sh` (on-demand product stack).
 
 After boot, Postgres should already be up. If `:5432` is closed, run `bash .cursor/start.sh`.
 
-Infra-ready is enough for `cargo test -p`. Product-ready (browser against local Macro) is a second command: `just stack up --no-doppler`. Do not run that in install. It compiles every service and builds aux images. Put `$HOME/.nix-profile/bin` first on `PATH` before `just stack` so Nix `ssh-keygen` wins over `/exec-daemon/ssh-keygen` (Nix glibc vs the shim).
+Infra-ready is enough for `cargo test -p`. Product-ready (browser against local Macro) is `bash .cursor/stack.sh`, which runs `just stack up --no-doppler --no-build`. Install precomputes zigbuild binaries and the frontend bundle so that path skips the ~8 min compile. Do not run a full `just stack up` without `--no-build` in install, and do not pass `--build-aux-services`: missing aux images rebuild from Dockerfiles and have failed here with Debian apt 400. Put `$HOME/.nix-profile/bin` first on `PATH` before `just stack` so Nix `ssh-keygen` wins over `/exec-daemon/ssh-keygen` (Nix glibc vs the shim).
 
 Do not follow the old `docker compose -f docker/docker-compose.yml up -d postgres` line. It skips `create_networks` and Redis.

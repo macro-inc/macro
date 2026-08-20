@@ -127,3 +127,23 @@ unset SQLX_OFFLINE
 cargo test --no-run -p macro_db_client
 
 echo "cursor-cloud install: test-ready"
+
+# Host artifacts for `just stack up --no-doppler --no-build`. Do not start the
+# product stack here: aux Dockerfiles (sync/lexical/websocket) rebuild on a
+# missing image and have failed this environment with Debian apt 400.
+ensure_writable_target
+nix develop --command bash -lc '
+  set -euo pipefail
+  export PATH="${HOME}/.nix-profile/bin:${PATH}"
+  cargo build -p xtask_local --features local-stack
+  cargo run --quiet --manifest-path Cargo.toml -p xtask_local --features local-stack -- zigbuild
+  cargo run --quiet --manifest-path Cargo.toml -p xtask_local --features local-stack -- runtime-image
+  bun install --frozen-lockfile
+  (
+    cd apps/web
+    MODE=development NODE_ENV=production VITE_LOCAL_SERVERS=ALL VITE_LOCAL_BACKEND_ORIGIN=same-origin \
+      bun run --bun build
+  )
+'
+
+echo "cursor-cloud install: app-artifacts"
