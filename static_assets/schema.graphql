@@ -1994,57 +1994,11 @@ input GraphqlFilterPropertiesLiteral {
 	"""
 	Optional entity type scope for the property match.
 	"""
-	entityType: GraphqlFilterPropertyEntityType
+	entityType: GraphqlPropertyEntityType
 	"""
 	Value to compare against the property.
 	"""
 	value: GraphqlFilterPropertyMatchValue!
-}
-
-"""
-An entity type supported by property filters.
-"""
-enum GraphqlFilterPropertyEntityType {
-	"""
-	Calendar event entity.
-	"""
-	CALENDAR_EVENT
-	"""
-	Call record entity.
-	"""
-	CALL_RECORD
-	"""
-	Channel entity.
-	"""
-	CHANNEL
-	"""
-	Chat entity.
-	"""
-	CHAT
-	"""
-	Company entity.
-	"""
-	COMPANY
-	"""
-	Document entity.
-	"""
-	DOCUMENT
-	"""
-	Project entity.
-	"""
-	PROJECT
-	"""
-	Task entity.
-	"""
-	TASK
-	"""
-	Thread entity.
-	"""
-	THREAD
-	"""
-	User entity.
-	"""
-	USER
 }
 
 """
@@ -2058,7 +2012,7 @@ input GraphqlFilterPropertyMatchValue @oneOf {
 	"""
 	Entity reference id to match.
 	"""
-	entityRef: String
+	entityRef: ID
 }
 
 """
