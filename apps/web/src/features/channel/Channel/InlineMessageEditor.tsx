@@ -32,9 +32,7 @@ type MessageEditorContentProps = {
  */
 export function MessageEditorContent(props: MessageEditorContentProps) {
   const snapshot = () => props.messageEditor.state()?.snapshot;
-  const botMentionUsers = useBotMentionUsers(
-    () => props.channelId
-  );
+  const botMentionUsers = useBotMentionUsers(() => props.channelId);
   const attachmentTracker = createInputAttachmentTracker({
     initialAttachments: snapshot()?.attachments,
   });

@@ -43,7 +43,7 @@ export function PersonaCreate(props: { onBack: () => void }) {
   const save = async () => {
     const teamId = currentTeam()?.id;
     if (!teamId || !isTeamAdmin()) {
-      toast.failure('Only team admins and owners can create personas');
+      toast.failure('Only team admins and owners can create agents');
       return;
     }
 
@@ -64,10 +64,10 @@ export function PersonaCreate(props: { onBack: () => void }) {
         avatarUrl: parsed.data.avatarUrl,
         agent: formValuesToAgentConfig(parsed.data),
       });
-      toast.success('Persona created');
+      toast.success('Agent created');
       props.onBack();
     } catch {
-      toast.failure('Failed to create persona');
+      toast.failure('Failed to create agent');
     } finally {
       setSaving(false);
     }
@@ -85,7 +85,7 @@ export function PersonaCreate(props: { onBack: () => void }) {
           onClick={leave}
         >
           <CaretLeftIcon />
-          Back to personas
+          Back to agents
         </Button>
 
         <form
@@ -98,14 +98,14 @@ export function PersonaCreate(props: { onBack: () => void }) {
           <header class="flex items-center gap-3">
             <BotAvatar
               bot={{
-                name: form.name || 'Persona',
+                name: form.name || 'Agent',
                 avatar_url: form.avatarUrl || undefined,
               }}
               size="lg"
             />
             <div class="min-w-0">
               <h1 class="truncate text-lg font-semibold tracking-[-0.01em]">
-                {form.name || 'New persona'}
+                {form.name || 'New agent'}
               </h1>
               <p class="mt-0.5 truncate text-sm text-ink-muted">
                 @{form.handle || 'handle'}
@@ -116,7 +116,7 @@ export function PersonaCreate(props: { onBack: () => void }) {
           <BotFormSection
             class="mt-3"
             title="Profile"
-            description="How this persona appears in channels and mentions."
+            description="How this agent appears in channels and mentions."
           >
             <BotProfileFields
               value={form}
@@ -136,8 +136,8 @@ export function PersonaCreate(props: { onBack: () => void }) {
           </BotFormSection>
 
           <BotFormSection
-            title="Agent"
-            description="What this persona runs when someone mentions it."
+            title="Configuration"
+            description="What this agent runs when someone mentions it."
           >
             <PersonaAgentFields
               value={form}
@@ -150,18 +150,14 @@ export function PersonaCreate(props: { onBack: () => void }) {
               onModelChange={(value) =>
                 setForm('model', value as typeof form.model)
               }
-              onRepoUrlChange={(value) => {
-                setForm('repoUrl', value);
-                setErrors((current) => ({ ...current, repoUrl: undefined }));
-              }}
             />
           </BotFormSection>
 
           <Show when={!canCreate()}>
             <p class="text-xs text-ink-muted">
               {currentTeam()
-                ? 'Only team admins and owners can create personas.'
-                : 'Join or create a team to create a persona.'}
+                ? 'Only team admins and owners can create agents.'
+                : 'Join or create a team to create an agent.'}
             </p>
           </Show>
 
@@ -181,7 +177,7 @@ export function PersonaCreate(props: { onBack: () => void }) {
               size="sm"
               disabled={pending() || !canCreate()}
             >
-              {saving() ? 'Creating…' : 'Create persona'}
+              {saving() ? 'Creating…' : 'Create agent'}
             </Button>
           </div>
         </form>

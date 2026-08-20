@@ -97,9 +97,9 @@ export function PersonaDetail(props: { botId: string; onBack: () => void }) {
       const nextForm = personaToFormValues(persona);
       setForm(nextForm);
       setInitialForm(nextForm);
-      toast.success('Persona updated');
+      toast.success('Agent updated');
     } catch {
-      toast.failure('Failed to update persona');
+      toast.failure('Failed to update agent');
     } finally {
       setSaving(false);
     }
@@ -109,10 +109,10 @@ export function PersonaDetail(props: { botId: string; onBack: () => void }) {
     try {
       await deletePersona.mutateAsync({ botId: props.botId });
       setDeleteOpen(false);
-      toast.success('Persona deleted');
+      toast.success('Agent deleted');
       props.onBack();
     } catch {
-      toast.failure('Failed to delete persona');
+      toast.failure('Failed to delete agent');
     }
   };
 
@@ -129,7 +129,7 @@ export function PersonaDetail(props: { botId: string; onBack: () => void }) {
             onClick={leave}
           >
             <CaretLeftIcon />
-            Back to personas
+            Back to agents
           </Button>
           <Show
             when={initialized() && personaQuery.data}
@@ -168,7 +168,7 @@ export function PersonaDetail(props: { botId: string; onBack: () => void }) {
                 <BotFormSection
                   class="mt-3"
                   title="Profile"
-                  description="How this persona appears in channels and mentions."
+                  description="How this agent appears in channels and mentions."
                 >
                   <BotProfileFields
                     value={form}
@@ -193,8 +193,8 @@ export function PersonaDetail(props: { botId: string; onBack: () => void }) {
                 </BotFormSection>
 
                 <BotFormSection
-                  title="Agent"
-                  description="What this persona runs when someone mentions it."
+                  title="Configuration"
+                  description="What this agent runs when someone mentions it."
                 >
                   <PersonaAgentFields
                     value={form}
@@ -209,13 +209,6 @@ export function PersonaDetail(props: { botId: string; onBack: () => void }) {
                     onModelChange={(value) =>
                       setForm('model', value as typeof form.model)
                     }
-                    onRepoUrlChange={(value) => {
-                      setForm('repoUrl', value);
-                      setErrors((current) => ({
-                        ...current,
-                        repoUrl: undefined,
-                      }));
-                    }}
                   />
                 </BotFormSection>
 
@@ -228,7 +221,7 @@ export function PersonaDetail(props: { botId: string; onBack: () => void }) {
                     onClick={() => setDeleteOpen(true)}
                   >
                     <TrashIcon />
-                    Delete persona
+                    Delete agent
                   </Button>
                   <div class="flex items-center gap-2">
                     <Button
@@ -258,6 +251,8 @@ export function PersonaDetail(props: { botId: string; onBack: () => void }) {
       <BotDeleteDialog
         open={deleteOpen()}
         botName={personaQuery.data?.name}
+        noun="agent"
+        description="This removes the agent from every channel and ends any sessions it is running. This action cannot be undone."
         pending={deletePersona.isPending}
         onClose={() => setDeleteOpen(false)}
         onConfirm={() => void remove()}

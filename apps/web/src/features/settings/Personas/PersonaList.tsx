@@ -16,10 +16,7 @@ function agentSummary(persona: Persona) {
   const model =
     MODEL_OPTIONS.find((option) => option.value === persona.agent.model)
       ?.label ?? persona.agent.model;
-  const repo = persona.agent.repo_url
-    ? persona.agent.repo_url.replace(/^https:\/\/(www\.)?github\.com\//, '')
-    : 'No repository';
-  return `${model} · ${harness} · ${repo}`;
+  return `${model} · ${harness}`;
 }
 
 function PersonaRow(props: {
@@ -64,18 +61,18 @@ export function PersonaList(props: {
 }) {
   return (
     <SettingsPage
-      title="Personas"
+      title="Agents"
       description="Named agents your team can mention. Each one runs with its own instructions."
       actions={
         <Button variant="cta" size="sm" onClick={props.onCreate}>
           <PlusIcon />
-          New persona
+          New agent
         </Button>
       }
     >
       <SettingsSection
-        title="Your personas"
-        description="Mentioning a persona opens a sandboxed session it answers in. Anyone on your team can mention one; only admins can edit them."
+        title="Your agents"
+        description="Mentioning an agent opens a sandboxed session it answers in. Anyone on your team can mention one; only admins can edit them."
       >
         <SettingsCard>
           <Show
@@ -94,7 +91,7 @@ export function PersonaList(props: {
                     <SparkleIcon class="size-6" />
                   </div>
                   <div class="mt-3 text-sm font-medium text-ink">
-                    Create your first persona
+                    Create your first agent
                   </div>
                   <div class="mt-1 max-w-80 text-xs text-ink-muted">
                     Give it a name, a handle and instructions, and your team can
@@ -107,7 +104,7 @@ export function PersonaList(props: {
                     onClick={props.onCreate}
                   >
                     <PlusIcon />
-                    New persona
+                    New agent
                   </Button>
                 </div>
               }

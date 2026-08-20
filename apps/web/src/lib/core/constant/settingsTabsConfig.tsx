@@ -21,6 +21,8 @@ import {
   BOT_MANAGEMENT_OVERRIDE,
   DEV_MODE_ENV,
   ENABLE_APP_STORE_QR_CODE,
+  ENABLE_CHAT_V3_AGENTS_FLAG,
+  ENABLE_CHAT_V3_AGENTS_OVERRIDE,
   ENABLE_CRM_FLAG,
   ENABLE_CRM_OVERRIDE,
 } from './featureFlags';
@@ -74,7 +76,7 @@ export const SETTINGS_TAB_GROUPS: SettingsTabGroup[] = [
   {
     label: 'Plugins',
     items: [
-      { tab: 'Personas', label: 'Personas', icon: SparkleIcon },
+      { tab: 'Personas', label: 'Agents', icon: SparkleIcon },
       { tab: 'Bots', label: 'Bots', icon: BotIcon },
     ],
   },
@@ -155,6 +157,9 @@ export const useSettingsTabAvailable = () => {
   const crmFlag = useFeatureFlag(ENABLE_CRM_FLAG, {
     enabledOverride: ENABLE_CRM_OVERRIDE,
   });
+  const agentsFlag = useFeatureFlag(ENABLE_CHAT_V3_AGENTS_FLAG, {
+    enabledOverride: ENABLE_CHAT_V3_AGENTS_OVERRIDE,
+  });
   const hasAdminPanel = useHasPermission(PERMISSION_IDS.WRITE_ADMIN_PANEL);
 
   return (tab: SettingsTab): boolean => {
@@ -180,8 +185,12 @@ export const useSettingsTabAvailable = () => {
       case 'Agent':
         return !isNativeMobilePlatform();
       case 'Bots':
-      case 'Personas':
         return botManagementFlag().enabled;
+      // Agents ride the same gate as every other agent-v3 surface (the mention
+      // entry, the folded session view), not bot management: the page only
+      // makes sense where sessions can actually be opened.
+      case 'Personas':
+        return agentsFlag().enabled;
       case 'Mobile':
         return isNativeMobilePlatform() && DEV_MODE_ENV;
       case 'Admin':

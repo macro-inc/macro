@@ -262,9 +262,7 @@ export function Channel(props: ChannelProps) {
   });
 
   const participants = useChannelParticipants(() => props.channelId);
-  const botMentionUsers = useBotMentionUsers(
-    () => props.channelId
-  );
+  const botMentionUsers = useBotMentionUsers(() => props.channelId);
 
   const activity = useChannelActivity(props.channelId);
 

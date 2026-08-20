@@ -56,9 +56,7 @@ export function ThreadReplyChannelInput(props: ThreadReplyChannelInputProps) {
   const sendMessageMutation = useSendMessageMutation();
   const typingMutation = usePostTypingUpdateMutation();
   const participants = useChannelParticipants(() => props.channelId);
-  const botMentionUsers = useBotMentionUsers(
-    () => props.channelId
-  );
+  const botMentionUsers = useBotMentionUsers(() => props.channelId);
 
   const tracker = createInputAttachmentTracker({
     persistenceKey: makeAttachmentTrackerPersistenceKey({
