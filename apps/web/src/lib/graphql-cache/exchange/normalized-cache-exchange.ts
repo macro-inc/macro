@@ -384,6 +384,8 @@ export function normalizedCacheExchange(
   return ({ forward, client }) => {
     /** Operations registered with the host, for push-driven re-execution. */
     const activeOps = new Map<number, Operation>();
+    const { source: affectedResults$, next: emitAffectedResult } =
+      makeSubject<OperationResult>();
     type RetainedReplacementFallback = {
       version: number;
       writeArgs: Parameters<CacheHost['writeQuery']>[0];
@@ -555,12 +557,41 @@ export function normalizedCacheExchange(
       });
     };
 
+    const emitAffectedWhileNetworkBound = (key: number): void => {
+      const operation = activeOps.get(key);
+      if (!operation) return;
+      void host
+        .readQuery({
+          opKey: operation.key,
+          query: queryText(operation),
+          operationName: operationName(operation),
+          variables: operation.variables as Record<string, unknown> | undefined,
+          priority: 'user-visible',
+          entityResolvers,
+        })
+        .then((read) => {
+          const active = activeOps.get(key);
+          if (read.kind !== 'hit' || !active) return;
+          // Preserve the authoritative request while immediately surfacing the
+          // newer local view. Its eventual result still gets the deferred
+          // cache reread below when it could not register fresh dependencies.
+          emitAffectedResult(cacheResult(active, read.data, true));
+        })
+        .catch((error) => options.onCacheError?.(error, operation));
+    };
+
     const unsubscribePush = host.onOpsAffected((opKeys) => {
       for (const key of opKeys) {
         if (!activeOps.has(key)) continue;
         const state = queryState(key);
         if (state.networkBoundQueries > 0) {
           state.deferredAffected = true;
+          if (
+            !state.replacementFallback &&
+            !state.retainedReplacementFallback
+          ) {
+            emitAffectedWhileNetworkBound(key);
+          }
           continue;
         }
         const registrationOnly = state.completedReplacementFallback;
@@ -1222,7 +1253,12 @@ export function normalizedCacheExchange(
         }
       }
       void unsubscribePush;
-      return merge([cacheResults$, mutationPrep$, forwarded$]);
+      return merge([
+        affectedResults$,
+        cacheResults$,
+        mutationPrep$,
+        forwarded$,
+      ]);
     };
   };
 }
