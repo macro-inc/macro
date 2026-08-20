@@ -1,10 +1,6 @@
 {
   "db_name": "PostgreSQL",
-<<<<<<<< HEAD:.sqlx/query-284cbb89903bdbc2a8f42e0b4702f52dddc568e5d49086647bff2bf46d33ed8a.json
-  "query": "\n            SELECT\n                id, owner_id, thread_id, originating_message_id, bot_id,\n                model, harness, repo_url, acp_session_id, status, status_event_name,\n                created_at, modified_at,\n                (SELECT channel_id FROM comms_messages WHERE id = agent_session.thread_id)\n                    AS \"thread_channel_id?\"\n            FROM agent_session\n            WHERE id = $1\n            ",
-========
-  "query": "\n            SELECT\n                id, owner_id, thread_id, originating_message_id, bot_id,\n                model, harness, repo_url, workspace, acp_session_id, status,\n                status_event_name, created_at, modified_at\n            FROM agent_session\n            WHERE id = $1\n            ",
->>>>>>>> f49aaada8 (feat(agent-sessions): external sessions via POST /agent-sessions + per-session workspace):.sqlx/query-2dc4d77b20c83a1a08345d8db5a6cb12bc9a5328f775d27e087be8de7c36365e.json
+  "query": "\n            SELECT\n                id, owner_id, thread_id, originating_message_id, bot_id,\n                model, harness, repo_url, workspace, acp_session_id, status,\n                status_event_name, created_at, modified_at,\n                (SELECT channel_id FROM comms_messages WHERE id = agent_session.thread_id)\n                    AS \"thread_channel_id?\"\n            FROM agent_session\n            WHERE thread_id = $1 AND bot_id = $2\n            ORDER BY created_at DESC\n            LIMIT 1\n            ",
   "describe": {
     "columns": [
       {
@@ -78,13 +74,14 @@
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 13,
+        "ordinal": 14,
         "name": "thread_channel_id?",
         "type_info": "Uuid"
       }
     ],
     "parameters": {
       "Left": [
+        "Uuid",
         "Uuid"
       ]
     },
@@ -96,7 +93,7 @@
       false,
       false,
       false,
-      false,
+      true,
       false,
       true,
       false,
@@ -106,9 +103,5 @@
       null
     ]
   },
-<<<<<<<< HEAD:.sqlx/query-284cbb89903bdbc2a8f42e0b4702f52dddc568e5d49086647bff2bf46d33ed8a.json
-  "hash": "284cbb89903bdbc2a8f42e0b4702f52dddc568e5d49086647bff2bf46d33ed8a"
-========
-  "hash": "2dc4d77b20c83a1a08345d8db5a6cb12bc9a5328f775d27e087be8de7c36365e"
->>>>>>>> f49aaada8 (feat(agent-sessions): external sessions via POST /agent-sessions + per-session workspace):.sqlx/query-2dc4d77b20c83a1a08345d8db5a6cb12bc9a5328f775d27e087be8de7c36365e.json
+  "hash": "1b01a7091a13b8088a31b1f4d539a47e43f866d1cc6ff35e2046924f71011039"
 }

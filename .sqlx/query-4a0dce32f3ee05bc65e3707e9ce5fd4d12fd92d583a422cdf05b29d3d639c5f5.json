@@ -1,10 +1,6 @@
 {
   "db_name": "PostgreSQL",
-<<<<<<<< HEAD:.sqlx/query-284cbb89903bdbc2a8f42e0b4702f52dddc568e5d49086647bff2bf46d33ed8a.json
-  "query": "\n            SELECT\n                id, owner_id, thread_id, originating_message_id, bot_id,\n                model, harness, repo_url, acp_session_id, status, status_event_name,\n                created_at, modified_at,\n                (SELECT channel_id FROM comms_messages WHERE id = agent_session.thread_id)\n                    AS \"thread_channel_id?\"\n            FROM agent_session\n            WHERE id = $1\n            ",
-========
-  "query": "\n            SELECT\n                id, owner_id, thread_id, originating_message_id, bot_id,\n                model, harness, repo_url, workspace, acp_session_id, status,\n                status_event_name, created_at, modified_at\n            FROM agent_session\n            WHERE id = $1\n            ",
->>>>>>>> f49aaada8 (feat(agent-sessions): external sessions via POST /agent-sessions + per-session workspace):.sqlx/query-2dc4d77b20c83a1a08345d8db5a6cb12bc9a5328f775d27e087be8de7c36365e.json
+  "query": "\n            INSERT INTO agent_session (\n                id, owner_id, thread_id, originating_message_id, bot_id, model,\n                harness, repo_url, workspace, acp_session_id, status,\n                status_event_name\n            )\n            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)\n            RETURNING\n                id, owner_id, thread_id, originating_message_id, bot_id,\n                model, harness, repo_url, workspace, acp_session_id, status,\n                status_event_name, created_at, modified_at,\n                (SELECT channel_id FROM comms_messages WHERE id = agent_session.thread_id)\n                    AS \"thread_channel_id?\"\n            ",
   "describe": {
     "columns": [
       {
@@ -78,14 +74,25 @@
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 13,
+        "ordinal": 14,
         "name": "thread_channel_id?",
         "type_info": "Uuid"
       }
     ],
     "parameters": {
       "Left": [
-        "Uuid"
+        "Uuid",
+        "Text",
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text"
       ]
     },
     "nullable": [
@@ -106,9 +113,5 @@
       null
     ]
   },
-<<<<<<<< HEAD:.sqlx/query-284cbb89903bdbc2a8f42e0b4702f52dddc568e5d49086647bff2bf46d33ed8a.json
-  "hash": "284cbb89903bdbc2a8f42e0b4702f52dddc568e5d49086647bff2bf46d33ed8a"
-========
-  "hash": "2dc4d77b20c83a1a08345d8db5a6cb12bc9a5328f775d27e087be8de7c36365e"
->>>>>>>> f49aaada8 (feat(agent-sessions): external sessions via POST /agent-sessions + per-session workspace):.sqlx/query-2dc4d77b20c83a1a08345d8db5a6cb12bc9a5328f775d27e087be8de7c36365e.json
+  "hash": "4a0dce32f3ee05bc65e3707e9ce5fd4d12fd92d583a422cdf05b29d3d639c5f5"
 }
