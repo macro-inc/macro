@@ -58,6 +58,46 @@ describe('createHistory', () => {
     });
   });
 
+  describe('backTo', () => {
+    it('jumps to the nearest earlier match, keeping the skipped entries forward', () => {
+      const history = createHistory<{ value: string }>();
+
+      history.push({ value: 'inbox' });
+      history.push({ value: 'doc' });
+      history.push({ value: 'tasks' });
+      history.push({ value: 'task' });
+      history.push({ value: 'thread' });
+
+      const result = history.backTo((item) => item.value === 'tasks');
+      expect(result).toEqual({ value: 'tasks' });
+      expect(history.index).toBe(2);
+      expect(history.items).toHaveLength(5);
+      expect(history.forward()).toEqual({ value: 'task' });
+    });
+
+    it('stays put when no earlier entry matches', () => {
+      const history = createHistory<{ value: string }>();
+
+      history.push({ value: 'doc' });
+      history.push({ value: 'thread' });
+
+      expect(history.backTo((item) => item.value === 'inbox')).toBe(null);
+      expect(history.index).toBe(1);
+    });
+
+    it('ignores the current entry and anything ahead of it', () => {
+      const history = createHistory<{ value: string }>();
+
+      history.push({ value: 'doc' });
+      history.push({ value: 'inbox' });
+      history.push({ value: 'thread' });
+      history.back();
+
+      expect(history.backTo((item) => item.value === 'inbox')).toBe(null);
+      expect(history.index).toBe(1);
+    });
+  });
+
   describe('forward', () => {
     it('should navigate forward in history', () => {
       const history = createHistory<{ value: string }>();

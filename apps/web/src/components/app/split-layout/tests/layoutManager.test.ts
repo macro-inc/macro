@@ -271,6 +271,54 @@ describe('layoutManager', () => {
         dispose();
       });
     });
+
+    it('jumps back to the nearest earlier entry matching a predicate', () => {
+      createRoot((dispose) => {
+        const manager = createSplitLayout(createMockOrchestrator(), [
+          { type: 'component', id: 'inbox' },
+        ]);
+        const split = manager.getSplit(manager.splits()[0].id)!;
+
+        split.replace({ next: { type: 'md', id: 'doc-1' } });
+        split.replace({ next: { type: 'component', id: 'tasks' } });
+        split.replace({ next: { type: 'md', id: 'doc-2' } });
+        split.replace({ next: { type: 'channel', id: 'ch-1' } });
+
+        const moved = split.goBackTo(
+          (content) => content.type === 'component' && content.id === 'tasks'
+        );
+
+        expect(moved).toBe(true);
+        expect(split.content()).toMatchObject({
+          type: 'component',
+          id: 'tasks',
+        });
+        // The skipped entries stay ahead, so forward still reaches them.
+        expect(split.canGoForward()).toBe(true);
+
+        dispose();
+      });
+    });
+
+    it('leaves the split put when nothing earlier matches', () => {
+      createRoot((dispose) => {
+        const manager = createSplitLayout(createMockOrchestrator(), [
+          { type: 'component', id: 'inbox' },
+        ]);
+        const split = manager.getSplit(manager.splits()[0].id)!;
+
+        split.replace({ next: { type: 'md', id: 'doc-1' } });
+
+        const moved = split.goBackTo(
+          (content) => content.type === 'component' && content.id === 'tasks'
+        );
+
+        expect(moved).toBe(false);
+        expect(split.content()).toMatchObject({ type: 'md', id: 'doc-1' });
+
+        dispose();
+      });
+    });
   });
 
   describe('navigation params', () => {

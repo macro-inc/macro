@@ -508,6 +508,12 @@ export type SplitHandle<TMeta extends ComponentMeta = ComponentMeta> = {
   isLast: () => boolean;
   activate: () => void;
   goBack: () => void;
+  /**
+   * Jump back to the nearest earlier history entry matching `predicate`,
+   * skipping the entries in between. Returns false — navigating nowhere — when
+   * no earlier entry matches.
+   */
+  goBackTo: (predicate: (content: SplitContent) => boolean) => boolean;
   close: () => void;
   reset: () => void;
   /** Returns the content item one step back in this split's history, without mutating. */
@@ -889,6 +895,39 @@ export function createSplitLayout(
     });
   }
 
+  /**
+   * Jump a split back to the nearest earlier history entry matching
+   * `predicate`, skipping the entries in between (they stay reachable with
+   * `forward`). Returns whether a match was found; the split is left untouched
+   * when none is.
+   */
+  function backTo(
+    id: SplitId,
+    predicate: (content: SplitContent) => boolean
+  ): boolean {
+    const i = splitIndexById(id);
+    if (i < 0) {
+      console.error(`Split with id ${id} not found`);
+      return false;
+    }
+
+    const split = state.splits[i];
+    const result = { moved: false };
+
+    batch(() => {
+      captureCurrentEntryState(split);
+
+      const prev = split.history.backTo(predicate);
+      if (!prev) return;
+
+      result.moved = true;
+      reattach(split, prev, undefined, 'history-back');
+      resetPreviewMode(id);
+    });
+
+    return result.moved;
+  }
+
   function forward(id: SplitId) {
     const i = splitIndexById(id);
     if (i < 0) return console.error(`Split with id ${id} not found`);
@@ -1062,6 +1101,8 @@ export function createSplitLayout(
       canGoForward: () =>
         (findSplitById(currentSplit.id) ?? currentSplit).history.canGoForward(),
       goBack: () => back(currentSplit.id),
+      goBackTo: (predicate: (content: SplitContent) => boolean) =>
+        backTo(currentSplit.id, predicate),
       reset: () => reset(currentSplit.id),
       goForward: () => forward(currentSplit.id),
       replace: ({ next, mergeHistory = false, referredFrom }) =>

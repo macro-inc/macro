@@ -935,7 +935,7 @@ const shortcutSections: ShortcutSection[] = [
       {
         keys: ['cmd+escape'],
         codes: ['MetaLeft', 'Escape'],
-        description: 'Go home / close split',
+        description: 'Back to list / close split',
       },
       {
         keys: ['shift+escape'],
