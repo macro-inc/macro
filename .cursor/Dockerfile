@@ -20,7 +20,10 @@ RUN apt-get update \
         git \
         gnupg \
         iptables \
+        iproute2 \
+        kmod \
         fuse-overlayfs \
+        procps \
         python3 \
         sudo \
         xz-utils \

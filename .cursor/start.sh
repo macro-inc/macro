@@ -37,8 +37,26 @@ wait_for "nix-daemon" 30 test -S "${NIX_SOCKET}"
 
 if ! docker info >/dev/null 2>&1; then
   echo "cursor-cloud start: starting dockerd"
-  sudo dockerd >>/tmp/dockerd.log 2>&1 &
+  # fuse-overlayfs needs /dev/fuse in nested containers.
+  if [ ! -e /dev/fuse ]; then
+    sudo mknod /dev/fuse c 10 229 || true
+    sudo chmod 666 /dev/fuse || true
+  fi
+  sudo sysctl -w net.ipv4.ip_forward=1 >/dev/null 2>&1 || true
+  : >/tmp/dockerd.log
+  sudo dockerd --host=unix:///var/run/docker.sock --pidfile=/var/run/docker.pid \
+    >>/tmp/dockerd.log 2>&1 &
 fi
-wait_for "docker socket" 60 test -S "${DOCKER_SOCK}"
+if ! wait_for "docker socket" 90 test -S "${DOCKER_SOCK}"; then
+  echo "cursor-cloud start: dockerd.log follows" >&2
+  sudo cat /tmp/dockerd.log >&2 || true
+  ls -la /var/run /run /dev/fuse >&2 || true
+  ps -ef >&2 || true
+  exit 1
+fi
 sudo chmod 666 "${DOCKER_SOCK}"
-wait_for "docker daemon" 60 docker info
+if ! wait_for "docker daemon" 60 docker info; then
+  echo "cursor-cloud start: docker info failed; dockerd.log follows" >&2
+  sudo cat /tmp/dockerd.log >&2 || true
+  exit 1
+fi
