@@ -760,6 +760,7 @@
           parallel
           docker-compose
           curl
+          openssh
           wget
           kcat
           xz
