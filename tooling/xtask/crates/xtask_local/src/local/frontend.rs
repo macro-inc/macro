@@ -235,6 +235,15 @@ pub fn start(
              previous run. Free it (`lsof -ti tcp:{port} | xargs kill`) and retry."
         );
     }
+    // Without node_modules, `bun run dev` never binds the port and never exits
+    // within the poll window below — it just times out with an opaque "did not
+    // become ready", giving no hint that a dependency install is missing.
+    if !app_dir().join("node_modules").exists() {
+        anyhow::bail!(
+            "{}/node_modules is missing — run `bun install` from the repo root first.",
+            app_dir().display()
+        );
+    }
     let mut cmd = Command::new("bun");
     cmd.current_dir(app_dir())
         .args(["run", "--bun", "dev"])
