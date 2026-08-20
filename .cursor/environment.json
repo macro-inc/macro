@@ -1,0 +1,13 @@
+{
+  "name": "macro local stack",
+  "build": {
+    "dockerfile": "Dockerfile"
+  },
+  "user": "ubuntu",
+  "install": "bash .cursor/install.sh",
+  "start": "bash .cursor/start.sh",
+  "ports": [
+    { "name": "app", "port": 8090 },
+    { "name": "fusionauth", "port": 9011 }
+  ]
+}

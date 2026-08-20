@@ -317,8 +317,13 @@ don't inject it directly into the error message.
 ## Cursor Cloud specific instructions
 
 This VM runs the intended local dev stack from `docs/RUNNING_LOCALLY.md` via Nix + Docker.
-The startup layer (nix daemon, docker daemon, `bun install`) is handled by the environment
-update script; the notes below are durable, non-obvious caveats for running the app here.
+The machine image is `.cursor/Dockerfile` (Docker 29 DinD + Determinate Nix + Nix openssh).
+`.cursor/environment.json` `install` (`.cursor/install.sh`) is a heavy one-time Environment
+Build: `bun install --frozen-lockfile`, `just doctor-local`, and a cold `just stack up
+--no-doppler` so cargo/sccache, the runtime image, infra images, and the init snapshot
+are on disk for fast later boots. `start` (`.cursor/start.sh`) only starts `nix-daemon`
+and `dockerd` — those processes do not survive the Build snapshot. The notes below are
+durable caveats for running the app here.
 
 - Toolchain lives in the Nix dev shell. Run dev commands from the repo root as
   `nix develop --command bash -c '<cmd>'`. If `nix` is not found, first
@@ -333,9 +338,11 @@ update script; the notes below are durable, non-obvious caveats for running the 
   putting a self-consistent Nix openssh first on PATH. openssh is installed in the Nix
   profile (`nix profile add nixpkgs#openssh`), so launch the stack as:
   `nix develop --command bash -c 'export PATH=$HOME/.nix-profile/bin:$PATH; just stack up --no-doppler'`
-- First `stack up` cross-compiles all service binaries with `cargo-zigbuild`
-  (slow — ~10 min cold on 4 cores); later runs reuse `sccache` and a cached init snapshot,
-  so they are fast. `just stack status` / `just stack update` / `just stack down` manage it.
+- First `stack up` on a machine without the Environment Build caches
+  cross-compiles all service binaries with `cargo-zigbuild` (slow — ~10 min
+  cold on 4 cores). Builds warm that plus the init snapshot in `install`, so
+  agent boots should reuse `sccache` and restore the snapshot. `just stack
+  status` / `just stack update` / `just stack down` manage it.
 - Endpoints (default instance): app at `http://localhost:8090/app/`, proxy at `:8090`,
   Mailpit at `http://localhost:8090/mailpit/`, FusionAuth at `:9011`.
 - Login is passwordless: the one-time code is delivered to Mailpit (not a real inbox).
