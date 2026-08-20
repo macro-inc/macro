@@ -1,6 +1,7 @@
 {
   "services": {
     "agent-harness-service": {
+      "deploy_enabled": false,
       "source_paths": [
         "services/agent_harness_service/**",
         "crates/agent_harness/**",
