@@ -69,6 +69,7 @@ impl ExternalSessionOpener for RecordingOpener {
             id: AgentSessionId::TEST_A,
             owner_id: request.owner.clone(),
             thread_id: request.thread.as_ref().map(|thread| thread.thread_id),
+            thread_channel_id: request.thread.as_ref().map(|thread| thread.channel_id),
             originating_message_id: request.thread.as_ref().map(|thread| thread.message_id),
             bot_id: request.bot_id,
             model: "claude".to_owned(),
