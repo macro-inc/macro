@@ -270,7 +270,7 @@ final class CallVideoOverlayController: NSObject, UIGestureRecognizerDelegate, U
     }
 
     func setLocalVideoTrack(_ track: VideoTrack?) {
-        DispatchQueue.main.async { [weak self, weak track] in
+        DispatchQueue.main.async { [weak self] in
             guard let self else { return }
             self.desired.localVideoTrack = track
             self.desired.isLocalVideoEnabled = track != nil
@@ -943,7 +943,7 @@ final class CallVideoOverlayController: NSObject, UIGestureRecognizerDelegate, U
     }
 
     private func updateLocalPreviewTrack() {
-        let desiredTrack = mode == .expanded ? localVideoTrack : nil
+        let desiredTrack = mode == .expanded && isLocalVideoEnabled ? localVideoTrack : nil
         // Unconditional on purpose: the tile must restyle (title/theme) even when
         // the track is unchanged, and configure() guards the track swap itself.
         configureLocalTile(track: desiredTrack)
@@ -966,7 +966,7 @@ final class CallVideoOverlayController: NSObject, UIGestureRecognizerDelegate, U
     }
 
     private func updateThumbnailTracks() {
-        let desiredLocalTrack = mode == .minimized ? localVideoTrack : nil
+        let desiredLocalTrack = mode == .minimized && isLocalVideoEnabled ? localVideoTrack : nil
         if renderedThumbnailLocalVideoTrack !== desiredLocalTrack {
             renderedThumbnailLocalVideoTrack = desiredLocalTrack
             thumbnailLocalVideoView.track = desiredLocalTrack
