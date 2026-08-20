@@ -85,6 +85,17 @@ describe('messageSnippet', () => {
     ).toBe('Hey Kyle! First,');
   });
 
+  it('falls back to the HTML body when the text body is only whitespace', () => {
+    expect(
+      messageSnippet(
+        message({
+          body_text: ' \n ',
+          body_html_sanitized: '<p>Hey Kyle!</p><p>First,</p>',
+        })
+      )
+    ).toBe('Hey Kyle! First,');
+  });
+
   it('is empty when there is no body', () => {
     expect(messageSnippet(message({}))).toBe('');
   });
