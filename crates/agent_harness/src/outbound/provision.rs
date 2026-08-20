@@ -15,8 +15,10 @@ pub const SIDECAR_LOG: &str = "/tmp/acp-sidecar.log";
 pub const SIDECAR_PORT: u16 = 8700;
 
 /// Readiness recipe baked alongside the harness container.
-const ENSURE_READY_SCRIPT: &str =
-    include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/container/ensure_ready.sh"));
+const ENSURE_READY_SCRIPT: &str = include_str!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/container/ensure_ready.sh"
+));
 
 /// Wrap the readiness recipe as one command for provider exec APIs.
 #[must_use]
