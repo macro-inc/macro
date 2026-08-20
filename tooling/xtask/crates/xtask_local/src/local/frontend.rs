@@ -237,11 +237,13 @@ pub fn start(
     }
     // Without node_modules, `bun run dev` never binds the port and never exits
     // within the poll window below — it just times out with an opaque "did not
-    // become ready", giving no hint that a dependency install is missing.
-    if !app_dir().join("node_modules").exists() {
+    // become ready", giving no hint that a dependency install is missing. This
+    // is a Bun workspace: `bun install` hoists deps into the repo-root
+    // node_modules, not a per-package one under apps/web.
+    if !repo_root().join("node_modules").exists() {
         anyhow::bail!(
             "{}/node_modules is missing — run `bun install` from the repo root first.",
-            app_dir().display()
+            repo_root().display()
         );
     }
     let mut cmd = Command::new("bun");
