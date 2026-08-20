@@ -17,6 +17,7 @@ import { cognitionApiServiceClient } from '@service-cognition/client';
 import type { NamedTool } from '@service-cognition/generated/tools/tool';
 import type { CreateCalendarEvent } from '@service-cognition/generated/tools/types';
 import { debounce } from '@solid-primitives/scheduled';
+import { Layer } from '@ui';
 import { createMemo, createSignal, onCleanup, Show } from 'solid-js';
 import {
   createCalendarEventToEditorInitialValues,
@@ -266,28 +267,30 @@ export function CalendarChatCompose(props: CalendarChatComposeProps) {
   onCleanup(() => debouncedUpdate.clear());
 
   return (
-    <div class="flex max-h-[32rem] min-h-0 flex-col gap-3 rounded-xl bg-surface p-4 text-ink">
-      <Show when={showOwnerDisabledMessage()}>
-        <p class="text-xs text-ink-extra-muted/60">
-          Only the chat owner can create or edit this calendar event.
-        </p>
-      </Show>
-      <Show when={props.streamLocked && !showOwnerDisabledMessage()}>
-        <p class="text-xs text-ink-extra-muted/60">
-          Waiting for the response to finish before this event can be edited.
-        </p>
-      </Show>
-      <EventForm
-        controller={controller}
-        disabled={
-          ownerGateDisabled() ||
-          props.streamLocked === true ||
-          operation() === 'reject'
-        }
-        pending={operation() === 'create'}
-        onCancel={() => void handleCancel()}
-        onSubmit={(values) => void handleCreate(values)}
-      />
-    </div>
+    <Layer depth={2}>
+      <div class="flex max-h-[32rem] min-h-0 flex-col gap-3 rounded-xl border border-edge-muted bg-surface p-4 text-ink shadow-sm">
+        <Show when={showOwnerDisabledMessage()}>
+          <p class="text-xs text-ink-extra-muted/60">
+            Only the chat owner can create or edit this calendar event.
+          </p>
+        </Show>
+        <Show when={props.streamLocked && !showOwnerDisabledMessage()}>
+          <p class="text-xs text-ink-extra-muted/60">
+            Waiting for the response to finish before this event can be edited.
+          </p>
+        </Show>
+        <EventForm
+          controller={controller}
+          disabled={
+            ownerGateDisabled() ||
+            props.streamLocked === true ||
+            operation() === 'reject'
+          }
+          pending={operation() === 'create'}
+          onCancel={() => void handleCancel()}
+          onSubmit={(values) => void handleCreate(values)}
+        />
+      </div>
+    </Layer>
   );
 }
