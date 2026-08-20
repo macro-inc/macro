@@ -34,6 +34,7 @@ mod deploy_preview;
 mod deploy_sync_service;
 mod deploy_web_app;
 mod docs_check;
+mod ensure_daytona_snapshot;
 mod path_validation;
 mod preview_fly;
 mod pulumi_preview_pr;
@@ -231,6 +232,11 @@ const WORKFLOWS: &[WorkflowFile] = &[
         slug: "deploy_web_app",
         file_name: "deploy_web_app.yml",
         render_yaml: || render_patched(deploy_web_app::deploy_web_app, deploy_web_app::patch),
+    },
+    WorkflowFile {
+        slug: "ensure_daytona_snapshot",
+        file_name: "ensure_daytona_snapshot.yml",
+        render_yaml: || render_gh_workflow(ensure_daytona_snapshot::ensure_daytona_snapshot)(),
     },
     WorkflowFile {
         slug: "pulumi_preview_pr",

@@ -1,0 +1,49 @@
+# DO NOT EDIT — regenerate with `cargo x workflows` (from the repository root).
+# Source: tooling/xtask/crates/xtask_workflows/src/workflows/ensure_daytona_snapshot.rs
+name: Ensure Daytona Snapshot
+'on':
+  push:
+    branches:
+    - main
+    paths:
+    - crates/agent_harness/container/**
+    - crates/agent_harness/justfile
+    - nix/cloud-storage.nix
+    - tooling/xtask/crates/xtask_workflows/src/workflows/ensure_daytona_snapshot.rs
+    - '.github/workflows/ensure_daytona_snapshot.yml'
+  workflow_dispatch: {}
+permissions:
+  contents: read
+jobs:
+  ensure-snapshot:
+    name: Ensure macro-agent-harness snapshot
+    runs-on: namespace-profile-linux-small
+    steps:
+    - name: Checkout
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      with:
+        clean: 'false'
+        persist-credentials: 'false'
+    - name: Mount /nix cache volume
+      uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
+      with:
+        cache: nix
+      continue-on-error: true
+    - name: Setup Nix
+      uses: './.github/actions/setup-nix'
+    - name: Setup Nix dev shell
+      uses: './.github/actions/setup-nix-dev-shell'
+    - name: Ensure Daytona snapshot
+      run: |
+        set -euo pipefail
+        if [[ -z "${DAYTONA_API_KEY:-}" ]]; then
+          echo "::error::DAYTONA_API_KEY repository secret is not configured"
+          exit 1
+        fi
+        just --justfile crates/agent_harness/justfile ensure-daytona
+      shell: bash
+      env:
+        DAYTONA_API_KEY: ${{ secrets.DAYTONA_API_KEY }}
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
