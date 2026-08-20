@@ -47,9 +47,9 @@ type Args = {
  * The agent harness service. Like agent-proxy before it, this component pins
  * `desiredCount` to 1 and forces a stop-then-start deployment (min healthy
  * 0%, max 100%) with no autoscaling: the harness owns the live agent-session
- * actors in process memory with no cross-instance sync, and its Kafka
- * consumer group must not split partitions across two momentarily-coexisting
- * tasks (see `AgentHarnessConsumerGroup` in `services/agent_harness_service`).
+ * actors in process memory with no cross-instance sync, and its Kafka consumer
+ * groups must not split partitions across two momentarily-coexisting tasks
+ * (see the consumer groups in `services/agent_harness_service`).
  */
 export class AgentHarnessService extends pulumi.ComponentResource {
   public role: aws.iam.Role;
@@ -158,7 +158,8 @@ export class AgentHarnessService extends pulumi.ComponentResource {
     );
 
     // Producer/consumer access to the macro event Kafka cluster: the harness
-    // consumes `macro.agent_sessions` and publishes channel side effects.
+    // consumes `macro.channels` and `macro.agent_sessions`, publishes agent
+    // triggers, and publishes channel side effects.
     new aws.iam.RolePolicyAttachment(
       `${BASE_NAME}-role-kafka-client-att-${stack}`,
       {
