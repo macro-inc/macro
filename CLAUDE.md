@@ -343,6 +343,10 @@ durable caveats for running the app here.
   cold on 4 cores). Builds warm that plus the init snapshot in `install`, so
   agent boots should reuse `sccache` and restore the snapshot. `just stack
   status` / `just stack update` / `just stack down` manage it.
+- Nested Docker image builds (`sync_service` and friends) run `apt-get` inside
+  Debian containers. DinD's default bridge MTU plus Fastly's HTTP endpoint for
+  `deb.debian.org` can 400 those fetches. The Environment Dockerfile sets
+  `"mtu": 1400`, and `install.sh` pre-builds those images with `--network=host`.
 - Endpoints (default instance): app at `http://localhost:8090/app/`, proxy at `:8090`,
   Mailpit at `http://localhost:8090/mailpit/`, FusionAuth at `:9011`.
 - Login is passwordless: the one-time code is delivered to Mailpit (not a real inbox).

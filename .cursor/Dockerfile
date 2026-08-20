@@ -54,7 +54,8 @@ RUN mkdir -p /etc/docker \
         '  "features": {' \
         '    "containerd-snapshotter": false' \
         '  },' \
-        '  "dns": ["8.8.8.8", "1.1.1.1"]' \
+        '  "dns": ["8.8.8.8", "1.1.1.1"],' \
+        '  "mtu": 1400' \
         '}' > /etc/docker/daemon.json \
     && update-alternatives --set iptables /usr/sbin/iptables-legacy \
     && update-alternatives --set ip6tables /usr/sbin/ip6tables-legacy
