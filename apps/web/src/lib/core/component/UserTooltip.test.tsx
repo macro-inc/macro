@@ -92,7 +92,9 @@ describe('UserTooltip CRM contact action', () => {
       />
     ));
 
-    await user.click(screen.getByRole('button', { name: 'Open contact' }));
+    await user.click(
+      await screen.findByRole('button', { name: 'Open contact' })
+    );
 
     expect(mocks.fetchCrmContactByEmail).toHaveBeenCalledWith('panat@pync.com');
     expect(mocks.openWithSplit).toHaveBeenCalledWith(
