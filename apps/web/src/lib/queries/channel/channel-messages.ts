@@ -143,37 +143,13 @@ export function channelMessagesQueryOptions(
   };
 }
 
-type UseChannelMessagesQueryOptions = {
-  placeholderData?: Accessor<ChannelMessagesData | undefined>;
-  enabled?: Accessor<boolean>;
-  refetchOnWindowFocus?: boolean;
-};
-
 export function useChannelMessagesQuery(
   channelId: Accessor<string>,
-  loadAroundMessageId: Accessor<string | null | undefined>,
-  options?: UseChannelMessagesQueryOptions
+  loadAroundMessageId: Accessor<string | null | undefined>
 ) {
-  return useInfiniteQuery<
-    ChannelMessagesPage,
-    Error,
-    ChannelMessagesData,
-    ChannelMessagesQueryKey,
-    ChannelMessagesPageParam | null
-  >(() => {
-    const placeholderData = options?.placeholderData?.();
-    return {
-      ...channelMessagesQueryOptions(
-        channelId(),
-        loadAroundMessageId() ?? null
-      ),
-      enabled: options?.enabled?.() ?? true,
-      ...(options?.refetchOnWindowFocus !== undefined
-        ? { refetchOnWindowFocus: options.refetchOnWindowFocus }
-        : {}),
-      ...(placeholderData ? { placeholderData } : {}),
-    };
-  });
+  return useInfiniteQuery(() =>
+    channelMessagesQueryOptions(channelId(), loadAroundMessageId() ?? null)
+  );
 }
 
 export function useChannelMessagesByIdsQuery(

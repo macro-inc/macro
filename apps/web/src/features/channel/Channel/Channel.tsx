@@ -24,6 +24,7 @@ import { FloatRegions } from '@components/app/mobile/float-regions/float-region-
 import { SwipableRowProvider } from '@components/app/mobile/SwipableRow';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
+import { EntityLoadGate } from '@core/component/EntityLoadGate';
 import { FindBar } from '@core/component/FindBar';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { toast } from '@core/component/Toast/Toast';
@@ -134,8 +135,6 @@ export type ChannelProps = {
   targetMessageReplyId?: string | undefined;
   lastViewedAt?: DateValue | null;
   initialMessagesStateSnapshot?: ChannelMessagesStateSnapshot;
-  /** Initial page loaded by the owning entity gate and seeded into the query cache. */
-  initialMessagesData?: ChannelMessagesData;
   onHandleReady?: (handle: ChannelHandle) => void;
   /** Whether to auto-focus the channel input on mount. Defaults to `!isTouchDevice()`. */
   autofocus?: boolean;
@@ -206,18 +205,25 @@ export function Channel(props: ChannelProps) {
   const [channelInputHandle, setChannelInputHandle] =
     createSignal<InputHandle>();
 
-  const initialLoadAroundMessageId = props.targetMessageId ?? null;
   const messagesQuery = useChannelMessagesQuery(
     () => props.channelId,
-    targetMessageController.loadAroundMessageId,
-    {
-      placeholderData: () =>
-        (targetMessageController.loadAroundMessageId() ?? null) ===
-        initialLoadAroundMessageId
-          ? props.initialMessagesData
-          : undefined,
-    }
+    targetMessageController.loadAroundMessageId
   );
+  const isTargetMessageMissing = () =>
+    targetMessageController.loadAroundMessageId() !== undefined &&
+    isMissingChannelMessageError(messagesQuery.error);
+  const messagesLoadResult = {
+    data: () => messagesQuery.data,
+    // Pagination and background-refresh errors should not replace content that
+    // has already loaded. Only initial-loading errors belong to the gate.
+    error: () =>
+      messagesQuery.isLoadingError && !isTargetMessageMissing()
+        ? messagesQuery.error
+        : undefined,
+    // Keep the loading view mounted while the missing-target handler switches
+    // the query back to the latest page.
+    isPending: () => messagesQuery.isPending || isTargetMessageMissing(),
+  };
 
   createEffect(
     on(
@@ -692,7 +698,7 @@ export function Channel(props: ChannelProps) {
     })
   );
 
-  return (
+  const renderContent = () => (
     <DebugSuspense name="Channel.root">
       <deleteConfirmation.ConfirmationDialog />
       <StaticMarkdownContext>
@@ -960,5 +966,9 @@ export function Channel(props: ChannelProps) {
         </SearchHighlightTermsProvider>
       </StaticMarkdownContext>
     </DebugSuspense>
+  );
+
+  return (
+    <EntityLoadGate result={messagesLoadResult}>{renderContent}</EntityLoadGate>
   );
 }
