@@ -9,7 +9,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { UserTooltip } from './UserTooltip';
 
 const mocks = vi.hoisted(() => ({
-  crmEnabled: true,
+  crmFlagEnabled: true,
+  teamCrmEnabled: true as boolean | null,
   fetchCrmContactByEmail: vi.fn(),
   openWithSplit: vi.fn(),
   onClose: vi.fn(),
@@ -17,7 +18,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('@app/lib/analytics/posthog', () => ({
   useFeatureFlag: () => () => ({
-    enabled: mocks.crmEnabled,
+    enabled: mocks.crmFlagEnabled,
     payload: undefined,
   }),
 }));
@@ -49,6 +50,15 @@ vi.mock('@queries/crm/contacts', () => ({
   fetchCrmContactByEmail: mocks.fetchCrmContactByEmail,
 }));
 
+vi.mock('@queries/team/teams', () => ({
+  useCurrentTeamQuery: () => ({
+    get data() {
+      if (mocks.teamCrmEnabled === null) return null;
+      return { team: { crm_enabled: mocks.teamCrmEnabled } };
+    },
+  }),
+}));
+
 vi.mock('@ui', () => ({
   cn: (...classes: Array<string | undefined>) =>
     classes.filter(Boolean).join(' '),
@@ -62,7 +72,8 @@ vi.mock('./UserIcon', () => ({
 }));
 
 beforeEach(() => {
-  mocks.crmEnabled = true;
+  mocks.crmFlagEnabled = true;
+  mocks.teamCrmEnabled = true;
   mocks.fetchCrmContactByEmail.mockReset();
   mocks.fetchCrmContactByEmail.mockResolvedValue({ id: 'contact-1' });
   mocks.openWithSplit.mockReset();
@@ -91,8 +102,28 @@ describe('UserTooltip CRM contact action', () => {
     expect(mocks.onClose).toHaveBeenCalledOnce();
   });
 
-  it('hides the contact action when CRM is disabled', () => {
-    mocks.crmEnabled = false;
+  it('hides the contact action when the CRM feature flag is off', () => {
+    mocks.crmFlagEnabled = false;
+
+    render(() => (
+      <UserTooltip displayName="Panat Taranat" email="panat@pync.com" />
+    ));
+
+    expect(screen.queryByRole('button', { name: 'Open contact' })).toBeNull();
+  });
+
+  it('hides the contact action when CRM is disabled for the team', () => {
+    mocks.teamCrmEnabled = false;
+
+    render(() => (
+      <UserTooltip displayName="Panat Taranat" email="panat@pync.com" />
+    ));
+
+    expect(screen.queryByRole('button', { name: 'Open contact' })).toBeNull();
+  });
+
+  it('hides the contact action when the user has no team', () => {
+    mocks.teamCrmEnabled = null;
 
     render(() => (
       <UserTooltip displayName="Panat Taranat" email="panat@pync.com" />
