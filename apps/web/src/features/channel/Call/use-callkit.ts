@@ -386,6 +386,23 @@ export function useCallKitSetup() {
       'call ended',
       (payload) => {
         console.info('[callkit] call ended event', payload);
+        // Native also emits call-ended for calls that never became the active
+        // one, e.g. declining a second incoming call while already on a call.
+        // Running the leave handler for those would hang up the current call.
+        // Only filter when we positively know the active call: with no
+        // snapshot (fresh webview) the event must still drive the leave.
+        const activeCallId = nativeCall.snapshot()?.callId;
+        if (
+          activeCallId !== undefined &&
+          activeCallId.toLowerCase() !== payload.callId.toLowerCase()
+        ) {
+          console.info('[callkit] ignoring ended call; not the active call', {
+            activeCallId,
+            endedCallId: payload.callId,
+          });
+          refreshActiveCallQueriesAfterLeave();
+          return;
+        }
         lastHandledAnsweredCall = undefined;
         refreshActiveCallQueriesAfterLeave();
         nativeCall.setBootstrapChannelId(null);
@@ -437,27 +454,81 @@ export function useCallKitSetup() {
       }
     );
 
-    // Do not let a stale startup drain overwrite live listener state.
-    invoke<GetActiveCallStateResponse>('plugin:call-kit|get_active_call_state')
-      .then(({ state }) => {
-        console.info('[callkit] initial active call state', { state });
-        if (!state) return;
-        nativeCall.setParticipantIdentities(state.participantIdentities ?? []);
-        if (nativeCall.snapshot() !== null) return;
-        nativeCall.setBootstrapChannelId(state.channelId);
-        nativeCall.setSnapshot({
-          channelId: state.channelId,
-          callId: state.callId,
-          connectionState: state.connectionState,
-          isAudioMuted: state.isAudioMuted,
-          isVideoMuted: state.isVideoMuted,
-          videoOverlayMode: state.videoOverlayMode,
-        });
-      })
-      .catch((err) =>
-        console.error('[callkit] get_active_call_state failed', err)
+    syncNativeCallState(nativeCall).catch((err) =>
+      console.error('[callkit] initial native call state sync failed', err)
+    );
+
+    // The webview misses connection-state/call-ended channel events while iOS
+    // has it suspended, leaving whatever call state existed at suspension
+    // frozen in the UI. Re-sync with the plugin every time the app returns to
+    // the foreground so an ended call can never keep rendering as active.
+    const handleVisibilityChange = () => {
+      if (document.visibilityState !== 'visible') return;
+      syncNativeCallState(nativeCall).catch((err) =>
+        console.error('[callkit] foreground native call state sync failed', err)
       );
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    onCleanup(() =>
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+    );
   });
+}
+
+/**
+ * Reconciles JS-side native call state with the plugin's actual state.
+ *
+ * Clears stale in-call state when native has no call (missed call-ended /
+ * disconnect events) and restores the snapshot when native has a call the
+ * webview does not know about (fresh webview during an active call). A live
+ * snapshot is never overwritten by this point-in-time query — the connection
+ * state watcher stays authoritative while events are flowing.
+ */
+async function syncNativeCallState(nativeCall: NativeCallState): Promise<void> {
+  const { state } = await invoke<GetActiveCallStateResponse>(
+    'plugin:call-kit|get_active_call_state'
+  );
+  console.info('[callkit] native call state sync', { state });
+  if (!state) {
+    if (
+      nativeCall.snapshot() === null &&
+      nativeCall.bootstrapChannelId() === null
+    ) {
+      return;
+    }
+    console.info(
+      '[callkit] clearing stale in-call state; native has no active call'
+    );
+    nativeCall.setBootstrapChannelId(null);
+    nativeCall.setParticipantIdentities([]);
+    nativeCall.setSnapshot(null);
+    refreshActiveCallQueriesAfterLeave();
+    return;
+  }
+  nativeCall.setParticipantIdentities(state.participantIdentities ?? []);
+  if (nativeCall.snapshot() !== null) return;
+  nativeCall.setBootstrapChannelId(state.channelId);
+  nativeCall.setSnapshot({
+    channelId: state.channelId,
+    callId: state.callId,
+    connectionState: state.connectionState,
+    isAudioMuted: state.isAudioMuted,
+    isVideoMuted: state.isVideoMuted,
+    videoOverlayMode: state.videoOverlayMode,
+  });
+}
+
+/**
+ * Post-leave safety net: reconcile JS state with the plugin so a leave always
+ * lands in a consistent state, even when the native call was already gone and
+ * no disconnect event will ever arrive (e.g. state orphaned while the app was
+ * suspended).
+ */
+export async function syncNativeCallStateAfterLeave(
+  nativeCall: NativeCallState
+): Promise<void> {
+  if (!isNativeIosCallKitEnabled()) return;
+  await syncNativeCallState(nativeCall);
 }
 
 function useCallKitNativeMetadataSync() {

@@ -4,6 +4,7 @@ import {
   endCallKitCall,
   isNativeIosCallKitEnabled,
   startNativeCallKitOutgoingCall,
+  syncNativeCallStateAfterLeave,
 } from './use-callkit';
 
 type CallSessionControllerOptions = {
@@ -115,6 +116,14 @@ function createNativeCallKitSessionController(options: {
       }
       await options.jsDisconnect();
       options.clearOptimisticJoin();
+      // If the native call was already gone (orphaned in-call state), no
+      // disconnect event will arrive to clear the snapshot — reconcile with
+      // the plugin so leave always lands in a consistent state.
+      try {
+        await syncNativeCallStateAfterLeave(options.nativeCall);
+      } catch (e) {
+        console.error('callkit: post-leave state sync failed', e);
+      }
     },
   };
 }
