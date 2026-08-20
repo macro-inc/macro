@@ -55,11 +55,15 @@ ensure_just_sqlx() {
   hash -r
 }
 
-# Nested dockerd / leftover zigbuild can leave root-owned target/.
+# Snapshot leftovers (zigbuild, nested dockerd) leave root-owned target/.
+# `-w` is the wrong test when this script is root and cargo is ubuntu.
 ensure_writable_target() {
-  if [ -e /workspace/target ] && [ ! -w /workspace/target ]; then
-    sudo chown -R "$(id -u):$(id -g)" /workspace/target
-  fi
+  local ws_user ws_group
+  ws_user="$(stat -c '%U' /workspace)"
+  ws_group="$(stat -c '%G' /workspace)"
+  sudo mkdir -p /workspace/target
+  sudo chown -R "${ws_user}:${ws_group}" /workspace/target
+  echo "cursor-cloud: /workspace/target -> ${ws_user}:${ws_group}"
 }
 
 ensure_apt_packages() {
@@ -116,6 +120,7 @@ just run_dbs -d
 ensure_test_envs
 
 just initialize_dbs
+ensure_writable_target
 cargo fetch --locked
 # Tests are not in the sqlx offline cache. Postgres is already up and migrated.
 unset SQLX_OFFLINE
