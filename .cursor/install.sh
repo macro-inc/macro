@@ -78,9 +78,13 @@ just run_dbs -d
 ensure_test_envs
 
 just initialize_dbs
-unset SQLX_OFFLINE
 cargo fetch --locked
-cargo test --no-run -p macro_db_client
+if host_test_bins_ready; then
+  echo "cursor-cloud install: test bins cached"
+else
+  unset SQLX_OFFLINE
+  cargo test --no-run -p macro_db_client
+fi
 
 echo "cursor-cloud install: test-ready"
 

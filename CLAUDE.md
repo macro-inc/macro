@@ -321,8 +321,8 @@ Environment scripts are `.cursor/install.sh` (durable files), `.cursor/start.sh`
 
 After boot, Postgres should already be up. If `:5432` is closed, run `bash .cursor/start.sh`.
 
-Cargo `target/`, the frontend bundle, and the stack init snapshot live under `$HOME/.cache/macro-cloud` and are symlinked or copied back into `/workspace`. A git checkout wipes `/workspace/target`; the home cache is what makes the next install skip the ~20 min zigbuild.
+Cargo `target/`, the frontend bundle, and the stack init snapshot live under `$HOME/.cache/macro-cloud` and are symlinked or copied back into `/workspace`. A git checkout wipes `/workspace/target`; the home cache is what makes the next install skip the ~20 min zigbuild and the host `cargo test --no-run`.
 
-Infra-ready is enough for `cargo test -p`. Product-ready is `bash .cursor/stack.sh` (`just stack up --no-doppler --no-build`). Install compiles zigbuild binaries only when they are missing from the cache. Do not run a full `just stack up` without `--no-build` in install, and do not pass `--build-aux-services`. Put `$HOME/.nix-profile/bin` first on `PATH` before `just stack` so Nix `ssh-keygen` wins over `/exec-daemon/ssh-keygen`.
+Infra-ready is enough for `cargo test -p`. Product-ready is `bash .cursor/stack.sh` (`just stack up --no-doppler --no-build`). Install compiles zigbuild / host test binaries only on a cache miss. Do not run a full `just stack up` without `--no-build` in install, and do not pass `--build-aux-services`. Put `$HOME/.nix-profile/bin` first on `PATH` before `just stack` so Nix `ssh-keygen` wins over `/exec-daemon/ssh-keygen`.
 
 Do not follow the old `docker compose -f docker/docker-compose.yml up -d postgres` line. It skips `create_networks` and Redis.

@@ -117,3 +117,16 @@ app_artifacts_ready() {
   done < <(required_zig_bins)
   [ -f /workspace/apps/web/dist/index.html ]
 }
+
+# Host `cargo test --no-run` output. Skip that compile when the cache already
+# has the binaries (warm snapshot / second install).
+host_test_bins_ready() {
+  shopt -s nullglob
+  local bins=(/workspace/target/debug/deps/macro_db_client-*)
+  shopt -u nullglob
+  local f
+  for f in "${bins[@]}"; do
+    [ -x "${f}" ] && return 0
+  done
+  return 1
+}
