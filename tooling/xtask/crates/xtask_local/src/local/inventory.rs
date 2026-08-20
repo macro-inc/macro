@@ -73,7 +73,25 @@ impl RustService {
             _ => &[],
         }
     }
+
+    /// The port this service listens on INSIDE its container.
+    ///
+    /// Conventionally [`DEFAULT_CONTAINER_PORT`]; `agent_harness_service` serves
+    /// its HTTP API on 8101. This is the single source for both the compose
+    /// `PORT` env (`gen_compose`) and the generated Caddy upstream (`proxy`) —
+    /// they must agree, or the proxy dials a port nothing is listening on and
+    /// every request through the prefix 502s.
+    pub fn container_port(&self) -> u16 {
+        match self.compose_name {
+            "agent_harness_service" => 8101,
+            _ => DEFAULT_CONTAINER_PORT,
+        }
+    }
 }
+
+/// The in-container port every service listens on unless
+/// [`RustService::container_port`] says otherwise.
+pub const DEFAULT_CONTAINER_PORT: u16 = 8080;
 
 /// The full service inventory of the local service binaries.
 pub const RUST_SERVICES: &[RustService] = &[

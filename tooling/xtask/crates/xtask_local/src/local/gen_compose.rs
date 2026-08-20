@@ -70,11 +70,7 @@ pub fn generate(
 
     // 1. Rust services → runtime image + mounted binaries.
     for svc in services_for_mode(mode) {
-        let container_port = if svc.compose_name == "agent_harness_service" {
-            8101
-        } else {
-            8080
-        };
+        let container_port = svc.container_port();
         let mut s = dct::Service {
             image: Some(RUNTIME_IMAGE_TAG.to_string()),
             volumes: mounts.iter().cloned().map(dct::Volumes::Simple).collect(),

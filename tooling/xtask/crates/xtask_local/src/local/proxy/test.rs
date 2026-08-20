@@ -11,10 +11,18 @@ fn generates_a_route_for_every_prefixed_service() {
         let Some(prefix) = svc.path_prefix else {
             continue;
         };
+        // The port must be the service's OWN container port, not a blanket
+        // 8080 — this assertion used to hardcode 8080 and so enforced the bug
+        // where `/agent-harness` routed to a port nothing listened on.
         assert!(
-            caddy.contains(&format!("reverse_proxy {}:8080", svc.compose_name)),
-            "Caddyfile is missing a route to {}",
-            svc.compose_name
+            caddy.contains(&format!(
+                "reverse_proxy {}:{}",
+                svc.compose_name,
+                svc.container_port()
+            )),
+            "Caddyfile is missing a route to {} on :{}",
+            svc.compose_name,
+            svc.container_port()
         );
         assert!(
             caddy.contains(&format!("{prefix}/*")),
@@ -108,4 +116,51 @@ fn static_frontend_block_is_opt_in() {
 
     let headless_dev = caddyfile(Mode::Dev, true);
     assert!(!headless_dev.contains("handle /mailpit/*"));
+}
+
+/// The generated Caddy upstream port and the container's `PORT` env come from
+/// two different generators (`proxy` and `gen_compose`). They must agree for
+/// every proxied service: when they drifted, the proxy dialled
+/// `agent_harness_service:8080` while the harness listened on 8101, and every
+/// request through `/agent-harness` failed with a 502 before reaching it.
+#[test]
+fn proxy_upstream_port_matches_the_container_port() {
+    let caddy = caddyfile(Mode::Local, false);
+    for svc in inventory::RUST_SERVICES {
+        if svc.path_prefix.is_none() {
+            continue;
+        }
+        let port = svc.container_port();
+        assert!(
+            caddy.contains(&format!("reverse_proxy {}:{port}", svc.compose_name)),
+            "{} is proxied to a port other than its container port :{port}",
+            svc.compose_name
+        );
+        // The wrong-port route must not also be present.
+        for other in [inventory::DEFAULT_CONTAINER_PORT, 8101] {
+            if other != port {
+                assert!(
+                    !caddy.contains(&format!("reverse_proxy {}:{other}", svc.compose_name)),
+                    "{} has a stale route to :{other}",
+                    svc.compose_name
+                );
+            }
+        }
+    }
+}
+
+/// The harness is the one service that does not listen on the conventional
+/// 8080, so it is the case the shared-source wiring exists for. Pinned
+/// explicitly so a change to its port has to be made deliberately.
+#[test]
+fn agent_harness_is_proxied_to_its_own_port() {
+    let harness = inventory::RUST_SERVICES
+        .iter()
+        .find(|s| s.compose_name == "agent_harness_service")
+        .expect("agent_harness_service is inventoried");
+    assert_eq!(harness.container_port(), 8101);
+    assert!(
+        caddyfile(Mode::Local, false).contains("reverse_proxy agent_harness_service:8101"),
+        "the /agent-harness route must target :8101"
+    );
 }
