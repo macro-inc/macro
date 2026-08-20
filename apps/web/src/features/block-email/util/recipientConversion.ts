@@ -48,7 +48,7 @@ export const getReplyAllRecipients = (
   // If last message was from user - reply to the to recipients (cc is handled separately below)
   if (referenceMessage?.from?.email === userEmail) {
     if (referenceMessage.to && referenceMessage.to.length > 0) {
-      to = referenceMessage.to.map(recipientEntityMapper('contact'));
+      to = referenceMessage.to.map(convertContactInfoToEmailRecipient);
     }
     // Otherwise keep existing recipients
   } else {

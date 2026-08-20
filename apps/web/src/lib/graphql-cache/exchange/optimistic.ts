@@ -7,6 +7,7 @@
  */
 
 import type { TypedDocumentNode } from '@graphql-typed-document-node/core';
+import type { DocumentNode } from 'graphql';
 import {
   type AnyVariables,
   type Client,
@@ -102,7 +103,7 @@ export type OptimisticUpdate = OptimisticLinkPatchWire & {
 };
 
 export type QueryRevalidation = {
-  document: TypedDocumentNode<unknown, AnyVariables>;
+  document: DocumentNode;
   variables: AnyVariables;
 };
 

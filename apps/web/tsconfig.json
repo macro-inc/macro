@@ -12,6 +12,7 @@
     "noImplicitAny": true,
     "strictNullChecks": true,
     "useUnknownInCatchVariables": true,
+    "strictFunctionTypes": true,
     "strictBindCallApply": true,
     "strictBuiltinIteratorReturn": true,
     "noImplicitThis": true,

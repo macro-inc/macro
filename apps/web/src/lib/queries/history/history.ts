@@ -76,17 +76,23 @@ export function setHistoryItemFileType(itemId: string, fileType: string) {
   }));
 }
 
+const fetchHistory = async (): Promise<HistoryQueryFnResult> => {
+  const result = await throwOnErr(
+    async () => await storageServiceClient.getUsersHistory()
+  );
+  return transformHistoryResponse(result);
+};
+
 const historyQueryOptions = queryOptions({
   queryKey: historyKeys.list.queryKey,
-  queryFn: async (): Promise<HistoryQueryFnResult> => {
-    const result = await throwOnErr(
-      async () => await storageServiceClient.getUsersHistory()
-    );
-    return transformHistoryResponse(result);
-  },
+  queryFn: fetchHistory,
   staleTime: HISTORY_STALE_TIME,
   gcTime: HISTORY_GC_TIME,
 });
+
+type HistoryQueryKey =
+  | typeof historyKeys.list.queryKey
+  | typeof historyKeys.graphqlList.queryKey;
 
 export function useHistoryQuery() {
   const graphqlSoupFlag = useFeatureFlag(ENABLE_GRAPHQL_SOUP_FLAG, {
@@ -98,8 +104,12 @@ export function useHistoryQuery() {
     return cacheHost?.disabled ? undefined : cacheHost;
   };
 
-  return useQuery<HistoryQueryFnResult, Error, HistoryQueryFnResult, QueryKey>(
-    () => {
+  return useQuery<
+    HistoryQueryFnResult,
+    Error,
+    HistoryQueryFnResult,
+    HistoryQueryKey
+  >(() => {
       const cacheHost = graphqlCacheHost();
       if (cacheHost) {
         return {
@@ -113,12 +123,14 @@ export function useHistoryQuery() {
       }
 
       return {
-        ...historyQueryOptions,
+        queryKey: historyKeys.list.queryKey,
+        queryFn: fetchHistory,
+        staleTime: HISTORY_STALE_TIME,
+        gcTime: HISTORY_GC_TIME,
         placeholderData: (prev: HistoryQueryFnResult | undefined) => prev,
         reconcile: 'id',
       };
-    }
-  );
+    });
 }
 
 export async function prefetchHistory() {

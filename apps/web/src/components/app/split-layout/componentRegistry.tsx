@@ -66,7 +66,7 @@ const withAuth = <P extends object>(Comp: Component<P>): Component<P> => {
   };
 };
 
-type ComponentFactory = (params?: Record<string, any>) => JSXElement;
+type ComponentFactory = (params: Record<string, any>) => JSXElement;
 
 type DocumentsComponentParams = {
   initialFilters?: Query;
@@ -136,7 +136,7 @@ export function resolveComponent(
   const registration = REGISTRY.get(name);
   if (!registration) throw new Error(`Component '${name}' not registered`);
   return {
-    element: () => registration.factory(params),
+    element: () => registration.factory(params ?? {}),
     initialMeta: registration.initialMeta,
   };
 }

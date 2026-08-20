@@ -15,3 +15,18 @@ export type EntityDragEvent = DragEvent & {
     data: EntityDragData;
   };
 };
+
+/** Checks whether data carries the tagged entity payload produced by the soup. */
+export function isEntityDragData(data: unknown): data is EntityDragData {
+  return (
+    typeof data === 'object' &&
+    data !== null &&
+    'dragType' in data &&
+    data.dragType === 'entity'
+  );
+}
+
+/** Checks whether a drag event carries the entity payload produced by the soup. */
+export function isEntityDragEvent(event: DragEvent): event is EntityDragEvent {
+  return isEntityDragData(event.draggable?.data);
+}

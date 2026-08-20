@@ -430,7 +430,7 @@ export function Document() {
     }
   };
 
-  const zoomHandler: JSX.EventHandler<Document, KeyboardEvent> = createCallback(
+  const zoomHandler = createCallback(
     (e) => {
       if (IS_MAC ? !e.metaKey : !e.ctrlKey) return;
       const viewer = getRootViewer();

@@ -651,8 +651,9 @@ function createNotificationsMutation(
 function notificationsMutationErrorFn(
   _: Error,
   _params: NotificationsMutationParams,
-  context: NotificationsMutationContext
+  context: NotificationsMutationContext | undefined
 ) {
+  if (!context) return;
   for (const [queryKey, data] of context.previousData) {
     queryClient.setQueryData(
       queryKey as readonly unknown[],

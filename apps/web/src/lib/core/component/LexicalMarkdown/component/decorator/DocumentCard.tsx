@@ -42,7 +42,7 @@ import {
   $getNodeByKey,
   $setSelection,
 } from 'lexical';
-import type { Component, JSX } from 'solid-js';
+import type { JSX } from 'solid-js';
 import {
   createEffect,
   createMemo,
@@ -179,7 +179,7 @@ function DocumentCardInner(props: DocumentCardDecoratorProps) {
   };
 
   const [previewComponent, setPreviewComponent] = createSignal<
-    Component | undefined
+    NonNullable<DocumentCardDecoratorProps['previewComponent']> | undefined
   >(undefined);
 
   const blockOwner = useBlockOwner();
@@ -453,10 +453,12 @@ function DocumentCardInner(props: DocumentCardDecoratorProps) {
                 <Show when={previewComponent()}>
                   <Show
                     when={isPreviewable()}
-                    fallback={<Dynamic component={previewComponent()} />}
+                    fallback={
+                      <Dynamic component={previewComponent()} {...props} />
+                    }
                   >
                     <div class="relative grow overflow-y-scroll">
-                      <Dynamic component={previewComponent()} />
+                      <Dynamic component={previewComponent()} {...props} />
                     </div>
                   </Show>
                 </Show>

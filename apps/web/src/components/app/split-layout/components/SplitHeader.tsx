@@ -15,7 +15,7 @@ import { TOKENS } from '@core/hotkey/tokens';
 import { isMobile } from '@core/mobile/isMobile';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import type { EntityDragEvent } from '@entity';
+import { type EntityDragEvent, isEntityDragEvent } from '@entity';
 import { AnimatedSquareSidebarIcon } from '@icon/square-sidebar';
 import SplitIcon from '@icon/wide-newSplit.svg';
 import { ContextMenu } from '@kobalte/core/context-menu';
@@ -487,11 +487,12 @@ export function SplitHeader(props: {
     );
   });
 
-  onDragEnd((event: EntityDragEvent) => {
-    if (event.droppable?.id !== droppableId) return;
+  onDragEnd((event) => {
+    if (!isEntityDragEvent(event) || event.droppable?.id !== droppableId) {
+      return;
+    }
 
-    const data = event.draggable?.data;
-    if (!data || data.dragType !== 'entity') return;
+    const data = event.draggable.data;
 
     const current = panel.handle.content();
     const next = getEntitySplitContent(data);
