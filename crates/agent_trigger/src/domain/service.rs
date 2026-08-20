@@ -6,16 +6,29 @@ use std::collections::HashSet;
 mod test;
 
 use agent_session::domain::error::Result;
-use agent_session::domain::model::{AgentSessionId, ChannelSession};
+use agent_session::domain::model::{AgentSession, AgentSessionId, ChannelSession};
 use agent_session::domain::ports::AgentSessionRepo;
 use bot_id::BotId;
 use channels::domain::broker_events::ChannelMessagePostedMetadata;
 use channels::domain::side_effects::bot_mention_ids;
 
+use macro_uuid::Uuid;
+
 use crate::domain::broker_events::{AgentSessionMacroEvent, ChannelEventMetadata, ChannelKind};
+use crate::domain::thread_window::{ThreadMessage, render_transcript, thread_window};
 use crate::domain::yield_event::{
     AgentSessionEventDecision, NoEventReason, PotentialTriggerEvent, yield_event,
 };
+
+/// Messages kept either side of a point where the agent spoke or was spoken to.
+/// Wide enough to carry the exchange around it, narrow enough that a long
+/// thread does not become mostly unrelated chatter.
+const WINDOW_RADIUS: usize = 4;
+
+/// Ceiling on transcript length, keeping the most recent messages. A judgement
+/// about the newest message rarely turns on what happened dozens of messages
+/// ago, and the fast model reads a bounded prompt.
+const TRANSCRIPT_CAP: usize = 40;
 
 /// Bot facts required to decide whether a mention may start an agent session.
 #[cfg_attr(test, mockall::automock)]
@@ -33,39 +46,63 @@ pub trait ReplyDetector: Send + Sync + 'static {
     fn is_quote_reply(&self, markdown: &str) -> impl Future<Output = Result<bool>> + Send;
 }
 
+/// Reads whole threads, so an unmentioned message can be judged against the
+/// conversation it landed in.
+#[cfg_attr(test, mockall::automock)]
+pub trait ThreadHistory: Send + Sync + 'static {
+    /// Every message of the thread rooted at `thread_id`, oldest first.
+    fn thread_messages(
+        &self,
+        channel_id: Uuid,
+        thread_id: Uuid,
+    ) -> impl Future<Output = Result<Vec<ThreadMessage>>> + Send;
+}
+
 /// Judges whether an unmentioned message in a session's thread is addressed
 /// to the agent.
 #[cfg_attr(test, mockall::automock)]
 pub trait ImplicitTriggerJudge: Send + Sync + 'static {
-    /// Whether the message reads as directed at the session's agent.
+    /// Whether the message reads as directed at the session's agent, read
+    /// against `transcript` - the thread around the agent's participation in
+    /// it, empty when the thread could not be read.
     fn is_addressed_to_agent(
         &self,
         posted: &ChannelMessagePostedMetadata,
+        transcript: &str,
     ) -> impl Future<Output = Result<bool>> + Send;
 }
 
 /// Looks up the session context for a channel message and evaluates its trigger rule.
-pub struct AgentTriggerService<Repo, Bots, Replies, Judge> {
+pub struct AgentTriggerService<Repo, Bots, Replies, Judge, History> {
     sessions: Repo,
     bots: Bots,
     replies: Replies,
     judge: Judge,
+    history: History,
 }
 
-impl<Repo, Bots, Replies, Judge> AgentTriggerService<Repo, Bots, Replies, Judge>
+impl<Repo, Bots, Replies, Judge, History> AgentTriggerService<Repo, Bots, Replies, Judge, History>
 where
     Repo: AgentSessionRepo,
     Bots: AgentBotLookup,
     Replies: ReplyDetector,
     Judge: ImplicitTriggerJudge,
+    History: ThreadHistory,
 {
     /// Creates a trigger service backed by session and bot lookups.
-    pub const fn new(sessions: Repo, bots: Bots, replies: Replies, judge: Judge) -> Self {
+    pub const fn new(
+        sessions: Repo,
+        bots: Bots,
+        replies: Replies,
+        judge: Judge,
+        history: History,
+    ) -> Self {
         Self {
             sessions,
             bots,
             replies,
             judge,
+            history,
         }
     }
 
@@ -179,6 +216,9 @@ where
     /// thread: a quote-reply is forwarded outright, anything else only when
     /// the judge reads it as addressed to the agent.
     ///
+    /// Only fires when exactly one agent is live in the thread; picking among
+    /// several by recency would route on nothing the author meant.
+    ///
     /// Detector and judge failures are treated as "no" rather than propagated:
     /// implicit triggering is best-effort, and an outage must not wedge the
     /// channel firehose or fabricate forwards.
@@ -194,21 +234,35 @@ where
         if posted.sender.as_user().is_none() {
             return Ok(None);
         }
-        let sessions = self.sessions.find_all_for_thread(thread_id).await?;
-        let mut candidate = None;
-        for session in sessions {
+        let mut candidates = Vec::new();
+        for session in self.sessions.find_all_for_thread(thread_id).await? {
             if self.bots.has_agent(session.bot_id).await? {
-                candidate = Some(session);
-                break;
+                candidates.push(session);
             }
         }
-        let Some(session) = candidate else {
-            return Ok(None);
+        let session = match candidates.as_slice() {
+            [] => return Ok(None),
+            [session] => session.clone(),
+            sessions => {
+                log_no_event(
+                    posted,
+                    None,
+                    NoEventReason::AmbiguousAgentSessions {
+                        candidates: sessions.len(),
+                    },
+                );
+                return Ok(None);
+            }
         };
 
         let kind = if self.is_quote_reply(posted).await {
+            // A quote-reply says who it answers on its face, so it needs no
+            // thread read at all.
             ChannelKind::QuoteReply
-        } else if self.is_addressed_to_agent(posted).await {
+        } else if self
+            .is_addressed_to_agent(posted, &self.transcript(posted, thread_id, &session).await)
+            .await
+        {
             ChannelKind::Inferred
         } else {
             log_no_event(
@@ -241,9 +295,56 @@ where
             .unwrap_or(false)
     }
 
-    async fn is_addressed_to_agent(&self, posted: &ChannelMessagePostedMetadata) -> bool {
+    /// The thread around the points where the agent took part: its own
+    /// messages, and the message being judged, each with [`WINDOW_RADIUS`]
+    /// messages of surrounding conversation.
+    ///
+    /// An unreadable thread yields an empty transcript rather than an error, so
+    /// the judge still rules on the message itself instead of the whole path
+    /// wedging on a thread read.
+    async fn transcript(
+        &self,
+        posted: &ChannelMessagePostedMetadata,
+        thread_id: Uuid,
+        session: &AgentSession,
+    ) -> String {
+        let messages = match self
+            .history
+            .thread_messages(posted.channel_id, thread_id)
+            .await
+        {
+            Ok(messages) => messages,
+            Err(error) => {
+                tracing::warn!(error = ?error, "thread read failed; judging without thread context");
+                return String::new();
+            }
+        };
+        let agent = session.bot_id.into_storage_id();
+        let anchors: Vec<Uuid> = messages
+            .iter()
+            .filter(|message| {
+                message.id == posted.message_id
+                    || message
+                        .sender
+                        .as_bot()
+                        .is_some_and(|bot| bot.as_ref() == agent.as_ref())
+            })
+            .map(|message| message.id)
+            .collect();
+
+        render_transcript(
+            &thread_window(&messages, &anchors, WINDOW_RADIUS, TRANSCRIPT_CAP),
+            session.bot_id,
+        )
+    }
+
+    async fn is_addressed_to_agent(
+        &self,
+        posted: &ChannelMessagePostedMetadata,
+        transcript: &str,
+    ) -> bool {
         self.judge
-            .is_addressed_to_agent(posted)
+            .is_addressed_to_agent(posted, transcript)
             .await
             .inspect_err(|error| {
                 tracing::warn!(error = ?error, "implicit trigger judge failed; treating as not addressed");

@@ -366,7 +366,7 @@ async fn forward_to_a_live_session_reuses_the_transport() {
 
 #[tokio::test]
 async fn forward_announces_before_delivering_the_prompt() {
-    let (service, _repo, containers, announcer) = harness();
+    let (service, _repo, containers, announcer, _runtimes) = harness();
     let id = AgentSessionId::new();
     let open = service.execute(id, HarnessCommand::Open(open_command()));
     let drive = async {

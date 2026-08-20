@@ -321,9 +321,9 @@ impl AgentSessionRepo for PgAgentSessionRepo {
             AgentSessionRow,
             r#"
             SELECT
-                id, owner_id, thread_id, originating_message_id, bot_id,
-                model, harness, repo_url, acp_session_id, status, status_event_name,
-                created_at, modified_at,
+                id, name, owner_id, thread_id, originating_message_id, bot_id,
+                model, harness, repo_url, workspace, sandbox_size, acp_session_id, status,
+                status_event_name, created_at, modified_at,
                 (SELECT channel_id FROM comms_messages WHERE id = agent_session.thread_id)
                     AS "thread_channel_id?"
             FROM agent_session

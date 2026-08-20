@@ -5,12 +5,13 @@ mod config;
 use agent_session::outbound::postgres::PgAgentSessionRepo;
 use agent_trigger::domain::processing::process_channel_event;
 use agent_trigger::domain::service::{AgentBotLookup, AgentTriggerService};
-use agent_trigger::outbound::{FastModelTriggerJudge, LexicalReplyDetector};
+use agent_trigger::outbound::{ChannelThreadHistory, FastModelTriggerJudge, LexicalReplyDetector};
 use anyhow::Context as _;
 use bots::domain::models::BotId;
 use bots::domain::ports::BotRepo as _;
 use bots::outbound::pg_bots_repo::PgBotsRepo;
 use channels::domain::broker_events::ChannelMacroEvent;
+use channels::outbound::pg_channels_repo::PgChannelsRepo;
 use config::Config;
 use kafka_util::{GroupName, KafkaEventConsumer, consumer_span, record_span_error};
 use lexical_client::LexicalClient;
@@ -80,7 +81,8 @@ async fn run() -> anyhow::Result<()> {
         PgAgentSessionRepo::new(pool.clone()),
         PgAgentBotLookup(PgBotsRepo::new(pool.clone())),
         LexicalReplyDetector::new(lexical),
-        FastModelTriggerJudge::new(ai_usage::pg_recorder(pool)),
+        FastModelTriggerJudge::new(ai_usage::pg_recorder(pool.clone())),
+        ChannelThreadHistory::new(PgChannelsRepo::new(pool)),
     );
     let publisher = MacroEventBrokerService::new(
         KafkaEventPublisher::new(config.kafka_brokers.as_ref())?,

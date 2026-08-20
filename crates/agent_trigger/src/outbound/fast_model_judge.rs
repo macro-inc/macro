@@ -24,7 +24,11 @@ the thread.
 
 Return true only when the message reads as something its author expects the \
 agent to respond to. Return false when it is commentary about the agent or \
-its work addressed to other people, or unrelated discussion.";
+its work addressed to other people, or unrelated discussion.
+
+You are given the thread around the agent's part in it, as lines of \
+'[speaker] message' where the agent's own messages are marked '[agent]'. Some \
+messages may be hidden; judge on what you are shown.";
 
 #[derive(Debug, Deserialize)]
 struct JudgeOutput {
@@ -51,7 +55,11 @@ impl FastModelTriggerJudge {
 }
 
 impl ImplicitTriggerJudge for FastModelTriggerJudge {
-    async fn is_addressed_to_agent(&self, posted: &ChannelMessagePostedMetadata) -> Result<bool> {
+    async fn is_addressed_to_agent(
+        &self,
+        posted: &ChannelMessagePostedMetadata,
+        transcript: &str,
+    ) -> Result<bool> {
         let schema = DynamicSchema {
             name: "ImplicitTriggerJudgeOutput".to_string(),
             description: Some(
@@ -81,10 +89,19 @@ impl ImplicitTriggerJudge for FastModelTriggerJudge {
             None => UsageContext::system(AiFeature::Automation),
         };
 
+        let prompt = if transcript.is_empty() {
+            format!("The message to judge:\n{}", posted.content)
+        } else {
+            format!(
+                "The thread so far:\n{transcript}\nThe message to judge:\n{}",
+                posted.content
+            )
+        };
+
         let value = dynamic_structured_completion(
             self.model,
             SYSTEM_PROMPT,
-            vec![Message::user(posted.content.clone())],
+            vec![Message::user(prompt)],
             schema,
             self.recorder.as_ref(),
             ctx,

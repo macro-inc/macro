@@ -1345,6 +1345,7 @@ fn agent_trigger_existing_event()
         ExistingAgentSessionEvent::Channel(ChannelEventMetadata {
             bot_id: bot_id::BotId::new_from_uuid(uuid::Uuid::from_u128(0xB07)),
             session_id: agent_session::domain::model::AgentSessionId::TEST_A,
+            kind: agent_trigger::domain::broker_events::ChannelKind::MentionThread,
             message: ChannelMessagePostedMetadata {
                 channel_id: uuid::Uuid::from_u128(1),
                 message_id: uuid::Uuid::from_u128(2),

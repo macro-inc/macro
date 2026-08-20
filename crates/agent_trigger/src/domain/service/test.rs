@@ -73,18 +73,43 @@ fn thread_session(id: AgentSessionId, bot_id: BotId) -> AgentSession {
     }
 }
 
+type TestService = AgentTriggerService<
+    MockAgentSessionRepo,
+    MockAgentBotLookup,
+    MockReplyDetector,
+    MockImplicitTriggerJudge,
+    MockThreadHistory,
+>;
+
+/// A service over a thread that reads as empty; tests that care about thread
+/// context pass their own history with [`service_reading`].
 fn service(
     sessions: MockAgentSessionRepo,
     bots: MockAgentBotLookup,
     replies: MockReplyDetector,
     judge: MockImplicitTriggerJudge,
-) -> AgentTriggerService<
-    MockAgentSessionRepo,
-    MockAgentBotLookup,
-    MockReplyDetector,
-    MockImplicitTriggerJudge,
-> {
-    AgentTriggerService::new(sessions, bots, replies, judge)
+) -> TestService {
+    AgentTriggerService::new(sessions, bots, replies, judge, thread_of(vec![]))
+}
+
+fn service_reading(
+    sessions: MockAgentSessionRepo,
+    bots: MockAgentBotLookup,
+    replies: MockReplyDetector,
+    judge: MockImplicitTriggerJudge,
+    history: MockThreadHistory,
+) -> TestService {
+    AgentTriggerService::new(sessions, bots, replies, judge, history)
+}
+
+/// A history that reads the given messages for any thread.
+fn thread_of(messages: Vec<ThreadMessage>) -> MockThreadHistory {
+    let mut history = MockThreadHistory::new();
+    history.expect_thread_messages().returning(move |_, _| {
+        let messages = messages.clone();
+        Box::pin(async move { Ok(messages) })
+    });
+    history
 }
 
 /// Mocks for tests whose message never reaches the implicit path; any call is
@@ -308,8 +333,30 @@ fn judge_saying(result: Result<bool>) -> MockImplicitTriggerJudge {
     judge
         .expect_is_addressed_to_agent()
         .once()
-        .return_once(move |_| Box::pin(async move { result }));
+        .return_once(move |_, _| Box::pin(async move { result }));
     judge
+}
+
+/// A judge that asserts on the transcript it was handed, and says yes.
+fn judge_expecting(transcript: &'static str) -> MockImplicitTriggerJudge {
+    let mut judge = MockImplicitTriggerJudge::new();
+    judge
+        .expect_is_addressed_to_agent()
+        .once()
+        .return_once(move |_, given| {
+            assert_eq!(given, transcript);
+            Box::pin(async { Ok(true) })
+        });
+    judge
+}
+
+fn thread_message(id: u128, sender: ChannelSender<'static>, content: &str) -> ThreadMessage {
+    ThreadMessage {
+        id: Uuid::from_u128(id),
+        sender,
+        content: content.to_owned(),
+        created_at: Utc::now(),
+    }
 }
 
 #[tokio::test]
@@ -433,6 +480,25 @@ async fn implicit_triggering_skips_sessions_of_agentless_bots() {
 }
 
 #[tokio::test]
+async fn two_live_agents_in_a_thread_yield_nothing() {
+    let posted = message(vec![]);
+    let sessions = implicit_sessions(vec![
+        thread_session(AgentSessionId::TEST_A, BotId::TEST_A),
+        thread_session(AgentSessionId::TEST_B, BotId::TEST_B),
+    ]);
+    let (replies, judge) = no_implicit();
+    let service = service(sessions, agent_bots(), replies, judge);
+
+    assert!(
+        service
+            .evaluate(&posted)
+            .await
+            .expect("evaluate message")
+            .is_empty()
+    );
+}
+
+#[tokio::test]
 async fn a_failing_detector_falls_through_to_the_judge() {
     let posted = message(vec![]);
     let sessions = implicit_sessions(vec![thread_session(AgentSessionId::TEST_A, BotId::TEST_A)]);
@@ -471,5 +537,83 @@ async fn a_failing_judge_yields_nothing_instead_of_an_error() {
             .await
             .expect("evaluate message")
             .is_empty()
+    );
+}
+
+#[tokio::test]
+async fn the_judge_reads_the_thread_around_the_agent() {
+    let posted = message(vec![]);
+    let sessions = implicit_sessions(vec![thread_session(AgentSessionId::TEST_A, BotId::TEST_A)]);
+    // Message 2 is the one being evaluated, so both it and the agent's own
+    // message anchor a window; message 0 falls outside both.
+    let history = thread_of(vec![
+        thread_message(0, ChannelSender::new_from_user(user()), "unrelated chatter"),
+        thread_message(1, ChannelSender::new_from_bot(BotId::TEST_A), "on it"),
+        thread_message(2, ChannelSender::new_from_user(user()), "hello"),
+    ]);
+    let service = service_reading(
+        sessions,
+        agent_bots(),
+        detector(Ok(false)),
+        judge_expecting(
+            "[user macro|trigger-service-test@macro.com] unrelated chatter\n\
+             [agent] on it\n\
+             [user macro|trigger-service-test@macro.com] hello\n",
+        ),
+        history,
+    );
+
+    let events = service.evaluate(&posted).await.expect("evaluate message");
+    assert_eq!(
+        existing_channel_metadata(&events).kind,
+        ChannelKind::Inferred
+    );
+}
+
+#[tokio::test]
+async fn a_quote_reply_never_reads_the_thread() {
+    let posted = message(vec![]);
+    let sessions = implicit_sessions(vec![thread_session(AgentSessionId::TEST_A, BotId::TEST_A)]);
+    let mut history = MockThreadHistory::new();
+    history.expect_thread_messages().never();
+    let service = service_reading(
+        sessions,
+        agent_bots(),
+        detector(Ok(true)),
+        MockImplicitTriggerJudge::new(),
+        history,
+    );
+
+    let events = service.evaluate(&posted).await.expect("evaluate message");
+    assert_eq!(
+        existing_channel_metadata(&events).kind,
+        ChannelKind::QuoteReply
+    );
+}
+
+#[tokio::test]
+async fn an_unreadable_thread_still_judges_the_message_alone() {
+    let posted = message(vec![]);
+    let sessions = implicit_sessions(vec![thread_session(AgentSessionId::TEST_A, BotId::TEST_A)]);
+    let mut history = MockThreadHistory::new();
+    history.expect_thread_messages().once().return_once(|_, _| {
+        Box::pin(async {
+            Err(AgentSessionError::Unknown(anyhow::anyhow!(
+                "channels database unavailable"
+            )))
+        })
+    });
+    let service = service_reading(
+        sessions,
+        agent_bots(),
+        detector(Ok(false)),
+        judge_expecting(""),
+        history,
+    );
+
+    let events = service.evaluate(&posted).await.expect("evaluate message");
+    assert_eq!(
+        existing_channel_metadata(&events).kind,
+        ChannelKind::Inferred
     );
 }

@@ -45,6 +45,12 @@ pub enum NoEventReason {
         /// Session whose thread carried the message.
         session_id: AgentSessionId,
     },
+    /// Several agents are live in the thread and nothing said which one the
+    /// message was for.
+    AmbiguousAgentSessions {
+        /// How many agent-backed sessions the thread carried.
+        candidates: usize,
+    },
 }
 
 /// Result of evaluating one message for one bot and session context.

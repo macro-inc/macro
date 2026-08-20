@@ -183,6 +183,7 @@ fn a_bot_authored_external_channel_message_is_skipped() {
         ChannelEventMetadata {
             bot_id: BotId::TEST_A,
             session_id: AgentSessionId::TEST_A,
+            kind: ChannelKind::MentionThread,
             message: message(ChannelSender::new_from_bot(BotId::TEST_B)),
         },
     ));
