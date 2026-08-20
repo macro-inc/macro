@@ -5,7 +5,9 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
 use agent_client_protocol::RawJsonRpcMessage;
-use agent_runtime_protocol::domain::ports::{Transport, TransportError};
+use agent_runtime_protocol::domain::ports::{
+    Transport, TransportError, TransportReceiver, TransportSender,
+};
 use agent_runtime_protocol::domain::schema::v0::{
     AcpMessage, SystemEvent, ToRuntimeMessage, ToServerMessage,
 };
@@ -111,7 +113,38 @@ impl ContainerMock {
     }
 }
 
+/// A [`ContainerMock`]'s sending half. Shares the mock's recorded state, so a
+/// test still observes sends through the mock it kept.
+pub struct ContainerSender {
+    agent: FakeAgent,
+    outbound: Arc<Mutex<Vec<ToRuntimeMessage>>>,
+    send_budget: Arc<Mutex<Option<usize>>>,
+}
+
+/// A [`ContainerMock`]'s receiving half.
+pub struct ContainerReceiver {
+    inbound: Arc<tokio::sync::Mutex<Inbound>>,
+}
+
 impl Transport<ToRuntimeMessage, ToServerMessage> for ContainerMock {
+    type Sender = ContainerSender;
+    type Receiver = ContainerReceiver;
+
+    fn split(self) -> (Self::Sender, Self::Receiver) {
+        (
+            ContainerSender {
+                agent: self.agent,
+                outbound: self.outbound,
+                send_budget: self.send_budget,
+            },
+            ContainerReceiver {
+                inbound: self.inbound,
+            },
+        )
+    }
+}
+
+impl TransportSender<ToRuntimeMessage> for ContainerSender {
     async fn send(&self, message: ToRuntimeMessage) -> Result<(), TransportError> {
         if let Some(budget) = self
             .send_budget
@@ -138,8 +171,10 @@ impl Transport<ToRuntimeMessage, ToServerMessage> for ContainerMock {
 
         Ok(())
     }
+}
 
-    async fn recv(&self) -> Result<Option<ToServerMessage>, TransportError> {
+impl TransportReceiver<ToServerMessage> for ContainerReceiver {
+    async fn recv(&mut self) -> Result<Option<ToServerMessage>, TransportError> {
         let mut inbound = self.inbound.lock().await;
         let Inbound { events, frames } = &mut *inbound;
 

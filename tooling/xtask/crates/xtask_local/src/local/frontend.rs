@@ -273,18 +273,17 @@ pub fn start(
     // output) if the child exits first. A bare port poll would mistake a stale
     // server already on the port for "ready" while our child has died.
     let addr: std::net::SocketAddr = ([127, 0, 0, 1], port).into();
-    let wait_buf = Arc::clone(&captured);
-    stage.run_step("Starting frontend", || {
-        for _ in 0..120 {
+    let startup = stage.run_step("Starting frontend", || {
+        // Cold starts may rebuild optimized Wasm packages before Vite launches.
+        for _ in 0..600 {
             // Settle first: a failed bind (e.g. port already in use) makes vite
             // exit near-instantly, so if the child is still alive after this it
             // genuinely bound the port — rather than us connecting to a stale
             // server squatting it.
             std::thread::sleep(std::time::Duration::from_millis(300));
             if let Some(status) = child.try_wait()? {
-                let out = tail_str(&String::from_utf8_lossy(&wait_buf.lock().unwrap()), 30);
                 anyhow::bail!(
-                    "frontend dev server exited during startup ({status})\n{out}\n\
+                    "frontend dev server exited during startup ({status})\n\
                      (if the port is in use, free it: `lsof -ti tcp:{port} | xargs kill`)"
                 );
             }
@@ -294,8 +293,23 @@ pub fn start(
                 return Ok(());
             }
         }
-        anyhow::bail!("frontend dev server did not become ready")
-    })?;
+        anyhow::bail!("frontend dev server did not become ready after 180 seconds")
+    });
+
+    if let Err(error) = startup {
+        let pgid = child.id() as i32;
+        // SAFETY: the child leads the process group created above. ESRCH is
+        // harmless when Bun already exited.
+        unsafe {
+            libc::kill(-pgid, libc::SIGKILL);
+        }
+        let _ = child.wait();
+        for handle in drains.drain(..) {
+            let _ = handle.join();
+        }
+        let out = tail_str(&String::from_utf8_lossy(&captured.lock().unwrap()), 30);
+        anyhow::bail!("{error}\nfrontend output (last lines):\n{out}");
+    }
 
     Ok(Some(Frontend {
         child,

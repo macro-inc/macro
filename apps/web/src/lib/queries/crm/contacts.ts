@@ -9,28 +9,36 @@ import { crmKeys } from './keys';
 
 const CONTACT_STALE_TIME = 60 * 1000;
 
-function crmContactByEmailQueryOptions(email: string) {
+function crmContactByEmailQueryOptions(teamId: string, email: string) {
   const normalizedEmail = email.trim().toLowerCase();
   return queryOptions({
-    queryKey: crmKeys.contactByEmail(normalizedEmail).queryKey,
-    queryFn: ({ signal }) =>
-      throwOnErr(() =>
+    queryKey: crmKeys.contactByEmail(teamId, normalizedEmail).queryKey,
+    queryFn: async ({ signal }) => {
+      const { contact } = await throwOnErr(() =>
         storageServiceClient.getContactByEmail({
           email: normalizedEmail,
           signal,
         })
-      ),
+      );
+      if (contact) {
+        queryClient.setQueryData(crmKeys.contact(contact.id).queryKey, contact);
+      }
+      return contact;
+    },
     staleTime: CONTACT_STALE_TIME,
   });
 }
 
 /** Resolves a team CRM contact by email and primes its detail cache. */
-export async function fetchCrmContactByEmail(email: string) {
-  const contact = await queryClient.fetchQuery(
-    crmContactByEmailQueryOptions(email)
-  );
-  queryClient.setQueryData(crmKeys.contact(contact.id).queryKey, contact);
-  return contact;
+export function useCrmContactByEmailQuery(
+  teamId: Accessor<string>,
+  email: Accessor<string>,
+  enabled: Accessor<boolean>
+) {
+  return useQuery(() => ({
+    ...crmContactByEmailQueryOptions(teamId(), email()),
+    enabled: enabled() && !!teamId() && !!email(),
+  }));
 }
 
 /**

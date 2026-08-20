@@ -49,14 +49,25 @@ pub enum ExistingAgentSessionEvent {
 }
 
 /// Events publishable to [`MacroAgentSessionsTopic`].
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+///
+/// The serde tag and [`AgentTriggerEventName`] spell the same wire names:
+/// subscribers filter on them, so they are API. `event_names_match_the_wire`
+/// holds the two in step.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, strum::EnumDiscriminants)]
 #[serde(tag = "event_type", content = "metadata")]
+#[strum_discriminants(
+    name(AgentTriggerEventName),
+    derive(strum::Display, strum::EnumIter, strum::IntoStaticStr),
+    doc = "The wire name of an [`AgentTriggerTopicEvent`], as subscribers filter on it."
+)]
 pub enum AgentTriggerTopicEvent {
     /// Open a session.
     #[serde(rename = "agent_trigger.new")]
+    #[strum_discriminants(strum(serialize = "agent_trigger.new"))]
     New(NewAgentSessionEvent),
     /// Feed a session that already exists.
     #[serde(rename = "agent_trigger.existing")]
+    #[strum_discriminants(strum(serialize = "agent_trigger.existing"))]
     Existing(ExistingAgentSessionEvent),
 }
 

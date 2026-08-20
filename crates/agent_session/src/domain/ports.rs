@@ -19,6 +19,82 @@ impl<T> AgentConnector for T where
 {
 }
 
+/// The facts about a bot that gate opening sessions for it.
+#[derive(Debug, Clone)]
+pub struct BotFacts {
+    /// Whether mentioning the bot runs a coding agent.
+    pub has_agent: bool,
+    /// Whether this deployment provisions the bot's runtime itself. Managed
+    /// bots' sessions are opened by the trigger pipeline, never over HTTP,
+    /// and nothing may dial in for them.
+    pub is_managed: bool,
+    /// The user who owns the bot, when it is user-owned.
+    pub owner_user_id: Option<MacroUserIdStr<'static>>,
+}
+
+/// Read-only lookup of the bots sessions may be opened for.
+pub trait BotDirectory: Send + Sync + 'static {
+    /// Fetch a bot's facts; `None` when no such bot exists.
+    fn bot_facts(&self, bot: BotId) -> impl Future<Output = Result<Option<BotFacts>>> + Send;
+}
+
+/// The mention that triggered a session, when one did.
+///
+/// Routes follow-up mentions in the thread to this session and feeds the
+/// announcement - the magic-chip message the session's bot posts back into
+/// the thread. The mention's text is quoted there for display only; the
+/// runtime still delivers it as the first prompt through the session
+/// control endpoint. Because all of this is claimed by the caller rather
+/// than observed by the trigger pipeline, it never grants the thread's
+/// channel any access to the session, and the announcement stands only
+/// where the bot can already post.
+#[derive(Debug, Clone)]
+pub struct SessionThread {
+    /// Channel the mentioning message was posted in.
+    pub channel_id: Uuid,
+    /// Thread the session belongs to.
+    pub thread_id: Uuid,
+    /// The mentioning message itself.
+    pub message_id: Uuid,
+    /// The mention's text, quoted in the announcement.
+    pub content: String,
+}
+
+/// Everything needed to open a session served by an external runtime.
+#[derive(Debug, Clone)]
+pub struct OpenExternalAgentSession {
+    /// The bot the session runs for.
+    pub bot_id: BotId,
+    /// Absolute directory the bot's harness runs in on its runtime.
+    pub workspace: String,
+    /// Repository nominally checked out at `workspace`, when stated.
+    pub repo_url: Option<String>,
+    /// The user who owns the session.
+    pub owner: MacroUserIdStr<'static>,
+    /// The thread whose mention triggered the session, when one did.
+    pub thread: Option<SessionThread>,
+}
+
+/// Opens externally-served sessions: rows whose runtime is hosted by the
+/// bot's operator and dials in on its own schedule. Implemented by the
+/// harness, which owns the session-opening semantics.
+pub trait ExternalSessionOpener: Send + Sync + 'static {
+    /// Open a session and return the persisted row.
+    fn open_external_session(
+        &self,
+        request: OpenExternalAgentSession,
+    ) -> impl Future<Output = Result<AgentSession>> + Send;
+
+    /// The session a thread's mentions already route to, if one exists.
+    /// What a caller whose open conflicted needs to recover: redeliveries
+    /// resume serving the existing session instead of being dropped.
+    fn find_thread_session(
+        &self,
+        thread_id: Uuid,
+        bot_id: BotId,
+    ) -> impl Future<Output = Result<Option<AgentSessionId>>> + Send;
+}
+
 /// `Send + Sync + 'static` with `Send` futures because callers drive sessions
 /// from spawned tasks - a Kafka consumer hands each message to its own task,
 /// and a repo whose futures are not `Send` cannot be used there.

@@ -176,8 +176,8 @@ impl WebhookRepo for PgRepository {
         let inserted = sqlx::query!(
             r#"
             INSERT INTO webhook (
-                id, workspace_id, namespace, name, endpoint_url, signing_secret, headers,
-                filters, status, is_valid, created_by_user_id
+                id, workspace_id, namespace, name, endpoint_url, signing_secret,
+                headers, filters, status, is_valid, created_by_user_id
             )
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, false, $10)
             ON CONFLICT (workspace_id, namespace) WHERE deleted_at IS NULL DO NOTHING

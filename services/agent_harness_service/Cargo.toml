@@ -34,6 +34,7 @@ notification = { path = "../../crates/notification" }
 rdkafka = { workspace = true }
 channels = { path = "../../crates/channels", features = ["ports", "outbound"] }
 anyhow = { workspace = true }
+macro_user_id = { path = "../../crates/macro_user_id" }
 axum = { workspace = true }
 aws-sdk-secretsmanager = { workspace = true }
 kafka_util = { path = "../../crates/kafka_util" }

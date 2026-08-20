@@ -9,15 +9,16 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { UserTooltip } from './UserTooltip';
 
 const mocks = vi.hoisted(() => ({
-  crmEnabled: true,
-  fetchCrmContactByEmail: vi.fn(),
+  crmFlagEnabled: true,
+  teamCrmEnabled: true as boolean | null,
+  contact: { id: 'contact-1' } as { id: string } | null | undefined,
   openWithSplit: vi.fn(),
   onClose: vi.fn(),
 }));
 
 vi.mock('@app/lib/analytics/posthog', () => ({
   useFeatureFlag: () => () => ({
-    enabled: mocks.crmEnabled,
+    enabled: mocks.crmFlagEnabled,
     payload: undefined,
   }),
 }));
@@ -46,7 +47,20 @@ vi.mock('@queries/channel/get-or-create-dm', () => ({
 }));
 
 vi.mock('@queries/crm/contacts', () => ({
-  fetchCrmContactByEmail: mocks.fetchCrmContactByEmail,
+  useCrmContactByEmailQuery: () => ({
+    get data() {
+      return mocks.contact;
+    },
+  }),
+}));
+
+vi.mock('@queries/team/teams', () => ({
+  useCurrentTeamQuery: () => ({
+    get data() {
+      if (mocks.teamCrmEnabled === null) return null;
+      return { team: { crm_enabled: mocks.teamCrmEnabled } };
+    },
+  }),
 }));
 
 vi.mock('@ui', () => ({
@@ -62,15 +76,15 @@ vi.mock('./UserIcon', () => ({
 }));
 
 beforeEach(() => {
-  mocks.crmEnabled = true;
-  mocks.fetchCrmContactByEmail.mockReset();
-  mocks.fetchCrmContactByEmail.mockResolvedValue({ id: 'contact-1' });
+  mocks.crmFlagEnabled = true;
+  mocks.teamCrmEnabled = true;
+  mocks.contact = { id: 'contact-1' };
   mocks.openWithSplit.mockReset();
   mocks.onClose.mockReset();
 });
 
 describe('UserTooltip CRM contact action', () => {
-  it('opens the CRM contact resolved from the hovered email', async () => {
+  it('opens the CRM contact resolved for the hovered email', async () => {
     const user = userEvent.setup({ skipHover: true });
     render(() => (
       <UserTooltip
@@ -81,9 +95,10 @@ describe('UserTooltip CRM contact action', () => {
       />
     ));
 
-    await user.click(screen.getByRole('button', { name: 'Open contact' }));
+    await user.click(
+      await screen.findByRole('button', { name: 'Open contact' })
+    );
 
-    expect(mocks.fetchCrmContactByEmail).toHaveBeenCalledWith('panat@pync.com');
     expect(mocks.openWithSplit).toHaveBeenCalledWith(
       { type: 'contact', id: 'contact-1' },
       { preferNewSplit: false, reopen: 'latest' }
@@ -91,13 +106,59 @@ describe('UserTooltip CRM contact action', () => {
     expect(mocks.onClose).toHaveBeenCalledOnce();
   });
 
-  it('hides the contact action when CRM is disabled', () => {
-    mocks.crmEnabled = false;
+  it('hides the contact action when the CRM feature flag is off', () => {
+    mocks.crmFlagEnabled = false;
 
     render(() => (
       <UserTooltip displayName="Panat Taranat" email="panat@pync.com" />
     ));
 
+    expect(screen.queryByRole('button', { name: 'Open contact' })).toBeNull();
+  });
+
+  it('hides the contact action when CRM is disabled for the team', () => {
+    mocks.teamCrmEnabled = false;
+
+    render(() => (
+      <UserTooltip displayName="Panat Taranat" email="panat@pync.com" />
+    ));
+
+    expect(screen.queryByRole('button', { name: 'Open contact' })).toBeNull();
+  });
+
+  it('hides the contact action when the user has no team', () => {
+    mocks.teamCrmEnabled = null;
+
+    render(() => (
+      <UserTooltip displayName="Panat Taranat" email="panat@pync.com" />
+    ));
+
+    expect(screen.queryByRole('button', { name: 'Open contact' })).toBeNull();
+  });
+
+  it('hides the contact action when no CRM contact exists', () => {
+    mocks.contact = null;
+
+    render(() => (
+      <UserTooltip displayName="Panat Taranat" email="panat@pync.com" />
+    ));
+
+    expect(screen.queryByRole('button', { name: 'Open contact' })).toBeNull();
+  });
+
+  it('keeps the rest of the tooltip visible while the contact is loading', () => {
+    mocks.contact = undefined;
+
+    render(() => (
+      <UserTooltip
+        displayName="Panat Taranat"
+        email="panat@pync.com"
+        id="macro|panat@pync.com"
+      />
+    ));
+
+    expect(screen.getByText('Panat Taranat')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Copy email' })).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Open contact' })).toBeNull();
   });
 });

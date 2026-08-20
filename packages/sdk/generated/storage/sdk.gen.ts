@@ -865,9 +865,10 @@ export class Sdk extends HeyApiClient {
     }
     
     /**
-     * Fetch a CRM contact by email in the caller's team. Any team member may
-     * resolve a visible contact; admin/owner callers may also resolve hidden
-     * contacts and contacts under hidden companies.
+     * Look up a CRM contact by email in the caller's team. Returns a null
+     * `contact` when no visible contact exists. Any team member may resolve a
+     * visible contact; admin/owner callers may also resolve hidden contacts and
+     * contacts under hidden companies.
      */
     public getContactByEmail<ThrowOnError extends boolean = false>(options: Options<GetContactByEmailData, ThrowOnError>): RequestResult<GetContactByEmailResponses, GetContactByEmailErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetContactByEmailResponses, GetContactByEmailErrors, ThrowOnError>({ url: '/crm/contacts/by-email', ...options });

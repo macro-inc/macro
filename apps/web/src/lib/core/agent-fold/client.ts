@@ -9,9 +9,25 @@
 import type {
   FoldedMessage,
   FoldedStreamEvent,
+  SessionMetadata,
 } from '@service-agent-fold/generated/types';
 import type { AgentSessionLogEntryDto } from '@service-agent-harness/generated/schemas';
 import type { FoldRequest, FoldResponse } from './protocol';
+
+/** A machine-backed read: the fold's messages plus its current metadata. */
+export type SessionFoldSnapshot = {
+  messages: FoldedMessage[];
+  metadata: SessionMetadata;
+};
+
+/** What a machine that has folded nothing knows — every field still absent. */
+const EMPTY_METADATA: SessionMetadata = {
+  model: null,
+  supportedModels: [],
+  title: null,
+  availableCommands: [],
+  status: null,
+};
 
 interface Pending {
   resolve: (response: Extract<FoldResponse, { ok: true }>) => void;
@@ -102,14 +118,16 @@ export async function foldSession(
 export async function openSession(
   sessionId: string,
   entries: AgentSessionLogEntryDto[]
-): Promise<FoldedMessage[]> {
+): Promise<SessionFoldSnapshot> {
   const response = await request((id) => ({
     id,
     kind: 'open',
     sessionId,
     entries,
   }));
-  return response.kind === 'open' ? response.messages : [];
+  return response.kind === 'open'
+    ? { messages: response.messages, metadata: response.metadata }
+    : { messages: [], metadata: EMPTY_METADATA };
 }
 
 /**
@@ -143,9 +161,11 @@ export async function pushSessionEntries(
  */
 export async function sessionMessages(
   sessionId: string
-): Promise<FoldedMessage[]> {
+): Promise<SessionFoldSnapshot> {
   const response = await request((id) => ({ id, kind: 'messages', sessionId }));
-  return response.kind === 'messages' ? response.messages : [];
+  return response.kind === 'messages'
+    ? { messages: response.messages, metadata: response.metadata }
+    : { messages: [], metadata: EMPTY_METADATA };
 }
 
 /** Drop a session's machine once nothing is watching it. */

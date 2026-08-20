@@ -5,6 +5,10 @@ use cache_core::queue::{
 use cache_core::store::{InMemoryStorage, Storage};
 use cache_core::value::{CacheValue, EntityKey, Record};
 use pollster::block_on;
+use predicate_index::{
+    ExactAttributePatch, ExactValue, IndexDocument, IntegerAttributePatch, IntegerFact,
+    OptimisticProjectionMutation, Profile, RecordKey, Token,
+};
 use serde_json::json;
 
 #[test]
@@ -13,6 +17,36 @@ fn optimistic_source_supports_versioned_and_legacy_json() {
         mutation_data: json!({"rename": {"name": "next"}}),
         link_patches: Vec::new(),
         revalidations: Vec::new(),
+        projection_mutations: vec![
+            OptimisticProjectionMutation::Replace(IndexDocument {
+                record_key: RecordKey::new("GraphqlSoupDocument:doc-1").unwrap(),
+                profile: Profile::new(Token::new("soup-flat-v1").unwrap()),
+                partition: Token::new("document").unwrap(),
+                exact_facts: Vec::new(),
+                integer_facts: Vec::new(),
+                sort_facts: vec![IntegerFact {
+                    attribute: Token::new("updated-at").unwrap(),
+                    value: 10,
+                }],
+            }),
+            OptimisticProjectionMutation::Patch {
+                record_key: RecordKey::new("GraphqlSoupDocument:doc-2").unwrap(),
+                profile: Profile::new(Token::new("soup-flat-v1").unwrap()),
+                partition: Token::new("document").unwrap(),
+                exact: vec![ExactAttributePatch {
+                    attribute: Token::new("owner").unwrap(),
+                    values: vec![ExactValue::utf8("user-1").unwrap()],
+                }],
+                integers: vec![IntegerAttributePatch {
+                    attribute: Token::new("updated-at").unwrap(),
+                    values: vec![20],
+                }],
+                sorts: vec![IntegerFact {
+                    attribute: Token::new("updated-at").unwrap(),
+                    value: 20,
+                }],
+            },
+        ],
     };
     assert_eq!(
         decode_optimistic_source(&encode_optimistic_source(&source)).unwrap(),
@@ -29,6 +63,23 @@ fn optimistic_source_supports_versioned_and_legacy_json() {
             "mutationData": {"name": "collision"},
             "rename": {"name": "legacy"}
         })
+    );
+
+    let legacy_v2 = decode_optimistic_source(
+        r#"@macro-cache/optimistic-source:{"version":2,"mutationData":{"rename":{"name":"legacy"}},"linkPatches":[],"revalidations":[]}"#,
+    )
+    .unwrap();
+    assert_eq!(
+        legacy_v2.mutation_data,
+        json!({"rename": {"name": "legacy"}})
+    );
+    assert!(legacy_v2.projection_mutations.is_empty());
+    assert!(
+        decode_optimistic_source(
+            r#"@macro-cache/optimistic-source:{"version":2,"mutationData":{},"projectionMutations":[]}"#,
+        )
+        .is_err(),
+        "version 2 must not silently accept a projection overlay"
     );
 }
 

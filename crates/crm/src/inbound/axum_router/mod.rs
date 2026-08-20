@@ -24,8 +24,8 @@ pub mod list_company_contacts;
 /// rows; admin/owner reach hidden contacts (and hidden parent companies).
 pub mod get_contact;
 
-/// Fetch a single CRM contact by email in the caller's team. Role-aware:
-/// members 404 on hidden rows; admin/owner reach hidden contacts.
+/// Look up a CRM contact by email in the caller's team. Role-aware: members
+/// receive null for hidden rows; admin/owner reach hidden contacts.
 pub mod get_contact_by_email;
 
 /// Fetch a single CRM company by id, hydrated with domains and contacts.

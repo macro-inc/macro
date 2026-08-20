@@ -104,6 +104,7 @@ import type { GetBatchChannelPreviewRequest } from './generated/schemas/getBatch
 import type { GetBatchChannelPreviewResponse } from './generated/schemas/getBatchChannelPreviewResponse';
 import type { GetBatchProjectPreviewResponse } from './generated/schemas/getBatchProjectPreviewResponse';
 import type { GetContactByEmailParams } from './generated/schemas/getContactByEmailParams';
+import type { GetContactByEmailResponse } from './generated/schemas/getContactByEmailResponse';
 import type { GetDocumentPermissionsResponseDataV2 } from './generated/schemas/getDocumentPermissionsResponseDataV2';
 import type { GetDocumentProcessingResultResponse } from './generated/schemas/getDocumentProcessingResultResponse';
 import type { GetDocumentResponseData } from './generated/schemas/getDocumentResponseData';
@@ -289,6 +290,8 @@ type CreateBotRequest = {
   handle: string;
   description?: string;
   avatar_url?: string;
+  /** Whether mentioning this bot opens a coding-agent session. Defaults to false. */
+  has_agent?: boolean;
 };
 
 type PatchBotRequest = {
@@ -296,6 +299,8 @@ type PatchBotRequest = {
   handle?: string;
   description?: string;
   avatar_url?: string;
+  /** Whether mentioning this bot opens a coding-agent session. Omit to leave unchanged. */
+  has_agent?: boolean;
 };
 
 type CreateBotTokenRequest = {
@@ -679,7 +684,11 @@ export const storageServiceClient = {
   },
 
   async createChannelScopedBot(
-    args: WithChannelId & CreateChannelScopedBotRequest
+    args: WithChannelId &
+      CreateChannelScopedBotRequest & {
+        /** Whether mentioning this bot opens a coding-agent session. Defaults to false. */
+        has_agent?: boolean;
+      }
   ) {
     const { channel_id, ...request } = args;
     return (
@@ -2475,7 +2484,7 @@ export const storageServiceClient = {
     signal,
   }: GetContactByEmailParams & { signal?: AbortSignal }) {
     const query = new URLSearchParams({ email });
-    return await dssFetch<CrmContactResponse>(
+    return await dssFetch<GetContactByEmailResponse>(
       `/crm/contacts/by-email?${query.toString()}`,
       { method: 'GET', signal }
     );

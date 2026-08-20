@@ -102,11 +102,14 @@ impl AgentSessionRepo for InMemoryAgentSessionRepo {
             id: params.id,
             owner_id: params.owner_id,
             thread_id: params.thread_id,
+            // The in-memory repo has no comms rows to derive a channel from.
+            thread_channel_id: None,
             originating_message_id: params.originating_message_id,
             bot_id: params.bot_id,
             model: params.model,
             harness: params.harness,
             repo_url: params.repo_url,
+            workspace: params.workspace,
             acp_session_id: None,
             status: SessionStatus::default(),
             created_at: now,
@@ -169,7 +172,7 @@ impl AgentSessionRepo for InMemoryAgentSessionRepo {
         let session = sessions.get_mut(&id).ok_or_else(|| {
             AgentSessionError::Unknown(anyhow::anyhow!("no agent session {}", id.as_uuid()))
         })?;
-        session.acp_session_id = Some(acp_session_id.to_string());
+        session.acp_session_id = Some(acp_session_id);
         session.modified_at = chrono::Utc::now();
         Ok(())
     }
@@ -241,7 +244,7 @@ impl AgentSessionLogRepo for InMemoryAgentSessionRepo {
                 .lock()
                 .expect("in-memory session store is not poisoned")
                 .get_mut(&session_id)
-            && session.acp_session_id.as_deref() == Some(acp_session_id.to_string().as_str())
+            && session.acp_session_id.as_ref() == Some(&acp_session_id)
         {
             session.model = change.model;
             session.modified_at = chrono::Utc::now();
@@ -290,11 +293,13 @@ pub fn test_agent_session(id: AgentSessionId) -> AgentSession {
         owner_id: macro_user_id::user_id::MacroUserIdStr::try_from_email("owner@example.com")
             .expect("valid macro user id"),
         thread_id: None,
+        thread_channel_id: None,
         originating_message_id: None,
         bot_id: BotId::new_from_uuid(Uuid::from_u128(0xb07)),
         model: "claude-sonnet-5".to_string(),
         harness: "claude-code".to_string(),
-        repo_url: "https://github.com/example/example".to_string(),
+        repo_url: Some("https://github.com/example/example".to_string()),
+        workspace: "/workspace".to_string(),
         acp_session_id: None,
         status: SessionStatus::NoMessages,
         created_at: now,

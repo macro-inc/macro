@@ -15,6 +15,7 @@
 import type {
   FoldedMessage,
   FoldedStreamEvent,
+  SessionMetadata,
 } from '@service-agent-fold/generated/types';
 import type { AgentSessionLogEntryDto } from '@service-agent-harness/generated/schemas';
 
@@ -78,11 +79,16 @@ export type FoldRequest =
 
 /** What the worker sends back, one per request. */
 export type FoldResponse =
+  | { id: number; ok: true; kind: 'once'; messages: FoldedMessage[] }
+  // Machine-backed reads also answer with the machine's current metadata,
+  // so a caller catching up (or joining late) does not have to wait for the
+  // next `{kind: 'metadata'}` push event to learn the session's title/model.
   | {
       id: number;
       ok: true;
-      kind: 'open' | 'once' | 'messages';
+      kind: 'open' | 'messages';
       messages: FoldedMessage[];
+      metadata: SessionMetadata;
     }
   | { id: number; ok: true; kind: 'push'; changes: FoldedStreamEvent[] }
   | { id: number; ok: true; kind: 'close' }

@@ -5,7 +5,7 @@
 #[cfg(test)]
 mod test;
 
-use crate::domain::error::Result;
+use crate::domain::error::{AgentSessionError, Result};
 use crate::domain::model::{
     AgentSession, AgentSessionId, AgentSessionLog, ChannelSession, CreateAgentSessionParams,
     Message, SessionBot, SessionStatus, StoredAgentSessionLog,
@@ -91,11 +91,13 @@ struct AgentSessionRow {
     id: Uuid,
     owner_id: String,
     thread_id: Option<Uuid>,
+    thread_channel_id: Option<Uuid>,
     originating_message_id: Option<Uuid>,
     bot_id: Uuid,
     model: String,
     harness: String,
-    repo_url: String,
+    repo_url: Option<String>,
+    workspace: String,
     acp_session_id: Option<String>,
     status: String,
     status_event_name: Option<String>,
@@ -113,12 +115,14 @@ impl TryFrom<AgentSessionRow> for AgentSession {
             owner_id: MacroUserIdStr::try_from(row.owner_id)
                 .context("agent session has an unparseable owner")?,
             thread_id: row.thread_id,
+            thread_channel_id: row.thread_channel_id,
             originating_message_id: row.originating_message_id,
             bot_id: BotId::new_from_uuid(row.bot_id),
             model: row.model,
             harness: row.harness,
             repo_url: row.repo_url,
-            acp_session_id: row.acp_session_id,
+            workspace: row.workspace,
+            acp_session_id: row.acp_session_id.map(Into::into),
             status,
             created_at: row.created_at,
             modified_at: row.modified_at,
@@ -137,6 +141,7 @@ impl AgentSessionRepo for PgAgentSessionRepo {
             model,
             harness,
             repo_url,
+            workspace,
         } = params;
 
         // The session row and its access grants land together: a crash between
@@ -154,13 +159,16 @@ impl AgentSessionRepo for PgAgentSessionRepo {
             r#"
             INSERT INTO agent_session (
                 id, owner_id, thread_id, originating_message_id, bot_id, model,
-                harness, repo_url, acp_session_id, status, status_event_name
+                harness, repo_url, workspace, acp_session_id, status,
+                status_event_name
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
             RETURNING
                 id, owner_id, thread_id, originating_message_id, bot_id,
-                model, harness, repo_url, acp_session_id, status, status_event_name,
-                created_at, modified_at
+                model, harness, repo_url, workspace, acp_session_id, status,
+                status_event_name, created_at, modified_at,
+                (SELECT channel_id FROM comms_messages WHERE id = agent_session.thread_id)
+                    AS "thread_channel_id?"
             "#,
             id.as_uuid(),
             owner_id.as_ref(),
@@ -170,13 +178,22 @@ impl AgentSessionRepo for PgAgentSessionRepo {
             model,
             harness,
             repo_url,
+            workspace,
             None::<String>,
             status,
             status_event_name,
         )
         .fetch_one(&mut *transaction)
         .await
-        .context("failed to create agent session")?;
+        .map_err(
+            |error| match error.as_database_error().and_then(|e| e.constraint()) {
+                Some("agent_session_thread_bot_unique") => AgentSessionError::ThreadSessionExists,
+                Some("agent_session_owner_id_fkey") => AgentSessionError::UnknownOwner,
+                _ => AgentSessionError::Unknown(
+                    anyhow::Error::new(error).context("failed to create agent session"),
+                ),
+            },
+        )?;
 
         insert_entity_access_row(
             &mut transaction,
@@ -189,11 +206,11 @@ impl AgentSessionRepo for PgAgentSessionRepo {
         .await
         .context("failed to grant the owner access to the agent session")?;
 
-        // The channel the bot was mentioned in can steer the session: the
+        // The channel the bot was invoked in can steer the session: the
         // invocation was public there, so that audience is. Read from the
-        // mention rather than taken as a parameter, so a caller cannot claim
-        // a channel the mention did not happen in. A directly created
-        // session has no mention, and so no inherited audience.
+        // message rather than taken from the caller, so the channel is always
+        // the one the message actually sits in. A session created without a
+        // message - directly, rather than from a channel - is its owner's alone.
         let origin_channel_id = match originating_message_id {
             Some(message_id) => sqlx::query_scalar!(
                 "SELECT channel_id FROM comms_messages WHERE id = $1",
@@ -232,8 +249,10 @@ impl AgentSessionRepo for PgAgentSessionRepo {
             r#"
             SELECT
                 id, owner_id, thread_id, originating_message_id, bot_id,
-                model, harness, repo_url, acp_session_id, status, status_event_name,
-                created_at, modified_at
+                model, harness, repo_url, workspace, acp_session_id, status,
+                status_event_name, created_at, modified_at,
+                (SELECT channel_id FROM comms_messages WHERE id = agent_session.thread_id)
+                    AS "thread_channel_id?"
             FROM agent_session
             WHERE id = $1
             "#,
@@ -263,8 +282,10 @@ impl AgentSessionRepo for PgAgentSessionRepo {
             r#"
             SELECT
                 id, owner_id, thread_id, originating_message_id, bot_id,
-                model, harness, repo_url, acp_session_id, status, status_event_name,
-                created_at, modified_at
+                model, harness, repo_url, workspace, acp_session_id, status,
+                status_event_name, created_at, modified_at,
+                (SELECT channel_id FROM comms_messages WHERE id = agent_session.thread_id)
+                    AS "thread_channel_id?"
             FROM agent_session
             WHERE thread_id = $1 AND bot_id = $2
             ORDER BY created_at DESC

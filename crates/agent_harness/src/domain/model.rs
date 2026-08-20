@@ -23,12 +23,28 @@ pub struct MentionOrigin {
 }
 
 /// Open a new session for a mention.
+///
+/// Only for managed sessions - the ones whose sandbox this deployment
+/// provisions. External sessions are opened through
+/// [`agent_session::domain::ports::ExternalSessionOpener`] instead: they
+/// need no provisioning, no announcement, and no first prompt, so they are
+/// a plain create rather than a harness command.
 #[derive(Debug, Clone)]
 pub struct OpenSession {
     /// The bot that was mentioned.
     pub bot_id: BotId,
     /// The mention itself.
     pub origin: MentionOrigin,
+}
+
+/// Whether this deployment provisions a sandbox for `bot`'s sessions.
+///
+/// Only the dedicated Macro coder bot is managed; every other agent bot hosts
+/// its own runtime and dials the gateway. This becomes a bot attribute the
+/// day managed bots stop being a closed set of one.
+#[must_use]
+pub fn is_managed_bot(bot: BotId) -> bool {
+    bot == bot_id::MACRO_CODER_BOT_ID
 }
 
 /// Where a prompt came from, when it came from somewhere the session should
@@ -93,8 +109,10 @@ impl DeliverAction {
         }
     }
 
-    /// A control request under a caller-visible id. Names no origin: whoever
-    /// called the endpoint is looking at the session already.
+    /// A control request under a caller-visible id. Names no origin: control
+    /// is "deliver this to the session", and announcing a prompt into its
+    /// channel is the trigger pipeline's job, keyed on what it observed
+    /// rather than anything a caller claims.
     pub fn control(id: AgentActionId, event: ControlEvent) -> Self {
         Self {
             id,
@@ -105,11 +123,33 @@ impl DeliverAction {
     }
 }
 
+/// Announce a prompt an external runtime delivers itself.
+///
+/// For a mention in an external session's thread, the trigger pipeline fans
+/// out twice: the bot's runtime gets the webhook and sends the prompt through
+/// the control endpoint, and this posts the magic-chip message the replies
+/// render into. Split that way because each side is the only one that can
+/// do its half honestly: only the runtime can reach its harness, and only
+/// the observed trigger event can vouch for the channel context.
+#[derive(Debug, Clone)]
+pub struct AnnouncePrompt {
+    /// The bot the trigger named; must match the session row before posting.
+    pub bot_id: BotId,
+    /// Where the mention was posted.
+    pub origin: AnnounceOrigin,
+    /// The mention's text, quoted in the announcement.
+    pub content: String,
+    /// Who mentioned the bot.
+    pub sender: MacroUserIdStr<'static>,
+}
+
 /// Facts required to announce one prompt into its originating context.
 #[derive(Debug, Clone)]
 pub struct SessionAnnouncement {
     /// Agent session represented by the announcement.
     pub session_id: AgentSessionId,
+    /// The bot the session runs for; the announcement posts as it.
+    pub bot_id: BotId,
     /// Channel containing the mention that opened the session.
     pub origin_channel_id: Uuid,
     /// Thread where the announcement should be posted.

@@ -37,10 +37,13 @@ use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
 use tokio::sync::{mpsc, oneshot};
 
+use bots::domain::models::BotId;
+
+use super::connection::RuntimeAttachment;
 use super::error::{AgentSessionError, Result};
 use super::model::{
-    AgentSession, AgentSessionId, AgentSessionLog, AuthorKind, CreateAgentSessionParams,
-    LogAppended, MessageId, SessionLog, StoredAgentSessionLog,
+    AgentSession, AgentSessionId, AgentSessionLog, AuthorKind, ChannelSession,
+    CreateAgentSessionParams, LogAppended, Message, MessageId, SessionLog, StoredAgentSessionLog,
 };
 use super::ports::{
     AgentConnector, AgentSessionLogRepo, AgentSessionLogWriter, AgentSessionRealtime,
@@ -77,13 +80,17 @@ pub trait AgentSessionService: Send + Sync + 'static {
     fn close_session(&self, id: AgentSessionId) -> impl Future<Output = Result<()>> + Send;
 
     /// Attach a new transport to an existing persisted session.
+    ///
+    /// The attachment carries the connection's handshake gate as well as the
+    /// transport, because whether this session runs `initialize` depends on
+    /// whether another session on the same connection already did.
     fn attach_session<Connector>(
         &self,
         id: AgentSessionId,
-        connector: Connector,
+        attachment: RuntimeAttachment<Connector>,
     ) -> impl Future<Output = Result<()>> + Send
     where
-        Connector: AgentConnector + Clone;
+        Connector: AgentConnector;
 
     /// Deliver an action through the session's active transport, under the
     /// action id it will carry onto the wire.
@@ -94,6 +101,13 @@ pub trait AgentSessionService: Send + Sync + 'static {
         action: AgentAction,
         action_id: AgentActionId,
     ) -> impl Future<Output = Result<()>> + Send;
+
+    /// The session an incoming channel context routes to, if any.
+    fn find_for_channel(
+        &self,
+        thread_id: Option<Uuid>,
+        bot_id: Option<BotId>,
+    ) -> impl Future<Output = Result<ChannelSession>> + Send;
 
     /// The user-message id the next prompt appended to this session will fold to.
     fn next_prompt_message_id(
@@ -145,12 +159,13 @@ impl<R, Folds, Rt> AgentSessionServiceImpl<R, Folds, Rt> {
         &self,
         id: AgentSessionId,
         acp_session_id: Option<SessionId>,
-        connector: Connector,
+        workspace: String,
+        attachment: RuntimeAttachment<Connector>,
     ) -> Result<()>
     where
         R: AgentSessionRepo + AgentSessionLogRepo + Clone,
         Rt: AgentSessionRealtime + Clone + Send + Sync + 'static,
-        Connector: AgentConnector + Clone,
+        Connector: AgentConnector,
     {
         let (commands, command_rx) = mpsc::channel(COMMAND_BUFFER);
 
@@ -167,7 +182,15 @@ impl<R, Folds, Rt> AgentSessionServiceImpl<R, Folds, Rt> {
         // which costs an attach nothing until the session actually says
         // something.
         let logs = LiveSessionLogWriter::new(self.repo.clone(), self.realtime.clone());
-        let actor = SessionActor::new(id, acp_session_id, connector, logs, command_rx);
+        let actor = SessionActor::new(
+            id,
+            acp_session_id,
+            workspace,
+            attachment.connector,
+            logs,
+            command_rx,
+            attachment.handshake,
+        );
         tokio::spawn(run_session(actor, Arc::downgrade(&self.active), commands));
         Ok(())
     }
@@ -225,6 +248,14 @@ where
         self.repo.get(id).await
     }
 
+    async fn find_for_channel(
+        &self,
+        thread_id: Option<Uuid>,
+        bot_id: Option<BotId>,
+    ) -> Result<ChannelSession> {
+        self.repo.find_for_channel(thread_id, bot_id).await
+    }
+
     async fn delete_session(&self, id: AgentSessionId) -> Result<()> {
         self.repo.delete(id).await
     }
@@ -240,16 +271,17 @@ where
     async fn attach_session<Connector>(
         &self,
         id: AgentSessionId,
-        connector: Connector,
+        attachment: RuntimeAttachment<Connector>,
     ) -> Result<()>
     where
-        Connector: AgentConnector + Clone,
+        Connector: AgentConnector,
     {
         let session = self.repo.get(id).await?;
         self.register_transport(
             session.id,
-            session.acp_session_id.map(Into::into),
-            connector,
+            session.acp_session_id,
+            session.workspace,
+            attachment,
         )
     }
 
@@ -323,6 +355,21 @@ where
 {
     async fn append(&mut self, log: AgentSessionLog) -> Result<()> {
         let session = log.agent_session_id;
+
+        // The wire tap: every frame of every session, both directions,
+        // crosses here exactly once. Enable with RUST_LOG=agent_session=trace.
+        if tracing::enabled!(tracing::Level::TRACE) {
+            let (direction, frame) = match &log.content {
+                Message::ToServer(message) => ("to_server", serde_json::to_string(message)),
+                Message::ToRuntime(message) => ("to_runtime", serde_json::to_string(message)),
+            };
+            tracing::trace!(
+                %session,
+                direction,
+                frame = frame.as_deref().unwrap_or("<unserializable>"),
+                "acp frame"
+            );
+        }
 
         // Durable first: projections are rebuildable, but a frame omitted from
         // session history is not.
@@ -475,7 +522,7 @@ async fn run_session<Connector, Logs>(
     active: std::sync::Weak<ActiveSessions>,
     commands: mpsc::Sender<SessionCommand>,
 ) where
-    Connector: AgentConnector + Clone,
+    Connector: AgentConnector,
     Logs: AgentSessionLogWriter + AgentSessionRepo,
 {
     while actor.step().await == Stepped::Continue {}

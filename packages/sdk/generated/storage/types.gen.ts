@@ -1000,6 +1000,8 @@ export type BomPart = {
 
 /**
  * Bot row.
+ *
+ * Clients deserialize this, so both derives are used.
  */
 export type Bot = {
     /**
@@ -2583,6 +2585,36 @@ export type CopyDocumentResponse = {
     error: boolean;
 };
 
+/**
+ * Request to create a bot.
+ */
+export type CreateBotRequest = {
+    /**
+     * Optional avatar URL.
+     */
+    avatar_url?: string | null;
+    /**
+     * Optional description.
+     */
+    description?: string | null;
+    /**
+     * Stable handle.
+     */
+    handle: string;
+    /**
+     * Whether mentioning this bot opens a sandboxed coding-agent session. Defaults to false.
+     */
+    has_agent?: boolean | null;
+    /**
+     * Display name.
+     */
+    name: string;
+    /**
+     * Team owner. The caller must be a team administrator or owner. Omit for a user-owned bot.
+     */
+    team_id?: string | null;
+};
+
 export type CreateBulkDocumentResponse = {
     /**
      * Data to be returned
@@ -2655,6 +2687,10 @@ export type CreateChannelScopedBotRequest = {
      * Stable handle.
      */
     handle: string;
+    /**
+     * Whether mentioning this bot opens a sandboxed coding-agent session. Defaults to false.
+     */
+    has_agent?: boolean | null;
     /**
      * Display name.
      */
@@ -3122,6 +3158,8 @@ export type CreateViewRequest = {
 
 /**
  * Request to create a webhook.
+ *
+ * Clients serialize this, so both derives are used.
  */
 export type CreateWebhookRequest = {
     /**
@@ -3150,6 +3188,8 @@ export type CreateWebhookRequest = {
 
 /**
  * Webhook returned after creation, including its signing secret.
+ *
+ * Clients deserialize this, so both derives are used.
  */
 export type CreateWebhookResponse = {
     /**
@@ -4951,6 +4991,13 @@ export type GetBatchProjectPreviewResponse = {
     previews: Array<ProjectPreview>;
 };
 
+/**
+ * Response from looking up a CRM contact by email.
+ */
+export type GetContactByEmailResponse = {
+    contact?: null | CrmContactResponse;
+};
+
 export type GetDocumentKeyResponse = {
     /**
      * Data to be returned
@@ -5506,6 +5553,8 @@ export type LinkShare = 'PUBLIC' | 'TEAM';
 
 /**
  * Webhooks visible to the caller across their personal and team workspaces.
+ *
+ * Clients deserialize this, so both derives are used.
  */
 export type ListWebhooksResponse = {
     /**
@@ -5634,6 +5683,32 @@ export type Params = {
  * The role a user has within a channel.
  */
 export type ParticipantRole = 'owner' | 'admin' | 'member';
+
+/**
+ * Request to patch a bot.
+ */
+export type PatchBotRequest = {
+    /**
+     * Optional avatar URL.
+     */
+    avatar_url?: string | null;
+    /**
+     * Optional description.
+     */
+    description?: string | null;
+    /**
+     * Stable handle.
+     */
+    handle?: string | null;
+    /**
+     * Whether mentioning this bot opens a sandboxed coding-agent session. Omit to leave unchanged.
+     */
+    has_agent?: boolean | null;
+    /**
+     * Display name.
+     */
+    name?: string | null;
+};
 
 /**
  * Request to patch a channel.
@@ -8203,6 +8278,8 @@ export type ViewsResponse = {
 
 /**
  * Webhook row returned by application APIs.
+ *
+ * Clients deserialize this, so both derives are used.
  */
 export type Webhook = {
     /**
@@ -8286,6 +8363,8 @@ export type WebhookFilter = {
 
 /**
  * Scope that owns a newly-created webhook.
+ *
+ * Clients serialize this, so both derives are used.
  */
 export type WebhookScope = 'user' | 'team';
 
@@ -10307,17 +10386,19 @@ export type GetContactByEmailData = {
 export type GetContactByEmailErrors = {
     400: ErrorResponse;
     401: ErrorResponse;
-    404: ErrorResponse;
     500: ErrorResponse;
 };
 
 export type GetContactByEmailError = GetContactByEmailErrors[keyof GetContactByEmailErrors];
 
 export type GetContactByEmailResponses = {
-    200: CrmContactResponse;
+    /**
+     * The matching contact, or a null contact when none is visible.
+     */
+    200: GetContactByEmailResponse;
 };
 
-export type GetContactByEmailResponse = GetContactByEmailResponses[keyof GetContactByEmailResponses];
+export type GetContactByEmailResponse2 = GetContactByEmailResponses[keyof GetContactByEmailResponses];
 
 export type GetContactData = {
     body?: never;

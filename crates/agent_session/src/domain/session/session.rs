@@ -15,13 +15,13 @@ use agent_runtime_protocol::domain::schema::v0::{
 };
 use macro_user_id::user_id::MacroUserIdStr;
 
+use crate::PROTOCOL_VERSION;
 use crate::domain::error::AgentSessionError;
 use crate::domain::model::AgentSessionId;
-use crate::{AGENT_WORKING_DIRECTORY, PROTOCOL_VERSION};
 
 use super::types::{
     CloseReason, Effect, Input, PendingAction, RuntimeStatus, SessionOpening, SessionPhase,
-    StopReason,
+    SessionRestoreSupport, StopReason,
 };
 
 const INITIAL_REQUEST_NUM: u64 = 0;
@@ -36,28 +36,35 @@ pub struct SessionMachine<Token> {
     /// Held outside the phase so a partial flush strands nothing.
     pending: VecDeque<PendingAction<Token>>,
     resume_session_id: Option<SessionId>,
+    /// Directory the agent works in, snapshotted on the session row at
+    /// creation; `session/new`, `session/resume`, and `session/load` all
+    /// carry it, so a reconnect re-enters the directory the session
+    /// actually ran in.
+    workspace: String,
 }
 
 impl<Token> SessionMachine<Token> {
     /// A fresh connection for `id`: booting, nothing queued.
-    pub fn new(id: AgentSessionId) -> Self {
+    pub fn new(id: AgentSessionId, workspace: String) -> Self {
         Self {
             id,
             phase: SessionPhase::Booting,
             next_request: INITIAL_REQUEST_NUM,
             pending: VecDeque::new(),
             resume_session_id: None,
+            workspace,
         }
     }
 
     /// A fresh connection that must restore an existing ACP session.
-    pub fn resume(id: AgentSessionId, session_id: SessionId) -> Self {
+    pub fn resume(id: AgentSessionId, session_id: SessionId, workspace: String) -> Self {
         Self {
             id,
             phase: SessionPhase::Booting,
             next_request: INITIAL_REQUEST_NUM,
             pending: VecDeque::new(),
             resume_session_id: Some(session_id),
+            workspace,
         }
     }
 
@@ -95,8 +102,22 @@ impl<Token> SessionMachine<Token> {
                 token,
             } => self.on_command(from, action, action_id, token),
             Input::Inbound(message) => self.on_inbound(message),
+            Input::Ready { restore } => self.on_connection_ready(restore),
             Input::Closed(reason) => self.on_closed(reason),
         }
+    }
+
+    /// Open on a connection somebody else initialized.
+    ///
+    /// Ignored unless still booting: the machine that ran the handshake is
+    /// told its own result this way too, and a session already opening or
+    /// live has nothing to learn from it.
+    fn on_connection_ready(&mut self, restore: SessionRestoreSupport) -> Vec<Effect<Token>> {
+        let mut effects = Vec::new();
+        if matches!(self.phase, SessionPhase::Booting) {
+            self.begin_opening(restore, &mut effects);
+        }
+        effects
     }
 
     fn on_command(
@@ -232,19 +253,25 @@ impl<Token> SessionMachine<Token> {
             }
         };
 
+        let restore = SessionRestoreSupport {
+            resume: response
+                .agent_capabilities
+                .session_capabilities
+                .resume
+                .is_some(),
+            load: response.agent_capabilities.load_session,
+        };
+        // Announced before this session opens: every other session on this
+        // connection needs the same answer, and only this machine was told it.
+        effects.push(Effect::Initialized { restore });
+        self.begin_opening(restore, effects);
+    }
+
+    /// Ask the agent for this session, however it has to be established.
+    fn begin_opening(&mut self, restore: SessionRestoreSupport, effects: &mut Vec<Effect<Token>>) {
         let opening = match self.resume_session_id.clone() {
-            Some(session_id)
-                if response
-                    .agent_capabilities
-                    .session_capabilities
-                    .resume
-                    .is_some() =>
-            {
-                self.build_resume_session_request(session_id)
-            }
-            Some(session_id) if response.agent_capabilities.load_session => {
-                self.build_load_session_request(session_id)
-            }
+            Some(session_id) if restore.resume => self.build_resume_session_request(session_id),
+            Some(session_id) if restore.load => self.build_load_session_request(session_id),
             Some(_) => {
                 self.resume_unsupported(effects);
                 return;
@@ -347,7 +374,7 @@ impl<Token> SessionMachine<Token> {
         agent_client_protocol::Error,
     > {
         self.build_session_request(
-            ResumeSessionRequest::new(session_id.clone(), AGENT_WORKING_DIRECTORY),
+            ResumeSessionRequest::new(session_id.clone(), self.workspace.clone()),
             SessionOpening::Resume(session_id),
         )
     }
@@ -360,7 +387,7 @@ impl<Token> SessionMachine<Token> {
         agent_client_protocol::Error,
     > {
         self.build_session_request(
-            LoadSessionRequest::new(session_id.clone(), AGENT_WORKING_DIRECTORY),
+            LoadSessionRequest::new(session_id.clone(), self.workspace.clone()),
             SessionOpening::Load(session_id),
         )
     }
@@ -383,7 +410,7 @@ impl<Token> SessionMachine<Token> {
         agent_client_protocol::Error,
     > {
         self.build_session_request(
-            NewSessionRequest::new(AGENT_WORKING_DIRECTORY),
+            NewSessionRequest::new(self.workspace.clone()),
             SessionOpening::New,
         )
     }
@@ -506,9 +533,11 @@ impl<Token> SessionMachine<Token> {
         });
     }
 
-    /// Namespaced so a caller's request id can never collide with ours.
+    /// Namespaced so a caller's request id can never collide with ours - and
+    /// carries the session, so sessions sharing one connection cannot collide
+    /// with each other either.
     fn next_id(&mut self) -> RequestId {
-        let id = RequestId::Str(format!("agent_session:{}", self.next_request));
+        let id = RequestId::Str(format!("agent_session:{}:{}", self.id, self.next_request));
         self.next_request += 1;
         id
     }

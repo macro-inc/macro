@@ -1,3 +1,4 @@
+import { openStandaloneReminderComposer } from '@app/features/reminders/reminder-composer';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { setAutomationComposerOpen } from '@block-automation/component';
 import { EMAIL_COMPOSE_TO_INPUT_ID } from '@block-email/constants';
@@ -13,6 +14,9 @@ import { CHAT_INPUT_TEXT_AREA_ID } from '@core/component/AI/component/input/Chat
 import { getIconConfig } from '@core/component/EntityIcon';
 import {
   ENABLE_ANIMATED_ICONS,
+  ENABLE_REMINDERS,
+  ENABLE_REMINDERS_FLAG,
+  ENABLE_REMINDERS_OVERRIDE,
   ENABLE_SNIPPETS_FLAG,
   ENABLE_SNIPPETS_OVERRIDE,
 } from '@core/constant/featureFlags';
@@ -59,6 +63,7 @@ import WideTask from '@icon/wide-task.svg';
 import { Dialog } from '@kobalte/core/dialog';
 import { getMarkdownGoldenBytes } from '@macro-inc/lexical-core/markdown-golden';
 import type { Span } from '@macro-inc/observability';
+import BellSimpleIcon from '@phosphor/bell-simple.svg';
 import MagnifyingGlassIcon from '@phosphor/magnifying-glass.svg';
 import PlusIcon from '@phosphor/plus.svg';
 import { createProject } from '@queries/storage/projects';
@@ -85,7 +90,7 @@ import {
 } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { Dynamic } from 'solid-js/web';
-import type { CreatableBlock } from './types';
+import type { CreatableBlock, CreatableName } from './types';
 
 const LAUNCHER_FRECENCY_STORE = 'launcher-frecency-v1';
 const LAUNCHER_SEARCH_MODE_STORE = 'launcher-search-mode-v1';
@@ -253,7 +258,7 @@ const createComponent = async (spec: {
 };
 
 export function runCreateAction(
-  blockName: BlockName | BlockAlias,
+  blockName: CreatableName,
   options: { shouldInsert?: boolean; source?: string } = {}
 ) {
   const shouldInsert = options.shouldInsert ?? false;
@@ -398,10 +403,17 @@ export function runCreateAction(
         asPopover: true,
       });
       return;
+    // A reminder has no block to open: the composer asks what and when, and the
+    // reminder lives in the Reminders lists from there.
+    case 'reminder':
+      if (!ENABLE_REMINDERS()) return;
+      setCreateMenuOpen(false, false);
+      openStandaloneReminderComposer();
+      return;
   }
 }
 
-export type { CreatableBlock } from './types';
+export type { CreatableBlock, CreatableName } from './types';
 
 export const CREATABLE_BLOCKS: CreatableBlock[] = [
   {
@@ -490,6 +502,23 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
     hotkey: 't' as const,
     keyDownHandler: () => {
       runCreateAction('task');
+      return true;
+    },
+  },
+  {
+    label: 'Reminder',
+    icon: BellSimpleIcon,
+    description: 'Create reminder',
+    launcherHint: 'Nudge yourself later',
+    keywords: ['new', 'make', 'add', 'remind', 'later', 'todo'],
+    blockName: 'reminder',
+    hotkeyToken: TOKENS.create.reminder,
+    // No `altHotkeyToken`: a reminder opens no split, so there is no
+    // shift-variant to bind.
+    hotkey: 'r',
+    enabled: () => ENABLE_REMINDERS(),
+    keyDownHandler: () => {
+      runCreateAction('reminder');
       return true;
     },
   },
@@ -603,11 +632,39 @@ export function useCreateMenuBlocks(
   const snippetsFlag = useFeatureFlag(ENABLE_SNIPPETS_FLAG, {
     enabledOverride: ENABLE_SNIPPETS_OVERRIDE,
   });
-  return createMemo(() =>
-    source().filter(
-      (block) => block.blockName !== 'snippet' || snippetsFlag().enabled
-    )
-  );
+  // Subscribed to rather than left to the block's own `enabled`, which reads
+  // PostHog without tracking it: this memo has no other reason to re-run, so a
+  // flag that resolves after mount would leave the menu as it was until reload.
+  const remindersFlag = useFeatureFlag(ENABLE_REMINDERS_FLAG, {
+    enabledOverride: ENABLE_REMINDERS_OVERRIDE,
+  });
+  return createMemo(() => {
+    remindersFlag();
+    return source().filter(
+      (block) =>
+        (block.blockName !== 'snippet' || snippetsFlag().enabled) &&
+        (block.enabled?.() ?? true)
+    );
+  });
+}
+
+/**
+ * Whether one creatable is on offer right now, tracked reactively.
+ *
+ * For the surfaces that offer a single creatable by name rather than rendering
+ * the whole list — an empty state's button, a list view's `+`. Answered from
+ * {@link useCreateMenuBlocks} so there is one gate rather than a copy of it per
+ * surface, and so a flag that resolves after mount reaches these too: a gated
+ * entry left to its own `enabled` reads PostHog without tracking it, which
+ * strands the answer the surface first happened to get.
+ *
+ * A name that is not a creatable-block entry at all is not "disabled" — it is
+ * not this gate's business, and callers reaching for a view-only label handle
+ * it themselves.
+ */
+export function useCreatableEnabled(): (name: CreatableName) => boolean {
+  const blocks = useCreateMenuBlocks();
+  return (name) => blocks().some((block) => block.blockName === name);
 }
 
 export const [createMenuOpen, setCreateMenuOpen] = createControlledOpenSignal(

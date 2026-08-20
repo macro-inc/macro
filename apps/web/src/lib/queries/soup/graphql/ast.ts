@@ -16,7 +16,7 @@ import type {
   GroupedSoupContinuationInput as GraphqlGroupedSoupContinuationInput,
   GroupedSoupInput as GraphqlGroupedSoupInput,
   GraphqlProjectLiteral as GraphqlProjectLiteralInput,
-  GraphqlPropertiesLiteral as GraphqlPropertiesLiteralInput,
+  GraphqlFilterPropertiesLiteral as GraphqlPropertiesLiteralInput,
   GraphqlReminderLiteral as GraphqlReminderLiteralInput,
   SoupInitialInput as GraphqlSoupInitialInput,
   SoupInput as GraphqlSoupInput,

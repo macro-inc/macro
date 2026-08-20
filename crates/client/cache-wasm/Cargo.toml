@@ -2,7 +2,7 @@
 edition = "2024"
 name = "cache-wasm"
 publish = false
-version = "0.4.2"
+version = "0.6.3"
 
 [features]
 default = []
@@ -30,6 +30,8 @@ cache-core = { path = "../cache-core" }
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 async-lock = { workspace = true }
 cache-turso = { path = "../cache-turso" }
+predicate-index = { path = "../../predicate_index" }
+soup-filter-cache-adapter = { path = "../../soup_filter_cache_adapter" }
 js-sys = { workspace = true }
 serde = { workspace = true }
 serde-wasm-bindgen = { workspace = true }

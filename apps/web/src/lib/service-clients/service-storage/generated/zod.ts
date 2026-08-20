@@ -713,7 +713,7 @@ export const getSelfBotResponse = zod
       .optional(),
     updated_at: zod.iso.datetime({}).describe('Update timestamp.'),
   })
-  .describe('Bot row.');
+  .describe('Bot row.\n\nClients deserialize this, so both derives are used.');
 
 /**
  * @summary Handler for `GET /bots/{bot_id}/channels`.
@@ -2287,6 +2287,12 @@ export const createChannelScopedBotBody = zod
     avatar_url: zod.string().nullish().describe('Optional avatar URL.'),
     description: zod.string().nullish().describe('Optional description.'),
     handle: zod.string().describe('Stable handle.'),
+    has_agent: zod
+      .boolean()
+      .nullish()
+      .describe(
+        'Whether mentioning this bot opens a sandboxed coding-agent session. Defaults to false.'
+      ),
     name: zod.string().describe('Display name.'),
     team_id: zod
       .uuid()
@@ -4048,9 +4054,10 @@ export const setCrmCompanyNameBody = zod
   .describe('Request body for `PUT \/companies\/{company_id}\/name`.');
 
 /**
- * @summary Fetch a CRM contact by email in the caller's team. Any team member may
-resolve a visible contact; admin/owner callers may also resolve hidden
-contacts and contacts under hidden companies.
+ * @summary Look up a CRM contact by email in the caller's team. Returns a null
+`contact` when no visible contact exists. Any team member may resolve a
+visible contact; admin/owner callers may also resolve hidden contacts and
+contacts under hidden companies.
  */
 export const getContactByEmailQueryParams = zod.object({
   email: zod
@@ -4060,36 +4067,45 @@ export const getContactByEmailQueryParams = zod.object({
 
 export const getContactByEmailResponse = zod
   .object({
-    companyId: zod
-      .uuid()
-      .describe('The id of the company the contact belongs to.'),
-    createdAt: zod.iso
-      .datetime({})
-      .describe('When the contact record was created.'),
-    email: zod.string().describe("The contact's email address."),
-    firstInteraction: zod.iso
-      .datetime({})
-      .describe('Earliest known interaction with this contact.'),
-    hidden: zod
-      .boolean()
-      .describe(
-        'Whether the contact is hidden from CRM listings for the\nrequesting team. Non-admin viewers never see `hidden = true`\nrows (the endpoint filters them out); admin\/owner callers see\nhidden contacts so they can render the right toggle state.'
-      ),
-    id: zod.uuid().describe('The id of the contact record.'),
-    lastInteraction: zod.iso
-      .datetime({})
-      .describe('Most recent known interaction with this contact.'),
-    name: zod
-      .string()
-      .nullish()
-      .describe('Display name observed for the contact, if any.'),
-    updatedAt: zod.iso
-      .datetime({})
-      .describe('When the contact record was last updated.'),
+    contact: zod
+      .union([
+        zod.null(),
+        zod
+          .object({
+            companyId: zod
+              .uuid()
+              .describe('The id of the company the contact belongs to.'),
+            createdAt: zod.iso
+              .datetime({})
+              .describe('When the contact record was created.'),
+            email: zod.string().describe("The contact's email address."),
+            firstInteraction: zod.iso
+              .datetime({})
+              .describe('Earliest known interaction with this contact.'),
+            hidden: zod
+              .boolean()
+              .describe(
+                'Whether the contact is hidden from CRM listings for the\nrequesting team. Non-admin viewers never see `hidden = true`\nrows (the endpoint filters them out); admin\/owner callers see\nhidden contacts so they can render the right toggle state.'
+              ),
+            id: zod.uuid().describe('The id of the contact record.'),
+            lastInteraction: zod.iso
+              .datetime({})
+              .describe('Most recent known interaction with this contact.'),
+            name: zod
+              .string()
+              .nullish()
+              .describe('Display name observed for the contact, if any.'),
+            updatedAt: zod.iso
+              .datetime({})
+              .describe('When the contact record was last updated.'),
+          })
+          .describe(
+            'A CRM contact as returned by `GET \/crm\/companies\/{company_id}\/contacts`.'
+          ),
+      ])
+      .optional(),
   })
-  .describe(
-    'A CRM contact as returned by `GET \/crm\/companies\/{company_id}\/contacts`.'
-  );
+  .describe('Response from looking up a CRM contact by email.');
 
 /**
  * @summary Fetch a single CRM contact by id. Access is enforced by
@@ -26996,14 +27012,16 @@ export const listWebhooksResponse = zod
             updated_at: zod.iso.datetime({}).describe('Update timestamp.'),
             workspace_id: zod.string().describe('Owning workspace id.'),
           })
-          .describe('Webhook row returned by application APIs.')
+          .describe(
+            'Webhook row returned by application APIs.\n\nClients deserialize this, so both derives are used.'
+          )
       )
       .describe(
         "The caller's webhooks, newest first. Signing secrets are omitted."
       ),
   })
   .describe(
-    'Webhooks visible to the caller across their personal and team workspaces.'
+    'Webhooks visible to the caller across their personal and team workspaces.\n\nClients deserialize this, so both derives are used.'
   );
 
 /**
@@ -27042,9 +27060,13 @@ export const createWebhookBody = zod
       ),
     scope: zod
       .enum(['user', 'team'])
-      .describe('Scope that owns a newly-created webhook.'),
+      .describe(
+        'Scope that owns a newly-created webhook.\n\nClients serialize this, so both derives are used.'
+      ),
   })
-  .describe('Request to create a webhook.');
+  .describe(
+    'Request to create a webhook.\n\nClients serialize this, so both derives are used.'
+  );
 
 /**
  * @summary Get a webhook.
@@ -27100,7 +27122,9 @@ export const getWebhookResponse = zod
     updated_at: zod.iso.datetime({}).describe('Update timestamp.'),
     workspace_id: zod.string().describe('Owning workspace id.'),
   })
-  .describe('Webhook row returned by application APIs.');
+  .describe(
+    'Webhook row returned by application APIs.\n\nClients deserialize this, so both derives are used.'
+  );
 
 /**
  * @summary Delete a webhook.
@@ -27208,7 +27232,9 @@ export const patchWebhookResponse = zod
     updated_at: zod.iso.datetime({}).describe('Update timestamp.'),
     workspace_id: zod.string().describe('Owning workspace id.'),
   })
-  .describe('Webhook row returned by application APIs.');
+  .describe(
+    'Webhook row returned by application APIs.\n\nClients deserialize this, so both derives are used.'
+  );
 
 /**
  * @summary Validate a webhook endpoint.

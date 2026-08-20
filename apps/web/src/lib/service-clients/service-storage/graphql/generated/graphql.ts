@@ -62,21 +62,21 @@ export type EntitySharePolicyInput = {
 
 /** The two operands of a recursive `CalendarEventFilterExpr` binary expression. */
 export type GraphqlCalendarEventBinaryExpr = {
-  /** The left-hand expression. */
+  /** Left expression. */
   left: GraphqlCalendarEventExpr;
-  /** The right-hand expression. */
+  /** Right expression. */
   right: GraphqlCalendarEventExpr;
 };
 
 /** A recursive `CalendarEventFilterExpr` filter expression. */
 export type GraphqlCalendarEventExpr =
-  {   /** Matches when both expressions match. */
+  {   /** Both expressions must match. */
   and: GraphqlCalendarEventBinaryExpr; literal?: never; not?: never; or?: never; }
-  |  { and?: never;   /** Matches a domain-specific literal condition. */
+  |  { and?: never;   /** Match a literal. */
   literal: GraphqlCalendarEventLiteral; not?: never; or?: never; }
-  |  { and?: never; literal?: never;   /** Negates an expression. */
+  |  { and?: never; literal?: never;   /** Negate an expression. */
   not: GraphqlCalendarEventExpr; or?: never; }
-  |  { and?: never; literal?: never; not?: never;   /** Matches when either expression matches. */
+  |  { and?: never; literal?: never; not?: never;   /** Either expression may match. */
   or: GraphqlCalendarEventBinaryExpr; };
 
 /** GraphQL input representing a calendar event literal. */
@@ -100,21 +100,21 @@ export type GraphqlCalendarEventLiteral =
 
 /** The two operands of a recursive `CallFilterExpr` binary expression. */
 export type GraphqlCallBinaryExpr = {
-  /** The left-hand expression. */
+  /** Left expression. */
   left: GraphqlCallExpr;
-  /** The right-hand expression. */
+  /** Right expression. */
   right: GraphqlCallExpr;
 };
 
 /** A recursive `CallFilterExpr` filter expression. */
 export type GraphqlCallExpr =
-  {   /** Matches when both expressions match. */
+  {   /** Both expressions must match. */
   and: GraphqlCallBinaryExpr; literal?: never; not?: never; or?: never; }
-  |  { and?: never;   /** Matches a domain-specific literal condition. */
+  |  { and?: never;   /** Match a literal. */
   literal: GraphqlCallLiteral; not?: never; or?: never; }
-  |  { and?: never; literal?: never;   /** Negates an expression. */
+  |  { and?: never; literal?: never;   /** Negate an expression. */
   not: GraphqlCallExpr; or?: never; }
-  |  { and?: never; literal?: never; not?: never;   /** Matches when either expression matches. */
+  |  { and?: never; literal?: never; not?: never;   /** Either expression may match. */
   or: GraphqlCallBinaryExpr; };
 
 /** GraphQL input representing the call literal. */
@@ -141,21 +141,21 @@ export type GraphqlCallStatus =
 
 /** The two operands of a recursive `ChannelFilterExpr` binary expression. */
 export type GraphqlChannelBinaryExpr = {
-  /** The left-hand expression. */
+  /** Left expression. */
   left: GraphqlChannelExpr;
-  /** The right-hand expression. */
+  /** Right expression. */
   right: GraphqlChannelExpr;
 };
 
 /** A recursive `ChannelFilterExpr` filter expression. */
 export type GraphqlChannelExpr =
-  {   /** Matches when both expressions match. */
+  {   /** Both expressions must match. */
   and: GraphqlChannelBinaryExpr; literal?: never; not?: never; or?: never; }
-  |  { and?: never;   /** Matches a domain-specific literal condition. */
+  |  { and?: never;   /** Match a literal. */
   literal: GraphqlChannelLiteral; not?: never; or?: never; }
-  |  { and?: never; literal?: never;   /** Negates an expression. */
+  |  { and?: never; literal?: never;   /** Negate an expression. */
   not: GraphqlChannelExpr; or?: never; }
-  |  { and?: never; literal?: never; not?: never;   /** Matches when either expression matches. */
+  |  { and?: never; literal?: never; not?: never;   /** Either expression may match. */
   or: GraphqlChannelBinaryExpr; };
 
 /** GraphQL input representing the channel literal. */
@@ -189,21 +189,21 @@ export type GraphqlChannelLiteral =
 
 /** The two operands of a recursive `ChannelThreadFilterExpr` binary expression. */
 export type GraphqlChannelThreadBinaryExpr = {
-  /** The left-hand expression. */
+  /** Left expression. */
   left: GraphqlChannelThreadExpr;
-  /** The right-hand expression. */
+  /** Right expression. */
   right: GraphqlChannelThreadExpr;
 };
 
 /** A recursive `ChannelThreadFilterExpr` filter expression. */
 export type GraphqlChannelThreadExpr =
-  {   /** Matches when both expressions match. */
+  {   /** Both expressions must match. */
   and: GraphqlChannelThreadBinaryExpr; literal?: never; not?: never; or?: never; }
-  |  { and?: never;   /** Matches a domain-specific literal condition. */
+  |  { and?: never;   /** Match a literal. */
   literal: GraphqlChannelThreadLiteral; not?: never; or?: never; }
-  |  { and?: never; literal?: never;   /** Negates an expression. */
+  |  { and?: never; literal?: never;   /** Negate an expression. */
   not: GraphqlChannelThreadExpr; or?: never; }
-  |  { and?: never; literal?: never; not?: never;   /** Matches when either expression matches. */
+  |  { and?: never; literal?: never; not?: never;   /** Either expression may match. */
   or: GraphqlChannelThreadBinaryExpr; };
 
 /** GraphQL input representing the channel thread literal. */
@@ -234,21 +234,21 @@ export type GraphqlChannelTypeFilter =
 
 /** The two operands of a recursive `ChatFilterExpr` binary expression. */
 export type GraphqlChatBinaryExpr = {
-  /** The left-hand expression. */
+  /** Left expression. */
   left: GraphqlChatExpr;
-  /** The right-hand expression. */
+  /** Right expression. */
   right: GraphqlChatExpr;
 };
 
 /** A recursive `ChatFilterExpr` filter expression. */
 export type GraphqlChatExpr =
-  {   /** Matches when both expressions match. */
+  {   /** Both expressions must match. */
   and: GraphqlChatBinaryExpr; literal?: never; not?: never; or?: never; }
-  |  { and?: never;   /** Matches a domain-specific literal condition. */
+  |  { and?: never;   /** Match a literal. */
   literal: GraphqlChatLiteral; not?: never; or?: never; }
-  |  { and?: never; literal?: never;   /** Negates an expression. */
+  |  { and?: never; literal?: never;   /** Negate an expression. */
   not: GraphqlChatExpr; or?: never; }
-  |  { and?: never; literal?: never; not?: never;   /** Matches when either expression matches. */
+  |  { and?: never; literal?: never; not?: never;   /** Either expression may match. */
   or: GraphqlChatBinaryExpr; };
 
 /** GraphQL input representing the chat literal. */
@@ -283,21 +283,21 @@ export type GraphqlChatRole =
 
 /** The two operands of a recursive `CrmCompanyFilterExpr` binary expression. */
 export type GraphqlCrmCompanyBinaryExpr = {
-  /** The left-hand expression. */
+  /** Left expression. */
   left: GraphqlCrmCompanyExpr;
-  /** The right-hand expression. */
+  /** Right expression. */
   right: GraphqlCrmCompanyExpr;
 };
 
 /** A recursive `CrmCompanyFilterExpr` filter expression. */
 export type GraphqlCrmCompanyExpr =
-  {   /** Matches when both expressions match. */
+  {   /** Both expressions must match. */
   and: GraphqlCrmCompanyBinaryExpr; literal?: never; not?: never; or?: never; }
-  |  { and?: never;   /** Matches a domain-specific literal condition. */
+  |  { and?: never;   /** Match a literal. */
   literal: GraphqlCrmCompanyLiteral; not?: never; or?: never; }
-  |  { and?: never; literal?: never;   /** Negates an expression. */
+  |  { and?: never; literal?: never;   /** Negate an expression. */
   not: GraphqlCrmCompanyExpr; or?: never; }
-  |  { and?: never; literal?: never; not?: never;   /** Matches when either expression matches. */
+  |  { and?: never; literal?: never; not?: never;   /** Either expression may match. */
   or: GraphqlCrmCompanyBinaryExpr; };
 
 /** GraphQL input representing the crm company literal. */
@@ -327,21 +327,21 @@ export type GraphqlDateLiteral =
 
 /** The two operands of a recursive `DocumentFilterExpr` binary expression. */
 export type GraphqlDocumentBinaryExpr = {
-  /** The left-hand expression. */
+  /** Left expression. */
   left: GraphqlDocumentExpr;
-  /** The right-hand expression. */
+  /** Right expression. */
   right: GraphqlDocumentExpr;
 };
 
 /** A recursive `DocumentFilterExpr` filter expression. */
 export type GraphqlDocumentExpr =
-  {   /** Matches when both expressions match. */
+  {   /** Both expressions must match. */
   and: GraphqlDocumentBinaryExpr; literal?: never; not?: never; or?: never; }
-  |  { and?: never;   /** Matches a domain-specific literal condition. */
+  |  { and?: never;   /** Match a literal. */
   literal: GraphqlDocumentLiteral; not?: never; or?: never; }
-  |  { and?: never; literal?: never;   /** Negates an expression. */
+  |  { and?: never; literal?: never;   /** Negate an expression. */
   not: GraphqlDocumentExpr; or?: never; }
-  |  { and?: never; literal?: never; not?: never;   /** Matches when either expression matches. */
+  |  { and?: never; literal?: never; not?: never;   /** Either expression may match. */
   or: GraphqlDocumentBinaryExpr; };
 
 /** GraphQL input representing the document literal. */
@@ -384,21 +384,21 @@ export type GraphqlDocumentSubType =
 
 /** The two operands of a recursive `EmailFilterExpr` binary expression. */
 export type GraphqlEmailBinaryExpr = {
-  /** The left-hand expression. */
+  /** Left expression. */
   left: GraphqlEmailExpr;
-  /** The right-hand expression. */
+  /** Right expression. */
   right: GraphqlEmailExpr;
 };
 
 /** A recursive `EmailFilterExpr` filter expression. */
 export type GraphqlEmailExpr =
-  {   /** Matches when both expressions match. */
+  {   /** Both expressions must match. */
   and: GraphqlEmailBinaryExpr; literal?: never; not?: never; or?: never; }
-  |  { and?: never;   /** Matches a domain-specific literal condition. */
+  |  { and?: never;   /** Match a literal. */
   literal: GraphqlEmailLiteral; not?: never; or?: never; }
-  |  { and?: never; literal?: never;   /** Negates an expression. */
+  |  { and?: never; literal?: never;   /** Negate an expression. */
   not: GraphqlEmailExpr; or?: never; }
-  |  { and?: never; literal?: never; not?: never;   /** Matches when either expression matches. */
+  |  { and?: never; literal?: never; not?: never;   /** Either expression may match. */
   or: GraphqlEmailBinaryExpr; };
 
 /** GraphQL input representing the email filter ast. */
@@ -500,7 +500,7 @@ export type GraphqlEntityFilterAst = {
   /** The project filter to apply. */
   projectFilter?: GraphqlProjectExpr | null | undefined;
   /** The properties filter to apply. */
-  propertiesFilter?: GraphqlPropertiesExpr | null | undefined;
+  propertiesFilter?: GraphqlFilterPropertiesExpr | null | undefined;
   /** The reminder filter to apply. */
   reminderFilter?: GraphqlReminderExpr | null | undefined;
 };
@@ -532,6 +532,8 @@ export type GraphqlEntityReferenceInput = {
 
 /** Canonical entity types accepted by cross-entity APIs. */
 export type GraphqlEntityType =
+  /** AI coding agent session entity. */
+  | 'AGENT_SESSION'
   /** Calendar event entity. */
   | 'CALENDAR_EVENT'
   /** Call entity. */
@@ -565,23 +567,82 @@ export type GraphqlEntityType =
   /** User entity. */
   | 'USER';
 
+/** The two operands of a recursive `PropertiesFilterExpr` binary expression. */
+export type GraphqlFilterPropertiesBinaryExpr = {
+  /** Left expression. */
+  left: GraphqlFilterPropertiesExpr;
+  /** Right expression. */
+  right: GraphqlFilterPropertiesExpr;
+};
+
+/** A recursive `PropertiesFilterExpr` filter expression. */
+export type GraphqlFilterPropertiesExpr =
+  {   /** Both expressions must match. */
+  and: GraphqlFilterPropertiesBinaryExpr; literal?: never; not?: never; or?: never; }
+  |  { and?: never;   /** Match a literal. */
+  literal: GraphqlFilterPropertiesLiteral; not?: never; or?: never; }
+  |  { and?: never; literal?: never;   /** Negate an expression. */
+  not: GraphqlFilterPropertiesExpr; or?: never; }
+  |  { and?: never; literal?: never; not?: never;   /** Either expression may match. */
+  or: GraphqlFilterPropertiesBinaryExpr; };
+
+/** GraphQL input for matching a property value on an entity. */
+export type GraphqlFilterPropertiesLiteral = {
+  /** Optional entity type scope for the property match. */
+  entityType?: GraphqlFilterPropertyEntityType | null | undefined;
+  /** Property definition id to match. */
+  propertyDefinitionId: string | number;
+  /** Value to compare against the property. */
+  value: GraphqlFilterPropertyMatchValue;
+};
+
+/** An entity type supported by property filters. */
+export type GraphqlFilterPropertyEntityType =
+  /** Calendar event entity. */
+  | 'CALENDAR_EVENT'
+  /** Call record entity. */
+  | 'CALL_RECORD'
+  /** Channel entity. */
+  | 'CHANNEL'
+  /** Chat entity. */
+  | 'CHAT'
+  /** Company entity. */
+  | 'COMPANY'
+  /** Document entity. */
+  | 'DOCUMENT'
+  /** Project entity. */
+  | 'PROJECT'
+  /** Task entity. */
+  | 'TASK'
+  /** Thread entity. */
+  | 'THREAD'
+  /** User entity. */
+  | 'USER';
+
+/** GraphQL input value used when matching a property. */
+export type GraphqlFilterPropertyMatchValue =
+  {   /** Entity reference id to match. */
+  entityRef: string; selectOption?: never; }
+  |  { entityRef?: never;   /** Select option id to match. */
+  selectOption: string | number; };
+
 /** The two operands of a recursive `ForeignEntityFilterExpr` binary expression. */
 export type GraphqlForeignEntityBinaryExpr = {
-  /** The left-hand expression. */
+  /** Left expression. */
   left: GraphqlForeignEntityExpr;
-  /** The right-hand expression. */
+  /** Right expression. */
   right: GraphqlForeignEntityExpr;
 };
 
 /** A recursive `ForeignEntityFilterExpr` filter expression. */
 export type GraphqlForeignEntityExpr =
-  {   /** Matches when both expressions match. */
+  {   /** Both expressions must match. */
   and: GraphqlForeignEntityBinaryExpr; literal?: never; not?: never; or?: never; }
-  |  { and?: never;   /** Matches a domain-specific literal condition. */
+  |  { and?: never;   /** Match a literal. */
   literal: GraphqlForeignEntityLiteral; not?: never; or?: never; }
-  |  { and?: never; literal?: never;   /** Negates an expression. */
+  |  { and?: never; literal?: never;   /** Negate an expression. */
   not: GraphqlForeignEntityExpr; or?: never; }
-  |  { and?: never; literal?: never; not?: never;   /** Matches when either expression matches. */
+  |  { and?: never; literal?: never; not?: never;   /** Either expression may match. */
   or: GraphqlForeignEntityBinaryExpr; };
 
 /** GraphQL input representing the foreign entity literal. */
@@ -701,21 +762,21 @@ export type GraphqlNotificationDocumentSubType =
 
 /** The two operands of a recursive `ProjectFilterExpr` binary expression. */
 export type GraphqlProjectBinaryExpr = {
-  /** The left-hand expression. */
+  /** Left expression. */
   left: GraphqlProjectExpr;
-  /** The right-hand expression. */
+  /** Right expression. */
   right: GraphqlProjectExpr;
 };
 
 /** A recursive `ProjectFilterExpr` filter expression. */
 export type GraphqlProjectExpr =
-  {   /** Matches when both expressions match. */
+  {   /** Both expressions must match. */
   and: GraphqlProjectBinaryExpr; literal?: never; not?: never; or?: never; }
-  |  { and?: never;   /** Matches a domain-specific literal condition. */
+  |  { and?: never;   /** Match a literal. */
   literal: GraphqlProjectLiteral; not?: never; or?: never; }
-  |  { and?: never; literal?: never;   /** Negates an expression. */
+  |  { and?: never; literal?: never;   /** Negate an expression. */
   not: GraphqlProjectExpr; or?: never; }
-  |  { and?: never; literal?: never; not?: never;   /** Matches when either expression matches. */
+  |  { and?: never; literal?: never; not?: never;   /** Either expression may match. */
   or: GraphqlProjectBinaryExpr; };
 
 /** GraphQL input representing the project literal. */
@@ -736,35 +797,6 @@ export type GraphqlProjectLiteral =
   projectIdSelf: string | number; updatedAt?: never; }
   |  { createdAt?: never; importance?: never; notificationDone?: never; notificationSeen?: never; owner?: never; projectId?: never; projectIdSelf?: never;   /** The updated at option. */
   updatedAt: GraphqlDateLiteral; };
-
-/** The two operands of a recursive `PropertiesFilterExpr` binary expression. */
-export type GraphqlPropertiesBinaryExpr = {
-  /** The left-hand expression. */
-  left: GraphqlPropertiesExpr;
-  /** The right-hand expression. */
-  right: GraphqlPropertiesExpr;
-};
-
-/** A recursive `PropertiesFilterExpr` filter expression. */
-export type GraphqlPropertiesExpr =
-  {   /** Matches when both expressions match. */
-  and: GraphqlPropertiesBinaryExpr; literal?: never; not?: never; or?: never; }
-  |  { and?: never;   /** Matches a domain-specific literal condition. */
-  literal: GraphqlPropertiesLiteral; not?: never; or?: never; }
-  |  { and?: never; literal?: never;   /** Negates an expression. */
-  not: GraphqlPropertiesExpr; or?: never; }
-  |  { and?: never; literal?: never; not?: never;   /** Matches when either expression matches. */
-  or: GraphqlPropertiesBinaryExpr; };
-
-/** GraphQL input for matching a property value on an entity. */
-export type GraphqlPropertiesLiteral = {
-  /** Optional entity type scope for the property match. */
-  entityType?: GraphqlPropertyEntityType | null | undefined;
-  /** Property definition id to match. */
-  propertyDefinitionId: string | number;
-  /** Value to compare against the property. */
-  value: GraphqlPropertyMatchValue;
-};
 
 /** A property definition's supported value type. */
 export type GraphqlPropertyDataType =
@@ -810,13 +842,6 @@ export type GraphqlPropertyEntityType =
   /** User entity. */
   | 'USER';
 
-/** GraphQL input value used when matching a property. */
-export type GraphqlPropertyMatchValue =
-  {   /** Entity reference id to match. */
-  entityRef: string; selectOption?: never; }
-  |  { entityRef?: never;   /** Select option id to match. */
-  selectOption: string | number; };
-
 /** Canonical entity type accepted for property targets. */
 export type GraphqlPropertyTargetEntityType =
   /** Call record target. */
@@ -838,21 +863,21 @@ export type GraphqlPropertyTargetEntityType =
 
 /** The two operands of a recursive `ReminderFilterExpr` binary expression. */
 export type GraphqlReminderBinaryExpr = {
-  /** The left-hand expression. */
+  /** Left expression. */
   left: GraphqlReminderExpr;
-  /** The right-hand expression. */
+  /** Right expression. */
   right: GraphqlReminderExpr;
 };
 
 /** A recursive `ReminderFilterExpr` filter expression. */
 export type GraphqlReminderExpr =
-  {   /** Matches when both expressions match. */
+  {   /** Both expressions must match. */
   and: GraphqlReminderBinaryExpr; literal?: never; not?: never; or?: never; }
-  |  { and?: never;   /** Matches a domain-specific literal condition. */
+  |  { and?: never;   /** Match a literal. */
   literal: GraphqlReminderLiteral; not?: never; or?: never; }
-  |  { and?: never; literal?: never;   /** Negates an expression. */
+  |  { and?: never; literal?: never;   /** Negate an expression. */
   not: GraphqlReminderExpr; or?: never; }
-  |  { and?: never; literal?: never; not?: never;   /** Matches when either expression matches. */
+  |  { and?: never; literal?: never; not?: never;   /** Either expression may match. */
   or: GraphqlReminderBinaryExpr; };
 
 /** GraphQL input representing the reminder literal. */

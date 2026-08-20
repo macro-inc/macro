@@ -941,6 +941,59 @@ export function restoreUserNotifications(notifications: NotificationItem[]) {
   });
 }
 
+/** The firing a reminder notification was written for, when it records one. */
+function reminderFiringOf(notification: NotificationItem): number | undefined {
+  const metadata = notification.notification_metadata;
+  if (metadata?.tag !== 'reminder') return undefined;
+  const { scheduledFor } = metadata.content;
+  if (!scheduledFor) return undefined;
+  const at = new Date(scheduledFor).getTime();
+  return Number.isNaN(at) ? undefined : at;
+}
+
+/**
+ * Whether `existing` is an earlier firing of the reminder `arriving` is for.
+ *
+ * A recurring reminder produces one notification per firing, all pointing at
+ * the same reminder. The two surfaces deliberately differ in what they do with
+ * that, and it is worth stating plainly because the code pulls both ways:
+ *
+ * - **Push alerts are per firing.** The APNS collapse key includes the firing,
+ *   so today's lock-screen alert does not replace yesterday's unread one.
+ * - **The notification list keeps one row per reminder.** A month away should
+ *   not return thirty identical "standup" rows to work through; the outstanding
+ *   firing is the one that matters.
+ *
+ * The dispatcher enforces the second server-side by retracting earlier firings
+ * as the next is delivered. That delete has no realtime event, and the arriving
+ * notification is merged into the cache without a refetch, so nothing here
+ * would otherwise notice — this is what keeps the two sides agreeing.
+ *
+ * Matched on the firing rather than on the reminder alone, so a redelivery of
+ * the *same* firing arriving under a fresh notification id replaces its twin
+ * instead of being treated as a new occurrence, and a row from a firing later
+ * than the arriving one is left alone.
+ */
+function isSupersededReminder(
+  existing: NotificationItem,
+  arriving: NotificationItem
+): boolean {
+  if (arriving.entity_type !== 'reminder') return false;
+  if (existing.entity_type !== 'reminder') return false;
+  if (existing.entity_id !== arriving.entity_id) return false;
+  // Same notification, not a superseded one — that case is handled as a
+  // duplicate insert.
+  if (existing.id === arriving.id) return false;
+
+  const existingFiring = reminderFiringOf(existing);
+  const arrivingFiring = reminderFiringOf(arriving);
+  // Either side predates the firing being recorded, so there is nothing to
+  // compare: fall back to one-row-per-reminder, which is the policy anyway.
+  if (existingFiring === undefined || arrivingFiring === undefined) return true;
+
+  return existingFiring <= arrivingFiring;
+}
+
 export function optimisticInsertNotification(
   notification: UnifiedNotification
 ) {
@@ -958,6 +1011,30 @@ export function optimisticInsertNotification(
         page.items.some((n) => n.id === item.id)
       );
       if (exists) return data;
+
+      // Clear the firing this one replaces before inserting, so a daily reminder
+      // shows one row rather than one per day since the user last looked.
+      //
+      // Retired from `unconfirmedInserts` as well as dropped from the pages. A
+      // superseded firing that arrived over the websocket is still tracked
+      // there, and `reapplyUnconfirmedInserts` re-prepends anything it finds
+      // missing from the pages — so removing it here alone would put it back on
+      // the next query success and leave it sitting beside its replacement.
+      const superseded = data.pages.flatMap((page) =>
+        page.items.filter((n) => isSupersededReminder(n, item)).map((n) => n.id)
+      );
+      if (superseded.length > 0) {
+        retireUnconfirmedInserts(superseded);
+        const ids = new Set(superseded);
+        data = {
+          ...data,
+          pages: data.pages.map((page) =>
+            page.items.some((n) => ids.has(n.id))
+              ? { ...page, items: page.items.filter((n) => !ids.has(n.id)) }
+              : page
+          ),
+        };
+      }
 
       return {
         ...data,

@@ -2,10 +2,12 @@ use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
 
 use super::*;
+use bot_id::BotId;
 
 #[test]
 fn chip_carries_the_announcement_identity() {
     let announcement = SessionAnnouncement {
+        bot_id: BotId::TEST_A,
         session_id: agent_session::domain::model::AgentSessionId::TEST_A,
         origin_channel_id: Uuid::from_u128(1),
         origin_thread_id: Uuid::from_u128(2),

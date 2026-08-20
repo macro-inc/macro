@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-use agent_runtime_protocol::domain::ports::{Transport, TransportError};
+use agent_runtime_protocol::domain::ports::Transport;
 use agent_runtime_protocol::domain::schema::v0::{ToRuntimeMessage, ToServerMessage};
 use agent_session::domain::model::AgentSessionId;
 use futures::{StreamExt as _, stream};
@@ -150,11 +150,11 @@ impl DaytonaContainerManager {
             id: id.clone(),
             client: self.client.clone(),
             managed: self.managed.clone(),
-            wire: Arc::new(SidecarTransport::connect_observed(socket, move || {
+            wire: SidecarTransport::connect_observed(socket, move || {
                 managed
                     .containers
                     .record_activity(&observed, Instant::now());
-            })),
+            }),
         })
     }
 
@@ -413,12 +413,11 @@ async fn stop_managed(
 }
 
 /// One Daytona sandbox and the live protocol connection to its sidecar.
-#[derive(Clone)]
 pub struct DaytonaContainer {
     id: DaytonaSandboxId,
     client: DaytonaClient,
     managed: Arc<DaytonaContainerManagerState>,
-    wire: Arc<SidecarTransport>,
+    wire: SidecarTransport,
 }
 
 impl DaytonaContainer {
@@ -439,12 +438,14 @@ impl DaytonaContainer {
 }
 
 impl Transport<ToRuntimeMessage, ToServerMessage> for DaytonaContainer {
-    async fn send(&self, message: ToRuntimeMessage) -> std::result::Result<(), TransportError> {
-        self.wire.send(message).await
-    }
+    type Sender = crate::outbound::sidecar::SidecarSender;
+    type Receiver = tokio::sync::mpsc::UnboundedReceiver<ToServerMessage>;
 
-    async fn recv(&self) -> std::result::Result<Option<ToServerMessage>, TransportError> {
-        self.wire.recv().await
+    /// The sandbox itself is not carried into the halves: nothing reattaches
+    /// to a container object once its session has it, and ending a sandbox
+    /// goes through the manager by session id.
+    fn split(self) -> (Self::Sender, Self::Receiver) {
+        self.wire.split()
     }
 }
 
