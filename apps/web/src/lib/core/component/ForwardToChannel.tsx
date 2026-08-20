@@ -12,18 +12,18 @@ import { CustomScrollbar } from '@core/component/CustomScrollbar';
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
 import { RecipientSelector } from '@core/component/RecipientSelector';
 import { ShareOptions } from '@core/component/TopBar/ShareButton';
+import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { isMobile } from '@core/mobile/isMobile';
 import { useCombinedRecipients } from '@core/signal/useCombinedRecipient';
 import type { WithCustomUserInput } from '@core/user';
 import { useSendMessageToPeople } from '@core/util/channels';
 import { getDestinationFromOptions } from '@core/util/destination';
-import { isModEnter } from '@core/util/modEnter';
 import CheckIcon from '@phosphor/check.svg?component-solid';
 import PaperPlaneTilt from '@phosphor/paper-plane-tilt.svg';
 import { blockNameToItemType } from '@service-storage/client';
 import type { AccessLevel } from '@service-storage/generated/schemas/accessLevel';
 import type { SharePermissionV2ChannelSharePermissions } from '@service-storage/generated/schemas/sharePermissionV2ChannelSharePermissions';
-import { Button, cn } from '@ui';
+import { Button, cn, Hotkey } from '@ui';
 import {
   type Accessor,
   createEffect,
@@ -197,26 +197,16 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
   >([]);
 
   const [mdScrollRef, setMdScrollRef] = createSignal<HTMLElement>();
+  const [containerRef, setContainerRef] = createSignal<HTMLDivElement>();
 
   const [markdown, setMarkdown] = createSignal('');
+  // No onEnter: the optional message is a multi-line composer, so a bare Enter
+  // falls through to Lexical and inserts a newline. Sharing is bound to
+  // cmd+enter through the hotkey system below.
   const markdownEditor = createConfiguredChannelMarkdownEditor({
     namespace: 'forward-to-channel-markdown',
     enableMentions: true,
     onChange: setMarkdown,
-    // The optional message is a multi-line composer, so a bare Enter has to
-    // insert a newline. Sharing is deliberately gated behind cmd/ctrl+enter.
-    onEnter: (e) => {
-      if (!isModEnter(e)) {
-        return false;
-      }
-      // Holding the shortcut repeats keydown; swallow the repeats rather than
-      // letting them fall through to a newline, but only submit on the first.
-      if (!e.repeat) {
-        handleSubmit();
-      }
-      e.preventDefault();
-      return true;
-    },
   });
   const [triedToSubmit, setTriedToSubmit] = createSignal(false);
   const { all: destinationOptions } = useCombinedRecipients();
@@ -422,23 +412,31 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
     props.onSubmit?.();
   }
 
-  /**
-   * Enter alone never shares. cmd/ctrl+enter does, from anywhere in the share
-   * menu — the markdown composer handles its own presses (and stops them from
-   * bubbling), so this covers the recipient input and the access selector.
-   */
-  const handleShortcutKeyDown = (e: KeyboardEvent) => {
-    if (e.defaultPrevented || !isModEnter(e)) {
-      return;
-    }
-    e.preventDefault();
-    if (e.repeat) {
-      return;
-    }
-    handleSubmit();
-  };
+  // Not detached: the handler below captures cmd+enter before the scope walk
+  // reaches any ancestor, so the share menu can keep inheriting global hotkeys.
+  const [attachHotkeys, shareHotkeyScope] = useHotkeyDOMScope(
+    'share-forward-to-channel'
+  );
+
+  registerHotkey({
+    hotkey: 'cmd+enter',
+    scopeId: shareHotkeyScope,
+    description: 'Share',
+    // Fires from the composer, the recipient input and the access selector.
+    runWithInputFocused: true,
+    keyDownHandler: (event) => {
+      // Holding the shortcut repeats keydown; swallow the repeats so one press
+      // sends one share, but keep capturing them so none reaches the composer.
+      if (event?.repeat) return true;
+      handleSubmit();
+      return true;
+    },
+  });
 
   onMount(() => {
+    const container = containerRef();
+    if (container) attachHotkeys(container);
+
     if (props.ref) {
       props.ref({
         getSubmitAccessLevel: submitAccessLevel,
@@ -450,9 +448,9 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
   });
 
   return (
-    // `contents` keeps the wrapper out of the layout while still receiving the
-    // keydown events that bubble up from the share menu's controls.
-    <div class="contents" onKeyDown={handleShortcutKeyDown}>
+    // Hosts the hotkey scope. `contents` keeps it out of the layout while it
+    // still sees the focusin events that activate the scope.
+    <div class="contents" ref={setContainerRef}>
       <Show
         when={!isMobile()}
         fallback={
@@ -612,6 +610,7 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
                 >
                   <PaperPlaneTilt class="size-4" />
                   Share
+                  <Hotkey shortcut="cmd+enter" theme="current" />
                 </Button>
               </div>
             </div>
