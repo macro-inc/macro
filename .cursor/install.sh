@@ -9,7 +9,7 @@ source "${SCRIPT_DIR}/cloud-lib.sh"
 ensure_apt_packages() {
   local pkg
   local missing=()
-  for pkg in libssl-dev pkg-config postgresql-client; do
+  for pkg in fuse-overlayfs libssl-dev pkg-config postgresql-client; do
     if ! dpkg -s "${pkg}" >/dev/null 2>&1; then
       missing+=("${pkg}")
     fi

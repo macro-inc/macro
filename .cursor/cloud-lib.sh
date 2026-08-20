@@ -55,6 +55,14 @@ ensure_nix_daemon() {
 }
 
 ensure_dockerd() {
+  local storage_driver='vfs'
+  local storage_args=()
+  if [ -x /usr/bin/fuse-overlayfs ]; then
+    storage_driver='fuse-overlayfs'
+  fi
+  if ! sudo /usr/bin/grep -q '"storage-driver"[[:space:]]*:' /etc/docker/daemon.json 2>/dev/null; then
+    storage_args+=("--storage-driver=${storage_driver}")
+  fi
   if [ -S "${DOCKER_SOCK}" ]; then
     sudo chmod 666 "${DOCKER_SOCK}"
     if docker info >/dev/null 2>&1; then
@@ -65,7 +73,8 @@ ensure_dockerd() {
   # reliably replace it while starting, so clear it after the API probe fails.
   sudo rm -f "${DOCKER_SOCK}"
   : >"${LOG_DIR}/dockerd.log"
-  sudo setsid /usr/bin/dockerd >>"${LOG_DIR}/dockerd.log" 2>&1 </dev/null &
+  sudo setsid /usr/bin/dockerd "${storage_args[@]}" \
+    >>"${LOG_DIR}/dockerd.log" 2>&1 </dev/null &
   local n=0
   while [ "${n}" -lt 60 ]; do
     if [ -S "${DOCKER_SOCK}" ]; then
