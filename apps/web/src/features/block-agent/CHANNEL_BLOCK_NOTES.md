@@ -31,7 +31,7 @@ Everything "block-shaped" lives here, NOT in Channel.tsx:
 | Orchestrator methods | :354–380 | `createMethodRegistration(blockHandle, { goToLocationFromParams, goToLatest })`. External navigation (mention click, inbox row) lands here. |
 | Handle await | :345–350 | `awaitCondition(() => messagesHandle() !== undefined, 10_000)` — the Messages tab may not have mounted yet; orchestrator methods wait for the child handle via a signal. |
 | Target-message resolution | :308–341 | `resolveTargetMessage`: cache-first (`findTopLevelMessageInChannelMessages`, `findThreadIdInChannelMessages`), falls back to `fetchResolvedChannelMessage` roundtrip. |
-| Permissions | :430 | Wraps everything in `<EntityPermissionsGate entityType="channel" entityId={channelId}>`. |
+| Initial load gate | `NewChannelBlockAdapter.tsx` | Fetches the initial message page before mounting the tab content and passes it through `<EntityLoadGate>`, so the content request itself supplies the access/not-found/gone state. |
 | Autofocus | :454 | `autofocus={canAutofocusSplitContent && !navigatedFromJK()}` — split layout + j/k navigation decide, not the component. |
 
 ### The child-handle pattern (the key adapter↔component contract)

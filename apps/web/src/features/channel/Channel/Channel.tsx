@@ -134,6 +134,8 @@ export type ChannelProps = {
   targetMessageReplyId?: string | undefined;
   lastViewedAt?: DateValue | null;
   initialMessagesStateSnapshot?: ChannelMessagesStateSnapshot;
+  /** Initial page loaded by the owning entity gate and seeded into the query cache. */
+  initialMessagesData?: ChannelMessagesData;
   onHandleReady?: (handle: ChannelHandle) => void;
   /** Whether to auto-focus the channel input on mount. Defaults to `!isTouchDevice()`. */
   autofocus?: boolean;
@@ -204,9 +206,15 @@ export function Channel(props: ChannelProps) {
   const [channelInputHandle, setChannelInputHandle] =
     createSignal<InputHandle>();
 
+  const initialLoadAroundMessageId = props.targetMessageId ?? null;
   const messagesQuery = useChannelMessagesQuery(
     () => props.channelId,
-    targetMessageController.loadAroundMessageId
+    targetMessageController.loadAroundMessageId,
+    () =>
+      (targetMessageController.loadAroundMessageId() ?? null) ===
+      initialLoadAroundMessageId
+        ? props.initialMessagesData
+        : undefined
   );
 
   createEffect(

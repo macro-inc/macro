@@ -143,13 +143,30 @@ export function channelMessagesQueryOptions(
   };
 }
 
+export function fetchChannelMessages(
+  channelId: string,
+  loadAroundMessageId: string | null
+): Promise<ChannelMessagesData> {
+  return queryClient.fetchInfiniteQuery(
+    channelMessagesQueryOptions(channelId, loadAroundMessageId)
+  );
+}
+
 export function useChannelMessagesQuery(
   channelId: Accessor<string>,
-  loadAroundMessageId: Accessor<string | null | undefined>
+  loadAroundMessageId: Accessor<string | null | undefined>,
+  initialData?: Accessor<ChannelMessagesData | undefined>
 ) {
-  return useInfiniteQuery(() =>
-    channelMessagesQueryOptions(channelId(), loadAroundMessageId() ?? null)
-  );
+  return useInfiniteQuery(() => {
+    const data = initialData?.();
+    return {
+      ...channelMessagesQueryOptions(
+        channelId(),
+        loadAroundMessageId() ?? null
+      ),
+      ...(data ? { placeholderData: data } : {}),
+    };
+  });
 }
 
 export function useChannelMessagesByIdsQuery(
