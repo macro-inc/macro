@@ -430,7 +430,7 @@ export function Document() {
     }
   };
 
-  const zoomHandler = createCallback((e) => {
+  const zoomHandler = createCallback((e: KeyboardEvent) => {
     if (IS_MAC ? !e.metaKey : !e.ctrlKey) return;
     const viewer = getRootViewer();
     if (!viewer) return;

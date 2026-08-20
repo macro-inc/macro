@@ -343,7 +343,7 @@ export const StorageService = new Svc('Document++ Storage Service API')
     description: schemas.upsertHistoryHandlerResponse.description!,
     args: {
       itemId: schemas.upsertHistoryHandlerParams.shape.item_id,
-      itemType: schemas.upsertHistoryHandlerParams.shape.item_type,
+      itemType: z.enum(ITEM_TYPES),
     },
     result: schemas.upsertHistoryHandlerResponse.shape.data.shape,
     modifies: true,
