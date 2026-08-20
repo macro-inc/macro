@@ -55,6 +55,13 @@ ensure_just_sqlx() {
   hash -r
 }
 
+# Nested dockerd / leftover zigbuild can leave root-owned target/.
+ensure_writable_target() {
+  if [ -e /workspace/target ] && [ ! -w /workspace/target ]; then
+    sudo chown -R "$(id -u):$(id -g)" /workspace/target
+  fi
+}
+
 ensure_apt_packages() {
   local pkg
   local missing=()
@@ -98,6 +105,7 @@ ensure_apt_packages
 ensure_nix_daemon
 ensure_just_sqlx
 ensure_dockerd
+ensure_writable_target
 
 docker pull pgvector/pgvector:pg18
 docker pull redis/redis-stack:latest

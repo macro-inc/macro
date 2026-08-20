@@ -55,9 +55,17 @@ ensure_just_sqlx() {
   hash -r
 }
 
+# Nested dockerd / leftover zigbuild can leave root-owned target/.
+ensure_writable_target() {
+  if [ -e /workspace/target ] && [ ! -w /workspace/target ]; then
+    sudo chown -R "$(id -u):$(id -g)" /workspace/target
+  fi
+}
+
 ensure_nix_daemon
 ensure_dockerd
 ensure_just_sqlx
+ensure_writable_target
 
 cd /workspace
 just run_dbs -d
