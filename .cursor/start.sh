@@ -5,7 +5,6 @@ set -euo pipefail
 
 NIX_DAEMON="/nix/var/nix/profiles/default/bin/nix-daemon"
 NIX_SOCKET="/nix/var/nix/daemon-socket/socket"
-DOCKER_SOCK="/var/run/docker.sock"
 
 if [ -f /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh ]; then
   # shellcheck disable=SC1091
@@ -35,7 +34,7 @@ if [ ! -S "${NIX_SOCKET}" ]; then
 fi
 wait_for "nix-daemon" 30 test -S "${NIX_SOCKET}"
 
-if ! docker info >/dev/null 2>&1; then
+if ! sudo docker info >/dev/null 2>&1; then
   echo "cursor-cloud start: starting dockerd"
   # fuse-overlayfs needs /dev/fuse in nested containers.
   if [ ! -e /dev/fuse ]; then
@@ -44,19 +43,27 @@ if ! docker info >/dev/null 2>&1; then
   fi
   sudo sysctl -w net.ipv4.ip_forward=1 >/dev/null 2>&1 || true
   : >/tmp/dockerd.log
-  sudo dockerd --host=unix:///var/run/docker.sock --pidfile=/var/run/docker.pid \
-    >>/tmp/dockerd.log 2>&1 &
+  # setsid+nohup: `sudo dockerd &` can get SIGHUP and exit after "daemon started"
+  # while never leaving a stable docker.sock for the waiter.
+  sudo setsid nohup dockerd \
+    --host=unix:///var/run/docker.sock \
+    --pidfile=/run/docker.pid \
+    >>/tmp/dockerd.log 2>&1 < /dev/null &
 fi
-if ! wait_for "docker socket" 90 test -S "${DOCKER_SOCK}"; then
+if ! wait_for "docker daemon" 90 sudo docker info; then
   echo "cursor-cloud start: dockerd.log follows" >&2
-  sudo cat /tmp/dockerd.log >&2 || true
-  ls -la /var/run /run /dev/fuse >&2 || true
-  ps -ef >&2 || true
+  sudo tail -n 80 /tmp/dockerd.log >&2 || true
+  echo "cursor-cloud start: socket listing" >&2
+  ls -la /var/run/docker.sock /run/docker.sock /dev/fuse >&2 || true
+  echo "cursor-cloud start: docker processes" >&2
+  ps -ef | grep -E '[d]ockerd|[c]ontainerd' >&2 || true
   exit 1
 fi
-sudo chmod 666 "${DOCKER_SOCK}"
-if ! wait_for "docker daemon" 60 docker info; then
-  echo "cursor-cloud start: docker info failed; dockerd.log follows" >&2
-  sudo cat /tmp/dockerd.log >&2 || true
-  exit 1
+# Group membership from the image does not apply until a new login; world-write
+# the socket so the ubuntu user can talk to dockerd without `sudo`.
+if [ -S /var/run/docker.sock ]; then
+  sudo chmod 666 /var/run/docker.sock
+elif [ -S /run/docker.sock ]; then
+  sudo chmod 666 /run/docker.sock
+  sudo ln -sfn /run/docker.sock /var/run/docker.sock
 fi
