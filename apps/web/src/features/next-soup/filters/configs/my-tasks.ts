@@ -3,7 +3,9 @@ import type {
   TaskEntityWithProperties,
 } from '@entity/types/entity';
 import { getTaskAssigneeIds } from '@entity/utils/task-properties';
+import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import type { Query } from '../filter-store';
+import { propFilter } from './base';
 
 /** Whether a task is owned by or assigned to the current user. */
 export const isMyTask = (
@@ -26,7 +28,10 @@ export const isMyTask = (
 
 /** Server-side owner-or-assignee scope for the My tasks tab. */
 export const getMyTasksQuery = (userId: string): Query => ({
-  include: { subType: ['task'] },
+  include: {
+    subType: ['task'],
+    properties: [propFilter(SYSTEM_PROPERTY_IDS.ASSIGNEES, 'entity', userId)],
+  },
   documentWhere: {
     op: 'or',
     clauses: [
