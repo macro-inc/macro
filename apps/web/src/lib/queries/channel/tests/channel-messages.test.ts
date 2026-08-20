@@ -1,4 +1,4 @@
-import { err as resultErr, ok as resultOk } from 'neverthrow';
+import { err as resultErr } from 'neverthrow';
 /**
  * @vitest-environment jsdom
  */
@@ -27,7 +27,6 @@ vi.mock('@service-storage/client', () => ({
 
 import {
   channelMessagesQueryOptions,
-  fetchChannelMessages,
   isMissingChannelMessageError,
 } from '../channel-messages';
 
@@ -83,21 +82,5 @@ describe('channelMessagesQueryOptions', () => {
 
     expect(options.retry(0, new Error('network'))).toBe(true);
     expect(options.retry(1, new Error('network'))).toBe(false);
-  });
-
-  it('reuses the prefetched initial page from the query cache', async () => {
-    mocks.getChannelMessages.mockResolvedValueOnce(
-      resultOk({
-        items: [],
-        next_cursor: null,
-        previous_cursor: null,
-      })
-    );
-
-    const initialData = await fetchChannelMessages('channel-1', null);
-    const mountedQueryData = await fetchChannelMessages('channel-1', null);
-
-    expect(mountedQueryData).toBe(initialData);
-    expect(mocks.getChannelMessages).toHaveBeenCalledTimes(1);
   });
 });

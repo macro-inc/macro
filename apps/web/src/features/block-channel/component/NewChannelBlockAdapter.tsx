@@ -65,11 +65,11 @@ import { buildEntityData } from '@entity';
 import RenameIcon from '@phosphor/pencil-line.svg';
 import { useActiveCallQuery } from '@queries/call/call';
 import {
-  fetchChannelMessages,
   fetchResolvedChannelMessage,
   findThreadIdInChannelMessages,
   findTopLevelMessageInChannelMessages,
   isMissingChannelMessageError,
+  useChannelMessagesQuery,
 } from '@queries/channel/channel-messages';
 import { useChannelParticipantsQuery } from '@queries/channel/channel-participants';
 import { ChannelTypeEnum } from '@service-storage/client';
@@ -77,12 +77,10 @@ import { useSearchParams } from '@solidjs/router';
 import { cn } from '@ui';
 import {
   createComputed,
-  createEffect,
-  createResource,
   createSignal,
   Match,
-  on,
   onCleanup,
+  onMount,
   Show,
   Suspense,
   Switch,
@@ -100,6 +98,15 @@ type ChannelTargetMessageParams = {
 };
 
 export type BlockChannelProps = ChannelTargetMessageParams;
+
+function MissingTargetMessageToast() {
+  onMount(() => {
+    toast.alert('Message no longer available', {
+      subtext: 'Showing the latest messages instead.',
+    });
+  });
+  return null;
+}
 
 type ChannelEntryStateSnapshot = {
   activeTab?: ChannelTabId;
@@ -308,43 +315,42 @@ export function NewChannelBlockAdapter(props: BlockChannelProps) {
     };
   };
 
-  const [initialTargetMessage, setInitialTargetMessage] =
-    createSignal<ChannelPropsTargetMessage>(
-      convertTargetMessage(initialTargetMessageParams())
-    );
-  const [initialMessages] = createResource(
-    () => [channelId, initialTargetMessage().targetMessageId ?? null] as const,
-    ([resolvedChannelId, loadAroundMessageId]) =>
-      fetchChannelMessages(resolvedChannelId, loadAroundMessageId)
+  const initialTargetMessage = convertTargetMessage(
+    initialTargetMessageParams()
   );
+  const initialTargetMessageId = initialTargetMessage.targetMessageId ?? null;
+  const initialTargetMessagesQuery = useChannelMessagesQuery(
+    () => channelId,
+    () => initialTargetMessageId,
+    {
+      enabled: () => initialTargetMessageId !== null,
+      // A missing deep-link target is immutable and should not be retried when
+      // the window regains focus.
+      refetchOnWindowFocus: false,
+    }
+  );
+  const isInitialTargetMissing = () =>
+    initialTargetMessageId !== null &&
+    isMissingChannelMessageError(initialTargetMessagesQuery.error);
+  const latestMessagesQuery = useChannelMessagesQuery(
+    () => channelId,
+    () => null,
+    {
+      enabled: () =>
+        initialTargetMessageId === null || isInitialTargetMissing(),
+    }
+  );
+  const initialMessagesQuery = () =>
+    initialTargetMessageId !== null && !isInitialTargetMissing()
+      ? initialTargetMessagesQuery
+      : latestMessagesQuery;
   const initialMessagesLoadResult = {
-    data: () => initialMessages(),
-    error: () => initialMessages.error,
-    isPending: () => initialMessages.loading,
+    data: () => initialMessagesQuery().data,
+    error: () => initialMessagesQuery().error,
+    isPending: () => initialMessagesQuery().isPending,
   };
-
-  // A missing deep-link target should fall back to the latest channel content,
-  // not make the entire channel look missing. The mounted Channel handles the
-  // same case for targets opened after the initial load.
-  createEffect(
-    on(
-      [
-        () => initialTargetMessage().targetMessageId,
-        () => initialMessages.error,
-      ],
-      ([targetMessageId, error]) => {
-        if (!targetMessageId || !isMissingChannelMessageError(error)) return;
-
-        toast.alert('Message no longer available', {
-          subtext: 'Showing the latest messages instead.',
-        });
-        setInitialTargetMessage({
-          targetMessageId: undefined,
-          targetMessageReplyId: undefined,
-        });
-      }
-    )
-  );
+  const resolvedInitialTargetMessage = (): ChannelPropsTargetMessage =>
+    isInitialTargetMissing() ? {} : initialTargetMessage;
 
   // Decide whether the user asked to auto-join the call (via ?join_call=true
   // deep link or programmatic open props) before creating signals so we
@@ -549,62 +555,70 @@ export function NewChannelBlockAdapter(props: BlockChannelProps) {
       : undefined;
 
   return (
-    <EntityLoadGate result={initialMessagesLoadResult}>
-      {(initialMessagesData) => (
-        <>
-          <CallEventSync />
-          <ChannelTabProvider activeTab={activeTab} setActiveTab={setActiveTab}>
-            <ChannelCallAutoJoin
-              channelId={channelId}
-              pendingJoinCall={pendingJoinCall}
-              onHandled={() => setPendingJoinCall(false)}
-            />
-            <div
-              ref={attachHotkeys}
-              class={cn(
-                'h-full flex flex-col px-2 touch:px-0',
-                // The channel block is full-frame on mobile (messages scroll
-                // behind the chrome); the other tabs still need to start below
-                // the status bar + floating header.
-                activeTab() !== 'messages' &&
-                  'touch:pt-(--mobile-content-inset-top)'
-              )}
+    <>
+      <Show when={isInitialTargetMissing()}>
+        <MissingTargetMessageToast />
+      </Show>
+      <EntityLoadGate result={initialMessagesLoadResult}>
+        {(initialMessagesData) => (
+          <>
+            <CallEventSync />
+            <ChannelTabProvider
+              activeTab={activeTab}
+              setActiveTab={setActiveTab}
             >
-              <Switch>
-                <Match when={activeTab() === 'messages'}>
-                  <NewChannel
-                    channelId={channelId}
-                    onHandleReady={onChannelReady}
-                    autofocus={canAutofocusSplitContent && !navigatedFromJK()}
-                    initialMessagesStateSnapshot={initialMessagesStateSnapshot()}
-                    initialMessagesData={initialMessagesData}
-                    {...initialTargetMessage()}
-                  />
-                </Match>
-                <Match when={activeTab() === 'attachments'}>
-                  <ChannelAttachmentsTab channelId={channelId} />
-                </Match>
-                <Match when={activeTab() === 'participants'}>
-                  <ChannelParticipantsTab
-                    channelId={channelId}
-                    botManagementEnabled={botManagement.enabled()}
-                    onCreateBot={botManagement.openCreateBot}
-                    inviteBotFocusRequest={botManagement.inviteFocusRequest()}
-                    onOpenBot={botManagement.openBot}
-                  />
-                </Match>
-                <Match when={activeTab() === 'call' && canUseInlineCallTab()}>
-                  <ChannelCallTab
-                    channelId={channelId}
-                    pendingJoin={pendingJoinCall}
-                  />
-                </Match>
-              </Switch>
-              <NewTop channelId={channelId} />
-            </div>
-          </ChannelTabProvider>
-        </>
-      )}
-    </EntityLoadGate>
+              <ChannelCallAutoJoin
+                channelId={channelId}
+                pendingJoinCall={pendingJoinCall}
+                onHandled={() => setPendingJoinCall(false)}
+              />
+              <div
+                ref={attachHotkeys}
+                class={cn(
+                  'h-full flex flex-col px-2 touch:px-0',
+                  // The channel block is full-frame on mobile (messages scroll
+                  // behind the chrome); the other tabs still need to start below
+                  // the status bar + floating header.
+                  activeTab() !== 'messages' &&
+                    'touch:pt-(--mobile-content-inset-top)'
+                )}
+              >
+                <Switch>
+                  <Match when={activeTab() === 'messages'}>
+                    <NewChannel
+                      channelId={channelId}
+                      onHandleReady={onChannelReady}
+                      autofocus={canAutofocusSplitContent && !navigatedFromJK()}
+                      initialMessagesStateSnapshot={initialMessagesStateSnapshot()}
+                      initialMessagesData={initialMessagesData}
+                      {...resolvedInitialTargetMessage()}
+                    />
+                  </Match>
+                  <Match when={activeTab() === 'attachments'}>
+                    <ChannelAttachmentsTab channelId={channelId} />
+                  </Match>
+                  <Match when={activeTab() === 'participants'}>
+                    <ChannelParticipantsTab
+                      channelId={channelId}
+                      botManagementEnabled={botManagement.enabled()}
+                      onCreateBot={botManagement.openCreateBot}
+                      inviteBotFocusRequest={botManagement.inviteFocusRequest()}
+                      onOpenBot={botManagement.openBot}
+                    />
+                  </Match>
+                  <Match when={activeTab() === 'call' && canUseInlineCallTab()}>
+                    <ChannelCallTab
+                      channelId={channelId}
+                      pendingJoin={pendingJoinCall}
+                    />
+                  </Match>
+                </Switch>
+                <NewTop channelId={channelId} />
+              </div>
+            </ChannelTabProvider>
+          </>
+        )}
+      </EntityLoadGate>
+    </>
   );
 }

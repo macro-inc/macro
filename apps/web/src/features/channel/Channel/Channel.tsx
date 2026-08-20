@@ -210,11 +210,13 @@ export function Channel(props: ChannelProps) {
   const messagesQuery = useChannelMessagesQuery(
     () => props.channelId,
     targetMessageController.loadAroundMessageId,
-    () =>
-      (targetMessageController.loadAroundMessageId() ?? null) ===
-      initialLoadAroundMessageId
-        ? props.initialMessagesData
-        : undefined
+    {
+      placeholderData: () =>
+        (targetMessageController.loadAroundMessageId() ?? null) ===
+        initialLoadAroundMessageId
+          ? props.initialMessagesData
+          : undefined,
+    }
   );
 
   createEffect(
