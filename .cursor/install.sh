@@ -76,7 +76,8 @@ prepare_durable_stack() {
     --build-aux-services \
     --json
 
-  just --quiet stack snapshot --json | python3 -c '
+  cargo run --quiet --manifest-path Cargo.toml -p xtask_local --features local-stack -- \
+    stack snapshot --json | python3 -c '
 import json
 import sys
 
