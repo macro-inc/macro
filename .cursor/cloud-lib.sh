@@ -110,9 +110,6 @@ workspace_group() {
   stat -c '%G' "${WORKSPACE_ROOT}"
 }
 
-# Disk snapshots keep Docker container metadata. Starting dockerd revives
-# leftover Rust services that bind-mount /workspace/target as root, so the
-# cache swap cannot delete it until those containers are gone.
 remove_workspace_target_mounts() {
   command -v docker >/dev/null 2>&1 || return 0
   docker info >/dev/null 2>&1 || return 0
