@@ -18,7 +18,7 @@ import type { NamedTool } from '@service-cognition/generated/tools/tool';
 import type { CreateCalendarEvent } from '@service-cognition/generated/tools/types';
 import { debounce } from '@solid-primitives/scheduled';
 import { Layer } from '@ui';
-import { createMemo, createSignal, onCleanup, Show } from 'solid-js';
+import { createMemo, createSignal, onCleanup, Show, Suspense } from 'solid-js';
 import {
   createCalendarEventToEditorInitialValues,
   editorSubmitValuesToCreateCalendarEvent,
@@ -89,8 +89,45 @@ function updateToolParts(
   return changed ? nextParts : parts;
 }
 
+function CalendarChatComposeFallback() {
+  return (
+    <Layer depth={2}>
+      <div
+        role="status"
+        aria-label="Loading calendar editor"
+        aria-busy="true"
+        class="flex min-h-64 animate-pulse flex-col gap-6 rounded-xl border border-edge-muted bg-surface p-4 shadow-sm"
+      >
+        <span class="sr-only">Loading calendar editor</span>
+
+        <div class="flex flex-col gap-4">
+          <div class="flex items-center gap-2">
+            <div class="h-7 w-28 rounded-lg bg-skeleton" />
+            <div class="h-7 w-28 rounded-lg bg-skeleton" />
+            <div class="h-7 w-16 rounded-lg bg-skeleton" />
+          </div>
+          <div class="h-6 w-2/5 rounded-md bg-skeleton" />
+          <div class="h-3 w-3/4 rounded-full bg-skeleton" />
+        </div>
+
+        <div class="flex flex-wrap gap-2">
+          <div class="h-7 w-24 rounded-full bg-skeleton" />
+          <div class="h-7 w-28 rounded-full bg-skeleton" />
+          <div class="h-7 w-20 rounded-full bg-skeleton" />
+          <div class="h-7 w-24 rounded-full bg-skeleton" />
+        </div>
+
+        <div class="mt-auto flex justify-end gap-3">
+          <div class="h-8 w-16 rounded-lg bg-skeleton" />
+          <div class="h-8 w-28 rounded-lg bg-skeleton" />
+        </div>
+      </div>
+    </Layer>
+  );
+}
+
 /** Inline editor for a deferred CreateCalendarEvent tool call. */
-export function CalendarChatCompose(props: CalendarChatComposeProps) {
+function CalendarChatComposeContent(props: CalendarChatComposeProps) {
   const chat = useChatContext();
   const chatQuery = useChatQuery(() => props.chatId);
   const calendarsQuery = useVisibleCalendarsQuery();
@@ -292,5 +329,14 @@ export function CalendarChatCompose(props: CalendarChatComposeProps) {
         />
       </div>
     </Layer>
+  );
+}
+
+/** Query-scoped boundary for the deferred calendar editor. */
+export function CalendarChatCompose(props: CalendarChatComposeProps) {
+  return (
+    <Suspense fallback={<CalendarChatComposeFallback />}>
+      <CalendarChatComposeContent {...props} />
+    </Suspense>
   );
 }
