@@ -117,6 +117,8 @@ ensure_test_envs
 
 just initialize_dbs
 cargo fetch --locked
-SQLX_OFFLINE=true cargo test --no-run -p macro_db_client
+# Tests are not in the sqlx offline cache. Postgres is already up and migrated.
+unset SQLX_OFFLINE
+cargo test --no-run -p macro_db_client
 
 echo "cursor-cloud install: test-ready"
