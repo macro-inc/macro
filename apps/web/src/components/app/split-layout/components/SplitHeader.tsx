@@ -510,7 +510,8 @@ export function SplitHeader(props: {
         class={cn(
           '@container/split-header isolate relative w-full h-full overflow-clip text-ink',
           // On mobile the header overlays the panel body as a transparent strip
-          // of floating islands
+          // of floating islands; the island utility's px min-size keeps them
+          // tappable regardless of the OS text-size setting (inert on desktop).
           'touch:absolute touch:inset-x-0 touch:top-(--safe-top) touch:z-mobile-nav-bar touch:h-11.25 touch:overflow-visible touch:pointer-events-none',
           isMobile() &&
             !isNativeMobilePlatform() &&

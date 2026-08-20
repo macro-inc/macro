@@ -459,17 +459,24 @@ function MenuOverflowPillTabs<T extends string>(props: PillTabsProps<T>) {
       </For>
       <Show when={overflowItems().length > 0}>
         <MobileDockIsland class="shrink-0">
-          <MobileTouchMenu
-            triggerIcon={DotsThreeIcon}
-            position="trigger-bottom"
-            footerLabel="Tabs"
-            items={overflowItems().map((item) => ({
-              id: item.value,
-              label: item.label,
-              active: () => props.value === item.value,
-              onSelect: () => props.onChange(item.value),
-            }))}
-          />
+          <MobileTouchMenu>
+            <MobileTouchMenu.Trigger icon={DotsThreeIcon} />
+            <MobileTouchMenu.Content>
+              <For each={overflowItems()}>
+                {(item) => (
+                  <MobileTouchMenu.Item
+                    id={item.value}
+                    active={props.value === item.value}
+                    onSelect={() => props.onChange(item.value)}
+                  >
+                    {item.label}
+                  </MobileTouchMenu.Item>
+                )}
+              </For>
+              <MobileTouchMenu.Separator />
+              <MobileTouchMenu.Footer>Tabs</MobileTouchMenu.Footer>
+            </MobileTouchMenu.Content>
+          </MobileTouchMenu>
         </MobileDockIsland>
       </Show>
       <div
