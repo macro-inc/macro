@@ -362,7 +362,15 @@ export const SoupView = (props: SoupViewProps) => {
         ? (initialCrmView.groupBy ?? undefined)
         : (persistedGroupBy ?? props.initialGroupBy);
 
-      let initialSortIds = initialCrmView?.sort ?? sortPref();
+      // The inbox exposes no sort control on either desktop (the toolbar
+      // hides SoupViewContextSort) or mobile, so its order is always
+      // updated_at. Ignore any sort persisted back when the control was
+      // reachable: honoring it would pin the list to an order the user can
+      // no longer change.
+      let initialSortIds =
+        contentId === 'inbox'
+          ? ['updated_at']
+          : (initialCrmView?.sort ?? sortPref());
       if (initialSortIds.length === 0) {
         initialSortIds = props.initialClientSort ?? ['updated_at'];
       }

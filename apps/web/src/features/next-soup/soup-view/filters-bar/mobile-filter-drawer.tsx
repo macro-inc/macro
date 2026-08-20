@@ -158,8 +158,9 @@ export const MobileFilterDrawer = (props: {
     return next.length ? picker.onChange(next) : picker.reset();
   };
 
+  // The inbox is deliberately absent: its order is fixed to updated_at, and
+  // the desktop toolbar hides SoupViewContextSort there for the same reason.
   const VIEW_SORT_OPTIONS: Partial<Record<ListView, SortOption[]>> = {
-    inbox: DEFAULT_SORT_OPTIONS,
     agents: DEFAULT_SORT_OPTIONS,
     mail: EMAIL_SORT_OPTIONS,
     documents: DOCUMENT_SORT_OPTIONS,
