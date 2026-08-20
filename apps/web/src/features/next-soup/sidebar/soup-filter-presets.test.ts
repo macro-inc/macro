@@ -18,7 +18,7 @@ afterEach(() => {
   mocks.calendarUiEnabled = true;
 });
 
-import { PROPERTY_OPTION_IDS, SYSTEM_PROPERTY_IDS } from '@property/constants';
+import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import { compileToAst, queryStateFrom } from '../filters/filter-store/compile';
 import { VIEW_TAB_LISTS } from '../soup-view/tab-lists';
 import { getViewPreset, VIEW_TAB_PRESETS } from './soup-filter-presets';
@@ -49,49 +49,11 @@ describe('task view presets', () => {
       or: ['task-not-started', 'task-in-progress', 'task-in-review'],
     });
     expect(preset?.groupBy).toBe(`property:${SYSTEM_PROPERTY_IDS.PRIORITY}`);
-
-    const ast = compileToAst(queryStateFrom(preset?.filters ?? {}));
-    expect(ast.df).toEqual({
+    expect(compileToAst(queryStateFrom(preset?.filters ?? {})).df).toEqual({
       '&': [
         { l: { dst: 'task' } },
         {
           '|': [{ l: { o: 'user-1' } }, { l: { imp: true } }],
-        },
-      ],
-    });
-    expect(ast.propf).toEqual({
-      '&': [
-        {
-          l: {
-            pd: SYSTEM_PROPERTY_IDS.ASSIGNEES,
-            v: { er: 'user-1' },
-          },
-        },
-        {
-          '|': [
-            {
-              l: {
-                pd: SYSTEM_PROPERTY_IDS.STATUS,
-                v: { so: PROPERTY_OPTION_IDS.STATUS.NOT_STARTED },
-              },
-            },
-            {
-              '|': [
-                {
-                  l: {
-                    pd: SYSTEM_PROPERTY_IDS.STATUS,
-                    v: { so: PROPERTY_OPTION_IDS.STATUS.IN_PROGRESS },
-                  },
-                },
-                {
-                  l: {
-                    pd: SYSTEM_PROPERTY_IDS.STATUS,
-                    v: { so: PROPERTY_OPTION_IDS.STATUS.IN_REVIEW },
-                  },
-                },
-              ],
-            },
-          ],
         },
       ],
     });

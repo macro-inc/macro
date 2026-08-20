@@ -457,29 +457,6 @@ export function useFilterRefinements() {
     });
   };
 
-  // My Tasks has an implicit current-user assignee scope in its tab preset.
-  // Materialize it in the editable Assignee picker without adding a redundant
-  // property filter until the user changes that default selection.
-  const [myTasksAssigneeEdited, setMyTasksAssigneeEdited] = createSignal(false);
-  const isMyTasksTab = () =>
-    currentView() === 'tasks' && activeTab() === 'my-tasks';
-  const defaultMyTasksAssigneeIds = () => {
-    const id = currentUserId();
-    return isMyTasksTab() && id ? [id] : [];
-  };
-  const visibleAssigneeIds = () => {
-    const ids = assigneeFilter();
-    if (ids.length > 0 || myTasksAssigneeEdited()) return ids;
-    return defaultMyTasksAssigneeIds();
-  };
-  const handleVisibleAssigneeChange = (ids: string[]) => {
-    const current = visibleAssigneeIds();
-    if (isMyTasksTab() && !myTasksAssigneeEdited()) {
-      setMyTasksAssigneeEdited(true);
-    }
-    handleAssigneeChange(ids, current);
-  };
-
   /**
    * Get filter categories for the current view
    */
@@ -763,14 +740,14 @@ export function useFilterRefinements() {
       const key = 'assignee';
       const popupOpen =
         consolidatedChipCache.get(key)?.isPopupOpen?.() ?? false;
-      const ids = visibleAssigneeIds();
+      const ids = assigneeFilter();
       if (ids.length === 0 && !popupOpen) return;
 
       seenKeys.add(key);
 
       // Compute values as accessor for reactivity, including icons
       const getValues = (): FilterValue[] =>
-        visibleAssigneeIds().map((id) => {
+        assigneeFilter().map((id) => {
           const opt = assigneeOptionsMap().get(id);
           return {
             id,
@@ -795,12 +772,12 @@ export function useFilterRefinements() {
             categoryLabel: 'Assignee',
             values: getValues,
             searchableOptions: assigneeSearchableOptions,
-            activeSearchableIds: visibleAssigneeIds,
-            onSearchableChange: handleVisibleAssigneeChange,
+            activeSearchableIds: assigneeFilter,
+            onSearchableChange: handleAssigneeChange,
             searchPlaceholder: 'Search assignees...',
             isPopupOpen,
             setPopupOpen,
-            onRemoveAll: () => handleVisibleAssigneeChange([]),
+            onRemoveAll: () => handleAssigneeChange([]),
           };
         })
       );
@@ -1113,7 +1090,6 @@ export function useFilterRefinements() {
       soup.predicates.set(preset.clientFilters);
       queryFilters.replace(preset.filters ?? null);
       setAssigneeFilter([]);
-      setMyTasksAssigneeEdited(false);
       setOwnerFilter([]);
       setStageFilter([]);
     });

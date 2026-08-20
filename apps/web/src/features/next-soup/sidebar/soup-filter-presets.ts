@@ -419,10 +419,7 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
             ...myTasksQuery,
             include: {
               ...myTasksQuery.include,
-              properties: [
-                ...(myTasksQuery.include?.properties ?? []),
-                ...OPEN_TASK_STATUS_INCLUDE_PROPS,
-              ],
+              properties: [...OPEN_TASK_STATUS_INCLUDE_PROPS],
             },
           }),
           clientFilters: {
