@@ -6,6 +6,7 @@ CACHE_ROOT="${HOME}/.cache/macro-cloud"
 TARGET_CACHE="${CACHE_ROOT}/target"
 FRONTEND_CACHE="${CACHE_ROOT}/frontend"
 export MACRO_STACK_SNAPSHOT_DIR="${CACHE_ROOT}/stack-snapshots"
+STACK_SNAPSHOT_IMAGE='macro-cloud-stack-snapshot:prepared'
 
 LOG_DIR="${HOME}/.cursor-cloud"
 MACRODB_URL='postgres://user:password@localhost:5432/macrodb'
@@ -15,6 +16,29 @@ NIX_SOCK='/nix/var/nix/daemon-socket/socket'
 export DATABASE_URL="${MACRODB_URL}"
 
 mkdir -p "${LOG_DIR}" "${TARGET_CACHE}" "${FRONTEND_CACHE}" "${MACRO_STACK_SNAPSHOT_DIR}"
+
+agent_debug_log() {
+  local hypothesis_id="$1"
+  local location="$2"
+  local message="$3"
+  shift 3
+  python3 - "${hypothesis_id}" "${location}" "${message}" "$@" <<'PY'
+import json
+import sys
+import time
+
+hypothesis_id, location, message, *pairs = sys.argv[1:]
+data = dict(pair.split("=", 1) for pair in pairs)
+with open("/opt/cursor/logs/debug.log", "a", encoding="utf-8") as log:
+    log.write(json.dumps({
+        "hypothesisId": hypothesis_id,
+        "location": location,
+        "message": message,
+        "data": data,
+        "timestamp": int(time.time() * 1000),
+    }) + "\n")
+PY
+}
 
 ensure_nix_installed() {
   if [ -x "${NIX_BIN}" ]; then
@@ -162,4 +186,48 @@ ensure_persistent_caches() {
   if [ -d "${WORKSPACE_ROOT}/infra/local/generated/.snapshots" ]; then
     cp -a "${WORKSPACE_ROOT}/infra/local/generated/.snapshots/." "${MACRO_STACK_SNAPSHOT_DIR}/"
   fi
+}
+
+bake_stack_snapshot_image() {
+  local key="$1"
+  local snapshot_dir="$2"
+
+  test -f "${snapshot_dir}/manifest.json"
+  docker build \
+    --tag "${STACK_SNAPSHOT_IMAGE}" \
+    --file - \
+    "${snapshot_dir}" <<EOF
+FROM alpine:3
+LABEL com.macro.stack-snapshot-key="${key}"
+COPY . /snapshot/
+EOF
+  docker image inspect "${STACK_SNAPSHOT_IMAGE}" >/dev/null
+}
+
+restore_stack_snapshot_image() {
+  if ! docker image inspect "${STACK_SNAPSHOT_IMAGE}" >/dev/null 2>&1; then
+    echo "cursor-cloud: prepared stack snapshot image not found"
+    return 0
+  fi
+
+  local key
+  key="$(docker image inspect \
+    --format '{{ index .Config.Labels "com.macro.stack-snapshot-key" }}' \
+    "${STACK_SNAPSHOT_IMAGE}")"
+  case "${key}" in
+    ''|*[!0-9a-f]*)
+      echo "prepared stack snapshot image has invalid key: ${key}" >&2
+      return 1
+      ;;
+  esac
+
+  local destination="${MACRO_STACK_SNAPSHOT_DIR}/${key}"
+  mkdir -p "${destination}"
+  docker run --rm \
+    --user "$(id -u):$(id -g)" \
+    --volume "${destination}:/restore" \
+    "${STACK_SNAPSHOT_IMAGE}" \
+    sh -ceu 'cp -a /snapshot/. /restore/'
+  test -f "${destination}/manifest.json"
+  echo "cursor-cloud: restored stack snapshot ${key} from image"
 }
