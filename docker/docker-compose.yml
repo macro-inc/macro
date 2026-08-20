@@ -315,13 +315,14 @@ services:
   # Agent session trigger events -> sandboxed coding agent sessions, plus the
   # session control routes, which have to be served from the process that owns
   # the live transports they act on.
-  # Starts credential-less (and warns); arm it with
+  # Starts when both credentials are supplied:
   # `DAYTONA_API_KEY=... GITHUB_TOKEN=... just run_local`.
   # ============================================================================
   agent_harness_service:
     <<: [*common-env, *rust-services-image]
     command: ["/app/out/agent_harness_service"]
     restart: on-failure
+    profiles: ["agent-harness"]
     ports:
       - "8101:8101"
     environment:
