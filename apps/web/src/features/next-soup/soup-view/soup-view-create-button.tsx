@@ -3,6 +3,7 @@ import {
   CREATABLE_BLOCKS,
   type CreatableName,
   runCreateAction,
+  useCreatableEnabled,
 } from '@app/features/command/Launcher';
 import { openCreateCompanyModal } from '@app/features/companies/CreateCompanyModal';
 import { useHandleFileUpload } from '@app/util/handleFileUpload';
@@ -75,14 +76,18 @@ const VIEW_CREATE_LABELS: Partial<Record<ListView, string>> = {
   tasks: 'Task',
 };
 
-function getViewCreateOptions(view: ListView): CreateOption[] {
+function getViewCreateOptions(
+  view: ListView,
+  isCreatableEnabled: (name: CreatableName) => boolean
+): CreateOption[] {
   const createNames = VIEW_CREATE_BLOCKNAMES[view] ?? [];
   const options: CreateOption[] = createNames.flatMap((name) => {
     const block = CREATABLE_BLOCKS.find((b) => b.blockName === name);
     if (block) {
       // A flagged-off entry is not offered here either, the same as in the
-      // create menus — `runCreateAction` would decline it anyway.
-      if (block.enabled?.() === false) return [];
+      // create menus — `runCreateAction` would decline it anyway. Asked
+      // reactively, so an option appears once its flag resolves.
+      if (!isCreatableEnabled(block.blockName)) return [];
       return [{ id: block.blockName, label: block.label }];
     }
     const viewOnlyLabel = VIEW_ONLY_BLOCK_LABELS[name];
@@ -125,6 +130,7 @@ function CreateOptionIcon(props: { id: CreateOption['id'] }) {
 export const SoupViewCreateButton = () => {
   const panel = useSplitPanelOrThrow();
   const handleFileUpload = useHandleFileUpload();
+  const isCreatableEnabled = useCreatableEnabled();
 
   const currentView = createMemo(() => {
     const content = panel.handle.content();
@@ -135,7 +141,7 @@ export const SoupViewCreateButton = () => {
   const options = createMemo<CreateOption[]>(() => {
     const view = currentView();
     if (!view) return [];
-    return getViewCreateOptions(view);
+    return getViewCreateOptions(view, isCreatableEnabled);
   });
   const createLabel = createMemo(() => {
     const view = currentView();

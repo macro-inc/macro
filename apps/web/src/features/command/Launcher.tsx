@@ -648,6 +648,25 @@ export function useCreateMenuBlocks(
   });
 }
 
+/**
+ * Whether one creatable is on offer right now, tracked reactively.
+ *
+ * For the surfaces that offer a single creatable by name rather than rendering
+ * the whole list — an empty state's button, a list view's `+`. Answered from
+ * {@link useCreateMenuBlocks} so there is one gate rather than a copy of it per
+ * surface, and so a flag that resolves after mount reaches these too: a gated
+ * entry left to its own `enabled` reads PostHog without tracking it, which
+ * strands the answer the surface first happened to get.
+ *
+ * A name that is not a creatable-block entry at all is not "disabled" — it is
+ * not this gate's business, and callers reaching for a view-only label handle
+ * it themselves.
+ */
+export function useCreatableEnabled(): (name: CreatableName) => boolean {
+  const blocks = useCreateMenuBlocks();
+  return (name) => blocks().some((block) => block.blockName === name);
+}
+
 export const [createMenuOpen, setCreateMenuOpen] = createControlledOpenSignal(
   false,
   { id: 'launcher' }

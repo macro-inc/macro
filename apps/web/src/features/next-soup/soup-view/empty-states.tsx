@@ -3,6 +3,7 @@ import type { ListView } from '@app/constants/list-views';
 import {
   type CreatableName,
   runCreateAction,
+  useCreatableEnabled,
 } from '@app/features/command/Launcher';
 import { openNewChannelModal } from '@channel/CreateChannelModal';
 import { useSettingsState } from '@core/constant/SettingsState';
@@ -97,6 +98,7 @@ export function EmptyState(props: {
   const startAddInbox = useAddInboxFlow();
   const soup = useSoupView();
   const teamQuery = useCurrentTeamQuery();
+  const isCreatableEnabled = useCreatableEnabled();
   const isTeamAdmin = useIsTeamAdmin();
   const { openSettings } = useSettingsState();
 
@@ -162,10 +164,17 @@ export function EmptyState(props: {
               particular.
             </>
           }
-          primaryAction={{
-            label: 'New reminder',
-            onClick: () => runCreateAction('reminder'),
-          }}
+          // Gated like every other reminder affordance. The tab itself is
+          // already hidden when the flag is off, so this is belt and braces
+          // rather than the only thing standing in the way.
+          primaryAction={
+            isCreatableEnabled('reminder')
+              ? {
+                  label: 'New reminder',
+                  onClick: () => runCreateAction('reminder'),
+                }
+              : undefined
+          }
           documentationUrl={`${DOCS_BASE}/product/inbox`}
         />
       </Match>
@@ -393,26 +402,32 @@ export function EmptyState(props: {
             FALLBACK_CONTENT[props.listView]) ?? {
             plural: 'items',
           };
+          // A gated creatable is not offered here either. Nothing else stops
+          // this button: a view can be reachable while the thing it creates is
+          // flagged off, and `runCreateAction` would then decline the click.
+          const createAction = () => {
+            const create = fallback.create;
+            if (!create || !isCreatableEnabled(create.blockName)) {
+              return undefined;
+            }
+            return {
+              label: create.label,
+              icon: PlusIcon,
+              onClick: () => {
+                if (props.listView === 'channels') {
+                  openNewChannelModal();
+                  return;
+                }
+                runCreateAction(create.blockName);
+              },
+            };
+          };
           return (
             <EmptyStatePanel
               graphic={fallback.graphic ?? EmptyStateInboxZeroGraphic}
               title={`No ${fallback.plural} to show`}
               description={fallback.description}
-              primaryAction={
-                fallback.create
-                  ? {
-                      label: fallback.create.label,
-                      icon: PlusIcon,
-                      onClick: () => {
-                        if (props.listView === 'channels') {
-                          openNewChannelModal();
-                          return;
-                        }
-                        runCreateAction(fallback.create!.blockName);
-                      },
-                    }
-                  : undefined
-              }
+              primaryAction={createAction()}
               documentationUrl={fallback.documentationUrl}
             />
           );
