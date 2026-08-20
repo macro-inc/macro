@@ -100,7 +100,9 @@ export async function getDocxExpandedParts(
             }
             return { sha: p.sha, path: p.path, content: buffer };
           } catch (error) {
-            console.warn(`Failed to get part ${p.path}: ${errorMessage(error)}`);
+            console.warn(
+              `Failed to get part ${p.path}: ${errorMessage(error)}`
+            );
             return null;
           }
         })

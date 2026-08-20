@@ -214,11 +214,7 @@ function stringifyVariables(variables: unknown): string {
   return typeof variables === 'string' ? variables : JSON.stringify(variables);
 }
 
-function buildMessages<
-  Schema extends z.ZodType,
-  Variables,
-  OnMutateResult,
->(
+function buildMessages<Schema extends z.ZodType, Variables, OnMutateResult>(
   options: CreateAIObjectOptions<Schema, Variables, OnMutateResult>,
   variables: Variables
 ): ChatMessage[] {

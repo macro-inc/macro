@@ -1,11 +1,4 @@
-import {
-  afterEach,
-  describe,
-  expect,
-  it,
-  type MockInstance,
-  vi,
-} from 'vitest';
+import { afterEach, describe, expect, it, type MockInstance, vi } from 'vitest';
 import { deleteLegacyNormalizedCacheIdb } from './legacy-idb-cleanup';
 
 type MutableDeleteRequest = Pick<

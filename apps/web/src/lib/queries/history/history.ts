@@ -9,7 +9,6 @@ import { type ItemType, storageServiceClient } from '@service-storage/client';
 import { getGraphqlSoupCacheHost } from '@service-storage/graphql-soup';
 import {
   type QueryClient,
-  type QueryKey,
   queryOptions,
   type Updater,
   useMutation,
@@ -110,27 +109,27 @@ export function useHistoryQuery() {
     HistoryQueryFnResult,
     HistoryQueryKey
   >(() => {
-      const cacheHost = graphqlCacheHost();
-      if (cacheHost) {
-        return {
-          queryKey: historyKeys.graphqlList.queryKey,
-          queryFn: () => readCachedGraphqlHistoryItems(cacheHost),
-          placeholderData: (prev: HistoryQueryFnResult | undefined) => prev,
-          staleTime: Infinity,
-          refetchOnMount: 'always' as const,
-          reconcile: 'id',
-        };
-      }
-
+    const cacheHost = graphqlCacheHost();
+    if (cacheHost) {
       return {
-        queryKey: historyKeys.list.queryKey,
-        queryFn: fetchHistory,
-        staleTime: HISTORY_STALE_TIME,
-        gcTime: HISTORY_GC_TIME,
+        queryKey: historyKeys.graphqlList.queryKey,
+        queryFn: () => readCachedGraphqlHistoryItems(cacheHost),
         placeholderData: (prev: HistoryQueryFnResult | undefined) => prev,
+        staleTime: Infinity,
+        refetchOnMount: 'always' as const,
         reconcile: 'id',
       };
-    });
+    }
+
+    return {
+      queryKey: historyKeys.list.queryKey,
+      queryFn: fetchHistory,
+      staleTime: HISTORY_STALE_TIME,
+      gcTime: HISTORY_GC_TIME,
+      placeholderData: (prev: HistoryQueryFnResult | undefined) => prev,
+      reconcile: 'id',
+    };
+  });
 }
 
 export async function prefetchHistory() {

@@ -155,12 +155,12 @@ export function normalize(text: string) {
     normalizationRegex,
     (
       match: string,
-      p1: any,
-      p2: any,
-      p3: any,
-      p4: any,
-      p5: any,
-      i: any
+      p1: string | undefined,
+      p2: string | undefined,
+      p3: string | undefined,
+      p4: string | undefined,
+      p5: string | undefined,
+      i: number
     ) => {
       i -= shiftOrigin;
       if (p1) {
@@ -245,7 +245,7 @@ export function normalize(text: string) {
         shift -= newCharLen;
         shiftOrigin += newCharLen;
       }
-      return p5;
+      return p5 ?? match;
     }
   );
 

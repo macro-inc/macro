@@ -1,10 +1,5 @@
 import { placeableModeSignal } from '@block-pdf/signal/placeables';
-import {
-  createEffect,
-  createSignal,
-  onCleanup,
-  Show,
-} from 'solid-js';
+import { createEffect, createSignal, onCleanup, Show } from 'solid-js';
 import { PayloadMode, type PayloadType } from '../type/placeables';
 
 const modeToCursor: Record<PayloadType, string> = {

@@ -21,8 +21,7 @@ type CommonProps = {
   style?: JSX.CSSProperties | string;
 };
 
-type SlotProps = CommonProps &
-  Omit<ComponentProps<'div'>, keyof CommonProps>;
+type SlotProps = CommonProps & Omit<ComponentProps<'div'>, keyof CommonProps>;
 
 export function Slot(props: SlotProps) {
   const [local, rest] = splitProps(props, [

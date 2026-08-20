@@ -269,10 +269,7 @@ type TypedRenderableEntity<T extends LexicalNode> = {
 
 type RenderableEntity = {
   guard: (node: LexicalNode) => boolean;
-  render: (
-    props: NodeComponent,
-    options: StaticRenderOptions
-  ) => JSX.Element;
+  render: (props: NodeComponent, options: StaticRenderOptions) => JSX.Element;
 };
 
 function eraseRenderableEntity<T extends LexicalNode>(
@@ -284,10 +281,7 @@ function eraseRenderableEntity<T extends LexicalNode>(
       if (!entity.guard(props.node)) {
         throw new Error('Static entity renderer received an unsupported node');
       }
-      return entity.render(
-        { node: props.node, theme: props.theme },
-        options
-      );
+      return entity.render({ node: props.node, theme: props.theme }, options);
     },
   };
 }

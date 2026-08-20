@@ -24,15 +24,13 @@ type SortState<T, TId extends string = string> = {
   available: Record<TId, SortConfig<T>>;
 };
 
-type SortItem<TConfigs> = TConfigs[keyof TConfigs] extends SortConfig<infer T>
-  ? T
-  : never;
+type SortItem<TConfigs> =
+  TConfigs[keyof TConfigs] extends SortConfig<infer T> ? T : never;
 
 export const createSortState = <
   TConfigs extends Record<string, SortConfig<never>>,
 >(
-  configs: TConfigs &
-    Record<keyof TConfigs, SortConfig<SortItem<TConfigs>>>,
+  configs: TConfigs & Record<keyof TConfigs, SortConfig<SortItem<TConfigs>>>,
   initialSortIds?: (keyof TConfigs & string)[]
 ): SortState<SortItem<TConfigs>, keyof TConfigs & string> => {
   type T = SortItem<TConfigs>;

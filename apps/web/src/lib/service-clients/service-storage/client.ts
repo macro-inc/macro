@@ -163,7 +163,9 @@ import type { View } from './generated/schemas/view';
 import type { ViewsResponse } from './generated/schemas/viewsResponse';
 import { saveDocumentHandlerResponse } from './generated/zod';
 import type { ItemType } from './itemType';
+
 export type { ItemType } from './itemType';
+
 import type {
   GetDocumentPermissionsTokenResponse,
   ProcessingResultType,

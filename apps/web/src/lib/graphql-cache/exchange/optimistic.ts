@@ -7,7 +7,6 @@
  */
 
 import type { TypedDocumentNode } from '@graphql-typed-document-node/core';
-import type { DocumentNode } from 'graphql';
 import {
   type AnyVariables,
   type Client,
@@ -17,6 +16,7 @@ import {
   type OperationResultSource,
   stringifyDocument,
 } from '@urql/core';
+import type { DocumentNode } from 'graphql';
 import type {
   EmbeddedLinkPathSegment,
   OptimisticLinkPatchWire,

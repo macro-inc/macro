@@ -1,10 +1,7 @@
 import { useBlockId } from '@core/block';
 import { ENABLE_LIVE_INDICATORS } from '@core/constant/featureFlags';
 import { createWebsocketEventEffect } from '@macro-inc/collaboration/websocket';
-import {
-  type FromWebsocketMessage,
-  ws,
-} from '@service-connection/websocket';
+import { type FromWebsocketMessage, ws } from '@service-connection/websocket';
 import { createStore, unwrap } from 'solid-js/store';
 import { z } from 'zod';
 

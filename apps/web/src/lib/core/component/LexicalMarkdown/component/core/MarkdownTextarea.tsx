@@ -86,7 +86,9 @@ function isHistoryItem(
   return (
     typeof item.name === 'string' &&
     typeof item.ownerId === 'string' &&
-    (item.type === 'document' || item.type === 'chat' || item.type === 'project')
+    (item.type === 'document' ||
+      item.type === 'chat' ||
+      item.type === 'project')
   );
 }
 
