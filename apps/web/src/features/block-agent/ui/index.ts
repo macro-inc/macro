@@ -7,6 +7,7 @@
  */
 
 export { AgentInput, type AgentInputProps } from './AgentInput';
+export { AgentModelSelector } from './AgentModelSelector';
 export { AnimatedNumber } from './AnimatedNumber';
 export { type CountItem, CountSummary } from './CountSummary';
 export { DiffChanges, type DiffChangesProps } from './DiffChanges';

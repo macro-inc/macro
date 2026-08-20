@@ -2,14 +2,15 @@
  * The agent block's composer: the chat input's look and its markdown editing
  * surface (`MarkdownShell` over a lean `EditorConfigBuilder`), without the
  * rest of `ChatInput`'s machinery — no mentions, attachments, upload queue,
- * model plumbing, or contexts. Visual chrome mirrors
+ * or contexts; model plumbing arrives through the `modelControl` slot. Visual
+ * chrome mirrors
  * `@core/component/AI/component/input/ChatInput.tsx`.
  */
 
 import { buildConfig } from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
 import { Button, SendButton, Surface } from '@ui';
-import { createSignal, Show } from 'solid-js';
+import { createSignal, type JSX, Show } from 'solid-js';
 
 export interface AgentInputProps {
   placeholder?: string;
@@ -20,6 +21,8 @@ export interface AgentInputProps {
   /** Receives the composed markdown. */
   onSend: (markdown: string) => void;
   onStop?: () => void;
+  /** Rendered in a bar under the text, e.g. the session's model selector. */
+  modelControl?: JSX.Element;
 }
 
 /** Past this height the controls drop below the text instead of overlaying it. */
@@ -104,6 +107,9 @@ export function AgentInput(props: AgentInputProps) {
           </Show>
         </div>
       </div>
+      <Show when={props.modelControl}>
+        <div class="flex items-center px-2 pb-1.5">{props.modelControl}</div>
+      </Show>
     </Surface>
   );
 }

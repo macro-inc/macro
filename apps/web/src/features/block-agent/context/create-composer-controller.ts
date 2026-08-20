@@ -40,6 +40,8 @@ export type ComposerController = {
   /** Drop a queued prompt. Dropping the failed head clears the failure. */
   remove: (promptId: string) => void;
   stop: () => void;
+  /** Ask the agent to run on a different model from here on. */
+  setModel: (model: string) => void;
 };
 
 /**
@@ -80,6 +82,17 @@ export function createComposerController(options: {
       setState('queue', (queue) => queue.filter((p) => p.id !== prompt.id));
       setState('post', { type: 'awaiting_turn', promptId: prompt.id });
     });
+  };
+
+  const postSetModel = async (model: string) => {
+    const result = await agentHarnessServiceClient
+      .control(options.sessionId(), { type: 'setModel', model })
+      .catch(() => undefined);
+    if (result === undefined || result.isErr()) {
+      toast.failure('The model could not be changed');
+    }
+    // Success is observed through the fold: the runtime acks the config
+    // change and the session metadata's `model` moves.
   };
 
   const postStop = async () => {
@@ -165,6 +178,9 @@ export function createComposerController(options: {
     stop: () => {
       if (!isBusy(state.post, options.working())) return;
       void postStop();
+    },
+    setModel: (model) => {
+      void postSetModel(model);
     },
   };
 }
