@@ -48,7 +48,12 @@ nix_stack 'just doctor-local'
 # stack down then drops running containers/volumes; images, cargo/sccache, the
 # nix store, and the init snapshot stay on disk for the Build snapshot.
 echo "cursor-cloud install: just stack up --no-doppler (cache warming)"
-nix_stack 'just stack up --no-doppler'
+# Nested BuildKit apt-get can flake once on DinD; retry once before failing.
+if ! nix_stack 'just stack up --no-doppler'; then
+  echo "cursor-cloud install: stack up failed, retrying once" >&2
+  nix_stack 'just stack down' || true
+  nix_stack 'just stack up --no-doppler'
+fi
 
 echo "cursor-cloud install: just stack down"
 nix_stack 'just stack down'

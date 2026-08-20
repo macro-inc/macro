@@ -53,7 +53,8 @@ RUN mkdir -p /etc/docker \
         '  "storage-driver": "fuse-overlayfs",' \
         '  "features": {' \
         '    "containerd-snapshotter": false' \
-        '  }' \
+        '  },' \
+        '  "dns": ["8.8.8.8", "1.1.1.1"]' \
         '}' > /etc/docker/daemon.json \
     && update-alternatives --set iptables /usr/sbin/iptables-legacy \
     && update-alternatives --set ip6tables /usr/sbin/ip6tables-legacy
