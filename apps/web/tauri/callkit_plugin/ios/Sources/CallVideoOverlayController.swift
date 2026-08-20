@@ -59,7 +59,10 @@ struct CallVideoOverlayTheme: Equatable {
 ///
 /// All externally-driven state is written to `desired`; the only place the
 /// view tree is mutated is the coalesced, always-async apply pass
-/// (`applyDesiredStateIfSafe`). While a touch is active anywhere in the
+/// (`applyDesiredStateIfSafe`). Sole exception: the drawer/thumbnail pan
+/// handlers move the view the finger owns directly while tracking — safe
+/// because the mutation happens for, not under, the in-flight touch.
+/// While a touch is active anywhere in the
 /// overlay, structural work (hierarchy changes, visibility flips on
 /// hit-testable views, frame/scroll geometry) is deferred and only safe
 /// restyles run; the pending state flushes when the interaction settles.
@@ -408,9 +411,10 @@ final class CallVideoOverlayController: NSObject, UIGestureRecognizerDelegate, U
     }
 
     /// Safe subset of the apply pass that may run while a touch is active:
-    /// text, colors, and indicator visibility on existing, non-hit-testable
-    /// content only. No hierarchy changes, no frames, no visibility flips on
-    /// hit-testable views, no video track swaps.
+    /// text, colors, indicator visibility on existing non-hit-testable
+    /// content, and control enabled/alpha state (touch-safe: no view enters
+    /// or leaves hit testing). No hierarchy changes, no frames, no visibility
+    /// flips on hit-testable views, no video track swaps.
     private func applyRestyleOnly() {
         applyTextContent()
         for participant in stripParticipants {
