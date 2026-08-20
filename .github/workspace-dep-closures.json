@@ -994,6 +994,7 @@
       "crates/entity_mutation",
       "crates/filter_ast",
       "crates/frecency",
+      "crates/graphql_common",
       "crates/graphql_soup_filter_input",
       "crates/invite_email",
       "crates/item_filter_index",
@@ -3810,14 +3811,26 @@
       "crates/workspace-hack"
     ],
     "graphql_soup_filter_input": [
+      "crates/bot_id",
       "crates/cowlike",
       "crates/document_sub_type",
       "crates/filter_ast",
+      "crates/graphql_common",
       "crates/graphql_soup_filter_input",
       "crates/item_filters",
+      "crates/macro_auth",
+      "crates/macro_authorization",
+      "crates/macro_env",
+      "crates/macro_env_var",
       "crates/macro_user_id",
+      "crates/model-entity",
+      "crates/model-error-response",
       "crates/model_file_type",
-      "crates/non_empty"
+      "crates/model_user",
+      "crates/models_properties",
+      "crates/non_empty",
+      "crates/remote_env_var",
+      "crates/workspace-hack"
     ],
     "image_optimizer": [
       "crates/macro_aws_config",
@@ -6424,6 +6437,7 @@
       "crates/entity_mutation",
       "crates/filter_ast",
       "crates/frecency",
+      "crates/graphql_common",
       "crates/graphql_soup_filter_input",
       "crates/invite_email",
       "crates/item_filter_index",
