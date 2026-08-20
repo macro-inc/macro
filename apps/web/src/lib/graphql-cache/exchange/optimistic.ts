@@ -135,8 +135,21 @@ export function withOptimisticMutationDisposition(
   result: OperationResult,
   disposition: OptimisticMutationDispositionMetadata
 ): OperationResult {
+  const queuedData =
+    disposition.kind === 'queued'
+      ? optimisticContextOf(result.operation)?.optimisticResponse
+      : undefined;
   return {
     ...result,
+    ...(disposition.kind === 'queued'
+      ? {
+          data: queuedData ?? result.data,
+          // A durable queued mutation is an accepted local write. Preserve the
+          // network failure in queue diagnostics, not as a caller-facing error
+          // that would roll back UI state or block the next edit.
+          error: undefined,
+        }
+      : {}),
     extensions: {
       ...result.extensions,
       [OPTIMISTIC_MUTATION_DISPOSITION_KEY]: disposition,

@@ -4,6 +4,7 @@ import type {
 } from '../../../generated/storage/types.gen';
 import { unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
+import type { FavoritableEntity } from '../entity';
 
 export type { PinnedItem, ReorderPinRequest };
 
@@ -17,25 +18,25 @@ export class PinsNamespace {
     return data?.recent ?? [];
   }
 
-  /** Pin an item at an index. `pinType` is the item's type (e.g. `document`). */
+  /** Pin an entity to a slot. `index` is the slot to put it in. */
   async add(
-    pinnedItemId: string,
-    opts: { pinType: string; pinIndex: number },
+    entity: FavoritableEntity<unknown>,
+    opts: { index: number },
   ): Promise<void> {
     unwrap(
       await this.client.storage.addPinHandler({
-        path: { pinned_item_id: pinnedItemId },
-        body: { pinType: opts.pinType, pinIndex: opts.pinIndex },
+        path: { pinned_item_id: entity.id },
+        body: { pinType: entity.entityType, pinIndex: opts.index },
       }),
     );
   }
 
-  /** Unpin an item. `pinType` is the item's type (e.g. `document`). */
-  async remove(pinnedItemId: string, pinType: string): Promise<void> {
+  /** Unpin an entity. */
+  async remove(entity: FavoritableEntity<unknown>): Promise<void> {
     unwrap(
       await this.client.storage.removePinHandler({
-        path: { pinned_item_id: pinnedItemId },
-        body: { pinType },
+        path: { pinned_item_id: entity.id },
+        body: { pinType: entity.entityType },
       }),
     );
   }

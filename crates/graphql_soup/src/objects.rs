@@ -45,6 +45,9 @@ pub trait SoupEntityEdges: ObjectType + Clone + Send + Sync + 'static {
     /// GraphQL notification object supplied by the notification adapter.
     type Notification: OutputType;
 
+    /// GraphQL activity event object supplied by the activity adapter.
+    type ActivityEvent: OutputType;
+
     /// Construct the common/global edge object for a Soup entity.
     /// This is for edges that apply to all soup entities, e.g. notifications
     fn from_entity(entity: model_entity::Entity<'static>) -> Self;
@@ -87,6 +90,13 @@ pub trait SoupEntityEdges: ObjectType + Clone + Send + Sync + 'static {
         &self,
         ctx: &Context<'_>,
     ) -> impl Future<Output = async_graphql::Result<Option<GraphqlEntityPermission>>> + Send;
+
+    /// Resolve the newest activity on this entity, newest first.
+    fn resolve_activity(
+        &self,
+        ctx: &Context<'_>,
+        limit: Option<i32>,
+    ) -> impl Future<Output = async_graphql::Result<Vec<Self::ActivityEvent>>> + Send;
 }
 
 /// Page returned by `Query.soup`.
@@ -265,6 +275,13 @@ pub struct GraphqlEntityMetadata {
         method = "frecency_score",
         ty = "Option<f64>",
         desc = "The viewer's frecency score for this entity, when loaded."
+    ),
+    field(
+        name = "activity",
+        method = "interface_activity",
+        ty = "Vec<E::ActivityEvent>",
+        arg(name = "limit", ty = "Option<i32>"),
+        desc = "The newest activity on this entity, newest first."
     )
 )]
 pub enum GraphqlSoupEntity<E: SoupEntityEdges> {
@@ -1994,6 +2011,15 @@ macro_rules! impl_common_interface_edges {
                     ctx: &Context<'_>,
                 ) -> async_graphql::Result<Option<GraphqlEntityPermission>> {
                     self.1.resolve_viewer_permission(ctx).await
+                }
+
+                /// Resolve shared activity through the composed edge adapter.
+                async fn interface_activity(
+                    &self,
+                    ctx: &Context<'_>,
+                    limit: Option<i32>,
+                ) -> async_graphql::Result<Vec<E::ActivityEvent>> {
+                    self.1.resolve_activity(ctx, limit).await
                 }
 
             }

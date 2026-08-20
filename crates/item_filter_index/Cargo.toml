@@ -1,0 +1,18 @@
+[package]
+edition = "2024"
+name = "item-filter-index"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+filter_ast = { path = "../filter_ast" }
+item_filters = { path = "../item_filters", default-features = false }
+predicate-index = { path = "../predicate_index" }
+thiserror = { workspace = true }
+uuid = { workspace = true }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+uuid = { workspace = true, features = ["js"] }
+
+[dev-dependencies]
+chrono = { workspace = true }

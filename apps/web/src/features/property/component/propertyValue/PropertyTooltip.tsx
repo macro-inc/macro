@@ -308,7 +308,7 @@ const LinkValuePill = (props: { url: string }) => {
       href={props.url}
       target="_blank"
       rel="noopener noreferrer"
-      class="inline-flex items-center gap-1.5 px-2 py-1 text-xs leading-none text-ink-muted h-fit w-fit rounded-sm"
+      class="inline-flex items-center gap-1.5 px-2 py-1 text-xs leading-none text-link hover:text-link-hover visited:text-link-visited h-fit w-fit rounded-sm"
       title={props.url}
     >
       <Show

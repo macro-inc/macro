@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT r.id, r.next_run_at\n            FROM reminder r\n            WHERE r.enabled\n              -- Completion is per-firing, so it only retires a one-shot. A\n              -- recurring reminder its owner has ticked off keeps coming due:\n              -- they dealt with the last nudge, not with the standing\n              -- arrangement, and ending that is what deleting is for.\n              AND (r.cron IS NOT NULL OR r.completed_at IS NULL)\n              AND r.next_run_at <= $1\n              AND NOT EXISTS (\n                  SELECT 1\n                  FROM reminder_occurrence o\n                  WHERE o.reminder_id = r.id\n                    AND o.scheduled_for = r.next_run_at\n                    AND o.sent_at IS NOT NULL\n              )\n            ORDER BY r.next_run_at\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "next_run_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "1951b50b2751a6658bec25b3e6b89de9197480f40fb4c8e55fe9c426385c1c86"
+}

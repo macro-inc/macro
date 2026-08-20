@@ -367,6 +367,8 @@ pub struct EditDocumentRepoArgs {
     /// Updated share permissions.
     pub share_permission:
         Option<models_permissions::share_permission::UpdateSharePermissionRequestV2>,
+    /// Whether to revoke direct non-owner user access in the edit transaction.
+    pub revoke_non_owner_user_access: bool,
     /// New file type (None = no change).
     pub file_type: Option<FileTypeUpdate>,
 }
@@ -475,6 +477,8 @@ pub struct CreateTaskResponse {
     pub document_metadata: DocumentResponseMetadata,
     /// A pre-generated permission token that you can use for SS
     pub token: String,
+    /// Base64-encoded canonical Loro snapshot used to initialize the task.
+    pub initial_snapshot: String,
     /// The team this task number is scoped to.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub team_id: Option<uuid::Uuid>,

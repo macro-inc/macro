@@ -1,6 +1,6 @@
 import { batch, createEffect, createSignal, type JSX, untrack } from 'solid-js';
-import { setThemeDepth, themeDepth } from '../signals/themeSignals';
 import { themeReactive } from '../signals/themeReactive';
+import { setThemeDepth, themeDepth } from '../signals/themeSignals';
 import { convertOklchTo, getOklch, validateColor } from '../utils/colorUtil';
 import { ColorPickerPopover } from './ColorPickerPopover';
 
@@ -27,9 +27,9 @@ function setChroma(chroma: number, saturation: number) {
 
 function setHue(hue: number) {
   batch(() => {
-    themeReactive.a0.h[1](hue      );
-    themeReactive.a1.h[1](hue +  40);
-    themeReactive.a2.h[1](hue +  80);
+    themeReactive.a0.h[1](hue);
+    themeReactive.a1.h[1](hue + 40);
+    themeReactive.a2.h[1](hue + 80);
     themeReactive.a3.h[1](hue + 120);
     themeReactive.a4.h[1](hue + 160);
 
@@ -67,11 +67,31 @@ function setSaturation(saturation: number) {
 
 let q = 8;
 function sigmoid(x: number, b: number): number {
-  return (-((1 / (1 + Math.exp(b * (x - 0.5))) - 0.5) * (0.5 / (1 / (1 + Math.exp(q / 2)) - 0.5))) + 0.5);
+  return (
+    -(
+      (1 / (1 + Math.exp(b * (x - 0.5))) - 0.5) *
+      (0.5 / (1 / (1 + Math.exp(q / 2)) - 0.5))
+    ) + 0.5
+  );
 }
 
 function getContrastFromY(y: number): number {
-  return ((-2 * Math.log(1 / (-(y - 0.5) / (0.5 / (1 / (1 + Math.exp(q / 2)) - 0.5)) + 0.5) - 1) - (-2 * Math.log(1 / (-(y - 0.5) / (0.5 / (1 / (1 + Math.exp(q / 2)) - 0.5)) + 0.5) - 1) < 0 ? -1 : 1)) / (q - 1) / 2 + 0.4);
+  return (
+    (-2 *
+      Math.log(
+        1 / (-(y - 0.5) / (0.5 / (1 / (1 + Math.exp(q / 2)) - 0.5)) + 0.5) - 1
+      ) -
+      (-2 *
+        Math.log(
+          1 / (-(y - 0.5) / (0.5 / (1 / (1 + Math.exp(q / 2)) - 0.5)) + 0.5) - 1
+        ) <
+      0
+        ? -1
+        : 1)) /
+      (q - 1) /
+      2 +
+    0.4
+  );
 }
 
 function setContrast(contrast: number) {
@@ -80,7 +100,7 @@ function setContrast(contrast: number) {
   const b = c * (q - 1) + p;
 
   batch(() => {
-    themeReactive.b0.l[1](sigmoid(0.00, b));
+    themeReactive.b0.l[1](sigmoid(0.0, b));
     themeReactive.b1.l[1](sigmoid(0.08, b));
     themeReactive.b2.l[1](sigmoid(0.18, b));
     themeReactive.b3.l[1](sigmoid(0.22, b));
@@ -90,11 +110,11 @@ function setContrast(contrast: number) {
     themeReactive.c3.l[1](sigmoid(0.76, b));
     themeReactive.c2.l[1](sigmoid(0.84, b));
     themeReactive.c1.l[1](sigmoid(0.92, b));
-    themeReactive.c0.l[1](sigmoid(1.00, b));
+    themeReactive.c0.l[1](sigmoid(1.0, b));
   });
 }
 
-export function randomizeTheme(){
+export function randomizeTheme() {
   batch(() => {
     const randLightness = Math.random();
     const randHue = Math.random();
@@ -104,7 +124,7 @@ export function randomizeTheme(){
     const randSaturation = Math.random() * 0.5;
     const randContrast = 1 - randLightness;
     const randChroma = (Math.random() * 0.5 + 0.5) * 0.37;
-    const randDepth = (Math.random() * 0.2 + 0.1);
+    const randDepth = Math.random() * 0.2 + 0.1;
 
     setContrast(randContrast);
     setChroma(randChroma, randSaturation);
@@ -136,8 +156,11 @@ function NumberInput(props: {
 
   createEffect(() => {
     const value = props.get();
-    if (untrack(isSetByInput)) { setIsSetByInput(false); }
-    else { setText(Math.round(toDisplay(value)).toString()); }
+    if (untrack(isSetByInput)) {
+      setIsSetByInput(false);
+    } else {
+      setText(Math.round(toDisplay(value)).toString());
+    }
   });
 
   return (
@@ -154,22 +177,24 @@ function NumberInput(props: {
         width: 6ch;
       "
     >
-        <input
-          class="theme-editor-basic-num"
-          type="number"
-          value={text()}
-          min={dMin()}
-          max={dMax()}
-          step={1}
-          onInput={(e) => {
-            const raw = e.currentTarget.value;
-            setIsSetByInput(true);
-            setText(raw);
-            const d = parseFloat(raw);
-            if (!Number.isNaN(d)) { props.set(fromDisplay(Math.max(dMin(), Math.min(dMax(), d)))); }
-          }}
-          onBlur={() => setText(Math.round(toDisplay(props.get())).toString())}
-          style="
+      <input
+        class="theme-editor-basic-num"
+        type="number"
+        value={text()}
+        min={dMin()}
+        max={dMax()}
+        step={1}
+        onInput={(e) => {
+          const raw = e.currentTarget.value;
+          setIsSetByInput(true);
+          setText(raw);
+          const d = parseFloat(raw);
+          if (!Number.isNaN(d)) {
+            props.set(fromDisplay(Math.max(dMin(), Math.min(dMax(), d))));
+          }
+        }}
+        onBlur={() => setText(Math.round(toDisplay(props.get())).toString())}
+        style="
             font-family: var(--font-mono);
             background: transparent;
             box-sizing: border-box;
@@ -182,7 +207,7 @@ function NumberInput(props: {
             padding: 0;
             flex: 1;
           "
-        />
+      />
       <span style="color: var(--c2); font-size: 12px; flex: none;">%</span>
     </div>
   );
@@ -338,7 +363,7 @@ function BasicSlider(props: {
   );
 }
 
-export function ThemeEditorBasic(){
+export function ThemeEditorBasic() {
   const a0 = themeReactive.a0;
 
   // Saturation is stored as a fraction of the accent's chroma; recover it so
@@ -352,11 +377,17 @@ export function ThemeEditorBasic(){
     Math.max(min, Math.min(max, n));
 
   const handleSaturationChange = (e: Event) =>
-    setSaturation(clamp(parseFloat((e.target as HTMLInputElement).value), 0, 1));
+    setSaturation(
+      clamp(parseFloat((e.target as HTMLInputElement).value), 0, 1)
+    );
   const handleContrastChange = (e: Event) =>
-    setContrast(clamp(parseFloat((e.target as HTMLInputElement).value), 0, 0.8));
+    setContrast(
+      clamp(parseFloat((e.target as HTMLInputElement).value), 0, 0.8)
+    );
   const handleDepthChange = (e: Event) =>
-    setThemeDepth(clamp(parseFloat((e.target as HTMLInputElement).value), 0, 0.4));
+    setThemeDepth(
+      clamp(parseFloat((e.target as HTMLInputElement).value), 0, 0.4)
+    );
 
   return (
     <>
@@ -408,7 +439,12 @@ export function ThemeEditorBasic(){
               min={0}
               max={1}
             />
-            <NumberInput get={satFraction} set={setSaturation} min={0} max={1} />
+            <NumberInput
+              get={satFraction}
+              set={setSaturation}
+              min={0}
+              max={1}
+            />
           </Control>
 
           <Control label="Lightness">
@@ -435,7 +471,12 @@ export function ThemeEditorBasic(){
               min={0}
               max={0.4}
             />
-            <NumberInput get={themeDepth} set={setThemeDepth} min={0} max={0.4} />
+            <NumberInput
+              get={themeDepth}
+              set={setThemeDepth}
+              min={0}
+              max={0.4}
+            />
           </Control>
         </div>
       </div>

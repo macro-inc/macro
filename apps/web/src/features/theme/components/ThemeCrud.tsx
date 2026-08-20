@@ -1,11 +1,17 @@
-import IconClipboard from '@phosphor-icons/core/regular/clipboard.svg?component-solid';
 import IconDotsThreeVertical from '@phosphor/dots-three-vertical.svg';
-import { deleteTheme, exportTheme } from '../utils/themeUtils';
-import { setDarkModeTheme, setLightModeTheme, userThemes } from '../signals/themeSignals';
-import { createMemo, Show } from 'solid-js';
+import IconClipboard from '@phosphor-icons/core/regular/clipboard.svg?component-solid';
 import { Button, Dropdown } from '@ui';
+import { createMemo, Show } from 'solid-js';
+import {
+  setDarkModeTheme,
+  setLightModeTheme,
+  userThemes,
+} from '../signals/themeSignals';
+import { deleteTheme, exportTheme } from '../utils/themeUtils';
 
-interface ThemeCrudProps { themeId: string; }
+interface ThemeCrudProps {
+  themeId: string;
+}
 
 export function ThemeCrud(props: ThemeCrudProps) {
   const isUserTheme = createMemo(() =>

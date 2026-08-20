@@ -14,11 +14,11 @@ use item_filters::{
 };
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
-use models_permissions::share_permission::UpdateSharePermissionRequestV2;
 use models_permissions::share_permission::access_level::AccessLevel;
 use models_permissions::share_permission::channel_share_permission::{
     UpdateChannelSharePermission, UpdateOperation,
 };
+use models_permissions::share_permission::{LinkShare, UpdateSharePermissionRequestV2};
 use sqlx::{Pool, Postgres};
 use uuid::Uuid;
 
@@ -189,7 +189,7 @@ async fn insert_user_mapping(
     migrator = "MACRO_DB_MIGRATIONS"
 )]
 async fn create_call_returns_call(pool: Pool<Postgres>) -> anyhow::Result<()> {
-    let repo = repo(pool);
+    let repo = repo(pool.clone());
     let id = Uuid::now_v7();
     let call = repo
         .create_call(&id, &CH2, "room-ch2", USER_B.deref().copied())
@@ -200,6 +200,32 @@ async fn create_call_returns_call(pool: Pool<Postgres>) -> anyhow::Result<()> {
     assert_eq!(call.channel_id, CH2);
     assert_eq!(call.room_name, "room-ch2");
     assert_eq!(call.created_by, USER_B.as_ref());
+
+    let share_permission_id =
+        sqlx::query_scalar!(r#"SELECT share_permission_id FROM calls WHERE id = $1"#, id,)
+            .fetch_one(&pool)
+            .await?;
+    let permission = get_stored_share_permission(&pool, &share_permission_id).await?;
+    assert_eq!(
+        permission,
+        StoredSharePermission {
+            link_share: None,
+            link_share_access_level: None,
+        }
+    );
+
+    let channel_access_level = sqlx::query_scalar!(
+        r#"
+        SELECT csp.access_level::text AS "access_level!"
+        FROM "ChannelSharePermission" csp
+        WHERE csp.share_permission_id = $1 AND csp.channel_id = $2
+        "#,
+        share_permission_id,
+        CH2.to_string(),
+    )
+    .fetch_one(&pool)
+    .await?;
+    assert_eq!(channel_access_level, "edit");
     Ok(())
 }
 
@@ -2053,89 +2079,48 @@ async fn delete_call_record_noop_for_unknown_id(pool: Pool<Postgres>) -> anyhow:
 
 const SP_ARCHIVED: &str = "00000000-0000-0000-0000-00000000sp02";
 
-#[sqlx::test(
-    fixtures(path = "../../../fixtures", scripts("call_repo")),
-    migrator = "MACRO_DB_MIGRATIONS"
-)]
-async fn patch_call_record_sets_is_public_true_defaults_view(
-    pool: Pool<Postgres>,
-) -> anyhow::Result<()> {
-    let repo = repo(pool.clone());
+#[derive(Debug, Eq, PartialEq)]
+struct StoredSharePermission {
+    link_share: Option<String>,
+    link_share_access_level: Option<String>,
+}
 
-    repo.patch_call_record(
-        &CALL_ARCHIVED,
-        &EditCallRecordRequest {
-            share_permission: Some(UpdateSharePermissionRequestV2 {
-                is_public: Some(true),
-                public_access_level: None,
-                channel_share_permissions: None,
-            }),
-            share_with_team: None,
-            custom_name: None,
-        },
-    )
-    .await?;
-
-    let row = sqlx::query!(
+async fn get_stored_share_permission(
+    pool: &Pool<Postgres>,
+    share_permission_id: &str,
+) -> Result<StoredSharePermission, sqlx::Error> {
+    sqlx::query_as!(
+        StoredSharePermission,
         r#"
-        SELECT "isPublic" as "is_public!", "publicAccessLevel" as "public_access_level?"
+        SELECT
+            "linkShare" AS "link_share?",
+            "linkShareAccessLevel"::text AS "link_share_access_level?"
         FROM "SharePermission"
         WHERE id = $1
         "#,
-        SP_ARCHIVED,
+        share_permission_id,
     )
-    .fetch_one(&pool)
-    .await?;
-
-    assert!(row.is_public);
-    assert_eq!(row.public_access_level.as_deref(), Some("view"));
-    Ok(())
+    .fetch_one(pool)
+    .await
 }
 
-#[sqlx::test(
-    fixtures(path = "../../../fixtures", scripts("call_repo")),
-    migrator = "MACRO_DB_MIGRATIONS"
-)]
-async fn patch_call_record_sets_is_public_false_clears_public_access_level(
-    pool: Pool<Postgres>,
-) -> anyhow::Result<()> {
-    let repo = repo(pool.clone());
-
-    // Seed a non-null public access level so the clear is observable.
+async fn set_stored_share_permission(
+    pool: &Pool<Postgres>,
+    link_share: Option<&str>,
+    access_level: Option<&str>,
+) -> Result<(), sqlx::Error> {
     sqlx::query!(
-        r#"UPDATE "SharePermission" SET "isPublic" = true, "publicAccessLevel" = 'edit' WHERE id = $1"#,
-        SP_ARCHIVED,
-    )
-    .execute(&pool)
-    .await?;
-
-    repo.patch_call_record(
-        &CALL_ARCHIVED,
-        &EditCallRecordRequest {
-            share_permission: Some(UpdateSharePermissionRequestV2 {
-                is_public: Some(false),
-                public_access_level: Some(AccessLevel::Edit),
-                channel_share_permissions: None,
-            }),
-            share_with_team: None,
-            custom_name: None,
-        },
-    )
-    .await?;
-
-    let row = sqlx::query!(
         r#"
-        SELECT "isPublic" as "is_public!", "publicAccessLevel" as "public_access_level?"
-        FROM "SharePermission"
+        UPDATE "SharePermission"
+        SET "linkShare" = $2, "linkShareAccessLevel" = $3::text::"AccessLevel"
         WHERE id = $1
         "#,
         SP_ARCHIVED,
+        link_share,
+        access_level,
     )
-    .fetch_one(&pool)
+    .execute(pool)
     .await?;
-
-    assert!(!row.is_public);
-    assert!(row.public_access_level.is_none());
     Ok(())
 }
 
@@ -2143,15 +2128,17 @@ async fn patch_call_record_sets_is_public_false_clears_public_access_level(
     fixtures(path = "../../../fixtures", scripts("call_repo")),
     migrator = "MACRO_DB_MIGRATIONS"
 )]
-async fn patch_call_record_sets_public_access_level(pool: Pool<Postgres>) -> anyhow::Result<()> {
+async fn patch_call_record_sets_public_link_and_defaults_level_to_view(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
     let repo = repo(pool.clone());
 
     repo.patch_call_record(
         &CALL_ARCHIVED,
         &EditCallRecordRequest {
             share_permission: Some(UpdateSharePermissionRequestV2 {
-                is_public: None,
-                public_access_level: Some(AccessLevel::Edit),
+                link_share: Some(Some(LinkShare::Public)),
+                link_share_access_level: None,
                 channel_share_permissions: None,
             }),
             share_with_team: None,
@@ -2160,18 +2147,106 @@ async fn patch_call_record_sets_public_access_level(pool: Pool<Postgres>) -> any
     )
     .await?;
 
-    let row = sqlx::query!(
-        r#"
-        SELECT "publicAccessLevel" as "public_access_level?"
-        FROM "SharePermission"
-        WHERE id = $1
-        "#,
-        SP_ARCHIVED,
+    let permission = get_stored_share_permission(&pool, SP_ARCHIVED).await?;
+    assert_eq!(permission.link_share.as_deref(), Some("PUBLIC"));
+    assert_eq!(permission.link_share_access_level.as_deref(), Some("view"));
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn patch_call_record_sets_team_link_and_explicit_level(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = repo(pool.clone());
+
+    repo.patch_call_record(
+        &CALL_ARCHIVED,
+        &EditCallRecordRequest {
+            share_permission: Some(UpdateSharePermissionRequestV2 {
+                link_share: Some(Some(LinkShare::Team)),
+                link_share_access_level: Some(Some(AccessLevel::Edit)),
+                channel_share_permissions: None,
+            }),
+            share_with_team: None,
+            custom_name: None,
+        },
     )
-    .fetch_one(&pool)
     .await?;
 
-    assert_eq!(row.public_access_level.as_deref(), Some("edit"));
+    let permission = get_stored_share_permission(&pool, SP_ARCHIVED).await?;
+    assert_eq!(permission.link_share.as_deref(), Some("TEAM"));
+    assert_eq!(permission.link_share_access_level.as_deref(), Some("edit"));
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn patch_call_record_explicit_null_disables_link_sharing(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = repo(pool.clone());
+    set_stored_share_permission(&pool, Some("PUBLIC"), Some("edit")).await?;
+
+    repo.patch_call_record(
+        &CALL_ARCHIVED,
+        &EditCallRecordRequest {
+            share_permission: Some(UpdateSharePermissionRequestV2 {
+                link_share: Some(None),
+                link_share_access_level: Some(Some(AccessLevel::Edit)),
+                channel_share_permissions: None,
+            }),
+            share_with_team: None,
+            custom_name: None,
+        },
+    )
+    .await?;
+
+    let permission = get_stored_share_permission(&pool, SP_ARCHIVED).await?;
+    assert_eq!(
+        permission,
+        StoredSharePermission {
+            link_share: None,
+            link_share_access_level: None,
+        }
+    );
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn patch_call_record_level_only_update_updates_link_share_access_level(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = repo(pool.clone());
+    set_stored_share_permission(&pool, Some("PUBLIC"), Some("view")).await?;
+
+    repo.patch_call_record(
+        &CALL_ARCHIVED,
+        &EditCallRecordRequest {
+            share_permission: Some(UpdateSharePermissionRequestV2 {
+                link_share: None,
+                link_share_access_level: Some(Some(AccessLevel::Comment)),
+                channel_share_permissions: None,
+            }),
+            share_with_team: None,
+            custom_name: None,
+        },
+    )
+    .await?;
+
+    let permission = get_stored_share_permission(&pool, SP_ARCHIVED).await?;
+    assert_eq!(permission.link_share.as_deref(), Some("PUBLIC"));
+    assert_eq!(
+        permission.link_share_access_level.as_deref(),
+        Some("comment")
+    );
     Ok(())
 }
 
@@ -2189,8 +2264,8 @@ async fn patch_call_record_adds_channel_share_permission(
         &CALL_ARCHIVED,
         &EditCallRecordRequest {
             share_permission: Some(UpdateSharePermissionRequestV2 {
-                is_public: None,
-                public_access_level: None,
+                link_share: None,
+                link_share_access_level: None,
                 channel_share_permissions: Some(vec![UpdateChannelSharePermission {
                     operation: UpdateOperation::Add,
                     channel_id: channel_id.clone(),
@@ -2264,8 +2339,8 @@ async fn patch_call_record_removes_channel_share_permission(
         &CALL_ARCHIVED,
         &EditCallRecordRequest {
             share_permission: Some(UpdateSharePermissionRequestV2 {
-                is_public: None,
-                public_access_level: None,
+                link_share: None,
+                link_share_access_level: None,
                 channel_share_permissions: Some(vec![UpdateChannelSharePermission {
                     operation: UpdateOperation::Remove,
                     channel_id: channel_id.clone(),
@@ -2297,43 +2372,29 @@ async fn patch_call_record_removes_channel_share_permission(
     fixtures(path = "../../../fixtures", scripts("call_repo")),
     migrator = "MACRO_DB_MIGRATIONS"
 )]
-async fn patch_call_record_none_is_noop(pool: Pool<Postgres>) -> anyhow::Result<()> {
+async fn patch_call_record_empty_share_permission_update_is_noop(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
     let repo = repo(pool.clone());
-
-    let before = sqlx::query!(
-        r#"
-        SELECT "isPublic" as "is_public!", "publicAccessLevel" as "public_access_level?"
-        FROM "SharePermission"
-        WHERE id = $1
-        "#,
-        SP_ARCHIVED,
-    )
-    .fetch_one(&pool)
-    .await?;
+    set_stored_share_permission(&pool, Some("TEAM"), Some("comment")).await?;
+    let before = get_stored_share_permission(&pool, SP_ARCHIVED).await?;
 
     repo.patch_call_record(
         &CALL_ARCHIVED,
         &EditCallRecordRequest {
-            share_permission: None,
+            share_permission: Some(UpdateSharePermissionRequestV2 {
+                link_share: None,
+                link_share_access_level: None,
+                channel_share_permissions: None,
+            }),
             share_with_team: None,
             custom_name: None,
         },
     )
     .await?;
 
-    let after = sqlx::query!(
-        r#"
-        SELECT "isPublic" as "is_public!", "publicAccessLevel" as "public_access_level?"
-        FROM "SharePermission"
-        WHERE id = $1
-        "#,
-        SP_ARCHIVED,
-    )
-    .fetch_one(&pool)
-    .await?;
-
-    assert_eq!(before.is_public, after.is_public);
-    assert_eq!(before.public_access_level, after.public_access_level);
+    let after = get_stored_share_permission(&pool, SP_ARCHIVED).await?;
+    assert_eq!(before, after);
     Ok(())
 }
 

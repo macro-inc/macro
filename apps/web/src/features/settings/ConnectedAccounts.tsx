@@ -1,8 +1,10 @@
 import { ENABLE_EMAIL } from '@core/constant/featureFlags';
+import { usePipedreamMcpFlag } from '@core/pipedream/flag';
 import { Show, Suspense } from 'solid-js';
 import { EmailCard } from './Email';
 import { GitHubCard } from './GitHub';
 import { IntegrationsSection } from './Integrations';
+import { PipedreamIntegrationsSection } from './PipedreamIntegrations';
 import { SettingsPage, SettingsSection } from './primitives';
 
 /**
@@ -11,6 +13,7 @@ import { SettingsPage, SettingsSection } from './primitives';
  * Macro is connected to lives in one place.
  */
 export function ConnectedAccounts() {
+  const pipedreamMcp = usePipedreamMcpFlag();
   return (
     <SettingsPage
       title="Connections"
@@ -29,7 +32,9 @@ export function ConnectedAccounts() {
         </div>
       </SettingsSection>
       <Suspense>
-        <IntegrationsSection />
+        <Show when={pipedreamMcp()} fallback={<IntegrationsSection />}>
+          <PipedreamIntegrationsSection />
+        </Show>
       </Suspense>
     </SettingsPage>
   );

@@ -1,5 +1,5 @@
-use cache_core::engine::{BeginOptimisticWrite, Engine};
-use cache_core::record_selection::RecordSelection;
+use cache_core::engine::{BeginOptimisticWrite, Engine, EngineError};
+use cache_core::record_selection::{RecordSelection, RecordSelectionError};
 use cache_core::store::{InMemoryStorage, Storage};
 use cache_core::value::{CacheValue, EntityKey, Record};
 use pollster::block_on;
@@ -74,7 +74,7 @@ fragment SoupItemFields on GraphqlSoupDocument {
 "#;
 
 #[test]
-fn projects_cold_links_skips_incomplete_and_paginates_exclusively() {
+fn projects_cold_links_and_skips_incomplete_explicit_keys() {
     block_on(async {
         let mut storage = InMemoryStorage::new();
         storage
@@ -90,34 +90,85 @@ fn projects_cold_links_skips_incomplete_and_paginates_exclusively() {
         let mut engine = Engine::with_capacity(storage, 1);
         let selection = RecordSelection::parse(ITEM_FRAGMENT, "SoupItemFields").unwrap();
 
-        let first = engine.read_records(&selection, None, 1).await.unwrap();
-        assert_eq!(
-            first.records,
-            vec![json!({
-                "documentId": "a",
-                "properties": [{
-                    "id": "a",
-                    "propertyName": "Alpha"
-                }]
-            })]
-        );
-        assert!(first.next_cursor.is_some());
-
-        let second = engine
-            .read_records(&selection, first.next_cursor.as_ref(), 1)
+        let selected = engine
+            .read_records_by_keys(
+                &selection,
+                &[
+                    key("GraphqlSoupDocument:a"),
+                    key("GraphqlSoupDocument:b"),
+                    key("GraphqlSoupDocument:c"),
+                ],
+            )
             .await
             .unwrap();
-        assert_eq!(second.records[0]["documentId"], json!("c"));
+        assert_eq!(selected.len(), 2);
+        assert_eq!(selected[0].record["documentId"], json!("a"));
         assert_eq!(
-            second.records[0]["properties"][0]["propertyName"],
+            selected[0].record["properties"][0]["propertyName"],
+            json!("Alpha")
+        );
+        assert_eq!(selected[1].record["documentId"], json!("c"));
+        assert_eq!(
+            selected[1].record["properties"][0]["propertyName"],
             json!("Charlie")
         );
-        assert!(second.next_cursor.is_none());
     });
 }
 
 #[test]
-fn reads_schema_incomplete_objects_through_fragments_in_entity_key_order() {
+fn explicit_key_projection_preserves_rank_order_without_scanning() {
+    block_on(async {
+        let mut storage = InMemoryStorage::new();
+        storage
+            .put_batch(vec![document("a", "Alpha"), document("c", "Charlie")])
+            .await
+            .unwrap();
+        let mut engine = Engine::new(storage);
+        let selection =
+            RecordSelection::parse("fragment Item on GraphqlSoupDocument { id name }", "Item")
+                .unwrap();
+
+        let selected = engine
+            .read_records_by_keys(
+                &selection,
+                &[
+                    key("GraphqlSoupDocument:c"),
+                    key("GraphqlSoupDocument:a"),
+                    key("GraphqlSoupDocument:c"),
+                    key("GraphqlSoupDocument:missing"),
+                ],
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            selected
+                .iter()
+                .map(|selected| selected.record_key.as_ref())
+                .collect::<Vec<_>>(),
+            ["GraphqlSoupDocument:c", "GraphqlSoupDocument:a"]
+        );
+        assert_eq!(selected[0].record, json!({"id": "c", "name": "Charlie"}));
+
+        let too_many = vec![key("GraphqlSoupDocument:a"); 501];
+        assert!(matches!(
+            engine.read_records_by_keys(&selection, &too_many).await,
+            Err(EngineError::RecordSelection(
+                RecordSelectionError::TooManyKeys { .. }
+            ))
+        ));
+        assert!(matches!(
+            engine
+                .read_records_by_keys(&selection, &[key("ROOT_QUERY")])
+                .await,
+            Err(EngineError::RecordSelection(
+                RecordSelectionError::InvalidKey
+            ))
+        ));
+    });
+}
+
+#[test]
+fn reads_schema_incomplete_objects_in_explicit_input_order() {
     block_on(async {
         let mut storage = InMemoryStorage::new();
         // These records intentionally omit other current, non-null schema
@@ -150,15 +201,24 @@ fn reads_schema_incomplete_objects_through_fragments_in_entity_key_order() {
         )
         .unwrap();
 
-        let page = engine.read_records(&selection, None, 10).await.unwrap();
+        let selected = engine
+            .read_records_by_keys(
+                &selection,
+                &[
+                    key("GraphqlSoupChat:c"),
+                    key("GraphqlSoupDocument:a"),
+                    key("GraphqlSoupDocument:b"),
+                ],
+            )
+            .await
+            .unwrap();
         assert_eq!(
-            page.records
+            selected
                 .iter()
-                .map(|record| record["id"].as_str().unwrap())
+                .map(|selected| selected.record["id"].as_str().unwrap())
                 .collect::<Vec<_>>(),
             vec!["c", "a", "b"]
         );
-        assert!(page.next_cursor.is_none());
     });
 }
 
@@ -242,10 +302,13 @@ fn merges_optimistic_updates_with_cold_linked_bases() {
             .await
             .unwrap();
 
-        let page = engine.read_records(&selection, None, 10).await.unwrap();
-        assert_eq!(page.records.len(), 1);
+        let selected = engine
+            .read_records_by_keys(&selection, &[key("GraphqlSoupDocument:doc-1")])
+            .await
+            .unwrap();
+        assert_eq!(selected.len(), 1);
         assert_eq!(
-            page.records[0]["properties"][0],
+            selected[0].record["properties"][0],
             json!({
                 "id": "property-1",
                 "propertyDefinitionId": "definition-1",
@@ -298,10 +361,13 @@ fn includes_optimistic_only_records() {
             .await
             .unwrap();
 
-        let page = engine.read_records(&selection, None, 10).await.unwrap();
+        let selected = engine
+            .read_records_by_keys(&selection, &[key("GraphqlProperty:property-1")])
+            .await
+            .unwrap();
         assert_eq!(
-            page.records,
-            vec![json!({"id": "property-1", "displayName": "Status"})]
+            selected[0].record,
+            json!({"id": "property-1", "displayName": "Status"})
         );
     });
 }

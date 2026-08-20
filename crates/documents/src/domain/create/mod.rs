@@ -413,11 +413,22 @@ impl NewTextFileDocument {
 #[derive(Debug)]
 pub struct CreatedDocument {
     response: CreateDocumentResponseData,
+    initial_snapshot: Option<Vec<u8>>,
 }
 
 impl CreatedDocument {
     fn new(response: CreateDocumentResponseData) -> Self {
-        Self { response }
+        Self {
+            response,
+            initial_snapshot: None,
+        }
+    }
+
+    fn new_markdown(response: CreateDocumentResponseData, initial_snapshot: Vec<u8>) -> Self {
+        Self {
+            response,
+            initial_snapshot: Some(initial_snapshot),
+        }
     }
 
     /// The created document id.
@@ -433,6 +444,11 @@ impl CreatedDocument {
     /// Get the underlying create response.
     pub fn response(&self) -> &CreateDocumentResponseData {
         &self.response
+    }
+
+    /// Get the canonical snapshot used to initialize a markdown document.
+    pub fn initial_snapshot(&self) -> Option<&[u8]> {
+        self.initial_snapshot.as_deref()
     }
 
     /// Consume into the raw create response.
@@ -583,7 +599,8 @@ where
                     .await?;
             }
 
-            self.markdown_initializer
+            let initial_snapshot = self
+                .markdown_initializer
                 .initialize_existing_markdown(&document_id, &markdown)
                 .await?;
 
@@ -594,19 +611,22 @@ where
                 )
                 .await?;
 
-            Ok(())
+            Ok(initial_snapshot)
         }
         .await;
 
-        if let Err(error) = finalize_result {
-            self.cleanup_created_document(&document_id).await;
-            return Err(error);
-        }
+        let initial_snapshot = match finalize_result {
+            Ok(initial_snapshot) => initial_snapshot,
+            Err(error) => {
+                self.cleanup_created_document(&document_id).await;
+                return Err(error);
+            }
+        };
 
         response.document_response.document_metadata.content =
             DocumentContent::ready(DocumentContentLocation::SyncService);
 
-        Ok(CreatedDocument::new(response))
+        Ok(CreatedDocument::new_markdown(response, initial_snapshot))
     }
 
     /// Create a text file and upload it to document storage.

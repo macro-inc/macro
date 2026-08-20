@@ -1,7 +1,8 @@
 use macro_user_id::user_id::MacroUserIdStr;
+use model_entity::Entity;
 use models_pagination::{CreatedAt, Query};
 use notification::domain::models::TaggedContent;
-use notification::domain::models::request::{NotificationEntityRef, NotificationListFilters};
+use notification::domain::models::request::NotificationListFilters;
 use notification::domain::models::{
     DeviceEndpoint, NotificationIdAndCollapseKey, SendNotificationRequestBuilder,
     UserNotificationRow, device::DeviceType,
@@ -106,6 +107,16 @@ impl NotificationRepository for SandboxNotificationRepository {
             .await
     }
 
+    async fn get_notification_ids_for_entities(
+        &self,
+        user_id: MacroUserIdStr<'_>,
+        entities: &[Entity<'_>],
+    ) -> Result<Vec<Uuid>, Report> {
+        self.inner
+            .get_notification_ids_for_entities(user_id, entities)
+            .await
+    }
+
     async fn get_basic_notifications(
         &self,
         notification_ids: &[Uuid],
@@ -157,11 +168,10 @@ impl NotificationRepository for SandboxNotificationRepository {
     async fn get_entity_notifications_batch(
         &self,
         user_id: MacroUserIdStr<'_>,
-        entity_refs: Vec<NotificationEntityRef>,
-    ) -> Result<HashMap<NotificationEntityRef, Vec<UserNotificationRow<serde_json::Value>>>, Report>
-    {
+        entities: Vec<Entity<'static>>,
+    ) -> Result<HashMap<Entity<'static>, Vec<UserNotificationRow<serde_json::Value>>>, Report> {
         self.inner
-            .get_entity_notifications_batch(user_id, entity_refs)
+            .get_entity_notifications_batch(user_id, entities)
             .await
     }
 

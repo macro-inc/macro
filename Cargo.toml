@@ -3,8 +3,10 @@ resolver = "2"
 
 members = [
   "crates/activity",
-  "crates/agent",
-  "crates/agent_runtime_protocol",
+  "crates/agent", "crates/agent_fold",
+  "crates/agent_harness",
+  "crates/agent_runtime_protocol", "crates/agent_session",
+  "crates/agent_trigger",
   "crates/ai_projections",
   "crates/ai_usage",
   "crates/bot_id",
@@ -13,9 +15,10 @@ members = [
   "crates/calendar_events",
   "crates/channel_bots",
   "crates/client/cache-core",
-  "crates/client/cache-idb",
-  "crates/client/cache-sqlite",
+  "crates/client/cache-turso",
   "crates/client/cache-wasm",
+  "crates/client/turso-opfs",
+  "crates/coding_agent_worker",
   "crates/complete_graph",
   "crates/cowlike",
   "crates/crm",
@@ -26,6 +29,7 @@ members = [
   "crates/foreign_entity",
   "crates/generic_email_domains",
   "crates/gmail_client",
+  "crates/graphql_activity",
   "crates/graphql_channel",
   "crates/graphql_common",
   "crates/graphql_email",
@@ -35,7 +39,9 @@ members = [
   "crates/graphql_permission",
   "crates/graphql_properties",
   "crates/graphql_soup",
+  "crates/graphql_soup_filter_input",
   "crates/import",
+  "crates/item_filter_index",
   "crates/integration_tests/local_e2e",
   "crates/loops_client",
   "crates/macro_authorization",
@@ -46,18 +52,26 @@ members = [
   "crates/macro_sync_service_jwt",
   "crates/maybe_send",
   "crates/memory",
+  "crates/mcp_select",
+  "crates/pipedream_mcp",
   "crates/onboarding",
+  "crates/predicate_index",
   "crates/prompt",
   "crates/properties_service",
   "crates/reminders",
   "crates/search_service",
   "crates/skills",
+  "crates/soup_filter_cache_adapter",
+  "crates/soup_filter_projection",
   "crates/soup_realtime",
   "crates/system_skills",
   "crates/task_dedup",
   "crates/unfurl",
+  "crates/webhook_signature",
   "crates/worker-rs-otel",
   "crates/workspace-hack",
+  "services/agent_harness_service",
+  "services/agent_trigger_service",
   "services/ai_projections_refresh_handler",
   "services/authentication_service",
   "services/call_recording_preview_handler",
@@ -105,10 +119,18 @@ members = [
 ]
 
 [workspace.dependencies]
+aes-gcm = { version = "0.10.3", features = ["zeroize"] }
 anyhow = "1.0.100"
 apollo-compiler = "1"
 apollo-parser = "0.8"
-agent-client-protocol = "1.2.0"
+# Locally forked (see third_party/README.md). Defaults off so the fold's
+# dependency chain stays wasm-reachable; whoever spawns an agent as a
+# subprocess asks for `features = ["subprocess"]`.
+# Pinned past the v2.0.0 tag to pick up wasm32 support (PR #294, merged to
+# main but not yet in a tagged release):
+# https://github.com/agentclientprotocol/rust-sdk/pull/294
+# Swap back to a plain version once upstream cuts a release containing it.
+agent-client-protocol = { git = "https://github.com/agentclientprotocol/rust-sdk", rev = "8769d16d10e0c9fa7e662ee18424a4313b06ea88" }
 askama = "0.14"
 async-graphql = "7.2.1"
 async-lock = "3"
@@ -124,6 +146,7 @@ automod = "1"
 aws-config = { version = "1.8.16", features = ["behavior-version-latest"] }
 aws-msk-iam-sasl-signer = "1.0.1"
 aws-sdk-dynamodb = "1.111.0"
+aws-sdk-kms = "1.104.0"
 aws-sdk-lambda = "1.122.0"
 aws-sdk-s3 = "1.132.0"
 aws-sdk-secretsmanager = "1.104.0"
@@ -204,6 +227,7 @@ pdfium-render = { version = "0.8.37", default-features = false, features = [
 ] }
 pgvector = { version = "0.4", features = ["postgres", "sqlx"] }
 postcard = { version = "1", features = ["use-std"] }
+pollster = "0.4"
 quote = "1"
 rand = "0.9.0"
 # uses vendored to fix lambda builds failing.
@@ -225,6 +249,7 @@ reqwest = { version = "0.13", default-features = false, features = [
 ] }
 rmcp = "1.6.0"
 rootcause = { version = "0.12" }
+rustls = { version = "0.23", default-features = false, features = ["aws_lc_rs"] }
 rootcause-tracing = "0.12.1"
 schemars = { version = "1.0.4", features = ["chrono04", "uuid1"] }
 semver = { version = "1", features = ["serde"] }
@@ -235,6 +260,9 @@ serde_json = { version = "1.0.132" }
 serde_repr = "0.1"
 serde_with = { version = "3.12.0", features = ["base64"] }
 serde_yaml = "0.9"
+specta = { version = "=2.0.0-rc.25", features = ["derive"] }
+specta-serde = "=0.0.12"
+specta-typescript = "=0.0.12"
 sha2 = "0.10.8"
 sqlx = { version = "0.8.6", features = [
   "chrono",
@@ -260,10 +288,14 @@ tower-http = { version = "0.6.1", features = [
   "cors",
   "trace",
 ] }
+toml = "0.8"
 tracing = "0.1.44"
 tracing-opentelemetry = "0.32.1"
 tracing-subscriber = { version = "0.3.22", features = ["env-filter", "json"] }
 tracing-tree = "0.4.0"
+# Exact remotely available Turso fork revision approved by the browser cache G0.
+# Its source tree is identical to the locally verified cf7de761 revision.
+turso_core = { git = "https://github.com/seanaye/turso", rev = "be9acfe9e5e6efb17911af84047e4855cace53a3", default-features = false }
 tungstenite = { version = "0.28", features = ["url"] }
 unsynn = "0.3"
 urlencoding = "2.1.3"
@@ -276,10 +308,13 @@ utoipa = { version = "5.4.0", features = [
 utoipa-swagger-ui = { version = "9", features = ["axum", "vendored"] }
 uuid = { version = "1.15.1", features = ["fast-rng", "serde", "v4", "v5", "v7"] }
 wiremock = "0.6.5"
+zeroize = "1.8.2"
 # worker-build (see services/sync-service/wrangler.toml) refuses to build against
 # anything older than 0.2.123, so keep this floor above that.
 wasm-bindgen = "0.2.123"
 wasm-bindgen-futures = "0.4"
+wasm-bindgen-test = "0.3"
+web-sys = "0.3"
 web-time = "1.1.0"
 worker = "0.8.1"
 # this is pinned to match axum 0.7.9 dependency requirements
@@ -318,6 +353,7 @@ strip = "none"
 # The Cloudflare sync worker is size-sensitive. Package manifests cannot own
 # profiles once they are workspace members, so keep its former release profile
 # here without changing release optimization for the backend services.
+
 [profile.sync-service-release]
 inherits = "release"
 lto = true

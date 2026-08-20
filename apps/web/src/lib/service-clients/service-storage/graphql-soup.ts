@@ -1,12 +1,12 @@
-import {
-  ENABLE_BEARER_TOKEN_AUTH,
-  ENABLE_GRAPHQL_SOUP,
-} from '@core/constant/featureFlags';
+import { ENABLE_BEARER_TOKEN_AUTH } from '@core/constant/featureFlags';
 import { SERVER_HOSTS } from '@core/constant/servers';
 import { fetchToken } from '@core/util/fetchWithToken';
 import { isTauri } from '@core/util/platform';
 import { platformFetch } from '@core/util/platformFetch';
-import { normalizedCacheExchange } from '@graphql-cache/exchange/normalized-cache-exchange';
+import {
+  HYDRATE_ONLY_CONTEXT_KEY,
+  normalizedCacheExchange,
+} from '@graphql-cache/exchange/normalized-cache-exchange';
 import type { CacheHost } from '@graphql-cache/host/types';
 import {
   createTauriCacheHost,
@@ -14,6 +14,7 @@ import {
   entityFromArgument,
 } from '@graphql-cache/index';
 import { registerCacheHost } from '@graphql-cache/lifecycle';
+import { getBrowserTursoCacheRolloutDecision } from '@graphql-cache/rollout';
 import { getOrCreateCacheScope } from '@graphql-cache/scope';
 import { getMacroApiToken } from '@service-auth/fetch';
 import type { ApiUserNotification } from '@service-notification/generated/schemas/apiUserNotification';
@@ -54,6 +55,7 @@ import {
   type GroupSoupQuery,
   GroupSoupDocument as GroupSoupQueryDocument,
   type GroupSoupQueryVariables,
+  type SoupBackfillResult,
   type SoupInitialInput,
   type SoupInput,
   type SoupNotificationFieldsFragment,
@@ -109,6 +111,10 @@ const graphqlSoupClient = createClient({
   url: `${dssHost}/items/soup/graphql`,
   exchanges: [fetchExchange],
   fetch: dssGraphqlFetch,
+  // urql's default ("within-url-limit") sends small documents as GET, but
+  // GET on the DSS GraphQL path serves the GraphiQL IDE — only POST
+  // executes. Every pre-activity document was too large to trigger this.
+  preferGetMethod: false,
 });
 
 /**
@@ -117,11 +123,27 @@ const graphqlSoupClient = createClient({
  * process (graphql_cache_plugin).
  */
 export function graphqlCacheEnabled(): boolean {
-  return ENABLE_GRAPHQL_SOUP();
+  if (!isTauri() && browserCacheClientActivated) return true;
+  return getBrowserTursoCacheRolloutDecision().enabled;
 }
 
 let cachedClient: Client | undefined;
 let cachedCacheHost: CacheHost | undefined;
+let cachedCacheCleanup: (() => void) | undefined;
+let browserCacheClientActivated = false;
+
+function fallbackAfterInitializationFailure(): void {
+  const cleanup = cachedCacheCleanup;
+  cachedCacheCleanup = undefined;
+  cachedCacheHost = undefined;
+  cachedClient = graphqlSoupClient;
+  browserCacheClientActivated = false;
+  try {
+    cleanup?.();
+  } catch {
+    // Initialization-failure cleanup cannot alter GraphQL transport fallback.
+  }
+}
 
 /** Returns the persistent normalized-cache host after client initialization. */
 export function getGraphqlCacheHost(): CacheHost | undefined {
@@ -137,20 +159,29 @@ export function getGraphqlCacheHost(): CacheHost | undefined {
  * Any failure falls back to the plain fetch client for the session.
  */
 export function getGraphqlSoupClient(): Client {
-  if (!graphqlCacheEnabled()) return graphqlSoupClient;
-  cachedClient ??= (() => {
+  const native = isTauri();
+  // Only the browser Turso client is session-latched. Tauri keeps the prior
+  // dynamic GraphQL transport behavior and can return to the plain client when
+  // ENABLE_GRAPHQL_SOUP changes without constructing a browser resource.
+  if (!native && browserCacheClientActivated && cachedClient)
+    return cachedClient;
+  const rollout = getBrowserTursoCacheRolloutDecision();
+  if (!rollout.enabled) return graphqlSoupClient;
+  if (cachedClient) return cachedClient;
+  cachedClient = (() => {
     let host: CacheHost | undefined;
     let websocketClient: GraphqlWsClient | undefined;
     let unregisterHost: () => void = () => undefined;
     const subscriptionsLifecycle = createGraphqlSoupSubscriptionsLifecycle();
-    const onInitializationError = (error: Error) => {
-      if (!host || cachedCacheHost !== host) return;
+    const cleanup = () => {
       unregisterHost();
-      host.dispose();
+      host?.dispose();
       subscriptionsLifecycle.dispose();
       if (websocketClient) void websocketClient.dispose();
-      cachedCacheHost = undefined;
-      cachedClient = graphqlSoupClient;
+    };
+    const onInitializationError = (error: Error) => {
+      if (!host || cachedCacheHost !== host) return;
+      fallbackAfterInitializationFailure();
       console.warn(
         'graphql cache async init failed; using uncached client',
         error
@@ -158,9 +189,13 @@ export function getGraphqlSoupClient(): Client {
     };
     try {
       const scope = getOrCreateCacheScope();
-      host = isTauri()
+      host = native
         ? createTauriCacheHost({ scope, onInitializationError })
-        : createWorkerCacheHost({ scope, onInitializationError });
+        : createWorkerCacheHost({
+            scope,
+            onInitializationError,
+            rolloutCohort: rollout.cohort,
+          });
       const resolveWebSocketUrl = createGraphqlSoupWebSocketUrlResolver({
         dssHost,
         bearerTokenAuth: ENABLE_BEARER_TOKEN_AUTH,
@@ -180,6 +215,8 @@ export function getGraphqlSoupClient(): Client {
       websocketClient = graphqlWsClient;
       const client = createClient({
         url: `${dssHost}/items/soup/graphql`,
+        // See graphqlSoupClient: GET serves GraphiQL on this path.
+        preferGetMethod: false,
         exchanges: [
           normalizedCacheExchange(host, {
             entityResolvers: {
@@ -226,13 +263,13 @@ export function getGraphqlSoupClient(): Client {
       cachedCacheHost = host;
       unregisterHost = registerCacheHost(host);
       subscriptionsLifecycle.replace(client, host);
+      cachedCacheCleanup = cleanup;
+      browserCacheClientActivated = !native;
       return client;
     } catch (error) {
-      unregisterHost();
-      host?.dispose();
-      subscriptionsLifecycle.dispose();
-      if (websocketClient) void websocketClient.dispose();
+      cleanup();
       cachedCacheHost = undefined;
+      cachedCacheCleanup = undefined;
       console.warn('graphql cache init failed; using uncached client', error);
       return graphqlSoupClient;
     }
@@ -1307,6 +1344,46 @@ export function mapGraphqlGroupedSoupPage(
   });
 
   return { items, groups };
+}
+
+export type GraphqlSoupHydrationPage = {
+  nextCursor: string | null;
+};
+
+/**
+ * Fetches and persists a Soup page while returning only fields not marked
+ * `@cacheOnly`. The generated GraphQL response type is deliberately narrowed
+ * to the directive-projected cursor shape at this boundary.
+ */
+export async function hydrateGraphqlSoup<
+  Data extends GraphqlSoupPageData,
+  Variables extends AnyVariables,
+>(
+  document: DocumentInput<Data, Variables>,
+  variables: Variables,
+  options: Pick<FetchGraphqlSoupOptions, 'signal'> = {}
+): Promise<GraphqlSoupHydrationPage> {
+  const client = getGraphqlSoupClient();
+  if (!getGraphqlCacheHost()) {
+    throw new Error('GraphQL cache hydration requires an active cache');
+  }
+  const result = await client
+    .query<SoupBackfillResult, Variables>(
+      document as DocumentInput<SoupBackfillResult, Variables>,
+      variables,
+      {
+        requestPolicy: 'network-only',
+        [HYDRATE_ONLY_CONTEXT_KEY]: true,
+        ...(options.signal ? { fetchOptions: { signal: options.signal } } : {}),
+      }
+    )
+    .toPromise();
+
+  if (result.error) throw result.error;
+  if (!result.data) {
+    throw new Error('GraphQL Soup hydration returned no cursor projection');
+  }
+  return { nextCursor: result.data.user.soup.nextCursor };
 }
 
 /** Executes any Soup-shaped query and maps its result to the shared page type. */

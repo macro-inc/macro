@@ -4188,6 +4188,11 @@
           }
         }
       },
+      "LinkShare": {
+        "type": "string",
+        "description": "Defines who can access an item through its share link.",
+        "enum": ["PUBLIC", "TEAM"]
+      },
       "MacroApiTokenResponse": {
         "type": "object",
         "required": ["macro_api_token"],
@@ -4288,6 +4293,17 @@
         "type": "object",
         "description": "Request to update a team",
         "properties": {
+          "default_link_share": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/LinkShare",
+                "description": "The default link-share scope for items owned by the team. Omit to\nleave unchanged or pass `null` to default to link sharing off."
+              }
+            ]
+          },
           "name": {
             "type": ["string", "null"],
             "description": "The new name for the team"
@@ -4508,6 +4524,17 @@
           "crm_enabled": {
             "type": "boolean",
             "description": "Whether the CRM is enabled for this team (from `team_crm_settings`;\n`false` when no row exists)."
+          },
+          "default_link_share": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/LinkShare",
+                "description": "The default link-share scope applied when items owned by the team are\nshared via link without an explicit choice. `None` means link sharing\nis off by default. Defaults to [`LinkShare::Team`]."
+              }
+            ]
           },
           "enterprise": {
             "type": "boolean",

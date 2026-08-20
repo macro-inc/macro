@@ -1351,6 +1351,18 @@ pub struct ReminderMetadata {
     pub reminder_id: Uuid,
     /// What the user asked to be reminded about.
     pub description: String,
+    /// Which firing this is — the occurrence the reminder came due for.
+    ///
+    /// What distinguishes two firings of the same recurring reminder, which are
+    /// otherwise identical: same id, same description. The collapse key is
+    /// built from it, so without it Tuesday's alert would replace Monday's
+    /// unread one on the lock screen.
+    ///
+    /// Optional because notifications written before recurring dispatch existed
+    /// have no such field, and they still have to read back.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schema(value_type = Option<String>, format = DateTime)]
+    pub scheduled_for: Option<DateTime<Utc>>,
 }
 
 impl Notification for ReminderMetadata {
@@ -1393,7 +1405,16 @@ impl NotificationExtIos for ReminderMetadata {
         // same firing should replace the alert, but a reminder is not "about"
         // the entity in the way a mention is, so two reminders on one document
         // stay two alerts.
-        NotifCollapseKey::new(Self::TYPE_NAME).append(&self.reminder_id.to_string())
+        //
+        // The firing is part of the key for the same reason. Two occurrences of
+        // a daily reminder share an id and a description, so on the id alone
+        // today's alert would quietly replace yesterday's unread one — which is
+        // right for a redelivery and wrong for a new day.
+        let key = NotifCollapseKey::new(Self::TYPE_NAME).append(&self.reminder_id.to_string());
+        match self.scheduled_for {
+            Some(scheduled_for) => key.append(&scheduled_for.timestamp().to_string()),
+            None => key,
+        }
     }
 
     fn as_apns<'a>(

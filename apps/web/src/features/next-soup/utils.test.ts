@@ -1,6 +1,19 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-const { toastAlert } = vi.hoisted(() => ({ toastAlert: vi.fn() }));
+const { toastAlert, ...operationMocks } = vi.hoisted(() => ({
+  toastAlert: vi.fn(),
+  bulkMarkNotificationsAsDone: vi.fn(async () => {}),
+  bulkMarkNotificationsAsUndone: vi.fn(async () => {}),
+  cancelQueries: vi.fn(async () => {}),
+  flagArchived: vi.fn(async () => ({ isErr: () => false, value: undefined })),
+  invalidateQueries: vi.fn(async () => {}),
+  invalidateRemindersById: vi.fn(),
+  invalidateSoupEntity: vi.fn(async () => {}),
+  setReminderCompleted: vi.fn(async () => {}),
+  updateNotificationsForEntities: vi.fn(
+    async (): Promise<Array<{ id: string }>> => []
+  ),
+}));
 
 // utils.ts transitively imports the websocket client modules, which open real
 // sockets at module scope and reject under jsdom.
@@ -17,6 +30,42 @@ vi.mock('@service-connection/websocket', () => ({
 vi.mock('@core/component/Toast/Toast', () => ({
   toast: { alert: toastAlert },
 }));
+vi.mock('@queries/client', () => ({
+  queryClient: {
+    cancelQueries: operationMocks.cancelQueries,
+    invalidateQueries: operationMocks.invalidateQueries,
+  },
+}));
+vi.mock('@queries/notification/entity-mutations', () => ({
+  toNotificationEntityRef: vi.fn(),
+  updateNotificationsForEntities: operationMocks.updateNotificationsForEntities,
+}));
+vi.mock('@queries/notification/user-notifications', () => ({
+  bulkMarkNotificationsAsDone: operationMocks.bulkMarkNotificationsAsDone,
+  bulkMarkNotificationsAsUndone: operationMocks.bulkMarkNotificationsAsUndone,
+  restoreUserNotifications: vi.fn(),
+  snapshotUserNotifications: vi.fn(() => []),
+}));
+vi.mock('@queries/reminders/reminders', () => ({
+  invalidateRemindersById: operationMocks.invalidateRemindersById,
+  setReminderCompleted: operationMocks.setReminderCompleted,
+}));
+vi.mock('@queries/soup/cache', () => ({
+  getSoupEntityById: vi.fn(),
+  invalidateSoupEntity: operationMocks.invalidateSoupEntity,
+  optimisticUpdateSoupEntity: vi.fn(() => ({ rollback: vi.fn() })),
+  removeSoupEntities: vi.fn(() => ({ rollback: vi.fn() })),
+  removeSoupEntitiesFromDoneFilteredQueries: vi.fn(() => ({
+    rollback: vi.fn(),
+  })),
+}));
+vi.mock('@service-email/client', () => ({
+  emailClient: { flagArchived: operationMocks.flagArchived },
+}));
+vi.mock('@core/constant/featureFlags', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@core/constant/featureFlags')>()),
+  ENABLE_CALENDAR_UI: () => true,
+}));
 
 import { setGlobalSplitManager } from '@app/signal/splitLayout';
 import type {
@@ -27,6 +76,7 @@ import type { ChannelEntityTarget, EntityData } from '@entity';
 import type { NotificationSource, UnifiedNotification } from '@notifications';
 import { previewSourceEntityId } from './preview-history';
 import {
+  executeMarkEntitiesDone,
   getChannelEntityTarget,
   getRowClickFallbackLocation,
   openEntityInSplitFromUnifiedList,
@@ -36,7 +86,7 @@ import {
 
 afterEach(() => {
   setGlobalSplitManager(undefined);
-  toastAlert.mockClear();
+  vi.clearAllMocks();
 });
 
 const sendNotification = (id: string, messageId: string): UnifiedNotification =>
@@ -132,6 +182,27 @@ describe('resolveMarkEntitiesDoneVariables', () => {
   });
 });
 
+describe('mark-done orchestration', () => {
+  it('executes entity notification writes directly and returns exact ids', async () => {
+    operationMocks.updateNotificationsForEntities.mockResolvedValueOnce([
+      { id: 'entity-notification' },
+    ]);
+
+    await expect(
+      executeMarkEntitiesDone({
+        emailIds: [],
+        notificationIds: [],
+        notificationEntities: [{ type: 'document', id: 'document-1' }],
+      })
+    ).resolves.toEqual(['entity-notification']);
+
+    expect(operationMocks.updateNotificationsForEntities).toHaveBeenCalledWith({
+      entities: [{ type: 'document', id: 'document-1' }],
+      operation: 'MARK_DONE',
+    });
+  });
+});
+
 describe('preview duplicate navigation', () => {
   it('rejects content owned by a different preview viewer and notifies', () => {
     const controller = {
@@ -159,6 +230,60 @@ describe('preview duplicate navigation', () => {
       false
     );
     expect(toastAlert).not.toHaveBeenCalled();
+  });
+});
+
+describe('calendar block navigation', () => {
+  it('opens and targets the singleton calendar block', async () => {
+    const openWithSplit = vi.fn();
+    const goToLocationFromParams = vi.fn();
+    const getBlockHandle = vi.fn(async () => ({ goToLocationFromParams }));
+    setGlobalSplitManager({
+      activeSplit: vi.fn(),
+      getOrchestrator: vi.fn(() => ({ getBlockHandle })),
+      getSplitByContent: vi.fn(),
+      openWithSplit,
+    } as unknown as SplitManager);
+
+    await openEntityInSplitFromUnifiedList(
+      {
+        type: 'calendar_event',
+        id: 'event-1',
+        notifications: () => [
+          {
+            notification_metadata: {
+              tag: 'calendar_event_reminder',
+              content: {
+                eventId: 'event-1',
+                occurrenceKey: 'instance-1',
+                startDate: '2026-01-27',
+              },
+            },
+          } as UnifiedNotification,
+        ],
+      } as unknown as EntityData,
+      {}
+    );
+
+    expect(openWithSplit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'calendar',
+        id: 'view',
+        params: expect.objectContaining({
+          eventId: 'event-1',
+          occurrenceKey: 'instance-1',
+          range: expect.objectContaining({
+            startDate: '2026-01-27',
+            endDate: '2026-01-28',
+          }),
+        }),
+      }),
+      expect.any(Object)
+    );
+    expect(getBlockHandle).toHaveBeenCalledWith('view', 'calendar');
+    expect(goToLocationFromParams).toHaveBeenCalledWith(
+      expect.objectContaining({ eventId: 'event-1' })
+    );
   });
 });
 

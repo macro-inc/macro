@@ -288,6 +288,78 @@ export function useFilterRefinements() {
     ];
   });
 
+  /** Creator options for the Tasks and Files Created by filter. */
+  const createdByOptionsMap = createMemo(
+    (): Map<string, { label: string; icon?: () => JSX.Element }> => {
+      const uid = currentUserId();
+      const map = new Map<
+        string,
+        { label: string; icon?: () => JSX.Element }
+      >();
+      for (const contact of contacts()) {
+        map.set(contact.id, {
+          label: buildContactLabel(contact, uid),
+          icon: () => (
+            <UserIcon
+              id={contact.id}
+              size="sm"
+              suppressClick
+              showTooltip={false}
+            />
+          ),
+        });
+      }
+      return map;
+    }
+  );
+
+  const createdBySearchableOptions = createMemo((): SearchableOption[] => {
+    const uid = currentUserId();
+    let meOption: SearchableOption | undefined;
+    const otherContactOptions: SearchableOption[] = [];
+    for (const contact of contacts()) {
+      const option: SearchableOption = {
+        id: contact.id,
+        label: buildContactLabel(contact, uid),
+        icon: () => (
+          <UserIcon
+            id={contact.id}
+            size="sm"
+            suppressClick
+            showTooltip={false}
+          />
+        ),
+      };
+      if (contact.id === uid) {
+        meOption = option;
+      } else {
+        otherContactOptions.push(option);
+      }
+    }
+    return [...(meOption ? [meOption] : []), ...otherContactOptions];
+  });
+
+  // The Files "Owned" tab scopes its base query to the current creator.
+  // An empty explicit selection must restore that preset constraint instead
+  // of broadening the tab to all files.
+  const baseCreatedByIds = createMemo(
+    () => currentPreset()?.filters.include?.documentOwnerId ?? []
+  );
+  const createdByIds = createMemo(
+    () => filterData().include.documentOwnerId ?? []
+  );
+  const hasCreatedByRefinement = () =>
+    !deepEqual(createdByIds(), baseCreatedByIds());
+
+  const handleCreatedByChange = (ids: string[]) => {
+    const nextIds = ids.length > 0 ? ids : baseCreatedByIds();
+    queryFilters.set({
+      include: {
+        documentOwnerId: nextIds.length > 0 ? nextIds : undefined,
+      },
+    });
+  };
+
   /**
    * Handler for owner filter changes (Customers view). Client-side
    * predicate only — companies come back from a dedicated capped CRM
@@ -353,8 +425,7 @@ export function useFilterRefinements() {
   /**
    * Handler for assignee filter changes.
    */
-  const handleAssigneeChange = (ids: string[]) => {
-    const current = assigneeFilter();
+  const handleAssigneeChange = (ids: string[], current = assigneeFilter()) => {
     const toAdd = ids.filter((id) => !current.includes(id));
     const toRemove = current.filter((id) => !ids.includes(id));
 
@@ -384,6 +455,29 @@ export function useFilterRefinements() {
       if (addProps.length)
         queryFilters.add({ include: { properties: addProps } });
     });
+  };
+
+  // My Tasks has an implicit current-user assignee scope in its tab preset.
+  // Materialize it in the editable Assignee picker without adding a redundant
+  // property filter until the user changes that default selection.
+  const [myTasksAssigneeEdited, setMyTasksAssigneeEdited] = createSignal(false);
+  const isMyTasksTab = () =>
+    currentView() === 'tasks' && activeTab() === 'my-tasks';
+  const defaultMyTasksAssigneeIds = () => {
+    const id = currentUserId();
+    return isMyTasksTab() && id ? [id] : [];
+  };
+  const visibleAssigneeIds = () => {
+    const ids = assigneeFilter();
+    if (ids.length > 0 || myTasksAssigneeEdited()) return ids;
+    return defaultMyTasksAssigneeIds();
+  };
+  const handleVisibleAssigneeChange = (ids: string[]) => {
+    const current = visibleAssigneeIds();
+    if (isMyTasksTab() && !myTasksAssigneeEdited()) {
+      setMyTasksAssigneeEdited(true);
+    }
+    handleAssigneeChange(ids, current);
   };
 
   /**
@@ -448,6 +542,7 @@ export function useFilterRefinements() {
         labelPlural?: string;
         allOptions: FilterValue[];
         multiple: boolean;
+        showTabDefaults: boolean;
         presetAndOptionIds: FilterID[];
         presetOrOptionIds: FilterID[];
       }
@@ -479,18 +574,22 @@ export function useFilterRefinements() {
       }
 
       const presetOptionIds = [...presetAndOptionIds, ...presetOrOptionIds];
+      const isMyTasksDefaultStatus =
+        view === 'tasks' && tab === 'my-tasks' && category.id === 'status';
       if (
         activeValues.length > 0 &&
-        hasFilterCategoryRefinement(
-          activeValues.map((value) => value.id),
-          presetOptionIds
-        )
+        (isMyTasksDefaultStatus ||
+          hasFilterCategoryRefinement(
+            activeValues.map((value) => value.id),
+            presetOptionIds
+          ))
       ) {
         categoryGroups.set(category.id, {
           label: category.label,
           labelPlural: category.labelPlural,
           allOptions,
           multiple: category.multiple ?? true,
+          showTabDefaults: isMyTasksDefaultStatus,
           presetAndOptionIds,
           presetOrOptionIds,
         });
@@ -512,6 +611,16 @@ export function useFilterRefinements() {
           ) {
             result.push(opt);
           }
+        }
+        if (group.showTabDefaults) {
+          const order = new Map([
+            ['task-in-progress', 0],
+            ['task-not-started', 1],
+            ['task-in-review', 2],
+          ]);
+          result.sort(
+            (a, b) => (order.get(a.id) ?? 3) - (order.get(b.id) ?? 3)
+          );
         }
         return result;
       };
@@ -582,7 +691,8 @@ export function useFilterRefinements() {
             ]);
             const changes = [...categoryOptionIds].flatMap((id) => {
               const wasActive = soup.predicates.isActive(id);
-              const shouldBeActive = presetOptionIds.has(id);
+              const shouldBeActive =
+                !group.showTabDefaults && presetOptionIds.has(id);
               return wasActive === shouldBeActive
                 ? []
                 : [{ id, shouldBeActive }];
@@ -594,6 +704,12 @@ export function useFilterRefinements() {
             const previousDocumentTypeIds = isDocumentTypeFilter
               ? getActiveDocumentTypeFilterIds(soup.predicates.isActive)
               : undefined;
+            const nextPresetAndIds = group.showTabDefaults
+              ? []
+              : group.presetAndOptionIds;
+            const nextPresetOrIds = group.showTabDefaults
+              ? []
+              : group.presetOrOptionIds;
 
             batch(() => {
               soup.predicates.set(({ andIds, orIds }) => ({
@@ -601,13 +717,13 @@ export function useFilterRefinements() {
                   ...andIds.filter(
                     (id) => !categoryOptionIds.has(id as FilterID)
                   ),
-                  ...group.presetAndOptionIds,
+                  ...nextPresetAndIds,
                 ],
                 or: [
                   ...orIds.filter(
                     (id) => !categoryOptionIds.has(id as FilterID)
                   ),
-                  ...group.presetOrOptionIds,
+                  ...nextPresetOrIds,
                 ],
               }));
 
@@ -647,14 +763,14 @@ export function useFilterRefinements() {
       const key = 'assignee';
       const popupOpen =
         consolidatedChipCache.get(key)?.isPopupOpen?.() ?? false;
-      const ids = assigneeFilter();
+      const ids = visibleAssigneeIds();
       if (ids.length === 0 && !popupOpen) return;
 
       seenKeys.add(key);
 
       // Compute values as accessor for reactivity, including icons
       const getValues = (): FilterValue[] =>
-        assigneeFilter().map((id) => {
+        visibleAssigneeIds().map((id) => {
           const opt = assigneeOptionsMap().get(id);
           return {
             id,
@@ -679,12 +795,56 @@ export function useFilterRefinements() {
             categoryLabel: 'Assignee',
             values: getValues,
             searchableOptions: assigneeSearchableOptions,
-            activeSearchableIds: assigneeFilter,
-            onSearchableChange: handleAssigneeChange,
+            activeSearchableIds: visibleAssigneeIds,
+            onSearchableChange: handleVisibleAssigneeChange,
             searchPlaceholder: 'Search assignees...',
             isPopupOpen,
             setPopupOpen,
-            onRemoveAll: () => handleAssigneeChange([]),
+            onRemoveAll: () => handleVisibleAssigneeChange([]),
+          };
+        })
+      );
+    };
+
+    // Created by is a server-side document-owner filter shared by Tasks and
+    // Files. Unlike Assignee, it has no separate client predicate/state.
+    const pushCreatedByConsolidatedChip = () => {
+      if (view !== 'documents' && view !== 'tasks') return;
+      const key = 'created-by';
+      const popupOpen =
+        consolidatedChipCache.get(key)?.isPopupOpen?.() ?? false;
+      if (!hasCreatedByRefinement() && !popupOpen) return;
+
+      seenKeys.add(key);
+
+      const getValues = (): FilterValue[] =>
+        createdByIds().map((id) => {
+          const option = createdByOptionsMap().get(id);
+          return { id, label: option?.label ?? id, icon: option?.icon };
+        });
+
+      filters.push(
+        getOrCreateConsolidatedChip(key, () => {
+          const [isPopupOpen, _setPopupOpen] = createSignal(false);
+          const setPopupOpen = (open: boolean) => {
+            if (!open) {
+              queueMicrotask(() =>
+                panel.panelRef()?.focus({ preventScroll: true })
+              );
+            }
+            _setPopupOpen(open);
+          };
+          return {
+            key,
+            categoryLabel: 'Created by',
+            values: getValues,
+            searchableOptions: createdBySearchableOptions,
+            activeSearchableIds: createdByIds,
+            onSearchableChange: handleCreatedByChange,
+            searchPlaceholder: 'Search creators...',
+            isPopupOpen,
+            setPopupOpen,
+            onRemoveAll: () => handleCreatedByChange([]),
           };
         })
       );
@@ -835,6 +995,7 @@ export function useFilterRefinements() {
     };
 
     pushAssigneeConsolidatedChip();
+    pushCreatedByConsolidatedChip();
     pushStageConsolidatedChip();
     pushOwnerConsolidatedChip();
     pushTagsConsolidatedChip();
@@ -952,6 +1113,7 @@ export function useFilterRefinements() {
       soup.predicates.set(preset.clientFilters);
       queryFilters.replace(preset.filters ?? null);
       setAssigneeFilter([]);
+      setMyTasksAssigneeEdited(false);
       setOwnerFilter([]);
       setStageFilter([]);
     });

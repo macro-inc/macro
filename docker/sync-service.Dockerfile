@@ -1,7 +1,16 @@
 # Builder: compiles the worker (Rust -> wasm + JS shim). Nothing from this
 # stage's toolchain (rustc, clang, npm dev deps, the cargo target dir) is
 # needed at runtime, so it all stays here.
-FROM rust:1.94-bookworm AS builder
+# Pinned to the exact patch the repo's rust-toolchain.toml asks for: the
+# floating 1.94 tag moved to 1.94.1, and rustup then tried to download 1.94.0
+# from scratch on every cargo invocation below.
+FROM rust:1.94.0-bookworm AS builder
+
+# rust-toolchain.toml also names components (rust-src, rust-analyzer) and host
+# targets this image has no use for, which is enough on its own to make rustup
+# re-sync the channel. Selecting the installed toolchain explicitly makes
+# rustup skip the file, so the build never touches static.rust-lang.org.
+ENV RUSTUP_TOOLCHAIN=1.94.0
 
 # Install Node.js 22.x
 RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - && \

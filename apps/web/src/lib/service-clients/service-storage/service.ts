@@ -390,7 +390,8 @@ export const StorageService = new Svc('Document++ Storage Service API')
   })
   .fn('getPins', {
     description: schemas.getPinsHandlerResponse.description!,
-    args: schemas.getRecentActivityHandlerQueryParams.shape,
+    // The pins handler takes no query params: it always returns all pins.
+    args: {},
     result: schemas.getPinsHandlerResponse.shape.data.unwrap().options[1].shape,
     throws: withFetchErrors(),
   })

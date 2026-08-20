@@ -3,10 +3,24 @@ use macro_user_id::user_id::MacroUserIdStr;
 use rmcp::{
     handler::server::ServerHandler,
     model::{
-        Content, ListToolsResult, PaginatedRequestParams, ServerCapabilities, ServerInfo, Tool,
+        Content, Icon, ListToolsResult, PaginatedRequestParams, ServerCapabilities, ServerInfo,
+        Tool, ToolAnnotations,
     },
 };
 use std::sync::Arc;
+
+/// Maps our protocol-agnostic annotations onto the MCP wire representation.
+///
+/// [`ToolKind`](ai_toolset::ToolKind) collapses `readOnlyHint`/`destructiveHint`
+/// into one choice, so this is the only place the two booleans are derived —
+/// they can never disagree.
+fn mcp_annotations(annotations: &ai_toolset::ToolAnnotations) -> ToolAnnotations {
+    ToolAnnotations::with_title(annotations.title)
+        .read_only(annotations.kind.read_only_hint())
+        .destructive(annotations.kind.destructive_hint())
+        .idempotent(annotations.idempotent)
+        .open_world(annotations.open_world)
+}
 
 /// MCP server handler that extracts authenticated user identity from HTTP
 /// request parts injected by rmcp's `StreamableHttpService`.
@@ -47,6 +61,8 @@ impl<Context> AuthenticatedToolService<Context> {
                     value.description.to_owned(),
                     Arc::new(value.input_schema.clone()),
                 )
+                .with_title(value.annotations.title)
+                .annotate(mcp_annotations(&value.annotations))
             })
             .collect()
     }
@@ -72,6 +88,7 @@ where
 {
     fn get_info(&self) -> ServerInfo {
         let mut info = ServerInfo::new(ServerCapabilities::builder().enable_tools().build());
+        let base_url = self.item_base_url.trim_end_matches('/');
         info.server_info = rmcp::model::Implementation::new(
             "macro-tools",
             env!("CARGO_PKG_VERSION"),
@@ -79,8 +96,14 @@ where
         .with_title("Macro")
         .with_description(
             "Search, read, and create content across documents, emails, and messages in Macro.",
-        );
-        let base_url = self.item_base_url.trim_end_matches('/');
+        )
+        // The same icon the web app's <link rel="icon"> points at, so the
+        // server shows up in MCP clients with the Macro favicon.
+        .with_icons(vec![
+            Icon::new(format!("{base_url}/app/macro-favicon.svg"))
+                .with_mime_type("image/svg+xml")
+                .with_sizes(vec!["any".to_owned()]),
+        ]);
         info.instructions = Some(format!(
             "This server provides tools for interacting with a user's Macro workspace. \
              Use ContentSearch and NameSearch to find entities. \

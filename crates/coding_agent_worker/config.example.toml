@@ -1,0 +1,35 @@
+# Everything a coding agent daemon needs to serve one bot's sessions.
+
+[macro]
+# Base URL of the agent-harness service. Its ws(s) twin hosts the runtime
+# gateway the daemon dials per session.
+api_url = "http://localhost:50009/agent-harness"
+# Base URL of the storage service (bots + webhook APIs); the daemon
+# registers its own trigger feed there at boot.
+storage_url = "http://localhost:50009/dss"
+# The user who owns the bot; registration acts for them.
+owner_user_id = "macro|you@macro.com"
+# The bot's API token.
+bot_token = "mbot_0123456789ab_0123456789abcdef"
+# Optional; `user` unless the bot is team-owned and acts in its team scope.
+bot_scope = "user"
+
+[server]
+# Port `POST /macro-events` is served on.
+port = 8790
+# The URL deliveries reach this daemon at; what the feed registers.
+# Locally, the stack's relay tunnels this to the port above.
+public_url = "http://sdk-webhook-relay:8787/macro-events"
+# Optional override; normally the daemon registers its own feed at boot
+# and keeps the minted secret in a state file next to this config.
+# signing_secret = "whsec_..."
+
+[harness]
+command = "opencode"
+args = ["acp"]
+
+[workspace]
+# Every session this daemon serves runs here.
+path = "/workspace"
+# Informational: having the repo cloned at `path` is the operator's job.
+repo_url = "https://github.com/macro-inc/macro"

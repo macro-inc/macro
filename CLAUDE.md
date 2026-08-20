@@ -313,3 +313,38 @@ don't inject it directly into the error message.
 ### DB Crate Changes
 
 - When making changes to a db crate you should always update tests, and run prepare
+
+## Cursor Cloud specific instructions
+
+This VM runs the intended local dev stack from `docs/RUNNING_LOCALLY.md` via Nix + Docker.
+The startup layer (nix daemon, docker daemon, `bun install`) is handled by the environment
+update script; the notes below are durable, non-obvious caveats for running the app here.
+
+- Toolchain lives in the Nix dev shell. Run dev commands from the repo root as
+  `nix develop --command bash -c '<cmd>'`. If `nix` is not found, first
+  `. /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh`. There is no systemd
+  (init is `tini`); `nix-daemon` and `dockerd` are plain background processes.
+- Use the `--no-doppler` path (this repo is run without team secrets). Prefer the
+  headless orchestrator `just stack ...` over `just run_local` — `run_local` has an
+  interactive hotkey loop that does not suit a non-interactive agent.
+- KEY GOTCHA (openssh): `just stack up` / `run_local` shell out to `ssh-keygen`/`ssh`
+  for the SDK webhook relay. The VM's `/exec-daemon/ssh-keygen` shim is first on PATH and
+  crashes under the Nix shell's `LD_LIBRARY_PATH` (glibc 2.42 vs system 2.39). Fix by
+  putting a self-consistent Nix openssh first on PATH. openssh is installed in the Nix
+  profile (`nix profile add nixpkgs#openssh`), so launch the stack as:
+  `nix develop --command bash -c 'export PATH=$HOME/.nix-profile/bin:$PATH; just stack up --no-doppler'`
+- First `stack up` cross-compiles all service binaries with `cargo-zigbuild`
+  (slow — ~10 min cold on 4 cores); later runs reuse `sccache` and a cached init snapshot,
+  so they are fast. `just stack status` / `just stack update` / `just stack down` manage it.
+- Endpoints (default instance): app at `http://localhost:8090/app/`, proxy at `:8090`,
+  Mailpit at `http://localhost:8090/mailpit/`, FusionAuth at `:9011`.
+- Login is passwordless: the one-time code is delivered to Mailpit (not a real inbox).
+- Seed sample data: `just seed-scenario apply --file seed/scenarios/team-perms.json`
+  (personas `alice`..`eve` at `<name>@seed.macro.local`). The login links it prints embed
+  port `3000` (the `run_local` dev-server default); in headless `stack` mode use `:8090`,
+  e.g. `http://localhost:8090/app/login?email=alice@seed.macro.local`.
+- `agent_harness_service` restarts continuously in a `--no-doppler` stack (it needs AI
+  provider keys); this is expected and does not affect non-AI features.
+- Tests run against the live local Postgres — do not set `SQLX_OFFLINE=true` for
+  `cargo test` (see the sqlx notes above). For DB-backed crate tests, run
+  `just setup_test_envs` first; pure-logic crates (e.g. `cargo test -p email_utils`) need no setup.

@@ -36,8 +36,9 @@ pub use macro_authorization::MacroAuthorizationExtractor;
 pub use optional::OptionalMacroAuthorizationExtractor;
 pub use policy::{
     ActingUser, ActingUserAuthorization, AnyPrincipal, AuthorizationPolicy, BotOnly,
-    InternalAuthorization, InternalEntity, InternalOnly, UserOnly, UserOrInternal,
-    UserOrInternalAuthorization, UserOrInternalCaller, UserOrInternalEntity, UserOrInternalService,
+    InternalAuthorization, InternalEntity, InternalOnly, UserOnly, UserOrBot,
+    UserOrBotAuthorization, UserOrBotEntity, UserOrInternal, UserOrInternalAuthorization,
+    UserOrInternalCaller, UserOrInternalEntity, UserOrInternalService,
     UserOrInternalServiceAuthorization,
 };
 

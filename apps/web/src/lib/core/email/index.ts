@@ -1,6 +1,8 @@
 // Email body parsing utilities
 export {
   parseEmailContent,
+  sanitizeEmailHtml,
+  scrubActiveContent,
   stripColorSchemeMediaQueries,
 } from './parse-email-html';
 

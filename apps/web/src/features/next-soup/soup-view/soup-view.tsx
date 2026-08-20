@@ -61,7 +61,6 @@ import { CrmStageIcon } from '@companies/crm/StageIcon';
 import type { CrmViewConfig } from '@companies/crm/saved-views';
 import { useCrmUnavailable } from '@companies/crm/team-crm-config';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
-import { FloatRegion } from '@components/app/mobile/float-regions/FloatRegion';
 import { PullToRefresh } from '@components/app/mobile/PullToRefresh';
 import { SwipableRowProvider } from '@components/app/mobile/SwipableRow';
 import { CollapsibleHeaderItem } from '@components/app/split-layout/components/CollapsibleItem';
@@ -81,7 +80,6 @@ import {
 } from '@core/dom-selectors';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
-import { isMobile } from '@core/mobile/isMobile';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { openExternalUrl } from '@core/util/url';
 import { useIsKeyPressActive } from '@core/util/useIsKeyPressActive';
@@ -210,6 +208,11 @@ const DEFAULT_PREVIEW_VIEWS = new Set(['inbox', 'channels']);
 const CONDENSED_NARROW_LIST_VIEWS: ReadonlySet<ListView> = new Set([
   'channels',
 ]);
+// Mixed-type lists render every entity as one specially designed line (see
+// NarrowSingleLineLayout) instead of the taller per-type narrow layouts.
+const SINGLE_LINE_NARROW_LIST_VIEWS: ReadonlySet<ListView> = new Set([
+  'search',
+]);
 type SoupListEntryState = {
   focus: string | undefined;
   virtualCache?: CacheSnapshot;
@@ -231,6 +234,13 @@ interface SoupViewProps {
    */
   initialGroupBy?: string;
   disableLocalSearch?: boolean;
+  /**
+   * Client sort ids applied when the user has no persisted sort preference.
+   * Defaults to `['updated_at']`. Pass `[]` for views whose ordering is the
+   * server's (e.g. Recent's touched-by-me order) so rows render as paged —
+   * an explicit user sort still wins once chosen.
+   */
+  initialClientSort?: string[];
   /**
    * Client-side entities to merge into the soup results. Useful for entity
    * types (e.g. automation) that don't come back from the soup API.
@@ -354,7 +364,7 @@ export const SoupView = (props: SoupViewProps) => {
 
       let initialSortIds = initialCrmView?.sort ?? sortPref();
       if (initialSortIds.length === 0) {
-        initialSortIds = ['updated_at'];
+        initialSortIds = props.initialClientSort ?? ['updated_at'];
       }
 
       const persistedViewActiveTab = isListViewID(contentId)
@@ -502,7 +512,6 @@ export const SoupView = (props: SoupViewProps) => {
   const isBoardRendered = createMemo(() => isBoardMode() && !crmUnavailable());
 
   const [narrowSearchExpanded, setNarrowSearchExpanded] = createSignal(false);
-  const [mobileSearchOpen, setMobileSearchOpen] = createSignal(false);
   const [searchIsCollapsed, setSearchIsCollapsed] = createSignal(false);
 
   registerHotkey({
@@ -512,11 +521,6 @@ export const SoupView = (props: SoupViewProps) => {
     registrationType: 'add',
     description: 'Search',
     keyDownHandler: () => {
-      if (isMobile()) {
-        if (mobileSearchOpen()) return false;
-        setMobileSearchOpen(true);
-        return true;
-      }
       if (narrowSearchExpanded() || !searchIsCollapsed()) return false;
       setNarrowSearchExpanded(true);
       return true;
@@ -534,11 +538,18 @@ export const SoupView = (props: SoupViewProps) => {
             class={cn(
               'h-full flex gap-3 @max-[380px]/split-header:gap-2 items-center',
               {
-                'shrink-0': !narrowSearchExpanded(),
-                'flex-1 min-w-0': narrowSearchExpanded(),
+                'shrink-0': !isTouchDevice() && !narrowSearchExpanded(),
+                'flex-1 min-w-0': !isTouchDevice() && narrowSearchExpanded(),
+                'w-full flex-1 min-w-0': isTouchDevice(),
               }
             )}
           >
+            {/* On mobile/tablet the header strip hosts the filter pills instead of
+                the view title (the bottom accessory region now belongs to the
+                global views row). */}
+            <Show when={isTouchDevice()}>
+              <MobileSoupViewTabs />
+            </Show>
             <Show when={!isTouchDevice() && !narrowSearchExpanded()}>
               <div class="flex items-center gap-1">
                 <span class="text-sm font-semibold">{props.viewName}</span>
@@ -686,11 +697,6 @@ export const SoupView = (props: SoupViewProps) => {
             <SoupViewList />
           </Show>
         </Suspense>
-        <Show when={isTouchDevice()}>
-          <FloatRegion region="accessory">
-            <MobileSoupViewTabs />
-          </FloatRegion>
-        </Show>
       </div>
       <Suspense>
         {/* The board and Preview Controller hide the AI bar: it floats over
@@ -767,9 +773,9 @@ const SoupViewListContent = (props: SoupViewListProps) => {
 
   const narrowLayout = createMemo<NarrowLayoutVariant>(() => {
     const view = currentView();
-    return view && CONDENSED_NARROW_LIST_VIEWS.has(view)
-      ? 'condensed'
-      : 'standard';
+    if (!view) return 'standard';
+    if (SINGLE_LINE_NARROW_LIST_VIEWS.has(view)) return 'single-line';
+    return CONDENSED_NARROW_LIST_VIEWS.has(view) ? 'condensed' : 'standard';
   });
 
   const focusFirstEntity = () => {
@@ -833,7 +839,20 @@ const SoupViewListContent = (props: SoupViewListProps) => {
   createEffect(() => {
     const ref = soupViewRef();
     if (!ref) return;
-    queueMicrotask(() => ref.focus());
+    queueMicrotask(() => {
+      // Claiming the hotkey scope must not yank focus from active text entry
+      // — e.g. the mobile dock search input, whose session swaps this view in
+      // via the pill row while the user keeps typing (blurring it would drop
+      // the virtual keyboard).
+      const active = document.activeElement;
+      if (
+        active instanceof HTMLElement &&
+        (active.isContentEditable || active.matches('input, textarea'))
+      ) {
+        return;
+      }
+      ref.focus();
+    });
   });
 
   const [attachHotkeys, soupViewScope] = useHotkeyDOMScope('soup-view');
@@ -1234,7 +1253,7 @@ const SoupViewListContent = (props: SoupViewListProps) => {
                     !isPullRefreshing()
                   }
                 >
-                  <div class="flex items-center gap-2 p-3 text-xs text-text-muted touch:mt-(--mobile-content-inset-top) touch:mb-(--mobile-content-inset-bottom)">
+                  <div class="flex items-center gap-2 p-3 text-xs text-ink-muted touch:mt-(--mobile-content-inset-top) touch:mb-(--mobile-content-inset-bottom)">
                     <Spinner class="size-3 animate-spin" />
                     Searching...
                   </div>
@@ -1437,6 +1456,10 @@ const SoupViewListContent = (props: SoupViewListProps) => {
                                         soup.predicates.isActive('inbox') &&
                                         !soup.predicates.isActive('noise')
                                       }
+                                      isLastInGroup={(() => {
+                                        const next = rows()[i() + 1];
+                                        return !next || next.getIsGrouped();
+                                      })()}
                                       checked={row.isSelected()}
                                       onChecked={(
                                         next: boolean,
@@ -1500,7 +1523,7 @@ const SoupViewListContent = (props: SoupViewListProps) => {
                                     source.isFetchingNextPage())
                                 }
                               >
-                                <div class="flex items-center gap-2 p-3 text-xs text-text-muted">
+                                <div class="flex items-center gap-2 p-3 text-xs text-ink-muted">
                                   <Spinner class="size-3 animate-spin" />
                                   {source.isFetchingNextPage()
                                     ? 'Loading more...'

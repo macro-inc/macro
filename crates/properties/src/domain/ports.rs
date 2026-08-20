@@ -195,14 +195,15 @@ pub trait PropertiesRepo: Send + Sync + 'static {
 
     /// Upsert an entity property value (insert or update).
     /// If the property doesn't exist, it will be created and attached to the entity.
-    /// If it exists, the value will be updated. Returns the persisted assignment.
+    /// If it exists, the value will be updated. Returns the persisted
+    /// assignment together with the pre-write value.
     fn upsert_entity_property(
         &self,
         entity_id: &str,
         entity_type: EntityType,
         property_definition_id: Uuid,
         value: Option<PropertyValue>,
-    ) -> impl Future<Output = Result<EntityProperty, Self::Err>> + Send;
+    ) -> impl Future<Output = Result<EntityPropertyMutationSnapshot, Self::Err>> + Send;
 
     /// Atomically add one option to a multi-select entity property value,
     /// attaching the property if needed. Re-adding a present option is deduped.

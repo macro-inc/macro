@@ -75,6 +75,12 @@ fn soup_response_schema_exposes_frontend_fields() {
         "effects: [SoupPatch!]!",
         "recordChannelActivity(input: RecordChannelActivityInput!): GraphqlChannelActivity!",
         "updateNotifications(input: UpdateNotificationsInput!): [GraphqlNotification!]!",
+        "updateNotificationsForEntity(input: UpdateNotificationsForEntityInput!): [GraphqlNotification!]!",
+        "input UpdateNotificationsForEntityInput {",
+        "entities: [NotificationEntityInput!]!",
+        "input NotificationEntityInput {",
+        "entityType: GraphqlEntityType!",
+        "entityId: ID!",
         "markEmailThreadSeen(input: MarkEmailThreadSeenInput!): GraphqlSoupEmailThread!",
         "updateEmailThreadLabel(input: UpdateEmailThreadLabelInput!): GraphqlSoupEmailThread!",
         "input MarkEmailThreadSeenInput {",
@@ -149,6 +155,7 @@ fn soup_interface_exposes_the_complete_shared_entity_contract() {
         "isFavorited",
         "viewerPermission",
         "frecencyScore",
+        "activity",
     ] {
         assert!(
             entity.fields.contains_key(shared_field),
@@ -176,6 +183,7 @@ fn soup_interface_exposes_the_complete_shared_entity_contract() {
         "viewerPermission",
         "properties",
         "notifications",
+        "activity",
     ] {
         assert!(
             document.fields.contains_key(shared_field),

@@ -202,6 +202,25 @@ impl AccessRepository for PgAccessRepository {
         Ok(queries::call_access::get_call_access(&self.pool, &call_uuid, &source_ids).await?)
     }
 
+    async fn get_agent_session_access(
+        &self,
+        agent_session_id: &str,
+        user_id: Option<&MacroUserId<Lowercase<'_>>>,
+    ) -> Result<Option<AccessLevel>, AccessError> {
+        let agent_session_uuid = agent_session_id
+            .parse::<Uuid>()
+            .map_err(|_| AccessError::BadRequest("Invalid agent session ID format"))?;
+        let source_ids = queries::get_user_source_ids(&self.pool, user_id)
+            .await
+            .map_err(|_| AccessError::Internal)?;
+        Ok(queries::agent_session_access::get_agent_session_access(
+            &self.pool,
+            &agent_session_uuid,
+            &source_ids,
+        )
+        .await?)
+    }
+
     // A macro user id embeds the user's email, so it stays out of the span; the
     // reminder id is what identifies the lookup anyway.
     #[tracing::instrument(err, skip(self, user_id))]
@@ -272,6 +291,14 @@ impl AccessRepository for PgAccessRepository {
             }
             EntityType::Call => {
                 queries::call_access::get_call_access(&self.pool, &entity_uuid, &source_ids).await
+            }
+            EntityType::AgentSession => {
+                queries::agent_session_access::get_agent_session_access(
+                    &self.pool,
+                    &entity_uuid,
+                    &source_ids,
+                )
+                .await
             }
             EntityType::User
             | EntityType::Channel

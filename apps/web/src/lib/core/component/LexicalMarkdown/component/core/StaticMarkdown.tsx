@@ -23,6 +23,7 @@ import {
   type HorizontalRuleNode,
   type ImageNode,
   isSupportedLanguage,
+  type MagicChipNode,
   normalizedLanguage,
   type PasteNode,
   type SnapshotNode,
@@ -81,6 +82,7 @@ import { DocumentMention as DocumentMentionDecorator } from '../decorator/Docume
 import { Equation as EquationDecorator } from '../decorator/Equation';
 import { GroupMention as GroupMentionDecorator } from '../decorator/GroupMention';
 import { LazyDecorator } from '../decorator/LazyDecorator';
+import { MagicChip as MagicChipDecorator } from '../decorator/MagicChip';
 import { MarkdownImage as ImageDecorator } from '../decorator/MarkdownImage';
 import { MarkdownVideo as VideoDecorator } from '../decorator/MarkdownVideo';
 import { PasteNode as PasteNodeDecorator } from '../decorator/PasteNode';
@@ -444,6 +446,20 @@ const Await: RenderableEntity<AwaitNode> = {
   },
 };
 
+const MagicChip: RenderableEntity<MagicChipNode> = {
+  guard: (node: LexicalNode): node is MagicChipNode =>
+    node.__type === 'magic-chip',
+  render: (props) => (
+    <div class="max-w-full">
+      <MagicChipDecorator
+        {...props.node.exportComponentProps()}
+        key={props.node.getKey()}
+        theme={props.theme}
+      />
+    </div>
+  ),
+};
+
 const Snapshot: RenderableEntity<SnapshotNode> = {
   guard: (node: LexicalNode): node is SnapshotNode =>
     node.__type === 'snapshot',
@@ -790,6 +806,7 @@ const InlineEntities: Array<RenderableEntity> = [
   DateMention,
   GroupMention,
   Await,
+  MagicChip,
   Snapshot,
   Image,
   Video,

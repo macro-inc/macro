@@ -1037,9 +1037,9 @@ export function MarkdownEditor(props: {
             aria-hidden="true"
             class="pointer-events-none absolute inset-x-0 top-0 flex flex-col gap-2.5 pt-1"
           >
-            <div class="skeleton-shimmer h-2.5 w-full rounded-full bg-placeholder/30" />
-            <div class="skeleton-shimmer h-2.5 w-full rounded-full bg-placeholder/30" />
-            <div class="skeleton-shimmer h-2.5 w-2/3 rounded-full bg-placeholder/30" />
+            <div class="skeleton-shimmer h-2.5 w-full rounded-full bg-skeleton" />
+            <div class="skeleton-shimmer h-2.5 w-full rounded-full bg-skeleton" />
+            <div class="skeleton-shimmer h-2.5 w-2/3 rounded-full bg-skeleton" />
           </div>
         </Show>
         <Show when={editorReady() && isBlankMarkdown()}>

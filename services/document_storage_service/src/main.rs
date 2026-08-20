@@ -855,6 +855,7 @@ async fn main() -> anyhow::Result<()> {
 
     let sqs_client = Arc::new(sqs_client);
     let conn_gateway_client = Arc::new(conn_gateway_client);
+
     // The OpenAI key is injected as the required `OPENAI_API_KEY` env var
     // (resolved from the `openai-key` secret at deploy time by the infra stack),
     // the same way `document_cognition_service` consumes it. Fail fast if it's
@@ -1214,6 +1215,11 @@ async fn main() -> anyhow::Result<()> {
             websocket_notification_consumer_service,
         ),
         graphql_notification_reader,
+        // GraphQL reads the activity log through the readonly pool; the
+        // Kafka consumer's writer-pool repo above is separate on purpose.
+        activity_reader: complete_graph::ActivityPortReader::new(Arc::new(
+            activity::outbound::pg_activity_repo::PgActivityRepo::new(readonly_db.clone()),
+        )),
         graphql_entity_mutation_service,
         github_sync_service: Arc::new(github_sync_service_impl),
         foreign_entity_state,

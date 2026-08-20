@@ -17,6 +17,7 @@ import type { PropertyInput } from '@service-storage/generated/schemas/propertyI
 
 import { uploadToPresignedUrl } from '@service-storage/util/uploadToPresignedUrl';
 import { err, ok } from 'neverthrow';
+import { decodeBase64Bytes } from './base64';
 import { isPaymentError } from './handlePaymentError';
 import { contentHash } from './hash';
 import {
@@ -65,7 +66,7 @@ export async function createMarkdownFile(
     name: args?.title ?? '',
     fileType: 'md',
   });
-  refetchSoupEntity(documentId, 'document');
+  refetchSoupEntity(documentId, 'document', { ownTouch: true });
 
   analytics.track('create_entity', {
     entityType: 'md',
@@ -93,6 +94,29 @@ type CreateTaskArgs = {
 export async function createTask(
   args?: CreateTaskArgs
 ): Promise<string | undefined> {
+  return (await createTaskResponse(args))?.documentId;
+}
+
+/**
+ * Creates a task and returns the canonical snapshot used to initialize it.
+ */
+export async function createTaskWithInitialSnapshot(args?: CreateTaskArgs) {
+  const createdTask = await createTaskResponse(args);
+  if (!createdTask) return;
+
+  let initialSnapshot: Uint8Array | undefined;
+  if (typeof createdTask.initialSnapshot === 'string') {
+    try {
+      initialSnapshot = decodeBase64Bytes(createdTask.initialSnapshot);
+    } catch (error) {
+      console.error('Failed to decode initial task snapshot', error);
+    }
+  }
+
+  return { documentId: createdTask.documentId, initialSnapshot };
+}
+
+async function createTaskResponse(args?: CreateTaskArgs) {
   // Ensure status is always set, defaulting to NOT_STARTED
   const existingPropertyValues = args?.propertyValues ?? [];
   const hasStatus = existingPropertyValues.some(
@@ -123,7 +147,7 @@ export async function createTask(
 
   if (result.isErr()) return;
 
-  const { documentId, documentMetadata, token } = result.value;
+  const { documentId, documentMetadata, token, initialSnapshot } = result.value;
 
   seedDocumentLoadBundle(documentId, {
     documentMetadata,
@@ -138,7 +162,7 @@ export async function createTask(
     fileType: 'md',
     subType: { type: 'task', is_completed: false },
   });
-  refetchSoupEntity(documentId, 'document');
+  refetchSoupEntity(documentId, 'document', { ownTouch: true });
 
   analytics.track('create_entity', {
     entityType: 'task',
@@ -159,7 +183,7 @@ export async function createTask(
     ),
   });
 
-  return documentId;
+  return { documentId, initialSnapshot };
 }
 
 type CreateSnippetArgs = {
@@ -197,7 +221,7 @@ export async function createSnippet(
     fileType: 'md',
     subType: { type: 'snippet' },
   });
-  refetchSoupEntity(documentId, 'document');
+  refetchSoupEntity(documentId, 'document', { ownTouch: true });
 
   analytics.track('create_entity', {
     entityType: 'snippet',
@@ -245,7 +269,7 @@ export async function createSkill(
     fileType: 'md',
     subType: { type: 'skill' },
   });
-  refetchSoupEntity(documentId, 'document');
+  refetchSoupEntity(documentId, 'document', { ownTouch: true });
 
   analytics.track('create_entity', {
     entityType: 'skill',
@@ -337,7 +361,9 @@ export async function createCodeFileFromText({
     name: title ?? 'New Code File',
     fileType: finalExtension,
   });
-  refetchSoupEntity(document.metadata.documentId, 'document');
+  refetchSoupEntity(document.metadata.documentId, 'document', {
+    ownTouch: true,
+  });
 
   analytics.track('create_entity', {
     entityType: 'code',
@@ -387,7 +413,7 @@ export async function createCanvasFileFromJsonString(args: {
     name: title ?? 'New Canvas',
     fileType: 'canvas',
   });
-  refetchSoupEntity(canvas.metadata.documentId, 'document');
+  refetchSoupEntity(canvas.metadata.documentId, 'document', { ownTouch: true });
 
   analytics.track('create_entity', {
     entityType: 'canvas',
@@ -424,7 +450,7 @@ export async function createChat(
     itemType: 'chat',
     name: args?.name ?? DEFAULT_CHAT_NAME,
   });
-  refetchSoupEntity(chat.id, 'chat');
+  refetchSoupEntity(chat.id, 'chat', { ownTouch: true });
 
   analytics.track('create_entity', {
     entityType: 'chat',

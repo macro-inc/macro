@@ -8,7 +8,7 @@ import ArrowLeft from '@phosphor/arrow-left.svg';
 import CaretRight from '@phosphor/caret-right.svg';
 import CircleDashedEmpty from '@phosphor/circle-dashed.svg';
 import InfoIcon from '@phosphor/info.svg';
-import { Button, Layer, Panel, Scroll } from '@ui';
+import { Button, Panel, Scroll } from '@ui';
 import { cn } from '@ui/utils/classname';
 import {
   type Accessor,
@@ -333,7 +333,11 @@ function Section(
       order: props.order,
       component: () => (
         <Accordion.Item value={props.id}>
-          <Panel depth={2} style={{ height: 'auto' }} class="rounded-xl">
+          <Panel
+            depth={2}
+            style={{ height: 'auto' }}
+            class="rounded-xl bg-surface"
+          >
             <Accordion.Header class="group flex items-center">
               <Accordion.Trigger class="px-2 py-3 flex flex-1 min-w-0 items-center gap-2 text-xs hover:underline">
                 <CaretRight class="size-3 text-ink-muted transition-transform duration-90 group-data-expanded:rotate-90" />
@@ -460,7 +464,7 @@ function EmptyPill(props: { label?: JSX.Element } = {}) {
 function Loading() {
   return (
     <div class="flex items-center justify-center p-2">
-      <div class="animate-pulse text-ink-muted rounded-full h-2 w-full bg-edge-muted/50"></div>
+      <div class="animate-pulse text-ink-muted rounded-full h-2 w-full bg-skeleton"></div>
     </div>
   );
 }
@@ -483,11 +487,9 @@ function CountTitle(props: { label: JSX.Element; count: number }) {
 
 function Card(props: ParentProps) {
   return (
-    <Layer depth={1}>
-      <div class="rounded-lg border border-edge-muted bg-surface overflow-hidden">
-        <div class="divide-y divide-edge-muted">{props.children}</div>
-      </div>
-    </Layer>
+    <div class="rounded-lg border border-edge-muted bg-inset overflow-hidden">
+      <div class="divide-y divide-edge-muted">{props.children}</div>
+    </div>
   );
 }
 

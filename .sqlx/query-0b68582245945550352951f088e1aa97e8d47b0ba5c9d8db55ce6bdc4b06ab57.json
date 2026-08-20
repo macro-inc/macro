@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM pipedream_mcp_connections WHERE user_id = $1 AND app_slug = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "0b68582245945550352951f088e1aa97e8d47b0ba5c9d8db55ce6bdc4b06ab57"
+}

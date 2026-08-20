@@ -1,0 +1,17 @@
+---
+title: EditTag
+description: "Rename or recolor an existing tag in the user's personal set or their team's shared set. The tag's id is preserved, so the change is reflected everywhere the tag is already applied — no item loses the tag. Provide the tag's `id` and its set's `property_definition_id` (both from ListTags) plus a new `label` and/or `color`; omit whichever you want to leave unchanged. This edits the tag itself; to change which tags are on a specific item, use SetEntityProperty instead."
+---
+
+# EditTag
+
+Rename or recolor an existing tag in the user's personal set or their team's shared set. The tag's id is preserved, so the change is reflected everywhere the tag is already applied — no item loses the tag. Provide the tag's `id` and its set's `property_definition_id` (both from ListTags) plus a new `label` and/or `color`; omit whichever you want to leave unchanged. This edits the tag itself; to change which tags are on a specific item, use SetEntityProperty instead.
+
+## Parameters
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `id` | string | Yes | The tag's option id (the `id` field from a ListTags result). |
+| `property_definition_id` | string | Yes | The tag set's property definition id (the `propertyDefinitionId` of the ListTags set that contains this tag). |
+| `label` | string | No | A new label for the tag. Omit to keep the current label. |
+| `color` | `"red"` \| `"tomato"` \| `"orange"` \| `"amber"` \| `"yellow"` \| `"green"` \| `"teal"` \| `"blue"` \| `"indigo"` \| `"purple"` \| `"pink"` \| `"gray"` | No | A new color for the tag, chosen from the fixed tag palette. Omit to keep the current color. |

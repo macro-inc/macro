@@ -1,4 +1,5 @@
 use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
+use ai_toolset::{ToolAnnotated, ToolAnnotations};
 use async_trait::async_trait;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -32,6 +33,10 @@ pub struct SendChannelMessage {
 pub struct SendChannelMessageResponse {
     pub channel_id: Uuid,
     pub message_id: String,
+}
+
+impl ToolAnnotated for SendChannelMessage {
+    const ANNOTATIONS: ToolAnnotations = ToolAnnotations::destructive("Send channel message");
 }
 
 #[async_trait]

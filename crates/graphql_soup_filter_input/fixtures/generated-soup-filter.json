@@ -1,0 +1,24 @@
+{
+  "documentFilter": {
+    "and": {
+      "left": { "literal": { "notificationDone": false } },
+      "right": {
+        "literal": { "updatedAt": { "gte": "2026-01-01T00:00:00.000Z" } }
+      }
+    }
+  },
+  "projectFilter": {
+    "literal": { "projectIdSelf": "00000000-0000-0000-0000-000000000000" }
+  },
+  "chatFilter": {
+    "not": {
+      "literal": { "owner": "macro|user@example.com" }
+    }
+  },
+  "emailFilter": {
+    "tree": { "literal": { "shared": "EXCLUDE" } }
+  },
+  "channelFilter": {
+    "literal": { "channelId": "00000000-0000-0000-0000-000000000000" }
+  }
+}

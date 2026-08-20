@@ -144,6 +144,7 @@ export const listTypedNotificationsResponse = zod
                 'crm_contact',
                 'reminder',
                 'skill',
+                'agent_session',
               ])
               .describe('The type of an entity in Macro'),
           })
@@ -695,6 +696,12 @@ export const listTypedNotificationsResponse = zod
                           reminderId: zod
                             .uuid()
                             .describe('The reminder that fired.'),
+                          scheduledFor: zod.iso
+                            .datetime({})
+                            .nullish()
+                            .describe(
+                              "Which firing this is — the occurrence the reminder came due for.\n\nWhat distinguishes two firings of the same recurring reminder, which are\notherwise identical: same id, same description. The collapse key is\nbuilt from it, so without it Tuesday's alert would replace Monday's\nunread one on the lock screen.\n\nOptional because notifications written before recurring dispatch existed\nhave no such field, and they still have to read back."
+                            ),
                         })
                         .describe(
                           'Metadata for a reminder the user set for themselves coming due.\n\nThere is no sender: a reminder is self-set, so the dispatcher sends it with\n`sender_id: None` (a recipient who is also the sender is filtered out of\ntheir own notification). Every formatter here must therefore work without\none.\n\nThe associated entity, when there is one, lives on the notification row\nrather than in here, and clients resolve its name from that — so the\ndispatcher does not have to look up a name across five entity types.'
@@ -1493,6 +1500,7 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                 'crm_contact',
                 'reminder',
                 'skill',
+                'agent_session',
               ])
               .describe('The type of an entity in Macro'),
           })
@@ -2044,6 +2052,12 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                           reminderId: zod
                             .uuid()
                             .describe('The reminder that fired.'),
+                          scheduledFor: zod.iso
+                            .datetime({})
+                            .nullish()
+                            .describe(
+                              "Which firing this is — the occurrence the reminder came due for.\n\nWhat distinguishes two firings of the same recurring reminder, which are\notherwise identical: same id, same description. The collapse key is\nbuilt from it, so without it Tuesday's alert would replace Monday's\nunread one on the lock screen.\n\nOptional because notifications written before recurring dispatch existed\nhave no such field, and they still have to read back."
+                            ),
                         })
                         .describe(
                           'Metadata for a reminder the user set for themselves coming due.\n\nThere is no sender: a reminder is self-set, so the dispatcher sends it with\n`sender_id: None` (a recipient who is also the sender is filtered out of\ntheir own notification). Every formatter here must therefore work without\none.\n\nThe associated entity, when there is one, lives on the notification row\nrather than in here, and clients resolve its name from that — so the\ndispatcher does not have to look up a name across five entity types.'
@@ -2836,6 +2850,7 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                 'crm_contact',
                 'reminder',
                 'skill',
+                'agent_session',
               ])
               .describe('The type of an entity in Macro'),
           })
@@ -3387,6 +3402,12 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                           reminderId: zod
                             .uuid()
                             .describe('The reminder that fired.'),
+                          scheduledFor: zod.iso
+                            .datetime({})
+                            .nullish()
+                            .describe(
+                              "Which firing this is — the occurrence the reminder came due for.\n\nWhat distinguishes two firings of the same recurring reminder, which are\notherwise identical: same id, same description. The collapse key is\nbuilt from it, so without it Tuesday's alert would replace Monday's\nunread one on the lock screen.\n\nOptional because notifications written before recurring dispatch existed\nhave no such field, and they still have to read back."
+                            ),
                         })
                         .describe(
                           'Metadata for a reminder the user set for themselves coming due.\n\nThere is no sender: a reminder is self-set, so the dispatcher sends it with\n`sender_id: None` (a recipient who is also the sender is filtered out of\ntheir own notification). Every formatter here must therefore work without\none.\n\nThe associated entity, when there is one, lives on the notification row\nrather than in here, and clients resolve its name from that — so the\ndispatcher does not have to look up a name across five entity types.'
@@ -4190,6 +4211,7 @@ export const getTypedNotificationByIdResponse = zod
         'crm_contact',
         'reminder',
         'skill',
+        'agent_session',
       ])
       .describe('The type of an entity in Macro'),
   })
@@ -4703,6 +4725,12 @@ export const getTypedNotificationByIdResponse = zod
                     .string()
                     .describe('What the user asked to be reminded about.'),
                   reminderId: zod.uuid().describe('The reminder that fired.'),
+                  scheduledFor: zod.iso
+                    .datetime({})
+                    .nullish()
+                    .describe(
+                      "Which firing this is — the occurrence the reminder came due for.\n\nWhat distinguishes two firings of the same recurring reminder, which are\notherwise identical: same id, same description. The collapse key is\nbuilt from it, so without it Tuesday's alert would replace Monday's\nunread one on the lock screen.\n\nOptional because notifications written before recurring dispatch existed\nhave no such field, and they still have to read back."
+                    ),
                 })
                 .describe(
                   'Metadata for a reminder the user set for themselves coming due.\n\nThere is no sender: a reminder is self-set, so the dispatcher sends it with\n`sender_id: None` (a recipient who is also the sender is filtered out of\ntheir own notification). Every formatter here must therefore work without\none.\n\nThe associated entity, when there is one, lives on the notification row\nrather than in here, and clients resolve its name from that — so the\ndispatcher does not have to look up a name across five entity types.'

@@ -122,14 +122,6 @@ export const ENABLE_MARKDOWN_LIVE_COLLABORATION = resolveFeatureFlag(
 
 export const ENABLE_EMAIL = resolveFeatureFlag('ENABLE_EMAIL', true);
 
-// Activity timeline: the Activity sidebar entry and the combined Firehose /
-// My Activity view. Keep it dev-only by default while the feature is under
-// development; override with VITE_ENABLE_ACTIVITY for controlled testing.
-export const ENABLE_ACTIVITY = resolveFeatureFlag(
-  'ENABLE_ACTIVITY',
-  DEV_MODE_ENV
-);
-
 // Email signatures: the settings editor, the compose / reply / AI-chat signature
 // previews, and the per-message include toggle. PostHog-gated with a dev-mode
 // default; override with VITE_ENABLE_EMAIL_SIGNATURES.
@@ -492,6 +484,23 @@ export const ENABLE_GRAPHQL_SOUP_OVERRIDE = getFeatureFlagOverride(
   'ENABLE_GRAPHQL_SOUP'
 );
 
+const parseBooleanOverride = (value: unknown): boolean | undefined =>
+  value === 'true' ? true : value === 'false' ? false : undefined;
+
+/** Controls the cache-warming GraphQL soup backfill. */
+export const ENABLE_GRAPHQL_BACKFILL = resolveFeatureFlag(
+  'ENABLE_GRAPHQL_BACKFILL',
+  false
+);
+
+/** Independent emergency stop. Any true env/PostHog source wins. */
+export const DISABLE_BROWSER_TURSO_CACHE_FLAG = 'disable-browser-turso-cache';
+const DISABLE_BROWSER_TURSO_CACHE_ENV = import.meta.env
+  .VITE_DISABLE_BROWSER_TURSO_CACHE;
+export const DISABLE_BROWSER_TURSO_CACHE_OVERRIDE = parseBooleanOverride(
+  DISABLE_BROWSER_TURSO_CACHE_ENV
+);
+
 /**
  * Non-reactive check for imperative call sites (e.g. the soup GraphQL
  * client's normalized-cache gate). Env override first (dev), else the same
@@ -640,4 +649,50 @@ export const ENABLE_CALENDAR_PROMPT_WEB_OVERRIDE = getFeatureFlagOverride(
 export const ENABLE_TAG_TEAM_SHARING_FLAG = 'enable-tag-team-sharing';
 export const ENABLE_TAG_TEAM_SHARING_OVERRIDE =
   getFeatureFlagOverride('ENABLE_TAG_TEAM_SHARING') ??
+  (DEV_MODE_ENV ? true : undefined);
+
+// The "Activity" section in the entity side panel: the entity's recent
+// activity timeline from the GraphQL activity log (who did what, when).
+// Purely additive — when off, the section never mounts and no activity
+// query is issued. PostHog-gated with a dev-mode default; override with
+// VITE_ENABLE_ENTITY_ACTIVITY_SECTION.
+export const ENABLE_ENTITY_ACTIVITY_SECTION_FLAG =
+  'enable-entity-activity-section';
+export const ENABLE_ENTITY_ACTIVITY_SECTION_OVERRIDE =
+  getFeatureFlagOverride('ENABLE_ENTITY_ACTIVITY_SECTION') ??
+  (DEV_MODE_ENV ? true : undefined);
+
+// The Activity view: the user's own activity feed from the GraphQL activity
+// log, replacing the retired soup/notification-derived timeline. Gates the
+// view (the /activity route redirects to the inbox when off) and its
+// sidebar entry. PostHog-gated with a dev-mode default; override with
+// VITE_ENABLE_ACTIVITY_FEED.
+export const ENABLE_ACTIVITY_FEED_FLAG = 'enable-activity-feed';
+export const ENABLE_ACTIVITY_FEED_OVERRIDE =
+  getFeatureFlagOverride('ENABLE_ACTIVITY_FEED') ??
+  (DEV_MODE_ENV ? true : undefined);
+
+// AI agents: the Macro Coder mention entry and the folded agent-session view
+// in channels. Override with VITE_ENABLE_CHAT_V3_AGENTS.
+export const ENABLE_CHAT_V3_AGENTS_FLAG = 'enable-chat-v3-agents';
+export const ENABLE_CHAT_V3_AGENTS_OVERRIDE =
+  getFeatureFlagOverride('ENABLE_CHAT_V3_AGENTS') ??
+  (DEV_MODE_ENV ? true : undefined);
+export function ENABLE_CHAT_V3_AGENTS(): boolean {
+  if (ENABLE_CHAT_V3_AGENTS_OVERRIDE !== undefined) {
+    return ENABLE_CHAT_V3_AGENTS_OVERRIDE;
+  }
+
+  return (
+    analytics.posthog.isFeatureEnabled(ENABLE_CHAT_V3_AGENTS_FLAG) ?? false
+  );
+}
+
+// The Recent view: the touched-by-me feed (everything the viewer mutated,
+// newest own-touch first). Gates the view (the route redirects to the inbox
+// when off) and its sidebar entry. PostHog-gated with a dev-mode default;
+// override with VITE_ENABLE_RECENT_VIEW.
+export const ENABLE_RECENT_VIEW_FLAG = 'enable-recent-view';
+export const ENABLE_RECENT_VIEW_OVERRIDE =
+  getFeatureFlagOverride('ENABLE_RECENT_VIEW') ??
   (DEV_MODE_ENV ? true : undefined);

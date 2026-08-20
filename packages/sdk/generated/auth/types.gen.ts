@@ -505,6 +505,11 @@ export type InviteToTeamRequest = {
     invites: Array<InviteEntry>;
 };
 
+/**
+ * Defines who can access an item through its share link.
+ */
+export type LinkShare = 'PUBLIC' | 'TEAM';
+
 export type MacroApiTokenResponse = {
     /**
      * The newly created macro_api_token
@@ -590,6 +595,7 @@ export type PatchTeamCrmSettingsResponse = {
  * Request to update a team
  */
 export type PatchTeamRequest = {
+    default_link_share?: null | LinkShare;
     /**
      * The new name for the team
      */
@@ -752,6 +758,7 @@ export type Team = {
      * `false` when no row exists).
      */
     crm_enabled: boolean;
+    default_link_share?: null | LinkShare;
     /**
      * Whether this team is on an enterprise license. Enterprise teams are
      * billed out-of-band; membership changes skip all Stripe subscription
@@ -1215,9 +1222,9 @@ export type InitGmailLinkData = {
          */
         original_url: string;
         /**
-         * **OPTIONAL**. Also request the Google Calendar scope. Only honored when the deployment allows calendar scope requests; pass it from calendar entry points only, since the extra scope changes the Google consent screen.
+         * **OPTIONAL**. Which capabilities to request consent for: `gmail` (default), `gmail_and_calendar`, or `calendar`. The calendar variants are only honored when the deployment allows calendar scope requests.
          */
-        include_calendar?: boolean;
+        scopes?: string;
     };
     url: '/link/gmail';
 };

@@ -14,6 +14,7 @@ import {
   ENABLE_SUPPORTED_SOUP_FOREIGN_ENTITIES_OVERRIDE,
 } from '@core/constant/featureFlags';
 import { PROPERTY_OPTION_IDS, SYSTEM_PROPERTY_IDS } from '@property/constants';
+import type { Params } from '@service-storage/generated/schemas/params';
 import { startOfDay, subWeeks } from 'date-fns';
 
 type SoupFiltersPreset = {
@@ -32,6 +33,15 @@ type SoupFiltersPreset = {
    * matching every feed that reads newest-first.
    */
   sortDirection?: 'asc' | 'desc';
+  /**
+   * Server sort this tab's meaning requires (e.g. `touched_by_me`), taking
+   * precedence over the client sort state. Tabs that force one usually also
+   * clear the client sort (`SoupView`'s `initialClientSort={[]}`) so the
+   * server's ordering survives to the rendered rows. Frecency is excluded:
+   * it is a different query flavor with its own client handling, not a
+   * per-tab ordering.
+   */
+  sortMethod?: Exclude<NonNullable<Params['sort_method']>, 'frecency'>;
 };
 
 // Tab preset configuration types
@@ -108,9 +118,10 @@ const getInboxSignalFilters = () => {
       emailShared: 'exclude',
       // Reminders are off by default server-side rather than excluded by
       // `defineQueryFilters` (there is no `remf` entry in ID_FIELD_NAMES), so
-      // this literal is the only thing that surfaces them — and Signal is the
-      // only view that sends it. Behind the flag so an unflagged user never
-      // pays for the reminders lookup on every Signal fetch.
+      // this literal is the only thing that surfaces them; the inbox Reminders
+      // tab below sends it too, for the not-yet-fired slice. Behind the flag
+      // so an unflagged user never pays for the reminders lookup on every
+      // Signal fetch.
       ...(ENABLE_REMINDERS() ? { includeReminders: true } : {}),
       // Calendar events with a not-done notification (a fired event alarm).
       // Referencing `calf` opts the calendar arm into the signal query, which
@@ -139,7 +150,36 @@ const getInboxNoiseFilters = () =>
     emailView: 'inbox',
   });
 
+/**
+ * Filters for the Recent view: the touched-by-me feed over everything the
+ * all view shows. Documents, chats, folders, channels, and emails stay
+ * unrestricted via `skipTargets` — the touched candidate query includes
+ * every touchable type by default, and it rejects channel/email filter
+ * trees outright (400), so even the usual NIL-id opt-in trees must not be
+ * sent for those two. Calendar/CRM/foreign/channel-thread targets keep
+ * their NIL exclusions; the touched query has no candidates of those types
+ * and ignores their trees.
+ */
+const getRecentFilters = () =>
+  defineQueryFilters(
+    { exclude: getDisabledSnippetSubtypeExclude() },
+    { skipTargets: ['df', 'cf', 'pf', 'chanf', 'ef'] }
+  );
+
 export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
+  recent: {
+    default: 'all',
+    tabs: {
+      // One tab: everything the user has touched, newest own-touch first.
+      // The server ordering is the product; the client sort is cleared by
+      // the view registration so rows render in server order.
+      all: () => ({
+        filters: getRecentFilters(),
+        clientFilters: { and: ['explicit-noise'] },
+        sortMethod: 'touched_by_me',
+      }),
+    },
+  },
   inbox: {
     default: 'signal',
     tabs: {
@@ -179,6 +219,22 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
         },
         clientFilters: { and: ['explicit-noise'] },
         groupBy: ENABLE_NEW_INBOX() ? 'date' : undefined,
+      }),
+      // Pending reminders only: scheduled but not yet fired. A fired reminder
+      // has already hit the inbox — Signal surfaces it through its not-done
+      // notification — so this tab is the forward-looking complement: what is
+      // coming, not what is due. Soonest first, since "newest first" on future
+      // dates would put December above tomorrow.
+      reminders: () => ({
+        filters: defineQueryFilters({
+          include: {
+            includeReminders: true,
+            reminderCompleted: false,
+            reminderFired: false,
+          },
+        }),
+        clientFilters: { and: ['reminders-scheduled'] },
+        sortDirection: 'asc',
       }),
     },
   },

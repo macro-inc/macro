@@ -5,48 +5,52 @@ import {
 } from '@service-storage/graphql/generated/graphql';
 import { describe, expect, expectTypeOf, it, vi } from 'vitest';
 import type { CacheHost } from '../host/types';
-import { readRecords, selectRecords } from './record-selection';
+import { readRecordsByKeys, selectRecords } from './record-selection';
 
 describe('typed record selection', () => {
-  it('extracts the root fragment and infers generated result types', async () => {
-    const readRecordsHost = vi.fn().mockResolvedValue({
-      records: [{ id: 'item-1' }],
-      nextCursor: 'cursor-1',
-    });
-    const host = { readRecords: readRecordsHost } as unknown as CacheHost;
+  it('projects explicit keys and infers generated result types', async () => {
+    const readRecordsByKeysHost = vi.fn().mockResolvedValue([
+      {
+        recordKey: 'GraphqlSoupDocument:item-1',
+        record: { id: 'item-1' },
+      },
+    ]);
+    const host = {
+      readRecordsByKeys: readRecordsByKeysHost,
+    } as unknown as CacheHost;
     const selection = selectRecords(SoupItemFieldsFragmentDoc);
-    const page = await readRecords(host, selection, { limit: 25 });
+    const records = await readRecordsByKeys(host, selection, [
+      'GraphqlSoupDocument:item-1',
+    ]);
 
-    expect(readRecordsHost).toHaveBeenCalledWith({
+    expect(readRecordsByKeysHost).toHaveBeenCalledWith({
       document: expect.stringContaining('fragment SoupItemFields'),
       fragmentName: 'SoupItemFields',
-      cursor: undefined,
-      limit: 25,
+      keys: ['GraphqlSoupDocument:item-1'],
     });
-    expect(page.nextCursor).toBe('cursor-1');
-    expectTypeOf(page.records).toEqualTypeOf<SoupItemFieldsFragment[]>();
+    expectTypeOf(records).toEqualTypeOf<
+      Array<{ recordKey: string; record: SoupItemFieldsFragment }>
+    >();
     // @ts-expect-error Generated fragment records have no arbitrary field.
-    page.records[0]?.missing;
+    records[0]?.record.missing;
   });
 
-  it('rejects operation documents and malformed host pages', async () => {
+  it('rejects operation documents and malformed host records', async () => {
     expect(() => selectRecords(SoupDocument)).toThrow(
       'requires a fragment-only document'
     );
 
     const selection = selectRecords(SoupItemFieldsFragmentDoc);
     for (const result of [
-      null,
-      { records: null, nextCursor: null },
-      { records: [null], nextCursor: null },
-      { records: [], nextCursor: 42 },
+      [{ recordKey: '', record: {} }],
+      [{ recordKey: 'GraphqlSoupDocument:1', record: null }],
     ]) {
       const host = {
-        readRecords: async () => result,
+        readRecordsByKeys: async () => result,
       } as unknown as CacheHost;
-      await expect(readRecords(host, selection, { limit: 1 })).rejects.toThrow(
-        'invalid cache'
-      );
+      await expect(
+        readRecordsByKeys(host, selection, ['GraphqlSoupDocument:1'])
+      ).rejects.toThrow('invalid cache');
     }
   });
 });

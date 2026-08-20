@@ -31,6 +31,7 @@ outbound = [
   "dep:entity_access_db_utils",
   "dep:hex",
   "dep:macro_sha_count_client",
+  "dep:share_permission_db_utils",
   "dep:sqlx",
   "dep:sqs_client",
   "dep:system_properties",
@@ -99,6 +100,7 @@ dynamodb_client = { path = "../dynamodb_client", optional = true }
 entity_access_db_utils = { path = "../entity_access_db_utils", optional = true }
 hex = { workspace = true, optional = true }
 macro_sha_count_client = { path = "../macro_sha_count_client", optional = true }
+share_permission_db_utils = { path = "../share_permission_db_utils", optional = true }
 sqlx = { workspace = true, optional = true }
 sqs_client = { path = "../sqs_client", default-features = false, features = [
   "document",

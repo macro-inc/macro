@@ -20,7 +20,7 @@ use uuid::Uuid;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[cfg_attr(feature = "ai_tool", derive(schemars::JsonSchema))]
 #[serde(rename_all = "camelCase")]
-pub enum NotificationItemType {
+pub enum NotificationCategory {
     Email,
     Message,
     Channel,
@@ -32,41 +32,6 @@ pub enum NotificationItemType {
     Github,
     Reminder,
     Calendar,
-}
-
-impl NotificationItemType {
-    pub(crate) fn filter_token(self) -> &'static str {
-        match self {
-            Self::Email => "email",
-            Self::Message => "message",
-            Self::Channel => "channel",
-            Self::Document => "document",
-            Self::Project => "project",
-            Self::Chat => "chat",
-            Self::Call => "call",
-            Self::Task => "task",
-            Self::Github => "github",
-            Self::Reminder => "reminder",
-            Self::Calendar => "calendar",
-        }
-    }
-}
-
-/// User-facing reference to one specific entity to filter notifications by.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[cfg_attr(feature = "ai_tool", derive(schemars::JsonSchema))]
-#[serde(rename_all = "camelCase")]
-pub struct NotificationEntityRef {
-    /// Entity type for the provided id.
-    pub entity_type: NotificationItemType,
-    /// Entity id. For `email`, this is the email thread id. For `message`, this is the channel message id.
-    pub id: String,
-}
-
-impl NotificationEntityRef {
-    pub(crate) fn filter_token(&self) -> String {
-        format!("{}:{}", self.entity_type.filter_token(), self.id)
-    }
 }
 
 /// Request to send a notification.
@@ -320,6 +285,17 @@ pub struct UpdateNotificationsRequest<'a> {
     pub status: NotificationStatus,
 }
 
+/// Request to update every notification associated with any of several entities for a user.
+#[derive(Debug)]
+pub struct UpdateNotificationsForEntitiesRequest<'a> {
+    /// The user whose notifications are being updated.
+    pub user_id: MacroUserIdStr<'a>,
+    /// The primary or secondary entities whose notifications should be updated.
+    pub entities: Vec<Entity<'a>>,
+    /// The status to set on matching notifications.
+    pub status: NotificationStatus,
+}
+
 /// Optional filters for listing user notifications.
 #[derive(Debug, Clone)]
 pub struct NotificationListFilters {
@@ -328,9 +304,9 @@ pub struct NotificationListFilters {
     /// Filter by seen status. `None` means include both seen and unseen notifications.
     pub seen: Option<bool>,
     /// Optional user-facing notification categories to include. Empty means include all types.
-    pub include_types: Vec<NotificationItemType>,
+    pub include_types: Vec<NotificationCategory>,
     /// Optional specific entities to include. Empty means include all entities.
-    pub entities: Vec<NotificationEntityRef>,
+    pub entities: Vec<Entity<'static>>,
 }
 
 impl NotificationListFilters {
@@ -342,20 +318,6 @@ impl NotificationListFilters {
             include_types: Vec::new(),
             entities: Vec::new(),
         }
-    }
-
-    pub(crate) fn include_type_tokens(&self) -> Vec<String> {
-        self.include_types
-            .iter()
-            .map(|item_type| item_type.filter_token().to_string())
-            .collect()
-    }
-
-    pub(crate) fn entity_tokens(&self) -> Vec<String> {
-        self.entities
-            .iter()
-            .map(NotificationEntityRef::filter_token)
-            .collect()
     }
 }
 

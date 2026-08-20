@@ -635,14 +635,14 @@ export function Login(props: { signupMode?: boolean }) {
             <div class="text-center text-xs text-ink/50 wrap-break-word">
               By continuing, you agree to our{' '}
               <a
-                class="underline underline-offset-2 hover:text-ink focus-visible:text-ink"
+                class="text-link hover:text-link-hover visited:text-link-visited underline underline-offset-2 focus-visible:text-link-hover"
                 href="/terms"
               >
                 terms
               </a>{' '}
               and{' '}
               <a
-                class="underline underline-offset-2 hover:text-ink focus-visible:text-ink"
+                class="text-link hover:text-link-hover visited:text-link-visited underline underline-offset-2 focus-visible:text-link-hover"
                 href="/privacy"
               >
                 privacy policy

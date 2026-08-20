@@ -26,4 +26,5 @@ export const ListRemindersEntityType = {
   crm_contact: 'crm_contact',
   reminder: 'reminder',
   skill: 'skill',
+  agent_session: 'agent_session',
 } as const;

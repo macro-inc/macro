@@ -31,6 +31,7 @@ import type {
   SearchData,
   WithSearch,
 } from '@entity';
+import { resolveOwnTouch } from '@queries/soup/normalized-cache/own-touch';
 import type {
   CallRecordSearchResult,
   ChannelSearchResult,
@@ -971,7 +972,14 @@ export const mapApiSoupItemToEntity = (
     })
     .exhaustive();
 
-  return withRawNotifications(entity, item);
+  // Attached once for every tag: only touched_by_me pages carry the field,
+  // and the Recent feed's client sort reads it off the entity. Resolved
+  // through the own-touch floor so a touched refetch that outran the
+  // activity consumer can't move a freshly-touched row back down.
+  const touchedAt = resolveOwnTouch(entity.id, item.touched_at ?? null);
+  const touched = touchedAt ? { ...entity, touchedAt } : entity;
+
+  return withRawNotifications(touched, item);
 };
 
 const toCalendarEventTime = (
