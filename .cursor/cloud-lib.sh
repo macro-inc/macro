@@ -81,6 +81,10 @@ ensure_nix_daemon() {
 }
 
 ensure_docker_iptables_backend() {
+  local desired_backend
+  desired_backend="$(readlink -f "${DOCKER_IPTABLES_BACKEND}")"
+  local desired_ip6_backend
+  desired_ip6_backend="$(readlink -f "${DOCKER_IP6TABLES_BACKEND}")"
   local current_backend
   current_backend="$(readlink -f /etc/alternatives/iptables 2>/dev/null || true)"
   local legacy_forward_policy
@@ -93,7 +97,7 @@ ensure_docker_iptables_backend() {
   agent_debug_log "E" ".cursor/cloud-lib.sh:ensure_docker_iptables_backend:before" \
     "inspected Docker iptables backend" \
     "current=${current_backend:-missing}" \
-    "desired=${DOCKER_IPTABLES_BACKEND}" \
+    "desired=${desired_backend}" \
     "legacy_forward_policy=${legacy_forward_policy:-missing}"
   # endregion
 
@@ -103,12 +107,12 @@ ensure_docker_iptables_backend() {
   # The cloud image can preserve a legacy FORWARD DROP policy while apt selects
   # iptables-nft. Make Docker program the enforcing legacy table instead of
   # opening FORWARD or bypassing Docker's per-network isolation chains.
-  if [ "${current_backend}" != "${DOCKER_IPTABLES_BACKEND}" ]; then
+  if [ "${current_backend}" != "${desired_backend}" ]; then
     sudo /usr/bin/update-alternatives \
       --set iptables "${DOCKER_IPTABLES_BACKEND}"
   fi
   if [ "$(readlink -f /etc/alternatives/ip6tables 2>/dev/null || true)" \
-    != "${DOCKER_IP6TABLES_BACKEND}" ]; then
+    != "${desired_ip6_backend}" ]; then
     sudo /usr/bin/update-alternatives \
       --set ip6tables "${DOCKER_IP6TABLES_BACKEND}"
   fi
@@ -116,8 +120,8 @@ ensure_docker_iptables_backend() {
   current_backend="$(readlink -f /etc/alternatives/iptables)"
   local current_ip6_backend
   current_ip6_backend="$(readlink -f /etc/alternatives/ip6tables)"
-  test "${current_backend}" = "${DOCKER_IPTABLES_BACKEND}"
-  test "${current_ip6_backend}" = "${DOCKER_IP6TABLES_BACKEND}"
+  test "${current_backend}" = "${desired_backend}"
+  test "${current_ip6_backend}" = "${desired_ip6_backend}"
 
   # region agent log
   agent_debug_log "E" ".cursor/cloud-lib.sh:ensure_docker_iptables_backend:after" \
