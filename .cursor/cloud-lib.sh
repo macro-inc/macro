@@ -12,6 +12,7 @@ MACRODB_URL='postgres://user:password@localhost:5432/macrodb'
 DOCKER_SOCK='/var/run/docker.sock'
 NIX_BIN='/nix/var/nix/profiles/default/bin/nix'
 NIX_DAEMON='/nix/var/nix/profiles/default/bin/nix-daemon'
+NIX_SOCK='/nix/var/nix/daemon-socket/socket'
 export DATABASE_URL="${MACRODB_URL}"
 
 mkdir -p "${LOG_DIR}" "${TARGET_CACHE}" "${FRONTEND_CACHE}" "${MACRO_STACK_SNAPSHOT_DIR}"
@@ -20,6 +21,10 @@ ensure_nix_daemon() {
   if "${NIX_BIN}" ping-store >/dev/null 2>&1; then
     return 0
   fi
+  # Disk snapshots preserve socket path entries, not the process listening on
+  # them. Remove the stale entry only after a real store probe has failed.
+  sudo rm -f "${NIX_SOCK}"
+  : >"${LOG_DIR}/nix-daemon.log"
   sudo setsid "${NIX_DAEMON}" >>"${LOG_DIR}/nix-daemon.log" 2>&1 </dev/null &
   local n=0
   while [ "${n}" -lt 30 ]; do
@@ -30,26 +35,36 @@ ensure_nix_daemon() {
     sleep 1
   done
   echo "nix-daemon did not become ready" >&2
+  sed -n '1,160p' "${LOG_DIR}/nix-daemon.log" >&2 || true
   return 1
 }
 
 ensure_dockerd() {
-  if [ ! -S "${DOCKER_SOCK}" ]; then
-    sudo setsid /usr/bin/dockerd >>"${LOG_DIR}/dockerd.log" 2>&1 </dev/null &
-    local n=0
-    while [ "${n}" -lt 60 ]; do
-      if [ -S "${DOCKER_SOCK}" ]; then
-        break
+  if [ -S "${DOCKER_SOCK}" ]; then
+    sudo chmod 666 "${DOCKER_SOCK}"
+    if docker info >/dev/null 2>&1; then
+      return 0
+    fi
+  fi
+  # As with Nix, a snapshot can contain a dead Unix socket. Docker does not
+  # reliably replace it while starting, so clear it after the API probe fails.
+  sudo rm -f "${DOCKER_SOCK}"
+  : >"${LOG_DIR}/dockerd.log"
+  sudo setsid /usr/bin/dockerd >>"${LOG_DIR}/dockerd.log" 2>&1 </dev/null &
+  local n=0
+  while [ "${n}" -lt 60 ]; do
+    if [ -S "${DOCKER_SOCK}" ]; then
+      sudo chmod 666 "${DOCKER_SOCK}"
+      if docker info >/dev/null 2>&1; then
+        return 0
       fi
-      n=$((n + 1))
-      sleep 1
-    done
-  fi
-  if [ ! -S "${DOCKER_SOCK}" ]; then
-    echo "docker.sock not ready" >&2
-    return 1
-  fi
-  sudo chmod 666 "${DOCKER_SOCK}"
+    fi
+    n=$((n + 1))
+    sleep 1
+  done
+  echo "dockerd did not become ready" >&2
+  sed -n '1,160p' "${LOG_DIR}/dockerd.log" >&2 || true
+  return 1
 }
 
 in_pinned_nix_shell() {
