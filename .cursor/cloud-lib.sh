@@ -208,7 +208,7 @@ restore_stack_snapshot_image() {
     --user "$(id -u):$(id -g)" \
     --volume "${destination}:/restore" \
     "${STACK_SNAPSHOT_IMAGE}" \
-    sh -ceu 'cp -a /snapshot/. /restore/'
+    sh -ceu 'cp -R /snapshot/. /restore/'
   test -f "${destination}/manifest.json"
   echo "cursor-cloud: restored stack snapshot ${key} from image"
 }
