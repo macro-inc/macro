@@ -278,7 +278,7 @@ function MobileRender(
           <MobileDrawer.Handle />
           {/* Scrolls when the sections outgrow the drawer's max height; the
               handle stays pinned so drag-to-dismiss remains reachable. */}
-          <div class="flex flex-col min-h-0 flex-1 overflow-y-auto">
+          <div class="flex flex-col min-h-0 flex-auto overflow-y-auto">
             <Show when={props.views}>
               {(views) => (
                 <>
