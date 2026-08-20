@@ -104,6 +104,7 @@ import type { GetBatchChannelPreviewRequest } from './generated/schemas/getBatch
 import type { GetBatchChannelPreviewResponse } from './generated/schemas/getBatchChannelPreviewResponse';
 import type { GetBatchProjectPreviewResponse } from './generated/schemas/getBatchProjectPreviewResponse';
 import type { GetContactByEmailParams } from './generated/schemas/getContactByEmailParams';
+import type { GetContactByEmail200 } from './generated/schemas/getContactByEmail200';
 import type { GetDocumentPermissionsResponseDataV2 } from './generated/schemas/getDocumentPermissionsResponseDataV2';
 import type { GetDocumentProcessingResultResponse } from './generated/schemas/getDocumentProcessingResultResponse';
 import type { GetDocumentResponseData } from './generated/schemas/getDocumentResponseData';
@@ -2475,7 +2476,7 @@ export const storageServiceClient = {
     signal,
   }: GetContactByEmailParams & { signal?: AbortSignal }) {
     const query = new URLSearchParams({ email });
-    return await dssFetch<CrmContactResponse>(
+    return await dssFetch<GetContactByEmail200>(
       `/crm/contacts/by-email?${query.toString()}`,
       { method: 'GET', signal }
     );

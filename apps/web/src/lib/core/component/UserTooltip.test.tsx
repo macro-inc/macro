@@ -11,7 +11,7 @@ import { UserTooltip } from './UserTooltip';
 const mocks = vi.hoisted(() => ({
   crmFlagEnabled: true,
   teamCrmEnabled: true as boolean | null,
-  fetchCrmContactByEmail: vi.fn(),
+  contact: { id: 'contact-1' } as { id: string } | null | undefined,
   openWithSplit: vi.fn(),
   onClose: vi.fn(),
 }));
@@ -47,7 +47,11 @@ vi.mock('@queries/channel/get-or-create-dm', () => ({
 }));
 
 vi.mock('@queries/crm/contacts', () => ({
-  fetchCrmContactByEmail: mocks.fetchCrmContactByEmail,
+  useCrmContactByEmailQuery: () => ({
+    get data() {
+      return mocks.contact;
+    },
+  }),
 }));
 
 vi.mock('@queries/team/teams', () => ({
@@ -74,14 +78,13 @@ vi.mock('./UserIcon', () => ({
 beforeEach(() => {
   mocks.crmFlagEnabled = true;
   mocks.teamCrmEnabled = true;
-  mocks.fetchCrmContactByEmail.mockReset();
-  mocks.fetchCrmContactByEmail.mockResolvedValue({ id: 'contact-1' });
+  mocks.contact = { id: 'contact-1' };
   mocks.openWithSplit.mockReset();
   mocks.onClose.mockReset();
 });
 
 describe('UserTooltip CRM contact action', () => {
-  it('opens the CRM contact resolved from the hovered email', async () => {
+  it('opens the CRM contact resolved for the hovered email', async () => {
     const user = userEvent.setup({ skipHover: true });
     render(() => (
       <UserTooltip
@@ -96,7 +99,6 @@ describe('UserTooltip CRM contact action', () => {
       await screen.findByRole('button', { name: 'Open contact' })
     );
 
-    expect(mocks.fetchCrmContactByEmail).toHaveBeenCalledWith('panat@pync.com');
     expect(mocks.openWithSplit).toHaveBeenCalledWith(
       { type: 'contact', id: 'contact-1' },
       { preferNewSplit: false, reopen: 'latest' }
@@ -131,6 +133,32 @@ describe('UserTooltip CRM contact action', () => {
       <UserTooltip displayName="Panat Taranat" email="panat@pync.com" />
     ));
 
+    expect(screen.queryByRole('button', { name: 'Open contact' })).toBeNull();
+  });
+
+  it('hides the contact action when no CRM contact exists', () => {
+    mocks.contact = null;
+
+    render(() => (
+      <UserTooltip displayName="Panat Taranat" email="panat@pync.com" />
+    ));
+
+    expect(screen.queryByRole('button', { name: 'Open contact' })).toBeNull();
+  });
+
+  it('keeps the rest of the tooltip visible while the contact is loading', () => {
+    mocks.contact = undefined;
+
+    render(() => (
+      <UserTooltip
+        displayName="Panat Taranat"
+        email="panat@pync.com"
+        id="macro|panat@pync.com"
+      />
+    ));
+
+    expect(screen.getByText('Panat Taranat')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Copy email' })).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Open contact' })).toBeNull();
   });
 });

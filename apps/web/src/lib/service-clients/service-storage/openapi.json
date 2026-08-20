@@ -4972,7 +4972,7 @@
     "/crm/contacts/by-email": {
       "get": {
         "tags": ["crm::inbound::axum_router::get_contact_by_email"],
-        "summary": "Fetch a CRM contact by email in the caller's team. Any team member may\nresolve a visible contact; admin/owner callers may also resolve hidden\ncontacts and contacts under hidden companies.",
+        "summary": "Look up a CRM contact by email in the caller's team. Returns JSON `null`\nwhen no visible contact exists. Any team member may resolve a visible\ncontact; admin/owner callers may also resolve hidden contacts and contacts\nunder hidden companies.",
         "operationId": "get_contact_by_email",
         "parameters": [
           {
@@ -4987,11 +4987,18 @@
         ],
         "responses": {
           "200": {
-            "description": "",
+            "description": "The matching contact, or JSON null when none is visible.",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/CrmContactResponse"
+                  "oneOf": [
+                    {
+                      "type": "null"
+                    },
+                    {
+                      "$ref": "#/components/schemas/CrmContactResponse"
+                    }
+                  ]
                 }
               }
             }
@@ -5007,16 +5014,6 @@
             }
           },
           "401": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "404": {
             "description": "",
             "content": {
               "application/json": {

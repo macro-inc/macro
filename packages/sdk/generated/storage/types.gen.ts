@@ -10307,14 +10307,16 @@ export type GetContactByEmailData = {
 export type GetContactByEmailErrors = {
     400: ErrorResponse;
     401: ErrorResponse;
-    404: ErrorResponse;
     500: ErrorResponse;
 };
 
 export type GetContactByEmailError = GetContactByEmailErrors[keyof GetContactByEmailErrors];
 
 export type GetContactByEmailResponses = {
-    200: CrmContactResponse;
+    /**
+     * The matching contact, or JSON null when none is visible.
+     */
+    200: null | CrmContactResponse;
 };
 
 export type GetContactByEmailResponse = GetContactByEmailResponses[keyof GetContactByEmailResponses];

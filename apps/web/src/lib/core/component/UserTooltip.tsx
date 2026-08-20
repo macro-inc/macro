@@ -13,7 +13,7 @@ import WideCopy from '@icon/wide-copy.svg';
 import WideTask from '@icon/wide-task.svg';
 import IconCheck from '@phosphor/check.svg';
 import { useGetOrCreateDirectMessageMutation } from '@queries/channel/get-or-create-dm';
-import { fetchCrmContactByEmail } from '@queries/crm/contacts';
+import { useCrmContactByEmailQuery } from '@queries/crm/contacts';
 import { useCurrentTeamQuery } from '@queries/team/teams';
 import { debounce } from '@solid-primitives/scheduled';
 import { cn, Surface } from '@ui';
@@ -161,42 +161,38 @@ export function UserTooltip(props: UserTooltipProps) {
 }
 
 /**
- * Inner action: lives inside a local `<Suspense>` so reading
- * `useCurrentTeamQuery().data` suspends only this button, not the tooltip.
+ * Inner action: lives inside a local `<Suspense>` so the team and contact
+ * lookups suspend only this button, not the tooltip.
  */
 function OpenContactAction(props: { email: string; onClose?: () => void }) {
-  const [openingContact, setOpeningContact] = createSignal(false);
   const { openWithSplit } = useSplitLayout();
   const currentTeamQuery = useCurrentTeamQuery();
-  const crmEnabled = () => currentTeamQuery.data?.team.crm_enabled === true;
+  const team = () => currentTeamQuery.data?.team;
+  const crmEnabled = () => team()?.crm_enabled === true;
+  const contactQuery = useCrmContactByEmailQuery(
+    () => team()?.id ?? '',
+    () => props.email,
+    crmEnabled
+  );
 
-  const openContact = async (e: MouseEvent) => {
+  const openContact = (e: MouseEvent, contactId: string) => {
     e.preventDefault();
     e.stopPropagation();
-    if (openingContact() || !crmEnabled()) return;
-
-    const preferNewSplit = e.shiftKey;
-    setOpeningContact(true);
-    try {
-      const contact = await fetchCrmContactByEmail(props.email);
-      openWithSplit(
-        { type: 'contact', id: contact.id },
-        { preferNewSplit, reopen: 'latest' }
-      );
-    } catch {
-      toast.failure('Failed to open contact');
-    } finally {
-      setOpeningContact(false);
-      props.onClose?.();
-    }
+    openWithSplit(
+      { type: 'contact', id: contactId },
+      { preferNewSplit: e.shiftKey, reopen: 'latest' }
+    );
+    props.onClose?.();
   };
 
   return (
-    <Show when={crmEnabled()}>
-      <ActionItem onClick={openContact} disabled={openingContact()}>
-        <WideContact class="size-3.5" />
-        Open contact
-      </ActionItem>
+    <Show when={crmEnabled() ? contactQuery.data : undefined}>
+      {(contact) => (
+        <ActionItem onClick={(e) => openContact(e, contact().id)}>
+          <WideContact class="size-3.5" />
+          Open contact
+        </ActionItem>
+      )}
     </Show>
   );
 }
