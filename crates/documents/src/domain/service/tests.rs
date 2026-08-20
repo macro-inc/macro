@@ -177,6 +177,56 @@ impl TaskPropertiesPort for TestTaskPropertiesPort {
     }
 }
 
+#[derive(Clone, Default)]
+struct RecordingTaskPropertiesPort {
+    calls: Arc<Mutex<Vec<(String, String, String, uuid::Uuid)>>>,
+}
+
+impl TaskPropertiesPort for RecordingTaskPropertiesPort {
+    async fn attach_task_properties(&self, _entity_ids: Vec<String>) -> anyhow::Result<()> {
+        Ok(())
+    }
+
+    async fn update_task_status(&self, _entity_id: &str, _status: &str) -> anyhow::Result<()> {
+        Ok(())
+    }
+
+    async fn set_entity_property(
+        &self,
+        _user_id: &str,
+        _entity_id: &str,
+        _property_definition_id: uuid::Uuid,
+        _value: Option<models_properties::api::requests::SetPropertyValue>,
+    ) -> anyhow::Result<()> {
+        Ok(())
+    }
+
+    async fn set_entity_property_with_actor(
+        &self,
+        user_id: &str,
+        actor: activity::Actor<'static>,
+        entity_id: &str,
+        property_definition_id: uuid::Uuid,
+        _value: Option<models_properties::api::requests::SetPropertyValue>,
+    ) -> anyhow::Result<()> {
+        self.calls.lock().unwrap().push((
+            user_id.to_owned(),
+            actor.as_ref().to_owned(),
+            entity_id.to_owned(),
+            property_definition_id,
+        ));
+        Ok(())
+    }
+
+    async fn copy_task_properties(
+        &self,
+        _from_task_id: &str,
+        _to_task_id: &str,
+    ) -> anyhow::Result<()> {
+        Ok(())
+    }
+}
+
 struct TestConnectionService;
 
 impl ConnectionService for TestConnectionService {
@@ -1897,6 +1947,11 @@ fn create_document_repo_args(file_type: FileType) -> CreateDocumentRepoArgs {
         user_id: macro_user_id::user_id::MacroUserIdStr::parse_from_str("macro|user@user.com")
             .unwrap()
             .into_owned(),
+        actor: activity::Actor::new_from_user(
+            macro_user_id::user_id::MacroUserIdStr::parse_from_str("macro|user@user.com")
+                .unwrap()
+                .into_owned(),
+        ),
         file_type: Some(file_type),
         project_id: None,
         team_id: None,
@@ -1942,6 +1997,104 @@ async fn create_document_with_team_default(
     )
     .await
     .unwrap();
+}
+
+#[tokio::test]
+async fn create_document_event_preserves_actor_separately_from_owner() {
+    let mut repo = make_mock_repo();
+    repo.expect_get_team_default_link_share()
+        .return_once(|_| Box::pin(std::future::ready(Ok(None))));
+    let created_metadata = make_test_metadata();
+    repo.expect_create_document()
+        .return_once(move |_, _| Box::pin(std::future::ready(Ok(created_metadata))));
+    repo.expect_set_document_content()
+        .return_once(|_, _| Box::pin(std::future::ready(Ok(()))));
+    repo.expect_get_team_task_metadata()
+        .return_once(|_| Box::pin(std::future::ready(Ok(None))));
+
+    let (service, event_broker) = make_test_service_with_event_broker(repo);
+    let mut args = create_document_repo_args(FileType::Md);
+    args.actor = activity::Actor::new_from_bot(bot_id::MACRO_SYSTEM_BOT_ID);
+
+    crate::domain::ports::DocumentService::create_document(
+        &service,
+        macro_user_id::user_id::MacroUserIdStr::parse_from_str("macro|user@user.com")
+            .unwrap()
+            .into_owned(),
+        args,
+        None,
+    )
+    .await
+    .unwrap();
+
+    let published = event_broker.published();
+    let published = published.lock().unwrap();
+    assert_eq!(published.len(), 1);
+    assert_eq!(
+        published[0].payload["metadata"]["owner"],
+        "macro|user@user.com"
+    );
+    assert_eq!(
+        published[0].payload["metadata"]["actor"],
+        bot_id::MACRO_SYSTEM_BOT_ID.into_storage_id().as_ref()
+    );
+}
+
+#[tokio::test]
+async fn task_properties_keep_the_user_for_access_and_forward_the_activity_actor() {
+    let property_definition_id = uuid::Uuid::now_v7();
+    let task_properties = RecordingTaskPropertiesPort::default();
+    let calls = Arc::clone(&task_properties.calls);
+    let service = DocumentServiceImpl::new(
+        make_mock_repo(),
+        test_cloudfront_config(),
+        sync_service_client::SyncServiceClient::new(
+            "test-sync-key".to_string(),
+            "http://sync-service.test".to_string(),
+        ),
+        TestUploadUrlPort,
+        task_properties,
+        TestConnectionService,
+        TestEntityAccessManagementService::default(),
+        TestForeignEntityService::default(),
+        TestEventBroker::default(),
+    );
+    let user_id =
+        macro_user_id::user_id::MacroUserIdStr::try_from("macro|owner@example.com".to_string())
+            .unwrap();
+    let system_actor = activity::Actor::new_from_bot(bot_id::MACRO_SYSTEM_BOT_ID);
+
+    crate::domain::ports::DocumentService::handle_task_properties_with_actor(
+        &service,
+        user_id,
+        system_actor,
+        "document-id",
+        &CreateTaskRequest {
+            task_name: "Starter task".to_string(),
+            markdown: None,
+            project_id: None,
+            team_id: None,
+            property_values: Some(vec![PropertyInput {
+                property_id: property_definition_id.to_string(),
+                value: SetPropertyValue::String {
+                    value: "starter".to_string(),
+                },
+            }]),
+            share_with_team: false,
+        },
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(
+        *calls.lock().unwrap(),
+        vec![(
+            "macro|owner@example.com".to_string(),
+            bot_id::MACRO_SYSTEM_BOT_ID.into_storage_id().to_string(),
+            "document-id".to_string(),
+            property_definition_id,
+        )]
+    );
 }
 
 #[tokio::test]

@@ -40,6 +40,7 @@ fn created_maps_to_a_created_activity_with_the_metadata_timestamp() {
     let event = envelope(DocumentTopicEvent::Created(DocumentCreatedMetadata {
         document_id: DOCUMENT_ID.to_string(),
         owner: user("macro|creator@example.com"),
+        actor: Some(Actor::new_from_user(user("macro|creator@example.com"))),
         document_name: "spec".to_string(),
         file_type: Some(FileType::Md),
         project_id: None,
@@ -54,6 +55,43 @@ fn created_maps_to_a_created_activity_with_the_metadata_timestamp() {
     assert_eq!(activity.entity_id, DOCUMENT_ID);
     assert_eq!(activity.occurred_at, created_at);
     assert_eq!(activity.id, activity_id(event.event_id, 0));
+}
+
+#[test]
+fn system_created_document_is_attributed_to_the_system_not_its_owner() {
+    let event = envelope(DocumentTopicEvent::Created(DocumentCreatedMetadata {
+        document_id: DOCUMENT_ID.to_string(),
+        owner: user("macro|owner@example.com"),
+        actor: Some(Actor::new_from_bot(bot_id::MACRO_SYSTEM_BOT_ID)),
+        document_name: "starter".to_string(),
+        file_type: Some(FileType::Md),
+        project_id: None,
+        sub_type: None,
+        created_at: None,
+    }));
+
+    let activity = single_activity(event.event.ingest(event.event_id));
+    let system = bot_id::MACRO_SYSTEM_BOT_ID.into_storage_id().to_string();
+    assert_eq!(activity.actor.as_ref(), system);
+    assert_eq!(activity.subject_id, system);
+}
+
+#[test]
+fn legacy_created_event_without_actor_falls_back_to_owner() {
+    let event = envelope(DocumentTopicEvent::Created(DocumentCreatedMetadata {
+        document_id: DOCUMENT_ID.to_string(),
+        owner: user("macro|legacy-owner@example.com"),
+        actor: None,
+        document_name: "legacy".to_string(),
+        file_type: None,
+        project_id: None,
+        sub_type: None,
+        created_at: None,
+    }));
+
+    let activity = single_activity(event.event.ingest(event.event_id));
+    assert_eq!(activity.actor.as_ref(), "macro|legacy-owner@example.com");
+    assert_eq!(activity.subject_id, "macro|legacy-owner@example.com");
 }
 
 #[test]

@@ -39,6 +39,7 @@ fn create_document_args(
         sha: "sha".to_string(),
         document_name: "task".to_string(),
         user_id: self::user_id(user_id),
+        actor: activity::Actor::new_from_user(self::user_id(user_id)),
         file_type: Some(model::document::FileType::Md),
         project_id: None,
         team_id,

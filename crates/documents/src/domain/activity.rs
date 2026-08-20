@@ -36,7 +36,10 @@ impl ActivitySource for DocumentTopicEvent {
 
         match self {
             DocumentTopicEvent::Created(metadata) => single(
-                Actor::new_from_user(metadata.owner.clone()),
+                metadata
+                    .actor
+                    .clone()
+                    .unwrap_or_else(|| Actor::new_from_user(metadata.owner.clone())),
                 CommonAction::Created,
                 &metadata.document_id,
                 metadata.created_at.unwrap_or_else(|| event_time(event_id)),

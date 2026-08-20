@@ -5,10 +5,11 @@ use serde_json::{Value, json};
 use uuid::Uuid;
 
 use super::{
-    DocumentContentUploadedMetadata, DocumentInteractionMetadata, DocumentMacroEvent,
-    DocumentPurgedMetadata, DocumentSyncContentUpdatedMetadata, DocumentTopicEvent,
-    InteractionReason,
+    DocumentContentUploadedMetadata, DocumentCreatedMetadata, DocumentInteractionMetadata,
+    DocumentMacroEvent, DocumentPurgedMetadata, DocumentSyncContentUpdatedMetadata,
+    DocumentTopicEvent, InteractionReason,
 };
+use activity::Actor;
 
 const DOCUMENT_ID: &str = "11111111-1111-1111-1111-111111111111";
 
@@ -25,6 +26,42 @@ fn assert_wire_round_trip(event: Event<DocumentTopicEvent>, expected: Value) {
     let decoded: Event<DocumentTopicEvent> =
         serde_json::from_value(expected).expect("event deserializes");
     assert_eq!(decoded, event);
+}
+
+#[test]
+fn created_event_serializes_its_actor_separately_from_its_owner() {
+    let event = Event::with_event_id(
+        Uuid::from_u128(9),
+        DocumentTopicEvent::Created(DocumentCreatedMetadata {
+            document_id: DOCUMENT_ID.to_string(),
+            owner: owner(),
+            actor: Some(Actor::new_from_bot(bot_id::MACRO_SYSTEM_BOT_ID)),
+            document_name: "starter".to_string(),
+            file_type: Some(FileType::Md),
+            project_id: None,
+            sub_type: None,
+            created_at: None,
+        }),
+    );
+
+    assert_wire_round_trip(
+        event,
+        json!({
+            "event_id": "00000000-0000-0000-0000-000000000009",
+            "schema_version": 1,
+            "event_type": "document.created",
+            "metadata": {
+                "document_id": DOCUMENT_ID,
+                "owner": "macro|owner@example.com",
+                "actor": bot_id::MACRO_SYSTEM_BOT_ID.into_storage_id().as_ref(),
+                "document_name": "starter",
+                "file_type": "md",
+                "project_id": null,
+                "sub_type": null,
+                "created_at": null,
+            },
+        }),
+    );
 }
 
 #[test]

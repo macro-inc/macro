@@ -1127,6 +1127,53 @@ async fn entity_property_event_set_publishes_null_authoritative_snapshot() {
 }
 
 #[tokio::test]
+async fn explicit_system_actor_changes_attribution_without_changing_access() {
+    let property_definition_id = Uuid::from_u128(0xE711);
+    let assignment = entity_property_for_event(
+        Uuid::from_u128(0xE712),
+        "doc1",
+        EntityType::Document,
+        property_definition_id,
+        event_timestamp(),
+    );
+    let mut repo = MockPropertiesRepo::new();
+    repo.expect_get_property_definition().return_once(move |_| {
+        Box::pin(async move { Ok(Some(multi_select_definition(property_definition_id, false))) })
+    });
+    repo.expect_upsert_entity_property()
+        .return_once(move |_, _, _, _| {
+            Box::pin(async move {
+                Ok(EntityPropertyMutationSnapshot {
+                    property: assignment,
+                    value: None,
+                    previous_value: None,
+                })
+            })
+        });
+    let event_broker = RecordingEventBroker::default();
+    let service = service_with_event_broker(repo, event_broker.clone());
+    let access = edit_receipt("doc1", EntityType::Document);
+
+    service
+        .set_entity_property_with_actor(
+            &access,
+            Some(activity::Actor::new_from_bot(bot_id::MACRO_SYSTEM_BOT_ID)),
+            property_definition_id,
+            None,
+        )
+        .await
+        .unwrap();
+
+    let metadata = &only_published_property_event(&event_broker).envelope["metadata"];
+    assert_eq!(metadata["actor_user_id"], serde_json::Value::Null);
+    assert_eq!(
+        metadata["actor"],
+        bot_id::MACRO_SYSTEM_BOT_ID.into_storage_id().as_ref()
+    );
+    assert_eq!(access.authenticated_user(), Some(&caller_user_id()));
+}
+
+#[tokio::test]
 async fn entity_property_event_set_failures_do_not_publish_before_commit() {
     let property_definition_id = Uuid::from_u128(0xE703);
 

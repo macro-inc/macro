@@ -6,6 +6,7 @@
 #[cfg(test)]
 mod test;
 
+use activity::Actor;
 use chrono::{DateTime, Utc};
 use macro_event_broker::{Event, MacroEvent, TopicEvent};
 use macro_event_topics::MacroPropertiesTopic;
@@ -112,6 +113,11 @@ pub struct EntityPropertyUpdatedMetadata {
     pub property_definition_id: Uuid,
     /// Authenticated user who changed the value, or `None` for a system operation.
     pub actor_user_id: Option<MacroUserIdStr<'static>>,
+    /// Principal that mechanically changed the value. New producers populate
+    /// this for both users and bots; `actor_user_id` remains for rolling and
+    /// stored-event compatibility.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub actor: Option<Actor<'static>>,
     /// Full value after the update, or `None` when cleared without deleting the row.
     pub value: Option<PropertyValue>,
     /// Full value before the update: `None` when the property was newly
@@ -136,6 +142,9 @@ pub struct EntityPropertyDeletedMetadata {
     pub property_definition_id: Uuid,
     /// Authenticated user who deleted the value, or `None` for a system operation.
     pub actor_user_id: Option<MacroUserIdStr<'static>>,
+    /// Principal that mechanically deleted the value.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub actor: Option<Actor<'static>>,
 }
 
 /// Metadata for [`PropertyTopicEvent::EntityPropertiesCleared`].
@@ -147,6 +156,9 @@ pub struct EntityPropertiesClearedMetadata {
     pub entity_type: EntityType,
     /// Authenticated user who cleared the values, or `None` for a system operation.
     pub actor_user_id: Option<MacroUserIdStr<'static>>,
+    /// Principal that mechanically cleared the values.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub actor: Option<Actor<'static>>,
 }
 
 /// Property mutation events published to [`MacroPropertiesTopic`].

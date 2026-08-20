@@ -1,6 +1,25 @@
 use super::*;
 
 #[test]
+fn first_party_bot_ids_are_distinct_and_parseable() {
+    let ids = [MACRO_AI_BOT_ID, MACRO_SYSTEM_BOT_ID, MACRO_CODER_BOT_ID];
+
+    assert_eq!(
+        ids.iter().collect::<std::collections::HashSet<_>>().len(),
+        ids.len()
+    );
+    for id in ids {
+        let principal = id.into_storage_id();
+        assert_eq!(
+            BotIdStr::parse_from_str(principal.as_ref())
+                .unwrap()
+                .bot_id(),
+            id
+        );
+    }
+}
+
+#[test]
 fn storage_string_round_trips() {
     let uuid = Uuid::new_v4();
     let bot_id = BotId::new_from_uuid(uuid);

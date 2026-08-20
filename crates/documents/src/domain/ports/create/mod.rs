@@ -3,6 +3,7 @@
 use std::future::Future;
 use std::sync::Arc;
 
+use activity::Actor;
 use macro_user_id::user_id::MacroUserIdStr;
 
 use crate::domain::content::DocumentContent;
@@ -48,6 +49,21 @@ pub trait DocumentCreationService: Send + Sync {
         request: &CreateTaskRequest,
     ) -> impl Future<Output = Result<(), DocumentError>> + Send;
 
+    /// Assign task properties while explicitly selecting their activity actor.
+    ///
+    /// The default preserves existing service adapters by delegating to
+    /// [`Self::handle_task_properties`]. Implementations that publish activity
+    /// should override this method and keep access based on `user_id`.
+    fn handle_task_properties_with_actor(
+        &self,
+        user_id: MacroUserIdStr<'static>,
+        _actor: Actor<'static>,
+        document_id: &str,
+        request: &CreateTaskRequest,
+    ) -> impl Future<Output = Result<(), DocumentError>> + Send {
+        self.handle_task_properties(user_id, document_id, request)
+    }
+
     /// Mark a created document's upload/finalization lifecycle as complete.
     fn mark_document_uploaded(
         &self,
@@ -86,6 +102,18 @@ where
     ) -> Result<(), DocumentError> {
         (**self)
             .handle_task_properties(user_id, document_id, request)
+            .await
+    }
+
+    async fn handle_task_properties_with_actor(
+        &self,
+        user_id: MacroUserIdStr<'static>,
+        actor: Actor<'static>,
+        document_id: &str,
+        request: &CreateTaskRequest,
+    ) -> Result<(), DocumentError> {
+        (**self)
+            .handle_task_properties_with_actor(user_id, actor, document_id, request)
             .await
     }
 

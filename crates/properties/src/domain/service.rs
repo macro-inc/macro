@@ -10,6 +10,7 @@
 
 use std::collections::HashMap;
 
+use activity::Actor;
 use entity_access::domain::models::{EntityAccessReceipt, MemberTeamRole};
 use macro_user_id::user_id::MacroUserIdStr;
 use models_properties::EntityType;
@@ -85,6 +86,17 @@ pub trait PropertiesService: Send + Sync + 'static {
         value: Option<SetPropertyValue>,
     ) -> impl Future<Output = Result<EntityPropertyWithDefinition, PropertiesErr>> + Send;
 
+    /// Set a property while explicitly selecting the principal recorded in
+    /// the resulting activity event. The access receipt remains the sole
+    /// authorization capability; `actor` affects attribution only.
+    fn set_entity_property_with_actor(
+        &self,
+        access: &EditReceipt,
+        actor: Option<Actor<'static>>,
+        property_definition_id: Uuid,
+        value: Option<SetPropertyValue>,
+    ) -> impl Future<Output = Result<EntityPropertyWithDefinition, PropertiesErr>> + Send;
+
     /// Add one option to a multi-select entity property value atomically.
     /// Attaches the property if needed and dedupes. Validates the option belongs
     /// to the (multi-select) property. Prefer this over `set_entity_property`
@@ -93,6 +105,16 @@ pub trait PropertiesService: Send + Sync + 'static {
     fn add_entity_property_option(
         &self,
         access: &EditReceipt,
+        property_definition_id: Uuid,
+        option_id: Uuid,
+    ) -> impl Future<Output = Result<(), PropertiesErr>> + Send;
+
+    /// Add an option while explicitly selecting the principal recorded in
+    /// the resulting activity event. Authorization still comes from `access`.
+    fn add_entity_property_option_with_actor(
+        &self,
+        access: &EditReceipt,
+        actor: Option<Actor<'static>>,
         property_definition_id: Uuid,
         option_id: Uuid,
     ) -> impl Future<Output = Result<(), PropertiesErr>> + Send;

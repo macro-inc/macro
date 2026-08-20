@@ -5,6 +5,7 @@
 //! call sites should choose the lifecycle they need (`create_markdown_text` or
 //! `create_text_file`).
 
+use activity::Actor;
 use anyhow::Context;
 use base64::Engine;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -30,6 +31,7 @@ pub struct NewDocumentMetadata {
     email_attachment_id: Option<uuid::Uuid>,
     created_at: Option<chrono::DateTime<chrono::Utc>>,
     skip_history: bool,
+    actor: Option<Actor<'static>>,
 }
 
 impl NewDocumentMetadata {
@@ -48,6 +50,7 @@ impl NewDocumentMetadata {
                 email_attachment_id: None,
                 created_at: None,
                 skip_history: false,
+                actor: None,
             },
         }
     }
@@ -57,11 +60,15 @@ impl NewDocumentMetadata {
         user_id: MacroUserIdStr<'static>,
         kind: RepoDocumentKind,
     ) -> CreateDocumentRepoArgs {
+        let actor = self
+            .actor
+            .unwrap_or_else(|| Actor::new_from_user(user_id.clone()));
         CreateDocumentRepoArgs {
             id: self.id,
             sha: kind.sha,
             document_name: self.document_name,
             user_id,
+            actor,
             file_type: kind.file_type,
             project_id: self.project_id,
             team_id: kind.team_id,
@@ -107,6 +114,15 @@ impl NewDocumentMetadataBuilder {
     /// Skip adding this document to user history.
     pub fn skip_history(mut self) -> Self {
         self.metadata.skip_history = true;
+        self
+    }
+
+    /// Attribute creation to a principal other than the document owner.
+    ///
+    /// This changes emitted activity only; it does not grant the principal
+    /// access or alter document ownership.
+    pub fn actor(mut self, actor: Actor<'static>) -> Self {
+        self.metadata.actor = Some(actor);
         self
     }
 
@@ -548,6 +564,10 @@ where
 
         let task_name = metadata.document_name.clone();
         let project_id = metadata.project_id;
+        let actor = metadata
+            .actor
+            .clone()
+            .unwrap_or_else(|| Actor::new_from_user(user_id.clone()));
         let team_id = if let Some((_, _, team_id)) = task.as_ref() {
             *team_id
         } else {
@@ -584,8 +604,9 @@ where
         let finalize_result = async {
             if let Some((property_values, share_with_team, team_id)) = task {
                 self.document_service
-                    .handle_task_properties(
+                    .handle_task_properties_with_actor(
                         user_id,
+                        actor,
                         &document_id,
                         &CreateTaskRequest {
                             task_name,
@@ -730,11 +751,49 @@ fn file_shas(file_content: &[u8]) -> FileShas {
 
 #[cfg(test)]
 mod tests {
-    use super::{MarkdownSubtype, NewDocumentMetadata, NewPlainTextDocument, file_shas};
+    use super::{
+        MarkdownSubtype, NewDocumentMetadata, NewPlainTextDocument, RepoDocumentKind,
+        RepoDocumentSubtype, file_shas,
+    };
+    use activity::Actor;
+    use macro_user_id::user_id::MacroUserIdStr;
     use model::document::FileType;
 
     fn metadata() -> NewDocumentMetadata {
         NewDocumentMetadata::new("test")
+    }
+
+    fn owner() -> MacroUserIdStr<'static> {
+        MacroUserIdStr::try_from("macro|owner@example.com".to_string()).unwrap()
+    }
+
+    fn repo_kind() -> RepoDocumentKind {
+        RepoDocumentKind {
+            file_type: Some(FileType::Md),
+            sha: "sha".to_string(),
+            subtype: RepoDocumentSubtype::Regular,
+            team_id: None,
+        }
+    }
+
+    #[test]
+    fn creation_actor_defaults_to_the_owner() {
+        let args = metadata().into_repo_args(owner(), repo_kind());
+        assert_eq!(args.actor.as_ref(), "macro|owner@example.com");
+    }
+
+    #[test]
+    fn creation_actor_can_be_overridden_without_changing_owner() {
+        let args = NewDocumentMetadata::builder("test")
+            .actor(Actor::new_from_bot(bot_id::MACRO_SYSTEM_BOT_ID))
+            .build()
+            .into_repo_args(owner(), repo_kind());
+
+        assert_eq!(args.user_id.as_ref(), "macro|owner@example.com");
+        assert_eq!(
+            args.actor.as_ref(),
+            bot_id::MACRO_SYSTEM_BOT_ID.into_storage_id().as_ref()
+        );
     }
 
     #[test]

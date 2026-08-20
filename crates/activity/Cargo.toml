@@ -16,6 +16,7 @@ consumer = [
 ]
 default = ["consumer", "outbound"]
 outbound = ["dep:sqlx", "dep:tracing"]
+schema = ["channel_sender/schema"]
 
 [dependencies]
 channel_sender = { path = "../channel_sender" }

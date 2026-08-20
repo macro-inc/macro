@@ -342,6 +342,22 @@ pub trait TaskPropertiesPort: Send + Sync + 'static {
         value: Option<models_properties::api::requests::SetPropertyValue>,
     ) -> impl Future<Output = anyhow::Result<()>> + Send;
 
+    /// Set a property while explicitly selecting its activity actor.
+    ///
+    /// The default preserves existing adapters by delegating to
+    /// [`Self::set_entity_property`]. Adapters that publish activity should
+    /// override this method and keep authorization based on `user_id`.
+    fn set_entity_property_with_actor(
+        &self,
+        user_id: &str,
+        _actor: activity::Actor<'static>,
+        entity_id: &str,
+        property_definition_id: uuid::Uuid,
+        value: Option<models_properties::api::requests::SetPropertyValue>,
+    ) -> impl Future<Output = anyhow::Result<()>> + Send {
+        self.set_entity_property(user_id, entity_id, property_definition_id, value)
+    }
+
     /// Copy all task property values from one task to another.
     fn copy_task_properties(
         &self,
@@ -494,6 +510,21 @@ pub trait DocumentService: Send + Sync + 'static {
         document_id: &str,
         request: &CreateTaskRequest,
     ) -> impl Future<Output = Result<(), DocumentError>> + Send;
+
+    /// Assigns task properties with an explicit activity actor.
+    ///
+    /// Existing service implementations remain compatible through the
+    /// default; activity-aware implementations should override it while
+    /// keeping authorization tied to `user_id`.
+    fn handle_task_properties_with_actor(
+        &self,
+        user_id: MacroUserIdStr<'static>,
+        _actor: activity::Actor<'static>,
+        document_id: &str,
+        request: &CreateTaskRequest,
+    ) -> impl Future<Output = Result<(), DocumentError>> + Send {
+        self.handle_task_properties(user_id, document_id, request)
+    }
 
     /// Returns the raw bytes of the cached Loro snapshot, or `None` if no snapshot exists.
     fn get_snapshot(

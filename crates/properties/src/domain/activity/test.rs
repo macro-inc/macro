@@ -25,6 +25,7 @@ fn update(actor: Option<MacroUserIdStr<'static>>) -> EntityPropertyUpdatedMetada
         entity_type: PropertyEntityType::Task,
         property_definition_id: Uuid::from_u128(3),
         actor_user_id: actor,
+        actor: None,
         value: None,
         previous_value: None,
         updated_at: Utc::now(),
@@ -51,6 +52,20 @@ fn property_update_carries_the_previous_value_as_the_transition_from() {
         }
         other => panic!("expected property_changed, got {other:?}"),
     }
+}
+
+#[test]
+fn generic_actor_takes_precedence_over_the_legacy_user_actor() {
+    let mut metadata = update(Some(user("macro|owner@example.com")));
+    metadata.actor = Some(Actor::new_from_bot(bot_id::MACRO_SYSTEM_BOT_ID));
+    let event = envelope(PropertyTopicEvent::EntityPropertyUpdated(metadata));
+
+    let Ingest::Insert(activities) = event.event.ingest(event.event_id) else {
+        panic!("expected activity");
+    };
+    let system = bot_id::MACRO_SYSTEM_BOT_ID.into_storage_id().to_string();
+    assert_eq!(activities[0].actor.as_ref(), system);
+    assert_eq!(activities[0].subject_id, system);
 }
 
 #[test]

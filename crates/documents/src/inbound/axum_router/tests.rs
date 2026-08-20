@@ -80,6 +80,7 @@ const RESOLVED_DOCUMENT_ID: &str = "resolved-document";
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct CreateDocumentCall {
     user_id: String,
+    actor: String,
     email_attachment_id: Option<Uuid>,
 }
 
@@ -285,6 +286,7 @@ impl DocumentService for FakeDocumentService {
             .expect("create calls lock poisoned")
             .push(CreateDocumentCall {
                 user_id: user_id.as_ref().to_string(),
+                actor: args.actor.as_ref().to_string(),
                 email_attachment_id: args.email_attachment_id,
             });
 
@@ -1125,6 +1127,7 @@ async fn legacy_internal_headers_reach_the_internal_only_creation_path() {
         document_service.create_calls(),
         [CreateDocumentCall {
             user_id: LEGACY_INTERNAL_USER_ID.to_string(),
+            actor: bot_id::MACRO_SYSTEM_BOT_ID.into_storage_id().to_string(),
             email_attachment_id: Some(email_attachment_id),
         }]
     );
@@ -1153,6 +1156,7 @@ async fn standard_internal_headers_reach_the_document_service() {
         document_service.create_calls(),
         [CreateDocumentCall {
             user_id: STANDARD_INTERNAL_USER_ID.to_string(),
+            actor: bot_id::MACRO_SYSTEM_BOT_ID.into_storage_id().to_string(),
             email_attachment_id: None,
         }]
     );
@@ -1183,6 +1187,7 @@ async fn standard_internal_headers_take_precedence_over_legacy_headers() {
         document_service.create_calls(),
         [CreateDocumentCall {
             user_id: STANDARD_INTERNAL_USER_ID.to_string(),
+            actor: bot_id::MACRO_SYSTEM_BOT_ID.into_storage_id().to_string(),
             email_attachment_id: None,
         }]
     );
@@ -1197,6 +1202,27 @@ async fn standard_internal_headers_take_precedence_over_legacy_headers() {
             },
         } if provided_key == STANDARD_INTERNAL_KEY && user_id == STANDARD_INTERNAL_USER_ID
     )));
+}
+
+#[tokio::test]
+async fn jwt_document_creation_is_attributed_to_the_user() {
+    let (router, document_service, _access_service, _authorization_service) = test_router();
+    let request = finish_request(
+        create_request().header("authorization", format!("Bearer {JWT_TOKEN}")),
+        None,
+    );
+
+    let (status, _body) = send(&router, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(
+        document_service.create_calls(),
+        [CreateDocumentCall {
+            user_id: JWT_USER_ID.to_string(),
+            actor: JWT_USER_ID.to_string(),
+            email_attachment_id: None,
+        }]
+    );
 }
 
 #[tokio::test]

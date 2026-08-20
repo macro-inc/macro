@@ -423,6 +423,7 @@ impl DocumentRepo for PgDocumentRepo {
             sha,
             document_name,
             user_id,
+            actor: _,
             file_type,
             project_id,
             team_id,

@@ -254,6 +254,27 @@ impl TaskPropertiesPort for TaskPropertiesAdapter {
         property_definition_id: uuid::Uuid,
         value: Option<models_properties::api::requests::SetPropertyValue>,
     ) -> anyhow::Result<()> {
+        let actor = activity::Actor::new_from_user(
+            macro_user_id::user_id::MacroUserIdStr::try_from(user_id.to_owned())?,
+        );
+        self.set_entity_property_with_actor(
+            user_id,
+            actor,
+            entity_id,
+            property_definition_id,
+            value,
+        )
+        .await
+    }
+
+    async fn set_entity_property_with_actor(
+        &self,
+        user_id: &str,
+        actor: activity::Actor<'static>,
+        entity_id: &str,
+        property_definition_id: uuid::Uuid,
+        value: Option<models_properties::api::requests::SetPropertyValue>,
+    ) -> anyhow::Result<()> {
         use properties::PropertiesService as _;
 
         let user_id = macro_user_id::user_id::MacroUserIdStr::parse_from_str(user_id)?;
@@ -268,7 +289,12 @@ impl TaskPropertiesPort for TaskPropertiesAdapter {
             )
             .await?;
         self.properties
-            .set_entity_property(&entity_access_receipt, property_definition_id, value)
+            .set_entity_property_with_actor(
+                &entity_access_receipt,
+                Some(actor),
+                property_definition_id,
+                value,
+            )
             .await
             .map(|_| ())
             .map_err(Into::into)

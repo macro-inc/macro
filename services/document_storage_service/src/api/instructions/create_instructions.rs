@@ -2,11 +2,12 @@ use crate::{
     api::context::{ApiContext, AuthorizationService},
     model::response::instructions::CreateInstructionsDocumentResponse,
 };
+use activity::Actor;
 use axum::{Json, extract::State};
 use documents_hex::domain::create::{NewDocumentMetadata, NewMarkdownTextDocument};
 use documents_hex::domain::models::DocumentError;
 use documents_hex::domain::ports::create::DocumentCreationService as _;
-use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
+use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal, UserOrInternalCaller};
 use macro_db_client::instructions::create::{
     CreateInstructionsError, insert_instructions_document,
 };
@@ -42,12 +43,17 @@ pub async fn create_instructions_handler(
         ));
     }
 
+    let mut metadata = NewDocumentMetadata::builder(INSTRUCTIONS_FILE_NAME);
+    if user_context.authorization.caller == UserOrInternalCaller::Internal {
+        metadata = metadata.actor(Actor::new_from_bot(bot_id::MACRO_SYSTEM_BOT_ID));
+    }
+
     let created = ctx
         .documents_state
         .creator
         .create_markdown_text(
             user_id.clone(),
-            NewMarkdownTextDocument::empty_note(NewDocumentMetadata::new(INSTRUCTIONS_FILE_NAME)),
+            NewMarkdownTextDocument::empty_note(metadata.build()),
         )
         .await?;
     let document_id = created.document_id().to_string();

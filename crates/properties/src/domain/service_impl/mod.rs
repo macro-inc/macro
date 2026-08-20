@@ -5,6 +5,7 @@ mod task_properties;
 
 use std::collections::{HashMap, HashSet};
 
+use activity::Actor;
 use document_sub_type::DocumentSubType;
 use entity_access::domain::models::{
     EntityAccessReceipt, EntityType as AccessEntityType, RequiredPermission,
@@ -180,13 +181,18 @@ where
         value: &Option<PropertyValue>,
         previous_value: &Option<PropertyValue>,
         access: &EditReceipt,
+        actor: &Option<Actor<'static>>,
     ) -> PropertyMacroEvent {
         PropertyMacroEvent::entity_property_updated(EntityPropertyUpdatedMetadata {
             entity_property_id: property.id,
             entity_id: property.entity_id.clone(),
             entity_type: property.entity_type,
             property_definition_id: property.property_definition_id,
-            actor_user_id: access.authenticated_user().cloned(),
+            actor_user_id: match actor {
+                Some(actor) => actor.as_user().cloned(),
+                None => access.authenticated_user().cloned(),
+            },
+            actor: actor.clone(),
             value: value.clone(),
             previous_value: previous_value.clone(),
             updated_at: property.updated_at,
@@ -208,6 +214,7 @@ where
                 &mutation.value,
                 &mutation.previous_value,
                 access,
+                &None,
             ));
         }
     }
@@ -392,6 +399,7 @@ where
                     entity_type: mutation.property.entity_type,
                     property_definition_id: mutation.property.property_definition_id,
                     actor_user_id: Some(actor.clone().into_owned()),
+                    actor: None,
                     value: mutation.value.clone(),
                     previous_value: mutation.previous_value.clone(),
                     updated_at: mutation.property.updated_at,
@@ -555,6 +563,27 @@ where
         property_definition_id: Uuid,
         value: Option<SetPropertyValue>,
     ) -> Result<EntityPropertyWithDefinition, PropertiesErr> {
+        self.set_entity_property_with_actor(access, None, property_definition_id, value)
+            .await
+    }
+
+    #[tracing::instrument(
+        err,
+        skip(self, access, actor),
+        fields(
+            entity_id = %access.entity_id(),
+            entity_type = ?access.entity_type(),
+            property_definition_id = %property_definition_id,
+            has_value = value.is_some()
+        )
+    )]
+    async fn set_entity_property_with_actor(
+        &self,
+        access: &EditReceipt,
+        actor: Option<Actor<'static>>,
+        property_definition_id: Uuid,
+        value: Option<SetPropertyValue>,
+    ) -> Result<EntityPropertyWithDefinition, PropertiesErr> {
         let subject = self.resolve_subject(access).await?;
         let entity_id = access.entity_id();
         let entity_type = subject.storage_entity_type;
@@ -628,6 +657,7 @@ where
                 // value; the activity transition simply omits its "from" side.
                 &None,
                 access,
+                &actor,
             ));
             return Ok(EntityPropertyWithDefinition {
                 property,
@@ -660,6 +690,7 @@ where
             &property_value,
             &snapshot.previous_value,
             access,
+            &actor,
         ));
 
         Ok(EntityPropertyWithDefinition {
@@ -682,6 +713,27 @@ where
     async fn add_entity_property_option(
         &self,
         access: &EditReceipt,
+        property_definition_id: Uuid,
+        option_id: Uuid,
+    ) -> Result<(), PropertiesErr> {
+        self.add_entity_property_option_with_actor(access, None, property_definition_id, option_id)
+            .await
+    }
+
+    #[tracing::instrument(
+        err,
+        skip(self, access, actor),
+        fields(
+            entity_id = %access.entity_id(),
+            entity_type = ?access.entity_type(),
+            property_definition_id = %property_definition_id,
+            option_id = %option_id
+        )
+    )]
+    async fn add_entity_property_option_with_actor(
+        &self,
+        access: &EditReceipt,
+        actor: Option<Actor<'static>>,
         property_definition_id: Uuid,
         option_id: Uuid,
     ) -> Result<(), PropertiesErr> {
@@ -729,6 +781,7 @@ where
             &mutation.value,
             &mutation.previous_value,
             access,
+            &actor,
         ));
 
         Ok(())
@@ -767,6 +820,7 @@ where
                 &mutation.value,
                 &mutation.previous_value,
                 access,
+                &None,
             ));
         }
 
@@ -1608,6 +1662,7 @@ where
                 entity_id: access.entity_id().to_string(),
                 entity_type: subject.storage_entity_type,
                 actor_user_id: access.authenticated_user().cloned(),
+                actor: None,
             },
         ));
 
@@ -1686,6 +1741,7 @@ where
                 entity_type: property_info.entity_type,
                 property_definition_id: property_info.property_definition_id,
                 actor_user_id: access.authenticated_user().cloned(),
+                actor: None,
             },
         ));
 

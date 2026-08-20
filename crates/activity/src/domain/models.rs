@@ -344,9 +344,8 @@ pub enum Ingest {
     Insert(Vec<Activity>),
     /// These entities were hard-deleted; purge their activities.
     Purge(Vec<(EntityType, String)>),
-    /// The event carries no activity: pipeline noise, or a mutation with no
-    /// actor (unattributable activities are dropped until a system principal
-    /// exists).
+    /// The event carries no activity: pipeline noise, or a legacy mutation
+    /// that omitted an attributable principal.
     Ignore,
 }
 

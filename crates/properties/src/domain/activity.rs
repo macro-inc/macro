@@ -35,19 +35,23 @@ fn entity_type(property_entity: &PropertyEntityType) -> Option<EntityType> {
 
 fn attributed(
     event_id: uuid::Uuid,
-    actor: &Option<MacroUserIdStr<'static>>,
+    actor: &Option<Actor<'static>>,
+    legacy_actor_user_id: &Option<MacroUserIdStr<'static>>,
     property_entity: &PropertyEntityType,
     entity_id: &str,
     action: CommonAction,
     occurred_at: chrono::DateTime<chrono::Utc>,
 ) -> Ingest {
+    let actor = actor
+        .clone()
+        .or_else(|| legacy_actor_user_id.clone().map(Actor::new_from_user));
     let (Some(actor), Some(entity_type)) = (actor, entity_type(property_entity)) else {
         return Ingest::Ignore;
     };
     Ingest::Insert(vec![Activity::common(
         event_id,
         0,
-        Actor::new_from_user(actor.clone()),
+        actor,
         None,
         entity_type,
         entity_id,
@@ -65,6 +69,7 @@ impl ActivitySource for PropertyTopicEvent {
         match self {
             PropertyTopicEvent::EntityPropertyUpdated(m) => attributed(
                 event_id,
+                &m.actor,
                 &m.actor_user_id,
                 &m.entity_type,
                 &m.entity_id,
@@ -91,6 +96,7 @@ impl ActivitySource for PropertyTopicEvent {
             ),
             PropertyTopicEvent::EntityPropertyDeleted(m) => attributed(
                 event_id,
+                &m.actor,
                 &m.actor_user_id,
                 &m.entity_type,
                 &m.entity_id,
@@ -105,6 +111,7 @@ impl ActivitySource for PropertyTopicEvent {
             // mutation of the entity.
             PropertyTopicEvent::EntityPropertiesCleared(m) => attributed(
                 event_id,
+                &m.actor,
                 &m.actor_user_id,
                 &m.entity_type,
                 &m.entity_id,

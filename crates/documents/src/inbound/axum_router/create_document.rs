@@ -2,6 +2,7 @@
 
 use std::str::FromStr;
 
+use activity::Actor;
 use axum::{Json, extract::State};
 use entity_access::domain::ports::EntityAccessService;
 use entity_access::inbound::axum_extractors::ProjectBodyAccessLevelExtractorV2;
@@ -93,6 +94,12 @@ pub async fn create_document_handler<
         sha: req.sha,
         document_name,
         user_id: user.authorization.user.macro_user_id.clone(),
+        actor: match user.authorization.caller {
+            UserOrInternalCaller::User => {
+                Actor::new_from_user(user.authorization.user.macro_user_id.clone())
+            }
+            UserOrInternalCaller::Internal => Actor::new_from_bot(bot_id::MACRO_SYSTEM_BOT_ID),
+        },
         file_type,
         project_id: req.project_id,
         team_id,

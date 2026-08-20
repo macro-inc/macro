@@ -1,4 +1,5 @@
 use crate::api::context::{ApiContext, AuthorizationService};
+use activity::Actor;
 use axum::{
     extract::State,
     response::{IntoResponse, Json, Response},
@@ -170,6 +171,7 @@ pub async fn handler(
     tracing::info!("initialize starter docs");
 
     let user_id = &user_context.authorization.user.macro_user_id;
+    let system_actor = Actor::new_from_bot(bot_id::MACRO_SYSTEM_BOT_ID);
 
     // Resolve every starter document's deterministic id up front so the
     // templates can cross-link before any document has been created.
@@ -202,6 +204,7 @@ pub async fn handler(
                 NewMarkdownTextDocument {
                     metadata: NewDocumentMetadata::builder(task.name)
                         .id(starter_doc_id(user_id, task.name))
+                        .actor(system_actor.clone())
                         .build(),
                     markdown: fill(task.template),
                     subtype: MarkdownSubtype::Task {
@@ -232,6 +235,7 @@ pub async fn handler(
             NewMarkdownTextDocument {
                 metadata: NewDocumentMetadata::builder(HOW_TO_GUIDE_NAME)
                     .id(starter_doc_id(user_id, HOW_TO_GUIDE_NAME))
+                    .actor(system_actor.clone())
                     .build(),
                 markdown: fill(HOW_TO_GUIDE_TEMPLATE),
                 subtype: MarkdownSubtype::Note,
@@ -341,8 +345,9 @@ pub async fn handler(
         if let Some(priority) = priority {
             let _ = state
                 .properties_service
-                .set_entity_property(
+                .set_entity_property_with_actor(
                     &receipt,
+                    Some(system_actor.clone()),
                     SystemPropertyKey::PRIORITY_UUID,
                     Some(SetPropertyValue::SelectOption {
                         option_id: priority.uuid(),
@@ -361,7 +366,12 @@ pub async fn handler(
         if let Some((tag_definition_id, tag_option_id)) = docs_tag {
             let _ = state
                 .properties_service
-                .add_entity_property_option(&receipt, tag_definition_id, tag_option_id)
+                .add_entity_property_option_with_actor(
+                    &receipt,
+                    Some(system_actor.clone()),
+                    tag_definition_id,
+                    tag_option_id,
+                )
                 .await
                 .inspect_err(|e| {
                     tracing::error!(

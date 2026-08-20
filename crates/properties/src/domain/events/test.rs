@@ -160,6 +160,7 @@ fn topic_events(
                 entity_type: EntityType::Document,
                 property_definition_id: uuid(PROPERTY_DEFINITION_ID),
                 actor_user_id: actor_user_id.clone(),
+                actor: None,
                 value: Some(PropertyValue::SelectOption(vec![uuid(OPTION_ID)])),
                 previous_value: None,
                 updated_at: timestamp(UPDATED_AT),
@@ -188,6 +189,7 @@ fn topic_events(
                 entity_type: EntityType::Document,
                 property_definition_id: uuid(PROPERTY_DEFINITION_ID),
                 actor_user_id: actor_user_id.clone(),
+                actor: None,
             }),
             json!({
                 "event_type": "entity_property.deleted",
@@ -205,6 +207,7 @@ fn topic_events(
                 entity_id: ENTITY_ID.to_string(),
                 entity_type: EntityType::Document,
                 actor_user_id,
+                actor: None,
             }),
             json!({
                 "event_type": "entity_properties.cleared",

@@ -7,6 +7,7 @@
 #[cfg(test)]
 mod test;
 
+use activity::Actor;
 use chrono::{DateTime, Utc};
 use document_sub_type::DocumentSubType;
 use macro_event_broker::{Event, MacroEvent, TopicEvent};
@@ -23,8 +24,13 @@ use super::models::FileTypeUpdate;
 pub struct DocumentCreatedMetadata {
     /// The id of the created document.
     pub document_id: String,
-    /// The owner (creator) of the document.
+    /// The owner of the document.
     pub owner: MacroUserIdStr<'static>,
+    /// Principal that mechanically created the document. Events published
+    /// before actor attribution was introduced omit this field; activity
+    /// consumers fall back to `owner` for those legacy events.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub actor: Option<Actor<'static>>,
     /// The document name, with any file extension stripped.
     pub document_name: String,
     /// File type of the document, when known.

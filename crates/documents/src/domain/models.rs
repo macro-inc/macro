@@ -313,8 +313,11 @@ pub struct CreateDocumentRepoArgs {
     pub sha: String,
     /// Document name without extension.
     pub document_name: String,
-    /// The owner/creator of the document.
+    /// The owner of the document.
     pub user_id: MacroUserIdStr<'static>,
+    /// Principal that mechanically creates the document. This is independent
+    /// from `user_id`, which remains the document owner.
+    pub actor: activity::Actor<'static>,
     /// File type of the document.
     pub file_type: Option<FileType>,
     /// Project to associate the document with.

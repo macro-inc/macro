@@ -579,6 +579,23 @@ impl<
         <Self as DocumentService>::handle_task_properties(self, user_id, document_id, request).await
     }
 
+    async fn handle_task_properties_with_actor(
+        &self,
+        user_id: MacroUserIdStr<'static>,
+        actor: activity::Actor<'static>,
+        document_id: &str,
+        request: &CreateTaskRequest,
+    ) -> Result<(), DocumentError> {
+        <Self as DocumentService>::handle_task_properties_with_actor(
+            self,
+            user_id,
+            actor,
+            document_id,
+            request,
+        )
+        .await
+    }
+
     #[tracing::instrument(err, skip(self))]
     async fn mark_document_uploaded(&self, document_id: &str) -> Result<(), DocumentError> {
         self.repo
@@ -1051,6 +1068,7 @@ impl<
         let file_type = args.file_type;
         let project_id = args.project_id;
         let sha = args.sha.clone();
+        let actor = args.actor.clone();
 
         // The owner's team default link-share preference decides the initial
         // share permission; without a team the per-file-type default applies.
@@ -1177,6 +1195,7 @@ impl<
             DocumentCreatedMetadata {
                 document_id: document_metadata.document_id.clone(),
                 owner: document_metadata.owner.clone(),
+                actor: Some(actor),
                 document_name: document_metadata.document_name.clone(),
                 file_type,
                 project_id: project_id.map(|p| p.to_string()),
@@ -1700,6 +1719,26 @@ impl<
         document_id: &str,
         request: &CreateTaskRequest,
     ) -> Result<(), DocumentError> {
+        let actor = activity::Actor::new_from_user(user_id.clone());
+        <Self as DocumentService>::handle_task_properties_with_actor(
+            self,
+            user_id,
+            actor,
+            document_id,
+            request,
+        )
+        .await
+    }
+
+    /// Assigns the task properties to a document with an explicit activity actor.
+    #[tracing::instrument(skip(self, request), err)]
+    async fn handle_task_properties_with_actor(
+        &self,
+        user_id: MacroUserIdStr<'static>,
+        actor: activity::Actor<'static>,
+        document_id: &str,
+        request: &CreateTaskRequest,
+    ) -> Result<(), DocumentError> {
         if request.share_with_team
             && let Some(team_id) = request.team_id
         {
@@ -1744,8 +1783,9 @@ impl<
 
             let _ = self
                 .task_properties_service
-                .set_entity_property(
+                .set_entity_property_with_actor(
                     user_id.as_ref(),
+                    actor.clone(),
                     document_id,
                     property_uuid,
                     Some(property_input.value.clone()),
