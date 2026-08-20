@@ -110,12 +110,34 @@ workspace_group() {
   stat -c '%G' "${WORKSPACE_ROOT}"
 }
 
+# Disk snapshots keep Docker container metadata. Starting dockerd revives
+# leftover Rust services that bind-mount /workspace/target as root, so the
+# cache swap cannot delete it until those containers are gone.
+remove_workspace_target_mounts() {
+  command -v docker >/dev/null 2>&1 || return 0
+  docker info >/dev/null 2>&1 || return 0
+  local id source
+  for id in $(docker ps -aq); do
+    while IFS= read -r source; do
+      case "${source}" in
+        "${WORKSPACE_ROOT}/target" | "${WORKSPACE_ROOT}/target"/*)
+          echo "cursor-cloud: removing leftover container ${id} mounted on ${source}"
+          docker rm -f "${id}" >/dev/null 2>&1 || true
+          break
+          ;;
+      esac
+    done < <(docker inspect --format '{{range .Mounts}}{{.Source}}{{println}}{{end}}' "${id}")
+  done
+}
+
 # Move /workspace/target into $HOME (same filesystem: rename). Recreate the
 # symlink after every checkout so Cargo's incremental cache survives it.
 ensure_persistent_caches() {
   mkdir -p "${TARGET_CACHE}" "${FRONTEND_CACHE}" "${MACRO_STACK_SNAPSHOT_DIR}"
+  remove_workspace_target_mounts
 
   if [ -e "${WORKSPACE_ROOT}/target" ] && [ ! -L "${WORKSPACE_ROOT}/target" ]; then
+    sudo chown -R "$(workspace_owner):$(workspace_group)" "${WORKSPACE_ROOT}/target"
     if [ -x "${WORKSPACE_ROOT}/target/x86_64-unknown-linux-gnu/debug/document_storage_service" ] \
       && [ ! -x "${TARGET_CACHE}/x86_64-unknown-linux-gnu/debug/document_storage_service" ]; then
       echo "cursor-cloud: moving ${WORKSPACE_ROOT}/target -> ${TARGET_CACHE}"
