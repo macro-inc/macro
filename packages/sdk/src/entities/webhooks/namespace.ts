@@ -13,11 +13,14 @@ export class WebhooksNamespace {
   constructor(private readonly client: MacroClient) {}
 
   /**
-   * Register a webhook. `filters` must be non-empty (each entry matches event
+   * Register a webhook. `namespace` must be unique among the owning
+   * workspace's webhooks (the endpoint returns 409 on a clash) and cannot be
+   * changed later. `filters` must be non-empty (each entry matches event
    * names, optionally narrowed to entity ids); `scope` defaults to `'user'`.
    */
   create(opts: {
     url: string;
+    namespace: string;
     name: string;
     filters: WebhookFilter[];
     scope?: WebhookScope;

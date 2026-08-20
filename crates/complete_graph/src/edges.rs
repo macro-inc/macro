@@ -1,13 +1,18 @@
 use std::marker::PhantomData;
 
-use async_graphql::{Context, Object};
+use async_graphql::{Context, ID, Object};
+use graphql_activity::{
+    ActivityEdgeKey, GraphqlActivityEvent, SoupActivityEdgeReader, load_entity_activity,
+    parse_activity_edge_limit,
+};
 use graphql_email::{
-    EmailContentKey, GraphqlSoupEmailMessage, SoupEmailContentEdgeReader, load_email_messages,
+    EmailContentKey, GraphqlSoupEmailMessage, SoupEmailEdgeReader,
+    email_message_selection_requires_full_payload, load_email_messages, load_email_thread_metadata,
     load_latest_email_message,
 };
 use graphql_favorite::{EntityFavoriteEdgeReader, load_entity_favorite};
 use graphql_notification::{
-    GraphqlSoupNotification, SoupNotificationEdgeReader, load_entity_notifications,
+    GraphqlNotification, SoupNotificationEdgeReader, load_entity_notifications,
 };
 use graphql_permission::{
     EntityPermissionEdgeReader, GraphqlEntityPermission, load_entity_permission,
@@ -17,23 +22,23 @@ use graphql_soup::SoupEntityEdges;
 use uuid::Uuid;
 
 /// The types of the edge readers for soup
-type EdgeReaders<NR, PR, ER, FR, AR> = PhantomData<fn() -> (NR, PR, ER, FR, AR)>;
+type EdgeReaders<NR, PR, ER, FR, AR, AcR> = PhantomData<fn() -> (NR, PR, ER, FR, AR, AcR)>;
 
-/// Notification, property, email-content, favorite, and permission fields
-/// attached to Soup entities.
+/// Notification, property, email-content, favorite, permission, and activity
+/// fields attached to Soup entities.
 ///
 /// This concrete edge shape lives in the composition crate so `graphql_soup`
 /// does not know which cross-domain fields are attached to its objects.
-pub struct SoupEdges<NR, PR, ER, FR, AR> {
+pub struct SoupEdges<NR, PR, ER, FR, AR, AcR> {
     /// Entity whose cross-domain fields are being resolved.
     entity: model_entity::Entity<'static>,
     /// Entity whose access determines the viewer permission for this object.
     permission_entity: model_entity::Entity<'static>,
     /// Associates the edge with its configured reader types.
-    _readers: EdgeReaders<NR, PR, ER, FR, AR>,
+    _readers: EdgeReaders<NR, PR, ER, FR, AR, AcR>,
 }
 
-impl<NR, PR, ER, FR, AR> Clone for SoupEdges<NR, PR, ER, FR, AR> {
+impl<NR, PR, ER, FR, AR, AcR> Clone for SoupEdges<NR, PR, ER, FR, AR, AcR> {
     fn clone(&self) -> Self {
         Self {
             entity: self.entity.clone(),
@@ -43,16 +48,18 @@ impl<NR, PR, ER, FR, AR> Clone for SoupEdges<NR, PR, ER, FR, AR> {
     }
 }
 
-impl<NR, PR, ER, FR, AR> SoupEntityEdges for SoupEdges<NR, PR, ER, FR, AR>
+impl<NR, PR, ER, FR, AR, AcR> SoupEntityEdges for SoupEdges<NR, PR, ER, FR, AR, AcR>
 where
     NR: SoupNotificationEdgeReader,
     PR: EntityPropertyReader,
-    ER: SoupEmailContentEdgeReader,
+    ER: SoupEmailEdgeReader,
     FR: EntityFavoriteEdgeReader,
     AR: EntityPermissionEdgeReader,
+    AcR: SoupActivityEdgeReader,
 {
     type Property = GraphqlProperty;
-    type Notification = GraphqlSoupNotification;
+    type Notification = GraphqlNotification;
+    type ActivityEvent = GraphqlActivityEvent;
     type EmailThreadEdges = SoupEmailThreadEdges<ER>;
 
     fn from_entity(entity: model_entity::Entity<'static>) -> Self {
@@ -104,17 +111,34 @@ where
     ) -> async_graphql::Result<Option<GraphqlEntityPermission>> {
         load_entity_permission::<AR>(ctx, self.permission_entity.clone()).await
     }
+
+    async fn resolve_activity(
+        &self,
+        ctx: &Context<'_>,
+        limit: Option<i32>,
+    ) -> async_graphql::Result<Vec<GraphqlActivityEvent>> {
+        let limit = parse_activity_edge_limit(limit)?;
+        load_entity_activity::<AcR>(
+            ctx,
+            ActivityEdgeKey {
+                entity: self.entity.clone(),
+                limit,
+            },
+        )
+        .await
+    }
 }
 
 /// Cross-domain fields attached to a property-bearing Soup entity.
 #[Object(name = "SoupEdges")]
-impl<NR, PR, ER, FR, AR> SoupEdges<NR, PR, ER, FR, AR>
+impl<NR, PR, ER, FR, AR, AcR> SoupEdges<NR, PR, ER, FR, AR, AcR>
 where
     NR: SoupNotificationEdgeReader,
     PR: EntityPropertyReader,
-    ER: SoupEmailContentEdgeReader,
+    ER: SoupEmailEdgeReader,
     FR: EntityFavoriteEdgeReader,
     AR: EntityPermissionEdgeReader,
+    AcR: SoupActivityEdgeReader,
 {
     /// Properties assigned to this entity that the authenticated user may view.
     async fn properties(&self, ctx: &Context<'_>) -> async_graphql::Result<Vec<GraphqlProperty>> {
@@ -125,7 +149,7 @@ where
     async fn notifications(
         &self,
         ctx: &Context<'_>,
-    ) -> async_graphql::Result<Vec<GraphqlSoupNotification>> {
+    ) -> async_graphql::Result<Vec<GraphqlNotification>> {
         self.resolve_notifications(ctx).await
     }
 
@@ -140,6 +164,17 @@ where
         ctx: &Context<'_>,
     ) -> async_graphql::Result<Option<GraphqlEntityPermission>> {
         self.resolve_viewer_permission(ctx).await
+    }
+
+    /// The newest activity on this entity, newest first. Loaded lazily and
+    /// batched across entities; an activity outage degrades to an empty
+    /// timeline. Deeper history belongs to the viewer's activity feed.
+    async fn activity(
+        &self,
+        ctx: &Context<'_>,
+        limit: Option<i32>,
+    ) -> async_graphql::Result<Vec<GraphqlActivityEvent>> {
+        self.resolve_activity(ctx, limit).await
     }
 }
 
@@ -156,24 +191,11 @@ fn parse_email_message_pagination(
     offset: Option<i32>,
     limit: Option<i32>,
 ) -> async_graphql::Result<(u32, u32)> {
-    let offset = offset.unwrap_or(0);
-    let limit = limit.unwrap_or(DEFAULT_EMAIL_MESSAGE_LIMIT);
-
-    let offset = u32::try_from(offset)
+    let offset = u32::try_from(offset.unwrap_or(0))
         .map_err(|_| async_graphql::Error::new("offset must be non-negative"))?;
-    if limit <= 0 {
-        return Err(async_graphql::Error::new("limit must be positive"));
-    }
-    if limit > MAX_EMAIL_MESSAGE_LIMIT {
-        return Err(async_graphql::Error::new(format!(
-            "limit must not exceed {MAX_EMAIL_MESSAGE_LIMIT}"
-        )));
-    }
-
-    Ok((
-        offset,
-        u32::try_from(limit).expect("positive GraphQL Int fits in u32"),
-    ))
+    let limit =
+        graphql_common::parse_limit(limit, DEFAULT_EMAIL_MESSAGE_LIMIT, MAX_EMAIL_MESSAGE_LIMIT)?;
+    Ok((offset, limit))
 }
 
 /// Email-content fields attached only to Soup email-thread entities.
@@ -197,8 +219,25 @@ impl<ER> Clone for SoupEmailThreadEdges<ER> {
 #[Object]
 impl<ER> SoupEmailThreadEdges<ER>
 where
-    ER: SoupEmailContentEdgeReader,
+    ER: SoupEmailEdgeReader,
 {
+    /// The canonical identifier of the email link that owns this thread.
+    async fn link_id(&self, ctx: &Context<'_>) -> async_graphql::Result<ID> {
+        let metadata = load_email_thread_metadata::<ER>(ctx, self.thread_id).await?;
+        Ok(ID(metadata.link_id.to_string()))
+    }
+
+    /// Timestamp of the latest inbound message, in RFC 3339 format.
+    async fn latest_inbound_message_ts(
+        &self,
+        ctx: &Context<'_>,
+    ) -> async_graphql::Result<Option<String>> {
+        let metadata = load_email_thread_metadata::<ER>(ctx, self.thread_id).await?;
+        Ok(metadata
+            .latest_inbound_message_ts
+            .map(|timestamp| timestamp.to_rfc3339()))
+    }
+
     /// A page of messages in this thread, newest first.
     async fn messages(
         &self,
@@ -207,7 +246,12 @@ where
         limit: Option<i32>,
     ) -> async_graphql::Result<Vec<GraphqlSoupEmailMessage>> {
         let (offset, limit) = parse_email_message_pagination(offset, limit)?;
-        load_email_messages::<ER>(ctx, EmailContentKey::page(self.thread_id, offset, limit)).await
+        let key = if email_message_selection_requires_full_payload(ctx) {
+            EmailContentKey::page_full(self.thread_id, offset, limit)
+        } else {
+            EmailContentKey::page(self.thread_id, offset, limit)
+        };
+        load_email_messages::<ER>(ctx, key).await
     }
 
     /// The newest non-draft content message in this thread.

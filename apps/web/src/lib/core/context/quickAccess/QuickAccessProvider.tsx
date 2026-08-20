@@ -35,6 +35,7 @@ export const QuickAccessProvider: FlowComponent = (props) => {
   const quickAccess: QuickAccessContextValue = {
     useList,
     usesRecordSelection: source.usesRecordSelection,
+    usesSearchProjection: source.usesSearchProjection,
     isLoading: source.isLoading,
     refresh: source.refresh,
     getById: source.getById,

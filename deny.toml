@@ -83,6 +83,11 @@ ignore = [
   { id = "RUSTSEC-2026-0174", reason = "http-types unmaintained, transitive via async-stripe; no safe upgrade available" },
   { id = "RUSTSEC-2026-0179", reason = "postgres-protocol 0.6.11 is transitive via pgvector; database connections are to trusted infrastructure" },
   { id = "RUSTSEC-2026-0180", reason = "postgres-protocol 0.6.11 is transitive via pgvector; database connections are to trusted infrastructure" },
+  { id = "RUSTSEC-2026-0247", reason = "bitmaps is unmaintained; transitive via im <- loro, pending loro moving off im" },
+  { id = "RUSTSEC-2026-0248", reason = "im is unmaintained; direct dependency of loro, no upstream migration yet" },
+  { id = "RUSTSEC-2026-0251", reason = "sized-chunks is unmaintained; transitive via im <- loro, pending loro moving off im" },
+  { id = "RUSTSEC-2026-0253", reason = "lru 0.16.4 pinned by async-graphql; no patched release compatible yet, and the unsound path needs a panicking key Drop during pop()" },
+  { id = "RUSTSEC-2026-0258", reason = "h2 0.3 (via aws-smithy legacy hyper-0.14 client) has no patched release; the hyper 1.x line is bumped to the patched 0.4.16" },
   #{ id = "RUSTSEC-0000-0000", reason = "you can specify a reason the advisory is ignored" },
   #"a-crate-that-is-yanked@0.1.1", # you can also ignore yanked crate versions if you wish
   #{ crate = "a-crate-that-is-yanked@0.1.1", reason = "you can specify why you are ignoring the yanked crate" },
@@ -196,6 +201,7 @@ deny = [
   ], reason = "Use macro_aws_config for AWS configuration in workspace crates" },
   { crate = "tracing-subscriber", wrappers = [
     "channels",                  # Dev logging only
+    "coding_agent_worker",       # Standalone daemon logging setup
     "documents",                 # Dev logging only
     "email",                     # Dev logging only
     "lambda_runtime_api_client", # External crate allowed to use tracing-subscriber
@@ -211,6 +217,7 @@ deny = [
     "tracing-panic",             # External crate allowed to use tracing-subscriber
     "tracing-tree",
     "tracing-web",               # External WASM tracing layer
+    "turso_core",                # External Turso crate requires tracing-subscriber directly
     "worker-rs-otel",             # Cloudflare/WASM OpenTelemetry integration
     "workspace-hack",             # cargo-hakari generated crate
   ], reason = "Use macro_entrypoint for tracing setup in workspace crates" },
@@ -333,7 +340,10 @@ unknown-git = "warn"
 # if not specified. If it is specified but empty, no registries are allowed.
 allow-registry = ["https://github.com/rust-lang/crates.io-index"]
 # List of URLs for allowed Git repositories
-allow-git = ["git+https://github.com/whutchinson98/jsonwebtoken"]
+allow-git = [
+  "git+https://github.com/agentclientprotocol/rust-sdk",
+  "git+https://github.com/whutchinson98/jsonwebtoken",
+]
 
 [sources.allow-org]
 # github.com organizations to allow git sources for

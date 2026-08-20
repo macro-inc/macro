@@ -283,6 +283,13 @@ impl CrmService for FakeCrmService {
         panic!("unexpected depopulate_contact call")
     }
 
+    async fn link_contact_pairs_with_sources(
+        &self,
+        _pairs: &[(Uuid, String)],
+    ) -> Result<Vec<(Uuid, String)>, CrmError> {
+        panic!("unexpected link_contact_pairs_with_sources call")
+    }
+
     async fn depopulate_link_in_team(
         &self,
         _team_id: &Uuid,
@@ -387,6 +394,14 @@ impl CrmService for FakeCrmService {
         _access: &CrmContactReceipt<ViewAccessLevel>,
     ) -> Result<Option<CrmContact>, CrmError> {
         panic!("unexpected get_contact_for_team call")
+    }
+
+    async fn get_contact_by_email(
+        &self,
+        _access: &CrmTeamReceipt<MemberTeamRole>,
+        _email: &str,
+    ) -> Result<Option<CrmContact>, CrmError> {
+        panic!("unexpected get_contact_by_email call")
     }
 
     async fn get_company_for_team(

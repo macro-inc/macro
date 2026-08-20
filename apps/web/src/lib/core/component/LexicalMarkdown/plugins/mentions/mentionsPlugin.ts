@@ -26,14 +26,18 @@ import {
   ContactMentionNode,
   type DateMentionInfo,
   DateMentionNode,
+  DocumentCardNode,
   type DocumentMentionInfo,
   DocumentMentionNode,
   type GroupMentionInfo,
   GroupMentionNode,
+  HISTORIC_TAG,
   InlineSearchNode,
   InlineSearchNodesType,
   type PullRequestMentionInfo,
   PullRequestMentionNode,
+  SKIP_DOM_SELECTION_TAG,
+  SKIP_SCROLL_INTO_VIEW_TAG,
   type SnapshotNodeInfo,
   type ThemeMentionInfo,
   type UserMentionInfo,
@@ -103,6 +107,10 @@ export const UPDATE_DOCUMENT_NAME_COMMAND: LexicalCommand<
   Record<string, string>
 > = createCommand('UPDATE_DOCUMENT_NAME_COMMAND');
 
+export const UPDATE_USER_DISPLAY_NAME_COMMAND: LexicalCommand<
+  Record<string, string>
+> = createCommand('UPDATE_USER_DISPLAY_NAME_COMMAND');
+
 export const INSERT_USER_MENTION_COMMAND: LexicalCommand<UserMentionInfo> =
   createCommand('INSERT_USER_MENTION_COMMAND');
 
@@ -129,11 +137,13 @@ export type ItemMention = {
     | 'unknown'
     | 'color'
     | 'call'
+    | 'calendar_event'
     | 'foreign'
     | 'group'
     | 'automation'
     | 'crm_company'
-    | 'crm_contact';
+    | 'crm_contact'
+    | 'skill';
   itemId: string;
   fileType?: string;
   documentName?: string;
@@ -172,7 +182,12 @@ function $mentionItemFromNode(node: MentionNode): ItemMention {
     // task/snippet aliases are markdown documents
     else if (blockName === 'task') fileType = 'md';
     else if (blockName === 'snippet') fileType = 'md';
-    else if (blockName === 'csv') fileType = 'csv';
+    // skills are their own attachment type: either a markdown skill
+    // document or a built-in system skill
+    else if (blockName === 'skill') {
+      fileType = 'md';
+      itemType = 'skill';
+    } else if (blockName === 'csv') fileType = 'csv';
     else if (blockName === 'canvas') fileType = 'canvas';
     else if (blockName === 'code') {
       const blockParams = node.getBlockParams();
@@ -196,6 +211,9 @@ function $mentionItemFromNode(node: MentionNode): ItemMention {
     } else if (blockName === 'call') {
       fileType = 'call';
       itemType = 'call';
+    } else if (blockName === 'calendar') {
+      fileType = 'calendar_event';
+      itemType = 'calendar_event';
     } else if (blockName === 'company') {
       fileType = 'company';
       itemType = 'crm_company';
@@ -287,6 +305,7 @@ const getDocumentMentionItemType = (
     .with('channel_thread', () => 'channel')
     .with('automation', () => 'automation')
     .with('call', () => 'call')
+    .with('calendar_event', () => 'calendar_event')
     .with('foreign', () => {
       throw new Error('foreign entities cannot be document mentions');
     })
@@ -642,10 +661,12 @@ function registerMentionsPlugin(
       (payload) => {
         editor.update(
           () => {
-            const nodesToUpdate: DocumentMentionNode[] = [];
+            const nodesToUpdate: Array<DocumentMentionNode | DocumentCardNode> =
+              [];
             $traverseNodes($getRoot(), (node) => {
               if (
-                node instanceof DocumentMentionNode &&
+                (node instanceof DocumentMentionNode ||
+                  node instanceof DocumentCardNode) &&
                 payload[node.getDocumentId()] &&
                 node.getDocumentName() !== payload[node.getDocumentId()]
               ) {
@@ -663,7 +684,51 @@ function registerMentionsPlugin(
             // they don't get recorded into the undo stack. This was breaking the predictability
             // of undo with document mentions. This hacks around that by using the an undocumented
             // "historic" tag from the LexicalHistoryPlugin.
-            tag: 'historic',
+            tag: [
+              HISTORIC_TAG,
+              SKIP_DOM_SELECTION_TAG,
+              SKIP_SCROLL_INTO_VIEW_TAG,
+            ],
+            discrete: true,
+          }
+        );
+
+        return true;
+      },
+      COMMAND_PRIORITY_NORMAL
+    ),
+
+    editor.registerCommand(
+      UPDATE_USER_DISPLAY_NAME_COMMAND,
+      (payload) => {
+        editor.update(
+          () => {
+            const nodesToUpdate: UserMentionNode[] = [];
+            $traverseNodes($getRoot(), (node) => {
+              const newName =
+                node instanceof UserMentionNode
+                  ? payload[node.getUserId()]
+                  : undefined;
+              if (
+                node instanceof UserMentionNode &&
+                newName &&
+                node.getDisplayName() !== newName
+              ) {
+                nodesToUpdate.push(node);
+              }
+            });
+
+            nodesToUpdate.forEach((node) => {
+              const newName = payload[node.getUserId()];
+              if (newName) node.setDisplayName(newName);
+            });
+          },
+          {
+            tag: [
+              HISTORIC_TAG,
+              SKIP_DOM_SELECTION_TAG,
+              SKIP_SCROLL_INTO_VIEW_TAG,
+            ],
             discrete: true,
           }
         );

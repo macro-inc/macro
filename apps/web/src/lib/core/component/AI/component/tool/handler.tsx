@@ -5,7 +5,15 @@ import {
 } from '@service-cognition/generated/tools/tool';
 import { Dynamic } from 'solid-js/web';
 import { bashCodeExecutionHandler } from './BashCodeExecution';
+import {
+  createCalendarEventHandler,
+  deleteCalendarEventHandler,
+  listCalendarEventsHandler,
+  listCalendarsHandler,
+  updateCalendarEventHandler,
+} from './CalendarTools';
 import { createDocumentHandler } from './CreateDocument';
+import { createProjectHandler } from './CreateProject';
 import { createTagHandler } from './CreateTag';
 import { getCompanyHandler, listCompaniesHandler } from './Crm';
 import { deleteTagHandler } from './DeleteTag';
@@ -25,6 +33,7 @@ import { listLabelsHandler } from './ListLabels';
 import { listTagsHandler } from './ListTags';
 import { listTeamMembersHandler } from './ListTeamMembers';
 import { loadToolsHandler } from './LoadTools';
+import { moveToProjectHandler } from './MoveToProject';
 import {
   listNotificationsHandler,
   markNotificationsDoneHandler,
@@ -44,9 +53,17 @@ import {
 import { readChatHandler } from './ReadChat';
 import { readContentHandler } from './ReadContent';
 import { readMetadataHandler } from './ReadMetadata';
+import { readProjectHandler } from './ReadProject';
 import { readThreadHandler } from './ReadThread';
+import {
+  createReminderHandler,
+  deleteReminderHandler,
+  listRemindersHandler,
+  updateReminderHandler,
+} from './Reminders';
 import { renameDocumentHandler } from './RenameDocument';
 import { contentSearchHandler, nameSearchHandler } from './Search';
+import { listSkillsHandler, searchSkillsHandler } from './SearchSkills';
 import { searchToolsHandler } from './SearchTools';
 import { selfKnowledgeHandler } from './SelfKnowledge';
 import { sendChannelMessageHandler } from './SendChannelMessage';
@@ -65,6 +82,11 @@ import { webFetchHandler } from './WebFetch';
 import { webSearchHandler } from './WebSearch';
 
 const toolHandlers: ToolHandlerMap<RenderContext> = {
+  CreateCalendarEvent: createCalendarEventHandler,
+  UpdateCalendarEvent: updateCalendarEventHandler,
+  DeleteCalendarEvent: deleteCalendarEventHandler,
+  ListCalendarEvents: listCalendarEventsHandler,
+  ListCalendars: listCalendarsHandler,
   CreateImportEntity: createImportEntityHandler,
   DeleteImportEntity: deleteImportEntityHandler,
   ImportNotionPage: importNotionPageHandler,
@@ -75,17 +97,23 @@ const toolHandlers: ToolHandlerMap<RenderContext> = {
   ListEntities: listEntitiesHandler,
   ListInboxes: listInboxesHandler,
   ListLabels: listLabelsHandler,
+  ListSkills: listSkillsHandler,
   ListNotifications: listNotificationsHandler,
+  ListReminders: listRemindersHandler,
   ListTags: listTagsHandler,
   ListTeamMembers: listTeamMembersHandler,
   LoadTools: loadToolsHandler,
   MarkNotificationsDone: markNotificationsDoneHandler,
   MarkNotificationsSeen: markNotificationsSeenHandler,
+  MoveToProject: moveToProjectHandler,
   BashCodeExecution: bashCodeExecutionHandler,
   DisplayResults: displayResultsHandler,
   ContentSearch: contentSearchHandler,
   CreateDocument: createDocumentHandler,
+  CreateProject: createProjectHandler,
+  CreateReminder: createReminderHandler,
   CreateTag: createTagHandler,
+  DeleteReminder: deleteReminderHandler,
   DeleteTag: deleteTagHandler,
   EditDocument: editDocumentHandler,
   EditTag: editTagHandler,
@@ -99,7 +127,9 @@ const toolHandlers: ToolHandlerMap<RenderContext> = {
   ReadThread: readThreadHandler,
   ReadContent: readContentHandler,
   ReadMetadata: readMetadataHandler,
+  ReadProject: readProjectHandler,
   RenameDocument: renameDocumentHandler,
+  SearchSkills: searchSkillsHandler,
   SearchTools: searchToolsHandler,
   SelfKnowledge: selfKnowledgeHandler,
   SendChannelMessage: sendChannelMessageHandler,
@@ -108,6 +138,7 @@ const toolHandlers: ToolHandlerMap<RenderContext> = {
   BulkSetEntityPropertyOptions: bulkSetEntityPropertyOptionsHandler,
   Subagent: subagentHandler,
   TextEditorCodeExecution: textEditorCodeExecutionHandler,
+  UpdateReminder: updateReminderHandler,
   UpdateThreadLabels: updateThreadLabelsHandler,
   WebFetch: webFetchHandler,
   WebSearch: webSearchHandler,

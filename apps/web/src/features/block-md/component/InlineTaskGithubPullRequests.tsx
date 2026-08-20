@@ -11,7 +11,7 @@ import { cn } from '@ui/utils/classname';
 import { createMemo, For, type JSX, Show, Suspense } from 'solid-js';
 
 const PILL_CLASS = cn(
-  'inline-flex items-center gap-1.5 min-w-0 ring ring-edge-muted',
+  'inline-flex items-center gap-1.5 min-w-0 border border-edge-muted',
   'px-2 py-1 leading-tight text-left rounded-full',
   'bg-surface text-ink-muted hover:bg-hover hover:text-ink',
   'focus-visible:outline-none focus-visible:ring-accent/20'
@@ -53,7 +53,7 @@ function InlineTaskGithubPullRequestsSkeleton(): JSX.Element {
         class={cn(PILL_CLASS, 'pointer-events-none select-none')}
       >
         <GithubIcon class="size-3 shrink-0 text-ink-extra-muted" />
-        <span class="skeleton-shimmer h-3 w-24 rounded-full bg-ink/10" />
+        <span class="skeleton-shimmer h-3 w-24 rounded-full bg-skeleton" />
       </div>
     </Layer>
   );

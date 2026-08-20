@@ -131,6 +131,50 @@ impl AccessRepository for PgAccessRepository {
         .await?)
     }
 
+    #[tracing::instrument(err, skip(self))]
+    async fn get_calendar_event_access(
+        &self,
+        event_id: &str,
+        user_id: Option<&MacroUserId<Lowercase<'_>>>,
+    ) -> Result<Option<AccessLevel>, AccessError> {
+        let event_id = event_id
+            .parse::<Uuid>()
+            .map_err(|_| AccessError::BadRequest("Invalid calendar event ID format"))?;
+        let Some(user_id) = user_id else {
+            return Ok(None);
+        };
+        let user_id = user_id.as_ref();
+        let is_owner = sqlx::query_scalar!(
+            r#"
+            SELECT event.owner_id = $2 AS "is_owner!"
+            FROM calendar_events event
+            WHERE event.id = $1
+              AND (
+                  event.owner_id = $2
+                  OR EXISTS (
+                      SELECT 1
+                      FROM macro_user_links link
+                      WHERE link.link_id = event.source_link_id
+                        AND link.primary_macro_id = $2
+                  )
+              )
+            "#,
+            event_id,
+            user_id,
+        )
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(AccessError::from)?;
+
+        Ok(is_owner.map(|is_owner| {
+            if is_owner {
+                AccessLevel::Owner
+            } else {
+                AccessLevel::Edit
+            }
+        }))
+    }
+
     #[tracing::instrument(err, skip(self, thread_ids, user_id))]
     async fn get_owned_email_thread_ids(
         &self,
@@ -156,6 +200,56 @@ impl AccessRepository for PgAccessRepository {
             .await
             .map_err(|_| AccessError::Internal)?;
         Ok(queries::call_access::get_call_access(&self.pool, &call_uuid, &source_ids).await?)
+    }
+
+    async fn get_agent_session_access(
+        &self,
+        agent_session_id: &str,
+        user_id: Option<&MacroUserId<Lowercase<'_>>>,
+    ) -> Result<Option<AccessLevel>, AccessError> {
+        let agent_session_uuid = agent_session_id
+            .parse::<Uuid>()
+            .map_err(|_| AccessError::BadRequest("Invalid agent session ID format"))?;
+        let source_ids = queries::get_user_source_ids(&self.pool, user_id)
+            .await
+            .map_err(|_| AccessError::Internal)?;
+        Ok(queries::agent_session_access::get_agent_session_access(
+            &self.pool,
+            &agent_session_uuid,
+            &source_ids,
+        )
+        .await?)
+    }
+
+    // A macro user id embeds the user's email, so it stays out of the span; the
+    // reminder id is what identifies the lookup anyway.
+    #[tracing::instrument(err, skip(self, user_id))]
+    async fn get_reminder_access(
+        &self,
+        reminder_id: &str,
+        user_id: Option<&MacroUserId<Lowercase<'_>>>,
+    ) -> Result<Option<AccessLevel>, AccessError> {
+        let reminder_uuid = reminder_id
+            .parse::<Uuid>()
+            .map_err(|_| AccessError::BadRequest("Invalid reminder ID format"))?;
+        // An anonymous caller can never own a reminder, so skip the query.
+        let Some(user_id) = user_id else {
+            return Ok(None);
+        };
+
+        let owns = sqlx::query_scalar!(
+            r#"SELECT EXISTS (
+                   SELECT 1 FROM reminder WHERE id = $1 AND user_id = $2
+               ) AS "owns!""#,
+            reminder_uuid,
+            user_id.as_ref(),
+        )
+        .fetch_one(&self.pool)
+        .await
+        .map_err(|_| AccessError::Internal)?;
+
+        // Owner or nothing: a reminder has no sharing model to grade.
+        Ok(owns.then_some(AccessLevel::Owner))
     }
 
     #[tracing::instrument(err, skip(self))]
@@ -198,14 +292,26 @@ impl AccessRepository for PgAccessRepository {
             EntityType::Call => {
                 queries::call_access::get_call_access(&self.pool, &entity_uuid, &source_ids).await
             }
+            EntityType::AgentSession => {
+                queries::agent_session_access::get_agent_session_access(
+                    &self.pool,
+                    &entity_uuid,
+                    &source_ids,
+                )
+                .await
+            }
             EntityType::User
             | EntityType::Channel
             | EntityType::ChannelMessage
+            | EntityType::CalendarEvent
             | EntityType::Team
             | EntityType::ForeignEntity
             | EntityType::StaticFile
             | EntityType::CrmCompany
-            | EntityType::CrmContact => {
+            | EntityType::CrmContact
+            | EntityType::Skill
+            // Reminders are user-owned, never reachable through a team scope.
+            | EntityType::Reminder => {
                 return Err(AccessError::BadRequest(
                     "Unsupported entity type for team item access",
                 ));

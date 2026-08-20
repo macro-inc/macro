@@ -8,7 +8,7 @@ use crate::api::saved_views::{
 };
 use crate::{
     api::{
-        activity, annotations,
+        annotations,
         documents::{
             self,
             export_document::ExportDocumentResponse,
@@ -34,7 +34,6 @@ use crate::{
             pins::{AddPinRequest, PinRequest},
         },
         response::{
-            activity::{GetActivitiesResponse, UserActivitiesResponse},
             documents::{
                 create::{CreateBulkDocumentResponse, CreateBulkDocumentResponseData},
                 get::{
@@ -83,7 +82,6 @@ use model::document::response::{
     DocumentResponseMetadata,
 };
 use model::{
-    activity::Activity,
     annotations::AnnotationIncrementalUpdate,
     chat::Chat,
     document::{
@@ -124,6 +122,8 @@ use models_soup::project::SoupProject;
 use projects_hex::inbound::axum_router::delete_project::{
     ProjectDeleteResponse, ProjectDeleteResponseData,
 };
+use reminders::domain::models::{Reminder, ReminderSchedule, RemindersList};
+use reminders::inbound::axum_router::{CreateReminderRequest, UpdateReminderRequest};
 use soup::domain::models::{SoupItemWithProperties, SoupPropertiesField};
 use soup::inbound::axum_router::{
     ApiGroupByField, ApiGroupMeta, GroupedSoupGroupPage, GroupedSoupInitialPage, GroupedSoupPage,
@@ -140,9 +140,8 @@ use utoipa::OpenApi;
     ),
     paths(
         health::health_handler,
-
-        // activity
-        activity::get_recent_activity::get_recent_activity_handler,
+        calendar_events::inbound::axum_router::list_occurrences,
+        calendar_events::inbound::axum_router::mention_previews,
 
         // annotations
         annotations::get::get_document_comments_handler,
@@ -185,6 +184,8 @@ use utoipa::OpenApi;
         documents::export_document::handler,
         documents_hex::inbound::axum_router::create_task::create_task_handler,
         documents_hex::inbound::axum_router::create_snippet::create_snippet_handler,
+        documents_hex::inbound::axum_router::create_skill::create_skill_handler,
+        documents_hex::inbound::axum_router::system_skills::get_system_skills_handler,
         documents_hex::inbound::axum_router::team_share::get_team_share_handler,
         documents_hex::inbound::axum_router::team_share::set_team_share_handler,
 
@@ -248,6 +249,7 @@ use utoipa::OpenApi;
         channels::inbound::axum_router::post_activity_handler,
 
         // bots
+        bots::inbound::axum_router::get_self_bot_handler,
         bots::inbound::axum_router::list_bot_channels_handler,
         bots::inbound::axum_router::remove_bot_channel_handler,
         bots::inbound::channel_webhook_router::create_channel_scoped_bot_handler,
@@ -303,6 +305,13 @@ use utoipa::OpenApi;
         favorites::inbound::axum_router::remove_favorite_by_entity_handler,
         favorites::inbound::axum_router::reorder_favorites_handler,
 
+        // reminders
+        reminders::inbound::axum_router::list_reminders_handler,
+        reminders::inbound::axum_router::create_reminder_handler,
+        reminders::inbound::axum_router::get_reminder_handler,
+        reminders::inbound::axum_router::update_reminder_handler,
+        reminders::inbound::axum_router::delete_reminder_handler,
+
         // foreign_entity
         foreign_entity::inbound::axum_router::get_foreign_entity_handler,
 
@@ -331,6 +340,7 @@ use utoipa::OpenApi;
         crm::inbound::axum_router::set_contact_name::handler,
         crm::inbound::axum_router::list_company_contacts::handler,
         crm::inbound::axum_router::get_contact::handler,
+        crm::inbound::axum_router::get_contact_by_email::handler,
         crm::inbound::axum_router::get_company::handler,
         crm::inbound::axum_router::create_company::handler,
         crm::inbound::axum_router::create_contact::handler,
@@ -368,6 +378,8 @@ use utoipa::OpenApi;
             documents_hex::domain::models::CreateTaskResponse,
             documents_hex::domain::models::CreateSnippetRequest,
             documents_hex::domain::models::CreateSnippetResponse,
+            documents_hex::domain::models::CreateSkillRequest,
+            documents_hex::domain::models::CreateSkillResponse,
             documents_hex::domain::models::DocumentTeamShareResponse,
             documents_hex::domain::models::SetDocumentTeamShareRequest,
             documents_hex::domain::models::PropertyInput,
@@ -398,9 +410,6 @@ use utoipa::OpenApi;
             PreSaveDocumentRequest,
             PreSaveDocumentResponseData,
             PreSaveDocumentResponse, // pre save
-            GetActivitiesResponse,
-            UserActivitiesResponse,
-            Activity, // Get recent ativity
             PinnedItem,
             PinRequest, // Generic pins
             AddPinRequest, // Add pin
@@ -418,6 +427,15 @@ use utoipa::OpenApi;
             DocumentPermissionsTokenRequest,
             ExportDocumentResponse,
             SyncServiceVersionID,
+            calendar_events::inbound::axum_router::CalendarOccurrenceItem,
+            calendar_events::inbound::axum_router::CalendarOccurrenceResponse,
+            calendar_events::inbound::axum_router::CalendarMentionPreviewRequest,
+            calendar_events::inbound::axum_router::CalendarMentionPreviewRequestItem,
+            calendar_events::inbound::axum_router::CalendarMentionPreviewResponse,
+            calendar_events::inbound::axum_router::CalendarMentionPreviewItem,
+            calendar_events::inbound::axum_router::CalendarMentionPreviewKind,
+            calendar_events::domain::models::CalendarMentionEvent,
+            calendar_events::domain::models::CalendarSyncStatus,
             SoupItemWithProperties,
             SoupApiItem,
             SoupDocument<SoupPropertiesField>,
@@ -431,6 +449,11 @@ use utoipa::OpenApi;
             AddFavoriteRequest,
             FavoriteEntityRef,
             ReorderFavoritesRequest,
+            Reminder,
+            RemindersList,
+            ReminderSchedule,
+            CreateReminderRequest,
+            UpdateReminderRequest,
             SoupApiSort,
             SoupPage,
             SoupEnrichedEmailThreadPreview<SoupPropertiesField>,
@@ -522,6 +545,8 @@ use utoipa::OpenApi;
             bots::domain::models::BotChannelType,
             bots::domain::models::ChannelWebhookRequest,
             bots::domain::models::ChannelWebhookResponse,
+            bots::domain::models::CreateBotRequest,
+            bots::domain::models::PatchBotRequest,
             bots::domain::models::CreateChannelScopedBotRequest,
             bots::domain::models::CreateChannelScopedBotResponse,
 
@@ -562,6 +587,7 @@ use utoipa::OpenApi;
 
 
             // Permissions V2
+            models_permissions::share_permission::LinkShare,
             models_permissions::share_permission::access_level::AccessLevel,
             models_permissions::share_permission::SharePermissionV2,
             models_permissions::share_permission::UpdateSharePermissionRequestV2, // Share permission

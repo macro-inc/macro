@@ -5,19 +5,20 @@ use crate::domain::{
         WebhookValidatedMetadata,
     },
     models::{
-        CreateWebhookRequest, PatchWebhookRequest, Webhook, WebhookEventQueueMessage, WebhookStatus,
+        CreateWebhookOutcome, CreateWebhookRequest, PatchWebhookRequest, Webhook,
+        WebhookEventQueueMessage, WebhookStatus,
     },
     ports::{WebhookEventEnqueuer, WebhookRepo, WebhookWorkspaceResolver},
 };
 use channel_sender::ChannelSender;
 use channels::domain::{
     broker_events::{
-        ChannelCreatedMetadata, ChannelDeletedMetadata, ChannelMessageAttachmentCreatedMetadata,
-        ChannelMessageAttachmentRemovedMetadata, ChannelMessageDeletedMetadata,
-        ChannelMessagePatchedMetadata, ChannelMessagePostedMetadata,
+        ChannelCreatedMetadata, ChannelDeletedMetadata, ChannelMentionedMetadata,
+        ChannelMessageAttachmentCreatedMetadata, ChannelMessageAttachmentRemovedMetadata,
+        ChannelMessageDeletedMetadata, ChannelMessagePatchedMetadata, ChannelMessagePostedMetadata,
         ChannelParticipantAddedMetadata, ChannelParticipantRemovedMetadata, ChannelUpdatedMetadata,
     },
-    models::ChannelType,
+    models::{ChannelType, SimpleMention},
 };
 use chrono::{DateTime, Utc};
 use documents::domain::events::{
@@ -40,6 +41,7 @@ use std::{
 const DOCUMENT_ID: &str = "11111111-1111-1111-1111-111111111111";
 const COPIED_DOCUMENT_ID: &str = "22222222-2222-2222-2222-222222222222";
 const PERSONAL_WORKSPACE_ID: &str = "macro|reader@example.com";
+const BOT_PRINCIPAL_ID: &str = "bot|66666666-6666-6666-6666-666666666666";
 const TEAM_WORKSPACE_ID: &str = "33333333-3333-3333-3333-333333333333";
 
 fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
@@ -246,7 +248,7 @@ impl WebhookRepo for MockRepository {
         _request: CreateWebhookRequest,
         _signing_secret: String,
         _headers: Value,
-    ) -> Result<Webhook, Self::Err> {
+    ) -> Result<CreateWebhookOutcome, Self::Err> {
         unimplemented!("not used by webhook event ingestion")
     }
 
@@ -361,6 +363,7 @@ fn webhook(id: &str, workspace_id: &str) -> Webhook {
     Webhook {
         id: id.to_string(),
         workspace_id: workspace_id.to_string(),
+        namespace: id.to_string(),
         name: id.to_string(),
         endpoint_url: "https://example.com/webhook".to_string(),
         signing_secret: "not-queued".to_string(),
@@ -419,10 +422,28 @@ struct EventCase {
     entity_id: String,
 }
 
+impl EventCase {
+    fn new(
+        event: TestBrokerEvent,
+        event_name: &'static str,
+        entity_type: EntityType,
+        normalized_entity_type: &'static str,
+        entity_id: String,
+    ) -> Self {
+        Self {
+            event,
+            event_name,
+            entity_type,
+            normalized_entity_type,
+            entity_id,
+        }
+    }
+}
+
 fn document_event_cases() -> Vec<EventCase> {
     vec![
-        EventCase {
-            event: TestBrokerEvent::Document(Event::with_schema_version(
+        EventCase::new(
+            TestBrokerEvent::Document(Event::with_schema_version(
                 DocumentTopicEvent::Created(DocumentCreatedMetadata {
                     document_id: DOCUMENT_ID.to_string(),
                     owner: user_id("macro|owner@example.com"),
@@ -434,13 +455,13 @@ fn document_event_cases() -> Vec<EventCase> {
                 }),
                 2,
             )),
-            event_name: "document.created",
-            entity_type: EntityType::Document,
-            normalized_entity_type: DOCUMENT_ENTITY_TYPE,
-            entity_id: DOCUMENT_ID.to_string(),
-        },
-        EventCase {
-            event: TestBrokerEvent::Document(Event::with_schema_version(
+            "document.created",
+            EntityType::Document,
+            DOCUMENT_ENTITY_TYPE,
+            DOCUMENT_ID.to_string(),
+        ),
+        EventCase::new(
+            TestBrokerEvent::Document(Event::with_schema_version(
                 DocumentTopicEvent::Updated(DocumentUpdatedMetadata {
                     document_id: DOCUMENT_ID.to_string(),
                     owner: user_id("macro|owner@example.com"),
@@ -453,13 +474,13 @@ fn document_event_cases() -> Vec<EventCase> {
                 }),
                 2,
             )),
-            event_name: "document.updated",
-            entity_type: EntityType::Document,
-            normalized_entity_type: DOCUMENT_ENTITY_TYPE,
-            entity_id: DOCUMENT_ID.to_string(),
-        },
-        EventCase {
-            event: TestBrokerEvent::Document(Event::with_schema_version(
+            "document.updated",
+            EntityType::Document,
+            DOCUMENT_ENTITY_TYPE,
+            DOCUMENT_ID.to_string(),
+        ),
+        EventCase::new(
+            TestBrokerEvent::Document(Event::with_schema_version(
                 DocumentTopicEvent::Deleted(DocumentDeletedMetadata {
                     document_id: DOCUMENT_ID.to_string(),
                     actor_user_id: Some(user_id("macro|owner@example.com")),
@@ -467,13 +488,13 @@ fn document_event_cases() -> Vec<EventCase> {
                 }),
                 2,
             )),
-            event_name: "document.deleted",
-            entity_type: EntityType::Document,
-            normalized_entity_type: DOCUMENT_ENTITY_TYPE,
-            entity_id: DOCUMENT_ID.to_string(),
-        },
-        EventCase {
-            event: TestBrokerEvent::Document(Event::with_schema_version(
+            "document.deleted",
+            EntityType::Document,
+            DOCUMENT_ENTITY_TYPE,
+            DOCUMENT_ID.to_string(),
+        ),
+        EventCase::new(
+            TestBrokerEvent::Document(Event::with_schema_version(
                 DocumentTopicEvent::Copied(DocumentCopiedMetadata {
                     document_id: COPIED_DOCUMENT_ID.to_string(),
                     source_document_id: DOCUMENT_ID.to_string(),
@@ -486,11 +507,11 @@ fn document_event_cases() -> Vec<EventCase> {
                 }),
                 2,
             )),
-            event_name: "document.copied",
-            entity_type: EntityType::Document,
-            normalized_entity_type: DOCUMENT_ENTITY_TYPE,
-            entity_id: COPIED_DOCUMENT_ID.to_string(),
-        },
+            "document.copied",
+            EntityType::Document,
+            DOCUMENT_ENTITY_TYPE,
+            COPIED_DOCUMENT_ID.to_string(),
+        ),
     ]
 }
 
@@ -533,8 +554,8 @@ fn channel_event_cases() -> Vec<EventCase> {
     let member = "macro|member@example.com";
 
     vec![
-        EventCase {
-            event: TestBrokerEvent::Channel(Event::with_schema_version(
+        EventCase::new(
+            TestBrokerEvent::Channel(Event::with_schema_version(
                 ChannelTopicEvent::Created(ChannelCreatedMetadata {
                     channel_id,
                     actor: sender(owner),
@@ -544,13 +565,13 @@ fn channel_event_cases() -> Vec<EventCase> {
                 }),
                 3,
             )),
-            event_name: "channel.created",
-            entity_type: EntityType::Channel,
-            normalized_entity_type: CHANNEL_ENTITY_TYPE,
-            entity_id: channel_id.to_string(),
-        },
-        EventCase {
-            event: TestBrokerEvent::Channel(Event::with_schema_version(
+            "channel.created",
+            EntityType::Channel,
+            CHANNEL_ENTITY_TYPE,
+            channel_id.to_string(),
+        ),
+        EventCase::new(
+            TestBrokerEvent::Channel(Event::with_schema_version(
                 ChannelTopicEvent::Updated(ChannelUpdatedMetadata {
                     channel_id,
                     actor: user_id(owner),
@@ -559,26 +580,26 @@ fn channel_event_cases() -> Vec<EventCase> {
                 }),
                 3,
             )),
-            event_name: "channel.updated",
-            entity_type: EntityType::Channel,
-            normalized_entity_type: CHANNEL_ENTITY_TYPE,
-            entity_id: channel_id.to_string(),
-        },
-        EventCase {
-            event: TestBrokerEvent::Channel(Event::with_schema_version(
+            "channel.updated",
+            EntityType::Channel,
+            CHANNEL_ENTITY_TYPE,
+            channel_id.to_string(),
+        ),
+        EventCase::new(
+            TestBrokerEvent::Channel(Event::with_schema_version(
                 ChannelTopicEvent::Deleted(ChannelDeletedMetadata {
                     channel_id,
                     actor: sender(owner),
                 }),
                 3,
             )),
-            event_name: "channel.deleted",
-            entity_type: EntityType::Channel,
-            normalized_entity_type: CHANNEL_ENTITY_TYPE,
-            entity_id: channel_id.to_string(),
-        },
-        EventCase {
-            event: TestBrokerEvent::Channel(Event::with_schema_version(
+            "channel.deleted",
+            EntityType::Channel,
+            CHANNEL_ENTITY_TYPE,
+            channel_id.to_string(),
+        ),
+        EventCase::new(
+            TestBrokerEvent::Channel(Event::with_schema_version(
                 ChannelTopicEvent::MessagePosted(ChannelMessagePostedMetadata {
                     channel_id,
                     message_id,
@@ -593,13 +614,13 @@ fn channel_event_cases() -> Vec<EventCase> {
                 }),
                 3,
             )),
-            event_name: "channel.message_posted",
-            entity_type: EntityType::Channel,
-            normalized_entity_type: CHANNEL_ENTITY_TYPE,
-            entity_id: channel_id.to_string(),
-        },
-        EventCase {
-            event: TestBrokerEvent::Channel(Event::with_schema_version(
+            "channel.message_posted",
+            EntityType::Channel,
+            CHANNEL_ENTITY_TYPE,
+            channel_id.to_string(),
+        ),
+        EventCase::new(
+            TestBrokerEvent::Channel(Event::with_schema_version(
                 ChannelTopicEvent::MessagePatched(ChannelMessagePatchedMetadata {
                     channel_id,
                     message_id,
@@ -611,13 +632,13 @@ fn channel_event_cases() -> Vec<EventCase> {
                 }),
                 3,
             )),
-            event_name: "channel.message_patched",
-            entity_type: EntityType::Channel,
-            normalized_entity_type: CHANNEL_ENTITY_TYPE,
-            entity_id: channel_id.to_string(),
-        },
-        EventCase {
-            event: TestBrokerEvent::Channel(Event::with_schema_version(
+            "channel.message_patched",
+            EntityType::Channel,
+            CHANNEL_ENTITY_TYPE,
+            channel_id.to_string(),
+        ),
+        EventCase::new(
+            TestBrokerEvent::Channel(Event::with_schema_version(
                 ChannelTopicEvent::MessageDeleted(ChannelMessageDeletedMetadata {
                     channel_id,
                     message_id,
@@ -627,13 +648,13 @@ fn channel_event_cases() -> Vec<EventCase> {
                 }),
                 3,
             )),
-            event_name: "channel.message_deleted",
-            entity_type: EntityType::Channel,
-            normalized_entity_type: CHANNEL_ENTITY_TYPE,
-            entity_id: channel_id.to_string(),
-        },
-        EventCase {
-            event: TestBrokerEvent::Channel(Event::with_schema_version(
+            "channel.message_deleted",
+            EntityType::Channel,
+            CHANNEL_ENTITY_TYPE,
+            channel_id.to_string(),
+        ),
+        EventCase::new(
+            TestBrokerEvent::Channel(Event::with_schema_version(
                 ChannelTopicEvent::MessageAttachmentCreated(
                     ChannelMessageAttachmentCreatedMetadata {
                         channel_id,
@@ -644,13 +665,13 @@ fn channel_event_cases() -> Vec<EventCase> {
                 ),
                 3,
             )),
-            event_name: "channel.message_attachment_created",
-            entity_type: EntityType::Channel,
-            normalized_entity_type: CHANNEL_ENTITY_TYPE,
-            entity_id: channel_id.to_string(),
-        },
-        EventCase {
-            event: TestBrokerEvent::Channel(Event::with_schema_version(
+            "channel.message_attachment_created",
+            EntityType::Channel,
+            CHANNEL_ENTITY_TYPE,
+            channel_id.to_string(),
+        ),
+        EventCase::new(
+            TestBrokerEvent::Channel(Event::with_schema_version(
                 ChannelTopicEvent::MessageAttachmentRemoved(
                     ChannelMessageAttachmentRemovedMetadata {
                         channel_id,
@@ -661,13 +682,13 @@ fn channel_event_cases() -> Vec<EventCase> {
                 ),
                 3,
             )),
-            event_name: "channel.message_attachment_removed",
-            entity_type: EntityType::Channel,
-            normalized_entity_type: CHANNEL_ENTITY_TYPE,
-            entity_id: channel_id.to_string(),
-        },
-        EventCase {
-            event: TestBrokerEvent::Channel(Event::with_schema_version(
+            "channel.message_attachment_removed",
+            EntityType::Channel,
+            CHANNEL_ENTITY_TYPE,
+            channel_id.to_string(),
+        ),
+        EventCase::new(
+            TestBrokerEvent::Channel(Event::with_schema_version(
                 ChannelTopicEvent::ParticipantAdded(ChannelParticipantAddedMetadata {
                     channel_id,
                     channel_type: ChannelType::Team,
@@ -676,13 +697,13 @@ fn channel_event_cases() -> Vec<EventCase> {
                 }),
                 3,
             )),
-            event_name: "channel.participant_added",
-            entity_type: EntityType::Channel,
-            normalized_entity_type: CHANNEL_ENTITY_TYPE,
-            entity_id: channel_id.to_string(),
-        },
-        EventCase {
-            event: TestBrokerEvent::Channel(Event::with_schema_version(
+            "channel.participant_added",
+            EntityType::Channel,
+            CHANNEL_ENTITY_TYPE,
+            channel_id.to_string(),
+        ),
+        EventCase::new(
+            TestBrokerEvent::Channel(Event::with_schema_version(
                 ChannelTopicEvent::ParticipantRemoved(ChannelParticipantRemovedMetadata {
                     channel_id,
                     channel_type: ChannelType::Team,
@@ -691,11 +712,35 @@ fn channel_event_cases() -> Vec<EventCase> {
                 }),
                 3,
             )),
-            event_name: "channel.participant_removed",
-            entity_type: EntityType::Channel,
-            normalized_entity_type: CHANNEL_ENTITY_TYPE,
-            entity_id: channel_id.to_string(),
-        },
+            "channel.participant_removed",
+            EntityType::Channel,
+            CHANNEL_ENTITY_TYPE,
+            channel_id.to_string(),
+        ),
+        // Like every channel event, mentions match and resolve access on the
+        // channel; the mentioned entity is payload for consumers to filter on.
+        EventCase::new(
+            TestBrokerEvent::Channel(Event::with_schema_version(
+                ChannelTopicEvent::Mentioned(ChannelMentionedMetadata {
+                    channel_id,
+                    message_id,
+                    thread_id: None,
+                    sender: sender(member),
+                    channel_type: ChannelType::Team,
+                    content: "hello bot".to_string(),
+                    mentioned: SimpleMention {
+                        entity_type: "bot".to_string(),
+                        entity_id: BOT_PRINCIPAL_ID.to_string(),
+                    },
+                    created_at: timestamp(),
+                }),
+                3,
+            )),
+            "channel.mentioned",
+            EntityType::Channel,
+            CHANNEL_ENTITY_TYPE,
+            channel_id.to_string(),
+        ),
     ]
 }
 
@@ -715,6 +760,7 @@ fn webhook_event_cases() -> Vec<WebhookEventCase> {
                 WebhookTopicEvent::Created(WebhookCreatedMetadata {
                     webhook_id: "wh_created".to_string(),
                     workspace_id: PERSONAL_WORKSPACE_ID.to_string(),
+                    namespace: "created-webhook".to_string(),
                     created_by_user_id: user_id("macro|creator@example.com"),
                     name: "Created webhook".to_string(),
                     endpoint_url: "https://example.com/created".to_string(),
@@ -786,12 +832,12 @@ fn webhook_event_cases() -> Vec<WebhookEventCase> {
 }
 
 #[tokio::test]
-async fn normalizes_and_matches_all_fourteen_event_variants() {
+async fn normalizes_and_matches_all_fifteen_event_variants() {
     let event_cases = document_event_cases()
         .into_iter()
         .chain(channel_event_cases())
         .collect::<Vec<_>>();
-    assert_eq!(event_cases.len(), 14);
+    assert_eq!(event_cases.len(), 15);
 
     for event_case in event_cases {
         let access = MockAccessService::with_users(vec![user_id(PERSONAL_WORKSPACE_ID)]);
@@ -1254,4 +1300,138 @@ async fn entity_access_internal_error_is_transient() {
         WebhookEventIngestionError::EntityAccess(AccessError::Internal)
     ));
     assert!(error.is_transient());
+}
+
+fn agent_trigger_new_event() -> Event<agent_trigger::domain::broker_events::AgentTriggerTopicEvent>
+{
+    use agent_trigger::domain::broker_events::{
+        AgentBotMentionedEvent, AgentTriggerTopicEvent, NewAgentSessionEvent,
+    };
+    use channels::domain::broker_events::ChannelMessagePostedMetadata;
+    use channels::domain::models::ChannelType;
+
+    Event::new(AgentTriggerTopicEvent::New(
+        NewAgentSessionEvent::TopLevelMentioned(AgentBotMentionedEvent {
+            bot_id: bot_id::BotId::new_from_uuid(uuid::Uuid::from_u128(0xB07)),
+            message: ChannelMessagePostedMetadata {
+                channel_id: uuid::Uuid::from_u128(1),
+                message_id: uuid::Uuid::from_u128(2),
+                thread_id: None,
+                sender: sender("macro|asker@example.com"),
+                triggered_by: None,
+                channel_type: ChannelType::Public,
+                content: "fix the flaky test".to_owned(),
+                mentions: vec![],
+                attachments: vec![],
+                created_at: timestamp(),
+            },
+        }),
+    ))
+}
+
+fn agent_trigger_existing_event()
+-> Event<agent_trigger::domain::broker_events::AgentTriggerTopicEvent> {
+    use agent_trigger::domain::broker_events::{
+        AgentTriggerTopicEvent, ChannelEventMetadata, ExistingAgentSessionEvent,
+    };
+    use channels::domain::broker_events::ChannelMessagePostedMetadata;
+    use channels::domain::models::ChannelType;
+
+    Event::new(AgentTriggerTopicEvent::Existing(
+        ExistingAgentSessionEvent::Channel(ChannelEventMetadata {
+            bot_id: bot_id::BotId::new_from_uuid(uuid::Uuid::from_u128(0xB07)),
+            session_id: agent_session::domain::model::AgentSessionId::TEST_A,
+            message: ChannelMessagePostedMetadata {
+                channel_id: uuid::Uuid::from_u128(1),
+                message_id: uuid::Uuid::from_u128(2),
+                thread_id: None,
+                sender: sender("macro|asker@example.com"),
+                triggered_by: None,
+                channel_type: ChannelType::Public,
+                content: "and now the other one".to_owned(),
+                mentions: vec![],
+                attachments: vec![],
+                created_at: timestamp(),
+            },
+        }),
+    ))
+}
+
+/// A follow-up on a session that exists asks the session, not the channel:
+/// the session carries its own grants, so whatever channel a later message
+/// landed in is incidental.
+#[tokio::test]
+async fn an_existing_session_trigger_is_gated_by_the_session() {
+    let access = MockAccessService::with_users(vec![user_id(PERSONAL_WORKSPACE_ID)]);
+    let repository = MockRepository::new(
+        vec![PERSONAL_WORKSPACE_ID.to_string()],
+        vec![webhook("wh_agent_feed", PERSONAL_WORKSPACE_ID)],
+    );
+    let service = service(access.clone(), repository.clone(), MockEnqueuer::default());
+
+    service
+        .ingest_agent_trigger_event(agent_trigger_existing_event())
+        .await
+        .expect("agent trigger events are ingested");
+
+    assert_eq!(
+        lock(&access.calls).as_slice(),
+        &[(
+            agent_session::domain::model::AgentSessionId::TEST_A.to_string(),
+            EntityType::AgentSession
+        )],
+    );
+}
+
+#[tokio::test]
+async fn agent_trigger_events_are_scoped_by_the_channel_but_named_by_the_bot() {
+    let access = MockAccessService::with_users(vec![user_id(PERSONAL_WORKSPACE_ID)]);
+    let repository = MockRepository::new(
+        vec![PERSONAL_WORKSPACE_ID.to_string()],
+        vec![webhook("wh_agent_feed", PERSONAL_WORKSPACE_ID)],
+    );
+    let enqueuer = MockEnqueuer::default();
+    let service = service(access.clone(), repository.clone(), enqueuer.clone());
+    let event = agent_trigger_new_event();
+
+    service
+        .ingest_agent_trigger_event(event.clone())
+        .await
+        .expect("agent trigger events are ingested");
+
+    let bot_id = bot_id::BotId::new_from_uuid(uuid::Uuid::from_u128(0xB07)).to_string();
+    // Who may see it is decided by the channel the mention sits in - the same
+    // question a channel event asks - not by the bot.
+    assert_eq!(
+        lock(&access.calls).as_slice(),
+        &[(uuid::Uuid::from_u128(1).to_string(), EntityType::Channel)],
+    );
+    let repository_state = lock(&repository.state);
+    // ...but the entity matched on is the bot, so a filter's `ids` scopes a
+    // subscriber to exactly one bot's triggers.
+    assert_eq!(repository_state.match_calls.len(), 1);
+    assert_eq!(repository_state.match_calls[0].entity_id, bot_id);
+    assert_eq!(
+        repository_state.match_calls[0].event_name,
+        "agent_trigger.new"
+    );
+    assert_eq!(
+        repository_state.match_calls[0].workspace_ids,
+        vec![PERSONAL_WORKSPACE_ID.to_string()]
+    );
+    drop(repository_state);
+
+    // The delivered body is the broker envelope, verbatim: exactly what the
+    // daemon on the other end decodes.
+    let enqueuer_state = lock(&enqueuer.state);
+    assert_eq!(enqueuer_state.attempted_messages.len(), 1);
+    let normalized = &enqueuer_state.attempted_messages[0].event;
+    assert_eq!(normalized.event_name, "agent_trigger.new");
+    assert_eq!(normalized.entity_type, "bot");
+    assert_eq!(normalized.entity_id, bot_id);
+    assert_eq!(normalized.ordering_key, bot_id);
+    assert_eq!(
+        normalized.broker_envelope,
+        serde_json::to_value(&event).expect("a serializable envelope"),
+    );
 }

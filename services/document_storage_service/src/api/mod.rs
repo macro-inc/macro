@@ -25,7 +25,6 @@ pub(crate) mod util;
 mod middleware;
 
 // Routes
-mod activity;
 mod annotations;
 mod documents;
 mod graphql_soup;
@@ -50,7 +49,6 @@ pub const MACRO_INTERNAL_USER_ID: &str = "macro|INTERNAL@macro.com";
 
 pub async fn setup_and_serve(state: ApiContext) -> anyhow::Result<()> {
     let app = api_router(state.clone())
-        .merge(health::router())
         .layer(
             ServiceBuilder::new()
                 .layer(MacroRequestIdAndTracingLayer::new(Duration::from_millis(200)).into_inner())
@@ -64,7 +62,11 @@ pub async fn setup_and_serve(state: ApiContext) -> anyhow::Result<()> {
                 .layer(CompressionLayer::new().gzip(true)),
         )
         // The health router is attached here so we don't attach the logging middleware to it
-        .merge(SwaggerUi::new("/docs").url("/api-doc/openapi.json", swagger::ApiDoc::openapi()));
+        .merge(SwaggerUi::new("/docs").url("/api-doc/openapi.json", swagger::ApiDoc::openapi()))
+        .merge(
+            SwaggerUi::new("/dss/docs")
+                .url("/dss/api-doc/openapi.json", swagger::ApiDoc::openapi()),
+        );
 
     let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{}", state.config.port))
         .await
@@ -88,6 +90,8 @@ fn items_router(state: ApiContext) -> Router<ApiContext> {
 fn api_router(state: ApiContext) -> Router {
     let github_sync_service_router_state = GithubSyncRouterState {
         service: state.github_sync_service.clone(),
+        entity_access_service: state.entity_access_service.clone(),
+        authorization_state: state.authorization_state.clone(),
     };
 
     // Webhook router is outside auth — LiveKit validates via its own JWT,
@@ -146,7 +150,6 @@ fn api_router(state: ApiContext) -> Router {
                 macro_middleware::connection_drop_prevention_handler,
             )),
         )
-        .nest("/activity", activity::router())
         .nest(
             "/pins",
             pins::router().layer(axum::middleware::from_fn(
@@ -203,6 +206,9 @@ fn api_router(state: ApiContext) -> Router {
             channels::inbound::list_router::channel_list_router(state.channel_list_state.clone()),
         )
         .nest("/entity", entity::router())
+        .merge(calendar_events::inbound::axum_router::calendar_router(
+            state.calendar_state.clone(),
+        ))
         .nest(
             "/channels",
             channels::inbound::axum_router::channels_router(state.channels_state.clone()),
@@ -218,6 +224,10 @@ fn api_router(state: ApiContext) -> Router {
         .nest(
             "/favorites",
             favorites::inbound::axum_router::favorites_router(state.favorites_state.clone()),
+        )
+        .nest(
+            "/reminders",
+            reminders::inbound::axum_router::reminders_router(state.reminders_state.clone()),
         )
         .nest(
             "/foreign_entity",
@@ -267,9 +277,14 @@ fn api_router(state: ApiContext) -> Router {
         .nest("/recents", recents::router())
         .nest("/saved_views", saved_views::router())
         .with_state(state);
-    Router::new()
+    let dss_router = Router::new()
         .nest("/{version}", internal_router.clone())
         .merge(internal_router)
         .merge(webhook_router)
         .merge(internal_call_router)
+        .merge(health::router());
+
+    Router::new()
+        .merge(dss_router.clone())
+        .nest("/dss", dss_router)
 }

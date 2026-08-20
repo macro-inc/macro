@@ -6,7 +6,7 @@ import MicrophoneSlash from '@phosphor/microphone-slash.svg';
 import Screencast from '@phosphor/screencast.svg';
 import VideoCamera from '@phosphor/video-camera.svg';
 import VideoCameraSlash from '@phosphor/video-camera-slash.svg';
-import { Button, Dropdown, SingleSelectCheck } from '@ui';
+import { Button, Dropdown, SingleSelectCheck, Tooltip } from '@ui';
 import { For, type JSX, Show } from 'solid-js';
 import { BACKGROUND_IMAGES, useCallContext } from '../CallContext';
 import { CallDeviceList } from '../CallDeviceList';
@@ -152,61 +152,72 @@ export function CallControlsDefaultAndPanelRow(
   return (
     <div class="inline-flex items-center overflow-hidden rounded-lg border border-ink-muted/[0.08] bg-ink-muted/[0.025] divide-x divide-ink-muted/[0.08]">
       <Cell>
-        <Button
-          size="icon-sm"
-          onClick={() => void callCtx.toggleAudio()}
-          disabled={isConnecting()}
-          aria-label={
-            callCtx.isAudioMuted() ? 'Unmute microphone' : 'Mute microphone'
-          }
-          aria-pressed={!callCtx.isAudioMuted()}
-        >
-          <Show when={!callCtx.isAudioMuted()} fallback={<MicrophoneSlash />}>
-            <Microphone />
-          </Show>
-        </Button>
+        <Tooltip label="Toggle microphone" placement="top">
+          <Button
+            size="icon-sm"
+            onClick={() => void callCtx.toggleAudio()}
+            disabled={isConnecting()}
+            aria-label={
+              callCtx.isAudioMuted() ? 'Unmute microphone' : 'Mute microphone'
+            }
+            aria-pressed={!callCtx.isAudioMuted()}
+          >
+            <Show when={!callCtx.isAudioMuted()} fallback={<MicrophoneSlash />}>
+              <Microphone />
+            </Show>
+          </Button>
+        </Tooltip>
       </Cell>
 
       <Cell>
-        <Button
-          size="icon-sm"
-          onClick={() => void callCtx.toggleVideo()}
-          disabled={isConnecting()}
-          aria-label={
-            callCtx.isVideoMuted() ? 'Turn on camera' : 'Turn off camera'
-          }
-          aria-pressed={!callCtx.isVideoMuted()}
-        >
-          <Show when={!callCtx.isVideoMuted()} fallback={<VideoCameraSlash />}>
-            <VideoCamera />
-          </Show>
-        </Button>
+        <Tooltip label="Toggle video" placement="top">
+          <Button
+            size="icon-sm"
+            onClick={() => void callCtx.toggleVideo()}
+            disabled={isConnecting()}
+            aria-label={
+              callCtx.isVideoMuted() ? 'Turn on camera' : 'Turn off camera'
+            }
+            aria-pressed={!callCtx.isVideoMuted()}
+          >
+            <Show
+              when={!callCtx.isVideoMuted()}
+              fallback={<VideoCameraSlash />}
+            >
+              <VideoCamera />
+            </Show>
+          </Button>
+        </Tooltip>
       </Cell>
 
       <Cell>
-        <Button
-          size="icon-sm"
-          onClick={() => void callCtx.toggleScreenShare()}
-          disabled={isConnecting()}
-          aria-label={
-            callCtx.isScreenSharing() ? 'Stop sharing screen' : 'Share screen'
-          }
-          aria-pressed={callCtx.isScreenSharing()}
-        >
-          <Screencast />
-        </Button>
+        <Tooltip label="Screen share" placement="top">
+          <Button
+            size="icon-sm"
+            onClick={() => void callCtx.toggleScreenShare()}
+            disabled={isConnecting()}
+            aria-label={
+              callCtx.isScreenSharing() ? 'Stop sharing screen' : 'Share screen'
+            }
+            aria-pressed={callCtx.isScreenSharing()}
+          >
+            <Screencast />
+          </Button>
+        </Tooltip>
       </Cell>
 
       <Cell>
         <Dropdown placement="top" gutter={6}>
-          <DropdownMenu.Trigger
-            as={Button}
-            size="icon-sm"
-            disabled={isConnecting()}
-            aria-label="Call settings"
-          >
-            <Gear />
-          </DropdownMenu.Trigger>
+          <Tooltip label="Settings" placement="top">
+            <DropdownMenu.Trigger
+              as={Button}
+              size="icon-sm"
+              disabled={isConnecting()}
+              aria-label="Call settings"
+            >
+              <Gear />
+            </DropdownMenu.Trigger>
+          </Tooltip>
           <Dropdown.Content class="min-w-56">
             <Dropdown.Group>
               <CallDeviceList
@@ -254,15 +265,17 @@ export function CallControlsDefaultAndPanelRow(
       </Cell>
 
       <Cell>
-        <Button
-          size="icon-sm"
-          class="text-failure not-disabled:hover:text-failure not-disabled:hover:bg-failure/10"
-          onClick={() => void props.onLeave()}
-          disabled={isConnecting()}
-          aria-label="Leave call"
-        >
-          <PhoneDisconnect />
-        </Button>
+        <Tooltip label="Leave call" placement="top">
+          <Button
+            size="icon-sm"
+            class="text-failure not-disabled:hover:text-failure not-disabled:hover:bg-failure/10"
+            onClick={() => void props.onLeave()}
+            disabled={isConnecting()}
+            aria-label="Leave call"
+          >
+            <PhoneDisconnect />
+          </Button>
+        </Tooltip>
       </Cell>
     </div>
   );

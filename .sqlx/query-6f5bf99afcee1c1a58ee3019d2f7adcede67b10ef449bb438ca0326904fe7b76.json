@@ -1,0 +1,26 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                    INSERT INTO calendar_backfill_jobs (\n                        id, email_link_id, account_id, kind, grant_version\n                    )\n                    VALUES ($1, $2, $3, $4, $5)\n                    ON CONFLICT (email_link_id, kind, grant_version) DO NOTHING\n                    RETURNING id\n                    ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "6f5bf99afcee1c1a58ee3019d2f7adcede67b10ef449bb438ca0326904fe7b76"
+}

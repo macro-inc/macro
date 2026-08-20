@@ -1,20 +1,14 @@
 import { CREATE_MENU_COMMAND_SCOPE } from '@app/constants/hotkeys';
-import { CREATABLE_BLOCKS } from '@app/features/command/Launcher';
+import { useCreateMenuBlocks } from '@app/features/command/Launcher';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useHotkeyInterceptor } from '@app/signal/hotkeyRoot';
-import { getIconConfig } from '@core/component/EntityIcon';
-import {
-  ENABLE_SNIPPETS_FLAG,
-  ENABLE_SNIPPETS_OVERRIDE,
-} from '@core/constant/featureFlags';
 import { setActiveScope } from '@core/hotkey/state';
 import { TOKENS } from '@core/hotkey/tokens';
 import { activateClosestDOMScope } from '@core/hotkey/utils';
 import CreateIcon from '@icon/square-pen-create.svg';
 import PlusIcon from '@phosphor/plus.svg';
-import { Button, cn, Dropdown, Hotkey, NavRow } from '@ui';
-import { createMemo, createSignal, For, onCleanup, Show } from 'solid-js';
+import { Button, Dropdown, Hotkey, NavRow } from '@ui';
+import { createSignal, For, onCleanup, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 
 export const SidebarCreateMenu = (props: {
@@ -25,15 +19,7 @@ export const SidebarCreateMenu = (props: {
   const analytics = useAnalytics();
   const [open, setOpen] = createSignal(false);
   const [focusedIndex, setFocusedIndex] = createSignal(-1);
-  const snippetsFlag = useFeatureFlag(ENABLE_SNIPPETS_FLAG, {
-    enabledOverride: ENABLE_SNIPPETS_OVERRIDE,
-  });
-
-  const blocks = createMemo(() =>
-    CREATABLE_BLOCKS.filter(
-      (block) => block.blockName !== 'snippet' || snippetsFlag().enabled
-    )
-  );
+  const blocks = useCreateMenuBlocks();
 
   const handleOpenChange = (nextOpen: boolean) => {
     if (nextOpen && !open()) {
@@ -137,39 +123,26 @@ export const SidebarCreateMenu = (props: {
       <Dropdown.Content class="min-w-52 shadow-menu">
         <Dropdown.Group>
           <For each={blocks()}>
-            {(block, index) => {
-              const iconConfig = getIconConfig(block.blockName);
-
-              return (
-                <Dropdown.Item
-                  class="min-h-9 gap-2 px-2.5"
-                  onFocus={() => setFocusedIndex(index())}
-                  onMouseEnter={() => setFocusedIndex(index())}
-                  onSelect={() => {
-                    setOpen(false);
-                    block.keyDownHandler();
-                  }}
-                >
-                  <div
-                    class={cn(
-                      'size-4 shrink-0 flex items-center rounded-sm [&_svg]:size-4',
-                      iconConfig.foreground
-                    )}
-                  >
-                    <Dynamic
-                      component={block.animatedIcon ?? block.icon}
-                      triggerAnimation={focusedIndex() === index()}
-                    />
-                  </div>
-                  <span class="flex-1 text-ink">{block.label}</span>
-                  <Hotkey
-                    token={block.hotkeyToken}
-                    theme="subtle"
-                    class="ml-6"
+            {(block, index) => (
+              <Dropdown.Item
+                class="min-h-9 gap-2 px-2.5"
+                onFocus={() => setFocusedIndex(index())}
+                onMouseEnter={() => setFocusedIndex(index())}
+                onSelect={() => {
+                  setOpen(false);
+                  block.keyDownHandler();
+                }}
+              >
+                <div class="size-4 shrink-0 flex items-center rounded-sm text-ink-muted [&_svg]:size-4">
+                  <Dynamic
+                    component={block.animatedIcon ?? block.icon}
+                    triggerAnimation={focusedIndex() === index()}
                   />
-                </Dropdown.Item>
-              );
-            }}
+                </div>
+                <span class="flex-1 text-ink">{block.label}</span>
+                <Hotkey token={block.hotkeyToken} theme="subtle" class="ml-6" />
+              </Dropdown.Item>
+            )}
           </For>
         </Dropdown.Group>
       </Dropdown.Content>

@@ -340,7 +340,7 @@ where
             .initialize_existing_markdown(&candidate.id, &markdown)
             .await
         {
-            Ok(()) => CandidateResult::Initialized,
+            Ok(_) => CandidateResult::Initialized,
             Err(error) if sync_snapshot_already_exists(&error) => CandidateResult::Initialized,
             Err(error) => CandidateResult::InitializeError {
                 error: error.to_string(),

@@ -21,6 +21,7 @@ import {
   isCallEntity,
   isChannelEntity,
   isChannelMessageEntity,
+  isSkillEntity,
   isSnippetEntity,
   isTaskEntity,
 } from '../types/entity';
@@ -107,28 +108,35 @@ function GithubPullRequestIcon(props: {
 
 export function EntityIcon(props: EntityIconProps) {
   const iconType = () => {
-    return match(props.entity)
-      .when(isChannelEntity, ({ channelType }) => channelType)
-      .when(isChannelMessageEntity, ({ channelType }) => channelType)
-      .when(isTaskEntity, () => 'task')
-      .when(isSnippetEntity, () => 'snippet')
-      .with({ type: 'document' }, ({ fileType }) => {
-        return fileType ?? 'default';
-      })
-      .with({ type: 'chat' }, () => 'chat')
-      .with({ type: 'project' }, () => 'project')
-      .with({ type: 'email' }, ({ isRead, hasIcsAttachment }) =>
-        hasIcsAttachment ? 'emailInvite' : isRead ? 'emailRead' : 'email'
-      )
-      .when(isCallEntity, () => 'call')
-      .with({ type: 'automation' }, () => 'automation')
-      .with(
-        { type: 'foreign', foreignSource: 'github_pull_request' },
-        () => 'githubPullRequest'
-      )
-      .with({ type: 'foreign' }, () => 'default')
-      .with({ type: 'crm_company' }, () => 'crm_company')
-      .otherwise(() => 'default');
+    return (
+      match(props.entity)
+        .when(isChannelEntity, ({ channelType }) => channelType)
+        .when(isChannelMessageEntity, ({ channelType }) => channelType)
+        .when(isTaskEntity, () => 'task')
+        .when(isSnippetEntity, () => 'snippet')
+        .when(isSkillEntity, () => 'skill')
+        .with({ type: 'document' }, ({ fileType }) => {
+          return fileType ?? 'default';
+        })
+        .with({ type: 'chat' }, () => 'chat')
+        .with({ type: 'project' }, () => 'project')
+        .with({ type: 'email' }, ({ isRead, hasIcsAttachment }) =>
+          hasIcsAttachment ? 'emailInvite' : isRead ? 'emailRead' : 'email'
+        )
+        .when(isCallEntity, () => 'call')
+        .with({ type: 'automation' }, () => 'automation')
+        .with(
+          { type: 'foreign', foreignSource: 'github_pull_request' },
+          () => 'githubPullRequest'
+        )
+        .with({ type: 'foreign' }, () => 'default')
+        .with({ type: 'crm_company' }, () => 'crm_company')
+        // Always the bell, never the referenced entity's icon: the row is a
+        // reminder first, and what it points at is iconed beside its name
+        // instead — see `reminderReferenceIconType`.
+        .with({ type: 'reminder' }, () => 'reminder')
+        .otherwise(() => 'default')
+    );
   };
 
   const validIconType = () => {

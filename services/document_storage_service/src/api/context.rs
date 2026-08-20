@@ -12,6 +12,10 @@ use cal::{
     domain::service::CalWebhookServiceImpl, inbound::cal_webhook_router::CalWebhookRouterState,
     outbound::analytics_client::AnalyticsClientSink,
 };
+use calendar_events::{
+    domain::service::CalendarService, inbound::axum_router::CalendarRouterState,
+    outbound::pg::PgCalendarRepository,
+};
 use call::{
     domain::service::CallServiceImpl,
     inbound::axum_router::{CallRouterState, InternalCallRouterState, WebhookRouterState},
@@ -89,6 +93,10 @@ use properties::{
     inbound::axum_router::PropertiesRouterState,
 };
 use readonly_pool::ReadOnlyPool;
+use reminders::{
+    domain::service::RemindersServiceImpl, inbound::axum_router::RemindersRouterState,
+    outbound::pg_reminders_repo::PgRemindersRepo,
+};
 use search_service::SearchHandlerState;
 use soup::{
     domain::service::SoupImpl, inbound::axum_router::SoupRouterState,
@@ -126,9 +134,10 @@ pub(crate) type DssCrmService = crm::domain::service::CrmServiceImpl<
 pub(crate) type DssEmailService = EmailServiceImpl<
     EmailPgRepo,
     FrecencyQueryServiceImpl<FrecencyPgStorage>,
-    email::domain::ports::NoOpEnqueuer,
+    sqs_client::SQS,
     DssCrmService,
     EntityAccessManagementService,
+    DssEventBroker,
 >;
 
 /// CRM router state.
@@ -146,6 +155,7 @@ pub(crate) type DssSoupService = SoupImpl<
     call::domain::service::CallRecordQueryServiceImpl<call::outbound::pg_call_repo::PgCallRepo>,
     DssCrmService,
     ForeignEntityServiceType,
+    RemindersServiceType,
 >;
 
 type DssSoupState =
@@ -154,12 +164,22 @@ type DssSoupState =
 /// Realtime Soup consumer service used by GraphQL subscriptions.
 pub(crate) type DssSoupRealtimeService = SoupRealtimeConsumerService<SoupTopicConsumer>;
 
+/// Realtime notification consumer service used by GraphQL subscriptions.
+pub(crate) type DssNotificationRealtimeService =
+    notification::domain::service::WebSocketNotificationConsumerService<
+        notification::outbound::notification_consumer::NotificationTopicConsumer<
+            model_notifications::NotifEvent,
+        >,
+        model_notifications::NotifEvent,
+    >;
+
 /// GraphQL Soup schema wired to the DSS services; the `ApiContext` state
 /// parameter lets GraphQL resolvers run the same axum extractors as the REST
 /// routes, lazily, against the stored request parts.
 pub(crate) type DssGraphqlSoupSchema = complete_graph::SharedSoupSchema<
     DssSoupService,
     DssSoupRealtimeService,
+    DssNotificationRealtimeService,
     DssEmailService,
     EntityAccessService,
     AuthorizationService,
@@ -173,7 +193,12 @@ pub(crate) type DssGraphqlSoupSchema = complete_graph::SharedSoupSchema<
     complete_graph::EmailServiceEmailContentReader<DssEmailService, EntityAccessService>,
     Arc<FavoritesServiceType>,
     Arc<EntityAccessService>,
+    DssActivityReader,
 >;
+
+/// GraphQL activity reader over the Postgres activity log (readonly pool).
+pub(crate) type DssActivityReader =
+    complete_graph::ActivityPortReader<activity::outbound::pg_activity_repo::PgActivityRepo>;
 
 type SystemPropertiesService = SystemPropertiesServiceImpl<PgSystemPropertiesRepository>;
 pub(crate) type NotificationIngressType = SqsNotificationIngress<SqsQueue>;
@@ -190,6 +215,12 @@ pub(crate) type PropertiesHandlerState =
 
 /// Type alias for the entity access service.
 pub(crate) type EntityAccessService = EntityAccessServiceImpl<PgAccessRepository>;
+
+/// Calendar occurrence query service.
+pub(crate) type DssCalendarService = CalendarService<PgCalendarRepository>;
+
+/// Calendar occurrence router state.
+pub(crate) type DssCalendarState = CalendarRouterState<DssCalendarService, AuthorizationService>;
 
 /// Adapter implementing [`TaskPropertiesPort`] for the system properties service.
 pub(crate) struct TaskPropertiesAdapter {
@@ -401,6 +432,13 @@ pub(crate) type FavoritesServiceType = FavoritesServiceImpl<PgFavoritesRepo>;
 pub(crate) type DssFavoritesState =
     FavoritesRouterState<FavoritesServiceType, EntityAccessService, AuthorizationService>;
 
+/// Type alias for the reminders service.
+pub(crate) type RemindersServiceType = RemindersServiceImpl<PgRemindersRepo>;
+
+/// Type alias for the reminders router state.
+pub(crate) type DssRemindersState =
+    RemindersRouterState<RemindersServiceType, EntityAccessService, AuthorizationService>;
+
 /// Type alias for the foreign entity service.
 pub(crate) type ForeignEntityServiceType = ForeignEntityServiceImpl<PgForeignEntityRepo>;
 
@@ -447,9 +485,11 @@ pub(crate) struct ApiContext {
     pub soup_router_state: DssSoupState,
     pub graphql_soup_schema: DssGraphqlSoupSchema,
     pub graphql_notification_reader: Arc<ai_tools::ToolNotificationService>,
+    pub activity_reader: DssActivityReader,
     pub graphql_entity_mutation_service: Arc<DssEntityMutationService>,
     pub favorites_state: DssFavoritesState,
     pub favorites_service: Arc<FavoritesServiceType>,
+    pub reminders_state: DssRemindersState,
     pub foreign_entity_state: DssForeignEntityState,
     pub macro_event_broker: DssEventBroker,
     pub sqs_client: Arc<sqs_client::SQS>,
@@ -469,6 +509,7 @@ pub(crate) struct ApiContext {
     /// Legacy channel list router state.
     pub channel_list_state: DssChannelListState,
     pub entity_access_service: Arc<EntityAccessService>,
+    pub calendar_state: DssCalendarState,
     pub documents_state: DocumentsState,
     pub projects_state: ProjectsState,
     pub channels_state: DssChannelsState,

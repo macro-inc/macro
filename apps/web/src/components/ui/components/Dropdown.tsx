@@ -3,7 +3,10 @@ import { DropdownMenu as KobalteDropdownMenu } from '@kobalte/core/dropdown-menu
 import CheckIcon from '@phosphor/check.svg';
 import { type ComponentProps, onCleanup, splitProps } from 'solid-js';
 import { cn } from '../utils/classname';
-import { addCtrlJKMenuNavigation } from '../utils/menuKeyboardNavigation';
+import {
+  addCtrlJKMenuNavigation,
+  highlightFirstMenuItemOnOpen,
+} from '../utils/menuKeyboardNavigation';
 import { Button, type ButtonProps } from './Button';
 import { Surface, type SurfaceProps } from './Surface';
 
@@ -73,7 +76,7 @@ export type DropdownItemProps = ComponentProps<typeof KobalteDropdownMenu.Item>;
 export type DropdownSubProps = ComponentProps<typeof KobalteDropdownMenu.Sub>;
 
 const ROW_CLASS =
-  'group rounded-lg w-full flex items-center gap-1.5 p-1.5 px-2 text-left font-normal text-sm cursor-default outline-none hover:bg-ink/5 data-highlighted:bg-ink/5 data-disabled:opacity-50 data-disabled:cursor-not-allowed';
+  'group rounded-lg w-full flex items-center gap-1.5 p-1.5 px-2 text-left font-normal text-sm cursor-default outline-none data-highlighted:bg-ink/5 data-disabled:opacity-50 data-disabled:cursor-not-allowed';
 
 function resolvePortalMount(
   searchRef: HTMLElement | undefined,
@@ -166,6 +169,7 @@ function callRef<T>(ref: ((el: T) => void) | undefined, el: T) {
 
 function DropdownContent(props: DropdownContentProps) {
   let searchRef: HTMLDivElement | undefined;
+  let contentRef: HTMLElement | undefined;
   const [local, rest] = splitProps(props, [
     'depth',
     'class',
@@ -173,10 +177,18 @@ function DropdownContent(props: DropdownContentProps) {
     'portalScope',
     'children',
     'ref',
+    'onOpenAutoFocus',
   ]);
+  const handleOpenAutoFocus = (event: Event) => {
+    local.onOpenAutoFocus?.(event);
+    if (!event.defaultPrevented && contentRef) {
+      highlightFirstMenuItemOnOpen(contentRef);
+    }
+  };
   const setContentRef = (el: HTMLElement) => {
     installKeyboardNavigation(el);
     installSwipeToDismiss(el);
+    contentRef = el;
     callRef(local.ref, el);
   };
 
@@ -194,9 +206,10 @@ function DropdownContent(props: DropdownContentProps) {
           depth={local.depth ?? 2}
           as={Surface}
           {...rest}
+          onOpenAutoFocus={handleOpenAutoFocus}
           ref={setContentRef}
         >
-          <div class="flex flex-col gap-px bg-edge-muted size-full">
+          <div class="flex flex-col gap-(--app-border-width) bg-edge-muted size-full">
             {local.children}
           </div>
         </KobalteDropdownMenu.Content>
@@ -229,7 +242,7 @@ function DropdownSubContent(props: DropdownSubContentProps) {
       >
         <KobalteDropdownMenu.SubContent
           class={cn(
-            'rounded-xl size-auto z-action-menu menu-open-animation bg-menu',
+            'rounded-xl size-auto z-action-menu menu-open-animation bg-menu [--color-surface:var(--color-menu)]',
             local.class
           )}
           depth={local.depth ?? 2}
@@ -237,7 +250,7 @@ function DropdownSubContent(props: DropdownSubContentProps) {
           {...rest}
           ref={setContentRef}
         >
-          <div class="flex flex-col gap-px bg-edge-muted size-full">
+          <div class="flex flex-col gap-(--app-border-width) bg-edge-muted size-full">
             {local.children}
           </div>
         </KobalteDropdownMenu.SubContent>
@@ -272,8 +285,7 @@ function DropdownGroupLabel(props: DropdownGroupLabelProps) {
 const CHECKBOX_ITEM_BOX_CLASS = cn(
   'inline-flex items-center justify-center size-3.5 shrink-0 rounded-sm',
   'border border-transparent text-surface',
-  'group-hover:not-hover:border-edge-muted group-data-highlighted:not-hover:border-edge-muted',
-  'hover:border-accent',
+  'group-data-highlighted:border-edge-muted',
   'group-data-checked:bg-accent group-data-checked:border-accent'
 );
 

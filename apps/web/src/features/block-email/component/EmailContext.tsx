@@ -526,7 +526,9 @@ export function EmailProvider(props: FlowProps<{ threadID: string }>) {
 
     const entity =
       selectedRow?.original ??
-      (cachedItem && cachedItem.tag !== 'channelThread'
+      (cachedItem &&
+      cachedItem.tag !== 'channelThread' &&
+      cachedItem.tag !== 'calendarEvent'
         ? mapApiSoupItemToEntity(cachedItem)
         : undefined);
 
@@ -626,7 +628,11 @@ export function EmailProvider(props: FlowProps<{ threadID: string }>) {
           markDoneOpts
         )
       );
-    } else if (cachedItem && cachedItem.tag !== 'channelThread') {
+    } else if (
+      cachedItem &&
+      cachedItem.tag !== 'channelThread' &&
+      cachedItem.tag !== 'calendarEvent'
+    ) {
       // Not rendered inside a soup list (e.g. thread opened in a split): no
       // row to drive the action from, so mark done via the cached soup entity
       // so soup views drop the thread and its notifications settle.
@@ -757,14 +763,20 @@ export function EmailProvider(props: FlowProps<{ threadID: string }>) {
   const markSenderSignal = () => {
     const senderEmail = getSenderEmail();
     if (!senderEmail) return false;
-    markSenderSignalWithToast(senderEmail);
+    markSenderSignalWithToast(
+      senderEmail,
+      toHeaderLinkId(threadQuery.data?.link_id)
+    );
     return true;
   };
 
   const markSenderNoise = () => {
     const senderEmail = getSenderEmail();
     if (!senderEmail) return false;
-    markSenderNoiseWithToast(senderEmail);
+    markSenderNoiseWithToast(
+      senderEmail,
+      toHeaderLinkId(threadQuery.data?.link_id)
+    );
     return true;
   };
 

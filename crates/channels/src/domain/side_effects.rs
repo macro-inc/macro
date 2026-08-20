@@ -3,8 +3,9 @@
 use crate::domain::{
     broker_events::{
         ChannelCreatedMetadata, ChannelDeletedMetadata, ChannelEventAttachment, ChannelMacroEvent,
-        ChannelMessageAttachmentCreatedMetadata, ChannelMessageAttachmentRemovedMetadata,
-        ChannelMessageDeletedMetadata, ChannelMessagePatchedMetadata, ChannelMessagePostedMetadata,
+        ChannelMentionedMetadata, ChannelMessageAttachmentCreatedMetadata,
+        ChannelMessageAttachmentRemovedMetadata, ChannelMessageDeletedMetadata,
+        ChannelMessagePatchedMetadata, ChannelMessagePostedMetadata,
         ChannelParticipantAddedMetadata, ChannelParticipantRemovedMetadata, ChannelUpdatedMetadata,
     },
     events::ChannelEvent,
@@ -29,18 +30,23 @@ use uuid::Uuid;
 /// Entity type used by message mentions that target a bot.
 pub const BOT_MENTION_ENTITY_TYPE: &str = "bot";
 
-/// A trigger derived from a channel message that mentions one or more bots.
+/// A bot-trigger candidate derived from a user-authored channel message.
+///
+/// Every user-authored message is a candidate; whether it actually triggers a
+/// bot (explicit mention or inferred invocation) is decided downstream by the
+/// consumer.
 #[derive(Debug, Clone)]
 pub struct ChannelBotTrigger {
-    /// Channel containing the triggering message.
+    /// Channel containing the candidate message.
     pub channel_id: Uuid,
-    /// The user-authored message that mentioned the bot(s).
+    /// The user-authored message.
     pub message: MutatedMessage,
-    /// Bots mentioned in the message.
-    pub bot_ids: Vec<BotId>,
+    /// Bots explicitly mentioned in the message that are active in the
+    /// channel. Empty when the message mentions no bot.
+    pub mentioned_bot_ids: Vec<BotId>,
 }
 
-/// Sender for bot triggers derived from channel messages.
+/// Sender for bot-trigger candidates derived from channel messages.
 pub type ChannelBotTriggerSender = UnboundedSender<ChannelBotTrigger>;
 
 /// Collect the bot ids mentioned in a message.
@@ -51,7 +57,12 @@ pub type ChannelBotTriggerSender = UnboundedSender<ChannelBotTrigger>;
 ///
 /// Ids must be in the canonical `bot|<uuid>` principal form; bare UUIDs are
 /// rejected (historical bare-UUID content is normalized by migration).
-fn bot_mention_ids(mentions: &[SimpleMention]) -> Vec<BotId> {
+///
+/// Public because out-of-process consumers have to derive the same answer: the
+/// in-process path gets [`ChannelBotTrigger::bot_ids`] for free, while anything
+/// reading `channel.message_posted` off Kafka only has the mention list and
+/// would otherwise reimplement these rules.
+pub fn bot_mention_ids(mentions: &[SimpleMention]) -> Vec<BotId> {
     let mut seen = HashSet::new();
     mentions
         .iter()
@@ -63,6 +74,33 @@ fn bot_mention_ids(mentions: &[SimpleMention]) -> Vec<BotId> {
             _ => None,
         })
         .filter(|id| seen.insert(*id))
+        .collect()
+}
+
+/// Collect mentioned bots that are active participants in the channel.
+///
+/// Mention payloads are client-controlled, so a syntactically valid bot id is
+/// not sufficient to dispatch a trigger or publish a bot-mention event.
+fn active_bot_mention_ids(
+    mentions: &[SimpleMention],
+    participants: &[ChannelParticipant],
+) -> Vec<BotId> {
+    let mut active_bot_ids: HashSet<_> = participants
+        .iter()
+        .filter(|participant| participant.left_at.is_none())
+        .filter_map(|participant| {
+            BotIdStr::parse_from_str(&participant.user_id)
+                .ok()
+                .map(|id| id.bot_id())
+        })
+        .collect();
+    // Macro AI is a code-defined system bot available in every channel; it
+    // has no participant row.
+    active_bot_ids.insert(bot_id::MACRO_AI_BOT_ID);
+
+    bot_mention_ids(mentions)
+        .into_iter()
+        .filter(|bot_id| active_bot_ids.contains(bot_id))
         .collect()
 }
 
@@ -364,20 +402,17 @@ impl<C, R, N, K, B> ChannelSideEffectService<C, R, N, K, B> {
         }
     }
 
-    /// Dispatch bot triggers for any bots mentioned in a user-authored message.
+    /// Dispatch a bot-trigger candidate for a user-authored message.
     fn dispatch_bot_triggers(
         &self,
         channel_id: Uuid,
         message: &MutatedMessage,
         mentions: &[SimpleMention],
+        participants: &[ChannelParticipant],
     ) {
         // Only user-authored messages can trigger bots; this prevents bots
         // (including Macro AI) from triggering each other in a loop.
         if message.sender_id.as_user().is_none() {
-            return;
-        }
-        let bot_ids = bot_mention_ids(mentions);
-        if bot_ids.is_empty() {
             return;
         }
 
@@ -386,7 +421,7 @@ impl<C, R, N, K, B> ChannelSideEffectService<C, R, N, K, B> {
                 .send(ChannelBotTrigger {
                     channel_id,
                     message: message.clone(),
-                    bot_ids,
+                    mentioned_bot_ids: active_bot_mention_ids(mentions, participants),
                 })
                 .is_err()
         {
@@ -657,7 +692,7 @@ where
             .await;
         }
 
-        self.dispatch_bot_triggers(channel_id, &message, &mentions);
+        self.dispatch_bot_triggers(channel_id, &message, &mentions, &participants);
         if notification_policy != PostMessageNotificationPolicy::Silent {
             self.send_message_posted_notifications(PostedMessageNotificationInputs {
                 channel_id,
@@ -1235,6 +1270,7 @@ fn broker_events_for_event(event: &ChannelEvent) -> Vec<ChannelMacroEvent> {
         ChannelEvent::MessagePosted {
             channel_id,
             metadata,
+            participants,
             message,
             mentions,
             attachments,
@@ -1269,6 +1305,39 @@ fn broker_events_for_event(event: &ChannelEvent) -> Vec<ChannelMacroEvent> {
                             .collect(),
                     },
                 ));
+            }
+            // One mentioned event per distinct mentioned entity. Bot mentions
+            // are invocations, so they only emit for bots that are active
+            // channel participants (mention payloads are client-controlled).
+            // Mentions of other entity kinds — including an author mentioning
+            // themselves — pass through; delivery is already scoped to
+            // channel access and consumers filter on the payload.
+            let active_bots = active_bot_mention_ids(mentions, participants);
+            let emits = |mention: &SimpleMention| match mention_bot_id(&mention.entity_id) {
+                Some(bot_id) => active_bots.contains(&bot_id),
+                // A bot-tagged mention that isn't a canonical bot principal
+                // is malformed; other kinds pass through.
+                None => mention.entity_type != BOT_MENTION_ENTITY_TYPE,
+            };
+            let mut seen_mentions = HashSet::new();
+            for mention in mentions {
+                if !emits(mention) {
+                    continue;
+                }
+                if !seen_mentions.insert((mention.entity_type.as_str(), mention.entity_id.as_str()))
+                {
+                    continue;
+                }
+                events.push(ChannelMacroEvent::mentioned(ChannelMentionedMetadata {
+                    channel_id: *channel_id,
+                    message_id: message.id,
+                    thread_id: message.thread_id,
+                    sender: message.sender_id.clone(),
+                    channel_type: metadata.channel_type,
+                    content: message.content.clone(),
+                    mentioned: mention.clone(),
+                    created_at: message.created_at,
+                }));
             }
             events
         }

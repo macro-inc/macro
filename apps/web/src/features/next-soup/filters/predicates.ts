@@ -141,6 +141,43 @@ export function crmCompanyFilter(entity: EntityData): boolean {
   return entity.type === 'crm_company';
 }
 
+export function remindersFilter(entity: EntityData): boolean {
+  return entity.type === 'reminder';
+}
+
+/**
+ * Reminders that have fired and are waiting on their owner.
+ *
+ * `completedAt` means the owner has dealt with the reminder, and firing
+ * deliberately does not set it — so a fired one is outstanding, not finished.
+ * The `nextRunAt` test is what separates these from reminders that simply have
+ * not come due yet; those live in Scheduled.
+ */
+export function firedRemindersFilter(entity: EntityData): boolean {
+  return (
+    entity.type === 'reminder' &&
+    !entity.completedAt &&
+    new Date(entity.nextRunAt).getTime() <= Date.now()
+  );
+}
+
+/**
+ * Reminders set for the future, which have not fired yet. Recurring reminders
+ * never complete, so between firings they sit here pointing at their next run.
+ */
+export function scheduledRemindersFilter(entity: EntityData): boolean {
+  return (
+    entity.type === 'reminder' &&
+    !entity.completedAt &&
+    new Date(entity.nextRunAt).getTime() > Date.now()
+  );
+}
+
+/** Reminders the owner has marked as dealt with. */
+export function doneRemindersFilter(entity: EntityData): boolean {
+  return entity.type === 'reminder' && !!entity.completedAt;
+}
+
 /**
  * Entity types the search view supports. Mirrors the search preset's
  * server-side exclusions (foreign entities + CRM) so entities that enter

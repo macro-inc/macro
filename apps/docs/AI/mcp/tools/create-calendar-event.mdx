@@ -1,0 +1,23 @@
+---
+title: CreateCalendarEvent
+description: "Create an event on the user's calendar, inviting any listed attendees through Google Calendar. The event is written to Google immediately, so attendees receive invitations the moment it is created — confirm details with the user before creating events with attendees.  The event lands on the user's primary calendar unless `calendarId` (from ListCalendars) targets another one. For recurring events pass RFC 5545 lines in `recurrenceLines`, e.g. [\"RRULE:FREQ=WEEKLY;BYDAY=MO\"]. Returns the created event with its `eventId` for later updates or deletion. Fails if the user has no writable calendar connected."
+---
+
+# CreateCalendarEvent
+
+Create an event on the user's calendar, inviting any listed attendees through Google Calendar. The event is written to Google immediately, so attendees receive invitations the moment it is created — confirm details with the user before creating events with attendees.
+
+The event lands on the user's primary calendar unless `calendarId` (from ListCalendars) targets another one. For recurring events pass RFC 5545 lines in `recurrenceLines`, e.g. ["RRULE:FREQ=WEEKLY;BYDAY=MO"]. Returns the created event with its `eventId` for later updates or deletion. Fails if the user has no writable calendar connected.
+
+## Parameters
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `title` | string | Yes | The event title. |
+| `time` | EventTimeInput | Yes | The mutually exclusive time shape supplied to calendar tools. |
+| `description` | string | No | Optional event body/description. |
+| `location` | string | No | Optional physical or virtual location label. |
+| `attendees` | AttendeeInput[] | No | Attendees to invite by email. They are notified by Google Calendar as soon as the event is created. Omit for a solo event. |
+| `recurrenceLines` | string[] | No | Raw RFC 5545 recurrence lines (RRULE, RDATE, EXDATE), e.g. ["RRULE:FREQ=WEEKLY;BYDAY=MO,WE"]. Omit for a one-off event. |
+| `calendarId` | string | No | Calendar to create the event on, from ListCalendars. Omit to use the user's primary calendar. |
+| `addGoogleMeet` | boolean | No | Attach a freshly generated Google Meet video conference to the event. |

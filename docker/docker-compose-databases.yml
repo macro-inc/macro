@@ -5,7 +5,7 @@ name: macro
 
 services: 
   postgres:
-    image: pgvector/pgvector:pg16
+    image: pgvector/pgvector:pg18
     # The default 100 max_connections is exhausted when every service's pool
     # fills under load (e.g. a large email backfill): workers then die on
     # "pool timed out" / "too many clients". Local-only headroom.
@@ -24,7 +24,9 @@ services:
       - POSTGRES_PASSWORD=password
       - PGPASSWORD=password
     volumes:
-      - db:/var/lib/postgresql/data
+      # pg18+ images keep PGDATA in a version-specific subdir; mount the parent
+      # so the data dir lands inside the volume (see docker-library/postgres#1259).
+      - db:/var/lib/postgresql
     networks:
       - databases
   redis:

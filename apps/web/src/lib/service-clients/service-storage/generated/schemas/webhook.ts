@@ -13,6 +13,8 @@ import type { WebhookStatus } from './webhookStatus';
 
 /**
  * Webhook row returned by application APIs.
+
+Clients deserialize this, so both derives are used.
  */
 export interface Webhook {
   /** Creation timestamp. */
@@ -33,6 +35,9 @@ export interface Webhook {
   is_valid: boolean;
   /** Display name. */
   name: string;
+  /** Caller-chosen namespace, unique among the owning workspace's webhooks.
+Set at creation time only; it cannot be changed afterwards. */
+  namespace: string;
   /** Webhook lifecycle status. */
   status: WebhookStatus;
   /** Update timestamp. */

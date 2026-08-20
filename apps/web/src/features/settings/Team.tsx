@@ -1,8 +1,14 @@
 import { toast } from '@core/component/Toast/Toast';
+import {
+  getLinkShareScope,
+  LINK_SHARE_SCOPE_OPTIONS,
+  type LinkShareScope,
+  NO_LINK_SHARE,
+} from '@core/component/TopBar/linkShare';
 import { UserIcon } from '@core/component/UserIcon';
 import { SERVER_HOSTS } from '@core/constant/servers';
 import { useUserId } from '@core/context/user';
-import { macroIdToEmail, tryMacroId, useDisplayName } from '@core/user';
+import { getDisplayName, macroIdToEmail, tryMacroId } from '@core/user';
 import { debouncedDependent } from '@core/util/debounce';
 import { fuzzyFilter } from '@core/util/fuzzy';
 import { getWebOrigin } from '@core/util/webOrigin';
@@ -22,6 +28,7 @@ import SpinnerIcon from '@phosphor/spinner.svg';
 import TrashIcon from '@phosphor/trash.svg';
 import UsersIcon from '@phosphor/users.svg';
 import XIcon from '@phosphor/x.svg';
+import { useGithubLinkStatusQuery } from '@queries/auth';
 import {
   useJoinTeamMutation,
   useRejectInvitationMutation,
@@ -45,7 +52,15 @@ import {
 import type { TeamInviteDetails } from '@service-auth/generated/schemas/teamInviteDetails';
 import type { TeamMember } from '@service-auth/generated/schemas/teamMember';
 import { TeamRole } from '@service-auth/generated/schemas/teamRole';
-import { Button, cn, Dialog, Panel, ToggleSwitch, Tooltip } from '@ui';
+import {
+  Button,
+  cn,
+  Dialog,
+  Panel,
+  SegmentedControl,
+  ToggleSwitch,
+  Tooltip,
+} from '@ui';
 import {
   createMemo,
   createSignal,
@@ -130,7 +145,7 @@ function RoleSelect(props: {
         <CaretDownIcon class="size-3 text-ink-muted shrink-0" />
       </Select.Trigger>
       <Select.Portal>
-        <Select.Content class="z-action-menu bg-surface ring ring-edge rounded shadow-lg min-w-25 p-1">
+        <Select.Content class="z-action-menu border border-edge bg-surface rounded shadow-lg min-w-25 p-1">
           <Select.Listbox />
         </Select.Content>
       </Select.Portal>
@@ -307,7 +322,7 @@ function MemberRow(props: {
   onRemove: () => void;
   onRoleChange: (role: TeamRole) => void;
 }) {
-  const [displayName] = useDisplayName(tryMacroId(props.member.user_id));
+  const displayName = () => getDisplayName(tryMacroId(props.member.user_id));
   const isMemberOwner = () => props.member.role === TeamRole.owner;
   const email = () => {
     const id = tryMacroId(props.member.user_id);
@@ -382,7 +397,7 @@ function MemberRow(props: {
 }
 
 function MemberName(props: { memberId: string }) {
-  const [displayName] = useDisplayName(tryMacroId(props.memberId));
+  const displayName = () => getDisplayName(tryMacroId(props.memberId));
   return <span class="font-medium">{displayName()}</span>;
 }
 
@@ -453,7 +468,7 @@ function InviteRow(props: {
 }
 
 function InviterName(props: { inviterId: string }) {
-  const [displayName] = useDisplayName(tryMacroId(props.inviterId));
+  const displayName = () => getDisplayName(tryMacroId(props.inviterId));
   return <span class="font-medium">{displayName()}</span>;
 }
 
@@ -811,6 +826,7 @@ function TeamManagement(props: {
 
   const teamQuery = useTeamQuery(() => props.teamId);
   const invitesQuery = useTeamInvitesQuery(() => props.teamId);
+  const githubLink = useGithubLinkStatusQuery();
 
   const deleteInviteMutation = useDeleteTeamInviteMutation();
   const removeUserMutation = useRemoveUserFromTeamMutation();
@@ -914,7 +930,7 @@ function TeamManagement(props: {
   // disposes it when the member leaves the list.
   const memberSearchIndex = mapArray(members, (member) => {
     const macroId = tryMacroId(member.user_id);
-    const [displayName] = useDisplayName(macroId);
+    const displayName = () => getDisplayName(macroId);
     const email = macroId ? macroIdToEmail(macroId) : '';
     // Memoized so the lowercased search string is built once (and only rebuilt
     // when the name resolves), not re-allocated for every member on each scan.
@@ -975,6 +991,20 @@ function TeamManagement(props: {
   const handleToggleNonAdminInvites = () => {
     if (!props.teamId || toggleNonAdminInvitesMutation.isPending) return;
     toggleNonAdminInvitesMutation.mutate({ teamId: props.teamId });
+  };
+
+  // The team-wide default link-share scope for newly shared items. NONE
+  // (stored as null) means link sharing starts off.
+  const defaultLinkShare = () =>
+    getLinkShareScope(teamQuery.data?.team.default_link_share);
+
+  const handleChangeDefaultLinkShare = (scope: LinkShareScope) => {
+    if (!props.teamId || patchTeamMutation.isPending) return;
+    if (scope === defaultLinkShare()) return;
+    patchTeamMutation.mutate({
+      teamId: props.teamId,
+      request: { default_link_share: scope === NO_LINK_SHARE ? null : scope },
+    });
   };
 
   const handleSaveTeamName = () => {
@@ -1296,6 +1326,24 @@ function TeamManagement(props: {
                   onChange={handleToggleNonAdminInvites}
                 />
               </SettingsRow>
+
+              <SettingsRow
+                label="Default link sharing"
+                description="The link-sharing scope newly shared items start with. None means link sharing starts off."
+                hideDescriptionOnMobile
+              >
+                <SegmentedControl
+                  aria-label="Default link sharing scope"
+                  size="sm"
+                  value={defaultLinkShare()}
+                  options={LINK_SHARE_SCOPE_OPTIONS.map((option) => ({
+                    ...option,
+                    disabled:
+                      patchTeamMutation.isPending || teamQuery.isLoading,
+                  }))}
+                  onChange={handleChangeDefaultLinkShare}
+                />
+              </SettingsRow>
             </Show>
           </SettingsCard>
         </SettingsSection>
@@ -1307,15 +1355,29 @@ function TeamManagement(props: {
               title="GitHub App"
               description="Connect your team's repositories for pull request sync."
             >
-              <a
-                href={`${SERVER_HOSTS['document-storage-service']}/github/install-sync`}
-                target="_blank"
-                rel="noopener noreferrer"
-                class="inline-flex h-7 items-center gap-1.5 rounded-md px-2 text-sm font-medium text-ink-muted outline-none transition-colors hover:bg-ink/4 hover:text-ink focus-visible:bg-ink/6"
+              {/* The install callback rejects users without a linked GitHub
+                  account, so don't offer the flow until they've connected one
+                  in their personal settings. */}
+              <Show
+                when={githubLink.data?.status === 'linked'}
+                fallback={
+                  <span class="text-xs text-ink-muted">
+                    {githubLink.isLoading
+                      ? 'Loading…'
+                      : 'Connect your GitHub account first'}
+                  </span>
+                }
               >
-                Configure app
-                <ArrowUpRightIcon class="size-3.5 opacity-70" />
-              </a>
+                <a
+                  href={`${SERVER_HOSTS['document-storage-service']}/github/install-sync`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="inline-flex h-7 items-center gap-1.5 rounded-md px-2 text-sm font-medium text-ink-muted outline-none transition-colors hover:bg-ink/4 hover:text-ink focus-visible:bg-ink/6"
+                >
+                  Configure app
+                  <ArrowUpRightIcon class="size-3.5 opacity-70" />
+                </a>
+              </Show>
             </IntegrationRow>
           </SettingsCard>
         </SettingsSection>
@@ -1365,7 +1427,7 @@ function TeamManagement(props: {
             when={!teamQuery.isLoading}
             fallback={
               <SettingsCard>
-                <div class="animate-pulse bg-ink-extra-muted rounded h-16 m-4" />
+                <div class="animate-pulse bg-skeleton rounded h-16 m-4" />
               </SettingsCard>
             }
           >
@@ -1678,9 +1740,7 @@ export function Team() {
     // Each state renders its own SettingsPage (scrolling, centered column) so
     // Team matches the Account/Appearance layout.
     <Suspense
-      fallback={
-        <div class="animate-pulse bg-ink-extra-muted rounded h-4 w-32 m-6" />
-      }
+      fallback={<div class="animate-pulse bg-skeleton rounded h-4 w-32 m-6" />}
     >
       <TeamContent />
     </Suspense>

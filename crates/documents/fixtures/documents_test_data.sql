@@ -106,8 +106,8 @@ INSERT INTO public.entity_access (entity_id, entity_type, source_id, source_type
     VALUES ('d0000000-0000-0000-0000-000000000001', 'document', 'macro|user@user.com', 'user', 'owner');
 
 -- Share permissions for document-one
-INSERT INTO public."SharePermission" ("id", "isPublic", "publicAccessLevel", "createdAt", "updatedAt")
-    (SELECT 'sp-doc-one', true, 'read', NOW(), NOW());
+INSERT INTO public."SharePermission" ("id", "linkShare", "linkShareAccessLevel", "createdAt", "updatedAt")
+    (SELECT 'sp-doc-one', 'PUBLIC', 'view', NOW(), NOW());
 
 INSERT INTO public."DocumentPermission" ("documentId", "sharePermissionId")
     (SELECT 'd0000000-0000-0000-0000-000000000001', 'sp-doc-one');
@@ -122,8 +122,8 @@ INSERT INTO comms_channel_participants (user_id, channel_id, role) VALUES
     ('macro|teammate2@user.com', 'c0000000-0000-0000-0000-000000000001', 'member');
 
 -- Share permissions for document-two
-INSERT INTO public."SharePermission" ("id", "isPublic", "createdAt", "updatedAt")
-    (SELECT 'sp-doc-two', false, NOW(), NOW());
+INSERT INTO public."SharePermission" ("id", "linkShare", "linkShareAccessLevel", "createdAt", "updatedAt")
+    (SELECT 'sp-doc-two', NULL, NULL, NOW(), NOW());
 
 INSERT INTO public."DocumentPermission" ("documentId", "sharePermissionId")
     (SELECT 'd0000000-0000-0000-0000-000000000002', 'sp-doc-two');
@@ -142,8 +142,8 @@ INSERT INTO public."DocumentInstance" ("revisionName", "documentId", "sha") (
     SELECT 'project_child_doc', 'd0000000-0000-0000-0000-000000000003', 'sha-three'
 );
 
-INSERT INTO public."SharePermission" ("id", "isPublic", "createdAt", "updatedAt")
-    (SELECT 'sp-doc-three', false, NOW(), NOW());
+INSERT INTO public."SharePermission" ("id", "linkShare", "linkShareAccessLevel", "createdAt", "updatedAt")
+    (SELECT 'sp-doc-three', NULL, NULL, NOW(), NOW());
 
 INSERT INTO public."DocumentPermission" ("documentId", "sharePermissionId")
     (SELECT 'd0000000-0000-0000-0000-000000000003', 'sp-doc-three');

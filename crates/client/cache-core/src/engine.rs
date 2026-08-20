@@ -3,18 +3,24 @@
 //! Tauri) expose over RPC.
 
 use crate::denormalize::{
-    DenormalizeError, ReadOutcome, RecordSource, denormalize, denormalize_record,
+    DenormalizeError, ReadOutcome, RecordSource, denormalize_record,
+    denormalize_with_entity_resolvers,
 };
 use crate::deps::{DepIndex, OpId};
 use crate::document::{Document, DocumentError, OperationKind};
+use crate::entity_resolver::{EntityResolver, EntityResolverError, EntityResolverLookup};
 use crate::link_patch::{
     LinkPatchError, OptimisticLinkPatch, QueryRevalidation, apply_link_patches,
     deduplicate_patches, missing_patch_record,
 };
-use crate::normalize::{NormalizeError, RecordUpdates, normalize};
+use crate::normalize::{
+    DependencyCompleteness, NormalizeError, RecordUpdates, normalize, normalize_with_dependencies,
+    project_hydration_response,
+};
 use crate::query_inspection::{
-    CachedQueryInstance, OwnerResolution, QueryInspection, QueryInspectionError, prepare,
-    recover_variants, resolve_owner, selected_result_value,
+    CachedQueryInstance, CachedQueryVariant, OwnerResolution, QueryInspection,
+    QueryInspectionError, matches_variable_filters, prepare, recover_variants, resolve_owner,
+    selected_result_value,
 };
 use crate::queue::{
     ClaimedMutation, MutationClaimRequest, MutationClaimToken, MutationId, MutationRequest,
@@ -22,9 +28,13 @@ use crate::queue::{
     decode_optimistic_source, encode_optimistic_source,
 };
 use crate::record_selection::{
-    RecordCursor, RecordSelection, RecordSelectionError, SelectedRecordPage, validate_limit,
+    MAX_RECORD_SELECTION_KEYS, RecordSelection, RecordSelectionError, SelectedRecord,
 };
-use crate::store::Storage;
+use crate::search::{
+    SearchCursor, SearchDocument, SearchError, SearchPage, SearchProfile, SearchRequest,
+    compare_recent, fuzzy_freshness_score, project_search_documents, validate_search_request,
+};
+use crate::store::{QueueDiagnostics, Storage};
 use crate::value::{EntityKey, Record, canonical_json};
 use lru::LruCache;
 use serde_json::Value as Json;
@@ -41,11 +51,15 @@ pub enum EngineError<S: std::error::Error + 'static> {
     #[error(transparent)]
     Denormalize(#[from] DenormalizeError),
     #[error(transparent)]
+    EntityResolver(#[from] EntityResolverError),
+    #[error(transparent)]
     LinkPatch(#[from] LinkPatchError),
     #[error(transparent)]
     QueryInspection(#[from] QueryInspectionError),
     #[error(transparent)]
     RecordSelection(#[from] RecordSelectionError),
+    #[error(transparent)]
+    Search(#[from] SearchError),
     #[error("unknown or already-settled optimistic transaction {0}")]
     UnknownTransaction(OptimisticTransactionId),
     #[error("stale claim for optimistic transaction {0}")]
@@ -68,11 +82,35 @@ pub enum ReadResult {
     Miss,
 }
 
+/// Borrowed inputs for one network response write.
+#[derive(Debug, Clone, Copy)]
+pub struct NetworkWrite<'a> {
+    /// GraphQL operation document.
+    pub query: &'a str,
+    /// Selected operation name.
+    pub operation_name: Option<&'a str>,
+    /// Resolved operation variables.
+    pub variables: &'a serde_json::Map<String, Json>,
+    /// GraphQL response data.
+    pub data: &'a Json,
+    /// Optional opaque session identity witness.
+    pub identity: Option<&'a str>,
+}
+
+/// An active query whose dependencies should be installed by a network write.
+#[derive(Debug, Clone, Copy)]
+pub struct QueryRegistration<'a> {
+    /// Host-scoped active operation id.
+    pub op_id: OpId,
+    /// Read-only relations that change which normalized entities the query uses.
+    pub entity_resolvers: &'a [EntityResolver],
+}
+
 /// Result of writing a network response.
 #[derive(Debug)]
 pub struct WriteResult {
     /// Records whose contents changed.
-    pub changed: BTreeSet<EntityKey>,
+    pub changed: BTreeSet<EntityKey<'static>>,
     /// Active operations depending on changed records (host re-executes
     /// these). Excludes the operation that performed the write. After a
     /// `reset` this is *every* active operation except the origin.
@@ -84,6 +122,38 @@ pub struct WriteResult {
     pub reset: bool,
     /// Queries that should be revalidated after a successful settlement.
     pub revalidations: Vec<QueryRevalidation>,
+}
+
+/// Result of hydrating a query while returning only non-`@cacheOnly` fields.
+#[derive(Debug)]
+pub struct HydrationWriteResult {
+    /// Cache changes used by hosts for invalidation fan-out.
+    pub write_result: WriteResult,
+    /// Small caller-visible projection, or `None` when every field is cache-only.
+    pub data: Option<Json>,
+}
+
+/// Outcome of the initial strict-head claim attempted after enqueue.
+#[derive(Debug)]
+pub enum InitialClaimOutcome<E> {
+    /// The strict queue head was runnable and is now durably leased.
+    Claimed(Box<ClaimedMutation>),
+    /// The strict queue head is leased, deferred, or the queue is empty.
+    NotRunnable,
+    /// Enqueue succeeded, but attempting to claim the strict head failed.
+    Failed(E),
+}
+
+/// Result of durably enqueueing an optimistic mutation and attempting its
+/// initial strict-head claim.
+#[derive(Debug)]
+pub struct EnqueueOptimisticMutationResult<E> {
+    /// Engine-assigned id of the newly enqueued optimistic mutation.
+    pub transaction_id: OptimisticTransactionId,
+    /// Visible cache changes caused by the newly published optimistic layer.
+    pub write_result: WriteResult,
+    /// Outcome of the claim attempt made before hosts publish cache changes.
+    pub initial_claim: InitialClaimOutcome<E>,
 }
 
 /// Borrowed inputs for atomically beginning one optimistic mutation.
@@ -144,13 +214,16 @@ pub const DEFAULT_HOT_CAPACITY: usize = 10_000;
 
 pub struct Engine<S: Storage> {
     storage: S,
-    hot: LruCache<EntityKey, Record>,
+    hot: LruCache<EntityKey<'static>, Record>,
     docs: HashMap<String, Document>,
     deps: DepIndex,
     identity: IdentityState,
     /// Ordered optimistic mutation layers hydrated from durable storage.
     optimistic: Vec<OptimisticLayer>,
     optimistic_hydrated: bool,
+    /// Compact durable catalogs are loaded lazily for text search. Empty
+    /// queries use the storage index directly and do not populate this map.
+    search_catalogs: HashMap<SearchProfile, HashMap<EntityKey<'static>, SearchDocument>>,
 }
 
 impl<S: Storage> Engine<S> {
@@ -167,6 +240,7 @@ impl<S: Storage> Engine<S> {
             identity: IdentityState::NotHydrated,
             optimistic: Vec::new(),
             optimistic_hydrated: false,
+            search_catalogs: HashMap::new(),
         }
     }
 
@@ -208,7 +282,7 @@ impl<S: Storage> Engine<S> {
         let after = effective_records(&bases, &replacement, &candidates);
         self.optimistic = replacement;
         self.optimistic_hydrated = true;
-        let changed: BTreeSet<EntityKey> = candidates
+        let changed: BTreeSet<EntityKey<'static>> = candidates
             .into_iter()
             .filter(|key| before_all.get(key) != after.get(key))
             .collect();
@@ -253,7 +327,7 @@ impl<S: Storage> Engine<S> {
                     detail: error.to_string(),
                 }
             })?;
-            let candidates: BTreeSet<EntityKey> = updates.keys().cloned().collect();
+            let candidates: BTreeSet<EntityKey<'static>> = updates.keys().cloned().collect();
             let (candidates, bases) = self
                 .load_link_patch_bases(candidates, &layers, &updates, &patches)
                 .await?;
@@ -284,7 +358,7 @@ impl<S: Storage> Engine<S> {
     /// first use. Never returns [`IdentityState::NotHydrated`].
     async fn bound_identity(&mut self) -> Result<IdentityState, EngineError<S::Error>> {
         if self.identity == IdentityState::NotHydrated {
-            let key = EntityKey(IDENTITY_META_KEY.to_string());
+            let key = EntityKey(IDENTITY_META_KEY.into());
             let fetched = self
                 .storage
                 .get_batch(std::slice::from_ref(&key))
@@ -321,7 +395,7 @@ impl<S: Storage> Engine<S> {
             crate::value::CacheValue::String(identity.to_string()),
         );
         self.storage
-            .put_batch(vec![(EntityKey(IDENTITY_META_KEY.to_string()), record)])
+            .put_batch(vec![(EntityKey(IDENTITY_META_KEY.into()), record)])
             .await
             .map_err(EngineError::Storage)?;
         self.identity = IdentityState::Bound(identity.to_string());
@@ -338,6 +412,21 @@ impl<S: Storage> Engine<S> {
         operation_name: Option<&str>,
         variables: &serde_json::Map<String, Json>,
     ) -> Result<ReadResult, EngineError<S::Error>> {
+        self.read_query_with_entity_resolvers(op_id, query, operation_name, variables, &[])
+            .await
+    }
+
+    /// Attempts to answer a query while applying validated read-only entity
+    /// relations. Resolver descriptors are request policy and never persisted.
+    pub async fn read_query_with_entity_resolvers(
+        &mut self,
+        op_id: Option<OpId>,
+        query: &str,
+        operation_name: Option<&str>,
+        variables: &serde_json::Map<String, Json>,
+        entity_resolvers: &[EntityResolver],
+    ) -> Result<ReadResult, EngineError<S::Error>> {
+        let entity_resolvers = EntityResolverLookup::compile(entity_resolvers)?;
         self.hydrate_optimistic().await?;
         let doc = Self::document(&mut self.docs, query)?;
         let op = doc.operation(operation_name)?;
@@ -355,7 +444,7 @@ impl<S: Storage> Engine<S> {
         // touched keys and is never promoted into the hot tier — the durable
         // LRU base must stay free of optimistic values.
         let optimistic = merged_optimistic(&self.optimistic);
-        let mut composed: HashMap<EntityKey, Record> = HashMap::new();
+        let mut composed: HashMap<EntityKey<'static>, Record> = HashMap::new();
         for (key, update) in &optimistic {
             if let Some(base) = self.hot.peek(key) {
                 let mut merged = base.clone();
@@ -366,8 +455,8 @@ impl<S: Storage> Engine<S> {
 
         // Durable records fetched from storage this read (pre-merge — safe
         // to promote into the hot tier afterwards).
-        let mut fetched_base: HashMap<EntityKey, Record> = HashMap::new();
-        let mut known_absent: BTreeSet<EntityKey> = BTreeSet::new();
+        let mut fetched_base: HashMap<EntityKey<'static>, Record> = HashMap::new();
+        let mut known_absent: BTreeSet<EntityKey<'static>> = BTreeSet::new();
         let mut deps = BTreeSet::new();
 
         let outcome = loop {
@@ -377,11 +466,17 @@ impl<S: Storage> Engine<S> {
                 fetched: &fetched_base,
                 composed: &composed,
             };
-            match denormalize(op, variables, &source, &mut deps)? {
+            match denormalize_with_entity_resolvers(
+                op,
+                variables,
+                &source,
+                &mut deps,
+                &entity_resolvers,
+            )? {
                 ReadOutcome::Complete(data) => break ReadResult::Hit { data },
                 ReadOutcome::Miss { .. } => break ReadResult::Miss,
                 ReadOutcome::NeedRecords(missing) => {
-                    let to_fetch: Vec<EntityKey> = missing
+                    let to_fetch: Vec<EntityKey<'static>> = missing
                         .into_iter()
                         .filter(|k| {
                             !known_absent.contains(k)
@@ -436,102 +531,82 @@ impl<S: Storage> Engine<S> {
         Ok(outcome)
     }
 
-    /// Reads complete cached records selected by a named fragment.
-    ///
-    /// Durable and optimistic-only records are merged in ascending entity-key
-    /// order. Incomplete projections are omitted, and one complete record is
-    /// read ahead before a continuation cursor is returned.
-    pub async fn read_records(
+    /// Projects a bounded explicit set of normalized entity keys through a
+    /// named fragment without scanning storage. Missing, wrong-type, and
+    /// incomplete records are omitted; output preserves first-occurrence key
+    /// order.
+    pub async fn read_records_by_keys(
         &mut self,
         selection: &RecordSelection,
-        cursor: Option<&RecordCursor>,
-        limit: usize,
-    ) -> Result<SelectedRecordPage, EngineError<S::Error>> {
-        validate_limit(limit)?;
+        keys: &[EntityKey<'static>],
+    ) -> Result<Vec<SelectedRecord>, EngineError<S::Error>> {
+        if keys.len() > MAX_RECORD_SELECTION_KEYS {
+            return Err(RecordSelectionError::TooManyKeys {
+                count: keys.len(),
+                max: MAX_RECORD_SELECTION_KEYS,
+            }
+            .into());
+        }
+        if keys.iter().any(|key| {
+            key.as_ref().len() > 1024
+                || key.as_ref().split_once(':').is_none_or(|(typename, _)| {
+                    typename.is_empty()
+                        || !typename.bytes().enumerate().all(|(index, byte)| {
+                            byte == b'_'
+                                || byte.is_ascii_alphabetic()
+                                || (index > 0 && byte.is_ascii_digit())
+                        })
+                })
+        }) {
+            return Err(RecordSelectionError::InvalidKey.into());
+        }
+        if keys.is_empty() {
+            return Ok(Vec::new());
+        }
         self.hydrate_optimistic().await?;
 
-        const SCAN_BATCH_SIZE: usize = 128;
-        let after = cursor.map(RecordCursor::entity_key).cloned();
-        let type_names: BTreeSet<_> = selection.type_names().iter().map(String::as_str).collect();
-        let optimistic = merged_optimistic(&self.optimistic);
-        let mut optimistic_candidates: BTreeSet<_> = optimistic
-            .keys()
+        let selected_types: BTreeSet<_> =
+            selection.type_names().iter().map(String::as_str).collect();
+        let mut seen = BTreeSet::new();
+        let ordered_keys: Vec<_> = keys
+            .iter()
             .filter(|key| {
-                after.as_ref().is_none_or(|after| *key > after)
-                    && record_key_type(key).is_some_and(|name| type_names.contains(name))
+                record_key_type(key).is_some_and(|name| selected_types.contains(name))
+                    && seen.insert((*key).clone())
             })
             .cloned()
             .collect();
-        let mut storage_after = after;
-        let mut selected = Vec::new();
-        let target = limit.saturating_add(1);
-
-        loop {
-            let rows = self
-                .storage
-                .scan_records(
-                    selection.type_names(),
-                    storage_after.as_ref(),
-                    SCAN_BATCH_SIZE,
-                )
-                .await
-                .map_err(EngineError::Storage)?;
-            let storage_exhausted = rows.len() < SCAN_BATCH_SIZE;
-            let high_key = rows.last().map(|(key, _)| key.clone());
-            if let Some(high_key) = &high_key {
-                storage_after = Some(high_key.clone());
-            }
-
-            let mut candidates: BTreeMap<EntityKey, Option<Record>> = rows
-                .into_iter()
-                .map(|(key, record)| (key, Some(record)))
-                .collect();
-            let optimistic_in_batch: Vec<_> = if storage_exhausted {
-                optimistic_candidates.iter().cloned().collect()
-            } else {
-                optimistic_candidates
-                    .iter()
-                    .take_while(|key| high_key.as_ref().is_some_and(|high| *key <= high))
-                    .cloned()
-                    .collect()
-            };
-            for key in optimistic_in_batch {
-                optimistic_candidates.remove(&key);
-                candidates.entry(key).or_insert(None);
-            }
-
-            let projected = self
-                .project_record_batch(selection, candidates, &optimistic)
-                .await?;
-            selected.extend(projected);
-            if selected.len() >= target || storage_exhausted {
-                break;
-            }
-        }
-
-        let has_more = selected.len() > limit;
-        selected.truncate(limit);
-        let next_cursor = has_more.then(|| {
-            RecordCursor::new(
-                selected
-                    .last()
-                    .expect("a page with lookahead contains a record")
-                    .0
-                    .clone(),
-            )
-        });
-        Ok(SelectedRecordPage {
-            records: selected.into_iter().map(|(_, record)| record).collect(),
-            next_cursor,
-        })
+        let key_set: BTreeSet<_> = ordered_keys.iter().cloned().collect();
+        let mut bases = self.load_bases(&key_set).await?;
+        let candidates = ordered_keys
+            .iter()
+            .cloned()
+            .map(|key| {
+                let record = bases.remove(&key);
+                (key, record)
+            })
+            .collect();
+        let optimistic = merged_optimistic(&self.optimistic);
+        let projected = self
+            .project_record_batch(selection, candidates, &optimistic)
+            .await?;
+        let mut projected: HashMap<_, _> = projected.into_iter().collect();
+        Ok(ordered_keys
+            .into_iter()
+            .filter_map(|record_key| {
+                projected
+                    .remove(&record_key)
+                    .map(|record| SelectedRecord { record_key, record })
+            })
+            .collect())
     }
 
     async fn project_record_batch(
         &mut self,
         selection: &RecordSelection,
-        candidates: BTreeMap<EntityKey, Option<Record>>,
-        optimistic: &BTreeMap<EntityKey, Record>,
-    ) -> Result<Vec<(EntityKey, Json)>, EngineError<S::Error>> {
+        candidates: BTreeMap<EntityKey<'static>, Option<Record>>,
+        optimistic: &BTreeMap<EntityKey<'static>, Record>,
+    ) -> Result<Vec<(EntityKey<'static>, Json)>, EngineError<S::Error>> {
         let candidate_keys: Vec<_> = candidates.keys().cloned().collect();
         let optimistic_only_candidates: BTreeSet<_> = candidates
             .iter()
@@ -636,6 +711,164 @@ impl<S: Storage> Engine<S> {
             .collect())
     }
 
+    /// Searches the compact materialized projection without scanning or
+    /// decoding normalized-record payloads.
+    ///
+    /// Empty queries fan out over the per-profile/per-bucket timestamp index.
+    /// Text queries lazily load one compact catalog and rank it in memory.
+    /// Active optimistic layers are projected from their fully composed record
+    /// values and overlaid explicitly on either durable path.
+    pub async fn search(
+        &mut self,
+        request: &SearchRequest,
+    ) -> Result<SearchPage, EngineError<S::Error>> {
+        let requested_buckets = validate_search_request(request)?;
+        self.hydrate_optimistic().await?;
+        let buckets: Vec<String> = if requested_buckets.is_empty() {
+            request
+                .profile
+                .buckets()
+                .iter()
+                .map(|bucket| (*bucket).to_owned())
+                .collect()
+        } else {
+            requested_buckets
+        };
+        let bucket_set: BTreeSet<_> = buckets.iter().map(String::as_str).collect();
+        let overlay = self.optimistic_search_overlay(request.profile).await?;
+        let trimmed_query = request.query.trim();
+
+        let mut candidates: HashMap<EntityKey<'static>, SearchDocument> =
+            if trimmed_query.is_empty() {
+                // Fetch enough extra durable rows to compensate for optimistic
+                // replacements/removals without turning this into a record scan.
+                let per_bucket_limit = request
+                    .limit
+                    .saturating_add(overlay.len())
+                    .saturating_add(1);
+                let mut candidates = HashMap::new();
+                for bucket in &buckets {
+                    let rows = self
+                        .storage
+                        .browse_search_documents(
+                            request.profile,
+                            bucket,
+                            request.cursor.as_ref(),
+                            per_bucket_limit,
+                        )
+                        .await
+                        .map_err(EngineError::Storage)?;
+                    for document in rows {
+                        candidates.insert(document.record_key.clone(), document);
+                    }
+                }
+                candidates
+            } else {
+                if !self.search_catalogs.contains_key(&request.profile) {
+                    let documents = self
+                        .storage
+                        .load_search_documents(request.profile)
+                        .await
+                        .map_err(EngineError::Storage)?;
+                    self.search_catalogs.insert(
+                        request.profile,
+                        documents
+                            .into_iter()
+                            .map(|document| (document.record_key.clone(), document))
+                            .collect(),
+                    );
+                }
+                self.search_catalogs[&request.profile].clone()
+            };
+
+        for (key, document) in overlay {
+            candidates.remove(&key);
+            if let Some(document) = document
+                && bucket_set.contains(document.bucket.as_str())
+                && cursor_allows(request.cursor.as_ref(), &document)
+            {
+                candidates.insert(key, document);
+            }
+        }
+
+        let mut scored: Vec<(SearchDocument, f64)> = candidates
+            .into_values()
+            .filter(|document| bucket_set.contains(document.bucket.as_str()))
+            .filter(|document| cursor_allows(request.cursor.as_ref(), document))
+            .filter_map(|document| {
+                let score = if trimmed_query.is_empty() {
+                    Some(0.0)
+                } else {
+                    fuzzy_freshness_score(&document, trimmed_query, request.now_ms)
+                }?;
+                Some((document, score))
+            })
+            .collect();
+        if trimmed_query.is_empty() {
+            scored.sort_by(|(left, _), (right, _)| compare_recent(left, right));
+        } else {
+            scored.sort_by(|(left, left_score), (right, right_score)| {
+                right_score
+                    .total_cmp(left_score)
+                    .then_with(|| compare_recent(left, right))
+            });
+        }
+        let has_more = scored.len() > request.limit;
+        scored.truncate(request.limit);
+        let documents: Vec<_> = scored.into_iter().map(|(document, _)| document).collect();
+        let next_cursor = (trimmed_query.is_empty() && has_more).then(|| {
+            let last = documents
+                .last()
+                .expect("a truncated search page contains a document");
+            SearchCursor {
+                timestamp_ms: last.timestamp_ms,
+                record_key: last.record_key.clone(),
+            }
+        });
+        Ok(SearchPage {
+            documents,
+            next_cursor,
+        })
+    }
+
+    async fn optimistic_search_overlay(
+        &mut self,
+        profile: SearchProfile,
+    ) -> Result<HashMap<EntityKey<'static>, Option<SearchDocument>>, EngineError<S::Error>> {
+        let keys = layer_keys(&self.optimistic);
+        if keys.is_empty() {
+            return Ok(HashMap::new());
+        }
+        let bases = self.load_bases(&keys).await?;
+        Ok(effective_records(&bases, &self.optimistic, &keys)
+            .into_iter()
+            .map(|(key, record)| {
+                let document = record.and_then(|record| {
+                    project_search_documents(&key, &record)
+                        .into_iter()
+                        .find(|document| document.profile == profile)
+                });
+                (key, document)
+            })
+            .collect())
+    }
+
+    fn update_loaded_search_catalogs(&mut self, entries: &[(EntityKey<'static>, Record)]) {
+        if self.search_catalogs.is_empty() {
+            return;
+        }
+        for (key, record) in entries {
+            for catalog in self.search_catalogs.values_mut() {
+                catalog.remove(key);
+            }
+            for document in project_search_documents(key, record) {
+                if let Some(catalog) = self.search_catalogs.get_mut(&document.profile) {
+                    catalog.insert(key.clone(), document);
+                }
+            }
+        }
+    }
+
     /// Normalizes and stores a network response. Returns changed records and
     /// the affected active operations (excluding `origin_op`).
     ///
@@ -653,10 +886,51 @@ impl<S: Storage> Engine<S> {
         data: &Json,
         identity: Option<&str>,
     ) -> Result<WriteResult, EngineError<S::Error>> {
+        self.write_query_with_registration(
+            origin_op,
+            None,
+            NetworkWrite {
+                query,
+                operation_name,
+                variables,
+                data,
+                identity,
+            },
+        )
+        .await
+    }
+
+    /// Normalizes and stores a network response, installing the active query's
+    /// dependencies from the same response without denormalizing it again.
+    pub async fn write_query_with_registration(
+        &mut self,
+        origin_op: Option<OpId>,
+        registration: Option<QueryRegistration<'_>>,
+        input: NetworkWrite<'_>,
+    ) -> Result<WriteResult, EngineError<S::Error>> {
+        let NetworkWrite {
+            query,
+            operation_name,
+            variables,
+            data,
+            identity,
+        } = input;
         self.hydrate_optimistic().await?;
+        let entity_resolvers = EntityResolverLookup::compile(
+            registration.map_or(&[][..], |registration| registration.entity_resolvers),
+        )?;
         let doc = Self::document(&mut self.docs, query)?;
         let op = doc.operation(operation_name)?;
-        let updates = normalize(op, variables, data)?;
+        if registration.is_some() && op.kind != OperationKind::Query {
+            return Err(EngineError::Document(
+                DocumentError::UnsupportedOperationType(format!(
+                    "{:?} (dependency registration is query-only)",
+                    op.kind
+                )),
+            ));
+        }
+        let normalized = normalize_with_dependencies(op, variables, data, &entity_resolvers)?;
+        let updates = normalized.updates;
 
         let mut reset = false;
         if let Some(observed) = identity {
@@ -670,6 +944,7 @@ impl<S: Storage> Engine<S> {
                     // mutations belong to the old identity — discard them.
                     self.optimistic.clear();
                     self.optimistic_hydrated = true;
+                    self.search_catalogs.clear();
                     self.storage.clear().await.map_err(EngineError::Storage)?;
                     self.bind_identity(observed).await?;
                     reset = true;
@@ -694,7 +969,7 @@ impl<S: Storage> Engine<S> {
         }
         let bases_after = self.load_bases(&candidates).await?;
         let after = effective_records(&bases_after, &self.optimistic, &candidates);
-        let visible_changed: BTreeSet<EntityKey> = candidates
+        let visible_changed: BTreeSet<EntityKey<'static>> = candidates
             .into_iter()
             .filter(|key| before.get(key) != after.get(key))
             .collect();
@@ -708,6 +983,16 @@ impl<S: Storage> Engine<S> {
         if let Some(origin) = origin_op {
             affected_ops.remove(&origin);
         }
+        if let Some(registration) = registration {
+            if normalized.completeness == DependencyCompleteness::Exact
+                && self.optimistic.is_empty()
+            {
+                self.deps
+                    .set_op_deps(registration.op_id, normalized.dependencies);
+            } else {
+                self.deps.set_op_broad(registration.op_id);
+            }
+        }
         Ok(WriteResult {
             changed,
             affected_ops,
@@ -716,18 +1001,52 @@ impl<S: Storage> Engine<S> {
         })
     }
 
+    /// Stores a network response and returns only fields not marked
+    /// `@cacheOnly`. Projection is taken directly from the validated network
+    /// payload, so hydration never denormalizes the response back out of
+    /// storage.
+    pub async fn hydrate_query(
+        &mut self,
+        query: &str,
+        operation_name: Option<&str>,
+        variables: &serde_json::Map<String, Json>,
+        data: &Json,
+        identity: Option<&str>,
+    ) -> Result<HydrationWriteResult, EngineError<S::Error>> {
+        let projected = {
+            let doc = Self::document(&mut self.docs, query)?;
+            let op = doc.operation(operation_name)?;
+            if op.kind != OperationKind::Query {
+                return Err(EngineError::Document(
+                    DocumentError::UnsupportedOperationType(format!(
+                        "{:?} (cache hydration is query-only)",
+                        op.kind
+                    )),
+                ));
+            }
+            project_hydration_response(op, data)?
+        };
+        let write_result = self
+            .write_query(None, query, operation_name, variables, data, identity)
+            .await?;
+        Ok(HydrationWriteResult {
+            write_result,
+            data: projected,
+        })
+    }
+
     /// Merges normalized updates into the hot tier and storage. Returns the
     /// keys whose durable contents actually changed.
     async fn persist_updates(
         &mut self,
         updates: RecordUpdates,
-    ) -> Result<BTreeSet<EntityKey>, EngineError<S::Error>> {
+    ) -> Result<BTreeSet<EntityKey<'static>>, EngineError<S::Error>> {
         // Load current values (hot tier, then storage) so merges detect real
         // changes. Merges are staged in a plain map, NOT the LRU: a batch
         // larger than the hot capacity would otherwise evict its own
         // records mid-merge and overwrite storage with partial updates.
-        let mut staging: HashMap<EntityKey, Record> = HashMap::new();
-        let mut missing: Vec<EntityKey> = Vec::new();
+        let mut staging: HashMap<EntityKey<'static>, Record> = HashMap::new();
+        let mut missing: Vec<EntityKey<'static>> = Vec::new();
         for key in updates.keys() {
             match self.hot.peek(key) {
                 Some(record) => {
@@ -750,7 +1069,7 @@ impl<S: Storage> Engine<S> {
         }
 
         let mut changed = BTreeSet::new();
-        let mut to_persist: Vec<(EntityKey, Record)> = Vec::new();
+        let mut to_persist: Vec<(EntityKey<'static>, Record)> = Vec::new();
         for (key, update) in updates {
             let merged = match staging.remove(&key) {
                 Some(mut existing) => {
@@ -774,9 +1093,10 @@ impl<S: Storage> Engine<S> {
         // keeps storage authoritative even if the hot tier evicted them
         // between loads).
         self.storage
-            .put_batch(to_persist)
+            .put_batch(to_persist.clone())
             .await
             .map_err(EngineError::Storage)?;
+        self.update_loaded_search_catalogs(&to_persist);
         Ok(changed)
     }
 
@@ -809,7 +1129,7 @@ impl<S: Storage> Engine<S> {
                 .chain(patches.iter().map(OptimisticLinkPatch::revalidation)),
         );
 
-        let candidates: BTreeSet<EntityKey> = updates.keys().cloned().collect();
+        let candidates: BTreeSet<EntityKey<'static>> = updates.keys().cloned().collect();
         let optimistic = self.optimistic.clone();
         let (candidates, bases) = self
             .load_link_patch_bases(candidates, &optimistic, &updates, &patches)
@@ -857,7 +1177,7 @@ impl<S: Storage> Engine<S> {
         });
 
         let after = effective_records(&bases, &self.optimistic, &candidates);
-        let changed: BTreeSet<EntityKey> = candidates
+        let changed: BTreeSet<EntityKey<'static>> = candidates
             .into_iter()
             .filter(|key| before.get(key) != after.get(key))
             .collect();
@@ -874,6 +1194,29 @@ impl<S: Storage> Engine<S> {
                 revalidations: Vec::new(),
             },
         ))
+    }
+
+    /// Durably enqueues a mutation and publishes its optimistic layer, then
+    /// attempts to claim the strict queue head before returning. A claim
+    /// failure is nested in the successful enqueue result so callers never
+    /// bypass or duplicate an already durable mutation.
+    pub async fn enqueue_optimistic_mutation(
+        &mut self,
+        origin_op: Option<OpId>,
+        input: BeginOptimisticWrite<'_>,
+        claim: MutationClaimRequest,
+    ) -> Result<EnqueueOptimisticMutationResult<EngineError<S::Error>>, EngineError<S::Error>> {
+        let (transaction_id, write_result) = self.begin_optimistic_write(origin_op, input).await?;
+        let initial_claim = match self.claim_next_mutation(claim).await {
+            Ok(Some(claimed)) => InitialClaimOutcome::Claimed(Box::new(claimed)),
+            Ok(None) => InitialClaimOutcome::NotRunnable,
+            Err(error) => InitialClaimOutcome::Failed(error),
+        };
+        Ok(EnqueueOptimisticMutationResult {
+            transaction_id,
+            write_result,
+            initial_claim,
+        })
     }
 
     /// Claims the oldest runnable mutation. A leased or backed-off head
@@ -955,6 +1298,7 @@ impl<S: Storage> Engine<S> {
         {
             return Err(EngineError::StaleMutationClaim(transaction));
         }
+        self.update_loaded_search_catalogs(&entries);
         for (key, record) in entries {
             self.hot.put(key, record);
         }
@@ -972,7 +1316,7 @@ impl<S: Storage> Engine<S> {
         let settled_bases = self.load_bases(&candidates).await?;
         let after = effective_records(&settled_bases, &replacement, &candidates);
         self.optimistic = replacement;
-        let visible_changed: BTreeSet<EntityKey> = candidates
+        let visible_changed: BTreeSet<EntityKey<'static>> = candidates
             .into_iter()
             .filter(|key| before.get(key) != after.get(key))
             .collect();
@@ -1018,7 +1362,7 @@ impl<S: Storage> Engine<S> {
         let current_bases = self.load_bases(&candidates).await?;
         let after = effective_records(&current_bases, &replacement, &candidates);
         self.optimistic = replacement;
-        let visible_changed: BTreeSet<EntityKey> = candidates
+        let visible_changed: BTreeSet<EntityKey<'static>> = candidates
             .into_iter()
             .filter(|key| before.get(key) != after.get(key))
             .collect();
@@ -1035,11 +1379,17 @@ impl<S: Storage> Engine<S> {
     /// link updates, including records currently outside the hot tier.
     async fn load_link_patch_bases(
         &mut self,
-        mut candidates: BTreeSet<EntityKey>,
+        mut candidates: BTreeSet<EntityKey<'static>>,
         layers: &[OptimisticLayer],
         pending_updates: &RecordUpdates,
         patches: &[OptimisticLinkPatch],
-    ) -> Result<(BTreeSet<EntityKey>, HashMap<EntityKey, Record>), EngineError<S::Error>> {
+    ) -> Result<
+        (
+            BTreeSet<EntityKey<'static>>,
+            HashMap<EntityKey<'static>, Record>,
+        ),
+        EngineError<S::Error>,
+    > {
         if !patches.is_empty() {
             candidates.insert(EntityKey::root());
         }
@@ -1064,10 +1414,10 @@ impl<S: Storage> Engine<S> {
     /// without touching LRU recency or persisting anything.
     async fn load_bases(
         &mut self,
-        keys: &BTreeSet<EntityKey>,
-    ) -> Result<HashMap<EntityKey, Record>, EngineError<S::Error>> {
+        keys: &BTreeSet<EntityKey<'static>>,
+    ) -> Result<HashMap<EntityKey<'static>, Record>, EngineError<S::Error>> {
         let mut out = HashMap::new();
-        let mut missing: Vec<EntityKey> = Vec::new();
+        let mut missing = Vec::new();
         for key in keys {
             match self.hot.peek(key) {
                 Some(record) => {
@@ -1091,7 +1441,42 @@ impl<S: Storage> Engine<S> {
         Ok(out)
     }
 
-    /// Enumerates cached argument variants of one generated query field.
+    /// Recovers cached argument variants of one generated query field.
+    ///
+    /// Only records needed to resolve the selected field's normalized owner
+    /// are loaded. The recovered variants are not denormalized.
+    pub async fn inspect_query_variants(
+        &mut self,
+        inspection: &QueryInspection,
+    ) -> Result<Vec<CachedQueryVariant>, EngineError<S::Error>> {
+        self.hydrate_optimistic().await?;
+        let operation = Self::document(&mut self.docs, &inspection.query)?
+            .operation(inspection.operation_name.as_deref())?
+            .clone();
+        let prepared = prepare(&operation, &inspection.path)?;
+
+        let mut candidates = BTreeSet::from([EntityKey::root()]);
+        let variants = loop {
+            let bases = self.load_bases(&candidates).await?;
+            let effective =
+                present_records(effective_records(&bases, &self.optimistic, &candidates));
+            match resolve_owner(&effective, &operation, &inspection.path)? {
+                OwnerResolution::Owner(owner) => break recover_variants(&owner, &prepared)?,
+                OwnerResolution::Absent => return Ok(Vec::new()),
+                OwnerResolution::NeedRecord(key) if !candidates.contains(&key) => {
+                    candidates.insert(key.into_owned());
+                }
+                OwnerResolution::NeedRecord(_) => return Ok(Vec::new()),
+            }
+        };
+        Ok(variants
+            .into_iter()
+            .map(|variables| CachedQueryVariant { variables })
+            .collect())
+    }
+
+    /// Enumerates and materializes cached argument variants of one generated
+    /// query field.
     ///
     /// Normalized owners, canonical field keys, cold records, and optimistic
     /// layers remain internal. Every recovered variable set is read through
@@ -1100,29 +1485,12 @@ impl<S: Storage> Engine<S> {
         &mut self,
         inspection: &QueryInspection,
     ) -> Result<Vec<CachedQueryInstance>, EngineError<S::Error>> {
-        self.hydrate_optimistic().await?;
-        let operation = Self::document(&mut self.docs, &inspection.query)?
-            .operation(inspection.operation_name.as_deref())?
-            .clone();
-        let prepared = prepare(&operation, &inspection.path)?;
-
-        let mut candidates = BTreeSet::from([EntityKey::root()]);
-        let owner = loop {
-            let bases = self.load_bases(&candidates).await?;
-            let effective =
-                present_records(effective_records(&bases, &self.optimistic, &candidates));
-            match resolve_owner(&effective, &operation, &inspection.path)? {
-                OwnerResolution::Owner(owner) => break owner,
-                OwnerResolution::Absent => return Ok(Vec::new()),
-                OwnerResolution::NeedRecord(key) if !candidates.contains(&key) => {
-                    candidates.insert(key);
-                }
-                OwnerResolution::NeedRecord(_) => return Ok(Vec::new()),
+        let variants = self.inspect_query_variants(inspection).await?;
+        let mut instances = Vec::with_capacity(variants.len());
+        for CachedQueryVariant { variables } in variants {
+            if !matches_variable_filters(&variables, &inspection.variable_filters) {
+                continue;
             }
-        };
-        let variables = recover_variants(&owner, &prepared)?;
-        let mut instances = Vec::with_capacity(variables.len());
-        for variables in variables {
             let value = match self
                 .read_query(
                     None,
@@ -1147,6 +1515,7 @@ impl<S: Storage> Engine<S> {
         self.hot.clear();
         self.docs.clear();
         self.optimistic.clear();
+        self.search_catalogs.clear();
         // Another engine may have rebound the shared storage and changed the
         // durable queue, so both identity and optimism must re-hydrate.
         self.optimistic_hydrated = false;
@@ -1165,13 +1534,16 @@ impl<S: Storage> Engine<S> {
     /// storage, and returns the local active operations that depend on them.
     pub fn invalidate_keys<'k>(
         &mut self,
-        keys: impl IntoIterator<Item = &'k EntityKey>,
+        keys: impl IntoIterator<Item = &'k EntityKey<'static>>,
     ) -> BTreeSet<OpId> {
         let mut affected = BTreeSet::new();
         for key in keys {
             self.hot.pop(key);
             affected.extend(self.deps.ops_for_keys([key]));
         }
+        // The durable projection was updated by the writing context. Reload
+        // only the compact catalog on the next text search.
+        self.search_catalogs.clear();
         affected
     }
 
@@ -1184,7 +1556,7 @@ impl<S: Storage> Engine<S> {
     /// [`Self::invalidate_keys`] instead.
     pub async fn delete_keys(
         &mut self,
-        keys: &[EntityKey],
+        keys: &[EntityKey<'static>],
     ) -> Result<BTreeSet<OpId>, EngineError<S::Error>> {
         let affected = self.deps.ops_for_keys(keys.iter());
         self.storage
@@ -1193,6 +1565,9 @@ impl<S: Storage> Engine<S> {
             .map_err(EngineError::Storage)?;
         for key in keys {
             self.hot.pop(key);
+            for catalog in self.search_catalogs.values_mut() {
+                catalog.remove(key);
+            }
         }
         Ok(affected)
     }
@@ -1203,6 +1578,7 @@ impl<S: Storage> Engine<S> {
         self.hot.clear();
         self.optimistic.clear();
         self.optimistic_hydrated = true;
+        self.search_catalogs.clear();
         self.deps = DepIndex::new();
         // The wipe below removes the binding record too.
         self.identity = IdentityState::Missing;
@@ -1213,10 +1589,26 @@ impl<S: Storage> Engine<S> {
         self.deps.active_ops()
     }
 
-    /// Access to the underlying storage (hosts need it for lifecycle
-    /// operations like closing connections before database deletion).
+    /// Returns payload-free durable mutation queue diagnostics.
+    pub async fn queue_diagnostics(&self) -> Result<QueueDiagnostics, EngineError<S::Error>> {
+        self.storage
+            .queue_diagnostics()
+            .await
+            .map_err(EngineError::Storage)
+    }
+
+    /// Access to the underlying storage for non-consuming diagnostics.
     pub fn storage(&self) -> &S {
         &self.storage
+    }
+
+    /// Consumes the engine and returns its owned storage.
+    ///
+    /// Hosts must use this transition for storage lifecycles that require
+    /// exclusive ownership, such as proving that a browser database connection
+    /// is closed before preserving or physically resetting its OPFS files.
+    pub fn into_storage(self) -> S {
+        self.storage
     }
 
     /// Memoized document parse. Takes the map (not `&mut self`) so callers
@@ -1237,16 +1629,16 @@ impl<S: Storage> Engine<S> {
 /// `peek` (no recency mutation) — recency is refreshed once per read from
 /// the dep set.
 struct EngineSource<'a> {
-    hot: &'a LruCache<EntityKey, Record>,
+    hot: &'a LruCache<EntityKey<'static>, Record>,
     /// Durable records batch-fetched from storage during this read.
-    fetched: &'a HashMap<EntityKey, Record>,
+    fetched: &'a HashMap<EntityKey<'static>, Record>,
     /// Optimistically touched keys: durable base + layers, pre-merged.
     /// Takes precedence over both durable tiers.
-    composed: &'a HashMap<EntityKey, Record>,
+    composed: &'a HashMap<EntityKey<'static>, Record>,
 }
 
 impl RecordSource for EngineSource<'_> {
-    fn get(&self, key: &EntityKey) -> Option<&Record> {
+    fn get(&self, key: &EntityKey<'static>) -> Option<&Record> {
         self.composed
             .get(key)
             .or_else(|| self.fetched.get(key))
@@ -1256,8 +1648,8 @@ impl RecordSource for EngineSource<'_> {
 
 /// All active optimistic layers' updates merged in creation order (later
 /// layers override earlier ones field-by-field).
-fn merged_optimistic(layers: &[OptimisticLayer]) -> BTreeMap<EntityKey, Record> {
-    let mut out: BTreeMap<EntityKey, Record> = BTreeMap::new();
+fn merged_optimistic(layers: &[OptimisticLayer]) -> BTreeMap<EntityKey<'static>, Record> {
+    let mut out: BTreeMap<EntityKey<'static>, Record> = BTreeMap::new();
     for layer in layers {
         for (key, record) in &layer.updates {
             out.entry(key.clone()).or_default().merge(record.clone());
@@ -1270,9 +1662,12 @@ fn merged_optimistic(layers: &[OptimisticLayer]) -> BTreeMap<EntityKey, Record> 
 /// mutating the hot tier or storage. The caller can then atomically settle a
 /// queued mutation before publishing the staged records in memory.
 fn stage_updates(
-    bases: &HashMap<EntityKey, Record>,
+    bases: &HashMap<EntityKey<'static>, Record>,
     updates: RecordUpdates,
-) -> (BTreeSet<EntityKey>, Vec<(EntityKey, Record)>) {
+) -> (
+    BTreeSet<EntityKey<'static>>,
+    Vec<(EntityKey<'static>, Record)>,
+) {
     let mut changed = BTreeSet::new();
     let mut entries = Vec::with_capacity(updates.len());
     for (key, update) in updates {
@@ -1297,10 +1692,10 @@ fn stage_updates(
 /// Effective visible records for `keys`: durable base + every active layer
 /// merged in order. `None` when the key exists nowhere.
 fn effective_records(
-    bases: &HashMap<EntityKey, Record>,
+    bases: &HashMap<EntityKey<'static>, Record>,
     layers: &[OptimisticLayer],
-    keys: &BTreeSet<EntityKey>,
-) -> HashMap<EntityKey, Option<Record>> {
+    keys: &BTreeSet<EntityKey<'static>>,
+) -> HashMap<EntityKey<'static>, Option<Record>> {
     keys.iter()
         .map(|key| {
             let mut record: Option<Record> = bases.get(key).cloned();
@@ -1316,7 +1711,9 @@ fn effective_records(
         .collect()
 }
 
-fn present_records(records: HashMap<EntityKey, Option<Record>>) -> HashMap<EntityKey, Record> {
+fn present_records(
+    records: HashMap<EntityKey<'static>, Option<Record>>,
+) -> HashMap<EntityKey<'static>, Record> {
     records
         .into_iter()
         .filter_map(|(key, record)| record.map(|record| (key, record)))
@@ -1324,7 +1721,7 @@ fn present_records(records: HashMap<EntityKey, Option<Record>>) -> HashMap<Entit
 }
 
 fn merge_updates_into_effective(
-    effective: &mut HashMap<EntityKey, Record>,
+    effective: &mut HashMap<EntityKey<'static>, Record>,
     updates: &RecordUpdates,
 ) {
     for (key, update) in updates {
@@ -1335,15 +1732,23 @@ fn merge_updates_into_effective(
     }
 }
 
-fn layer_keys(layers: &[OptimisticLayer]) -> BTreeSet<EntityKey> {
+fn layer_keys(layers: &[OptimisticLayer]) -> BTreeSet<EntityKey<'static>> {
     layers
         .iter()
         .flat_map(|layer| layer.updates.keys().cloned())
         .collect()
 }
 
-fn record_key_type(key: &EntityKey) -> Option<&str> {
+fn record_key_type<'a>(key: &'a EntityKey<'a>) -> Option<&'a str> {
     key.0.split_once(':').map(|(type_name, _)| type_name)
+}
+
+fn cursor_allows(cursor: Option<&SearchCursor>, document: &SearchDocument) -> bool {
+    cursor.is_none_or(|cursor| {
+        document.timestamp_ms < cursor.timestamp_ms
+            || (document.timestamp_ms == cursor.timestamp_ms
+                && document.record_key > cursor.record_key)
+    })
 }
 
 fn deduplicate_revalidations(

@@ -75,6 +75,7 @@ ports = ["dep:entity_access", "dep:tokio", "entity_access/ports"]
 schema = ["channel_sender/schema", "dep:utoipa", "macro_user_id/schema"]
 
 [dependencies]
+activity = { path = "../activity", default-features = false }
 anyhow = { workspace = true }
 attachment = { path = "../attachment", optional = true }
 axum = { workspace = true, optional = true }

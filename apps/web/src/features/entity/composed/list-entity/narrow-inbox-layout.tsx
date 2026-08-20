@@ -1,5 +1,4 @@
 import { useMaybeSoupView } from '@app/features/next-soup/soup-view/soup-view-context';
-import { tryMacroId, useDisplayNameParts } from '@core/user';
 import { cn } from '@ui';
 import { Match, Show, Switch } from 'solid-js';
 import { MultiSelectCheckbox } from '../../components/MultiSelectCheckbox';
@@ -32,11 +31,6 @@ export function NarrowInboxLayout(props: LayoutProps) {
   const isDirectMessage = () =>
     isChannelEntity(props.entity) &&
     props.entity.channelType === 'direct_message';
-
-  const mostRecentMessageSenderName = () =>
-    isChannelEntity(props.entity) && props.entity.latestMessage?.senderId
-      ? useDisplayNameParts(tryMacroId(props.entity.latestMessage?.senderId))
-      : undefined;
 
   const firstNotification = () => {
     if (!isWithNotification(props.entity)) return undefined;
@@ -142,12 +136,7 @@ export function NarrowInboxLayout(props: LayoutProps) {
         <Match
           when={isChannelEntity(props.entity) && props.entity.latestMessage}
         >
-          {(msg) => (
-            <ChannelLatestMessageNarrowBody
-              message={msg()}
-              senderFirstName={mostRecentMessageSenderName()?.firstName()}
-            />
-          )}
+          {(msg) => <ChannelLatestMessageNarrowBody message={msg()} />}
         </Match>
         <Match when={isEmailEntity(props.entity) && props.entity}>
           {(entity) => (

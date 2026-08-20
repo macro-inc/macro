@@ -1,13 +1,21 @@
 import { partialMatchKey } from '@tanstack/query-core';
 import { QueryClient } from '@tanstack/solid-query';
 import { describe, expect, it, vi } from 'vitest';
+import { authKeys } from './auth/keys';
 import { channelKeys } from './channel/keys';
 import { type PersistScope, setupQueryPersistence } from './persistence';
 import type {
   PerQueryPersistence,
   PersistedQueryEntry,
 } from './persistence/per-query-idb';
-import { shouldPersistChannelQuery } from './persistence-scopes';
+import {
+  createQueryPersistenceScopes,
+  shouldPersistChannelQuery,
+} from './persistence-scopes';
+
+vi.mock('@core/mobile/isNativeMobilePlatform', () => ({
+  isNativeMobilePlatform: () => true,
+}));
 
 function createMockStore(): PerQueryPersistence & {
   entries: Map<string, PersistedQueryEntry>;
@@ -270,6 +278,52 @@ describe('setupQueryPersistence', () => {
 
     expect(queryClient.getQueryData(['channel', 'old'])).toBeUndefined();
     expect(store.remove).toHaveBeenCalledWith('["channel","old"]');
+  });
+
+  it('restores entries regardless of age when the scope has no max age', async () => {
+    const queryClient = new QueryClient();
+    const store = createMockStore();
+    const tenYearsAgo = Date.now() - 10 * 365 * 24 * 60 * 60 * 1000;
+
+    store.entries.set('["identity","user"]', {
+      queryHash: '["identity","user"]',
+      queryKey: ['identity', 'user'],
+      data: { authenticated: true },
+      dataUpdatedAt: tenYearsAgo,
+      persistedAt: tenYearsAgo,
+      buster: 'test',
+    });
+
+    const scope = createScope(['identity'], store, { maxAge: undefined });
+    setupQueryPersistence({ queryClient, scopes: [scope] });
+
+    void queryClient.prefetchQuery({
+      queryKey: ['identity', 'user'],
+      queryFn: () => new Promise(() => {}),
+    });
+
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(queryClient.getQueryData(['identity', 'user'])).toEqual({
+      authenticated: true,
+    });
+    expect(store.remove).not.toHaveBeenCalled();
+  });
+
+  it('configures only native user-info persistence without an expiry', () => {
+    const scopes = createQueryPersistenceScopes('test');
+    const userInfoScope = scopes.find((scope) =>
+      scope.shouldPersist(authKeys.userInfo.queryKey)
+    );
+
+    expect(userInfoScope).toBeDefined();
+    expect(userInfoScope?.maxAge).toBeUndefined();
+    expect(
+      scopes
+        .filter((scope) => scope !== userInfoScope)
+        .every((scope) => scope.maxAge !== undefined)
+    ).toBe(true);
   });
 
   it('removes buster-mismatched entries instead of restoring', async () => {

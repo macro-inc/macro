@@ -163,6 +163,29 @@ describe('CORS middleware tests', async () => {
     expect(allowedHeaders).toContain('content-type');
   });
 
+  // The web client's traced fetch wrapper injects W3C trace context on every
+  // instrumented request. If these aren't preflight-allowed the browser blocks
+  // the response outright, which previously broke /metadata (and with it the
+  // document history timeline and blame tooltips).
+  test('should allow w3c trace context headers', async () => {
+    const response = await mf.dispatchFetch(
+      'http://localhost:8787/document/test-doc/metadata',
+      {
+        method: 'OPTIONS',
+        headers: {
+          Origin: 'https://dev.macro.com',
+          'Access-Control-Request-Method': 'GET',
+          'Access-Control-Request-Headers': 'authorization,traceparent',
+        },
+      }
+    );
+
+    expect(response.status).toBe(200);
+    const allowedHeaders = response.headers.get('Access-Control-Allow-Headers');
+    expect(allowedHeaders).toContain('traceparent');
+    expect(allowedHeaders).toContain('tracestate');
+  });
+
   test('should work with actual API requests after CORS validation', async () => {
     // Create a document first
     const user = await createTestUser(mf, 'cors-test-doc');

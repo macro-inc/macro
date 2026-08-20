@@ -1,0 +1,120 @@
+query EmailThreadPage($threadId: ID!, $offset: Int!, $limit: Int!) {
+	user {
+		id
+		emailThread(input: { threadId: $threadId }) {
+			...EmailThreadPageFields
+		}
+	}
+}
+
+fragment EmailThreadPageFields on GraphqlSoupEmailThread {
+	__typename
+	id
+	providerId
+	linkId
+	inboxVisible
+	isRead
+	projectId
+	latestInboundMessageTs
+	createdAt
+	updatedAt
+	viewerPermission {
+		__typename
+		... on GraphqlAccessLevelPermission {
+			accessLevel
+		}
+	}
+	labels {
+		__typename
+		id
+		linkId
+		providerLabelId
+		name
+		createdAt
+		messageListVisibility
+		labelListVisibility
+		type
+	}
+	messages(offset: $offset, limit: $limit) {
+		...EmailThreadMessageFields
+	}
+}
+
+fragment EmailThreadMessageFields on GraphqlSoupEmailMessage {
+	__typename
+	id
+	providerId
+	threadId
+	replyingToId
+	linkId
+	subject
+	snippet
+	internalDateTs
+	sentAt
+	isRead
+	isStarred
+	isSent
+	isDraft
+	hasAttachments
+	scheduledSendTime
+	from {
+		email
+		name
+		photoUrl
+	}
+	to {
+		email
+		name
+		photoUrl
+	}
+	cc {
+		email
+		name
+		photoUrl
+	}
+	bcc {
+		email
+		name
+		photoUrl
+	}
+	labels {
+		providerLabelId
+		name
+	}
+	bodyText
+	bodyHtmlSanitized
+	bodyMacro
+	bodyReplyless
+	attachments {
+		__typename
+		id
+		providerId
+		filename
+		mimeType
+		sizeBytes
+		sfsId
+		contentId
+	}
+	attachmentsDraft {
+		__typename
+		id
+		draftId
+		fileName
+		contentType
+		sha
+		size
+		s3Key
+	}
+	attachmentsForwarded {
+		__typename
+		attachmentId
+		draftId
+		providerAttachmentId
+		messageProviderId
+		filename
+		mimeType
+		sizeBytes
+	}
+	createdAt
+	updatedAt
+}

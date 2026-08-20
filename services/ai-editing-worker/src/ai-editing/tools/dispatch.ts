@@ -1,3 +1,4 @@
+import { type Span, Telemetry } from '@macro-inc/observability';
 import { type LanguageModel, tool } from 'ai';
 import { z } from 'zod';
 import type { coder } from '../agents';
@@ -164,6 +165,23 @@ export function computeContextRange(
   };
 }
 
+/**
+ * Node ids an instruction actually refers to.
+ *
+ * Filtered against ids present in the document so ordinary prose that happens
+ * to match the id shape (`Suggested`, `constraint`) doesn't create phantom
+ * conflicts that serialize unrelated edits.
+ */
+export function targetIds(
+  instruction: string,
+  session: LexicalSession
+): Set<string> {
+  const candidates = instruction.match(ID_PATTERN);
+  if (!candidates) return new Set();
+  const { byId } = indexXmlRanges(serializeWithXml(session));
+  return new Set(candidates.filter((id) => byId.has(id)));
+}
+
 /** Lines of context to show a writer around its target region. Generous on
  *  purpose: a roomy window means the writer rarely has to call `readDocument`. */
 const MIN_WINDOW_LINES = 20;
@@ -200,11 +218,18 @@ export type DispatchEditTrace = {
   coderStartedAt: number;
   coderFinishedAt: number;
   runCodeAt: number[];
+  /** Reply text per runCode call, positionally aligned with `runCodeAt`. */
+  runCodeResults: string[];
 };
 
 /** One runCode invocation as recorded for the trace: the code plus any content
  *  the writer composed and passed alongside it. */
-export type CoderRunCode = { code: string; snippets?: Record<string, string> };
+export type CoderRunCode = {
+  code: string;
+  snippets?: Record<string, string>;
+  /** The reply this call produced, as the coder saw it. */
+  result?: string;
+};
 
 export type DispatchToolOptions = {
   session: LexicalSession;
@@ -220,6 +245,8 @@ export type DispatchToolOptions = {
   sleep?: (ms: number) => Promise<void>;
   signal?: AbortSignal;
   makeWriter: () => Promise<Writer>;
+  /** Per-coder step cap, forwarded to every coder this tool spawns. */
+  maxCoderSteps?: number;
   runTask: typeof coder;
   serialize?: (session: LexicalSession) => string;
   onOps?: RunCodeToolOptions['onOps'];
@@ -227,6 +254,12 @@ export type DispatchToolOptions = {
   onCoderResult?: (codes: CoderRunCode[]) => void;
   /** Called after each dispatch call with the edit's timing trace. */
   onEditTrace?: (edit: DispatchEditTrace) => void;
+  /** Resolves the parent for each `edit.dispatch` span at launch time — the
+   *  supervisor turn that issued the call. Passed explicitly, and as a
+   *  function, because coders launch from AI SDK stream callbacks: the
+   *  ambient context is not trustworthy there, and the parent changes
+   *  from one turn to the next. */
+  parentSpan?: () => Span | undefined;
 };
 
 export const DispatchEditSchema = z.object({
@@ -250,6 +283,7 @@ export function createDispatchTool(opts: DispatchToolOptions) {
     sleep,
     signal,
     makeWriter,
+    maxCoderSteps,
     runTask,
     runner,
     onOps,
@@ -268,37 +302,88 @@ export function createDispatchTool(opts: DispatchToolOptions) {
   // Coders already started from onInputAvailable, keyed by tool call id.
   const calls = new Map<string, EditRun>();
 
+  /**
+   * Node ids each in-flight coder is working on, plus a promise that settles
+   * when it finishes. Parallel coders share one `LexicalSession`, so two
+   * dispatches aimed at the same node interleave their edits on the same
+   * subtree — the largest failure class in the trace corpus, and the one that
+   * produces silently corrupted documents rather than clean failures.
+   */
+  const inFlight: { ids: Set<string>; done: Promise<unknown> }[] = [];
+
+  /** Wait out any in-flight coder whose target ids overlap this instruction's.
+   *
+   *  Independent edits still run fully in parallel; only the ones that would
+   *  collide are serialized, so this costs latency exactly where the
+   *  alternative is corruption. */
+  async function awaitConflicts(ids: Set<string>): Promise<void> {
+    if (ids.size === 0) return;
+    const blockers = inFlight
+      .filter((entry) => [...ids].some((id) => entry.ids.has(id)))
+      .map((entry) => entry.done);
+    if (blockers.length > 0) await Promise.allSettled(blockers);
+  }
+
   async function runEdit(
     edit: DispatchEdit,
     trace: DispatchEditTrace,
-    childModel: LanguageModel
+    childModel: LanguageModel,
+    span: Span
   ): Promise<CoderRun> {
-    // Serialized at launch time so an edit launched early sees whatever earlier
-    // coders have already applied.
-    const xml = serializeWithXml(session);
-    const context = xmlWindow(
-      xml,
-      computeContextRange(xml, edit.editing_instruction)
-    );
-    const writer = await makeWriter();
-    const { doc, awarenessSource } = writer;
+    // Hold off until nothing conflicting is running, THEN serialize the
+    // document — so this coder's window reflects the conflicting edit rather
+    // than a snapshot taken before it landed.
+    await awaitConflicts(targetIds(edit.editing_instruction, session));
     try {
-      return await runTask(session, edit.editing_instruction, childModel, {
-        doc,
-        awarenessSource,
-        context,
-        request,
-        params,
-        typingAnimations,
-        sleep,
-        signal,
-        runner,
-        onOps,
-        onRunCode: () => trace.runCodeAt.push(Date.now()),
-      });
+      // Serialized at launch time so an edit launched early sees whatever earlier
+      // coders have already applied.
+      const xml = serializeWithXml(session);
+      const range = computeContextRange(xml, edit.editing_instruction);
+      const context = xmlWindow(xml, range);
+      span.setAttr('context.source', range.source);
+      span.setAttr('context.lines', range.endLine - range.startLine + 1);
+      const borrowStartedAt = Date.now();
+      const writer = await makeWriter();
+      span.setAttr('writer.wait_ms', Date.now() - borrowStartedAt);
+      const { doc, awarenessSource } = writer;
+      try {
+        const result = await runTask(
+          session,
+          edit.editing_instruction,
+          childModel,
+          {
+            doc,
+            awarenessSource,
+            context,
+            maxSteps: maxCoderSteps,
+            request,
+            params,
+            typingAnimations,
+            sleep,
+            signal,
+            runner,
+            onOps,
+            onRunCode: () => trace.runCodeAt.push(Date.now()),
+            onRunCodeResult: (result) => trace.runCodeResults.push(result),
+            span,
+          }
+        );
+        span.setAttr(
+          'gen_ai.request.model',
+          (childModel as { modelId: string }).modelId
+        );
+        span.setAttr('run_code.count', trace.runCodeAt.length);
+        span.setAttr('coder.blocked', findBlocked(result) !== null);
+        return result;
+      } finally {
+        trace.coderFinishedAt = Date.now();
+        writer.release();
+      }
+    } catch (e) {
+      span.error(e);
+      throw e;
     } finally {
-      trace.coderFinishedAt = Date.now();
-      writer.release();
+      span.end();
     }
   }
 
@@ -315,12 +400,41 @@ export function createDispatchTool(opts: DispatchToolOptions) {
       coderStartedAt: Date.now(),
       coderFinishedAt: 0,
       runCodeAt: [],
+      runCodeResults: [],
     };
+    // runEdit ends the span in its finally, so streamed runs that reject
+    // before `execute` joins them still close it.
+    const parent = opts.parentSpan?.();
+    const span = parent
+      ? parent.span('edit.dispatch')
+      : Telemetry.span('edit.dispatch');
+    span.setAttr('dispatch.tool_call_id', toolCallId);
+    span.setAttr('dispatch.streamed', streamed);
+    span.setAttr('instruction.chars', edit.editing_instruction.length);
     const model = makeChildModel();
-    const entry: EditRun = { run: runEdit(edit, trace, model), trace, model };
+    const entry: EditRun = {
+      run: runEdit(edit, trace, model, span),
+      trace,
+      model,
+    };
     // A streamed run can reject before `execute` awaits it; keep that rejection
     // for the join instead of letting it escape as an unhandled rejection.
     entry.run.catch(() => {});
+
+    // Publish this coder's targets before it starts so a later dispatch in the
+    // same batch can see the conflict. Ids are resolved against the document as
+    // it stands now, which is what a concurrent sibling would collide with.
+    const claimed =
+      typeof edit.editing_instruction === 'string'
+        ? targetIds(edit.editing_instruction, session)
+        : new Set<string>();
+    const record = { ids: claimed, done: entry.run };
+    inFlight.push(record);
+    void entry.run.finally(() => {
+      const i = inFlight.indexOf(record);
+      if (i !== -1) inFlight.splice(i, 1);
+    });
+
     calls.set(toolCallId, entry);
     return entry;
   }
@@ -347,9 +461,9 @@ export function createDispatchTool(opts: DispatchToolOptions) {
           const codes = result.steps
             .flatMap((step) => step.toolCalls)
             .filter((call) => call.toolName === 'runCode')
-            .map((call) => {
+            .map((call, i) => {
               const { code, snippets } = call.input as CoderRunCode;
-              return { code, snippets };
+              return { code, snippets, result: entry.trace.runCodeResults[i] };
             });
           onCoderResult(codes);
         }

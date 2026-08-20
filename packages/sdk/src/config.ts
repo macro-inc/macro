@@ -95,6 +95,8 @@ export interface MacroOpts {
   auth?: MacroAuth;
   /** Shorthand for `auth: { type: 'user', token }`. */
   token?: TokenSource;
+  /** Which Macro environment to talk to. Falls back to the MACRO_ENV env
+   * var, then `'dev'`. */
   env?: Env;
   /** Override individual service hosts (e.g. point one at localhost). */
   hosts?: Partial<Record<ServiceName, string>>;
@@ -104,7 +106,7 @@ export interface MacroOpts {
   webhookSecret?: string;
   wsVerify?: string;
   /** User id the bot acts for, sent as `x-macro-bot-for-macro-user-id` on
-   * every request. Bot auth only. Set via `macro.requestedAs(userId)` rather
+   * every request. Bot auth only. Set via `macro.requestedAs(user)` rather
    * than directly. */
   requestedAs?: string;
 }

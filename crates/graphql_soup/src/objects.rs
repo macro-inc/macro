@@ -3,13 +3,16 @@ use std::marker::PhantomData;
 use async_graphql::{
     Context, ID, Interface, Json, Object, ObjectType, OutputType, SimpleObject, Union,
 };
-use graphql_common::{GraphqlCacheDeletion, GraphqlEntity, GraphqlSoupEntityType};
+use graphql_common::{
+    GraphqlCacheDeletion, GraphqlEntity, GraphqlEntityType, GraphqlSoupEntityType,
+};
 use graphql_email::GraphqlEmailLabel;
 use graphql_permission::GraphqlEntityPermission;
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::Entity;
 use models_pagination::PaginatedOpaqueCursor;
 use models_soup::{
+    calendar_event::SoupCalendarEvent,
     call_record::{SoupCallRecord, SoupCallRecordParticipant},
     chat::SoupChat,
     comms::{ChannelMessage, ChannelParticipant, ChannelType, SoupChannel, SoupChannelThread},
@@ -22,6 +25,7 @@ use models_soup::{
     foreign_entity::SoupForeignEntity,
     item::SoupItem,
     project::SoupProject,
+    reminder::{SoupReminder, SoupReminderSchedule},
 };
 use serde_json::Value;
 use soup::domain::models::{EnrichedSoupItem, SoupPropertiesField, grouping::NestedSoupGroups};
@@ -40,6 +44,9 @@ pub trait SoupEntityEdges: ObjectType + Clone + Send + Sync + 'static {
 
     /// GraphQL notification object supplied by the notification adapter.
     type Notification: OutputType;
+
+    /// GraphQL activity event object supplied by the activity adapter.
+    type ActivityEvent: OutputType;
 
     /// Construct the common/global edge object for a Soup entity.
     /// This is for edges that apply to all soup entities, e.g. notifications
@@ -83,6 +90,13 @@ pub trait SoupEntityEdges: ObjectType + Clone + Send + Sync + 'static {
         &self,
         ctx: &Context<'_>,
     ) -> impl Future<Output = async_graphql::Result<Option<GraphqlEntityPermission>>> + Send;
+
+    /// Resolve the newest activity on this entity, newest first.
+    fn resolve_activity(
+        &self,
+        ctx: &Context<'_>,
+        limit: Option<i32>,
+    ) -> impl Future<Output = async_graphql::Result<Vec<Self::ActivityEvent>>> + Send;
 }
 
 /// Page returned by `Query.soup`.
@@ -180,6 +194,9 @@ impl<E: SoupEntityEdges> GraphqlSoupEntity<E> {
             Self::Call(entity) => entity.2 = score,
             Self::CrmCompany(entity) => entity.2 = score,
             Self::ForeignEntity(entity) => entity.2 = score,
+            // Calendar events carry no frecency slot; scores never target them.
+            Self::CalendarEvent(_) => {}
+            Self::Reminder(entity) => entity.2 = score,
         }
         self
     }
@@ -258,6 +275,13 @@ pub struct GraphqlEntityMetadata {
         method = "frecency_score",
         ty = "Option<f64>",
         desc = "The viewer's frecency score for this entity, when loaded."
+    ),
+    field(
+        name = "activity",
+        method = "interface_activity",
+        ty = "Vec<E::ActivityEvent>",
+        arg(name = "limit", ty = "Option<i32>"),
+        desc = "The newest activity on this entity, newest first."
     )
 )]
 pub enum GraphqlSoupEntity<E: SoupEntityEdges> {
@@ -275,10 +299,14 @@ pub enum GraphqlSoupEntity<E: SoupEntityEdges> {
     ChannelMessage(GraphqlSoupChannelMessage<E>),
     /// Call entity.
     Call(GraphqlSoupCall<E>),
+    /// Calendar event entity.
+    CalendarEvent(GraphqlSoupCalendarEvent<E>),
     /// CRM company entity.
     CrmCompany(GraphqlSoupCrmCompany<E>),
     /// Foreign entity.
     ForeignEntity(GraphqlSoupForeignEntity<E>),
+    /// Reminder entity.
+    Reminder(GraphqlSoupReminder<E>),
 }
 
 impl<E> GraphqlSoupEntity<E>
@@ -301,6 +329,8 @@ where
                 GraphqlSoupEntityType::Call => GraphqlSoupCall::<E>::type_name(),
                 GraphqlSoupEntityType::CrmCompany => GraphqlSoupCrmCompany::<E>::type_name(),
                 GraphqlSoupEntityType::ForeignEntity => GraphqlSoupForeignEntity::<E>::type_name(),
+                GraphqlSoupEntityType::CalendarEvent => GraphqlSoupCalendarEvent::<E>::type_name(),
+                GraphqlSoupEntityType::Reminder => GraphqlSoupReminder::<E>::type_name(),
             }
             .into_owned(),
         )
@@ -351,6 +381,12 @@ where
                 );
                 Self::Call(GraphqlSoupCall(item, edges, None))
             }
+            SoupItem::CalendarEvent(item) => {
+                let edges = E::from_entity(
+                    model_entity::EntityType::CalendarEvent.with_entity_string(item.id.to_string()),
+                );
+                Self::CalendarEvent(GraphqlSoupCalendarEvent(item, edges))
+            }
             SoupItem::CrmCompany(item) => {
                 let edges = E::from_entity(
                     model_entity::EntityType::CrmCompany.with_entity_string(item.id.to_string()),
@@ -363,7 +399,116 @@ where
                 );
                 Self::ForeignEntity(GraphqlSoupForeignEntity(item, edges, None))
             }
+            SoupItem::Reminder(item) => {
+                let edges = E::from_entity(
+                    model_entity::EntityType::Reminder.with_entity_string(item.id.to_string()),
+                );
+                Self::Reminder(GraphqlSoupReminder(item, edges, None))
+            }
         }
+    }
+}
+
+/// GraphQL calendar event entity.
+pub struct GraphqlSoupCalendarEvent<E: SoupEntityEdges>(SoupCalendarEvent<()>, E);
+
+/// GraphQL representation of a canonical calendar event.
+#[Object(name = "GraphqlSoupCalendarEvent")]
+impl<E> GraphqlSoupCalendarEvent<E>
+where
+    E: SoupEntityEdges,
+{
+    /// The unique identifier.
+    async fn id(&self) -> ID {
+        ID(self.0.id.to_string())
+    }
+
+    /// Canonical entity kind.
+    async fn entity_type(&self) -> GraphqlSoupEntityType {
+        GraphqlSoupEntityType::CalendarEvent
+    }
+
+    /// User-visible display name.
+    async fn display_name(&self) -> Option<String> {
+        Some(self.0.title.clone())
+    }
+
+    /// Common calendar event metadata.
+    async fn metadata(&self) -> GraphqlEntityMetadata {
+        GraphqlEntityMetadata {
+            owner_id: Some(self.0.owner_id.clone()),
+            parent: None,
+            created_at: Some(self.0.created_at.to_rfc3339()),
+            updated_at: Some(self.0.updated_at.to_rfc3339()),
+            viewed_at: None,
+            deleted_at: None,
+        }
+    }
+
+    /// The owning Macro user.
+    async fn owner_id(&self) -> &str {
+        &self.0.owner_id
+    }
+
+    /// The event title.
+    async fn title(&self) -> &str {
+        &self.0.title
+    }
+
+    /// The event description.
+    async fn description(&self) -> Option<&str> {
+        self.0.description.as_deref()
+    }
+
+    /// The event location.
+    async fn location(&self) -> Option<&str> {
+        self.0.location.as_deref()
+    }
+
+    /// Canonical event status.
+    async fn status(&self) -> &str {
+        &self.0.status
+    }
+
+    /// Timed or all-day event span.
+    async fn time(&self) -> Json<serde_json::Value> {
+        Json(serde_json::to_value(&self.0.time).unwrap_or(serde_json::Value::Null))
+    }
+
+    /// Direct conference join URL.
+    async fn conference_url(&self) -> Option<&str> {
+        self.0.conference_url.as_deref()
+    }
+
+    /// Which conferencing system backs the join URL.
+    async fn conference_provider(&self) -> Option<&str> {
+        self.0.conference_provider.as_deref()
+    }
+
+    /// Whether the canonical source is read-only.
+    async fn is_read_only(&self) -> bool {
+        self.0.is_read_only
+    }
+
+    /// Creation timestamp.
+    async fn created_at(&self) -> String {
+        self.0.created_at.to_rfc3339()
+    }
+
+    /// Update timestamp.
+    async fn updated_at(&self) -> String {
+        self.0.updated_at.to_rfc3339()
+    }
+
+    /// The viewer's frecency score for this entity, when loaded.
+    async fn frecency_score(&self) -> Option<f64> {
+        None
+    }
+
+    #[graphql(flatten)]
+    /// Common entity edges.
+    async fn edges(&self) -> E {
+        self.1.clone()
     }
 }
 
@@ -480,6 +625,13 @@ pub struct GraphqlSnippetSubType {
     nothing: bool,
 }
 
+/// represents the skill subtype fields
+#[derive(SimpleObject)]
+pub struct GraphqlSkillSubType {
+    /// this object has nothing as a field but we need at least 1 field
+    nothing: bool,
+}
+
 /// GraphQL representation of the soup document sub type.
 #[derive(Union)]
 pub enum GraphqlSoupDocumentSubType {
@@ -487,6 +639,8 @@ pub enum GraphqlSoupDocumentSubType {
     Task(GraphqlTaskSubType),
     /// the sub type is a snippet
     Snippet(GraphqlSnippetSubType),
+    /// the sub type is a skill
+    Skill(GraphqlSkillSubType),
 }
 
 impl GraphqlSoupDocumentSubType {
@@ -499,6 +653,7 @@ impl GraphqlSoupDocumentSubType {
             SoupDocumentSubType::Snippet {} => {
                 Self::Snippet(GraphqlSnippetSubType { nothing: false })
             }
+            SoupDocumentSubType::Skill {} => Self::Skill(GraphqlSkillSubType { nothing: false }),
         }
     }
 }
@@ -803,16 +958,6 @@ where
     /// Whether the thread should appear in the inbox.
     async fn inbox_visible(&self) -> bool {
         self.0.thread.inbox_visible
-    }
-
-    /// The identifier of the link.
-    async fn link_id(&self) -> Option<ID> {
-        self.0
-            .participants
-            .first()
-            .map(|participant| participant.link_id)
-            .or_else(|| self.0.labels.first().map(|label| label.link_id))
-            .map(|id| ID(id.to_string()))
     }
 
     /// The name.
@@ -1674,6 +1819,162 @@ where
     }
 }
 
+/// How often a reminder fires.
+#[derive(async_graphql::Enum, Copy, Clone, Eq, PartialEq)]
+pub enum GraphqlReminderScheduleType {
+    /// Fires once, at `remindAt`.
+    Once,
+    /// Fires repeatedly, on `cron` evaluated in `timezone`.
+    Recurring,
+}
+
+/// The entity a reminder is about, resolved server-side.
+///
+/// Carries `file_type`/`sub_type` rather than just the reference: a reminder is
+/// iconed as whatever it points at, and the client's icon path is synchronous,
+/// so resolving them here saves a fetch per row.
+#[derive(SimpleObject)]
+pub struct GraphqlSoupReminderReference {
+    /// The referenced entity's id.
+    pub id: ID,
+    /// The referenced entity's type.
+    pub entity_type: GraphqlEntityType,
+    /// File type, when the reference is a document — `md`, `pdf`, and so on.
+    pub file_type: Option<String>,
+    /// Sub type, when the reference is a task or snippet document.
+    pub sub_type: Option<String>,
+}
+
+/// GraphQL reminder entity.
+pub struct GraphqlSoupReminder<E: SoupEntityEdges>(SoupReminder<()>, E, Option<f64>);
+
+/// GraphQL representation of the soup reminder.
+#[Object(name = "GraphqlSoupReminder")]
+impl<E> GraphqlSoupReminder<E>
+where
+    E: SoupEntityEdges,
+{
+    /// The unique identifier.
+    async fn id(&self) -> ID {
+        ID(self.0.id.to_string())
+    }
+
+    /// Canonical entity kind.
+    async fn entity_type(&self) -> GraphqlSoupEntityType {
+        GraphqlSoupEntityType::Reminder
+    }
+
+    /// User-visible display name — a reminder's description is its name.
+    async fn display_name(&self) -> Option<String> {
+        Some(self.0.description.clone())
+    }
+
+    /// Common reminder metadata.
+    ///
+    /// `owner_id` is absent because a reminder is only ever readable by its
+    /// owner, and `parent` because a reminder is not contained by the entity it
+    /// references — see [`Self::referenced_entity`].
+    async fn metadata(&self) -> GraphqlEntityMetadata {
+        GraphqlEntityMetadata {
+            owner_id: None,
+            parent: None,
+            created_at: Some(self.0.created_at.to_rfc3339()),
+            updated_at: Some(self.0.updated_at.to_rfc3339()),
+            viewed_at: None,
+            deleted_at: None,
+        }
+    }
+
+    /// The entity this reminder is about, when it is attached to one.
+    ///
+    /// Only the reference is returned; the client resolves it into a Soup item
+    /// through the edges that already exist for that entity type.
+    async fn referenced_entity(&self) -> Option<GraphqlSoupReminderReference> {
+        self.0
+            .referenced_entity
+            .as_ref()
+            .map(|r| GraphqlSoupReminderReference {
+                id: ID(r.id.clone()),
+                entity_type: GraphqlEntityType::new(r.entity_type),
+                file_type: r.file_type.clone(),
+                sub_type: r.sub_type.clone(),
+            })
+    }
+
+    /// What to remind the user about.
+    async fn description(&self) -> &str {
+        &self.0.description
+    }
+
+    /// Whether the reminder fires once or repeatedly.
+    async fn schedule_type(&self) -> GraphqlReminderScheduleType {
+        match self.0.schedule {
+            SoupReminderSchedule::Once { .. } => GraphqlReminderScheduleType::Once,
+            SoupReminderSchedule::Recurring { .. } => GraphqlReminderScheduleType::Recurring,
+        }
+    }
+
+    /// The instant a one-shot reminder fires at, in RFC 3339 format.
+    async fn remind_at(&self) -> Option<String> {
+        match &self.0.schedule {
+            SoupReminderSchedule::Once { remind_at } => Some(remind_at.to_rfc3339()),
+            SoupReminderSchedule::Recurring { .. } => None,
+        }
+    }
+
+    /// The cron expression a recurring reminder fires on.
+    async fn cron(&self) -> Option<&str> {
+        match &self.0.schedule {
+            SoupReminderSchedule::Recurring { cron, .. } => Some(cron),
+            SoupReminderSchedule::Once { .. } => None,
+        }
+    }
+
+    /// The timezone a recurring reminder's cron is evaluated in.
+    async fn timezone(&self) -> Option<&str> {
+        match &self.0.schedule {
+            SoupReminderSchedule::Recurring { timezone, .. } => Some(timezone),
+            SoupReminderSchedule::Once { .. } => None,
+        }
+    }
+
+    /// The next firing, in RFC 3339 format. Soup orders reminders on this.
+    async fn next_run_at(&self) -> String {
+        self.0.next_run_at.to_rfc3339()
+    }
+
+    /// When false, the dispatcher skips this reminder.
+    async fn enabled(&self) -> bool {
+        self.0.enabled
+    }
+
+    /// When a one-shot reminder fired, in RFC 3339 format.
+    async fn completed_at(&self) -> Option<String> {
+        self.0.completed_at.map(|ts| ts.to_rfc3339())
+    }
+
+    /// The created timestamp in RFC 3339 format.
+    async fn created_at(&self) -> String {
+        self.0.created_at.to_rfc3339()
+    }
+
+    /// The updated timestamp in RFC 3339 format.
+    async fn updated_at(&self) -> String {
+        self.0.updated_at.to_rfc3339()
+    }
+
+    #[graphql(flatten)]
+    /// The edges.
+    async fn edges(&self) -> E {
+        self.1.clone()
+    }
+
+    /// The viewer's frecency score for this entity, when loaded.
+    async fn frecency_score(&self) -> Option<f64> {
+        self.2
+    }
+}
+
 /// Implement interface-only dispatch methods for fields whose concrete
 /// GraphQL definitions are supplied by the flattened edge object.
 macro_rules! impl_common_interface_edges {
@@ -1712,12 +2013,22 @@ macro_rules! impl_common_interface_edges {
                     self.1.resolve_viewer_permission(ctx).await
                 }
 
+                /// Resolve shared activity through the composed edge adapter.
+                async fn interface_activity(
+                    &self,
+                    ctx: &Context<'_>,
+                    limit: Option<i32>,
+                ) -> async_graphql::Result<Vec<E::ActivityEvent>> {
+                    self.1.resolve_activity(ctx, limit).await
+                }
+
             }
         )+
     };
 }
 
 impl_common_interface_edges!(
+    GraphqlSoupCalendarEvent,
     GraphqlSoupDocument,
     GraphqlSoupChat,
     GraphqlSoupProject,
@@ -1727,6 +2038,7 @@ impl_common_interface_edges!(
     GraphqlSoupCall,
     GraphqlSoupCrmCompany,
     GraphqlSoupForeignEntity,
+    GraphqlSoupReminder,
 );
 
 /// Realtime Soup patch represented as exactly one update or cache deletion.

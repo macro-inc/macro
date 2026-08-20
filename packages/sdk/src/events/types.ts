@@ -1,10 +1,11 @@
 // Event names and payloads come from the backend's OpenAPI spec
 // (`WebhookEvent` in generated/storage/schemas), so this file stays in
-// lockstep with what the backend actually delivers. Message events
-// additionally carry a hydrated `message` ORM handle.
+// lockstep with what the backend actually delivers. On top of the raw
+// `metadata`, handlers get ORM handles for every entity the payload names.
 
 import type { WebhookEvent } from '../../generated/storage/types.gen';
-import type { Message } from '../entities/channels/message';
+import type { hydrateChannelEvent } from './hydrate/channel';
+import type { hydrateDocumentEvent } from './hydrate/document';
 
 /** A webhook delivery body, exactly as Macro serializes it. */
 export type MacroEvent = WebhookEvent;
@@ -19,24 +20,25 @@ export type EventPayload<E extends EventName> = Extract<
 >['metadata'];
 
 /**
- * Events whose payload names a message; handlers get a `message` handle.
- * Derived structurally (payload carries `channel_id` + `message_id`), so a
- * new backend event that names a message is hydrated with no SDK change.
- * The receiver's runtime check mirrors this shape.
+ * Every hydrated event the receiver can dispatch, as one discriminated union.
+ *
+ * The `hydrate*` functions are the single source of truth for which handles
+ * ride along with which event — this reads their inferred return types back
+ * rather than restating the mapping.
  */
-export type MessageEventName = {
-  [E in EventName]: EventPayload<E> extends {
-    channel_id: string;
-    message_id: string;
-  }
-    ? E
-    : never;
-}[EventName];
+type HydratedEvent =
+  | ReturnType<typeof hydrateChannelEvent>
+  | ReturnType<typeof hydrateDocumentEvent>;
 
+/**
+ * What a handler receives, per event: the raw `metadata` plus the ORM handles
+ * named by that event's ids.
+ *
+ * Handles are free to construct and load lazily, so hydrating every event costs
+ * nothing until a handler reads a field or calls a method on one.
+ */
 export type EventMap = {
-  [E in EventName]: E extends MessageEventName
-    ? { metadata: EventPayload<E>; message: Message }
-    : { metadata: EventPayload<E> };
+  [E in EventName]: Extract<HydratedEvent, { event_type: E }>;
 };
 
 export type EventHandler<E extends EventName> = (

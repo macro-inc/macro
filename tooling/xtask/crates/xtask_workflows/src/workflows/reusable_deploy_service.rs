@@ -8,8 +8,7 @@
 //! deploy-all-services warms a shared dep closure once and fans a build
 //! matrix out across it; with a single service there is no fan-out to
 //! amortise, so the per-service build realises its own closure directly (the
-//! /nix sticky disk + Cachix still substitute everything unchanged from
-//! prior runs).
+//! /nix sticky disk still substitutes everything unchanged from prior runs).
 
 use anyhow::Result;
 use gh_workflow::{Env, Event, Expression, Job, Run, Step, Use, Workflow, WorkflowCall};
@@ -70,8 +69,6 @@ pub fn patch(root: &mut serde_yaml::Value) -> Result<()> {
                 required: true
               DD_API_KEY:
                 required: true
-              CACHIX_AUTH_TOKEN:
-                required: true
         "#})?,
     );
     Ok(())
@@ -105,7 +102,7 @@ fn check_artifact_config() -> Step<Run> {
         .add_env(Env::new("SERVICE", "${{ inputs.service-name }}"))
 }
 
-/// Base for the two nix build jobs: warm /nix volume + Nix + Cachix fallback.
+/// Base for the two Nix build jobs using Namespace's warm `/nix` volume.
 fn build_job(name: &str, gate_output: &str) -> Job {
     Job::default()
         .name(name)
@@ -117,7 +114,6 @@ fn build_job(name: &str, gate_output: &str) -> Job {
         .add_step(steps::checkout_v4().add_with(("clean", false)))
         .add_step(steps::mount_nix_cache_volume())
         .add_step(steps::setup_nix())
-        .add_step(steps::setup_cachix())
 }
 
 fn build_service_binaries() -> Job {
@@ -131,7 +127,8 @@ fn build_service_binaries() -> Job {
 }
 
 fn build_prebuilt_binaries() -> Step<Run> {
-    let script = steps::with_cachix_watch(indoc::indoc! {r#"
+    let script = indoc::indoc! {r#"
+        set -euo pipefail
         mkdir -p prebuilt
         nix build --print-build-logs ".#deploy-service-binaries-${SERVICE}"
         cp -r result/bin/* prebuilt/
@@ -143,7 +140,7 @@ fn build_prebuilt_binaries() -> Step<Run> {
         tar -C prebuilt -czf prebuilt-binaries.tar.gz .
         # Receipt: the deploy job logs the same hash on read.
         echo "handoff receipt: $(sha256sum prebuilt-binaries.tar.gz | cut -d' ' -f1) ($(stat -c%s prebuilt-binaries.tar.gz) bytes)"
-    "#});
+    "#};
     Step::new("Build prebuilt binaries")
         .run(script)
         .shell("bash")
@@ -153,7 +150,7 @@ fn build_prebuilt_binaries() -> Step<Run> {
 /// Each handler is a crane + cargo-zigbuild nix package; the build script
 /// runs `nix build .#deploy-lambda-<name>` for the service's handlers.
 /// Unchanged handlers are pure cache hits (substituted from the /nix disk or
-/// Cachix).
+/// the Namespace Nix cache volume).
 fn build_lambda_artifacts() -> Job {
     build_job(
         "Build ${{ inputs.service-name }} Lambda artifacts",

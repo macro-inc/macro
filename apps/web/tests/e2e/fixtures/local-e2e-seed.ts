@@ -78,7 +78,8 @@ export type SeedDocument = {
   document_id: string;
   document_name: string;
   file_name: string;
-  is_public: boolean;
+  link_share: 'PUBLIC' | 'TEAM' | null;
+  link_share_access_level: 'view' | 'comment' | 'edit' | null;
 };
 
 export type SeedChannel = {

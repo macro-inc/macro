@@ -1,7 +1,7 @@
 import { useEmailContext } from '@block-email/component/EmailContext';
 import { isScrollingToMessage } from '@block-email/signal/scrollState';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
-import { isMobile } from '@core/mobile/isMobile';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { cn } from '@ui';
 import {
   createEffect,
@@ -49,7 +49,7 @@ export function MessageList(props: MessageListProps) {
   // consistent height wins over keeping the whole thread in view.
   createEffect(() => {
     const list = context.messagesListRef();
-    if (!list || isMobile()) return;
+    if (!list || isTouchDevice()) return;
     const observer = new ResizeObserver(() => {
       list.style.setProperty(
         '--thread-bottom-pad',
@@ -68,9 +68,9 @@ export function MessageList(props: MessageListProps) {
         'pt-1 pb-[calc(1.5rem+var(--thread-bottom-pad,0px))] w-full flex flex-col-reverse items-center overflow-y-scroll overflow-x-hidden scrollbar-hidden text-sm gap-1.5',
         // In-scroll top inset: messages rest below the floating split chrome
         // but under-scroll it.
-        'mobile:pt-[calc(var(--mobile-content-inset-top,0)+0.5rem)]',
+        'touch:pt-[calc(var(--mobile-content-inset-top,0)+0.5rem)]',
         props.underScrollsBottom &&
-          'mobile:pb-[calc(var(--mobile-content-inset-bottom,0)+1.5rem)]'
+          'touch:pb-[calc(var(--mobile-content-inset-bottom,0)+1.5rem)]'
       )}
       ref={context.registerMessagesList}
       onscroll={(e) => {
@@ -139,7 +139,7 @@ export function MessageList(props: MessageListProps) {
             // Gmail/Superhuman). Desktop only: mobile edits drafts in a drawer.
             const hasDraft = createMemo(() => {
               const messageID = message().db_id;
-              if (!messageID || isMobile()) return false;
+              if (!messageID || isTouchDevice()) return false;
               return !!context.drafts.getDraftForMessage(messageID);
             });
 
@@ -174,7 +174,7 @@ export function MessageList(props: MessageListProps) {
           }}
         </Index>
       </StaticMarkdownContext>
-      <Show when={isMobile() && props.title}>
+      <Show when={isTouchDevice() && props.title}>
         <div class="shrink-0 w-full flex justify-center pb-3">
           <div class="macro-message-width macro-message-padding w-full">
             <h1 class="text-xl font-semibold text-ink pt-1 pb-0 tracking-tight text-balance">

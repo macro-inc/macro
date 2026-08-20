@@ -1,0 +1,28 @@
+[package]
+edition = "2024"
+name = "agent_trigger_service"
+publish = false
+version = "0.1.0"
+
+[[bin]]
+name = "agent_trigger_service"
+path = "src/main.rs"
+
+[dependencies]
+agent_session = { path = "../../crates/agent_session" }
+agent_trigger = { path = "../../crates/agent_trigger" }
+anyhow = { workspace = true }
+bots = { path = "../../crates/bots", default-features = false, features = ["outbound", "ports"] }
+channels = { path = "../../crates/channels", default-features = false, features = ["ports"] }
+database_env_vars = { path = "../../crates/database_env_vars" }
+kafka_util = { path = "../../crates/kafka_util" }
+macro_config = { path = "../../crates/macro_config" }
+macro_entrypoint = { path = "../../crates/macro_entrypoint" }
+macro_env_var = { path = "../../crates/macro_env_var" }
+macro_event_broker = { path = "../../crates/macro_event_broker", features = ["outbound"] }
+rdkafka = { workspace = true }
+serde_json = { workspace = true }
+sqlx = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "signal"] }
+tracing = { workspace = true }
+workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }

@@ -45,6 +45,13 @@ pub trait AccessRepository: Clone + Send + Sync + 'static {
         user_id: Option<&MacroUserId<Lowercase<'_>>>,
     ) -> impl Future<Output = Result<Option<AccessLevel>, AccessError>> + Send;
 
+    /// Get owner or explicitly delegated-inbox access to a calendar event.
+    fn get_calendar_event_access(
+        &self,
+        event_id: &str,
+        user_id: Option<&MacroUserId<Lowercase<'_>>>,
+    ) -> impl Future<Output = Result<Option<AccessLevel>, AccessError>> + Send;
+
     /// Return the requested email threads owned by, or inbox-delegated to, a user.
     fn get_owned_email_thread_ids(
         &self,
@@ -56,6 +63,24 @@ pub trait AccessRepository: Clone + Send + Sync + 'static {
     fn get_call_access(
         &self,
         call_id: &str,
+        user_id: Option<&MacroUserId<Lowercase<'_>>>,
+    ) -> impl Future<Output = Result<Option<AccessLevel>, AccessError>> + Send;
+
+    /// Get the highest access level a user has for an agent session.
+    fn get_agent_session_access(
+        &self,
+        agent_session_id: &str,
+        user_id: Option<&MacroUserId<Lowercase<'_>>>,
+    ) -> impl Future<Output = Result<Option<AccessLevel>, AccessError>> + Send;
+
+    /// Get the access level a user has for a reminder.
+    ///
+    /// A reminder is never shared, so this is ownership and nothing else:
+    /// [`AccessLevel::Owner`] for the user who set it, `None` for everyone
+    /// else and for a reminder that does not exist.
+    fn get_reminder_access(
+        &self,
+        reminder_id: &str,
         user_id: Option<&MacroUserId<Lowercase<'_>>>,
     ) -> impl Future<Output = Result<Option<AccessLevel>, AccessError>> + Send;
 

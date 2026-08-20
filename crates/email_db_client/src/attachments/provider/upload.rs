@@ -1,6 +1,6 @@
 use crate::attachments::provider::upload_filters::{
     ATTACHMENT_MIME_TYPE_FILTERS, ATTACHMENT_MIME_TYPE_FILTERS_WITH_MEDIA,
-    ATTACHMENT_WHITELISTED_DOMAINS,
+    ATTACHMENT_WHITELISTED_DOMAINS, DOCUMENT_MIME_TYPES, OCTET_STREAM_DOCUMENT_EXTENSIONS,
 };
 use models_email::service::attachment::AttachmentUploadMetadata;
 use sqlx::types::Uuid;
@@ -25,6 +25,22 @@ pub async fn thread_document_atts_for_backfill(
 ) -> anyhow::Result<Vec<AttachmentUploadMetadata>> {
     let query = format!(
         r#"
+        WITH
+        thread_info AS MATERIALIZED (
+            SELECT
+                t.id AS thread_id,
+                t.link_id,
+                LOWER(SPLIT_PART(link.email_address, '@', 2)) AS user_domain
+            FROM email_threads t
+            JOIN email_links link ON link.id = t.link_id
+            WHERE t.id = $1
+        ),
+        important_label AS MATERIALIZED (
+            SELECT l.id
+            FROM email_labels l
+            JOIN thread_info ti ON l.link_id = ti.link_id
+            WHERE l.name = 'IMPORTANT'
+        )
         SELECT
             a.id AS attachment_db_id,
             m.provider_id as email_provider_id,
@@ -39,32 +55,39 @@ pub async fn thread_document_atts_for_backfill(
         FROM email_attachments a
         JOIN email_messages m ON a.message_id = m.id
         JOIN email_contacts from_contact ON m.from_contact_id = from_contact.id
+        JOIN thread_info ti ON m.thread_id = ti.thread_id
         WHERE m.thread_id = $1
             AND a.filename IS NOT NULL
             -- attachment mime type filters injected below
             {}
-            AND EXISTS ( -- only fetch if at least one message in the thread meets any of the criteria
-                SELECT 1
-                FROM email_messages m2
-                LEFT JOIN email_message_labels ml ON m2.id = ml.message_id
-                LEFT JOIN email_labels l ON ml.label_id = l.id
-                LEFT JOIN email_contacts c ON m2.from_contact_id = c.id
-                JOIN email_threads t ON m2.thread_id = t.id
-                JOIN email_links link ON t.link_id = link.id
-                WHERE m2.thread_id = $1
-                    AND (
-                        m2.is_sent = true -- condition 1
-                        OR l.name = 'IMPORTANT' -- condition 2
-                        OR (
-                            -- condition 3
-                            c.email_address IS NOT NULL
-                            AND RIGHT(c.email_address, LENGTH(RIGHT(link.email_address,
-                                LENGTH(link.email_address) - POSITION('@' IN link.email_address)))) =
-                            RIGHT(link.email_address, LENGTH(link.email_address) - POSITION('@' IN link.email_address))
+            AND (
+                -- condition 1: the thread contains a sent message
+                EXISTS (
+                    SELECT 1
+                    FROM email_messages sent_message
+                    WHERE sent_message.thread_id = ti.thread_id
+                        AND sent_message.is_sent = true
+                )
+                -- condition 2: the thread contains a message with the link's IMPORTANT label
+                OR EXISTS (
+                    SELECT 1
+                    FROM important_label il
+                    JOIN email_message_labels ml ON ml.label_id = il.id
+                    JOIN email_messages labeled_message ON labeled_message.id = ml.message_id
+                    WHERE labeled_message.thread_id = ti.thread_id
+                )
+                -- conditions 3 and 4 share one sender pass
+                OR EXISTS (
+                    SELECT 1
+                    FROM email_messages sender_message
+                    JOIN email_contacts c ON c.id = sender_message.from_contact_id
+                    WHERE sender_message.thread_id = ti.thread_id
+                        AND (
+                            LOWER(SPLIT_PART(c.email_address, '@', 2)) = ti.user_domain
+                            -- whitelisted domain check injected below
+                            {}
                         )
-                        -- whitelisted domain check injected below
-                        {}
-                    )
+                )
             )
         ORDER BY a.id
         "#,
@@ -142,47 +165,52 @@ pub async fn fetch_job_attachments_for_backfill(
 ) -> anyhow::Result<Vec<AttachmentUploadMetadata>> {
     let query = format!(
         r#"
-        -- Step 1: Get the user's own email address from the link_id. This is our exclusion criteria.
         WITH
-        user_email AS (
-            SELECT email_address
-            FROM public.email_links
-            WHERE id = $1
+        eligible_threads AS (
+            SELECT DISTINCT thread_id
+            FROM public.email_messages
+            WHERE link_id = $1
+                AND has_attachments = true
         ),
-
-        -- Step 2: Create a distinct list of OTHER people this user has ever sent mail to.
-        previously_contacted_emails AS (
-            SELECT DISTINCT ec.email_address
-            FROM public.email_messages em
-            JOIN public.email_message_recipients emr ON em.id = emr.message_id
-            JOIN public.email_contacts ec ON emr.contact_id = ec.id
-            WHERE em.link_id = $1
-                AND em.is_sent = true
-                AND ec.email_address != (SELECT email_address FROM user_email)
+        self_contact AS (
+            SELECT c.id
+            FROM public.email_links l
+            JOIN public.email_contacts c
+                ON c.link_id = l.id
+                AND LOWER(c.email_address) = LOWER(l.email_address)
+            WHERE l.id = $1
         ),
-
-        -- Step 3: For each thread, create a complete list of OTHER participant email addresses.
-        thread_participants AS (
-            -- Get all senders in each thread (excluding the user)
-            SELECT DISTINCT em.thread_id, ec.email_address
-            FROM public.email_messages em
-            JOIN public.email_contacts ec ON em.from_contact_id = ec.id
-            WHERE em.link_id = $1
-                AND ec.email_address != (SELECT email_address FROM user_email)
+        contacted AS (
+            SELECT DISTINCT emr.contact_id
+            FROM public.email_messages sent_message
+            JOIN public.email_message_recipients emr ON emr.message_id = sent_message.id
+            WHERE sent_message.link_id = $1
+                AND sent_message.is_sent = true
+        ),
+        participants AS (
+            SELECT message.thread_id, message.from_contact_id AS contact_id
+            FROM eligible_threads eligible
+            JOIN public.email_messages message ON message.thread_id = eligible.thread_id
+            WHERE message.from_contact_id IS NOT NULL
 
             UNION
 
-            -- Get all recipients in each thread (excluding the user)
-            SELECT DISTINCT em.thread_id, ec.email_address
-            FROM public.email_messages em
-            JOIN public.email_message_recipients emr ON em.id = emr.message_id
-            JOIN public.email_contacts ec ON emr.contact_id = ec.id
-            WHERE em.link_id = $1
-                AND ec.email_address != (SELECT email_address FROM user_email)
+            SELECT message.thread_id, recipient.contact_id
+            FROM eligible_threads eligible
+            JOIN public.email_messages message ON message.thread_id = eligible.thread_id
+            JOIN public.email_message_recipients recipient ON recipient.message_id = message.id
+        ),
+        qualified_threads AS (
+            SELECT DISTINCT participant.thread_id
+            FROM participants participant
+            JOIN contacted ON contacted.contact_id = participant.contact_id
+            WHERE NOT EXISTS (
+                SELECT 1
+                FROM self_contact
+                WHERE self_contact.id = participant.contact_id
+            )
         )
 
-        -- Final Step: Select attachments from threads where AT LEAST ONE of the OTHER participants
-        --             is in the list of OTHER previously_contacted_emails.
         SELECT
             a.id AS attachment_db_id,
             m.provider_id as email_provider_id,
@@ -197,11 +225,7 @@ pub async fn fetch_job_attachments_for_backfill(
         FROM public.email_attachments a
         JOIN public.email_messages m ON a.message_id = m.id
         JOIN public.email_contacts from_contact ON m.from_contact_id = from_contact.id
-        WHERE m.thread_id IN (
-                SELECT DISTINCT tp.thread_id
-                FROM thread_participants tp
-                INNER JOIN previously_contacted_emails pce ON tp.email_address = pce.email_address
-            )
+        WHERE m.thread_id IN (SELECT thread_id FROM qualified_threads)
             -- attachment mime type filters injected below
             {}
             AND a.filename IS NOT NULL
@@ -218,6 +242,52 @@ pub async fn fetch_job_attachments_for_backfill(
         .collect();
 
     Ok(attachments)
+}
+
+async fn message_has_unclaimed_document_attachment(
+    db: &Pool<Postgres>,
+    link_id: Uuid,
+    message_provider_id: &str,
+) -> anyhow::Result<bool> {
+    let document_mime_types = DOCUMENT_MIME_TYPES
+        .iter()
+        .map(|value| (*value).to_owned())
+        .collect::<Vec<_>>();
+    let octet_stream_document_extensions = OCTET_STREAM_DOCUMENT_EXTENSIONS
+        .iter()
+        .map(|value| (*value).to_owned())
+        .collect::<Vec<_>>();
+
+    let has_candidate = sqlx::query_scalar!(
+        r#"
+        SELECT EXISTS (
+            SELECT 1
+            FROM email_attachments a
+            JOIN email_messages m ON a.message_id = m.id
+            LEFT JOIN document_email de ON de.email_attachment_id = a.id
+            WHERE m.link_id = $2
+                AND m.provider_id = $1
+                AND de.email_attachment_id IS NULL
+                AND a.upload_claimed_at IS NULL
+                AND a.filename IS NOT NULL
+                AND (
+                    a.mime_type = ANY($3::text[])
+                    OR (
+                        a.mime_type = 'application/octet-stream'
+                        AND UPPER(SUBSTRING(a.filename FROM '\.([^.]+)$')) = ANY($4::text[])
+                    )
+                )
+        ) AS "has_candidate!"
+        "#,
+        message_provider_id,
+        link_id,
+        document_mime_types.as_slice(),
+        octet_stream_document_extensions.as_slice(),
+    )
+    .fetch_one(db)
+    .await?;
+
+    Ok(has_candidate)
 }
 
 /// Fetch and atomically claim attachments for a specific message to upload to Macro.
@@ -243,16 +313,39 @@ pub async fn new_email_document_atts(
     link_id: Uuid,
     message_provider_id: &str,
 ) -> anyhow::Result<Vec<AttachmentUploadMetadata>> {
+    if !message_has_unclaimed_document_attachment(db, link_id, message_provider_id).await? {
+        return Ok(Vec::new());
+    }
+
     // query for conditions 1-4: claim attachments atomically and return metadata
     let query1 = format!(
         r#"
-        WITH claimed AS (
+        WITH
+        thread_info AS MATERIALIZED (
+            SELECT
+                t.id AS thread_id,
+                t.link_id,
+                LOWER(SPLIT_PART(link.email_address, '@', 2)) AS user_domain
+            FROM email_messages target_message
+            JOIN email_threads t ON t.id = target_message.thread_id
+            JOIN email_links link ON link.id = t.link_id
+            WHERE target_message.link_id = $2
+                AND target_message.provider_id = $1
+        ),
+        important_label AS MATERIALIZED (
+            SELECT l.id
+            FROM email_labels l
+            JOIN thread_info ti ON l.link_id = ti.link_id
+            WHERE l.name = 'IMPORTANT'
+        ),
+        claimed AS (
             UPDATE email_attachments
             SET upload_claimed_at = NOW()
             WHERE id IN (
                 SELECT a.id
                 FROM email_attachments a
                 JOIN email_messages m ON a.message_id = m.id
+                JOIN thread_info ti ON m.thread_id = ti.thread_id
                 LEFT JOIN document_email de ON de.email_attachment_id = a.id
                 WHERE m.link_id = $2
                     AND m.provider_id = $1
@@ -260,26 +353,33 @@ pub async fn new_email_document_atts(
                     {}
                     AND de.email_attachment_id IS NULL
                     AND a.upload_claimed_at IS NULL
-                    AND EXISTS (
-                        SELECT 1
-                        FROM email_messages m2
-                        LEFT JOIN email_message_labels ml ON m2.id = ml.message_id
-                        LEFT JOIN email_labels l ON ml.label_id = l.id
-                        LEFT JOIN email_contacts c ON m2.from_contact_id = c.id
-                        JOIN email_threads t ON m2.thread_id = t.id
-                        JOIN email_links link ON t.link_id = link.id
-                        WHERE m2.thread_id = m.thread_id
-                            AND (
-                                m2.is_sent = true
-                                OR l.name = 'IMPORTANT'
-                                OR (
-                                    c.email_address IS NOT NULL
-                                    AND RIGHT(c.email_address, LENGTH(RIGHT(link.email_address,
-                                        LENGTH(link.email_address) - POSITION('@' IN link.email_address)))) =
-                                    RIGHT(link.email_address, LENGTH(link.email_address) - POSITION('@' IN link.email_address))
+                    AND (
+                        -- condition 1: the thread contains a sent message
+                        EXISTS (
+                            SELECT 1
+                            FROM email_messages sent_message
+                            WHERE sent_message.thread_id = ti.thread_id
+                                AND sent_message.is_sent = true
+                        )
+                        -- condition 2: the thread contains a message with the link's IMPORTANT label
+                        OR EXISTS (
+                            SELECT 1
+                            FROM important_label il
+                            JOIN email_message_labels ml ON ml.label_id = il.id
+                            JOIN email_messages labeled_message ON labeled_message.id = ml.message_id
+                            WHERE labeled_message.thread_id = ti.thread_id
+                        )
+                        -- conditions 3 and 4 share one sender pass
+                        OR EXISTS (
+                            SELECT 1
+                            FROM email_messages sender_message
+                            JOIN email_contacts c ON c.id = sender_message.from_contact_id
+                            WHERE sender_message.thread_id = ti.thread_id
+                                AND (
+                                    LOWER(SPLIT_PART(c.email_address, '@', 2)) = ti.user_domain
+                                    {}
                                 )
-                                {}
-                            )
+                        )
                     )
             )
             RETURNING id
@@ -325,35 +425,29 @@ pub async fn new_email_document_atts(
         r#"
         WITH
         message_info AS (
-            SELECT m.thread_id, l.email_address as user_email, m.link_id
-            FROM email_messages m
-            JOIN email_threads t ON m.thread_id = t.id
-            JOIN email_links l ON t.link_id = l.id
-            WHERE m.link_id = $2
-                AND m.provider_id = $1
+            SELECT thread_id
+            FROM email_messages
+            WHERE link_id = $2
+                AND provider_id = $1
         ),
-        previously_contacted_emails AS (
-            SELECT DISTINCT ec.email_address
-            FROM email_messages em
-            JOIN email_message_recipients emr ON em.id = emr.message_id
-            JOIN email_contacts ec ON emr.contact_id = ec.id
-            WHERE em.link_id = (SELECT link_id FROM message_info)
-                AND em.is_sent = true
-                AND ec.email_address != (SELECT user_email FROM message_info)
+        self_contact AS (
+            SELECT c.id
+            FROM email_links l
+            JOIN email_contacts c
+                ON c.link_id = l.id
+                AND LOWER(c.email_address) = LOWER(l.email_address)
+            WHERE l.id = $2
         ),
-        thread_participants AS (
-            SELECT DISTINCT ec.email_address
+        participants AS (
+            SELECT em.from_contact_id AS contact_id
             FROM email_messages em
-            JOIN email_contacts ec ON em.from_contact_id = ec.id
             WHERE em.thread_id = (SELECT thread_id FROM message_info)
-                AND ec.email_address != (SELECT user_email FROM message_info)
+                AND em.from_contact_id IS NOT NULL
             UNION
-            SELECT DISTINCT ec.email_address
+            SELECT emr.contact_id
             FROM email_messages em
-            JOIN email_message_recipients emr ON em.id = emr.message_id
-            JOIN email_contacts ec ON emr.contact_id = ec.id
+            JOIN email_message_recipients emr ON emr.message_id = em.id
             WHERE em.thread_id = (SELECT thread_id FROM message_info)
-                AND ec.email_address != (SELECT user_email FROM message_info)
         ),
         claimed AS (
             UPDATE email_attachments
@@ -371,8 +465,20 @@ pub async fn new_email_document_atts(
                     {}
                     AND EXISTS (
                         SELECT 1
-                        FROM thread_participants tp
-                        INNER JOIN previously_contacted_emails pce ON tp.email_address = pce.email_address
+                        FROM participants p
+                        WHERE NOT EXISTS (
+                                SELECT 1
+                                FROM self_contact
+                                WHERE self_contact.id = p.contact_id
+                            )
+                            AND EXISTS (
+                                SELECT 1
+                                FROM email_message_recipients emr
+                                JOIN email_messages sent_message ON sent_message.id = emr.message_id
+                                WHERE emr.contact_id = p.contact_id
+                                    AND sent_message.link_id = $2
+                                    AND sent_message.is_sent = true
+                            )
                     )
             )
             RETURNING id

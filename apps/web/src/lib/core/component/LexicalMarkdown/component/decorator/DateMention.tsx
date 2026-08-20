@@ -1,5 +1,5 @@
 import { DatePicker } from '@core/component/DatePicker';
-import { formatDate } from '@core/util/dateParser';
+import { formatRelativeDay } from '@core/util/dateParser';
 import type { DateMentionDecoratorProps } from '@macro-inc/lexical-core';
 import { $isDateMentionNode } from '@macro-inc/lexical-core';
 import ClockIcon from '@phosphor/clock.svg';
@@ -17,24 +17,6 @@ import { autoRegister } from '../../plugins';
 import { MentionTooltip } from './MentionTooltip';
 
 false && floatWithElement;
-
-function formatRelativeDate(date: Date): string {
-  const diff = differenceInCalendarDays(date, new Date());
-  switch (diff) {
-    case -2:
-      return '2 days ago';
-    case -1:
-      return 'Yesterday';
-    case 0:
-      return 'Today';
-    case 1:
-      return 'Tomorrow';
-    case 2:
-      return 'In 2 days';
-    default:
-      return formatDate(date);
-  }
-}
 
 function formatTooltipDate(date: Date): string {
   const diff = Math.abs(differenceInCalendarDays(date, new Date()));
@@ -62,7 +44,7 @@ export function DateMention(props: DateMentionDecoratorProps) {
   let mentionRef!: HTMLSpanElement;
 
   const displayFormat = createMemo(() => {
-    return formatRelativeDate(new Date(props.date));
+    return formatRelativeDay(new Date(props.date));
   });
 
   const isSelectedAsNode = () => {
@@ -79,7 +61,7 @@ export function DateMention(props: DateMentionDecoratorProps) {
       const node = $getNodeByKey(props.key);
       if ($isDateMentionNode(node)) {
         node.setDate(newDate.toISOString());
-        node.setDisplayFormat(formatRelativeDate(newDate));
+        node.setDisplayFormat(formatRelativeDay(newDate));
       }
     });
 

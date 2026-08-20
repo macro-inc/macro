@@ -19,7 +19,7 @@ macro_authorization = { path = "../macro_authorization", default-features = fals
   "axum",
 ] }
 macro_user_id = { path = "../macro_user_id" }
-mcp_client = { path = "../mcp_client" }
+mcp_select = { path = "../mcp_select" }
 model-entity = { path = "../model-entity" }
 models_properties = { path = "../models_properties" }
 properties = { path = "../properties", default-features = false, features = [

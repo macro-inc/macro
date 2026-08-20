@@ -1,3 +1,8 @@
+import {
+  TurnOffCalendarDialog,
+  type TurnOffCalendarTarget,
+} from '@app/features/calendar/components/TurnOffCalendarDialog';
+import { useCalendarUiFlag } from '@app/features/calendar/hooks/use-calendar-ui-flag';
 import { openAddInboxDialog } from '@app/features/inbox/AddInboxDialog';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { toast } from '@core/component/Toast/Toast';
@@ -16,6 +21,7 @@ import {
 } from '@core/email-link';
 import GmailIcon from '@icon/mcp-gmail.svg';
 import ArrowsClockwiseIcon from '@phosphor-icons/core/regular/arrows-clockwise.svg?component-solid';
+import CalendarSlashIcon from '@phosphor-icons/core/regular/calendar-slash.svg?component-solid';
 import PlusIcon from '@phosphor-icons/core/regular/plus.svg?component-solid';
 import SignatureIcon from '@phosphor-icons/core/regular/signature.svg?component-solid';
 import XIcon from '@phosphor-icons/core/regular/x.svg?component-solid';
@@ -92,6 +98,8 @@ export function EmailCard() {
     email: string;
     isOwn: boolean;
   } | null>(null);
+  const [turnOffCalendarTarget, setTurnOffCalendarTarget] =
+    createSignal<TurnOffCalendarTarget | null>(null);
   const [resyncingIds, setResyncingIds] = createSignal<ReadonlySet<string>>(
     new Set()
   );
@@ -178,11 +186,20 @@ export function EmailCard() {
                 resyncing={resyncingIds().has(primary().id)}
                 onResync={() => handleResyncInbox(primary().id)}
                 onReconnect={() => void startAddInbox()}
+                onEnableCalendar={() =>
+                  void startAddInbox({ scopes: 'calendar' })
+                }
                 onRemove={() =>
                   setRemoveTarget({
                     id: primary().id,
                     email: primary().email_address,
                     isOwn: primary().macro_id === userId(),
+                  })
+                }
+                onTurnOffCalendar={() =>
+                  setTurnOffCalendarTarget({
+                    linkId: primary().id,
+                    emailAddress: primary().email_address,
                   })
                 }
               />
@@ -204,11 +221,20 @@ export function EmailCard() {
                 resyncing={resyncingIds().has(link.id)}
                 onResync={() => handleResyncInbox(link.id)}
                 onReconnect={() => void startAddInbox()}
+                onEnableCalendar={() =>
+                  void startAddInbox({ scopes: 'calendar' })
+                }
                 onRemove={() =>
                   setRemoveTarget({
                     id: link.id,
                     email: link.email_address,
                     isOwn: link.macro_id === userId(),
+                  })
+                }
+                onTurnOffCalendar={() =>
+                  setTurnOffCalendarTarget({
+                    linkId: link.id,
+                    emailAddress: link.email_address,
                   })
                 }
               />
@@ -234,6 +260,11 @@ export function EmailCard() {
           </Show>
         </Show>
       </SettingsCard>
+
+      <TurnOffCalendarDialog
+        target={turnOffCalendarTarget()}
+        onClose={() => setTurnOffCalendarTarget(null)}
+      />
 
       <Dialog
         open={removeTarget() !== null}
@@ -383,11 +414,14 @@ function InboxRow(props: {
   resyncing: boolean;
   onResync: () => void;
   onReconnect: () => void;
+  onEnableCalendar: () => void;
   onRemove: () => void;
+  onTurnOffCalendar: () => void;
 }) {
   const emailSignaturesFlag = useFeatureFlag(ENABLE_EMAIL_SIGNATURES_FLAG, {
     enabledOverride: ENABLE_EMAIL_SIGNATURES_OVERRIDE,
   });
+  const calendarUiEnabled = useCalendarUiFlag();
   const showSignature = () => isSignatureExpanded(props.link.id);
   const signatureSectionId = `signature-section-${props.link.id}`;
   return (
@@ -478,6 +512,48 @@ function InboxRow(props: {
             >
               Reconnect
             </Button>
+          </Show>
+          {/* Its own consent flow, since Reconnect asks for the Gmail scopes
+              only. Shown alongside Reconnect rather than after it: this
+              request is a superset, so one consent repairs a dead grant and
+              enables calendar, sparing a full revoke two round trips. */}
+          <Show
+            when={calendarUiEnabled() && props.link.needs_calendar_permission}
+          >
+            <Button
+              variant="active"
+              size="sm"
+              depth={3}
+              onClick={props.onEnableCalendar}
+              aria-label={`Enable calendar for ${props.link.email_address}`}
+            >
+              Enable calendar
+            </Button>
+          </Show>
+          {/* Only the owner sees this: turning calendar off deletes the
+              inbox's calendar data, which a delegate must not do. Offered
+              whenever that data exists, not only while the grant satisfies
+              today's capability check — an inbox synced under an earlier scope
+              set still has events to remove. */}
+          <Show
+            when={
+              calendarUiEnabled() &&
+              props.isOwn &&
+              (!props.link.needs_calendar_permission ||
+                props.link.has_calendar_data)
+            }
+          >
+            <Tooltip label="Turn off calendar">
+              <Button
+                variant="base"
+                size="icon-sm"
+                depth={3}
+                onClick={props.onTurnOffCalendar}
+                aria-label={`Turn off calendar for ${props.link.email_address}`}
+              >
+                <CalendarSlashIcon class="size-4" />
+              </Button>
+            </Tooltip>
           </Show>
           <Show when={ENABLE_INBOX_RESYNC}>
             <Tooltip label="Force sync">

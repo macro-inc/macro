@@ -127,37 +127,47 @@ const SearchableMultiSelectItem = (itemProps: {
 );
 
 const VirtualizedListbox = (props: {
-  options: SearchableOption[];
   class?: string;
   onOnly?: (id: string) => void;
   isSoleActive?: (id: string) => boolean;
 }) => {
   let handle: VirtualizerHandle | undefined;
+  // Kobalte supplies the collection after applying the combobox search
+  // filter. Use it for focus scrolling too — indexing the original options
+  // array targets the wrong virtual row whenever the list is filtered.
+  let visibleItems:
+    | Accessor<Iterable<CollectionNode<SearchableOption>>>
+    | undefined;
   return (
     <Combobox.Listbox<SearchableOption>
       scrollToItem={(key) => {
-        const idx = props.options.findIndex((o) => o.id === key);
+        const idx = Array.from(visibleItems?.() ?? []).findIndex(
+          (item) => item.rawValue.id === key
+        );
         if (idx !== -1) handle?.scrollToIndex(idx, { align: 'nearest' });
       }}
       class={cn(LISTBOX_CLASS, props.class)}
     >
-      {(items) => (
-        <Virtualizer
-          ref={(h) => {
-            handle = h;
-          }}
-          data={[...items()]}
-          itemSize={ITEM_HEIGHT}
-        >
-          {(item) => (
-            <SearchableMultiSelectItem
-              item={item}
-              onOnly={props.onOnly}
-              isSoleActive={props.isSoleActive}
-            />
-          )}
-        </Virtualizer>
-      )}
+      {(items) => {
+        visibleItems = items;
+        return (
+          <Virtualizer
+            ref={(h) => {
+              handle = h;
+            }}
+            data={[...items()]}
+            itemSize={ITEM_HEIGHT}
+          >
+            {(item) => (
+              <SearchableMultiSelectItem
+                item={item}
+                onOnly={props.onOnly}
+                isSoleActive={props.isSoleActive}
+              />
+            )}
+          </Virtualizer>
+        );
+      }}
     </Combobox.Listbox>
   );
 };
@@ -272,7 +282,7 @@ export const SearchableMultiSelect = (props: SearchableMultiSelectProps) => {
         <Layer depth={2}>
           <Combobox.Content
             class={cn(
-              'z-action-menu bg-surface ring ring-edge-muted rounded-xl shadow-md w-65 max-w-[90vw] overflow-hidden',
+              'z-action-menu border border-edge-muted bg-surface rounded-xl shadow-md w-65 max-w-[90vw] overflow-hidden',
               props.contentClass
             )}
           >
@@ -295,7 +305,6 @@ export const SearchableMultiSelect = (props: SearchableMultiSelectProps) => {
                 }
               >
                 <VirtualizedListbox
-                  options={displayOptions()}
                   class={props.listboxClass}
                   onOnly={props.onOnly}
                   isSoleActive={isSoleActive}
@@ -417,10 +426,7 @@ export const SearchableMultiSelectInline = (
             </div>
           }
         >
-          <VirtualizedListbox
-            options={sortedOptions()}
-            class={props.listboxClass}
-          />
+          <VirtualizedListbox class={props.listboxClass} />
         </Show>
       </div>
     </Combobox>

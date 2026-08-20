@@ -27,6 +27,9 @@ env_vars! {
     pub(crate) struct SenderBaseAddress;
     #[derive(Debug, Clone)]
     pub(crate) struct LastOnlineRedisUri;
+    /// Comma-separated Kafka bootstrap servers for WebSocket notification delivery.
+    #[derive(Debug, Clone)]
+    pub(crate) struct KafkaBrokers;
 }
 
 maybe_env_var! {
@@ -79,6 +82,9 @@ pub struct Config {
 
     /// Redis used by connection-gateway for last-online state.
     pub(crate) last_online_redis_uri: LastOnlineRedisUri,
+
+    /// Comma-separated Kafka bootstrap servers for WebSocket notification delivery.
+    pub(crate) kafka_brokers: KafkaBrokers,
 
     /// Apple app bundle id for APNS pushes.
     pub(crate) apple_bundle_id: AppleBundleId,

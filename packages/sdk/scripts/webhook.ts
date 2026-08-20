@@ -14,6 +14,7 @@ const { positionals, values } = parseArgs({
     events: { type: 'string' },
     help: { type: 'boolean', short: 'h' },
     name: { type: 'string' },
+    namespace: { type: 'string' },
     port: { type: 'string' },
     scope: { type: 'string' },
     'user-id': { type: 'string' },
@@ -46,20 +47,25 @@ async function register(): Promise<void> {
   const name = required(values.name, '--name');
   const events = parseEvents(values.events ?? fail('--events is required'));
   const scope = values.scope ?? fail('--scope is required');
-  if (scope !== 'user' && scope !== 'team') fail('--scope must be user or team');
+  if (scope !== 'user' && scope !== 'team')
+    fail('--scope must be user or team');
   const userId =
     scope === 'user'
       ? required(values['user-id'], '--user-id')
       : values['user-id'];
 
+  const namespace = values.namespace ?? crypto.randomUUID();
+
   const macro = new Macro({ env, requestedAs: userId });
   const webhook = await macro.webhooks.create({
     url: endpointUrl,
+    namespace,
     name,
     filters: [{ events }],
     scope,
   });
-  const secret = webhook.signingSecret ?? fail('webhook signing secret missing');
+  const secret =
+    webhook.signingSecret ?? fail('webhook signing secret missing');
 
   console.log(`
 Webhook registered.
@@ -123,6 +129,7 @@ Register a webhook or receive and print its events.
   webhook register --env <dev|prod|local> --url <endpoint URL>
                    --name <webhook name> --events <event,event>
                    --scope <user|team> [--user-id <macro-user-id>]
+                   [--namespace <workspace-unique namespace, random by default>]
 
   webhook receive <webhook-id> --env <dev|prod|local>
                    [--port <port>] [--user-id <macro-user-id>]

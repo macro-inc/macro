@@ -1,4 +1,5 @@
-import type { EntityData } from '@entity';
+import { isTaskEntity } from '@entity';
+import type { PropertyEditorEntity } from '@property/editor/state/propertyEditor';
 import type {
   Property,
   PropertyApiValues,
@@ -7,10 +8,16 @@ import type {
 import { macroEntityToPropertyEntityType } from '@property/utils';
 import { useBulkSaveEntityPropertiesMutation } from '@queries/properties/entity';
 
+function propertyEditorEntityType(entity: PropertyEditorEntity) {
+  if ('entityType' in entity) return entity.entityType;
+  if (isTaskEntity(entity)) return 'TASK';
+  return macroEntityToPropertyEntityType(entity);
+}
+
 export function useSavePropertyForMultiEntitites() {
   const mutation = useBulkSaveEntityPropertiesMutation();
   return async (
-    entities: EntityData[],
+    entities: PropertyEditorEntity[],
     property: Property | PropertyDefinitionDomain,
     value: PropertyApiValues
   ) => {
@@ -22,7 +29,7 @@ export function useSavePropertyForMultiEntitites() {
       await mutation.mutateAsync({
         properties: entities.map((e) => ({
           entityId: e.id,
-          entityType: macroEntityToPropertyEntityType(e),
+          entityType: propertyEditorEntityType(e),
           property,
           apiValues: value,
         })),

@@ -36,6 +36,7 @@ export {
   useUnreadNotifications,
 } from './notification-helpers';
 export {
+  formatCalendarReminderTime,
   getNotificationAction,
   getNotificationContent,
   getNotificationTargetName,

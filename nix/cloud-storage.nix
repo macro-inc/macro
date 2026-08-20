@@ -7,6 +7,7 @@
         nixpkgs
         fenix
         crane
+        hermes-agent
         ;
       pkgs = import nixpkgs {
         system = system;
@@ -76,7 +77,7 @@
       # manifest plus a crane stub target. A leaf's store hash then only
       # moves when a crate it actually depends on changes — an email-only
       # change leaves the other deploy derivations as pure substitutions
-      # (sticky disk / Cachix) instead of full workspace-subgraph rebuilds.
+      # from Namespace's Nix cache instead of full workspace-subgraph rebuilds.
       # Manifest or Cargo.lock changes still invalidate every leaf (the stub
       # layer embeds them all); those are the rare structural commits.
       #
@@ -188,7 +189,7 @@
         BINDGEN_EXTRA_CLANG_ARGS = "-I${pkgs.glibc.dev}/include -I${pkgs.gcc.cc}/lib/gcc/${pkgs.stdenv.hostPlatform.config}/${pkgs.gcc.version}/include";
       };
 
-      # Pre-built third-party deps — Cachix caches this; hash is driven by Cargo.lock
+      # Pre-built third-party deps cached by Namespace; hash is driven by Cargo.lock
       # (workspace member sources are stubbed by crane), so it survives most PRs.
       # --all-features matches the test job (cargo nextest --all-features) and clippy
       # so all consumers share the same dep feature unification.
@@ -201,9 +202,10 @@
 
       # Layered atop cargoArtifacts: pre-compile every workspace lib crate so
       # downstream derivations (openApiBins, clippy) inherit a warm target/. The
-      # hash is per-source so cachix only hits when the SHA matches across CI
-      # workflows — but since code-check-cloud-storage and web-app-check-main both
-      # run on the same SHA, whichever finishes first pushes for the other.
+      # hash is per-source so Namespace's Nix cache only hits when the SHA
+      # matches across CI workflows — but since code-check-cloud-storage and
+      # web-app-check-main both run on the same SHA, whichever finishes first
+      # populates the cache for the other.
       # sync_service is checked separately with its supported default feature
       # set because its KV and R2 storage features are mutually exclusive.
       workspaceArtifacts = craneLib.cargoBuild (
@@ -312,7 +314,7 @@
       # Pre-built nextest archive — packages all compiled test binaries plus their
       # metadata into a single tar.zst. CI fetches this archive and runs
       # `cargo nextest run --archive-file` outside the sandbox so tests can hit
-      # postgres/redis services. Built in nix → cached by cachix.
+      # postgres/redis services. Built in Nix and cached by Namespace.
       nextestArchive = craneLib.mkCargoDerivation (
         commonArgs
         // {
@@ -336,6 +338,11 @@
       );
 
       deployServiceBinaryDefinitions = [
+        {
+          serviceName = "agent-harness-service";
+          packageName = "agent_harness_service";
+          binaries = [ "agent_harness_service" ];
+        }
         {
           serviceName = "agent-schedule-service";
           packageName = "scheduled_action";
@@ -471,7 +478,7 @@
       # ── Lambda builds (crane + cargo-zigbuild) ─────────────────────
       # SPIKE: build a Rust Lambda handler reproducibly under nix/crane so
       # lambdas ride the same content-addressed cache as the service binaries
-      # (nix store + Cachix + sticky disk) instead of a cargo-in-checkout that
+      # (Namespace Nix store volume) instead of a cargo-in-checkout that
       # recompiles the workspace every run. cargo-zigbuild pins the Lambda
       # glibc via a target *suffix* (no toolchain swap; host triple == lambda
       # triple, so no extra rust-std). The binary is renamed `bootstrap` and
@@ -659,18 +666,115 @@
         }) lambdaNames
       );
 
+      # The Namespace CLI, the other sandbox provider crates/agent_harness
+      # talks to. Only used to mint the bearer tokens its Compute API wants
+      # (`just namespace-token`); the harness itself speaks the API directly.
+      # Not in nixpkgs either, and shipped as goreleaser tarballs rather than
+      # bare binaries, so this unpacks and takes just the nsc binary.
+      nsc =
+        let
+          version = "0.0.551";
+          asset =
+            {
+              x86_64-linux = {
+                arch = "linux_amd64";
+                hash = "sha256-2Ip69WLe+VgbF2E74r4A4ZFfygMfiV+SMqgtGs87b7I=";
+              };
+              aarch64-linux = {
+                arch = "linux_arm64";
+                hash = "sha256-0+KpniE+7nQsFip1Tg5Z42xjAOlhPpdfmwEhQh5Ep4c=";
+              };
+              x86_64-darwin = {
+                arch = "darwin_amd64";
+                hash = "sha256-tpv81Cu1/7b2vq4Tiw4Z7pqCI3SCCiEKRRgJ2rEcX+g=";
+              };
+              aarch64-darwin = {
+                arch = "darwin_arm64";
+                hash = "sha256-x3FYe8DT+5U4D506ioSUfmiT5unG6CGMiGf4r/9jPpc=";
+              };
+            }
+            .${system};
+        in
+        pkgs.stdenvNoCC.mkDerivation {
+          pname = "nsc";
+          inherit version;
+          src = pkgs.fetchurl {
+            url = "https://github.com/namespacelabs/foundation/releases/download/v${version}/nsc_${version}_${asset.arch}.tar.gz";
+            inherit (asset) hash;
+          };
+          sourceRoot = ".";
+          nativeBuildInputs = pkgs.lib.optionals isLinux [ pkgs.autoPatchelfHook ];
+          installPhase = ''
+            runHook preInstall
+            install -Dm755 nsc $out/bin/nsc
+            runHook postInstall
+          '';
+        };
+
+      # The Daytona CLI (sandbox snapshots for crates/agent_harness) is not in
+      # nixpkgs and is only published as prebuilt release binaries, so this
+      # installs the asset rather than building from source. Pinned instead of
+      # tracking `latest` so the shell stays reproducible; bump the version and
+      # the four hashes together.
+      daytona =
+        let
+          version = "0.203.0";
+          asset =
+            {
+              x86_64-linux = {
+                arch = "linux-amd64";
+                hash = "sha256-5r+K1OgFcw1BF1sNJwdlbc0rGAVZSy16eEiCvQ/X8DI=";
+              };
+              aarch64-linux = {
+                arch = "linux-arm64";
+                hash = "sha256-bQa4KpU3gYf2m9+6ClG1qiCa5W+MjX/XgiCv59b1ptA=";
+              };
+              x86_64-darwin = {
+                arch = "darwin-amd64";
+                hash = "sha256-mcygBoN89RsMDmakGy8LEi1XgNc/+g4ImqaTEuPZrW4=";
+              };
+              aarch64-darwin = {
+                arch = "darwin-arm64";
+                hash = "sha256-X29vyGaEGQZN9bNb17SCrIlf3zmtMgaJmKThK7cY2kc=";
+              };
+            }
+            .${system};
+        in
+        pkgs.stdenvNoCC.mkDerivation {
+          pname = "daytona";
+          inherit version;
+          src = pkgs.fetchurl {
+            url = "https://github.com/daytona/clients/releases/download/v${version}/daytona-${asset.arch}";
+            inherit (asset) hash;
+          };
+          dontUnpack = true;
+          # The Linux builds are cgo, so they need their interpreter and
+          # libc rewritten to the store.
+          nativeBuildInputs = pkgs.lib.optionals isLinux [ pkgs.autoPatchelfHook ];
+          installPhase = ''
+            runHook preInstall
+            install -Dm755 $src $out/bin/daytona
+            runHook postInstall
+          '';
+        };
+
       shellTools =
         with pkgs;
         [
+          hermes-agent.packages.${system}.default
+          daytona
+          nsc
           parallel
           docker-compose
           curl
+          wget
           kcat
           xz
           unzip
           zip
           cargo-info
           cargo-udeps
+          cargo-tauri
           cargo-lambda
           cargo-zigbuild
           zig
@@ -706,12 +810,17 @@
           just-lsp
           taplo
           bun
+          brotli
           pnpm
+          postgresql
           sqlx-cli
           typescript-language-server
           nodejs_24
           pulumi
           pulumiPackages.pulumi-nodejs
+          pulumiPackages.pulumi-aws-native
+          playwright
+          playwright-mcp
           doppler
           biome
           jq

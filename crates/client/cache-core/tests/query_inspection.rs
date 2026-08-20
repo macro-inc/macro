@@ -5,8 +5,12 @@ use cache_core::link_patch::{
     LinkOperation, LinkPathSegment, ListItemByScalar, OptimisticLinkPatch,
 };
 use cache_core::query_inspection::{MAX_INSPECTED_VARIANTS, QueryInspection, QueryInspectionError};
-use cache_core::store::InMemoryStorage;
-use cache_core::value::EntityKey;
+use cache_core::queue::{
+    ClaimedMutation, MutationClaimRequest, MutationClaimToken, MutationId, NewQueuedMutation,
+    QueuedMutation,
+};
+use cache_core::store::{InMemoryStorage, Storage};
+use cache_core::value::{EntityKey, Record};
 use pollster::block_on;
 use serde_json::{Value as Json, json};
 
@@ -62,6 +66,7 @@ fn inspection(query: &str, path: &[&str]) -> QueryInspection {
         query: query.to_string(),
         operation_name: Some("GroupViews".to_string()),
         path: path.iter().map(|part| (*part).to_string()).collect(),
+        variable_filters: Vec::new(),
     }
 }
 
@@ -75,6 +80,126 @@ async fn write_group(
         .write_query(None, query, Some("GroupViews"), variables, data, None)
         .await
         .unwrap();
+}
+
+#[derive(Clone, Debug)]
+struct OwnerOnlyStorage(InMemoryStorage);
+
+impl Storage for OwnerOnlyStorage {
+    type Error = std::convert::Infallible;
+
+    async fn get_batch(&self, keys: &[EntityKey<'_>]) -> Result<Vec<Option<Record>>, Self::Error> {
+        assert!(
+            keys.iter()
+                .all(|key| key.is_root() || key.0 == "GraphqlUser:user-1"),
+            "variables-only inspection loaded a non-owner record: {keys:?}"
+        );
+        self.0.get_batch(keys).await
+    }
+
+    async fn put_batch(
+        &mut self,
+        entries: Vec<(EntityKey<'static>, Record)>,
+    ) -> Result<(), Self::Error> {
+        self.0.put_batch(entries).await
+    }
+
+    async fn delete_batch(&mut self, keys: &[EntityKey<'static>]) -> Result<(), Self::Error> {
+        self.0.delete_batch(keys).await
+    }
+
+    async fn enqueue_mutation(
+        &mut self,
+        entry: NewQueuedMutation,
+    ) -> Result<MutationId, Self::Error> {
+        self.0.enqueue_mutation(entry).await
+    }
+
+    async fn load_mutation_queue(&self) -> Result<Vec<QueuedMutation>, Self::Error> {
+        self.0.load_mutation_queue().await
+    }
+
+    async fn claim_next_mutation(
+        &mut self,
+        request: MutationClaimRequest,
+    ) -> Result<Option<ClaimedMutation>, Self::Error> {
+        self.0.claim_next_mutation(request).await
+    }
+
+    async fn defer_mutation(
+        &mut self,
+        id: MutationId,
+        claim: MutationClaimToken,
+        next_attempt_at_ms: i64,
+        error: String,
+    ) -> Result<bool, Self::Error> {
+        self.0
+            .defer_mutation(id, claim, next_attempt_at_ms, error)
+            .await
+    }
+
+    async fn complete_mutation(
+        &mut self,
+        id: MutationId,
+        claim: MutationClaimToken,
+        entries: Vec<(EntityKey<'static>, Record)>,
+    ) -> Result<bool, Self::Error> {
+        self.0.complete_mutation(id, claim, entries).await
+    }
+
+    async fn discard_mutation(
+        &mut self,
+        id: MutationId,
+        claim: MutationClaimToken,
+    ) -> Result<bool, Self::Error> {
+        self.0.discard_mutation(id, claim).await
+    }
+
+    async fn clear(&mut self) -> Result<(), Self::Error> {
+        self.0.clear().await
+    }
+}
+
+#[test]
+fn variants_only_recovers_pages_without_loading_items() {
+    block_on(async {
+        let mut writer = Engine::new(InMemoryStorage::new());
+        let initial_variables = initial(20);
+        let continuation_variables = continuation("cursor-1");
+        write_group(
+            &mut writer,
+            GROUP_QUERY,
+            &initial_variables,
+            &page("task-1", None),
+        )
+        .await;
+        write_group(
+            &mut writer,
+            GROUP_QUERY,
+            &continuation_variables,
+            &page("task-2", Some("cursor-2")),
+        )
+        .await;
+
+        let storage = OwnerOnlyStorage(writer.storage().clone());
+        let mut reopened = Engine::new(storage);
+        let variants = reopened
+            .inspect_query_variants(&inspection(GROUP_QUERY, &["user", "groupSoup"]))
+            .await
+            .unwrap();
+
+        assert_eq!(variants.len(), 2);
+        assert!(
+            variants
+                .iter()
+                .any(|variant| variant.variables == initial_variables)
+        );
+        assert!(
+            variants
+                .iter()
+                .any(|variant| variant.variables == continuation_variables)
+        );
+    });
 }
 
 #[test]
@@ -145,6 +270,70 @@ fn enumerates_variants_aliases_and_misses_in_canonical_order() {
         assert_eq!(
             hit.value.as_ref().unwrap()["bins"][0]["items"][0]["id"],
             "task-1"
+        );
+    });
+}
+
+#[test]
+fn materializes_only_variants_matching_recursive_variable_filters() {
+    block_on(async {
+        let mut engine = Engine::new(InMemoryStorage::new());
+        let status_initial = initial(20);
+        let status_continuation = continuation("cursor-1");
+        let priority_initial = object(json!({"input": {"initial": {
+            "groupBy": {"field": "PROPERTY", "propertyDefinitionId": "priority-def"},
+            "limit": 20
+        }}}));
+        write_group(
+            &mut engine,
+            GROUP_QUERY,
+            &status_initial,
+            &page("task-1", None),
+        )
+        .await;
+        write_group(
+            &mut engine,
+            GROUP_QUERY,
+            &status_continuation,
+            &page("task-2", None),
+        )
+        .await;
+        write_group(
+            &mut engine,
+            GROUP_QUERY,
+            &priority_initial,
+            &page("task-3", None),
+        )
+        .await;
+
+        let mut filtered = inspection(GROUP_QUERY, &["user", "groupSoup"]);
+        filtered.variable_filters = vec![
+            object(json!({"input": {"initial": {"groupBy": {
+                "field": "PROPERTY",
+                "propertyDefinitionId": "status-def"
+            }}}})),
+            object(json!({"input": {"continuation": {"groupBy": {
+                "field": "PROPERTY",
+                "propertyDefinitionId": "status-def"
+            }}}})),
+        ];
+        let results = engine.inspect_query(&filtered).await.unwrap();
+
+        assert_eq!(results.len(), 2);
+        assert!(
+            results
+                .iter()
+                .any(|result| result.variables == status_initial)
+        );
+        assert!(
+            results
+                .iter()
+                .any(|result| result.variables == status_continuation)
+        );
+        assert!(
+            results
+                .iter()
+                .all(|result| result.variables != priority_initial)
         );
     });
 }
@@ -322,6 +511,7 @@ fn rejects_invalid_entrypoints_paths_variables_and_limits() {
             query: "mutation GroupViews { renameFile(input: {}) { id } }".into(),
             operation_name: Some("GroupViews".into()),
             path: vec!["renameFile".into()],
+            variable_filters: Vec::new(),
         };
         assert!(matches!(
             engine.inspect_query(&mutation).await.unwrap_err(),

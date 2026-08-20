@@ -49,6 +49,10 @@
       "name": "vpc",
       "version": "0.0.0",
     },
+    "stacks/agent-harness-service": {
+      "name": "agent-harness-service-stack",
+      "version": "0.0.0",
+    },
     "stacks/agent-schedule-service": {
       "name": "agent-schedule-service-stack",
       "version": "0.0.0",
@@ -134,6 +138,10 @@
       "dependencies": {
         "pulumi-fusionauth": "6.0.2",
       },
+    },
+    "stacks/gateway": {
+      "name": "gateway-stack",
+      "version": "0.0.0",
     },
     "stacks/github-runners": {
       "name": "github-runners-stack",
@@ -463,6 +471,8 @@
 
     "agent-base": ["agent-base@7.1.4", "", {}, "sha512-MnA+YT8fwfJPgBx3m60MNqakm30XOkyIoH1y6huTQvC0PwZG7ki8NacLBcrPbNoo8vEZy7Jpuk7+jMO+CUovTQ=="],
 
+    "agent-harness-service-stack": ["agent-harness-service-stack@workspace:stacks/agent-harness-service"],
+
     "agent-schedule-service-stack": ["agent-schedule-service-stack@workspace:stacks/agent-schedule-service"],
 
     "ansi-regex": ["ansi-regex@5.0.1", "", {}, "sha512-quJQXlTSUGL2LH9SUXo8VwsY4soanhgo6LNSm84E1LBcE8s3O0wpdiRzyR9z/ZZJMlMWv37qOOb9pdJlMUEKFQ=="],
@@ -572,6 +582,8 @@
     "fusion-auth": ["fusion-auth@workspace:stacks/fusion-auth"],
 
     "fusionauth-instance-stack": ["fusionauth-instance-stack@workspace:stacks/fusionauth-instance"],
+
+    "gateway-stack": ["gateway-stack@workspace:stacks/gateway"],
 
     "get-caller-file": ["get-caller-file@2.0.5", "", {}, "sha512-DyFP3BM/3YHTQOCUL/w0OZHR0lpKeGrxotcHWcqNEdnltqFwXVfhEBQ94eIo34AfQpo0rGki4cyIiftY06h2Fg=="],
 

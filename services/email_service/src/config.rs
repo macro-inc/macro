@@ -55,6 +55,13 @@ pub struct Config {
     #[macro_config_default(false)]
     pub use_apollo_crm_enrichment: bool,
 
+    /// Master switch for calendar ingestion and sync. When `false` (the
+    /// default) inline ICS extraction is skipped, the calendar outbox stays
+    /// parked, and calendar backfill deliveries requeue their outbox rows.
+    /// Grant bookkeeping still runs so enabling later resumes cleanly.
+    #[macro_config_default(false)]
+    pub calendar_sync_enabled: bool,
+
     /// Apollo.io API key for CRM enrichment. Locally this is the key
     /// itself; in deployed envs it's the name of the Secrets Manager
     /// secret holding it (resolved at startup). Empty disables enrichment.

@@ -2,7 +2,7 @@
 //! two shared dep closures onto sticky disks, fan a build matrix out per
 //! service (binaries via crane, lambdas via crane + cargo-zigbuild), hand the
 //! artifacts off through Namespace artifact storage, run DB migrations, then
-//! deploy every service via Pulumi. Called by `deploy_cloud_storage_on_push`
+//! deploy every service via Pulumi. Called by `deploy_on_push`
 //! (dev) and `release-production` (prod), and manually dispatchable.
 //! Generated into `deploy_all_services.yml` (replaces the hand-written
 //! `deploy-all-services.yml`).
@@ -45,7 +45,7 @@ pub fn deploy_all_services() -> Workflow {
                 "Warm shared binary deps onto sticky disk",
                 "binaries",
                 "Warm shared release deps",
-                "\".#deployCargoArtifacts\"",
+                ".#deployCargoArtifacts",
                 "Shared release deps realised into /nix/store; committed on job exit.",
             ),
         )
@@ -55,7 +55,7 @@ pub fn deploy_all_services() -> Workflow {
                 "Warm shared lambda deps onto sticky disk",
                 "lambdas",
                 "Warm shared lambda dep closure",
-                "\".#lambdaDeployCargoArtifacts\" \".#callRecordingPreviewFfmpegLayer\"",
+                ".#lambdaDeployCargoArtifacts .#callRecordingPreviewFfmpegLayer",
                 "Shared lambda deps realised into /nix/store; committed on job exit.",
             ),
         )
@@ -105,8 +105,8 @@ pub fn patch(root: &mut serde_yaml::Value) -> Result<()> {
                 required: true
               DD_API_KEY:
                 required: true
-              CACHIX_AUTH_TOKEN:
-                required: true
+              NIX_CACHE_SIGNING_KEY:
+                required: false
         "#})?,
     );
     Ok(())
@@ -128,12 +128,12 @@ fn set_matrix() -> Step<Run> {
         .run(indoc::indoc! {r#"
             set -euo pipefail
             cfg=.github/services-config.json
-            # Full list drives deploy-services; the filtered lists keep each build
-            # matrix to only the services that actually produce that artifact, so
-            # no build job spins up Nix + a cache volume for nothing.
-            services=$(jq -c '.services | keys' "$cfg")
-            binaries=$(jq -c '[.services | to_entries[] | select((.value.deploy_binaries // []) | length > 0) | .key]' "$cfg")
-            lambdas=$(jq -c '[.services | to_entries[] | select((.value.deploy_lambdas // []) | length > 0) | .key]' "$cfg")
+            # Enabled services drive deploy-services; the filtered lists keep each
+            # build matrix to only enabled services that produce that artifact, so
+            # disabled services and empty artifact jobs consume no runners.
+            services=$(jq -c '[.services | to_entries[] | select(.value.deploy_enabled != false) | .key]' "$cfg")
+            binaries=$(jq -c '[.services | to_entries[] | select(.value.deploy_enabled != false) | select((.value.deploy_binaries // []) | length > 0) | .key]' "$cfg")
+            lambdas=$(jq -c '[.services | to_entries[] | select(.value.deploy_enabled != false) | select((.value.deploy_lambdas // []) | length > 0) | .key]' "$cfg")
             echo "matrix=${services}" >> "$GITHUB_OUTPUT"
             echo "binaries=${binaries}" >> "$GITHUB_OUTPUT"
             echo "lambdas=${lambdas}" >> "$GITHUB_OUTPUT"
@@ -144,11 +144,12 @@ fn set_matrix() -> Step<Run> {
         .id("set-matrix")
 }
 
-/// Warm one shared dep closure onto the /nix sticky disk. The two warm jobs
-/// run in parallel and each build matrix depends only on its own warm job, so
-/// a slow lambda-closure warm never blocks binary builds and vice versa. The
-/// /nix cache volume is an optimization; Cachix is the consistency backstop
-/// either way.
+/// Warm one shared dep closure onto the /nix sticky disk, then push it to the
+/// S3 binary cache so every matrix job that drew a cold/stale volume from the
+/// pool can substitute it instead of rebuilding. The two warm jobs run in
+/// parallel and each build matrix depends only on its own warm job, so a slow
+/// lambda-closure warm never blocks binary builds and vice versa. The /nix
+/// cache volume is provided by Namespace's native Nix integration.
 fn warm_job(
     name: &str,
     gate_output: &str,
@@ -156,6 +157,11 @@ fn warm_job(
     targets: &str,
     done_msg: &str,
 ) -> Job {
+    let quoted_targets = targets
+        .split_whitespace()
+        .map(|t| format!("\"{t}\""))
+        .collect::<Vec<_>>()
+        .join(" ");
     Job::default()
         .name(name)
         .needs(vec!["setup".to_string()])
@@ -165,15 +171,15 @@ fn warm_job(
         .runs_on(runners::Runner::Mid.to_string())
         .add_step(steps::checkout_v4())
         .add_step(steps::mount_nix_cache_volume())
-        .add_step(steps::setup_nix())
-        .add_step(steps::setup_cachix())
-        .add_step(steps::nix_build_watched(build_step_name, targets, done_msg))
+        .add_step(steps::setup_nix_with_cache())
+        .add_step(steps::nix_build(build_step_name, &quoted_targets, done_msg))
+        .add_step(steps::push_nix_cache(targets))
         .add_step(steps::teardown_nix())
 }
 
 /// Base for the per-service build matrix jobs: clones the warm /nix cache
 /// volume populated by the matching warm job, so only each service's own
-/// crate compiles (cold volume -> Cachix substitution). No max-parallel:
+/// crate compiles. No max-parallel:
 /// runners autoscale, so all services build concurrently.
 fn build_job(name: &str, warm_job_id: &str, gate_output: &str) -> Job {
     Job::default()
@@ -192,8 +198,7 @@ fn build_job(name: &str, warm_job_id: &str, gate_output: &str) -> Job {
         })
         .add_step(steps::checkout_v4().add_with(("clean", false)))
         .add_step(steps::mount_nix_cache_volume())
-        .add_step(steps::setup_nix())
-        .add_step(steps::setup_cachix())
+        .add_step(steps::setup_nix_with_cache())
 }
 
 fn build_service_binaries() -> Job {
@@ -203,6 +208,11 @@ fn build_service_binaries() -> Job {
         "binaries",
     )
     .add_step(build_prebuilt_binaries())
+    // Pushing the built output is what makes this service a pure substitution
+    // next run when it is unchanged, even on a cold volume.
+    .add_step(steps::push_nix_cache(
+        ".#deploy-service-binaries-${{ matrix.service }}",
+    ))
     .add_step(steps::upload_handoff_artifact(
         "prebuilt-binaries.tar.gz",
         "${{ matrix.service }}",
@@ -211,7 +221,8 @@ fn build_service_binaries() -> Job {
 }
 
 fn build_prebuilt_binaries() -> Step<Run> {
-    let script = steps::with_cachix_watch(indoc::indoc! {r#"
+    let script = indoc::indoc! {r#"
+        set -euo pipefail
         mkdir -p prebuilt
         nix build --print-build-logs ".#deploy-service-binaries-${SERVICE}"
         cp -r result/bin/* prebuilt/
@@ -223,7 +234,7 @@ fn build_prebuilt_binaries() -> Step<Run> {
         tar -C prebuilt -czf prebuilt-binaries.tar.gz .
         # Receipt: the deploy job logs the same hash on read.
         echo "handoff receipt: $(sha256sum prebuilt-binaries.tar.gz | cut -d' ' -f1) ($(stat -c%s prebuilt-binaries.tar.gz) bytes)"
-    "#});
+    "#};
     Step::new("Build prebuilt binaries")
         .run(script)
         .shell("bash")
@@ -233,7 +244,7 @@ fn build_prebuilt_binaries() -> Step<Run> {
 /// Each handler is a crane + cargo-zigbuild nix package. This job builds all
 /// of a service's handlers via `nix build .#deploy-lambda-<name>`, cloning the
 /// warm lambda /nix disk committed by warm-lambdas. Unchanged handlers are
-/// pure cache hits (substituted from the disk/Cachix, no recompile).
+/// pure cache hits from the Namespace Nix volume (no recompile).
 fn build_lambda_artifacts() -> Job {
     build_job(
         "Build ${{ matrix.service }} Lambda artifacts",
@@ -250,9 +261,22 @@ fn build_lambda_artifacts() -> Job {
 }
 
 fn build_lambdas() -> Step<Run> {
+    // The cache env lets the script push the handler out-paths it just built
+    // (see the script's push block) — the store-path equivalent of the binary
+    // job's push step, minus a second flake evaluation.
     Step::new("Build Lambda artifacts")
         .run(".github/scripts/build-cloud-storage-lambdas-nix.sh")
         .add_env(Env::new("SERVICE", "${{ matrix.service }}"))
+        .add_env(Env::new("NIX_CACHE_URL", vars::NIX_CACHE_URL))
+        .add_env(Env::new(
+            "NIX_CACHE_SIGNING_KEY",
+            vars::NIX_CACHE_SIGNING_KEY,
+        ))
+        .add_env(Env::new("AWS_ACCESS_KEY_ID", vars::AWS_ACCESS_KEY))
+        .add_env(Env::new(
+            "AWS_SECRET_ACCESS_KEY",
+            vars::AWS_SECRET_ACCESS_KEY,
+        ))
 }
 
 fn log_lambda_receipt() -> Step<Run> {

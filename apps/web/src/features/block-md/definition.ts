@@ -30,6 +30,7 @@ export const definition = defineBlock({
   aliases: [
     { name: 'task', defaultFileName: 'New Task' },
     { name: 'snippet', defaultFileName: 'New Snippet' },
+    { name: 'skill', defaultFileName: 'New Skill' },
   ],
   component: MarkdownBlock,
   accepted: {

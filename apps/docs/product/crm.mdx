@@ -9,40 +9,36 @@ description: "Contact and company records built automatically from your team's e
 </Frame>
 
 <Note>
-  CRM is rolling out now. If you don't see the **Customers** view in your workspace yet, it hasn't reached your account.
+  Only a user's **primary** email is used to enrich the CRM. Secondary and tertiary emails are not part of the CRM.
 </Note>
 
-Most CRMs die because nobody fills them in. Macro's CRM builds itself: because your team's email already flows through Macro, contact and company records are created and kept up to date automatically as you work. You don't have to run an importer or type in fields.
-
-### A CRM that lives where you work
-
-The primary benefit of "Macro CRM" is that it's not even a separate CRM: it seamlessly brings the features you need into your existing team collaboration space.
+Macro's CRM builds itself on your team's emails so contact and company records are created and kept up to date automatically as you work. You don't have to run an importer or type in fields.
 
 <Note>
   You can also work with our CRM through Macro's MCP server. To connect it, go to **Settings → MCP server**.
 </Note>
 
-### Deeply tied into your email client
+### Tied into your email client
 
-Macro CRM is deeply integrated with the Macro Mail client. It works with your existing email. Most CRMs, like Salesforce, have a limited Gmail/Outlook integration.
+Macro CRM is deeply integrated with the Macro Mail client. It works with your existing email to enrich company properties with contacts and previous communications.
 
 <Frame>
   ![Macro CRM records alongside the Mail client](/images/crm_emails.png)
 </Frame>
 
-With Macro there is instant bidirectional syncing, full access to properties, etc, which means you'll never have to open the record itself, and if you feel like it, it's in the same tab.
+With Macro there is instant bidirectional syncing, full access to properties, and access to the record itself by clicking in.
 
-### Unified with your team chat
+### Discussions
 
-Most CRMs have a "comments" feature on each Contact, Company, and Deal record. The problem is, this isn't your primary communications surface, so while you might leave a comment in HubSpot, you also feel the need to ping the #sales channel in Slack. In Macro, this all works as a single system. You can @mention people on your team and they'll receive a ping just like in a channel. It all goes into one inbox.
+Every company and contact record has its own discussion thread. The CRM discussion should be used as a record of notes for that company so your team doesn't lose information in a separate chat. @mention a teammate and they'll receive a notification just like in a channel, and it all lands in the same inbox as the rest of your work. The discussion is ingested by [team-level memory](/product/unified-memory) and can be queried with the [Macro agent](/product/agents).
+
+### @mentionable anywhere
+
+@mention things everywhere — docs, tasks, etc. When a company is @mentioned in a Macro chat all its information is automatically shared to anyone in that channel, including past emails, discussion posts, and contacts.
 
 <Frame>
   ![Team chat and @mentions on a CRM record](/images/crm_chat.png)
 </Frame>
-
-### @mentionable anywhere
-
-One problem with using products like Slack, Notion, alongside your CRM is that your CRM is a separate system. In Macro, you can @mention things everywhere — docs, tasks, etc.
 
 ### Board and list views
 
@@ -94,13 +90,11 @@ Use the **Group** and **Filter** controls in the toolbar to reshape the table, o
 
 ### Records build themselves
 
-When someone on your team emails an external contact, Macro creates a contact record for them and groups contacts into companies by email domain (everyone `@acme.com` rolls up to one Acme record). Each contact tracks its first and last interaction, so you can see the full history of a relationship at a glance. Generic tool and vendor domains (the SaaS notification emails every company gets) are filtered out so the CRM stays focused on your actual customers.
-
-New companies are enriched automatically with public data: name, description, logo, website, industry, headcount, funding, location, and social links land on the record without anyone touching it.
+When someone on your team emails an external contact, Macro creates a contact record for them and groups contacts into companies by email domain (everyone `@acme.com` rolls up to one Acme record). Each contact tracks its first and last interaction, so you can see the full history of a relationship at a glance. Generic tool and vendor domains are filtered out.
 
 ### Team sharing
 
-CRM is a team feature, and it's where Macro's email auto-sharing lives. When **Email Sync** is on for a company, your team's email threads with that company become visible to teammates in the CRM, so nobody has to forward a thread just to share context. Turning it off for a company keeps the record but makes its threads private to their participants.
+CRM is best used as a team feature, and it's where Macro's email auto-sharing lives. When **Email Sync** is on for a company, your team's email threads with that company become visible to teammates in the CRM, so nobody has to forward a thread just to share context. Turning it off for a company keeps the record but makes its threads private to their participants.
 
 Team admins can also **hide** a company or contact entirely, which removes it (and its threads) from the team's view. Members see visible records; admins and owners can edit records, toggle Email Sync, and manage hidden ones.
 

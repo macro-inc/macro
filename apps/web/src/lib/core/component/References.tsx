@@ -5,7 +5,7 @@ import { useSplitLayout } from '@components/app/split-layout/layout';
 import type { BlockAlias, BlockName } from '@core/block';
 import { toast } from '@core/component/Toast/Toast';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
-import { tryMacroId, useDisplayNameParts } from '@core/user';
+import { getDisplayNameParts, tryMacroId } from '@core/user';
 import { compareDateDesc, type DateValue } from '@core/util/date';
 import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
 import { formatRelativeTimestamp } from '@entity';
@@ -134,11 +134,12 @@ function ChannelReferenceRow(props: {
   reference: ChannelRef;
   onOpen: (e: KeyboardEvent | MouseEvent) => void;
 }) {
-  const { firstName, fullName } = useDisplayNameParts(
-    tryMacroId(props.reference.sender_id),
-    { emailFallback: 'local-part' }
-  );
-  const senderName = () => firstName() || fullName();
+  const senderName = () => {
+    const parts = getDisplayNameParts(tryMacroId(props.reference.sender_id), {
+      emailFallback: 'local-part',
+    });
+    return parts.firstName || parts.fullName;
+  };
   const hasContent = () => {
     const content = props.reference.message_content?.trim();
     if (!content) return false;
@@ -179,10 +180,12 @@ function GenericReferenceRow(props: {
   onOpen: (item: PreviewItem, e?: KeyboardEvent | MouseEvent) => void;
 }) {
   const userId = props.reference.user_id!;
-  const { firstName, fullName } = useDisplayNameParts(tryMacroId(userId), {
-    emailFallback: 'local-part',
-  });
-  const senderName = () => firstName() || fullName();
+  const senderName = () => {
+    const parts = getDisplayNameParts(tryMacroId(userId), {
+      emailFallback: 'local-part',
+    });
+    return parts.firstName || parts.fullName;
+  };
   const [item] = useItemPreview(() => ({
     id: props.reference.source_entity_id,
     type: props.reference.source_entity_type as ItemType,

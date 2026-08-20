@@ -553,38 +553,78 @@ async fn resolve_channel_display_name(
             Ok(info.name.clone().unwrap_or_default())
         }
         ChannelType::Private | ChannelType::DirectMessage => {
-            let participant_ids = load_active_participant_ids(pool, info.id).await?;
-            let name_lookup = load_user_display_names(pool, &participant_ids).await?;
+            let principals = load_active_participant_principals(pool, info.id).await?;
+            let user_ids: Vec<MacroUserIdStr<'static>> = principals
+                .iter()
+                .filter_map(|principal| MacroUserIdStr::try_from(principal.clone()).ok())
+                .collect();
+            let bot_ids: Vec<BotId> = principals
+                .iter()
+                .filter_map(|principal| {
+                    bot_id::BotIdStr::parse_from_str(principal)
+                        .ok()
+                        .map(|id| id.bot_id())
+                })
+                .collect();
+            let name_lookup = load_user_display_names(pool, &user_ids).await?;
+            let bot_name_lookup = load_bot_display_names(pool, &bot_ids).await?;
+            let display_name = |principal: &String| {
+                principal_display_name(principal, &name_lookup, &bot_name_lookup)
+            };
 
             if matches!(info.channel_type, ChannelType::DirectMessage)
-                && participant_ids
+                && principals
                     .iter()
-                    .any(|participant_id| participant_id.as_ref() == viewer_user_id.as_ref())
+                    .any(|principal| principal == viewer_user_id.as_ref())
             {
-                if let Some(other_participant_id) = participant_ids
+                if let Some(name) = principals
                     .iter()
-                    .find(|participant_id| participant_id.as_ref() != viewer_user_id.as_ref())
+                    .filter(|principal| principal.as_str() != viewer_user_id.as_ref())
+                    .find_map(display_name)
                 {
-                    return Ok(id_to_display_name(other_participant_id, &name_lookup));
+                    return Ok(name);
                 }
 
                 tracing::warn!(channel_id=%info.id, "direct message channel has no other participant");
                 return Ok("Unknown".to_string());
             }
 
-            Ok(participant_ids
+            Ok(principals
                 .iter()
-                .map(|participant_id| id_to_display_name(participant_id, &name_lookup))
+                .filter_map(display_name)
                 .collect::<Vec<_>>()
                 .join(", "))
         }
     }
 }
 
-async fn load_active_participant_ids(
+/// Display name for a participant principal: users resolve through the name
+/// lookup, bots through the bot-name lookup (Macro AI is code-defined).
+/// Unrecognized principals yield `None`.
+fn principal_display_name(
+    principal: &str,
+    name_lookup: &NameLookup,
+    bot_name_lookup: &HashMap<BotId, String>,
+) -> Option<String> {
+    if let Ok(user_id) = MacroUserIdStr::try_from(principal.to_string()) {
+        return Some(id_to_display_name(&user_id, name_lookup));
+    }
+    let bot_id = bot_id::BotIdStr::parse_from_str(principal).ok()?.bot_id();
+    if bot_id == bot_id::MACRO_AI_BOT_ID {
+        return Some(bot_id::MACRO_AI_NAME.to_string());
+    }
+    Some(
+        bot_name_lookup
+            .get(&bot_id)
+            .cloned()
+            .unwrap_or_else(|| "Bot".to_string()),
+    )
+}
+
+async fn load_active_participant_principals(
     pool: &PgPool,
     channel_id: Uuid,
-) -> anyhow::Result<Vec<MacroUserIdStr<'static>>> {
+) -> anyhow::Result<Vec<String>> {
     let rows = sqlx::query_as!(
         UserIdRow,
         r#"
@@ -597,9 +637,31 @@ async fn load_active_participant_ids(
     )
     .fetch_all(pool)
     .await?;
-    rows.into_iter()
-        .map(|row| MacroUserIdStr::try_from(row.user_id).map_err(Into::into))
-        .collect()
+    Ok(rows.into_iter().map(|row| row.user_id).collect())
+}
+
+async fn load_bot_display_names(
+    pool: &PgPool,
+    bot_ids: &[BotId],
+) -> anyhow::Result<HashMap<BotId, String>> {
+    if bot_ids.is_empty() {
+        return Ok(HashMap::new());
+    }
+    let uuids: Vec<Uuid> = bot_ids.iter().map(|bot_id| bot_id.as_uuid()).collect();
+    let rows = sqlx::query!(
+        r#"
+        SELECT id, name
+        FROM bots
+        WHERE id = ANY($1) AND deleted_at IS NULL
+        "#,
+        &uuids,
+    )
+    .fetch_all(pool)
+    .await?;
+    Ok(rows
+        .into_iter()
+        .map(|row| (BotId::new_from_uuid(row.id), row.name))
+        .collect())
 }
 
 async fn load_user_display_names(
@@ -669,7 +731,7 @@ fn id_to_display_name(user_id: &MacroUserIdStr<'static>, name_lookup: &NameLooku
 #[cfg(feature = "list")]
 static CHANNEL_LIST_PREFIX: &str = r#"
     WITH user_channels AS (
-        SELECT DISTINCT c.*
+        SELECT c.*
         FROM comms_channels c
         INNER JOIN comms_channel_participants cp ON cp.channel_id = c.id
         WHERE cp.user_id = $1 AND cp.left_at IS NULL
@@ -681,7 +743,7 @@ static CHANNEL_LIST_PREFIX: &str = r#"
 #[cfg(feature = "list")]
 static CHANNEL_LIST_PREFIX_WITH_TEAM_CHANNELS: &str = r#"
     WITH user_channels AS (
-        SELECT DISTINCT c.*
+        SELECT c.*
         FROM comms_channels c
         WHERE (
             EXISTS (
@@ -706,9 +768,19 @@ static CHANNEL_LIST_PREFIX_WITH_TEAM_CHANNELS: &str = r#"
 #[cfg(feature = "list")]
 static CHANNEL_LIST_SELECT: &str = r#"
     ),
+    paged_channels AS (
+        SELECT uc.*
+        FROM user_channels uc
+        WHERE
+            ($4::timestamptz IS NULL)
+            OR
+            ((CASE $2 WHEN 'created_at' THEN uc.created_at ELSE uc.updated_at END), uc.id::text) < ($4, $5)
+        ORDER BY (CASE $2 WHEN 'created_at' THEN uc.created_at ELSE uc.updated_at END) DESC, uc.id::text DESC
+        LIMIT $3
+    ),
     channel_participants_json AS (
         SELECT
-            uc.id as channel_id,
+            pc.id as channel_id,
             ARRAY_AGG(
                 json_build_object(
                     'channel_id', cp.channel_id,
@@ -718,37 +790,32 @@ static CHANNEL_LIST_SELECT: &str = r#"
                     'left_at', cp.left_at
                 )
             ) as participants
-        FROM user_channels uc
-        JOIN comms_channel_participants cp ON cp.channel_id = uc.id
+        FROM paged_channels pc
+        JOIN comms_channel_participants cp ON cp.channel_id = pc.id
         WHERE cp.left_at IS NULL
-        GROUP BY uc.id
+        GROUP BY pc.id
     )
     SELECT
-        uc.id as "id",
-        uc.name as "name",
-        uc.channel_type as "channel_type",
-        uc.org_id as "org_id",
-        uc.team_id as "team_id",
-        uc.auto_join_team as "auto_join_team",
-        uc.created_at as "created_at",
-        uc.updated_at as "updated_at",
-        uc.owner_id as "owner_id",
+        pc.id as "id",
+        pc.name as "name",
+        pc.channel_type as "channel_type",
+        pc.org_id as "org_id",
+        pc.team_id as "team_id",
+        pc.auto_join_team as "auto_join_team",
+        pc.created_at as "created_at",
+        pc.updated_at as "updated_at",
+        pc.owner_id as "owner_id",
         cpj.participants as "participants_json",
         EXISTS (
             SELECT 1
             FROM comms_channel_participants cp_active
-            WHERE cp_active.channel_id = uc.id
+            WHERE cp_active.channel_id = pc.id
               AND cp_active.user_id = $1
               AND cp_active.left_at IS NULL
         ) as "is_participant"
-    FROM user_channels uc
-    LEFT JOIN channel_participants_json cpj ON cpj.channel_id = uc.id
-    WHERE
-        ($4::timestamptz IS NULL)
-        OR
-        ((CASE $2 WHEN 'created_at' THEN uc.created_at ELSE uc.updated_at END), uc.id::text) < ($4, $5)
-    ORDER BY (CASE $2 WHEN 'created_at' THEN uc.created_at ELSE uc.updated_at END) DESC, uc.id::text DESC
-    LIMIT $3
+    FROM paged_channels pc
+    LEFT JOIN channel_participants_json cpj ON cpj.channel_id = pc.id
+    ORDER BY (CASE $2 WHEN 'created_at' THEN pc.created_at ELSE pc.updated_at END) DESC, pc.id::text DESC
 "#;
 
 #[cfg(feature = "list")]
@@ -868,6 +935,8 @@ fn channel_filter_mentions_participation(expr: &Expr<ChannelLiteral>) -> bool {
 fn build_channel_list_query(
     filter_ast: &LiteralTree<ChannelLiteral>,
 ) -> QueryBuilder<'_, Postgres> {
+    // QueryBuilder is required because the channel filter is an AST with arbitrary
+    // AND/OR/NOT shape. Dynamic literals are constrained to parsed domain types.
     let prefix = if filter_ast
         .as_deref()
         .is_some_and(channel_filter_mentions_participation)
@@ -3556,15 +3625,12 @@ impl ChannelRepo for PgChannelsRepo {
 
         Ok(rows
             .into_iter()
-            .filter_map(|row| {
-                let user_id = MacroUserIdStr::try_from(row.user_id).ok()?;
-                Some(ChannelParticipant {
-                    channel_id: row.channel_id,
-                    user_id: user_id.as_ref().to_string(),
-                    role: row.role,
-                    joined_at: row.joined_at,
-                    left_at: row.left_at,
-                })
+            .map(|row| ChannelParticipant {
+                channel_id: row.channel_id,
+                user_id: row.user_id,
+                role: row.role,
+                joined_at: row.joined_at,
+                left_at: row.left_at,
             })
             .collect())
     }

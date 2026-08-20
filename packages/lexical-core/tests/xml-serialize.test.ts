@@ -278,18 +278,24 @@ describe('xml serialization', () => {
     `);
   });
 
-  it('user mention keeps userId + email', () => {
+  it('user mention keeps userId, email, and display name', () => {
     expect(
       serialize(() => {
         const p = $createParagraphNode();
-        p.append($createUserMentionNode({ userId: 'u_1', email: 'a@b.com' }));
+        p.append(
+          $createUserMentionNode({
+            userId: 'u_1',
+            email: 'a@b.com',
+            displayName: 'Alice',
+          })
+        );
         $getRoot().append(p);
       })
     ).toMatchInlineSnapshot(`
       "
       <doc>
         <p>
-          <user-mention userId="u_1" email="a@b.com"/>
+          <user-mention userId="u_1" email="a@b.com" name="Alice"/>
         </p>
       </doc>"
     `);

@@ -45,7 +45,12 @@ pub fn static_dir(instance: &Instance) -> std::path::PathBuf {
 /// (dev-mode bundle, production optimizations), except the backend origin is
 /// the `same-origin` sentinel — resolved from `location.origin` at runtime — so
 /// the one bundle works on localhost and through any tunnel/preview hostname.
-pub fn build_static(stage: &Stage, instance: &Instance, prebuilt: Option<&Path>) -> Result<()> {
+pub fn build_static(
+    stage: &Stage,
+    instance: &Instance,
+    mode: Mode,
+    prebuilt: Option<&Path>,
+) -> Result<()> {
     let dist = match prebuilt {
         Some(dir) => dir.to_owned(),
         None => {
@@ -56,6 +61,9 @@ pub fn build_static(stage: &Stage, instance: &Instance, prebuilt: Option<&Path>)
                 .env("NODE_ENV", "production")
                 .env("VITE_LOCAL_SERVERS", "ALL")
                 .env("VITE_LOCAL_BACKEND_ORIGIN", "same-origin");
+            if mode.spec().runs_local_infra {
+                cmd.env("VITE_AI_EDITING_WORKER_URL", "/ai-editing");
+            }
             stage.run("Building frontend bundle", &mut cmd)?;
             app_dir().join("dist")
         }
@@ -97,7 +105,7 @@ pub fn build_static(stage: &Stage, instance: &Instance, prebuilt: Option<&Path>)
 /// and exercises the real browser -> proxy -> collector path. Left unset
 /// otherwise. This overrides the bare-dev defaults in apps/web/.env.local
 /// (Vite lets process env win).
-fn dev_env(instance: &Instance, traces_enabled: bool) -> Vec<(String, String)> {
+fn dev_env(instance: &Instance, mode: Mode, traces_enabled: bool) -> Vec<(String, String)> {
     let mut env = vec![
         (
             "PORT".to_string(),
@@ -109,6 +117,12 @@ fn dev_env(instance: &Instance, traces_enabled: bool) -> Vec<(String, String)> {
             proxy::url(instance),
         ),
     ];
+    if mode.spec().runs_local_infra {
+        env.push((
+            "VITE_AI_EDITING_WORKER_URL".to_string(),
+            format!("{}/ai-editing", proxy::url(instance)),
+        ));
+    }
     if traces_enabled {
         env.push((
             "VITE_OTEL_EXPORTER_URL".to_string(),
@@ -235,7 +249,7 @@ pub fn start(
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
-    for (k, v) in dev_env(instance, traces_enabled) {
+    for (k, v) in dev_env(instance, mode, traces_enabled) {
         cmd.env(k, v);
     }
     let mut child = cmd.spawn().context("launching `bun run dev`")?;
@@ -259,18 +273,17 @@ pub fn start(
     // output) if the child exits first. A bare port poll would mistake a stale
     // server already on the port for "ready" while our child has died.
     let addr: std::net::SocketAddr = ([127, 0, 0, 1], port).into();
-    let wait_buf = Arc::clone(&captured);
-    stage.run_step("Starting frontend", || {
-        for _ in 0..120 {
+    let startup = stage.run_step("Starting frontend", || {
+        // Cold starts may rebuild optimized Wasm packages before Vite launches.
+        for _ in 0..600 {
             // Settle first: a failed bind (e.g. port already in use) makes vite
             // exit near-instantly, so if the child is still alive after this it
             // genuinely bound the port — rather than us connecting to a stale
             // server squatting it.
             std::thread::sleep(std::time::Duration::from_millis(300));
             if let Some(status) = child.try_wait()? {
-                let out = tail_str(&String::from_utf8_lossy(&wait_buf.lock().unwrap()), 30);
                 anyhow::bail!(
-                    "frontend dev server exited during startup ({status})\n{out}\n\
+                    "frontend dev server exited during startup ({status})\n\
                      (if the port is in use, free it: `lsof -ti tcp:{port} | xargs kill`)"
                 );
             }
@@ -280,8 +293,23 @@ pub fn start(
                 return Ok(());
             }
         }
-        anyhow::bail!("frontend dev server did not become ready")
-    })?;
+        anyhow::bail!("frontend dev server did not become ready after 180 seconds")
+    });
+
+    if let Err(error) = startup {
+        let pgid = child.id() as i32;
+        // SAFETY: the child leads the process group created above. ESRCH is
+        // harmless when Bun already exited.
+        unsafe {
+            libc::kill(-pgid, libc::SIGKILL);
+        }
+        let _ = child.wait();
+        for handle in drains.drain(..) {
+            let _ = handle.join();
+        }
+        let out = tail_str(&String::from_utf8_lossy(&captured.lock().unwrap()), 30);
+        anyhow::bail!("{error}\nfrontend output (last lines):\n{out}");
+    }
 
     Ok(Some(Frontend {
         child,

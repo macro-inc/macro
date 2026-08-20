@@ -10,13 +10,29 @@ import type { SyncStatus } from './syncStatus';
 import type { UserProvider } from './userProvider';
 
 export interface Link {
+  /** Whether the user turned calendar off for this inbox, which also removed
+its calendar data. `needs_calendar_permission` is true either way, so
+this is what separates "never granted" from "deliberately off" —
+unprompted calendar nags must stay quiet for the latter. */
+  calendar_disabled: boolean;
   created_at: string;
   email_address: string;
   fusionauth_user_id: string;
+  /** Whether Macro holds calendar data for this inbox. Drives the turn-off
+control on its own, so removing that data never depends on the recorded
+scopes still matching the set Macro requests today — a set that changes
+as the integration narrows, stranding data behind a capability check
+that no longer recognizes an older grant. */
+  has_calendar_data: boolean;
   id: string;
   is_primary: boolean;
   is_sync_active: boolean;
   macro_id: string;
+  /** Whether the link's Google grant is missing the calendar scope. True for
+inboxes connected before the calendar capability existed (and for
+grants where the user declined it); drives the per-inbox calendar
+upgrade prompt. Re-running the connect flow records the new grant. */
+  needs_calendar_permission: boolean;
   /** Whether the link's Google grant needs to be reconnected. Drives the
 per-inbox reconnect prompt independently of the sync-status badge. */
   needs_reauth: boolean;

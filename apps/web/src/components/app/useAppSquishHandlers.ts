@@ -2,6 +2,7 @@ import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import {
   setVirtualKeyboardHeight,
   setVirtualKeyboardVisible,
+  type VirtualKeyboardEvent,
   virtualKeyboardVisible,
 } from '@core/mobile/virtualKeyboard';
 import { isEditableInput } from '@core/util/isEditableInput';
@@ -9,6 +10,39 @@ import { isIOS } from '@solid-primitives/platform';
 import { onCleanup, onMount } from 'solid-js';
 
 const ACTIVE_ELEMENT_POLL_INTERVAL_MS = 1000;
+
+/** Approximation of UIKit's private keyboard animation curve. */
+const IOS_KEYBOARD_EASING = 'cubic-bezier(0.38, 0.7, 0.125, 1)';
+
+/**
+ * Register the squish properties as typed lengths so CSS transitions can
+ * interpolate them — unregistered custom properties are not interpolable.
+ * Native-app only: a registered property's initial value permanently replaces
+ * the `var(--dvh, 1dvh)` fallbacks that the plain web build relies on, and
+ * only the native branch sets the properties inline before first paint.
+ * Returns whether the properties are animatable.
+ */
+function registerSquishAnimationProperties(): boolean {
+  if (
+    typeof CSS === 'undefined' ||
+    typeof CSS.registerProperty !== 'function'
+  ) {
+    return false;
+  }
+  for (const name of ['--dvh', '--virtual-keyboard-height']) {
+    try {
+      CSS.registerProperty({
+        name,
+        syntax: '<length>',
+        inherits: true,
+        initialValue: '0px',
+      });
+    } catch {
+      // Already registered (HMR re-run) — still animatable.
+    }
+  }
+  return true;
+}
 
 function getViewportHeight() {
   return window.visualViewport?.height ?? window.innerHeight;
@@ -57,14 +91,31 @@ function createActiveElementPolling(onActiveElementLost: () => void) {
  */
 export function useAppSquishHandlers() {
   if (isNativeMobilePlatform()) {
-    type VirtualKeyboardEvent = CustomEventInit<{
-      height: number;
-      duration: number;
-    }>;
+    const animatable = registerSquishAnimationProperties();
+
+    /**
+     * Transition the squish properties over the keyboard's own animation
+     * duration so the layout tracks the keyboard sliding in/out. A duration
+     * of 0 clears the transition so the next property change applies
+     * instantly (non-keyboard resets must not replay the last animation).
+     */
+    const setSquishTransition = (durationSeconds: number) => {
+      const style = document.documentElement.style;
+      const durationMs = animatable ? Math.round(durationSeconds * 1000) : 0;
+      if (durationMs <= 0) {
+        style.removeProperty('transition');
+        return;
+      }
+      style.setProperty(
+        'transition',
+        `--dvh ${durationMs}ms ${IOS_KEYBOARD_EASING}, --virtual-keyboard-height ${durationMs}ms ${IOS_KEYBOARD_EASING}`
+      );
+    };
 
     let activeElementPolling: ReturnType<typeof createActiveElementPolling>;
 
     function resetNativeVirtualKeyboardState() {
+      setSquishTransition(0);
       activeElementPolling.stop();
       resetVirtualKeyboardState();
     }
@@ -75,20 +126,24 @@ export function useAppSquishHandlers() {
 
     const handleKeyboardWillShow = (event: VirtualKeyboardEvent) => {
       activeElementPolling.start();
+      const keyboardHeight = event.detail?.height ?? 0;
       const newViewportHeight =
-        (window.visualViewport?.height ?? 0) - (event.detail?.height ?? 0);
+        (window.visualViewport?.height ?? 0) - keyboardHeight;
       const dvh = newViewportHeight * 0.01;
+      setSquishTransition(event.detail?.duration ?? 0);
       document.documentElement.style.setProperty('--dvh', `${dvh}px`);
       document.documentElement.style.setProperty(
         '--virtual-keyboard-height',
-        `${event.detail?.height ?? 0}px`
+        `${keyboardHeight}px`
       );
       setVirtualKeyboardVisible(true);
-      setVirtualKeyboardHeight(event.detail?.height ?? 0);
+      setVirtualKeyboardHeight(keyboardHeight);
     };
 
-    const handleKeyboardWillHide = () => {
-      resetNativeVirtualKeyboardState();
+    const handleKeyboardWillHide = (event: VirtualKeyboardEvent) => {
+      setSquishTransition(event.detail?.duration ?? 0);
+      activeElementPolling.stop();
+      resetVirtualKeyboardState();
     };
 
     const handleVisibilityChange = () => {
@@ -112,6 +167,7 @@ export function useAppSquishHandlers() {
 
       onCleanup(() => {
         activeElementPolling.stop();
+        document.documentElement.style.removeProperty('transition');
         window.removeEventListener('keyboardWillShow', handleKeyboardWillShow);
         window.removeEventListener('keyboardWillHide', handleKeyboardWillHide);
         document.removeEventListener(

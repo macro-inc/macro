@@ -1,6 +1,7 @@
+import type { HotkeyToken } from '@core/hotkey/tokens';
 import CaretDownIcon from '@phosphor/caret-down.svg';
 import { makePersisted } from '@solid-primitives/storage';
-import { cn } from '@ui';
+import { cn, Tooltip } from '@ui';
 import { createSignal, For, type JSX, onCleanup, Show } from 'solid-js';
 
 export type CollapsibleSidebarSectionItem = {
@@ -12,7 +13,12 @@ export type CollapsibleSidebarSectionItem = {
 export function CollapsibleSidebarSection(props: {
   label: string;
   items: readonly CollapsibleSidebarSectionItem[];
-  headerMenu?: () => JSX.Element;
+  headerMenu?: (open: boolean) => JSX.Element;
+  headerWrapper?: (header: JSX.Element) => JSX.Element;
+  headerTooltip?: {
+    label: string;
+    hotkey?: HotkeyToken | HotkeyToken[];
+  };
   defaultOpen?: boolean;
   /** Persist the open state locally under this key. */
   persistKey?: string;
@@ -43,31 +49,53 @@ export function CollapsibleSidebarSection(props: {
     }, 130);
   };
 
+  const headerButton = () => (
+    <button
+      type="button"
+      class={cn(
+        'flex h-7 w-full min-w-0 items-center justify-start gap-1 rounded-md px-2 text-left text-[13px] font-medium text-ink-extra-muted/60 transition-colors group-hover/section:bg-ink/3 group-hover/section:text-ink-muted',
+        props.headerMenu ? 'pr-18' : 'pr-2'
+      )}
+      aria-expanded={open()}
+      onClick={toggleOpen}
+    >
+      <span class="min-w-0 truncate">{props.label}</span>
+      <CaretDownIcon
+        class={cn(
+          'size-3 shrink-0 transition-transform duration-[120ms] ease-in-out',
+          !open() && '-rotate-90'
+        )}
+      />
+    </button>
+  );
+
+  const header = () => (
+    <header class="group/section relative">
+      <Show when={props.headerTooltip} fallback={headerButton()}>
+        {(tooltip) => (
+          <Tooltip
+            label={tooltip().label}
+            hotkey={tooltip().hotkey}
+            placement="right"
+            class="w-full"
+          >
+            {headerButton()}
+          </Tooltip>
+        )}
+      </Show>
+      <Show when={props.headerMenu}>
+        {(headerMenu) => (
+          <div class="pointer-events-none absolute right-1 top-1/2 -translate-y-1/2 z-10 flex items-center">
+            {headerMenu()(open())}
+          </div>
+        )}
+      </Show>
+    </header>
+  );
+
   return (
-    <section class="w-full flex flex-col">
-      <header class="group/section relative">
-        <button
-          type="button"
-          class="flex h-7 w-full min-w-0 items-center justify-start gap-1 rounded-md px-2 pr-9 text-left text-[13px] font-medium text-ink-extra-muted/60 transition-colors group-hover/section:bg-ink/3 group-hover/section:text-ink-muted"
-          aria-expanded={open()}
-          onClick={toggleOpen}
-        >
-          <span class="min-w-0 truncate">{props.label}</span>
-          <CaretDownIcon
-            class={cn(
-              'size-3 shrink-0 transition-transform duration-[120ms] ease-in-out',
-              !open() && '-rotate-90'
-            )}
-          />
-        </button>
-        <Show when={props.headerMenu}>
-          {(headerMenu) => (
-            <div class="absolute right-1 top-1/2 -translate-y-1/2 flex items-center">
-              {headerMenu()()}
-            </div>
-          )}
-        </Show>
-      </header>
+    <section class="group/sidebar-section w-full flex flex-col">
+      {props.headerWrapper ? props.headerWrapper(header()) : header()}
       <div
         class={cn('grid overflow-hidden', !open() && 'pointer-events-none')}
         aria-hidden={!open()}

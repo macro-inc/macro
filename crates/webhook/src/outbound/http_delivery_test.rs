@@ -11,6 +11,7 @@ fn webhook(endpoint_url: &str, headers: WebhookHeaders) -> Webhook {
     Webhook {
         id: "wh_test".to_string(),
         workspace_id: "workspace_test".to_string(),
+        namespace: "test-webhook".to_string(),
         name: "Test webhook".to_string(),
         endpoint_url: endpoint_url.to_string(),
         signing_secret: "signing-secret".to_string(),

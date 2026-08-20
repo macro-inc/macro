@@ -4,7 +4,6 @@ use std::{
 };
 
 use chrono::{DateTime, Utc};
-use either::Either;
 use entity_access::domain::models::{EntityAccessReceipt, MemberTeamRole};
 use item_filters::ast::{
     call::CallLiteral,
@@ -88,7 +87,7 @@ impl SoupService for RecordingSoupService {
             });
         let page: PaginatedCursor<SoupItem<()>, String, SimpleSortMethod, T> =
             Paginated::from_parts(items, None);
-        Ok(Either::Left(page))
+        Ok(SoupOutput::Simple(page))
     }
 
     async fn get_user_soup_with_properties<T>(

@@ -87,7 +87,7 @@ export function MediaButtons(props: MediaButtonsProps) {
 
   return (
     <Layer depth={3}>
-      <div class="absolute bg-surface ring ring-edge rounded-md top-2 right-2 flex flex-row p-1">
+      <div class="absolute border border-edge bg-surface rounded-md top-2 right-2 flex flex-row p-1">
         <Show when={!collapsed()}>
           <ButtonContent />
         </Show>

@@ -19,8 +19,8 @@ on:
         required: true
       DD_API_KEY:
         required: true
-      CACHIX_AUTH_TOKEN:
-        required: true
+      NIX_CACHE_SIGNING_KEY:
+        required: false
   workflow_dispatch:
     inputs:
       environment:
@@ -49,12 +49,12 @@ jobs:
       run: |
         set -euo pipefail
         cfg=.github/services-config.json
-        # Full list drives deploy-services; the filtered lists keep each build
-        # matrix to only the services that actually produce that artifact, so
-        # no build job spins up Nix + a cache volume for nothing.
-        services=$(jq -c '.services | keys' "$cfg")
-        binaries=$(jq -c '[.services | to_entries[] | select((.value.deploy_binaries // []) | length > 0) | .key]' "$cfg")
-        lambdas=$(jq -c '[.services | to_entries[] | select((.value.deploy_lambdas // []) | length > 0) | .key]' "$cfg")
+        # Enabled services drive deploy-services; the filtered lists keep each
+        # build matrix to only enabled services that produce that artifact, so
+        # disabled services and empty artifact jobs consume no runners.
+        services=$(jq -c '[.services | to_entries[] | select(.value.deploy_enabled != false) | .key]' "$cfg")
+        binaries=$(jq -c '[.services | to_entries[] | select(.value.deploy_enabled != false) | select((.value.deploy_binaries // []) | length > 0) | .key]' "$cfg")
+        lambdas=$(jq -c '[.services | to_entries[] | select(.value.deploy_enabled != false) | select((.value.deploy_lambdas // []) | length > 0) | .key]' "$cfg")
         echo "matrix=${services}" >> "$GITHUB_OUTPUT"
         echo "binaries=${binaries}" >> "$GITHUB_OUTPUT"
         echo "lambdas=${lambdas}" >> "$GITHUB_OUTPUT"
@@ -79,22 +79,38 @@ jobs:
       continue-on-error: true
     - name: Setup Nix
       uses: ./.github/actions/setup-nix
-    - name: Configure Cachix fallback
-      uses: ./.github/actions/setup-cachix
       with:
-        cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
+        nix-cache-url: ${{ vars.NIX_CACHE_URL }}
+        nix-cache-public-key: ${{ vars.NIX_CACHE_PUBLIC_KEY }}
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
     - name: Warm shared release deps
-      run: |
+      run: |-
         set -euo pipefail
-        cachix_pid=
-        if command -v cachix >/dev/null 2>&1 && [ -n "${CACHIX_CACHE_NAME:-}" ]; then
-          cachix watch-store "$CACHIX_CACHE_NAME" >/tmp/cachix-watch-store.log 2>&1 &
-          cachix_pid=$!
-          trap 'if [ -n "${cachix_pid:-}" ]; then kill "$cachix_pid" 2>/dev/null || true; wait "$cachix_pid" 2>/dev/null || true; fi' EXIT
-        fi
         nix build --print-build-logs ".#deployCargoArtifacts"
         echo "Shared release deps realised into /nix/store; committed on job exit."
       shell: bash
+    - name: Push to nix cache
+      run: |
+        set -uo pipefail
+        if [[ -z "${NIX_CACHE_URL:-}" || -z "${NIX_CACHE_SIGNING_KEY:-}" ]]; then
+          echo "nix cache not configured; skipping push"
+          exit 0
+        fi
+        key="$RUNNER_TEMP/nix-cache-signing-key"
+        printf '%s\n' "$NIX_CACHE_SIGNING_KEY" > "$key"
+        sep='?'; [[ "$NIX_CACHE_URL" == *\?* ]] && sep='&'
+        # shellcheck disable=SC2086 # TARGETS is a list on purpose
+        nix copy --to "${NIX_CACHE_URL}${sep}secret-key=${key}" $TARGETS \
+          || echo "::warning::nix cache push failed (non-fatal)"
+        rm -f "$key"
+      shell: bash
+      env:
+        TARGETS: .#deployCargoArtifacts
+        NIX_CACHE_URL: ${{ vars.NIX_CACHE_URL }}
+        NIX_CACHE_SIGNING_KEY: ${{ secrets.NIX_CACHE_SIGNING_KEY }}
+        AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
     - name: Teardown Nix
       if: always()
       uses: ./.github/actions/teardown-nix
@@ -116,22 +132,38 @@ jobs:
       continue-on-error: true
     - name: Setup Nix
       uses: ./.github/actions/setup-nix
-    - name: Configure Cachix fallback
-      uses: ./.github/actions/setup-cachix
       with:
-        cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
+        nix-cache-url: ${{ vars.NIX_CACHE_URL }}
+        nix-cache-public-key: ${{ vars.NIX_CACHE_PUBLIC_KEY }}
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
     - name: Warm shared lambda dep closure
-      run: |
+      run: |-
         set -euo pipefail
-        cachix_pid=
-        if command -v cachix >/dev/null 2>&1 && [ -n "${CACHIX_CACHE_NAME:-}" ]; then
-          cachix watch-store "$CACHIX_CACHE_NAME" >/tmp/cachix-watch-store.log 2>&1 &
-          cachix_pid=$!
-          trap 'if [ -n "${cachix_pid:-}" ]; then kill "$cachix_pid" 2>/dev/null || true; wait "$cachix_pid" 2>/dev/null || true; fi' EXIT
-        fi
         nix build --print-build-logs ".#lambdaDeployCargoArtifacts" ".#callRecordingPreviewFfmpegLayer"
         echo "Shared lambda deps realised into /nix/store; committed on job exit."
       shell: bash
+    - name: Push to nix cache
+      run: |
+        set -uo pipefail
+        if [[ -z "${NIX_CACHE_URL:-}" || -z "${NIX_CACHE_SIGNING_KEY:-}" ]]; then
+          echo "nix cache not configured; skipping push"
+          exit 0
+        fi
+        key="$RUNNER_TEMP/nix-cache-signing-key"
+        printf '%s\n' "$NIX_CACHE_SIGNING_KEY" > "$key"
+        sep='?'; [[ "$NIX_CACHE_URL" == *\?* ]] && sep='&'
+        # shellcheck disable=SC2086 # TARGETS is a list on purpose
+        nix copy --to "${NIX_CACHE_URL}${sep}secret-key=${key}" $TARGETS \
+          || echo "::warning::nix cache push failed (non-fatal)"
+        rm -f "$key"
+      shell: bash
+      env:
+        TARGETS: .#lambdaDeployCargoArtifacts .#callRecordingPreviewFfmpegLayer
+        NIX_CACHE_URL: ${{ vars.NIX_CACHE_URL }}
+        NIX_CACHE_SIGNING_KEY: ${{ secrets.NIX_CACHE_SIGNING_KEY }}
+        AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
     - name: Teardown Nix
       if: always()
       uses: ./.github/actions/teardown-nix
@@ -159,19 +191,14 @@ jobs:
       continue-on-error: true
     - name: Setup Nix
       uses: ./.github/actions/setup-nix
-    - name: Configure Cachix fallback
-      uses: ./.github/actions/setup-cachix
       with:
-        cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
+        nix-cache-url: ${{ vars.NIX_CACHE_URL }}
+        nix-cache-public-key: ${{ vars.NIX_CACHE_PUBLIC_KEY }}
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
     - name: Build prebuilt binaries
-      run: |+
+      run: |
         set -euo pipefail
-        cachix_pid=
-        if command -v cachix >/dev/null 2>&1 && [ -n "${CACHIX_CACHE_NAME:-}" ]; then
-          cachix watch-store "$CACHIX_CACHE_NAME" >/tmp/cachix-watch-store.log 2>&1 &
-          cachix_pid=$!
-          trap 'if [ -n "${cachix_pid:-}" ]; then kill "$cachix_pid" 2>/dev/null || true; wait "$cachix_pid" 2>/dev/null || true; fi' EXIT
-        fi
         mkdir -p prebuilt
         nix build --print-build-logs ".#deploy-service-binaries-${SERVICE}"
         cp -r result/bin/* prebuilt/
@@ -183,10 +210,30 @@ jobs:
         tar -C prebuilt -czf prebuilt-binaries.tar.gz .
         # Receipt: the deploy job logs the same hash on read.
         echo "handoff receipt: $(sha256sum prebuilt-binaries.tar.gz | cut -d' ' -f1) ($(stat -c%s prebuilt-binaries.tar.gz) bytes)"
-
       shell: bash
       env:
         SERVICE: ${{ matrix.service }}
+    - name: Push to nix cache
+      run: |
+        set -uo pipefail
+        if [[ -z "${NIX_CACHE_URL:-}" || -z "${NIX_CACHE_SIGNING_KEY:-}" ]]; then
+          echo "nix cache not configured; skipping push"
+          exit 0
+        fi
+        key="$RUNNER_TEMP/nix-cache-signing-key"
+        printf '%s\n' "$NIX_CACHE_SIGNING_KEY" > "$key"
+        sep='?'; [[ "$NIX_CACHE_URL" == *\?* ]] && sep='&'
+        # shellcheck disable=SC2086 # TARGETS is a list on purpose
+        nix copy --to "${NIX_CACHE_URL}${sep}secret-key=${key}" $TARGETS \
+          || echo "::warning::nix cache push failed (non-fatal)"
+        rm -f "$key"
+      shell: bash
+      env:
+        TARGETS: .#deploy-service-binaries-${{ matrix.service }}
+        NIX_CACHE_URL: ${{ vars.NIX_CACHE_URL }}
+        NIX_CACHE_SIGNING_KEY: ${{ secrets.NIX_CACHE_SIGNING_KEY }}
+        AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
     - name: Upload handoff artifact
       run: nsc artifact upload prebuilt-binaries.tar.gz "$DEST" --expires_in=24h
       shell: bash
@@ -219,14 +266,19 @@ jobs:
       continue-on-error: true
     - name: Setup Nix
       uses: ./.github/actions/setup-nix
-    - name: Configure Cachix fallback
-      uses: ./.github/actions/setup-cachix
       with:
-        cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
+        nix-cache-url: ${{ vars.NIX_CACHE_URL }}
+        nix-cache-public-key: ${{ vars.NIX_CACHE_PUBLIC_KEY }}
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
     - name: Build Lambda artifacts
       run: .github/scripts/build-cloud-storage-lambdas-nix.sh
       env:
         SERVICE: ${{ matrix.service }}
+        NIX_CACHE_URL: ${{ vars.NIX_CACHE_URL }}
+        NIX_CACHE_SIGNING_KEY: ${{ secrets.NIX_CACHE_SIGNING_KEY }}
+        AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
     - name: Log handoff receipt
       run: |
         set -euo pipefail

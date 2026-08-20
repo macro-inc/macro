@@ -1,6 +1,8 @@
-import { Message } from '../entities/channels/message';
+import { match, P } from 'ts-pattern';
 import { MacroError } from '../utils';
 import type { MacroClient } from '../utils/client';
+import { hydrateChannelEvent } from './hydrate/channel';
+import { hydrateDocumentEvent } from './hydrate/document';
 import type {
   DeliveryHeaders,
   EventHandler,
@@ -15,18 +17,16 @@ type AnyHandler = (event: unknown) => void | Promise<void>;
 /** Sent by Macro when validating a newly registered endpoint; acked, never dispatched. */
 const VALIDATION_EVENT = 'webhook.validation.test';
 
-// Runtime mirror of `MessageEventName`: any payload naming a message gets a
-// hydrated handle.
+/** Attach the entity handles defined for each webhook event. */
 function hydrate(client: MacroClient, event: MacroEvent): EventMap[EventName] {
-  const meta = event.metadata;
-  if ('message_id' in meta && 'channel_id' in meta) {
-    const mentions = 'mentions' in meta ? meta.mentions : [];
-    return {
-      metadata: meta,
-      message: Message.byId(client, meta.channel_id, meta.message_id, mentions),
-    } as EventMap[EventName];
-  }
-  return { metadata: meta } as EventMap[EventName];
+  return match(event)
+    .with({ event_type: P.string.startsWith('document.') }, (documentEvent) =>
+      hydrateDocumentEvent(client, documentEvent),
+    )
+    .with({ event_type: P.string.startsWith('channel.') }, (channelEvent) =>
+      hydrateChannelEvent(client, channelEvent),
+    )
+    .exhaustive();
 }
 
 /**
@@ -57,6 +57,32 @@ export class MacroEvents {
   }
 
   /**
+   * Subscribe to @-mentions of the authenticated caller: `channel.mentioned`
+   * deliveries whose mentioned entity is this bot (bot auth) or this user
+   * (user auth).
+   *
+   * `channel.mentioned` deliveries cover every mention in channels the
+   * webhook's workspace can access (its `ids` filter, like all channel
+   * events, holds channel ids); picking out "me" happens here, client-side.
+   * The caller's identity is resolved lazily (once) on the first delivery.
+   * The webhook itself is registered separately and once, e.g.
+   * `macro.webhooks.create({ filters: [{ events: ['channel.mentioned'] }],
+   * … })`.
+   *
+   * @returns An unsubscribe function.
+   */
+  onSelfMention(handler: EventHandler<'channel.mentioned'>): () => void {
+    return this.on('channel.mentioned', async (event) => {
+      // Principals embed emails for users; emails are case-insensitive.
+      const mentioned = event.metadata.mentioned.entity_id.toLowerCase();
+      if (mentioned !== (await this.client.myPrincipalId()).toLowerCase()) {
+        return;
+      }
+      await handler(event);
+    });
+  }
+
+  /**
    * Feed a raw delivery in: verifies the signature, parses, and dispatches to
    * matching handlers.
    *
@@ -75,11 +101,11 @@ export class MacroEvents {
 
     const event = JSON.parse(rawBody) as MacroEvent;
     if (!('event_type' in event)) return;
-    const set = this.handlers.get(event.event_type);
-    if (!set || set.size === 0) return;
+    const handlers = this.handlers.get(event.event_type);
+    if (!handlers || handlers.size === 0) return;
 
     const payload = hydrate(this.client, event);
-    await Promise.all([...set].map((handler) => handler(payload)));
+    await Promise.all([...handlers].map((handler) => handler(payload)));
   }
 
   /**

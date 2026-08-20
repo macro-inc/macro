@@ -18,7 +18,7 @@ import {
   SLOWLOG_SETTINGS,
 } from '../constants';
 
-type CreateIndexArgs = {
+export type CreateIndexArgs = {
   indexName: string;
   aliasName: string;
   body: Record<string, unknown>;
@@ -95,6 +95,196 @@ export function planCreateIndex(state: CreateIndexState): CreatePlan {
   return { kind: 'create_with_alias' };
 }
 
+/**
+ * Field-level drift between an index body in this file and the mapping that is
+ * actually live on the cluster.
+ *
+ * `updates` is the `properties` payload of a `_mapping` PUT: the full desired
+ * definition of every top-level field that is missing fields, which OpenSearch
+ * merges additively. `missingPaths` and `conflictPaths` are dotted field paths
+ * for the operator log.
+ */
+export type MappingConvergencePlan = {
+  updates: Record<string, unknown>;
+  missingPaths: string[];
+  conflictPaths: string[];
+};
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
+
+const fieldType = (definition: unknown): string | undefined => {
+  if (!isRecord(definition)) return undefined;
+  return typeof definition.type === 'string' ? definition.type : undefined;
+};
+
+/**
+ * Sub-fields of one field definition: object/nested members under
+ * `properties`, plus multi-fields under `fields`. A field can never have both,
+ * so flattening them into one namespace can't collide.
+ */
+const subFields = (definition: unknown): Record<string, unknown> => {
+  if (!isRecord(definition)) return {};
+  return {
+    ...(isRecord(definition.properties) ? definition.properties : {}),
+    ...(isRecord(definition.fields) ? definition.fields : {}),
+  };
+};
+
+function collectFieldDrift(
+  path: string,
+  desired: unknown,
+  live: unknown,
+  missingPaths: string[],
+  conflictPaths: string[]
+) {
+  const desiredType = fieldType(desired);
+  const liveType = fieldType(live);
+  // A type change can't be applied additively — it needs a reindex, so record
+  // it and stop descending (children of a differently-typed field are moot).
+  if (desiredType && liveType && desiredType !== liveType) {
+    conflictPaths.push(path);
+    return;
+  }
+
+  const desiredSubFields = subFields(desired);
+  const liveSubFields = subFields(live);
+  for (const [name, desiredSubField] of Object.entries(desiredSubFields)) {
+    const subPath = `${path}.${name}`;
+    if (!(name in liveSubFields)) {
+      missingPaths.push(subPath);
+      continue;
+    }
+    collectFieldDrift(
+      subPath,
+      desiredSubField,
+      liveSubFields[name],
+      missingPaths,
+      conflictPaths
+    );
+  }
+}
+
+/**
+ * Pure decision: which fields does the live mapping lack, and which of them
+ * can be added without a reindex?
+ *
+ * Only field *presence* is compared, never per-field parameters: OpenSearch
+ * echoes back a normalized mapping (defaults omitted, some values rewritten),
+ * so diffing parameters would report drift on every index forever. A field
+ * whose `type` disagrees lands in `conflictPaths` and is left alone — changing
+ * a live field's type requires `reindex_with_alias_swap.ts`. Anything else
+ * missing is additive, so the whole top-level definition goes into `updates`
+ * for OpenSearch to merge.
+ */
+export function planMappingConvergence(args: {
+  desired: Record<string, unknown> | undefined;
+  live: Record<string, unknown> | undefined;
+}): MappingConvergencePlan {
+  const desired = args.desired ?? {};
+  const live = args.live ?? {};
+
+  const updates: Record<string, unknown> = {};
+  const missingPaths: string[] = [];
+  const conflictPaths: string[] = [];
+
+  for (const [name, desiredDefinition] of Object.entries(desired)) {
+    if (!(name in live)) {
+      missingPaths.push(name);
+      updates[name] = desiredDefinition;
+      continue;
+    }
+
+    const fieldMissing: string[] = [];
+    const fieldConflicts: string[] = [];
+    collectFieldDrift(
+      name,
+      desiredDefinition,
+      live[name],
+      fieldMissing,
+      fieldConflicts
+    );
+    missingPaths.push(...fieldMissing);
+    conflictPaths.push(...fieldConflicts);
+    // Sending a definition that carries a conflict would be rejected wholesale,
+    // taking the additive sub-fields down with it.
+    if (fieldMissing.length > 0 && fieldConflicts.length === 0) {
+      updates[name] = desiredDefinition;
+    }
+  }
+
+  return { updates, missingPaths, conflictPaths };
+}
+
+/**
+ * Bring an existing index's mapping up to the body declared above by adding
+ * whatever fields it is missing.
+ *
+ * Index creation is one-shot, so a field added to a body here never reaches an
+ * index that already exists — and because every body is `dynamic: 'false'`,
+ * writes of the new field are dropped silently and searches over it match
+ * nothing (macro-2731: `call_records_v2` never got `properties`/`name`, so tag
+ * filters and name matches on calls returned empty). Converging on every run
+ * makes the body the single source of truth instead of a one-off script.
+ */
+async function convergeMapping(
+  opensearchClient: Client,
+  indexName: string,
+  body: Record<string, unknown>
+) {
+  const desiredMappings = isRecord(body.mappings) ? body.mappings : undefined;
+  const desired = isRecord(desiredMappings?.properties)
+    ? (desiredMappings?.properties as Record<string, unknown>)
+    : undefined;
+
+  const response = await opensearchClient.indices.getMapping({
+    index: indexName,
+  });
+  const liveMappings = (response.body ?? {})[indexName]?.mappings;
+  const live = isRecord(liveMappings?.properties)
+    ? (liveMappings?.properties as Record<string, unknown>)
+    : undefined;
+
+  const plan = planMappingConvergence({ desired, live });
+
+  for (const path of plan.conflictPaths) {
+    console.log(
+      `${indexName}: ⚠️  "${path}" has a different type live than in this file. ` +
+        `A type change needs a reindex — run reindex_with_alias_swap.ts.`
+    );
+  }
+
+  if (Object.keys(plan.updates).length === 0) {
+    if (plan.conflictPaths.length === 0) {
+      console.log(`${indexName}: mapping matches this file`);
+    }
+    return;
+  }
+
+  console.log(
+    `${indexName}: mapping is missing ${plan.missingPaths.length} field(s): ${plan.missingPaths.join(', ')}`
+  );
+
+  if (IS_DRY_RUN) {
+    console.log(
+      `[DRY-RUN] Would add ${Object.keys(plan.updates).join(', ')} to ${indexName}`
+    );
+    return;
+  }
+
+  const putMappingResponse = await opensearchClient.indices.putMapping({
+    index: indexName,
+    body: { properties: plan.updates },
+  });
+  if (!putMappingResponse.body.acknowledged) {
+    throw new Error(`Failed to add mapping fields to ${indexName}`);
+  }
+  console.log(
+    `✓ ${indexName}: added ${Object.keys(plan.updates).join(', ')}. ` +
+      `Backfill the affected entity to populate existing docs.`
+  );
+}
+
 async function createIndexWithAlias(
   opensearchClient: Client,
   { indexName, aliasName, body }: CreateIndexArgs
@@ -142,17 +332,19 @@ async function createIndexWithAlias(
   switch (plan.kind) {
     case 'noop':
       console.log(`${indexName}: ${plan.reason}`);
+      await convergeMapping(opensearchClient, indexName, body);
       return;
     case 'add_alias':
       if (IS_DRY_RUN) {
         console.log(`[DRY-RUN] Would add alias ${aliasName} -> ${indexName}`);
-        return;
+      } else {
+        console.log(`Adding alias ${aliasName} -> ${indexName}`);
+        await opensearchClient.indices.putAlias({
+          index: indexName,
+          name: aliasName,
+        });
       }
-      console.log(`Adding alias ${aliasName} -> ${indexName}`);
-      await opensearchClient.indices.putAlias({
-        index: indexName,
-        name: aliasName,
-      });
+      await convergeMapping(opensearchClient, indexName, body);
       return;
     case 'create_with_alias':
       if (IS_DRY_RUN) {
@@ -182,6 +374,7 @@ async function createIndexWithAlias(
       return;
     case 'defer_alias':
       console.log(`${indexName}: ${plan.nextStep}`);
+      await convergeMapping(opensearchClient, indexName, body);
       return;
   }
 }
@@ -718,46 +911,72 @@ const CALL_RECORDS_V2_BODY = {
   },
 };
 
+/**
+ * Every index this repo owns, with the mapping it is supposed to have.
+ * `verify_mappings.ts` reads the same list so a drift check and a converging
+ * run can never disagree about what the desired mapping is.
+ *
+ * chats and call_records use parent/child join mappings (bodies inlined above
+ * as CHATS_V2_BODY / CALL_RECORDS_V2_BODY).
+ */
+export const INDEX_SPECS: CreateIndexArgs[] = [
+  {
+    indexName: DOCUMENTS_INDEX,
+    aliasName: DOCUMENTS_ALIAS,
+    body: DOCUMENT_BODY,
+  },
+  { indexName: EMAILS_INDEX, aliasName: EMAILS_ALIAS, body: EMAIL_BODY },
+  { indexName: CHANNELS_INDEX, aliasName: CHANNELS_ALIAS, body: CHANNEL_BODY },
+  { indexName: CHATS_INDEX, aliasName: CHATS_ALIAS, body: CHATS_V2_BODY },
+  {
+    indexName: CALL_RECORDS_INDEX,
+    aliasName: CALL_RECORDS_ALIAS,
+    body: CALL_RECORDS_V2_BODY,
+  },
+  { indexName: PROJECTS_INDEX, aliasName: PROJECTS_ALIAS, body: PROJECTS_BODY },
+];
+
+/**
+ * Narrow a run to one index by alias or physical name (`INDEX=call_records`).
+ *
+ * An environment can sit mid-migration on one index while another needs a
+ * field added — prod held `emails` on `emails_v1` while `call_records_v2` was
+ * missing its `properties` mapping, and an unscoped run there would have
+ * created an empty `emails_v2` as a side effect. Scoping keeps a mapping fix
+ * from touching an unrelated migration.
+ */
+export function selectIndexSpecs(
+  specs: CreateIndexArgs[],
+  filter: string | undefined
+): CreateIndexArgs[] {
+  if (!filter) return specs;
+  return specs.filter(
+    (spec) => spec.indexName === filter || spec.aliasName === filter
+  );
+}
+
 async function createIndices() {
   const opensearchClient = client();
+  const filter = process.env.INDEX;
+  const specs = selectIndexSpecs(INDEX_SPECS, filter);
+  if (specs.length === 0) {
+    console.log(
+      `⚠️  INDEX="${filter}" matches no index. Known: ` +
+        `${INDEX_SPECS.map((s) => s.aliasName).join(', ')}. Aborting.`
+    );
+    return;
+  }
+
   console.log(
-    `Creating indices... ${IS_DRY_RUN ? '(DRY-RUN MODE — set DRY_RUN=false to apply)' : '(LIVE MODE)'}`
+    `Creating indices and converging mappings${filter ? ` for "${filter}"` : ''}... ${IS_DRY_RUN ? '(DRY-RUN MODE — set DRY_RUN=false to apply)' : '(LIVE MODE)'}`
   );
 
   try {
-    await createIndexWithAlias(opensearchClient, {
-      indexName: DOCUMENTS_INDEX,
-      aliasName: DOCUMENTS_ALIAS,
-      body: DOCUMENT_BODY,
-    });
-    await createIndexWithAlias(opensearchClient, {
-      indexName: EMAILS_INDEX,
-      aliasName: EMAILS_ALIAS,
-      body: EMAIL_BODY,
-    });
-    await createIndexWithAlias(opensearchClient, {
-      indexName: CHANNELS_INDEX,
-      aliasName: CHANNELS_ALIAS,
-      body: CHANNEL_BODY,
-    });
-    // chats and call_records use parent/child join mappings (bodies inlined
-    // above as CHATS_V2_BODY / CALL_RECORDS_V2_BODY). Idempotent — no-ops where
-    // they already exist.
-    await createIndexWithAlias(opensearchClient, {
-      indexName: CHATS_INDEX,
-      aliasName: CHATS_ALIAS,
-      body: CHATS_V2_BODY,
-    });
-    await createIndexWithAlias(opensearchClient, {
-      indexName: CALL_RECORDS_INDEX,
-      aliasName: CALL_RECORDS_ALIAS,
-      body: CALL_RECORDS_V2_BODY,
-    });
-    await createIndexWithAlias(opensearchClient, {
-      indexName: PROJECTS_INDEX,
-      aliasName: PROJECTS_ALIAS,
-      body: PROJECTS_BODY,
-    });
+    // Idempotent — indices that already exist keep their data and only gain
+    // fields this file declares that they are missing.
+    for (const spec of specs) {
+      await createIndexWithAlias(opensearchClient, spec);
+    }
     console.log('done');
   } catch (error) {
     console.error('Error', error);

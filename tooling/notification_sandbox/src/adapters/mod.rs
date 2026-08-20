@@ -1,7 +1,7 @@
 /// Interactive mobile push sender for sandbox.
 pub mod interactive_mobile;
-/// WebSocket sender that logs delivery info.
-pub mod logging_websocket;
+/// Realtime sender that logs delivery info.
+pub mod logging_realtime;
 /// Tokio mpsc-backed notification queue.
 pub mod mpsc_queue;
 /// Rate limiter that always allows.

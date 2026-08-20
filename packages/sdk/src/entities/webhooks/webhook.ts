@@ -54,6 +54,7 @@ export class Webhook extends MacroEntity<WebhookRecord> {
     client: MacroClient,
     opts: {
       url: string;
+      namespace: string;
       name: string;
       filters: WebhookFilter[];
       scope?: WebhookScope;
@@ -64,6 +65,7 @@ export class Webhook extends MacroEntity<WebhookRecord> {
       await client.storage.createWebhook({
         body: {
           endpoint_url: opts.url,
+          namespace: opts.namespace,
           name: opts.name,
           filters: opts.filters,
           scope: opts.scope ?? 'user',
@@ -86,6 +88,12 @@ export class Webhook extends MacroEntity<WebhookRecord> {
 
   /** The webhook's display name. */
   readonly name = this.field('name');
+
+  /**
+   * The caller-chosen namespace, unique among the owning workspace's webhooks.
+   * Fixed at creation time; it cannot be patched.
+   */
+  readonly namespace = this.field('namespace');
 
   /** The HTTPS endpoint URL deliveries are sent to. */
   readonly endpointUrl = this.field('endpoint_url');

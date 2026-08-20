@@ -11,7 +11,7 @@ export type TabItem = {
 export type TabsInsetDropdownProps = {
   placeholder?: string | JSX.Element;
   onChange?: (value: string) => void;
-  depth?: 0 | 1 | 2 | 3 | 4 | 5;
+  depth?: 0 | 1 | 2 | 3 | 4;
   defaultValue?: string;
   disabled?: boolean;
   list: TabItem[];
@@ -41,7 +41,7 @@ export const TabsInsetDropdown = (props: TabsInsetDropdownProps) => {
       <Dropdown.Trigger
         class={cn(
           'not-disabled:hover:bg-surface active:bg-surface focus-visible:bg-surface',
-          'h-auto p-0.5 rounded-lg border-0 ring ring-edge-muted bg-surface',
+          'h-auto p-0.5 rounded-lg border border-edge-muted bg-surface',
           local.class
         )}
         disabled={local.disabled}

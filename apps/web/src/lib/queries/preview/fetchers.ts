@@ -357,6 +357,53 @@ async function fetchEmailPreviews(threadIds: string[]): Promise<PreviewItem[]> {
   return results;
 }
 
+/**
+ * Calendar mention previews resolve through the requester's own copy of the
+ * meeting: the API answers with the viewer-relative event (or no_access /
+ * does_not_exist), never another user's row. The batch is occurrence-agnostic
+ * — previews cache per event id, and the server picks the instance nearest to
+ * now.
+ */
+async function fetchCalendarEventPreviews(
+  eventIds: string[]
+): Promise<PreviewItem[]> {
+  const result = await storageServiceClient.getBatchCalendarEventPreviews({
+    items: eventIds.map((eventId) => ({ eventId })),
+  });
+
+  if (result.isErr()) {
+    console.error('Failed to fetch calendar event previews');
+    return [];
+  }
+
+  return result.value.items.map((item) => {
+    const base = {
+      id: item.eventId,
+      type: 'calendar_event',
+    } as const;
+
+    if (item.type === 'access' && item.event) {
+      return {
+        ...base,
+        access: 'access' as const,
+        loading: false as const,
+        rawName: item.event.title,
+        name: item.event.title,
+        updatedAt: item.event.updatedAt,
+        event: item.event,
+      };
+    }
+    return {
+      ...base,
+      access:
+        item.type === 'does_not_exist'
+          ? ('does_not_exist' as const)
+          : ('no_access' as const),
+      loading: false as const,
+    };
+  });
+}
+
 function filterMapToId(items: Array<ItemEntity>, type: ItemEntity['type']) {
   return items.filter((i) => i.type === type).map(({ id }) => id);
 }
@@ -380,6 +427,7 @@ export async function fetchPreviewBatch(
     doFetch(fetchProjectPreviews, filterMapToId(items, 'project')),
     doFetch(fetchEmailPreviews, filterMapToId(items, 'email')),
     doFetch(fetchCrmCompanyPreviews, filterMapToId(items, 'crm_company')),
+    doFetch(fetchCalendarEventPreviews, filterMapToId(items, 'calendar_event')),
   ]);
   const resultMap = new Map<string, PreviewItem>();
   results.flat().forEach((result) => {

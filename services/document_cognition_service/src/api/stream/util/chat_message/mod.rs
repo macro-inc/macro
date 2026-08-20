@@ -35,6 +35,7 @@ pub async fn store_incoming_message(
                         EntityType::Channel => AttachmentType::Channel,
                         EntityType::EmailThread => AttachmentType::Email,
                         EntityType::Project => AttachmentType::Project,
+                        EntityType::Skill => AttachmentType::Skill,
                         _ => return None,
                     };
                     Some(NewAttachment {

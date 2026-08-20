@@ -11,6 +11,8 @@ import type { WebhookScope } from './webhookScope';
 
 /**
  * Request to create a webhook.
+
+Clients serialize this, so both derives are used.
  */
 export interface CreateWebhookRequest {
   /** Endpoint URL. HTTPS is required outside local environments. */
@@ -20,6 +22,9 @@ export interface CreateWebhookRequest {
   headers?: CreateWebhookRequestHeaders;
   /** Display name. */
   name: string;
+  /** Caller-chosen namespace, unique among the owning workspace's webhooks.
+Set at creation time only; it cannot be changed afterwards. */
+  namespace: string;
   /** Scope that owns the webhook. */
   scope: WebhookScope;
 }

@@ -176,7 +176,7 @@ const NestedConnectorLines: Component<NestedConnectorLinesProps> = (props) => {
   for (let i = 0; i < (props.threadDepth ?? 0); i++) {
     NestedLines.push(
       <div
-        class="absolute h-full border-l"
+        class="absolute h-full border-l-1"
         classList={{
           'border-accent': props.isParentNewMessage,
           'border-rail': !props.isParentNewMessage,
@@ -261,7 +261,7 @@ const Root: Component<MessageRootProps> = (props) => {
                 'relative flex flex-col pl-[calc(var(--user-icon-width)/2+var(--message-padding-x))] ml-(--left-of-connector)',
                 !props.hideConnectors &&
                   (!props.isLastMessage || props.hasReplyInputBelow) &&
-                  'border-l',
+                  'border-l-1',
                 props.isNewMessage ? 'border-accent' : 'border-rail',
                 !(
                   props.isConsecutive ||
@@ -417,7 +417,7 @@ const Root: Component<MessageRootProps> = (props) => {
                 ref={(el) => props.setThreadAppendMountTarget?.(el)}
               >
                 <div
-                  class="absolute border-l border-rail"
+                  class="absolute border-l-1 border-rail"
                   style={{
                     left: `calc((var(--user-icon-width) / 2) * -1)`,
                     height:

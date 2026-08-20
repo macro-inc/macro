@@ -1,42 +1,46 @@
 import { cn } from '@ui';
-import { type Accessor, createEffect, createSignal, onCleanup } from 'solid-js';
+import { type Accessor, createEffect, onCleanup } from 'solid-js';
 
 const SCROLL_THRESHOLD = 20;
 
+function thresholdOpacity(distance: number) {
+  return Math.max(0, Math.min(distance, SCROLL_THRESHOLD) / SCROLL_THRESHOLD);
+}
+
 /**
- * Used to add decorative indications that content is scrollable, in scenarios where the scrollbar is hidden.
- * Supports both vertical (default) and horizontal scroll directions.
+ * Adds decorative indications that content is scrollable. The indicators hide
+ * at their respective scroll boundaries and support vertical or horizontal
+ * scrolling.
  */
 export const ScrollIndicators = (props: {
   scrollRef: Accessor<HTMLElement | undefined>;
   direction?: 'vertical' | 'horizontal';
+  appearance?: 'pattern' | 'gradient';
+  class?: string;
   noBorderStart?: boolean;
   noBorderEnd?: boolean;
 }) => {
-  const [startOpacity, setStartOpacity] = createSignal(0);
-  const [endOpacity, setEndOpacity] = createSignal(0);
+  let startIndicator: HTMLDivElement | undefined;
+  let endIndicator: HTMLDivElement | undefined;
 
   const isHorizontal = () => props.direction === 'horizontal';
+  const isGradient = () => props.appearance === 'gradient';
 
   const updateIndicators = () => {
     const ref = props.scrollRef();
-    if (!ref) return;
+    if (!ref || !startIndicator || !endIndicator) return;
 
     if (isHorizontal()) {
       const { scrollLeft, scrollWidth, clientWidth } = ref;
-      setStartOpacity(
-        Math.min(scrollLeft, SCROLL_THRESHOLD) / SCROLL_THRESHOLD
-      );
-      setEndOpacity(
-        Math.min(scrollWidth - clientWidth - scrollLeft, SCROLL_THRESHOLD) /
-          SCROLL_THRESHOLD
+      startIndicator.style.opacity = String(thresholdOpacity(scrollLeft));
+      endIndicator.style.opacity = String(
+        thresholdOpacity(scrollWidth - clientWidth - scrollLeft)
       );
     } else {
       const { scrollTop, scrollHeight, clientHeight } = ref;
-      setStartOpacity(Math.min(scrollTop, SCROLL_THRESHOLD) / SCROLL_THRESHOLD);
-      setEndOpacity(
-        Math.min(scrollHeight - clientHeight - scrollTop, SCROLL_THRESHOLD) /
-          SCROLL_THRESHOLD
+      startIndicator.style.opacity = String(thresholdOpacity(scrollTop));
+      endIndicator.style.opacity = String(
+        thresholdOpacity(scrollHeight - clientHeight - scrollTop)
       );
     }
   };
@@ -45,52 +49,67 @@ export const ScrollIndicators = (props: {
     const ref = props.scrollRef();
     if (!ref) return;
 
-    ref.addEventListener('scroll', updateIndicators);
+    ref.addEventListener('scroll', updateIndicators, { passive: true });
 
     const resizeObserver = new ResizeObserver(updateIndicators);
     resizeObserver.observe(ref);
+    const observeScrollContent = () => {
+      const content = ref.firstElementChild;
+      if (content instanceof HTMLElement) resizeObserver.observe(content);
+    };
+    observeScrollContent();
+
+    updateIndicators();
 
     onCleanup(() => {
       ref.removeEventListener('scroll', updateIndicators);
       resizeObserver.disconnect();
     });
-
-    updateIndicators();
   });
 
   return (
     <>
-      {/* Start scroll boundary indicator */}
       <div
+        ref={startIndicator}
+        aria-hidden="true"
         class={cn(
-          'absolute pointer-events-none z-annotation-layer pattern-diagonal-4 pattern-edge',
-          isHorizontal()
-            ? cn(
-                'inset-y-px left-0 w-3 mask-r-from-0%',
-                !props.noBorderStart && 'border-l border-edge-muted'
-              )
-            : cn(
-                'inset-x-px top-0 h-3 mask-b-from-0%',
-                !props.noBorderStart && 'border-t border-edge-muted'
-              )
+          'pointer-events-none absolute z-annotation-layer',
+          isGradient()
+            ? isHorizontal()
+              ? 'inset-y-0 left-0 w-4 bg-linear-to-r from-surface to-transparent transition-opacity'
+              : 'inset-x-0 top-0 h-4 bg-linear-to-b from-surface to-transparent transition-opacity'
+            : isHorizontal()
+              ? cn(
+                  'inset-y-px left-0 w-3 mask-r-from-0% pattern-diagonal-4 pattern-edge',
+                  !props.noBorderStart && 'border-edge-muted border-l'
+                )
+              : cn(
+                  'inset-x-px top-0 h-3 mask-b-from-0% pattern-diagonal-4 pattern-edge',
+                  !props.noBorderStart && 'border-edge-muted border-t'
+                ),
+          props.class
         )}
-        style={{ opacity: startOpacity() }}
       />
-      {/* End scroll boundary indicator */}
       <div
+        ref={endIndicator}
+        aria-hidden="true"
         class={cn(
-          'absolute pointer-events-none z-annotation-layer pattern-diagonal-4 pattern-edge',
-          isHorizontal()
-            ? cn(
-                'inset-y-px right-0 w-3 mask-l-from-0%',
-                !props.noBorderEnd && 'border-r border-edge-muted'
-              )
-            : cn(
-                'inset-x-px bottom-0 h-3 mask-t-from-0%',
-                !props.noBorderEnd && 'border-b border-edge-muted'
-              )
+          'pointer-events-none absolute z-annotation-layer',
+          isGradient()
+            ? isHorizontal()
+              ? 'inset-y-0 right-0 w-4 bg-linear-to-l from-surface to-transparent transition-opacity'
+              : 'inset-x-0 bottom-0 h-4 bg-linear-to-t from-surface to-transparent transition-opacity'
+            : isHorizontal()
+              ? cn(
+                  'inset-y-px right-0 w-3 mask-l-from-0% pattern-diagonal-4 pattern-edge',
+                  !props.noBorderEnd && 'border-edge-muted border-r'
+                )
+              : cn(
+                  'inset-x-px bottom-0 h-3 mask-t-from-0% pattern-diagonal-4 pattern-edge',
+                  !props.noBorderEnd && 'border-edge-muted border-b'
+                ),
+          props.class
         )}
-        style={{ opacity: endOpacity() }}
       />
     </>
   );

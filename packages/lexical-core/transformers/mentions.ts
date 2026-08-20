@@ -31,6 +31,7 @@ export const I_USER_MENTION: TextMatchTransformer = {
     const data = JSON.stringify({
       userId: node.getUserId(),
       email: node.getEmail(),
+      displayName: node.getDisplayName(),
     });
     return `<m-user-mention>${data}</m-user-mention>`;
   },
@@ -40,7 +41,11 @@ export const I_USER_MENTION: TextMatchTransformer = {
       for (const field of ['userId', 'email']) {
         if (!(field in data)) throw new Error(`Missing field ${field}`);
       }
-      const userMentionNode = new UserMentionNode(data.userId, data.email);
+      const displayName =
+        typeof data.displayName === 'string' ? data.displayName : undefined;
+      const userMentionNode = new UserMentionNode(data.userId, data.email, {
+        displayName,
+      });
       node.replace(userMentionNode);
     } catch (e) {
       console.error('Error in I_USER_MENTION replace:', e);

@@ -25,19 +25,19 @@ concurrency:
 
 jobs:
   deploy:
-    runs-on:
-      [
-        runs-on,
-        runner=8cpu-linux-x64,
-        hdd=40,
-        spot=false,
-        ssh=false,
-        'run-id=${{github.run_id}}',
-      ]
+    runs-on: namespace-profile-linux-mid
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
         with:
           ref: ${{ github.ref_name }}
+          persist-credentials: false
+      - name: Mount Namespace Nix cache
+        continue-on-error: true
+        uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0 # v1.4.3
+        with:
+          cache: nix
+      - name: Setup Nix
+        uses: ./.github/actions/setup-nix
       - uses: ./.github/actions/deploy-cloud-storage-pulumi
         with:
           environment: ${{ inputs.environment }}
@@ -46,7 +46,8 @@ jobs:
           pulumi-access-token: ${{ secrets.PULUMI_ACCESS_TOKEN }}
           pulumi-service-name: ${{ inputs.pulumi-service-name }} # TODO: we should have validation that this is a valid pulumi service name before we allow it to be set here
           cloud-storage-service-name: ${{ inputs.cloud-storage-service-name }}
-          cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
-          sccache-bucket: ${{ vars.SCCACHE_BUCKET || secrets.SCCACHE_BUCKET }}
           dd-app-key: ${{ secrets.DD_APP_KEY }}
           dd-api-key: ${{ secrets.DD_API_KEY }}
+      - name: Teardown Nix
+        if: ${{ always() }}
+        uses: ./.github/actions/teardown-nix

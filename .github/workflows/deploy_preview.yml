@@ -14,8 +14,9 @@ env:
     - apps/web/**
     - packages/**
     - crates/client/cache-core/**
-    - crates/client/cache-idb/**
+    - crates/client/cache-turso/**
     - crates/client/cache-wasm/**
+    - crates/client/turso-opfs/**
     - static_assets/schema.graphql
     - Cargo.toml
     - Cargo.lock
@@ -83,6 +84,9 @@ jobs:
           --preview-id ${{ steps.preview-id.outputs.id }} \
           --sha ${{ github.sha }}
       working-directory: apps/web
+    - name: Teardown Nix
+      if: always()
+      uses: './.github/actions/teardown-nix'
 concurrency:
   group: preview-${{ github.event.pull_request.number }}
   cancel-in-progress: true

@@ -11,6 +11,7 @@
 
 mod assign_author;
 mod assign_labels;
+mod build_agent_daemon_on_tag;
 mod build_appimage_on_tag;
 mod build_desktop_on_tag;
 mod build_dmg_on_tag;
@@ -19,18 +20,20 @@ mod cargo_deny;
 mod cargo_workspace_dependency_check;
 mod check_generated;
 mod check_node_modules_nix;
+mod cla;
 mod cleanup_preview;
 mod code_check_cloud_storage;
 mod code_check_conventions;
 mod code_check_infra;
 mod deploy_ai_editing_worker;
 mod deploy_all_services;
-mod deploy_cloud_storage_on_push;
+mod deploy_cla_worker;
 mod deploy_fusionauth_instance;
+mod deploy_on_push;
 mod deploy_preview;
 mod deploy_sync_service;
 mod deploy_web_app;
-mod deploy_web_app_dev_push;
+mod docs_check;
 mod path_validation;
 mod preview_fly;
 mod pulumi_preview_pr;
@@ -108,6 +111,11 @@ const WORKFLOWS: &[WorkflowFile] = &[
         render_yaml: || render_gh_workflow(assign_labels::assign_labels)(),
     },
     WorkflowFile {
+        slug: "build_agent_daemon_on_tag",
+        file_name: "build_agent_daemon_on_tag.yml",
+        render_yaml: || render_gh_workflow(build_agent_daemon_on_tag::build_agent_daemon_on_tag)(),
+    },
+    WorkflowFile {
         slug: "build_appimage_on_tag",
         file_name: "build_appimage_on_tag.yml",
         render_yaml: || render_gh_workflow(build_appimage_on_tag::build_appimage)(),
@@ -150,6 +158,11 @@ const WORKFLOWS: &[WorkflowFile] = &[
         },
     },
     WorkflowFile {
+        slug: "cla",
+        file_name: "cla.yml",
+        render_yaml: || render_gh_workflow(cla::cla)(),
+    },
+    WorkflowFile {
         slug: "cleanup_preview",
         file_name: "cleanup_preview.yml",
         render_yaml: || render_gh_workflow(cleanup_preview::cleanup_preview)(),
@@ -180,14 +193,14 @@ const WORKFLOWS: &[WorkflowFile] = &[
         },
     },
     WorkflowFile {
-        slug: "deploy_cloud_storage_on_push",
-        file_name: "deploy_cloud_storage_on_push.yml",
-        render_yaml: || {
-            render_patched(
-                deploy_cloud_storage_on_push::deploy_cloud_storage_on_push,
-                deploy_cloud_storage_on_push::patch,
-            )
-        },
+        slug: "deploy_cla_worker",
+        file_name: "deploy_cla_worker.yml",
+        render_yaml: || render_gh_workflow(deploy_cla_worker::deploy_cla_worker)(),
+    },
+    WorkflowFile {
+        slug: "deploy_on_push",
+        file_name: "deploy_on_push.yml",
+        render_yaml: || render_patched(deploy_on_push::deploy_on_push, deploy_on_push::patch),
     },
     WorkflowFile {
         slug: "deploy_fusionauth_instance",
@@ -218,16 +231,6 @@ const WORKFLOWS: &[WorkflowFile] = &[
         slug: "deploy_web_app",
         file_name: "deploy_web_app.yml",
         render_yaml: || render_patched(deploy_web_app::deploy_web_app, deploy_web_app::patch),
-    },
-    WorkflowFile {
-        slug: "deploy_web_app_dev_push",
-        file_name: "deploy_web_app_dev_push.yml",
-        render_yaml: || {
-            render_patched(
-                deploy_web_app_dev_push::deploy_web_app_dev_push,
-                deploy_web_app_dev_push::patch,
-            )
-        },
     },
     WorkflowFile {
         slug: "pulumi_preview_pr",
@@ -288,6 +291,11 @@ const WORKFLOWS: &[WorkflowFile] = &[
         slug: "sdk_check",
         file_name: "sdk-check.yml",
         render_yaml: || render_gh_workflow(sdk_check::sdk_check)(),
+    },
+    WorkflowFile {
+        slug: "docs_check",
+        file_name: "docs-check.yml",
+        render_yaml: || render_gh_workflow(docs_check::docs_check)(),
     },
 ];
 

@@ -17,7 +17,7 @@ export function FatalError(props: FatalErrorProps) {
 
   return (
     <Dialog open position="center" class="w-120">
-      <Surface depth={2} class="rounded-xl">
+      <Surface depth={2} class="rounded-xl bg-surface">
         <div class="p-6 sm:p-8 font-sans">
           <div class="text-center">
             <h1 class="text-ink text-lg/7 font-semibold mb-4">
@@ -26,7 +26,7 @@ export function FatalError(props: FatalErrorProps) {
 
             <Show when={props.error} keyed>
               {(error) => (
-                <div class="mb-6 p-3 bg-failure/10 border border-edge rounded text-left">
+                <div class="mb-6 p-3 bg-failure-bg border border-edge rounded text-left">
                   <p class="text-sm text-failure-ink font-mono break-all">
                     {error.message || error.toString()}
                   </p>

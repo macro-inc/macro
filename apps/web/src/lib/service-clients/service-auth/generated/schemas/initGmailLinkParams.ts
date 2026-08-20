@@ -10,4 +10,8 @@ export type InitGmailLinkParams = {
    * **OPTIONAL**. The original url to redirect to.
    */
   original_url: string;
+  /**
+   * **OPTIONAL**. Which capabilities to request consent for: `gmail` (default), `gmail_and_calendar`, or `calendar`. The calendar variants are only honored when the deployment allows calendar scope requests.
+   */
+  scopes?: string;
 };

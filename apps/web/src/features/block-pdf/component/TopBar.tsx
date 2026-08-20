@@ -162,6 +162,7 @@ export function TopBar() {
       action: () => printFile(),
     },
     {
+      group: 'file',
       label: 'Download',
       icon: DownloadIcon,
       action: download,
@@ -169,6 +170,7 @@ export function TopBar() {
     ...(fileType === 'docx'
       ? [
           {
+            group: 'file',
             label: 'Download DOCX',
             icon: DownloadIcon,
             action: downloadDocx,
@@ -214,6 +216,7 @@ export function TopBar() {
       ),
     },
     {
+      group: 'sharing',
       label: 'Share',
       icon: IconShared,
       action: () => shareCtx.open(),
@@ -242,8 +245,8 @@ export function TopBar() {
         <BlockItemSplitLabel />
       </SplitHeaderLeft>
       <SplitHeaderRight>
-        {/* Hidden on mobile: no floating-island treatment for live avatars yet. */}
-        <div class="-order-1 mobile:hidden">
+        {/* Hidden on mobile/tablet: no floating-island treatment for live avatars yet. */}
+        <div class="-order-1 touch:hidden">
           <BlockLiveIndicators />
         </div>
       </SplitHeaderRight>

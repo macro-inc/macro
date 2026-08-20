@@ -1,4 +1,9 @@
 import {
+  AGENT_SESSION_LOG_EVENT,
+  type AgentSessionLogEvent,
+} from '@queries/agent-session/realtime-protocol';
+import { handleAgentSessionLog } from '@queries/agent-session/session-fold';
+import {
   handleCommsAttachment,
   handleCommsMessage,
   handleCommsReaction,
@@ -14,6 +19,7 @@ import {
 import { invalidateAllProperties } from '@queries/properties/tags';
 import { invalidateAllSoup } from '@queries/soup/normalized-cache';
 import { handleTaskDuplicateMatchesUpdated } from '@queries/storage/task-duplicates';
+import { handleRefreshCalendar } from '../calendar/sync';
 // Side-effect import: registers the scheduled-action live-update websocket
 // listener. Must be imported somewhere that always loads on app start — this
 // provider is guaranteed to mount alongside the other sync handlers.
@@ -49,6 +55,16 @@ export function QuerySyncProvider(props: SyncProviderProps) {
       .with({ type: 'comms_message' }, () => {
         withParsedWebsocketPayload(data.type, data.data, handleCommsMessage);
       })
+      // One frame appended to a live agent session's log. Routed to the
+      // channel's fold rather than to any cache: the frame is not a message,
+      // it is a step towards one, and only the fold knows which.
+      .with({ type: AGENT_SESSION_LOG_EVENT }, () => {
+        withParsedWebsocketPayload<AgentSessionLogEvent>(
+          data.type,
+          data.data,
+          handleAgentSessionLog
+        );
+      })
       .with({ type: 'comms_reaction' }, () => {
         withParsedWebsocketPayload(data.type, data.data, handleCommsReaction);
       })
@@ -81,6 +97,9 @@ export function QuerySyncProvider(props: SyncProviderProps) {
       })
       .with({ type: 'refresh_email' }, () => {
         withParsedWebsocketPayload(data.type, data.data, handleRefreshEmail);
+      })
+      .with({ type: 'refresh_calendar' }, () => {
+        withParsedWebsocketPayload(data.type, data.data, handleRefreshCalendar);
       })
       // Signup seeding is fire-and-forget, so refresh Soup and the provisioned
       // properties and favorites when it finishes.

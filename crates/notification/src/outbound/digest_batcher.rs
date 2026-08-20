@@ -176,7 +176,7 @@ impl DigestBatcher for RedisDigestBatcher {
             .into_iter()
             .filter_map(|s| {
                 serde_json::from_str::<UserNotificationRow<serde_json::Value>>(&s)
-                    .inspect_err(|e| tracing::error!(error=?e, json=%s, "failed to deserialize digest notification"))
+                    .inspect_err(|e| tracing::error!(error=?e, payload_length=s.len(), "failed to deserialize digest notification"))
                     .ok()
                     .map(|n| n.into_tagged())
             })

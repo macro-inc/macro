@@ -11,11 +11,13 @@ use uuid::Uuid;
 
 use super::{
     entity_properties_get_query, entity_property_queries, metadata_queries,
-    property_definition_queries, property_option_queries, task_property_queries,
+    property_definition_queries, property_option_queries, tag_promotion_queries,
+    task_property_queries,
 };
 use crate::domain::model::{
     EntityPropertiesKey, EntityPropertyInfo, EntityPropertyMutationSnapshot,
-    GetOrCreateTagDefinitionResult, PropertyDefinitionOwner, UpdatePropertyOptionOutcome,
+    GetOrCreateTagDefinitionResult, PropertyDefinitionOwner, TagPromotionOutcome, TagRemapOutcome,
+    UpdatePropertyOptionOutcome,
 };
 use crate::domain::ports::PropertiesRepo;
 use models_properties::DataType;
@@ -234,6 +236,40 @@ impl PropertiesRepo for PropertiesPgRepo {
     }
 
     #[tracing::instrument(skip(self))]
+    async fn promote_tag_option(
+        &self,
+        option_id: Uuid,
+        source_definition_id: Uuid,
+        target_definition_id: Uuid,
+    ) -> Result<TagPromotionOutcome, Self::Err> {
+        tag_promotion_queries::promote_tag_option(
+            &self.pool,
+            option_id,
+            source_definition_id,
+            target_definition_id,
+        )
+        .await
+    }
+
+    #[tracing::instrument(skip(self))]
+    async fn merge_tag_option(
+        &self,
+        source_option_id: Uuid,
+        source_definition_id: Uuid,
+        target_option_id: Uuid,
+        target_definition_id: Uuid,
+    ) -> Result<Option<TagRemapOutcome>, Self::Err> {
+        tag_promotion_queries::merge_tag_option(
+            &self.pool,
+            source_option_id,
+            source_definition_id,
+            target_option_id,
+            target_definition_id,
+        )
+        .await
+    }
+
+    #[tracing::instrument(skip(self))]
     async fn count_valid_property_options(
         &self,
         property_definition_id: Uuid,
@@ -254,7 +290,7 @@ impl PropertiesRepo for PropertiesPgRepo {
         entity_type: EntityType,
         property_definition_id: Uuid,
         value: Option<PropertyValue>,
-    ) -> Result<models_properties::service::entity_property::EntityProperty, Self::Err> {
+    ) -> Result<EntityPropertyMutationSnapshot, Self::Err> {
         entity_property_queries::upsert_entity_property(
             &self.pool,
             entity_id,

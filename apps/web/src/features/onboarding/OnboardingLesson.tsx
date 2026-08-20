@@ -65,7 +65,7 @@ export function OnboardingLessonActions(props: LessonActionsProps) {
           type="button"
           onClick={onboarding.handleSkipLesson}
           class={cn(
-            'w-full px-3 py-2.5 text-lg font-bold rounded-xs flex items-center gap-2 border-none bg-transparent text-ink/60 hover:bg-hover ring ring-edge-muted',
+            'w-full px-3 py-2.5 text-lg font-bold rounded-xs flex items-center gap-2 border border-edge-muted bg-transparent text-ink/60 hover:bg-hover',
             props.lesson.definition.centeredButton
               ? 'justify-center'
               : 'justify-between'
@@ -176,7 +176,7 @@ export function OnboardingDemoFallback() {
 
 export function OnboardingDemoPanel(props: LessonStyleProps) {
   return (
-    <div class="flex-1 min-w-0 flex items-center justify-center bg-surface-secondary/30 overflow-hidden">
+    <div class="flex-1 min-w-0 flex items-center justify-center bg-panel overflow-hidden">
       <div style={props.bodyStyle()} class="size-full">
         <Show
           when={props.lesson.definition.demo}

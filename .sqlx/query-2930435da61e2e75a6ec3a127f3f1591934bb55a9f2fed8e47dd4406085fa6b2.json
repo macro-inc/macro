@@ -47,7 +47,8 @@
             "kind": {
               "Enum": [
                 "task",
-                "snippet"
+                "snippet",
+                "skill"
               ]
             }
           }

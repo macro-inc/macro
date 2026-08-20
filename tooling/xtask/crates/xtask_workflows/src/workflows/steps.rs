@@ -82,6 +82,18 @@ pub fn setup_rust_light() -> Step<Use> {
     .add_with(("rust-cache", "false"))
 }
 
+/// [`setup_rust_light`] plus sccache, for jobs that actually compile something
+/// but do not need the Nix dev shell. Pair with
+/// [`configure_namespace_sccache`] to point the wrapper at the remote cache.
+pub fn setup_rust_sccache() -> Step<Use> {
+    uses_local(
+        "Setup Rust",
+        xtask_paths::repo_dir!(".github/actions/setup-rust"),
+    )
+    .add_with(("sccache", "true"))
+    .add_with(("rust-cache", "false"))
+}
+
 /// Install + initialise Nix on the runner. Namespace profiles don't ship Nix,
 /// so this must run before [`setup_dev_shell`] (which shells out to `nix`). The
 /// `/nix` cache volume mounted by [`mount_cache_volume`] keeps the store warm,
@@ -91,6 +103,55 @@ pub fn setup_nix() -> Step<Use> {
         "Setup Nix",
         xtask_paths::repo_dir!(".github/actions/setup-nix"),
     )
+}
+
+/// [`setup_nix`] with the private S3 binary cache configured as a substituter,
+/// so a /nix cache-volume miss degrades to a download instead of a rebuild.
+/// Only for jobs with access to the AWS secrets (deploy pipeline — never
+/// PR-triggered jobs). No-ops back to plain [`setup_nix`] behavior while the
+/// `NIX_CACHE_*` repo variables are unset.
+pub fn setup_nix_with_cache() -> Step<Use> {
+    setup_nix()
+        .add_with(("nix-cache-url", vars::NIX_CACHE_URL))
+        .add_with(("nix-cache-public-key", vars::NIX_CACHE_PUBLIC_KEY))
+        .add_with(("aws-access-key-id", vars::AWS_ACCESS_KEY))
+        .add_with(("aws-secret-access-key", vars::AWS_SECRET_ACCESS_KEY))
+}
+
+/// Push built store paths to the private S3 binary cache, signing on upload —
+/// the `cachix watch-store` role. `targets` lands in the step's `TARGETS` env
+/// (space-separated flake refs or store paths; GH expressions fine) and is
+/// word-split on purpose. Skips silently while the cache vars/secret are
+/// unset, and never fails the job: the cache is an optimization, and the paths
+/// were already handed off via Namespace artifacts.
+pub fn push_nix_cache(targets: &str) -> Step<Run> {
+    Step::new("Push to nix cache")
+        .run(indoc::indoc! {r#"
+            set -uo pipefail
+            if [[ -z "${NIX_CACHE_URL:-}" || -z "${NIX_CACHE_SIGNING_KEY:-}" ]]; then
+              echo "nix cache not configured; skipping push"
+              exit 0
+            fi
+            key="$RUNNER_TEMP/nix-cache-signing-key"
+            printf '%s\n' "$NIX_CACHE_SIGNING_KEY" > "$key"
+            sep='?'; [[ "$NIX_CACHE_URL" == *\?* ]] && sep='&'
+            # shellcheck disable=SC2086 # TARGETS is a list on purpose
+            nix copy --to "${NIX_CACHE_URL}${sep}secret-key=${key}" $TARGETS \
+              || echo "::warning::nix cache push failed (non-fatal)"
+            rm -f "$key"
+        "#})
+        .shell("bash")
+        .add_env(Env::new("TARGETS", targets))
+        .add_env(Env::new("NIX_CACHE_URL", vars::NIX_CACHE_URL))
+        .add_env(Env::new(
+            "NIX_CACHE_SIGNING_KEY",
+            vars::NIX_CACHE_SIGNING_KEY,
+        ))
+        .add_env(Env::new("AWS_ACCESS_KEY_ID", vars::AWS_ACCESS_KEY))
+        .add_env(Env::new(
+            "AWS_SECRET_ACCESS_KEY",
+            vars::AWS_SECRET_ACCESS_KEY,
+        ))
 }
 
 /// Enter the repo's Nix dev shell (toolchain, mold, just, the sccache binary,
@@ -103,17 +164,6 @@ pub fn setup_dev_shell() -> Step<Use> {
         "Setup Nix dev shell",
         xtask_paths::repo_dir!(".github/actions/setup-nix-dev-shell"),
     )
-}
-
-/// Configure Cachix and enter the repo's Nix dev shell. This is retained for
-/// workflow families that have not yet migrated to Namespace's Nix cache.
-pub fn setup_cachix_dev_shell() -> Step<Use> {
-    uses_local(
-        "Setup Nix dev shell",
-        xtask_paths::repo_dir!(".github/actions/setup-cachix"),
-    )
-    .add_with(("cachix-auth-token", vars::CACHIX_AUTH_TOKEN))
-    .add_with(("dev-shell", "true"))
 }
 
 /// Mount the Namespace profile's persisted cache volume: `cache: rust` persists
@@ -296,32 +346,13 @@ pub fn checkout_v4() -> Step<Use> {
         .add_with(("persist-credentials", false))
 }
 
-/// Wrap a shell fragment in the standard Cachix watch-store lifecycle.
-///
-/// The watcher is optional and always cleaned up, so Nix builds still succeed
-/// when Cachix is unavailable while every deploy-family caller shares the same
-/// process and trap semantics.
-pub fn with_cachix_watch(inner: &str) -> String {
-    indoc::formatdoc! {r#"
-        set -euo pipefail
-        cachix_pid=
-        if command -v cachix >/dev/null 2>&1 && [ -n "${{CACHIX_CACHE_NAME:-}}" ]; then
-          cachix watch-store "$CACHIX_CACHE_NAME" >/tmp/cachix-watch-store.log 2>&1 &
-          cachix_pid=$!
-          trap 'if [ -n "${{cachix_pid:-}}" ]; then kill "$cachix_pid" 2>/dev/null || true; wait "$cachix_pid" 2>/dev/null || true; fi' EXIT
-        fi
-        {inner}
-    "#}
-}
-
-/// `nix build` wrapped in `cachix watch-store`, so realised store paths are
-/// pushed to Cachix as they build — the consistency backstop when the /nix
-/// volume is cold or evicted.
-pub fn nix_build_watched(name: &str, targets: &str, done_msg: &str) -> Step<Run> {
-    let script = with_cachix_watch(&format!(
-        "nix build --print-build-logs {targets}\necho \"{done_msg}\""
-    ));
-    Step::new(name).run(script).shell("bash")
+/// Build Nix targets using Namespace's mounted `/nix` cache volume.
+pub fn nix_build(name: &str, targets: &str, done_msg: &str) -> Step<Run> {
+    Step::new(name)
+        .run(format!(
+            "set -euo pipefail\nnix build --print-build-logs {targets}\necho \"{done_msg}\""
+        ))
+        .shell("bash")
 }
 
 /// Upload a build's handoff tarball to Namespace artifact storage: strongly
@@ -381,15 +412,6 @@ pub fn checkout_ref(ref_expr: &str) -> Step<Use> {
 /// desktop builds that delegate entirely to Nix.
 pub fn mount_nix_cache_volume() -> Step<Use> {
     nscloud_cache_action("Mount /nix cache volume").add_with(("cache", "nix"))
-}
-
-/// Configure Cachix (without entering a dev shell).
-pub fn setup_cachix() -> Step<Use> {
-    uses_local(
-        "Configure Cachix fallback",
-        xtask_paths::repo_dir!(".github/actions/setup-cachix"),
-    )
-    .add_with(("cachix-auth-token", vars::CACHIX_AUTH_TOKEN))
 }
 
 /// Derive a safe tag name from the git ref for use in artifact names.

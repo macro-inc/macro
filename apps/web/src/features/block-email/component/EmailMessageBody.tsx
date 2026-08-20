@@ -176,6 +176,11 @@ export function EmailMessageBody(props: EmailMessageBodyProps) {
     // Raw mailto: anchors open the in-app composer instead of the OS mail client
     interceptMailtoLinks(messageDiv);
     messageDiv.style.userSelect = 'text';
+    // Safari resolves only the -webkit- prefixed form of user-select
+    // (unprefixed shipped in Safari 26.4), and WebKit inherits the app-wide
+    // `user-select: none` through the shadow boundary — without the prefix,
+    // email text isn't selectable in Safari.
+    messageDiv.style.setProperty('-webkit-user-select', 'text');
     messageDiv.style.cursor = 'auto';
     shadow.appendChild(messageDiv);
     return hostContainer;

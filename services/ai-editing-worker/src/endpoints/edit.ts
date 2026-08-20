@@ -2,6 +2,7 @@ import { createAnthropic } from '@ai-sdk/anthropic';
 import { createCerebras } from '@ai-sdk/cerebras';
 import { createOpenAI } from '@ai-sdk/openai';
 import { zValidator } from '@hono/zod-validator';
+import { Telemetry } from '@macro-inc/observability';
 import type { LanguageModel } from 'ai';
 import { createFallback } from 'ai-fallback';
 import { Hono } from 'hono';
@@ -19,7 +20,22 @@ type Provider = 'anthropic' | 'cerebras' | 'openai';
 const PROVIDERS = {
   anthropic: { key: 'ANTHROPIC_API_KEY', create: createAnthropic },
   cerebras: { key: 'CEREBRAS_API_KEY', create: createCerebras },
-  openai: { key: 'OPENAI_API_KEY', create: createOpenAI },
+  // `.chat()` pins OpenAI to Chat Completions. The default factory uses the
+  // Responses API, which references reasoning items across steps by id — and
+  // this org has Zero Data Retention, so those ids are never persisted. Every
+  // multi-step edit then dies on:
+  //   "Item with id 'rs_...' not found. Items are not persisted for Zero Data
+  //    Retention organizations."
+  // The supervisor chain ends in gpt-5.5, so without this the last-resort
+  // fallback fails outright whenever both Anthropic models are unavailable —
+  // exactly when it is needed.
+  openai: {
+    key: 'OPENAI_API_KEY',
+    create: (opts: { apiKey: string }) => {
+      const provider = createOpenAI(opts);
+      return (modelId: string) => provider.chat(modelId);
+    },
+  },
 } satisfies Record<
   Provider,
   {
@@ -64,7 +80,8 @@ const EditBody = z.object({
  *  chain (multiple, advancing on provider errors/rate limits). */
 function buildModels(
   env: ReturnType<typeof getEnv>,
-  models: EditModels
+  models: EditModels,
+  onFallback?: () => void
 ): ResolvedModels {
   const resolveOne = ({ provider, model }: Model) => {
     const apiKey = env[PROVIDERS[provider].key];
@@ -75,8 +92,10 @@ function buildModels(
     if (resolved.length === 1) return resolved[0];
     return createFallback({
       models: resolved,
-      onError: (error, modelId) =>
-        console.error(`edit model ${modelId} failed, falling back:`, error),
+      onError: (error, modelId) => {
+        onFallback?.();
+        console.error(`edit model ${modelId} failed, falling back:`, error);
+      },
     });
   };
   return {
@@ -131,19 +150,43 @@ edit.post('/', zValidator('json', EditBody), async (c) => {
         setTimeout(resolve, ms / presence.multiplier())
       );
 
-    const { usage, ops, session, clarification } = await runEditSession({
-      source,
-      documentId,
-      prompt,
-      models: buildModels(env, models),
-      typingAnimations,
-      sleep,
-      interpret,
-      debug,
-      propagate,
-      runner: runInSandbox,
-      signal,
-    }).finally(presence.stop);
+    const { usage, ops, session, clarification } = await Telemetry.span(
+      'edit.session',
+      async (span) => {
+        span.setAttr('document.id', documentId);
+        span.setAttr('edit.interpret', interpret);
+        span.setAttr('edit.propagate', propagate);
+        let modelFallbacks = 0;
+        try {
+          const result = await runEditSession({
+            source,
+            documentId,
+            prompt,
+            models: buildModels(env, models, () => modelFallbacks++),
+            typingAnimations,
+            sleep,
+            interpret,
+            debug,
+            propagate,
+            runner: runInSandbox,
+            signal,
+          }).finally(presence.stop);
+          span.setAttr(
+            'edit.dispatch_count',
+            result.session.dispatchEditTraces?.length ?? 0
+          );
+          span.setAttr('edit.ops_total', result.ops.length);
+          span.setAttr('edit.blocked', result.clarification !== undefined);
+          return result;
+        } catch (err) {
+          span.setAttr('edit.aborted', signal.aborted);
+          span.error(err);
+          throw err;
+        } finally {
+          span.setAttr('model.fallbacks', modelFallbacks);
+        }
+      }
+    );
 
     const db = c.env.TRACES_DB;
     if (db) {

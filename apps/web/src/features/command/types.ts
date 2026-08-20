@@ -5,6 +5,7 @@ import type { Component } from 'solid-js';
 
 export type CreatableBlock = Omit<HotkeyRegistrationOptions, 'scopeId'> & {
   label: string;
+  launcherHint?: string;
   blockName: BlockName | BlockAlias;
   altHotkeyToken?: HotkeyToken;
   animatedIcon?: Component<{ triggerAnimation?: boolean }>;

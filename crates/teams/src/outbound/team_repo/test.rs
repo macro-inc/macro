@@ -1394,6 +1394,7 @@ async fn test_patch_team_normalizes_slug_to_screaming_snake_case(
         name: Some("New Name".to_string()),
         slug: Some("my-team  slug".to_string()),
         user_role_updates: None,
+        default_link_share: None,
     };
 
     team_repo.patch_team(&team_id, &req).await?;
@@ -1422,6 +1423,7 @@ async fn test_patch_team_rejects_invalid_slug_without_updating_name(
         name: Some("Should Not Apply".to_string()),
         slug: Some("bad.slug".to_string()),
         user_role_updates: None,
+        default_link_share: None,
     };
 
     let err = team_repo.patch_team(&team_id, &req).await.err().unwrap();
@@ -1449,11 +1451,60 @@ async fn test_patch_team_rejects_too_long_slug(pool: Pool<Postgres>) -> anyhow::
         name: None,
         slug: Some("THIS_SLUG_IS_WAY_TOO_LONG".to_string()),
         user_role_updates: None,
+        default_link_share: None,
     };
 
     let err = team_repo.patch_team(&team_id, &req).await.err().unwrap();
 
     assert!(matches!(err, TeamError::BadRequest(_)));
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("teams"))
+)]
+async fn test_patch_team_default_link_share_round_trip(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let team_repo = TeamRepositoryImpl::new(pool);
+    let team_id = macro_uuid::string_to_uuid("11111111-1111-1111-1111-111111111111")?;
+
+    // Existing teams default to TEAM via the column default.
+    let team = team_repo.get_team_by_id(&team_id).await?;
+    assert_eq!(team.team.default_link_share(), Some(LinkShare::Team));
+
+    // Providing a value updates it.
+    let req = PatchTeamRequest {
+        name: None,
+        slug: None,
+        user_role_updates: None,
+        default_link_share: Some(Some(LinkShare::Public)),
+    };
+    team_repo.patch_team(&team_id, &req).await?;
+    let team = team_repo.get_team_by_id(&team_id).await?;
+    assert_eq!(team.team.default_link_share(), Some(LinkShare::Public));
+
+    // Omitting the field leaves it unchanged.
+    let req = PatchTeamRequest {
+        name: Some("Renamed".to_string()),
+        slug: None,
+        user_role_updates: None,
+        default_link_share: None,
+    };
+    team_repo.patch_team(&team_id, &req).await?;
+    let team = team_repo.get_team_by_id(&team_id).await?;
+    assert_eq!(team.team.default_link_share(), Some(LinkShare::Public));
+
+    // An explicit null turns default link sharing off.
+    let req = PatchTeamRequest {
+        name: None,
+        slug: None,
+        user_role_updates: None,
+        default_link_share: Some(None),
+    };
+    team_repo.patch_team(&team_id, &req).await?;
+    let team = team_repo.get_team_by_id(&team_id).await?;
+    assert_eq!(team.team.default_link_share(), None);
 
     Ok(())
 }
@@ -1688,6 +1739,12 @@ async fn test_add_user_to_team(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let user_id = MacroUserIdStr::parse_from_str("macro|user3@user.com")?;
 
     let seat_count_before = team_repo.get_team_seat_count(&team_id).await?;
+    let invites_before = team_repo.get_user_team_invites(&user_id).await?;
+    assert!(
+        invites_before
+            .iter()
+            .any(|invite| invite.team_id == team_id)
+    );
 
     let member = team_repo
         .add_user_to_team(&team_id, &user_id)
@@ -1703,6 +1760,9 @@ async fn test_add_user_to_team(pool: Pool<Postgres>) -> anyhow::Result<()> {
 
     let seat_count = team_repo.get_team_seat_count(&team_id).await?;
     assert_eq!(seat_count, seat_count_before + 1);
+
+    let invites_after = team_repo.get_user_team_invites(&user_id).await?;
+    assert!(!invites_after.iter().any(|invite| invite.team_id == team_id));
 
     // Adding again is a no-op: no member returned, no extra seat counted.
     let member = team_repo.add_user_to_team(&team_id, &user_id).await?;

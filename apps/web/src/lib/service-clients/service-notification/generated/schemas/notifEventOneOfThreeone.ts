@@ -4,14 +4,14 @@
  * notification_service
  * OpenAPI spec version: 0.1.0
  */
-import type { GithubPrCheckRun } from './githubPrCheckRun';
+import type { AiResponseMetadata } from './aiResponseMetadata';
 import type { NotifEventOneOfThreeoneTag } from './notifEventOneOfThreeoneTag';
 
 /**
- * A GitHub pull request check run completed.
+ * An AI assistant responded to a chat.
  */
 export type NotifEventOneOfThreeone = {
-  /** A GitHub pull request check run completed. */
-  content: GithubPrCheckRun;
+  /** An AI assistant responded to a chat. */
+  content: AiResponseMetadata;
   tag: NotifEventOneOfThreeoneTag;
 };

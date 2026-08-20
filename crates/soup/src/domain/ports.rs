@@ -2,12 +2,15 @@ use std::sync::Arc;
 
 use crate::domain::models::{
     AdvancedSortParams, EnrichedSoupItem, GroupedSortRequest, IntoSoupReqAst, SimpleSortRequest,
-    SoupErr, SoupPropertiesField, SoupRequest, grouping::ItemGroupingInfo,
+    SoupErr, SoupPropertiesField, SoupRequest, TouchedEntity, TouchedSoupRequest,
+    grouping::ItemGroupingInfo,
 };
-use either::Either;
 use entity_access::domain::models::{EntityAccessReceipt, MemberTeamRole};
 use macro_user_id::user_id::MacroUserIdStr;
-use models_pagination::{Frecency, PaginatedCursor, SimpleSortMethod};
+use models_pagination::{
+    Frecency, PaginatedCursor, PaginatedOpaqueCursor, SimpleSortMethod, TouchedByMe,
+    TypeEraseCursor,
+};
 use models_properties::service::property_definition_with_options::PropertyDefinitionWithOptions;
 use models_soup::item::SoupItem;
 use serde::Serialize;
@@ -70,18 +73,88 @@ pub trait SoupRepo: Send + Sync + 'static {
         &self,
         req: GroupedSortRequest<'a>,
     ) -> impl Future<Output = Result<Self::GroupedItems, Self::Err>> + Send;
+
+    /// Fetch one page of touched-by-me candidates: entities the user has
+    /// mutated (views excluded), newest own-mutation first, already gated on
+    /// existence, deletion, access, and the request's entity filters.
+    fn touched_soup_page<'a>(
+        &self,
+        req: TouchedSoupRequest<'a>,
+    ) -> impl Future<Output = Result<Vec<TouchedEntity>, Self::Err>> + Send;
 }
 
-/// type alias which represents the posible outputs of soup
-/// The response is a paginated cursor where
+/// The possible outputs of soup — one paginated page per query mode.
+/// The page is a paginated cursor where
 /// 1. The item type is the requested raw or enriched Soup representation
 /// 1. The id type is [String] (this should be changed to uuid)
-/// 1. The sort method is [Either] [SimpleSortMethod] or [Frecency]
+/// 1. The sort method matches the variant's query mode
 /// 1. The filter type is an [Option] [EntityFilterAst]
-pub type SoupOutput<T, Item = SoupItem<()>> = Either<
-    PaginatedCursor<Item, String, SimpleSortMethod, T>,
-    PaginatedCursor<Item, String, Frecency, T>,
->;
+#[derive(Debug)]
+pub enum SoupOutput<T, Item = SoupItem<()>> {
+    /// Page of a timestamp-sorted query.
+    Simple(PaginatedCursor<Item, String, SimpleSortMethod, T>),
+    /// Page of a frecency-sorted query.
+    Frecency(PaginatedCursor<Item, String, Frecency, T>),
+    /// Page of a touched-by-me query.
+    Touched(PaginatedCursor<Item, String, TouchedByMe, T>),
+}
+
+impl<T, Item> SoupOutput<T, Item> {
+    /// Maps the item type of the page, preserving the cursor.
+    pub fn map<F, V>(self, f: F) -> SoupOutput<T, V>
+    where
+        F: FnMut(Item) -> V,
+    {
+        match self {
+            SoupOutput::Simple(page) => SoupOutput::Simple(page.map(f)),
+            SoupOutput::Frecency(page) => SoupOutput::Frecency(page.map(f)),
+            SoupOutput::Touched(page) => SoupOutput::Touched(page.map(f)),
+        }
+    }
+
+    /// Discards the cursor and returns the page's items.
+    pub fn into_items(self) -> Vec<Item> {
+        match self {
+            SoupOutput::Simple(page) => page.items,
+            SoupOutput::Frecency(page) => page.items,
+            SoupOutput::Touched(page) => page.items,
+        }
+    }
+
+    /// Returns the page when this is a [`SoupOutput::Simple`] output.
+    pub fn into_simple(self) -> Option<PaginatedCursor<Item, String, SimpleSortMethod, T>> {
+        match self {
+            SoupOutput::Simple(page) => Some(page),
+            SoupOutput::Frecency(_) | SoupOutput::Touched(_) => None,
+        }
+    }
+
+    /// Returns the page when this is a [`SoupOutput::Frecency`] output.
+    pub fn into_frecency(self) -> Option<PaginatedCursor<Item, String, Frecency, T>> {
+        match self {
+            SoupOutput::Frecency(page) => Some(page),
+            SoupOutput::Simple(_) | SoupOutput::Touched(_) => None,
+        }
+    }
+
+    /// Returns the page when this is a [`SoupOutput::Touched`] output.
+    pub fn into_touched(self) -> Option<PaginatedCursor<Item, String, TouchedByMe, T>> {
+        match self {
+            SoupOutput::Touched(page) => Some(page),
+            SoupOutput::Simple(_) | SoupOutput::Frecency(_) => None,
+        }
+    }
+}
+
+impl<T, Item> TypeEraseCursor<Item> for SoupOutput<T, Item> {
+    fn type_erase(self) -> PaginatedOpaqueCursor<Item> {
+        match self {
+            SoupOutput::Simple(page) => page.type_erase(),
+            SoupOutput::Frecency(page) => page.type_erase(),
+            SoupOutput::Touched(page) => page.type_erase(),
+        }
+    }
+}
 
 #[cfg(test)]
 mod test;

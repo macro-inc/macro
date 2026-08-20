@@ -1,5 +1,5 @@
 use crate::domain::{
-    models::McpServerRecord,
+    models::{McpServerRecord, OAuthClientMetadata},
     ports::{McpServerStore, OAuthClient},
 };
 use axum::{
@@ -32,6 +32,7 @@ pub struct McpRouterState<S, O, Auth> {
     store: Arc<S>,
     oauth: Arc<O>,
     authorization_state: MacroAuthorizationState<Auth>,
+    client_metadata: OAuthClientMetadata,
     on_auth_completed: Option<McpAuthCompletedHook>,
 }
 
@@ -41,6 +42,7 @@ impl<S, O, Auth> Clone for McpRouterState<S, O, Auth> {
             store: self.store.clone(),
             oauth: self.oauth.clone(),
             authorization_state: self.authorization_state.clone(),
+            client_metadata: self.client_metadata.clone(),
             on_auth_completed: self.on_auth_completed.clone(),
         }
     }
@@ -60,11 +62,17 @@ where
 {
     /// Create a new router state from a server store, OAuth client, and
     /// authorization state.
-    pub fn new(store: S, oauth: O, authorization_state: MacroAuthorizationState<Auth>) -> Self {
+    pub fn new(
+        store: S,
+        oauth: O,
+        authorization_state: MacroAuthorizationState<Auth>,
+        client_metadata: OAuthClientMetadata,
+    ) -> Self {
         Self {
             store: Arc::new(store),
             oauth: Arc::new(oauth),
             authorization_state,
+            client_metadata,
             on_auth_completed: None,
         }
     }
@@ -100,7 +108,7 @@ where
         .with_state(state)
 }
 
-/// Unauthenticated OAuth callback route.
+/// Unauthenticated OAuth callback and client metadata routes.
 pub fn mcp_oauth_callback_router<S, O, Auth, Global>(
     state: McpRouterState<S, O, Auth>,
 ) -> Router<Global>
@@ -115,6 +123,10 @@ where
         .route(
             "/mcp/servers/auth/callback",
             get(auth_callback::<S, O, Auth>),
+        )
+        .route(
+            "/mcp/servers/auth/client-metadata",
+            get(client_metadata::<S, O, Auth>),
         )
         .with_state(state)
 }
@@ -447,6 +459,27 @@ where
         .await?;
 
     Ok(Json(StartAuthResponse { authorization_url }))
+}
+
+#[utoipa::path(
+    get,
+    path = "/mcp/servers/auth/client-metadata",
+    tag = "mcp",
+    operation_id = "mcp_oauth_client_metadata",
+    responses(
+        (status = 200, description = "Macro OAuth client metadata document"),
+    )
+)]
+/// Return Macro's public OAuth Client ID Metadata Document.
+pub async fn client_metadata<S, O, Auth>(
+    State(state): State<McpRouterState<S, O, Auth>>,
+) -> Json<OAuthClientMetadata>
+where
+    S: McpServerStore,
+    O: OAuthClient,
+    Auth: MacroAuthorizationService,
+{
+    Json(state.client_metadata.clone())
 }
 
 /// Classify a callback as a successful `(code, state)` pair or a handler

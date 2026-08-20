@@ -123,6 +123,141 @@ describe('createPriorityCollapser', () => {
     };
   }
 
+  // Mirrors PriorityCollapseOverflowSensor's `truncateAsLastResort` item: a
+  // max-priority registration whose collapsed state caps required width at the
+  // available width, because the sensor's shrinkable content then fits the
+  // capped element exactly.
+  function createLastResortCapHarness() {
+    const transitions: Array<{
+      id: string;
+      collapsed: boolean;
+      silent: boolean;
+    }> = [];
+    let availableWidth = 100;
+    let retryWidth = 100;
+    let invalidate = () => {};
+    let disposeRoot = () => {};
+
+    const titleWidth = 40;
+    const [tabsCollapsed, setTabsCollapsed] = createSignal(false);
+    const [capped, setCapped] = createSignal(false);
+
+    const probe: OverflowProbe = {
+      measure: () => {
+        const requiredWidth = titleWidth + (tabsCollapsed() ? 20 : 50);
+        return {
+          requiredWidth: capped()
+            ? Math.min(requiredWidth, availableWidth)
+            : requiredWidth,
+          availableWidth,
+          retryWidth,
+        };
+      },
+      observe: (onChange) => {
+        invalidate = onChange;
+        return () => {};
+      },
+    };
+
+    const collapser = createRoot((dispose) => {
+      disposeRoot = dispose;
+      return createPriorityCollapser(probe);
+    });
+
+    const track =
+      (id: string, set: (value: boolean) => void) =>
+      (value: boolean, options?: { silent?: boolean }) => {
+        transitions.push({
+          id,
+          collapsed: value,
+          silent: options?.silent ?? false,
+        });
+        set(value);
+      };
+
+    collapser.register({
+      id: 'tabs',
+      priority: 1,
+      collapsed: tabsCollapsed,
+      setCollapsed: track('tabs', setTabsCollapsed),
+    });
+    collapser.register({
+      id: 'cap',
+      priority: Number.MAX_SAFE_INTEGER,
+      collapsed: capped,
+      setCollapsed: track('cap', setCapped),
+    });
+
+    return {
+      dispose: disposeRoot,
+      invalidate: () => {
+        invalidate();
+        flushAnimationFrames();
+      },
+      setAvailableWidth: (width: number) => {
+        availableWidth = width;
+      },
+      setRetryWidth: (width: number) => {
+        retryWidth = width;
+      },
+      tabsCollapsed,
+      capped,
+      transitions,
+    };
+  }
+
+  it('collapses a last-resort width cap only after real items give up their space', () => {
+    const harness = createLastResortCapHarness();
+
+    harness.setAvailableWidth(70);
+    harness.invalidate();
+    expect(harness.tabsCollapsed()).toBe(true);
+    expect(harness.capped()).toBe(false);
+
+    harness.setAvailableWidth(50);
+    harness.invalidate();
+    expect(harness.capped()).toBe(true);
+
+    harness.transitions.length = 0;
+    harness.setAvailableWidth(120);
+    harness.setRetryWidth(130);
+    harness.invalidate();
+
+    expect(harness.capped()).toBe(false);
+    expect(harness.tabsCollapsed()).toBe(false);
+    expect(
+      harness.transitions
+        .filter(({ collapsed, silent }) => !collapsed && !silent)
+        .map(({ id }) => id)
+    ).toEqual(['cap', 'tabs']);
+
+    harness.dispose();
+  });
+
+  it('holds a capped row steady instead of thrashing the cap', () => {
+    const harness = createLastResortCapHarness();
+
+    harness.setAvailableWidth(50);
+    harness.invalidate();
+    expect(harness.tabsCollapsed()).toBe(true);
+    expect(harness.capped()).toBe(true);
+
+    // Same widths again: the failed-expand guard skips the trial entirely.
+    harness.transitions.length = 0;
+    harness.invalidate();
+    expect(harness.transitions).toEqual([]);
+
+    // Growth too small to fit the full content: the trial expansion runs but
+    // reverts pre-paint, so the cap never visibly flickers.
+    harness.setAvailableWidth(55);
+    harness.invalidate();
+    expect(harness.capped()).toBe(true);
+    expect(harness.transitions.length).toBeGreaterThan(0);
+    expect(harness.transitions.every(({ silent }) => silent)).toBe(true);
+
+    harness.dispose();
+  });
+
   it('collapses the lowest-priority-number item first and stops once content fits', () => {
     const harness = createHarness();
     const first = harness.register('first', 1, 50, 20);

@@ -10,6 +10,7 @@ import {
 } from '@macro-inc/collaboration/collab/wal';
 import type { SyncServiceSource } from '@macro-inc/collaboration/sync-service/source';
 import { MARKDOWN_LORO_SCHEMA } from '@macro-inc/lexical-core/markdown-loro-schema';
+import { Telemetry } from '@macro-inc/observability';
 import type { LanguageModel } from 'ai';
 import { supervisor } from './ai-editing/agents';
 import type { DocumentOp } from './ai-editing/editor';
@@ -74,26 +75,34 @@ export async function runEditSession(
   args: RunEditArgs
 ): Promise<RunEditResult> {
   const source = args.source;
-  const initialResult = await source.doInitialSync();
-  if (initialResult.isErr()) {
-    source.cleanup();
-    const e = initialResult.error;
-    throw new Error(`initial sync failed: ${e.type} (${e.duration}ms)`);
-  }
-  const initial = initialResult.value;
 
   // The manager owns the one true (merged) doc + mirror.
   const manager = new LoroManager(MARKDOWN_LORO_SCHEMA, {
     documentId: args.documentId,
   });
 
-  const initResult = await manager.initializeFromSnapshot(initial.snapshot);
-  if (initResult.isErr()) {
-    source.cleanup();
-    throw new Error(
-      `failed to initialize from snapshot: ${initResult.error[0]?.message}`
-    );
-  }
+  await Telemetry.span('edit.sync_init', async (span) => {
+    const initialResult = await source.doInitialSync();
+    if (initialResult.isErr()) {
+      source.cleanup();
+      const e = initialResult.error;
+      const err = new Error(`initial sync failed: ${e.type} (${e.duration}ms)`);
+      span.error(err);
+      throw err;
+    }
+    const initial = initialResult.value;
+    span.setAttr('snapshot.bytes', initial.snapshot.byteLength);
+
+    const initResult = await manager.initializeFromSnapshot(initial.snapshot);
+    if (initResult.isErr()) {
+      source.cleanup();
+      const err = new Error(
+        `failed to initialize from snapshot: ${initResult.error[0]?.message}`
+      );
+      span.error(err);
+      throw err;
+    }
+  });
 
   // When the caller applies the returned ops locally instead, propagating
   // here too would double the content — so route live sync to a no-op sink
@@ -110,14 +119,21 @@ export async function runEditSession(
 
   // The workspace owns the editing surface + its two-way sync with Loro, and
   // hands out per-coder writers. Under debug it also records a replay trace.
-  const workspace = new EditingWorkspace(manager, liveSource, wal);
+  const { workspace, initialDocument } = await Telemetry.span(
+    'edit.hydrate',
+    async (span) => {
+      const workspace = new EditingWorkspace(manager, liveSource, wal);
+      const initialDocument = serializeWithXml(workspace.session);
+      span.setAttr('document.chars', initialDocument.length);
+      return { workspace, initialDocument };
+    }
+  );
 
   const allOps: DocumentOp[] = [];
   const coderCodeBlocks: CoderRunCode[][][] = [];
   const dispatchEditTraces: DispatchEditTrace[][] = [];
   const sessionId = crypto.randomUUID();
   const startedAt = new Date();
-  const initialDocument = serializeWithXml(workspace.session);
   try {
     const {
       totalUsage,
@@ -141,8 +157,10 @@ export async function runEditSession(
     // Drain the queued propagates (plus a final catch-all sync) and ensure every
     // commit reached the server before we disconnect. No-op sink when not
     // propagating, so this is harmless either way.
-    await workspace.flush();
-    await wal.flush();
+    await Telemetry.span('edit.flush', async () => {
+      await workspace.flush();
+      await wal.flush();
+    });
 
     const usage = totalUsage.toEntries();
 

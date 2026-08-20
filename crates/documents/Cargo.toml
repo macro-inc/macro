@@ -14,6 +14,7 @@ ai_tools = [
   "dep:ai_toolset",
   "dep:ai_usage",
   "dep:async-trait",
+  "dep:macro_tower_layers",
   "dep:model_file_type",
   "dep:schemars",
   "dep:sha2",
@@ -32,6 +33,7 @@ attachment = [
 axum = [
   "dep:axum",
   "dep:axum-extra",
+  "dep:base64",
   "dep:jsonwebtoken",
   "dep:lexical_client",
   "dep:macro_authorization",
@@ -60,6 +62,7 @@ outbound = [
   "dep:base64",
   "dep:entity_access_db_utils",
   "dep:hex",
+  "dep:share_permission_db_utils",
   "dep:sqlx",
   "ports",
 ]
@@ -68,6 +71,7 @@ schema = ["dep:utoipa", "macro_user_id/schema"]
 service = ["dep:entity_access_management", "dep:foreign_entity", "ports"]
 
 [dependencies]
+activity = { path = "../activity", default-features = false }
 # Core
 anyhow = { workspace = true }
 chrono = { workspace = true }
@@ -105,6 +109,7 @@ macro_service_urls = { path = "../macro_service_urls", optional = true }
 macro_sync_service_jwt = { path = "../macro_sync_service_jwt" }
 macro_user_id = { path = "../macro_user_id" }
 macro_uuid = { path = "../macro_uuid" }
+system_skills = { path = "../system_skills" }
 model = { path = "../model" }
 model-entity = { path = "../model-entity" }
 models_permissions = { path = "../models_permissions" }
@@ -130,6 +135,7 @@ base64 = { workspace = true, optional = true }
 cloudfront_sign = { workspace = true }
 entity_access_db_utils = { path = "../entity_access_db_utils", optional = true }
 futures = { workspace = true }
+share_permission_db_utils = { path = "../share_permission_db_utils", optional = true }
 hex = { workspace = true, optional = true }
 sqlx = { workspace = true, optional = true }
 sync_service_client = { path = "../sync_service_client" }
@@ -141,10 +147,12 @@ ai_toolset = { path = "../ai_toolset", optional = true }
 ai_usage = { path = "../ai_usage", optional = true }
 async-trait = { workspace = true, optional = true }
 lexical_client = { path = "../lexical_client", optional = true }
+macro_tower_layers = { path = "../macro_tower_layers", optional = true }
 model_file_type = { path = "../model_file_type", optional = true }
 reqwest = { workspace = true, optional = true }
 schemars = { workspace = true, optional = true }
 sha2 = { workspace = true, optional = true }
+
 
 # Attachment
 attachment = { path = "../attachment", optional = true }

@@ -7,9 +7,13 @@ set -euo pipefail
 # cargo-lambda script produced, so nothing downstream changes.
 #
 # Unlike the cargo-lambda path, this never recompiles unchanged handlers: nix is
-# content-addressed, so an unchanged handler is a pure cache hit (substituted
-# from the warm /nix lambda disk or Cachix). Independent handler derivations
+# content-addressed, so an unchanged handler is a pure cache hit from the
+# Namespace Nix volume or the S3 binary cache. Independent handler derivations
 # also build in parallel within the single `nix build` invocation.
+#
+# When NIX_CACHE_URL + NIX_CACHE_SIGNING_KEY are set (deploy pipeline only),
+# the freshly built out-paths are pushed back to the S3 cache, signed on
+# upload — so the next run substitutes them even from a cold /nix volume.
 
 SERVICE="${SERVICE:?SERVICE is required}"
 OUTPUT_DIR="${OUTPUT_DIR:-lambda-artifacts}"
@@ -29,13 +33,6 @@ fi
 
 echo "Building Lambda artifacts for $SERVICE via nix: ${LAMBDAS[*]}"
 
-cachix_pid=
-if command -v cachix >/dev/null 2>&1 && [[ -n "${CACHIX_CACHE_NAME:-}" ]]; then
-  cachix watch-store "$CACHIX_CACHE_NAME" >/tmp/cachix-watch-store.log 2>&1 &
-  cachix_pid=$!
-  trap 'if [[ -n "${cachix_pid:-}" ]]; then kill "$cachix_pid" 2>/dev/null || true; wait "$cachix_pid" 2>/dev/null || true; fi' EXIT
-fi
-
 # Build every handler for this service in one nix invocation: independent
 # derivations build in parallel, unchanged ones are pure cache hits, and the
 # out paths are captured here (stdout) while build logs stream to stderr —
@@ -45,6 +42,17 @@ for lambda in "${LAMBDAS[@]}"; do
   installables+=(".#deploy-lambda-${lambda}")
 done
 mapfile -t outs < <(nix build --no-link --print-build-logs --print-out-paths "${installables[@]}")
+
+if [[ -n "${NIX_CACHE_URL:-}" && -n "${NIX_CACHE_SIGNING_KEY:-}" ]]; then
+  key="${RUNNER_TEMP:-/tmp}/nix-cache-signing-key"
+  printf '%s\n' "$NIX_CACHE_SIGNING_KEY" > "$key"
+  sep='?'; [[ "$NIX_CACHE_URL" == *\?* ]] && sep='&'
+  nix copy --to "${NIX_CACHE_URL}${sep}secret-key=${key}" "${outs[@]}" \
+    || echo "::warning::nix cache push failed (non-fatal)"
+  rm -f "$key"
+else
+  echo "nix cache not configured; skipping push"
+fi
 
 # Assemble target/lambda/<name>/*.zip. Each out path is laid out as
 # <out>/<handler>/{bootstrap.zip,...} (see deployLambdaPackage in flake.nix),

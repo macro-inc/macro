@@ -113,6 +113,18 @@ pub trait CrmService: Clone + Send + Sync + 'static {
         email: &str,
     ) -> impl Future<Output = Result<DepopulateContactOutcome, CrmError>> + Send;
 
+    /// Filters `(link_id, email)` pairs down to those with a live
+    /// `crm_contact_sources` row — the pairs a teardown would actually touch.
+    /// See
+    /// [`crate::domain::companies_repo::CompaniesRepository::link_contact_pairs_with_sources`].
+    ///
+    /// Used by the nightly cleanup job to prune candidates for contacts CRM
+    /// never tracked, before they become one SQS message each.
+    fn link_contact_pairs_with_sources(
+        &self,
+        pairs: &[(uuid::Uuid, String)],
+    ) -> impl Future<Output = Result<Vec<(uuid::Uuid, String)>, CrmError>> + Send;
+
     /// Bulk teardown for one user's email link within one team: drops
     /// the team's `crm_contact_sources` rows owned by `link_id`, then
     /// cascades to `crm_contacts` and `crm_companies` for the rows
@@ -310,6 +322,17 @@ pub trait CrmService: Clone + Send + Sync + 'static {
     fn get_contact_for_team(
         &self,
         access: &CrmContactReceipt<ViewAccessLevel>,
+    ) -> impl Future<Output = Result<Option<CrmContact>, CrmError>> + Send;
+
+    /// Fetch the CRM contact matching `email` in the caller's team. The team
+    /// receipt keeps the lookup scoped to an authorized team; the caller's
+    /// role decides whether hidden contacts and hidden parent companies are
+    /// visible. The email is validated and normalized before it crosses the
+    /// repository port.
+    fn get_contact_by_email(
+        &self,
+        access: &CrmTeamReceipt<MemberTeamRole>,
+        email: &str,
     ) -> impl Future<Output = Result<Option<CrmContact>, CrmError>> + Send;
 
     /// Fetch the company addressed by `access`, hydrated with all
@@ -644,6 +667,16 @@ where
             .await
     }
 
+    #[tracing::instrument(skip(self, pairs), fields(pair_count = pairs.len()), err)]
+    async fn link_contact_pairs_with_sources(
+        &self,
+        pairs: &[(uuid::Uuid, String)],
+    ) -> Result<Vec<(uuid::Uuid, String)>, CrmError> {
+        self.companies_repository
+            .link_contact_pairs_with_sources(pairs)
+            .await
+    }
+
     #[tracing::instrument(skip(self), err)]
     async fn depopulate_link_in_team(
         &self,
@@ -863,6 +896,18 @@ where
     }
 
     #[tracing::instrument(skip(self, access), err)]
+    async fn get_contact_by_email(
+        &self,
+        access: &CrmTeamReceipt<MemberTeamRole>,
+        email: &str,
+    ) -> Result<Option<CrmContact>, CrmError> {
+        let email = normalize_contact_email(email)?;
+        self.companies_repository
+            .get_contact_by_email_for_team(&access.team_id(), &email, access.include_hidden())
+            .await
+    }
+
+    #[tracing::instrument(skip(self, access), err)]
     async fn get_company_for_team(
         &self,
         access: &CrmCompanyReceipt<ViewAccessLevel>,
@@ -1057,6 +1102,13 @@ impl CrmService for NoOpCrmService {
         unimplemented!("NoOpCrmService.depopulate_contact")
     }
 
+    async fn link_contact_pairs_with_sources(
+        &self,
+        _pairs: &[(uuid::Uuid, String)],
+    ) -> Result<Vec<(uuid::Uuid, String)>, CrmError> {
+        unimplemented!("NoOpCrmService.link_contact_pairs_with_sources")
+    }
+
     async fn depopulate_link_in_team(
         &self,
         _team_id: &uuid::Uuid,
@@ -1160,6 +1212,14 @@ impl CrmService for NoOpCrmService {
     async fn get_contact_for_team(
         &self,
         _access: &CrmContactReceipt<ViewAccessLevel>,
+    ) -> Result<Option<CrmContact>, CrmError> {
+        Ok(None)
+    }
+
+    async fn get_contact_by_email(
+        &self,
+        _access: &CrmTeamReceipt<MemberTeamRole>,
+        _email: &str,
     ) -> Result<Option<CrmContact>, CrmError> {
         Ok(None)
     }

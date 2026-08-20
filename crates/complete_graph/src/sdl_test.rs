@@ -19,7 +19,8 @@ fn soup_response_schema_exposes_frontend_fields() {
         "type GraphqlSoupEmailThread implements GraphqlSoupEntity {",
         "providerId: String",
         "inboxVisible: Boolean!",
-        "linkId: ID",
+        "linkId: ID!",
+        "latestInboundMessageTs: String",
         "senderPhotoUrl: String",
         "participants: [GraphqlSoupEmailParticipant!]!",
         "attachments: [GraphqlSoupEmailAttachment!]!",
@@ -41,10 +42,19 @@ fn soup_response_schema_exposes_frontend_fields() {
         "messages(offset: Int, limit: Int): [GraphqlSoupEmailMessage!]!",
         "latestContentMessage: GraphqlSoupEmailMessage",
         "type GraphqlSoupEmailMessage {",
+        "replyingToId: ID",
+        "scheduledSendTime: String",
         "isDraft: Boolean!",
         "bodyParsed: String",
         "bodyHtmlSanitized: String",
         "bodyReplyless: String",
+        "attachments: [GraphqlSoupEmailMessageAttachment!]!",
+        "attachmentsDraft: [GraphqlSoupEmailDraftAttachment!]!",
+        "attachmentsForwarded: [GraphqlSoupEmailForwardedAttachment!]!",
+        "type GraphqlSoupEmailMessageAttachment {",
+        "sfsId: ID",
+        "type GraphqlSoupEmailDraftAttachment {",
+        "type GraphqlSoupEmailForwardedAttachment {",
         "type GraphqlSoupCall implements GraphqlSoupEntity {",
         "channelName: String",
         "customName: String",
@@ -64,17 +74,46 @@ fn soup_response_schema_exposes_frontend_fields() {
         "type GraphqlMutationSuccess {",
         "effects: [SoupPatch!]!",
         "recordChannelActivity(input: RecordChannelActivityInput!): GraphqlChannelActivity!",
-        "updateNotifications(input: UpdateNotificationsInput!): [GraphqlSoupNotification!]!",
+        "updateNotifications(input: UpdateNotificationsInput!): [GraphqlNotification!]!",
+        "updateNotificationsForEntity(input: UpdateNotificationsForEntityInput!): [GraphqlNotification!]!",
+        "input UpdateNotificationsForEntityInput {",
+        "entities: [NotificationEntityInput!]!",
+        "input NotificationEntityInput {",
+        "entityType: GraphqlEntityType!",
+        "entityId: ID!",
+        "markEmailThreadSeen(input: MarkEmailThreadSeenInput!): GraphqlSoupEmailThread!",
+        "updateEmailThreadLabel(input: UpdateEmailThreadLabelInput!): GraphqlSoupEmailThread!",
+        "input MarkEmailThreadSeenInput {",
+        "input UpdateEmailThreadLabelInput {",
+        "labelId: ID!",
+        "value: Boolean!",
         "enum ChannelActivityType {",
         "enum NotificationUpdateOperation {",
         "MARK_SEEN",
         "MARK_DONE",
         "MARK_UNDONE",
-        "type SoupSubscriptionRoot {",
+        "type CompleteSubscriptionRoot {",
         "soupUpdates: [SoupPatch!]!",
+        "notificationUpdates: GraphqlNotificationPatch!",
+        "union GraphqlNotificationPatch = GraphqlNotification | GraphqlCacheDeletion",
+        "type GraphqlNotification {",
+        "metadata: GraphqlNotifEvent!",
     ] {
         assert_sdl_line(&sdl, expected);
     }
+    assert!(
+        sdl.contains("union GraphqlNotifEvent = GraphqlChannelMentionMetadata |"),
+        "notification metadata must be represented by the typed event union"
+    );
+    assert_eq!(
+        sdl.lines()
+            .filter(|line| line.trim() == "metadata: GraphqlNotifEvent!")
+            .count(),
+        1,
+        "stored and realtime notifications must share one typed metadata field"
+    );
+    assert!(!sdl.contains("GraphqlRealtimeNotification"));
+    assert!(!sdl.contains("GraphqlSoupNotification"));
     assert!(
         !sdl.lines()
             .any(|line| line.trim() == "type GraphqlEntityRef {"),
@@ -116,6 +155,7 @@ fn soup_interface_exposes_the_complete_shared_entity_contract() {
         "isFavorited",
         "viewerPermission",
         "frecencyScore",
+        "activity",
     ] {
         assert!(
             entity.fields.contains_key(shared_field),
@@ -143,6 +183,7 @@ fn soup_interface_exposes_the_complete_shared_entity_contract() {
         "viewerPermission",
         "properties",
         "notifications",
+        "activity",
     ] {
         assert!(
             document.fields.contains_key(shared_field),

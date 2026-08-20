@@ -39,10 +39,11 @@ export function useTeamQuery(teamId: Accessor<string>) {
 }
 
 /** The current user's team, or `null` if they don't belong to one. */
-export function useCurrentTeamQuery() {
+export function useCurrentTeamQuery(enabled?: Accessor<boolean>) {
   return useQuery(() => ({
     queryKey: teamKeys.currentTeam.queryKey,
     queryFn: async () => await throwOnErr(() => authServiceClient.getTeam()),
+    enabled: enabled?.() ?? true,
   }));
 }
 
@@ -384,6 +385,7 @@ export function useCreateTeamWithInvitesMutation(
               auto_join_domain: null,
               enterprise: false,
               allow_non_admin_invites: true,
+              default_link_share: 'TEAM',
             };
 
             queryClient.setQueryData<Team[]>(

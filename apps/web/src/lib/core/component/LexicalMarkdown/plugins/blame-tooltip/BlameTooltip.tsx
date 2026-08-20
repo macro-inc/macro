@@ -1,5 +1,5 @@
 import { UserIcon } from '@core/component/UserIcon';
-import { macroIdToEmail, tryMacroId, useDisplayNameParts } from '@core/user';
+import { getDisplayNameParts, macroIdToEmail, tryMacroId } from '@core/user';
 import { formatRelativeTimestamp } from '@entity';
 import { useNodeBlameQuery } from '@queries/blame';
 import { createScheduled, debounce } from '@solid-primitives/scheduled';
@@ -19,9 +19,9 @@ const SHOW_DELAY_MS = 500;
 
 function UserLine(props: { userId: string; editedAt: Date }) {
   const macroId = tryMacroId(props.userId);
-  const { firstName } = useDisplayNameParts(macroId);
   const name = () =>
-    firstName() || (macroId ? macroIdToEmail(macroId) : props.userId);
+    getDisplayNameParts(macroId).firstName ||
+    (macroId ? macroIdToEmail(macroId) : props.userId);
 
   return (
     <span class="inline-flex items-center gap-1">

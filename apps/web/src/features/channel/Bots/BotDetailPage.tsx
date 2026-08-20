@@ -12,6 +12,7 @@ import { useSyncBotChannelsMutation } from '@queries/channel/channel-bots';
 import { Button } from '@ui';
 import { createEffect, createMemo, createSignal, on, Show } from 'solid-js';
 import { createStore } from 'solid-js/store';
+import { BotAgentSection } from './BotAgentSection';
 import { BotAvatar } from './BotAvatar';
 import { BotDeleteDialog } from './BotDeleteDialog';
 import { BotDetailActions } from './BotDetailActions';
@@ -91,7 +92,8 @@ export function BotDetail(props: { botId: string; onBack: () => void }) {
       form.name === original.name &&
       form.handle === original.handle &&
       form.description === original.description &&
-      form.avatarUrl === original.avatarUrl;
+      form.avatarUrl === original.avatarUrl &&
+      form.hasAgent === original.hasAgent;
     return (
       !sameForm || !sameChannelSelection(initialChannelIds(), channelIds())
     );
@@ -120,6 +122,7 @@ export function BotDetail(props: { botId: string; onBack: () => void }) {
         handle: parsed.data.handle,
         description: parsed.data.description ?? '',
         avatarUrl: parsed.data.avatarUrl ?? '',
+        hasAgent: parsed.data.hasAgent,
       });
       const channelResult = await syncChannelsMutation.mutateAsync({
         botId: props.botId,
@@ -169,7 +172,10 @@ export function BotDetail(props: { botId: string; onBack: () => void }) {
   return (
     <>
       <div class="size-full overflow-y-auto bg-surface text-ink">
-        <main class="mx-auto w-full max-w-[560px] px-8 pt-14 pb-24 mobile:px-5 mobile:pt-8 mobile:pb-12">
+        {/* Mobile chrome insets live inside the scroll content so the page is
+            full-frame, matching SettingsPage (this detail view only renders
+            inside the settings panel). */}
+        <main class="mx-auto w-full max-w-[560px] px-8 pt-14 pb-24 touch:px-5 touch:pt-[calc(var(--mobile-content-inset-top,0px)+2rem)] touch:pb-[calc(var(--mobile-content-inset-bottom,0px)+3rem)]">
           <Button
             type="button"
             variant="ghost"
@@ -244,6 +250,12 @@ export function BotDetail(props: { botId: string; onBack: () => void }) {
                     }
                   />
                 </BotFormSection>
+
+                <BotAgentSection
+                  checked={form.hasAgent}
+                  disabled={saving()}
+                  onChange={(checked) => setForm('hasAgent', checked)}
+                />
 
                 <BotFormSection
                   title="Channels"

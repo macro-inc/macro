@@ -4,7 +4,8 @@ pub static MACRO_MOBILE_LOGIN_SESSION_PREFIX: &str = "mbl_login:";
 pub static MACRO_MOBILE_LOGIN_SESSION_EXPIRY_SECONDS: u64 = 5 * 60;
 
 /// This is the length of time a passwordless login code is valid for within FusionAuth
-pub static MACRO_PASSWORDLESS_LOGIN_CODE_EXPIRY_SECONDS: u64 = 600;
+/// This matches the time configured in the fusionauth tenant with some buffer time (30s)
+pub static MACRO_PASSWORDLESS_LOGIN_CODE_EXPIRY_SECONDS: u64 = 630;
 
 /// How long after account creation the first completed login is still
 /// attributed as a signup (the create-user webhook and the auth callback run

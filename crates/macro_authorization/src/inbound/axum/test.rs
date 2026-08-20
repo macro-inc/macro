@@ -347,6 +347,7 @@ fn test_router() -> (Router, FakeAuthorizationService) {
         )
         .route("/required/acting-user", get(policy_handler::<ActingUser>))
         .route("/required/user-only", get(policy_handler::<UserOnly>))
+        .route("/required/user-or-bot", get(policy_handler::<UserOrBot>))
         .route("/required/bot-only", get(policy_handler::<BotOnly>))
         .route(
             "/required/internal-only",
@@ -371,6 +372,10 @@ fn test_router() -> (Router, FakeAuthorizationService) {
         .route(
             "/optional/user-only",
             get(optional_policy_handler::<UserOnly>),
+        )
+        .route(
+            "/optional/user-or-bot",
+            get(optional_policy_handler::<UserOrBot>),
         )
         .route(
             "/optional/bot-only",
@@ -1490,6 +1495,7 @@ async fn every_combination_of_multiple_explicit_credential_types_is_ambiguous() 
         "/required/user-or-internal-service",
         "/required/acting-user",
         "/required/user-only",
+        "/required/user-or-bot",
         "/required/bot-only",
         "/required/internal-only",
         "/required/any-principal",
@@ -1497,6 +1503,7 @@ async fn every_combination_of_multiple_explicit_credential_types_is_ambiguous() 
         "/optional/user-or-internal-service",
         "/optional/acting-user",
         "/optional/user-only",
+        "/optional/user-or-bot",
         "/optional/bot-only",
         "/optional/internal-only",
         "/optional/any-principal",
@@ -1669,6 +1676,17 @@ async fn required_policy_matrix_enforces_principal_and_acting_user_contracts() {
             ],
         ),
         (
+            "/required/user-or-bot",
+            [
+                StatusCode::OK,
+                StatusCode::OK,
+                StatusCode::OK,
+                StatusCode::FORBIDDEN,
+                StatusCode::FORBIDDEN,
+                StatusCode::UNAUTHORIZED,
+            ],
+        ),
+        (
             "/required/bot-only",
             [
                 StatusCode::FORBIDDEN,
@@ -1748,6 +1766,17 @@ async fn optional_policy_matrix_enforces_credentials_but_allows_anonymous_reques
                 StatusCode::OK,
                 StatusCode::FORBIDDEN,
                 StatusCode::FORBIDDEN,
+                StatusCode::FORBIDDEN,
+                StatusCode::FORBIDDEN,
+                StatusCode::OK,
+            ],
+        ),
+        (
+            "/optional/user-or-bot",
+            [
+                StatusCode::OK,
+                StatusCode::OK,
+                StatusCode::OK,
                 StatusCode::FORBIDDEN,
                 StatusCode::FORBIDDEN,
                 StatusCode::OK,

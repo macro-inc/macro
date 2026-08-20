@@ -67,9 +67,14 @@ use referral::{
     outbound::{pg_referral_repo::PgReferralRepo, stripe_discount_client::StripeDiscountClient},
 };
 
-use crate::api::context::{
-    ApiContext, AuthorizationService, MacroApiTokenContext, MacroApiTokenExpirySeconds,
-    MacroApiTokenIssuer, MacroApiTokenPrivateSecretKey, StripeWebhookSecretKey,
+use crate::{
+    api::context::{
+        ApiContext, AuthorizationService, MacroApiTokenContext, MacroApiTokenExpirySeconds,
+        MacroApiTokenIssuer, MacroApiTokenPrivateSecretKey, StripeWebhookSecretKey,
+    },
+    microsoft_token_cipher::{
+        EnvelopeMicrosoftTokenCipher, KmsDataKeyProvider, MicrosoftTokenCipher,
+    },
 };
 use std::{sync::Arc, time::Duration};
 use tokio_util::task::TaskTracker;
@@ -77,6 +82,7 @@ use tokio_util::task::TaskTracker;
 mod api;
 mod config;
 mod generate_password;
+mod microsoft_token_cipher;
 mod rate_limit_config;
 
 #[tokio::main]
@@ -92,6 +98,15 @@ async fn main() -> anyhow::Result<()> {
 
     // Parse our configuration from the environment.
     let config = Config::from_env().context("expected to be able to generate config")?;
+    let microsoft_credentials = config
+        .microsoft_credentials()
+        .context("invalid Microsoft OAuth configuration")?;
+    let microsoft_token_cipher = microsoft_credentials.as_ref().map(|credentials| {
+        Arc::new(EnvelopeMicrosoftTokenCipher::new(KmsDataKeyProvider::new(
+            aws_sdk_kms::Client::new(&aws_config),
+            credentials.token_kms_key_id.clone(),
+        ))) as Arc<dyn MicrosoftTokenCipher>
+    });
 
     let internal_api_key = config.internal_api_key.clone();
 
@@ -176,6 +191,14 @@ async fn main() -> anyhow::Result<()> {
         google_client_secret,
     )
     .with_public_url(fusionauth_public_url);
+    let auth_client = match microsoft_credentials {
+        Some(credentials) => auth_client.with_microsoft_credentials(
+            credentials.client_id,
+            credentials.client_secret,
+            credentials.tenant_id,
+        ),
+        None => auth_client,
+    };
     tracing::trace!("initialized auth client");
 
     let document_storage_service_client = DocumentStorageServiceClient::new(
@@ -279,11 +302,13 @@ async fn main() -> anyhow::Result<()> {
     }));
     tracing::trace!("initialized analytics client");
 
-    // Initialize Loops client. Only production sign-ups are added to Loops;
-    // in all other environments (or when no API key is configured) this is a
-    // no-op.
+    // Initialize Loops client. Production and develop sign-ups are added to
+    // Loops; on localhost, or wherever no API key is configured, this is a
+    // no-op. Note there is one Loops audience — a develop sign-up creates a
+    // real contact and can trigger live workflows, so leave the key unset in
+    // any environment that should not send.
     let loops_client = match (config.environment, config.loops_api_key.value()) {
-        (Environment::Production, Some(api_key)) => {
+        (Environment::Production | Environment::Develop, Some(api_key)) => {
             tracing::info!("configuring Loops");
             LoopsClient::new(api_key.to_string())
         }
@@ -399,6 +424,7 @@ async fn main() -> anyhow::Result<()> {
             db,
             github_link_service: Arc::new(github_link_service_impl),
             auth_client: Arc::new(auth_client),
+            microsoft_token_cipher,
             macro_cache_client: Arc::new(macro_cache_client),
             stripe_client: Arc::new(stripe_client),
             document_storage_service_client: Arc::new(document_storage_service_client),
@@ -408,6 +434,7 @@ async fn main() -> anyhow::Result<()> {
             sqs_client,
             environment: config.environment,
             rate_limit_service: rate_limit,
+            calendar_scope_enabled: config.calendar_scope_enabled,
             jwt_args,
             authorization_state,
             token_context: MacroApiTokenContext {

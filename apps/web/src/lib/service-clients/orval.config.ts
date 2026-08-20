@@ -179,6 +179,7 @@ export default defineConfig({
           /^ChannelParticipant(Added|Removed)Metadata$/,
           /^ChannelMessage(Posted|Patched|Deleted)Metadata$/,
           /^ChannelMessageAttachment(Created|Removed)Metadata$/,
+          /^ChannelMentionedMetadata$/,
           /^ChannelEventAttachment$/,
           /^ChannelSender$/,
         ],
@@ -196,6 +197,19 @@ export default defineConfig({
     },
     input: {
       target: './service-unfurl/openapi.json',
+    },
+  },
+  agentHarnessService: {
+    output: {
+      client: 'fetch',
+      target: './service-agent-harness/generated/client.ts',
+      schemas: './service-agent-harness/generated/schemas',
+      override: {
+        useDates: false,
+      },
+    },
+    input: {
+      target: './service-agent-harness/openapi.json',
     },
   },
 });

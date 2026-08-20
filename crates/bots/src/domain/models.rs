@@ -1,6 +1,7 @@
 //! Bot domain models.
 
 use chrono::{DateTime, Utc};
+use macro_user_id::user_id::MacroUserIdStr;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -99,6 +100,8 @@ pub enum BotOwner {
 }
 
 /// Bot row.
+///
+/// Clients deserialize this, so both derives are used.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 pub struct Bot {
@@ -124,6 +127,8 @@ pub struct Bot {
     pub updated_at: DateTime<Utc>,
     /// Soft-delete timestamp.
     pub deleted_at: Option<DateTime<Utc>>,
+    /// Whether mentioning this bot opens a sandboxed coding-agent session.
+    pub has_agent: bool,
 }
 
 /// Channel containing a bot.
@@ -138,6 +143,17 @@ pub struct BotChannel {
     pub channel_type: BotChannelType,
     /// Timestamp when the bot joined the channel.
     pub joined_at: DateTime<Utc>,
+}
+
+/// Authenticated principal asking to list a bot's channels.
+#[derive(Debug, Clone)]
+pub enum BotChannelListCaller {
+    /// A directly authenticated Macro user.
+    User(MacroUserIdStr<'static>),
+    /// An authenticated bot.
+    Bot(BotId),
+    /// An authenticated internal service, with or without an acting user.
+    Internal,
 }
 
 /// Bot token metadata.
@@ -194,6 +210,8 @@ pub struct CreateBotRequest {
     pub description: Option<String>,
     /// Optional avatar URL.
     pub avatar_url: Option<String>,
+    /// Whether mentioning this bot opens a sandboxed coding-agent session. Defaults to false.
+    pub has_agent: Option<bool>,
 }
 
 /// Request to patch a bot.
@@ -208,6 +226,8 @@ pub struct PatchBotRequest {
     pub description: Option<String>,
     /// Optional avatar URL.
     pub avatar_url: Option<String>,
+    /// Whether mentioning this bot opens a sandboxed coding-agent session. Omit to leave unchanged.
+    pub has_agent: Option<bool>,
 }
 
 /// Request to create a bot token.
@@ -246,6 +266,8 @@ pub struct CreateChannelScopedBotRequest {
     pub token_label: Option<String>,
     /// Optional token expiration timestamp.
     pub token_expires_at: Option<DateTime<Utc>>,
+    /// Whether mentioning this bot opens a sandboxed coding-agent session. Defaults to false.
+    pub has_agent: Option<bool>,
 }
 
 /// Response containing a newly minted token.

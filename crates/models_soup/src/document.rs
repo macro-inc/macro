@@ -19,6 +19,8 @@ pub enum SoupDocumentSubType {
     },
     /// A snippet document — reusable markdown
     Snippet {},
+    /// A skill document — markdown instructions for AI
+    Skill {},
 }
 
 impl SoupDocumentSubType {
@@ -30,6 +32,7 @@ impl SoupDocumentSubType {
                 is_completed: is_completed.unwrap_or_default(),
             }),
             DocumentSubType::Snippet => Some(Self::Snippet {}),
+            DocumentSubType::Skill => Some(Self::Skill {}),
         }
     }
 
@@ -37,7 +40,7 @@ impl SoupDocumentSubType {
     pub fn is_task_completed(&self) -> Option<bool> {
         match self {
             Self::Task { is_completed } => Some(*is_completed),
-            Self::Snippet {} => None,
+            Self::Snippet {} | Self::Skill {} => None,
         }
     }
 }
@@ -113,13 +116,15 @@ impl<T> SoupDocument<T> {
     /// Returns the entity type for this document.
     ///
     /// Documents with a `sub_type` of `Task` return `EntityType::Task`,
-    /// otherwise they return `EntityType::Document`. Snippets are documents
-    /// as far as the entity system is concerned — their snippet-ness only
-    /// lives in `sub_type`.
+    /// otherwise they return `EntityType::Document`. Snippets and skills are
+    /// documents as far as the entity system is concerned — their snippet-ness
+    /// or skill-ness only lives in `sub_type`.
     pub fn entity_type(&self) -> EntityType {
         match &self.sub_type {
             Some(SoupDocumentSubType::Task { .. }) => EntityType::Task,
-            Some(SoupDocumentSubType::Snippet {}) | None => EntityType::Document,
+            Some(SoupDocumentSubType::Snippet {} | SoupDocumentSubType::Skill {}) | None => {
+                EntityType::Document
+            }
         }
     }
 }

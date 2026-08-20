@@ -30,8 +30,9 @@ jobs:
             - 'apps/web/**'
             - 'packages/**'
             - 'crates/client/cache-core/**'
-            - 'crates/client/cache-idb/**'
+            - 'crates/client/cache-turso/**'
             - 'crates/client/cache-wasm/**'
+            - 'crates/client/turso-opfs/**'
             - 'static_assets/schema.graphql'
             - 'Cargo.toml'
             - 'Cargo.lock'
@@ -116,6 +117,9 @@ jobs:
     - name: Check Collaboration Package Types
       run: bun run type-check
       working-directory: packages/collaboration
+    - name: Teardown Nix
+      if: always()
+      uses: './.github/actions/teardown-nix'
   biome-check:
     needs:
     - path-check
@@ -142,6 +146,9 @@ jobs:
     - name: Run Collaboration Package Biome
       run: biome ci --changed --no-errors-on-unmatched --error-on-warnings
       working-directory: packages/collaboration
+    - name: Teardown Nix
+      if: always()
+      uses: './.github/actions/teardown-nix'
   tailwind:
     needs:
     - path-check
@@ -166,6 +173,9 @@ jobs:
     - name: Check Tailwind Classes
       run: just check-tailwind
       working-directory: apps/web
+    - name: Teardown Nix
+      if: always()
+      uses: './.github/actions/teardown-nix'
   test:
     needs:
     - path-check
@@ -190,6 +200,9 @@ jobs:
     - name: Test
       run: bunx vitest
       working-directory: apps/web
+    - name: Teardown Nix
+      if: always()
+      uses: './.github/actions/teardown-nix'
   cycles:
     needs:
     - path-check
@@ -214,6 +227,9 @@ jobs:
     - name: Collaboration Package Cycles Import Check
       run: biome lint --changed --no-errors-on-unmatched --only=suspicious/noImportCycles
       working-directory: packages/collaboration
+    - name: Teardown Nix
+      if: always()
+      uses: './.github/actions/teardown-nix'
   build:
     needs:
     - path-check
@@ -236,6 +252,9 @@ jobs:
     - name: Build
       run: just build-dev
       working-directory: apps/web
+    - name: Teardown Nix
+      if: always()
+      uses: './.github/actions/teardown-nix'
   status-check:
     needs:
     - path-check

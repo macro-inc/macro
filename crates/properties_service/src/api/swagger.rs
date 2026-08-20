@@ -8,7 +8,10 @@ use properties::inbound::axum_router::{
         EntityPropertiesResponse, EntityPropertyOptionSelectionResponse,
         EntityPropertyOptionUpdateRequest, EntityQueryParams, SetEntityPropertyRequest,
     },
-    tags::{EnsureTagSetRequest, TagScope, TagSetResponse},
+    tags::{
+        EnsureTagSetRequest, MergeTagRequest, PromoteTagRequest, TagPromotionConflictResponse,
+        TagScope, TagSetResponse,
+    },
 };
 use utoipa::OpenApi;
 
@@ -30,6 +33,8 @@ use utoipa::OpenApi;
         properties::inbound::axum_router::options::delete_property_option,
         properties::inbound::axum_router::tags::list_tags,
         properties::inbound::axum_router::tags::ensure_tag_set,
+        properties::inbound::axum_router::tags::promote_tag,
+        properties::inbound::axum_router::tags::merge_tag,
         // Entity properties
         properties::inbound::axum_router::entities::get_entity_properties,
         properties::inbound::axum_router::entities::get_bulk_entity_properties,
@@ -77,6 +82,9 @@ use utoipa::OpenApi;
             TagScope,
             TagSetResponse,
             EnsureTagSetRequest,
+            PromoteTagRequest,
+            MergeTagRequest,
+            TagPromotionConflictResponse,
         )
     ),
     tags(

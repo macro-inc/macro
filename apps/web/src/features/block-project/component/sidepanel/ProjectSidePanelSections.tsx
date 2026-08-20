@@ -1,3 +1,4 @@
+import { EntityActivitySectionConditional } from '@app/features/activity/EntityActivitySection';
 import {
   EntityPropertiesSection,
   EntityTagsSection,
@@ -52,6 +53,11 @@ export function ProjectSidePanelSections() {
           />
         </Suspense>
       </SidePanel.Section>
+      <EntityActivitySectionConditional
+        entityId={projectId}
+        entityType="PROJECT"
+        order={40}
+      />
     </>
   );
 }

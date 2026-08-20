@@ -2,7 +2,7 @@ import { FloatRegionOrInline } from '@components/app/mobile/float-regions/FloatR
 import { inboxIconProps } from '@core/component/inboxIcon';
 import { UserIcon } from '@core/component/UserIcon';
 import { useEmail } from '@core/context/user';
-import { isMobile } from '@core/mobile/isMobile';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import ArrowBendUpLeft from '@phosphor/arrow-bend-up-left.svg';
 import ArrowBendUpRight from '@phosphor/arrow-bend-up-right.svg';
 import CheckIcon from '@phosphor/check.svg';
@@ -28,12 +28,12 @@ function ReplyActionButton(props: {
       // accessory region, match the chrome's depth so the island surface
       // matches the dock buttons. (The region host's Layer can't help —
       // Button's own Layer would reset it.)
-      depth={isMobile() ? 3 : undefined}
+      depth={isTouchDevice() ? 3 : undefined}
       variant="base"
       aria-label={props.ariaLabel}
       class={cn(
-        // Island pills when floating in the mobile accessory region.
-        'mobile:island mobile:h-8 mobile:rounded-full mobile:border-0'
+        // Island pills when floating in the mobile/tablet accessory region.
+        'touch:island touch:h-8 touch:rounded-full touch:border-0'
       )}
       onClick={props.onClick}
     >
@@ -84,7 +84,7 @@ export function BottomReplyButtons(props: { lastMessage: ApiMessage }) {
 
   return (
     <Show
-      when={isMobile()}
+      when={isTouchDevice()}
       fallback={
         <div class="flex w-full items-center pt-4">
           <button
@@ -104,8 +104,8 @@ export function BottomReplyButtons(props: { lastMessage: ApiMessage }) {
       }
     >
       <FloatRegionOrInline region="accessory">
-        <div class="w-full p-2 pb-2 pt-4 mobile:px-(--mobile-chrome-gutter) mobile:py-0">
-          <div class="flex flex-row items-center gap-2 justify-between mobile:pointer-events-auto">
+        <div class="w-full p-2 pb-2 pt-4 touch:px-(--mobile-chrome-gutter) touch:py-0">
+          <div class="flex flex-row items-center gap-2 justify-between touch:pointer-events-auto">
             <div class="flex flex-row items-center gap-2">
               <ReplyActionButton
                 icon={ArrowBendUpLeft}

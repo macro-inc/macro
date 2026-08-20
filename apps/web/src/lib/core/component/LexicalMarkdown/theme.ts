@@ -3,38 +3,38 @@ import type { EditorThemeClasses } from 'lexical';
 
 const VERTICAL_GAP = 'my-4 first:mt-1.5 last:mb-1.5';
 
-// SCUFFED THEMING: we have to figure out what to do about code highlighting.
+// Syntax highlighting consumes the theme's authored named palette directly.
 const codeHighlight: Record<string, string> = {
-  atrule: 'text-accent-30',
-  attr: 'text-accent-60',
-  boolean: 'text-accent-90',
-  builtin: 'text-accent-120',
+  atrule: 'text-red',
+  attr: 'text-orange',
+  boolean: 'text-yellow',
+  builtin: 'text-lime',
   cdata: 'text-ink-muted',
-  char: 'text-accent-150',
-  class: 'text-accent-180',
-  'class-name': 'text-accent-180',
+  char: 'text-green',
+  class: 'text-teal',
+  'class-name': 'text-teal',
   comment: 'text-ink-muted',
-  constant: 'text-accent-270',
-  deleted: 'text-accent-300',
-  doctype: 'text-accent-330',
-  entity: 'text-accent-30',
-  function: 'text-accent-60',
-  important: 'text-accent-90',
-  inserted: 'text-accent-120',
-  keyword: 'text-accent-150',
-  namespace: 'text-accent-180',
-  number: 'text-accent-120',
-  operator: 'text-accent-300',
+  constant: 'text-violet',
+  deleted: 'text-purple',
+  doctype: 'text-pink',
+  entity: 'text-red',
+  function: 'text-orange',
+  important: 'text-yellow',
+  inserted: 'text-lime',
+  keyword: 'text-green',
+  namespace: 'text-teal',
+  number: 'text-lime',
+  operator: 'text-purple',
   prolog: 'text-ink-muted',
-  property: 'text-accent-270',
+  property: 'text-violet',
   punctuation: 'text-ink',
-  regex: 'text-accent-60',
-  selector: 'text-accent-90',
-  string: 'text-accent-30',
-  symbol: 'text-accent-60',
-  tag: 'text-accent-90',
-  url: 'text-accent-120',
-  variable: 'text-accent-150',
+  regex: 'text-orange',
+  selector: 'text-yellow',
+  string: 'text-red',
+  symbol: 'text-orange',
+  tag: 'text-yellow',
+  url: 'text-lime',
+  variable: 'text-green',
 };
 
 export const theme: EditorThemeClasses = {
@@ -42,7 +42,7 @@ export const theme: EditorThemeClasses = {
   text: {
     bold: 'font-bold',
     italic: 'italic',
-    code: 'bg-message font-mono rounded-xs md-inline-code p-0.5',
+    code: 'bg-code-buffer font-mono rounded-xs md-inline-code p-0.5',
     strikethrough: 'md-strike',
     underline: 'md-underline',
     highlight: 'text-accent font-semibold',
@@ -66,12 +66,12 @@ export const theme: EditorThemeClasses = {
     checklist: 'md-list md-check',
     listitemChecked: 'checked md-strike text-ink-extra-muted',
   },
-  link: 'text-accent underline hover:underline cursor-default underline-offset-[0.15em]',
+  link: 'text-link hover:text-link-hover visited:text-link-visited underline hover:underline cursor-default underline-offset-[0.15em]',
   quote:
     'md-quote border-l-2 border-edge pl-4 py-2 italic text-ink-muted my-4 first:mt-1.5',
-  code: 'bg-message font-mono p-3 rounded block md-code-box before:text-ink-extra-muted/70 whitespace-pre mb-4',
+  code: 'bg-code-buffer font-mono p-3 rounded block md-code-box before:text-ink-extra-muted/70 whitespace-pre mb-4',
   static: {
-    'code-container': 'bg-message rounded',
+    'code-container': 'bg-code-buffer rounded',
     'table-container': 'my-4 max-w-full',
   },
   codeHighlight,
@@ -157,7 +157,7 @@ export const aiChatTheme = createTheme(
     },
     code: 'w-full bg-transparent',
     static: {
-      'code-container': 'bg-message m-2',
+      'code-container': 'bg-code-buffer m-2',
     },
   },
   theme,
@@ -169,7 +169,7 @@ export const channelTheme = createTheme(
     root: 'channel-markdown max-w-full min-w-0',
     code: 'rounded w-full bg-transparent',
     static: {
-      'code-container': 'bg-message rounded m-2',
+      'code-container': 'bg-code-buffer rounded m-2',
     },
   },
   theme,
@@ -186,7 +186,7 @@ export const channelThemeSender = createTheme(
     list: {
       listitemChecked: 'checked chat-blue md-strike text-current/50',
     },
-    link: 'text-current underline hover:opacity-50',
+    link: 'text-link hover:text-link-hover visited:text-link-visited underline',
     code: `chat-blue font-mono p-3 rounded block md-code-box before:text-current/50`,
     static: {
       'code-container': `bg-[navy]/20 rounded m-2`,
@@ -202,7 +202,7 @@ export const embeddedCodeBlock = createTheme({
 });
 
 export const unifiedListMarkdownTheme = createTheme({
-  code: 'font-mono overflow-hidden px-1.5 py-0.5 rounded bg-message inline-block',
+  code: 'font-mono overflow-hidden px-1.5 py-0.5 rounded bg-code-buffer inline-block',
   quote: 'border-l-2 border-current/20 pl-1 italic text-current/80',
   static: {
     'code-container':

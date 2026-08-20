@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                        INSERT INTO calendar_sync_outbox (\n                            id, backfill_job_id\n                        )\n                        VALUES ($1, $2)\n                        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "7df4af241ff7b68d6545c4ebfb75a6e15d89b5892d16f96b30fe345d68fe9692"
+}

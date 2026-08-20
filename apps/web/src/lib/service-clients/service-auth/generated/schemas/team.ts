@@ -5,6 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { TeamAutoJoinDomain } from './teamAutoJoinDomain';
+import type { TeamDefaultLinkShare } from './teamDefaultLinkShare';
 
 /**
  * The Team struct
@@ -19,6 +20,7 @@ with, when automatic domain joining is enabled (None otherwise). */
   /** Whether the CRM is enabled for this team (from `team_crm_settings`;
 `false` when no row exists). */
   crm_enabled: boolean;
+  default_link_share?: TeamDefaultLinkShare;
   /** Whether this team is on an enterprise license. Enterprise teams are
 billed out-of-band; membership changes skip all Stripe subscription
 bookkeeping (no seat counts, no subscription backfill, no paying check). */

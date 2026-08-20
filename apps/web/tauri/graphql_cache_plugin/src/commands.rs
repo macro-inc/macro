@@ -10,26 +10,22 @@
 //! worker's `{ok: false, error}` responses.
 
 use crate::engine::{
-    ClaimedMutationWire, EngineHandle, OptimisticWriteResultWire, ReadResultWire, WriteResultWire,
+    ClaimedMutationWire, EngineHandle, EnqueueOptimisticMutationResultWire, ReadResultWire,
+    WriteRegistration, WriteRequest, WriteResultWire,
 };
 use crate::{
     CacheState, InitializedCache, emit_cache_changed, emit_mutation_settled, emit_ops_affected,
 };
+use cache_core::entity_resolver::EntityResolver;
 use cache_core::link_patch::{OptimisticLinkPatch, QueryRevalidation};
-use cache_core::query_inspection::CachedQueryInstance;
-use cache_core::record_selection::{RecordCursor, SelectedRecordPage};
-use cache_sqlite::SqliteStorage;
-use serde::Deserialize;
+use cache_core::query_inspection::{CachedQueryInstance, CachedQueryVariant};
+use cache_core::record_selection::SelectedRecord;
+use cache_core::search::{SearchPage, SearchRequest};
+use cache_turso::TursoFileDatabase;
+use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager, Runtime, State};
 
 type Variables = serde_json::Map<String, serde_json::Value>;
-
-fn parse_record_cursor(cursor: Option<String>) -> Result<Option<RecordCursor>, String> {
-    cursor
-        .map(|value| serde_json::from_value(serde_json::Value::String(value)))
-        .transpose()
-        .map_err(|error| error.to_string())
-}
 
 fn engine_handle(state: &State<'_, CacheState>) -> Result<EngineHandle, String> {
     state
@@ -43,10 +39,8 @@ fn engine_handle(state: &State<'_, CacheState>) -> Result<EngineHandle, String> 
 
 /// Opens (or creates) the cache for `scope`. Idempotent for the same scope;
 /// errors on a scope mismatch (parity with the browser worker `init`). The
-/// database lives at `{app_data_dir}/graphql-cache/cache.sqlite`. A scope
-/// change clears all cache state; for the same scope, a schema compatibility
-/// epoch or format mismatch clears disposable records but retains queued user
-/// intent.
+/// database lives at `{app_data_dir}/graphql-cache/cache.turso`. Incompatible
+/// or uncertain storage is physically replaced before opening.
 #[tauri::command]
 pub async fn graphql_cache_init<R: Runtime>(
     app: AppHandle<R>,
@@ -73,8 +67,11 @@ pub async fn graphql_cache_init<R: Runtime>(
         .map_err(|e| e.to_string())?
         .join("graphql-cache");
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-    let storage =
-        SqliteStorage::open(dir.join("cache.sqlite"), &scope).map_err(|e| e.to_string())?;
+    let database =
+        TursoFileDatabase::new(dir.join("cache.turso")).map_err(|error| error.to_string())?;
+    let storage = database
+        .open_or_reset(&scope)
+        .map_err(|error| error.to_string())?;
     let handle = EngineHandle::new(storage, hot_capacity);
     *guard = Some(InitializedCache { scope, handle });
     Ok(())
@@ -88,24 +85,50 @@ pub async fn graphql_cache_read(
     query: String,
     operation_name: Option<String>,
     variables: Option<Variables>,
+    entity_resolvers: Option<Vec<EntityResolver>>,
 ) -> Result<ReadResultWire, String> {
     engine_handle(&state)?
-        .read(op_id, query, operation_name, variables.unwrap_or_default())
+        .read(
+            op_id,
+            query,
+            operation_name,
+            variables.unwrap_or_default(),
+            entity_resolvers.unwrap_or_default(),
+        )
         .await
 }
 
-/// Projects normalized records through a named GraphQL fragment.
+/// Projects explicit normalized entity keys without scanning storage.
 #[tauri::command]
-pub async fn graphql_cache_read_records(
+pub async fn graphql_cache_read_records_by_keys(
     state: State<'_, CacheState>,
     document: String,
     fragment_name: String,
-    cursor: Option<String>,
-    limit: u32,
-) -> Result<SelectedRecordPage, String> {
+    keys: Vec<String>,
+) -> Result<Vec<SelectedRecord>, String> {
     engine_handle(&state)?
-        .read_records(document, fragment_name, parse_record_cursor(cursor)?, limit)
+        .read_records_by_keys(document, fragment_name, keys)
         .await
+}
+
+/// Searches the compact cache projection without scanning normalized records.
+#[tauri::command]
+pub async fn graphql_cache_search(
+    state: State<'_, CacheState>,
+    request: SearchRequest,
+) -> Result<SearchPage, String> {
+    engine_handle(&state)?.search(request).await
+}
+
+/// Active-query registration installed by a network write.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WriteRegistrationWire {
+    /// Host operation id.
+    pub op_id: String,
+    /// Synthetic read relations used by the query.
+    #[serde(default)]
+    pub entity_resolvers: Vec<EntityResolver>,
 }
 
 /// Normalizes and stores a network response; broadcasts affected operations
@@ -115,6 +138,7 @@ pub async fn graphql_cache_write<R: Runtime>(
     app: AppHandle<R>,
     state: State<'_, CacheState>,
     origin_op_id: Option<String>,
+    registration: Option<WriteRegistrationWire>,
     query: String,
     operation_name: Option<String>,
     variables: Option<Variables>,
@@ -122,8 +146,51 @@ pub async fn graphql_cache_write<R: Runtime>(
     identity: Option<String>,
 ) -> Result<WriteResultWire, String> {
     let result = engine_handle(&state)?
-        .write(
+        .write(WriteRequest {
             origin_op_id,
+            registration: registration.map(|registration| WriteRegistration {
+                op_id: registration.op_id,
+                entity_resolvers: registration.entity_resolvers,
+            }),
+            query,
+            operation_name,
+            variables: variables.unwrap_or_default(),
+            data,
+            identity,
+        })
+        .await?;
+    emit_ops_affected(&app, &result.affected_ops, &result.changed);
+    emit_cache_changed(&app);
+    Ok(result)
+}
+
+/// Result of hydrating a response without returning cache-only fields.
+#[derive(Debug, Serialize)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum HydrationResultWire {
+    /// At least one non-cache-only field was projected.
+    Data {
+        /// Projected GraphQL response data.
+        data: serde_json::Value,
+    },
+    /// Every response field was cache-only.
+    Void,
+}
+
+/// Normalizes and stores a network response, broadcasts affected operations,
+/// and returns only fields not marked `@cacheOnly`.
+#[tauri::command]
+pub async fn graphql_cache_hydrate<R: Runtime>(
+    app: AppHandle<R>,
+    state: State<'_, CacheState>,
+    query: String,
+    operation_name: Option<String>,
+    variables: Option<Variables>,
+    data: serde_json::Value,
+    identity: Option<String>,
+) -> Result<HydrationResultWire, String> {
+    let result = engine_handle(&state)?
+        .hydrate_query(
             query,
             operation_name,
             variables.unwrap_or_default(),
@@ -131,15 +198,23 @@ pub async fn graphql_cache_write<R: Runtime>(
             identity,
         )
         .await?;
-    emit_ops_affected(&app, &result.affected_ops, &result.changed);
+    emit_ops_affected(
+        &app,
+        &result.write_result.affected_ops,
+        &result.write_result.changed,
+    );
     emit_cache_changed(&app);
-    Ok(result)
+    Ok(match result.data {
+        Some(data) => HydrationResultWire::Data { data },
+        None => HydrationResultWire::Void,
+    })
 }
 
-/// Durably queues a mutation and its optimistic response. The one engine is
-/// shared by all webviews, so visible changes are broadcast too.
+/// Durably queues an optimistic mutation and attempts to claim the strict
+/// queue head before broadcasting visible changes to every webview.
 #[tauri::command]
-pub async fn graphql_cache_begin_optimistic_write<R: Runtime>(
+#[allow(clippy::too_many_arguments)]
+pub async fn graphql_cache_enqueue_optimistic_mutation<R: Runtime>(
     app: AppHandle<R>,
     state: State<'_, CacheState>,
     origin_op_id: Option<String>,
@@ -150,9 +225,12 @@ pub async fn graphql_cache_begin_optimistic_write<R: Runtime>(
     link_patches: Option<Vec<OptimisticLinkPatch>>,
     revalidations: Option<Vec<QueryRevalidation>>,
     created_at_ms: i64,
-) -> Result<OptimisticWriteResultWire, String> {
+    owner: String,
+    now_ms: i64,
+    lease_expires_at_ms: i64,
+) -> Result<EnqueueOptimisticMutationResultWire, String> {
     let result = engine_handle(&state)?
-        .begin_optimistic_write(
+        .enqueue_optimistic_mutation(
             origin_op_id,
             query,
             operation_name,
@@ -161,6 +239,9 @@ pub async fn graphql_cache_begin_optimistic_write<R: Runtime>(
             link_patches.unwrap_or_default(),
             revalidations.unwrap_or_default(),
             created_at_ms,
+            owner,
+            now_ms,
+            lease_expires_at_ms,
         )
         .await?;
     emit_ops_affected(&app, &result.result.affected_ops, &result.result.changed);
@@ -175,19 +256,38 @@ pub struct InspectionPathSegment {
     pub field: String,
 }
 
-/// Enumerates cached variants of one generated query field.
+/// Recovers cached query variables without materializing each variant.
+#[tauri::command]
+pub async fn graphql_cache_inspect_query_variants(
+    state: State<'_, CacheState>,
+    query: String,
+    operation_name: Option<String>,
+    path: Vec<InspectionPathSegment>,
+) -> Result<Vec<CachedQueryVariant>, String> {
+    engine_handle(&state)?
+        .inspect_query_variants(
+            query,
+            operation_name,
+            path.into_iter().map(|segment| segment.field).collect(),
+        )
+        .await
+}
+
+/// Enumerates and materializes cached variants of one generated query field.
 #[tauri::command]
 pub async fn graphql_cache_inspect_query(
     state: State<'_, CacheState>,
     query: String,
     operation_name: Option<String>,
     path: Vec<InspectionPathSegment>,
+    variable_filters: Option<Vec<serde_json::Map<String, serde_json::Value>>>,
 ) -> Result<Vec<CachedQueryInstance>, String> {
     engine_handle(&state)?
         .inspect_query(
             query,
             operation_name,
             path.into_iter().map(|segment| segment.field).collect(),
+            variable_filters.unwrap_or_default(),
         )
         .await
 }

@@ -1,7 +1,11 @@
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
+import { useIsAuthenticated } from '@core/auth';
 import {
   $isTagMentionNode,
+  HISTORIC_TAG,
+  SKIP_DOM_SELECTION_TAG,
+  SKIP_SCROLL_INTO_VIEW_TAG,
   type TagMentionDecoratorProps,
 } from '@macro-inc/lexical-core';
 import { TagDot } from '@property/tags/TagDot';
@@ -38,6 +42,7 @@ export function TagMention(props: TagMentionDecoratorProps) {
   const tagsQuery = useTagsQuery();
   const split = useSplitLayout();
   const panel = useSplitPanel();
+  const isAuthenticated = useIsAuthenticated();
 
   const isSelectedAsNode = createMemo(() => {
     const sel = selection();
@@ -83,11 +88,16 @@ export function TagMention(props: TagMentionDecoratorProps) {
           color: tag.color,
         });
       },
-      { tag: 'historic', discrete: true }
+      {
+        tag: [HISTORIC_TAG, SKIP_DOM_SELECTION_TAG, SKIP_SCROLL_INTO_VIEW_TAG],
+        discrete: true,
+      }
     );
   });
 
   const open = () => {
+    if (isAuthenticated() !== true) return;
+
     const tag = resolvedTag();
     navigateToTag(split.openWithSplit, tag, { handle: panel?.handle });
   };

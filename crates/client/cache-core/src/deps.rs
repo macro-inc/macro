@@ -11,8 +11,9 @@ pub type OpId = u64;
 
 #[derive(Debug, Default)]
 pub struct DepIndex {
-    by_op: HashMap<OpId, BTreeSet<EntityKey>>,
-    by_key: HashMap<EntityKey, HashSet<OpId>>,
+    by_op: HashMap<OpId, BTreeSet<EntityKey<'static>>>,
+    by_key: HashMap<EntityKey<'static>, HashSet<OpId>>,
+    broad_ops: BTreeSet<OpId>,
 }
 
 impl DepIndex {
@@ -21,7 +22,7 @@ impl DepIndex {
     }
 
     /// Replaces the dependency set of an active operation.
-    pub fn set_op_deps(&mut self, op: OpId, deps: BTreeSet<EntityKey>) {
+    pub fn set_op_deps(&mut self, op: OpId, deps: BTreeSet<EntityKey<'static>>) {
         self.remove_op(op);
         for key in &deps {
             self.by_key.entry(key.clone()).or_default().insert(op);
@@ -29,8 +30,16 @@ impl DepIndex {
         self.by_op.insert(op, deps);
     }
 
+    /// Registers an operation conservatively against every visible change.
+    pub fn set_op_broad(&mut self, op: OpId) {
+        self.remove_op(op);
+        self.broad_ops.insert(op);
+        self.by_op.insert(op, BTreeSet::new());
+    }
+
     /// Unregisters an operation (urql teardown).
     pub fn remove_op(&mut self, op: OpId) {
+        self.broad_ops.remove(&op);
         if let Some(old) = self.by_op.remove(&op) {
             for key in old {
                 if let Some(set) = self.by_key.get_mut(&key) {
@@ -46,19 +55,24 @@ impl DepIndex {
     /// Active operations depending on any of `keys`.
     pub fn ops_for_keys<'a>(
         &self,
-        keys: impl IntoIterator<Item = &'a EntityKey>,
+        keys: impl IntoIterator<Item = &'a EntityKey<'static>>,
     ) -> BTreeSet<OpId> {
         let mut out = BTreeSet::new();
+        let mut saw_key = false;
         for key in keys {
+            saw_key = true;
             if let Some(ops) = self.by_key.get(key) {
                 out.extend(ops.iter().copied());
             }
+        }
+        if saw_key {
+            out.extend(self.broad_ops.iter().copied());
         }
         out
     }
 
     /// Keys pinned by at least one active operation (future: eviction).
-    pub fn pinned(&self) -> impl Iterator<Item = &EntityKey> {
+    pub fn pinned(&self) -> impl Iterator<Item = &EntityKey<'static>> {
         self.by_key.keys()
     }
 
@@ -76,8 +90,8 @@ impl DepIndex {
 mod tests {
     use super::*;
 
-    fn key(s: &str) -> EntityKey {
-        EntityKey(s.to_string())
+    fn key(s: &str) -> EntityKey<'static> {
+        EntityKey(s.to_owned().into())
     }
 
     #[test]
@@ -98,5 +112,22 @@ mod tests {
         idx.remove_op(2);
         assert_eq!(idx.active_ops(), 0);
         assert!(idx.ops_for_keys(&[key("B"), key("C")]).is_empty());
+    }
+
+    #[test]
+    fn broad_registration_is_replaced_and_removed() {
+        let mut idx = DepIndex::new();
+        idx.set_op_broad(1);
+        assert_eq!(idx.ops_for_keys(&[key("anything")]), [1].into());
+        assert!(idx.ops_for_keys(std::iter::empty()).is_empty());
+
+        idx.set_op_deps(1, [key("A")].into());
+        assert!(idx.ops_for_keys(&[key("B")]).is_empty());
+        assert_eq!(idx.ops_for_keys(&[key("A")]), [1].into());
+
+        idx.set_op_broad(1);
+        idx.remove_op(1);
+        assert!(idx.ops_for_keys(&[key("A")]).is_empty());
+        assert_eq!(idx.active_ops(), 0);
     }
 }

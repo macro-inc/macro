@@ -28,8 +28,8 @@ VALUES (
     '2022-01-01 00:00:00'
 );
 
-INSERT INTO public."SharePermission" ("id", "isPublic", "publicAccessLevel", "createdAt", "updatedAt")
-VALUES ('sp-public', true, 'comment', '2022-01-01 00:00:00', '2022-01-01 00:00:00');
+INSERT INTO public."SharePermission" ("id", "linkShare", "linkShareAccessLevel", "createdAt", "updatedAt")
+VALUES ('sp-public', 'PUBLIC', 'comment', '2022-01-01 00:00:00', '2022-01-01 00:00:00');
 
 INSERT INTO public."DocumentPermission" ("documentId", "sharePermissionId")
 VALUES ('11111111-1111-1111-1111-111111111111', 'sp-public');
@@ -45,8 +45,8 @@ VALUES (
     '2022-01-01 00:00:00'
 );
 
-INSERT INTO public."SharePermission" ("id", "isPublic", "publicAccessLevel", "createdAt", "updatedAt")
-VALUES ('sp-private', false, NULL, '2022-01-01 00:00:00', '2022-01-01 00:00:00');
+INSERT INTO public."SharePermission" ("id", "linkShare", "linkShareAccessLevel", "createdAt", "updatedAt")
+VALUES ('sp-private', NULL, NULL, '2022-01-01 00:00:00', '2022-01-01 00:00:00');
 
 INSERT INTO public."DocumentPermission" ("documentId", "sharePermissionId")
 VALUES ('22222222-2222-2222-2222-222222222222', 'sp-private');

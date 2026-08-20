@@ -470,12 +470,18 @@ async fn test_process_scheduled_message_insert(pool: Pool<Postgres>) -> anyhow::
     };
 
     let mut tx = pool.begin().await?;
-    super::super::message::process_scheduled_message(&mut *tx, link_id, msg_id, Some(send_time))
-        .await?;
+    super::super::message::process_scheduled_message(
+        &mut *tx,
+        link_id,
+        msg_id,
+        Some(send_time),
+        Some("macro|actor@example.com"),
+    )
+    .await?;
     tx.commit().await?;
 
     let row = sqlx::query(
-        "SELECT send_time, sent FROM email_scheduled_messages WHERE link_id = $1 AND message_id = $2",
+        "SELECT send_time, sent, actor_id FROM email_scheduled_messages WHERE link_id = $1 AND message_id = $2",
     )
     .bind(link_id)
     .bind(msg_id)
@@ -484,8 +490,10 @@ async fn test_process_scheduled_message_insert(pool: Pool<Postgres>) -> anyhow::
 
     let stored_time = row.get::<chrono::DateTime<chrono::Utc>, _>("send_time");
     let sent = row.get::<bool, _>("sent");
+    let actor_id = row.get::<Option<String>, _>("actor_id");
     assert_eq!(stored_time, send_time);
     assert!(!sent);
+    assert_eq!(actor_id.as_deref(), Some("macro|actor@example.com"));
 
     Ok(())
 }
@@ -506,14 +514,26 @@ async fn test_process_scheduled_message_upsert(pool: Pool<Postgres>) -> anyhow::
 
     // Insert first
     let mut tx = pool.begin().await?;
-    super::super::message::process_scheduled_message(&mut *tx, link_id, msg_id, Some(send_time1))
-        .await?;
+    super::super::message::process_scheduled_message(
+        &mut *tx,
+        link_id,
+        msg_id,
+        Some(send_time1),
+        None,
+    )
+    .await?;
     tx.commit().await?;
 
     // Upsert with new time
     let mut tx = pool.begin().await?;
-    super::super::message::process_scheduled_message(&mut *tx, link_id, msg_id, Some(send_time2))
-        .await?;
+    super::super::message::process_scheduled_message(
+        &mut *tx,
+        link_id,
+        msg_id,
+        Some(send_time2),
+        None,
+    )
+    .await?;
     tx.commit().await?;
 
     let row = sqlx::query(
@@ -552,13 +572,19 @@ async fn test_process_scheduled_message_delete(pool: Pool<Postgres>) -> anyhow::
 
     // Insert first
     let mut tx = pool.begin().await?;
-    super::super::message::process_scheduled_message(&mut *tx, link_id, msg_id, Some(send_time))
-        .await?;
+    super::super::message::process_scheduled_message(
+        &mut *tx,
+        link_id,
+        msg_id,
+        Some(send_time),
+        Some("macro|actor@example.com"),
+    )
+    .await?;
     tx.commit().await?;
 
     // Delete by passing None
     let mut tx = pool.begin().await?;
-    super::super::message::process_scheduled_message(&mut *tx, link_id, msg_id, None).await?;
+    super::super::message::process_scheduled_message(&mut *tx, link_id, msg_id, None, None).await?;
     tx.commit().await?;
 
     let count: i64 = sqlx::query_scalar(
@@ -585,7 +611,7 @@ async fn test_process_scheduled_message_delete_nonexistent(
 
     // Delete when nothing exists — should not error
     let mut tx = pool.begin().await?;
-    super::super::message::process_scheduled_message(&mut *tx, link_id, msg_id, None).await?;
+    super::super::message::process_scheduled_message(&mut *tx, link_id, msg_id, None, None).await?;
     tx.commit().await?;
 
     Ok(())

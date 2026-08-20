@@ -5,8 +5,8 @@ use std::collections::HashMap;
 use url::Url;
 
 use crate::http_safety::{
-    FetchError, assert_not_internal, check_content_length, content_type_of, send_request,
-    validate_url,
+    FetchError, MAX_REDIRECTS, assert_not_internal, check_content_length, content_type_of,
+    redirect_target, send_request, validate_url,
 };
 
 pub use ::unfurl::domain::favicon::append_optimistic_favico;
@@ -118,10 +118,34 @@ pub async fn extract_meta_tags_prod(
     client: &reqwest::Client,
     raw_url: &str,
 ) -> Result<HashMap<String, String>, UnfurlFetchError> {
-    let url = validate_url(raw_url)?;
-    assert_not_internal(&url).await?;
+    let mut url = validate_url(raw_url)?;
+    let mut redirects_remaining = MAX_REDIRECTS;
 
-    let response = send_request(client, &url).await?;
+    let response = loop {
+        assert_not_internal(&url).await?;
+        let response = send_request(client, &url).await?;
+        let status = response.status();
+
+        if status.is_redirection() {
+            if redirects_remaining == 0 {
+                return Err(FetchError::UpstreamRedirect(format!(
+                    "exceeded maximum of {MAX_REDIRECTS} redirects"
+                ))
+                .into());
+            }
+            let next = redirect_target(&url, &response)?;
+            tracing::debug!(from = %url, to = %next, "following redirect");
+            redirects_remaining -= 1;
+            url = next;
+            continue;
+        }
+
+        if !status.is_success() {
+            return Err(FetchError::UpstreamStatus(status).into());
+        }
+
+        break response;
+    };
 
     let content_type = content_type_of(&response);
     if !is_html_content_type(&content_type) {

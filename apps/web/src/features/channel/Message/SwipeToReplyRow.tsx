@@ -3,7 +3,7 @@ import {
   SwipableRowContext,
 } from '@components/app/mobile/SwipableRow';
 import { triggerFocusInput } from '@core/directive/focusInput';
-import { isMobile } from '@core/mobile/isMobile';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import ReplyIcon from '@phosphor/arrow-bend-up-left.svg';
 import { type ParentProps, Show, useContext } from 'solid-js';
 import type { MessageActions, MessageData } from './types';
@@ -29,10 +29,13 @@ function SwipeReplyBadge(props: { messageId: string }) {
 }
 
 /**
- * On mobile, wraps a channel message so swiping it left reveals a reply
+ * On touch devices, wraps a channel message so swiping it left reveals a reply
  * affordance and opens the reply input for its thread. Renders children
  * as-is when there is no surrounding `EntityRowProvider` (desktop,
  * standalone threads) or the message cannot be replied to.
+ *
+ * Keyed on touch rather than viewport width so tablets get the gesture too —
+ * an iPad is wider than the mobile breakpoint but is still finger-driven.
  */
 export function MaybeSwipeToReplyRow(
   props: ParentProps<{ message: MessageData; actions?: MessageActions }>
@@ -56,7 +59,7 @@ export function MaybeSwipeToReplyRow(
 
   return (
     <Show
-      when={isMobile() && ctx && props.actions?.onReply}
+      when={isTouchDevice() && ctx && props.actions?.onReply}
       fallback={props.children}
     >
       <SwipableRow

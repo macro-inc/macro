@@ -10,14 +10,7 @@ import XIcon from '@phosphor/x.svg';
 import type { ApiChannelWithLatest } from '@service-storage/channel-list-types';
 import { ChannelTypeEnum } from '@service-storage/client';
 import { Avatar, Button, cn, Tooltip } from '@ui';
-import {
-  createMemo,
-  createSignal,
-  type FlowComponent,
-  For,
-  onCleanup,
-  Show,
-} from 'solid-js';
+import { createMemo, type FlowComponent, For, Show } from 'solid-js';
 import { dismissIncomingCall, useVisibleIncomingCalls } from './incoming-calls';
 
 const SLIM_MAX = 4;
@@ -95,19 +88,6 @@ function computeChannelLetters(
   return result;
 }
 
-function formatDuration(startedAt: string | undefined, nowMs: number) {
-  const startedAtMs = startedAt ? new Date(startedAt).getTime() : Number.NaN;
-  if (!Number.isFinite(startedAtMs)) return '';
-
-  const totalSeconds = Math.max(0, Math.floor((nowMs - startedAtMs) / 1000));
-  const hours = Math.floor(totalSeconds / 3600);
-  const minutes = Math.floor((totalSeconds % 3600) / 60);
-  const seconds = totalSeconds % 60;
-
-  if (hours > 0) return `${hours}h ${minutes}m`;
-  return `${minutes}:${seconds.toString().padStart(2, '0')}`;
-}
-
 type IncomingCallContextMenuProps = {
   callId: string;
   channelId: string;
@@ -142,12 +122,6 @@ export function SidebarActiveCallWidget(props: {
 }) {
   const channelsCtx = useChannelsContext();
   const userId = useUserId();
-  const [nowMs, setNowMs] = createSignal(Date.now());
-  const durationTimer = globalThis.setInterval(
-    () => setNowMs(Date.now()),
-    1000
-  );
-  onCleanup(() => globalThis.clearInterval(durationTimer));
 
   const activeCalls = useVisibleIncomingCalls();
 
@@ -178,13 +152,6 @@ export function SidebarActiveCallWidget(props: {
               {(call) => {
                 const channel = () =>
                   channelsCtx.channelsById()[call.channelId];
-                const duration = () => formatDuration(call.createdAt, nowMs());
-                const label = () => {
-                  const time = duration();
-                  return time
-                    ? `${displayName(channel())} call - ${time}`
-                    : `${displayName(channel())} call`;
-                };
                 return (
                   <div class="size-8">
                     <IncomingCallContextMenu
@@ -192,27 +159,24 @@ export function SidebarActiveCallWidget(props: {
                       channelId={call.channelId}
                       onDismiss={() => dismissIncomingCall(call.callId)}
                     >
-                      <Tooltip label={label()} placement="right">
-                        <Button
-                          class="relative flex items-center cursor-default rounded-md text-ink-extra-muted not-disabled:hover:bg-ink/3 justify-center size-8"
-                          draggable={false}
-                          variant="ghost"
-                          size="sm"
-                          onMouseDown={(e) => {
-                            if (e.button !== 0) return;
-                            e.preventDefault();
-                            void openChannelCallTab(call.channelId);
-                          }}
-                        >
-                          <ChannelCallBadge
-                            channel={channel()}
-                            letters={
-                              channelLetters().get(call.channelId) ?? '?'
-                            }
-                            slim
-                          />
-                        </Button>
-                      </Tooltip>
+                      <Button
+                        aria-label={`${displayName(channel())} call`}
+                        class="relative flex items-center cursor-default rounded-md text-ink-extra-muted not-disabled:hover:bg-ink/3 justify-center size-8"
+                        draggable={false}
+                        variant="ghost"
+                        size="sm"
+                        onMouseDown={(e) => {
+                          if (e.button !== 0) return;
+                          e.preventDefault();
+                          void openChannelCallTab(call.channelId);
+                        }}
+                      >
+                        <ChannelCallBadge
+                          channel={channel()}
+                          letters={channelLetters().get(call.channelId) ?? '?'}
+                          slim
+                        />
+                      </Button>
                     </IncomingCallContextMenu>
                   </div>
                 );
@@ -238,13 +202,6 @@ export function SidebarActiveCallWidget(props: {
               {(call) => {
                 const channel = () =>
                   channelsCtx.channelsById()[call.channelId];
-                const duration = () => formatDuration(call.createdAt, nowMs());
-                const label = () => {
-                  const time = duration();
-                  return time
-                    ? `${displayName(channel())} call - ${time}`
-                    : `${displayName(channel())} call`;
-                };
                 const dismissLabel = () =>
                   `Dismiss ${displayName(channel())} call`;
                 const openCall = () => {
@@ -259,39 +216,33 @@ export function SidebarActiveCallWidget(props: {
                       onDismiss={() => dismissIncomingCall(call.callId)}
                     >
                       <div class="flex items-center gap-1.5 w-full rounded-lg p-2 text-ink-extra-muted hover:bg-ink/3">
-                        <Tooltip
-                          class="min-w-0 flex-1"
-                          label={label()}
-                          placement="right"
-                        >
-                          <button
-                            type="button"
-                            class="flex min-w-0 flex-1 items-center justify-start gap-2 cursor-default"
-                            draggable={false}
-                            onMouseDown={(e) => {
-                              if (e.button !== 0) return;
-                              e.preventDefault();
-                            }}
-                            onClick={(e) => {
-                              e.preventDefault();
-                              openCall();
-                            }}
-                          >
-                            <ChannelCallBadge
-                              channel={channel()}
-                              letters={
-                                channelLetters().get(call.channelId) ?? '?'
-                              }
-                              slim={false}
-                            />
-                            <span class="text-sm font-medium truncate">
-                              {displayName(channel())}
-                            </span>
-                          </button>
-                        </Tooltip>
                         <button
                           type="button"
-                          aria-label={label()}
+                          class="flex min-w-0 flex-1 items-center justify-start gap-2 cursor-default"
+                          draggable={false}
+                          onMouseDown={(e) => {
+                            if (e.button !== 0) return;
+                            e.preventDefault();
+                          }}
+                          onClick={(e) => {
+                            e.preventDefault();
+                            openCall();
+                          }}
+                        >
+                          <ChannelCallBadge
+                            channel={channel()}
+                            letters={
+                              channelLetters().get(call.channelId) ?? '?'
+                            }
+                            slim={false}
+                          />
+                          <span class="text-sm font-medium truncate">
+                            {displayName(channel())}
+                          </span>
+                        </button>
+                        <button
+                          type="button"
+                          aria-label={`Join ${displayName(channel())} call`}
                           class="shrink-0 size-5 flex items-center justify-center text-xs font-medium bg-success/15 text-success rounded-md"
                           draggable={false}
                           onMouseDown={(e) => {

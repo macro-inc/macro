@@ -119,6 +119,51 @@ fn message_posted_wire_shape_with_bot_sender() {
 }
 
 #[test]
+fn mentioned_wire_shape() {
+    let bot_principal = "bot|00000000-0000-0000-0000-00000000a1a1";
+    let event = Event::with_event_id(
+        Uuid::nil(),
+        ChannelTopicEvent::Mentioned(ChannelMentionedMetadata {
+            channel_id: Uuid::nil(),
+            message_id: Uuid::nil(),
+            thread_id: None,
+            sender: user("macro|human@example.com"),
+            channel_type: ChannelType::Team,
+            content: "hello bot".to_string(),
+            mentioned: SimpleMention {
+                entity_type: "bot".to_string(),
+                entity_id: bot_principal.to_string(),
+            },
+            created_at: timestamp(),
+        }),
+    );
+
+    let value = serde_json::to_value(&event).expect("serializable");
+    assert_eq!(
+        value,
+        json!({
+            "event_id": "00000000-0000-0000-0000-000000000000",
+            "schema_version": 1,
+            "event_type": "channel.mentioned",
+            "metadata": {
+                "channel_id": "00000000-0000-0000-0000-000000000000",
+                "message_id": "00000000-0000-0000-0000-000000000000",
+                "thread_id": null,
+                "sender": "macro|human@example.com",
+                "channel_type": "team",
+                "content": "hello bot",
+                "mentioned": { "entity_type": "bot", "entity_id": bot_principal },
+                "created_at": "2026-01-02T03:04:05Z",
+            },
+        })
+    );
+
+    let decoded: Event<ChannelTopicEvent> =
+        serde_json::from_value(value).expect("decodable payload");
+    assert_eq!(&decoded, &event);
+}
+
+#[test]
 fn decode_round_trips() {
     let channel_id = Uuid::new_v4();
     let original = ChannelMacroEvent::participant_removed(ChannelParticipantRemovedMetadata {

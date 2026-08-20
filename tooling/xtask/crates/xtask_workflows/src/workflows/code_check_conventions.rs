@@ -62,6 +62,7 @@ fn ast_grep() -> Job {
         .add_step(steps::setup_nix())
         .add_step(steps::setup_dev_shell())
         .add_step(run_ast_grep())
+        .add_step(steps::teardown_nix())
 }
 
 /// Always-run collector used as the required status check. Its name must stay
@@ -94,6 +95,7 @@ fn paths_filter() -> Step<Use> {
                   - 'packages/**'
                   - 'rules/**'
                   - 'sgconfig.yml'
+                  - '.github/actions/teardown-nix/**'
                   - '.github/workflows/code_check_conventions.yml'
             "#},
         ))

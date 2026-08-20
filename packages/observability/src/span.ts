@@ -3,8 +3,8 @@ import {
 	context,
 	isSpanContextValid,
 	type Attributes as OtelAttributes,
-	propagation,
 	type Span as OtelSpan,
+	propagation,
 	SpanStatusCode,
 } from "@opentelemetry/api";
 import type { Attribute, Attributes } from "./config";

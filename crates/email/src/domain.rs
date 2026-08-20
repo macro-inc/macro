@@ -1,3 +1,5 @@
+/// Event-to-activity mappings for this domain.
+pub mod activity;
 pub mod events;
 pub mod models;
 

@@ -40,6 +40,7 @@ type CreateNotificationServiceArgs = {
   secretKeyArns: (pulumi.Output<string> | string)[];
   queueArns: Array<pulumi.Output<string> | string>;
   snsPlatformArns: Array<pulumi.Output<string> | string>;
+  extraManagedPolicyArns?: Array<pulumi.Output<string> | string>;
   tags: { [key: string]: string };
 };
 
@@ -69,6 +70,7 @@ export class NotificationService extends pulumi.ComponentResource {
       cloudStorageClusterName,
       queueArns,
       snsPlatformArns,
+      extraManagedPolicyArns = [],
       secretKeyArns,
       tags,
     }: CreateNotificationServiceArgs,
@@ -195,6 +197,7 @@ export class NotificationService extends pulumi.ComponentResource {
           queuePolicy.arn,
           sesPolicy.arn,
           snsPolicy.arn,
+          ...extraManagedPolicyArns,
         ],
       },
       { parent: this }

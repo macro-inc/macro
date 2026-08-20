@@ -84,6 +84,9 @@ jobs:
     - name: Check endpoint coverage
       run: bun run coverage
       working-directory: packages/sdk
+    - name: Teardown Nix
+      if: always()
+      uses: './.github/actions/teardown-nix'
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-check
   cancel-in-progress: true

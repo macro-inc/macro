@@ -173,6 +173,50 @@
   },
   "components": {
     "schemas": {
+      "CalendarEventFilters": {
+        "type": "object",
+        "description": "Filters for canonical calendar-event entities.",
+        "properties": {
+          "attendees": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Attendee email addresses."
+          },
+          "calendar_event_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Canonical event ids."
+          },
+          "ends_after": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Include master events ending after this instant."
+          },
+          "organizers": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Organizer email addresses."
+          },
+          "starts_before": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Include master events starting before this instant."
+          },
+          "statuses": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Event statuses such as `confirmed`, `tentative`, or `cancelled`."
+          }
+        }
+      },
       "CallFilters": {
         "type": "object",
         "description": "Filters for call records.",
@@ -1378,7 +1422,7 @@
       "DocumentSubType": {
         "type": "string",
         "description": "The document sub type enum represents all values of document sub types.\nThese values should match the `document_sub_type_value` table in macrodb.",
-        "enum": ["task", "snippet"]
+        "enum": ["task", "snippet", "skill"]
       },
       "EmailFilters": {
         "type": "object",
@@ -1742,6 +1786,10 @@
         "type": "object",
         "description": "a bundle of all of the filters for each entity type",
         "properties": {
+          "calendar_event_filters": {
+            "$ref": "#/components/schemas/CalendarEventFilters",
+            "description": "the bundled [CalendarEventFilters]"
+          },
           "call_filters": {
             "$ref": "#/components/schemas/CallFilters",
             "description": "the bundled [CallFilters]"
@@ -1785,6 +1833,10 @@
             },
             "description": "property-based filters applied across entity types"
           },
+          "reminder_filters": {
+            "$ref": "#/components/schemas/ReminderFilters",
+            "description": "the bundled [ReminderFilters]"
+          },
           "tag_filter_mode": {
             "$ref": "#/components/schemas/TagFilterMode",
             "description": "How the `tag_option_ids` combine: `any` (default) matches entities\nholding at least one selected tag, `all` requires every selected tag."
@@ -1820,6 +1872,7 @@
         "type": "string",
         "description": "Type of entity that can be referenced by entity properties.",
         "enum": [
+          "CALENDAR_EVENT",
           "CALL_RECORD",
           "CHANNEL",
           "CHAT",
@@ -2794,6 +2847,38 @@
           }
         ],
         "description": "Property value (service representation).\n\nRepresents the actual value stored for an entity property.\nThis is serialized to/from JSONB in the database."
+      },
+      "ReminderFilters": {
+        "type": "object",
+        "description": "Filters for reminders.",
+        "properties": {
+          "completed": {
+            "type": ["boolean", "null"],
+            "description": "Filter on whether the owner has marked the reminder done. `None` returns\nboth."
+          },
+          "entities": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Restrict to reminders attached to these entities, each `\"{type}:{id}\"`."
+          },
+          "fired": {
+            "type": ["boolean", "null"],
+            "description": "Filter on whether the reminder's next run has come due, i.e. it has\nfired and is awaiting its owner. `None` returns both.\n\nEvaluated server-side against the database clock rather than a\ntimestamp supplied by the caller: a timestamp would land in the query\ncache key and change on every render."
+          },
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Reminder ids to filter by. Empty to include all of the caller's reminders."
+          },
+          "include": {
+            "type": "boolean",
+            "description": "Opt this query into reminders at all. Reminders are off by default —\nsee [`crate::ast::reminder::ReminderLiteral::Include`]. Asking for\nspecific `ids` or `entities` also opts in."
+          }
+        }
       },
       "SearchHighlight": {
         "type": "object",

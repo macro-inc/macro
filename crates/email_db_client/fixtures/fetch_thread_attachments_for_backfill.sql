@@ -1,7 +1,7 @@
 
 -- SQL fixture for fetch_thread_attachments_for_backfill tests
 -- This file seeds:
--- - 5 threads (4 matching the conditions, 1 control with no matches)
+-- - 7 threads covering eligibility conditions and exact-domain matching
 -- - Messages, contacts, labels, attachments
 
 -- NOTE:
@@ -12,11 +12,11 @@
 -- Common: links + threads
 ------------------------------------------------------------
 
--- Link A: user email is user_a@example.com
+-- Link A: user email is user@macro.com
 INSERT INTO email_links (id, macro_id, fusionauth_user_id, email_address, provider, is_sync_active, created_at,
                          updated_at)
-VALUES ('00000000-0000-0000-0000-00000000001a', 'macro|user_a@example.com', '00000000-0000-0000-0000-00000000001a',
-        'user_a@example.com', 'GMAIL', true, '2025-11-11 17:48:26.664688 +00:00',
+VALUES ('00000000-0000-0000-0000-00000000001a', 'macro|user@macro.com', '00000000-0000-0000-0000-00000000001a',
+        'user@macro.com', 'GMAIL', true, '2025-11-11 17:48:26.664688 +00:00',
         '2025-11-11 17:48:26.664688 +00:00');
 
 -- Thread 1: used for condition 1 (is_sent = true)
@@ -64,6 +64,24 @@ VALUES ('00000000-0000-0000-0000-000000000105',
         NOW(),
         NOW());
 
+-- Thread 6: domain suffix must not qualify as the same domain
+INSERT INTO email_threads (id, link_id, inbox_visible, is_read, created_at, updated_at)
+VALUES ('00000000-0000-0000-0000-000000000106',
+        '00000000-0000-0000-0000-00000000001a',
+        false,
+        false,
+        NOW(),
+        NOW());
+
+-- Thread 7: exact domain with mixed case must qualify as the same domain
+INSERT INTO email_threads (id, link_id, inbox_visible, is_read, created_at, updated_at)
+VALUES ('00000000-0000-0000-0000-000000000107',
+        '00000000-0000-0000-0000-00000000001a',
+        false,
+        false,
+        NOW(),
+        NOW());
+
 ------------------------------------------------------------
 -- Labels
 ------------------------------------------------------------
@@ -83,11 +101,11 @@ VALUES ('00000000-0000-0000-0000-0000000a0001',
 -- Contacts
 ------------------------------------------------------------
 
--- Contact with same domain as user_a@example.com
+-- Contact with same domain as user@macro.com
 INSERT INTO email_contacts (id, link_id, email_address, created_at, updated_at)
 VALUES ('00000000-0000-0000-0000-0000000c0001',
         '00000000-0000-0000-0000-00000000001a',
-        'sender_same@example.com',
+        'sender_same@macro.com',
         NOW(),
         NOW());
 
@@ -104,6 +122,22 @@ INSERT INTO email_contacts (id, link_id, email_address, created_at, updated_at)
 VALUES ('00000000-0000-0000-0000-0000000c0003',
         '00000000-0000-0000-0000-00000000001a',
         'noreply@docusign.com',
+        NOW(),
+        NOW());
+
+-- Contact whose domain only has the user's domain as a suffix
+INSERT INTO email_contacts (id, link_id, email_address, created_at, updated_at)
+VALUES ('00000000-0000-0000-0000-0000000c0004',
+        '00000000-0000-0000-0000-00000000001a',
+        'foo@notmacro.com',
+        NOW(),
+        NOW());
+
+-- Contact with the exact user domain in mixed case
+INSERT INTO email_contacts (id, link_id, email_address, created_at, updated_at)
+VALUES ('00000000-0000-0000-0000-0000000c0005',
+        '00000000-0000-0000-0000-00000000001a',
+        'Foo@MACRO.com',
         NOW(),
         NOW());
 
@@ -371,6 +405,52 @@ VALUES ('00000000-0000-0000-0000-0000005a0501',
         '00000000-0000-0000-0000-00000000e501',
         'provider-att-501',
         'docusign_doc.pdf',
+        'application/pdf',
+        NOW());
+
+------------------------------------------------------------
+-- Thread 6: domain suffix does not match
+------------------------------------------------------------
+
+INSERT INTO email_messages (id, thread_id, link_id, provider_id, is_sent, from_contact_id, internal_date_ts,
+                            has_attachments, is_read, is_starred, is_draft, created_at, updated_at)
+VALUES ('00000000-0000-0000-0000-00000000e601',
+        '00000000-0000-0000-0000-000000000106',
+        '00000000-0000-0000-0000-00000000001a',
+        'provider-msg-601',
+        FALSE,
+        '00000000-0000-0000-0000-0000000c0004',
+        NOW(),
+        true, false, false, false, NOW(), NOW());
+
+INSERT INTO email_attachments (id, message_id, provider_attachment_id, filename, mime_type, created_at)
+VALUES ('00000000-0000-0000-0000-0000006a0601',
+        '00000000-0000-0000-0000-00000000e601',
+        'provider-att-601',
+        'suffix_domain_doc.pdf',
+        'application/pdf',
+        NOW());
+
+------------------------------------------------------------
+-- Thread 7: exact domain matches case-insensitively
+------------------------------------------------------------
+
+INSERT INTO email_messages (id, thread_id, link_id, provider_id, is_sent, from_contact_id, internal_date_ts,
+                            has_attachments, is_read, is_starred, is_draft, created_at, updated_at)
+VALUES ('00000000-0000-0000-0000-00000000e701',
+        '00000000-0000-0000-0000-000000000107',
+        '00000000-0000-0000-0000-00000000001a',
+        'provider-msg-701',
+        FALSE,
+        '00000000-0000-0000-0000-0000000c0005',
+        NOW(),
+        true, false, false, false, NOW(), NOW());
+
+INSERT INTO email_attachments (id, message_id, provider_attachment_id, filename, mime_type, created_at)
+VALUES ('00000000-0000-0000-0000-0000007a0701',
+        '00000000-0000-0000-0000-00000000e701',
+        'provider-att-701',
+        'mixed_case_domain_doc.pdf',
         'application/pdf',
         NOW());
 

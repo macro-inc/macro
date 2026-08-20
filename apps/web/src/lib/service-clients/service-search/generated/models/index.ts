@@ -5,6 +5,9 @@
  * OpenAPI spec version: 0.1.0
  */
 
+export * from './calendarEventFilters';
+export * from './calendarEventFiltersEndsAfter';
+export * from './calendarEventFiltersStartsBefore';
 export * from './callFilters';
 export * from './callFiltersAttended';
 export * from './callFiltersStatus';
@@ -202,6 +205,9 @@ export * from './propertyValueOneOfSevenType';
 export * from './propertyValueOneOfThree';
 export * from './propertyValueOneOfThreeType';
 export * from './propertyValueOneOfType';
+export * from './reminderFilters';
+export * from './reminderFiltersCompleted';
+export * from './reminderFiltersFired';
 export * from './searchHighlight';
 export * from './searchHighlightName';
 export * from './searchHighlightSender';

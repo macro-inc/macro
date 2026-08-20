@@ -114,7 +114,7 @@ export function ReactionChip(props: ReactionChipProps) {
         </HoverCard>
       </Popover.Anchor>
       <Popover.Portal>
-        <Popover.Content class="z-modal bg-surface p-1.5 text-ink-muted text-xs rounded-sm ring ring-edge-muted">
+        <Popover.Content class="z-modal border border-edge-muted bg-surface p-1.5 text-ink-muted text-xs rounded-sm">
           <ReactionTooltipContent
             users={props.users}
             currentUserId={props.currentUserId}

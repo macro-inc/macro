@@ -2,9 +2,13 @@ import { GO_TO_COMMAND_SCOPE, GO_TO_LEADER_KEY } from '@app/constants/hotkeys';
 import { isListViewID, type ListView } from '@app/constants/list-views';
 import { CommandState } from '@app/features/command/state';
 import { VIEW_TAB_PRESETS } from '@app/features/next-soup/sidebar/soup-filter-presets';
-import { openEntityInSplitFromUnifiedList } from '@app/features/next-soup/utils';
+import {
+  markReminderSeenOnOpen,
+  openEntityInSplitFromUnifiedList,
+} from '@app/features/next-soup/utils';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { globalSplitManager } from '@app/signal/splitLayout';
+import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import type { SplitHandle } from '@components/app/split-layout/layoutManager';
 import { createHotkeyGroup, registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
@@ -19,7 +23,11 @@ import { openSingleStackNotification } from '@notifications';
 import { type Accessor, onCleanup } from 'solid-js';
 import type { VirtualizerHandle } from 'virtua/solid';
 import type { SoupState } from '../create-soup-state';
-import { type TabbedListView, VIEW_TAB_LISTS } from './soup-view-tabs';
+import {
+  type TabbedListView,
+  useVisibleViewTabs,
+  VIEW_TAB_LISTS,
+} from './soup-view-tabs';
 
 type UseSoupViewHotkeysOptions = {
   scopeId: string;
@@ -45,6 +53,7 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
   } = options;
 
   const analytics = useAnalytics();
+  const notificationSource = useGlobalNotificationSource();
 
   const splitIsUnifiedList = () => isListViewID(splitHandle.content().id);
 
@@ -174,6 +183,7 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
       const location =
         contentHitData?.length === 1 ? contentHitData[0]?.location : undefined;
 
+      markReminderSeenOnOpen(entity, notificationSource);
       openEntityInSplitFromUnifiedList(entity, {
         splitHandle,
         location,
@@ -213,6 +223,7 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
     keyDownHandler: () => {
       const entity = soup.focus.item();
       if (!entity) return false;
+      markReminderSeenOnOpen(entity, notificationSource);
       openEntityInSplitFromUnifiedList(entity, {
         splitHandle,
         replacePreview: true,
@@ -323,6 +334,7 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
 
       const entity = soup.focus.item();
       if (!entity) return false;
+      markReminderSeenOnOpen(entity, notificationSource);
       openEntityInSplitFromUnifiedList(entity, {
         splitHandle,
         openInNewSplit: true,
@@ -335,10 +347,11 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
 
   const isTabbedView = (v: string): v is TabbedListView => v in VIEW_TAB_LISTS;
 
+  const visibleViewTabs = useVisibleViewTabs();
   const getTabKeys = () => {
     const view = currentView();
     if (!view || !isTabbedView(view)) return [];
-    return VIEW_TAB_LISTS[view].map((t) => t.value);
+    return visibleViewTabs(view).map((t) => t.value);
   };
 
   const switchToTabIndex = (index: number) => {

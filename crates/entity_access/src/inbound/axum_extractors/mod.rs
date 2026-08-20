@@ -8,6 +8,7 @@ mod test;
 #[cfg(test)]
 mod test_support;
 
+mod agent_session;
 mod bot;
 mod call;
 mod channel;
@@ -19,9 +20,11 @@ mod foreign_entity;
 mod history;
 mod pin;
 mod project;
+mod reminder;
 mod team;
 mod thread;
 
+pub use agent_session::AgentSessionAccessLevelExtractor;
 pub use call::{CallAccessLevelExtractor, CallWithChannelIdAccessLevelExtractor};
 pub use channel::ChannelAccessLevelExtractor;
 pub use chat::ChatAccessLevelExtractor;
@@ -32,6 +35,7 @@ pub use foreign_entity::ForeignEntityAccessLevelExtractor;
 pub use history::HistoryAccessExtractor;
 pub use pin::PinAccessLevelExtractor;
 pub use project::{ProjectAccessLevelExtractor, ProjectBodyAccessLevelExtractorV2};
+pub use reminder::ReminderAccessExtractor;
 pub use team::{MacroUserTeamExtractorV2, OptionalMacroUserTeamExtractorV2};
 pub use thread::ThreadAccessLevelExtractor;
 

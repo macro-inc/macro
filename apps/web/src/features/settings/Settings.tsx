@@ -1,6 +1,5 @@
 import { Billing } from '@app/features/settings/Billing';
 import { Bots } from '@app/features/settings/Bots';
-import { FloatRegion } from '@components/app/mobile/float-regions/FloatRegion';
 import { PillTabs } from '@components/app/mobile/PillTabs';
 import { HeaderIsland } from '@components/app/split-layout/components/HeaderIsland';
 import {
@@ -19,6 +18,7 @@ import { useSettingsTabs } from '@core/constant/settingsTabsConfig';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import type { ValidHotkey } from '@core/hotkey/types';
 import { isMobile } from '@core/mobile/isMobile';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { activeTabId, setActiveTabId } from '@core/signal/settingsTab';
 import ArrowsIn from '@phosphor/arrows-in.svg';
 import ArrowsOut from '@phosphor/arrows-out.svg';
@@ -100,8 +100,8 @@ export function SettingsPanel(props: SettingsPanelProps) {
 
   // Responsive state, driven by the panel's own width (see breakpoints above).
   const [panelWidth, setPanelWidth] = createSignal(Number.POSITIVE_INFINITY);
-  const compact = () => !isMobile() && panelWidth() < COMPACT_WIDTH;
-  const narrow = () => !isMobile() && panelWidth() < NARROW_WIDTH;
+  const compact = () => !isTouchDevice() && panelWidth() < COMPACT_WIDTH;
+  const narrow = () => !isTouchDevice() && panelWidth() < NARROW_WIDTH;
 
   // Set up hotkey scope for settings panel
   const [attachHotkeys, settingsHotkeyScope] = useHotkeyDOMScope('settings');
@@ -214,23 +214,6 @@ export function SettingsPanel(props: SettingsPanelProps) {
   const tabItems = () =>
     flatTabs().map((tab) => ({ value: tab.tab, label: tab.label }));
 
-  function BottomTabs() {
-    return (
-      <FloatRegion region="accessory">
-        <div class="flex items-center px-(--mobile-chrome-gutter)">
-          <PillTabs
-            items={flatTabs().map((tab) => ({
-              value: tab.tab,
-              label: tab.label,
-            }))}
-            value={activeTabId()}
-            onChange={handleTabChange}
-          />
-        </div>
-      </FloatRegion>
-    );
-  }
-
   // "Back to app" — the close affordance for solo settings. Laid out like a nav row.
   const backToApp = () => (
     <button
@@ -263,25 +246,45 @@ export function SettingsPanel(props: SettingsPanelProps) {
     >
       <Show when={variant() === 'split'}>
         <SplitHeaderLeft>
-          <HeaderIsland>
-            <div class="h-full flex gap-3 items-center">
-              <h1 class="font-semibold text-ink select-none text-sm shrink-0">
-                Settings
-              </h1>
-            </div>
-          </HeaderIsland>
-          {/* When the sidebar collapses, tab selection moves into the split's
-              top bar as a dropdown of the current tab. (Rendered directly
-              rather than via CollapsibleHeaderItem so the wide segmented
-              control never flashes before measuring.) */}
-          <Show when={compact()}>
-            <div class="mx-2 shrink-0">
-              <TabsInsetDropdown
-                list={tabItems()}
+          <Show
+            when={!isTouchDevice()}
+            fallback={
+              // On mobile the header strip hosts the tab pills (the bottom
+              // accessory region belongs to the global views row). Full-bleed
+              // breakout: span the header container (100cqw), opting out of
+              // the row's flex sizing, with -ml cancelling the row gutter so
+              // the pills scroll device edge to device edge — see
+              // MOBILE_TAB_STRIP_CLASS in soup-view-tabs.tsx.
+              <PillTabs
+                scrollable
+                class="-ml-(--mobile-chrome-gutter) w-[100cqw] max-w-none flex-none"
+                contentClass="px-(--mobile-chrome-gutter)"
+                items={tabItems()}
                 value={activeTabId()}
                 onChange={handleTabChange}
               />
-            </div>
+            }
+          >
+            <HeaderIsland>
+              <div class="h-full flex gap-3 items-center">
+                <h1 class="font-semibold text-ink select-none text-sm shrink-0">
+                  Settings
+                </h1>
+              </div>
+            </HeaderIsland>
+            {/* When the sidebar collapses, tab selection moves into the split's
+                top bar as a dropdown of the current tab. (Rendered directly
+                rather than via CollapsibleHeaderItem so the wide segmented
+                control never flashes before measuring.) */}
+            <Show when={compact()}>
+              <div class="mx-2 shrink-0">
+                <TabsInsetDropdown
+                  list={tabItems()}
+                  value={activeTabId()}
+                  onChange={handleTabChange}
+                />
+              </div>
+            </Show>
           </Show>
         </SplitHeaderLeft>
         {/* Collapse the other splits so settings becomes the sole one (desktop only). */}
@@ -300,7 +303,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
 
       <div class="flex grow min-h-1 overflow-hidden">
         {/* Inline sidebar — hidden once the panel gets too narrow. */}
-        <Show when={!isMobile() && !compact()}>
+        <Show when={!isTouchDevice() && !compact()}>
           <SideNav
             class={cn(
               'w-[clamp(208px,20%,248px)] gap-3',
@@ -350,7 +353,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
             around it tightens as the panel narrows, and goes uniform once the
             sidebar collapses. Full-bleed on mobile. */}
         <div
-          class="flex-1 min-w-0 overflow-hidden mobile:p-0"
+          class="flex-1 min-w-0 overflow-hidden touch:p-0"
           classList={{
             'py-2 pr-2 pl-0': !compact() && !narrow(),
             'py-1 pr-1 pl-0': !compact() && narrow(),
@@ -358,7 +361,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
           }}
         >
           <Layer depth={1}>
-            <div class="relative flex size-full flex-col overflow-hidden rounded-xl border border-ink/[0.06] bg-surface shadow-menu mobile:rounded-none mobile:border-0 mobile:bg-transparent">
+            <div class="relative flex size-full flex-col overflow-hidden rounded-xl border border-ink/[0.06] bg-surface shadow-menu touch:rounded-none touch:border-0 touch:bg-transparent">
               {/* Compact full-screen chrome: no split header to host the tabs,
                   so the sidebar collapses into a top bar here — back / tab
                   dropdown / move-to-split. (Split mode puts the tabs in its
@@ -376,7 +379,11 @@ export function SettingsPanel(props: SettingsPanelProps) {
                 </div>
               </Show>
 
-              <div class="relative min-h-0 flex-1 overflow-hidden mobile:pt-(--mobile-content-inset-top) mobile:pb-(--mobile-content-inset-bottom)">
+              {/* Full-frame on mobile: the tab pages own the chrome insets
+                  inside their scrollers (see SettingsPage in primitives.tsx),
+                  so content scrolls under the floating header/dock like every
+                  other block instead of being boxed between them. */}
+              <div class="relative min-h-0 flex-1 overflow-hidden">
                 <Show when={isCurrentTab('Account')}>
                   <Suspense>
                     <Account />
@@ -432,8 +439,6 @@ export function SettingsPanel(props: SettingsPanelProps) {
           </Layer>
         </div>
       </div>
-
-      <BottomTabs />
     </div>
   );
 }

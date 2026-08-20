@@ -10,6 +10,10 @@ use models_email::service::message::is_macro_draft;
 use sqlx::types::Uuid;
 
 /// Updates a thread's metadata
+///
+/// Skips the write entirely when the recomputed values match the stored row,
+/// so redundant recomputations (e.g. redelivered backfill work) don't produce
+/// dead tuples and WAL for zero semantic change.
 #[expect(clippy::too_many_arguments, reason = "too annoying to fix right now")]
 #[tracing::instrument(skip(tx), err)]
 async fn update_db_thread_metadata(
@@ -34,7 +38,9 @@ async fn update_db_thread_metadata(
             updated_at = NOW()
         WHERE
             id = $6 AND
-            link_id = $7
+            link_id = $7 AND
+            (inbox_visible, is_read, latest_inbound_message_ts, latest_outbound_message_ts, latest_non_spam_message_ts)
+                IS DISTINCT FROM ($1, $2, $3, $4, $5)
         "#,
         inbox_visible,
         is_read,

@@ -2,6 +2,17 @@ use chrono::{DateTime, Utc};
 
 use super::message::Message;
 
+/// Canonical persisted metadata lazily exposed for an email thread.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EmailThreadMetadata {
+    /// Database ID of the thread.
+    pub thread_id: uuid::Uuid,
+    /// Canonical email link that owns the thread.
+    pub link_id: uuid::Uuid,
+    /// Timestamp of the latest inbound message, when one exists.
+    pub latest_inbound_message_ts: Option<DateTime<Utc>>,
+}
+
 /// A thread record without messages.
 #[derive(Debug, Clone)]
 pub struct ThreadRow {

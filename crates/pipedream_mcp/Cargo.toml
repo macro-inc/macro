@@ -1,0 +1,29 @@
+[package]
+name = "pipedream_mcp"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+ai_toolset = { path = "../ai_toolset" }
+anyhow.workspace = true
+axum.workspace = true
+futures.workspace = true
+macro_authorization = { path = "../macro_authorization", default-features = false, features = [
+  "axum",
+] }
+macro_user_id = { path = "../macro_user_id" }
+model-error-response = { path = "../model-error-response" }
+reqwest.workspace = true
+rmcp = { workspace = true, features = ["client", "transport-streamable-http-client-reqwest"] }
+schemars.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sqlx.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+utoipa.workspace = true
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
+
+[dev-dependencies]
+tokio.workspace = true

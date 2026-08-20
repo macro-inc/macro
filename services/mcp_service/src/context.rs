@@ -200,6 +200,7 @@ async fn build_tool_context(args: ToolContextBuildArgs<'_>) -> anyhow::Result<To
         ),
         crm::domain::service::NoOpCrmService,
         foreign_entity_service,
+        reminders::domain::service::NoOpRemindersService,
     ));
 
     let s3_client = macro_aws_config::s3_client().await;
@@ -275,20 +276,21 @@ async fn build_tool_context(args: ToolContextBuildArgs<'_>) -> anyhow::Result<To
     let properties_tool_context =
         ai_tools::build_properties_tool_context(properties_service, entity_access_service.clone());
 
+    let user_email_service = Arc::new(
+        EmailServiceImpl::new(
+            EmailPgRepo::new(db.clone()),
+            FrecencyQueryServiceImpl::new(FrecencyPgStorage::new(db.clone())),
+            sqs_client,
+            crm_service.clone(),
+            entity_access_management::domain::service::EntityAccessManagementServiceImpl::new(
+                entity_access_management::outbound::PgRepository::new(db.clone()),
+            ),
+            0,
+        )
+        .with_macro_event_broker(macro_event_broker.clone()),
+    );
     let email_tool_context = email::inbound::toolset::EmailToolContext::new(
-        Arc::new(
-            EmailServiceImpl::new(
-                EmailPgRepo::new(db.clone()),
-                FrecencyQueryServiceImpl::new(FrecencyPgStorage::new(db.clone())),
-                sqs_client,
-                crm_service.clone(),
-                entity_access_management::domain::service::EntityAccessManagementServiceImpl::new(
-                    entity_access_management::outbound::PgRepository::new(db.clone()),
-                ),
-                0,
-            )
-            .with_macro_event_broker(macro_event_broker.clone()),
-        ),
+        user_email_service.clone(),
         Arc::new(email::domain::ports::NoOpGmailTokenProvider),
         Arc::new(EntityAccessServiceImpl::new(PgAccessRepository::new(
             db.clone(),
@@ -351,23 +353,46 @@ async fn build_tool_context(args: ToolContextBuildArgs<'_>) -> anyhow::Result<To
         },
     );
 
+    let project_tool_context = ai_tools::build_project_tool_context(
+        db.clone(),
+        macro_event_broker.clone(),
+        entity_access_service.clone(),
+        document_tool_context.service.clone(),
+        chat_tool_context.service.clone(),
+        user_email_service,
+    );
+
+    let search_service_client = Arc::new(search_service_client);
+    let skill_tool_context =
+        ai_tools::build_skill_tool_context(search_service_client.clone(), soup_service.clone());
     let tool_context = ToolServiceContext {
         email_service_client: Arc::new(EmailServiceClientExternal::new(
             email_service_client.url().to_owned(),
         )),
-        search_service_client: Arc::new(search_service_client),
+        search_service_client: search_service_client.clone(),
         soup_service,
         email_service: email_service_for_tools,
         document_tool_context,
         properties_tool_context,
         email_tool_context,
         call_tool_context,
+        calendar_tool_context: ai_tools::build_calendar_tool_context(
+            db.clone(),
+            email_service_client.url().to_owned(),
+            config.internal_api_key.to_string(),
+        ),
         notification_tool_context,
+        reminders_tool_context: ai_tools::build_reminders_tool_context(
+            db.clone(),
+            entity_access_service.clone(),
+        ),
         import_tool_context: ToolImportToolContext::unwired(),
         chat_tool_context,
         channel_tool_context,
+        project_tool_context,
         team_tool_context: ai_tools::build_team_tool_context(db.clone()),
         crm_tool_context: ai_tools::build_crm_tool_context(db.clone()),
+        skill_tool_context,
         schedule_tool_context: NoOpScheduleContext,
         anthropic_tool_context: ai_tools::build_anthropic_tool_context(),
         recorder: ai_usage::pg_recorder(db.clone()),

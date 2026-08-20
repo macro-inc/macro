@@ -1,0 +1,64 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            event_id, email, display_name, response_status,\n            is_organizer, is_optional, is_self, comment\n        FROM calendar_event_attendees\n        WHERE event_id = ANY($1)\n        ORDER BY event_id, email\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "event_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "email",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "display_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "response_status",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "is_organizer",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 5,
+        "name": "is_optional",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 6,
+        "name": "is_self",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 7,
+        "name": "comment",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      false,
+      false,
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "afa4f92ec00bda91b89bf08dcc20fcb96bf29248f9ec8c39e178c126c0b653e4"
+}

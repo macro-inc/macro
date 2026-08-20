@@ -10,14 +10,15 @@ mod metadata;
 mod unsubscribe;
 pub use device::DeviceType;
 pub use metadata::{
-    AiResponseMetadata, CallStartedMetadata, ChannelInviteMetadata, ChannelMentionMetadata,
-    ChannelMessageSendMetadata, ChannelReplyMetadata, ChannelType, CommentedOnDocumentMetadata,
-    CommonChannelMetadata, DocumentMentionMetadata, GithubPrCheckRun, GithubPrCheckRunState,
-    GithubPrComment, GithubPrCommentKind, GithubPrEventAction, GithubPrEventStatus,
-    GithubPrMention, GithubPrMentionLocation, GithubPrNotificationCommon, GithubPrReview,
-    GithubPrReviewState, GithubPrStatusChanged, GithubReviewRequested, InboxReauthRequiredMetadata,
-    InviteToTeamMetadata, ItemSharedMetadata, MentionedInDocumentCommentMetadata, NewEmailMetadata,
-    NotificationDocumentSubType, NotificationTitle, RepliedToDocumentCommentThreadMetadata,
+    AiResponseMetadata, CalendarEventReminderMetadata, CallStartedMetadata, ChannelInviteMetadata,
+    ChannelMentionMetadata, ChannelMessageSendMetadata, ChannelReplyMetadata, ChannelType,
+    CommentedOnDocumentMetadata, CommonChannelMetadata, DocumentMentionMetadata, GithubPrCheckRun,
+    GithubPrCheckRunState, GithubPrComment, GithubPrCommentKind, GithubPrEventAction,
+    GithubPrEventStatus, GithubPrMention, GithubPrMentionLocation, GithubPrNotificationCommon,
+    GithubPrReview, GithubPrReviewState, GithubPrStatusChanged, GithubReviewRequested,
+    InboxReauthRequiredMetadata, InviteToTeamMetadata, ItemSharedMetadata,
+    MentionedInDocumentCommentMetadata, NewEmailMetadata, NotificationDocumentSubType,
+    NotificationTitle, ReminderMetadata, RepliedToDocumentCommentThreadMetadata,
     TaskAssignedMetadata,
 };
 pub use unsubscribe::UserUnsubscribe;
@@ -212,6 +213,12 @@ define_notif_event!(
         /// A user was assigned to a task.
         TaskAssigned(TaskAssignedMetadata),
 
+        /// A reminder the user set for themselves came due.
+        Reminder(ReminderMetadata),
+
+        /// A calendar event alarm came due.
+        CalendarEventReminder(CalendarEventReminderMetadata),
+
         /// An AI assistant responded to a chat.
         AiResponse(AiResponseMetadata),
 
@@ -272,6 +279,10 @@ impl NotificationTitle for NotifEvent {
             NotifEvent::TaskAssigned(task_assigned_metadata) => {
                 task_assigned_metadata.format_title(sender_id)
             }
+            NotifEvent::Reminder(reminder_metadata) => reminder_metadata.format_title(sender_id),
+            NotifEvent::CalendarEventReminder(calendar_event_reminder_metadata) => {
+                calendar_event_reminder_metadata.format_title(sender_id)
+            }
             NotifEvent::AiResponse(ai_response_metadata) => {
                 ai_response_metadata.format_title(sender_id)
             }
@@ -327,6 +338,10 @@ impl NotificationTitle for NotifEvent {
             NotifEvent::InviteToTeam(_) => Err(report!("not implemented")),
             NotifEvent::TaskAssigned(task_assigned_metadata) => {
                 task_assigned_metadata.format_body(sender_id)
+            }
+            NotifEvent::Reminder(reminder_metadata) => reminder_metadata.format_body(sender_id),
+            NotifEvent::CalendarEventReminder(calendar_event_reminder_metadata) => {
+                calendar_event_reminder_metadata.format_body(sender_id)
             }
             NotifEvent::AiResponse(ai_response_metadata) => {
                 ai_response_metadata.format_body(sender_id)

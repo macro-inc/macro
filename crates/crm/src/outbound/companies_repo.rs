@@ -772,6 +772,41 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
         Ok(outcome)
     }
 
+    #[tracing::instrument(skip(self, pairs), fields(pair_count = pairs.len()), err)]
+    async fn link_contact_pairs_with_sources(
+        &self,
+        pairs: &[(uuid::Uuid, String)],
+    ) -> Result<Vec<(uuid::Uuid, String)>, CrmError> {
+        if pairs.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let (link_ids, emails): (Vec<uuid::Uuid>, Vec<String>) = pairs
+            .iter()
+            .map(|(link_id, email)| (*link_id, email.to_ascii_lowercase()))
+            .unzip();
+
+        let rows = sqlx::query!(
+            r#"
+            SELECT cs.link_id AS "link_id!", LOWER(ct.email) AS "email!"
+            FROM crm_contact_sources cs
+            JOIN crm_contacts ct ON ct.id = cs.contact_id
+            JOIN UNNEST($1::uuid[], $2::text[]) AS p(link_id, email)
+              ON p.link_id = cs.link_id AND p.email = LOWER(ct.email)
+            "#,
+            &link_ids,
+            &emails,
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+
+        Ok(rows
+            .into_iter()
+            .map(|row| (row.link_id, row.email))
+            .collect())
+    }
+
     #[tracing::instrument(skip(self), err)]
     async fn depopulate_link_in_team(
         &self,
@@ -1668,6 +1703,57 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
               AND ($3 OR (ct.hidden = FALSE AND co.hidden = FALSE))
             "#,
             contact_id,
+            team_id,
+            include_hidden,
+        )
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+
+        Ok(row.map(|row| CrmContact {
+            id: row.id,
+            company_id: row.company_id,
+            email: row.email,
+            name: row.name,
+            hidden: row.hidden,
+            first_interaction: row.first_interaction,
+            last_interaction: row.last_interaction,
+            created_at: row.created_at,
+            updated_at: row.updated_at,
+        }))
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn get_contact_by_email_for_team(
+        &self,
+        team_id: &uuid::Uuid,
+        email: &str,
+        include_hidden: bool,
+    ) -> Result<Option<CrmContact>, CrmError> {
+        // Contacts are normalized to lowercase on every write path, so
+        // lowercasing the input preserves use of crm_contacts_email_idx. Team
+        // scope and hidden-row semantics mirror get_contact_for_team.
+        let row = sqlx::query!(
+            r#"
+            SELECT
+                ct.id,
+                ct.company_id,
+                ct.email,
+                ct.name,
+                ct.hidden,
+                ct.first_interaction,
+                ct.last_interaction,
+                ct.created_at,
+                ct.updated_at
+            FROM crm_contacts ct
+            JOIN crm_companies co ON co.id = ct.company_id
+            WHERE ct.email = LOWER($1)
+              AND co.team_id = $2
+              AND ($3 OR (ct.hidden = FALSE AND co.hidden = FALSE))
+            ORDER BY ct.id DESC
+            LIMIT 1
+            "#,
+            email,
             team_id,
             include_hidden,
         )

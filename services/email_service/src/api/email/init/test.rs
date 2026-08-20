@@ -1,11 +1,72 @@
 use super::*;
-use anyhow::anyhow;
+use macro_db_migrator::MACRO_DB_MIGRATIONS;
+use sqlx::PgPool;
+
+async fn insert_email_link(pool: &PgPool) -> Uuid {
+    let link_id = Uuid::now_v7();
+    let email_address = format!("sso-grant-{link_id}@example.com");
+    sqlx::query!(
+        r#"
+        INSERT INTO email_links (
+            id, macro_id, fusionauth_user_id, email_address, provider
+        )
+        VALUES ($1, $2, $2, $3, 'GMAIL')
+        "#,
+        link_id,
+        "macro|sso-grant@example.com",
+        email_address,
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+    link_id
+}
 
 async fn body_json(response: Response) -> serde_json::Value {
     let bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
         .await
         .unwrap();
     serde_json::from_slice(&bytes).unwrap()
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn zero_grant_is_unrecorded(pool: PgPool) {
+    let link_id = insert_email_link(&pool).await;
+    sqlx::query!(
+        "INSERT INTO email_link_google_scopes (link_id) VALUES ($1)",
+        link_id,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    assert!(has_unrecorded_google_grant(&pool, link_id).await);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn missing_side_table_state_is_unrecorded(pool: PgPool) {
+    let link_id = insert_email_link(&pool).await;
+
+    assert!(has_unrecorded_google_grant(&pool, link_id).await);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn recorded_side_table_grant_is_not_unrecorded(pool: PgPool) {
+    let link_id = insert_email_link(&pool).await;
+    sqlx::query!(
+        "INSERT INTO email_link_google_scopes (link_id, grant_version) VALUES ($1, 1)",
+        link_id,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    assert!(!has_unrecorded_google_grant(&pool, link_id).await);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn missing_email_link_is_not_unrecorded(pool: PgPool) {
+    assert!(!has_unrecorded_google_grant(&pool, Uuid::now_v7()).await);
 }
 
 #[tokio::test]
@@ -25,48 +86,34 @@ async fn already_initialized_is_a_coded_400() {
 }
 
 #[test]
-fn auth_service_not_found_classifies_as_no_gmail_grant() {
-    let err = anyhow::Error::new(AuthServiceClientError::NotFound)
-        .context("Failed to get Google access token from auth service");
-    assert!(matches!(
-        classify_token_fetch_error(err),
-        InitError::NoGmailGrant
-    ));
-}
-
-#[test]
-fn other_token_fetch_failures_stay_bad_request() {
-    for err in [
-        anyhow!("connection refused"),
-        anyhow::Error::new(AuthServiceClientError::Unauthorized),
-    ] {
+fn unusable_provider_grants_classify_as_no_gmail_grant() {
+    for error in [EmailApiError::AuthRequired, EmailApiError::Forbidden] {
         assert!(matches!(
-            classify_token_fetch_error(err),
-            InitError::BadRequest(_)
+            classify_provider_init_error(error),
+            InitError::NoGmailGrant
         ));
     }
 }
 
 #[test]
-fn watch_forbidden_classifies_as_no_gmail_grant() {
-    assert!(matches!(
-        classify_watch_error(GmailError::Forbidden),
-        InitError::NoGmailGrant
-    ));
+fn rate_limiting_classifies_as_http_429() {
+    let error = classify_provider_init_error(EmailApiError::RateLimited {
+        retry_after: None,
+        origin: email_api_client::domain::models::RateLimitOrigin::Provider,
+    });
+    assert_eq!(error.status_code(), StatusCode::TOO_MANY_REQUESTS);
 }
 
-#[test]
-fn other_watch_failures_stay_gmail_errors() {
-    for err in [
-        GmailError::Unauthorized,
-        GmailError::RateLimitExceeded,
-        GmailError::ApiError("(500): boom".to_string()),
-    ] {
-        assert!(matches!(
-            classify_watch_error(err),
-            InitError::GmailError(_)
-        ));
-    }
+#[tokio::test]
+async fn provider_diagnostics_are_not_returned_to_clients() {
+    let response = InitError::ProviderError(EmailApiError::Permanent {
+        message: "sanitized provider body".to_string(),
+    })
+    .into_response();
+    let bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    assert_eq!(bytes, "Email provider operation failed");
 }
 
 #[test]
@@ -88,11 +135,41 @@ fn only_shared_inbox_conflict_keeps_the_in_progress_link() {
         InitError::NoGmailGrant,
         InitError::EnqueueError,
         InitError::BadRequest("bad".to_string()),
-        InitError::GmailError(GmailError::Unauthorized),
+        InitError::ProviderError(EmailApiError::AuthRequired),
     ] {
         assert!(
             should_clean_up_in_progress_link(&err),
             "terminal failure {err:?} should clean up the in_progress row"
         );
     }
+}
+
+/// The grant alone cannot say whether the user wanted calendar: consent
+/// requests carry `include_granted_scopes=true`, so Google re-issues the
+/// calendar scopes of an earlier grant on a plain Gmail reconnect. Only what
+/// the request asked for decides.
+#[test]
+fn calendar_intent_follows_the_consent_request_not_the_grant() {
+    let calendar_scopes = calendar_events::domain::models::GOOGLE_CALENDAR_SCOPES
+        .map(str::to_owned)
+        .to_vec();
+    let gmail_scope = "https://www.googleapis.com/auth/gmail.modify".to_owned();
+    let in_progress = |requested: Vec<String>| InProgressUserLink {
+        macro_user_id: Uuid::now_v7(),
+        linked_email: None,
+        requested_google_scopes: requested,
+        granted_google_scopes: [vec![gmail_scope.clone()], calendar_scopes.clone()].concat(),
+    };
+
+    assert!(matches!(
+        CompletedGoogleGrant::from_in_progress(&in_progress(vec![gmail_scope.clone()])).intent,
+        CalendarGrantIntent::Incidental
+    ));
+    assert!(matches!(
+        CompletedGoogleGrant::from_in_progress(&in_progress(
+            [vec![gmail_scope.clone()], calendar_scopes.clone()].concat()
+        ))
+        .intent,
+        CalendarGrantIntent::CalendarRequested
+    ));
 }

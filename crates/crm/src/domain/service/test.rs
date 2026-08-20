@@ -78,6 +78,13 @@ impl CompaniesRepository for StubRepo {
         unimplemented!()
     }
 
+    async fn link_contact_pairs_with_sources(
+        &self,
+        _pairs: &[(uuid::Uuid, String)],
+    ) -> Result<Vec<(uuid::Uuid, String)>, CrmError> {
+        unimplemented!()
+    }
+
     async fn depopulate_link_in_team(
         &self,
         _team_id: &uuid::Uuid,
@@ -173,6 +180,15 @@ impl CompaniesRepository for StubRepo {
         &self,
         _team_id: &uuid::Uuid,
         _contact_id: &uuid::Uuid,
+        _include_hidden: bool,
+    ) -> Result<Option<CrmContact>, CrmError> {
+        unimplemented!()
+    }
+
+    async fn get_contact_by_email_for_team(
+        &self,
+        _team_id: &uuid::Uuid,
+        _email: &str,
         _include_hidden: bool,
     ) -> Result<Option<CrmContact>, CrmError> {
         unimplemented!()

@@ -2,6 +2,13 @@ import { envsafe, str } from 'envsafe';
 import type { D1Database } from './traces-db';
 
 export type Bindings = {
+  /** Tags exported spans with deployment.environment (matches DD_ENV). */
+  ENVIRONMENT: string | undefined;
+  /** OTLP/HTTP traces endpoint; unset disables trace export. */
+  OTEL_EXPORTER_OTLP_ENDPOINT: string | undefined;
+  /** Datadog API key attached to trace exports when the endpoint is a
+   * Datadog intake; secret, set via `wrangler secret put DD_API_KEY`. */
+  DD_API_KEY: string | undefined;
   ANTHROPIC_API_KEY: string | undefined;
   CEREBRAS_API_KEY: string | undefined;
   OPENAI_API_KEY: string | undefined;

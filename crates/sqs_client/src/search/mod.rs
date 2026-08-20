@@ -5,7 +5,7 @@ use crate::{
         channel::ChannelMessageUpdate,
         chat::ChatMessage,
         document::SearchExtractorMessage,
-        email::{EmailLinkMessage, EmailMessage, EmailThreadBatchMessage, EmailThreadMessage},
+        email::EmailThreadBatchMessage,
         project::UpsertProject,
     },
 };
@@ -74,11 +74,7 @@ pub enum SearchQueueMessage {
     // Chat
     /// SQS backfill work-queue contract for reconciling a chat message.
     ChatMessage(ChatMessage),
-    // Email
-    ExtractEmailMessage(EmailMessage),
-    RemoveEmailMessage(EmailMessage),
-    ExtractEmailThreadMessage(EmailThreadMessage),
-    RemoveEmailLink(EmailLinkMessage),
+    // Email backfills
     ExtractEmailThreadBatch(EmailThreadBatchMessage),
     // Channel
     ChannelMessageUpdate(ChannelMessageUpdate),
@@ -99,13 +95,9 @@ impl PrimaryId for SearchQueueMessage {
             SearchQueueMessage::ExtractSync(message) => message.document_id.clone(),
             // The message id keeps entries unique within an SQS batch.
             SearchQueueMessage::ChatMessage(message) => message.message_id.clone(),
-            SearchQueueMessage::ExtractEmailMessage(message)
-            | SearchQueueMessage::RemoveEmailMessage(message) => message.message_id.clone(),
-            SearchQueueMessage::ExtractEmailThreadMessage(message) => message.thread_id.clone(),
             SearchQueueMessage::ExtractEmailThreadBatch(message) => {
                 message.thread_ids.first().cloned().unwrap_or_default()
             }
-            SearchQueueMessage::RemoveEmailLink(message) => message.link_id.clone(),
             SearchQueueMessage::ChannelMessageUpdate(message) => message.message_id.clone(),
             SearchQueueMessage::CallRecord(message) => message.call_id.clone(),
             SearchQueueMessage::RemoveCallRecord(message) => format!(
@@ -128,12 +120,8 @@ impl SearchQueueMessage {
             SearchQueueMessage::ExtractSync(_) => Operation::ExtractSync,
             // Chat
             SearchQueueMessage::ChatMessage(_) => Operation::ExtractText,
-            // Email
-            SearchQueueMessage::ExtractEmailMessage(_) => Operation::ExtractText,
-            SearchQueueMessage::RemoveEmailMessage(_) => Operation::Remove,
-            SearchQueueMessage::ExtractEmailThreadMessage(_) => Operation::ExtractText,
+            // Email backfills
             SearchQueueMessage::ExtractEmailThreadBatch(_) => Operation::ExtractText,
-            SearchQueueMessage::RemoveEmailLink(_) => Operation::Remove,
             // Channels
             SearchQueueMessage::ChannelMessageUpdate(_) => Operation::ExtractText,
             // Calls

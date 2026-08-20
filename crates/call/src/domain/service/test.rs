@@ -1443,8 +1443,10 @@ async fn edit_call_record_publishes_updated_event_for_share_permission_only() {
             EditCallRecordRequest {
                 share_permission: Some(
                     models_permissions::share_permission::UpdateSharePermissionRequestV2 {
-                        is_public: Some(true),
-                        public_access_level: None,
+                        link_share: Some(Some(
+                            models_permissions::share_permission::LinkShare::Public,
+                        )),
+                        link_share_access_level: None,
                         channel_share_permissions: None,
                     },
                 ),

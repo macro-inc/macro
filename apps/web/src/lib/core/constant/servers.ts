@@ -13,6 +13,7 @@ const serverHostLocal: Servers = {
   'email-service': 'http://localhost:8087',
   'image-proxy-service': 'http://localhost:8097',
   'scheduled-action': 'http://localhost:8098',
+  'agent-harness': 'http://localhost:8101',
 } as const;
 
 const devServerSuffix = import.meta.env.MODE === 'development' ? '-dev' : '';
@@ -37,6 +38,7 @@ const serverHostRemote = {
   'email-service': `https://email-service${devServerSuffix}.macro.com`,
   'image-proxy-service': `https://image-proxy${devServerSuffix}.macro.com`,
   'scheduled-action': `https://agent-schedule${devServerSuffix}.macro.com`,
+  'agent-harness': `https://agent-harness${devServerSuffix}.macro.com`,
 } as const;
 
 type Servers = Record<keyof typeof serverHostRemote, string>;
@@ -94,6 +96,7 @@ function proxyServers(): Servers | undefined {
     'notification-service': `${proxyOrigin}/notification`,
     'static-file': `${proxyOrigin}/static-file`,
     'unfurl-service': `${proxyOrigin}/unfurl`,
+    'agent-harness': `${proxyOrigin}/agent-harness`,
     contacts: `${proxyOrigin}/contacts`,
     'email-service': `${proxyOrigin}/email`,
     'image-proxy-service': `${proxyOrigin}/image-proxy`,

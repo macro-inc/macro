@@ -341,6 +341,66 @@ async fn fetch_inbox_details_joins_settings_backfill_and_photo(
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn fetch_inbox_details_reads_google_scopes_from_side_table(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    insert_user(&pool, CHILD, "sharedbox@corp.test").await;
+    let (link_id, _, _) =
+        insert_inbox_with_thread_and_message(&pool, CHILD, "sharedbox@corp.test").await;
+    let granted_scopes = vec![
+        "https://www.googleapis.com/auth/calendar.readonly".to_owned(),
+        "https://www.googleapis.com/auth/calendar.events".to_owned(),
+    ];
+
+    sqlx::query!(
+        r#"
+        INSERT INTO email_link_google_scopes (link_id, granted_scopes, grant_version)
+        VALUES ($1, $2, 1)
+        ON CONFLICT (link_id) DO UPDATE
+        SET granted_scopes = EXCLUDED.granted_scopes,
+            grant_version = EXCLUDED.grant_version,
+            updated_at = now()
+        "#,
+        link_id,
+        &granted_scopes,
+    )
+    .execute(&pool)
+    .await?;
+
+    let details = fetch_inbox_details_for_macro_id(&pool, &macro_id(CHILD)).await?;
+    assert_eq!(details.len(), 1);
+    assert_eq!(details[0].google_granted_scopes, granted_scopes);
+    assert!(!details[0].calendar_disabled);
+
+    sqlx::query!(
+        "UPDATE email_link_google_scopes SET calendar_disabled_at = now() WHERE link_id = $1",
+        link_id,
+    )
+    .execute(&pool)
+    .await?;
+
+    let details = fetch_inbox_details_for_macro_id(&pool, &macro_id(CHILD)).await?;
+    assert!(
+        details[0].calendar_disabled,
+        "an opted-out inbox reads as deliberately disabled, not merely ungranted"
+    );
+
+    sqlx::query!(
+        "DELETE FROM email_link_google_scopes WHERE link_id = $1",
+        link_id,
+    )
+    .execute(&pool)
+    .await?;
+
+    let details = fetch_inbox_details_for_macro_id(&pool, &macro_id(CHILD)).await?;
+    assert_eq!(details.len(), 1);
+    assert!(details[0].google_granted_scopes.is_empty());
+    assert!(!details[0].calendar_disabled);
+
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn fetch_inbox_details_includes_delegated_inbox_with_optional_fields_absent(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
@@ -650,6 +710,44 @@ async fn fetch_link_by_macro_id_and_email_address_none_when_no_match(
     let found =
         fetch_link_by_macro_id_and_email_address(&pool, CHILD, "sharedbox@corp.test").await?;
     assert!(found.is_none());
+
+    Ok(())
+}
+
+/// Removing an inbox's calendar data has to stay reachable no matter what the
+/// recorded scopes say, so the flag tracks the account row rather than the
+/// grant: a calendar synced under an older scope set still reads as present.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn fetch_inbox_details_reports_calendar_data_from_the_account_row(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    insert_user(&pool, CHILD, "sharedbox@corp.test").await;
+    let (link_id, _, _) =
+        insert_inbox_with_thread_and_message(&pool, CHILD, "sharedbox@corp.test").await;
+
+    let details = fetch_inbox_details_for_macro_id(&pool, &macro_id(CHILD)).await?;
+    assert!(!details[0].has_calendar_data);
+
+    sqlx::query!(
+        r#"
+        INSERT INTO calendar_accounts (
+            id, owner_id, email_link_id, provider, provider_account_id
+        )
+        VALUES ($1, $2, $3, 'google', 'sharedbox@corp.test')
+        "#,
+        Uuid::now_v7(),
+        CHILD,
+        link_id,
+    )
+    .execute(&pool)
+    .await?;
+
+    let details = fetch_inbox_details_for_macro_id(&pool, &macro_id(CHILD)).await?;
+    assert!(details[0].has_calendar_data);
+    assert!(
+        details[0].google_granted_scopes.is_empty(),
+        "the flag is about stored data, not about what the grant carries"
+    );
 
     Ok(())
 }

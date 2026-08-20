@@ -1,5 +1,6 @@
 import type { AnalyticsProvider } from '@app/lib/analytics';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
+import { toast } from '@core/component/Toast/Toast';
 import { SERVER_HOSTS } from '@core/constant/servers';
 import { useEmailLinks } from '@core/email-link';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
@@ -56,17 +57,23 @@ export function useSsoLogin(opts?: { signupMode?: boolean }) {
       });
 
       if (!result.success || !result.token) {
-        console.error('Authentication failed:', result.error);
+        // A canceled sheet is a deliberate user action, not a failure.
+        if (result.error !== 'User canceled login') {
+          console.error('Authentication failed:', result.error);
+          toast.failure('Sign-in failed. Please try again.');
+        }
         return;
       }
-
-      unsetTokenPromise();
 
       const res = await authServiceClient.sessionLogin({
         session_code: result.token,
       });
 
       if (res.isOk()) {
+        // Reset token state only after the session cookies have actually
+        // changed — resetting before sessionLogin opens a window where a
+        // visibility-triggered refresh re-latches under the new generation.
+        unsetTokenPromise();
         await invalidateAllAfterLogin();
         await initEmailLink().match(
           () => {},
@@ -76,6 +83,9 @@ export function useSsoLogin(opts?: { signupMode?: boolean }) {
             }
           }
         );
+      } else {
+        console.error('Failed to redeem session code', res.error);
+        toast.failure('Sign-in failed. Please try again.');
       }
 
       analytics.track(analyticsEvent, { method: idp_name }, analyticsProviders);

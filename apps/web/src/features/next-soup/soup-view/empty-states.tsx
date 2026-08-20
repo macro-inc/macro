@@ -25,6 +25,15 @@ import { type Component, type JSXElement, Match, Switch } from 'solid-js';
 import { FolderDropZone } from './FolderDropZone';
 import { useSoupView } from './soup-view-context';
 
+/** A single key, sized to sit inline in a sentence rather than on its own row. */
+function HotkeyCap(props: { children: JSXElement }) {
+  return (
+    <kbd class="rounded border border-edge-muted px-1 py-px font-mono text-xs">
+      {props.children}
+    </kbd>
+  );
+}
+
 type FallbackContent = {
   plural: string;
   graphic?: Component<{ class?: string }>;
@@ -49,6 +58,17 @@ const FALLBACK_CONTENT: Partial<Record<ListView, FallbackContent>> = {
       'Channels are shared spaces for team conversations organized by topic, project, or team. Create a channel to start collaborating with your team.',
     create: { label: 'New channel', blockName: 'channel' },
     documentationUrl: `${DOCS_BASE}/product/channels`,
+  },
+  // No `create`: a reminder is always set on something, from that thing's own
+  // menu — there is no standalone "new reminder" to offer here.
+  reminders: {
+    plural: 'reminders',
+    description: (
+      <>
+        Set a reminder on anything in Macro by selecting it and pressing{' '}
+        <HotkeyCap>h</HotkeyCap>, or with the option in its right-click menu.
+      </>
+    ),
   },
   calls: {
     plural: 'calls',
@@ -121,6 +141,27 @@ export function EmptyState(props: {
             />
           )}
         </EmptyStatePanel>
+      </Match>
+
+      {/* The Reminders tab is not an email surface, so it sits above the
+          connect-email gate — its empty copy is the same with or without a
+          linked inbox. */}
+      <Match
+        when={props.listView === 'inbox' && soup.activeTab() === 'reminders'}
+      >
+        <EmptyStatePanel
+          graphic={EmptyStateInboxTrayGraphic}
+          title="No scheduled reminders"
+          description={
+            <>
+              Reminders you schedule wait here until they fire into Signal. Set
+              one on anything in Macro by selecting it and pressing{' '}
+              <HotkeyCap>h</HotkeyCap>, or with the option in its right-click
+              menu.
+            </>
+          }
+          documentationUrl={`${DOCS_BASE}/product/inbox`}
+        />
       </Match>
 
       <Match when={props.listView === 'inbox' && !emailActive()}>
@@ -224,6 +265,22 @@ export function EmptyState(props: {
             label: 'New automation',
             icon: PlusIcon,
             onClick: () => runCreateAction('automation'),
+          }}
+          documentationUrl={`${DOCS_BASE}/product/agents`}
+        />
+      </Match>
+
+      <Match
+        when={props.listView === 'agents' && soup.activeTab() === 'skills'}
+      >
+        <EmptyStatePanel
+          graphic={EmptyStateAiGraphic}
+          title="No skills yet"
+          description="Skills are markdown documents with instructions AI follows. Reference one with / in any AI input."
+          primaryAction={{
+            label: 'New skill',
+            icon: PlusIcon,
+            onClick: () => runCreateAction('skill'),
           }}
           documentationUrl={`${DOCS_BASE}/product/agents`}
         />

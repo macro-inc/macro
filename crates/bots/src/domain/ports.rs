@@ -1,16 +1,17 @@
 //! Bot ports.
 
 use super::models::{
-    AuthenticatedBot, Bot, BotChannel, BotId, BotOwner, BotToken, BotTokenCandidate,
-    CreateBotRequest, CreateBotTokenRequest, CreateBotTokenResponse, CreateChannelScopedBotRequest,
-    CreateChannelScopedBotResponse, PatchBotRequest,
+    AuthenticatedBot, Bot, BotChannel, BotChannelListCaller, BotId, BotOwner, BotToken,
+    BotTokenCandidate, CreateBotRequest, CreateBotTokenRequest, CreateBotTokenResponse,
+    CreateChannelScopedBotRequest, CreateChannelScopedBotResponse, PatchBotRequest,
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use std::future::Future;
 use uuid::Uuid;
 
 /// Bot repository.
-pub trait BotRepo: Clone + Send + Sync + 'static {
+#[cfg_attr(feature = "test-utils", mockall::automock(type Err = anyhow::Error;))]
+pub trait BotRepo: Send + Sync + 'static {
     /// Repository error.
     type Err: Into<anyhow::Error> + Send;
 
@@ -139,7 +140,8 @@ pub trait BotRepo: Clone + Send + Sync + 'static {
 }
 
 /// Bot service.
-pub trait BotService: Clone + Send + Sync + 'static {
+#[cfg_attr(feature = "test-utils", mockall::automock)]
+pub trait BotService: Send + Sync + 'static {
     /// Create a bot owned by the caller or a team they administer.
     fn create_bot(
         &self,
@@ -167,6 +169,9 @@ pub trait BotService: Clone + Send + Sync + 'static {
         caller: MacroUserIdStr<'static>,
         bot_id: BotId,
     ) -> impl Future<Output = Result<Bot, BotError>> + Send;
+
+    /// Get the authenticated bot's own record.
+    fn get_self(&self, bot_id: BotId) -> impl Future<Output = Result<Bot, BotError>> + Send;
 
     /// Patch a manageable bot.
     fn patch_bot(
@@ -199,10 +204,11 @@ pub trait BotService: Clone + Send + Sync + 'static {
         bot_id: BotId,
     ) -> impl Future<Output = Result<(), BotError>> + Send;
 
-    /// List active channels containing a manageable bot.
+    /// List active channels containing a manageable bot, the calling bot itself,
+    /// or a bot requested by an authenticated internal service.
     fn list_bot_channels(
         &self,
-        caller: MacroUserIdStr<'static>,
+        caller: BotChannelListCaller,
         bot_id: BotId,
     ) -> impl Future<Output = Result<Vec<BotChannel>, BotError>> + Send;
 

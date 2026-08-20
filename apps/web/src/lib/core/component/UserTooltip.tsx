@@ -1,15 +1,23 @@
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { toast } from '@core/component/Toast/Toast';
+import {
+  ENABLE_CRM_FLAG,
+  ENABLE_CRM_OVERRIDE,
+} from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { useIsConnectedSecondaryInbox } from '@core/user';
 import WideChat from '@icon/wide-chat.svg';
+import WideContact from '@icon/wide-contact.svg';
 import WideCopy from '@icon/wide-copy.svg';
 import WideTask from '@icon/wide-task.svg';
 import IconCheck from '@phosphor/check.svg';
 import { useGetOrCreateDirectMessageMutation } from '@queries/channel/get-or-create-dm';
+import { useCrmContactByEmailQuery } from '@queries/crm/contacts';
+import { useCurrentTeamQuery } from '@queries/team/teams';
 import { debounce } from '@solid-primitives/scheduled';
 import { cn, Surface } from '@ui';
-import { createSignal, type JSX, Show } from 'solid-js';
+import { createSignal, type JSX, Show, Suspense } from 'solid-js';
 import { UserIcon } from './UserIcon';
 
 type UserTooltipProps = {
@@ -40,6 +48,9 @@ export function UserTooltip(props: UserTooltipProps) {
   const canTreatAsUser = () =>
     !!props.id && !props.isDeleted && !isConnectedSecondaryInbox(props.id);
   const { openWithSplit, popoverSplit } = useSplitLayout();
+  const crmFlag = useFeatureFlag(ENABLE_CRM_FLAG, {
+    enabledOverride: ENABLE_CRM_OVERRIDE,
+  });
   const getOrCreateDmMutation = useGetOrCreateDirectMessageMutation({
     onError: () => toast.failure('Failed to open direct message'),
   });
@@ -123,6 +134,13 @@ export function UserTooltip(props: UserTooltipProps) {
                 Copy email
               </ActionItem>
             </Show>
+            <Show when={crmFlag().enabled ? props.email : undefined}>
+              {(email) => (
+                <Suspense fallback={<div class="h-8" />}>
+                  <OpenContactAction email={email()} onClose={props.onClose} />
+                </Suspense>
+              )}
+            </Show>
             <Show when={canTreatAsUser() && props.id !== currentUserId()}>
               <ActionItem onClick={openDM}>
                 <WideChat class="size-3.5" />
@@ -142,10 +160,48 @@ export function UserTooltip(props: UserTooltipProps) {
   );
 }
 
+/**
+ * Inner action: lives inside a local `<Suspense>` so the team and contact
+ * lookups suspend only this button, not the tooltip.
+ */
+function OpenContactAction(props: { email: string; onClose?: () => void }) {
+  const { openWithSplit } = useSplitLayout();
+  const currentTeamQuery = useCurrentTeamQuery();
+  const team = () => currentTeamQuery.data?.team;
+  const crmEnabled = () => team()?.crm_enabled === true;
+  const contactQuery = useCrmContactByEmailQuery(
+    () => team()?.id ?? '',
+    () => props.email,
+    crmEnabled
+  );
+
+  const openContact = (e: MouseEvent, contactId: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    openWithSplit(
+      { type: 'contact', id: contactId },
+      { preferNewSplit: e.shiftKey, reopen: 'latest' }
+    );
+    props.onClose?.();
+  };
+
+  return (
+    <Show when={crmEnabled() ? contactQuery.data : undefined}>
+      {(contact) => (
+        <ActionItem onClick={(e) => openContact(e, contact().id)}>
+          <WideContact class="size-3.5" />
+          Open contact
+        </ActionItem>
+      )}
+    </Show>
+  );
+}
+
 function ActionItem(props: {
   children: JSX.Element;
   onClick: JSX.EventHandler<HTMLButtonElement, MouseEvent>;
   class?: string;
+  disabled?: boolean;
 }) {
   return (
     <button
@@ -155,6 +211,7 @@ function ActionItem(props: {
         props.class
       )}
       onClick={props.onClick}
+      disabled={props.disabled}
     >
       {props.children}
     </button>

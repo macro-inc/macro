@@ -87,4 +87,10 @@ pub struct CrmCleanupCandidate {
     pub id: i64,
     pub link_id: Uuid,
     pub contact_email: String,
+    /// When the pair was first recorded (the upsert keeps the original on
+    /// repeat deletes). The lister uses this as a settling clock: populate for
+    /// a contact is always enqueued before the deletion that records the
+    /// candidate, so an old row means populate has had at least that long to
+    /// land.
+    pub created_at: DateTime<Utc>,
 }

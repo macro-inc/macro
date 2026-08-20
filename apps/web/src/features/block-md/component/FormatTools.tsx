@@ -385,7 +385,10 @@ export function FormatTools(props: { withinPopup?: boolean }) {
   });
   const cleanups: Array<() => void> = [];
 
-  function handleLink() {
+  function handleLink(e?: MouseEvent | KeyboardEvent) {
+    e?.preventDefault();
+    e?.stopPropagation();
+
     const currentEditor = editor();
     if (currentEditor === undefined) return;
     if (selection()?.hasLinks) {
@@ -794,6 +797,7 @@ export function FormatTools(props: { withinPopup?: boolean }) {
             size="icon-sm"
             class="rounded-md"
             depth={3}
+            onPointerDown={(e: PointerEvent) => e.preventDefault()}
             onClick={handleLink}
             tooltip={selection()?.hasLinks ? 'Remove Link' : 'Insert Link'}
             disabled={buttonIsDisabled()}
@@ -967,6 +971,7 @@ export function FormatTools(props: { withinPopup?: boolean }) {
               size="icon-sm"
               class="rounded-md"
               depth={3}
+              onPointerDown={(e: PointerEvent) => e.preventDefault()}
               onClick={handleLink}
               tooltip={selection()?.hasLinks ? 'Remove Link' : 'Insert Link'}
               disabled={buttonIsDisabled()}

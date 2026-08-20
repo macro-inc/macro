@@ -11,6 +11,7 @@ import {
   optimisticUpdateSoupEntity,
   type SoupTransaction,
 } from '@queries/soup/cache';
+import { ownTouchStamp } from '@queries/soup/normalized-cache/own-touch';
 import { type MutationCallbacks, withCallbacks } from '@queries/utils';
 import type { CallRecord } from '@service-call/client';
 import type { ApiChannelWithLatest } from '@service-storage/channel-list-types';
@@ -92,7 +93,15 @@ const getEntityRenameData = (
 ): EntityRenameData | null => {
   const { entity, newName } = operation;
   // crm companies/contacts aren't renamable and have no storage item type.
-  if (entity.type === 'crm_company' || entity.type === 'crm_contact') {
+  // Reminders aren't either — the entity-mutation router rejects them, and a
+  // reminder's name is its description, edited through the reminders API.
+  // Calendar event titles are edited through the calendar mutation API.
+  if (
+    entity.type === 'crm_company' ||
+    entity.type === 'crm_contact' ||
+    entity.type === 'reminder' ||
+    entity.type === 'calendar_event'
+  ) {
     return null;
   }
   return {
@@ -177,6 +186,7 @@ const renameDssSetData = (
   entities: EntityRenameOptimisticInfo[]
 ): SoupTransactionMap => {
   const txns: SoupTransactionMap = new Map();
+  // A rename is an Edited activity, i.e. a touch (own-touch.ts).
   for (const { id, itemType, newName } of entities) {
     const current = getSoupEntityById(id);
     const score = current?.frecency_score ?? 0;
@@ -187,6 +197,7 @@ const renameDssSetData = (
           tag: 'channel',
           data: { channel: { id, name: newName } },
           frecency_score: score,
+          touched_at: ownTouchStamp(id),
         })
       );
     } else if (itemType === 'call') {
@@ -203,6 +214,7 @@ const renameDssSetData = (
       itemType !== 'channel_message' &&
       itemType !== 'channel_thread' &&
       itemType !== 'automation' &&
+      itemType !== 'calendar_event' &&
       itemType !== 'foreign' &&
       // CRM companies/contacts aren't renamed via the FileList path (their
       // names derive from the directory/email, and their soup tags are
@@ -216,6 +228,7 @@ const renameDssSetData = (
           tag: itemType,
           data: { id, name: newName },
           frecency_score: score,
+          touched_at: ownTouchStamp(id),
         })
       );
     }
@@ -259,6 +272,9 @@ const renameCallRecordSetData = (
 
 const renamePreviewSetData = (entities: EntityRenameOptimisticInfo[]) => {
   entities.forEach(({ id, newName, itemType }) => {
+    // Calendar event previews are API-served projections keyed to the
+    // viewer's copy; renames flow through calendar mutations instead.
+    if (itemType === 'calendar_event') return;
     setPreviewName({
       itemId: id,
       name: newName,
