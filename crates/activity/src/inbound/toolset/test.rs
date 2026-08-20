@@ -14,8 +14,11 @@ use uuid::Uuid;
 
 use super::*;
 use crate::domain::{
-    models::{Action, ActivityRecord, Actor, RecordedAction},
-    ports::{ActivityFeedPage, ActivityRange, ActivityReads, EntityActivityMap},
+    models::{Action, ActivityRecord, Actor, PropertyChange, RecordedAction},
+    ports::{
+        ActivityFeedPage, ActivityMetadataResolver, ActivityPropertyMetadata, ActivityRange,
+        ActivityReads, EntityActivityMap,
+    },
 };
 
 #[derive(Debug)]
@@ -114,6 +117,35 @@ fn record() -> ActivityRecord {
     }
 }
 
+#[derive(Clone, Copy)]
+struct FakeMetadata;
+
+#[async_trait::async_trait]
+impl ActivityMetadataResolver for FakeMetadata {
+    async fn resolve_properties(
+        &self,
+        _viewer: &MacroUserIdStr<'_>,
+        property_ids: &[String],
+    ) -> HashMap<String, ActivityPropertyMetadata> {
+        property_ids
+            .iter()
+            .map(|id| {
+                (
+                    id.clone(),
+                    ActivityPropertyMetadata {
+                        display_name: "Status".to_string(),
+                        data_type: "select_string".to_string(),
+                        option_labels: HashMap::from([(
+                            "00000000-0000-0000-0000-000000000001".to_string(),
+                            "Completed".to_string(),
+                        )]),
+                    },
+                )
+            })
+            .collect()
+    }
+}
+
 #[test]
 fn read_activity_schema_is_valid() {
     let validated = generate_validated_input_schema::<ReadActivity>().unwrap();
@@ -180,4 +212,50 @@ async fn rejects_an_empty_or_reversed_range_before_reading() {
         "activity range `from` must be before `to`"
     );
     assert!(queries.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn resolves_property_and_option_names_for_the_model() {
+    let property = "00000000-0000-0000-0000-000000000002";
+    let option = "00000000-0000-0000-0000-000000000001";
+    let mut record = record();
+    record.action = RecordedAction::Known(Action::PropertyChanged(PropertyChange {
+        property: property.to_string(),
+        from: None,
+        to: Some(serde_json::json!({
+            "type": "SelectOption",
+            "value": [option],
+        })),
+    }));
+    let reads = FakeReads::new(ActivityRange {
+        records: vec![record],
+        truncated: false,
+    });
+
+    let response = ReadActivity {
+        from: time("2026-08-17T12:00:00Z"),
+        to: time("2026-08-17T14:00:00Z"),
+    }
+    .call(
+        ServiceContext(ActivityToolContext::new(reads).with_metadata_resolver(FakeMetadata)),
+        RequestContext::new(user("macro|caller@example.com")),
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(
+        response.activities[0].action,
+        ToolActivityAction::PropertyChanged {
+            property: property.to_string(),
+            property_name: Some("Status".to_string()),
+            property_type: Some("select_string".to_string()),
+            from: None,
+            from_labels: None,
+            to: Some(serde_json::json!({
+                "type": "SelectOption",
+                "value": [option],
+            })),
+            to_labels: Some(vec!["Completed".to_string()]),
+        }
+    );
 }

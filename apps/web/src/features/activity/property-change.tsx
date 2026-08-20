@@ -23,7 +23,10 @@ type PropertyChangedAction = Extract<
  * wording. `from` is rendered only when the source event carried it (most
  * producers don't yet).
  */
-export function PropertyChangeText(props: { action: PropertyChangedAction }) {
+export function PropertyChangeText(props: {
+  action: PropertyChangedAction;
+  capitalize?: boolean;
+}) {
   const definitions = useAllProperties();
   const definition = () =>
     definitions().find((def) => def.id === props.action.property);
@@ -38,7 +41,15 @@ export function PropertyChangeText(props: { action: PropertyChangedAction }) {
 
   return (
     <span class="inline-flex min-w-0 flex-wrap items-center gap-x-1 gap-y-0.5">
-      <span class="shrink-0">{cleared() ? 'cleared' : 'changed'}</span>
+      <span class="shrink-0">
+        {cleared()
+          ? props.capitalize
+            ? 'Cleared'
+            : 'cleared'
+          : props.capitalize
+            ? 'Changed'
+            : 'changed'}
+      </span>
       <span class="shrink-0 font-medium text-ink">{name()}</span>
       <Show when={hasFrom()}>
         <span class="shrink-0">from</span>

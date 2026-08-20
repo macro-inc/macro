@@ -1,6 +1,10 @@
+import { ActivityTimelineRow } from '@app/features/activity/activity-timeline-row';
+import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import ClockCounterClockwise from '@phosphor-icons/core/regular/clock-counter-clockwise.svg';
+import type { ActivityEvent } from '@queries/activity/graphql/entity';
 import type { NamedTool } from '@service-cognition/generated/tools/tool';
-import { createSignal, For } from 'solid-js';
+import type { GraphqlEntityType } from '@service-storage/graphql/generated/graphql';
+import { createMemo, createSignal, For } from 'solid-js';
 import { match } from 'ts-pattern';
 import { BaseTool } from './BaseTool';
 import { Tool } from './Tool';
@@ -11,29 +15,82 @@ type Activity = NamedTool<
   'response'
 >['data']['activities'][number];
 
-function actionLabel(action: Activity['action']): string {
+const ENTITY_TYPES: Readonly<Record<string, GraphqlEntityType>> = {
+  user: 'USER',
+  chat: 'CHAT',
+  channel: 'CHANNEL',
+  channel_message: 'CHANNEL_MESSAGE',
+  document: 'DOCUMENT',
+  project: 'PROJECT',
+  email_thread: 'EMAIL_THREAD',
+  calendar_event: 'CALENDAR_EVENT',
+  team: 'TEAM',
+  call: 'CALL',
+  foreign_entity: 'FOREIGN_ENTITY',
+  static_file: 'STATIC_FILE',
+  crm_company: 'CRM_COMPANY',
+  crm_contact: 'CRM_CONTACT',
+  reminder: 'REMINDER',
+  skill: 'SKILL',
+};
+
+function activityAction(action: Activity['action']): ActivityEvent['action'] {
   return match(action)
-    .with({ type: 'created' }, () => 'Created')
-    .with({ type: 'edited' }, () => 'Edited')
-    .with({ type: 'opened' }, () => 'Opened')
-    .with({ type: 'deleted' }, () => 'Deleted')
-    .with({ type: 'messaged' }, () => 'Sent a message in')
-    .with({ type: 'sent' }, () => 'Sent an email in')
-    .with(
-      { type: 'propertyChanged' },
-      ({ property }) => `Changed property ${property} on`
-    )
-    .with(
-      { type: 'participantAdded' },
-      ({ participant }) => `Added ${participant} to`
-    )
-    .with(
-      { type: 'participantRemoved' },
-      ({ participant }) => `Removed ${participant} from`
-    )
-    .with({ type: 'callStarted' }, () => 'Started a call in')
-    .with({ type: 'unknown' }, ({ tag }) => tag.replaceAll('_', ' '))
+    .with({ type: 'created' }, () => ({
+      __typename: 'GraphqlActivityCreated' as const,
+    }))
+    .with({ type: 'edited' }, () => ({
+      __typename: 'GraphqlActivityEdited' as const,
+    }))
+    .with({ type: 'opened' }, () => ({
+      __typename: 'GraphqlActivityOpened' as const,
+    }))
+    .with({ type: 'deleted' }, () => ({
+      __typename: 'GraphqlActivityDeleted' as const,
+    }))
+    .with({ type: 'messaged' }, () => ({
+      __typename: 'GraphqlActivityMessaged' as const,
+    }))
+    .with({ type: 'sent' }, () => ({
+      __typename: 'GraphqlActivitySent' as const,
+    }))
+    .with({ type: 'propertyChanged' }, ({ property, from, to }) => ({
+      __typename: 'GraphqlActivityPropertyChanged' as const,
+      property,
+      from,
+      to,
+    }))
+    .with({ type: 'participantAdded' }, ({ participant }) => ({
+      __typename: 'GraphqlActivityParticipantAdded' as const,
+      participant,
+    }))
+    .with({ type: 'participantRemoved' }, ({ participant }) => ({
+      __typename: 'GraphqlActivityParticipantRemoved' as const,
+      participant,
+    }))
+    .with({ type: 'callStarted' }, ({ callId }) => ({
+      __typename: 'GraphqlActivityCallStarted' as const,
+      callId,
+    }))
+    .with({ type: 'unknown' }, ({ tag, payload }) => ({
+      __typename: 'GraphqlActivityUnknownAction' as const,
+      tag,
+      payload,
+    }))
     .exhaustive();
+}
+
+function activityEvent(activity: Activity, index: number): ActivityEvent {
+  return {
+    __typename: 'GraphqlActivityEvent',
+    id: `read-activity:${index}:${activity.occurredAt}`,
+    actorId: activity.actorId,
+    subjectId: activity.actorId,
+    entityType: ENTITY_TYPES[activity.entityType] ?? 'FOREIGN_ENTITY',
+    entityId: activity.entityId,
+    action: activityAction(activity.action),
+    occurredAt: activity.occurredAt,
+  };
 }
 
 function formatRangeTimestamp(value: string): string {
@@ -46,8 +103,11 @@ function formatRangeTimestamp(value: string): string {
 const handler = createToolRenderer({
   name: 'ReadActivity',
   render: (ctx) => {
-    const [isExpanded, setIsExpanded] = createSignal(false);
+    const [isExpanded, setIsExpanded] = createSignal(
+      ctx.renderContext.grouped !== true
+    );
     const activities = () => ctx.response?.data.activities ?? [];
+    const events = createMemo(() => activities().map(activityEvent));
     const hasResults = () => activities().length > 0;
     const statusText = () => {
       if (!ctx.response) return undefined;
@@ -65,30 +125,15 @@ const handler = createToolRenderer({
         type="call"
         response={
           hasResults() && isExpanded() ? (
-            <div class="max-h-120 overflow-y-auto">
-              <Tool.List>
-                <For each={activities()}>
-                  {(activity) => (
-                    <Tool.ListItem>
-                      <div class="flex min-w-0 items-center justify-between gap-3">
-                        <div class="min-w-0 truncate text-ink">
-                          {actionLabel(activity.action)}{' '}
-                          <span class="text-ink-muted">
-                            {activity.entityType} {activity.entityId}
-                          </span>
-                        </div>
-                        <time
-                          class="shrink-0 text-ink-extra-muted"
-                          dateTime={activity.occurredAt}
-                        >
-                          {formatRangeTimestamp(activity.occurredAt)}
-                        </time>
-                      </div>
-                    </Tool.ListItem>
+            <StaticMarkdownContext>
+              <div class="max-h-120 overflow-y-auto rounded-md border border-edge-muted/60 py-1">
+                <For each={events()}>
+                  {(event) => (
+                    <ActivityTimelineRow event={event} showActor={false} />
                   )}
                 </For>
-              </Tool.List>
-            </div>
+              </div>
+            </StaticMarkdownContext>
           ) : undefined
         }
       >

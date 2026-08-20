@@ -1,6 +1,6 @@
 //! ReadActivity tool for querying the caller's activity in a time range.
 
-use std::num::NonZeroU32;
+use std::{collections::HashMap, num::NonZeroU32};
 
 use ai_toolset::{
     AsyncTool, RequestContext, ServiceContext, ToolAnnotated, ToolAnnotations, ToolCallError,
@@ -15,7 +15,7 @@ use serde_json::Value;
 use super::ActivityToolContext;
 use crate::domain::{
     models::{Action, ActivityRecord, RecordedAction},
-    ports::ActivityReads,
+    ports::{ActivityPropertyMetadata, ActivityReads},
 };
 
 /// Maximum events returned by one activity tool call.
@@ -26,7 +26,7 @@ const MAX_ACTIVITY_RESULTS: u32 = 100;
 #[serde(rename_all = "camelCase")]
 #[schemars(
     title = "ReadActivity",
-    description = "Read actions attributed to the authenticated user within a time range, newest first. Use this for questions about what the user did, including actions an agent performed on their behalf. Do not use it for organization-wide updates or everything that happened to entities the user can access; use ListEntities for those. Returns at most 100 activities and reports when the result was truncated."
+    description = "Read actions attributed to the authenticated user within a time range, newest first. Use this for questions about what the user did, including actions an agent performed on their behalf. Property changes include propertyName/propertyType plus fromLabels/toLabels for resolved select and tag values; use those human-readable fields in the answer and never expose property or option ids. Do not use this for organization-wide updates or everything that happened to entities the user can access; use ListEntities for those. Returns at most 100 activities and reports when the result was truncated."
 )]
 pub struct ReadActivity {
     /// Inclusive start of the time range.
@@ -67,10 +67,23 @@ pub enum ToolActivityAction {
     PropertyChanged {
         /// The property definition id.
         property: String,
+        /// The property definition's human-readable display name, when it is
+        /// still visible to the caller.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        property_name: Option<String>,
+        /// The property's canonical data type, including `tag` for tag sets.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        property_type: Option<String>,
         /// The previous value, when known.
         from: Option<Value>,
+        /// Previous select/tag option ids resolved to display labels.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        from_labels: Option<Vec<String>>,
         /// The new value, or `None` when cleared.
         to: Option<Value>,
+        /// New select/tag option ids resolved to display labels.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        to_labels: Option<Vec<String>>,
     },
     /// A principal was added to the entity.
     ParticipantAdded {
@@ -96,8 +109,11 @@ pub enum ToolActivityAction {
     },
 }
 
-impl From<RecordedAction> for ToolActivityAction {
-    fn from(action: RecordedAction) -> Self {
+impl ToolActivityAction {
+    fn from_recorded(
+        action: RecordedAction,
+        properties: &HashMap<String, ActivityPropertyMetadata>,
+    ) -> Self {
         match action {
             RecordedAction::Known(Action::Created) => Self::Created,
             RecordedAction::Known(Action::Edited) => Self::Edited,
@@ -105,11 +121,20 @@ impl From<RecordedAction> for ToolActivityAction {
             RecordedAction::Known(Action::Deleted) => Self::Deleted,
             RecordedAction::Known(Action::Messaged) => Self::Messaged,
             RecordedAction::Known(Action::Sent) => Self::Sent,
-            RecordedAction::Known(Action::PropertyChanged(change)) => Self::PropertyChanged {
-                property: change.property,
-                from: change.from,
-                to: change.to,
-            },
+            RecordedAction::Known(Action::PropertyChanged(change)) => {
+                let metadata = properties.get(&change.property);
+                let from_labels = option_labels(change.from.as_ref(), metadata);
+                let to_labels = option_labels(change.to.as_ref(), metadata);
+                Self::PropertyChanged {
+                    property: change.property,
+                    property_name: metadata.map(|property| property.display_name.clone()),
+                    property_type: metadata.map(|property| property.data_type.clone()),
+                    from: change.from,
+                    from_labels,
+                    to: change.to,
+                    to_labels,
+                }
+            }
             RecordedAction::Known(Action::ParticipantAdded(change)) => Self::ParticipantAdded {
                 participant: change.participant.as_ref().to_owned(),
             },
@@ -122,6 +147,25 @@ impl From<RecordedAction> for ToolActivityAction {
             RecordedAction::Unknown { tag, payload } => Self::Unknown { tag, payload },
         }
     }
+}
+
+fn option_labels(
+    value: Option<&Value>,
+    metadata: Option<&ActivityPropertyMetadata>,
+) -> Option<Vec<String>> {
+    let value = value?;
+    let metadata = metadata?;
+    if value.get("type").and_then(Value::as_str) != Some("SelectOption") {
+        return None;
+    }
+    let labels: Vec<String> = value
+        .get("value")?
+        .as_array()?
+        .iter()
+        .filter_map(Value::as_str)
+        .filter_map(|id| metadata.option_labels.get(id).cloned())
+        .collect();
+    (!labels.is_empty()).then_some(labels)
 }
 
 /// One activity event returned by [`ReadActivity`].
@@ -140,13 +184,16 @@ pub struct ToolActivityEvent {
     pub occurred_at: DateTime<Utc>,
 }
 
-impl From<ActivityRecord> for ToolActivityEvent {
-    fn from(record: ActivityRecord) -> Self {
+impl ToolActivityEvent {
+    fn from_record(
+        record: ActivityRecord,
+        properties: &HashMap<String, ActivityPropertyMetadata>,
+    ) -> Self {
         Self {
             actor_id: record.actor.as_ref().to_owned(),
             entity_type: record.entity_type.as_ref().to_owned(),
             entity_id: record.entity_id,
-            action: record.action.into(),
+            action: ToolActivityAction::from_recorded(record.action, properties),
             occurred_at: record.occurred_at,
         }
     }
@@ -191,9 +238,9 @@ where
         }
 
         let range = service_context
-            .reads
+            .service
             .subject_activity_range(
-                request_context.user_id.as_ref(),
+                &request_context.user_id,
                 self.from,
                 self.to,
                 NonZeroU32::new(MAX_ACTIVITY_RESULTS).expect("activity result limit is non-zero"),
@@ -204,9 +251,17 @@ where
                 internal_error: error.into(),
             })?;
 
+        let crate::domain::service::ResolvedActivityRange {
+            activity,
+            properties,
+        } = range;
         Ok(ReadActivityResponse {
-            activities: range.records.into_iter().map(Into::into).collect(),
-            truncated: range.truncated,
+            activities: activity
+                .records
+                .into_iter()
+                .map(|record| ToolActivityEvent::from_record(record, &properties))
+                .collect(),
+            truncated: activity.truncated,
         })
     }
 }

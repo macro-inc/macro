@@ -2313,8 +2313,12 @@ export const ReadActivityResponse = z.object({
           z.object({ type: z.literal('sent') }),
           z.object({
             from: z.any().optional(),
+            fromLabels: z.union([z.array(z.string()), z.null()]).optional(),
             property: z.string(),
+            propertyName: z.union([z.string(), z.null()]).optional(),
+            propertyType: z.union([z.string(), z.null()]).optional(),
             to: z.any().optional(),
+            toLabels: z.union([z.array(z.string()), z.null()]).optional(),
             type: z.literal('propertyChanged'),
           }),
           z.object({

@@ -527,15 +527,32 @@ export type ToolActivityAction =
         [k: string]: unknown;
       };
       /**
+       * Previous select/tag option ids resolved to display labels.
+       */
+      fromLabels?: string[] | null;
+      /**
        * The property definition id.
        */
       property: string;
+      /**
+       * The property definition's human-readable display name, when it is
+       * still visible to the caller.
+       */
+      propertyName?: string | null;
+      /**
+       * The property's canonical data type, including `tag` for tag sets.
+       */
+      propertyType?: string | null;
       /**
        * The new value, or `None` when cleared.
        */
       to?: {
         [k: string]: unknown;
       };
+      /**
+       * New select/tag option ids resolved to display labels.
+       */
+      toLabels?: string[] | null;
       type: 'propertyChanged';
     }
   | {
@@ -3312,7 +3329,7 @@ export interface ProjectSearchResult {
   score?: number | null;
 }
 /**
- * Read actions attributed to the authenticated user within a time range, newest first. Use this for questions about what the user did, including actions an agent performed on their behalf. Do not use it for organization-wide updates or everything that happened to entities the user can access; use ListEntities for those. Returns at most 100 activities and reports when the result was truncated.
+ * Read actions attributed to the authenticated user within a time range, newest first. Use this for questions about what the user did, including actions an agent performed on their behalf. Property changes include propertyName/propertyType plus fromLabels/toLabels for resolved select and tag values; use those human-readable fields in the answer and never expose property or option ids. Do not use this for organization-wide updates or everything that happened to entities the user can access; use ListEntities for those. Returns at most 100 activities and reports when the result was truncated.
  */
 export interface ReadActivity {
   /**

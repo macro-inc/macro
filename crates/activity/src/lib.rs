@@ -31,3 +31,8 @@ pub use domain::models::{
     RecordedAction, VIEW_ACTION_TAGS, activity_id, event_time,
 };
 pub use domain::ports::{ActivityFeedPage, ActivityRange, ActivityReads, EntityActivityMap};
+#[cfg(feature = "ai_tools")]
+pub use domain::{
+    ports::{ActivityMetadataResolver, ActivityPropertyMetadata},
+    service::{ActivityReadService, NoopActivityMetadataResolver, ResolvedActivityRange},
+};
