@@ -2,19 +2,20 @@
 set -euo pipefail
 
 # On-demand product stack. start.sh is infra-only so cargo-test agents do not
-# boot FusionAuth. Binaries and the frontend bundle must already be in the
-# snapshot (install.sh); --no-build skips the ~8 min zigbuild.
-# Do not pass --build-aux-services.
+# boot FusionAuth. Binaries come from $HOME/.cache/macro-cloud (survives
+# checkout). --no-build skips zigbuild. Do not pass --build-aux-services.
 
-export PATH="${HOME}/.nix-profile/bin:/nix/var/nix/profiles/default/bin:${PATH}"
+# shellcheck source=cloud-lib.sh
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/cloud-lib.sh"
 
-bash /workspace/.cursor/start.sh
+bash "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/start.sh"
 
 cd /workspace
-nix develop --command bash -lc '
+nix develop --command bash -lc "
   set -euo pipefail
-  export PATH="${HOME}/.nix-profile/bin:${PATH}"
+  export PATH=\"\${HOME}/.nix-profile/bin:\${PATH}\"
+  export MACRO_STACK_SNAPSHOT_DIR='${MACRO_STACK_SNAPSHOT_DIR}'
   just stack up --no-doppler --no-build
-'
+"
 
 echo "cursor-cloud stack: app ready"

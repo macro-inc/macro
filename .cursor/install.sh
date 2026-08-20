@@ -1,70 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-LOG_DIR="${HOME}/.cursor-cloud"
-MACRODB_URL='postgres://user:password@localhost:5432/macrodb'
-DOCKER_SOCK='/var/run/docker.sock'
-NIX_DAEMON='/nix/var/nix/profiles/default/bin/nix-daemon'
-
-export PATH="${HOME}/.nix-profile/bin:/nix/var/nix/profiles/default/bin:${PATH}"
-export DATABASE_URL="${MACRODB_URL}"
-
-mkdir -p "${LOG_DIR}"
-
-ensure_nix_daemon() {
-  if nix ping-store >/dev/null 2>&1; then
-    return 0
-  fi
-  sudo setsid "${NIX_DAEMON}" >>"${LOG_DIR}/nix-daemon.log" 2>&1 </dev/null &
-  local n=0
-  while [ "${n}" -lt 30 ]; do
-    if nix ping-store >/dev/null 2>&1; then
-      return 0
-    fi
-    n=$((n + 1))
-    sleep 1
-  done
-  echo "nix-daemon did not become ready" >&2
-  return 1
-}
-
-ensure_dockerd() {
-  if [ ! -S "${DOCKER_SOCK}" ]; then
-    sudo setsid /usr/bin/dockerd >>"${LOG_DIR}/dockerd.log" 2>&1 </dev/null &
-    local n=0
-    while [ "${n}" -lt 60 ]; do
-      if [ -S "${DOCKER_SOCK}" ]; then
-        break
-      fi
-      n=$((n + 1))
-      sleep 1
-    done
-  fi
-  if [ ! -S "${DOCKER_SOCK}" ]; then
-    echo "docker.sock not ready" >&2
-    return 1
-  fi
-  sudo chmod 666 "${DOCKER_SOCK}"
-}
-
-ensure_just_sqlx() {
-  if command -v just >/dev/null 2>&1 && command -v sqlx >/dev/null 2>&1; then
-    return 0
-  fi
-  nix profile add nixpkgs#just nixpkgs#sqlx-cli
-  hash -r
-}
-
-# Snapshot leftovers (zigbuild, nested dockerd) leave root-owned target/.
-# `-w` is the wrong test when this script is root and cargo is ubuntu.
-ensure_writable_target() {
-  local ws_user ws_group
-  ws_user="$(stat -c '%U' /workspace)"
-  ws_group="$(stat -c '%G' /workspace)"
-  sudo mkdir -p /workspace/target
-  sudo chown -R "${ws_user}:${ws_group}" /workspace/target
-  echo "cursor-cloud: /workspace/target -> ${ws_user}:${ws_group}"
-}
+# shellcheck source=cloud-lib.sh
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/cloud-lib.sh"
 
 ensure_apt_packages() {
   local pkg
@@ -105,11 +43,31 @@ ensure_test_envs() {
   done < <(crate_env_paths)
 }
 
+build_app_artifacts() {
+  nix develop --command bash -lc "
+    set -euo pipefail
+    export PATH=\"\${HOME}/.nix-profile/bin:\${PATH}\"
+    cargo build -p xtask_local --features local-stack
+    cargo run --quiet --manifest-path Cargo.toml -p xtask_local --features local-stack -- zigbuild
+    cargo run --quiet --manifest-path Cargo.toml -p xtask_local --features local-stack -- runtime-image
+    bun install --frozen-lockfile
+    (
+      cd apps/web
+      MODE=development NODE_ENV=production VITE_LOCAL_SERVERS=ALL VITE_LOCAL_BACKEND_ORIGIN=same-origin \\
+        bun run --bun build
+    )
+  "
+  if [ -f /workspace/apps/web/dist/index.html ]; then
+    mkdir -p "${FRONTEND_CACHE}"
+    cp -a /workspace/apps/web/dist/. "${FRONTEND_CACHE}/"
+  fi
+}
+
 ensure_apt_packages
 ensure_nix_daemon
 ensure_just_sqlx
 ensure_dockerd
-ensure_writable_target
+ensure_persistent_caches
 
 docker pull pgvector/pgvector:pg18
 docker pull redis/redis-stack:latest
@@ -120,30 +78,17 @@ just run_dbs -d
 ensure_test_envs
 
 just initialize_dbs
-ensure_writable_target
-cargo fetch --locked
-# Tests are not in the sqlx offline cache. Postgres is already up and migrated.
 unset SQLX_OFFLINE
+cargo fetch --locked
 cargo test --no-run -p macro_db_client
 
 echo "cursor-cloud install: test-ready"
 
-# Host artifacts for `just stack up --no-doppler --no-build`. Do not start the
-# product stack here: aux Dockerfiles (sync/lexical/websocket) rebuild on a
-# missing image and have failed this environment with Debian apt 400.
-ensure_writable_target
-nix develop --command bash -lc '
-  set -euo pipefail
-  export PATH="${HOME}/.nix-profile/bin:${PATH}"
-  cargo build -p xtask_local --features local-stack
-  cargo run --quiet --manifest-path Cargo.toml -p xtask_local --features local-stack -- zigbuild
-  cargo run --quiet --manifest-path Cargo.toml -p xtask_local --features local-stack -- runtime-image
-  bun install --frozen-lockfile
-  (
-    cd apps/web
-    MODE=development NODE_ENV=production VITE_LOCAL_SERVERS=ALL VITE_LOCAL_BACKEND_ORIGIN=same-origin \
-      bun run --bun build
-  )
-'
-
-echo "cursor-cloud install: app-artifacts"
+# Do not start the product stack. Aux Dockerfiles rebuild on a missing image
+# and have failed this environment with Debian apt 400.
+if app_artifacts_ready; then
+  echo "cursor-cloud install: app-artifacts cached"
+else
+  build_app_artifacts
+  echo "cursor-cloud install: app-artifacts"
+fi
