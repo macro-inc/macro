@@ -10292,6 +10292,33 @@ export type SetCrmCompanyNameResponses = {
 
 export type SetCrmCompanyNameResponse = SetCrmCompanyNameResponses[keyof SetCrmCompanyNameResponses];
 
+export type GetContactByEmailData = {
+    body?: never;
+    path?: never;
+    query: {
+        /**
+         * The contact email to resolve within the caller's team.
+         */
+        email: string;
+    };
+    url: '/crm/contacts/by-email';
+};
+
+export type GetContactByEmailErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type GetContactByEmailError = GetContactByEmailErrors[keyof GetContactByEmailErrors];
+
+export type GetContactByEmailResponses = {
+    200: CrmContactResponse;
+};
+
+export type GetContactByEmailResponse = GetContactByEmailResponses[keyof GetContactByEmailResponses];
+
 export type GetContactData = {
     body?: never;
     path: {

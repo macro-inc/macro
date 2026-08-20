@@ -4969,6 +4969,76 @@
         }
       }
     },
+    "/crm/contacts/by-email": {
+      "get": {
+        "tags": ["crm::inbound::axum_router::get_contact_by_email"],
+        "summary": "Fetch a CRM contact by email in the caller's team. Any team member may\nresolve a visible contact; admin/owner callers may also resolve hidden\ncontacts and contacts under hidden companies.",
+        "operationId": "get_contact_by_email",
+        "parameters": [
+          {
+            "name": "email",
+            "in": "query",
+            "description": "The contact email to resolve within the caller's team.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CrmContactResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/crm/contacts/{contact_id}": {
       "get": {
         "tags": ["crm::inbound::axum_router::get_contact"],
