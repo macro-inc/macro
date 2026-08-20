@@ -1,6 +1,7 @@
 import { isListViewID, type ListView } from '@app/constants/list-views';
 import {
   CREATABLE_BLOCKS,
+  type CreatableName,
   runCreateAction,
 } from '@app/features/command/Launcher';
 import { openCreateCompanyModal } from '@app/features/companies/CreateCompanyModal';
@@ -8,7 +9,7 @@ import { useHandleFileUpload } from '@app/util/handleFileUpload';
 import { openNewChannelModal } from '@channel/CreateChannelModal';
 import { CollapsibleHeaderItem } from '@components/app/split-layout/components/CollapsibleItem';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
-import type { BlockAlias, BlockName } from '@core/block';
+import type { BlockName } from '@core/block';
 import { EntityIcon } from '@core/component/EntityIcon';
 import {
   handleFolderSelect,
@@ -24,24 +25,18 @@ import { createMemo, For, Show } from 'solid-js';
 import { NewCallButton } from './NewCallButton';
 
 // Which blocks to show as create options per view, in order
-const VIEW_CREATE_BLOCKNAMES: Partial<
-  Record<ListView, (BlockName | BlockAlias)[]>
-> = {
+const VIEW_CREATE_BLOCKNAMES: Partial<Record<ListView, CreatableName[]>> = {
   documents: ['md', 'snippet', 'canvas', 'code', 'project'],
   tasks: ['task'],
   agents: ['chat', 'automation', 'skill'],
   mail: ['email'],
   channels: ['channel'],
   folders: ['project'],
+  reminders: ['reminder'],
 };
 
 type CreateOption = {
-  id:
-    | BlockName
-    | BlockAlias
-    | 'import-file'
-    | 'import-folder'
-    | 'create-company';
+  id: CreatableName | 'import-file' | 'import-folder' | 'create-company';
   label: string;
 };
 
@@ -65,10 +60,9 @@ const CREATE_COMPANY_OPTION: CreateOption = {
  * (and thus aren't in CREATABLE_BLOCKS) but still need a create entry in
  * specific list views.
  */
-const VIEW_ONLY_BLOCK_LABELS: Partial<Record<BlockName | BlockAlias, string>> =
-  {
-    automation: 'Automation',
-  };
+const VIEW_ONLY_BLOCK_LABELS: Partial<Record<CreatableName, string>> = {
+  automation: 'Automation',
+};
 
 const VIEW_CREATE_LABELS: Partial<Record<ListView, string>> = {
   agents: 'Agent',
@@ -77,6 +71,7 @@ const VIEW_CREATE_LABELS: Partial<Record<ListView, string>> = {
   documents: 'New',
   folders: 'Folder',
   mail: 'Email',
+  reminders: 'Reminder',
   tasks: 'Task',
 };
 
@@ -84,7 +79,12 @@ function getViewCreateOptions(view: ListView): CreateOption[] {
   const createNames = VIEW_CREATE_BLOCKNAMES[view] ?? [];
   const options: CreateOption[] = createNames.flatMap((name) => {
     const block = CREATABLE_BLOCKS.find((b) => b.blockName === name);
-    if (block) return [{ id: block.blockName, label: block.label }];
+    if (block) {
+      // A flagged-off entry is not offered here either, the same as in the
+      // create menus — `runCreateAction` would decline it anyway.
+      if (block.enabled?.() === false) return [];
+      return [{ id: block.blockName, label: block.label }];
+    }
     const viewOnlyLabel = VIEW_ONLY_BLOCK_LABELS[name];
     if (viewOnlyLabel) return [{ id: name, label: viewOnlyLabel }];
     return [];

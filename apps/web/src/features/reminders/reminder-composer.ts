@@ -46,6 +46,14 @@ interface ReminderComposerState {
   entity?: EntityData;
   /** The reminder being edited. Absent when creating. */
   editing?: ReminderDraft;
+  /**
+   * A new reminder about nothing at all.
+   *
+   * Its own flag rather than the absence of the other two: "no entity and no
+   * draft" is how a closed composer looks, so without this the modal cannot
+   * tell a standalone reminder from nothing to compose.
+   */
+  standalone?: boolean;
 }
 
 /** What the surface that opened the composer does once the reminder exists. */
@@ -74,6 +82,7 @@ export function takeReminderCreatedHandler():
 const [state, setState] = createStore<ReminderComposerState>({
   entity: undefined,
   editing: undefined,
+  standalone: undefined,
 });
 
 /**
@@ -91,7 +100,25 @@ export function openReminderComposer(
   // Batched so the modal's open-keyed effect sees this entity rather than the
   // previous one.
   batch(() => {
-    setState(reconcile({ entity, editing: undefined }));
+    setState(reconcile({ entity, editing: undefined, standalone: undefined }));
+    setReminderComposerOpen(true);
+  });
+}
+
+/**
+ * Open the composer to create a reminder about nothing.
+ *
+ * There is no entity to name it after, so the description step it opens on is
+ * the one thing it cannot skip — see `resolveStandaloneDescription`.
+ */
+export function openStandaloneReminderComposer(options?: {
+  onCreated?: ReminderCreatedHandler;
+}) {
+  createdHandler = options?.onCreated;
+  batch(() => {
+    setState(
+      reconcile({ entity: undefined, editing: undefined, standalone: true })
+    );
     setReminderComposerOpen(true);
   });
 }
@@ -106,7 +133,13 @@ export function openReminderComposer(
 export function openReminderEditor(reminder: ReminderDraft) {
   createdHandler = undefined;
   batch(() => {
-    setState(reconcile({ entity: undefined, editing: reminder }));
+    setState(
+      reconcile({
+        entity: undefined,
+        editing: reminder,
+        standalone: undefined,
+      })
+    );
     setReminderComposerOpen(true);
   });
 }
@@ -115,7 +148,13 @@ export function closeReminderComposer() {
   createdHandler = undefined;
   batch(() => {
     setReminderComposerOpen(false);
-    setState(reconcile({ entity: undefined, editing: undefined }));
+    setState(
+      reconcile({
+        entity: undefined,
+        editing: undefined,
+        standalone: undefined,
+      })
+    );
   });
 }
 

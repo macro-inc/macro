@@ -1,8 +1,10 @@
 import { DOCS_BASE } from '@app/constants/docs-links';
 import type { ListView } from '@app/constants/list-views';
-import { runCreateAction } from '@app/features/command/Launcher';
+import {
+  type CreatableName,
+  runCreateAction,
+} from '@app/features/command/Launcher';
 import { openNewChannelModal } from '@channel/CreateChannelModal';
-import type { BlockAlias, BlockName } from '@core/block';
 import { useSettingsState } from '@core/constant/SettingsState';
 import { useAddInboxFlow, useEmailLinksStatus } from '@core/email-link';
 import EmptyStateAiGraphic from '@design/empty-state-ai.svg';
@@ -38,7 +40,7 @@ type FallbackContent = {
   plural: string;
   graphic?: Component<{ class?: string }>;
   description?: JSXElement;
-  create?: { label: string; blockName: BlockName | BlockAlias };
+  create?: { label: string; blockName: CreatableName };
   documentationUrl?: string;
 };
 
@@ -59,16 +61,16 @@ const FALLBACK_CONTENT: Partial<Record<ListView, FallbackContent>> = {
     create: { label: 'New channel', blockName: 'channel' },
     documentationUrl: `${DOCS_BASE}/product/channels`,
   },
-  // No `create`: a reminder is always set on something, from that thing's own
-  // menu — there is no standalone "new reminder" to offer here.
   reminders: {
     plural: 'reminders',
     description: (
       <>
         Set a reminder on anything in Macro by selecting it and pressing{' '}
-        <HotkeyCap>h</HotkeyCap>, or with the option in its right-click menu.
+        <HotkeyCap>h</HotkeyCap>, or write one about nothing in particular from
+        the Create menu.
       </>
     ),
+    create: { label: 'New reminder', blockName: 'reminder' },
   },
   calls: {
     plural: 'calls',
@@ -156,10 +158,14 @@ export function EmptyState(props: {
             <>
               Reminders you schedule wait here until they fire into Signal. Set
               one on anything in Macro by selecting it and pressing{' '}
-              <HotkeyCap>h</HotkeyCap>, or with the option in its right-click
-              menu.
+              <HotkeyCap>h</HotkeyCap>, or write one about nothing in
+              particular.
             </>
           }
+          primaryAction={{
+            label: 'New reminder',
+            onClick: () => runCreateAction('reminder'),
+          }}
           documentationUrl={`${DOCS_BASE}/product/inbox`}
         />
       </Match>

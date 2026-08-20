@@ -20,6 +20,7 @@ import {
   repeatPartsFromSchedule,
   resolveEditedDescription,
   resolveReminderDescription,
+  resolveStandaloneDescription,
   sameSchedule,
 } from './reminder-schedule';
 
@@ -285,6 +286,35 @@ describe('resolveReminderDescription', () => {
     expect(resolveReminderDescription(atLimit, doc('Q3 Contract'))).toBe(
       atLimit
     );
+  });
+});
+
+describe('resolveStandaloneDescription', () => {
+  it('uses what the user typed', () => {
+    expect(resolveStandaloneDescription('Book a flight')).toBe('Book a flight');
+  });
+
+  it('trims what the user typed', () => {
+    expect(resolveStandaloneDescription('  Book a flight  ')).toBe(
+      'Book a flight'
+    );
+  });
+
+  // There is no entity to name this reminder after, so an empty field has no
+  // answer at all — which is also how the composer knows it cannot advance.
+  it('has no answer for an empty field', () => {
+    expect(resolveStandaloneDescription('')).toBeUndefined();
+  });
+
+  it('treats whitespace-only input as empty', () => {
+    expect(resolveStandaloneDescription('   \n\t ')).toBeUndefined();
+  });
+
+  it('truncates over-long input by character', () => {
+    const long = '🔔'.repeat(REMINDER_DESCRIPTION_MAX_LENGTH + 10);
+    const result = resolveStandaloneDescription(long);
+
+    expect([...(result ?? '')]).toHaveLength(REMINDER_DESCRIPTION_MAX_LENGTH);
   });
 });
 
