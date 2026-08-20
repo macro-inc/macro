@@ -1282,8 +1282,9 @@ final class CallVideoOverlayController: NSObject, UIGestureRecognizerDelegate, U
 
         let bounds = rootView.bounds
         if thumbnailView.center.x > bounds.width + 24 || thumbnailView.center.x < -24 {
-            desired.mode = .hidden
-            scheduleApply()
+            // Through setMode so onModeChanged reaches the session (JS snapshot
+            // + PiP refresh), matching every other native-initiated transition.
+            setMode(.hidden)
             return
         }
 
@@ -1524,11 +1525,6 @@ private final class RemoteVideoTileView: UIControl {
     }
 }
 
-/// Non-recognizing gesture recognizer attached to the overlay root purely to
-/// observe whether any touch is live anywhere in the overlay subtree. It never
-/// leaves `.possible` and never cancels or delays anything; it just counts
-/// touches so the apply pipeline can defer structural mutations while a finger
-/// is down without every touchable view needing its own bookkeeping.
 /// The participant strip is wall-to-wall UIControl tiles, and
 /// `UIScrollView.touchesShouldCancel(in:)` returns false for UIControls by
 /// default — so with `delaysContentTouches = false` a drag that starts on a
@@ -1539,6 +1535,14 @@ private final class TileStripScrollView: UIScrollView {
     override func touchesShouldCancel(in view: UIView) -> Bool { true }
 }
 
+/// Non-recognizing gesture recognizer attached to the overlay root purely to
+/// observe whether any touch is live anywhere in the overlay subtree. It never
+/// cancels or delays anything; it just counts touches so the apply pipeline
+/// can defer structural mutations while a finger is down without every
+/// touchable view needing its own bookkeeping. When the last tracked touch
+/// resolves it explicitly fails, guaranteeing UIKit's reset cycle (and our
+/// residual-count cleanup in `reset()`) rather than relying on the implicit
+/// auto-fail of recognizers left in `.possible`.
 private final class OverlayTouchGateRecognizer: UIGestureRecognizer {
     private var activeTouchCount = 0
     var onAllTouchesResolved: (() -> Void)?
@@ -1552,11 +1556,13 @@ private final class OverlayTouchGateRecognizer: UIGestureRecognizer {
     override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent) {
         super.touchesEnded(touches, with: event)
         resolve(touches.count)
+        if activeTouchCount == 0 { state = .failed }
     }
 
     override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent) {
         super.touchesCancelled(touches, with: event)
         resolve(touches.count)
+        if activeTouchCount == 0 { state = .failed }
     }
 
     override func reset() {
