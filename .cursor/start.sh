@@ -1,21 +1,22 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# shellcheck source=cloud-lib.sh
-source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/cloud-lib.sh"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-ensure_nix_daemon
-ensure_dockerd
-ensure_just_sqlx
+# shellcheck source=cloud-lib.sh
+source "${SCRIPT_DIR}/cloud-lib.sh"
+
+if ! in_pinned_nix_shell; then
+  ensure_nix_daemon
+  ensure_dockerd
+  reenter_pinned_nix_shell "${SCRIPT_DIR}/start.sh" "$@"
+fi
+
 ensure_persistent_caches
 
-cd /workspace
+cd "${WORKSPACE_ROOT}"
 just run_dbs -d
 
-if command -v pg_isready >/dev/null 2>&1; then
-  pg_isready -h 127.0.0.1 -p 5432
-else
-  timeout 5 bash -c 'echo >/dev/tcp/127.0.0.1/5432'
-fi
+pg_isready -h 127.0.0.1 -p 5432
 
 echo "cursor-cloud start: infra ready"

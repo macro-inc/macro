@@ -1,28 +1,29 @@
 # Shared by install.sh / start.sh / stack.sh. Sourced, not executed.
 # Persistent caches live under $HOME so they survive `git checkout` into /workspace.
 
+WORKSPACE_ROOT='/workspace'
 CACHE_ROOT="${HOME}/.cache/macro-cloud"
 TARGET_CACHE="${CACHE_ROOT}/target"
 FRONTEND_CACHE="${CACHE_ROOT}/frontend"
 export MACRO_STACK_SNAPSHOT_DIR="${CACHE_ROOT}/stack-snapshots"
-export PATH="${HOME}/.nix-profile/bin:/nix/var/nix/profiles/default/bin:${PATH}"
 
 LOG_DIR="${HOME}/.cursor-cloud"
 MACRODB_URL='postgres://user:password@localhost:5432/macrodb'
 DOCKER_SOCK='/var/run/docker.sock'
+NIX_BIN='/nix/var/nix/profiles/default/bin/nix'
 NIX_DAEMON='/nix/var/nix/profiles/default/bin/nix-daemon'
 export DATABASE_URL="${MACRODB_URL}"
 
 mkdir -p "${LOG_DIR}" "${TARGET_CACHE}" "${FRONTEND_CACHE}" "${MACRO_STACK_SNAPSHOT_DIR}"
 
 ensure_nix_daemon() {
-  if nix ping-store >/dev/null 2>&1; then
+  if "${NIX_BIN}" ping-store >/dev/null 2>&1; then
     return 0
   fi
   sudo setsid "${NIX_DAEMON}" >>"${LOG_DIR}/nix-daemon.log" 2>&1 </dev/null &
   local n=0
   while [ "${n}" -lt 30 ]; do
-    if nix ping-store >/dev/null 2>&1; then
+    if "${NIX_BIN}" ping-store >/dev/null 2>&1; then
       return 0
     fi
     n=$((n + 1))
@@ -51,20 +52,23 @@ ensure_dockerd() {
   sudo chmod 666 "${DOCKER_SOCK}"
 }
 
-ensure_just_sqlx() {
-  if command -v just >/dev/null 2>&1 && command -v sqlx >/dev/null 2>&1; then
-    return 0
-  fi
-  nix profile add nixpkgs#just nixpkgs#sqlx-cli
-  hash -r
+in_pinned_nix_shell() {
+  [ "${MACRO_CLOUD_PINNED_NIX:-}" = "1" ]
+}
+
+reenter_pinned_nix_shell() {
+  local script_path="$1"
+  shift
+  exec "${NIX_BIN}" develop "${WORKSPACE_ROOT}" --command /usr/bin/env \
+    MACRO_CLOUD_PINNED_NIX=1 /usr/bin/bash "${script_path}" "$@"
 }
 
 workspace_owner() {
-  stat -c '%U' /workspace
+  stat -c '%U' "${WORKSPACE_ROOT}"
 }
 
 workspace_group() {
-  stat -c '%G' /workspace
+  stat -c '%G' "${WORKSPACE_ROOT}"
 }
 
 # Move /workspace/target into $HOME (same filesystem: rename). Recreate the
@@ -73,43 +77,43 @@ workspace_group() {
 ensure_persistent_caches() {
   mkdir -p "${TARGET_CACHE}" "${FRONTEND_CACHE}" "${MACRO_STACK_SNAPSHOT_DIR}"
 
-  if [ -e /workspace/target ] && [ ! -L /workspace/target ]; then
-    if [ -x /workspace/target/x86_64-unknown-linux-gnu/debug/document_storage_service ] \
+  if [ -e "${WORKSPACE_ROOT}/target" ] && [ ! -L "${WORKSPACE_ROOT}/target" ]; then
+    if [ -x "${WORKSPACE_ROOT}/target/x86_64-unknown-linux-gnu/debug/document_storage_service" ] \
       && [ ! -x "${TARGET_CACHE}/x86_64-unknown-linux-gnu/debug/document_storage_service" ]; then
-      echo "cursor-cloud: moving /workspace/target -> ${TARGET_CACHE}"
+      echo "cursor-cloud: moving ${WORKSPACE_ROOT}/target -> ${TARGET_CACHE}"
       rm -rf "${TARGET_CACHE}"
-      mv /workspace/target "${TARGET_CACHE}"
+      mv "${WORKSPACE_ROOT}/target" "${TARGET_CACHE}"
     else
-      echo "cursor-cloud: replacing /workspace/target with cache symlink"
-      rm -rf /workspace/target
+      echo "cursor-cloud: replacing ${WORKSPACE_ROOT}/target with cache symlink"
+      rm -rf "${WORKSPACE_ROOT}/target"
     fi
   fi
 
   mkdir -p "${TARGET_CACHE}"
-  ln -sfn "${TARGET_CACHE}" /workspace/target
+  ln -sfn "${TARGET_CACHE}" "${WORKSPACE_ROOT}/target"
   sudo chown -R "$(workspace_owner):$(workspace_group)" "${TARGET_CACHE}"
-  echo "cursor-cloud: /workspace/target -> ${TARGET_CACHE}"
+  echo "cursor-cloud: ${WORKSPACE_ROOT}/target -> ${TARGET_CACHE}"
 
-  if [ ! -f /workspace/apps/web/dist/index.html ] && [ -f "${FRONTEND_CACHE}/index.html" ]; then
-    mkdir -p /workspace/apps/web/dist
-    cp -a "${FRONTEND_CACHE}/." /workspace/apps/web/dist/
+  if [ ! -f "${WORKSPACE_ROOT}/apps/web/dist/index.html" ] && [ -f "${FRONTEND_CACHE}/index.html" ]; then
+    mkdir -p "${WORKSPACE_ROOT}/apps/web/dist"
+    cp -a "${FRONTEND_CACHE}/." "${WORKSPACE_ROOT}/apps/web/dist/"
     echo "cursor-cloud: restored frontend bundle from cache"
-  elif [ -f /workspace/apps/web/dist/index.html ]; then
-    cp -a /workspace/apps/web/dist/. "${FRONTEND_CACHE}/"
+  elif [ -f "${WORKSPACE_ROOT}/apps/web/dist/index.html" ]; then
+    cp -a "${WORKSPACE_ROOT}/apps/web/dist/." "${FRONTEND_CACHE}/"
   fi
 
-  if [ -d /workspace/infra/local/generated/.snapshots ]; then
-    cp -a /workspace/infra/local/generated/.snapshots/. "${MACRO_STACK_SNAPSHOT_DIR}/"
+  if [ -d "${WORKSPACE_ROOT}/infra/local/generated/.snapshots" ]; then
+    cp -a "${WORKSPACE_ROOT}/infra/local/generated/.snapshots/." "${MACRO_STACK_SNAPSHOT_DIR}/"
   fi
 }
 
 required_zig_bins() {
   awk '/cargo_bin: "/ { gsub(/[",]/, "", $2); print $2 }' \
-    /workspace/tooling/xtask/crates/xtask_local/src/local/inventory.rs
+    "${WORKSPACE_ROOT}/tooling/xtask/crates/xtask_local/src/local/inventory.rs"
 }
 
 app_artifacts_ready() {
-  local dir="/workspace/target/x86_64-unknown-linux-gnu/debug"
+  local dir="${WORKSPACE_ROOT}/target/x86_64-unknown-linux-gnu/debug"
   local bin
   while IFS= read -r bin; do
     [ -z "${bin}" ] && continue
@@ -122,7 +126,7 @@ app_artifacts_ready() {
 # has the binaries (warm snapshot / second install).
 host_test_bins_ready() {
   shopt -s nullglob
-  local bins=(/workspace/target/debug/deps/macro_db_client-*)
+  local bins=("${WORKSPACE_ROOT}"/target/debug/deps/macro_db_client-*)
   shopt -u nullglob
   local f
   for f in "${bins[@]}"; do

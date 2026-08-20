@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 # shellcheck source=cloud-lib.sh
-source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/cloud-lib.sh"
+source "${SCRIPT_DIR}/cloud-lib.sh"
 
 ensure_apt_packages() {
   local pkg
@@ -44,35 +46,34 @@ ensure_test_envs() {
 }
 
 build_app_artifacts() {
-  nix develop --command bash -lc "
-    set -euo pipefail
-    export PATH=\"\${HOME}/.nix-profile/bin:\${PATH}\"
-    cargo build -p xtask_local --features local-stack
-    cargo run --quiet --manifest-path Cargo.toml -p xtask_local --features local-stack -- zigbuild
-    cargo run --quiet --manifest-path Cargo.toml -p xtask_local --features local-stack -- runtime-image
-    bun install --frozen-lockfile
-    (
-      cd apps/web
-      MODE=development NODE_ENV=production VITE_LOCAL_SERVERS=ALL VITE_LOCAL_BACKEND_ORIGIN=same-origin \\
-        bun run --bun build
-    )
-  "
-  if [ -f /workspace/apps/web/dist/index.html ]; then
+  cargo build -p xtask_local --features local-stack
+  cargo run --quiet --manifest-path Cargo.toml -p xtask_local --features local-stack -- zigbuild
+  cargo run --quiet --manifest-path Cargo.toml -p xtask_local --features local-stack -- runtime-image
+  bun install --frozen-lockfile
+  (
+    cd "${WORKSPACE_ROOT}/apps/web"
+    MODE=development NODE_ENV=production VITE_LOCAL_SERVERS=ALL VITE_LOCAL_BACKEND_ORIGIN=same-origin \
+      bun run --bun build
+  )
+  if [ -f "${WORKSPACE_ROOT}/apps/web/dist/index.html" ]; then
     mkdir -p "${FRONTEND_CACHE}"
-    cp -a /workspace/apps/web/dist/. "${FRONTEND_CACHE}/"
+    cp -a "${WORKSPACE_ROOT}/apps/web/dist/." "${FRONTEND_CACHE}/"
   fi
 }
 
-ensure_apt_packages
-ensure_nix_daemon
-ensure_just_sqlx
-ensure_dockerd
+if ! in_pinned_nix_shell; then
+  ensure_apt_packages
+  ensure_nix_daemon
+  ensure_dockerd
+  reenter_pinned_nix_shell "${SCRIPT_DIR}/install.sh" "$@"
+fi
+
 ensure_persistent_caches
 
 docker pull pgvector/pgvector:pg18
 docker pull redis/redis-stack:latest
 
-cd /workspace
+cd "${WORKSPACE_ROOT}"
 just run_dbs -d
 
 ensure_test_envs
