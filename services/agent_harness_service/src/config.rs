@@ -41,6 +41,28 @@ pub struct Config {
     /// unaffected.
     #[macro_config_default(String::new())]
     pub github_token: String,
+    /// Run sandboxes on the local Docker daemon instead of Daytona.
+    ///
+    /// Default off: a deployed harness must keep using Daytona even if this
+    /// binary is started with a copied local env file. `just run_local` sets
+    /// it. Refused at boot unless `ENVIRONMENT=local`, because this path
+    /// drives the host Docker daemon over a mounted socket.
+    #[macro_config_default(false)]
+    pub dev_dangerous_local_containers: bool,
+    /// `docker`-compatible binary the local provider drives.
+    #[macro_config_default(String::from("docker"))]
+    pub local_container_docker_binary: String,
+    /// Image the local provider creates sandboxes from.
+    #[macro_config_default(String::from("macro-agent-harness:latest"))]
+    pub local_container_image: String,
+    /// Docker network local sandboxes join, empty for none.
+    ///
+    /// Required when this service is itself a container: a sandbox's published
+    /// host port is on the host's loopback, not this container's, so the only
+    /// address that resolves for both is one on a network they share. Empty is
+    /// right when the service runs natively.
+    #[macro_config_default(String::new())]
+    pub local_container_network: String,
     /// The bot this deployment answers for.
     ///
     /// Configuration rather than a constant: `@claude` and `@codex` are separate

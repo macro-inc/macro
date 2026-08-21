@@ -300,8 +300,9 @@ services:
   # Channel messages -> agent session trigger events -> sandboxed coding agent
   # sessions, plus the session control routes, which have to be served from the
   # process that owns the live transports they act on.
-  # Managed sandboxes require DAYTONA_API_KEY and GITHUB_TOKEN; trigger
-  # processing and external sessions run without them.
+  # Daytona-backed sandboxes require DAYTONA_API_KEY; `just run_local` sets
+  # DEV_DANGEROUS_LOCAL_CONTAINERS and runs sandboxes on the host Docker daemon
+  # instead. Trigger processing and external sessions run without either.
   # ============================================================================
   agent_harness_service:
     <<: [*common-env, *rust-services-image]
@@ -313,6 +314,11 @@ services:
       # In-network gateway address; the local default (http://localhost:8082)
       # would point at this container itself.
       - OVERRIDE_CONNECTION_GATEWAY_URL=http://connection-gateway:8080
+    volumes:
+      # The local container provider drives the host's Docker daemon, so
+      # sandboxes are siblings of this container rather than children. Harmless
+      # under the Daytona provider, which never opens it.
+      - /var/run/docker.sock:/var/run/docker.sock
     depends_on:
       - postgres
       - kafka

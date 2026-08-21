@@ -127,6 +127,26 @@ just run_local --no-doppler --env-file ./local.env
 
 Keys in the file override the code-defined defaults, so you only need to list the integrations you care about. With Doppler access, `just run_local` (without `--no-doppler`) supplies everything automatically.
 
+## Agent sandboxes
+
+`just run_local` runs coding-agent sandboxes on your own Docker daemon. It sets `DEV_DANGEROUS_LOCAL_CONTAINERS=true` and wipes `DAYTONA_API_KEY`, so a stack with Doppler still does not create billed Daytona sandboxes.
+
+Build the sandbox image once before the first mention that needs a managed session:
+
+```bash
+just -f crates/agent_harness/justfile build-local
+```
+
+The image is slow on a cold build (it bakes two nix dev shells). Rebuild with `just -f crates/agent_harness/justfile build-local --force` after changing `crates/agent_harness/container/`.
+
+To exercise real Daytona from a local stack instead:
+
+```bash
+DEV_DANGEROUS_LOCAL_CONTAINERS=false DAYTONA_API_KEY=... just run_local
+```
+
+`GITHUB_TOKEN` still comes from Doppler or process env. Local sandboxes clone with it the same way Daytona sandboxes do.
+
 ## Check the Setup
 
 Run the preflight check before the first start:
