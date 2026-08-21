@@ -7,7 +7,6 @@
         nixpkgs
         fenix
         crane
-        hermes-agent
         ;
       pkgs = import nixpkgs {
         system = system;
@@ -825,7 +824,6 @@
       shellTools =
         with pkgs;
         [
-          hermes-agent.packages.${system}.default
           daytona
           nsc
           parallel
