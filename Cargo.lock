@@ -4329,6 +4329,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "cursor_acp"
+version = "0.1.0"
+dependencies = [
+ "agent-client-protocol",
+ "futures",
+ "insta",
+ "macro_env_var",
+ "reqwest 0.13.4",
+ "rootcause",
+ "serde",
+ "serde_json",
+ "sse-core",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "curve25519-dalek"
 version = "4.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8278,6 +8297,7 @@ dependencies = [
  "console 0.16.4",
  "globset",
  "once_cell",
+ "serde",
  "similar",
  "tempfile",
  "walkdir",
@@ -15285,6 +15305,17 @@ dependencies = [
  "aws-sdk-sqs",
  "tracing",
  "workspace-hack",
+]
+
+[[package]]
+name = "sse-core"
+version = "0.2.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "28f4c044039e70ba5724b7e9dacf9fb610394773d15df2bb629170ca30391c88"
+dependencies = [
+ "bytes",
+ "memchr",
+ "thiserror 2.0.18",
 ]
 
 [[package]]

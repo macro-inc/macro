@@ -25,6 +25,7 @@ members = [
   "crates/complete_graph",
   "crates/cowlike",
   "crates/crm",
+  "crates/cursor_acp",
   "crates/embedding",
   "crates/email_api_client",
   "crates/entity_mutation",
