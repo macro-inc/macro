@@ -771,6 +771,7 @@ dependencies = [
  "lru",
  "maybe_send",
  "postcard",
+ "predicate-index",
  "serde",
  "serde_json",
  "sha2",
@@ -783,6 +784,7 @@ version = "0.1.0"
 dependencies = [
  "cache-core",
  "maybe_send",
+ "predicate-index",
  "thiserror 2.0.18",
  "turso-opfs",
  "turso_core",
@@ -4570,6 +4572,15 @@ name = "precomputed-hash"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "925383efa346730478fb4838dbe9137d2a47675ad789c546d150a6e1dd4ab31c"
+
+[[package]]
+name = "predicate-index"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "serde",
+ "thiserror 2.0.18",
+]
 
 [[package]]
 name = "prettyplease"

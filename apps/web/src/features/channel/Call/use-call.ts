@@ -63,10 +63,10 @@ const LEAVE_IN_FLIGHT_STALE_MS = 10_000;
 let leaveInFlightSince: number | null = null;
 
 function isLeaveInFlight(): boolean {
-  return (
-    leaveInFlightSince !== null &&
-    Date.now() - leaveInFlightSince < LEAVE_IN_FLIGHT_STALE_MS
-  );
+  if (leaveInFlightSince === null) return false;
+  const elapsed = Date.now() - leaveInFlightSince;
+  // A backwards wall-clock jump must release the latch, not extend it.
+  return elapsed >= 0 && elapsed < LEAVE_IN_FLIGHT_STALE_MS;
 }
 
 /**

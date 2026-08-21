@@ -424,7 +424,7 @@ export const USE_MACRO_PR_SUMMARY_BLOCK = resolveFeatureFlag(
 );
 
 // skips over posthog and sets the ENABLE_CALLS feature to true if we are in dev mode
-const ENABLE_CALLS_OVERRIDE = DEV_MODE_ENV ? true : undefined;
+const ENABLE_CALLS_OVERRIDE = DEV_MODE_ENV ? true : true;
 
 export function ENABLE_CALLS(): boolean {
   if (ENABLE_CALLS_OVERRIDE !== undefined) {

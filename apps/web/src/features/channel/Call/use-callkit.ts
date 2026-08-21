@@ -128,11 +128,30 @@ function refreshActiveCallQueriesAfterLeave() {
   );
 }
 
+// Call setup has legitimate windows where JS already tracks a call but native
+// reports none yet (answered call before the LiveKit session connects, the
+// split-manager wait before a JS-driven join). syncNativeCallState must not
+// mistake those for orphaned state, so every live call-state signal marks
+// activity here and the destructive clear requires a quiet period first.
+const NATIVE_CALL_STATE_CLEAR_QUIET_MS = 30_000;
+let lastNativeCallActivityMs: number | null = null;
+
+function markNativeCallActivity() {
+  lastNativeCallActivityMs = Date.now();
+}
+
+function hasRecentNativeCallActivity(): boolean {
+  if (lastNativeCallActivityMs === null) return false;
+  const elapsed = Date.now() - lastNativeCallActivityMs;
+  return elapsed >= 0 && elapsed < NATIVE_CALL_STATE_CLEAR_QUIET_MS;
+}
+
 function applyConnectionState(
   nativeCall: NativeCallState,
   payload: ConnectionStatePayload
 ) {
   console.info('[callkit] connection state channel message', payload);
+  markNativeCallActivity();
   if (
     !payload.channelId ||
     !payload.callId ||
@@ -347,6 +366,7 @@ export function useCallKitSetup() {
         nativeMedia,
         source,
       });
+      markNativeCallActivity();
       nativeCall.setBootstrapChannelId(channelId);
       joinChannelCallWhenReady(channelId, nativeMedia).catch((err) =>
         console.error('[callkit] joinChannelCallWhenReady failed', err)
@@ -444,6 +464,7 @@ export function useCallKitSetup() {
         console.info('[callkit] drawer opened event', {
           channelId,
         });
+        markNativeCallActivity();
         nativeCall.setBootstrapChannelId(channelId);
         joinChannelCallWhenReady(channelId, true).catch((err) =>
           console.error(
@@ -475,6 +496,11 @@ export function useCallKitSetup() {
   });
 }
 
+export type NativeCallStateBeforeLeave = {
+  snapshot: NativeCallSnapshot | null;
+  bootstrapChannelId: string | null;
+};
+
 /**
  * Reconciles JS-side native call state with the plugin's actual state.
  *
@@ -483,8 +509,17 @@ export function useCallKitSetup() {
  * webview does not know about (fresh webview during an active call). A live
  * snapshot is never overwritten by this point-in-time query — the connection
  * state watcher stays authoritative while events are flowing.
+ *
+ * By default the destructive clear requires a quiet period (see
+ * hasRecentNativeCallActivity). An explicit leave passes
+ * `clearOnlyIfUnchangedSince` instead: the state observed when the leave began
+ * is exactly what the user asked to leave, so it may be cleared regardless of
+ * age — while state replaced mid-leave (a newer call) is preserved.
  */
-async function syncNativeCallState(nativeCall: NativeCallState): Promise<void> {
+async function syncNativeCallState(
+  nativeCall: NativeCallState,
+  options?: { clearOnlyIfUnchangedSince: NativeCallStateBeforeLeave }
+): Promise<void> {
   const { state } = await invoke<GetActiveCallStateResponse>(
     'plugin:call-kit|get_active_call_state'
   );
@@ -496,6 +531,25 @@ async function syncNativeCallState(nativeCall: NativeCallState): Promise<void> {
     ) {
       return;
     }
+    const beforeLeave = options?.clearOnlyIfUnchangedSince;
+    if (beforeLeave) {
+      if (
+        nativeCall.snapshot() !== beforeLeave.snapshot ||
+        nativeCall.bootstrapChannelId() !== beforeLeave.bootstrapChannelId
+      ) {
+        console.info(
+          '[callkit] skipping stale-state clear; call state changed during leave'
+        );
+        return;
+      }
+    } else if (hasRecentNativeCallActivity()) {
+      // A call is likely still being established (native briefly reports no
+      // call before its LiveKit session exists); events will settle the state.
+      console.info(
+        '[callkit] skipping stale-state clear; call state changed recently'
+      );
+      return;
+    }
     console.info(
       '[callkit] clearing stale in-call state; native has no active call'
     );
@@ -505,6 +559,7 @@ async function syncNativeCallState(nativeCall: NativeCallState): Promise<void> {
     refreshActiveCallQueriesAfterLeave();
     return;
   }
+  markNativeCallActivity();
   nativeCall.setParticipantIdentities(state.participantIdentities ?? []);
   if (nativeCall.snapshot() !== null) return;
   nativeCall.setBootstrapChannelId(state.channelId);
@@ -522,13 +577,18 @@ async function syncNativeCallState(nativeCall: NativeCallState): Promise<void> {
  * Post-leave safety net: reconcile JS state with the plugin so a leave always
  * lands in a consistent state, even when the native call was already gone and
  * no disconnect event will ever arrive (e.g. state orphaned while the app was
- * suspended).
+ * suspended). `stateBeforeLeave` is the call state observed when the leave
+ * began — clearing is scoped to exactly that state, bypassing the quiet-period
+ * gate without risking a concurrently-established call's state.
  */
 export async function syncNativeCallStateAfterLeave(
-  nativeCall: NativeCallState
+  nativeCall: NativeCallState,
+  stateBeforeLeave: NativeCallStateBeforeLeave
 ): Promise<void> {
   if (!isNativeIosCallKitEnabled()) return;
-  await syncNativeCallState(nativeCall);
+  await syncNativeCallState(nativeCall, {
+    clearOnlyIfUnchangedSince: stateBeforeLeave,
+  });
 }
 
 function useCallKitNativeMetadataSync() {
@@ -793,6 +853,7 @@ export async function startNativeCallKitOutgoingCall(
     channelTitle: args.channelTitle,
   });
   await invoke('plugin:call-kit|start_outgoing_call', args);
+  markNativeCallActivity();
   nativeCall.setBootstrapChannelId(args.channelId);
 }
 

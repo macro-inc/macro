@@ -48,13 +48,22 @@ final class IncomingCallCoordinator: NSObject, CXProviderDelegate, PKPushRegistr
     /// this coordinator's own call pointers. Ending a call must key off the
     /// session itself so a corrupted/cleared `activeCallUUID` can never orphan
     /// a live LiveKit room (stuck drawer, call audio that cannot be hung up).
+    /// Main-queue only, like the rest of the coordinator's state: the plugin's
+    /// `mediaSession` property and the session's snapshot are main-confined.
     private func mediaSessionCallUUID() -> UUID? {
         guard let snapshot = existingMediaSession()?.currentSnapshot() else { return nil }
         return UUID(uuidString: snapshot.callId)
     }
 
-    private func shouldDisconnectNativeMedia(for uuid: UUID) -> Bool {
+    private func isNativeMediaCall(_ uuid: UUID) -> Bool {
         activeNativeMediaUUID == uuid || mediaSessionCallUUID() == uuid
+    }
+
+    /// Whether any native media is running, regardless of which call the
+    /// coordinator's pointer names. Cleanup and audio hand-off paths must reach
+    /// a live session even when the pointer was cleared by an earlier failure.
+    private func hasActiveNativeMedia() -> Bool {
+        activeNativeMediaUUID != nil || mediaSessionCallUUID() != nil
     }
 
     func load() {
@@ -111,11 +120,12 @@ final class IncomingCallCoordinator: NSObject, CXProviderDelegate, PKPushRegistr
         // token for the same call). Requesting a duplicate CXStartCallAction
         // would fail and its cleanup would orphan the live media session, so
         // report success and resync the call pointers to the running call.
+        let sessionCallUUID = mediaSessionCallUUID()
         if !isAnsweringPendingIncomingCall,
-           activeCallUUID == uuid || mediaSessionCallUUID() == uuid {
+           activeCallUUID == uuid || sessionCallUUID == uuid {
             print("[CallKit] startOutgoingCall ignored; call already running uuid=\(uuid.uuidString) channelId=\(channelId)")
             activeCallUUID = uuid
-            if mediaSessionCallUUID() == uuid {
+            if sessionCallUUID == uuid {
                 activeNativeMediaUUID = uuid
             }
             completion(nil)
@@ -193,10 +203,18 @@ final class IncomingCallCoordinator: NSObject, CXProviderDelegate, PKPushRegistr
         // Fall back to the media session's own call so a desynced/cleared
         // activeCallUUID cannot leave a live room (and its drawer) unreachable
         // from the app's leave button.
-        guard let uuid = activeCallUUID ?? mediaSessionCallUUID() else {
+        let sessionCallUUID = mediaSessionCallUUID()
+        guard let uuid = activeCallUUID ?? sessionCallUUID else {
             print("[CallKit] endActiveCall requested with no active CallKit UUID or media session")
             completion()
             return
+        }
+
+        // If the pointer and the session disagree, end the session's call too —
+        // the pointer alone must never strand a live room.
+        if let sessionCallUUID, sessionCallUUID != uuid {
+            print("[CallKit] endActiveCall also ending media session call uuid=\(sessionCallUUID.uuidString)")
+            requestEndCall(uuid: sessionCallUUID)
         }
 
         print("[CallKit] endActiveCall requesting CXEndCallAction uuid=\(uuid.uuidString)")
@@ -235,7 +253,7 @@ final class IncomingCallCoordinator: NSObject, CXProviderDelegate, PKPushRegistr
     }
 
     private func clearCallStateAndDisconnectMediaIfNeeded(uuid: UUID) {
-        let shouldDisconnectNativeMedia = shouldDisconnectNativeMedia(for: uuid)
+        let shouldDisconnectNativeMedia = isNativeMediaCall(uuid)
         clearCallState(uuid: uuid)
         if shouldDisconnectNativeMedia {
             let mediaSession = mediaSessionProvider()
@@ -253,7 +271,7 @@ final class IncomingCallCoordinator: NSObject, CXProviderDelegate, PKPushRegistr
         }
 
         print("[CallKit] Application terminating with active CallKit call uuid=\(uuid.uuidString)")
-        if shouldDisconnectNativeMedia(for: uuid) {
+        if hasActiveNativeMedia() {
             mediaSessionProvider().disconnectForAppTermination()
         }
         provider.reportCall(with: uuid, endedAt: Date(), reason: .remoteEnded)
@@ -346,10 +364,12 @@ final class IncomingCallCoordinator: NSObject, CXProviderDelegate, PKPushRegistr
         // off activeCallUUID, and the ring's later cleanup would nil it, leaving
         // the active call impossible to end from the app. The ringing call
         // becomes active only when it is answered.
-        if activeCallUUID == nil {
+        if let activeCallUUID {
+            if activeCallUUID != uuid {
+                print("[CallKit] Incoming call while another call is active; keeping active uuid=\(activeCallUUID.uuidString) ringing uuid=\(uuid.uuidString)")
+            }
+        } else {
             activeCallUUID = uuid
-        } else if activeCallUUID != uuid {
-            print("[CallKit] Incoming call while another call is active; keeping active uuid=\(activeCallUUID!.uuidString) ringing uuid=\(uuid.uuidString)")
         }
 
         let update = CXCallUpdate()
@@ -389,7 +409,7 @@ final class IncomingCallCoordinator: NSObject, CXProviderDelegate, PKPushRegistr
         outgoingCallUUIDs.removeAll()
         reportedConnectedOutgoingCallUUIDs.removeAll()
         completeAllPendingEndCalls()
-        if activeNativeMediaUUID != nil || mediaSessionCallUUID() != nil {
+        if hasActiveNativeMedia() {
             activeNativeMediaUUID = nil
             let mediaSession = mediaSessionProvider()
             Task {
@@ -468,6 +488,10 @@ final class IncomingCallCoordinator: NSObject, CXProviderDelegate, PKPushRegistr
 
         // The answered call is now the active call (a ring no longer claims
         // activeCallUUID on push), so JS can request CXEndCallAction for it.
+        // Deliberately unconditional, unlike the ring path: answering displaces
+        // any previous active call — the media session switches to the answered
+        // call, and with "End & Accept" the old call's CXEndCallAction can
+        // arrive in either order relative to this answer.
         activeCallUUID = answeredUUID
         pendingCalls.removeValue(forKey: answeredUUID)
         pendingCallTokens.removeValue(forKey: answeredUUID)
@@ -512,7 +536,7 @@ final class IncomingCallCoordinator: NSObject, CXProviderDelegate, PKPushRegistr
         // Keyed off the session as well as activeNativeMediaUUID: if the
         // pointer was cleared by an earlier failure, ending the call must still
         // tear down the room it is running.
-        if shouldDisconnectNativeMedia(for: action.callUUID) {
+        if isNativeMediaCall(action.callUUID) {
             let mediaSession = mediaSessionProvider()
             Task {
                 await mediaSession.disconnect()
@@ -526,7 +550,7 @@ final class IncomingCallCoordinator: NSObject, CXProviderDelegate, PKPushRegistr
 
     func provider(_ provider: CXProvider, perform action: CXSetMutedCallAction) {
         print("[CallKit] CXSetMutedCallAction received uuid=\(action.callUUID.uuidString) muted=\(action.isMuted)")
-        if activeNativeMediaUUID == action.callUUID {
+        if isNativeMediaCall(action.callUUID) {
             mediaSessionProvider().setAudioMuted(action.isMuted)
         }
         action.fulfill()
@@ -535,7 +559,7 @@ final class IncomingCallCoordinator: NSObject, CXProviderDelegate, PKPushRegistr
 
     func provider(_ provider: CXProvider, didActivate audioSession: AVAudioSession) {
         isCallKitAudioSessionActive = true
-        guard activeNativeMediaUUID != nil else {
+        guard hasActiveNativeMedia() else {
             print("[CallKit] AVAudioSession activated by CallKit; native media not active yet")
             return
         }
@@ -545,7 +569,7 @@ final class IncomingCallCoordinator: NSObject, CXProviderDelegate, PKPushRegistr
 
     func provider(_ provider: CXProvider, didDeactivate audioSession: AVAudioSession) {
         isCallKitAudioSessionActive = false
-        guard activeNativeMediaUUID != nil else {
+        guard hasActiveNativeMedia() else {
             print("[CallKit] AVAudioSession deactivated by CallKit; no native media session active")
             return
         }
@@ -642,7 +666,7 @@ final class IncomingCallCoordinator: NSObject, CXProviderDelegate, PKPushRegistr
     }
 
     private func activateNativeMediaAudioIfNeeded(reason: String) {
-        guard activeNativeMediaUUID != nil else { return }
+        guard hasActiveNativeMedia() else { return }
         guard isCallKitAudioSessionActive else {
             print("[CallKit] Native media waiting for CallKit AVAudioSession activation reason=\(reason)")
             return
