@@ -3,7 +3,7 @@
 use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
 use ai_toolset::{ToolAnnotated, ToolAnnotations};
 use async_trait::async_trait;
-use entity_access::domain::models::EditAccessLevel;
+use entity_access::domain::models::{BotAccessScope, EditAccessLevel};
 use entity_access::domain::ports::EntityAccessService;
 use entity_mutation::{EntityMutationErrorCode, MoveEntity, capability::MoveEntityRequest};
 use macro_user_id::user_id::MacroUserIdStr;
@@ -93,9 +93,12 @@ where
     ESvc: EntityAccessService,
 {
     let receipt = entity_access_service
-        .generate_entity_access_receipt::<S::Receipt>(
-            user_id,
-            None,
+        .generate_bot_entity_access_receipt::<S::Receipt>(
+            bot_id::MACRO_AI_BOT_ID,
+            BotAccessScope::User {
+                user_id: user_id.clone(),
+                user_org_id: None,
+            },
             &entity.entity_id,
             entity.entity_type,
         )
@@ -105,9 +108,12 @@ where
     let request = match project_id {
         Some(project_id) => {
             let project_receipt = entity_access_service
-                .generate_entity_access_receipt::<EditAccessLevel>(
-                    user_id,
-                    None,
+                .generate_bot_entity_access_receipt::<EditAccessLevel>(
+                    bot_id::MACRO_AI_BOT_ID,
+                    BotAccessScope::User {
+                        user_id: user_id.clone(),
+                        user_org_id: None,
+                    },
                     &project_id,
                     EntityType::Project,
                 )

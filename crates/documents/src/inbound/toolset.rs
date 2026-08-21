@@ -23,9 +23,12 @@ use crate::{
         markdown_init::LexicalSyncMarkdownInitializer,
     },
 };
+use activity::{Actor, Attribution};
 use ai_toolset::AsyncToolCollection;
+use entity_access::domain::models::BotAccessScope;
 use entity_access::domain::ports::EntityAccessService;
 use lexical_client::LexicalClient;
+use macro_user_id::user_id::MacroUserIdStr;
 use std::sync::Arc;
 use sync_service_client::SyncServiceClient;
 
@@ -127,6 +130,17 @@ impl<
     pub fn with_recorder(mut self, recorder: Arc<dyn ai_usage::UsageRecorder>) -> Self {
         self.recorder = recorder;
         self
+    }
+}
+
+fn ai_tool_attribution(user: MacroUserIdStr<'static>) -> Attribution {
+    Attribution::delegated(Actor::new_from_bot(bot_id::MACRO_AI_BOT_ID), user)
+}
+
+fn ai_tool_user_scope(user: MacroUserIdStr<'static>) -> BotAccessScope {
+    BotAccessScope::User {
+        user_id: user,
+        user_org_id: None,
     }
 }
 

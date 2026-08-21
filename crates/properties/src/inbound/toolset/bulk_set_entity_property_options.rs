@@ -153,9 +153,9 @@ where
             let entity_type = model_entity::EntityType::from(entity.entity_type);
             match service_context
                 .entity_access_service
-                .generate_entity_access_receipt::<EditAccessLevel>(
-                    &request_context.user_id,
-                    None,
+                .generate_bot_entity_access_receipt::<EditAccessLevel>(
+                    bot_id::MACRO_AI_BOT_ID,
+                    super::ai_tool_user_scope(request_context.user_id.clone()),
                     &entity.entity_id,
                     entity_type,
                 )

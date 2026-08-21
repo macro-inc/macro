@@ -15,9 +15,10 @@ mod test;
 use crate::domain::service::{PropertiesService, TeamReceipt};
 use ai_toolset::{AsyncToolCollection, RequestContext, ServiceContext, ToolCallError};
 use entity_access::domain::models::{
-    AccessError, Entity, EntityAccessReceipt, EntityPermission, EntityType,
+    AccessError, BotAccessScope, Entity, EntityAccessReceipt, EntityPermission, EntityType,
 };
 use entity_access::domain::ports::EntityAccessService;
+use macro_user_id::user_id::MacroUserIdStr;
 use std::sync::Arc;
 
 pub use bulk_set_entity_property_options::{
@@ -29,6 +30,13 @@ pub use edit_tag::{EditTag, EditTagResponse};
 pub use get_entity_properties::{GetEntityProperties, GetEntityPropertiesResponse};
 pub use list_tags::{ListTags, ListTagsResponse};
 pub use set_entity_property::{SetEntityProperty, SetEntityPropertyResponse};
+
+fn ai_tool_user_scope(user: MacroUserIdStr<'static>) -> BotAccessScope {
+    BotAccessScope::User {
+        user_id: user,
+        user_org_id: None,
+    }
+}
 
 /// Service context for properties AI tools.
 pub struct PropertiesToolContext<T: PropertiesService, A: EntityAccessService> {

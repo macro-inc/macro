@@ -63,6 +63,8 @@ fn updated_event() -> Event<DocumentTopicEvent> {
         document_id: DOCUMENT_ID.to_string(),
         owner: user(),
         actor_user_id: None,
+        actor: None,
+        on_behalf_of: None,
         document_name: Some("Updated".to_string()),
         previous_project_id: None,
         project_id: None,
@@ -133,6 +135,8 @@ fn document_lifecycle_events_map_to_updated_and_deleted_patches() {
     let deleted = DocumentTopicEvent::Deleted(DocumentDeletedMetadata {
         document_id: DOCUMENT_ID.to_string(),
         actor_user_id: None,
+        actor: None,
+        on_behalf_of: None,
         project_id: None,
     });
 
@@ -152,6 +156,8 @@ fn moving_a_document_out_of_a_project_updates_the_previous_project() {
         document_id: DOCUMENT_ID.to_string(),
         owner: user(),
         actor_user_id: None,
+        actor: None,
+        on_behalf_of: None,
         document_name: None,
         previous_project_id: Some(previous_project_id.clone()),
         project_id: None,
