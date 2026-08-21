@@ -49,6 +49,7 @@ where
         )
     )]
 #[tracing::instrument(
+    err(Debug),
     skip_all,
     fields(message_type = %body.message_type, recipient_count = 1)
 )]
