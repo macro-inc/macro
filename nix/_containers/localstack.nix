@@ -74,7 +74,8 @@ let
 
   # DynamoDB in LocalStack 4 is Amazon DynamoDB Local (Java), not moto. The
   # gateway otherwise forwards CreateTable to a random port whose JVM never
-  # starts. Pin the zip + LocalStack's javaagent/javassist; JDK 21 is Nixpkgs.
+  # starts. The URL is Amazon's v2.x channel; the hash pins the bytes so a
+  # silent upstream bump fails the FOD instead of pulling a new Hub image.
   dynamodbLocal = pkgs.fetchzip {
     url = "https://d1ni2b6xgvw0s0.cloudfront.net/v2.x/dynamodb_local_latest.zip";
     hash = "sha256-qJjfqjmW56nJMy///RNBhEZy5jyjNhfHTZq6cckaNfI=";

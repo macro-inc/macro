@@ -36,7 +36,7 @@ use super::{env_layer, fusionauth, gen_compose, repo_root, workspace_root};
 /// could freeze a tenant-less FusionAuth DB — and the key never changed, so
 /// the bad snapshot was sticky).
 /// 4: Nix dockerTools infra images (Postgres/OpenSearch/Kafka data-dir layout
-/// no longer matches the previously pulled registry images).
+/// no longer matches the previously loaded Nix images).
 const FORMAT: u32 = 4;
 
 /// Throwaway dockerTools image (`tar` + `gzip` + `sh`) used to archive volumes.

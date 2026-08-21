@@ -103,6 +103,11 @@ fn local_compose_flavor(instance: &Instance, mode: Mode, static_frontend: bool) 
         }
     }
     for (name, node) in services {
+        if node.get("build").map(|b| !b.is_null()).unwrap_or(false) {
+            failures.push(format!(
+                "'{name}' still has a build: stanza — local images are Nix dockerTools loads, not Dockerfiles"
+            ));
+        }
         if let Some(img) = node.get("image").and_then(Value::as_str)
             && !is_nix_local_image(img)
         {
