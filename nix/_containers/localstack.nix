@@ -72,13 +72,33 @@ let
     installPhase = "true";
   };
 
+  testCert = pkgs.runCommand "localstack-test-cert" {
+    nativeBuildInputs = [ pkgs.openssl ];
+  } ''
+    mkdir -p "$out"
+    openssl req -x509 -newkey rsa:2048 -sha256 -days 3650 -nodes \
+      -keyout "$out/key.pem" \
+      -out "$out/cert.pem" \
+      -subj "/CN=localhost" \
+      -addext "subjectAltName=DNS:localhost,DNS:localhost.localstack.cloud,DNS:localstack,IP:127.0.0.1"
+    cat "$out/key.pem" "$out/cert.pem" > "$out/server.test.pem"
+  '';
+
   entrypoint = pkgs.writeShellScriptBin "localstack-entrypoint" ''
     set -euo pipefail
     export GATEWAY_LISTEN="''${GATEWAY_LISTEN:-0.0.0.0:4566}"
     export SERVICES="''${SERVICES:-sqs,dynamodb,s3}"
     export FILESYSTEM_ROOT="''${FILESYSTEM_ROOT:-/var/lib/localstack}"
     export LOCALSTACK_VOLUME_DIR="''${LOCALSTACK_VOLUME_DIR:-/var/lib/localstack}"
-    mkdir -p "$FILESYSTEM_ROOT" "$LOCALSTACK_VOLUME_DIR"
+    export SKIP_SSL_CERT_DOWNLOAD="''${SKIP_SSL_CERT_DOWNLOAD:-1}"
+    mkdir -p "$FILESYSTEM_ROOT/cache" "$LOCALSTACK_VOLUME_DIR"
+    # Image Volumes hide /var/lib/localstack; copy the Nix-made PEM into the
+    # writable cache so LocalStack never hits pyOpenSSL's removed add_extensions
+    # or tries to download a cert from api.localstack.cloud.
+    if [ ! -s "$FILESYSTEM_ROOT/cache/server.test.pem" ]; then
+      cp /etc/localstack/server.test.pem "$FILESYSTEM_ROOT/cache/server.test.pem"
+    fi
+    export CUSTOM_SSL_CERT_PATH="''${CUSTOM_SSL_CERT_PATH:-$FILESYSTEM_ROOT/cache/server.test.pem}"
     cd "$FILESYSTEM_ROOT"
     exec ${runtime}/bin/localstack start --host
   '';
@@ -103,10 +123,12 @@ imageLib.mk {
     "SERVICES=sqs,dynamodb,s3"
     "FILESYSTEM_ROOT=/var/lib/localstack"
     "LOCALSTACK_VOLUME_DIR=/var/lib/localstack"
+    "SKIP_SSL_CERT_DOWNLOAD=1"
     "PYTHONUNBUFFERED=1"
   ];
   extraCommands = ''
-    mkdir -p ./var/lib/localstack ./tmp/localstack
+    mkdir -p ./var/lib/localstack/cache ./tmp/localstack ./etc/localstack
+    cp ${testCert}/server.test.pem ./etc/localstack/server.test.pem
   '';
   config = {
     Cmd = [ "${entrypoint}/bin/localstack-entrypoint" ];
