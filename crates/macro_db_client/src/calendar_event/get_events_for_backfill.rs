@@ -17,8 +17,8 @@ pub struct CalendarEventBackfillRow {
 /// `calendar_event_occurrences` and are not indexed — so this enumerates
 /// exactly the set the index holds.
 ///
-/// Calendar has no Kafka topic, so this is also the recovery mechanism for a
-/// dropped live publish, not just first-time population.
+/// This is also the recovery mechanism for a change the `macro.calendar` topic
+/// dropped, not just first-time population.
 #[tracing::instrument(skip(db), err)]
 pub async fn get_calendar_events_for_search_backfill(
     db: &Pool<Postgres>,

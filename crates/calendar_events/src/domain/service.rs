@@ -5,6 +5,9 @@ use futures::future::{Either, select};
 use rootcause::Report;
 use uuid::Uuid;
 
+use crate::domain::events::{CalendarEventChangedMetadata, CalendarMacroEvent};
+use macro_event_broker::MacroEventBroker;
+
 use super::{
     models::{
         AppliedGoogleGrant, CalendarBackfillClaim, CalendarBackfillFailureDisposition,
@@ -14,9 +17,8 @@ use super::{
     },
     ports::{
         CalendarBackfillRepository, CalendarEventWrite, CalendarOccurrenceService,
-        CalendarRepository, CalendarSearchIndexer, GoogleCalendarProvider,
-        GoogleCalendarSyncRepository, GoogleEventSyncContext, GoogleProviderError,
-        GoogleProviderErrorKind,
+        CalendarRepository, GoogleCalendarProvider, GoogleCalendarSyncRepository,
+        GoogleEventSyncContext, GoogleProviderError, GoogleProviderErrorKind,
     },
 };
 
@@ -188,10 +190,10 @@ where
 }
 
 /// Orchestrates a Google account backfill while keeping HTTP and SQL behind ports.
-pub struct GoogleCalendarBackfillService<R, G, S> {
+pub struct GoogleCalendarBackfillService<R, G, B> {
     repository: R,
     provider: G,
-    search: S,
+    macro_event_broker: B,
     watch: Option<super::models::GoogleWatchConfig>,
 }
 
@@ -287,20 +289,20 @@ pub enum GoogleCalendarBackfillRunError {
 }
 
 /// Application service that owns Google backfill claim, lease, and terminal policy.
-pub struct GoogleCalendarBackfillCoordinator<R, G, L, S> {
+pub struct GoogleCalendarBackfillCoordinator<R, G, L, B> {
     repository: R,
     provider: G,
     lifecycle: L,
-    search: S,
+    macro_event_broker: B,
     watch: Option<super::models::GoogleWatchConfig>,
 }
 
-impl<R, G, L, S> GoogleCalendarBackfillCoordinator<R, G, L, S>
+impl<R, G, L, B> GoogleCalendarBackfillCoordinator<R, G, L, B>
 where
     R: CalendarRepository + Clone,
     G: GoogleCalendarProvider + Clone,
     L: CalendarBackfillRepository,
-    S: CalendarSearchIndexer + Clone,
+    B: MacroEventBroker + Clone,
 {
     /// Construct a coordinator from domain ports; supplying a watch config
     /// makes every backfill maintain push notification channels.
@@ -308,14 +310,14 @@ where
         repository: R,
         provider: G,
         lifecycle: L,
-        search: S,
+        macro_event_broker: B,
         watch: Option<super::models::GoogleWatchConfig>,
     ) -> Self {
         Self {
             repository,
             provider,
             lifecycle,
-            search,
+            macro_event_broker,
             watch,
         }
     }
@@ -373,7 +375,7 @@ where
         let backfill = GoogleCalendarBackfillService::new(
             self.repository.clone(),
             self.provider.clone(),
-            self.search.clone(),
+            self.macro_event_broker.clone(),
             self.watch.clone(),
         );
         let work = backfill.backfill(
@@ -459,23 +461,23 @@ where
     }
 }
 
-impl<R, G, S> GoogleCalendarBackfillService<R, G, S>
+impl<R, G, B> GoogleCalendarBackfillService<R, G, B>
 where
     R: CalendarRepository,
     G: GoogleCalendarProvider,
-    S: CalendarSearchIndexer,
+    B: MacroEventBroker,
 {
     /// Construct the provider backfill service.
     pub fn new(
         repository: R,
         provider: G,
-        search: S,
+        macro_event_broker: B,
         watch: Option<super::models::GoogleWatchConfig>,
     ) -> Self {
         Self {
             repository,
             provider,
-            search,
+            macro_event_broker,
             watch,
         }
     }
@@ -570,16 +572,17 @@ where
                         upsert,
                     })
                     .await?;
-                // Best-effort: sync progress is already committed, and the
-                // search backfill re-enumerates from Postgres, so a dropped
-                // publish costs index freshness rather than correctness.
-                if let Err(error) = self.search.index_event(event_id).await {
-                    tracing::warn!(
-                        error=?error,
-                        event_id=%event_id,
-                        "failed to enqueue calendar event reindex"
-                    );
-                }
+                // Sync progress is already committed, so a publish failure is
+                // logged and dropped rather than failing the run.
+                let _ = self
+                    .macro_event_broker
+                    .send_event(&CalendarMacroEvent::changed(CalendarEventChangedMetadata {
+                        event_id,
+                        owner_id: owner_id.to_string(),
+                    }))
+                    .inspect_err(|error| {
+                        tracing::error!(error=?error, "failed to publish calendar event");
+                    });
                 calendar_count += 1;
             }
             // The upserts above committed individually, so they count even

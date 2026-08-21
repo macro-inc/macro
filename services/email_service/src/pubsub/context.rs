@@ -4,10 +4,7 @@ use crate::util::redis::RedisClient;
 use calendar_events::{
     domain::models::GoogleWatchConfig,
     domain::service::{GoogleCalendarBackfillCoordinator, GoogleCalendarBackfillFailureService},
-    outbound::{
-        google::GoogleCalendarClient, pg::PgCalendarRepository,
-        sqs_search_indexer::SqsCalendarSearchIndexer,
-    },
+    outbound::{google::GoogleCalendarClient, pg::PgCalendarRepository},
 };
 use connection_gateway_client::client::ConnectionGatewayClient;
 use contacts::domain::service::SqsContactsIngress;
@@ -39,7 +36,7 @@ pub type GoogleCalendarBackfillService = GoogleCalendarBackfillCoordinator<
     PgCalendarRepository,
     GoogleCalendarClient<RedisCalendarRequestGate>,
     PgCalendarRepository,
-    SqsCalendarSearchIndexer,
+    PubSubEventBroker,
 >;
 
 /// Concrete pre-lease Google Calendar failure application service.
@@ -57,7 +54,11 @@ pub struct CalendarBackfillServices {
 
 impl CalendarBackfillServices {
     /// Compose calendar application services from process-level adapters.
-    pub fn new(db: PgPool, redis_client: RedisClient, sqs: Arc<sqs_client::SQS>) -> Self {
+    pub fn new(
+        db: PgPool,
+        redis_client: RedisClient,
+        macro_event_broker: PubSubEventBroker,
+    ) -> Self {
         let repository = PgCalendarRepository::new(db);
         Self {
             google: Arc::new(GoogleCalendarBackfillCoordinator::new(
@@ -70,7 +71,7 @@ impl CalendarBackfillServices {
                     RedisCalendarRequestGate::new(redis_client),
                 ),
                 repository.clone(),
-                SqsCalendarSearchIndexer::new(sqs),
+                macro_event_broker,
                 calendar_watch_config(),
             )),
             google_failure: Arc::new(GoogleCalendarBackfillFailureService::new(repository)),

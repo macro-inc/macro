@@ -704,35 +704,6 @@ pub trait CalendarReminderDispatchRepo: Send + Sync + 'static {
     ) -> impl Future<Output = Result<(), Report>> + Send;
 }
 
-/// Search-index egress for calendar event writes.
-///
-/// Calendar has no Kafka topic, so unlike every other indexed entity there is
-/// no event stream a consumer can follow. Writes announce themselves through
-/// this port instead, and the search backfill re-enumerates from Postgres to
-/// recover anything a lost publish dropped.
-pub trait CalendarSearchIndexer: Send + Sync + 'static {
-    /// Enqueue a reindex of one event's series master.
-    fn index_event(&self, event_id: Uuid) -> impl Future<Output = Result<(), Report>> + Send;
-
-    /// Enqueue removal of one event from the search index.
-    fn remove_event(&self, event_id: Uuid) -> impl Future<Output = Result<(), Report>> + Send;
-}
-
-/// A search indexer for hosts that expose calendar operations without a search
-/// queue (e.g. tests and AI-tool-only roots). Every call is a no-op.
-#[derive(Clone, Copy, Debug, Default)]
-pub struct UnwiredCalendarSearchIndexer;
-
-impl CalendarSearchIndexer for UnwiredCalendarSearchIndexer {
-    async fn index_event(&self, _event_id: Uuid) -> Result<(), Report> {
-        Ok(())
-    }
-
-    async fn remove_event(&self, _event_id: Uuid) -> Result<(), Report> {
-        Ok(())
-    }
-}
-
 /// Notification egress for due calendar reminders.
 pub trait CalendarReminderNotifier: Send + Sync + 'static {
     /// Send the reminder notification to the event owner.

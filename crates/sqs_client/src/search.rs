@@ -1,7 +1,7 @@
 use crate::{
     SQS,
     search::{
-        calendar_event::{RemoveCalendarEvent, UpsertCalendarEvent},
+        calendar_event::UpsertCalendarEvent,
         call::{CallRecordMessage, RemoveCallRecord},
         channel::ChannelMessageUpdate,
         chat::ChatMessage,
@@ -87,7 +87,6 @@ pub enum SearchQueueMessage {
     UpsertProject(UpsertProject),
     // Calendar
     UpsertCalendarEvent(UpsertCalendarEvent),
-    RemoveCalendarEvent(RemoveCalendarEvent),
 
     // User
     RemoveUserProfile(String),
@@ -112,7 +111,6 @@ impl PrimaryId for SearchQueueMessage {
             ),
             SearchQueueMessage::UpsertProject(message) => message.project_id.clone(),
             SearchQueueMessage::UpsertCalendarEvent(message) => message.event_id.clone(),
-            SearchQueueMessage::RemoveCalendarEvent(message) => message.event_id.clone(),
 
             SearchQueueMessage::RemoveUserProfile(message) => message.clone(),
         }
@@ -138,7 +136,6 @@ impl SearchQueueMessage {
             SearchQueueMessage::UpsertProject(_) => Operation::UpdateMetadata,
             // Calendar
             SearchQueueMessage::UpsertCalendarEvent(_) => Operation::UpdateMetadata,
-            SearchQueueMessage::RemoveCalendarEvent(_) => Operation::Remove,
             // Users
             SearchQueueMessage::RemoveUserProfile(_) => Operation::Remove,
         }

@@ -19,55 +19,58 @@ use super::{
     ports::{
         CalendarAccessTokenProvider, CalendarDeletionScope, CalendarEventWrite,
         CalendarMutationError, CalendarMutationService, CalendarRepository, CalendarRsvpScope,
-        CalendarSearchIndexer, CalendarTokenError, CalendarUpdateScope,
-        GoogleCalendarMutationProvider, GoogleInstanceUpdateOutcome, GoogleProviderError,
-        GoogleProviderErrorKind, GoogleRsvpOutcome, GoogleSeriesMutationOutcome,
+        CalendarTokenError, CalendarUpdateScope, GoogleCalendarMutationProvider,
+        GoogleInstanceUpdateOutcome, GoogleProviderError, GoogleProviderErrorKind,
+        GoogleRsvpOutcome, GoogleSeriesMutationOutcome,
     },
 };
+use crate::domain::events::{CalendarEventChangedMetadata, CalendarMacroEvent};
+use macro_event_broker::MacroEventBroker;
 
 /// Calendar mutation use cases with provider, token, and persistence
 /// details behind ports.
-pub struct CalendarMutationServiceImpl<R, G, T, S> {
+pub struct CalendarMutationServiceImpl<R, G, T, B> {
     repository: R,
     provider: G,
     tokens: T,
-    search: S,
+    macro_event_broker: B,
 }
 
-impl<R, G, T, S> CalendarMutationServiceImpl<R, G, T, S>
+impl<R, G, T, B> CalendarMutationServiceImpl<R, G, T, B>
 where
     R: CalendarRepository,
     G: GoogleCalendarMutationProvider,
     T: CalendarAccessTokenProvider,
-    S: CalendarSearchIndexer,
+    B: MacroEventBroker,
 {
     /// Construct the service from its ports.
-    pub fn new(repository: R, provider: G, tokens: T, search: S) -> Self {
+    pub fn new(repository: R, provider: G, tokens: T, macro_event_broker: B) -> Self {
         Self {
             repository,
             provider,
             tokens,
-            search,
+            macro_event_broker,
         }
     }
 
-    /// Announce a write to search. Never fails the mutation: the provider and
-    /// the local projection are already updated, and the search backfill
-    /// re-enumerates from Postgres, so a dropped publish costs index freshness
-    /// rather than correctness.
+    /// Publish a calendar change event; failures are logged and dropped.
     ///
-    /// Always a reindex, never a removal, even on the delete paths. Retiring
-    /// one source does not necessarily remove the event — another source can
-    /// still back it — so the indexer re-reads the row and deletes only when
-    /// it is actually gone.
-    async fn announce_to_search(&self, event_id: Uuid) {
-        if let Err(error) = self.search.index_event(event_id).await {
-            tracing::warn!(
-                error=?error,
-                event_id=%event_id,
-                "failed to enqueue calendar event reindex"
-            );
-        }
+    /// The provider and the local projection are already updated by this
+    /// point, so a publish failure must not fail the mutation.
+    ///
+    /// Always a change, never a deletion, even on the delete paths: retiring
+    /// one source leaves the event alive when another still backs it, so the
+    /// consumer re-reads the row and treats its absence as removal.
+    fn publish_calendar_change(&self, event_id: Uuid, owner_id: String) {
+        let _ = self
+            .macro_event_broker
+            .send_event(&CalendarMacroEvent::changed(CalendarEventChangedMetadata {
+                event_id,
+                owner_id,
+            }))
+            .inspect_err(|error| {
+                tracing::error!(error=?error, "failed to publish calendar event");
+            });
     }
 
     async fn resolve_mutation_target(
@@ -110,17 +113,17 @@ where
             .await
             .map_err(|error| CalendarMutationError::PersistFailed(format!("{error:?}")))?;
         event.id = event_id;
-        self.announce_to_search(event_id).await;
+        self.publish_calendar_change(event_id, event.owner_id.clone());
         Ok(event)
     }
 }
 
-impl<R, G, T, S> CalendarMutationService for CalendarMutationServiceImpl<R, G, T, S>
+impl<R, G, T, B> CalendarMutationService for CalendarMutationServiceImpl<R, G, T, B>
 where
     R: CalendarRepository,
     G: GoogleCalendarMutationProvider,
     T: CalendarAccessTokenProvider,
-    S: CalendarSearchIndexer,
+    B: MacroEventBroker,
 {
     #[tracing::instrument(skip(self, requester_id, draft), err)]
     async fn create_event(
@@ -316,7 +319,7 @@ where
                     )
                     .await
                     .map_err(|error| CalendarMutationError::PersistFailed(format!("{error:?}")))?;
-                self.announce_to_search(event_id).await;
+                self.publish_calendar_change(event_id, target.owner_id.clone());
                 Ok(())
             }
         }
@@ -386,12 +389,12 @@ where
     }
 }
 
-impl<R, G, T, S> CalendarMutationServiceImpl<R, G, T, S>
+impl<R, G, T, B> CalendarMutationServiceImpl<R, G, T, B>
 where
     R: CalendarRepository,
     G: GoogleCalendarMutationProvider,
     T: CalendarAccessTokenProvider,
-    S: CalendarSearchIndexer,
+    B: MacroEventBroker,
 {
     /// Close the push channels a disconnected calendar left open. Best-effort:
     /// the local calendars are already gone, so a notification that still

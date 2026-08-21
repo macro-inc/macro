@@ -1,6 +1,7 @@
 [
   "macro.agent_sessions",
   "macro.bots",
+  "macro.calendar",
   "macro.calls",
   "macro.channels",
   "macro.chats",

@@ -494,37 +494,56 @@ impl CalendarAccessTokenProvider for FakeTokens {
     }
 }
 
-/// Records the event ids a mutation announced to search.
+/// One event captured off the broker.
+#[derive(Clone, Debug)]
+struct PublishedEvent {
+    topic: &'static str,
+    key: String,
+    payload: serde_json::Value,
+}
+
+/// Records the calendar events a mutation published to the broker.
 #[derive(Clone, Default)]
-struct RecordingSearchIndexer {
-    indexed: std::sync::Arc<std::sync::Mutex<Vec<Uuid>>>,
+struct RecordingEventBroker {
+    published: Arc<Mutex<Vec<PublishedEvent>>>,
     fail: bool,
 }
 
-impl RecordingSearchIndexer {
+impl RecordingEventBroker {
     fn failing() -> Self {
         Self {
-            indexed: Default::default(),
+            published: Default::default(),
             fail: true,
         }
     }
 
-    fn indexed(&self) -> Vec<Uuid> {
-        self.indexed.lock().expect("indexer lock").clone()
+    fn published(&self) -> Vec<PublishedEvent> {
+        self.published.lock().expect("broker lock").clone()
     }
 }
 
-impl CalendarSearchIndexer for RecordingSearchIndexer {
-    async fn index_event(&self, event_id: Uuid) -> Result<(), rootcause::Report> {
-        self.indexed.lock().expect("indexer lock").push(event_id);
+impl macro_event_broker::MacroEventBroker for RecordingEventBroker {
+    fn send_event<E: macro_event_broker::MacroEvent + ?Sized>(
+        &self,
+        event: &E,
+    ) -> Result<
+        tokio::task::JoinHandle<Result<(), macro_event_broker::EventBrokerError>>,
+        macro_event_broker::EventBrokerError,
+    > {
         if self.fail {
-            return Err(rootcause::report!("search queue unavailable").into());
+            return Err(macro_event_broker::EventBrokerError::Publish(
+                "test failure".to_string(),
+            ));
         }
-        Ok(())
-    }
-
-    async fn remove_event(&self, _event_id: Uuid) -> Result<(), rootcause::Report> {
-        Ok(())
+        self.published
+            .lock()
+            .expect("broker lock")
+            .push(PublishedEvent {
+                topic: event.topic(),
+                key: event.key().to_string(),
+                payload: serde_json::to_value(event.event())?,
+            });
+        Ok(tokio::spawn(async { Ok(()) }))
     }
 }
 
@@ -532,17 +551,17 @@ fn service(
     repo: FakeRepo,
     provider: FakeProvider,
     tokens: FakeTokens,
-) -> CalendarMutationServiceImpl<FakeRepo, FakeProvider, FakeTokens, RecordingSearchIndexer> {
-    CalendarMutationServiceImpl::new(repo, provider, tokens, RecordingSearchIndexer::default())
+) -> CalendarMutationServiceImpl<FakeRepo, FakeProvider, FakeTokens, RecordingEventBroker> {
+    CalendarMutationServiceImpl::new(repo, provider, tokens, RecordingEventBroker::default())
 }
 
-fn service_with_search(
+fn service_with_broker(
     repo: FakeRepo,
     provider: FakeProvider,
     tokens: FakeTokens,
-    search: RecordingSearchIndexer,
-) -> CalendarMutationServiceImpl<FakeRepo, FakeProvider, FakeTokens, RecordingSearchIndexer> {
-    CalendarMutationServiceImpl::new(repo, provider, tokens, search)
+    broker: RecordingEventBroker,
+) -> CalendarMutationServiceImpl<FakeRepo, FakeProvider, FakeTokens, RecordingEventBroker> {
+    CalendarMutationServiceImpl::new(repo, provider, tokens, broker)
 }
 
 #[tokio::test]
@@ -598,62 +617,73 @@ async fn create_persists_the_provider_echo_and_returns_the_applied_id() {
 }
 
 #[tokio::test]
-async fn create_announces_the_applied_event_to_search() {
+async fn create_publishes_the_applied_event_to_the_calendar_topic() {
     let applied_id = Uuid::now_v7();
     let repo = FakeRepo {
         creation_target: Some(creation_target(false)),
         persisted_event_id: Some(applied_id),
         ..FakeRepo::default()
     };
-    let search = RecordingSearchIndexer::default();
-    service_with_search(
+    let broker = RecordingEventBroker::default();
+    service_with_broker(
         repo,
         FakeProvider::new(FakeProviderBehavior::Echo),
         FakeTokens::ok(),
-        search.clone(),
+        broker.clone(),
     )
     .create_event("macro|user", None, None, draft())
     .await
     .unwrap();
 
-    // The applied entity id, not the draft's — search indexes what persisted.
-    assert_eq!(search.indexed(), vec![applied_id]);
+    let published = broker.published();
+    assert_eq!(published.len(), 1);
+    let event = &published[0];
+    assert_eq!(event.topic, "macro.calendar");
+    // Keyed by entity id: the consumer shards on the key, so every change to
+    // one event must land on one partition to stay ordered.
+    assert_eq!(event.key, applied_id.to_string());
+    let metadata = &event.payload["calendar_event.changed"];
+    // The applied entity id, not the draft's — consumers re-read what persisted.
+    assert_eq!(metadata["event_id"], serde_json::json!(applied_id));
+    assert_eq!(
+        metadata["owner_id"],
+        serde_json::json!("macro|self@example.com")
+    );
+    assert_eq!(event.payload["schema_version"], serde_json::json!(1));
 }
 
 #[tokio::test]
-async fn a_failed_search_publish_does_not_fail_the_mutation() {
-    // Google and the local projection are already updated by this point, and
-    // the search backfill re-enumerates from Postgres, so a dropped publish
-    // must cost index freshness rather than the write.
+async fn a_failed_publish_does_not_fail_the_mutation() {
+    // Google and the local projection are already updated by this point, so a
+    // broker failure must cost index freshness rather than the write. The
+    // search backfill re-enumerates from Postgres to recover.
     let applied_id = Uuid::now_v7();
     let repo = FakeRepo {
         creation_target: Some(creation_target(false)),
         persisted_event_id: Some(applied_id),
         ..FakeRepo::default()
     };
-    let search = RecordingSearchIndexer::failing();
-    let created = service_with_search(
+    let created = service_with_broker(
         repo,
         FakeProvider::new(FakeProviderBehavior::Echo),
         FakeTokens::ok(),
-        search.clone(),
+        RecordingEventBroker::failing(),
     )
     .create_event("macro|user", None, None, draft())
     .await
-    .expect("a search publish failure must not fail the mutation");
+    .expect("a publish failure must not fail the mutation");
 
     assert_eq!(created.id, applied_id);
-    assert_eq!(search.indexed(), vec![applied_id]);
 }
 
 #[tokio::test]
-async fn a_rejected_mutation_announces_nothing_to_search() {
-    let search = RecordingSearchIndexer::default();
-    let svc = service_with_search(
+async fn a_rejected_mutation_publishes_nothing() {
+    let broker = RecordingEventBroker::default();
+    let svc = service_with_broker(
         FakeRepo::default(),
         FakeProvider::new(FakeProviderBehavior::Echo),
         FakeTokens::ok(),
-        search.clone(),
+        broker.clone(),
     );
     assert!(
         svc.create_event("macro|user", None, None, draft())
@@ -661,8 +691,8 @@ async fn a_rejected_mutation_announces_nothing_to_search() {
             .is_err()
     );
     assert!(
-        search.indexed().is_empty(),
-        "nothing persisted, so nothing to index"
+        broker.published().is_empty(),
+        "nothing persisted, so nothing to announce"
     );
 }
 
