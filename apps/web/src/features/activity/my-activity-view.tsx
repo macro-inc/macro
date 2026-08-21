@@ -8,46 +8,28 @@ import { formatRelativeTimestamp } from '@entity/utils/timestamp';
 import { usePropertyEntityDisplay } from '@property/hooks';
 import type { ActivityEvent } from '@queries/activity/graphql/entity';
 import { createMyActivityQuery } from '@queries/activity/graphql/feed';
+import { createMyActivityOverviewQuery } from '@queries/activity/graphql/overview';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
-import type { GraphqlEntityType } from '@service-storage/graphql/generated/graphql';
 import { Button } from '@ui';
 import { type Component, createMemo, For, Show } from 'solid-js';
-import { match } from 'ts-pattern';
 import { ActionGlyph } from './action-glyph';
 import { ActionPhrase } from './action-phrase';
 import { ActorName } from './actor-name';
+import { ContributionGraph } from './contribution-graph';
 import {
   actionAsPropertyChange,
   describeActionForEntity,
 } from './describe-action';
+import { displayEntityType } from './display-entity-type';
 import { EntityMention } from './entity-mention';
 import { PropertyChangeText } from './property-change';
-
-/**
- * Maps an activity event's canonical entity type onto the display vocabulary
- * used by the shared entity name/icon/link resolver. Only types the resolver
- * can actually name are mapped — calls, calendar events, and companies have
- * no preview/name source there and would render as a stuck "Loading…" or a
- * raw id, so they (like teams and static files) return undefined and the row
- * shows without an entity reference.
- */
-function displayEntityType(
-  entityType: GraphqlEntityType
-): EntityType | undefined {
-  return match<GraphqlEntityType, EntityType | undefined>(entityType)
-    .with('DOCUMENT', () => 'DOCUMENT')
-    .with('PROJECT', () => 'PROJECT')
-    .with('CHAT', () => 'CHAT')
-    .with('EMAIL_THREAD', () => 'THREAD')
-    .with('CHANNEL', () => 'CHANNEL')
-    .with('USER', () => 'USER')
-    .otherwise(() => undefined);
-}
+import { TopEntities } from './top-entities';
 
 type FeedGroup = { key: string; label: string; events: ActivityEvent[] };
 
 /** The user's own activity, newest first, behind the activity-feed flag. */
 export function MyActivityView() {
+  const overview = createMyActivityOverviewQuery({ enabled: () => true });
   const feed = createMyActivityQuery({ enabled: () => true });
   const groups = createMemo<FeedGroup[]>(() => {
     const out: FeedGroup[] = [];
@@ -69,32 +51,55 @@ export function MyActivityView() {
         <span class="font-semibold text-sm">Activity</span>
       </SplitHeaderLeft>
       <StaticMarkdownContext>
-        <div class="min-h-0 flex-1 overflow-y-auto py-1">
-          <Show
-            when={groups().length > 0}
-            fallback={
-              <p class="px-3 py-2 text-ink-muted text-sm">
-                {feed.isLoading
-                  ? 'Loading…'
-                  : feed.isError
-                    ? 'Activity is unavailable right now. Try again in a moment.'
-                    : 'No activity yet.'}
-              </p>
-            }
-          >
-            <FeedGroups groups={groups()} row={SentenceTimelineRow} />
-            <Show when={feed.hasNextPage}>
-              <div class="flex justify-center py-2">
-                <Button
-                  variant="ghost"
-                  onClick={() => void feed.fetchNextPage()}
-                  disabled={feed.isFetchingNextPage}
-                >
-                  {feed.isFetchingNextPage ? 'Loading…' : 'Show more'}
-                </Button>
-              </div>
+        <div class="shrink-0 border-edge-muted border-b px-6 py-4">
+          <div class="mx-auto w-full max-w-5xl">
+            <Show
+              when={overview.data}
+              fallback={
+                <p class="text-ink-extra-muted text-sm">
+                  {overview.isError
+                    ? 'Activity overview is unavailable right now.'
+                    : 'Loading activity overview…'}
+                </p>
+              }
+            >
+              {(data) => (
+                <div class="grid min-w-0 gap-6 @min-[900px]/u-list:grid-cols-[minmax(0,2fr)_minmax(14rem,1fr)]">
+                  <ContributionGraph overview={data()} />
+                  <TopEntities entities={data().topEntities} />
+                </div>
+              )}
             </Show>
-          </Show>
+          </div>
+        </div>
+        <div class="min-h-0 flex-1 overflow-y-auto py-1">
+          <div class="mx-auto w-full max-w-5xl px-6">
+            <Show
+              when={groups().length > 0}
+              fallback={
+                <p class="py-2 text-ink-muted text-sm">
+                  {feed.isLoading
+                    ? 'Loading…'
+                    : feed.isError
+                      ? 'Activity is unavailable right now. Try again in a moment.'
+                      : 'No activity yet.'}
+                </p>
+              }
+            >
+              <FeedGroups groups={groups()} row={SentenceTimelineRow} />
+              <Show when={feed.hasNextPage}>
+                <div class="flex justify-center py-2">
+                  <Button
+                    variant="ghost"
+                    onClick={() => void feed.fetchNextPage()}
+                    disabled={feed.isFetchingNextPage}
+                  >
+                    {feed.isFetchingNextPage ? 'Loading…' : 'Show more'}
+                  </Button>
+                </div>
+              </Show>
+            </Show>
+          </div>
         </div>
       </StaticMarkdownContext>
     </div>
