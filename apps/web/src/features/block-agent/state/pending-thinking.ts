@@ -9,6 +9,7 @@
  */
 
 import type { FoldedMessage } from '@service-agent-fold/generated/types';
+import { sessionIsWorking } from './session-working';
 
 function hasVisibleAgentWork(message: FoldedMessage): boolean {
   return message.parts.some(
@@ -27,6 +28,11 @@ export function shouldShowPendingThinking(options: {
   if (!options.busy) return false;
   const last = options.messages.at(-1);
   if (!last) return true;
+  // A stop (or model switch) is not a prompt — the composer is busy only
+  // because a cancel is on the wire, not because a turn is starting.
+  if (last.author.kind === 'user' && !sessionIsWorking(options.messages)) {
+    return false;
+  }
   if (last.author.kind === 'user') return true;
   if (last.stop != null) return true;
   return !hasVisibleAgentWork(last);

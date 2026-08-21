@@ -143,4 +143,29 @@ describe('createAgentSessionFeed live updates', () => {
     });
     expect(feed.working()).toBe(false);
   });
+
+  it('is idle after a stop control even if the agent row never got a stop reason', async () => {
+    const { createAgentSessionFeed } = await import(
+      './create-agent-session-feed'
+    );
+
+    worker.messages = [
+      message(0, 'agent', 'halfway'),
+      {
+        ...message(1, 'user', ''),
+        parts: [
+          {
+            kind: 'control',
+            control: { kind: 'stop' },
+            outcome: { kind: 'accepted' },
+          },
+        ],
+      },
+    ];
+    const feed = createRoot(() => createAgentSessionFeed(() => 'session'));
+    await flush();
+    await flush();
+
+    expect(feed.working()).toBe(false);
+  });
 });

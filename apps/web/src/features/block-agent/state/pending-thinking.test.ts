@@ -65,6 +65,24 @@ describe('shouldShowPendingThinking', () => {
     ).toBe(false);
   });
 
+  it('hides after a stop control — that is not a new turn starting', () => {
+    expect(
+      shouldShowPendingThinking({
+        busy: true,
+        messages: [
+          message('agent', [{ kind: 'text', text: 'halfway' }]),
+          message('user', [
+            {
+              kind: 'control',
+              control: { kind: 'stop' },
+              outcome: { kind: 'accepted' },
+            },
+          ]),
+        ],
+      })
+    ).toBe(false);
+  });
+
   it('hides once a tool call is visible, even without a thought', () => {
     expect(
       shouldShowPendingThinking({

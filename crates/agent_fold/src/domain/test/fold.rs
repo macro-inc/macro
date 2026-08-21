@@ -216,6 +216,43 @@ fn folds_session_controls_as_typed_parts() {
     assert_eq!(messages[2].id, TurnId(2));
 }
 
+/// `session/cancel` must close the open agent turn in the same frame. The
+/// prompt's later `cancelled` result is expected and must not warn as
+/// uncorrelated — that was the "Stop forever" wedge: the agent message kept
+/// `stop: None` until a result that sometimes never arrived.
+#[test]
+fn a_stop_closes_the_open_turn_as_cancelled() {
+    let log = parse_log(concat!(
+        r#"{"direction":"to_runtime","user_id":"macro|user@example.com","content":{"type":"acp","jsonrpc":"2.0","id":"p","method":"session/prompt","params":{"sessionId":"s","prompt":[{"type":"text","text":"hi"}]}}}"#,
+        "\n",
+        r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"halfway"}}}}}"#,
+        "\n",
+        r#"{"direction":"to_runtime","user_id":"macro|user@example.com","content":{"type":"acp","jsonrpc":"2.0","method":"session/cancel","params":{"sessionId":"s"}}}"#,
+        "\n",
+        r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","id":"p","result":{"stopReason":"cancelled"}}}"#,
+    ));
+
+    let (messages, warnings) = fold_capturing_warnings(log);
+    assert_eq!(
+        warnings,
+        vec![],
+        "the cancelled result is the stop's answer"
+    );
+    assert_eq!(messages.len(), 3);
+    assert_eq!(
+        messages[1].stop,
+        Some(StopReason::Cancelled),
+        "the agent message closed when cancel was sent"
+    );
+    assert_eq!(
+        messages[2].parts.as_slice(),
+        &[MessagePart::Control {
+            control: Control::Stop,
+            outcome: ControlOutcome::Accepted,
+        }]
+    );
+}
+
 #[test]
 fn a_rejected_control_reports_the_runtime_error() {
     let log = parse_log(concat!(
