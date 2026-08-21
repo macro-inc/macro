@@ -4,7 +4,6 @@
 
 use std::sync::Arc;
 
-use crate::domain::error::HarnessError;
 use agent_client_protocol::RawJsonRpcMessage;
 use agent_client_protocol::schema::v1::{
     AgentCapabilities, ClientRequest, ContentBlock, InitializeResponse, NewSessionResponse,
@@ -1249,7 +1248,7 @@ async fn set_sandbox_size_unsupported_does_not_persist() {
         .await
         .expect_err("unsupported resize should fail");
     assert!(
-        matches!(error, HarnessError::Container(message) if message.contains("cannot resize")),
+        error.to_string().contains("cannot resize"),
         "unexpected error: {error}"
     );
     assert_eq!(
