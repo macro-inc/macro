@@ -83,6 +83,10 @@ struct ResizeSandboxRequest {
     disk: Option<u32>,
 }
 
+fn resize_not_enabled(status: reqwest::StatusCode, body: &str) -> bool {
+    status == reqwest::StatusCode::NOT_FOUND && body.contains("Cannot POST")
+}
+
 fn configuration_parameters<'a>(
     snapshot: &'a Snapshot,
     env: Env,
@@ -162,15 +166,21 @@ impl DaytonaClient {
         memory: Option<u32>,
         disk: Option<u32>,
     ) -> Result<()> {
-        let _: serde::de::IgnoredAny = self
-            .json(
+        let result = self
+            .json::<serde::de::IgnoredAny>(
                 self.http
                     .post(format!("{}/sandbox/{sandbox_id}/resize", self.base))
                     .json(&ResizeSandboxRequest { cpu, memory, disk }),
                 "resize sandbox",
             )
-            .await?;
-        Ok(())
+            .await;
+        match result {
+            Ok(_) => Ok(()),
+            Err(DaytonaError::Api { status, body, .. }) if resize_not_enabled(status, &body) => {
+                Err(DaytonaError::ResizeNotEnabled)
+            }
+            Err(error) => Err(error),
+        }
     }
 
     /// Find one sandbox carrying the supplied label.

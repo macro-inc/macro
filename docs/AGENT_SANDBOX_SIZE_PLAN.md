@@ -279,7 +279,9 @@ No picker on `AgentSplitHeader`. No mention-typeahead control.
 
 ## Risks
 
-- **Snapshot create rejects resource fields (HTTP 400).** Mitigated by inheriting snapshot quotas on create and applying the named tier with resize. Fallback of three snapshots is not needed.
+- **Snapshot create rejects resource fields (HTTP 400).** Mitigated by inheriting snapshot quotas on create and applying the named tier with resize.
+- **`POST /sandbox/{id}/resize` 404s with `Cannot POST` when `SANDBOX_RESIZE` is off for the org.** Confirmed against `https://app.daytona.io/api` (v0.207.0): create-without-resources works; `POST /stop` on a real sandbox is routed; `POST /resize` on the same sandbox is not. Enable the flag before shipping in-place size changes.
+- **Live `macro-agent-harness` snapshot is still 4 / 8 / 10.** The justfile asks for 8 / 16 / 96, but the snapshot on the probed account has not been rebuilt. `default` spawn will try to hot-resize 4→8 and fail until the flag is on *or* the snapshot matches `default`.
 - **`large` exceeds quota.** Keep it out of the public enum until a create succeeds.
 - **Users think the picker resizes the open session.** Header copy + toast. Size on the session response is the spawned size, not the pending default.
 - **Mention already spawned before the UI is visible.** That is why the picker edits the *next* session's default, not the current sandbox.

@@ -65,6 +65,18 @@ fn resize_request_omits_unset_fields() {
     assert!(json.get("disk").is_none());
 }
 
+#[test]
+fn resize_404_cannot_post_means_the_org_flag_is_off() {
+    assert!(resize_not_enabled(
+        reqwest::StatusCode::NOT_FOUND,
+        r#"{"message":"Cannot POST /api/sandbox/abc/resize"}"#,
+    ));
+    assert!(!resize_not_enabled(
+        reqwest::StatusCode::NOT_FOUND,
+        r#"{"message":"Sandbox with ID or name abc not found"}"#,
+    ));
+}
+
 #[tokio::test]
 async fn live_hot_resize_increases_cpu_and_memory_without_touching_disk() {
     let Some(api_key) = live_env::DaytonaApiKey::new().and_then(|key| optional_env(key.value()))
@@ -129,9 +141,20 @@ async fn live_hot_resize_increases_cpu_and_memory_without_touching_disk() {
         );
         eprintln!("hot-resizing cpu {from_cpu}->{target_cpu} memory_gib {from_memory}->{target_memory} without disk");
 
-        client
+        match client
             .resize(&id, Some(target_cpu), Some(target_memory), None)
-            .await?;
+            .await
+        {
+            Ok(()) => {}
+            Err(DaytonaError::ResizeNotEnabled) => {
+                panic!(
+                    "create-without-resources worked (cpu={cpu} memory_gib={memory} disk={disk:?}) \
+                     but POST /sandbox/{{id}}/resize 404s: Daytona SANDBOX_RESIZE is not enabled \
+                     for this organization"
+                );
+            }
+            Err(error) => return Err(error),
+        }
         client
             .wait_for_resize(&id, Duration::from_secs(300))
             .await?;

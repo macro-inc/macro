@@ -28,6 +28,14 @@ pub enum DaytonaError {
         status: reqwest::StatusCode,
         body: String,
     },
+    /// `POST /sandbox/{id}/resize` is not registered for this organization.
+    ///
+    /// Daytona gates the route with `SANDBOX_RESIZE` (default off). When the
+    /// flag is off, a real sandbox id 404s with NestJS `Cannot POST .../resize`.
+    #[error(
+        "daytona sandbox resize is not enabled for this organization (SANDBOX_RESIZE); POST /sandbox/{{id}}/resize returned 404"
+    )]
+    ResizeNotEnabled,
     /// A successful response did not match Daytona's response schema.
     #[error("failed to parse the {operation} response: {source}: {body}")]
     Decode {
