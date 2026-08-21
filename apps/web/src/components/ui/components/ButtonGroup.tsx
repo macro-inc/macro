@@ -121,7 +121,7 @@ export const ButtonGroup = (props: ButtonGroupProps) => {
   );
 };
 
-type DividerProps = { class?: string };
+type DividerProps = { class?: string; short?: boolean };
 
 const Divider = (props: DividerProps) => {
   const group = useButtonGroupContext();
@@ -132,8 +132,16 @@ const Divider = (props: DividerProps) => {
       role="separator"
       aria-orientation={orientation()}
       data-orientation={orientation()}
+      style={
+        props.short
+          ? orientation() === 'horizontal'
+            ? { height: '14px', 'align-self': 'center' }
+            : { width: '14px', 'align-self': 'center' }
+          : undefined
+      }
       class={cn(
-        'shrink-0 self-stretch',
+        'shrink-0',
+        props.short ? 'self-center' : 'self-stretch',
         'data-[orientation=horizontal]:w-px',
         'data-[orientation=vertical]:h-px',
         dividerVariantStyles[variant()],

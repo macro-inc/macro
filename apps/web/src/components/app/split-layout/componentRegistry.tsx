@@ -1,6 +1,7 @@
 import { useActivityFeedFlag } from '@app/features/activity/use-activity-feed-flag';
 import type { EventEditorInitialValues } from '@app/features/calendar/components/composer/event-form-model';
 import type { CalendarEvent } from '@app/features/calendar/types';
+import { ExperimentalChatView } from '@app/features/experimental-app-layout/experimental-chat-view';
 import { GettingStarted } from '@app/features/getting-started';
 import { Home } from '@app/features/home';
 import { queryStateFrom } from '@app/features/next-soup/filters/filter-store';
@@ -151,6 +152,14 @@ registerComponent(
   withAuth(() => {
     usePageViewTracking('home');
     return <Home />;
+  })
+);
+
+registerComponent(
+  'chat-workspace',
+  withAuth(() => {
+    usePageViewTracking('chat');
+    return <ExperimentalChatView />;
   })
 );
 
@@ -373,17 +382,25 @@ registerComponent(
   })
 );
 
+type ChannelsComponentParams = {
+  experimentalView?: 'people';
+  initialTab?: string;
+};
+
 registerComponent(
   'channels',
-  withAuth(() => {
+  withAuth((params: ChannelsComponentParams = {}) => {
     usePageViewTracking('channels');
-    const preset = getViewPreset('channels');
+    const preset = getViewPreset('channels', params.initialTab);
     return (
       <SoupView
-        viewName="Channels"
+        viewName={params.experimentalView === 'people' ? 'People' : 'Channels'}
         initialFilters={preset?.filters}
         initialClientFilters={preset?.clientFilters}
         initialGroupBy={preset?.groupBy}
+        initialActiveTab={params.initialTab}
+        preferInitialFilters={params.initialTab !== undefined}
+        experimentalView={params.experimentalView}
       />
     );
   })

@@ -29,6 +29,7 @@ import {
 interface EntityIconProps {
   entity: EntityData;
   streamState?: StreamEvent;
+  opened?: boolean;
   class?: string;
   suppressClick?: boolean;
   showTooltip?: boolean;
@@ -177,6 +178,7 @@ export function EntityIcon(props: EntityIconProps) {
         <PulsingStar
           kind="listIcon"
           animate={props.streamState?.type === 'created'}
+          opened={props.opened}
           class={props.class}
         />
       </Match>

@@ -11,6 +11,7 @@ type Kind = keyof typeof kind;
 export function PulsingStar(props: {
   kind: Kind;
   animate?: boolean;
+  opened?: boolean;
   class?: string;
 }) {
   const [pulse, setPulse] = createSignal(false);
@@ -27,7 +28,10 @@ export function PulsingStar(props: {
 
   return (
     <div class={kind[props.kind]}>
-      <AnimatedStarIcon class={props.class} triggerAnimation={pulse()} />
+      <AnimatedStarIcon
+        class={props.class}
+        triggerAnimation={props.opened || pulse()}
+      />
     </div>
   );
 }

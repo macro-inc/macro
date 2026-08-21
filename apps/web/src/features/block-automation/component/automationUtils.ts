@@ -123,16 +123,23 @@ function nthSuffix(n: number): string {
   }
 }
 
-export function describeSchedule(draft: ScheduleDraft, timezone: string) {
+export function describeSchedule(
+  draft: Pick<
+    ScheduleDraft,
+    'frequency' | 'time' | 'daysOfWeek' | 'dayOfMonth'
+  >,
+  timezone?: string
+) {
   const timeLabel = formatTimeLabel(draft.time);
+  const timezoneLabel = timezone ? ` (${timezone})` : '';
   if (draft.frequency === 'week') {
-    return `${formatDayList(draft.daysOfWeek)} at ${timeLabel} (${timezone})`;
+    return `${formatDayList(draft.daysOfWeek)} at ${timeLabel}${timezoneLabel}`;
   }
   const day = Number(draft.dayOfMonth);
   if (Number.isInteger(day) && day >= 1 && day <= 31) {
-    return `${day}${nthSuffix(day)} of each month at ${timeLabel} (${timezone})`;
+    return `${day}${nthSuffix(day)} of each month at ${timeLabel}${timezoneLabel}`;
   }
-  return `Each month at ${timeLabel} (${timezone})`;
+  return `Each month at ${timeLabel}${timezoneLabel}`;
 }
 
 type ParsedCron = Pick<

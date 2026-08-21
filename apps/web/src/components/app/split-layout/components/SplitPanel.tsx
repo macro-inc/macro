@@ -1,4 +1,5 @@
 import { isListViewID, LIST_VIEW_ID } from '@app/constants/list-views';
+import { experimentalAppLayoutEnabled } from '@app/features/experimental-app-layout/state';
 import { createSoupState } from '@app/features/next-soup/create-soup-state';
 import { SoupContextProvider } from '@app/features/next-soup/soup-context';
 import { SoupViewContextProvider } from '@app/features/next-soup/soup-view/soup-view-context';
@@ -310,7 +311,10 @@ export function SplitPanel(props: SplitPanelProps) {
             >
               <Panel.Header
                 class={cn(
-                  'relative block min-h-10.25 touch:min-h-11.25 p-0 overflow-visible border-b-0!',
+                  'relative block touch:min-h-11.25 p-0 overflow-visible border-b-0!',
+                  experimentalAppLayoutEnabled()
+                    ? 'min-h-9'
+                    : 'min-h-10.25',
                   'z-split-panel-chrome',
                   // On mobile/tablet the header collapses to a zero-height grid row;
                   // SplitHeader overlays the body as floating islands.

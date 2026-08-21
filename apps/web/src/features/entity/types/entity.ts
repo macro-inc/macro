@@ -262,6 +262,10 @@ export type AutomationEntity = EntityBase & {
   type: 'automation';
   /** Cron expression controlling when the automation runs. */
   cron: string;
+  /** User-authored instruction executed when the automation runs. */
+  prompt?: string;
+  /** IANA timezone in which the cron expression is evaluated. */
+  timezone?: string;
   /** Whether the automation is currently enabled. */
   enabled: boolean;
   /** ISO timestamp of the next scheduled run, or null when paused / unscheduled. */

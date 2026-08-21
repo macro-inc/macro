@@ -1,3 +1,4 @@
+import { cn } from '@ui';
 import { Show } from 'solid-js';
 import { Entity } from '../../entity';
 import {
@@ -14,11 +15,20 @@ import { type LayoutProps, RowIndicator } from './shared';
 export function NarrowLayout(props: LayoutProps) {
   return (
     <Entity.Layout
-      class="w-full gap-x-1 items-center text-sm pr-2 pl-1 grid"
+      class={cn(
+        'w-full gap-x-1 items-center text-sm grid',
+        props.indicatorPosition === 'end' ? 'px-3' : 'pr-2 pl-1'
+      )}
       style={{
-        'grid-template-columns': 'auto 1fr max-content',
-        'grid-template-rows': '44px',
-        'grid-template-areas': '"indicator title timestamp"',
+        'grid-template-columns':
+          props.indicatorPosition === 'end'
+            ? '1fr max-content auto'
+            : 'auto 1fr max-content',
+        'grid-template-rows': props.compact ? '38px' : '44px',
+        'grid-template-areas':
+          props.indicatorPosition === 'end'
+            ? '"title timestamp indicator"'
+            : '"indicator title timestamp"',
       }}
     >
       <Entity.Slot placement="indicator" class="relative">
@@ -26,7 +36,7 @@ export function NarrowLayout(props: LayoutProps) {
           checked={props.checked}
           hideCheckbox={props.hideCheckbox}
           onChecked={props.onChecked}
-          unread={props.unread}
+          unread={props.unreadIndicator !== 'icon' && props.unread}
         />
       </Entity.Slot>
 
@@ -34,8 +44,17 @@ export function NarrowLayout(props: LayoutProps) {
         placement="title"
         class="ph-no-capture flex items-center gap-2 truncate font-semibold"
       >
-        <div class="size-4 shrink-0">
-          <Entity.Icon entity={props.entity} streamState={props.streamState} />
+        <div
+          class={cn(
+            'size-4 shrink-0',
+            props.hideIconWhenRead && !props.unread && 'invisible'
+          )}
+        >
+          <Entity.Icon
+            entity={props.entity}
+            streamState={props.streamState}
+            opened={props.unreadIndicator === 'icon' && props.unread}
+          />
         </div>
         <Show
           when={isChannelMessageEntity(props.entity) && props.entity}
@@ -67,7 +86,11 @@ export function NarrowLayout(props: LayoutProps) {
       >
         <Entity.Slot
           placement="timestamp"
-          class="text-xs text-right text-ink-extra-muted font-light"
+          class={cn(
+            'text-xs text-right text-ink-extra-muted font-light transition-opacity',
+            props.showTimestampOnHover &&
+              'opacity-0 group-hover/narrow:opacity-100'
+          )}
         >
           <Show
             when={!isTaskEntity(props.entity)}

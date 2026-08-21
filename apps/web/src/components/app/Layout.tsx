@@ -18,6 +18,8 @@ import { CreateCompanyModal } from '@app/features/companies/CreateCompanyModal';
 import { CreateContactModal } from '@app/features/companies/CreateContactModal';
 import { DevStatusBar } from '@app/features/devtools/DevStatusBar';
 import { GlobalBulkEditEntityModal } from '@app/features/entity/bulk-edit/BulkEditEntityModal';
+import { ExperimentalAppSidebar } from '@app/features/experimental-app-layout/experimental-app-sidebar';
+import { experimentalAppLayoutEnabled } from '@app/features/experimental-app-layout/state';
 import {
   AddInboxDialog,
   isAddInboxDialogOpen,
@@ -491,19 +493,38 @@ function LayoutInner(props: RouteSectionProps) {
             sortables with the same drag-drop context as the entity drags. */}
         <ItemDndProvider>
           <Show when={isSidebarVisible()}>
-            <AppSidebar
-              sidebarState={sidebarState()}
-              overlayOpen={sidebarOverlayOpen()}
-              onOverlayOpenChange={setSidebarOverlayOpenGuarded}
-              onOpenChange={(open) => {
-                if (!open) {
-                  setSidebarState(isTouchDevice() ? 'hidden' : 'slim');
-                  return;
-                }
+            <Show
+              when={experimentalAppLayoutEnabled()}
+              fallback={
+                <AppSidebar
+                  sidebarState={sidebarState()}
+                  overlayOpen={sidebarOverlayOpen()}
+                  onOverlayOpenChange={setSidebarOverlayOpenGuarded}
+                  onOpenChange={(open) => {
+                    if (!open) {
+                      setSidebarState(isTouchDevice() ? 'hidden' : 'slim');
+                      return;
+                    }
 
-                setSidebarState('expanded');
-              }}
-            />
+                    setSidebarState('expanded');
+                  }}
+                />
+              }
+            >
+              <ExperimentalAppSidebar
+                sidebarState={sidebarState()}
+                overlayOpen={sidebarOverlayOpen()}
+                onOverlayOpenChange={setSidebarOverlayOpenGuarded}
+                onOpenChange={(open) => {
+                  if (!open) {
+                    setSidebarState(isTouchDevice() ? 'hidden' : 'slim');
+                    return;
+                  }
+
+                  setSidebarState('expanded');
+                }}
+              />
+            </Show>
           </Show>
           <Show when={sidebarCollapsed()}>
             <div

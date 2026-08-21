@@ -18,6 +18,8 @@ interface SortDropdownProps {
   open?: boolean;
   /** Controlled open state setter (optional - uses internal state if not provided) */
   onOpenChange?: (open: boolean) => void;
+  /** Render only the sort icon while preserving an accessible label. */
+  hideLabel?: boolean;
 }
 
 export const SortDropdown: Component<SortDropdownProps> = (props) => {
@@ -30,9 +32,15 @@ export const SortDropdown: Component<SortDropdownProps> = (props) => {
       placement="bottom-start"
     >
       <Tooltip label="Sort" hotkey={TOKENS.soup.sort}>
-        <Dropdown.Trigger depth={2} class="bg-surface">
+        <Dropdown.Trigger
+          depth={2}
+          class="bg-surface"
+          aria-label={props.hideLabel ? 'Sort' : undefined}
+        >
           <SortIcon />
-          <span>Sort</span>
+          <Show when={!props.hideLabel}>
+            <span>Sort</span>
+          </Show>
         </Dropdown.Trigger>
       </Tooltip>
       <Dropdown.Content class="shadow-menu">

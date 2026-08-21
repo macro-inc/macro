@@ -9,6 +9,10 @@ import {
   createMenuOpen,
   setCreateMenuOpen,
 } from '@app/features/command/Launcher';
+import {
+  experimentalAppLayoutEnabled,
+  toggleExperimentalAppLayout,
+} from '@app/features/experimental-app-layout/state';
 import { openMacroMcpSetupModal } from '@app/features/integrations/mcp-setup/MacroMcpSetupModal';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
@@ -41,6 +45,7 @@ import {
   openFolderPicker,
 } from '@core/util/upload';
 import IconGear from '@icon/macro-gear.svg';
+import GridIcon from '@phosphor/grid-four.svg';
 import Plus from '@phosphor/plus.svg';
 import LogoutIcon from '@phosphor/sign-out.svg';
 import Upload from '@phosphor/upload.svg';
@@ -217,6 +222,33 @@ export default function GlobalShortcuts() {
       setCreateMenuOpen(false);
       return true;
     },
+    runWithInputFocused: true,
+  });
+
+  registerHotkey({
+    scopeId: 'global',
+    description: () =>
+      experimentalAppLayoutEnabled()
+        ? 'Switch to classic app layout'
+        : 'Try new app layout',
+    keyDownHandler: () => {
+      const enabled = toggleExperimentalAppLayout();
+      toast.success(
+        enabled ? 'New app layout enabled' : 'Classic app layout enabled'
+      );
+      return true;
+    },
+    icon: GridIcon,
+    keywords: [
+      'sidebar',
+      'layout',
+      'views',
+      'classic',
+      'old',
+      'new',
+      'experiment',
+    ],
+    displayPriority: 9,
     runWithInputFocused: true,
   });
 

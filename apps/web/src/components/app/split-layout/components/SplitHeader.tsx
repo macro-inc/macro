@@ -1,4 +1,5 @@
 import { isListViewID, LIST_VIEW_ID } from '@app/constants/list-views';
+import { experimentalAppLayoutEnabled } from '@app/features/experimental-app-layout/state';
 import { useSoup } from '@app/features/next-soup/soup-context';
 import { openEntityInSplitFromUnifiedList } from '@app/features/next-soup/utils';
 import { CALENDAR_BLOCK_ID } from '@block-calendar/types';
@@ -25,8 +26,6 @@ import ArrowRight from '@phosphor/arrow-right.svg';
 import CollapseIcon from '@phosphor/arrows-in.svg';
 import ExpandIcon from '@phosphor/arrows-out.svg';
 import CaretDown from '@phosphor/caret-down.svg';
-import CaretLeft from '@phosphor/caret-left.svg';
-import CaretRight from '@phosphor/caret-right.svg';
 import CaretUp from '@phosphor/caret-up.svg';
 import CopyIcon from '@phosphor/copy.svg';
 import CloseIcon from '@phosphor/x.svg';
@@ -89,12 +88,18 @@ function getEntitySplitContent(data: EntityDragEvent['draggable']['data']):
   return { type: data.type, id: data.id };
 }
 
+const splitHeaderControlClass = () =>
+  cn(
+    'rounded-lg touch:p-1',
+    experimentalAppLayoutEnabled() ? 'p-0.5' : 'p-1'
+  );
+
 function SplitBackButton() {
   const context = useContext(SplitPanelContext);
   if (!context) return null;
   return (
     <Button
-      class="p-1 rounded-lg touch:active:bg-transparent"
+      class={cn(splitHeaderControlClass(), 'touch:active:bg-transparent')}
       label="Go Back"
       hotkey={TOKENS.split.go.back}
       disabled={!context.handle.canGoBack()}
@@ -103,7 +108,7 @@ function SplitBackButton() {
         context.handle.goBack();
       }}
     >
-      <CaretLeft class="h-4" />
+      <ArrowLeft class="h-4" />
     </Button>
   );
 }
@@ -117,9 +122,9 @@ function SplitForwardButton() {
       hotkey={TOKENS.split.go.forward}
       disabled={!context.handle.canGoForward()}
       onClick={context.handle.goForward}
-      class={cn('p-1 rounded-lg')}
+      class={splitHeaderControlClass()}
     >
-      <CaretRight class="h-4" />
+      <ArrowRight class="h-4" />
     </Button>
   );
 }
@@ -145,7 +150,7 @@ function SidebarExpandButton() {
       aria-hidden={!visible()}
     >
       <Button
-        class="p-1 rounded-lg"
+        class={splitHeaderControlClass()}
         label="Expand Sidebar"
         hotkey={TOKENS.global.toggleSidebar}
         disabled={!visible()}
@@ -170,7 +175,7 @@ function _SplitSpotlightButton() {
   return (
     <Show when={canSpotlight(layout.manager)}>
       <Button
-        class="p-1 rounded-lg hidden"
+        class={cn(splitHeaderControlClass(), 'hidden')}
         label={
           context.handle.isSpotLight() ? 'Minimize Split' : 'Spotlight Split'
         }
@@ -215,7 +220,7 @@ function SplitCloseButton() {
   return (
     <Show when={hasMultipleSplits() && !isPreviewViewer()}>
       <Button
-        class="p-1 rounded-lg"
+        class={splitHeaderControlClass()}
         label={label()}
         hotkey={TOKENS.split.close}
         onClick={context.handle.close}
@@ -278,7 +283,7 @@ function SoupNavigationButtons() {
     <Show when={shouldShow()}>
       <div class="flex items-center gap-0.5">
         <Button
-          class="p-1 rounded-lg"
+          class={splitHeaderControlClass()}
           label="Previous item"
           hotkey={TOKENS.entity.step.start}
           disabled={!canNavigateUp()}
@@ -287,7 +292,7 @@ function SoupNavigationButtons() {
           <CaretUp class="size-4" />
         </Button>
         <Button
-          class="p-1 rounded-lg"
+          class={splitHeaderControlClass()}
           label="Next item"
           hotkey={TOKENS.entity.step.end}
           disabled={!canNavigateDown()}
@@ -466,9 +471,22 @@ export function SplitHeader(props: {
   collapseController: PriorityCollapseController;
 }) {
   const panel = useContext(SplitPanelContext);
+  const layout = useContext(SplitLayoutContext);
+  const sidebar = useSidebarCollapse();
   if (!panel) {
     throw new Error('<SplitHeader> must be used within a <SplitLayout>');
   }
+
+  const showCloseControl = () =>
+    !!layout &&
+    layout.manager.splits().length - layout.manager.previewPairs().length > 1 &&
+    !panel.handle.isViewerSplit();
+  const showSidebarExpandControl = () =>
+    !!layout &&
+    sidebar.isCollapsed() &&
+    layout.manager.splits()[0]?.id === panel.handle.id;
+  const showLeadingControls = () =>
+    showCloseControl() || showSidebarExpandControl();
 
   const droppableId = `split-header-${panel.handle.id}`;
   const droppable = createDroppable(droppableId, {
@@ -545,9 +563,19 @@ export function SplitHeader(props: {
           <Show
             when={isTouchDevice()}
             fallback={
-              <div class="relative flex items-center pl-2 h-full">
-                <SidebarExpandButton />
-                <SplitCloseButton />
+              <div class="relative flex h-full items-center gap-2 pl-4 @max-[720px]/split-header:pl-2">
+                <Show when={showLeadingControls()}>
+                  <div
+                    class={cn(
+                      'flex items-center',
+                      !showCloseControl() &&
+                        '@max-[380px]/split-header:hidden'
+                    )}
+                  >
+                    <SidebarExpandButton />
+                    <SplitCloseButton />
+                  </div>
+                </Show>
                 <div class="flex items-center @max-[380px]/split-header:hidden">
                   <SplitBackButton />
                   <SplitForwardButton />

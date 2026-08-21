@@ -1,6 +1,5 @@
 import type { ListView } from '@app/constants/list-views';
 import type { FilterID } from '@app/features/next-soup/filters';
-import { getMyTasksQuery } from '@app/features/next-soup/filters/configs/my-tasks';
 import {
   defineQueryFilters,
   NIL_UUID,
@@ -396,27 +395,87 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
     tabs: {
       'my-tasks': (ctx) => {
         if (!ctx.userId) return undefined;
-        const myTasksQuery = getMyTasksQuery(ctx.userId);
         return {
           filters: defineQueryFilters({
-            ...myTasksQuery,
             include: {
-              ...myTasksQuery.include,
-              properties: [...OPEN_TASK_STATUS_INCLUDE_PROPS],
+              subType: ['task'],
+              properties: [
+                {
+                  propertyId: SYSTEM_PROPERTY_IDS.ASSIGNEES,
+                  type: 'entity',
+                  value: ctx.userId,
+                },
+                ...OPEN_TASK_STATUS_INCLUDE_PROPS,
+              ],
             },
           }),
           clientFilters: {
-            and: ['task', 'my-tasks'],
+            and: ['task', 'assigned-to'],
             or: [...OPEN_TASK_STATUS_FILTER_IDS],
           },
           groupBy: `property:${SYSTEM_PROPERTY_IDS.PRIORITY}`,
         };
       },
-      all: () => ({
+      'created-by-me': (ctx) => {
+        if (!ctx.userId) return undefined;
+        return {
+          filters: defineQueryFilters({
+            include: {
+              subType: ['task'],
+              documentOwnerId: [ctx.userId],
+              properties: [...OPEN_TASK_STATUS_INCLUDE_PROPS],
+            },
+          }),
+          clientFilters: {
+            and: ['task', 'owned-entity'],
+            or: [...OPEN_TASK_STATUS_FILTER_IDS],
+          },
+          groupBy: `property:${SYSTEM_PROPERTY_IDS.PRIORITY}`,
+        };
+      },
+      'shared-with-me': (ctx) => {
+        if (!ctx.userId) return undefined;
+        return {
+          filters: defineQueryFilters({
+            include: {
+              subType: ['task'],
+              properties: [...OPEN_TASK_STATUS_INCLUDE_PROPS],
+            },
+            exclude: { documentOwnerId: [ctx.userId] },
+          }),
+          clientFilters: {
+            and: ['task', 'shared-entity'],
+            or: [...OPEN_TASK_STATUS_FILTER_IDS],
+          },
+          groupBy: `property:${SYSTEM_PROPERTY_IDS.PRIORITY}`,
+        };
+      },
+      projects: () => ({
         filters: defineQueryFilters({
-          include: { subType: ['task'] },
+          include: {
+            subType: ['task'],
+            properties: [...OPEN_TASK_STATUS_INCLUDE_PROPS],
+          },
+          exclude: { projectId: [NIL_UUID] },
         }),
-        clientFilters: { and: ['task'] },
+        clientFilters: {
+          and: ['task'],
+          or: [...OPEN_TASK_STATUS_FILTER_IDS],
+        },
+        groupBy: 'project',
+      }),
+      'team-tasks': () => ({
+        filters: defineQueryFilters({
+          include: {
+            subType: ['task'],
+            properties: [...OPEN_TASK_STATUS_INCLUDE_PROPS],
+          },
+        }),
+        clientFilters: {
+          and: ['task'],
+          or: [...OPEN_TASK_STATUS_FILTER_IDS],
+        },
+        groupBy: `property:${SYSTEM_PROPERTY_IDS.PRIORITY}`,
       }),
     },
   },
@@ -432,6 +491,14 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
           },
         }),
         clientFilters: { and: ['channels'] },
+      }),
+      'experimental-conversations': () => ({
+        filters: defineQueryFilters({
+          // The experimental People view lists every team channel and direct
+          // message, including channels the current user has not joined yet.
+          include: { channelIsParticipant: [true, false] },
+        }),
+        clientFilters: { and: ['all-channels'] },
       }),
       people: () => ({
         filters: defineQueryFilters({

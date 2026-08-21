@@ -841,20 +841,17 @@ export const SoupViewContextProvider: FlowComponent<
             : undefined;
 
         queryFilters.replace(
-          entryQuery ??
-            (options.preferInitialFilters ? options.initialQuery : undefined) ??
-            persistedQuery ??
-            options.initialQuery ??
-            null
+          options.preferInitialFilters
+            ? (options.initialQuery ?? null)
+            : (entryQuery ?? persistedQuery ?? options.initialQuery ?? null)
         );
         soup.predicates.set(
-          entryPredicates ??
-            (options.preferInitialFilters
-              ? options.initialClientFilters
-              : undefined) ??
-            savedPredicates ??
-            options.initialClientFilters ??
-            {}
+          options.preferInitialFilters
+            ? (options.initialClientFilters ?? {})
+            : (entryPredicates ??
+                savedPredicates ??
+                options.initialClientFilters ??
+                {})
         );
         setSearchText(options.initialSearchText ?? '');
         setEnabled(true);

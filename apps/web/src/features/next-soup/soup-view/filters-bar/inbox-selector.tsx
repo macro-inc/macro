@@ -22,7 +22,9 @@ import { SearchableMultiSelect } from './searchable-multi-select';
  * Selection is held in soup-view's `inboxFilter` and compiled into `Owner`
  * email literals.
  */
-export function InboxSelector() {
+export function InboxSelector(
+  props: { inline?: boolean; experimentalSidebar?: boolean } = {}
+) {
   const { inboxFilter, setInboxFilter } = useSoupView();
   const picker = useInboxPicker({
     selectedIds: inboxFilter,
@@ -72,15 +74,25 @@ export function InboxSelector() {
         depth={2}
         aria-label={selectorProps.hideLabel ? label() : undefined}
         class={cn(
-          'bg-surface gap-1',
-          selectorProps.hideLabel ? 'px-1' : 'max-w-50'
+          'gap-1',
+          props.experimentalSidebar
+            ? 'h-10 w-full max-w-none justify-start rounded-xl border-transparent bg-ink/4 px-3 hover:bg-ink/7'
+            : 'bg-surface',
+          selectorProps.hideLabel
+            ? 'px-1'
+            : !props.experimentalSidebar && 'max-w-50'
         )}
       >
         <TrayIcon />
         <Show when={!selectorProps.hideLabel}>
           <span class="truncate">{label()}</span>
         </Show>
-        <CaretDownIcon class="size-3 shrink-0" />
+        <CaretDownIcon
+          class={cn(
+            'size-3 shrink-0',
+            props.experimentalSidebar && 'ml-auto'
+          )}
+        />
       </Combobox.Trigger>
     </SearchableMultiSelect>
   );
@@ -92,7 +104,13 @@ export function InboxSelector() {
       depth={2}
       aria-label={buttonProps.hideLabel ? 'Connect another email' : undefined}
       tooltip={buttonProps.hideLabel ? 'Connect another email' : undefined}
-      class={cn('bg-surface gap-1', buttonProps.hideLabel && 'px-1')}
+      class={cn(
+        'gap-1',
+        props.experimentalSidebar
+          ? 'h-10 w-full justify-start rounded-xl border-transparent bg-ink/4 px-3 hover:bg-ink/7'
+          : 'bg-surface',
+        buttonProps.hideLabel && 'px-1'
+      )}
       onClick={startAddInboxFlow}
     >
       <TrayIcon />
@@ -105,22 +123,38 @@ export function InboxSelector() {
   const showConnectButton = () =>
     multiInboxFlag().enabled && picker.options().length === 1;
 
+  const Content = (contentProps: { hideLabel?: boolean }) => (
+    <Show
+      when={showConnectButton()}
+      fallback={<Selector hideLabel={contentProps.hideLabel} />}
+    >
+      <ConnectAnotherEmail hideLabel={contentProps.hideLabel} />
+    </Show>
+  );
+
   return (
     <Show when={multiInboxFlag().enabled || picker.hasMultiple()}>
-      <CollapsibleHeaderItem
-        id="inbox-selector"
-        priority={3}
-        containerClass="h-full"
-      >
-        {(isCollapsed) => (
-          <Show
-            when={showConnectButton()}
-            fallback={<Selector hideLabel={isCollapsed()} />}
+      <Show
+        when={props.inline}
+        fallback={
+          <CollapsibleHeaderItem
+            id="inbox-selector"
+            priority={3}
+            containerClass="h-full"
           >
-            <ConnectAnotherEmail hideLabel={isCollapsed()} />
-          </Show>
-        )}
-      </CollapsibleHeaderItem>
+            {(isCollapsed) => <Content hideLabel={isCollapsed()} />}
+          </CollapsibleHeaderItem>
+        }
+      >
+        <Show
+          when={props.experimentalSidebar}
+          fallback={<Content />}
+        >
+          <div class="w-full [&_[data-button]]:w-full">
+            <Content />
+          </div>
+        </Show>
+      </Show>
     </Show>
   );
 }

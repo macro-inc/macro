@@ -58,6 +58,8 @@ export { EmptyStatePanel } from './components/EmptyStatePanel';
 export type { FilteredHiddenBannerProps } from './components/FilteredHiddenBanner';
 export { FilteredHiddenBanner } from './components/FilteredHiddenBanner';
 export { Hotkey } from './components/Hotkey';
+export type { HorizontalScrollAreaProps } from './components/HorizontalScrollArea';
+export { HorizontalScrollArea } from './components/HorizontalScrollArea';
 export { HoverCard } from './components/HoverCard';
 export type {
   DialogClosedEvent,
@@ -98,6 +100,8 @@ export { Select } from './components/Select';
 export type { SendButtonProps } from './components/SendButton';
 export { SendButton } from './components/SendButton';
 export { SideNav } from './components/SideNav';
+export type { SplitActionButtonProps } from './components/SplitActionButton';
+export { SplitActionButton } from './components/SplitActionButton';
 export { Surface } from './components/Surface';
 export { TabbedControl } from './components/TabbedControl';
 export type { ToggleSwitchProps } from './components/ToggleSwitch';

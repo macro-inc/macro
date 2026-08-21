@@ -22,7 +22,7 @@ import { invalidateAllSoup } from '@queries/soup/cache';
 import { cognitionApiServiceClient } from '@service-cognition/client';
 import { createEffect, onMount } from 'solid-js';
 
-function SoupChatInputInner() {
+function SoupChatInputInner(props: { onChatCreated?: (chatId: string) => void }) {
   const splitPanelContext = useSplitPanelOrThrow();
   const input = useChatInputContext();
 
@@ -109,10 +109,14 @@ function SoupChatInputInner() {
         model: request.model,
       });
 
-      // Replace the soup split with the chat split
-      splitPanelContext.handle.replace({
-        next: { type: 'chat', id: chatId },
-      });
+      if (props.onChatCreated) {
+        props.onChatCreated(chatId);
+      } else {
+        // Replace the soup split with the chat split.
+        splitPanelContext.handle.replace({
+          next: { type: 'chat', id: chatId },
+        });
+      }
     }
   };
 
@@ -142,14 +146,16 @@ function SoupChatInputInner() {
   );
 }
 
-export function SoupChatInput() {
+export function SoupChatInput(props: {
+  onChatCreated?: (chatId: string) => void;
+} = {}) {
   // Seed the selector from the persisted soup draft model so the user's last
   // choice in the new-chat composer is restored. ChatInputProvider falls back
   // to DEFAULT_MODEL when this is undefined.
   const initialModel = getSoupInputStoredModel();
   return (
     <ChatInputProvider model={initialModel}>
-      <SoupChatInputInner />
+      <SoupChatInputInner onChatCreated={props.onChatCreated} />
     </ChatInputProvider>
   );
 }

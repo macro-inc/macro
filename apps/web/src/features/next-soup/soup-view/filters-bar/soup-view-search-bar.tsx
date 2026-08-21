@@ -29,10 +29,12 @@ type SearchbarVariant = 'filled' | 'secondary';
 
 interface SoupSearchbarProps {
   variant?: SearchbarVariant;
+  size?: 'default' | 'comfortable';
   autoFocus?: boolean;
   onDismiss?: () => void;
   placeholder?: string;
   initialValue?: string;
+  class?: string;
 }
 
 const variantStyles: Record<SearchbarVariant, string> = {
@@ -170,8 +172,12 @@ export const SoupSearchbar = (props: SoupSearchbarProps) => {
     >
       <div
         class={cn(
-          'group w-full relative flex items-center gap-1 rounded-lg h-7 mobile:h-9 pl-1 pr-1 py-1 mobile:min-w-35 border text-xs',
-          variantStyles[props.variant ?? 'secondary']
+          'group w-full relative flex items-center gap-1 rounded-lg pl-1 pr-1 py-1 mobile:min-w-35 border text-xs',
+          props.size === 'comfortable'
+            ? 'h-10 rounded-xl px-3 text-sm'
+            : 'h-7 mobile:h-9',
+          variantStyles[props.variant ?? 'secondary'],
+          props.class
         )}
       >
         <SearchIcon class="size-4 shrink-0" />

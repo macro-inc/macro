@@ -18,6 +18,7 @@ function scheduleToEntity(
   schedule: ScheduledAction
 ): AutomationEntity | undefined {
   if (!schedule.id) return undefined;
+  const prompt = schedule.task.user_prompt;
   return {
     id: schedule.id,
     type: 'automation',
@@ -26,6 +27,11 @@ function scheduleToEntity(
     createdAt: schedule.created_at,
     updatedAt: schedule.updated_at,
     cron: schedule.schedule,
+    prompt:
+      typeof prompt === 'string' && prompt.trim().length > 0
+        ? prompt.trim()
+        : undefined,
+    timezone: schedule.timezone,
     enabled: schedule.enabled,
     nextRunAt: schedule.next_run_at,
     isRunning: isClaimActive(schedule.claimed),

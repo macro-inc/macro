@@ -14,4 +14,4 @@ export {
   FolderLink,
   OwnerValue,
 } from './FileSidePanelSections';
-export { SidePanel, useSidePanel } from './SidePanel';
+export { SidePanel, useHasSidePanel, useSidePanel } from './SidePanel';

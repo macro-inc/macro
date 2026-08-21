@@ -59,7 +59,12 @@ const MAIN_MIN_PX = 320;
  *
  * Sections are rendered as a Kobalte Accordion in JSX-declared order.
  */
-function Layout(props: ParentProps<{ defaultOpen?: boolean }>) {
+function Layout(
+  props: ParentProps<{
+    defaultOpen?: boolean;
+    narrowThreshold?: number;
+  }>
+) {
   const [sections, setSections] = createSignal<SidePanelSectionEntry[]>([]);
   const [openIds, setOpenIds] = createSignal<string[]>([]);
   // Independent open state per mode so wide and narrow can have different
@@ -124,6 +129,7 @@ function Layout(props: ParentProps<{ defaultOpen?: boolean }>) {
           isOpen={isOpen}
           setIsOpen={setIsOpen}
           setIsNarrow={setIsNarrow}
+          narrowThreshold={props.narrowThreshold}
         >
           {props.children}
         </SidePanelLayoutInner>
@@ -140,6 +146,7 @@ function SidePanelLayoutInner(
     isOpen: Accessor<boolean>;
     setIsOpen: (next: boolean | ((prev: boolean) => boolean)) => void;
     setIsNarrow: Setter<boolean>;
+    narrowThreshold?: number;
   }>
 ) {
   const resolved = children(() => props.children);
@@ -150,7 +157,9 @@ function SidePanelLayoutInner(
   }
 
   const isNarrow = createMemo(
-    () => isMobile() || zoneCtx.size() < NARROW_THRESHOLD_PX
+    () =>
+      isMobile() ||
+      zoneCtx.size() < (props.narrowThreshold ?? NARROW_THRESHOLD_PX)
   );
   const hasSections = createMemo(() => props.sections().length > 0);
 
@@ -381,7 +390,7 @@ function useSidePanel() {
 }
 
 /** Indicates whether the current subtree has a SidePanel.Layout ancestor. */
-function _useHasSidePanel(): boolean {
+export function useHasSidePanel(): boolean {
   return useContext(SidePanelContext) !== undefined;
 }
 

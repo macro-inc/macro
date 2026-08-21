@@ -31,7 +31,10 @@ import { CallKitSync } from '@channel/Call/use-callkit';
 import { GlobalAppStateProvider } from '@components/app/GlobalAppState';
 import { Layout } from '@components/app/Layout';
 import { ReactiveFavicon } from '@components/app/ReactiveFavicon';
-import { LAYOUT_ROUTE } from '@components/app/split-layout/SplitLayoutRoute';
+import {
+  CHAT_LAYOUT_ROUTE,
+  LAYOUT_ROUTE,
+} from '@components/app/split-layout/SplitLayoutRoute';
 import { ChatAttachmentsInit } from '@core/component/AI/signal/globalAttachments';
 import { LoadingBlock } from '@core/component/LoadingBlock';
 import { ToastRegion } from '@core/component/Toast/ToastRegion';
@@ -226,6 +229,7 @@ const ROUTES: RouteDefinition[] = [
     path: '/task-slug/:taskSlug',
     component: TaskRoute,
   },
+  CHAT_LAYOUT_ROUTE,
   LAYOUT_ROUTE,
   /** BEGIN - APP ROUTES */
   {

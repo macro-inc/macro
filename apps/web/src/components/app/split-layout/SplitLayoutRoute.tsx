@@ -18,6 +18,21 @@ function LayoutRoute(props: RouteSectionProps & LayoutPath) {
   );
 }
 
+function ChatLayoutRoute() {
+  return (
+    <SplitLayoutContainer
+      pairs={['component', 'chat-workspace']}
+      setManager={setGlobalSplitManager}
+    />
+  );
+}
+
+/** Standalone chat workspace route; the optional tail is the active chat id. */
+export const CHAT_LAYOUT_ROUTE: WithRequired<RouteDefinition, 'component'> = {
+  path: '/chat/*id',
+  component: ChatLayoutRoute,
+};
+
 export const LAYOUT_ROUTE: WithRequired<RouteDefinition, 'component'> = {
   path: '/*splits',
   component: LayoutRoute,

@@ -65,29 +65,37 @@ export function WideLayout(props: LayoutProps) {
   // When a thread resolves to one of the user's inboxes the inbox chip already
   // conveys ownership, so the generic "shared" badge would be redundant.
   const owningInbox = useOwningInboxForEntity(() => props.entity);
+  const indicatorAtEnd = () => props.indicatorPosition === 'end';
 
   return (
     <Entity.Layout
       class={cn(
-        'w-full min-h-[inherit] items-center text-sm px-2',
+        'w-full min-h-[inherit] items-center text-sm',
         'gap-2 grid grid-rows-[1fr]',
+        indicatorAtEnd() ? 'px-3' : 'px-2',
         // Drop the indicator column entirely when the checkbox is hidden so the
         // content isn't indented by an empty 1rem gutter.
         props.hideCheckbox
           ? 'grid-cols-[1fr_auto_8ch]'
-          : 'grid-cols-[1rem_1fr_auto_8ch]',
+          : indicatorAtEnd()
+            ? 'grid-cols-[1fr_auto_8ch_1rem]'
+            : 'grid-cols-[1rem_1fr_auto_8ch]',
         '[--title-width:10rem]'
       )}
       style={{
         'grid-template-areas': props.hideCheckbox
           ? '"content meta timestamp"'
-          : '"indicator content meta timestamp"',
+          : indicatorAtEnd()
+            ? '"content meta timestamp indicator"'
+            : '"indicator content meta timestamp"',
       }}
     >
       <Show when={!props.hideCheckbox}>
         <Entity.Slot placement="indicator" class="relative size-full group">
           <div class="absolute inset-0 grid place-items-center group-hover:opacity-0">
-            <UnreadIndicator active={props.unread} />
+            <UnreadIndicator
+              active={props.unreadIndicator !== 'icon' && props.unread}
+            />
           </div>
           <div
             class={cn(
@@ -108,8 +116,17 @@ export function WideLayout(props: LayoutProps) {
         placement="content"
         class="ph-no-capture font-medium truncate items-center gap-2 flex"
       >
-        <div class="size-4 shrink-0">
-          <Entity.Icon entity={props.entity} streamState={props.streamState} />
+        <div
+          class={cn(
+            'size-4 shrink-0',
+            props.hideIconWhenRead && !props.unread && 'invisible'
+          )}
+        >
+          <Entity.Icon
+            entity={props.entity}
+            streamState={props.streamState}
+            opened={props.unreadIndicator === 'icon' && props.unread}
+          />
         </div>
         <Switch>
           <Match when={isEmailEntity(props.entity) && props.entity}>
@@ -283,7 +300,11 @@ export function WideLayout(props: LayoutProps) {
       </Entity.Slot>
       <Entity.Slot
         placement="timestamp"
-        class="text-xs text-right text-ink-extra-muted font-medium"
+        class={cn(
+          'text-xs text-right text-ink-extra-muted font-medium transition-opacity',
+          props.showTimestampOnHover &&
+            'opacity-0 group-hover/narrow:opacity-100'
+        )}
       >
         <Show
           when={

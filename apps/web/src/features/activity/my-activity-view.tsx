@@ -1,8 +1,11 @@
+import { ExperimentalActivityView } from '@app/features/experimental-app-layout/experimental-activity-view';
+import { experimentalAppLayoutEnabled } from '@app/features/experimental-app-layout/state';
 import { dateBucket } from '@app/features/next-soup/soup-view/group-by-date';
 import { SoupSectionHeader } from '@app/features/next-soup/soup-view/section-header';
 import { SplitHeaderLeft } from '@components/app/split-layout/components/SplitHeader';
 import { openDocument } from '@core/component/LexicalMarkdown/component/core/BlockLink';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
 import { formatRelativeTimestamp } from '@entity/utils/timestamp';
 import { usePropertyEntityDisplay } from '@property/hooks';
@@ -10,7 +13,7 @@ import type { ActivityEvent } from '@queries/activity/graphql/entity';
 import { createMyActivityQuery } from '@queries/activity/graphql/feed';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import type { GraphqlEntityType } from '@service-storage/graphql/generated/graphql';
-import { Button } from '@ui';
+import { Button, cn } from '@ui';
 import { type Component, createMemo, For, Show } from 'solid-js';
 import { match } from 'ts-pattern';
 import { ActionGlyph } from './action-glyph';
@@ -63,55 +66,92 @@ export function MyActivityView() {
     return out;
   });
 
-  return (
-    <div class="@container/u-list flex size-full flex-col">
-      <SplitHeaderLeft>
-        <span class="font-semibold text-sm">Activity</span>
-      </SplitHeaderLeft>
-      <StaticMarkdownContext>
-        <div class="min-h-0 flex-1 overflow-y-auto py-1">
-          <Show
-            when={groups().length > 0}
-            fallback={
-              <p class="px-3 py-2 text-ink-muted text-sm">
-                {feed.isLoading
-                  ? 'Loading…'
-                  : feed.isError
-                    ? 'Activity is unavailable right now. Try again in a moment.'
-                    : 'No activity yet.'}
-              </p>
-            }
-          >
-            <FeedGroups groups={groups()} row={SentenceTimelineRow} />
-            <Show when={feed.hasNextPage}>
-              <div class="flex justify-center py-2">
-                <Button
-                  variant="ghost"
-                  onClick={() => void feed.fetchNextPage()}
-                  disabled={feed.isFetchingNextPage}
-                >
-                  {feed.isFetchingNextPage ? 'Loading…' : 'Show more'}
-                </Button>
-              </div>
-            </Show>
+  const FeedContent = (contentProps: { experimental?: boolean }) => (
+    <StaticMarkdownContext>
+      <div class="min-h-0 flex-1 overflow-y-auto py-1">
+        <Show
+          when={groups().length > 0}
+          fallback={
+            <p
+              class={cn(
+                'py-2 text-sm text-ink-muted',
+                contentProps.experimental ? 'px-2' : 'px-3'
+              )}
+            >
+              {feed.isLoading
+                ? 'Loading…'
+                : feed.isError
+                  ? 'Activity is unavailable right now. Try again in a moment.'
+                  : 'No activity yet.'}
+            </p>
+          }
+        >
+          <FeedGroups
+            groups={groups()}
+            row={SentenceTimelineRow}
+            experimental={contentProps.experimental}
+          />
+          <Show when={feed.hasNextPage}>
+            <div class="flex justify-center py-2">
+              <Button
+                variant="ghost"
+                class={contentProps.experimental ? 'rounded-full' : undefined}
+                onClick={() => void feed.fetchNextPage()}
+                disabled={feed.isFetchingNextPage}
+              >
+                {feed.isFetchingNextPage ? 'Loading…' : 'Show more'}
+              </Button>
+            </div>
           </Show>
+        </Show>
+      </div>
+    </StaticMarkdownContext>
+  );
+
+  return (
+    <Show
+      when={experimentalAppLayoutEnabled() && !isTouchDevice()}
+      fallback={
+        <div class="@container/u-list flex size-full flex-col">
+          <SplitHeaderLeft>
+            <span class="font-semibold text-sm">Activity</span>
+          </SplitHeaderLeft>
+          <FeedContent />
         </div>
-      </StaticMarkdownContext>
-    </div>
+      }
+    >
+      <ExperimentalActivityView>
+        <FeedContent experimental />
+      </ExperimentalActivityView>
+    </Show>
   );
 }
 
 function FeedGroups(props: {
   groups: FeedGroup[];
-  row: Component<{ event: ActivityEvent }>;
+  row: Component<{ event: ActivityEvent; experimental?: boolean }>;
+  experimental?: boolean;
 }) {
   return (
     <For each={props.groups}>
       {(group) => (
         <>
-          <SoupSectionHeader>{group.label}</SoupSectionHeader>
+          <Show
+            when={props.experimental}
+            fallback={<SoupSectionHeader>{group.label}</SoupSectionHeader>}
+          >
+            <div class="flex items-center gap-2 px-2 pb-2 pt-5 text-[11px] font-semibold uppercase tracking-[0.08em] text-ink-extra-muted">
+              <span class="shrink-0">{group.label}</span>
+              <span class="h-px min-w-4 flex-1 bg-edge-muted/80" />
+            </div>
+          </Show>
           <For each={group.events}>
-            {(event) => <props.row event={event} />}
+            {(event) => (
+              <props.row
+                event={event}
+                experimental={props.experimental}
+              />
+            )}
           </For>
         </>
       )}
@@ -134,11 +174,21 @@ function Timestamp(props: { event: ActivityEvent }) {
  * actor in medium weight, verb muted, the natural connector per action
  * kind, and the entity as a real mention.
  */
-function SentenceTimelineRow(props: { event: ActivityEvent }) {
+function SentenceTimelineRow(props: {
+  event: ActivityEvent;
+  experimental?: boolean;
+}) {
   const entityType = () => displayEntityType(props.event.entityType);
 
   return (
-    <div class="mx-1 flex w-[calc(100%-0.5rem)] items-stretch gap-1 px-2 text-sm">
+    <div
+      class={cn(
+        'flex items-stretch gap-1 text-sm',
+        props.experimental
+          ? 'w-full'
+          : 'mx-1 w-[calc(100%-0.5rem)] px-2'
+      )}
+    >
       <div class="relative flex w-6 shrink-0 items-center justify-center">
         <div class="absolute inset-y-0 w-px bg-edge-muted" />
         <span class="relative flex size-5 items-center justify-center rounded-full bg-surface ring ring-edge-muted">

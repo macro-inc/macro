@@ -4,7 +4,7 @@ import { TOKENS } from '@core/hotkey/tokens';
 import EyeIcon from '@phosphor-icons/core/regular/eye.svg?component-solid';
 import EyeSlashIcon from '@phosphor-icons/core/regular/eye-slash.svg?component-solid';
 import { Button, Tooltip } from '@ui';
-import { Show } from 'solid-js';
+import { onCleanup, Show } from 'solid-js';
 import { useSplitPanelOrThrow } from '../layoutUtils';
 
 /** Toggle Preview mode for eligible Controller content outside a Viewer. */
@@ -44,7 +44,7 @@ export function PreviewButton(
     }
   };
 
-  registerHotkey({
+  const previewHotkeyRegistration = registerHotkey({
     hotkeyToken: TOKENS.unifiedList.togglePreview,
     scopeId: panel.splitHotkeyScope,
     description: 'Toggle preview',
@@ -55,6 +55,8 @@ export function PreviewButton(
     },
     hotkey: 'space',
   });
+
+  onCleanup(previewHotkeyRegistration.dispose);
 
   return (
     <Show when={!isViewer()}>

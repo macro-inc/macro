@@ -19,6 +19,7 @@ import type { GetChatPermissionsResponse } from './generated/schemas/getChatPerm
 import type { GetChatResponse } from './generated/schemas/getChatResponse';
 import type { GetChatsForAttachmentResponse } from './generated/schemas/getChatsForAttachmentResponse';
 import type { HttpSendChatMessageRequest } from './generated/schemas/httpSendChatMessageRequest';
+import type { MemoryResponse } from './generated/schemas/memoryResponse';
 import type { PatchChatRequest } from './generated/schemas/patchChatRequest';
 import type { ProjectionStateResponse } from './generated/schemas/projectionStateResponse';
 import type { SendChatMessageResponse } from './generated/schemas/sendChatMessageResponse';
@@ -105,6 +106,11 @@ export type PipedreamCatalogResponse = {
 export const PIPEDREAM_DISABLED = 'PIPEDREAM_DISABLED' as const;
 
 export const cognitionApiServiceClient = {
+  /** Gets the latest generated memory for the current user. */
+  async getMemory() {
+    return dcsFetch<MemoryResponse>('/memory', { method: 'GET' });
+  },
+
   /** Creates a mapping from source_id to target_id */
   async createIdMapping(args: { source_id: string; target_id: string }) {
     const { source_id, target_id } = args;
