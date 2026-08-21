@@ -260,10 +260,11 @@ export type ScopeNodeBase = {
   description?: string;
   parentScopeId?: string;
   childScopeIds: string[];
-  // Map of hotkey -> array of commands (multiple handlers can be registered for the same hotkey)
-  hotkeyCommands: Map<ValidHotkey, HotkeyCommand[]>;
-  // A list of commands that don't have hotkeys.
-  unkeyedCommands: HotkeyCommand[];
+  // Every command registered to this scope, in registration order — the
+  // single source of truth. Keyed lookups (dispatch, hotkey UI) derive from
+  // it via getCommandsForHotkey; commands without hotkeys (command-palette
+  // only) are the entries whose `hotkeys` is undefined.
+  commands: HotkeyCommand[];
   // If true, this scope is detached from the DOM tree, it's parent is global.
   detached: boolean;
 };

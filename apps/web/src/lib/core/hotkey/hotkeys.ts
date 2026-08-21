@@ -39,7 +39,7 @@ import {
   activateClosestDOMScope,
   findClosestParentScopeElement,
   findClosestParentScopeId,
-  getEffectiveCommands,
+  getCommandsForHotkey,
   getKeyString,
   getScopeId,
   normalizeEventKeyPress,
@@ -256,38 +256,16 @@ export function registerHotkey(
   // persistent commands (disposeWithOwner: false) re-register on every mount
   // of their view and must not accumulate eclipsed copies.
   if (registrationType === 'override' && hotkeyToken) {
-    const replaced = new Set<HotkeyCommand>();
-    scopeNode.hotkeyCommands.forEach((existing) => {
-      for (const existingCommand of existing) {
-        if (existingCommand.hotkeyToken === hotkeyToken) {
-          replaced.add(existingCommand);
-        }
-      }
-    });
-    for (const existingCommand of scopeNode.unkeyedCommands) {
-      if (existingCommand.hotkeyToken === hotkeyToken) {
-        replaced.add(existingCommand);
+    const replaced: HotkeyCommand[] = [];
+    for (let i = scopeNode.commands.length - 1; i >= 0; i--) {
+      const existingCommand = scopeNode.commands[i];
+      if (existingCommand && existingCommand.hotkeyToken === hotkeyToken) {
+        replaced.push(existingCommand);
+        scopeNode.commands.splice(i, 1);
       }
     }
-    if (replaced.size > 0) {
-      scopeNode.hotkeyCommands.forEach((existing, h) => {
-        const remaining = existing.filter((c) => !replaced.has(c));
-        if (remaining.length === existing.length) return;
-        if (remaining.length > 0) {
-          scopeNode.hotkeyCommands.set(h, remaining);
-        } else {
-          scopeNode.hotkeyCommands.delete(h);
-        }
-      });
-      for (let i = scopeNode.unkeyedCommands.length - 1; i >= 0; i--) {
-        const existingCommand = scopeNode.unkeyedCommands[i];
-        if (existingCommand && replaced.has(existingCommand)) {
-          scopeNode.unkeyedCommands.splice(i, 1);
-        }
-      }
-      setHotkeyTokenMap((prev) =>
-        removeCommandsFromTokenMap(prev, Array.from(replaced))
-      );
+    if (replaced.length > 0) {
+      setHotkeyTokenMap((prev) => removeCommandsFromTokenMap(prev, replaced));
     }
   }
 
@@ -300,21 +278,12 @@ export function registerHotkey(
     });
   }
 
-  if (scopeNode) {
-    // Register each hotkey with the same command. Both registration types
-    // append in registration order: an 'override' command eclipses the
-    // commands before it (see getEffectiveCommands) rather than destroying
-    // them, so disposing it restores whatever it displaced — a block taking
-    // over a split-scope key does not permanently disable it.
-    if (hotkeys) {
-      hotkeys.forEach((h) => {
-        const existingHandlers = scopeNode.hotkeyCommands.get(h) || [];
-        scopeNode.hotkeyCommands.set(h, [...existingHandlers, command]);
-      });
-    } else {
-      scopeNode.unkeyedCommands.push(command);
-    }
-  }
+  // Commands append in registration order. An 'override' command eclipses
+  // the commands registered before it on its keys (see getCommandsForHotkey)
+  // rather than destroying them, so disposing it restores whatever it
+  // displaced — a block taking over a split-scope key does not permanently
+  // disable it.
+  scopeNode.commands.push(command);
 
   const primaryHotkey = hotkeys?.[0];
   const prettyHotkey = primaryHotkey
@@ -338,31 +307,12 @@ export function registerHotkey(
         );
       }
 
-      // Remove this specific command from scope's hotkey handlers
+      // Remove this specific command from its scope
       const scope = hotkeyScopeTree.get(scopeId);
       if (scope) {
-        if (hotkeys) {
-          hotkeys.forEach((h) => {
-            const existingHandlers = scope.hotkeyCommands.get(h);
-            if (existingHandlers) {
-              const newHandlers = existingHandlers.filter((c) => c !== command);
-              if (newHandlers.length > 0) {
-                scope.hotkeyCommands.set(h, newHandlers);
-              } else {
-                scope.hotkeyCommands.delete(h);
-              }
-            }
-          });
-        } else {
-          // Unkeyed commands are pushed onto `unkeyedCommands` at registration
-          // (see above). Without this branch they leaked until the whole scope
-          // was removed — re-registering unkeyed commands (e.g. per-favorite
-          // command-menu entries) grew the list unboundedly and left ghost
-          // rows for removed/renamed entries.
-          const idx = scope.unkeyedCommands.indexOf(command);
-          if (idx !== -1) {
-            scope.unkeyedCommands.splice(idx, 1);
-          }
+        const idx = scope.commands.indexOf(command);
+        if (idx !== -1) {
+          scope.commands.splice(idx, 1);
         }
       }
 
@@ -777,9 +727,7 @@ export function useHotKeyRoot() {
     let commandScopeActivated = false;
 
     while (scopeNode) {
-      const commands = getEffectiveCommands(
-        scopeNode.hotkeyCommands.get(pressedKeysString)
-      );
+      const commands = getCommandsForHotkey(scopeNode, pressedKeysString);
       if (commands.length > 0) {
         // Sort commands by handlerPriority (higher priority first)
         const sortedCommands = [...commands].sort(

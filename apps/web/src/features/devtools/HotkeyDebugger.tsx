@@ -30,10 +30,7 @@ export default function HotkeyDebugger() {
     let current = hotkeyScopeTree.get(active);
     let scopeLevel = 0;
     while (current) {
-      const scopeCommands = [
-        ...Array.from(current.hotkeyCommands.values()).flat(),
-        ...current.unkeyedCommands,
-      ];
+      const scopeCommands = [...current.commands];
       for (const command of scopeCommands) {
         const hotkeys = command.hotkeys ?? [];
         const hotkeyIsShadowed = hotkeys.some((hk) => hotkeySet.has(hk));

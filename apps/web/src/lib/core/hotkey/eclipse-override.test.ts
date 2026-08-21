@@ -4,7 +4,7 @@ import { registerHotkey } from './hotkeys';
 import { hotkeyScopeTree, hotkeyTokenMap } from './state';
 import type { HotkeyToken } from './tokens';
 import type { ValidHotkey } from './types';
-import { getEffectiveCommands, registerScope, removeScope } from './utils';
+import { getCommandsForHotkey, registerScope, removeScope } from './utils';
 
 let scopeCounter = 0;
 const createdScopes: string[] = [];
@@ -23,16 +23,22 @@ afterEach(() => {
   createdScopes.length = 0;
 });
 
-/** The registered command array for a key, in registration order. */
+/** The registered commands for a key, in registration order, eclipsed included. */
 function rawCommands(scopeId: string, key: ValidHotkey) {
-  return hotkeyScopeTree.get(scopeId)?.hotkeyCommands.get(key) ?? [];
+  return (
+    hotkeyScopeTree
+      .get(scopeId)
+      ?.commands.filter((c) => c.hotkeys?.includes(key)) ?? []
+  );
 }
 
 /** Descriptions of the commands that would currently run for a key. */
 function effectiveDescriptions(scopeId: string, key: ValidHotkey): string[] {
-  return getEffectiveCommands(
-    hotkeyScopeTree.get(scopeId)?.hotkeyCommands.get(key)
-  ).map((c) => c.description as string);
+  const scopeNode = hotkeyScopeTree.get(scopeId);
+  if (!scopeNode) return [];
+  return getCommandsForHotkey(scopeNode, key).map(
+    (c) => c.description as string
+  );
 }
 
 function register(
@@ -111,7 +117,8 @@ describe('eclipse override', () => {
     register(scopeId, 'first', { hotkey: undefined, hotkeyToken: token });
     register(scopeId, 'second', { hotkey: undefined, hotkeyToken: token });
 
-    const unkeyed = hotkeyScopeTree.get(scopeId)?.unkeyedCommands ?? [];
+    const unkeyed =
+      hotkeyScopeTree.get(scopeId)?.commands.filter((c) => !c.hotkeys) ?? [];
     expect(unkeyed.map((c) => c.description)).toEqual(['second']);
     expect(hotkeyTokenMap().get(token)).toHaveLength(1);
   });

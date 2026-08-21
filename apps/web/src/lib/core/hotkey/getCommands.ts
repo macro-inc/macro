@@ -3,7 +3,7 @@ import { isEditableInput } from '@core/util/isEditableInput';
 import { createMemo } from 'solid-js';
 import { activeScope, hotkeyScopeTree } from './state';
 import type { HotkeyCommand, ValidHotkey } from './types';
-import { getEffectiveCommands } from './utils';
+import { getCommandsForHotkey } from './utils';
 
 type sortAndFilterOptions = {
   // orders commands from the active scope to the global scope, sub-ordered by displayPriority
@@ -46,17 +46,19 @@ export function getActiveCommandsFromScope(
   const commands: CommandWithInfo[] = [];
   let scopeLevel = 0;
   while (currentScopeNode) {
-    // Flatten the arrays of commands from hotkeyCommands (each hotkey can
-    // have multiple handlers). Eclipsed commands — older registrations an
-    // 'override' displaced — are omitted; they aren't runnable until the
-    // override is disposed.
-    const allHotkeyCommands = Array.from(
-      currentScopeNode?.hotkeyCommands.values() ?? []
-    ).flatMap((commands) => getEffectiveCommands(commands));
-    const scopeCommands = [
-      ...allHotkeyCommands,
-      ...(currentScopeNode?.unkeyedCommands ?? []),
-    ]
+    const scopeNode = currentScopeNode;
+    // A command is enumerable when it is unkeyed (command-palette only) or
+    // currently effective on at least one of its keys. Eclipsed commands —
+    // older registrations an 'override' displaced — are omitted; they aren't
+    // runnable until the override is disposed.
+    const scopeCommands = scopeNode.commands
+      .filter(
+        (command) =>
+          !command.hotkeys ||
+          command.hotkeys.some((hk) =>
+            getCommandsForHotkey(scopeNode, hk).includes(command)
+          )
+      )
       .filter(filterCommands(displayOptions))
       .map((command) => {
         const hotkeys = command.hotkeys ?? [];
