@@ -12,9 +12,12 @@ vi.mock('@components/app/GlobalAppState', () => ({
   useGlobalNotificationSource: () => mocks.notificationSource,
 }));
 
-function documentMentionNotification(): UnifiedNotification {
+function documentMentionNotification(
+  id: string,
+  messageId = 'message-1'
+): UnifiedNotification {
   return {
-    id: 'notification-1',
+    id,
     entity_id: 'channel-1',
     entity_type: 'channel',
     created_at: '2026-08-17T00:00:00.000Z',
@@ -22,9 +25,7 @@ function documentMentionNotification(): UnifiedNotification {
     notification_event_type: 'document_mention',
     notification_metadata: {
       tag: 'document_mention',
-      content: {
-        messageId: 'message-1',
-      },
+      content: { messageId },
     } as UnifiedNotification['notification_metadata'],
     sent: true,
     updated_at: '2026-08-17T00:00:00.000Z',
@@ -33,21 +34,27 @@ function documentMentionNotification(): UnifiedNotification {
 }
 
 describe('MarkMessageNotifications', () => {
-  const markAsRead = vi.fn<NotificationSource['markAsRead']>();
+  const bulkMarkAsRead = vi.fn<NotificationSource['bulkMarkAsRead']>();
+  const matchingNotifications = [
+    documentMentionNotification('notification-1'),
+    documentMentionNotification('notification-2'),
+  ];
 
   beforeEach(() => {
     vi.clearAllMocks();
-    markAsRead.mockResolvedValue(undefined);
-    const notification = documentMentionNotification();
+    bulkMarkAsRead.mockResolvedValue(undefined);
     mocks.notificationSource = {
       notificationsByEntity: () => ({
-        'channel@channel-1': [notification],
+        'channel@channel-1': [
+          ...matchingNotifications,
+          documentMentionNotification('notification-3', 'other-message'),
+        ],
       }),
-      markAsRead,
+      bulkMarkAsRead,
     } as unknown as NotificationSource;
   });
 
-  it('marks a document mention as read when its channel message mounts', async () => {
+  it('marks every document mention from the mounted channel message as read', async () => {
     render(() => (
       <MarkMessageNotifications messageId="message-1" channelId="channel-1">
         <span>Message</span>
@@ -55,13 +62,8 @@ describe('MarkMessageNotifications', () => {
     ));
 
     await waitFor(() => {
-      expect(markAsRead).toHaveBeenCalledOnce();
-      expect(markAsRead).toHaveBeenCalledWith(
-        expect.objectContaining({
-          id: 'notification-1',
-          notification_event_type: 'document_mention',
-        })
-      );
+      expect(bulkMarkAsRead).toHaveBeenCalledOnce();
+      expect(bulkMarkAsRead).toHaveBeenCalledWith(matchingNotifications);
     });
   });
 });
