@@ -689,7 +689,7 @@ function TagPickerBody(props: {
     <Popover.Portal>
       <Layer depth={3}>
         <Popover.Content
-          class="z-modal w-64 rounded-xl border border-edge-muted bg-surface text-sm shadow-menu menu-open-animation"
+          class="z-modal w-96 max-w-[min(24rem,calc(100vw-1.5rem))] rounded-xl border border-edge-muted bg-surface text-sm shadow-menu menu-open-animation"
           onCloseAutoFocus={(event) => event.preventDefault()}
           onFocusOutside={(event) => {
             if (shouldIgnoreOutsideEvent()) event.preventDefault();
@@ -938,7 +938,7 @@ function TagPickerRow(props: {
       >
         <OptionCheckBox checked={props.checked} multiselect />
         <TagDot color={props.item.option.color ?? undefined} />
-        <span class="min-w-0 truncate">{label()}</span>
+        <span class="min-w-0 flex-1 truncate">{label()}</span>
         <Show when={props.item.scope === 'team'}>
           <span class="max-w-20 shrink-0 truncate rounded-full border border-ink/5 px-1.5 py-0.5 text-[10px] leading-none text-ink-extra-muted">
             {props.teamName}
