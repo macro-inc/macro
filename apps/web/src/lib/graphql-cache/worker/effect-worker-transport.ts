@@ -3,6 +3,7 @@ import * as BrowserWorkerRunner from '@effect/platform-browser/BrowserWorkerRunn
 import * as Cause from 'effect/Cause';
 import * as Effect from 'effect/Effect';
 import * as Fiber from 'effect/Fiber';
+import * as Queue from 'effect/Queue';
 import * as WorkerApi from 'effect/unstable/workers/Worker';
 import type { WorkerError } from 'effect/unstable/workers/WorkerError';
 
@@ -13,7 +14,7 @@ export interface EffectWorkerTransportOptions<Inbound> {
   endpoint: BrowserWorkerEndpoint;
   onMessage(message: Inbound): void;
   onError(error: Error): void;
-  /** Runs after the Effect worker scope has closed. */
+  /** Synchronously closes the caller-owned browser endpoint. */
   closeEndpoint?: () => void;
 }
 
@@ -30,6 +31,21 @@ export interface EffectWorkerTransport<Outbound> {
 
 const asError = (cause: unknown): Error =>
   cause instanceof Error ? cause : new Error(String(cause));
+
+const originalWorkerError = (error: unknown): Error => {
+  if (
+    typeof error === 'object' &&
+    error !== null &&
+    'reason' in error &&
+    typeof error.reason === 'object' &&
+    error.reason !== null &&
+    'cause' in error.reason &&
+    error.reason.cause instanceof Error
+  ) {
+    return error.reason.cause;
+  }
+  return asError(error);
+};
 
 /**
  * Starts Effect's parent-side browser worker protocol over an existing worker
@@ -73,11 +89,14 @@ export function createEffectWorkerTransport<Inbound, Outbound>(
       {
         onSpawn: Effect.sync(() => {
           if (readySettled) return;
-          readySettled = true;
           // `Worker.run` opens its internal ready latch after `onSpawn`
           // completes, then flushes buffered sends. Resolve in the next task
           // so callers observe the fully-ready transport.
-          setTimeout(resolveReady, 0);
+          setTimeout(() => {
+            if (readySettled) return;
+            readySettled = true;
+            resolveReady();
+          }, 0);
         }),
       }
     )
@@ -109,30 +128,40 @@ export function createEffectWorkerTransport<Inbound, Outbound>(
       transfers?: readonly Transferable[]
     ): Promise<void> {
       if (closed) throw new Error('Effect worker transport is closed');
-      await Effect.runPromise(backing.send(message, transfers));
+      const exit = await Effect.runPromiseExit(
+        backing.send(message, transfers)
+      );
+      if (exit._tag === 'Failure') {
+        throw originalWorkerError(Cause.squash(exit.cause));
+      }
     },
 
-    sendUnsafe(
-      message: Outbound,
-      transfers?: readonly Transferable[]
-    ): void {
+    sendUnsafe(message: Outbound, transfers?: readonly Transferable[]): void {
       if (closed) throw new Error('Effect worker transport is closed');
-      Effect.runSync(backing.send(message, transfers));
+      const exit = Effect.runSyncExit(backing.send(message, transfers));
+      if (exit._tag === 'Failure') {
+        throw originalWorkerError(Cause.squash(exit.cause));
+      }
     },
 
     close(): Promise<void> {
       if (closePromise) return closePromise;
       closed = true;
+      if (!readySettled) {
+        readySettled = true;
+        rejectReady(new Error('Effect worker transport closed before ready'));
+      }
       messageTarget.removeEventListener('messageerror', onMessageError);
-      closePromise = Effect.runPromise(Fiber.interrupt(fiber)).then(
-        () => {
-          options.closeEndpoint?.();
-        },
-        (error: unknown) => {
-          options.closeEndpoint?.();
-          throw asError(error);
-        }
-      );
+      // Preserve the browser adapter's synchronous close behavior while still
+      // speaking Effect's explicit close protocol to the runner.
+      try {
+        messageTarget.postMessage([1]);
+      } catch {
+        // Endpoint teardown remains authoritative if close framing fails.
+      } finally {
+        options.closeEndpoint?.();
+      }
+      closePromise = Effect.runPromise(Fiber.interrupt(fiber));
       return closePromise;
     },
   };
@@ -141,6 +170,7 @@ export function createEffectWorkerTransport<Inbound, Outbound>(
 export interface EffectWorkerRunnerOptions<Inbound> {
   endpoint: MessagePort | Window;
   onMessage(portId: number, message: Inbound): void | Promise<void>;
+  onDisconnect?: (portId: number) => void;
   onError(error: Error): void;
 }
 
@@ -164,7 +194,9 @@ export function createEffectWorkerRunnerTransport<Inbound, Outbound>(
   const run = runner
     .run((portId, message) => {
       const handled = options.onMessage(portId, message);
-      return handled instanceof Promise ? Effect.promise(() => handled) : undefined;
+      return handled instanceof Promise
+        ? Effect.promise(() => handled)
+        : undefined;
     })
     .pipe(
       Effect.catchCause((cause) =>
@@ -174,6 +206,16 @@ export function createEffectWorkerRunnerTransport<Inbound, Outbound>(
       )
     );
   const fiber = Effect.runFork(run);
+  const disconnectFiber = runner.disconnects
+    ? Effect.runFork(
+        Queue.take(runner.disconnects).pipe(
+          Effect.tap((portId) =>
+            Effect.sync(() => options.onDisconnect?.(portId))
+          ),
+          Effect.forever
+        )
+      )
+    : undefined;
 
   return {
     sendUnsafe(portId, message, transfers): void {
@@ -184,16 +226,24 @@ export function createEffectWorkerRunnerTransport<Inbound, Outbound>(
     close(): Promise<void> {
       if (closePromise) return closePromise;
       closed = true;
-      closePromise = Effect.runPromise(Fiber.interrupt(fiber));
+      closePromise = Effect.runPromise(
+        Effect.all(
+          [
+            Fiber.interrupt(fiber),
+            ...(disconnectFiber ? [Fiber.interrupt(disconnectFiber)] : []),
+          ],
+          { discard: true }
+        )
+      );
       return closePromise;
     },
   };
 }
 
 /** Extracts Effect's typed worker failure for telemetry without exposing Effect. */
-export function effectWorkerErrorTag(error: unknown):
-  | WorkerError['reason']['_tag']
-  | undefined {
+export function effectWorkerErrorTag(
+  error: unknown
+): WorkerError['reason']['_tag'] | undefined {
   if (
     typeof error !== 'object' ||
     error === null ||

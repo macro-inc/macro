@@ -17,10 +17,6 @@ class FakePort extends EventTarget {
   onmessageerror: (() => void) | null = null;
   effectProtocol = false;
 
-  constructor() {
-    super();
-  }
-
   postMessage(message: unknown): void {
     this.messages.push(message);
     const payload = effectPayload(message);
@@ -81,16 +77,13 @@ const attach = async (
   enginePort: FakePort
 ): Promise<void> => {
   enginePort.effectProtocol = true;
-  await router.handleTabMessage(
-    tabPort as CoordinatorMessagePort,
-    {
-      ...version,
-      kind: 'attach-engine-port',
-      tabId,
-      ownerEpoch,
-    },
-    [enginePort as unknown as MessagePort]
-  );
+  await router.handleTabMessage(tabPort as CoordinatorMessagePort, {
+    ...version,
+    kind: 'attach-engine-port',
+    tabId,
+    ownerEpoch,
+    enginePort: enginePort as unknown as MessagePort,
+  });
 };
 
 const ready = (
@@ -383,9 +376,7 @@ describe('CoordinatorRouter', () => {
         .map(effectPayload)
         .filter(
           (message) =>
-            typeof message === 'object' &&
-            message !== null &&
-            'kind' in message
+            typeof message === 'object' && message !== null && 'kind' in message
         )
         .slice(-2)
         .map((message) => (message as { kind: string }).kind)

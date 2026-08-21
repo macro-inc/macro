@@ -9,11 +9,13 @@ class FakeMessagePort extends EventTarget {
     message: unknown;
     transfers: readonly Transferable[] | undefined;
   }> = [];
+  closed = false;
 
   postMessage(
     message: unknown,
     transfers?: readonly Transferable[] | StructuredSerializeOptions
   ): void {
+    if (this.closed) return;
     this.sent.push({
       message,
       transfers: Array.isArray(transfers)
@@ -24,7 +26,9 @@ class FakeMessagePort extends EventTarget {
 
   start(): void {}
 
-  close(): void {}
+  close(): void {
+    this.closed = true;
+  }
 
   ready(): void {
     this.dispatchEvent(new MessageEvent('message', { data: [0] }));
@@ -72,7 +76,10 @@ describe('Effect worker transport', () => {
       endpoint: endpoint as unknown as MessagePort,
       onMessage: vi.fn(),
       onError: vi.fn(),
-      closeEndpoint,
+      closeEndpoint: () => {
+        closeEndpoint();
+        endpoint.close();
+      },
     });
     endpoint.ready();
     await transport.ready;
@@ -146,7 +153,9 @@ describe('Effect worker transport', () => {
       new MessageEvent('messageerror', { data: 'uncloneable response' })
     );
     expect(onError).toHaveBeenCalledWith(
-      expect.objectContaining({ message: 'Effect worker transport messageerror' })
+      expect.objectContaining({
+        message: 'Effect worker transport messageerror',
+      })
     );
 
     await transport.close();

@@ -14,10 +14,6 @@ import {
   type CoordinatorSnapshot,
 } from './coordinator-core';
 import {
-  createEffectWorkerTransport,
-  type EffectWorkerTransport,
-} from './effect-worker-transport';
-import {
   type ActivationFailureCode,
   CACHE_COORDINATOR_PROTOCOL_VERSION,
   type CoordinatorToEngineEnvelope,
@@ -31,11 +27,18 @@ import {
   validateEngineToCoordinatorEnvelope,
   validateTabToCoordinatorEnvelope,
 } from './coordinator-protocol';
+import {
+  createEffectWorkerTransport,
+  type EffectWorkerTransport,
+} from './effect-worker-transport';
 
-export type CoordinatorMessagePort = Pick<
-  MessagePort,
-  'postMessage' | 'close' | 'start' | 'onmessage' | 'onmessageerror'
->;
+export interface CoordinatorMessagePort {
+  onmessage: ((event: MessageEvent<unknown>) => void) | null;
+  onmessageerror: ((event: MessageEvent<unknown>) => void) | null;
+  postMessage(message: unknown, transfers?: Transferable[]): void;
+  close(): void;
+  start(): void;
+}
 
 export type CancelLivenessWatch = () => void;
 
@@ -249,22 +252,12 @@ export class CoordinatorRouter {
       return;
     }
     const message = parsed.value;
-    const expectedPortCount = message.kind === 'attach-engine-port' ? 1 : 0;
-    if (transferredPorts.length !== expectedPortCount) {
+    if (transferredPorts.length !== 0) {
       for (const transferredPort of transferredPorts) transferredPort.close();
-      const tabId = this.portTabs.get(port);
-      if (message.kind === 'attach-engine-port' && tabId) {
-        this.failOwner(
-          tabId,
-          message.ownerEpoch,
-          'engine attachment transferred the wrong number of ports'
-        );
-      } else {
-        this.postProtocolError(
-          port,
-          'coordinator envelope transferred unexpected ports'
-        );
-      }
+      this.postProtocolError(
+        port,
+        'coordinator envelope transferred unexpected event ports'
+      );
       return;
     }
     if (message.kind === 'register-tab') {
@@ -295,7 +288,7 @@ export class CoordinatorRouter {
         this.applyActions(core.request(tabId, message.request));
         break;
       case 'attach-engine-port':
-        this.attachEnginePort(tabId, message.ownerEpoch, transferredPorts[0]);
+        this.attachEnginePort(tabId, message.ownerEpoch, message.enginePort);
         break;
       case 'graceful-departure':
         this.applyActions(
@@ -450,7 +443,8 @@ export class CoordinatorRouter {
     >({
       endpoint: transferredPort,
       onMessage: (message) => {
-        if (this.engineRoute === route) this.handleEngineMessage(route, message);
+        if (this.engineRoute === route)
+          this.handleEngineMessage(route, message);
       },
       onError: (error) => {
         if (this.engineRoute === route) {

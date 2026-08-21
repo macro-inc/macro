@@ -22,10 +22,6 @@ class FakePort extends EventTarget {
   onmessage: ((event: MessageEvent<unknown>) => void) | null = null;
   onmessageerror: (() => void) | null = null;
 
-  constructor() {
-    super();
-  }
-
   postMessage(message: unknown): void {
     this.messages.push(message);
   }
@@ -125,16 +121,13 @@ const attachRuntime = async (
       postMessage(message);
     }) as MessagePort['postMessage'];
   }
-  await router.handleTabMessage(
-    tabPort as CoordinatorMessagePort,
-    {
-      ...version,
-      kind: 'attach-engine-port',
-      tabId,
-      ownerEpoch,
-    },
-    [channel.port1]
-  );
+  await router.handleTabMessage(tabPort as CoordinatorMessagePort, {
+    ...version,
+    kind: 'attach-engine-port',
+    tabId,
+    ownerEpoch,
+    enginePort: channel.port1,
+  });
   const scope = new FakeWorkerScope();
   installCacheEngineWorker({
     scope,

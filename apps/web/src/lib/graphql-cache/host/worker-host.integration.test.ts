@@ -9,11 +9,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { makeSubject, pipe, type Source, subscribe } from 'wonka';
 import { normalizedCacheExchange } from '../exchange/normalized-cache-exchange';
 import type { CacheRequest, CacheResponse } from '../protocol';
+import { installCacheCoordinatorWorker } from '../worker/cache-coordinator-runtime';
 import { installCacheEngineWorker } from '../worker/cache-engine-runtime';
-import {
-  type CoordinatorMessagePort,
-  CoordinatorRouter,
-} from '../worker/coordinator-router';
+import { CoordinatorRouter } from '../worker/coordinator-router';
 import type { CacheHost } from './types';
 import { createWorkerCacheHost } from './worker-host';
 
@@ -74,10 +72,6 @@ class LinkedMessagePort extends EventTarget {
   onmessage: ((event: MessageEvent<unknown>) => void) | null = null;
   onmessageerror: (() => void) | null = null;
   closed = false;
-
-  constructor() {
-    super();
-  }
 
   postMessage(
     message: unknown,
@@ -250,7 +244,10 @@ class IntegrationSharedWorker {
   constructor(router: CoordinatorRouter) {
     const channel = new LinkedMessageChannel();
     this.port = channel.port1;
-    router.connect(channel.port2 as unknown as CoordinatorMessagePort);
+    installCacheCoordinatorWorker({
+      endpoint: channel.port2 as unknown as MessagePort,
+      router,
+    });
   }
 
   fail(message: string): void {

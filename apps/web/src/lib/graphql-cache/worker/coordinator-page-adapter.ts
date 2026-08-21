@@ -13,6 +13,10 @@ import {
   tabLivenessLockName,
   validateCoordinatorToTabEnvelope,
 } from './coordinator-protocol';
+import {
+  createEffectWorkerTransport,
+  type EffectWorkerTransport,
+} from './effect-worker-transport';
 
 export interface SharedWorkerLike {
   readonly port: MessagePort;
@@ -95,6 +99,9 @@ export class CacheCoordinatorPageAdapter {
   private readonly lockManager: Pick<LockManager, 'request'> | undefined;
   private readonly gracefulTimeoutMs: number;
   private sharedWorker: SharedWorkerLike | undefined;
+  private sharedTransport:
+    | EffectWorkerTransport<TabToCoordinatorEnvelope>
+    | undefined;
   private engineWorker: DedicatedWorkerLike | undefined;
   private ownerEpoch: number | undefined;
   private registered = false;
@@ -348,27 +355,29 @@ export class CacheCoordinatorPageAdapter {
         new Error(event.message || 'SharedWorker transport error')
       );
     };
-    worker.port.onmessage = (event: MessageEvent<unknown>) => {
-      const transferredPorts = event.ports ?? [];
-      if (transferredPorts.length > 0) {
-        for (const port of transferredPorts) this.closePort(port);
+    const transport = createEffectWorkerTransport<
+      CoordinatorToTabEnvelope,
+      TabToCoordinatorEnvelope
+    >({
+      endpoint: worker as SharedWorker,
+      onMessage: (message) => {
+        try {
+          this.handleCoordinatorMessage(message);
+        } catch (error) {
+          this.failTerminal(
+            error instanceof Error ? error : new Error(String(error))
+          );
+        }
+      },
+      onError: (error) => {
         this.failTerminal(
-          new Error('coordinator envelope transferred an unexpected port')
+          new Error(`coordinator Effect transport failed: ${error.message}`)
         );
-        return;
-      }
-      try {
-        this.handleCoordinatorMessage(event.data);
-      } catch (error) {
-        this.failTerminal(
-          error instanceof Error ? error : new Error(String(error))
-        );
-      }
-    };
-    worker.port.onmessageerror = () => {
-      this.failTerminal(new Error('coordinator MessagePort messageerror'));
-    };
-    worker.port.start();
+      },
+      closeEndpoint: () => this.closePort(worker.port),
+    });
+    this.sharedTransport = transport;
+    void transport.ready.catch(() => undefined);
     this.postCoordinator(
       withVersion<TabToCoordinatorEnvelope>({
         kind: 'register-tab',
@@ -522,6 +531,7 @@ export class CacheCoordinatorPageAdapter {
           kind: 'attach-engine-port',
           tabId: this.tabId,
           ownerEpoch: election.ownerEpoch,
+          enginePort: directChannel.port1,
         }),
         [directChannel.port1],
         [directChannel.port1]
@@ -610,8 +620,8 @@ export class CacheCoordinatorPageAdapter {
     transfer: Transferable[] = [],
     untransferredPorts: MessagePort[] = []
   ): boolean {
-    const port = this.sharedWorker?.port;
-    if (!port) {
+    const transport = this.sharedTransport;
+    if (!transport) {
       for (const untransferredPort of untransferredPorts) {
         this.closePort(untransferredPort);
       }
@@ -621,7 +631,7 @@ export class CacheCoordinatorPageAdapter {
       return false;
     }
     try {
-      port.postMessage(message, transfer);
+      transport.sendUnsafe(message, transfer);
       return true;
     } catch (error) {
       for (const untransferredPort of untransferredPorts) {
@@ -693,20 +703,21 @@ export class CacheCoordinatorPageAdapter {
 
   private closeCoordinatorPort(): void {
     const worker = this.sharedWorker;
+    const transport = this.sharedTransport;
     this.sharedWorker = undefined;
-    if (!worker) return;
-    try {
-      worker.onerror = null;
-    } catch {
-      // Continue closing the port even if a test double rejects detachment.
+    this.sharedTransport = undefined;
+    if (worker) {
+      try {
+        worker.onerror = null;
+      } catch {
+        // Continue closing even if a test double rejects detachment.
+      }
     }
-    try {
-      worker.port.onmessage = null;
-      worker.port.onmessageerror = null;
-    } catch {
-      // Continue closing even if a test double rejects handler detachment.
+    if (transport) {
+      void transport.close().catch(() => undefined);
+    } else if (worker) {
+      this.closePort(worker.port);
     }
-    this.closePort(worker.port);
   }
 
   private closePort(port: Pick<MessagePort, 'close'>): void {
