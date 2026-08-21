@@ -1,3 +1,4 @@
+import { startPendingSession } from '@app/features/block-agent/context/pending-session';
 import { openStandaloneReminderComposer } from '@app/features/reminders/reminder-composer';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { setAutomationComposerOpen } from '@block-automation/component';
@@ -71,7 +72,6 @@ import MagnifyingGlassIcon from '@phosphor/magnifying-glass.svg';
 import PlusIcon from '@phosphor/plus.svg';
 import Robot from '@phosphor/robot.svg';
 import { createProject } from '@queries/storage/projects';
-import { agentHarnessServiceClient } from '@service-agent-harness/client';
 import { makePersisted } from '@solid-primitives/storage';
 import {
   CommandMenuHotkeyHint,
@@ -417,18 +417,21 @@ export function runCreateAction(
       return;
     // Nothing to ask for: a managed session's bot, repository and workspace
     // are all deployment configuration, so this opens one straight away.
-    case 'agent':
-      createBlock({
-        blockName: 'agent',
-        loading: true,
-        createFn: async () => {
-          const result = await agentHarnessServiceClient.create({});
-          if (result.isErr()) return;
-          return result.value.session.id;
-        },
-        shouldInsert,
-      });
+    //
+    // Opened against a placeholder rather than awaited: the create does not
+    // answer until its sandbox has booted and cloned the repo, and no one
+    // should watch a spinner for that. The block mounts now — composer live,
+    // prompts queueing — and adopts the real id when it lands
+    // (`block-agent/context/pending-session.ts`).
+    case 'agent': {
+      const { openWithSplit } = useSplitLayout();
+      setCreateMenuOpen(false, false);
+      openWithSplit(
+        { type: 'agent', id: startPendingSession() },
+        { referredFrom: 'launcher', preferNewSplit: shouldInsert }
+      );
       return;
+    }
   }
 }
 

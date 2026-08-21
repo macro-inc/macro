@@ -255,7 +255,7 @@ export default function AgentReplay() {
         keyed
       >
         {(session) => (
-          <AgentSessionProvider sessionId={session.id}>
+          <AgentSessionProvider blockId={session.id}>
             <StaticMarkdownContext>
               <div class="flex-1 min-h-0 flex flex-col">
                 <SessionChrome />

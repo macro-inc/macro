@@ -11,10 +11,17 @@ import CaretDown from '@phosphor-icons/core/regular/caret-down.svg?component-sol
 import type { ModelOption } from '@service-agent-fold/generated/types';
 import { cn, Dropdown } from '@ui';
 import { For, Show } from 'solid-js';
+import { TextShimmer } from './TextShimmer';
 
 export interface AgentModelSelectorProps {
   /** Current model id, when the fold has learned it. */
   model: string | null;
+  /**
+   * A change to this model is on the wire. The pill shows it, shimmering,
+   * so the switch is visibly in progress rather than appearing not to have
+   * registered — the request can block for a whole container resume.
+   */
+  changingTo?: string;
   /** The models the harness offers, in the order it listed them. */
   options: ModelOption[];
   disabled?: boolean;
@@ -23,9 +30,10 @@ export interface AgentModelSelectorProps {
 }
 
 export function AgentModelSelector(props: AgentModelSelectorProps) {
+  const shown = () => props.changingTo ?? props.model;
   const label = () =>
-    props.options.find((option) => option.id === props.model)?.name ??
-    props.model ??
+    props.options.find((option) => option.id === shown())?.name ??
+    shown() ??
     'Model';
 
   return (
@@ -35,9 +43,9 @@ export function AgentModelSelector(props: AgentModelSelectorProps) {
           variant="ghost"
           size="sm"
           class="h-6 gap-1 rounded-full bg-ink/5 px-2 text-xs text-ink-muted hover:bg-ink/10"
-          disabled={props.disabled}
+          disabled={props.disabled || props.changingTo !== undefined}
         >
-          {label()}
+          <TextShimmer text={label()} active={props.changingTo !== undefined} />
           <CaretDown />
         </Dropdown.Trigger>
         <Dropdown.Content>
@@ -47,7 +55,7 @@ export function AgentModelSelector(props: AgentModelSelectorProps) {
                 <Dropdown.Item
                   class={cn(
                     'gap-2',
-                    option.id === props.model && 'text-ink font-medium'
+                    option.id === shown() && 'text-ink font-medium'
                   )}
                   title={option.description ?? undefined}
                   onSelect={() => {

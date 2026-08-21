@@ -243,6 +243,13 @@ impl ContainerManager for DaytonaContainerManager {
             session_id,
             repo_url,
         } = command;
+        // `GITHUB_TOKEN` is here for `gh auth setup-git` and the github MCP
+        // server. It is also the env var opencode's `github-copilot` provider
+        // activates on, so its mere presence makes opencode advertise every
+        // Copilot model - and a plain PAT is not a Copilot credential, so each
+        // one fails at prompt time with "Authorization header is badly
+        // formatted". `container/opencode.json` pins `enabled_providers` to
+        // keep that list honest; do not drop that pin while this var is set.
         let env = Env::from(HashMap::from([
             ("REPO_URL".to_owned(), repo_url),
             (

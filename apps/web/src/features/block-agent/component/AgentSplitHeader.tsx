@@ -10,7 +10,6 @@ import {
   SplitHeaderRight,
 } from '@components/app/split-layout/components/SplitHeader';
 import { StaticSplitLabel } from '@components/app/split-layout/components/SplitLabel';
-import { useBlockId } from '@core/block';
 import { toast } from '@core/component/Toast/Toast';
 import { isMobile } from '@core/mobile/isMobile';
 import { buildSimpleEntityUrl, openExternalUrl } from '@core/util/url';
@@ -19,6 +18,7 @@ import LinkIcon from '@phosphor/link.svg';
 import TreeStructure from '@phosphor/tree-structure.svg';
 import type { AgentSessionResponse } from '@service-agent-harness/generated/schemas';
 import { For, Show } from 'solid-js';
+import { useAgentSession } from '../context/AgentSessionContext';
 import {
   ORIGIN_THREAD_DRAWER_ID,
   sessionOriginThread,
@@ -45,13 +45,18 @@ export function AgentSplitHeader(props: {
   /** The fold's session title, preferred over the harness fallback. */
   title?: string;
 }) {
-  const blockId = useBlockId();
+  // The session, not `useBlockId()`: a block created from the launcher mounts
+  // against a placeholder and keeps reporting it (see `Block.tsx`), so the
+  // block id is the one thing here that is not a shareable session id.
+  const { sessionId } = useAgentSession();
   const title = () => props.title ?? harnessTitle(props.session?.harness);
   const originThreadDrawer = useDrawerControl(ORIGIN_THREAD_DRAWER_ID);
 
   const copyLink = async () => {
+    const id = sessionId();
+    if (!id) return;
     await navigator.clipboard.writeText(
-      buildSimpleEntityUrl({ type: 'agent', id: blockId })
+      buildSimpleEntityUrl({ type: 'agent', id })
     );
     toast.success('Link copied to clipboard');
   };
@@ -68,6 +73,8 @@ export function AgentSplitHeader(props: {
       label: 'Copy link',
       icon: LinkIcon,
       action: copyLink,
+      // Nothing to link to until the session exists.
+      condition: () => sessionId() !== undefined,
     },
   ];
 
@@ -110,7 +117,7 @@ export function AgentSplitHeader(props: {
         tools={[]}
         menuTools={tools}
         ops={ops}
-        id={blockId}
+        id={sessionId() ?? ''}
         itemType="foreign"
         name={title()}
       />

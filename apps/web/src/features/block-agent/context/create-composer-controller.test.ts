@@ -42,14 +42,21 @@ const prompts = () =>
     .filter((c) => (c.action as { type: string }).type === 'prompt')
     .map((c) => (c.action as { prompt: string }).prompt);
 
-function setup(options?: { working?: boolean }) {
+function setup(options?: {
+  working?: boolean;
+  sessionId?: string;
+  model?: string | null;
+}) {
   const [working, setWorking] = createSignal(options?.working ?? false);
-  const [sessionId, setSessionId] = createSignal('session-1');
+  const [sessionId, setSessionId] = createSignal<string | undefined>(
+    'sessionId' in (options ?? {}) ? options?.sessionId : 'session-1'
+  );
+  const [model, setModel] = createSignal<string | null>(options?.model ?? null);
   const { controller, dispose } = createRoot((dispose) => ({
-    controller: createComposerController({ sessionId, working }),
+    controller: createComposerController({ sessionId, working, model }),
     dispose,
   }));
-  return { controller, setWorking, setSessionId, dispose };
+  return { controller, setWorking, setSessionId, setModel, dispose };
 }
 
 beforeEach(() => {
@@ -233,6 +240,95 @@ describe('stop', () => {
     controller.stop();
     await flush();
     expect(control.calls.at(-1)?.action).toEqual({ type: 'stop' });
+    dispose();
+  });
+});
+
+describe('a session that does not exist yet', () => {
+  it('queues prompts typed before the create lands, then drains them in order', async () => {
+    const { controller, setWorking, setSessionId, dispose } = setup({
+      sessionId: undefined,
+    });
+    controller.send('first');
+    controller.send('second');
+    await flush();
+
+    // Nothing on the wire: there is nowhere to post to.
+    expect(prompts()).toEqual([]);
+    expect(controller.queue().map((p) => p.markdown)).toEqual([
+      'first',
+      'second',
+    ]);
+
+    setSessionId('session-1');
+    await flush();
+    // The queue survived acquiring the id, and its head went out against it.
+    expect(prompts()).toEqual(['first']);
+    expect(control.calls.every((c) => c.sessionId === 'session-1')).toBe(true);
+
+    setWorking(true); // the fold shows first's turn
+    await flush();
+    setWorking(false); // ...and it settles
+    await flush();
+
+    expect(prompts()).toEqual(['first', 'second']);
+    expect(controller.queue()).toEqual([]);
+    dispose();
+  });
+
+  it('does not post stop or setModel before there is a session', async () => {
+    const { controller, dispose } = setup({ sessionId: undefined });
+    controller.stop();
+    controller.setModel('opus');
+    await flush();
+
+    expect(control.calls).toEqual([]);
+    dispose();
+  });
+});
+
+describe('a model change in flight', () => {
+  it('holds until the fold shows the runtime moved, not until the POST returns', async () => {
+    const { controller, setModel, dispose } = setup({ model: 'old-model' });
+    controller.setModel('new-model');
+    await flush();
+
+    // The POST has already come back; the runtime has not moved yet.
+    expect(control.calls.at(-1)?.action).toEqual({
+      type: 'setModel',
+      model: 'new-model',
+    });
+    expect(controller.changingModel()).toBe('new-model');
+
+    setModel('new-model');
+    await flush();
+
+    expect(controller.changingModel()).toBeUndefined();
+    dispose();
+  });
+
+  it('clears when the runtime settles on something else entirely', async () => {
+    const { controller, setModel, dispose } = setup({ model: 'old-model' });
+    controller.setModel('new-model');
+    await flush();
+
+    // A later change overtook this one; nothing is still pending.
+    setModel('third-model');
+    await flush();
+    controller.setModel('third-model');
+    await flush();
+
+    expect(controller.changingModel()).toBeUndefined();
+    dispose();
+  });
+
+  it('clears immediately when the POST fails', async () => {
+    const { controller, dispose } = setup({ model: 'old-model' });
+    control.outcome = 'err';
+    controller.setModel('new-model');
+    await flush();
+
+    expect(controller.changingModel()).toBeUndefined();
     dispose();
   });
 });

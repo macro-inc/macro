@@ -520,9 +520,11 @@ pub enum PermissionOutcome {
 
 /// Why a turn stopped.
 ///
-/// Parsed straight off ACP's `stopReason` wire string by [`FromStr`]: the
-/// `snake_case` variant names are the wire names, and anything unmodelled
-/// falls through to [`Self::Other`], so parsing never fails.
+/// All but one variant is parsed straight off ACP's `stopReason` wire string
+/// by [`FromStr`]: the `snake_case` variant names are the wire names, and
+/// anything unmodelled falls through to [`Self::Other`], so parsing never
+/// fails. [`Self::Failed`] is the exception - no wire string produces it,
+/// because it is what a turn that got no `stopReason` at all stopped for.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Type)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum StopReason {
@@ -540,6 +542,19 @@ pub enum StopReason {
     Other {
         /// The unrecognized wire value.
         reason: String,
+    },
+    /// The runtime answered the prompt with a JSON-RPC error, so the turn
+    /// produced no reply and never will.
+    ///
+    /// Constructed by the fold, never parsed: an error response carries no
+    /// `stopReason` to read. Modelled as a stop reason rather than as
+    /// something alongside one because that is what it is - a turn that
+    /// ended - and because every reader already asks `stop` whether a turn
+    /// is still running. A turn left with no stop reason reads as forever in
+    /// flight, which is how a failed prompt used to wedge a session.
+    Failed {
+        /// The runtime's error message, verbatim.
+        message: String,
     },
 }
 

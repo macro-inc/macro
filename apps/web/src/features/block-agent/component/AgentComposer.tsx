@@ -5,14 +5,29 @@
  * boundary.
  */
 
+import { Show } from 'solid-js';
 import { useAgentSession } from '../context/AgentSessionContext';
-import { AgentInput, AgentModelSelector, QueuedPromptList } from '../ui';
+import {
+  AgentInput,
+  AgentModelSelector,
+  ComposerNotice,
+  QueuedPromptList,
+} from '../ui';
 
 export function AgentComposer() {
-  const { composer, loadFailed, metadata } = useAgentSession();
+  const { composer, loadFailed, metadata, pending, resuming } =
+    useAgentSession();
+
+  // A session still being created was created by this user, one action ago,
+  // and has an empty transcript: the only thing to do with it is type. The
+  // wait for the sandbox is exactly when that matters most.
+  const autofocus = pending();
 
   return (
     <>
+      <Show when={resuming()}>
+        <ComposerNotice text="Waking the agent's sandbox…" active />
+      </Show>
       <QueuedPromptList
         prompts={composer.queue()}
         sendingId={composer.sendingId()}
@@ -22,6 +37,7 @@ export function AgentComposer() {
       />
       <AgentInput
         placeholder="Message the agent"
+        autofocus={autofocus}
         busy={composer.busy()}
         disabled={loadFailed()}
         onSend={composer.send}
@@ -29,6 +45,7 @@ export function AgentComposer() {
         modelControl={
           <AgentModelSelector
             model={metadata()?.model ?? null}
+            changingTo={composer.changingModel()}
             options={metadata()?.supportedModels ?? []}
             disabled={loadFailed()}
             onSelect={composer.setModel}

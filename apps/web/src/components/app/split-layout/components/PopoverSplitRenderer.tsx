@@ -81,6 +81,8 @@ function PopoverSplitModal(props: {
     isViewerSplit: () => false,
     isControllerSplit: () => false,
     replace: () => {},
+    // A popover has no URL and no history to rewrite.
+    adoptContentId: () => {},
     removeFromHistory: () => {},
     registerContentChangeListener: () => {},
     unregisterContentChangeListener: () => {},
