@@ -1,11 +1,8 @@
 # Production-style images: crane binary + the shared runtime.
 #
 # Layout matches both contracts:
-# - `/app/svc` (`Dockerfile.prebuilt`)
-# - `/app/out/<bin>` (local stack)
-#
-# These are comparison / deploy artifacts. The local stack does not bake
-# binaries into the runtime image; it bind-mounts `/app/out`.
+# - `/app/svc` (ECS entrypoint)
+# - `/app/out/<bin>` (local stack / pubsub workers)
 {
   pkgs,
   runtime,
@@ -15,18 +12,21 @@ let
   inherit (pkgs) lib;
   inherit (pkgs.dockerTools) buildLayeredImage;
 
+  convert = pkgs.callPackage ./convert.nix { inherit lib; };
+  pdfium = pkgs.callPackage ./pdfium.nix { };
+
   layout =
-    package: binaries:
+    {
+      package,
+      binaries,
+      svcBinary,
+    }:
     pkgs.runCommand "svc-layout-${package.pname or "service"}" { } ''
       mkdir -p $out/app/out
-      first=""
       for binary in ${lib.concatStringsSep " " binaries}; do
         ln -s ${package}/bin/$binary $out/app/out/$binary
-        if [ -z "$first" ]; then
-          first=$binary
-          ln -s ${package}/bin/$binary $out/app/svc
-        fi
       done
+      ln -s ${package}/bin/${svcBinary} $out/app/svc
     '';
 
   specs = [
@@ -53,6 +53,11 @@ let
     {
       serviceName = "convert-service";
       binaries = [ "convert_service" ];
+      extraContents = [
+        convert.layout
+      ]
+      ++ convert.lokLibs;
+      extraEnv = convert.extraEnv;
     }
     {
       serviceName = "document-cognition-service";
@@ -68,6 +73,16 @@ let
         "email_service"
         "pubsub_workers"
       ];
+      svcBinary = "email_service";
+    }
+    {
+      serviceName = "email-service-pubsub-workers";
+      packageName = "email-service";
+      binaries = [
+        "email_service"
+        "pubsub_workers"
+      ];
+      svcBinary = "pubsub_workers";
     }
     {
       serviceName = "image-proxy-service";
@@ -84,6 +99,11 @@ let
     {
       serviceName = "search-processing-service";
       binaries = [ "search_processing_service" ];
+      extraContents = [ pdfium ];
+    }
+    {
+      serviceName = "sha-cleanup-worker";
+      binaries = [ "sha_cleanup_worker" ];
     }
     {
       serviceName = "static-file-service";
@@ -94,19 +114,33 @@ let
       binaries = [ "unfurl_service" ];
     }
   ];
+
+  mkSpec =
+    spec:
+    let
+      packageName = spec.packageName or spec.serviceName;
+      svcBinary = spec.svcBinary or (builtins.head spec.binaries);
+      extraContents = spec.extraContents or [ ];
+      extraEnv = spec.extraEnv or [ ];
+    in
+    {
+      name = "docker-image-${spec.serviceName}";
+      value = buildLayeredImage (
+        runtime.mkImage {
+          name = spec.serviceName;
+          tag = "latest";
+          extraContents = [
+            (layout {
+              package = deployPackages."deploy-service-binaries-${packageName}";
+              binaries = spec.binaries;
+              inherit svcBinary;
+            })
+          ]
+          ++ extraContents;
+          inherit extraEnv;
+          extraConfig.Cmd = [ "/app/svc" ];
+        }
+      );
+    };
 in
-lib.listToAttrs (
-  map (spec: {
-    name = "docker-image-${spec.serviceName}";
-    value = buildLayeredImage (
-      runtime.mkImage {
-        name = spec.serviceName;
-        tag = "latest";
-        extraContents = [
-          (layout deployPackages."deploy-service-binaries-${spec.serviceName}" spec.binaries)
-        ];
-        extraConfig.Cmd = [ "/app/svc" ];
-      }
-    );
-  }) specs
-)
+lib.listToAttrs (map mkSpec specs)

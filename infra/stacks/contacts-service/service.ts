@@ -18,7 +18,6 @@ import {
 } from '../../packages/shared';
 
 const BASE_NAME = pulumi.getProject();
-const REPO_ROOT = '../../..';
 export const SERVICE_DOMAIN_NAME = `contacts${
   stack === 'prod' ? '' : `-${stack}`
 }.${BASE_DOMAIN}`;
@@ -148,12 +147,8 @@ export class ContactsService extends pulumi.ComponentResource {
         repositoryId: `${BASE_NAME}-ecr-${stack}`,
         repositoryName: `${BASE_NAME}-${stack}`,
         imageId: `${BASE_NAME}-image-${stack}`,
-        imagePath: REPO_ROOT,
-        dockerfile: 'docker/Dockerfile',
+        nixImage: 'docker-image-contacts-service',
         platform,
-        buildArgs: {
-          SERVICE_NAME: 'contacts_service',
-        },
         tags: this.tags,
       },
       { parent: this }

@@ -33,10 +33,10 @@ clean:
 build:
     SQLX_OFFLINE=true cargo build
 
-# Build dev service Docker images to pre-warm the cache used by root `run_local`.
+# Build the Nix dockerTools runtime image used by `just run_local`.
 build_dev_service_images:
-  docker build -f docker/Dockerfile.dev --target services_bundle -t macro-local-rust-services:dev .
-  docker build -f docker/Dockerfile.search_processing_service.dev --target search_processing_service -t macro-local-search-processing-service:dev .
+  nix build .#stream-docker-image-local-runtime --out-link target/nix/stream-docker-image-local-runtime
+  sh -c 'exec "$1" | docker load' nix-stream target/nix/stream-docker-image-local-runtime
 
 # Build all lambda functions
 build_lambdas compiler="":

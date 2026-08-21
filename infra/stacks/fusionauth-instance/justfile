@@ -14,12 +14,17 @@ start *ARGS:
   docker network create auth 2>/dev/null || true
   docker volume create fusionauth_db_data 2>/dev/null || true
   docker volume create fusionauth_config 2>/dev/null || true
-  docker compose up {{ ARGS }}
+  just -f {{justfile_directory()}}/../../../justfile -d {{justfile_directory()}}/../../.. ensure_arion
+  docker compose --project-directory {{justfile_directory()}}/../../.. \
+    -f {{justfile_directory()}}/../../../target/nix/arion-compose.yaml \
+    up db fusionauth {{ ARGS }}
 
 # Stops the local FusionAuth instance. This should only be used for setup/testing.
 stop *ARGS:
   @echo "Stopping fusionauth"
-  docker compose stop {{ ARGS }}
+  docker compose --project-directory {{justfile_directory()}}/../../.. \
+    -f {{justfile_directory()}}/../../../target/nix/arion-compose.yaml \
+    stop db fusionauth {{ ARGS }}
 
 # Destroys the local pulumi stack.
 destroy_local_stack:
@@ -30,7 +35,9 @@ destroy_local_stack:
 # Destroys the local FusionAuth instance and pulumi stack.
 destroy:
   just destroy_local_stack || true
-  docker compose down -v
+  docker compose --project-directory {{justfile_directory()}}/../../.. \
+    -f {{justfile_directory()}}/../../../target/nix/arion-compose.yaml \
+    stop db fusionauth
   docker volume rm fusionauth_db_data fusionauth_config || true
 
 # Creates the local pulumi stack and updates FusionAuth with components.

@@ -1,12 +1,13 @@
 //! The minimal runtime image the service binaries run inside.
 //!
-//! On Linux the image is Nixpkgs `dockerTools.buildLayeredImage` (see
+//! The image is Nixpkgs `dockerTools.buildLayeredImage` (see
 //! `nix/_containers/runtime.nix`). Binaries still arrive via the `/app/out`
 //! bind mount, so the image does not rebuild when Rust code changes.
 //!
-//! macOS keeps the Dockerfile BuildKit path: a typical Mac flake eval cannot
-//! build `aarch64-linux` dockerTools images without a Linux remote builder.
+//! On macOS this realizes the GNU/Linux dockerTools derivation (see
+//! `nix/docker-images.nix`) and needs a Linux remote builder.
 
+use std::path::Path;
 use std::process::Command;
 
 use anyhow::{Context, Result};
@@ -18,24 +19,51 @@ use super::super::{stage::Stage, workspace_root};
 /// instance-specific content.
 pub const RUNTIME_IMAGE_TAG: &str = "macro-local-runtime:dev";
 
-const DOCKERFILE_REL: &str = "docker/Dockerfile.runtime";
-const NIX_STREAM_ATTR: &str = ".#stream-docker-image-local-runtime";
+pub const NODE_BUN_IMAGE_TAG: &str = "macro-local-node-bun:dev";
+pub const SDK_WEBHOOK_IMAGE_TAG: &str = "macro-sdk-webhook-relay:dev";
+
+const NIX_STREAM_RUNTIME: &str = ".#stream-docker-image-local-runtime";
+const NIX_STREAM_NODE_BUN: &str = ".#stream-docker-image-local-node-bun";
+const NIX_STREAM_SDK_WEBHOOK: &str = ".#stream-docker-image-sdk-webhook-relay";
 
 /// Reconcile the runtime image for the host arch.
-///
-/// Linux loads the flake's dockerTools stream. Darwin uses BuildKit. `force`
-/// rebuilds from scratch (`nix build --rebuild` / `--no-cache`).
-pub fn ensure_runtime_image(stage: &Stage, target: Target, force: bool) -> Result<()> {
-    if cfg!(target_os = "linux") {
-        nix_load_runtime_image(stage, force)
-    } else {
-        docker_build_runtime_image(stage, target, force)
-    }
+pub fn ensure_runtime_image(stage: &Stage, _target: Target, force: bool) -> Result<()> {
+    nix_load_stream(
+        stage,
+        NIX_STREAM_RUNTIME,
+        "stream-docker-image-local-runtime",
+        RUNTIME_IMAGE_TAG,
+        force,
+    )
 }
 
-fn nix_load_runtime_image(stage: &Stage, force: bool) -> Result<()> {
+/// Load the Node/Bun runtime and the SDK webhook relay used by aux services.
+pub fn ensure_aux_images(stage: &Stage, force: bool) -> Result<()> {
+    nix_load_stream(
+        stage,
+        NIX_STREAM_NODE_BUN,
+        "stream-docker-image-local-node-bun",
+        NODE_BUN_IMAGE_TAG,
+        force,
+    )?;
+    nix_load_stream(
+        stage,
+        NIX_STREAM_SDK_WEBHOOK,
+        "stream-docker-image-sdk-webhook-relay",
+        SDK_WEBHOOK_IMAGE_TAG,
+        force,
+    )
+}
+
+fn nix_load_stream(
+    stage: &Stage,
+    attr: &str,
+    out_name: &str,
+    tag: &str,
+    force: bool,
+) -> Result<()> {
     let ws = workspace_root();
-    let out_link = ws.join("target/nix/stream-docker-image-local-runtime");
+    let out_link = ws.join("target/nix").join(out_name);
     if let Some(parent) = out_link.parent() {
         std::fs::create_dir_all(parent)
             .with_context(|| format!("creating {}", parent.display()))?;
@@ -44,42 +72,22 @@ fn nix_load_runtime_image(stage: &Stage, force: bool) -> Result<()> {
     let mut build = Command::new("nix");
     build
         .current_dir(&ws)
-        .args(["build", "--print-build-logs", NIX_STREAM_ATTR])
+        .args(["build", "--print-build-logs", attr])
         .args(["--out-link"])
         .arg(&out_link);
     if force {
         build.arg("--rebuild");
     }
-    stage.run("Building Nix runtime image", &mut build)?;
+    stage.run(&format!("Building Nix image {tag}"), &mut build)?;
 
-    // `Stage::run` captures stdout/stderr; piping the stream into `docker load`
-    // has to happen inside one process so the capture doesn't steal the image
-    // tarball. `$0` is the dummy argv0, `$1` is the stream script.
+    load_stream(stage, &out_link, tag)
+}
+
+fn load_stream(stage: &Stage, stream: &Path, tag: &str) -> Result<()> {
     let mut load = Command::new("sh");
     load.arg("-c")
         .arg("exec \"$1\" | docker load")
-        .arg("nix-stream-runtime-image")
-        .arg(&out_link);
-    stage.run(
-        &format!("Loading runtime image {RUNTIME_IMAGE_TAG}"),
-        &mut load,
-    )
-}
-
-fn docker_build_runtime_image(stage: &Stage, target: Target, force: bool) -> Result<()> {
-    let ws = workspace_root();
-    let mut cmd = Command::new("docker");
-    cmd.current_dir(&ws)
-        .args(["buildx", "build", "--platform", target.docker_platform])
-        .args(["-f", DOCKERFILE_REL])
-        .args(["-t", RUNTIME_IMAGE_TAG])
-        .arg("--load");
-    if force {
-        cmd.arg("--no-cache");
-    }
-    cmd.arg(".");
-    stage.run(
-        &format!("Building runtime image {RUNTIME_IMAGE_TAG}"),
-        &mut cmd,
-    )
+        .arg("nix-stream-image")
+        .arg(stream);
+    stage.run(&format!("Loading image {tag}"), &mut load)
 }

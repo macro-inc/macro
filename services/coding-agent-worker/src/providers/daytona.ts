@@ -1,6 +1,6 @@
 import type { Stream } from '@agentclientprotocol/sdk';
 import { createWebSocketStream } from '@agentclientprotocol/sdk/experimental/ws-client';
-import { Daytona, Image, type Sandbox } from '@daytona/sdk';
+import { Daytona, type Sandbox } from '@daytona/sdk';
 import type {
   AgentSandbox,
   CommandRunner,
@@ -69,12 +69,11 @@ export class DaytonaProvider implements SandboxProvider {
     // interpolated into a shell command, but reject junk at the boundary.
     assertSafeRepoUrl(opts.repoUrl);
 
-    // The SDK uploads the Dockerfile's COPY sources before snapshot logs can
-    // stream; that upload phase has no progress reporting.
+    // The SDK pulls `macro-coding-agent-sandbox:dev` (Nix dockerTools).
     console.log('[daytona] uploading build context + creating sandbox');
     const created = await this.daytona.create(
       {
-        image: Image.fromDockerfile('container/Dockerfile'),
+        image: 'macro-coding-agent-sandbox:dev',
         // REPO_URL rides in the sandbox env so ensure() needs no arguments
         // and reconnects don't have to rethread it.
         envVars: { ...opts.envVars, REPO_URL: opts.repoUrl },

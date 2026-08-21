@@ -113,7 +113,7 @@ impl InfraEnv {
             redis_uri: "redis://redis:6379".into(),
             opensearch_url: "http://search:9200".into(),
             local_aws_url: "http://localstack:4566".into(),
-            // The broker's in-network listener (see docker/docker-compose-databases.yml);
+            // The broker's in-network listener (see `nix/_arion/databases.nix`);
             // host processes use localhost:9092 instead.
             kafka_brokers: "kafka:29092".into(),
         }

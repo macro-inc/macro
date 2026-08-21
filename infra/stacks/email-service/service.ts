@@ -18,7 +18,6 @@ import {
 } from '../../packages/shared';
 
 const BASE_NAME = 'email-service';
-const REPO_ROOT = '../../..';
 
 export const SERVICE_DOMAIN_NAME = `email-service${
   stack === 'prod' ? '' : `-${stack}`
@@ -85,13 +84,9 @@ export class EmailService extends pulumi.ComponentResource {
         repositoryId: `${BASE_NAME}-ecr-${stack}`,
         repositoryName: `${BASE_NAME}-${stack}`,
         imageId: `${BASE_NAME}-image-${stack}`,
-        imagePath: REPO_ROOT,
-        dockerfile: 'docker/Dockerfile',
+        nixImage: 'docker-image-email-service',
         platform,
         tags: this.tags,
-        buildArgs: {
-          SERVICE_NAME: 'email_service',
-        },
       },
       { parent: this }
     );

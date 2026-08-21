@@ -24,7 +24,7 @@
     "@pulumi/aws-native": "*",
     "@pulumi/awsx": "^3.1.0",
     "@pulumi/datadog": "^4.51.0",
-    "@pulumi/docker-build": "^0.0.15",
+    "@pulumi/command": "^1.1.0",
     "@pulumi/pulumi": "^3.209.0",
     "@pulumi/tls": "*",
     "@pulumiverse/doppler": "^0.9.0",

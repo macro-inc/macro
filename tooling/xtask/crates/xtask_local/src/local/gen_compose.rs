@@ -7,10 +7,9 @@
 //! FusionAuth is repointed at the generated kickstart.
 //!
 //! The only thing the typed model can't express is Compose's `!reset` /
-//! `!override` merge tags (needed to drop the inherited `build:` and to replace
-//! inherited `ports:`/`volumes:` rather than append). Those are emitted via
-//! `serde_yaml`'s native tagged-value support — still structured data, no string
-//! munging.
+//! `!override` merge tags (needed to replace inherited `ports:`/`volumes:`
+//! rather than append). Those are emitted via `serde_yaml`'s native tagged-value
+//! support — still structured data, no string munging.
 
 use std::path::PathBuf;
 use std::process::Command;
@@ -172,18 +171,10 @@ fn add_sdk_webhook_relay(
     instance: &Instance,
 ) -> Result<()> {
     super::sdk_webhook::ensure_keys(instance)?;
-    let build = dct::BuildStep::Advanced(dct::AdvancedBuildStep {
-        context: repo_root()
-            .join("infra/local/sdk-webhook-relay")
-            .display()
-            .to_string(),
-        ..Default::default()
-    });
     services.insert(
         "sdk-webhook-relay".to_string(),
         Some(dct::Service {
             image: Some(SDK_WEBHOOK_RELAY_IMAGE.to_string()),
-            build_: Some(build),
             ports: dct::Ports::Short(vec![format!(
                 "127.0.0.1:{}:22",
                 super::sdk_webhook::ssh_port(instance)
@@ -516,11 +507,19 @@ pub fn arion_compose_yaml() -> PathBuf {
 
 /// Evaluate the Arion composition into a Compose YAML file.
 ///
-/// `just run_local` / `just stack` use this as the base file instead of
-/// `docker/docker-compose.yml`. The hand-written YAML remains for tracing
-/// collectors, snapshot hashing, and ad-hoc `docker compose` helpers.
+/// `just run_local` / `just stack` use this as the base file. Tracing collectors
+/// are compose profiles on the same Arion YAML.
 pub fn ensure_arion_compose(stage: &Stage) -> Result<PathBuf> {
     let path = arion_compose_yaml();
+    if path.exists()
+        && Command::new("nix")
+            .arg("--version")
+            .output()
+            .map(|o| !o.status.success())
+            .unwrap_or(true)
+    {
+        return Ok(path);
+    }
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)
             .with_context(|| format!("creating {}", parent.display()))?;

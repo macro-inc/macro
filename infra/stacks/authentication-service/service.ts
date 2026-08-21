@@ -19,7 +19,6 @@ import {
 } from '../../packages/shared';
 
 const BASE_NAME = pulumi.getProject();
-const REPO_ROOT = '../../..';
 
 const MICROSOFT_TOKEN_KMS_ACTIONS = ['kms:GenerateDataKey', 'kms:Decrypt'];
 
@@ -247,13 +246,9 @@ export class AuthenticationService extends pulumi.ComponentResource {
         repositoryId: `${BASE_NAME}-ecr-${stack}`,
         repositoryName: `${BASE_NAME}-${stack}`,
         imageId: `${BASE_NAME}-image-${stack}`,
-        imagePath: REPO_ROOT,
-        dockerfile: 'docker/Dockerfile',
+        nixImage: 'docker-image-authentication-service',
         platform,
         tags: this.tags,
-        buildArgs: {
-          SERVICE_NAME: 'authentication_service',
-        },
       },
       { parent: this }
     );

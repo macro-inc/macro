@@ -68,11 +68,8 @@ in
     };
   };
 
-  search = lib.dockerfile {
-    context = paths.opensearchContext;
-    dockerfile = paths.dockerfiles.opensearch;
-    image = "macro-local-opensearch:dev";
-    service = {
+  search =
+    lib.pulled "opensearchproject/opensearch:3.5.0" {
       environment = {
         "cluster.name" = "search";
         "discovery.type" = "single-node";
@@ -86,7 +83,10 @@ in
         "9200:9200"
         "9600:9600"
       ];
-      volumes = [ "opensearch_data:/usr/share/opensearch/data" ];
+      volumes = [
+        "opensearch_data:/usr/share/opensearch/data"
+        "${paths.opensearchEntrypoint}:/opensearch-entrypoint.sh:ro"
+      ];
       networks = [ "databases" ];
       healthcheck = {
         test = [
@@ -96,18 +96,20 @@ in
         interval = "10s";
         retries = 80;
       };
-    };
-  }
-  // {
-    out.service.ulimits = {
-      memlock = {
-        soft = -1;
-        hard = -1;
+    }
+    // {
+      out.service = {
+        entrypoint = [ "/bin/bash" "/opensearch-entrypoint.sh" ];
+        ulimits = {
+          memlock = {
+            soft = -1;
+            hard = -1;
+          };
+          nofile = {
+            soft = 65536;
+            hard = 65536;
+          };
+        };
       };
-      nofile = {
-        soft = 65536;
-        hard = 65536;
-      };
     };
-  };
 }

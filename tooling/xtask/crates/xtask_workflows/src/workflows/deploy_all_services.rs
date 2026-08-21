@@ -211,7 +211,7 @@ fn build_service_binaries() -> Job {
     // Pushing the built output is what makes this service a pure substitution
     // next run when it is unchanged, even on a cold volume.
     .add_step(steps::push_nix_cache(
-        ".#deploy-service-binaries-${{ matrix.service }}",
+        ".#docker-image-${{ matrix.service }}",
     ))
     .add_step(steps::upload_handoff_artifact(
         "prebuilt-binaries.tar.gz",
@@ -224,18 +224,13 @@ fn build_prebuilt_binaries() -> Step<Run> {
     let script = indoc::indoc! {r#"
         set -euo pipefail
         mkdir -p prebuilt
-        nix build --print-build-logs ".#deploy-service-binaries-${SERVICE}"
-        cp -r result/bin/* prebuilt/
-        mkdir -p prebuilt/nix-store
-        while IFS= read -r store_path; do
-          cp -a "$store_path" prebuilt/nix-store/
-        done < <(nix-store -qR result)
-        touch prebuilt/.keep
-        tar -C prebuilt -czf prebuilt-binaries.tar.gz .
+        nix build --print-build-logs ".#docker-image-${SERVICE}"
+        cp -a result prebuilt/docker-image.tar
+        tar -C prebuilt -czf prebuilt-binaries.tar.gz docker-image.tar
         # Receipt: the deploy job logs the same hash on read.
         echo "handoff receipt: $(sha256sum prebuilt-binaries.tar.gz | cut -d' ' -f1) ($(stat -c%s prebuilt-binaries.tar.gz) bytes)"
     "#};
-    Step::new("Build prebuilt binaries")
+    Step::new("Build Nix docker image")
         .run(script)
         .shell("bash")
         .add_env(Env::new("SERVICE", "${{ matrix.service }}"))

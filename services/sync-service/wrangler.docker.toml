@@ -2,7 +2,8 @@ name = "sync_service2"
 main = "build/worker/shim.mjs"
 compatibility_date = "2025-03-05"
 
-# No [build] section - build is done during Docker image creation
+# No [build] section — the wasm worker is produced on the host (or baked
+# into a Nix image) and bind-mounted at `build/worker/shim.mjs`.
 
 [observability.logs]
 enabled = true

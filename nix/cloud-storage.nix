@@ -409,6 +409,11 @@
           binaries = [ "search_processing_service" ];
         }
         {
+          serviceName = "sha-cleanup-worker";
+          packageName = "sha_cleanup_worker";
+          binaries = [ "sha_cleanup_worker" ];
+        }
+        {
           serviceName = "static-file-service";
           packageName = "static_file_service";
           binaries = [ "static_file_service" ];

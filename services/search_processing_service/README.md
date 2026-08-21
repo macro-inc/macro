@@ -64,10 +64,11 @@ just get_environment                 # .env-local.enc       (local services)
 just get_environment dev             # .env-localdev.enc    (dev services)
 ```
 
-The repository already provides a Kafka broker in `docker/docker-compose-databases.yml`. Start it for fully local processing:
+The repository already provides a Kafka broker in the Arion composition. Start it for fully local processing:
 
 ```bash
-docker compose --project-directory . -f docker/docker-compose-databases.yml up -d kafka
+just ensure_arion
+docker compose --project-directory . -f target/nix/arion-compose.yaml up -d kafka
 ```
 
 Use `KAFKA_BROKERS=localhost:9092` when sps runs directly on the host. A service container attached to the compose `databases` network must use `KAFKA_BROKERS=kafka:29092`; `localhost` inside that container refers to the container itself. Keep the broker value supplied by the dev environment bundle when running against dev infrastructure.
@@ -106,7 +107,7 @@ cargo run --features disable_processing
 For the local broker, inspect group lag with:
 
 ```bash
-docker compose --project-directory . -f docker/docker-compose-databases.yml exec kafka \
+docker compose --project-directory . -f target/nix/arion-compose.yaml exec kafka \
   /opt/kafka/bin/kafka-consumer-groups.sh \
   --bootstrap-server kafka:29092 \
   --group search-processing-service \

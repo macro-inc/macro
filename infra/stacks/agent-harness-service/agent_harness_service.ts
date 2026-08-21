@@ -19,7 +19,6 @@ import {
 } from '../../packages/shared';
 
 const BASE_NAME = pulumi.getProject();
-const REPO_ROOT = '../../..';
 
 export const SERVICE_DOMAIN_NAME = `agent-harness${
   stack === 'prod' ? '' : `-${stack}`
@@ -175,12 +174,8 @@ export class AgentHarnessService extends pulumi.ComponentResource {
         repositoryId: `${BASE_NAME}-ecr-${stack}`,
         repositoryName: `${BASE_NAME}-${stack}`,
         imageId: `${BASE_NAME}-image-${stack}`,
-        imagePath: REPO_ROOT,
-        dockerfile: 'docker/Dockerfile',
+        nixImage: 'docker-image-agent-harness-service',
         platform,
-        buildArgs: {
-          SERVICE_NAME: 'agent_harness_service',
-        },
         tags,
       },
       { parent: this }

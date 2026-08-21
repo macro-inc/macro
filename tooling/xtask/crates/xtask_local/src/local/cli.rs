@@ -119,7 +119,7 @@ pub struct RunArgs {
     #[arg(long, short)]
     pub verbose: bool,
     /// Start a local OTLP trace collector and wire services to export to it.
-    /// Omit to leave tracing off (the default) — see `docker/docker-compose.yml`
+    /// Omit to leave tracing off (the default) — see `nix/_arion/tracing.nix`
     /// for what each backend does.
     #[arg(long)]
     pub traces: Option<TracesBackend>,

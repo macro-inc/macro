@@ -45,12 +45,11 @@ When testing you will need to be running the `macrodb` and the redis cluster
 docker images (see **local development**). You will need to export the database url
 before running `cargo test`: `export DATABASE_URL=postgres://user:password@localhost:5432/macrodb`
 
-## Creating Docker Image
+## Creating a production image
 
-Before you create the docker image using either the docker build command
-or `pulumi up`, you will need to have the local db running and run
-`make prepare_db` this will create the necessary `.sqlx` files to allow for us
-to build the application without needing a direct DB connection.
+Production images are Nix dockerTools archives (`nix build .#docker-image-document-storage-service`).
+Before deploying, have the local db running and run `make prepare_db` so the
+`.sqlx` files allow the application to build without a live DB connection.
 
 ## Contributing
 

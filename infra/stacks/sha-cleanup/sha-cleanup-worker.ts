@@ -2,11 +2,11 @@ import * as aws from '@pulumi/aws';
 import * as awsx from '@pulumi/awsx';
 import type { Output } from '@pulumi/pulumi';
 import * as pulumi from '@pulumi/pulumi';
+import { EcrImage } from '../../packages/service';
 import { stack } from '../../packages/shared';
 
 const BASE_NAME = `sha-cleaner-worker`;
 const WORKER_NAME = `${BASE_NAME}-${stack}`;
-const REPO_ROOT = '../../..';
 
 type CreateShaCleanupWorkerArgs = {
   containerEnvVars?: { name: string; value: Output<string> | string }[];
@@ -18,7 +18,7 @@ type CreateShaCleanupWorkerArgs = {
 export class ShaWorker extends pulumi.ComponentResource {
   public role: aws.iam.Role;
   public ecr: awsx.ecr.Repository;
-  public image: awsx.ecr.Image;
+  public image: { imageUri: pulumi.Output<string> };
   public taskDefinition: awsx.ecs.FargateTaskDefinition;
   constructor(
     name: string,
@@ -31,28 +31,20 @@ export class ShaWorker extends pulumi.ComponentResource {
     opts?: pulumi.ComponentResourceOptions
   ) {
     super('my:components:ShaWorker', name, {}, opts);
-    this.ecr = new awsx.ecr.Repository(
-      `${BASE_NAME}-ecr-${stack}`,
+    const image = new EcrImage(
+      `${BASE_NAME}-ecr-image-${stack}`,
       {
-        name: `${BASE_NAME}-${stack}`,
-        imageTagMutability: 'MUTABLE',
-        forceDelete: true,
+        repositoryId: `${BASE_NAME}-ecr-${stack}`,
+        repositoryName: `${BASE_NAME}-${stack}`,
+        imageId: `${BASE_NAME}-image-${stack}`,
+        nixImage: 'docker-image-sha-cleanup-worker',
+        platform,
         tags,
       },
       { parent: this }
     );
-
-    this.image = new awsx.ecr.Image(
-      `${BASE_NAME}-image-${stack}`,
-      {
-        imageTag: 'latest',
-        context: REPO_ROOT,
-        platform: `${platform.family}/${platform.architecture}`,
-        repositoryUrl: this.ecr.url,
-        dockerfile: `${REPO_ROOT}/docker/Dockerfile.sha-cleanup-worker`,
-      },
-      { parent: this }
-    );
+    this.ecr = image.ecr;
+    this.image = image.image;
 
     const docStorageBucketPolicy = new aws.iam.Policy(
       `${BASE_NAME}-doc-storage-policy-${stack}`,
@@ -114,7 +106,7 @@ export class ShaWorker extends pulumi.ComponentResource {
         taskRole: { roleArn: this.role.arn },
         container: {
           name: WORKER_NAME,
-          image: pulumi.interpolate`${this.ecr.repository.repositoryUrl}:latest`,
+          image: this.image.imageUri,
           cpu: 256, // Specify CPU units
           memory: 512, // Specify memory in MB
           environment: containerEnvVars,

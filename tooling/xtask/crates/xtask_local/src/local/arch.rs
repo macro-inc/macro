@@ -22,7 +22,7 @@ pub struct Target {
     /// e.g. `aarch64-unknown-linux-gnu`. Output binaries land in
     /// `target/<triple>/debug/<binary>`.
     pub triple: &'static str,
-    /// e.g. `linux/arm64`. Passed to `docker buildx --platform`.
+    /// e.g. `linux/arm64`. Used to tag snapshot keys and image platforms.
     pub docker_platform: &'static str,
 }
 

@@ -175,7 +175,7 @@ pub fn print(
 /// The trace viewer for the OTel spans the web app emits, if one is running.
 ///
 /// The viewers are global (fixed ports, one per machine, started manually via
-/// compose profiles — see `docker/docker-compose.yml`), so this probes rather
+/// compose profiles — see `nix/_arion/tracing.nix`), so this probes rather
 /// than consulting the instance: the Jaeger UI on 16686, else a Datadog agent
 /// on the OTLP port 4318, whose traces land in the Datadog APM UI under the
 /// `env:` its compose profile sets (`DD_ENV`, default `local`).

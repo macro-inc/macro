@@ -18,7 +18,6 @@ import {
 } from '../../packages/shared';
 
 const BASE_NAME = pulumi.getProject();
-const REPO_ROOT = '../../..';
 
 export const SERVICE_DOMAIN_NAME = `image-proxy${
   stack === 'prod' ? '' : `-${stack}`
@@ -82,12 +81,8 @@ export class ImageProxyService extends pulumi.ComponentResource {
         repositoryId: `${BASE_NAME}-ecr-${stack}`,
         repositoryName: `${BASE_NAME}-${stack}`,
         imageId: `${BASE_NAME}-image-${stack}`,
-        imagePath: REPO_ROOT,
-        dockerfile: 'docker/Dockerfile',
+        nixImage: 'docker-image-image-proxy-service',
         platform,
-        buildArgs: {
-          SERVICE_NAME: 'image_proxy_service',
-        },
         tags: this.tags,
       },
       { parent: this }

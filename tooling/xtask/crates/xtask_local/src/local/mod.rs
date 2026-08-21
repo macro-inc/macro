@@ -157,8 +157,8 @@ use anyhow::Result;
 use instance::Instance;
 use stage::Stage;
 
-/// Every non-Rust local service whose image is built from this repository.
-/// `docker compose up` builds a missing image implicitly, but an Environment
+/// Every non-Rust local service whose image is produced from this repository
+/// (Nix dockerTools, or a bind-mounted Node/Bun runtime). An Environment
 /// Build must materialize all of them so a fresh agent never discovers one at
 /// stack-start time.
 const LOCAL_BUILD_SERVICE_IMAGES: &[&str] = &[
@@ -188,7 +188,7 @@ const LOCAL_RECREATE_SERVICE_IMAGES: &[&str] = &[
 /// separately by [`build::ensure_runtime_image`].
 const LOCAL_PULL_SERVICE_IMAGES: &[&str] = &["proxy", "mailpit", "static_file_cdn"];
 
-/// The artifact-driven preview updater can refresh every Docker-built app
+/// The artifact-driven preview updater can refresh every Nix-built app
 /// service. Keep this separate so enabling local aux rebuilds does not make the
 /// existing `run_local` edit loop rebuild the AI worker too.
 const PREVIEW_AUX_SERVICE_IMAGES: &[&str] = &[
@@ -518,6 +518,7 @@ fn prepare(
     let target = arch::detect()?;
     gen_compose::ensure_arion_compose(stage)?;
     build::ensure_runtime_image(stage, target, false)?;
+    build::ensure_aux_images(stage, args.build.build_aux_services)?;
     let binaries = build::resolve(
         stage,
         target,
@@ -544,9 +545,6 @@ fn prepare(
         let google = kickstart::GoogleIdp::from_env(&env.merged);
         fusionauth::write_kickstart(instance, google.as_ref())?;
     }
-    if args.build.build_aux_services {
-        build_aux_service_images(stage, instance, &env)?;
-    }
     if pull_app_images {
         pull_app_service_images(stage, instance, &env)?;
     }
@@ -562,12 +560,10 @@ fn compose_cmd(instance: &Instance, env: &env_layer::ResolvedEnv) -> Command {
 
 fn build_aux_service_images(
     stage: &Stage,
-    instance: &Instance,
-    env: &env_layer::ResolvedEnv,
+    _instance: &Instance,
+    _env: &env_layer::ResolvedEnv,
 ) -> Result<()> {
-    let mut build = compose_cmd(instance, env);
-    build.arg("build").args(LOCAL_BUILD_SERVICE_IMAGES);
-    stage.run("Building auxiliary service images", &mut build)
+    build::ensure_aux_images(stage, false)
 }
 
 fn pull_app_service_images(
@@ -722,7 +718,7 @@ fn bring_up_app(
 
 /// Start the requested trace collector (`--traces`) under its own compose
 /// project, the same one a developer would use manually — see
-/// `docker/docker-compose.yml`'s `jaeger`/`datadog-agent` services. Global and
+/// `nix/_arion/tracing.nix`'s `jaeger`/`datadog-agent` services. Global and
 /// idempotent (like `start_localstack`): one collector per machine, shared
 /// across instances, left running across `run_local` invocations.
 fn ensure_tracing_backend(stage: &Stage, backend: cli::TracesBackend) -> Result<()> {
@@ -738,7 +734,8 @@ fn ensure_tracing_backend(stage: &Stage, backend: cli::TracesBackend) -> Result<
             backend.compose_profile()
         );
     }
-    let compose = repo_root().join("docker/docker-compose.yml");
+    gen_compose::ensure_arion_compose(stage)?;
+    let compose = gen_compose::arion_compose_yaml();
     let mut up = Command::new("docker");
     up.arg("compose")
         .arg("--project-directory")
@@ -776,7 +773,7 @@ fn ensure_tracing_backend(stage: &Stage, backend: cli::TracesBackend) -> Result<
 /// attach it to this instance's `services` network under the `otel-collector`
 /// alias that the injected `OTEL_EXPORTER_OTLP_ENDPOINT` points at (see
 /// `env_layer::resolve`). The collectors are started under their own compose
-/// project (`docker/docker-compose.yml`, profiles `jaeger`/`datadog`), and
+/// project (`target/nix/arion-compose.yaml`, profiles `jaeger`/`datadog`), and
 /// Compose prefixes networks per project — so without this, instance
 /// containers can't resolve `otel-collector` and span exports fail with DNS
 /// errors. Best-effort: "already connected" (rerun) and other failures are

@@ -1,21 +1,15 @@
-import * as awsx from '@pulumi/awsx';
 import { stack } from '../../../shared';
 
+/**
+ * @deprecated Service images are Nix dockerTools archives pushed by
+ * `EcrImage` in `packages/service`. This helper is unused.
+ */
 export function createImage(
-  serviceName: string,
-  pathToDockerfile: string,
-  platform?: string
+  _serviceName: string,
+  _nixImage: string,
+  _platform?: string
 ) {
-  const ecr = new awsx.ecr.Repository(`${serviceName}-ecr-${stack}`, {
-    name: `${serviceName}-${stack}`,
-    imageTagMutability: 'MUTABLE',
-    forceDelete: true,
-  });
-  const image = new awsx.ecr.Image(`${serviceName}-image-${stack}`, {
-    imageTag: 'latest',
-    context: pathToDockerfile,
-    platform: platform ?? 'linux/arm64',
-    repositoryUrl: ecr.url,
-  });
-  return { ecr, image };
+  throw new Error(
+    `createImage is removed; use EcrImage with nixImage (stack=${stack})`
+  );
 }

@@ -106,12 +106,8 @@ export class StaticFileService extends pulumi.ComponentResource {
         repositoryId: `${SERVICE_NAME}-ecr-${stack}`,
         repositoryName: `${SERVICE_NAME}-${stack}`,
         imageId: `${SERVICE_NAME}-image-${stack}`,
-        imagePath: REPO_ROOT,
-        dockerfile: 'docker/Dockerfile',
+        nixImage: 'docker-image-static-file-service',
         platform: args.platform,
-        buildArgs: {
-          SERVICE_NAME: 'static_file_service',
-        },
         tags: this.tags,
       },
       { parent: this }

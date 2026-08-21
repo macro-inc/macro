@@ -1,10 +1,24 @@
 import * as aws from '@pulumi/aws';
 import * as awsx from '@pulumi/awsx';
+import * as command from '@pulumi/command';
 import * as pulumi from '@pulumi/pulumi';
+import * as crypto from 'crypto';
+import * as fs from 'fs';
+import * as path from 'path';
+
+function nixImageTarHash(): string {
+  const tar = process.env.NIX_DOCKER_IMAGE_TAR;
+  if (!tar || !fs.existsSync(tar)) {
+    return '';
+  }
+  const hash = crypto.createHash('sha256');
+  hash.update(fs.readFileSync(tar));
+  return hash.digest('hex');
+}
 
 export class EcrImage extends pulumi.ComponentResource {
   public ecr: awsx.ecr.Repository;
-  public image: awsx.ecr.Image;
+  public image: { imageUri: pulumi.Output<string> };
   public tags: { [key: string]: string };
 
   constructor(
@@ -13,19 +27,15 @@ export class EcrImage extends pulumi.ComponentResource {
       repositoryId,
       repositoryName,
       imageId,
-      imagePath,
-      platform,
-      dockerfile,
-      buildArgs,
+      nixImage,
       tags,
     }: {
       repositoryId: string;
       repositoryName: string;
       imageId: string;
-      imagePath: string;
+      /** Flake package that produces a dockerTools archive, e.g. `docker-image-authentication-service`. */
+      nixImage: string;
       platform: { family: string; architecture: string };
-      dockerfile?: string;
-      buildArgs?: { [key: string]: string };
       tags: { [key: string]: string };
     },
 
@@ -73,43 +83,28 @@ export class EcrImage extends pulumi.ComponentResource {
       { parent: this }
     );
 
-    const usePrebuiltServiceBinaries =
-      process.env.USE_PREBUILT_SERVICE_BINARIES === 'true';
-    const prebuiltDockerfiles: { [key: string]: string } = {
-      'docker/Dockerfile': 'docker/Dockerfile.prebuilt',
-      'docker/Dockerfile.convert_service':
-        'docker/Dockerfile.convert_service.prebuilt',
-      'docker/Dockerfile.search_processing_service':
-        'docker/Dockerfile.search_processing_service.prebuilt',
-    };
-    const effectiveDockerfile = (() => {
-      if (!usePrebuiltServiceBinaries) {
-        return dockerfile;
-      }
-
-      const dockerfileKey = dockerfile ?? 'docker/Dockerfile';
-      const prebuiltDockerfile = prebuiltDockerfiles[dockerfileKey];
-      if (!prebuiltDockerfile) {
-        throw new Error(
-          `No prebuilt Dockerfile mapping configured for ${dockerfileKey}`
-        );
-      }
-      return prebuiltDockerfile;
-    })();
-
-    this.image = new awsx.ecr.Image(
-      imageId,
-      {
-        imageTag: 'latest',
-        context: imagePath,
-        platform: `${platform.family}/${platform.architecture}`,
-        dockerfile: effectiveDockerfile
-          ? `${imagePath}/${effectiveDockerfile}`
-          : undefined,
-        repositoryUrl: this.ecr.url,
-        args: buildArgs,
-      },
-      { parent: this }
+    const repoRoot =
+      process.env.MACRO_REPO_ROOT ?? path.resolve(process.cwd(), '../../..');
+    const pushScript = path.join(
+      repoRoot,
+      'tooling/scripts/push-nix-docker-image.sh'
     );
+
+    const push = new command.local.Command(
+      `${imageId}-nix-push`,
+      {
+        create: pulumi.interpolate`${pushScript} ${nixImage} ${this.ecr.url}:latest`,
+        triggers: [
+          nixImage,
+          process.env.NIX_DOCKER_IMAGE_TAR ?? '',
+          nixImageTarHash(),
+        ],
+      },
+      { parent: this, dependsOn: [this.ecr] }
+    );
+
+    this.image = {
+      imageUri: push.stdout.apply((s) => s.trim()),
+    };
   }
 }

@@ -189,14 +189,11 @@ fn dump_boot_timings() -> Step<Run> {
 ///   VM) and via zigbuild, not a host build (the nix dev shell links the
 ///   /nix/store ELF interpreter, which doesn't exist in the VM image).
 /// - `web`: the same-origin frontend bundle.
-/// - `images`: the compose-built app images (the most fragile part of a
-///   fresh bring-up — a broken Dockerfile still fails the step early via
-///   fail-fast wait), then a best-effort premirror push to the app's Fly
-///   registry so the network transfer overlaps the cargo lane instead of
-///   serializing after it. The deploy step's mirror loop stays
-///   authoritative: its manifest-existence check skips whatever was
-///   premirrored here and pushes the rest (e.g. the bake-built runtime
-///   image).
+/// - `images`: load the Nix dockerTools app images, then a best-effort
+///   premirror push to the app's Fly registry so the network transfer
+///   overlaps the cargo lane instead of serializing after it. The deploy
+///   step's mirror loop stays authoritative: its manifest-existence check
+///   skips whatever was premirrored here and pushes the rest.
 /// - `bake`: the init snapshot (see the lane script header for details),
 ///   under its own CARGO_TARGET_DIR so its host xtask build doesn't take
 ///   the workspace build-dir lock the cargo lane holds.
@@ -280,11 +277,14 @@ fn build_artifacts() -> Step<Run> {
 
             cat > "$lanes/images.sh" <<'LANE'
             set -euo pipefail
-            docker compose --project-directory . -p macro -f docker/docker-compose.yml build \
-              search sync_service websocket_service lexical_service ai_editing_worker
-            # The image BUILD above is fatal; the premirror below is a pure
-            # optimization with an authoritative fallback (the deploy step's
-            # mirror loop), so its failure only costs a slower push later.
+            mkdir -p target/nix
+            nix build .#arion-compose-yaml --out-link target/nix/arion-compose.yaml
+            nix build .#stream-docker-image-local-runtime --out-link target/nix/stream-docker-image-local-runtime
+            sh -c 'exec "$1" | docker load' nix-stream target/nix/stream-docker-image-local-runtime
+            nix build .#stream-docker-image-local-node-bun --out-link target/nix/stream-docker-image-local-node-bun
+            sh -c 'exec "$1" | docker load' nix-stream target/nix/stream-docker-image-local-node-bun
+            nix build .#stream-docker-image-sdk-webhook-relay --out-link target/nix/stream-docker-image-sdk-webhook-relay
+            sh -c 'exec "$1" | docker load' nix-stream target/nix/stream-docker-image-sdk-webhook-relay
             bash -euo pipefail "$(dirname "$0")/premirror.sh" \
               || echo "premirror failed (non-fatal): the deploy step mirrors authoritatively" >&2
             LANE
@@ -301,7 +301,7 @@ fn build_artifacts() -> Step<Run> {
             flyctl auth docker
             registry="registry.fly.io/$APP_NAME"
             for img in $(docker compose --project-directory . -p macro \
-                -f docker/docker-compose.yml config --images | sort -u) alpine:3; do
+                -f target/nix/arion-compose.yaml config --images | sort -u) alpine:3; do
               if ! docker image inspect "$img" >/dev/null 2>&1 && ! docker pull "$img"; then
                 echo "premirror: skipping $img (not local, not pullable)"
                 continue
@@ -466,19 +466,18 @@ fn stage_context() -> Step<Run> {
         # snapshot-key input, byte-identical to this checkout, so the VM's
         # key matches the snapshot baked above.
         rsync -a --relative --exclude node_modules \
-          docker/docker-compose.yml \
-          docker/docker-compose-databases.yml \
-          infra/stacks/fusionauth-instance/docker-compose.yml \
+          nix/_arion \
+          nix/_containers \
           infra/local/nginx \
-          infra/local/opensearch \
           infra/stacks/opensearch/helpers \
           crates/macro_db_client/migrations \
           "$ctx/repo/"
+        mkdir -p "$ctx/repo/target/nix"
+        nix build .#arion-compose-yaml --out-link "$ctx/repo/target/nix/arion-compose.yaml"
         # Service binaries only — the target dir also holds gigabytes of
         # build intermediates. `-p` everywhere: preserved mtimes mean files
-        # cargo didn't relink produce byte-identical Docker layers, so the
-        # registry push/pull skips them (the Dockerfile orders its COPYs
-        # stable → volatile for the same reason).
+        # cargo didn't relink produce byte-identical layers in the Nix
+        # preview image extraCommands copy.
         find target/x86_64-unknown-linux-gnu/debug \
           -maxdepth 1 -type f -executable ! -name '*.d' ! -name '*.so' \
           -exec cp -p {} "$ctx/artifacts/binaries/" \;
@@ -510,8 +509,6 @@ fn stage_context() -> Step<Run> {
         cp -p target/x86_64-unknown-linux-gnu/release/xtask_local "$ctx/bin/xtask"
         cp -p infra/preview/hot-update.sh "$ctx/bin/hot-update"
         cp -p infra/preview/entrypoint.sh "$ctx/entrypoint.sh"
-        cp -p infra/preview/Dockerfile "$ctx/Dockerfile"
-        cp -p infra/preview/update.Dockerfile "$ctx/update.Dockerfile"
     "#})
 }
 
@@ -676,7 +673,7 @@ fn deploy_to_fly() -> Step<Run> {
             envfile=infra/local/generated/macro/local.generated.env
             [ -f "$envfile" ] || : > "$envfile"
             images=$(docker compose --project-directory . -p macro \
-              -f docker/docker-compose.yml \
+              -f target/nix/arion-compose.yaml \
               -f infra/local/generated/macro/docker-compose.override.yml \
               --env-file "$envfile" \
               config --images | sort -u)
@@ -730,7 +727,7 @@ fn deploy_to_fly() -> Step<Run> {
 
             if [ "$mode" = hot ]; then
               update_image="$registry:update-${{ github.sha }}"
-              docker build -f preview-ctx/update.Dockerfile -t "$update_image" preview-ctx
+              bash tooling/scripts/build-preview-image.sh docker-image-preview-update preview-ctx "$update_image"
               push_image "$update_image"
               token_file="$RUNNER_TEMP/registry-pull-token"
               printf '%s' "$pull_token" > "$token_file"
@@ -794,7 +791,7 @@ fn deploy_to_fly() -> Step<Run> {
                 done
 
             image="$registry:${{ github.sha }}"
-            docker build -t "$image" preview-ctx
+            bash tooling/scripts/build-preview-image.sh docker-image-preview preview-ctx "$image"
             push_image "$image"
             # First boot does real work before 8090 opens (pulling the stack
             # images, snapshot restore, compose up, FusionAuth's JVM) —

@@ -146,11 +146,8 @@ runs:
         rm -rf target/lambda
         tar -xzf lambda-artifacts.tar.gz -C .
 
-    # setup docker -- a Namespace remote builder keeps a persistent buildkit
-    # layer cache (so heavy bases like LibreOffice/Collabora stay warm across
-    # runs instead of re-pulling ~hundreds of MB from ECR each time);
-    # otherwise the stock buildx builder. Pulumi's docker-build provider uses
-    # whichever is set as the default builder.
+    # Docker is used to `docker load` the Nix dockerTools archive and push it
+    # to ECR. Images are not built with Dockerfiles or buildx.
     - name: Set up Namespace Docker builder
       if: ${{ inputs.use-docker == 'true' && inputs.use-namespace-builder == 'true' }}
       uses: namespacelabs/nscloud-setup-buildx-action@d059ed7184f0bc7c8b27e8810cea153d02bcc6dd # v0.0.23
@@ -199,3 +196,4 @@ runs:
         DD_API_KEY: ${{ inputs.dd-api-key }}
         DD_HOST: ${{ inputs.dd-host }}
         USE_PREBUILT_SERVICE_BINARIES: ${{ (inputs.prebuilt-binaries-artifact != '' || inputs.prebuilt-binaries-tar != '') && 'true' || 'false' }}
+        NIX_DOCKER_IMAGE_TAR: ${{ (inputs.prebuilt-binaries-artifact != '' || inputs.prebuilt-binaries-tar != '') && 'prebuilt/docker-image.tar' || '' }}

@@ -4,8 +4,14 @@ set positional-arguments
 # single-instance by design; do not derive resource names from the directory.
 export COMPOSE_PROJECT_NAME := "macro"
 
-compose := "docker compose --project-directory . -f docker/docker-compose.yml"
-database_compose := "docker compose -f docker/docker-compose-databases.yml"
+arion_yaml := "target/nix/arion-compose.yaml"
+
+ensure_arion:
+  mkdir -p target/nix
+  nix build .#arion-compose-yaml --out-link {{ arion_yaml }}
+
+compose := "docker compose --project-directory . -f " + arion_yaml
+database_compose := compose
 
 # Creates global networks that are shared across docker-compose files
 create_networks:
@@ -37,11 +43,13 @@ get_environment CONFIG="lcl":
 # This is used when initializing your databases
 run_dbs *ARGS:
   just create_networks
+  just ensure_arion
   {{ database_compose }} up postgres redis --wait {{ ARGS }}
 
 # Spins up main docker-compose
 docker_up *ARGS:
   echo "startup docker compose"
+  just ensure_arion
   {{ compose }} up {{ ARGS }}
 
 # Reset and seed deterministic data used by local E2E tests.
@@ -97,11 +105,12 @@ patch_local_fusionauth_env:
   cleanup() {
     if [ "$NEEDS_STOP" = true ]; then
       echo "Stopping temporary FusionAuth..."
-      {{ compose }} stop fusionauth
+  {{ compose }} stop fusionauth
     fi
   }
   trap cleanup EXIT
 
+  just ensure_arion
   if ! curl -s http://localhost:9011/api/status 2>/dev/null | grep -q '"Ok"'; then
     echo "Starting FusionAuth temporarily to read config..."
     NEEDS_STOP=true
@@ -111,9 +120,11 @@ patch_local_fusionauth_env:
 
 # Stop all local services (default project; legacy alias).
 stop-local:
+  just ensure_arion
   {{ compose }} down
 
 stop-databases:
+  just ensure_arion
   {{ database_compose }} down
 
 # Import LocalStack recipes
@@ -139,7 +150,8 @@ setup_fusionauth:
 
 # Stop FusionAuth containers
 stop_fusionauth:
-  docker compose -f infra/stacks/fusionauth-instance/docker-compose.yml down
+  just ensure_arion
+  {{ compose }} stop db fusionauth
 
 # Clear all BuildKit build cache (full cold rebuild next time)
 docker_cache_clear:

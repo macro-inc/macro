@@ -5,8 +5,8 @@
 # this file with `include_str!`. Every stage skips itself when already done, so
 # this is safe on first boot, on reconnect, and after a machine restart.
 #
-# The paths below are properties of the container image (see the service's
-# `container/Dockerfile`), not configuration, which is why they live here rather
+# The paths below are properties of the container image (see
+# `nix/_containers/sandbox.nix`), not configuration, which is why they live here rather
 # than in Rust. The one value Rust also needs is the sidecar port, because it
 # has to dial the sidecar afterwards - `provision::SIDECAR_PORT` mirrors it and
 # a test asserts the two agree.

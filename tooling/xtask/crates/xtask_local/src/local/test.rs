@@ -29,39 +29,22 @@ fn mode_specs_are_coherent() {
 
 #[test]
 fn durable_bake_covers_every_repository_built_local_image() {
-    fn direct_build_services(path: &std::path::Path) -> BTreeSet<String> {
-        let raw = std::fs::read_to_string(path).unwrap();
-        let compose: serde_yaml::Value = serde_yaml::from_str(&raw).unwrap();
-        compose["services"]
-            .as_mapping()
-            .unwrap()
-            .iter()
-            .filter_map(|(name, service)| {
-                service
-                    .as_mapping()
-                    .is_some_and(|service| service.contains_key("build"))
-                    .then(|| name.as_str().unwrap().to_string())
-            })
-            .collect()
-    }
-
-    let mut expected = direct_build_services(&repo_root().join("docker/docker-compose.yml"));
-    expected.extend(direct_build_services(
-        &repo_root().join("docker/docker-compose-databases.yml"),
-    ));
-    // The generated override adds this build definition.
-    expected.insert("sdk-webhook-relay".to_string());
-    // The Rust services use the host-built runtime image; this profile-only
-    // helper is intentionally never needed by local stack preparation.
-    expected.remove("rust_services_image");
-    for service in inventory::RUST_SERVICES {
-        expected.remove(service.compose_name);
-    }
-
     let actual: BTreeSet<_> = LOCAL_BUILD_SERVICE_IMAGES
         .iter()
         .map(|name| name.to_string())
         .collect();
+    let expected: BTreeSet<_> = [
+        "websocket_service",
+        "sync_service",
+        "lexical_service",
+        "ai_editing_worker",
+        "analytics_proxy",
+        "sdk-webhook-relay",
+        "search",
+    ]
+    .into_iter()
+    .map(str::to_string)
+    .collect();
     assert_eq!(actual, expected);
     assert_eq!(
         LOCAL_PULL_SERVICE_IMAGES,

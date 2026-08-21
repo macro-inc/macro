@@ -288,11 +288,7 @@ export class CloudStorageService extends pulumi.ComponentResource {
         repositoryId: `${BASE_NAME}-ecr-${stack}`,
         repositoryName: `${BASE_NAME}-${stack}`,
         imageId: `${BASE_NAME}-image-${stack}`,
-        imagePath: REPO_ROOT,
-        dockerfile: 'docker/Dockerfile',
-        buildArgs: {
-          SERVICE_NAME: 'document_storage_service',
-        },
+        nixImage: 'docker-image-document-storage-service',
         platform,
         tags: this.tags,
       },

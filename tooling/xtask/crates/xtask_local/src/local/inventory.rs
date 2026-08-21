@@ -238,8 +238,8 @@ pub const RUST_SERVICES: &[RustService] = &[
         is_websocket: false,
         // Local-only: the default `pdf` feature bundles an amd64-only libpdfium,
         // so local builds drop it (see `build_features`) and cross-compile native
-        // like every other service. Dev/prod still deploy from the dedicated
-        // Dockerfile with the default (pdf-enabled) build.
+        // like every other service. Dev/prod still deploy the pdf-enabled
+        // Nix dockerTools image (`docker-image-search-processing-service`).
         modes: &[Mode::Local],
         opt_in: false,
         no_default_features: true,

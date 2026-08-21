@@ -61,13 +61,20 @@ let
       name,
       tag,
       extraContents ? [ ],
+      extraEnv ? [ ],
       extraConfig ? { },
     }:
+    let
+      mergedEnv = env ++ extraEnv ++ (extraConfig.Env or [ ]);
+      mergedConfig = (config // extraConfig) // {
+        Env = mergedEnv;
+      };
+    in
     {
       inherit name tag;
       contents = contents ++ extraContents;
       extraCommands = fhs.extraCommands;
-      config = config // extraConfig;
+      config = mergedConfig;
     };
 in
 {
@@ -85,5 +92,5 @@ in
     tag = "dev";
   });
 
-  inherit mkImage contents;
+  inherit mkImage contents env runtimeLibs;
 }

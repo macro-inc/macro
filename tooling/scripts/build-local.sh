@@ -1,42 +1,37 @@
 #!/bin/bash
 set -euo pipefail
 
-# Background:
-# Useful for local development as it uses incremental compilation to speed up builds,
-# which is not available in CI/CD. Build speeds will go from 10-20 minutes to seconds.
-
-# Pre-requisites:
-# You will need to install cross (https://github.com/cross-rs/cross).
-
-# What this script does:
-# Builds a local binary cross-compiled for Linux and then builds a Docker image from it
-# and pushes it to ECR under the 'local' tag ('latest' is reserved). 
-# To deploy the image run `USE_EXISTING_IMAGE=true pulumi up` in the stack directory
-
-# Usage: tooling/scripts/build-local.sh <SERVICE_NAME> <ECR_REPO>
-# Example: tooling/scripts/build-local.sh insight_service 569036502058.dkr.ecr.us-east-1.amazonaws.com/insight-service-dev
+# Build a Linux service image with Nix dockerTools and push it to ECR.
+#
+# Usage: tooling/scripts/build-local.sh <service-key> <ECR_REPO>
+# Example: tooling/scripts/build-local.sh authentication-service 569036502058.dkr.ecr.us-east-1.amazonaws.com/authentication-service-dev
 
 SERVICE_NAME=${1:-}
 ECR_REPO=${2:-}
 IMAGE_TAG="local"
 
 if [ -z "$SERVICE_NAME" ] || [ -z "$ECR_REPO" ]; then
-  echo "Usage: $0 <SERVICE_NAME> <ECR_REPO>"
+  echo "Usage: $0 <service-key> <ECR_REPO>"
+  echo "  service-key is the flake docker-image-* suffix, e.g. authentication-service"
   exit 1
 fi
 
-# Build locally for maximum incremental speed
-echo "Building $SERVICE_NAME for Linux using docker locally with incremental compilation..."
-cross build --release --bin "${SERVICE_NAME}" --target x86_64-unknown-linux-gnu --target-dir target
-echo "✅ Local build complete"
+ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+cd "$ROOT"
 
-echo "🐳 Building Docker image from release..."
-docker buildx build \
-  --platform=linux/amd64 \
-  --build-context release=target/x86_64-unknown-linux-gnu/release \
-  --build-arg SERVICE_NAME="$SERVICE_NAME" \
-  -t "$ECR_REPO:$IMAGE_TAG" \
-  -f docker/Dockerfile.prebuilt . \
-  --push
+echo "Building docker-image-${SERVICE_NAME} with Nix dockerTools..."
+nix build --print-build-logs ".#docker-image-${SERVICE_NAME}"
+load_out=$(docker load -i result)
+loaded=$(printf '%s\n' "$load_out" | awk '/Loaded image:/{print $3; exit}')
+if [[ -z "$loaded" ]]; then
+  loaded=$(printf '%s\n' "$load_out" | awk '/Loaded image ID:/{print $4; exit}')
+fi
+if [[ -z "$loaded" ]]; then
+  echo "error: could not parse docker load output:" >&2
+  printf '%s\n' "$load_out" >&2
+  exit 1
+fi
 
+docker tag "$loaded" "$ECR_REPO:$IMAGE_TAG"
+docker push "$ECR_REPO:$IMAGE_TAG"
 echo "✅ Built and pushed $ECR_REPO:$IMAGE_TAG"

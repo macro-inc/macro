@@ -16,7 +16,6 @@ import {
 } from '../../packages/shared';
 
 const BASE_NAME = 'email-service-pubsub-workers';
-const REPO_ROOT = '../../..';
 
 type Args = {
   role: aws.iam.Role;
@@ -68,13 +67,9 @@ export class EmailPubSubWorkers extends pulumi.ComponentResource {
         repositoryId: `${BASE_NAME}-ecr-${stack}`,
         repositoryName: `${BASE_NAME}-${stack}`,
         imageId: `${BASE_NAME}-image-${stack}`,
-        imagePath: REPO_ROOT,
-        dockerfile: 'docker/Dockerfile',
+        nixImage: 'docker-image-email-service',
         platform,
         tags: this.tags,
-        buildArgs: {
-          SERVICE_NAME: 'pubsub_workers',
-        },
       },
       { parent: this }
     );
@@ -113,6 +108,7 @@ export class EmailPubSubWorkers extends pulumi.ComponentResource {
             service: {
               name: BASE_NAME,
               image: image.image.imageUri,
+              command: ['/app/out/pubsub_workers'],
               stopTimeout: 10, // 10 seconds to force kill the task
               cpu: stack === 'prod' ? 2048 : 1024,
               memory: stack === 'prod' ? 3742 : 1742, // 2048 minimum - 256 for datadog - 50 for log_router

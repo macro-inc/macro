@@ -1,9 +1,9 @@
 # Small constructors for Arion service modules.
 #
 # Every service here sets `image.nixBuild = false`. Rust services use the
-# preloaded dockerTools runtime; everything else is a registry image or a
-# Dockerfile build. That keeps `nix build .#arion-compose-yaml` a cheap eval
-# (no dummy dockerTools images, no crane).
+# preloaded dockerTools runtime; JS services use the preloaded Node/Bun
+# runtime; everything else is a registry image. That keeps
+# `nix build .#arion-compose-yaml` a cheap eval (no crane, no dummy images).
 { pkgs }:
 let
   inherit (pkgs) lib;
@@ -42,6 +42,7 @@ in
   inherit envFile paths;
 
   rustRuntimeImage = "macro-local-runtime:dev";
+  nodeBunImage = "macro-local-node-bun:dev";
 
   rustService =
     {
@@ -80,31 +81,5 @@ in
     {
       image.nixBuild = false;
       service = { inherit image; } // service;
-    };
-
-  dockerfile =
-    {
-      dockerfile,
-      context ? paths.context,
-      args ? { },
-      image ? null,
-      service,
-    }:
-    let
-      typedBuild = {
-        inherit context dockerfile;
-      };
-      buildWithArgs = typedBuild // lib.optionalAttrs (args != { }) { inherit args; };
-    in
-    {
-      image.nixBuild = false;
-      service = {
-        build = typedBuild;
-      }
-      // lib.optionalAttrs (image != null) { inherit image; }
-      // service;
-      # `build.args` is not in Arion's typed schema. `out.service` is merged
-      # into the rendered YAML, so re-supply the full `build` map there.
-      out.service = lib.optionalAttrs (args != { }) { build = buildWithArgs; };
     };
 }

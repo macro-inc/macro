@@ -18,7 +18,6 @@ import {
 } from '../../packages/shared';
 
 const BASE_NAME = pulumi.getProject();
-const REPO_ROOT = '../../..';
 export const SERVICE_DOMAIN_NAME = `convert-service${
   stack === 'prod' ? '' : `-${stack}`
 }.${BASE_DOMAIN}`;
@@ -144,12 +143,8 @@ export class ConvertService extends pulumi.ComponentResource {
         repositoryId: `${BASE_NAME}-ecr-${stack}`,
         repositoryName: `${BASE_NAME}-${stack}`,
         imageId: `${BASE_NAME}-image-${stack}`,
-        imagePath: REPO_ROOT,
-        dockerfile: 'docker/Dockerfile.convert_service',
+        nixImage: 'docker-image-convert-service',
         platform,
-        buildArgs: {
-          SERVICE_NAME: 'convert_service',
-        },
         tags: this.tags,
       },
       { parent: this }

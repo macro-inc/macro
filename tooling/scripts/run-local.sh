@@ -14,7 +14,7 @@ compose_cmd=()
 if [ -n "${COMPOSE_FILE:-}" ]; then
   compose_base=(docker compose --project-directory "$ROOT_DIR")
 else
-  compose_base=(docker compose --project-directory "$ROOT_DIR" -f "$ROOT_DIR/docker/docker-compose.yml")
+  compose_base=(docker compose --project-directory "$ROOT_DIR" -f "$ROOT_DIR/target/nix/arion-compose.yaml")
 fi
 local_aws_env=(
   env

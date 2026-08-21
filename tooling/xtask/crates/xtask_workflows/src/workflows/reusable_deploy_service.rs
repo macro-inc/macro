@@ -130,18 +130,13 @@ fn build_prebuilt_binaries() -> Step<Run> {
     let script = indoc::indoc! {r#"
         set -euo pipefail
         mkdir -p prebuilt
-        nix build --print-build-logs ".#deploy-service-binaries-${SERVICE}"
-        cp -r result/bin/* prebuilt/
-        mkdir -p prebuilt/nix-store
-        while IFS= read -r store_path; do
-          cp -a "$store_path" prebuilt/nix-store/
-        done < <(nix-store -qR result)
-        touch prebuilt/.keep
-        tar -C prebuilt -czf prebuilt-binaries.tar.gz .
+        nix build --print-build-logs ".#docker-image-${SERVICE}"
+        cp -a result prebuilt/docker-image.tar
+        tar -C prebuilt -czf prebuilt-binaries.tar.gz docker-image.tar
         # Receipt: the deploy job logs the same hash on read.
         echo "handoff receipt: $(sha256sum prebuilt-binaries.tar.gz | cut -d' ' -f1) ($(stat -c%s prebuilt-binaries.tar.gz) bytes)"
     "#};
-    Step::new("Build prebuilt binaries")
+    Step::new("Build Nix docker image")
         .run(script)
         .shell("bash")
         .add_env(Env::new("SERVICE", "${{ inputs.service-name }}"))

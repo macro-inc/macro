@@ -36,7 +36,7 @@ sed -e "s/USER_ID_PLACEHOLDER/$USER_ID/g" \
 
 # Add the local development user
 echo "Adding local development user..."
-docker compose -f "$REPO_ROOT/docker/docker-compose-databases.yml" exec -T postgres \
+docker compose --project-directory "$REPO_ROOT" -f "$REPO_ROOT/target/nix/arion-compose.yaml" exec -T postgres \
     psql -U user -d macrodb -v ON_ERROR_STOP=1 \
     < "$SCRIPT_DIR/InitiateLocalUser.sql"
 

@@ -1,9 +1,4 @@
-# Local E2E overrides for docker/docker-compose.yml.
-#
-# The default .env can point at shared dev infrastructure. Keep Playwright's
-# deterministic smoke suite on local Docker dependencies by overriding the
-# service environment here and running compose with:
-#   COMPOSE_FILE=docker/docker-compose.yml:docker/docker-compose.local-e2e.yml
+# Local E2E overrides for the Arion compose graph.
 
 x-local-e2e-env: &local-e2e-env
   DATABASE_URL: postgres://user:password@postgres:5432/macrodb
@@ -121,7 +116,7 @@ services:
   sync_service:
     environment: *local-e2e-env
   # Not needed by the smoke suite. Keep this behind an inactive profile because
-  # its Docker image currently depends on sibling packages/lexical-core sources that
+  # its Nix image currently depends on sibling packages/lexical-core sources that
   # are outside its build context.
   lexical_service:
     profiles:

@@ -229,13 +229,13 @@ The seeded persona login links embed the frontend port. If you switch ports, run
 
 The Rust services are built on the host with `cargo zigbuild` (or consumed from a Nix/crane `--binaries-dir`). The binaries are bind-mounted into a shared runtime image. Docker does not compile these services during a normal `run_local`.
 
-On Linux that runtime image is a Nixpkgs `dockerTools.buildLayeredImage` (`nix build .#stream-docker-image-local-runtime`, tagged `macro-local-runtime:dev`). On macOS the same tag is built from `docker/Dockerfile.runtime`, because a typical Mac flake eval cannot produce `aarch64-linux` dockerTools images without a Linux remote builder.
+On every platform that runtime image is a Nixpkgs `dockerTools.buildLayeredImage` (`nix build .#stream-docker-image-local-runtime`, tagged `macro-local-runtime:dev`). macOS needs a Linux remote builder to realize the GNU/Linux image.
 
 The Compose graph itself comes from the Arion composition in `nix/_arion/` (`nix build .#arion-compose-yaml`). xtask generates a per-instance override on top for `/app/out` mounts, LocalStack, Mailpit, and the reverse proxy.
 
 Press `r` to rebuild the binaries. Only the services whose binaries changed restart.
 
-Three services have Docker-built images. They are not rebuilt by default:
+Three services share the Nix Node/Bun runtime image. They are not rebuilt by default:
 
 - `sync_service`
 - `lexical_service`

@@ -20,7 +20,6 @@ import {
 } from '../../packages/shared';
 
 const BASE_NAME = 'document-cognition';
-const REPO_ROOT = '../../..';
 
 export const SERVICE_DOMAIN_NAME = `document-cognition${
   stack === 'prod' ? '' : `-${stack}`
@@ -90,12 +89,8 @@ export class DocumentCognitionService extends pulumi.ComponentResource {
         repositoryId: `${BASE_NAME}-ecr-${stack}`,
         repositoryName: `${BASE_NAME}-${stack}`,
         imageId: `${BASE_NAME}-image-${stack}`,
-        imagePath: REPO_ROOT,
-        dockerfile: 'docker/Dockerfile',
+        nixImage: 'docker-image-document-cognition-service',
         platform,
-        buildArgs: {
-          SERVICE_NAME: 'document_cognition_service',
-        },
         tags: this.tags,
       },
       { parent: this }
