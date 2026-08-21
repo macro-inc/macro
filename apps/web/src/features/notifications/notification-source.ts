@@ -1,4 +1,7 @@
-import { ENABLE_DOCUMENT_MENTION_NOTIFICATIONS } from '@core/constant/featureFlags';
+import {
+  ENABLE_DOCUMENT_MENTION_NOTIFICATIONS,
+  ENABLE_GRAPHQL_SOUP,
+} from '@core/constant/featureFlags';
 import type { Entity } from '@core/types';
 import { createSocketEffect } from '@macro-inc/collaboration/websocket';
 import {
@@ -39,6 +42,7 @@ export const CHANNEL_EVENT_TYPES = [
   'channel_mention',
   'channel_message_send',
   'channel_message_reply',
+  'document_mention',
 ] as const;
 
 export const DOCUMENT_COMMENT_EVENT_TYPES = [
@@ -229,6 +233,10 @@ export function createNotificationSource(
   });
 
   createEffect(() => {
+    // TODO(dev-rb/notifications): Remove this legacy eager pagination when the
+    // REST notification source is retired. GraphQL consumers should use Soup
+    // notification edges or dedicated notification queries instead.
+    if (ENABLE_GRAPHQL_SOUP()) return;
     if (!notificationsQuery.data) return;
     if (notificationsQuery.hasNextPage && !notificationsQuery.isFetching) {
       notificationsQuery.fetchNextPage();
@@ -245,6 +253,8 @@ export function createNotificationSource(
     setMutedEntities(reconcile(mutedEntities));
   });
 
+  // TODO(dev-rb/notifications): Verify whether document-mention suppression is
+  // still required, and remove this source-based cleanup when it is not.
   if (!ENABLE_DOCUMENT_MENTION_NOTIFICATIONS) {
     createEffect(() => {
       const toDiscard = notifications().filter(

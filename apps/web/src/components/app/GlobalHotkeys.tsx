@@ -198,12 +198,15 @@ export default function GlobalShortcuts() {
       description: item.description,
       condition: () =>
         (item.condition?.() ?? true) &&
+        (item.enabled?.() ?? true) &&
         (item.blockName !== 'snippet' || snippetsFlag().enabled),
       keyDownHandler: item.keyDownHandler,
       icon: Plus,
       tags: item.tags,
       keywords: item.keywords,
-      hide: () => item.blockName === 'snippet' && !snippetsFlag().enabled,
+      hide: () =>
+        !(item.enabled?.() ?? true) ||
+        (item.blockName === 'snippet' && !snippetsFlag().enabled),
       runWithInputFocused: true,
     });
   });

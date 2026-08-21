@@ -4,6 +4,9 @@ use crate::{PhysicalResetReason, TursoStorageError};
 use cache_core::codec::{
     cache_namespace, decode_record, decode_record_updates, encode_record, encode_record_updates,
 };
+use cache_core::predicate::{
+    PredicateIndexStorage, PredicateQueryResult, ProjectionIncompleteKind, ProjectionMutation,
+};
 use cache_core::queue::{
     ClaimedMutation, MutationClaimRequest, MutationClaimToken, MutationId, MutationRequest,
     NewQueuedMutation, PersistedOptimisticLayer, QueuedMutation, StoredMutation,
@@ -11,6 +14,11 @@ use cache_core::queue::{
 use cache_core::search::{SearchCursor, SearchDocument, SearchProfile, project_search_documents};
 use cache_core::store::{QueueDiagnostics, QueueDiagnosticsAvailability, Storage};
 use cache_core::value::{EntityKey, Record};
+use predicate_index::{
+    PredicateExpr, Profile, RangeBound, RecordKey as PredicateRecordKey, SortDirection, Token,
+    ValidatedIndexQuery,
+};
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU8, Ordering};
 use turso_core::{Connection, Numeric, Value};
@@ -32,7 +40,7 @@ use turso_opfs::{
 };
 
 /// Frozen storage schema version, independent of cache postcard versions.
-pub const STORAGE_SCHEMA_VERSION: u32 = 6;
+pub const STORAGE_SCHEMA_VERSION: u32 = 7;
 
 /// Coarse outcome of validating a Turso database.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -43,7 +51,7 @@ pub enum TursoStorageOpenOutcome {
     OpenedNew,
 }
 
-const CREATE_SCHEMA: [&str; 7] = [
+const CREATE_SCHEMA: [&str; 16] = [
     "CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)",
     "CREATE TABLE records (__typename TEXT NOT NULL, id TEXT NOT NULL, value BLOB NOT NULL, PRIMARY KEY (__typename, id))",
     "CREATE TABLE search_documents (profile TEXT NOT NULL, __typename TEXT NOT NULL, id TEXT NOT NULL, bucket TEXT NOT NULL, search_text TEXT NOT NULL, timestamp_ms INTEGER NOT NULL, source_hash TEXT NOT NULL, PRIMARY KEY (profile, __typename, id))",
@@ -51,6 +59,15 @@ const CREATE_SCHEMA: [&str; 7] = [
     "CREATE TABLE mutation_queue (id INTEGER PRIMARY KEY AUTOINCREMENT, query TEXT NOT NULL, operation_name TEXT, variables_json TEXT NOT NULL, identity TEXT, attempt_count INTEGER NOT NULL DEFAULT 0, next_attempt_at_ms INTEGER, lease_owner TEXT, lease_generation INTEGER NOT NULL DEFAULT 0, lease_expires_at_ms INTEGER, last_error TEXT, created_at_ms INTEGER NOT NULL)",
     "CREATE INDEX mutation_queue_created_at_ms_idx ON mutation_queue(created_at_ms)",
     "CREATE TABLE optimistic_layers (mutation_id INTEGER PRIMARY KEY, optimistic_data_json TEXT NOT NULL, normalized_updates BLOB NOT NULL, FOREIGN KEY (mutation_id) REFERENCES mutation_queue(id) ON DELETE CASCADE)",
+    "CREATE TABLE index_documents (id INTEGER PRIMARY KEY, record_key TEXT NOT NULL, profile TEXT NOT NULL, partition TEXT NOT NULL, state INTEGER NOT NULL)",
+    "CREATE UNIQUE INDEX index_documents_record_key_idx ON index_documents(record_key)",
+    "CREATE INDEX index_documents_scope_idx ON index_documents(profile, partition, state, id)",
+    "CREATE TABLE exact_facts (document_id INTEGER NOT NULL, attribute TEXT NOT NULL, value BLOB NOT NULL, PRIMARY KEY (document_id, attribute, value), FOREIGN KEY (document_id) REFERENCES index_documents(id) ON DELETE CASCADE)",
+    "CREATE INDEX exact_facts_lookup_idx ON exact_facts(attribute, value, document_id)",
+    "CREATE TABLE integer_facts (document_id INTEGER NOT NULL, attribute TEXT NOT NULL, value INTEGER NOT NULL, PRIMARY KEY (document_id, attribute, value), FOREIGN KEY (document_id) REFERENCES index_documents(id) ON DELETE CASCADE)",
+    "CREATE INDEX integer_facts_lookup_idx ON integer_facts(attribute, value, document_id)",
+    "CREATE TABLE sort_facts (document_id INTEGER NOT NULL, attribute TEXT NOT NULL, value INTEGER NOT NULL, PRIMARY KEY (document_id, attribute), FOREIGN KEY (document_id) REFERENCES index_documents(id) ON DELETE CASCADE)",
+    "CREATE INDEX sort_facts_lookup_idx ON sort_facts(attribute, value, document_id)",
 ];
 const RECORD_GET: &str = "SELECT value FROM records WHERE __typename = ?1 AND id = ?2";
 const RECORD_UPSERT: &str = "INSERT INTO records (__typename, id, value) VALUES (?1, ?2, ?3) ON CONFLICT (__typename, id) DO UPDATE SET value = excluded.value";
@@ -60,6 +77,20 @@ const SEARCH_UPSERT: &str = "INSERT INTO search_documents (profile, __typename, 
 const SEARCH_LOAD: &str = "SELECT __typename, id, bucket, search_text, timestamp_ms, source_hash FROM search_documents WHERE profile = ?1";
 const SEARCH_BROWSE: &str = "SELECT __typename, id, bucket, search_text, timestamp_ms, source_hash FROM search_documents INDEXED BY search_documents_browse_idx WHERE profile = ?1 AND bucket = ?2 ORDER BY timestamp_ms DESC, __typename ASC, id ASC LIMIT ?3";
 const SEARCH_BROWSE_AFTER: &str = "SELECT __typename, id, bucket, search_text, timestamp_ms, source_hash FROM search_documents INDEXED BY search_documents_browse_idx WHERE profile = ?1 AND bucket = ?2 AND (timestamp_ms < ?3 OR (timestamp_ms = ?3 AND (__typename > ?4 OR (__typename = ?4 AND id > ?5)))) ORDER BY timestamp_ms DESC, __typename ASC, id ASC LIMIT ?6";
+const INDEX_DOCUMENT_UPSERT: &str = "INSERT INTO index_documents (record_key, profile, partition, state) VALUES (?1, ?2, ?3, ?4) ON CONFLICT (record_key) DO UPDATE SET profile = excluded.profile, partition = excluded.partition, state = excluded.state RETURNING id";
+const INDEX_DOCUMENT_ID: &str = "SELECT id FROM index_documents WHERE record_key = ?1";
+const INDEX_DOCUMENT_DELETE: &str = "DELETE FROM index_documents WHERE record_key = ?1";
+const INDEX_FACTS_DELETE: [&str; 3] = [
+    "DELETE FROM exact_facts WHERE document_id = ?1",
+    "DELETE FROM integer_facts WHERE document_id = ?1",
+    "DELETE FROM sort_facts WHERE document_id = ?1",
+];
+const EXACT_FACT_INSERT: &str =
+    "INSERT INTO exact_facts (document_id, attribute, value) VALUES (?1, ?2, ?3)";
+const INTEGER_FACT_INSERT: &str =
+    "INSERT INTO integer_facts (document_id, attribute, value) VALUES (?1, ?2, ?3)";
+const SORT_FACT_INSERT: &str =
+    "INSERT INTO sort_facts (document_id, attribute, value) VALUES (?1, ?2, ?3)";
 const QUEUE_INSERT: &str = "INSERT INTO mutation_queue (query, operation_name, variables_json, identity, attempt_count, next_attempt_at_ms, lease_owner, lease_generation, lease_expires_at_ms, last_error, created_at_ms) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)";
 const LAYER_INSERT: &str = "INSERT INTO optimistic_layers (mutation_id, optimistic_data_json, normalized_updates) VALUES (?1, ?2, ?3)";
 const QUEUE_SELECT: &str = "SELECT m.id, m.query, m.operation_name, m.variables_json, m.identity, m.attempt_count, m.next_attempt_at_ms, m.lease_owner, m.lease_generation, m.lease_expires_at_ms, m.last_error, m.created_at_ms, o.optimistic_data_json, o.normalized_updates FROM mutation_queue AS m LEFT JOIN optimistic_layers AS o ON o.mutation_id = m.id ORDER BY m.id ASC";
@@ -728,6 +759,38 @@ impl Storage for TursoStorage {
         self.latch_result(result)
     }
 
+    async fn put_batch_with_projections(
+        &mut self,
+        entries: Vec<(EntityKey<'static>, Record)>,
+        projections: Vec<ProjectionMutation>,
+    ) -> Result<(), Self::Error> {
+        self.require_healthy()?;
+        let result = (|| {
+            let entries = prepare_records(entries)?;
+            let connection = self.connection();
+            driver::write_transaction(&connection, || {
+                let mut statement = driver::prepare(&connection, RECORD_UPSERT)?;
+                for (index, entry) in entries.iter().enumerate() {
+                    require_changed(
+                        driver::execute_prepared(
+                            &mut statement,
+                            vec![
+                                text(&entry.key.typename),
+                                text(&entry.key.id),
+                                Value::from_blob(entry.value.clone()),
+                            ],
+                        )?,
+                        1,
+                    )?;
+                    self.fault_after(TestFaultSite::Put, index)?;
+                }
+                write_search_documents(&connection, &entries)?;
+                write_projection_mutations(&connection, projections)
+            })
+        })();
+        self.latch_result(result)
+    }
+
     async fn delete_batch(&mut self, keys: &[EntityKey<'static>]) -> Result<(), Self::Error> {
         self.require_healthy()?;
         let result = (|| {
@@ -1011,6 +1074,17 @@ impl Storage for TursoStorage {
         claim: MutationClaimToken,
         entries: Vec<(EntityKey<'static>, Record)>,
     ) -> Result<bool, Self::Error> {
+        self.complete_mutation_with_projections(id, claim, entries, Vec::new())
+            .await
+    }
+
+    async fn complete_mutation_with_projections(
+        &mut self,
+        id: MutationId,
+        claim: MutationClaimToken,
+        entries: Vec<(EntityKey<'static>, Record)>,
+        projections: Vec<ProjectionMutation>,
+    ) -> Result<bool, Self::Error> {
         self.require_healthy()?;
         let result = (|| {
             let sql_id = mutation_id_to_sql(id)?;
@@ -1040,6 +1114,7 @@ impl Storage for TursoStorage {
                     }
                 }
                 write_search_documents(&connection, &entries)?;
+                write_projection_mutations(&connection, projections)?;
                 require_changed(
                     driver::execute(
                         &connection,
@@ -1094,12 +1169,511 @@ impl Storage for TursoStorage {
                 driver::execute(&connection, "DELETE FROM mutation_queue", Vec::new())?;
                 self.fault_after(TestFaultSite::Clear, 1)?;
                 driver::execute(&connection, "DELETE FROM search_documents", Vec::new())?;
+                driver::execute(&connection, "DELETE FROM index_documents", Vec::new())?;
                 driver::execute(&connection, "DELETE FROM records", Vec::new())?;
                 self.fault_after(TestFaultSite::Clear, 2)?;
                 Ok(())
             })
         };
         self.latch_result(result)
+    }
+}
+
+impl PredicateIndexStorage for TursoStorage {
+    async fn delete_batch_with_projections(
+        &mut self,
+        keys: &[EntityKey<'static>],
+        projection_keys: &[PredicateRecordKey],
+    ) -> Result<(), Self::Error> {
+        self.require_healthy()?;
+        let result = (|| {
+            let keys = keys
+                .iter()
+                .map(RecordKey::from_entity)
+                .collect::<Result<Vec<_>, _>>()?;
+            let connection = self.connection();
+            driver::write_transaction(&connection, || {
+                let mut record_statement = driver::prepare(&connection, RECORD_DELETE)?;
+                let mut search_statement = driver::prepare(&connection, SEARCH_DELETE)?;
+                for key in &keys {
+                    let changed = driver::execute_prepared(
+                        &mut record_statement,
+                        vec![text(&key.typename), text(&key.id)],
+                    )?;
+                    if !(0..=1).contains(&changed) {
+                        return Err(invariant());
+                    }
+                    driver::execute_prepared(
+                        &mut search_statement,
+                        vec![text(&key.typename), text(&key.id)],
+                    )?;
+                }
+                for key in projection_keys {
+                    let changed = driver::execute(
+                        &connection,
+                        INDEX_DOCUMENT_DELETE,
+                        vec![text(key.as_str())],
+                    )?;
+                    if !(0..=1).contains(&changed) {
+                        return Err(invariant());
+                    }
+                }
+                Ok(())
+            })
+        })();
+        self.latch_result(result)
+    }
+
+    async fn query_predicate_index(
+        &self,
+        query: &ValidatedIndexQuery,
+    ) -> Result<PredicateQueryResult, Self::Error> {
+        self.require_healthy()?;
+        let connection = self.connection();
+        let result = driver::read_transaction(&connection, || {
+            if predicate_scope_is_incomplete(&connection, query)? {
+                return Ok(PredicateQueryResult::Incomplete);
+            }
+            let (sql, parameters) = compile_predicate_sql(query);
+            let rows = driver::query(&connection, &sql, parameters)?;
+            let mut keys = Vec::with_capacity(rows.len());
+            for row in rows {
+                if row.len() != 1 {
+                    return Err(invariant());
+                }
+                keys.push(
+                    PredicateRecordKey::new(required_text(&row, 0)?).map_err(|_| invariant())?,
+                );
+            }
+            Ok(PredicateQueryResult::Complete(keys))
+        });
+        self.latch_result(result)
+    }
+
+    async fn get_index_documents(
+        &self,
+        keys: &[PredicateRecordKey],
+    ) -> Result<Vec<Option<predicate_index::IndexDocument>>, Self::Error> {
+        self.require_healthy()?;
+        let connection = self.connection();
+        let result =
+            driver::read_transaction(&connection, || load_index_documents(&connection, keys));
+        self.latch_result(result)
+    }
+}
+
+fn write_projection_mutations(
+    connection: &Arc<Connection>,
+    projections: Vec<ProjectionMutation>,
+) -> Result<(), TursoStorageError> {
+    for mutation in projections {
+        match mutation {
+            ProjectionMutation::Replace(document) => {
+                document.validate().map_err(|_| invariant())?;
+                let document_id = upsert_index_document(
+                    connection,
+                    &document.record_key,
+                    &document.profile,
+                    &document.partition,
+                    0,
+                )?;
+                delete_index_facts(connection, document_id)?;
+                for fact in document.exact_facts {
+                    require_changed(
+                        driver::execute(
+                            connection,
+                            EXACT_FACT_INSERT,
+                            vec![
+                                Value::from_i64(document_id),
+                                text(fact.attribute.as_str()),
+                                Value::from_blob(fact.value.as_bytes().to_vec()),
+                            ],
+                        )?,
+                        1,
+                    )?;
+                }
+                for fact in document.integer_facts {
+                    require_changed(
+                        driver::execute(
+                            connection,
+                            INTEGER_FACT_INSERT,
+                            vec![
+                                Value::from_i64(document_id),
+                                text(fact.attribute.as_str()),
+                                Value::from_i64(fact.value),
+                            ],
+                        )?,
+                        1,
+                    )?;
+                }
+                for fact in document.sort_facts {
+                    require_changed(
+                        driver::execute(
+                            connection,
+                            SORT_FACT_INSERT,
+                            vec![
+                                Value::from_i64(document_id),
+                                text(fact.attribute.as_str()),
+                                Value::from_i64(fact.value),
+                            ],
+                        )?,
+                        1,
+                    )?;
+                }
+            }
+            ProjectionMutation::MarkIncomplete {
+                record_key,
+                profile,
+                partition,
+                kind,
+            } => {
+                let document_id = upsert_index_document(
+                    connection,
+                    &record_key,
+                    &profile,
+                    &partition,
+                    projection_state_code(kind),
+                )?;
+                delete_index_facts(connection, document_id)?;
+            }
+            ProjectionMutation::Delete(record_key) => {
+                let changed = driver::execute(
+                    connection,
+                    INDEX_DOCUMENT_DELETE,
+                    vec![text(record_key.as_str())],
+                )?;
+                if !(0..=1).contains(&changed) {
+                    return Err(invariant());
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+fn upsert_index_document(
+    connection: &Arc<Connection>,
+    record_key: &PredicateRecordKey,
+    profile: &Profile,
+    partition: &Token,
+    state: i64,
+) -> Result<i64, TursoStorageError> {
+    let rows = driver::query(
+        connection,
+        INDEX_DOCUMENT_UPSERT,
+        vec![
+            text(record_key.as_str()),
+            text(profile.token().as_str()),
+            text(partition.as_str()),
+            Value::from_i64(state),
+        ],
+    )?;
+    match rows.as_slice() {
+        [row] if row.len() == 1 => required_i64(row, 0),
+        _ => Err(invariant()),
+    }
+}
+
+fn delete_index_facts(
+    connection: &Arc<Connection>,
+    document_id: i64,
+) -> Result<(), TursoStorageError> {
+    for sql in INDEX_FACTS_DELETE {
+        let changed = driver::execute(connection, sql, vec![Value::from_i64(document_id)])?;
+        if changed < 0 {
+            return Err(invariant());
+        }
+    }
+    Ok(())
+}
+
+fn projection_state_code(kind: ProjectionIncompleteKind) -> i64 {
+    match kind {
+        ProjectionIncompleteKind::Dirty => 1,
+        ProjectionIncompleteKind::Missing => 2,
+        ProjectionIncompleteKind::IncompatibleVersion => 3,
+    }
+}
+
+fn load_index_documents(
+    connection: &Arc<Connection>,
+    keys: &[PredicateRecordKey],
+) -> Result<Vec<Option<predicate_index::IndexDocument>>, TursoStorageError> {
+    if keys.is_empty() {
+        return Ok(Vec::new());
+    }
+    let placeholders = (1..=keys.len())
+        .map(|index| format!("?{index}"))
+        .collect::<Vec<_>>()
+        .join(", ");
+    let rows = driver::query(
+        connection,
+        &format!(
+            "SELECT id, record_key, profile, partition FROM index_documents WHERE state = 0 AND record_key IN ({placeholders})"
+        ),
+        keys.iter().map(|key| text(key.as_str())).collect(),
+    )?;
+    let mut by_id = HashMap::with_capacity(rows.len());
+    let mut documents = HashMap::with_capacity(rows.len());
+    for row in rows {
+        if row.len() != 4 {
+            return Err(invariant());
+        }
+        let id = required_i64(&row, 0)?;
+        let record_key =
+            PredicateRecordKey::new(required_text(&row, 1)?).map_err(|_| invariant())?;
+        let profile = Profile::new(Token::new(required_text(&row, 2)?).map_err(|_| invariant())?);
+        let partition = Token::new(required_text(&row, 3)?).map_err(|_| invariant())?;
+        by_id.insert(id, record_key.clone());
+        documents.insert(
+            record_key.clone(),
+            predicate_index::IndexDocument {
+                record_key,
+                profile,
+                partition,
+                exact_facts: Vec::new(),
+                integer_facts: Vec::new(),
+                sort_facts: Vec::new(),
+            },
+        );
+    }
+    if by_id.is_empty() {
+        return Ok(vec![None; keys.len()]);
+    }
+
+    let id_placeholders = (1..=by_id.len())
+        .map(|index| format!("?{index}"))
+        .collect::<Vec<_>>()
+        .join(", ");
+    let ids = by_id.keys().copied().collect::<Vec<_>>();
+    let id_parameters = || ids.iter().copied().map(Value::from_i64).collect::<Vec<_>>();
+    for row in driver::query(
+        connection,
+        &format!(
+            "SELECT document_id, attribute, value FROM exact_facts WHERE document_id IN ({id_placeholders})"
+        ),
+        id_parameters(),
+    )? {
+        let record_key = by_id.get(&required_i64(&row, 0)?).ok_or_else(invariant)?;
+        documents
+            .get_mut(record_key)
+            .ok_or_else(invariant)?
+            .exact_facts
+            .push(predicate_index::ExactFact {
+                attribute: Token::new(required_text(&row, 1)?).map_err(|_| invariant())?,
+                value: predicate_index::ExactValue::new(required_blob(&row, 2)?)
+                    .map_err(|_| invariant())?,
+            });
+    }
+    for row in driver::query(
+        connection,
+        &format!(
+            "SELECT document_id, attribute, value FROM integer_facts WHERE document_id IN ({id_placeholders})"
+        ),
+        id_parameters(),
+    )? {
+        let record_key = by_id.get(&required_i64(&row, 0)?).ok_or_else(invariant)?;
+        documents
+            .get_mut(record_key)
+            .ok_or_else(invariant)?
+            .integer_facts
+            .push(predicate_index::IntegerFact {
+                attribute: Token::new(required_text(&row, 1)?).map_err(|_| invariant())?,
+                value: required_i64(&row, 2)?,
+            });
+    }
+    for row in driver::query(
+        connection,
+        &format!(
+            "SELECT document_id, attribute, value FROM sort_facts WHERE document_id IN ({id_placeholders})"
+        ),
+        id_parameters(),
+    )? {
+        let record_key = by_id.get(&required_i64(&row, 0)?).ok_or_else(invariant)?;
+        documents
+            .get_mut(record_key)
+            .ok_or_else(invariant)?
+            .sort_facts
+            .push(predicate_index::IntegerFact {
+                attribute: Token::new(required_text(&row, 1)?).map_err(|_| invariant())?,
+                value: required_i64(&row, 2)?,
+            });
+    }
+
+    for document in documents.values() {
+        document.validate().map_err(|_| invariant())?;
+    }
+    Ok(keys.iter().map(|key| documents.get(key).cloned()).collect())
+}
+
+fn predicate_scope_is_incomplete(
+    connection: &Arc<Connection>,
+    query: &ValidatedIndexQuery,
+) -> Result<bool, TursoStorageError> {
+    let descriptor = query.as_query();
+    let clauses = descriptor
+        .partitions
+        .iter()
+        .map(|_| "(profile = ? AND partition = ?)")
+        .collect::<Vec<_>>()
+        .join(" OR ");
+    let sql = format!("SELECT 1 FROM index_documents WHERE state <> 0 AND ({clauses}) LIMIT 1");
+    let mut parameters = Vec::with_capacity(descriptor.partitions.len() * 2);
+    for partition in &descriptor.partitions {
+        parameters.push(text(descriptor.profile.token().as_str()));
+        parameters.push(text(partition.partition.as_str()));
+    }
+    Ok(!driver::query(connection, &sql, parameters)?.is_empty())
+}
+
+fn compile_predicate_sql(query: &ValidatedIndexQuery) -> (String, Vec<Value>) {
+    let descriptor = query.as_query();
+    let mut compiler = SqlPredicateCompiler::default();
+    let roots = descriptor
+        .partitions
+        .iter()
+        .map(|partition| {
+            compiler.compile(
+                &partition.predicate,
+                &descriptor.profile,
+                &partition.partition,
+            )
+        })
+        .collect::<Vec<_>>();
+    let matches = compiler.next_name();
+    let union = roots
+        .iter()
+        .map(|root| format!("SELECT document_id FROM {root}"))
+        .collect::<Vec<_>>()
+        .join(" UNION ");
+    compiler
+        .ctes
+        .push(format!("{matches}(document_id) AS ({union})"));
+    compiler
+        .parameters
+        .push(text(descriptor.sort_attribute.as_str()));
+    compiler
+        .parameters
+        .push(Value::from_i64(i64::from(descriptor.limit)));
+    let sort_direction = match descriptor.sort_direction {
+        SortDirection::Asc => "ASC",
+        SortDirection::Desc => "DESC",
+    };
+    let tie_direction = match descriptor.tie_break_direction {
+        SortDirection::Asc => "ASC",
+        SortDirection::Desc => "DESC",
+    };
+    let sql = format!(
+        "WITH {} SELECT d.record_key FROM {matches} AS m JOIN index_documents AS d ON d.id = m.document_id JOIN sort_facts AS s ON s.document_id = d.id WHERE s.attribute = ? ORDER BY s.value {sort_direction}, d.record_key {tie_direction} LIMIT ?",
+        compiler.ctes.join(", ")
+    );
+    (sql, compiler.parameters)
+}
+
+#[derive(Default)]
+struct SqlPredicateCompiler {
+    ctes: Vec<String>,
+    parameters: Vec<Value>,
+    next_id: usize,
+}
+
+impl SqlPredicateCompiler {
+    fn next_name(&mut self) -> String {
+        let name = format!("expr_{}", self.next_id);
+        self.next_id += 1;
+        name
+    }
+
+    fn compile(&mut self, expr: &PredicateExpr, profile: &Profile, partition: &Token) -> String {
+        match expr {
+            PredicateExpr::All => self.universe(profile, partition),
+            PredicateExpr::None => {
+                let name = self.next_name();
+                self.ctes.push(format!(
+                    "{name}(document_id) AS (SELECT id FROM index_documents WHERE 0)"
+                ));
+                name
+            }
+            PredicateExpr::Exact { attribute, value } => {
+                let name = self.next_name();
+                self.parameters.push(text(profile.token().as_str()));
+                self.parameters.push(text(partition.as_str()));
+                self.parameters.push(text(attribute.as_str()));
+                self.parameters
+                    .push(Value::from_blob(value.as_bytes().to_vec()));
+                self.ctes.push(format!(
+                    "{name}(document_id) AS (SELECT f.document_id FROM exact_facts AS f JOIN index_documents AS d ON d.id = f.document_id WHERE d.profile = ? AND d.partition = ? AND d.state = 0 AND f.attribute = ? AND f.value = ?)"
+                ));
+                name
+            }
+            PredicateExpr::I64Range {
+                attribute,
+                lower,
+                upper,
+            } => {
+                let name = self.next_name();
+                self.parameters.push(text(profile.token().as_str()));
+                self.parameters.push(text(partition.as_str()));
+                self.parameters.push(text(attribute.as_str()));
+                let mut range = String::new();
+                if let Some(bound) = lower {
+                    let (operator, value) = sql_bound(*bound, true);
+                    range.push_str(&format!(" AND f.value {operator} ?"));
+                    self.parameters.push(Value::from_i64(value));
+                }
+                if let Some(bound) = upper {
+                    let (operator, value) = sql_bound(*bound, false);
+                    range.push_str(&format!(" AND f.value {operator} ?"));
+                    self.parameters.push(Value::from_i64(value));
+                }
+                self.ctes.push(format!(
+                    "{name}(document_id) AS (SELECT f.document_id FROM integer_facts AS f JOIN index_documents AS d ON d.id = f.document_id WHERE d.profile = ? AND d.partition = ? AND d.state = 0 AND f.attribute = ?{range})"
+                ));
+                name
+            }
+            PredicateExpr::And(left, right) | PredicateExpr::Or(left, right) => {
+                let left = self.compile(left, profile, partition);
+                let right = self.compile(right, profile, partition);
+                let operator = if matches!(expr, PredicateExpr::And(_, _)) {
+                    "INTERSECT"
+                } else {
+                    "UNION"
+                };
+                let name = self.next_name();
+                self.ctes.push(format!(
+                    "{name}(document_id) AS (SELECT document_id FROM {left} {operator} SELECT document_id FROM {right})"
+                ));
+                name
+            }
+            PredicateExpr::Not(expr) => {
+                let universe = self.universe(profile, partition);
+                let child = self.compile(expr, profile, partition);
+                let name = self.next_name();
+                self.ctes.push(format!(
+                    "{name}(document_id) AS (SELECT document_id FROM {universe} EXCEPT SELECT document_id FROM {child})"
+                ));
+                name
+            }
+        }
+    }
+
+    fn universe(&mut self, profile: &Profile, partition: &Token) -> String {
+        let name = self.next_name();
+        self.parameters.push(text(profile.token().as_str()));
+        self.parameters.push(text(partition.as_str()));
+        self.ctes.push(format!(
+            "{name}(document_id) AS (SELECT id FROM index_documents WHERE profile = ? AND partition = ? AND state = 0)"
+        ));
+        name
+    }
+}
+
+fn sql_bound(bound: RangeBound, lower: bool) -> (&'static str, i64) {
+    match (lower, bound) {
+        (true, RangeBound::Inclusive(value)) => (">=", value),
+        (true, RangeBound::Exclusive(value)) => (">", value),
+        (false, RangeBound::Inclusive(value)) => ("<=", value),
+        (false, RangeBound::Exclusive(value)) => ("<", value),
     }
 }
 
@@ -1171,6 +1745,12 @@ fn initialize(
         SEARCH_LOAD,
         SEARCH_BROWSE,
         SEARCH_BROWSE_AFTER,
+        INDEX_DOCUMENT_UPSERT,
+        INDEX_DOCUMENT_ID,
+        INDEX_DOCUMENT_DELETE,
+        EXACT_FACT_INSERT,
+        INTEGER_FACT_INSERT,
+        SORT_FACT_INSERT,
         QUEUE_INSERT,
         LAYER_INSERT,
         QUEUE_SELECT,
@@ -1180,6 +1760,9 @@ fn initialize(
         REQUIRE_LAYER_SELECT,
         QUEUE_DIAGNOSTICS_SELECT,
     ] {
+        driver::validate(connection, sql).map_err(TursoStorageError::initialization)?;
+    }
+    for sql in INDEX_FACTS_DELETE {
         driver::validate(connection, sql).map_err(TursoStorageError::initialization)?;
     }
     validate_queue_consistency(connection)
@@ -1408,6 +1991,116 @@ const OPTIMISTIC_COLUMNS: &[ColumnSpec] = &[
     },
 ];
 
+const INDEX_DOCUMENT_COLUMNS: &[ColumnSpec] = &[
+    ColumnSpec {
+        name: "id",
+        declared_type: "INTEGER",
+        not_null: false,
+        default_zero: false,
+        primary_key_position: 1,
+    },
+    ColumnSpec {
+        name: "record_key",
+        declared_type: "TEXT",
+        not_null: true,
+        default_zero: false,
+        primary_key_position: 0,
+    },
+    ColumnSpec {
+        name: "profile",
+        declared_type: "TEXT",
+        not_null: true,
+        default_zero: false,
+        primary_key_position: 0,
+    },
+    ColumnSpec {
+        name: "partition",
+        declared_type: "TEXT",
+        not_null: true,
+        default_zero: false,
+        primary_key_position: 0,
+    },
+    ColumnSpec {
+        name: "state",
+        declared_type: "INTEGER",
+        not_null: true,
+        default_zero: false,
+        primary_key_position: 0,
+    },
+];
+
+const EXACT_FACT_COLUMNS: &[ColumnSpec] = &[
+    ColumnSpec {
+        name: "document_id",
+        declared_type: "INTEGER",
+        not_null: true,
+        default_zero: false,
+        primary_key_position: 1,
+    },
+    ColumnSpec {
+        name: "attribute",
+        declared_type: "TEXT",
+        not_null: true,
+        default_zero: false,
+        primary_key_position: 2,
+    },
+    ColumnSpec {
+        name: "value",
+        declared_type: "BLOB",
+        not_null: true,
+        default_zero: false,
+        primary_key_position: 3,
+    },
+];
+
+const INTEGER_FACT_COLUMNS: &[ColumnSpec] = &[
+    ColumnSpec {
+        name: "document_id",
+        declared_type: "INTEGER",
+        not_null: true,
+        default_zero: false,
+        primary_key_position: 1,
+    },
+    ColumnSpec {
+        name: "attribute",
+        declared_type: "TEXT",
+        not_null: true,
+        default_zero: false,
+        primary_key_position: 2,
+    },
+    ColumnSpec {
+        name: "value",
+        declared_type: "INTEGER",
+        not_null: true,
+        default_zero: false,
+        primary_key_position: 3,
+    },
+];
+
+const SORT_FACT_COLUMNS: &[ColumnSpec] = &[
+    ColumnSpec {
+        name: "document_id",
+        declared_type: "INTEGER",
+        not_null: true,
+        default_zero: false,
+        primary_key_position: 1,
+    },
+    ColumnSpec {
+        name: "attribute",
+        declared_type: "TEXT",
+        not_null: true,
+        default_zero: false,
+        primary_key_position: 2,
+    },
+    ColumnSpec {
+        name: "value",
+        declared_type: "INTEGER",
+        not_null: true,
+        default_zero: false,
+        primary_key_position: 0,
+    },
+];
+
 fn validate_frozen_schema(connection: &Arc<Connection>) -> Result<(), TursoStorageError> {
     validate_allowed_schema_objects(connection)?;
     validate_table_columns(connection, "meta", META_COLUMNS)?;
@@ -1415,21 +2108,34 @@ fn validate_frozen_schema(connection: &Arc<Connection>) -> Result<(), TursoStora
     validate_table_columns(connection, "search_documents", SEARCH_COLUMNS)?;
     validate_table_columns(connection, "mutation_queue", MUTATION_COLUMNS)?;
     validate_table_columns(connection, "optimistic_layers", OPTIMISTIC_COLUMNS)?;
+    validate_table_columns(connection, "index_documents", INDEX_DOCUMENT_COLUMNS)?;
+    validate_table_columns(connection, "exact_facts", EXACT_FACT_COLUMNS)?;
+    validate_table_columns(connection, "integer_facts", INTEGER_FACT_COLUMNS)?;
+    validate_table_columns(connection, "sort_facts", SORT_FACT_COLUMNS)?;
     validate_table_indexes(connection, "meta", &[(0, "key")])?;
     validate_table_indexes(connection, "records", &[(0, "__typename"), (1, "id")])?;
     validate_search_indexes(connection)?;
     validate_mutation_queue_indexes(connection)?;
     validate_table_indexes(connection, "optimistic_layers", &[])?;
+    validate_predicate_indexes(connection)?;
     validate_table_constraints(connection, "meta", false)?;
     validate_table_constraints(connection, "records", false)?;
     validate_table_constraints(connection, "search_documents", false)?;
     validate_table_constraints(connection, "mutation_queue", true)?;
     validate_table_constraints(connection, "optimistic_layers", false)?;
+    validate_table_constraints(connection, "index_documents", false)?;
+    validate_table_constraints(connection, "exact_facts", false)?;
+    validate_table_constraints(connection, "integer_facts", false)?;
+    validate_table_constraints(connection, "sort_facts", false)?;
     validate_no_foreign_keys(connection, "meta")?;
     validate_no_foreign_keys(connection, "records")?;
     validate_no_foreign_keys(connection, "search_documents")?;
     validate_no_foreign_keys(connection, "mutation_queue")?;
-    validate_optimistic_foreign_key(connection)
+    validate_no_foreign_keys(connection, "index_documents")?;
+    validate_optimistic_foreign_key(connection)?;
+    validate_fact_foreign_key(connection, "exact_facts")?;
+    validate_fact_foreign_key(connection, "integer_facts")?;
+    validate_fact_foreign_key(connection, "sort_facts")
 }
 
 const SQLITE_SEQUENCE_TABLE: &str = "sqlite_sequence";
@@ -1444,16 +2150,28 @@ fn validate_allowed_schema_objects(connection: &Arc<Connection>) -> Result<(), T
     )
     .map_err(TursoStorageError::initialization)?;
     let expected = [
+        "exact_facts",
+        "index_documents",
+        "integer_facts",
         "meta",
         "mutation_queue",
         "optimistic_layers",
         "records",
         "search_documents",
+        "sort_facts",
+    ];
+    let named_indexes = [
+        "exact_facts_lookup_idx",
+        "index_documents_scope_idx",
+        "integer_facts_lookup_idx",
+        "index_documents_record_key_idx",
+        "mutation_queue_created_at_ms_idx",
+        "search_documents_browse_idx",
+        "sort_facts_lookup_idx",
     ];
     let support = [SQLITE_SEQUENCE_TABLE, TURSO_AUTOINCREMENT_TABLE];
-    let mut seen = [false; 5];
-    let mut diagnostics_index_seen = false;
-    let mut search_index_seen = false;
+    let mut seen = [false; 9];
+    let mut named_index_seen = [false; 7];
     let mut support_seen = [false; 2];
     for row in rows {
         if row.len() != 3 {
@@ -1474,27 +2192,14 @@ fn validate_allowed_schema_objects(connection: &Arc<Connection>) -> Result<(), T
         if object_type == "index" && matches!(row.get(2), Some(Value::Null)) {
             continue;
         }
-        if name == "search_documents_browse_idx" {
+        if let Some(position) = named_indexes.iter().position(|expected| *expected == name) {
             if object_type != "index"
                 || !matches!(row.get(2), Some(Value::Text(_)))
-                || search_index_seen
+                || named_index_seen[position]
             {
                 return Err(compatibility());
             }
-            search_index_seen = true;
-            continue;
-        }
-        if name == "mutation_queue_created_at_ms_idx" {
-            if object_type != "index"
-                || required_text(&row, 2).ok().as_deref()
-                    != Some(
-                        "CREATE INDEX mutation_queue_created_at_ms_idx ON mutation_queue (created_at_ms)",
-                    )
-                || diagnostics_index_seen
-            {
-                return Err(compatibility());
-            }
-            diagnostics_index_seen = true;
+            named_index_seen[position] = true;
             continue;
         }
         if let Some(position) = support.iter().position(|expected| *expected == name) {
@@ -1511,8 +2216,7 @@ fn validate_allowed_schema_objects(connection: &Arc<Connection>) -> Result<(), T
         return Err(compatibility());
     }
     if seen.into_iter().all(|present| present)
-        && diagnostics_index_seen
-        && search_index_seen
+        && named_index_seen.into_iter().all(|present| present)
         && support_seen.into_iter().all(|present| present)
     {
         Ok(())
@@ -1988,6 +2692,63 @@ fn scan_quoted(
     Err(compatibility())
 }
 
+fn validate_predicate_indexes(connection: &Arc<Connection>) -> Result<(), TursoStorageError> {
+    for (table, index, expected_columns) in [
+        (
+            "index_documents",
+            "index_documents_scope_idx",
+            &["profile", "partition", "state", "id"][..],
+        ),
+        (
+            "exact_facts",
+            "exact_facts_lookup_idx",
+            &["attribute", "value", "document_id"][..],
+        ),
+        (
+            "integer_facts",
+            "integer_facts_lookup_idx",
+            &["attribute", "value", "document_id"][..],
+        ),
+        (
+            "sort_facts",
+            "sort_facts_lookup_idx",
+            &["attribute", "value", "document_id"][..],
+        ),
+    ] {
+        let indexes = driver::query(
+            connection,
+            &format!("PRAGMA index_list('{table}')"),
+            Vec::new(),
+        )
+        .map_err(TursoStorageError::initialization)?;
+        if indexes.len() != 2
+            || !indexes
+                .iter()
+                .any(|row| required_text(row, 1).ok().as_deref() == Some(index))
+        {
+            return Err(compatibility());
+        }
+        let columns = driver::query(
+            connection,
+            &format!("PRAGMA index_info('{index}')"),
+            Vec::new(),
+        )
+        .map_err(TursoStorageError::initialization)?;
+        if columns.len() != expected_columns.len()
+            || columns.iter().zip(expected_columns).enumerate().any(
+                |(position, (row, expected))| {
+                    row.len() != 3
+                        || required_i64(row, 0).ok() != i64::try_from(position).ok()
+                        || required_text(row, 2).ok().as_deref() != Some(*expected)
+                },
+            )
+        {
+            return Err(compatibility());
+        }
+    }
+    Ok(())
+}
+
 fn validate_no_foreign_keys(
     connection: &Arc<Connection>,
     table: &str,
@@ -2022,6 +2783,34 @@ fn validate_optimistic_foreign_key(connection: &Arc<Connection>) -> Result<(), T
         || required_i64(row, 1).ok() != Some(0)
         || required_text(row, 2).ok().as_deref() != Some("mutation_queue")
         || required_text(row, 3).ok().as_deref() != Some("mutation_id")
+        || required_text(row, 4).ok().as_deref() != Some("id")
+        || required_text(row, 5).ok().as_deref() != Some("NO ACTION")
+        || required_text(row, 6).ok().as_deref() != Some("CASCADE")
+        || required_text(row, 7).ok().as_deref() != Some("NONE")
+    {
+        return Err(compatibility());
+    }
+    Ok(())
+}
+
+fn validate_fact_foreign_key(
+    connection: &Arc<Connection>,
+    table: &str,
+) -> Result<(), TursoStorageError> {
+    let rows = driver::query(
+        connection,
+        &format!("PRAGMA foreign_key_list('{}')", table.replace('\'', "''")),
+        Vec::new(),
+    )
+    .map_err(TursoStorageError::initialization)?;
+    let [row] = rows.as_slice() else {
+        return Err(compatibility());
+    };
+    if row.len() != 8
+        || required_i64(row, 0).ok() != Some(0)
+        || required_i64(row, 1).ok() != Some(0)
+        || required_text(row, 2).ok().as_deref() != Some("index_documents")
+        || required_text(row, 3).ok().as_deref() != Some("document_id")
         || required_text(row, 4).ok().as_deref() != Some("id")
         || required_text(row, 5).ok().as_deref() != Some("NO ACTION")
         || required_text(row, 6).ok().as_deref() != Some("CASCADE")

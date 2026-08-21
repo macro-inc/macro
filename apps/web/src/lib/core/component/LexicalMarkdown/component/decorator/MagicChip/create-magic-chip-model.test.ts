@@ -7,8 +7,12 @@ const sessionFold = vi.hoisted(() => ({
   acquireAgentSessionFold: vi.fn(),
   subscribeAgentSessionLog: vi.fn(),
 }));
+const serviceClient = vi.hoisted(() => ({ get: vi.fn() }));
 
 vi.mock('@queries/agent-session/session-fold', () => sessionFold);
+vi.mock('@service-agent-harness/client', () => ({
+  agentHarnessServiceClient: serviceClient,
+}));
 
 import { createMagicChipModel } from './create-magic-chip-model';
 
@@ -44,6 +48,10 @@ describe('createMagicChipModel', () => {
       messages: [prompt, response],
       release: vi.fn(),
     });
+    serviceClient.get.mockResolvedValue({
+      isOk: () => true,
+      value: { status: { kind: 'disconnected' } },
+    });
   });
 
   it('settles after the attached turn completes despite stale acp_ready status', async () => {
@@ -59,6 +67,28 @@ describe('createMagicChipModel', () => {
     expect(sessionFold.acquireAgentSessionFold).toHaveBeenCalledWith({
       agentSessionId: 'session',
       onChange: expect.any(Function),
+    });
+
+    dispose();
+  });
+
+  it('hydrates a disconnected status from the session', async () => {
+    sessionFold.acquireAgentSessionFold.mockResolvedValue({
+      messages: [],
+      release: vi.fn(),
+    });
+    let presentation!: ReturnType<typeof createMagicChipModel>['presentation'];
+    const dispose = createRoot((rootDispose) => {
+      presentation = createMagicChipModel(props).presentation;
+      return rootDispose;
+    });
+
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(presentation()).toEqual({
+      kind: 'working',
+      activity: { label: 'Session disconnected', busy: false },
     });
 
     dispose();

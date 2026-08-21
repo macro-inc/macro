@@ -313,6 +313,59 @@ fn folds_every_official_tool_kind() {
     insta::assert_debug_snapshot!(agent.parts);
 }
 
+/// An edit call that never reports a diff content block — Claude Code's
+/// `Write` — synthesizes a whole-file diff from `rawInput`'s
+/// `{filePath, content}`, on the opening frame or a later patch.
+#[test]
+fn synthesizes_a_write_diff_from_raw_input() {
+    let log = parse_log(concat!(
+        r#"{"direction":"to_runtime","content":{"type":"acp","jsonrpc":"2.0","id":"p","method":"session/prompt","params":{"sessionId":"s","prompt":[{"type":"text","text":"hi"}]}}}"#,
+        "\n",
+        // Opened with the raw input already present, no diff content ever.
+        r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s","update":{"sessionUpdate":"tool_call","toolCallId":"w","title":"write","kind":"edit","status":"in_progress","rawInput":{"filePath":"/repo/readme.md","content":"hello\n"}}}}}"#,
+        "\n",
+        r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s","update":{"sessionUpdate":"tool_call_update","toolCallId":"w","status":"completed"}}}}"#,
+    ));
+
+    let messages = fold(log);
+    let MessagePart::ToolUse { detail, .. } = &messages[1].parts[0] else {
+        panic!("first part is the write: {:?}", messages[1].parts);
+    };
+    let ToolDetail::Edit { diffs } = detail else {
+        panic!("write folds to an edit: {detail:?}");
+    };
+    assert_eq!(diffs.len(), 1);
+    assert_eq!(diffs[0].path, std::path::PathBuf::from("/repo/readme.md"));
+    assert_eq!(
+        diffs[0].old_text, None,
+        "prior contents are not on the wire"
+    );
+    assert_eq!(diffs[0].new_text, "hello\n");
+}
+
+/// A reported diff block wins over the synthesized raw-input diff.
+#[test]
+fn reported_diffs_beat_the_synthesized_write_diff() {
+    let log = parse_log(concat!(
+        r#"{"direction":"to_runtime","content":{"type":"acp","jsonrpc":"2.0","id":"p","method":"session/prompt","params":{"sessionId":"s","prompt":[{"type":"text","text":"hi"}]}}}"#,
+        "\n",
+        r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s","update":{"sessionUpdate":"tool_call","toolCallId":"e","title":"edit","kind":"edit","status":"in_progress","rawInput":{"filePath":"/repo/a.rs","content":"whole file"}}}}}"#,
+        "\n",
+        r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s","update":{"sessionUpdate":"tool_call_update","toolCallId":"e","status":"completed","content":[{"type":"diff","path":"/repo/a.rs","oldText":"old","newText":"new"}]}}}}"#,
+    ));
+
+    let messages = fold(log);
+    let MessagePart::ToolUse { detail, .. } = &messages[1].parts[0] else {
+        panic!("first part is the edit: {:?}", messages[1].parts);
+    };
+    let ToolDetail::Edit { diffs } = detail else {
+        panic!("edit folds to diffs: {detail:?}");
+    };
+    assert_eq!(diffs.len(), 1);
+    assert_eq!(diffs[0].old_text.as_deref(), Some("old"));
+    assert_eq!(diffs[0].new_text, "new");
+}
+
 /// A patch for a tool call that was never opened is logged, not fatal.
 #[test]
 fn reports_a_patch_before_open() {

@@ -159,7 +159,7 @@ import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import { isSourceDSS, isSourceSyncService } from '@core/util/source';
 import { bufToString } from '@core/util/string';
 import { handleFileFolderDrop } from '@core/util/upload';
-import type { EntityDragEvent } from '@entity';
+import { type EntityDragEvent, isEntityDragEvent } from '@entity';
 import type { LoroManager } from '@macro-inc/collaboration/collab/manager';
 import {
   $isInlineSearchNode,
@@ -429,17 +429,17 @@ export function MarkdownEditor(props: {
     });
   }, 60);
 
-  onDragEnd((event: EntityDragEvent) => {
+  onDragEnd((event) => {
     // dndDragMove is a trailing throttle, so a callback scheduled just before
     // the drop would otherwise fire after it and could re-show the indicator.
     dndDragMove.clear();
     // Only soup entity drags insert mentions (not e.g. sidebar favorite drags).
-    if (event.draggable?.data.dragType !== 'entity') return;
+    if (!isEntityDragEvent(event)) return;
     dndDragEnd(event);
   });
 
-  onDragMove((event: EntityDragEvent) => {
-    if (event.draggable?.data.dragType !== 'entity') return;
+  onDragMove((event) => {
+    if (!isEntityDragEvent(event)) return;
     dndDragMove(event);
   });
 

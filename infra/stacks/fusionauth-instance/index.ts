@@ -180,6 +180,7 @@ const defaultTenant = new FusionAuthTenant(
       },
     ],
     externalIdentifierConfiguration: {
+      passwordlessLoginTimeToLiveInSeconds: 600, // 10 minutes for email codes
       passwordlessLoginGenerator: {
         length: 6,
         type: 'randomDigits',

@@ -16,6 +16,7 @@ import type { Bot } from '@service-storage/generated/schemas/bot';
 import { Button, ToggleSwitch } from '@ui';
 import { createMemo, createSignal, Show } from 'solid-js';
 import { createStore } from 'solid-js/store';
+import { BotAgentSection } from './BotAgentSection';
 import { BotCreationResult } from './BotCreationResult';
 import { BotFormSection } from './BotFormSection';
 import { BotProfileFields } from './BotProfileFields';
@@ -112,6 +113,7 @@ export function BotCreate(props: { channelId?: string; onBack: () => void }) {
           description: values.description || undefined,
           avatar_url: values.avatarUrl || undefined,
           token_label: 'webhook',
+          has_agent: values.hasAgent,
         },
         {
           onSuccess: async ({ bot, bot_token }) => {
@@ -145,6 +147,7 @@ export function BotCreate(props: { channelId?: string; onBack: () => void }) {
         handle: values.handle,
         description: values.description || undefined,
         avatarUrl: values.avatarUrl || undefined,
+        hasAgent: values.hasAgent,
       },
       {
         onSuccess: (bot) => {
@@ -239,6 +242,12 @@ export function BotCreate(props: { channelId?: string; onBack: () => void }) {
                 onDescriptionChange={(value) => setForm('description', value)}
               />
             </BotFormSection>
+
+            <BotAgentSection
+              checked={form.hasAgent}
+              disabled={pending()}
+              onChange={(checked) => setForm('hasAgent', checked)}
+            />
 
             <BotFormSection
               title="Ownership"

@@ -17,6 +17,7 @@ import {
   requestInboxFilter,
 } from '@app/features/next-soup/soup-view/inbox-filter-controllers';
 import { requestSearchFocus } from '@app/features/next-soup/soup-view/search-controllers';
+import { useRecentViewFlag } from '@app/features/next-soup/use-recent-view-flag';
 import {
   InviteModal,
   setInviteModalOpen,
@@ -52,7 +53,6 @@ import {
   ENABLE_CALLS,
   ENABLE_CRM,
   ENABLE_NEW_PRICING_OVERRIDE,
-  ENABLE_REMINDERS,
 } from '@core/constant/featureFlags';
 import {
   type SettingsTab,
@@ -83,7 +83,6 @@ import { AnimatedSearchIcon } from '@icon/wide-search';
 import { AnimatedStarIcon } from '@icon/wide-star';
 import { AnimatedTaskIcon } from '@icon/wide-task';
 import { ContextMenu } from '@kobalte/core/context-menu';
-import BellSimpleIcon from '@phosphor/bell-simple.svg';
 import CaretRightIcon from '@phosphor/caret-right.svg';
 import CaretUpIcon from '@phosphor/caret-up.svg';
 import CompassIcon from '@phosphor/compass.svg';
@@ -128,7 +127,7 @@ interface SidebarItem {
   href: string;
   params?: Record<string, unknown>;
   icon?: Component<
-    JSX.SvgSVGAttributes<SVGSVGElement> | { triggerAnimation?: boolean }
+    JSX.SvgSVGAttributes<SVGSVGElement> & { triggerAnimation?: boolean }
   >;
   hotkey: ValidHotkey;
   hotkeyToken: HotkeyToken;
@@ -414,11 +413,13 @@ export const GoToHotkeys = () => {
   const gettingStartedEnabled = useGettingStartedEnabled();
   const calendarUiEnabled = useCalendarUiFlag();
   const activityFeedEnabled = useActivityFeedFlag();
+  const recentViewEnabled = useRecentViewFlag();
   const links = createMemo((): SidebarItem[] =>
     buildSidebarLinks(
       gettingStartedEnabled(),
       calendarUiEnabled(),
-      activityFeedEnabled()
+      activityFeedEnabled(),
+      recentViewEnabled()
     )
   );
 
@@ -1034,15 +1035,15 @@ const ACTIVITY_LINK: SidebarItem = {
   hotkeyToken: TOKENS.sidebar.goTo.activity,
 };
 
-const REMINDERS_LINK: SidebarItem = {
-  id: 'reminders',
-  label: 'Reminders',
-  href: LIST_VIEW_PATHS.reminders,
-  icon: BellSimpleIcon,
-  // `r` is Calendar; `m` is free and the only other letter in "reminders" that
-  // is not already a sidebar destination.
-  hotkey: 'm',
-  hotkeyToken: TOKENS.sidebar.goTo.reminders,
+const RECENT_LINK: SidebarItem = {
+  id: 'recent',
+  label: 'Recent',
+  href: LIST_VIEW_PATHS.recent,
+  icon: AnimatedActivityIcon,
+  // `r` is Calendar and `e`/`c`/`t` are taken; `n` is the only letter of
+  // "recent" that is not already a sidebar destination.
+  hotkey: 'n',
+  hotkeyToken: TOKENS.sidebar.goTo.recent,
 };
 
 /**
@@ -1061,7 +1062,8 @@ const REMINDERS_LINK: SidebarItem = {
 const buildSidebarLinks = (
   showGettingStarted: boolean,
   showCalendar: boolean,
-  showActivity: boolean
+  showActivity: boolean,
+  showRecent: boolean
 ): SidebarItem[] => {
   let links: SidebarItem[] = [
     DASHBOARD_LINK,
@@ -1069,22 +1071,18 @@ const buildSidebarLinks = (
     ...SIDEBAR_LINKS.filter((link) => showCalendar || link.id !== 'calendar'),
   ];
 
-  if (showActivity) {
+  if (showRecent) {
+    // Directly below Inbox; Activity anchors after it.
     const idx = links.findIndex((link) => link.id === 'inbox');
+    links = [...links.slice(0, idx + 1), RECENT_LINK, ...links.slice(idx + 1)];
+  }
+
+  if (showActivity) {
+    const anchorId = showRecent ? 'recent' : 'inbox';
+    const idx = links.findIndex((link) => link.id === anchorId);
     links = [
       ...links.slice(0, idx + 1),
       ACTIVITY_LINK,
-      ...links.slice(idx + 1),
-    ];
-  }
-
-  if (ENABLE_REMINDERS()) {
-    // Directly below Activity, or below Inbox when Activity is off.
-    const anchorId = showActivity ? 'activity' : 'inbox';
-    const idx = links.findIndex((l) => l.id === anchorId);
-    links = [
-      ...links.slice(0, idx + 1),
-      REMINDERS_LINK,
       ...links.slice(idx + 1),
     ];
   }
@@ -1166,11 +1164,13 @@ export const AppSidebar = (props: AppSidebarProps) => {
   const gettingStartedEnabled = useGettingStartedEnabled();
   const calendarUiEnabled = useCalendarUiFlag();
   const activityFeedEnabled = useActivityFeedFlag();
+  const recentViewEnabled = useRecentViewFlag();
   const allLinks = createMemo((): SidebarItem[] =>
     buildSidebarLinks(
       gettingStartedEnabled(),
       calendarUiEnabled(),
-      activityFeedEnabled()
+      activityFeedEnabled(),
+      recentViewEnabled()
     )
   );
 
@@ -1346,7 +1346,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
   // lives in the collapsible Workspace section. `findLink` drops ids that
   // `buildSidebarLinks` gated out, so flag-gated rows need no filter here.
   const topLinks = createMemo(() =>
-    ['home', 'getting-started', 'inbox', 'activity', 'reminders']
+    ['home', 'getting-started', 'inbox', 'recent', 'activity']
       .filter(
         (id) => id !== 'getting-started' || !gettingStartedVisibility.hidden()
       )

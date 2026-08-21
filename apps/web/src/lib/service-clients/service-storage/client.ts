@@ -103,6 +103,8 @@ import type { GetAttachmentReferencesResponse } from './generated/schemas/getAtt
 import type { GetBatchChannelPreviewRequest } from './generated/schemas/getBatchChannelPreviewRequest';
 import type { GetBatchChannelPreviewResponse } from './generated/schemas/getBatchChannelPreviewResponse';
 import type { GetBatchProjectPreviewResponse } from './generated/schemas/getBatchProjectPreviewResponse';
+import type { GetContactByEmailParams } from './generated/schemas/getContactByEmailParams';
+import type { GetContactByEmailResponse } from './generated/schemas/getContactByEmailResponse';
 import type { GetDocumentPermissionsResponseDataV2 } from './generated/schemas/getDocumentPermissionsResponseDataV2';
 import type { GetDocumentProcessingResultResponse } from './generated/schemas/getDocumentProcessingResultResponse';
 import type { GetDocumentResponseData } from './generated/schemas/getDocumentResponseData';
@@ -160,8 +162,13 @@ import type { UserViewsResponse } from './generated/schemas/userViewsResponse';
 import type { View } from './generated/schemas/view';
 import type { ViewsResponse } from './generated/schemas/viewsResponse';
 import { saveDocumentHandlerResponse } from './generated/zod';
+import type { ItemType } from './itemType';
+
+export type { ItemType } from './itemType';
+
 import type {
   GetDocumentPermissionsTokenResponse,
+  ProcessingResultType,
   StorageServiceClient,
   ValidateDocumentPermissionsTokenResponse,
 } from './service';
@@ -226,19 +233,6 @@ type Success = {
 };
 type SuccessResponse = { data: Success };
 
-export type ItemType =
-  | CloudStorageItemType
-  | 'channel'
-  | 'email'
-  | 'channel_message'
-  | 'channel_thread'
-  | 'call'
-  | 'automation'
-  | 'calendar_event'
-  | 'foreign'
-  | 'crm_company'
-  | 'crm_contact';
-
 export const DEFAULT_ITEM_TYPE: ItemType = 'document';
 
 export type { ApiAttachmentChannelReference } from './generated/schemas/apiAttachmentChannelReference';
@@ -288,6 +282,8 @@ type CreateBotRequest = {
   handle: string;
   description?: string;
   avatar_url?: string;
+  /** Whether mentioning this bot opens a coding-agent session. Defaults to false. */
+  has_agent?: boolean;
 };
 
 type PatchBotRequest = {
@@ -295,6 +291,8 @@ type PatchBotRequest = {
   handle?: string;
   description?: string;
   avatar_url?: string;
+  /** Whether mentioning this bot opens a coding-agent session. Omit to leave unchanged. */
+  has_agent?: boolean;
 };
 
 type CreateBotTokenRequest = {
@@ -391,7 +389,6 @@ export function isCloudStorageItem(
   return Object.values(CloudStorageItemTypeMap).includes(item as any);
 }
 
-type ProcessingResultType = 'PREPROCESS' | 'SPLIT_TEXTS';
 export type ProcessingResultResponseType<T extends ProcessingResultType> =
   T extends 'PREPROCESS'
     ? ICoParse
@@ -678,7 +675,11 @@ export const storageServiceClient = {
   },
 
   async createChannelScopedBot(
-    args: WithChannelId & CreateChannelScopedBotRequest
+    args: WithChannelId &
+      CreateChannelScopedBotRequest & {
+        /** Whether mentioning this bot opens a coding-agent session. Defaults to false. */
+        has_agent?: boolean;
+      }
   ) {
     const { channel_id, ...request } = args;
     return (
@@ -2468,6 +2469,16 @@ export const storageServiceClient = {
     return await dssFetch<CrmContactResponse>(`/crm/contacts/${contactId}`, {
       method: 'GET',
     });
+  },
+  async getContactByEmail({
+    email,
+    signal,
+  }: GetContactByEmailParams & { signal?: AbortSignal }) {
+    const query = new URLSearchParams({ email });
+    return await dssFetch<GetContactByEmailResponse>(
+      `/crm/contacts/by-email?${query.toString()}`,
+      { method: 'GET', signal }
+    );
   },
   async setContactName({
     contactId,

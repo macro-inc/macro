@@ -12,6 +12,10 @@ pub enum AgentSessionError {
     Handshake(String),
     #[error("agent session {0} is no longer connected")]
     Disconnected(AgentSessionId),
+    #[error("this bot already has a session for this thread")]
+    ThreadSessionExists,
+    #[error("the session owner is not a known user")]
+    UnknownOwner,
     #[error(
         "agent session {0} cannot be restored because the agent supports neither session/resume nor session/load"
     )]

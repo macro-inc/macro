@@ -9,6 +9,7 @@ import type {
   CacheRequest,
   CacheResponse,
   EnqueueOptimisticMutationResult,
+  EntityFilterCacheResult,
   HydrationResult,
   ReadResult,
   SearchCachePage,
@@ -390,10 +391,18 @@ export class CacheWorkerCore {
         );
         return result;
       })
+      .with({ kind: 'entity-filter' }, async (request) => {
+        const result: EntityFilterCacheResult =
+          await this.requireEngine().entityFilter(request.request);
+        return result;
+      })
       .with({ kind: 'write' }, async (request) => {
         const engine = this.requireEngine();
         const result = await engine.writeQuery(
-          request.originOpId,
+          {
+            originOpId: request.originOpId,
+            registration: request.registration,
+          },
           request.query,
           request.operationName,
           request.variables,

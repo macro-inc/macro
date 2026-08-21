@@ -4,7 +4,10 @@ import {
   pushSessionEntries,
   sessionMessages,
 } from '@core/agent-fold/client';
-import type { FoldedMessage } from '@service-agent-fold/generated/types';
+import type {
+  FoldedMessage,
+  SessionMetadata,
+} from '@service-agent-fold/generated/types';
 import { agentHarnessServiceClient } from '@service-agent-harness/client';
 import type {
   AgentSessionLogEntryDto,
@@ -15,6 +18,9 @@ import { type AgentSessionLogEvent, entryOf } from './realtime-protocol';
 /** Receives the folded messages changed by appended frames. */
 export type FoldedMessageSink = (messages: FoldedMessage[]) => void;
 
+/** Receives the session metadata whenever a frame changes it (latest-wins). */
+export type SessionMetadataSink = (metadata: SessionMetadata) => void;
+
 /** Receives raw realtime frames for one session. */
 export type AgentSessionLogSink = (event: AgentSessionLogEvent) => void;
 
@@ -23,6 +29,7 @@ type SessionState = {
   bot?: SessionBot;
   buffered: AgentSessionLogEntryDto[];
   foldedSinks: Set<FoldedMessageSink>;
+  metadataSinks: Set<SessionMetadataSink>;
   opening?: Promise<void>;
   ready: boolean;
   references: number;
@@ -56,21 +63,25 @@ export function subscribeAgentSessionLog(
 export async function acquireAgentSessionFold(args: {
   agentSessionId: string;
   onChange?: FoldedMessageSink;
+  onMetadata?: SessionMetadataSink;
 }): Promise<{
   bot: SessionBot;
   messages: FoldedMessage[];
+  metadata: SessionMetadata;
   release: () => void;
 }> {
-  const { agentSessionId, onChange } = args;
+  const { agentSessionId, onChange, onMetadata } = args;
   const state = sessions.get(agentSessionId) ?? {
     agentSessionId,
     buffered: [],
     foldedSinks: new Set<FoldedMessageSink>(),
+    metadataSinks: new Set<SessionMetadataSink>(),
     ready: false,
     references: 0,
   };
   state.references += 1;
   if (onChange) state.foldedSinks.add(onChange);
+  if (onMetadata) state.metadataSinks.add(onMetadata);
   sessions.set(agentSessionId, state);
 
   let released = false;
@@ -78,6 +89,7 @@ export async function acquireAgentSessionFold(args: {
     if (released) return;
     released = true;
     if (onChange) state.foldedSinks.delete(onChange);
+    if (onMetadata) state.metadataSinks.delete(onMetadata);
     state.references -= 1;
     releaseState(state);
   };
@@ -85,12 +97,15 @@ export async function acquireAgentSessionFold(args: {
   try {
     state.opening ??= open(state);
     await state.opening;
-    const [messages, bot] = await Promise.all([
-      sessionMessages(agentSessionId),
-      Promise.resolve(state.bot),
-    ]);
+    const snapshot = await sessionMessages(agentSessionId);
+    const bot = state.bot;
     if (!bot) throw new Error(`agent session ${agentSessionId} has no bot`);
-    return { bot, messages, release };
+    return {
+      bot,
+      messages: snapshot.messages,
+      metadata: snapshot.metadata,
+      release,
+    };
   } catch (error) {
     release();
     throw error;
@@ -162,20 +177,14 @@ async function push(
 ): Promise<void> {
   const events = await pushSessionEntries(state.agentSessionId, entries);
   if (sessions.get(state.agentSessionId) !== state) return;
-  for (const event of events) {
-    if (event.kind === 'metadata') {
-      console.log('[agent-fold] metadata changed', event.metadata);
-    } else {
-      console.log(
-        `[agent-fold] ${event.kind} message`,
-        event.message.requestId,
-        event.message
-      );
-    }
-  }
   const messages = events.flatMap((event) =>
     event.kind === 'metadata' ? [] : [event.message]
   );
+  // Metadata is carried whole per event, latest-wins — only the last matters.
+  const metadata = events.findLast((event) => event.kind === 'metadata');
+  if (metadata) {
+    for (const sink of state.metadataSinks) sink(metadata.metadata);
+  }
   if (messages.length === 0) return;
   for (const sink of state.foldedSinks) sink(messages);
 }

@@ -69,3 +69,19 @@ pub mod claude_code {
 pub fn command_from_raw_input(raw_input: Option<&serde_json::Value>) -> Option<String> {
     raw_input?.get("command")?.as_str().map(ToOwned::to_owned)
 }
+
+/// The whole-file edit an edit tool's raw input describes, as
+/// `(path, new contents)`.
+///
+/// Claude Code's `Write` (and whole-file `Edit`) calls carry
+/// `{"filePath", "content"}` in `rawInput` and never report an ACP diff
+/// content block, so this is the only material a fold has for their diff. The
+/// prior contents are not on the wire at all — a reader treats the file as
+/// new.
+#[must_use]
+pub fn file_edit_from_raw_input(raw_input: Option<&serde_json::Value>) -> Option<(String, String)> {
+    let input = raw_input?;
+    let path = input.get("filePath")?.as_str()?;
+    let content = input.get("content")?.as_str()?;
+    Some((path.to_owned(), content.to_owned()))
+}

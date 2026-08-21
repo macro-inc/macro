@@ -23,7 +23,11 @@ import { openSingleStackNotification } from '@notifications';
 import { type Accessor, onCleanup } from 'solid-js';
 import type { VirtualizerHandle } from 'virtua/solid';
 import type { SoupState } from '../create-soup-state';
-import { type TabbedListView, VIEW_TAB_LISTS } from './soup-view-tabs';
+import {
+  type TabbedListView,
+  useVisibleViewTabs,
+  VIEW_TAB_LISTS,
+} from './soup-view-tabs';
 
 type UseSoupViewHotkeysOptions = {
   scopeId: string;
@@ -343,10 +347,11 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
 
   const isTabbedView = (v: string): v is TabbedListView => v in VIEW_TAB_LISTS;
 
+  const visibleViewTabs = useVisibleViewTabs();
   const getTabKeys = () => {
     const view = currentView();
     if (!view || !isTabbedView(view)) return [];
-    return VIEW_TAB_LISTS[view].map((t) => t.value);
+    return visibleViewTabs(view).map((t) => t.value);
   };
 
   const switchToTabIndex = (index: number) => {

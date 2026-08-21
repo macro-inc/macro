@@ -1,10 +1,11 @@
+use crate::markdown_images::{MarkdownImageResolver, tool_result_with_images};
 use ai_toolset::{AsyncToolCollection, RequestContext, ToolSet};
 use macro_user_id::user_id::MacroUserIdStr;
 use rmcp::{
     handler::server::ServerHandler,
     model::{
-        Content, ListToolsResult, PaginatedRequestParams, ServerCapabilities, ServerInfo, Tool,
-        ToolAnnotations,
+        Content, Icon, ListToolsResult, PaginatedRequestParams, ServerCapabilities, ServerInfo,
+        Tool, ToolAnnotations,
     },
 };
 use std::sync::Arc;
@@ -84,10 +85,11 @@ mod test;
 
 impl<Context> ServerHandler for AuthenticatedToolService<Context>
 where
-    Context: Clone + Send + Sync + 'static,
+    Context: Clone + Send + Sync + MarkdownImageResolver + 'static,
 {
     fn get_info(&self) -> ServerInfo {
         let mut info = ServerInfo::new(ServerCapabilities::builder().enable_tools().build());
+        let base_url = self.item_base_url.trim_end_matches('/');
         info.server_info = rmcp::model::Implementation::new(
             "macro-tools",
             env!("CARGO_PKG_VERSION"),
@@ -95,8 +97,14 @@ where
         .with_title("Macro")
         .with_description(
             "Search, read, and create content across documents, emails, and messages in Macro.",
-        );
-        let base_url = self.item_base_url.trim_end_matches('/');
+        )
+        // The same icon the web app's <link rel="icon"> points at, so the
+        // server shows up in MCP clients with the Macro favicon.
+        .with_icons(vec![
+            Icon::new(format!("{base_url}/app/macro-favicon.svg"))
+                .with_mime_type("image/svg+xml")
+                .with_sizes(vec!["any".to_owned()]),
+        ]);
         info.instructions = Some(format!(
             "This server provides tools for interacting with a user's Macro workspace. \
              Use ContentSearch and NameSearch to find entities. \
@@ -129,7 +137,7 @@ where
     ) -> Result<rmcp::model::CallToolResult, rmcp::ErrorData> {
         let user_id = Self::authenticated_user_id(&context.extensions)?;
 
-        let request_context = RequestContext::new(user_id);
+        let request_context = RequestContext::new(user_id.clone());
 
         let arguments = request
             .arguments
@@ -155,7 +163,7 @@ where
             })?;
 
         match result {
-            Ok(value) => Ok(rmcp::model::CallToolResult::structured(value)),
+            Ok(value) => Ok(tool_result_with_images(&self.context, &user_id, value).await),
             Err(error) => Ok(rmcp::model::CallToolResult::error(vec![Content::text(
                 error.description,
             )])),

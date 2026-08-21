@@ -1,5 +1,8 @@
 import { openReminderEditor } from '@app/features/reminders/reminder-composer';
-import { reminderDescriptionForReference } from '@app/features/reminders/reminder-schedule';
+import {
+  reminderDescriptionForReference,
+  scheduleFromRow,
+} from '@app/features/reminders/reminder-schedule';
 import { ENABLE_REMINDERS } from '@core/constant/featureFlags';
 import type { EntityData, ReminderEntity } from '@entity';
 import {
@@ -28,22 +31,15 @@ function fallbackDescriptionFor(entity: ReminderEntity): string | undefined {
 }
 
 /**
- * Edit an existing reminder — its description, its time, or both.
+ * Edit an existing reminder — its description, its schedule, or both.
  *
  * `execute` opens the composer prefilled rather than writing anything: both
  * answers come from the user, so there is nothing to do until that modal
  * resolves. Single-entity only, like creating one.
- *
- * Recurring reminders are excluded. The composer only speaks one-shot
- * schedules, so editing one through it would quietly turn a cron into a single
- * firing. Nothing in the product creates a recurring reminder today, so this
- * excludes nothing a user can actually reach.
  */
 export const makeEditReminderAction = () => {
   const canExecute = (entity: EntityData): boolean =>
-    ENABLE_REMINDERS() &&
-    entity.type === 'reminder' &&
-    entity.scheduleType === 'once';
+    ENABLE_REMINDERS() && entity.type === 'reminder';
 
   const execute = (entities: EntityData[]) => {
     const [entity] = entities;
@@ -55,6 +51,7 @@ export const makeEditReminderAction = () => {
       id: entity.id,
       description: entity.description,
       remindAt: new Date(entity.nextRunAt),
+      schedule: scheduleFromRow(entity),
       completed: entity.completedAt != null,
       fallbackDescription: fallbackDescriptionFor(entity),
     });

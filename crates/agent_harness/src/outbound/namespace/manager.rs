@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use agent_runtime_protocol::domain::ports::{Transport, TransportError};
+use agent_runtime_protocol::domain::ports::Transport;
 use agent_runtime_protocol::domain::schema::v0::{ToRuntimeMessage, ToServerMessage};
 use agent_session::domain::model::AgentSessionId;
 
@@ -73,7 +73,7 @@ impl NamespaceContainerManager {
         Ok(NamespaceContainer {
             instance: Arc::new(instance),
             client: self.client.clone(),
-            wire: Arc::new(SidecarTransport::connect(socket)),
+            wire: SidecarTransport::connect(socket),
         })
     }
 }
@@ -129,11 +129,10 @@ impl ContainerManager for NamespaceContainerManager {
 }
 
 /// One Namespace instance and its live sidecar transport.
-#[derive(Clone)]
 pub struct NamespaceContainer {
     instance: Arc<Instance>,
     client: NamespaceClient,
-    wire: Arc<SidecarTransport>,
+    wire: SidecarTransport,
 }
 
 impl NamespaceContainer {
@@ -154,12 +153,14 @@ impl NamespaceContainer {
 }
 
 impl Transport<ToRuntimeMessage, ToServerMessage> for NamespaceContainer {
-    async fn send(&self, message: ToRuntimeMessage) -> std::result::Result<(), TransportError> {
-        self.wire.send(message).await
-    }
+    type Sender = crate::outbound::sidecar::SidecarSender;
+    type Receiver = tokio::sync::mpsc::UnboundedReceiver<ToServerMessage>;
 
-    async fn recv(&self) -> std::result::Result<Option<ToServerMessage>, TransportError> {
-        self.wire.recv().await
+    /// The sandbox itself is not carried into the halves: nothing reattaches
+    /// to a container object once its session has it, and ending a sandbox
+    /// goes through the manager by session id.
+    fn split(self) -> (Self::Sender, Self::Receiver) {
+        self.wire.split()
     }
 }
 

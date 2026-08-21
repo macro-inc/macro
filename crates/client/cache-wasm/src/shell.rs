@@ -2,10 +2,12 @@ use async_lock::Mutex;
 use cache_core::codec::cache_database_name;
 use cache_core::deps::OpId;
 use cache_core::engine::{
-    BeginOptimisticWrite, Engine, EngineError, InitialClaimOutcome, ReadResult,
+    BeginOptimisticWrite, Engine, EngineError, InitialClaimOutcome, NetworkWrite,
+    QueryRegistration, ReadResult,
 };
 use cache_core::entity_resolver::EntityResolver;
 use cache_core::link_patch::{OptimisticLinkPatch, QueryRevalidation};
+use cache_core::predicate::PredicateQueryResult;
 use cache_core::query_inspection::QueryInspection;
 use cache_core::queue::{ClaimedMutation, MutationClaimRequest, MutationClaimToken};
 use cache_core::record_selection::RecordSelection;
@@ -16,7 +18,12 @@ use cache_turso::{
     PhysicalResetReason, TursoStorage, TursoStorageCloseOutcome, TursoStorageError,
     TursoStorageOpenOutcome,
 };
+use predicate_index::RecordKey;
 use serde::{Deserialize, Serialize};
+use soup_filter_cache_adapter::{
+    SoupFilterCompileOutcome, authoritative_projection_mutations, compile_filter_request,
+    dirty_projection_mutations, optimistic_projection_mutations,
+};
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
@@ -113,6 +120,21 @@ fn recovery_outcome(reason: PhysicalResetReason) -> CacheOpenOutcome {
         | PhysicalResetReason::TransactionOutcomeUncertain
         | PhysicalResetReason::Io => CacheOpenOutcome::ResetStorageUncertain,
     }
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct JsWriteContext {
+    origin_op_id: Option<String>,
+    registration: Option<JsQueryRegistration>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct JsQueryRegistration {
+    op_id: String,
+    #[serde(default)]
+    entity_resolvers: Vec<EntityResolver>,
 }
 
 #[derive(Serialize)]
@@ -232,6 +254,23 @@ fn unwrap_storage(storage: BrowserStorage) -> TursoStorage {
 #[cfg(test)]
 fn unwrap_storage(storage: BrowserStorage) -> TursoStorage {
     storage.into_inner()
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct JsEntityFilterRequest {
+    filters: serde_json::Value,
+    sort_method: String,
+    sort_direction: String,
+    limit: u16,
+}
+
+#[derive(Serialize)]
+#[serde(tag = "kind", rename_all = "kebab-case")]
+enum JsEntityFilterResult {
+    Complete { keys: Vec<String>, optimistic: bool },
+    Unsupported,
+    Incomplete,
 }
 
 struct CacheState {
@@ -789,6 +828,49 @@ impl CacheEngine {
         })
     }
 
+    /// Evaluates one exact `soup-flat-v1` GraphQL filter request.
+    #[wasm_bindgen(js_name = entityFilter)]
+    pub fn entity_filter(&self, request: JsValue) -> js_sys::Promise {
+        let state = self.state.clone();
+        future_to_promise(async move {
+            let mut state = state.lock().await;
+            state.ensure_callable()?;
+            let request: JsEntityFilterRequest =
+                serde_wasm_bindgen::from_value(request).map_err(err_js)?;
+            let outcome = compile_filter_request(
+                request.filters,
+                &request.sort_method,
+                &request.sort_direction,
+                request.limit,
+            )
+            .map_err(err_js)?;
+            let result = match outcome {
+                SoupFilterCompileOutcome::Unsupported => JsEntityFilterResult::Unsupported,
+                SoupFilterCompileOutcome::Supported(query) => {
+                    let result = state.engine_mut()?.query_predicate_index(&query).await;
+                    match state.engine_result(result)? {
+                        PredicateQueryResult::Complete(keys) => JsEntityFilterResult::Complete {
+                            keys: keys
+                                .into_iter()
+                                .map(|key| key.as_str().to_owned())
+                                .collect(),
+                            optimistic: false,
+                        },
+                        PredicateQueryResult::Optimistic(keys) => JsEntityFilterResult::Complete {
+                            keys: keys
+                                .into_iter()
+                                .map(|key| key.as_str().to_owned())
+                                .collect(),
+                            optimistic: true,
+                        },
+                        PredicateQueryResult::Incomplete => JsEntityFilterResult::Incomplete,
+                    }
+                }
+            };
+            to_js(&result)
+        })
+    }
+
     /// Normalizes and stores a network response. Resolves to
     /// `{changed: string[], affectedOps: string[], reset: boolean}` —
     /// `affectedOps` are the registered operation ids (excluding
@@ -798,7 +880,7 @@ impl CacheEngine {
     #[wasm_bindgen(js_name = writeQuery)]
     pub fn write_query(
         &self,
-        origin_op_id: Option<String>,
+        context: JsValue,
         query: String,
         operation_name: Option<String>,
         variables: JsValue,
@@ -810,18 +892,36 @@ impl CacheEngine {
         future_to_promise(async move {
             let mut state = state.lock().await;
             state.ensure_callable()?;
+            let context: JsWriteContext =
+                serde_wasm_bindgen::from_value(context).map_err(err_js)?;
             let vars = parse_variables(variables)?;
             let data: serde_json::Value = serde_wasm_bindgen::from_value(data).map_err(err_js)?;
-            let origin = origin_op_id.map(|name| ops.borrow_mut().intern(&name));
+            let origin = context
+                .origin_op_id
+                .map(|name| ops.borrow_mut().intern(&name));
+            let registration = context.registration.map(|registration| {
+                let op_id = ops.borrow_mut().intern(&registration.op_id);
+                (op_id, registration.entity_resolvers)
+            });
+            let projections = authoritative_projection_mutations(&data);
             let result = state
                 .engine_mut()?
-                .write_query(
+                .write_query_with_registration_and_projections(
                     origin,
-                    &query,
-                    operation_name.as_deref(),
-                    &vars,
-                    &data,
-                    identity.as_deref(),
+                    registration
+                        .as_ref()
+                        .map(|(op_id, entity_resolvers)| QueryRegistration {
+                            op_id: *op_id,
+                            entity_resolvers,
+                        }),
+                    NetworkWrite {
+                        query: &query,
+                        operation_name: operation_name.as_deref(),
+                        variables: &vars,
+                        data: &data,
+                        identity: identity.as_deref(),
+                    },
+                    projections,
                 )
                 .await;
             let result = state.engine_result(result)?;
@@ -856,14 +956,16 @@ impl CacheEngine {
             state.ensure_callable()?;
             let variables = parse_variables(variables)?;
             let data: serde_json::Value = serde_wasm_bindgen::from_value(data).map_err(err_js)?;
+            let projections = authoritative_projection_mutations(&data);
             let result = state
                 .engine_mut()?
-                .hydrate_query(
+                .hydrate_query_with_projections(
                     &query,
                     operation_name.as_deref(),
                     &variables,
                     &data,
                     identity.as_deref(),
+                    projections,
                 )
                 .await;
             let result = state.engine_result(result)?;
@@ -911,6 +1013,7 @@ impl CacheEngine {
             let link_patches: Vec<OptimisticLinkPatch> = parse_vec(link_patches)?;
             let revalidations: Vec<QueryRevalidation> = parse_vec(revalidations)?;
             let created_at_ms = parse_timestamp(created_at_ms, "enqueue timestamp")?;
+            let projection_mutations = optimistic_projection_mutations(&data, created_at_ms);
             let claim = MutationClaimRequest {
                 owner: lease_owner,
                 now_ms: parse_timestamp(now_ms, "claim timestamp")?,
@@ -922,7 +1025,7 @@ impl CacheEngine {
             let origin = origin_op_id.map(|name| ops.borrow_mut().intern(&name));
             let result = state
                 .engine_mut()?
-                .enqueue_optimistic_mutation(
+                .enqueue_optimistic_mutation_with_projections(
                     origin,
                     BeginOptimisticWrite {
                         query: &query,
@@ -934,6 +1037,7 @@ impl CacheEngine {
                         created_at_ms,
                     },
                     claim,
+                    projection_mutations,
                 )
                 .await;
             let result = state.engine_result(result)?;
@@ -1089,15 +1193,17 @@ impl CacheEngine {
             };
             let vars = parse_variables(variables)?;
             let data: serde_json::Value = serde_wasm_bindgen::from_value(data).map_err(err_js)?;
+            let projections = authoritative_projection_mutations(&data);
             let result = state
                 .engine_mut()?
-                .commit_optimistic_write(
+                .commit_optimistic_write_with_projections(
                     transaction,
                     claim,
                     &query,
                     operation_name.as_deref(),
                     &vars,
                     &data,
+                    projections,
                 )
                 .await;
             let result = state.engine_result(result)?;
@@ -1161,6 +1267,14 @@ impl CacheEngine {
         future_to_promise(async move {
             let mut state = state.lock().await;
             state.ensure_callable()?;
+            let projections = dirty_projection_mutations(&keys);
+            if !projections.is_empty() {
+                let result = state
+                    .engine_mut()?
+                    .mark_projections_incomplete(projections)
+                    .await;
+                state.engine_result(result)?;
+            }
             let keys: Vec<EntityKey<'static>> =
                 keys.into_iter().map(|key| EntityKey(key.into())).collect();
             let affected = state.engine_mut()?.invalidate_keys(keys.iter());
@@ -1177,9 +1291,16 @@ impl CacheEngine {
         future_to_promise(async move {
             let mut state = state.lock().await;
             state.ensure_callable()?;
+            let projection_keys = keys
+                .iter()
+                .filter_map(|key| RecordKey::new(key.clone()).ok())
+                .collect::<Vec<_>>();
             let keys: Vec<EntityKey<'static>> =
                 keys.into_iter().map(|key| EntityKey(key.into())).collect();
-            let result = state.engine_mut()?.delete_keys(&keys).await;
+            let result = state
+                .engine_mut()?
+                .delete_keys_with_projections(&keys, &projection_keys)
+                .await;
             let affected = state.engine_result(result)?;
             to_js(&ops.borrow().names(affected))
         })

@@ -165,7 +165,13 @@ type FakeHost = CacheHost & {
     priority?: 'user-visible';
     entityResolvers?: readonly unknown[];
   }>;
-  writes: Array<{ opKey?: number; data: unknown; identity?: string }>;
+  writes: Array<{
+    opKey?: number;
+    data: unknown;
+    identity?: string;
+    registerDependencies?: boolean;
+    entityResolvers?: readonly unknown[];
+  }>;
   begins: Array<{
     query: string;
     data: unknown;
@@ -261,11 +267,16 @@ function makeFakeHost(): FakeHost {
     async search() {
       return { documents: [], nextCursor: null };
     },
+    async entityFilter() {
+      return { kind: 'unsupported' };
+    },
     async writeQuery(args): Promise<WriteResult> {
       host.writes.push({
         opKey: args.opKey,
         data: args.data,
         identity: args.identity,
+        registerDependencies: args.registerDependencies,
+        entityResolvers: args.entityResolvers,
       });
       host.cacheActions.push({ kind: 'write', value: args.data });
       return { changed: [], affectedOps: [], reset: false };
@@ -778,16 +789,21 @@ describe('normalizedCacheExchange', () => {
     ops.next(makeOp(1));
     await tick();
 
-    expect(host.reads).toHaveLength(2);
-    expect(host.reads.map((read) => read.opKey)).toEqual([1, 1]);
+    expect(host.reads).toHaveLength(1);
+    expect(host.reads[0]?.opKey).toBe(1);
     expect(forwarded.map((op) => op.key)).toEqual([1]);
     expect(results).toHaveLength(1);
     expect(results[0]?.data).toEqual({ from: 'network' });
     expect(host.writes).toHaveLength(1);
-    expect(host.writes[0]?.data).toEqual({ from: 'network' });
+    expect(host.writes[0]).toEqual(
+      expect.objectContaining({
+        data: { from: 'network' },
+        registerDependencies: true,
+      })
+    );
   });
 
-  it('compiles entity resolvers once and forwards them to initial and post-write reads', async () => {
+  it('compiles entity resolvers once and forwards them to reads and registered writes', async () => {
     const options = {
       entityResolvers: ENTITY_RESOLVER_OPTIONS.entityResolvers,
     } satisfies NormalizedCacheExchangeOptions;
@@ -798,15 +814,15 @@ describe('normalizedCacheExchange', () => {
     ops.next(makeOp(1));
     await tick();
 
-    expect(host.reads).toHaveLength(2);
+    expect(host.reads).toHaveLength(1);
     expect(forwarded.map((operation) => operation.key)).toEqual([1]);
-    expect(host.reads.every((read) => read.entityResolvers !== undefined)).toBe(
-      true
+    expect(host.reads[0]?.entityResolvers).toEqual(EXPECTED_ENTITY_RESOLVERS);
+    expect(host.writes[0]).toEqual(
+      expect.objectContaining({
+        registerDependencies: true,
+        entityResolvers: EXPECTED_ENTITY_RESOLVERS,
+      })
     );
-    expect(host.reads.map((read) => read.entityResolvers)).toEqual([
-      EXPECTED_ENTITY_RESOLVERS,
-      EXPECTED_ENTITY_RESOLVERS,
-    ]);
   });
 
   it('cache-first resolver hit emits without reaching the network', async () => {
@@ -868,16 +884,21 @@ describe('normalizedCacheExchange', () => {
     expect(host.reads).toHaveLength(1);
   });
 
-  it('network-only skips the initial read and refreshes dependencies after writing', async () => {
+  it('network-only registers dependencies without reading the cache', async () => {
     const { ops, results } = harness(host, undefined, ENTITY_RESOLVER_OPTIONS);
     ops.next(makeOp(1, 'network-only'));
     await tick();
 
-    expect(host.reads).toHaveLength(1);
-    expect(host.reads[0]?.opKey).toBe(1);
-    expect(host.reads[0]?.entityResolvers).toEqual(EXPECTED_ENTITY_RESOLVERS);
+    expect(host.reads).toHaveLength(0);
     expect(results[0]?.data).toEqual({ from: 'network' });
     expect(host.writes).toHaveLength(1);
+    expect(host.writes[0]).toEqual(
+      expect.objectContaining({
+        opKey: 1,
+        registerDependencies: true,
+        entityResolvers: EXPECTED_ENTITY_RESOLVERS,
+      })
+    );
   });
 
   it('hydrate-only stores the full response and emits only the cache projection', async () => {
@@ -1063,7 +1084,31 @@ describe('normalizedCacheExchange', () => {
     ]);
   });
 
-  it('defers replacement reread behind a slow successful fallback network request', async () => {
+  it('emits an affected cache result while an authoritative query remains in flight', async () => {
+    host.scriptRead({ kind: 'hit', data: { status: 'In Review' } });
+    const { ops, results, forwarded, client } = controlledQueryHarness(host);
+    ops.next(makeOp(8, 'cache-and-network'));
+    await tick();
+
+    expect(forwarded).toHaveLength(1);
+    expect(results.map((result) => [result.data, result.stale])).toEqual([
+      [{ status: 'In Review' }, true],
+    ]);
+
+    host.scriptRead({ kind: 'hit', data: { status: 'Completed' } });
+    host.pushAffected([8]);
+    await tick();
+
+    expect(client.reexecuteOperation).not.toHaveBeenCalled();
+    expect(forwarded).toHaveLength(1);
+    expect(host.reads.at(-1)?.priority).toBe('user-visible');
+    expect(results.map((result) => [result.data, result.stale])).toEqual([
+      [{ status: 'In Review' }, true],
+      [{ status: 'Completed' }, true],
+    ]);
+  });
+
+  it('registers a slow fallback write without a replacement reread', async () => {
     let readCount = 0;
     host.readQuery = async (args) => {
       host.reads.push({ opKey: args.opKey, query: args.query });
@@ -1095,7 +1140,8 @@ describe('normalizedCacheExchange', () => {
     expect(forwarded).toHaveLength(1);
     expect(client.reexecuteOperation).not.toHaveBeenCalled();
     expect(host.writes).toHaveLength(1);
-    expect(host.reads).toHaveLength(2);
+    expect(host.writes[0]?.registerDependencies).toBe(true);
+    expect(host.reads).toHaveLength(1);
   });
 
   it('restores a fast successful fallback after replacement without another API request', async () => {
@@ -1155,12 +1201,13 @@ describe('normalizedCacheExchange', () => {
       })
     );
     expect(cached).toEqual({ from: 'fast-network' });
-    expect(host.reads).toHaveLength(2);
-    expect(host.reads[1]).toEqual(
+    expect(host.reads).toHaveLength(1);
+    expect(host.writeQuery).toHaveBeenLastCalledWith(
       expect.objectContaining({
         opKey: 42,
         variables: { input: { limit: 2 } },
         entityResolvers: EXPECTED_ENTITY_RESOLVERS,
+        registerDependencies: true,
       })
     );
     expect(client.reexecuteOperation).not.toHaveBeenCalled();
@@ -1210,7 +1257,10 @@ describe('normalizedCacheExchange', () => {
 
     host.pushAffected([43]);
     await vi.waitFor(() => expect(host.writeQuery).toHaveBeenCalledTimes(3));
-    await vi.waitFor(() => expect(host.reads).toHaveLength(2));
+    expect(host.reads).toHaveLength(1);
+    expect(host.writeQuery).toHaveBeenLastCalledWith(
+      expect.objectContaining({ registerDependencies: true })
+    );
 
     expect(client.reexecuteOperation).not.toHaveBeenCalled();
     expect(forwarded).toHaveLength(1);
@@ -1276,14 +1326,19 @@ describe('normalizedCacheExchange', () => {
       hasNext: false,
     });
     await vi.waitFor(() => expect(host.writeQuery).toHaveBeenCalledTimes(3));
-    await vi.waitFor(() => expect(host.reads).toHaveLength(2));
+    expect(host.reads).toHaveLength(1);
     expect(cached).toEqual({ version: 'B' });
-    expect(host.reads[1]?.entityResolvers).toEqual(EXPECTED_ENTITY_RESOLVERS);
+    expect(host.writeQuery).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        entityResolvers: EXPECTED_ENTITY_RESOLVERS,
+        registerDependencies: true,
+      })
+    );
 
     host.pushAffected([46]);
     await tick();
     expect(client.reexecuteOperation).toHaveBeenCalledOnce();
-    expect(host.reads).toHaveLength(3);
+    expect(host.reads).toHaveLength(2);
     expect(host.writeQuery).toHaveBeenCalledTimes(3);
     expect(cached).toEqual({ version: 'B' });
     expect(forwarded.filter(({ kind }) => kind === 'query')).toHaveLength(2);
@@ -1946,7 +2001,7 @@ describe('normalizedCacheExchange', () => {
       expect(host.commits).toHaveLength(0);
     });
 
-    it('retains a retryable network failure and still returns the error', async () => {
+    it('retains a retryable network failure as a successful local write', async () => {
       const error = new CombinedError({
         networkError: new Error('offline'),
       });
@@ -1964,31 +2019,46 @@ describe('normalizedCacheExchange', () => {
         { transactionId: 'txn-1', error: error.message },
       ]);
       expect(host.rollbacks).toHaveLength(0);
-      expect(results[0]?.error).toBe(error);
+      expect(results[0]?.error).toBeUndefined();
+      expect(results[0]?.data).toEqual(optimistic);
       expect(optimisticMutationDispositionOf(results[0])).toEqual({
         kind: 'queued',
         transactionId: 'txn-1',
       });
     });
 
-    it('reports a later mutation as queued while a deferred head blocks it', async () => {
+    it('accepts later local writes while a deferred offline head blocks the network', async () => {
       const error = new CombinedError({
         networkError: new Error('offline'),
       });
+      const firstOptimistic = {
+        setEntityProperty: { id: 'prop-1', displayName: 'Doing' },
+      };
+      const secondOptimistic = {
+        setEntityProperty: { id: 'prop-1', displayName: 'Completed' },
+      };
       const { ops, results, forwarded } = harness(
         host,
         (op) => (op.kind === 'mutation' ? { error, data: undefined } : {}),
         { shouldRetryMutation: () => true }
       );
 
-      ops.next(makeMutationOp(1, optimistic));
+      ops.next(makeMutationOp(1, firstOptimistic));
       await tick();
-      ops.next(makeMutationOp(2, optimistic));
+      ops.next(makeMutationOp(2, secondOptimistic));
       await tick();
 
       expect(host.claims).toEqual(['txn-1']);
       expect(forwarded.map((op) => op.key)).toEqual([1]);
+      expect(host.begins.map((begin) => begin.data)).toEqual([
+        firstOptimistic,
+        secondOptimistic,
+      ]);
       expect(results).toHaveLength(2);
+      expect(results[0]?.error).toBeUndefined();
+      expect(results[1]?.error).toBeUndefined();
+      expect(results[0]?.data).toEqual(firstOptimistic);
+      expect(results[1]?.data).toEqual(secondOptimistic);
       expect(optimisticMutationDispositionOf(results[1])).toEqual({
         kind: 'queued',
         transactionId: 'txn-2',

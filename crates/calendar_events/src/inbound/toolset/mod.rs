@@ -23,7 +23,9 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 use crate::domain::{
-    models::{CalendarAttendeeInput, CalendarEvent, EventTime},
+    models::{
+        CalendarAttendeeInput, CalendarEvent, EventReminderOverride, EventReminders, EventTime,
+    },
     ports::{CalendarMutationError, CalendarMutationService, CalendarOccurrenceService},
 };
 
@@ -76,8 +78,7 @@ where
     }
 }
 
-/// Create the calendar toolset.
-pub fn calendar_toolset<M, O>() -> AsyncToolCollection<CalendarToolContext<M, O>>
+fn shared_calendar_toolset<M, O>() -> AsyncToolCollection<CalendarToolContext<M, O>>
 where
     M: CalendarMutationService,
     O: CalendarOccurrenceService,
@@ -85,9 +86,32 @@ where
     AsyncToolCollection::new()
         .add_tool::<ListCalendarEvents, CalendarToolContext<M, O>>()
         .add_tool::<ListCalendars, CalendarToolContext<M, O>>()
-        .add_tool::<CreateCalendarEvent, CalendarToolContext<M, O>>()
         .add_tool::<UpdateCalendarEvent, CalendarToolContext<M, O>>()
         .add_tool::<DeleteCalendarEvent, CalendarToolContext<M, O>>()
+}
+
+/// Create the AI chat calendar toolset.
+///
+/// Event creation is deferred until the user reviews and executes the pending
+/// call. Reads, updates, and deletions continue to execute in the agent loop.
+pub fn calendar_toolset<M, O>() -> AsyncToolCollection<CalendarToolContext<M, O>>
+where
+    M: CalendarMutationService,
+    O: CalendarOccurrenceService,
+{
+    shared_calendar_toolset().add_user_tool::<CreateCalendarEvent, CalendarToolContext<M, O>>()
+}
+
+/// Create the MCP calendar toolset.
+///
+/// MCP clients receive the real create tool and apply their own confirmation
+/// policy from its annotations rather than the chat-specific deferred flow.
+pub fn mcp_toolset<M, O>() -> AsyncToolCollection<CalendarToolContext<M, O>>
+where
+    M: CalendarMutationService,
+    O: CalendarOccurrenceService,
+{
+    shared_calendar_toolset().add_tool::<CreateCalendarEvent, CalendarToolContext<M, O>>()
 }
 
 /// The mutually exclusive time shape supplied to calendar tools.
@@ -159,6 +183,45 @@ impl From<AttendeeInput> for CalendarAttendeeInput {
         Self {
             email: input.email,
             is_optional: input.is_optional,
+        }
+    }
+}
+
+/// One reminder override supplied to a calendar tool.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct EventReminderOverrideInput {
+    /// Provider reminder method. `popup` creates a Macro notification.
+    pub method: String,
+    /// Minutes before the event start.
+    pub minutes: u32,
+}
+
+impl From<EventReminderOverrideInput> for EventReminderOverride {
+    fn from(input: EventReminderOverrideInput) -> Self {
+        Self {
+            method: input.method,
+            minutes: input.minutes,
+        }
+    }
+}
+
+/// Reminder configuration supplied when creating a calendar event.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct EventRemindersInput {
+    /// Whether the selected calendar's default reminders should apply.
+    pub use_default: bool,
+    /// Overrides used when calendar defaults are disabled.
+    #[serde(default)]
+    pub overrides: Vec<EventReminderOverrideInput>,
+}
+
+impl From<EventRemindersInput> for EventReminders {
+    fn from(input: EventRemindersInput) -> Self {
+        Self {
+            use_default: input.use_default,
+            overrides: input.overrides.into_iter().map(Into::into).collect(),
         }
     }
 }

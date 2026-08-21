@@ -13,7 +13,8 @@
 
 use cache_core::deps::OpId;
 use cache_core::engine::{
-    BeginOptimisticWrite, Engine, InitialClaimOutcome, ReadResult, WriteResult,
+    BeginOptimisticWrite, Engine, InitialClaimOutcome, NetworkWrite, QueryRegistration, ReadResult,
+    WriteResult,
 };
 use cache_core::entity_resolver::EntityResolver;
 use cache_core::link_patch::{OptimisticLinkPatch, QueryRevalidation};
@@ -169,6 +170,32 @@ impl OpInterner {
 }
 
 type Variables = serde_json::Map<String, serde_json::Value>;
+
+/// Optional active-query registration installed by a network write.
+pub struct WriteRegistration {
+    /// Host operation id.
+    pub op_id: String,
+    /// Synthetic read relations used by the query.
+    pub entity_resolvers: Vec<EntityResolver>,
+}
+
+/// Owned inputs for a network response write.
+pub struct WriteRequest {
+    /// Origin operation excluded from immediate invalidation.
+    pub origin_op_id: Option<String>,
+    /// Active query registration to install.
+    pub registration: Option<WriteRegistration>,
+    /// GraphQL document.
+    pub query: String,
+    /// Selected operation name.
+    pub operation_name: Option<String>,
+    /// Operation variables.
+    pub variables: Variables,
+    /// GraphQL response data.
+    pub data: serde_json::Value,
+    /// Opaque identity witness.
+    pub identity: Option<String>,
+}
 
 struct EngineState {
     engine: Engine<TursoStorage>,
@@ -342,26 +369,39 @@ impl EngineHandle {
     }
 
     /// Normalizes and stores a network response.
-    pub async fn write(
-        &self,
-        origin_op_id: Option<String>,
-        query: String,
-        operation_name: Option<String>,
-        variables: Variables,
-        data: serde_json::Value,
-        identity: Option<String>,
-    ) -> Result<WriteResultWire, String> {
+    pub async fn write(&self, request: WriteRequest) -> Result<WriteResultWire, String> {
+        let WriteRequest {
+            origin_op_id,
+            registration,
+            query,
+            operation_name,
+            variables,
+            data,
+            identity,
+        } = request;
         let mut state = self.inner.lock().await;
         let EngineState { engine, ops } = &mut *state;
         let origin = origin_op_id.map(|name| ops.intern(&name));
+        let registration = registration.map(|registration| {
+            let op_id = ops.intern(&registration.op_id);
+            (op_id, registration.entity_resolvers)
+        });
         engine
-            .write_query(
+            .write_query_with_registration(
                 origin,
-                &query,
-                operation_name.as_deref(),
-                &variables,
-                &data,
-                identity.as_deref(),
+                registration
+                    .as_ref()
+                    .map(|(op_id, entity_resolvers)| QueryRegistration {
+                        op_id: *op_id,
+                        entity_resolvers,
+                    }),
+                NetworkWrite {
+                    query: &query,
+                    operation_name: operation_name.as_deref(),
+                    variables: &variables,
+                    data: &data,
+                    identity: identity.as_deref(),
+                },
             )
             .await
             .map(|result| wire_write_result(ops, result))

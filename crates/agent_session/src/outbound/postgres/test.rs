@@ -67,6 +67,7 @@ async fn create_test_bot(pool: &PgPool) -> BotId {
                 handle: format!("test-agent-{}", macro_uuid::generate_uuid_v7()),
                 description: None,
                 avatar_url: None,
+                has_agent: None,
             },
         )
         .await
@@ -87,7 +88,8 @@ fn new_session(
         originating_message_id,
         model: "claude-sonnet-5".to_string(),
         harness: "claude-code".to_string(),
-        repo_url: "https://github.com/example/example".to_string(),
+        repo_url: Some("https://github.com/example/example".to_string()),
+        workspace: "/workspace".to_string(),
     }
 }
 
@@ -198,7 +200,10 @@ async fn set_acp_session_id_updates_only_the_resume_identity(pool: PgPool) {
         .expect("persist ACP session id");
 
     let updated = repo.get(id).await.expect("get updated agent session");
-    assert_eq!(updated.acp_session_id.as_deref(), Some("acp-session-1"));
+    assert_eq!(
+        updated.acp_session_id,
+        Some(SessionId::from("acp-session-1"))
+    );
     assert!(matches!(
         updated.status,
         SessionStatus::Event(SystemEvent::AcpReady)
@@ -317,7 +322,7 @@ async fn find_for_channel_matches_the_originating_thread_and_bot(pool: PgPool) {
     let repo = PgAgentSessionRepo::new(pool.clone());
     let bot_a = create_test_bot(&pool).await;
     let bot_b = create_test_bot(&pool).await;
-    let (_originating_channel, thread, originating_message) =
+    let (originating_channel, thread, originating_message) =
         insert_originating_thread_fixture(&pool).await;
 
     let session = create_session(
@@ -325,6 +330,9 @@ async fn find_for_channel_matches_the_originating_thread_and_bot(pool: PgPool) {
         new_session(bot_b, Some(thread), Some(originating_message)),
     )
     .await;
+    // The create response must already resolve the thread's channel: linked
+    // -thread navigation renders from this row without a second lookup.
+    assert_eq!(session.thread_channel_id, Some(originating_channel));
     // A session from some other context must not shadow the lookup.
     create_session(&repo, new_session(bot_a, None, None)).await;
 
@@ -337,6 +345,7 @@ async fn find_for_channel_matches_the_originating_thread_and_bot(pool: PgPool) {
     };
     assert_eq!(matched.id, session.id);
     assert_eq!(matched.originating_message_id, Some(originating_message));
+    assert_eq!(matched.thread_channel_id, Some(originating_channel));
 
     let wrong_bot = repo
         .find_for_channel(Some(thread), Some(bot_a))

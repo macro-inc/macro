@@ -10,6 +10,7 @@ import type { Query } from '@app/features/next-soup/filters/filter-store/types';
 import { getViewPreset } from '@app/features/next-soup/sidebar/soup-filter-presets';
 import { NonMemberChannelPreview } from '@app/features/next-soup/soup-view/non-member-channel-preview';
 import { SoupView } from '@app/features/next-soup/soup-view/soup-view';
+import { useRecentViewFlag } from '@app/features/next-soup/use-recent-view-flag';
 import { SettingsPanelComponentWrapper } from '@app/features/settings/Settings';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { usePosthog } from '@app/lib/analytics/posthog';
@@ -65,7 +66,9 @@ const withAuth = <P extends object>(Comp: Component<P>): Component<P> => {
   };
 };
 
-type ComponentFactory = (params?: Record<string, any>) => JSXElement;
+type ComponentParams = Record<string, unknown>;
+
+type ComponentFactory = (params: ComponentParams) => JSXElement;
 
 type DocumentsComponentParams = {
   initialFilters?: Query;
@@ -130,12 +133,12 @@ function RedirectSplit(props: { to: SplitContent }) {
 
 export function resolveComponent(
   name: string,
-  params?: Record<string, any>
+  params?: ComponentParams
 ): ResolvedComponent {
   const registration = REGISTRY.get(name);
   if (!registration) throw new Error(`Component '${name}' not registered`);
   return {
-    element: () => registration.factory(params),
+    element: () => registration.factory(params ?? {}),
     initialMeta: registration.initialMeta,
   };
 }
@@ -177,6 +180,47 @@ registerComponent(
     );
   })
 );
+
+registerComponent('recent', withAuth(RecentViewWrapper));
+
+function TrackedRecentView() {
+  usePageViewTracking('recent');
+  const preset = getViewPreset('recent');
+  return (
+    <SoupView
+      viewName="Recent"
+      initialFilters={preset?.filters}
+      initialClientFilters={preset?.clientFilters}
+      // Rows carry the server's touched_at, so sorting on it preserves
+      // the touched-by-me order and lets optimistic bumps reorder locally.
+      initialClientSort={['touched_at']}
+      disableLocalSearch
+    />
+  );
+}
+
+function RecentViewWrapper() {
+  const recentViewEnabled = useRecentViewFlag();
+  const posthog = usePosthog();
+
+  // Registered even when the flag is off so a bookmarked /recent or a
+  // restored split recovers to the inbox instead of an empty split, and the
+  // touched query is never issued. The redirect replaces the split
+  // irreversibly, so it must wait for PostHog to actually answer — on a
+  // fresh reload the flag reads false until flags load.
+  return (
+    <Show
+      when={recentViewEnabled()}
+      fallback={
+        <Show when={posthog.flagsLoaded()}>
+          <RedirectSplit to={{ type: 'component', id: 'inbox' }} />
+        </Show>
+      }
+    >
+      <TrackedRecentView />
+    </Show>
+  );
+}
 
 const MyActivityView = lazy(() =>
   import('@app/features/activity/my-activity-view').then((module) => ({
@@ -507,13 +551,20 @@ registerComponent('email-compose', (params) => {
   usePageViewTracking('email-compose');
   // mailto: links land here as `component/email-compose?to=a@x.com,b@y.com`.
   const toParam = new URLSearchParams(window.location.search).get('to');
+  const paramsInitialTo = Array.isArray(params.initialTo)
+    ? params.initialTo.filter(
+        (value): value is string => typeof value === 'string'
+      )
+    : undefined;
   const initialTo =
-    params?.initialTo ??
+    paramsInitialTo ??
     toParam
       ?.split(',')
       .map((e) => e.trim())
       .filter(Boolean);
-  return <EmailCompose draftID={params?.draftID} initialTo={initialTo} />;
+  const draftID =
+    typeof params.draftID === 'string' ? params.draftID : undefined;
+  return <EmailCompose draftID={draftID} initialTo={initialTo} />;
 });
 registerComponent('task-compose', (params) => {
   usePageViewTracking('task-compose');
@@ -646,6 +697,21 @@ if (LOCAL_ONLY) {
   registerComponent(
     'dynamic-ui',
     lazy(() => import('@app/features/dynamic-ui/Gallery'))
+  );
+
+  registerComponent(
+    'agent-ui',
+    lazy(() => import('@app/features/block-agent/debug/Gallery'))
+  );
+
+  registerComponent(
+    'agent-replay',
+    lazy(() => import('@app/features/block-agent/debug/replay/Replay'))
+  );
+
+  registerComponent(
+    'linked-conversation',
+    withAuth(lazy(() => import('@core/linked-conversation/debug/Demo')))
   );
 }
 

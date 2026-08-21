@@ -27,7 +27,7 @@ type ToolParserMap = {
   CreateBot: { call: types.CreateBot; response: types.CreateBotResponse };
   CreateCalendarEvent: {
     call: types.CreateCalendarEvent;
-    response: types.ToolCalendarEvent;
+    response: types.UserToolResponseForToolCalendarEvent;
   };
   CreateDocument: {
     call: types.CreateDocument;
@@ -180,7 +180,10 @@ type ToolParserMap = {
     call: types.SendChannelMessage;
     response: types.SendChannelMessageResponse;
   };
-  SendEmail: { call: types.SendEmail; response: types.UserToolResponse };
+  SendEmail: {
+    call: types.SendEmail;
+    response: types.UserToolResponseForSendEmailResponse;
+  };
   SetEntityProperty: {
     call: types.SetEntityProperty;
     response: types.SetEntityPropertyResponse;
@@ -223,7 +226,7 @@ const toolParserMap = {
   CreateBot: { call: schemas.CreateBot, response: schemas.CreateBotResponse },
   CreateCalendarEvent: {
     call: schemas.CreateCalendarEvent,
-    response: schemas.ToolCalendarEvent,
+    response: schemas.UserToolResponseForToolCalendarEvent,
   },
   CreateDocument: {
     call: schemas.CreateDocument,
@@ -403,7 +406,10 @@ const toolParserMap = {
     call: schemas.SendChannelMessage,
     response: schemas.SendChannelMessageResponse,
   },
-  SendEmail: { call: schemas.SendEmail, response: schemas.UserToolResponse },
+  SendEmail: {
+    call: schemas.SendEmail,
+    response: schemas.UserToolResponseForSendEmailResponse,
+  },
   SetEntityProperty: {
     call: schemas.SetEntityProperty,
     response: schemas.SetEntityPropertyResponse,
@@ -457,7 +463,7 @@ type ToolDataMap = {
   CreateBot: { call: types.CreateBot; response: types.CreateBotResponse };
   CreateCalendarEvent: {
     call: types.CreateCalendarEvent;
-    response: types.ToolCalendarEvent;
+    response: types.UserToolResponseForToolCalendarEvent;
   };
   CreateDocument: {
     call: types.CreateDocument;
@@ -610,7 +616,10 @@ type ToolDataMap = {
     call: types.SendChannelMessage;
     response: types.SendChannelMessageResponse;
   };
-  SendEmail: { call: types.SendEmail; response: types.UserToolResponse };
+  SendEmail: {
+    call: types.SendEmail;
+    response: types.UserToolResponseForSendEmailResponse;
+  };
   SetEntityProperty: {
     call: types.SetEntityProperty;
     response: types.SetEntityPropertyResponse;

@@ -1,3 +1,4 @@
+use agent_client_protocol::schema::v1::SessionId;
 use agent_runtime_protocol::domain::schema::v0::SystemEvent;
 use bots::domain::models::BotId;
 use chrono::{DateTime, Utc};
@@ -42,8 +43,10 @@ pub struct CreateAgentSessionParams {
     pub model: String,
     /// Harness slug.
     pub harness: String,
-    /// Repository the agent works with.
-    pub repo_url: String,
+    /// Repository the agent works with, when one was stated.
+    pub repo_url: Option<String>,
+    /// Absolute directory the harness runs in on its runtime.
+    pub workspace: String,
 }
 
 /// A running or historical agent coding session.
@@ -55,6 +58,10 @@ pub struct AgentSession {
     pub owner_id: MacroUserIdStr<'static>,
     /// The root message where the bot was originally invoked, if any.
     pub thread_id: Option<Uuid>,
+    /// The channel `thread_id` lives in, when the session was spawned from a
+    /// thread. Derived from the thread root's message row rather than
+    /// stored — the message's channel is authoritative.
+    pub thread_channel_id: Option<Uuid>,
     /// The exact message that originally invoked the bot, if any.
     pub originating_message_id: Option<Uuid>,
     /// the bot id of the bot running the agent
@@ -63,10 +70,15 @@ pub struct AgentSession {
     pub model: String,
     /// harness slug - TODO: probably a better type here
     pub harness: String,
-    /// repo we are working with
-    pub repo_url: String,
+    /// repo we are working with, when one was stated
+    pub repo_url: Option<String>,
+    /// Directory the harness runs in, snapshotted at creation. The session
+    /// actor sends it as the working directory of `session/new`, and resume
+    /// and load re-enter it - the directory the session actually ran in,
+    /// not whatever the runtime is configured with today.
+    pub workspace: String,
     /// ACP session if we have one
-    pub acp_session_id: Option<String>,
+    pub acp_session_id: Option<SessionId>,
     pub status: SessionStatus,
     pub created_at: DateTime<Utc>,
     pub modified_at: DateTime<Utc>,

@@ -94,9 +94,10 @@ fn active_bot_mention_ids(
                 .map(|id| id.bot_id())
         })
         .collect();
-    // Macro AI is a code-defined system bot available in every channel; it
-    // has no participant row.
+    // Code-defined system bots are available in every channel and have no
+    // participant rows.
     active_bot_ids.insert(bot_id::MACRO_AI_BOT_ID);
+    active_bot_ids.insert(bot_id::MACRO_CODER_BOT_ID);
 
     bot_mention_ids(mentions)
         .into_iter()

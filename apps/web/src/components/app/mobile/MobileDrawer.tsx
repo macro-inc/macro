@@ -44,12 +44,14 @@ export function scrollToFocusedInput(e: FocusEvent, offset = 40) {
  * - Switches between `pb-(--safe-bottom)` and `pb-0` based on whether any
  *   input/textarea inside the drawer currently has focus (detected via
  *   bubbling focusin/focusout — no per-input wiring needed)
+ * - When a `MobileDrawer.ScrollBody` is present, hands the safe-area padding
+ *   to it so the scroll viewport reaches the drawer's bottom edge
  *
  * Also handles default styling, which can be overridden via the `class` prop.
  */
 function MobileDrawerContent(
   props: ComponentProps<typeof Drawer.Content> & {
-    /** Maximum height as a percentage of the viewport (vh). Clamped to 100. Defaults to 80. */
+    /** Maximum height as a percentage of the viewport (vh). Clamped to 100. Defaults to 80, or `targetHeight` when that is larger. */
     maxHeight?: number;
     /** Initial/start height as a percentage of the viewport (vh). Clamped to 100. Fits content when omitted. */
     targetHeight?: number;
@@ -61,7 +63,8 @@ function MobileDrawerContent(
     'targetHeight',
   ]);
 
-  const maxHeight = () => Math.min(100, local.maxHeight ?? 80);
+  const maxHeight = () =>
+    Math.min(100, local.maxHeight ?? Math.max(80, local.targetHeight ?? 0));
   const targetHeight = () =>
     local.targetHeight != null ? Math.min(100, local.targetHeight) : undefined;
 
@@ -88,7 +91,7 @@ function MobileDrawerContent(
           targetHeight() != null ? 'h-(--drawer-h)' : 'h-fit',
           virtualKeyboardVisible()
             ? 'pb-0 max-h-[calc(var(--drawer-max-h)-var(--virtual-keyboard-height))] overflow-y-auto'
-            : 'pb-(--safe-bottom)',
+            : 'pb-(--safe-bottom) has-[[data-drawer-scroll-body]]:pb-0',
           local.class
         )}
         {...rest}
@@ -143,6 +146,42 @@ function MobileDrawerSection<T extends ValidComponent = 'div'>(
 }
 
 /**
+ * Scrolling body for drawer content. Sits between the pinned chrome (Handle,
+ * headers) and the drawer's bottom edge, and scrolls when its sections
+ * outgrow the drawer's max height.
+ *
+ * `flex-auto` rather than `flex-1` on purpose: `Content` defaults to `h-fit`,
+ * and a basis-0 child of a fit-content flex column collapses the drawer to a
+ * sliver. `flex-auto` hugs content under `h-fit` and still fills the drawer
+ * when `targetHeight` makes its height definite.
+ *
+ * Takes over the safe-area padding from `Content` (via
+ * `data-drawer-scroll-body`): padding the drawer itself would end the scroll
+ * viewport above the home-indicator inset, so instead the scroll content is
+ * padded — the viewport reaches the drawer's bottom edge and the last item
+ * still clears the home indicator when scrolled to the end.
+ */
+function MobileDrawerScrollBody<T extends ValidComponent = 'div'>(
+  props: ExtendDiv<T>
+) {
+  const [local, rest] = splitProps(props, ['as', 'class', 'children']);
+  return (
+    <Dynamic
+      component={(local.as ?? 'div') as ValidComponent}
+      data-drawer-scroll-body
+      class={cn(
+        'flex min-h-0 flex-auto flex-col overflow-y-auto',
+        !virtualKeyboardVisible() && 'pb-(--safe-bottom)',
+        local.class
+      )}
+      {...rest}
+    >
+      {local.children}
+    </Dynamic>
+  );
+}
+
+/**
  * Component for rendering the standard mobile drawer drag handle.
  */
 function MobileDrawerHandle<T extends ValidComponent = 'div'>(
@@ -180,6 +219,7 @@ export const MobileDrawer = Object.assign(
     Overlay: Drawer.Overlay,
     Content: MobileDrawerContent,
     Close: Drawer.Close,
+    ScrollBody: MobileDrawerScrollBody,
     Handle: MobileDrawerHandle,
     Section: MobileDrawerSection,
     Label: MobileDrawerSectionLabel,

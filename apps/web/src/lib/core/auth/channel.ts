@@ -2,7 +2,7 @@ import {
   broadcastChannels,
   setBroadcastChannels,
 } from '@app/signal/broadcastChannels';
-import { errAsync, okAsync, ResultAsync } from 'neverthrow';
+import { err, ok, ResultAsync } from 'neverthrow';
 
 const AUTH_CHANNEL = 'auth';
 const LOGIN_SUCCESS = 'login-success';
@@ -49,7 +49,7 @@ function waitForAuthSuccessOrTimeout(
     new Promise((resolve) => {
       const timeoutId = setTimeout(() => {
         resolve(
-          errAsync({
+          err({
             tag: 'TimeoutError',
             message: 'Timeout waiting for auth success',
           })
@@ -59,7 +59,7 @@ function waitForAuthSuccessOrTimeout(
       channel.onmessage = (event) => {
         if (event.data.type === LOGIN_SUCCESS) {
           clearTimeout(timeoutId);
-          resolve(okAsync(undefined));
+          resolve(ok(undefined));
         }
       };
     })

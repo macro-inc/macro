@@ -980,6 +980,18 @@ export type ReminderMetadata = {
      * The reminder that fired.
      */
     reminderId: string;
+    /**
+     * Which firing this is — the occurrence the reminder came due for.
+     *
+     * What distinguishes two firings of the same recurring reminder, which are
+     * otherwise identical: same id, same description. The collapse key is
+     * built from it, so without it Tuesday's alert would replace Monday's
+     * unread one on the lock screen.
+     *
+     * Optional because notifications written before recurring dispatch existed
+     * have no such field, and they still have to read back.
+     */
+    scheduledFor?: string | null;
 };
 
 /**

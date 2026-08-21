@@ -5,7 +5,9 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
 use agent_client_protocol::RawJsonRpcMessage;
-use agent_runtime_protocol::domain::ports::{Transport, TransportError};
+use agent_runtime_protocol::domain::ports::{
+    Transport, TransportError, TransportReceiver, TransportSender,
+};
 use agent_runtime_protocol::domain::schema::v0::{
     AcpMessage, SystemEvent, ToRuntimeMessage, ToServerMessage,
 };
@@ -111,7 +113,38 @@ impl ContainerMock {
     }
 }
 
+/// A [`ContainerMock`]'s sending half. Shares the mock's recorded state, so a
+/// test still observes sends through the mock it kept.
+pub struct ContainerSender {
+    agent: FakeAgent,
+    outbound: Arc<Mutex<Vec<ToRuntimeMessage>>>,
+    send_budget: Arc<Mutex<Option<usize>>>,
+}
+
+/// A [`ContainerMock`]'s receiving half.
+pub struct ContainerReceiver {
+    inbound: Arc<tokio::sync::Mutex<Inbound>>,
+}
+
 impl Transport<ToRuntimeMessage, ToServerMessage> for ContainerMock {
+    type Sender = ContainerSender;
+    type Receiver = ContainerReceiver;
+
+    fn split(self) -> (Self::Sender, Self::Receiver) {
+        (
+            ContainerSender {
+                agent: self.agent,
+                outbound: self.outbound,
+                send_budget: self.send_budget,
+            },
+            ContainerReceiver {
+                inbound: self.inbound,
+            },
+        )
+    }
+}
+
+impl TransportSender<ToRuntimeMessage> for ContainerSender {
     async fn send(&self, message: ToRuntimeMessage) -> Result<(), TransportError> {
         if let Some(budget) = self
             .send_budget
@@ -138,8 +171,10 @@ impl Transport<ToRuntimeMessage, ToServerMessage> for ContainerMock {
 
         Ok(())
     }
+}
 
-    async fn recv(&self) -> Result<Option<ToServerMessage>, TransportError> {
+impl TransportReceiver<ToServerMessage> for ContainerReceiver {
+    async fn recv(&mut self) -> Result<Option<ToServerMessage>, TransportError> {
         let mut inbound = self.inbound.lock().await;
         let Inbound { events, frames } = &mut *inbound;
 
@@ -160,6 +195,7 @@ impl Transport<ToRuntimeMessage, ToServerMessage> for ContainerMock {
 #[derive(Clone, Default)]
 pub struct MockContainerManager {
     containers: Arc<Mutex<HashMap<AgentSessionId, ContainerMock>>>,
+    spawn_error: Arc<Mutex<Option<String>>>,
     resumes: Arc<AtomicUsize>,
     teardowns: Arc<AtomicUsize>,
 }
@@ -189,6 +225,14 @@ impl MockContainerManager {
         self.lock().len()
     }
 
+    /// Make the next sandbox spawn fail with `message`.
+    pub fn fail_next_spawn(&self, message: impl Into<String>) {
+        *self
+            .spawn_error
+            .lock()
+            .expect("spawn error lock should not be poisoned") = Some(message.into());
+    }
+
     /// How many times an existing sandbox was requested.
     #[must_use]
     pub fn resumed(&self) -> usize {
@@ -212,6 +256,14 @@ impl ContainerManager for MockContainerManager {
     type Transport = ContainerMock;
 
     async fn spawn(&self, command: SpawnContainer) -> Result<ContainerMock, HarnessError> {
+        if let Some(message) = self
+            .spawn_error
+            .lock()
+            .expect("spawn error lock should not be poisoned")
+            .take()
+        {
+            return Err(HarnessError::Container(message));
+        }
         let container = ContainerMock::default();
         self.lock().insert(command.session_id, container.clone());
         Ok(container)

@@ -8,9 +8,9 @@ import solid from 'vite-plugin-solid';
 import solidSvg from 'vite-plugin-solid-svg';
 import wasm from 'vite-plugin-wasm';
 import tsconfigpaths from 'vite-tsconfig-paths';
-
 // @ts-ignore
 import { version } from './package.json';
+import { keepImportMetaDev } from './scripts/keep-import-meta-dev';
 
 function readShortSha(): string {
   try {
@@ -230,6 +230,15 @@ function getAssetsPath(mode: string, command: string): string {
 }
 
 function defineEnv(mode: string, command: string) {
+  // `vite build` compiles DEV from NODE_ENV, not MODE. Local-backend static
+  // bundles already set VITE_LOCAL_BACKEND_ORIGIN (stack up, Fly preview);
+  // keep DEV so those artifacts match `just run_local` (vite serve). Hosted
+  // `just build-dev` does not set the origin, so DEV stays false.
+  const keepDev = keepImportMetaDev({
+    command,
+    mode,
+    localBackendOrigin: process.env.VITE_LOCAL_BACKEND_ORIGIN,
+  });
   return {
     'import.meta.env.__APP_VERSION__': JSON.stringify(appVersion),
     'import.meta.env.ASSETS_PATH': JSON.stringify(getAssetsPath(mode, command)),
@@ -238,5 +247,11 @@ function defineEnv(mode: string, command: string) {
     'import.meta.env.__GIT_BRANCH__': JSON.stringify(
       command === 'serve' ? readGitBranch() : ''
     ),
+    ...(keepDev
+      ? {
+          'import.meta.env.DEV': true,
+          'import.meta.env.PROD': false,
+        }
+      : {}),
   };
 }

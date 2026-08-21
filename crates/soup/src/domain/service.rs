@@ -67,14 +67,16 @@ mod tests;
 struct SoupCandidate {
     item: SoupItem<()>,
     frecency_score: Option<AggregateFrecency>,
+    touched_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
 impl SoupCandidate {
-    /// A candidate with no frecency loaded yet.
+    /// A candidate with no frecency or touch timestamp loaded yet.
     fn plain(item: SoupItem<()>) -> Self {
         SoupCandidate {
             item,
             frecency_score: None,
+            touched_at: None,
         }
     }
 }
@@ -383,6 +385,7 @@ where
             .map(|(soup_item, frecency)| SoupCandidate {
                 item: soup_item,
                 frecency_score: Some(frecency),
+                touched_at: None,
             });
 
         Ok(match res.len().cmp(&(limit as usize)) {
@@ -434,7 +437,6 @@ where
                 limit,
                 after,
                 filter: cursor.filter().as_ref(),
-                include_projects: matches!(soup_type, SoupType::UnExpanded),
                 link_ids: &link_ids,
             })
             .await
@@ -454,13 +456,23 @@ where
             .flatten();
 
         let mut main_entities = Vec::new();
+        let mut project_entities = Vec::new();
         let mut channel_ids = Vec::new();
         let mut email_ids = Vec::new();
         for candidate in &touched {
             match candidate.entity.entity_type {
-                EntityType::Document | EntityType::Chat | EntityType::Project => {
+                EntityType::Document | EntityType::Chat => {
                     main_entities.push(candidate.entity.copied())
                 }
+                // Projects are rows of this feed in both soup types, but the
+                // expanded by-ids query deliberately omits project rows, so
+                // under Expanded they hydrate through a separate unexpanded
+                // query. Under UnExpanded the main query is already the
+                // unexpanded one — projects ride it, saving a round trip.
+                EntityType::Project => match soup_type {
+                    SoupType::Expanded => project_entities.push(candidate.entity.copied()),
+                    SoupType::UnExpanded => main_entities.push(candidate.entity.copied()),
+                },
                 EntityType::Channel => match Uuid::parse_str(&candidate.entity.entity_id) {
                     Ok(id) => channel_ids.push(id),
                     Err(error) => {
@@ -525,8 +537,22 @@ where
             .map_err(anyhow::Error::from)
             .map_err(SoupErr::from)
         };
-        let (main_items, channel_candidates, email_candidates) = tokio::join!(
+        let project_items_fut = async {
+            if project_entities.is_empty() {
+                return Ok(Vec::new());
+            }
+            self.soup_storage
+                .unexpanded_soup_by_ids(AdvancedSortParams {
+                    entities: &project_entities,
+                    user_id: user.copied(),
+                })
+                .await
+                .map_err(anyhow::Error::from)
+                .map_err(SoupErr::from)
+        };
+        let (main_items, project_items, channel_candidates, email_candidates) = tokio::join!(
             main_items_fut,
+            project_items_fut,
             self.handle_comms_request(comms_request),
             self.handle_email_request(email_request),
         );
@@ -534,6 +560,7 @@ where
         let mut items_by_entity: HashMap<(EntityType, String), SoupItem<()>> = HashMap::new();
         for item in main_items?
             .into_iter()
+            .chain(project_items?)
             .chain(channel_candidates?.map(|c| c.item))
             .chain(email_candidates?.map(|c| c.item))
         {
@@ -557,7 +584,11 @@ where
                     tracing::warn!(entity_type = ?key.0, "touched entity did not hydrate; skipping");
                     None
                 })?;
-                Some(SoupCandidate::plain(item))
+                Some(SoupCandidate {
+                    item,
+                    frecency_score: None,
+                    touched_at: Some(candidate.touched_at),
+                })
             })
             .collect();
 
@@ -608,6 +639,7 @@ where
             |(item, frecency_score)| SoupCandidate {
                 item,
                 frecency_score,
+                touched_at: None,
             },
         )))
     }
@@ -633,6 +665,7 @@ where
                         SoupCandidate {
                             item: SoupItem::Channel(soup_channel),
                             frecency_score,
+                            touched_at: None,
                         }
                     })
                 })?,
@@ -803,16 +836,16 @@ where
             return Ok(Vec::new());
         }
 
-        let (items, frecency_scores): (Vec<_>, Vec<_>) = items
+        let (items, enrichments): (Vec<_>, Vec<_>) = items
             .into_iter()
-            .map(|item| (item.item, item.frecency_score))
+            .map(|item| (item.item, (item.frecency_score, item.touched_at)))
             .unzip();
         let items = self
             .soup_storage
             .populate_properties(user_id, items)
             .await
             .map_err(anyhow::Error::from)?;
-        if items.len() != frecency_scores.len() {
+        if items.len() != enrichments.len() {
             return Err(SoupErr::SoupDbErr(anyhow::anyhow!(
                 "property hydration changed the number of Soup items"
             )));
@@ -820,10 +853,11 @@ where
 
         Ok(items
             .into_iter()
-            .zip(frecency_scores)
-            .map(|(item, frecency_score)| EnrichedSoupItem {
+            .zip(enrichments)
+            .map(|(item, (frecency_score, touched_at))| EnrichedSoupItem {
                 item,
                 frecency_score,
+                touched_at,
             })
             .collect())
     }
@@ -921,6 +955,7 @@ where
                 .item
                 .map_extra(|()| SoupPropertiesField::default()),
             frecency_score: candidate.frecency_score,
+            touched_at: candidate.touched_at,
         })
     }
 

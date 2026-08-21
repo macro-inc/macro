@@ -6,6 +6,7 @@ use agent_client_protocol::schema::v1::{
 use agent_fold::domain::service::FoldedMessageService;
 use agent_runtime_protocol::domain::action::{AgentAction, AgentActionId};
 use agent_session::PROTOCOL_VERSION;
+use agent_session::domain::connection::RuntimeAttachment;
 use agent_session::domain::error::AgentSessionError;
 use agent_session::domain::model::{AgentSessionId, CreateAgentSessionParams, Message};
 use agent_session::domain::ports::{AgentSessionLogRepo, NoOpRealtime};
@@ -31,7 +32,8 @@ fn params(id: AgentSessionId) -> CreateAgentSessionParams {
         originating_message_id: None,
         model: "claude".to_owned(),
         harness: "opencode".to_owned(),
-        repo_url: "https://github.com/macro/macro".to_owned(),
+        repo_url: Some("https://github.com/macro/macro".to_owned()),
+        workspace: "/workspace".to_owned(),
     }
 }
 
@@ -68,7 +70,7 @@ async fn container_session_runs_and_logs_end_to_end() {
 
     let record = sessions.create_session(params(id)).await.unwrap();
     sessions
-        .attach_session(id, container.clone())
+        .attach_session(id, RuntimeAttachment::solo(container.clone()))
         .await
         .unwrap();
     assert_eq!(record.id, id);
@@ -144,8 +146,14 @@ async fn attaching_a_second_transport_to_an_active_session_fails() {
     let second = ContainerMock::default();
 
     sessions.create_session(params(id)).await.unwrap();
-    sessions.attach_session(id, first).await.unwrap();
-    let error = sessions.attach_session(id, second).await.unwrap_err();
+    sessions
+        .attach_session(id, RuntimeAttachment::solo(first))
+        .await
+        .unwrap();
+    let error = sessions
+        .attach_session(id, RuntimeAttachment::solo(second))
+        .await
+        .unwrap_err();
 
     assert!(matches!(error, AgentSessionError::AlreadyConnected(found) if found == id));
 }

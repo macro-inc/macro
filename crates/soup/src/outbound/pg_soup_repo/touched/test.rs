@@ -25,7 +25,6 @@ fn req<'a>(
         limit: 50,
         after: None,
         filter,
-        include_projects: false,
         link_ids,
     }
 }
@@ -40,20 +39,21 @@ fn keys(page: &[TouchedEntity]) -> Vec<(EntityType, String)> {
     fixtures(path = "../../../../fixtures", scripts("touched_by_me")),
     migrator = "MACRO_DB_MIGRATIONS"
 )]
-async fn expanded_feed_orders_by_own_latest_mutation(pool: Pool<Postgres>) -> anyhow::Result<()> {
+async fn feed_orders_by_own_latest_mutation(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let link_ids = [Uuid::parse_str(LINK_1)?];
     let page = touched_soup_page(&pool, req(USER_1, None, &link_ids)).await?;
 
     // Exactly the touchable, visible entities — the deleted doc, isolated
-    // doc, opened-only doc, left channel, foreign-inbox thread, and (in
-    // expanded feeds) the project are all absent — ordered by user-1's own
-    // latest mutation. user-2's newer edit of doc-B must not move it, and
-    // chat-A's later `opened` must not outrank doc-A's edit.
+    // doc, opened-only doc, left channel, and foreign-inbox thread are all
+    // absent — ordered by user-1's own latest mutation. user-2's newer edit
+    // of doc-B must not move it, and chat-A's later `opened` must not
+    // outrank doc-A's edit.
     assert_eq!(
         keys(&page),
         vec![
             (EntityType::Document, DOC_A.to_string()),
             (EntityType::Chat, CHAT_A.to_string()),
+            (EntityType::Project, PROJECT_A.to_string()),
             (EntityType::Channel, CHANNEL_X.to_string()),
             (EntityType::EmailThread, THREAD_Z.to_string()),
             (EntityType::Document, DOC_B.to_string()),
@@ -68,32 +68,7 @@ async fn expanded_feed_orders_by_own_latest_mutation(pool: Pool<Postgres>) -> an
             t.touched_at.minute()
         })
         .collect();
-    assert_eq!(minutes, vec![9, 8, 6, 4, 2]);
-
-    Ok(())
-}
-
-#[sqlx::test(
-    fixtures(path = "../../../../fixtures", scripts("touched_by_me")),
-    migrator = "MACRO_DB_MIGRATIONS"
-)]
-async fn unexpanded_feed_includes_projects(pool: Pool<Postgres>) -> anyhow::Result<()> {
-    let link_ids = [Uuid::parse_str(LINK_1)?];
-    let mut request = req(USER_1, None, &link_ids);
-    request.include_projects = true;
-    let page = touched_soup_page(&pool, request).await?;
-
-    assert_eq!(
-        keys(&page),
-        vec![
-            (EntityType::Document, DOC_A.to_string()),
-            (EntityType::Chat, CHAT_A.to_string()),
-            (EntityType::Project, PROJECT_A.to_string()),
-            (EntityType::Channel, CHANNEL_X.to_string()),
-            (EntityType::EmailThread, THREAD_Z.to_string()),
-            (EntityType::Document, DOC_B.to_string()),
-        ]
-    );
+    assert_eq!(minutes, vec![9, 8, 7, 6, 4, 2]);
 
     Ok(())
 }
@@ -127,7 +102,7 @@ async fn keyset_paginates_without_overlap_or_gaps(pool: Pool<Postgres>) -> anyho
     // Walking in pages of 2 yields the same feed as one big page.
     let one_page = touched_soup_page(&pool, req(USER_1, None, &link_ids)).await?;
     assert_eq!(keys(&all), keys(&one_page));
-    assert_eq!(all.len(), 5);
+    assert_eq!(all.len(), 6);
 
     Ok(())
 }
@@ -152,6 +127,7 @@ async fn entity_filters_compose_with_the_touch_gate(pool: Pool<Postgres>) -> any
         vec![
             (EntityType::Document, DOC_A.to_string()),
             (EntityType::Chat, CHAT_A.to_string()),
+            (EntityType::Project, PROJECT_A.to_string()),
             (EntityType::Channel, CHANNEL_X.to_string()),
             (EntityType::EmailThread, THREAD_Z.to_string()),
         ]
@@ -166,19 +142,13 @@ fn view_tags_render_as_quoted_list() {
 }
 
 #[test]
-fn no_filter_includes_every_expanded_type_with_inboxes() {
+fn no_filter_includes_every_touchable_type_with_inboxes() {
     let link_ids = [uuid::Uuid::from_u128(1)];
     let types = included_types(&req("macro|user@example.com", None, &link_ids));
-    assert_eq!(types, vec!["document", "chat", "channel", "email_thread"]);
-}
-
-#[test]
-fn projects_join_only_unexpanded_feeds() {
-    let link_ids = [uuid::Uuid::from_u128(1)];
-    let mut request = req("macro|user@example.com", None, &link_ids);
-    request.include_projects = true;
-    let types = included_types(&request);
-    assert!(types.contains(&"project"));
+    assert_eq!(
+        types,
+        vec!["document", "chat", "project", "channel", "email_thread"]
+    );
 }
 
 #[test]

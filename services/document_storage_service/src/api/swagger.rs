@@ -340,6 +340,7 @@ use utoipa::OpenApi;
         crm::inbound::axum_router::set_contact_name::handler,
         crm::inbound::axum_router::list_company_contacts::handler,
         crm::inbound::axum_router::get_contact::handler,
+        crm::inbound::axum_router::get_contact_by_email::handler,
         crm::inbound::axum_router::get_company::handler,
         crm::inbound::axum_router::create_company::handler,
         crm::inbound::axum_router::create_contact::handler,
@@ -544,6 +545,8 @@ use utoipa::OpenApi;
             bots::domain::models::BotChannelType,
             bots::domain::models::ChannelWebhookRequest,
             bots::domain::models::ChannelWebhookResponse,
+            bots::domain::models::CreateBotRequest,
+            bots::domain::models::PatchBotRequest,
             bots::domain::models::CreateChannelScopedBotRequest,
             bots::domain::models::CreateChannelScopedBotResponse,
 

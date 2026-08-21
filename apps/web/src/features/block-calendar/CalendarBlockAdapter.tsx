@@ -9,105 +9,14 @@ import { LoadingBlock } from '@core/component/LoadingBlock';
 import { useUserId } from '@core/context/user';
 import { createMethodRegistration } from '@core/orchestrator';
 import { blockHandleSignal } from '@core/signal/load';
-import { fetchCalendarMentionPreview } from '@queries/calendar/mention-preview';
 import { useCalendarOccurrencesQuery } from '@queries/calendar/occurrences';
 import { useSearchParams } from '@solidjs/router';
-import { createMemo, createSignal, onMount, Show } from 'solid-js';
+import { createMemo, onMount, Show } from 'solid-js';
 import { CalendarFocusContextProvider } from './calendar-focus-target';
-import {
-  type CalendarBlockEventTime,
-  createCalendarBlockRange,
-  isCalendarBlockRange,
-} from './calendar-range';
 import { resolveCalendarBlockTarget } from './calendar-target';
+import { createCalendarTargetAim } from './calendar-target-request';
 import { Workspace } from './components/Workspace';
-import type { CalendarBlockProps, CalendarBlockTargetRequest } from './types';
-
-function targetRequestFromParams(
-  params: CalendarBlockProps,
-  requestId: number
-): CalendarBlockTargetRequest | undefined {
-  if (
-    typeof params.eventId !== 'string' ||
-    params.eventId.length === 0 ||
-    !isCalendarBlockRange(params.range)
-  ) {
-    return undefined;
-  }
-
-  return {
-    eventId: params.eventId,
-    range: params.range,
-    occurrenceKey:
-      typeof params.occurrenceKey === 'string'
-        ? params.occurrenceKey
-        : undefined,
-    requestId,
-    requestedAt: Date.now(),
-  };
-}
-
-function isSameTargetRequest(
-  current: CalendarBlockTargetRequest | undefined,
-  next: CalendarBlockTargetRequest | undefined
-): boolean {
-  if (!current || !next) return current === next;
-  if (current.eventId !== next.eventId) return false;
-  if (current.occurrenceKey !== undefined || next.occurrenceKey !== undefined) {
-    return current.occurrenceKey === next.occurrenceKey;
-  }
-  return (
-    current.range.start === next.range.start &&
-    current.range.end === next.range.end &&
-    current.range.startDate === next.range.startDate &&
-    current.range.endDate === next.range.endDate
-  );
-}
-
-/**
- * A target with an event id but no usable range — a copied `/app/calendar`
- * link or a mention without preview data — resolves through the calendar
- * mention preview API, which also maps another user's projection of the
- * meeting to the viewer's own copy.
- */
-async function resolveTargetRequestFromPreview(
-  params: CalendarBlockProps,
-  requestId: number
-): Promise<CalendarBlockTargetRequest | undefined> {
-  if (typeof params.eventId !== 'string' || params.eventId.length === 0) {
-    return undefined;
-  }
-  const occurrenceKey =
-    typeof params.occurrenceKey === 'string' ? params.occurrenceKey : undefined;
-  const event = await fetchCalendarMentionPreview(
-    params.eventId,
-    occurrenceKey
-  ).catch(() => null);
-  if (!event) return undefined;
-
-  const time: CalendarBlockEventTime =
-    event.time.kind === 'timed'
-      ? {
-          kind: 'timed',
-          startsAt: event.time.startsAt,
-          endsAt: event.time.endsAt,
-        }
-      : {
-          kind: 'allDay',
-          startDate: event.time.startDate,
-          endDate: event.time.endDate,
-        };
-  const range = createCalendarBlockRange(time);
-  if (!range) return undefined;
-
-  return {
-    eventId: event.viewerEventId,
-    range,
-    occurrenceKey: event.occurrenceKey ?? occurrenceKey,
-    requestId,
-    requestedAt: Date.now(),
-  };
-}
+import type { CalendarBlockProps } from './types';
 
 function CalendarBlockDisabledRedirect() {
   const panel = useSplitPanelOrThrow();
@@ -149,52 +58,12 @@ function CalendarBlockAdapter(props: CalendarBlockProps) {
         : queryAim.occurrenceKey,
     range: props.range,
   };
-  let nextRequestId = 1;
-  let latestRequestId = 0;
-  const [targetRequest, setTargetRequest] = createSignal<
-    CalendarBlockTargetRequest | undefined
-  >(targetRequestFromParams(initialAim, nextRequestId++));
-
-  // Preview resolution is async, so a stale answer must never clobber a
-  // target the user has since re-aimed or cleared.
-  const applyResolvedTarget = (request: CalendarBlockTargetRequest) => {
-    if (
-      request.requestId < latestRequestId ||
-      isSameTargetRequest(targetRequest(), request)
-    ) {
-      return;
-    }
-    setTargetRequest(request);
-  };
-
-  const aimAtParams = (params: CalendarBlockProps) => {
-    const requestId = nextRequestId++;
-    latestRequestId = requestId;
-    const direct = targetRequestFromParams(params, requestId);
-    if (direct) {
-      applyResolvedTarget(direct);
-      return;
-    }
-    if (typeof params.eventId === 'string' && params.eventId.length > 0) {
-      resolveTargetRequestFromPreview(params, requestId).then((resolved) => {
-        if (resolved) applyResolvedTarget(resolved);
-      });
-      return;
-    }
-    if (targetRequest() !== undefined) setTargetRequest(undefined);
-  };
-
-  if (
-    !targetRequest() &&
-    typeof initialAim.eventId === 'string' &&
-    initialAim.eventId
-  ) {
-    aimAtParams(initialAim);
-  }
+  const aim = createCalendarTargetAim({ initial: initialAim });
+  const targetRequest = aim.target;
 
   createMethodRegistration(blockHandle, {
     goToLocationFromParams: async (params: Record<string, unknown>) => {
-      aimAtParams(params as CalendarBlockProps);
+      aim.aimAt(params as CalendarBlockProps);
     },
   });
 
@@ -209,9 +78,20 @@ function CalendarBlockAdapter(props: CalendarBlockProps) {
       };
     }
   );
+  // A cold `.data` read suspends the nearest <Suspense>, which is the one
+  // wrapping each calendar page: the first aim of a session enables this
+  // query, so reading it unguarded blanks the whole grid for the length of
+  // the fetch and remounts it. There is no target to resolve until the
+  // occurrences land anyway.
   const focusTarget = createMemo(() => {
     const request = targetRequest();
-    if (!request || occurrencesQuery.isPlaceholderData) return undefined;
+    if (
+      !request ||
+      occurrencesQuery.isLoading ||
+      occurrencesQuery.isPlaceholderData
+    ) {
+      return undefined;
+    }
     return resolveCalendarBlockTarget(
       occurrencesQuery.data?.items ?? [],
       request

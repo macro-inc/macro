@@ -8,6 +8,7 @@ import {
   optimisticUpdateSoupEntity,
   type SoupTransaction,
 } from '@queries/soup/cache';
+import { ownTouchStamp } from '@queries/soup/normalized-cache/own-touch';
 import type { FileType } from '@service-storage/generated/schemas/fileType';
 import { useMutation } from '@tanstack/solid-query';
 
@@ -27,6 +28,8 @@ function performOptimisticFileTypeUpdate(id: string, fileType: string) {
     tag: 'document',
     data: { id, fileType },
     frecency_score: score,
+    // A file-type change is an Edited activity, i.e. a touch (own-touch.ts).
+    touched_at: ownTouchStamp(id),
   });
 
   return { soupTransaction };

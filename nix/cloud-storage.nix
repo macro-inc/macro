@@ -52,7 +52,9 @@
       # Include Cargo sources plus the .sqlx offline query cache.
       sqlxFilter = path: _type: builtins.match ".*\\.sqlx/.*\\.json$" path != null;
       pdfiumFilter = path: _type: builtins.match ".*pdfium-lib/.*\\.(so|dylib)$" path != null;
-      assetFilter = path: _type: builtins.match ".*\\.(md|html|txt|json|canvas|sql)$" path != null;
+      # `.sh` is required so `include_str!` of
+      # `crates/agent_harness/container/ensure_ready.sh` survives the prune.
+      assetFilter = path: _type: builtins.match ".*\\.(md|html|txt|json|canvas|sql|sh)$" path != null;
       binFilter = path: _type: builtins.match ".*\\.bin$" path != null;
       srcFilter =
         path: type:
@@ -338,6 +340,11 @@
 
       deployServiceBinaryDefinitions = [
         {
+          serviceName = "agent-harness-service";
+          packageName = "agent_harness_service";
+          binaries = [ "agent_harness_service" ];
+        }
+        {
           serviceName = "agent-schedule-service";
           packageName = "scheduled_action";
           binaries = [ "service" ];
@@ -412,6 +419,36 @@
         }
       ];
 
+      localStackBinaryDefinitions = [
+        {
+          serviceName = "local-authentication";
+          packageName = "authentication_service";
+          binaries = [ "authentication_service" ];
+          featureArgs = "--no-default-features --features return_passwordless_code";
+        }
+        {
+          serviceName = "local-search-processing";
+          packageName = "search_processing_service";
+          binaries = [ "search_processing_service" ];
+          featureArgs = "--no-default-features --features processing,service";
+        }
+        {
+          serviceName = "local-upload-finalizer";
+          packageName = "document_upload_finalizer_handler";
+          binaries = [ "document_upload_finalizer_local_worker" ];
+        }
+        {
+          serviceName = "local-agent-trigger";
+          packageName = "agent_trigger_service";
+          binaries = [ "agent_trigger_service" ];
+        }
+        {
+          serviceName = "local-seed-cli";
+          packageName = "seed_cli";
+          binaries = [ "seed_cli" ];
+        }
+      ];
+
       deployBinaryCargoExtraArgs =
         "--locked "
         + pkgs.lib.concatMapStringsSep " " (
@@ -438,6 +475,7 @@
           serviceName,
           packageName,
           binaries,
+          featureArgs ? "",
         }:
         craneLib.buildPackage (
           commonArgs
@@ -450,7 +488,8 @@
             doCheck = false;
             cargoExtraArgs =
               "--locked --package ${packageName} "
-              + pkgs.lib.concatMapStringsSep " " (binary: "--bin ${binary}") binaries;
+              + pkgs.lib.concatMapStringsSep " " (binary: "--bin ${binary}") binaries
+              + pkgs.lib.optionalString (featureArgs != "") " ${featureArgs}";
             CARGO_PROFILE = "release";
             installPhaseCommand = ''
               mkdir -p $out/bin
@@ -468,6 +507,36 @@
           value = deployServiceBinaryPackage def;
         }) deployServiceBinaryDefinitions
       );
+
+      localStackBinaryPackages = pkgs.lib.listToAttrs (
+        map (def: {
+          name = "local-stack-binaries-${def.serviceName}";
+          value = deployServiceBinaryPackage def;
+        }) localStackBinaryDefinitions
+      );
+
+      localStackDeployServiceNames = [
+        "agent-harness-service"
+        "connection-gateway"
+        "contacts-service"
+        "document-cognition-service"
+        "document-storage-service"
+        "email-service"
+        "image-proxy-service"
+        "notification-service"
+        "static-file-service"
+        "unfurl-service"
+      ];
+
+      localStackBinaries = pkgs.buildEnv {
+        name = "local-stack-binaries";
+        pathsToLink = [ "/bin" ];
+        paths =
+          pkgs.lib.attrValues localStackBinaryPackages
+          ++ map (
+            serviceName: deployServiceBinaryPackages."deploy-service-binaries-${serviceName}"
+          ) localStackDeployServiceNames;
+      };
 
       # ── Lambda builds (crane + cargo-zigbuild) ─────────────────────
       # SPIKE: build a Rust Lambda handler reproducibly under nix/crane so
@@ -760,6 +829,7 @@
           parallel
           docker-compose
           curl
+          openssh
           wget
           kcat
           xz
@@ -822,7 +892,11 @@
           rustToolchain
           python3
         ]
-        ++ pkgs.lib.optionals isLinux [ mold ];
+        ++ pkgs.lib.optionals isLinux [
+          mold
+          docker
+          fuse-overlayfs
+        ];
 
     in
     {
@@ -903,7 +977,10 @@
       }
       // dopplerConfigBinPackages
       // deployServiceBinaryPackages
-      // deployLambdaPackages;
+      // deployLambdaPackages
+      // pkgs.lib.optionalAttrs isLinux {
+        local-stack-binaries = localStackBinaries;
+      };
 
       devShells = {
         default =

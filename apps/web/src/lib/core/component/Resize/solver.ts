@@ -26,7 +26,7 @@ type ResizeSolver = {
   moveHandle: (index: number, delta: number) => void;
   order: () => PanelId[];
   hasPanel: (id: PanelId) => boolean;
-  canFitPanel: (panel: PanelConfig) => boolean;
+  canFitPanel: (panel: Partial<PanelConfig>) => boolean;
   swap: (firstId: PanelId, secondId: PanelId) => void;
   hide: (id: PanelId) => void;
   show: (id: PanelId) => void;
@@ -929,7 +929,7 @@ export function createResizeSolver(params: {
     hasPanel: (id: PanelId) => {
       return order().includes(id) && id in panelData;
     },
-    canFitPanel: (panel: PanelConfig) => {
+    canFitPanel: (panel: Partial<PanelConfig>) => {
       const currentPanels = panelsInOrder();
       const n = currentPanels.length;
       const usable = getUsable(n + 1, params.size(), params.gutter());

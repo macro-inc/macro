@@ -8,7 +8,7 @@ pub mod outbound;
 pub const PROTOCOL_VERSION: ProtocolVersion = ProtocolVersion::V1;
 
 /// Physical directory inside the container where the agent works.
-pub const AGENT_WORKING_DIRECTORY: &str = "/workspace";
+pub const MANAGED_CONTAINER_WORKSPACE: &str = "/workspace";
 
 /// In-memory port implementations for tests.
 #[cfg(any(test, feature = "test-utils"))]

@@ -14,6 +14,8 @@ import type {
   CachedQueryVariantWire,
   ClaimedMutation,
   EnqueueOptimisticMutationResult,
+  EntityFilterCacheArgs,
+  EntityFilterCacheResult,
   OptimisticLinkPatchWire,
   QueryRevalidationWire,
   ReadResult,
@@ -78,8 +80,17 @@ export interface CacheEngine {
   search(
     request: SearchCacheArgs & { nowMs: number }
   ): Promise<SearchCachePage>;
+  entityFilter(
+    request: EntityFilterCacheArgs
+  ): Promise<EntityFilterCacheResult>;
   writeQuery(
-    originOpId: string | undefined,
+    context: {
+      originOpId?: string;
+      registration?: {
+        opId: string;
+        entityResolvers?: readonly EntityResolverWire[];
+      };
+    },
     query: string,
     operationName: string | undefined,
     variables: Record<string, unknown> | undefined,

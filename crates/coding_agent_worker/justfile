@@ -1,0 +1,33 @@
+# Run the coding agent daemon.
+#
+#   just serve
+#   RUST_LOG=coding_agent_worker=trace just serve   # tap the ACP wire
+#
+# Reads the repo-root macro.toml by default; override with CONFIG=/path/to.toml.
+
+CONFIG := env("CONFIG", justfile_directory() + "/../../macro.toml")
+
+ROOT := justfile_directory() + "/../.."
+SCRIPTS := ROOT + "/tooling/xtask/crates/xtask_workflows/src/workflows/scripts"
+
+# Serve this bot's agent sessions: webhook receiver, one connection, one harness.
+serve:
+    SQLX_OFFLINE=true cargo run -p coding_agent_worker -- --config {{ CONFIG }}
+
+# Build the release `macrod` the way the tag workflow does, and prove it is as
+# self-contained as it claims. Runs the workflow's own scripts rather than a
+# copy of them, so a green run here means the same steps are green in CI.
+#
+#   just build-static                                    # host architecture
+#   TARGET=aarch64-unknown-linux-musl just build-static  # cross, no smoke run
+#
+# Needs the dev shell: cargo-zigbuild, zig, and cmake all come from it.
+build-static TARGET=(arch() + "-unknown-linux-musl"):
+    cd {{ ROOT }} && TARGET={{ TARGET }} bash {{ SCRIPTS }}/build_agent_daemon_linux.sh
+    cd {{ ROOT }} && TARGET={{ TARGET }} SLUG=local SAFE_TAG=dev \
+        SMOKE_RUN={{ if TARGET == arch() + "-unknown-linux-musl" { "1" } else { "0" } }} \
+        bash {{ SCRIPTS }}/package_agent_daemon.sh
+    @# Both land at the workspace root, which is not where you ran this from.
+    @cd {{ ROOT }} && echo "" \
+        && echo "binary:  $(pwd)/target/{{ TARGET }}/release/macrod" \
+        && echo "tarball: $(pwd)/artifacts/macrod-dev-local.tar.gz"

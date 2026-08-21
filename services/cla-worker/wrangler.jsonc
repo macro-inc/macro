@@ -1,0 +1,70 @@
+{
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "macro-cla",
+	"main": "src/index.ts",
+	"compatibility_date": "2025-07-22",
+	"observability": {
+		"enabled": true
+	},
+	// CLA.md is bundled as a text module so the served text and CLA_VERSION are
+	// deployed atomically and can never drift from each other.
+	"rules": [
+		{
+			"type": "Text",
+			"globs": [
+				"**/*.md"
+			],
+			"fallthrough": true
+		}
+	],
+	// Served on workers.dev like the account's other workers (the macro.com
+	// zone is on Route 53, so a Cloudflare custom domain isn't available).
+	// Moving to a vanity host later only means updating the OAuth app callback
+	// and WORKER_ORIGIN in tooling/xtask/.../workflows/cla.rs — the signature
+	// store is unaffected.
+	"workers_dev": true,
+	"vars": {
+		// Client ID of the "Macro CLA" GitHub OAuth App (not a GitHub App).
+		// Callback URL must be
+		// https://macro-cla.macroverse.workers.dev/cla/callback. The matching
+		// GITHUB_CLIENT_SECRET and CHECK_API_KEY are Worker secrets — see README.
+		"GITHUB_CLIENT_ID": "Ov23liHJwqaYS2VRXWNr",
+		// Date tag of the current CLA text. Bump ONLY together with a material
+		// change to CLA.md; never edit the text without bumping (see README).
+		"CLA_VERSION": "2026-08-19"
+	},
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_name": "macro-cla",
+			// From `wrangler d1 create macro-cla` — see README.
+			"database_id": "a040e03d-dacc-4d84-afca-5b34c6a26f81"
+		},
+		{
+			"binding": "macro_cla",
+			"database_name": "macro-cla",
+			"database_id": "a040e03d-dacc-4d84-afca-5b34c6a26f81",
+			"remote": true
+		}
+	],
+	"r2_buckets": [
+		{
+			"binding": "EXPORTS",
+			"bucket_name": "macro-cla-exports"
+		},
+		{
+			"bucket_name": "macro-cla-exports",
+			"binding": "macro_cla_exports",
+			"remote": true
+		}
+	],
+	"triggers": {
+		// Weekly full-table dump to R2 — evidence must not live solely in D1.
+		"crons": [
+			"0 6 * * 1"
+		]
+	},
+	"dev": {
+		"port": 8099
+	}
+}

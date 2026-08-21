@@ -605,10 +605,9 @@ describe('CacheWorkerCore', () => {
       affectedOps: [],
       reset: false,
     };
+    const writeQuery = vi.fn().mockResolvedValue(writeResult);
     loadCacheWasmMock.mockResolvedValue({
-      openCache: vi.fn().mockResolvedValue({
-        writeQuery: vi.fn().mockResolvedValue(writeResult),
-      }),
+      openCache: vi.fn().mockResolvedValue({ writeQuery }),
     });
     const messages: unknown[] = [];
     const port = { postMessage: (message: unknown) => messages.push(message) };
@@ -623,10 +622,26 @@ describe('CacheWorkerCore', () => {
     await core.handleRequest(port, {
       id: 2,
       kind: 'write',
+      originOpId: 'client:7',
+      registration: {
+        opId: 'client:7',
+        entityResolvers: [],
+      },
       query: 'query { user { id } }',
       data: { user: { id: 'user-1' } },
     });
 
+    expect(writeQuery).toHaveBeenCalledWith(
+      {
+        originOpId: 'client:7',
+        registration: { opId: 'client:7', entityResolvers: [] },
+      },
+      'query { user { id } }',
+      undefined,
+      undefined,
+      { user: { id: 'user-1' } },
+      undefined
+    );
     expect(messages).toContainEqual({ kind: 'cache-changed' });
   });
 

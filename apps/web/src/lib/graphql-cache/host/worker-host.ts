@@ -13,6 +13,8 @@ import {
   type CacheResponseErrorCode,
   type ClaimedMutation,
   type EnqueueOptimisticMutationResult,
+  type EntityFilterCacheArgs,
+  type EntityFilterCacheResult,
   type HydrationResult,
   isCachePush,
   isCacheResponse,
@@ -286,7 +288,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
     pending.delete(msg.id);
     if (entry.timer !== undefined) clearTimeout(entry.timer);
     if (
-      entry.kind === 'read' &&
+      (entry.kind === 'read' || entry.kind === 'write') &&
       entry.opKey !== undefined &&
       activeOpKeys.has(entry.opKey)
     ) {
@@ -305,9 +307,12 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
     registeredOpKeys.clear();
   }
 
-  function markPendingReads(target: Set<number>): void {
+  function markPendingRegistrations(target: Set<number>): void {
     for (const entry of pending.values()) {
-      if (entry.kind === 'read' && entry.opKey !== undefined) {
+      if (
+        (entry.kind === 'read' || entry.kind === 'write') &&
+        entry.opKey !== undefined
+      ) {
         target.add(entry.opKey);
       }
     }
@@ -331,7 +336,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
       // No old response put this host into recovery. Requests still pending at
       // replacement broadcast were queued by the coordinator while resetting
       // and will be routed exactly once to this replacement generation.
-      markPendingReads(replacementReadOpKeys);
+      markPendingRegistrations(replacementReadOpKeys);
     }
     if (state !== 'ready' && state !== 'awaiting-replacement') return;
     void startInitialization().catch(() => undefined);
@@ -344,7 +349,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
     beginRecoveryGeneration();
     // A rejected old-epoch read may have registered dependencies before its
     // response was lost. It belongs to the lost generation, not replacement.
-    markPendingReads(lostRegisteredOpKeys);
+    markPendingRegistrations(lostRegisteredOpKeys);
     replacementError = error;
     initialization = undefined;
     state = 'awaiting-replacement';
@@ -611,6 +616,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
           : msg.kind === 'read' ||
               msg.kind === 'read-records-by-keys' ||
               msg.kind === 'search' ||
+              msg.kind === 'entity-filter' ||
               msg.kind === 'inspect-query' ||
               msg.kind === 'inspect-query-variants'
             ? requestTimeoutMs
@@ -802,17 +808,41 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
       })) as SearchCachePage;
     },
 
-    async writeQuery(args: CacheWriteArgs): Promise<WriteResult> {
+    async entityFilter(
+      args: EntityFilterCacheArgs
+    ): Promise<EntityFilterCacheResult> {
       await ensureInitialized();
       return (await request({
-        kind: 'write',
-        originOpId: args.opKey === undefined ? undefined : opId(args.opKey),
-        query: args.query,
-        operationName: args.operationName,
-        variables: args.variables,
-        data: args.data,
-        identity: args.identity,
-      })) as WriteResult;
+        kind: 'entity-filter',
+        request: args,
+      })) as EntityFilterCacheResult;
+    },
+
+    async writeQuery(args: CacheWriteArgs): Promise<WriteResult> {
+      if (args.registerDependencies && args.opKey !== undefined) {
+        activeOpKeys.add(args.opKey);
+        if (recoveryInProgress) replacementReadOpKeys.add(args.opKey);
+      }
+      await ensureInitialized();
+      return (await request(
+        {
+          kind: 'write',
+          originOpId: args.opKey === undefined ? undefined : opId(args.opKey),
+          registration:
+            args.registerDependencies && args.opKey !== undefined
+              ? {
+                  opId: opId(args.opKey),
+                  entityResolvers: args.entityResolvers,
+                }
+              : undefined,
+          query: args.query,
+          operationName: args.operationName,
+          variables: args.variables,
+          data: args.data,
+          identity: args.identity,
+        },
+        args.registerDependencies ? args.opKey : undefined
+      )) as WriteResult;
     },
 
     async hydrateQuery(

@@ -9,12 +9,17 @@ agent_session = { path = "../agent_session" }
 bot_id = { path = "../bot_id" }
 channels = { path = "../channels", features = ["ports"] }
 chrono = { workspace = true }
-macro_event_broker = { path = "../macro_event_broker", features = ["outbound"] }
+# Only the domain vocabulary (`Event`, `MacroEvent`, `TopicEvent`). Asking for
+# `outbound` here would pull rdkafka — and so librdkafka and openssl — into
+# every consumer of this crate, including the self-hosted daemon, which
+# publishes nothing and has to link statically.
+macro_event_broker = { path = "../macro_event_broker", default-features = false }
 macro_event_topics = { path = "../macro_event_topics" }
 macro_user_id = { path = "../macro_user_id" }
 channel_sender = { path = "../channel_sender" }
 macro_uuid = { path = "../macro_uuid" }
 serde = { workspace = true }
+strum = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }

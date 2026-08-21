@@ -16,10 +16,10 @@ import { TOKENS } from '@core/hotkey/tokens';
 import { type EntityData, isTaskEntity } from '@entity';
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import type { Property, PropertyDefinitionDomain } from '@property/types';
-import { macroEntityToPropertyEntityType } from '@property/utils';
 import { onCleanup } from 'solid-js';
 import type { SoupState } from '../create-soup-state';
 import {
+  makeAddTagAction,
   makeCopyAction,
   makeCopyBranchNameAction,
   makeCopyEntityIdAction,
@@ -96,6 +96,7 @@ export const useEntityActionHotkeys = (
   const favoriteAction = makeFavoriteAction();
 
   const setCompanyPropertyAction = makeSetCompanyPropertyAction();
+  const addTagAction = makeAddTagAction();
 
   const getEntitiesForAction = (): EntityData[] => {
     if (
@@ -171,15 +172,6 @@ export const useEntityActionHotkeys = (
       });
     }
   };
-  const canAssignTags = (entity: EntityData) => {
-    try {
-      macroEntityToPropertyEntityType(entity);
-      return true;
-    } catch {
-      return false;
-    }
-  };
-
   // Mark Done - 'e', not included in Hotkey Group so that we can use it from inside of blocks
   registerHotkey({
     hotkey: ['e'],
@@ -599,7 +591,7 @@ export const useEntityActionHotkeys = (
     keyDownHandler: () => {
       const entities = getEntitiesForAction();
       if (entities.length === 0) return false;
-      openPropertyEditor(entities, 'tag', undefined, {
+      addTagAction.execute(entities, {
         restoreFocus: () => restoreSoupFocus(entities[0]?.id),
       });
       return true;
@@ -607,7 +599,7 @@ export const useEntityActionHotkeys = (
     condition: () => {
       if (condition && !condition()) return false;
       const entities = getEntitiesForAction();
-      return entities.length > 0 && entities.every(canAssignTags);
+      return entities.length > 0 && entities.every(addTagAction.canExecute);
     },
     scopeId,
   }).withGroup(group);

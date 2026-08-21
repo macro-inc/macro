@@ -90,6 +90,41 @@ async fn appending_persists_the_event() {
     assert_eq!(log.len(), 2);
 }
 
+#[tokio::test]
+async fn marking_disconnected_persists_and_publishes_the_event() {
+    let repo = InMemoryAgentSessionRepo::new();
+    let session = test_session();
+    repo.insert_session(test_agent_session(session));
+    let realtime = RecordingRealtime::new();
+    let service = AgentSessionServiceImpl::new(
+        repo.clone(),
+        FoldedMessageService::new(repo.clone()),
+        realtime.clone(),
+    );
+
+    service
+        .mark_disconnected(session)
+        .await
+        .expect("disconnect is recorded");
+
+    let stored = AgentSessionLogRepo::list_by_session(&repo, session)
+        .await
+        .expect("stored log can be read");
+    assert!(matches!(
+        &stored[..],
+        [StoredAgentSessionLog {
+            entry: AgentSessionLog {
+                content: Message::ToServer(ToServerMessage::Event {
+                    event: SystemEvent::Disconnected,
+                }),
+                ..
+            },
+            ..
+        }]
+    ));
+    assert_eq!(realtime.published().len(), 1);
+}
+
 /// The point of the rework: a connection folds its session once, when it
 /// starts, and every frame after that is folded into the state it kept.
 ///
