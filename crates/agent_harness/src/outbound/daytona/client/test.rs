@@ -128,12 +128,13 @@ async fn live_hot_resize_increases_cpu_and_memory_without_touching_disk() {
             .await
         {
             Ok(()) => {}
-            Err(DaytonaError::ResizeNotEnabled) => {
-                panic!(
+            Err(error @ DaytonaError::ResizeNotEnabled) => {
+                eprintln!(
                     "create-without-resources worked (cpu={cpu} memory_gib={memory} disk={disk:?}) \
                      but POST /sandbox/{{id}}/resize 404s: the documented resize route is not \
                      registered on this API"
                 );
+                return Err(error);
             }
             Err(error) => return Err(error),
         }
