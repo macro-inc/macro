@@ -111,29 +111,74 @@ ensure_nix_daemon() {
 }
 
 ensure_docker_iptables_backend() {
-  if [ ! -x /usr/bin/update-alternatives ] \
-    || [ ! -x "${DOCKER_IPTABLES_BACKEND}" ] \
+  # Compose puts Postgres/Redis/services on custom bridges. With
+  # bridge-nf-call-iptables=1, that ICC walks iptables FORWARD. Dockerd
+  # programs the legacy table; if iptables-legacy is missing it only
+  # wires docker0, and auth/storage time out reaching postgres.
+  if [ ! -x "${DOCKER_IPTABLES_BACKEND}" ] \
     || [ ! -x "${DOCKER_IP6TABLES_BACKEND}" ]; then
+    if [ ! -x /usr/bin/apt-get ]; then
+      echo "cursor-cloud: iptables-legacy is required for Docker ICC" >&2
+      return 1
+    fi
+    echo "cursor-cloud: installing iptables (legacy backend)"
+    sudo DEBIAN_FRONTEND=noninteractive apt-get update -qq
+    sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq iptables
+  fi
+
+  if [ -x /usr/bin/update-alternatives ]; then
+    local desired_backend
+    desired_backend="$(readlink -f "${DOCKER_IPTABLES_BACKEND}")"
+    local desired_ip6_backend
+    desired_ip6_backend="$(readlink -f "${DOCKER_IP6TABLES_BACKEND}")"
+    local current_backend
+    current_backend="$(readlink -f /etc/alternatives/iptables 2>/dev/null || true)"
+
+    if [ "${current_backend}" != "${desired_backend}" ]; then
+      sudo /usr/bin/update-alternatives \
+        --set iptables "${DOCKER_IPTABLES_BACKEND}"
+    fi
+    if [ "$(readlink -f /etc/alternatives/ip6tables 2>/dev/null || true)" \
+      != "${desired_ip6_backend}" ]; then
+      sudo /usr/bin/update-alternatives \
+        --set ip6tables "${DOCKER_IP6TABLES_BACKEND}"
+    fi
+  fi
+}
+
+# Allow container-to-container traffic on every Docker bridge. Needed when
+# networks were created before iptables-legacy existed (dockerd then only
+# programmed docker0). Safe to repeat: each rule is added only if missing.
+ensure_docker_bridge_forwarding() {
+  if [ ! -x "${DOCKER_IPTABLES_BACKEND}" ]; then
+    return 0
+  fi
+  if ! sudo "${DOCKER_IPTABLES_BACKEND}" -nL DOCKER-FORWARD >/dev/null 2>&1; then
     return 0
   fi
 
-  local desired_backend
-  desired_backend="$(readlink -f "${DOCKER_IPTABLES_BACKEND}")"
-  local desired_ip6_backend
-  desired_ip6_backend="$(readlink -f "${DOCKER_IP6TABLES_BACKEND}")"
-  local current_backend
-  current_backend="$(readlink -f /etc/alternatives/iptables 2>/dev/null || true)"
-
-  # Reconcile the backend with a preserved legacy FORWARD policy.
-  if [ "${current_backend}" != "${desired_backend}" ]; then
-    sudo /usr/bin/update-alternatives \
-      --set iptables "${DOCKER_IPTABLES_BACKEND}"
-  fi
-  if [ "$(readlink -f /etc/alternatives/ip6tables 2>/dev/null || true)" \
-    != "${desired_ip6_backend}" ]; then
-    sudo /usr/bin/update-alternatives \
-      --set ip6tables "${DOCKER_IP6TABLES_BACKEND}"
-  fi
+  local br name
+  for br in /sys/class/net/br-*; do
+    [ -e "${br}" ] || continue
+    name="$(basename "${br}")"
+    if ! sudo "${DOCKER_IPTABLES_BACKEND}" -C DOCKER-FORWARD \
+      -i "${name}" -j ACCEPT >/dev/null 2>&1; then
+      sudo "${DOCKER_IPTABLES_BACKEND}" -A DOCKER-FORWARD \
+        -i "${name}" -j ACCEPT
+    fi
+    if sudo "${DOCKER_IPTABLES_BACKEND}" -nL DOCKER-CT >/dev/null 2>&1 \
+      && ! sudo "${DOCKER_IPTABLES_BACKEND}" -C DOCKER-CT -o "${name}" \
+        -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT >/dev/null 2>&1; then
+      sudo "${DOCKER_IPTABLES_BACKEND}" -A DOCKER-CT -o "${name}" \
+        -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT || true
+    fi
+    if sudo "${DOCKER_IPTABLES_BACKEND}" -nL DOCKER-BRIDGE >/dev/null 2>&1 \
+      && ! sudo "${DOCKER_IPTABLES_BACKEND}" -C DOCKER-BRIDGE \
+        -o "${name}" -j DOCKER >/dev/null 2>&1; then
+      sudo "${DOCKER_IPTABLES_BACKEND}" -A DOCKER-BRIDGE \
+        -o "${name}" -j DOCKER || true
+    fi
+  done
 }
 
 ensure_dockerd() {
@@ -161,6 +206,7 @@ ensure_dockerd() {
   if [ -S "${DOCKER_SOCK}" ]; then
     sudo chmod 666 "${DOCKER_SOCK}"
     if docker info >/dev/null 2>&1; then
+      ensure_docker_bridge_forwarding
       return 0
     fi
   fi
@@ -174,6 +220,7 @@ ensure_dockerd() {
     if [ -S "${DOCKER_SOCK}" ]; then
       sudo chmod 666 "${DOCKER_SOCK}"
       if docker info >/dev/null 2>&1; then
+        ensure_docker_bridge_forwarding
         return 0
       fi
     fi

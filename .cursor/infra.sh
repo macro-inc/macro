@@ -19,6 +19,7 @@ ensure_persistent_caches
 
 \cd "${WORKSPACE_ROOT}"
 just run_dbs -d
+ensure_docker_bridge_forwarding
 
 pg_isready -h 127.0.0.1 -p 5432
 
