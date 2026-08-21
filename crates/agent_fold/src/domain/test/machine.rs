@@ -274,10 +274,10 @@ fn a_stop_reports_the_closed_turn_then_the_control() {
         FoldEvent::NewMessage(message) => {
             assert!(matches!(
                 message.parts.first(),
-                MessagePart::Control {
+                Some(MessagePart::Control {
                     control: Control::Stop,
                     ..
-                }
+                })
             ));
         }
         other => panic!("second report is the stop control: {other:?}"),
