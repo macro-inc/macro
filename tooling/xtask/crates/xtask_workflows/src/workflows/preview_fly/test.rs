@@ -58,3 +58,12 @@ fn images_lane_always_builds_the_sandbox_image() {
         "preview should not pull GHCR: {yaml}"
     );
 }
+
+#[test]
+fn web_lane_raises_the_node_heap() {
+    let yaml = rendered();
+    assert!(
+        yaml.contains("NODE_OPTIONS=--max-old-space-size=6144"),
+        "vite OOM is the documented CI flap without this: {yaml}"
+    );
+}

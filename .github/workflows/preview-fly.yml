@@ -93,6 +93,10 @@ jobs:
         cd apps/web
         export MODE=development NODE_ENV=production
         export VITE_LOCAL_SERVERS=ALL VITE_LOCAL_BACKEND_ORIGIN=same-origin
+        # Same ceiling as `just -f apps/web/justfile build-dev`: vite's
+        # chunk-render peaks at node's default ~4GB heap and aborts with
+        # "Ineffective mark-compacts near heap limit".
+        export NODE_OPTIONS=--max-old-space-size=6144
         bun run --bun build
         LANE
 
