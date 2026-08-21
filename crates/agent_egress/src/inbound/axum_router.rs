@@ -96,9 +96,26 @@ where
 /// The whole git route: no repository in the path, because the session has
 /// exactly one and the service reads it from the grant. The sandbox's remote
 /// is just `<egress>/git`, and git appends these suffixes itself.
+///
+/// Returns a `Response` rather than a `Result` so an unauthenticated one can
+/// carry the challenge git needs - see [`with_basic_challenge`].
 async fn git_handler<Service>(
     State(state): State<EgressRouterState<Service>>,
     Path(path): Path<String>,
+    request: Request,
+) -> Response
+where
+    Service: EgressService,
+{
+    match git_proxy(state, path, request).await {
+        Ok(response) => response,
+        Err(error) => with_basic_challenge(error),
+    }
+}
+
+async fn git_proxy<Service>(
+    state: EgressRouterState<Service>,
+    path: String,
     request: Request,
 ) -> Result<Response, EgressError>
 where
@@ -111,6 +128,30 @@ where
     })?;
 
     proxy(state, token, EgressTarget::GitHubGit { endpoint }, request).await
+}
+
+/// Advertise Basic on an unauthenticated git response.
+///
+/// Load-bearing, and only on this route. git does not send a credential
+/// up front: it makes the request bare, and only reaches for its credential
+/// helper once the server asks. Asking is this header - libcurl picks an auth
+/// scheme from it, and with no header there is no scheme to pick, so git holds
+/// a perfectly good token it never sends and the clone fails as
+/// "Authentication failed" with nothing to point at the cause.
+///
+/// Not on `/mcp`, where the credential is a bearer token the client already
+/// sends up front, and where advertising Basic would only invite an MCP client
+/// to prompt somebody for a password that does not exist.
+fn with_basic_challenge(error: EgressError) -> Response {
+    let unauthenticated = matches!(error, EgressError::Unauthenticated);
+    let mut response = error.into_response();
+    if unauthenticated {
+        response.headers_mut().insert(
+            http::header::WWW_AUTHENTICATE,
+            http::HeaderValue::from_static(r#"Basic realm="Macro egress", charset="UTF-8""#),
+        );
+    }
+    response
 }
 
 async fn proxy<Service>(

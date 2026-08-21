@@ -250,3 +250,42 @@ async fn an_error_body_never_carries_internal_detail() {
     assert!(!body.contains("mcp.example.com"), "{body}");
     assert_eq!(body, "The upstream could not be reached.");
 }
+
+/// git makes its first request bare and only consults its credential helper
+/// once the server asks for authentication. Asking is this header: without it
+/// libcurl has no auth scheme to choose, so git never sends the token it
+/// already holds and the clone dies as "Authentication failed".
+#[tokio::test]
+async fn an_unauthenticated_git_request_is_told_to_use_basic() {
+    let service = SpyService::accepting();
+    let response = call(
+        &service,
+        get("/git/info/refs?service=git-upload-pack", None),
+    )
+    .await;
+
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    assert_eq!(
+        response
+            .headers()
+            .get(http::header::WWW_AUTHENTICATE)
+            .and_then(|value| value.to_str().ok()),
+        Some(r#"Basic realm="Macro egress", charset="UTF-8""#)
+    );
+}
+
+/// Only git needs the challenge. An MCP client sends its bearer token up
+/// front, and advertising Basic would invite it to prompt for a password that
+/// does not exist.
+#[tokio::test]
+async fn an_unauthenticated_mcp_request_is_not_told_to_use_basic() {
+    let service = SpyService::accepting();
+    let response = call(&service, get("/mcp/datadog", None)).await;
+
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    assert!(
+        !response
+            .headers()
+            .contains_key(http::header::WWW_AUTHENTICATE)
+    );
+}

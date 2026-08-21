@@ -337,3 +337,18 @@ fn mcp_public_url_uses_the_proxy_cognition_route() {
         Some(named_public_url.as_str())
     );
 }
+
+/// In-network address, not localhost: a sandbox's localhost is its own. The
+/// host is hyphenated because a sandbox's git percent-encodes `_` before
+/// matching `credential.<url>.helper`, so the compose service name would leave
+/// the scoped helper silently unfired.
+#[test]
+fn the_egress_base_url_is_the_hyphenated_in_network_alias() {
+    let named = Instance::derive(Some("2508"), None).unwrap();
+    let named_env = LocalEnv::for_instance(Mode::Local, &named, true).to_env();
+
+    assert_eq!(
+        named_env.get("EGRESS_BASE_URL").map(String::as_str),
+        Some("http://agent-harness-service:8102")
+    );
+}

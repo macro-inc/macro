@@ -288,8 +288,12 @@ struct AgentHarnessEnv {
     /// `crates/agent_harness/container` to this tag (BuildKit cache is the
     /// freshness check).
     image: &'static str,
-    /// Network sandboxes join, so this service can dial their sidecars.
+    /// Network sandboxes join, so this service can dial their sidecars and a
+    /// sandbox can dial its egress proxy. Both are containers, so neither can
+    /// use the host's loopback to reach the other.
     network: String,
+    /// The egress proxy as a sandbox on that network sees it.
+    egress_base_url: String,
 }
 
 impl AgentHarnessEnv {
@@ -301,6 +305,12 @@ impl AgentHarnessEnv {
             image: super::sandbox_image::DEFAULT_LOCAL_TAG,
             // Compose names a network `<project>_<network>`.
             network: format!("{project_name}_services"),
+            // The service's hyphenated network alias, not its compose name:
+            // a sandbox's git percent-encodes `_` in a host before matching
+            // `credential.<url>.helper`, so an underscore here means the
+            // scoped credential helper never fires and the clone prompts for
+            // a password it has no terminal to read.
+            egress_base_url: "http://agent-harness-service:8102".to_owned(),
         }
     }
 
@@ -311,6 +321,7 @@ impl AgentHarnessEnv {
         env.insert("DEV_DANGEROUS_LOCAL_CONTAINERS".into(), "true".into());
         env.insert("LOCAL_CONTAINER_IMAGE".into(), self.image.into());
         env.insert("LOCAL_CONTAINER_NETWORK".into(), self.network.clone());
+        env.insert("EGRESS_BASE_URL".into(), self.egress_base_url.clone());
     }
 }
 

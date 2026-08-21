@@ -328,8 +328,15 @@ services:
       - connection_gateway
       - lexical_service
     networks:
-      - databases
-      - services
+      databases:
+      services:
+        aliases:
+          # Hyphens, because a sandbox's git reaches the egress proxy by this
+          # name and git percent-encodes `_` in a host before matching
+          # `credential.<url>.helper`. Under the compose service name the
+          # scoped helper silently never fires and the clone prompts for a
+          # password it has no terminal to read.
+          - agent-harness-service
 
   # ============================================================================
   # static_file_service (Port 8094)
