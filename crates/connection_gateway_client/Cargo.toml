@@ -14,9 +14,3 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 tracing = { workspace = true, features = ["attributes"] }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
-
-[dev-dependencies]
-opentelemetry = { workspace = true, features = ["trace"] }
-opentelemetry_sdk = { workspace = true, features = ["trace"] }
-tracing-opentelemetry = { workspace = true }
-tracing-subscriber = { workspace = true }

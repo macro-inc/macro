@@ -20,7 +20,7 @@
 
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex, OnceLock};
+use std::sync::{Arc, OnceLock};
 
 use agent_client_protocol::RawJsonRpcMessage;
 use agent_client_protocol::schema::v1::{RequestId, Response, SessionId};
@@ -31,7 +31,7 @@ use agent_runtime_protocol::domain::schema::v0::{
     AcpMessage, SystemEvent, ToRuntimeMessage, ToServerMessage,
 };
 use dashmap::DashMap;
-use tokio::sync::{mpsc, watch};
+use tokio::sync::{Mutex, mpsc, watch};
 
 use crate::domain::model::AgentSessionId;
 use crate::domain::session::HandshakeStatus;
@@ -72,21 +72,13 @@ pub(crate) struct Routes {
 
 impl Routes {
     /// Remember that `session` is awaiting an answer to `request`.
-    pub(crate) fn expect_response(
-        &mut self,
-        request: RequestId,
-        session: AgentSessionId,
-    ) -> Option<AgentSessionId> {
-        self.requests.insert(request, session)
+    pub(crate) fn expect_response(&mut self, request: RequestId, session: AgentSessionId) {
+        self.requests.insert(request, session);
     }
 
     /// Remember that `acp_session` is `session`'s session on the agent.
-    pub(crate) fn bind_acp_session(
-        &mut self,
-        acp_session: SessionId,
-        session: AgentSessionId,
-    ) -> Option<AgentSessionId> {
-        self.acp_sessions.insert(acp_session, session)
+    pub(crate) fn bind_acp_session(&mut self, acp_session: SessionId, session: AgentSessionId) {
+        self.acp_sessions.insert(acp_session, session);
     }
 
     /// Forget everything about a session that is over.
@@ -115,83 +107,6 @@ impl Routes {
         match acp_session_of(frame).and_then(|acp| self.acp_sessions.get(&acp)) {
             Some(session) => Routed::Session(*session),
             None => Routed::Orphan,
-        }
-    }
-}
-
-/// Routes installed before an outbound send and automatically removed if the
-/// send errors or its future is cancelled. Successful sends explicitly commit.
-struct RouteMutation<'a> {
-    routes: &'a Mutex<Routes>,
-    session: AgentSessionId,
-    request: Option<(RequestId, Option<AgentSessionId>)>,
-    acp_session: Option<(SessionId, Option<AgentSessionId>)>,
-    committed: bool,
-}
-
-impl<'a> RouteMutation<'a> {
-    fn install(
-        routes: &'a Mutex<Routes>,
-        session: AgentSessionId,
-        frame: &RawJsonRpcMessage,
-    ) -> Self {
-        let mut routes_guard = routes.lock().expect("route lock is not poisoned");
-        let request = if let RawJsonRpcMessage::Request(request) = frame {
-            Some((
-                request.id.clone(),
-                routes_guard.expect_response(request.id.clone(), session),
-            ))
-        } else {
-            None
-        };
-        let acp_session = acp_session_of(frame).map(|acp_session| {
-            let previous = routes_guard.bind_acp_session(acp_session.clone(), session);
-            (acp_session, previous)
-        });
-        drop(routes_guard);
-        Self {
-            routes,
-            session,
-            request,
-            acp_session,
-            committed: false,
-        }
-    }
-
-    fn commit(mut self) {
-        self.committed = true;
-    }
-}
-
-impl Drop for RouteMutation<'_> {
-    fn drop(&mut self) {
-        if self.committed {
-            return;
-        }
-        let mut routes = self.routes.lock().expect("route lock is not poisoned");
-        if let Some((request, previous)) = self.request.take()
-            && routes.requests.get(&request) == Some(&self.session)
-        {
-            match previous {
-                Some(previous) => {
-                    routes.requests.insert(request, previous);
-                }
-                None => {
-                    routes.requests.remove(&request);
-                }
-            }
-        }
-        if let Some((acp_session, previous)) = self.acp_session.take()
-            && routes.acp_sessions.get(&acp_session) == Some(&self.session)
-        {
-            match previous {
-                Some(previous) => {
-                    routes.acp_sessions.insert(acp_session, previous);
-                }
-                None => {
-                    routes.acp_sessions.remove(&acp_session);
-                }
-            }
         }
     }
 }
@@ -312,10 +227,7 @@ where
     ) -> RuntimeAttachment<SessionChannel<Sender>> {
         let (inbound, frames) = mpsc::channel(SESSION_INBOUND_BUFFER);
         if self.bound.insert(session, inbound).is_some() {
-            self.routes
-                .lock()
-                .expect("route lock is not poisoned")
-                .forget(session);
+            self.routes.lock().await.forget(session);
         }
         // A runtime that reported ready before anyone was here to hear it
         // said so exactly once. Whoever binds first inherits the job.
@@ -346,12 +258,18 @@ where
         // Recorded before the send: the answer can arrive the instant the
         // frame lands, and a response nobody claims is an orphan.
         if let ToRuntimeMessage::Acp(AcpMessage(frame)) = &message {
-            let mutation = RouteMutation::install(&self.routes, session, frame);
-            let result = self.outbound.send(message).await;
-            if result.is_ok() {
-                mutation.commit();
+            let mut routes = self.routes.lock().await;
+            if let RawJsonRpcMessage::Request(request) = frame {
+                routes.expect_response(request.id.clone(), session);
             }
-            return result;
+            // A request naming an ACP session is also where that session's
+            // ownership is established. It has to be, for the ones that
+            // matter: `session/resume` and `session/load` name the session
+            // going out and their answers do not echo it back, so the
+            // outbound frame is the only place it is ever stated.
+            if let Some(acp) = acp_session_of(frame) {
+                routes.bind_acp_session(acp, session);
+            }
         }
         self.outbound.send(message).await
     }
@@ -373,20 +291,12 @@ where
 
             // A session's opening response is where its ACP session id first
             // appears, and every later frame for it routes on that id.
-            let routed = self
-                .routes
-                .lock()
-                .expect("route lock is not poisoned")
-                .route(&message);
+            let routed = self.routes.lock().await.route(&message);
             if let Routed::Session(session) = routed
                 && let ToServerMessage::Acp(AcpMessage(frame)) = &message
                 && let Some(acp) = opened_acp_session(frame)
             {
-                let _ = self
-                    .routes
-                    .lock()
-                    .expect("route lock is not poisoned")
-                    .bind_acp_session(acp, session);
+                self.routes.lock().await.bind_acp_session(acp, session);
             }
 
             match routed {

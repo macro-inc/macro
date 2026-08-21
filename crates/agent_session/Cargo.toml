@@ -55,10 +55,6 @@ non_empty = { path = "../non_empty" }
 agent_fold = { path = "../agent_fold", features = ["test-utils"] }
 axum = { workspace = true, features = ["ws"] }
 macro_db_migrator = { path = "../macro_db_migrator" }
-opentelemetry = { workspace = true, features = ["trace"] }
-opentelemetry_sdk = { workspace = true, features = ["testing"] }
 tokio = { workspace = true, features = ["fs", "io-std", "io-util", "macros", "net", "rt-multi-thread", "time"] }
 tokio-tungstenite = { workspace = true }
 tower = { workspace = true, features = ["util"] }
-tracing-opentelemetry = { workspace = true }
-tracing-subscriber = { workspace = true }

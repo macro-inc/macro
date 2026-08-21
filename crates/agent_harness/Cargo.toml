@@ -51,8 +51,3 @@ agent_fold = { path = "../agent_fold", features = ["test-utils"] }
 agent_session = { path = "../agent_session", features = ["test-utils"] }
 bot_id = { path = "../bot_id", features = ["test-utils"] }
 mockall = { workspace = true }
-opentelemetry = { workspace = true, features = ["trace"] }
-opentelemetry_sdk = { workspace = true, features = ["testing", "trace"] }
-tracing-subscriber = { workspace = true }
-tracing-opentelemetry = { workspace = true }
-tokio = { workspace = true, features = ["test-util"] }

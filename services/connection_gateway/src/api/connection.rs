@@ -34,9 +34,6 @@ use tracing_opentelemetry::OpenTelemetrySpanExt as _;
 
 mod messages;
 
-#[cfg(test)]
-mod test;
-
 pub fn router() -> Router<AppState> {
     Router::new().route("/", get(ws_handler))
 }

@@ -10,9 +10,6 @@ use model_entity::Entity;
 mod calendar;
 mod email;
 
-#[cfg(test)]
-mod test;
-
 /// HTTP client for communicating with the connection gateway service.
 #[derive(Clone, Debug)]
 pub struct ConnectionGatewayClient {

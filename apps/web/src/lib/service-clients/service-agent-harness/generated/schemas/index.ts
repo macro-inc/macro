@@ -20,6 +20,8 @@ export * from './agentActionOneOfSevenType';
 export * from './agentPromptAction';
 export * from './agentSessionLogEntryDto';
 export * from './agentSessionLogEntryDtoAllOf';
+export * from './agentSessionLogEntryDtoAllOfTraceparent';
+export * from './agentSessionLogEntryDtoAllOfTracestate';
 export * from './agentSessionLogEntryDtoAllOfUserId';
 export * from './agentSessionLogResponse';
 export * from './agentSessionResponse';

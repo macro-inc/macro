@@ -15,9 +15,6 @@ use std::future::Future;
 use std::time::Instant;
 use tracing::Instrument as _;
 
-#[cfg(test)]
-mod test;
-
 pub struct Delivery {
     pub user_id: String,
     pub active: bool,
