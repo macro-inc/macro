@@ -10,11 +10,14 @@ use schemars::JsonSchema;
 use serde::Deserialize;
 
 use super::{
-    AttendeeInput, CalendarToolContext, EventTimeInput, ToolCalendarEvent, mutation_tool_error,
+    AttendeeInput, CalendarToolContext, EventRemindersInput, EventTimeInput, ToolCalendarEvent,
+    mutation_tool_error,
 };
 use crate::domain::{
-    models::{CalendarEventPatch, ConferenceChange},
-    ports::{CalendarMutationService, CalendarOccurrenceService, CalendarUpdateScope},
+    models::{AttendeeResponseStatus, CalendarEventPatch, ConferenceChange},
+    ports::{
+        CalendarMutationService, CalendarOccurrenceService, CalendarRsvpScope, CalendarUpdateScope,
+    },
 };
 
 /// A requested change to an event's video conference.
@@ -32,6 +35,28 @@ impl From<ConferenceChangeInput> for ConferenceChange {
         match input {
             ConferenceChangeInput::GoogleMeet => Self::GoogleMeet,
             ConferenceChangeInput::Remove => Self::Removed,
+        }
+    }
+}
+
+/// The requester's own RSVP on an event they were invited to.
+#[derive(Debug, Deserialize, JsonSchema, Clone, Copy, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum RsvpResponseInput {
+    /// Attending.
+    Accepted,
+    /// Not attending.
+    Declined,
+    /// Might attend.
+    Tentative,
+}
+
+impl From<RsvpResponseInput> for AttendeeResponseStatus {
+    fn from(input: RsvpResponseInput) -> Self {
+        match input {
+            RsvpResponseInput::Accepted => Self::Accepted,
+            RsvpResponseInput::Declined => Self::Declined,
+            RsvpResponseInput::Tentative => Self::Tentative,
         }
     }
 }
@@ -67,7 +92,11 @@ event instead.\n\
 \n\
 Passing `attendees` replaces the full attendee list — include everyone who should remain, \
 not just additions. An empty string for `description` or `location` clears it. Fails on \
-events from calendars the user cannot edit."
+events from calendars the user cannot edit.\n\
+\n\
+`rsvp` sets the user's own response to an invitation and is independent of the field \
+edits — it can be the only thing this call changes. It applies at the same `scope` as \
+the rest of the call, and only works on events the user is actually an attendee of."
 )]
 pub struct UpdateCalendarEvent {
     /// Event to update.
@@ -146,6 +175,25 @@ pub struct UpdateCalendarEvent {
     )]
     #[serde(default)]
     pub conference: Option<ConferenceChangeInput>,
+
+    /// Replacement reminder configuration.
+    #[schemars(
+        description = "Replacement notification reminders. `useDefault: true` follows the \
+                       calendar's own defaults; otherwise `overrides` replaces the whole list \
+                       with entries of `method` \"popup\" (a Macro notification) or \"email\" \
+                       and `minutes` before the start — an empty list silences the event. \
+                       Omit to keep the current reminders."
+    )]
+    #[serde(default)]
+    pub reminders: Option<EventRemindersInput>,
+
+    /// The requester's own RSVP.
+    #[schemars(
+        description = "Set the user's own response to the invitation: \"accepted\", \
+                       \"declined\", or \"tentative\". Omit to leave their response alone."
+    )]
+    #[serde(default)]
+    pub rsvp: Option<RsvpResponseInput>,
 }
 
 impl ToolAnnotated for UpdateCalendarEvent {
@@ -170,6 +218,7 @@ where
             event_id=%self.event_id,
             scope=?self.scope,
             attendee_count=?self.attendees.as_ref().map(Vec::len),
+            rsvp=?self.rsvp,
             "Update calendar event"
         );
 
@@ -216,15 +265,55 @@ where
             recurrence_lines: self.recurrence_lines.clone(),
             visibility: None,
             transparency: None,
-            reminders: None,
+            reminders: self.reminders.clone().map(Into::into),
             conference: self.conference.map(Into::into),
         };
 
-        let event = service_context
-            .mutations
-            .update_event(&requester_id, self.event_id, patch, scope)
-            .await
-            .map_err(|error| mutation_tool_error("update the calendar event", error))?;
+        // An RSVP is its own provider call, so a call carrying only one runs
+        // only that half. Answering after the patch keeps a replaced attendee
+        // list from discarding the response that was just recorded.
+        let patched = if patch.is_empty() {
+            None
+        } else {
+            Some(
+                service_context
+                    .mutations
+                    .update_event(&requester_id, self.event_id, patch, scope.clone())
+                    .await
+                    .map_err(|error| mutation_tool_error("update the calendar event", error))?,
+            )
+        };
+
+        let event = match self.rsvp {
+            Some(rsvp) => {
+                let rsvp_scope = match scope {
+                    CalendarUpdateScope::All => CalendarRsvpScope::All,
+                    CalendarUpdateScope::ThisEvent { recurrence_id } => {
+                        CalendarRsvpScope::ThisEvent { recurrence_id }
+                    }
+                };
+                service_context
+                    .mutations
+                    .respond_to_event(&requester_id, self.event_id, rsvp.into(), rsvp_scope)
+                    .await
+                    .map_err(|error| {
+                        let action = if patched.is_some() {
+                            "record the RSVP — the other changes were saved"
+                        } else {
+                            "record the RSVP"
+                        };
+                        mutation_tool_error(action, error)
+                    })?
+            }
+            None => patched.ok_or_else(|| ToolCallError {
+                description: "This call changes nothing — supply at least one field to update, \
+                              or an `rsvp`."
+                    .to_string(),
+                internal_error: anyhow::Error::from_boxed(
+                    rootcause::report!("update without any change").into_boxed_error(),
+                ),
+            })?,
+        };
 
         Ok(ToolCalendarEvent::from_event(&event))
     }

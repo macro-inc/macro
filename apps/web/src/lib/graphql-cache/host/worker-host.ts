@@ -210,7 +210,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
   let adapterDisposePromise: Promise<void> | undefined;
   let adapterDisposeWasGraceful = false;
   let adapterDisposalStarted = false;
-  let disposalMode: 'graceful' | 'abrupt' | undefined;
+  let disposalMode: 'graceful' | 'navigation' | 'abrupt' | undefined;
   let pagehideRegistered = false;
   let legacyIdbDeletionStarted = false;
   let telemetryRelayStarted = false;
@@ -418,14 +418,21 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
     }
   }
 
-  function disposeAdapter(graceful: boolean): Promise<void> {
+  function disposeAdapter(
+    graceful: boolean,
+    preserveDatabase = false
+  ): Promise<void> {
     if (adapterDisposePromise) {
       if (!graceful && adapterDisposeWasGraceful && adapter) {
         adapterDisposeWasGraceful = false;
         try {
           // A pagehide during graceful retirement must reach the adapter so it
-          // can terminate and close instead of memoizing the old mode.
-          void adapter.dispose({ graceful: false });
+          // can terminate immediately without classifying navigation as loss.
+          void adapter.dispose(
+            preserveDatabase
+              ? { graceful: false, preserveDatabase: true }
+              : { graceful: false }
+          );
         } catch {
           // The original disposal promise still owns final settlement.
         }
@@ -436,7 +443,9 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
     adapterDisposeWasGraceful = graceful;
     try {
       adapterDisposePromise = adapter
-        .dispose({ graceful })
+        .dispose(
+          preserveDatabase ? { graceful, preserveDatabase: true } : { graceful }
+        )
         .catch(() => undefined);
     } catch {
       // The host is already closed and cannot safely retry disposal.
@@ -523,13 +532,16 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
     pageTelemetry?.relay.dispose();
   }
 
-  function startAdapterDisposal(graceful: boolean): void {
+  function startAdapterDisposal(
+    graceful: boolean,
+    preserveDatabase = false
+  ): void {
     if (adapterDisposalStarted) {
-      if (!graceful) void disposeAdapter(false);
+      if (!graceful) void disposeAdapter(false, preserveDatabase);
       return;
     }
     adapterDisposalStarted = true;
-    void disposeAdapter(graceful).then(() => {
+    void disposeAdapter(graceful, preserveDatabase).then(() => {
       if (state !== 'disposing') return;
       state = 'disposed';
       unregisterPagehide();
@@ -548,11 +560,27 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
     startAdapterDisposal(true);
   }
 
-  function disposeHost(graceful: boolean): void {
+  function disposeHost(graceful: boolean, preserveDatabase = false): void {
     stopStorageHealthSampling();
     if (state === 'disposed') return;
     if (state === 'disposing') {
-      if (graceful || disposalMode === 'abrupt') return;
+      if (
+        graceful ||
+        disposalMode === 'abrupt' ||
+        (preserveDatabase && disposalMode === 'navigation')
+      ) {
+        return;
+      }
+      if (preserveDatabase) {
+        disposalMode = 'navigation';
+        clearSubscribers();
+        rejectPending(
+          new Error('cache worker host was disposed for page navigation'),
+          true
+        );
+        startAdapterDisposal(false, true);
+        return;
+      }
       disposalMode = 'abrupt';
       const quarantine = hasAdmittedEnqueue();
       clearSubscribers();
@@ -568,23 +596,33 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
       state = 'disposing';
       disposalMode = 'graceful';
       clearSubscribers();
-      // Keep pagehide armed through coordinator retirement so an abrupt close
-      // can still terminate the adapter's in-progress graceful drain.
+      // Keep pagehide armed through coordinator retirement so navigation can
+      // terminate the worker without converting the handoff into a wipe.
       finishGracefulDisposeIfDrained();
       return;
     }
 
-    const quarantine = hasAdmittedEnqueue();
     state = 'disposing';
-    disposalMode = 'abrupt';
     clearSubscribers();
+    if (preserveDatabase) {
+      disposalMode = 'navigation';
+      rejectPending(
+        new Error('cache worker host was disposed for page navigation'),
+        true
+      );
+      startAdapterDisposal(false, true);
+      return;
+    }
+
+    const quarantine = hasAdmittedEnqueue();
+    disposalMode = 'abrupt';
     if (quarantine) void quarantineCacheScope(options.scope);
     rejectPending(new Error('cache worker host was abruptly disposed'), true);
     startAdapterDisposal(false);
   }
 
   function onPagehide(): void {
-    disposeHost(false);
+    disposeHost(false, true);
   }
 
   function request(
@@ -984,7 +1022,19 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
       registeredOpKeys.delete(opKey);
       lostRegisteredOpKeys.delete(opKey);
       replacementReadOpKeys.delete(opKey);
-      await ensureInitialized();
+      // urql emits teardown while initialization-failure fallback is
+      // unsubscribing operations. Local registration cleanup is sufficient
+      // when no usable engine generation remains.
+      if (state !== 'ready' && state !== 'initializing') return;
+      if (state === 'initializing') {
+        try {
+          await ensureInitialized();
+        } catch {
+          return;
+        }
+      }
+      // Disposal or owner loss can win while an initialization await yields.
+      if (state !== 'ready') return;
       await request({ kind: 'teardown', opId: opId(opKey) });
     },
 

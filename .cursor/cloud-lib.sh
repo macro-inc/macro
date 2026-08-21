@@ -232,6 +232,23 @@ ensure_dockerd() {
   return 1
 }
 
+# Populate `doppler_args` for `just stack up`. The doppler CLI is already on
+# PATH from `nix develop` — this only chooses whether to pass `--no-doppler`.
+# A config-scoped service token (local / lcl_preview) is enough; no login.
+# DOPPLER_PREVIEW_TOKEN is the Fly/CI name for the same token.
+stack_doppler_args() {
+  if [ -z "${DOPPLER_TOKEN:-}" ] && [ -n "${DOPPLER_PREVIEW_TOKEN:-}" ]; then
+    export DOPPLER_TOKEN="${DOPPLER_PREVIEW_TOKEN}"
+  fi
+  doppler_args=()
+  if [ -n "${DOPPLER_TOKEN:-}" ]; then
+    echo "cursor-cloud: DOPPLER_TOKEN present — pulling local/lcl_preview secrets"
+  else
+    echo "cursor-cloud: no DOPPLER_TOKEN — using --no-doppler stubs"
+    doppler_args+=(--no-doppler)
+  fi
+}
+
 in_pinned_nix_shell() {
   [ "${MACRO_CLOUD_PINNED_NIX:-}" = "1" ]
 }

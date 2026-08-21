@@ -37,7 +37,9 @@ pub use list_calendar_events::{
     CalendarEventListItem, ListCalendarEvents, ListCalendarEventsResponse,
 };
 pub use list_calendars::{ListCalendars, ListCalendarsToolResponse, ToolCalendar};
-pub use update_calendar_event::{ConferenceChangeInput, UpdateCalendarEvent, UpdateScopeInput};
+pub use update_calendar_event::{
+    ConferenceChangeInput, RsvpResponseInput, UpdateCalendarEvent, UpdateScopeInput,
+};
 
 /// Service context for calendar AI tools.
 pub struct CalendarToolContext<M, O>
