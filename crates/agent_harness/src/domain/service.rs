@@ -362,13 +362,30 @@ where
             })
             .await?;
 
-        let container = self
+        let container = match self
             .containers
             .spawn(SpawnContainer {
                 session_id,
                 repo_url,
             })
-            .await?;
+            .await
+        {
+            Ok(container) => container,
+            Err(error) => {
+                let _ = self
+                    .sessions
+                    .mark_disconnected(session_id)
+                    .await
+                    .inspect_err(|status_error| {
+                        tracing::error!(
+                            error = ?status_error,
+                            %session_id,
+                            "failed to mark an unprovisioned session disconnected"
+                        );
+                    });
+                return Err(error);
+            }
+        };
         self.sessions
             .attach_session(session_id, RuntimeAttachment::solo(container))
             .await?;
