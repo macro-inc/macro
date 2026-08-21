@@ -1,12 +1,25 @@
 # Arion composition for the local stack.
 #
 # Paths with `/_` are ignored by import-tree; `nix/arion.nix` imports this
-# directory. `just run_local` / `just stack` consume the rendered YAML
-# (`.#arion-compose-yaml`) plus the xtask override for bind mounts, LocalStack,
-# Mailpit, and the reverse proxy.
-{ pkgs, ... }:
+# directory and injects the Linux dockerTools image attrsets. `just run_local`
+# / `just stack` consume the rendered YAML (`.#arion-compose-yaml`) plus the
+# xtask override for bind mounts, LocalStack, Mailpit, and the reverse proxy.
+{
+  pkgs,
+  images,
+  runtime,
+  aux,
+  ...
+}:
 let
-  helpers = import ./lib.nix { inherit pkgs; };
+  helpers = import ./lib.nix {
+    inherit
+      pkgs
+      images
+      runtime
+      aux
+      ;
+  };
 in
 {
   project.name = "macro";

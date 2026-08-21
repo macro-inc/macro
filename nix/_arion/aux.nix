@@ -3,7 +3,7 @@ let
   inherit (lib) envFile paths;
 in
 {
-  static_file_cdn = lib.pulled "macro-local-nginx:dev" {
+  static_file_cdn = lib.nixImage lib.images.nginx {
     ports = [ "8100:80" ];
     volumes = [
       "${paths.staticFileCdnConf}:/etc/nginx/conf.d/default.conf:ro"
@@ -17,7 +17,7 @@ in
     };
   };
 
-  websocket_service = lib.pulled lib.nodeBunImage {
+  websocket_service = lib.nixImage { ref = lib.nodeBunImage; } {
     working_dir = "/app/services/websocket-service";
     volumes = [ "${paths.context}:/app" ];
     command = [
@@ -33,7 +33,7 @@ in
     };
   };
 
-  sync_service = lib.pulled lib.nodeBunImage {
+  sync_service = lib.nixImage { ref = lib.nodeBunImage; } {
     working_dir = "/app/services/sync-service";
     env_file = [ envFile ];
     ports = [ "8787:8787" ];
@@ -72,7 +72,7 @@ in
     };
   };
 
-  ai_editing_worker = lib.pulled lib.nodeBunImage {
+  ai_editing_worker = lib.nixImage { ref = lib.nodeBunImage; } {
     working_dir = "/app/services/ai-editing-worker";
     env_file = [ envFile ];
     ports = [ "8933:8933" ];
@@ -96,7 +96,7 @@ in
     };
   };
 
-  analytics_proxy = lib.pulled lib.nodeBunImage {
+  analytics_proxy = lib.nixImage { ref = lib.nodeBunImage; } {
     working_dir = "/app/services/analytics-proxy";
     env_file = [ envFile ];
     ports = [ "8098:8098" ];
@@ -120,7 +120,7 @@ in
     };
   };
 
-  lexical_service = lib.pulled lib.nodeBunImage {
+  lexical_service = lib.nixImage { ref = lib.nodeBunImage; } {
     working_dir = "/app/services/lexical-service";
     env_file = [ envFile ];
     ports = [ "8096:8096" ];

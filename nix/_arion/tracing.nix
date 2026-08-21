@@ -3,7 +3,7 @@ let
   inherit (lib) paths;
 in
 {
-  jaeger = lib.pulled "macro-local-jaeger:dev" {
+  jaeger = lib.nixImage lib.images.jaeger {
     environment = {
       COLLECTOR_OTLP_ENABLED = "true";
     };
@@ -22,7 +22,7 @@ in
     out.service.profiles = [ "jaeger" ];
   };
 
-  datadog-agent = lib.pulled "macro-local-datadog-agent:dev" {
+  datadog-agent = lib.nixImage lib.images.datadog-agent {
     environment = {
       DD_API_KEY = "";
       DD_SITE = "us5.datadoghq.com";

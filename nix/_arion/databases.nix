@@ -1,6 +1,6 @@
 { lib }:
 {
-  postgres = lib.pulled "macro-local-postgres:dev" {
+  postgres = lib.nixImage lib.images.postgres {
     ports = [ "5432:5432" ];
     expose = [ "5432" ];
     environment = {
@@ -21,7 +21,7 @@
     };
   };
 
-  redis = lib.pulled "macro-local-redis:dev" {
+  redis = lib.nixImage lib.images.redis {
     ports = [
       "6379:6379"
       "8001:8001"
@@ -39,14 +39,15 @@
     };
   };
 
-  kafka = lib.pulled "macro-local-kafka:dev" {
+  kafka = lib.nixImage lib.images.kafka {
     environment = {
       KAFKA_NODE_ID = 1;
       KAFKA_PROCESS_ROLES = "broker,controller";
       KAFKA_CONTROLLER_QUORUM_VOTERS = "1@kafka:29093";
+      KAFKA_CONTROLLER_QUORUM_BOOTSTRAP_SERVERS = "kafka:29093";
       KAFKA_CONTROLLER_LISTENER_NAMES = "CONTROLLER";
       KAFKA_LISTENERS = "PLAINTEXT://0.0.0.0:29092,PLAINTEXT_HOST://0.0.0.0:9092,CONTROLLER://0.0.0.0:29093";
-      KAFKA_ADVERTISED_LISTENERS = "PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092";
+      KAFKA_ADVERTISED_LISTENERS = "PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092,CONTROLLER://kafka:29093";
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP = "PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT,CONTROLLER:PLAINTEXT";
       KAFKA_INTER_BROKER_LISTENER_NAME = "PLAINTEXT";
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR = 1;
@@ -71,7 +72,7 @@
   };
 
   search =
-    lib.pulled "macro-local-opensearch:dev" {
+    lib.nixImage lib.images.opensearch {
       environment = {
         OPENSEARCH_JAVA_OPTS = "-Xms512m -Xmx512m";
       };

@@ -1,10 +1,11 @@
 # Small constructors for Arion service modules.
 #
-# Every service here sets `image.nixBuild = false`. Images are realized with
-# `dockerTools.streamLayeredImage` and `docker load` (see xtask
-# `ensure_aux_images`); Arion only emits Compose YAML, so eval stays cheap
-# (no crane, no dummy images).
-{ pkgs }:
+# Images are Nix `dockerTools` derivations from `nix/_containers`. Arion only
+# emits Compose YAML (`image.nixBuild = false`): turning `nixBuild` on would
+# IFD every stream into `x-arion.images` while rendering
+# `.#arion-compose-yaml`. xtask `docker load`s the streams, then Compose uses
+# the tags those derivations assigned. Nothing here is a registry pull.
+{ pkgs, images, runtime, aux }:
 let
   inherit (pkgs) lib;
   paths = import ./paths.nix;
@@ -39,10 +40,16 @@ let
       };
 in
 {
-  inherit envFile paths;
+  inherit
+    envFile
+    paths
+    images
+    runtime
+    aux
+    ;
 
-  rustRuntimeImage = "macro-local-runtime:dev";
-  nodeBunImage = "macro-local-node-bun:dev";
+  rustRuntimeImage = runtime.imageRef;
+  nodeBunImage = aux.nodeBunRef;
 
   rustService =
     {
@@ -61,7 +68,7 @@ in
     {
       image.nixBuild = false;
       service = {
-        image = "macro-local-runtime:dev";
+        image = runtime.imageRef;
         inherit command;
         env_file = [ envFile ];
         working_dir = "/app";
@@ -76,10 +83,11 @@ in
       };
     };
 
-  pulled =
-    image: service:
+  # `img` is a dockerTools attrset from `image-lib.mk` (or `{ ref = "..."; }`).
+  nixImage =
+    img: service:
     {
       image.nixBuild = false;
-      service = { inherit image; } // service;
+      service = { image = img.ref; } // service;
     };
 }

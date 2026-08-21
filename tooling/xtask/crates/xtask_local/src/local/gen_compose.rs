@@ -334,7 +334,9 @@ fn add_local_infra(
                 ports: dct::Ports::Short(vec![format!("{kafka_port}:9092")]),
                 environment: kv(&[(
                     "KAFKA_ADVERTISED_LISTENERS",
-                    &format!("PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:{kafka_port}"),
+                    &format!(
+                        "PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:{kafka_port},CONTROLLER://kafka:29093"
+                    ),
                 )]),
                 ..Default::default()
             }),

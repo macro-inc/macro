@@ -1,7 +1,7 @@
 # Shared dockerTools constructor for local-stack infra images.
 #
-# Every image is built from Nixpkgs packages (plus FODs for upstream
-# tarballs that nixpkgs does not pin). Nothing here uses `fromImage` or a
+# Every image is built from Nixpkgs packages (plus FODs only when nixpkgs
+# does not package the software). Nothing here uses `fromImage` or a
 # registry base.
 { pkgs }:
 let

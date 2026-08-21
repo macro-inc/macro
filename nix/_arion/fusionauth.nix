@@ -3,7 +3,7 @@ let
   inherit (lib) paths;
 in
 {
-  db = lib.pulled "macro-local-fusionauth-db:dev" {
+  db = lib.nixImage lib.images.fusionauth-db {
     environment = {
       PGDATA = "/var/lib/postgresql/data/pgdata";
       POSTGRES_USER = "postgres";
@@ -22,7 +22,7 @@ in
     };
   };
 
-  fusionauth = lib.pulled "macro-local-fusionauth:dev" {
+  fusionauth = lib.nixImage lib.images.fusionauth {
     depends_on = {
       db.condition = "service_healthy";
     };
