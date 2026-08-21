@@ -121,6 +121,26 @@ pub struct DocumentSyncContentUpdatedMetadata {
     pub on_behalf_of: Option<MacroUserIdStr<'static>>,
 }
 
+impl DocumentSyncContentUpdatedMetadata {
+    /// Build metadata from extract-sync strings. Invalid actor or subject
+    /// ids are dropped so a bad payload still extracts the document.
+    pub fn from_extract(
+        document_id: String,
+        file_type: FileType,
+        document_version_id: Option<String>,
+        actor: Option<String>,
+        on_behalf_of: Option<String>,
+    ) -> Self {
+        Self {
+            document_id,
+            file_type,
+            document_version_id,
+            actor: actor.and_then(|id| Actor::try_from(id).ok()),
+            on_behalf_of: on_behalf_of.and_then(|id| MacroUserIdStr::try_from(id).ok()),
+        }
+    }
+}
+
 /// Metadata for [`DocumentTopicEvent::Purged`].
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
