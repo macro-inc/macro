@@ -22,19 +22,17 @@ let
 
   nginx = imageLib.mk {
     name = "macro-local-nginx";
-    extraContents = [
-      pkgs.nginx
-      nginxConf
-    ];
+    extraContents = [ pkgs.nginx ];
     extraPath = [ pkgs.nginx ];
     extraCommands = ''
       mkdir -p ./etc/nginx/conf.d ./var/log/nginx ./var/cache/nginx
+      cp ${nginxConf} ./etc/nginx/nginx.conf
     '';
     config = {
       Cmd = [
         "${pkgs.nginx}/bin/nginx"
         "-c"
-        "${nginxConf}"
+        "/etc/nginx/nginx.conf"
       ];
       ExposedPorts = {
         "80/tcp" = { };
