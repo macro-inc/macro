@@ -2343,6 +2343,9 @@ export const ReadActivity = z.object({
 export const ReadActivityResponse = z.object({
   activities: z.array(
     z.object({
+      actorId: z.string(),
+      entityType: z.string(),
+      entityId: z.string(),
       action: z.any().superRefine((x, ctx) => {
         const schemas = [
           z.object({ type: z.literal('created') }),
@@ -2352,11 +2355,11 @@ export const ReadActivityResponse = z.object({
           z.object({ type: z.literal('messaged') }),
           z.object({ type: z.literal('sent') }),
           z.object({
-            from: z.any().optional(),
-            fromLabels: z.union([z.array(z.string()), z.null()]).optional(),
             property: z.string(),
             propertyName: z.union([z.string(), z.null()]).optional(),
             propertyType: z.union([z.string(), z.null()]).optional(),
+            from: z.any().optional(),
+            fromLabels: z.union([z.array(z.string()), z.null()]).optional(),
             to: z.any().optional(),
             toLabels: z.union([z.array(z.string()), z.null()]).optional(),
             type: z.literal('propertyChanged'),
@@ -2371,8 +2374,8 @@ export const ReadActivityResponse = z.object({
           }),
           z.object({ callId: z.string(), type: z.literal('callStarted') }),
           z.object({
-            payload: z.any().optional(),
             tag: z.string(),
+            payload: z.any().optional(),
             type: z.literal('unknown'),
           }),
         ];
@@ -2392,9 +2395,6 @@ export const ReadActivityResponse = z.object({
           });
         }
       }),
-      actorId: z.string(),
-      entityId: z.string(),
-      entityType: z.string(),
       occurredAt: z.string().datetime({ offset: true }),
     })
   ),

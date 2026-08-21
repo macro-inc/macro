@@ -473,16 +473,6 @@ export type ToolActivityAction =
     }
   | {
       /**
-       * The previous value, when known.
-       */
-      from?: {
-        [k: string]: unknown;
-      };
-      /**
-       * Previous select/tag option ids resolved to display labels.
-       */
-      fromLabels?: string[] | null;
-      /**
        * The property definition id.
        */
       property: string;
@@ -495,6 +485,16 @@ export type ToolActivityAction =
        * The property's canonical data type, including `tag` for tag sets.
        */
       propertyType?: string | null;
+      /**
+       * The previous value, when known.
+       */
+      from?: {
+        [k: string]: unknown;
+      };
+      /**
+       * Previous select/tag option ids resolved to display labels.
+       */
+      fromLabels?: string[] | null;
       /**
        * The new value, or `None` when cleared.
        */
@@ -530,15 +530,15 @@ export type ToolActivityAction =
     }
   | {
       /**
+       * The stored action tag.
+       */
+      tag: string;
+      /**
        * The stored payload, verbatim.
        */
       payload?: {
         [k: string]: unknown;
       };
-      /**
-       * The stored action tag.
-       */
-      tag: string;
       type: 'unknown';
     };
 /**
@@ -3305,19 +3305,19 @@ export interface ReadActivityResponse {
  * One activity event returned by [`ReadActivity`].
  */
 export interface ToolActivityEvent {
-  action: ToolActivityAction;
   /**
    * The principal that mechanically performed the action.
    */
   actorId: string;
   /**
-   * The entity acted on.
-   */
-  entityId: string;
-  /**
    * The kind of entity acted on.
    */
   entityType: string;
+  /**
+   * The entity acted on.
+   */
+  entityId: string;
+  action: ToolActivityAction;
   /**
    * When the action occurred.
    */
