@@ -5,6 +5,7 @@ export const TOKENS = {
     askAi: 'soup.askAi',
     sort: 'soup.sort',
     filter: 'soup.filter',
+    dismiss: 'soup.dismiss',
     tabs: {
       '0': 'soup.tabs.0',
       '1': 'soup.tabs.1',
