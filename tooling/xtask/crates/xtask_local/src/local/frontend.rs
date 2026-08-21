@@ -45,6 +45,11 @@ pub fn static_dir(instance: &Instance) -> std::path::PathBuf {
 /// (dev-mode bundle, production optimizations), except the backend origin is
 /// the `same-origin` sentinel — resolved from `location.origin` at runtime — so
 /// the one bundle works on localhost and through any tunnel/preview hostname.
+///
+/// `VITE_KEEP_DEV` keeps `import.meta.env.DEV` true in the static bundle.
+/// `vite build` otherwise compiles it to false, which drops local-only paths
+/// such as passwordless auto-login (`just run_local` uses `vite serve`, where
+/// DEV is already true).
 pub fn build_static(
     stage: &Stage,
     instance: &Instance,
@@ -59,6 +64,7 @@ pub fn build_static(
                 .args(["run", "--bun", "build"])
                 .env("MODE", "development")
                 .env("NODE_ENV", "production")
+                .env("VITE_KEEP_DEV", "true")
                 .env("VITE_LOCAL_SERVERS", "ALL")
                 .env("VITE_LOCAL_BACKEND_ORIGIN", "same-origin");
             if mode.spec().runs_local_infra {

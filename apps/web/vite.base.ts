@@ -230,6 +230,10 @@ function getAssetsPath(mode: string, command: string): string {
 }
 
 function defineEnv(mode: string, command: string) {
+  // `vite build` always compiles import.meta.env.DEV to false, even when
+  // MODE=development. Headless `stack up` sets VITE_KEEP_DEV so the static
+  // bundle keeps the same DEV paths as `just run_local` (vite serve).
+  const keepDev = process.env.VITE_KEEP_DEV === 'true';
   return {
     'import.meta.env.__APP_VERSION__': JSON.stringify(appVersion),
     'import.meta.env.ASSETS_PATH': JSON.stringify(getAssetsPath(mode, command)),
@@ -238,5 +242,11 @@ function defineEnv(mode: string, command: string) {
     'import.meta.env.__GIT_BRANCH__': JSON.stringify(
       command === 'serve' ? readGitBranch() : ''
     ),
+    ...(keepDev
+      ? {
+          'import.meta.env.DEV': true,
+          'import.meta.env.PROD': false,
+        }
+      : {}),
   };
 }

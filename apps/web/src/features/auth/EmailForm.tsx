@@ -85,15 +85,14 @@ export const sendEmailCode = action(async (formData: FormData) => {
     return false; // passwordless login flow is not reached
   }
 
-  // Local backends (run_local + stack up) return the one-time code so the
-  // UI can finish login without the email round-trip. Production never
-  // includes `code`. Gate on the payload, not import.meta.env.DEV: `vite
-  // build` (the stack static bundle) compiles DEV to false even when
-  // MODE=development.
-  const body = (await response.json().catch(() => undefined)) as
-    | { code?: string }
-    | undefined;
-  if (body?.code) return { autoCode: body.code };
+  // Local backends return the one-time code so dev tooling (seeded persona
+  // tabs) can finish the login without the email round-trip.
+  if (import.meta.env.DEV) {
+    const body = (await response.json().catch(() => undefined)) as
+      | { code?: string }
+      | undefined;
+    if (body?.code) return { autoCode: body.code };
+  }
 
   return true;
 }, 'passwordless-login');
