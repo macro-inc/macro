@@ -57,6 +57,7 @@ jobs:
             - 'static_assets/**'
             - 'flake.nix'
             - 'flake.lock'
+            - 'nix/**'
             - '.github/actions/setup-nix/**'
             - '.github/actions/setup-nix-dev-shell/**'
             - '.github/actions/teardown-nix/**'
@@ -255,21 +256,6 @@ jobs:
       NEXTEST_FILTER: ${{ needs.path-check.outputs.nextest_filter }}
       NEXTEST_TEST_THREADS: '32'
       RUSTFLAGS: '-Dwarnings -C link-arg=-fuse-ld=mold'
-    services:
-      postgres:
-        image: pgvector/pgvector:pg18
-        env:
-          POSTGRES_USER: user
-          POSTGRES_PASSWORD: password
-          POSTGRES_DB: macrodb
-        ports:
-        - '5432:5432'
-        options: '--health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 5 --shm-size 1g'
-      redis:
-        image: redis:7
-        ports:
-        - '6379:6379'
-        options: '--health-cmd "redis-cli ping" --health-interval 10s --health-timeout 5s --health-retries 5'
     steps:
     - name: Checkout
       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
@@ -314,11 +300,57 @@ jobs:
         else
           echo "::warning::Namespace remote sccache setup failed; using local cache fallback"
         fi
+    - name: start nix postgres and redis
+      run: |
+        #!/usr/bin/env bash
+        # Load Nix dockerTools Postgres + Redis and publish them on the CI job's
+        # localhost ports. Replaces GitHub Actions `services:` pulls of registry images.
+        set -euo pipefail
+
+        root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+        cd "$root"
+
+        bash tooling/scripts/load-nix-docker-streams.sh \
+          stream-docker-image-local-postgres \
+          stream-docker-image-local-redis
+
+        if ! docker ps --format '{{.Names}}' | grep -qx postgres; then
+          docker rm -f postgres >/dev/null 2>&1 || true
+          docker run -d --name postgres \
+            --health-cmd 'pg_isready -U user' \
+            --health-interval 10s \
+            --health-timeout 5s \
+            --health-retries 5 \
+            --shm-size 1g \
+            -e POSTGRES_USER=user \
+            -e POSTGRES_PASSWORD=password \
+            -e POSTGRES_DB=macrodb \
+            -p 5432:5432 \
+            macro-local-postgres:dev
+        fi
+
+        if ! docker ps --format '{{.Names}}' | grep -qx redis; then
+          docker rm -f redis >/dev/null 2>&1 || true
+          docker run -d --name redis \
+            --health-cmd 'redis-cli ping' \
+            --health-interval 10s \
+            --health-timeout 5s \
+            --health-retries 5 \
+            -p 6379:6379 \
+            macro-local-redis:dev
+        fi
+
+        until docker exec postgres pg_isready -U user -d macrodb; do
+          sleep 1
+        done
+        until docker exec redis redis-cli ping | grep -q PONG; do
+          sleep 1
+        done
     - name: configure postgres for concurrent tests
       run: |
-        postgres_container="$(docker ps --format '{{.ID}} {{.Image}}' | awk '$2 == "pgvector/pgvector:pg18" { print $1; exit }')"
+        postgres_container="$(docker ps --format '{{.ID}} {{.Image}}' | awk '$2 ~ /^macro-local-postgres(:|$)/ { print $1; exit }')"
         if [ -z "$postgres_container" ]; then
-          echo "pgvector/pgvector:pg18 service container not found" >&2
+          echo "macro-local-postgres service container not found" >&2
           docker ps
           exit 1
         fi

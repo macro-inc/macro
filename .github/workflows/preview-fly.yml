@@ -153,12 +153,11 @@ jobs:
         set -euo pipefail
         mkdir -p target/nix
         nix build .#arion-compose-yaml --out-link target/nix/arion-compose.yaml
-        nix build .#stream-docker-image-local-runtime --out-link target/nix/stream-docker-image-local-runtime
-        sh -c 'exec "$1" | docker load' nix-stream target/nix/stream-docker-image-local-runtime
-        nix build .#stream-docker-image-local-node-bun --out-link target/nix/stream-docker-image-local-node-bun
-        sh -c 'exec "$1" | docker load' nix-stream target/nix/stream-docker-image-local-node-bun
-        nix build .#stream-docker-image-sdk-webhook-relay --out-link target/nix/stream-docker-image-sdk-webhook-relay
-        sh -c 'exec "$1" | docker load' nix-stream target/nix/stream-docker-image-sdk-webhook-relay
+        bash tooling/scripts/load-nix-docker-streams.sh \
+          stream-docker-image-local-runtime \
+          stream-docker-image-local-node-bun \
+          stream-docker-image-sdk-webhook-relay
+        bash tooling/scripts/load-nix-docker-streams.sh --infra-farm
         bash -euo pipefail "$(dirname "$0")/premirror.sh" \
           || echo "premirror failed (non-fatal): the deploy step mirrors authoritatively" >&2
         LANE
@@ -175,9 +174,9 @@ jobs:
         flyctl auth docker
         registry="registry.fly.io/$APP_NAME"
         for img in $(docker compose --project-directory . -p macro \
-            -f target/nix/arion-compose.yaml config --images | sort -u) alpine:3; do
-          if ! docker image inspect "$img" >/dev/null 2>&1 && ! docker pull "$img"; then
-            echo "premirror: skipping $img (not local, not pullable)"
+            -f target/nix/arion-compose.yaml config --images | sort -u); do
+          if ! docker image inspect "$img" >/dev/null 2>&1; then
+            echo "premirror: skipping $img (not loaded locally)"
             continue
           fi
           id=$(docker image inspect -f '{{.Id}}' "$img")
@@ -513,8 +512,7 @@ jobs:
         # uploads layers that actually changed; the entrypoint pulls with
         # the same dedup against the machine's persistent layer store. The
         # manifest maps image ID -> local tag -> registry ref so boots can
-        # skip images already present. alpine:3 rides along for the
-        # snapshot-restore helper container.
+        # skip images already present.
         # On a snapshot cache hit only gen-compose ran, which doesn't write
         # the env file; compose hard-fails on a missing --env-file, and the
         # image names don't interpolate env vars anyway.
@@ -526,13 +524,15 @@ jobs:
           --env-file "$envfile" \
           config --images | sort -u)
         echo "mirroring images:" $images
-        docker image inspect alpine:3 >/dev/null 2>&1 || docker pull alpine:3
         mkdir -p preview-ctx/preload
         : > preview-ctx/preload/manifest.txt
-        for img in $images alpine:3; do
-          # Images the bake didn't leave in the daemon (snapshot cache hit,
-          # or app-layer-only images like proxy/mailpit) get pulled here.
-          docker image inspect "$img" >/dev/null 2>&1 || docker pull "$img"
+        for img in $images; do
+          # Images the bake didn't leave in the daemon (snapshot cache hit)
+          # must already be Nix-loaded; never docker-pull registry bases.
+          docker image inspect "$img" >/dev/null 2>&1 || {
+            echo "missing local Nix image $img" >&2
+            exit 1
+          }
           id=$(docker image inspect -f '{{.Id}}' "$img")
           # Content-addressed tag: same image content = same ref, so a
           # redeploy's push is skippable by a manifest existence check and

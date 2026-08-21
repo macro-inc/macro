@@ -27,18 +27,26 @@ let
         chown -R postgres:postgres "$PGDATA" /run/postgresql
         chmod 700 "$PGDATA" || true
         if [ ! -s "$PGDATA/PG_VERSION" ]; then
+          pwfile=$(mktemp)
+          printf '%s\n' "$PASSWORD" > "$pwfile"
+          chown postgres:postgres "$pwfile"
           ${pkgs.gosu}/bin/gosu postgres ${postgresql}/bin/initdb \
             --username="$USER_NAME" \
-            --pwfile=<(printf '%s\n' "$PASSWORD") \
+            --pwfile="$pwfile" \
             --auth-host=scram-sha-256 \
             --auth-local=trust \
             -D "$PGDATA"
+          rm -f "$pwfile"
           {
             echo "listen_addresses = '*'"
             echo "max_connections = 500"
           } >> "$PGDATA/postgresql.conf"
           echo "host all all 0.0.0.0/0 scram-sha-256" >> "$PGDATA/pg_hba.conf"
           echo "host all all ::/0 scram-sha-256" >> "$PGDATA/pg_hba.conf"
+          if [ "$USER_NAME" != "postgres" ]; then
+            echo "CREATE DATABASE \"''${USER_NAME}\";" \
+              | ${pkgs.gosu}/bin/gosu postgres ${postgresql}/bin/postgres --single -D "$PGDATA" postgres
+          fi
           if [ -n "$DB_NAME" ] && [ "$DB_NAME" != "$USER_NAME" ]; then
             echo "CREATE DATABASE \"''${DB_NAME}\";" \
               | ${pkgs.gosu}/bin/gosu postgres ${postgresql}/bin/postgres --single -D "$PGDATA" postgres
