@@ -110,12 +110,8 @@ export function isBusy(post: PostPhase, agentWorking: boolean): boolean {
   );
 }
 
-/** Stop is a no-op once one is in flight, or after a cancel awaiting replace. */
-export function canStop(
-  post: PostPhase,
-  agentWorking: boolean,
-  replacing: boolean
-): boolean {
-  if (post.type === 'stopping' || replacing) return false;
+/** Stop is a no-op while one is already on the wire. */
+export function canStop(post: PostPhase, agentWorking: boolean): boolean {
+  if (post.type === 'stopping') return false;
   return isBusy(post, agentWorking);
 }

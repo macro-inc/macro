@@ -130,16 +130,19 @@ export function createComposerController(options: {
       toast.failure('The agent could not be stopped');
       return;
     }
-    // Success: free the post slot and let a queued prompt replace this turn
-    // immediately. Drop a prompt whose POST was still in flight so stop
-    // cannot resend the very message it cancelled. The fold dropping
+    // Success: free the post slot and, if anything is queued, let it replace
+    // this turn immediately. Drop a prompt whose POST was still in flight so
+    // stop cannot resend the very message it cancelled. The fold dropping
     // `working` is observed, not awaited.
+    const remaining = postingId
+      ? state.queue.filter((p) => p.id !== postingId)
+      : state.queue;
     batch(() => {
       if (postingId) {
-        setState('queue', (queue) => queue.filter((p) => p.id !== postingId));
+        setState('queue', remaining);
       }
       setState('post', { type: 'idle' });
-      setState('replacing', true);
+      setState('replacing', remaining.length > 0);
     });
   };
 
@@ -224,7 +227,7 @@ export function createComposerController(options: {
       });
     },
     stop: () => {
-      if (!canStop(state.post, options.working(), state.replacing)) return;
+      if (!canStop(state.post, options.working())) return;
       void postStop();
     },
     attachInput: (handle) => {

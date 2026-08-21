@@ -119,15 +119,14 @@ describe('isBusy', () => {
 
 describe('canStop', () => {
   it('allows a stop while a turn is running', () => {
-    expect(canStop({ type: 'idle' }, true, false)).toBe(true);
+    expect(canStop({ type: 'idle' }, true)).toBe(true);
   });
 
-  it('rejects a second stop while one is in flight or replacing', () => {
-    expect(canStop({ type: 'stopping' }, true, false)).toBe(false);
-    expect(canStop({ type: 'idle' }, true, true)).toBe(false);
+  it('rejects a second stop while one is in flight', () => {
+    expect(canStop({ type: 'stopping' }, true)).toBe(false);
   });
 
   it('rejects a stop while idle', () => {
-    expect(canStop({ type: 'idle' }, false, false)).toBe(false);
+    expect(canStop({ type: 'idle' }, false)).toBe(false);
   });
 });

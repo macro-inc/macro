@@ -273,6 +273,20 @@ describe('stop', () => {
     dispose();
   });
 
+  it('after a stop with nothing queued, another stop is allowed if the turn is still running', async () => {
+    const { controller, dispose } = setup({ working: true });
+    controller.stop();
+    await flush();
+    controller.stop();
+    await flush();
+    expect(
+      control.calls.filter(
+        (c) => (c.action as { type: string }).type === 'stop'
+      )
+    ).toHaveLength(2);
+    dispose();
+  });
+
   it('after stop, a queued prompt posts immediately even while the turn is still working', async () => {
     const { controller, dispose } = setup({ working: true });
     controller.send('queued');
