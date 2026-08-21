@@ -1,8 +1,9 @@
 //! Domain models for properties.
 
+use activity::{Actor, Attribution};
 use entity_access::domain::models::{
-    EditAccessLevel, EntityAccessAuth, EntityAccessReceipt, EntityType as AccessEntityType,
-    RequiredPermission, ViewAccessLevel,
+    BotReceiptScope, EditAccessLevel, EntityAccessAuth, EntityAccessReceipt,
+    EntityType as AccessEntityType, RequiredPermission, ViewAccessLevel,
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use models_properties::service::entity_property::EntityProperty;
@@ -40,6 +41,11 @@ pub trait PropertyAccessReceiptExt {
     fn entity_type(&self) -> AccessEntityType;
     /// Authenticated user, if the receipt represents one.
     fn authenticated_user(&self) -> Option<&MacroUserIdStr<'static>>;
+    /// Activity attribution implied by this receipt.
+    ///
+    /// A user receipt is Direct. A bot acting as a user is Delegated.
+    /// Team-scoped bots and unauthenticated receipts have no attribution.
+    fn attribution(&self) -> Option<Attribution>;
 }
 
 impl<T: RequiredPermission> PropertyAccessReceiptExt for EntityAccessReceipt<T> {
@@ -57,6 +63,22 @@ impl<T: RequiredPermission> PropertyAccessReceiptExt for EntityAccessReceipt<T> 
             EntityAccessAuth::Bot(_)
             | EntityAccessAuth::Unauthenticated
             | EntityAccessAuth::Internal => None,
+        }
+    }
+
+    fn attribution(&self) -> Option<Attribution> {
+        match self.auth() {
+            EntityAccessAuth::Authenticated(user) => {
+                Some(Attribution::direct(Actor::new_from_user(user.clone())))
+            }
+            EntityAccessAuth::Bot(bot) => match bot.scope() {
+                BotReceiptScope::User { acting_user } => Some(Attribution::delegated(
+                    Actor::new_from_bot(bot.bot_id()),
+                    acting_user.clone(),
+                )),
+                BotReceiptScope::Team { .. } => None,
+            },
+            EntityAccessAuth::Unauthenticated | EntityAccessAuth::Internal => None,
         }
     }
 }

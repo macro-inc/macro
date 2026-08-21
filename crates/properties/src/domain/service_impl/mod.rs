@@ -5,6 +5,7 @@ mod task_properties;
 
 use std::collections::{HashMap, HashSet};
 
+use activity::{Actor, Attribution};
 use document_sub_type::DocumentSubType;
 use entity_access::domain::models::{
     EntityAccessReceipt, EntityType as AccessEntityType, RequiredPermission,
@@ -48,6 +49,21 @@ use super::service::{PropertiesService, TeamReceipt, team_id_from_receipt};
 use helpers::{
     extract_option_ids_from_property_value, is_property_applicable_to, retain_caller_visible_tags,
 };
+
+fn published_event_actors(
+    access: &EditReceipt,
+) -> (
+    Option<Actor<'static>>,
+    Option<MacroUserIdStr<'static>>,
+    Option<MacroUserIdStr<'static>>,
+) {
+    match access.attribution() {
+        Some(Attribution::Delegated { actor, subject }) => (Some(actor), Some(subject), None),
+        Some(Attribution::Direct { .. }) | None => {
+            (None, None, access.authenticated_user().cloned())
+        }
+    }
+}
 
 /// Implementation of [`PropertiesService`] using repository, permission,
 /// notification, and event-publishing ports.
@@ -181,12 +197,15 @@ where
         previous_value: &Option<PropertyValue>,
         access: &EditReceipt,
     ) -> PropertyMacroEvent {
+        let (actor, on_behalf_of, actor_user_id) = published_event_actors(access);
         PropertyMacroEvent::entity_property_updated(EntityPropertyUpdatedMetadata {
             entity_property_id: property.id,
             entity_id: property.entity_id.clone(),
             entity_type: property.entity_type,
             property_definition_id: property.property_definition_id,
-            actor_user_id: access.authenticated_user().cloned(),
+            actor_user_id,
+            actor,
+            on_behalf_of,
             value: value.clone(),
             previous_value: previous_value.clone(),
             updated_at: property.updated_at,
@@ -392,6 +411,8 @@ where
                     entity_type: mutation.property.entity_type,
                     property_definition_id: mutation.property.property_definition_id,
                     actor_user_id: Some(actor.clone().into_owned()),
+                    actor: None,
+                    on_behalf_of: None,
                     value: mutation.value.clone(),
                     previous_value: mutation.previous_value.clone(),
                     updated_at: mutation.property.updated_at,
@@ -1603,11 +1624,14 @@ where
             .await
             .map_err(anyhow::Error::from)?;
 
+        let (actor, on_behalf_of, actor_user_id) = published_event_actors(access);
         self.publish_property_event(PropertyMacroEvent::entity_properties_cleared(
             EntityPropertiesClearedMetadata {
                 entity_id: access.entity_id().to_string(),
                 entity_type: subject.storage_entity_type,
-                actor_user_id: access.authenticated_user().cloned(),
+                actor_user_id,
+                actor,
+                on_behalf_of,
             },
         ));
 
@@ -1679,13 +1703,16 @@ where
 
         tracing::info!("successfully removed entity property");
 
+        let (actor, on_behalf_of, actor_user_id) = published_event_actors(access);
         self.publish_property_event(PropertyMacroEvent::entity_property_deleted(
             EntityPropertyDeletedMetadata {
                 entity_property_id,
                 entity_id: property_info.entity_id,
                 entity_type: property_info.entity_type,
                 property_definition_id: property_info.property_definition_id,
-                actor_user_id: access.authenticated_user().cloned(),
+                actor_user_id,
+                actor,
+                on_behalf_of,
             },
         ));
 
