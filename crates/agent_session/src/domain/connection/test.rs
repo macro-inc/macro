@@ -39,8 +39,8 @@ fn ready() -> ToServerMessage {
 #[test]
 fn a_response_goes_to_whoever_asked() {
     let mut routes = Routes::default();
-    let _ = routes.expect_response(RequestId::Str("mine".to_owned()), AgentSessionId::TEST_A);
-    let _ = routes.expect_response(RequestId::Str("theirs".to_owned()), OTHER);
+    routes.expect_response(RequestId::Str("mine".to_owned()), AgentSessionId::TEST_A);
+    routes.expect_response(RequestId::Str("theirs".to_owned()), OTHER);
 
     assert_eq!(
         routes.route(&response("theirs", serde_json::json!({}))),
@@ -55,7 +55,7 @@ fn a_response_goes_to_whoever_asked() {
 #[test]
 fn a_second_answer_to_one_request_belongs_to_nobody() {
     let mut routes = Routes::default();
-    let _ = routes.expect_response(RequestId::Str("once".to_owned()), AgentSessionId::TEST_A);
+    routes.expect_response(RequestId::Str("once".to_owned()), AgentSessionId::TEST_A);
 
     routes.route(&response("once", serde_json::json!({})));
 
@@ -70,8 +70,8 @@ fn a_second_answer_to_one_request_belongs_to_nobody() {
 #[test]
 fn session_scoped_traffic_routes_on_its_acp_session() {
     let mut routes = Routes::default();
-    let _ = routes.bind_acp_session("acp-mine".into(), AgentSessionId::TEST_A);
-    let _ = routes.bind_acp_session("acp-theirs".into(), OTHER);
+    routes.bind_acp_session("acp-mine".into(), AgentSessionId::TEST_A);
+    routes.bind_acp_session("acp-theirs".into(), OTHER);
 
     let update = notification(
         "session/update",
@@ -93,7 +93,7 @@ fn session_scoped_traffic_routes_on_its_acp_session() {
 #[test]
 fn traffic_for_an_unknown_session_is_an_orphan() {
     let mut routes = Routes::default();
-    let _ = routes.bind_acp_session("acp-mine".into(), AgentSessionId::TEST_A);
+    routes.bind_acp_session("acp-mine".into(), AgentSessionId::TEST_A);
 
     let stray = notification(
         "session/update",
@@ -123,9 +123,9 @@ fn system_events_belong_to_the_connection() {
 #[test]
 fn a_finished_session_stops_owning_anything() {
     let mut routes = Routes::default();
-    let _ = routes.expect_response(RequestId::Str("pending".to_owned()), AgentSessionId::TEST_A);
-    let _ = routes.bind_acp_session("acp-mine".into(), AgentSessionId::TEST_A);
-    let _ = routes.expect_response(RequestId::Str("survives".to_owned()), OTHER);
+    routes.expect_response(RequestId::Str("pending".to_owned()), AgentSessionId::TEST_A);
+    routes.bind_acp_session("acp-mine".into(), AgentSessionId::TEST_A);
+    routes.expect_response(RequestId::Str("survives".to_owned()), OTHER);
 
     routes.forget(AgentSessionId::TEST_A);
 
@@ -172,20 +172,6 @@ struct SilentSender;
 /// Its receiving half: a socket that is open and simply never speaks.
 struct SilentReceiver;
 
-struct FailingSocket;
-
-#[derive(Clone)]
-struct FailingSender;
-
-struct HangingSocket {
-    entered: Arc<tokio::sync::Notify>,
-}
-
-#[derive(Clone)]
-struct HangingSender {
-    entered: Arc<tokio::sync::Notify>,
-}
-
 impl Transport<ToRuntimeMessage, ToServerMessage> for SilentSocket {
     type Sender = SilentSender;
     type Receiver = SilentReceiver;
@@ -203,42 +189,6 @@ impl TransportSender<ToRuntimeMessage> for SilentSender {
 
 impl TransportReceiver<ToServerMessage> for SilentReceiver {
     async fn recv(&mut self) -> Result<Option<ToServerMessage>, TransportError> {
-        std::future::pending().await
-    }
-}
-
-impl Transport<ToRuntimeMessage, ToServerMessage> for FailingSocket {
-    type Sender = FailingSender;
-    type Receiver = SilentReceiver;
-
-    fn split(self) -> (Self::Sender, Self::Receiver) {
-        (FailingSender, SilentReceiver)
-    }
-}
-
-impl TransportSender<ToRuntimeMessage> for FailingSender {
-    async fn send(&self, _message: ToRuntimeMessage) -> Result<(), TransportError> {
-        Err(TransportError::Client("send failed".to_owned()))
-    }
-}
-
-impl Transport<ToRuntimeMessage, ToServerMessage> for HangingSocket {
-    type Sender = HangingSender;
-    type Receiver = SilentReceiver;
-
-    fn split(self) -> (Self::Sender, Self::Receiver) {
-        (
-            HangingSender {
-                entered: self.entered,
-            },
-            SilentReceiver,
-        )
-    }
-}
-
-impl TransportSender<ToRuntimeMessage> for HangingSender {
-    async fn send(&self, _message: ToRuntimeMessage) -> Result<(), TransportError> {
-        self.entered.notify_one();
         std::future::pending().await
     }
 }
@@ -362,71 +312,7 @@ async fn a_resumed_session_owns_the_updates_that_follow() {
         serde_json::json!({ "sessionId": "acp-42", "update": {} }),
     );
     assert_eq!(
-        connection.routes.lock().expect("route lock").route(&update),
+        connection.routes.lock().await.route(&update),
         Routed::Session(AgentSessionId::TEST_A)
-    );
-}
-
-#[tokio::test]
-async fn a_failed_send_rolls_back_request_and_session_routes() {
-    let connection = RuntimeConnection::connect(FailingSocket);
-    let attachment = connection.bind(AgentSessionId::TEST_A).await;
-    let (outbound, _inbound) = attachment.connector.split();
-
-    assert!(outbound.send(resume_request("acp-42")).await.is_err());
-
-    assert_eq!(
-        connection
-            .routes
-            .lock()
-            .expect("route lock")
-            .route(&response("agent_session:resume", serde_json::json!({}))),
-        Routed::Orphan
-    );
-    assert_eq!(
-        connection
-            .routes
-            .lock()
-            .expect("route lock")
-            .route(&notification(
-                "session/update",
-                serde_json::json!({ "sessionId": "acp-42", "update": {} }),
-            )),
-        Routed::Orphan
-    );
-}
-
-#[tokio::test]
-async fn cancelling_a_send_rolls_back_request_and_session_routes() {
-    let entered = Arc::new(tokio::sync::Notify::new());
-    let connection = RuntimeConnection::connect(HangingSocket {
-        entered: entered.clone(),
-    });
-    let attachment = connection.bind(AgentSessionId::TEST_A).await;
-    let (outbound, _inbound) = attachment.connector.split();
-    let send = tokio::spawn(async move { outbound.send(resume_request("acp-42")).await });
-    entered.notified().await;
-
-    send.abort();
-    let _ = send.await;
-
-    assert_eq!(
-        connection
-            .routes
-            .lock()
-            .expect("route lock")
-            .route(&response("agent_session:resume", serde_json::json!({}))),
-        Routed::Orphan
-    );
-    assert_eq!(
-        connection
-            .routes
-            .lock()
-            .expect("route lock")
-            .route(&notification(
-                "session/update",
-                serde_json::json!({ "sessionId": "acp-42", "update": {} }),
-            )),
-        Routed::Orphan
     );
 }

@@ -434,6 +434,14 @@
                 "format": "date-time",
                 "description": "When the log recorded the frame.\n\nThe frame itself carries no time, so this comes from the log row. It is\nwhat a reader has to order these against anything else it is showing\nbeside them - the fold derives an order among the messages of one\nsession and nothing more."
               },
+              "traceparent": {
+                "type": ["string", "null"],
+                "description": "W3C trace parent active when this frame was persisted."
+              },
+              "tracestate": {
+                "type": ["string", "null"],
+                "description": "Optional W3C vendor trace state accompanying `traceparent`."
+              },
               "userId": {
                 "type": ["string", "null"],
                 "description": "The user whose action produced the frame, absent when no user did.\n\nOnly prompts carry one, and only when the frame was attributed at the\ntime - a replayed or recorded session's are anonymous."

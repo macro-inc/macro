@@ -27,4 +27,3 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 [dev-dependencies]
 chrono = { workspace = true }
 models_pagination = { path = "../models_pagination" }
-tracing-subscriber = { workspace = true }
