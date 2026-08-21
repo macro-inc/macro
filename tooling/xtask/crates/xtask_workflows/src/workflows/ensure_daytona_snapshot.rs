@@ -87,10 +87,14 @@ fn ensure_snapshot() -> Job {
                       exit 1
                     fi
                     daytona login --api-key "$DAYTONA_API_KEY"
+                    echo "ensuring Daytona snapshot at --cpu ${DAYTONA_SNAPSHOT_CPU} --memory ${DAYTONA_SNAPSHOT_MEMORY} --disk ${DAYTONA_SNAPSHOT_DISK}"
                     just --justfile crates/agent_harness/justfile ensure-daytona
                 "#})
                 .shell("bash")
-                .add_env(("DAYTONA_API_KEY", vars::DAYTONA_API_KEY)),
+                .add_env(("DAYTONA_API_KEY", vars::DAYTONA_API_KEY))
+                .add_env(("DAYTONA_SNAPSHOT_CPU", "8"))
+                .add_env(("DAYTONA_SNAPSHOT_MEMORY", "16"))
+                .add_env(("DAYTONA_SNAPSHOT_DISK", "96")),
         )
 }
 
