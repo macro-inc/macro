@@ -1,7 +1,11 @@
 import { parseLocalDate } from '@app/features/calendar/utils/calendar-date';
 import { openChatWithAgent } from '@app/features/chat/ChatWithAgentButton';
 import { globalSplitManager } from '@app/signal/splitLayout';
-import { calendarEventDeepLink } from '@block-calendar/copy-event-mention';
+import {
+  type CalendarMentionTarget,
+  calendarEventDeepLink,
+  copyCalendarEventMentionTarget,
+} from '@block-calendar/copy-event-mention';
 import { openCalendarEventSplit } from '@block-calendar/open-calendar-event';
 import { CALENDAR_BLOCK_ID } from '@block-calendar/types';
 import { URL_PARAMS as URL_PARAMS_CANVAS } from '@block-canvas/constants';
@@ -693,11 +697,35 @@ export function DocumentPreviewContent(props: DocumentPreviewContentProps) {
     });
   };
 
+  // Copying an event has to reproduce what the calendar's own copy action
+  // writes, so pasting into an editor rebuilds the mention instead of
+  // dropping in a bare deep link.
+  const calendarMentionTarget = (): CalendarMentionTarget | undefined => {
+    const target = calendarOpenTarget();
+    if (!target) return undefined;
+    const i = item();
+    const previewed = isCalendarEventPreviewItem(i) ? i.event : undefined;
+    const title = previewed?.title ?? props.documentInfo.name;
+    if (!title) return undefined;
+    return {
+      eventId: target.eventId,
+      title,
+      occurrenceKey:
+        previewed && !previewed.isRecurring ? undefined : target.occurrenceKey,
+    };
+  };
+
   const handleCopy = () => {
     try {
       let hostname = window.location.hostname.replace('www.', '').toLowerCase();
       if (hostname === 'localhost') {
         hostname = 'dev.macro.com';
+      }
+
+      const mentionTarget = calendarMentionTarget();
+      if (mentionTarget) {
+        copyCalendarEventMentionTarget(mentionTarget);
+        return;
       }
 
       const calendarTarget = calendarOpenTarget();
