@@ -62,6 +62,20 @@ describe('EntityLoadGate', () => {
     expect(container.textContent).toBe('Loaded');
   });
 
+  it.each([
+    { label: 'zero', data: 0 },
+    { label: 'false', data: false },
+    { label: 'an empty string', data: '' },
+  ])('renders its child when data is $label', ({ data }) => {
+    const container = renderGate({
+      data: () => data,
+      error: () => undefined,
+      isPending: () => false,
+    });
+
+    expect(container.textContent).toBe('Loaded');
+  });
+
   it('does not mount its child while data is pending', () => {
     let childMounted = false;
     const Child = () => {

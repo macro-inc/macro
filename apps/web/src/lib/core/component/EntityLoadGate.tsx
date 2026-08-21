@@ -78,7 +78,7 @@ export function EntityLoadGate<Data>(props: EntityLoadGateProps<Data>) {
         <Match when={props.result.isPending()}>
           <LoadingBlock />
         </Match>
-        <Match when={props.result.data()}>{props.children}</Match>
+        <Match when={props.result.data() !== undefined}>{props.children}</Match>
       </Switch>
     </Suspense>
   );
