@@ -1,8 +1,8 @@
 import { SplitHeaderLeft } from '@components/app/split-layout/components/SplitHeader';
 import { StaticSplitLabel } from '@components/app/split-layout/components/SplitLabel';
-import { activeScope, hotkeyScopeTree } from '@core/hotkey/state';
+import { activeScope, hotkeyScopeTree, pressedKeys } from '@core/hotkey/state';
 import type { HotkeyCommand, ValidHotkey } from '@core/hotkey/types';
-import { prettyPrintHotkeyString } from '@core/hotkey/utils';
+import { getKeyString, prettyPrintHotkeyString } from '@core/hotkey/utils';
 import { cn } from '@ui';
 import { createMemo, For, Show } from 'solid-js';
 
@@ -80,6 +80,12 @@ export default function HotkeyDebugger() {
           <span class="text-ink-muted">
             active scope:{' '}
             <span class="font-semibold text-ink">{activeScope()}</span>
+          </span>
+          <span class="text-ink-muted">
+            pressed keys:{' '}
+            <span class="font-semibold text-ink">
+              {getKeyString(pressedKeys()) || '—'}
+            </span>
           </span>
           <span class="ml-auto text-ink-muted">
             {commands().length} commands

@@ -108,9 +108,16 @@ function PopoverSplitModal(props: {
     viewerId: () => undefined,
   };
 
+  const [bindHotKeyDom, scopeId] = useHotkeyDOMScope(
+    `popover-split-${props.popover.id}`
+  );
+
   const stubPanelContext: SplitPanelContextType = {
     handle: stubHandle,
-    splitHotkeyScope: `popover-${props.popover.id}`,
+    // The real registered scope id: blocks register their commands to
+    // `splitHotkeyScope`, so a made-up id would send them to a scope that
+    // doesn't exist and every registration would silently noop.
+    splitHotkeyScope: scopeId,
     isPanelActive: () => true,
     panelRef,
     panelSize: { width: null, height: null },
@@ -128,10 +135,6 @@ function PopoverSplitModal(props: {
     headerCollapser: { register: () => () => {} },
     toolbarCollapser: { register: () => () => {} },
   };
-
-  const [bindHotKeyDom, scopeId] = useHotkeyDOMScope(
-    `popover-split-${props.popover.id}`
-  );
 
   registerHotkey({
     hotkey: 'escape',

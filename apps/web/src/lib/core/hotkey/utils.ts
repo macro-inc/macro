@@ -64,6 +64,26 @@ export function removeCommandsFromTokenMap(
   return newMap ?? tokenMap;
 }
 
+/**
+ * The commands that may currently run for a key. An 'override' registration
+ * eclipses every command registered before it on that key, so only the slice
+ * from the newest override onward is effective. Eclipsed commands stay
+ * registered — disposing the commands that eclipse them makes them effective
+ * again (e.g. a block taking over a split-scope key returns it on unmount).
+ */
+export function getEffectiveCommands(
+  commands: HotkeyCommand[] | undefined
+): HotkeyCommand[] {
+  if (!commands || commands.length === 0) return [];
+  for (let i = commands.length - 1; i >= 0; i--) {
+    const command = commands[i];
+    if (command && (command.registrationType ?? 'override') === 'override') {
+      return commands.slice(i);
+    }
+  }
+  return commands;
+}
+
 type GetHotkeyCommandOptions = {
   /**
    * The property to sort by. Defaults to 'handlerPriority'.
@@ -105,8 +125,8 @@ function getHotkeyCommands(
 
   if (!scopeNode) return [];
 
-  const commands = scopeNode.hotkeyCommands.get(hotkey);
-  if (!commands || commands.length === 0) return [];
+  const commands = getEffectiveCommands(scopeNode.hotkeyCommands.get(hotkey));
+  if (commands.length === 0) return [];
 
   // Sort by the specified property
   return [...commands].sort((a, b) => {

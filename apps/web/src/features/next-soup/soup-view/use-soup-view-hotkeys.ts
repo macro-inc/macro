@@ -304,6 +304,9 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
   }).withGroup(group);
 
   // escape - Multi-purpose: Clear selection / Close spotlight
+  // Deliberately outside the group and kept past this view's unmount: the
+  // soup selection and split spotlight it acts on live at the split-panel
+  // level, so escape keeps working after a list entity is opened in place.
   registerHotkey({
     hotkey: ['escape'],
     scopeId,
@@ -321,6 +324,7 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
       }
       return false;
     },
+    disposeWithOwner: false,
   });
 
   // shift+enter - Open in new split

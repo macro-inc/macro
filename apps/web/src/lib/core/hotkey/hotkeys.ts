@@ -3,7 +3,7 @@ import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { isEditableInput } from '@core/util/isEditableInput';
 import { Telemetry } from '@macro-inc/observability';
 
-import { onCleanup, onMount, untrack } from 'solid-js';
+import { getOwner, onCleanup, onMount, untrack } from 'solid-js';
 import {
   EVENT_MODIFIER_KEYS,
   EVENT_MODIFIER_NAME_MAP,
@@ -37,6 +37,7 @@ import {
   activateClosestDOMScope,
   findClosestParentScopeElement,
   findClosestParentScopeId,
+  getEffectiveCommands,
   getKeyString,
   getScopeId,
   normalizeEventKeyPress,
@@ -87,7 +88,11 @@ import {
  * @param args.tags - Optional tags for categorizing in the command palette.
  * @returns An object with a dispose function to clean up the hotkey
  * registration. If `activateCommandScope` is true, it also includes the
- * `commandScopeId`.
+ * `commandScopeId`. When called under a reactive owner, the registration is
+ * also disposed automatically with that owner — commands can attach to scopes
+ * that outlive their registrant (block commands live on the split scope,
+ * which survives split navigation), so they must not depend on scope teardown
+ * for cleanup.
  *
  * @example
  * // Basic usage
@@ -134,6 +139,7 @@ export function registerHotkey(
     surfaceNestedCommands,
     shouldReturnFocusOnClose,
     proxiedHotkey,
+    disposeWithOwner,
   } = args;
 
   const noopDisposer: RegisterHotkeyReturn = {
@@ -220,6 +226,7 @@ export function registerHotkey(
   const command: HotkeyCommand = {
     hotkeyToken,
     scopeId,
+    registrationType,
     hotkeys,
     condition,
     description,
@@ -242,19 +249,33 @@ export function registerHotkey(
     proxiedHotkey,
   };
 
-  // Check for existing hotkeys in the scope and warn if overriding
-  if (registrationType === 'override') {
-    hotkeys?.forEach((h) => {
-      const existingHandlers = scopeNode.hotkeyCommands.get(h);
-      if (existingHandlers && existingHandlers.length > 0) {
-        Telemetry.warn(
-          `Hotkey ${h} already registered in scope ${scopeId}. Previous hotkey is being overwritten.`,
-          {
-            error: 'Hotkey already registered in scope',
-          }
-        );
+  // An override re-registration of the same logical command — same token in
+  // this scope — replaces the old registration outright instead of stacking:
+  // persistent commands (disposeWithOwner: false) re-register on every mount
+  // of their view and must not accumulate eclipsed copies.
+  if (registrationType === 'override' && hotkeyToken) {
+    const replaced = new Set<HotkeyCommand>();
+    scopeNode.hotkeyCommands.forEach((existing) => {
+      for (const existingCommand of existing) {
+        if (existingCommand.hotkeyToken === hotkeyToken) {
+          replaced.add(existingCommand);
+        }
       }
     });
+    if (replaced.size > 0) {
+      scopeNode.hotkeyCommands.forEach((existing, h) => {
+        const remaining = existing.filter((c) => !replaced.has(c));
+        if (remaining.length === existing.length) return;
+        if (remaining.length > 0) {
+          scopeNode.hotkeyCommands.set(h, remaining);
+        } else {
+          scopeNode.hotkeyCommands.delete(h);
+        }
+      });
+      setHotkeyTokenMap((prev) =>
+        removeCommandsFromTokenMap(prev, Array.from(replaced))
+      );
+    }
   }
 
   if (hotkeyToken) {
@@ -267,16 +288,15 @@ export function registerHotkey(
   }
 
   if (scopeNode) {
-    // Register each hotkey with the same command
+    // Register each hotkey with the same command. Both registration types
+    // append in registration order: an 'override' command eclipses the
+    // commands before it (see getEffectiveCommands) rather than destroying
+    // them, so disposing it restores whatever it displaced — a block taking
+    // over a split-scope key does not permanently disable it.
     if (hotkeys) {
       hotkeys.forEach((h) => {
         const existingHandlers = scopeNode.hotkeyCommands.get(h) || [];
-        if (registrationType === 'add') {
-          scopeNode.hotkeyCommands.set(h, [...existingHandlers, command]);
-        } else {
-          // Override: replace with single-element array
-          scopeNode.hotkeyCommands.set(h, [command]);
-        }
+        scopeNode.hotkeyCommands.set(h, [...existingHandlers, command]);
       });
     } else {
       scopeNode.unkeyedCommands.push(command);
@@ -289,9 +309,15 @@ export function registerHotkey(
     : undefined;
 
   // Create disposer object
+  let disposed = false;
   const disposer: RegisterHotkeyReturn = {
     hotkey: () => prettyHotkey,
     dispose: () => {
+      // Idempotent: manual disposal (groups, effect re-runs) and the
+      // owner-bound auto-dispose below may both fire.
+      if (disposed) return;
+      disposed = true;
+
       // Remove from hotkey token map if it exists
       if (hotkeyToken) {
         setHotkeyTokenMap((prev) =>
@@ -338,6 +364,15 @@ export function registerHotkey(
       return disposer;
     },
   };
+
+  // A registration made under a reactive owner must not outlive it: the
+  // target scope can persist past the registrant (the split scope survives
+  // split navigation), and a leaked command would keep running with closures
+  // over unmounted state. `disposeWithOwner: false` opts out for commands
+  // meant to persist past their registrant (see HotkeyRegistrationOptions).
+  if (disposeWithOwner !== false && getOwner()) {
+    onCleanup(() => disposer.dispose());
+  }
 
   return disposer;
 }
@@ -573,7 +608,18 @@ export function useHotKeyRoot() {
   let onHotkeyInterceptor: ((context: HotkeyInterceptorContext) => boolean)[] =
     [];
 
+  // Synthetic keyboard events must not reach the hotkey system: several
+  // components dispatch keydowns to drive Kobalte (e.g.
+  // highlightFirstMenuItemOnOpen sends ArrowDown, with no paired keyup), and a
+  // keydown without its keyup leaves a phantom key stuck in pressedKeys that
+  // makes every subsequent plain-key hotkey resolve to e.g. 'arrowdown+j'
+  // until a modifier keyup clears the set. Tests simulate keypresses with
+  // dispatched (untrusted) events, so they stay exempt.
+  const shouldIgnoreKeyEvent = (e: KeyboardEvent) =>
+    !e.isTrusted && import.meta.env.MODE !== 'test';
+
   const handleKeyDown = (e: KeyboardEvent) => {
+    if (shouldIgnoreKeyEvent(e)) return;
     document.documentElement.dataset.modality = 'keyboard';
     const key = normalizeEventKeyPress(e);
 
@@ -615,6 +661,7 @@ export function useHotKeyRoot() {
   };
 
   const handleKeyUp = (e: KeyboardEvent) => {
+    if (shouldIgnoreKeyEvent(e)) return;
     const key = normalizeEventKeyPress(e);
 
     // if we are releasing a modifier key, release all keys, because the user may have triggered some broswer or os shortcut
@@ -690,8 +737,10 @@ export function useHotKeyRoot() {
     let commandScopeActivated = false;
 
     while (scopeNode) {
-      const commands = scopeNode.hotkeyCommands.get(pressedKeysString);
-      if (commands && commands.length > 0) {
+      const commands = getEffectiveCommands(
+        scopeNode.hotkeyCommands.get(pressedKeysString)
+      );
+      if (commands.length > 0) {
         // Sort commands by handlerPriority (higher priority first)
         const sortedCommands = [...commands].sort(
           (a, b) => (b.handlerPriority ?? 0) - (a.handlerPriority ?? 0)
