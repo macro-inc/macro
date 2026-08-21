@@ -518,8 +518,7 @@ export const SoupView = (props: SoupViewProps) => {
   const experimentalView = createMemo(() => {
     if (
       !experimentalAppLayoutEnabled() ||
-      isTouchDevice() ||
-      contentId === 'inbox'
+      isTouchDevice()
     ) {
       return undefined;
     }
@@ -1014,8 +1013,9 @@ const SoupViewListContent = (props: SoupViewListProps) => {
   const listEntityComponent = () => {
     if (currentView() === 'tasks') return TaskListEntity;
     if (currentView() === 'companies') return CompanyListEntity;
+    if (currentView() === 'inbox' && (props.experimental || isNewInboxEnabled()))
+      return InboxListEntity;
     if (props.experimental) return ExperimentalListEntity;
-    if (isNewInboxEnabled()) return InboxListEntity;
     return ListEntity;
   };
 

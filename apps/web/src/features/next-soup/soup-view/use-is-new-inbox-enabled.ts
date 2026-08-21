@@ -1,6 +1,8 @@
 import { isListViewID } from '@app/constants/list-views';
+import { experimentalAppLayoutEnabled } from '@app/features/experimental-app-layout/state';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import {
   ENABLE_NEW_INBOX_FLAG,
   ENABLE_NEW_INBOX_OVERRIDE,
@@ -19,5 +21,8 @@ export function useIsNewInboxEnabled() {
     enabledOverride: ENABLE_NEW_INBOX_OVERRIDE,
   });
 
-  return () => currentView() === 'inbox' && newInboxFlag().enabled;
+  return () =>
+    currentView() === 'inbox' &&
+    (newInboxFlag().enabled ||
+      (experimentalAppLayoutEnabled() && !isTouchDevice()));
 }

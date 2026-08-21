@@ -105,6 +105,7 @@ import {
 } from './experimental-view-sidebar';
 
 export type ExperimentalSoupView =
+  | 'inbox'
   | 'email'
   | 'library'
   | 'machines'
@@ -112,6 +113,7 @@ export type ExperimentalSoupView =
   | 'people';
 
 const VIEW_TITLES: Record<ExperimentalSoupView, string> = {
+  inbox: 'Inbox',
   email: 'Email',
   library: 'Library',
   machines: 'Powers',
@@ -124,6 +126,12 @@ type ViewNavigationItem = {
   label: string;
   icon: Component<JSX.SvgSVGAttributes<SVGSVGElement>>;
 };
+
+const INBOX_ITEMS: readonly ViewNavigationItem[] = [
+  { value: 'signal', label: 'Signal', icon: SignalIcon },
+  { value: 'noise', label: 'Noise', icon: NoiseIcon },
+  { value: 'all', label: 'All', icon: SquaresIcon },
+];
 
 const TASK_PERSONAL_ITEMS: readonly ViewNavigationItem[] = [
   { value: 'my-tasks', label: 'My tasks', icon: UserFocusIcon },
@@ -235,8 +243,9 @@ const LIBRARY_TYPE_FILTERS = [
 ] as const;
 
 const TAB_VIEW_BY_EXPERIMENTAL_VIEW: Partial<
-  Record<ExperimentalSoupView, 'mail' | 'agents' | 'tasks'>
+  Record<ExperimentalSoupView, 'inbox' | 'mail' | 'agents' | 'tasks'>
 > = {
+  inbox: 'inbox',
   email: 'mail',
   machines: 'agents',
   tasks: 'tasks',
@@ -285,6 +294,7 @@ export function ExperimentalSoupLayout(props: ExperimentalSoupLayoutProps) {
   });
 
   const searchPlaceholder = createMemo(() => {
+    if (props.view === 'inbox') return 'Search inbox';
     if (props.view === 'email') return 'Search email';
     if (props.view === 'library') return 'Search library';
     if (props.view === 'tasks') return 'Search tasks';
@@ -510,7 +520,9 @@ export function ExperimentalSoupLayout(props: ExperimentalSoupLayoutProps) {
 
   const PrimaryControls = () => (
     <div class="ml-auto flex shrink-0 flex-nowrap items-center justify-end gap-2 [&_[data-button]]:h-8 [&_[data-button]]:min-w-8 [&_[data-button]]:rounded-lg @max-[720px]/experimental-soup:gap-1">
-      <SoupViewContextSort hideLabel />
+      <Show when={props.view !== 'inbox'}>
+        <SoupViewContextSort hideLabel />
+      </Show>
       <SoupViewContextGroup hideLabel />
       <ExperimentalFilterControl />
       <Show when={isPeopleCompanies()}>
@@ -677,6 +689,36 @@ export function ExperimentalSoupLayout(props: ExperimentalSoupLayoutProps) {
               )}
               aria-pressed={active()}
               onClick={() => selectPowersTab(item.value)}
+            >
+              <Dynamic component={item.icon} class="size-4 shrink-0" />
+              <span>{item.label}</span>
+            </button>
+          );
+        }}
+      </For>
+    </HorizontalScrollArea>
+  );
+
+  const InboxTabs = () => (
+    <HorizontalScrollArea
+      class="min-w-0 flex-1"
+      contentClass="gap-1"
+      ariaLabel="Inbox sections"
+    >
+      <For each={INBOX_ITEMS}>
+        {(item) => {
+          const active = () => soupView.activeTab() === item.value;
+          return (
+            <button
+              type="button"
+              class={cn(
+                'flex h-10 items-center gap-2 rounded-full border px-3 text-sm font-medium outline-none transition-colors focus-visible:ring-2 focus-visible:ring-accent/40',
+                active()
+                  ? 'border-transparent bg-active text-ink'
+                  : 'border-transparent text-ink-muted hover:bg-ink/5 hover:text-ink'
+              )}
+              aria-pressed={active()}
+              onClick={() => selectTab(item.value)}
             >
               <Dynamic component={item.icon} class="size-4 shrink-0" />
               <span>{item.label}</span>
@@ -1310,6 +1352,26 @@ export function ExperimentalSoupLayout(props: ExperimentalSoupLayoutProps) {
     </header>
   );
 
+  const InboxLayout = () => (
+    <div class="flex size-full min-h-0 flex-col">
+      <header class="flex shrink-0 items-center justify-between gap-3 border-b border-edge px-4 pb-4 pt-2 @max-[720px]/experimental-soup:px-2">
+        <div class="flex min-w-0 flex-1 items-center gap-6 @max-[720px]/experimental-soup:gap-3">
+          <h1 class="m-0 shrink-0 truncate text-2xl font-semibold tracking-[-0.03em] text-ink">
+            Inbox
+          </h1>
+          <InboxTabs />
+        </div>
+        <SoupViewCreateButton inline experimental />
+      </header>
+      <ListContentContainer>
+        <header class="shrink-0 px-6 pb-5 pt-4 @max-[760px]/experimental-soup:px-3 @max-[480px]/experimental-soup:px-2">
+          <SearchAndControls flush />
+        </header>
+        <Body />
+      </ListContentContainer>
+    </div>
+  );
+
   const EmailLayout = () => (
     <div class="flex size-full min-h-0 flex-col">
       <ViewTitleRow title="Email" navigation={<EmailNavigation />} />
@@ -1385,6 +1447,9 @@ export function ExperimentalSoupLayout(props: ExperimentalSoupLayoutProps) {
   return (
     <div class="@container/experimental-soup flex size-full min-h-0 flex-col bg-panel">
       <Switch fallback={<Body />}>
+        <Match when={props.view === 'inbox'}>
+          <InboxLayout />
+        </Match>
         <Match when={props.view === 'email'}>
           <EmailLayout />
         </Match>
@@ -1412,6 +1477,7 @@ export function experimentalSoupViewForContent(args: {
 }): ExperimentalSoupView | undefined {
   if (args.requestedView) return args.requestedView;
   const mapping: Partial<Record<ListView, ExperimentalSoupView>> = {
+    inbox: 'inbox',
     mail: 'email',
     documents: 'library',
     agents: 'machines',
