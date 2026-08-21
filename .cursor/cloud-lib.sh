@@ -161,6 +161,10 @@ ensure_dockerd() {
   if [ -S "${DOCKER_SOCK}" ]; then
     sudo chmod 666 "${DOCKER_SOCK}"
     if docker info >/dev/null 2>&1; then
+      # Nested Cloud VMs often lack iptables-legacy, so dockerd never
+      # installs FORWARD rules. With bridge-nf-call-iptables=1 that drops
+      # container-to-container traffic on compose networks.
+      ensure_docker_bridge_icc
       return 0
     fi
   fi
@@ -174,6 +178,7 @@ ensure_dockerd() {
     if [ -S "${DOCKER_SOCK}" ]; then
       sudo chmod 666 "${DOCKER_SOCK}"
       if docker info >/dev/null 2>&1; then
+        ensure_docker_bridge_icc
         return 0
       fi
     fi
@@ -183,6 +188,13 @@ ensure_dockerd() {
   echo "dockerd did not become ready" >&2
   sed -n '1,160p' "${LOG_DIR}/dockerd.log" >&2 || true
   return 1
+}
+
+# docker-proxy still publishes host ports; this only lets containers on the
+# same bridge reach each other when dockerd could not program iptables.
+ensure_docker_bridge_icc() {
+  sudo sysctl -w net.bridge.bridge-nf-call-iptables=0 >/dev/null
+  sudo sysctl -w net.bridge.bridge-nf-call-ip6tables=0 >/dev/null || true
 }
 
 in_pinned_nix_shell() {
