@@ -53,6 +53,7 @@ pub fn encode_permission_token(
 }
 
 /// Read claims from a token minted by [`encode_permission_token`].
+#[cfg(test)]
 pub(crate) fn decode_permission_token(
     token: &DocumentPermissionToken,
     jwt_secret: &str,

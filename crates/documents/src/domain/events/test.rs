@@ -249,3 +249,16 @@ fn existing_v1_document_events_still_decode() {
         })
     );
 }
+
+#[test]
+fn sync_extract_drops_invalid_attribution_strings() {
+    let metadata = DocumentSyncContentUpdatedMetadata::from_extract(
+        DOCUMENT_ID.to_string(),
+        FileType::Md,
+        None,
+        Some("not-an-actor".to_string()),
+        Some("also-not-a-user".to_string()),
+    );
+    assert_eq!(metadata.actor, None);
+    assert_eq!(metadata.on_behalf_of, None);
+}
