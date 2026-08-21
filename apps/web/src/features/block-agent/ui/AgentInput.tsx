@@ -16,6 +16,8 @@ import { createSignal, onCleanup, onMount, Show } from 'solid-js';
 export type AgentInputHandle = {
   /** Insert a channel-style quote-reply of `quotedContent` into the draft. */
   insertQuote: (quotedContent: string) => void;
+  /** Focus the markdown editor. */
+  focus: () => void;
 };
 
 export interface AgentInputProps {
@@ -84,7 +86,9 @@ export function AgentInput(props: AgentInputProps) {
     editor.controls.focus();
   };
 
-  onMount(() => props.onReady?.({ insertQuote }));
+  onMount(() =>
+    props.onReady?.({ insertQuote, focus: () => editor.controls.focus() })
+  );
   onCleanup(() => props.onReady?.(undefined));
 
   return (

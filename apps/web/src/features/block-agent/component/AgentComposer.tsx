@@ -5,11 +5,14 @@
  * boundary.
  */
 
+import { useCanAutofocusSplitContent } from '@components/app/split-layout/layoutUtils';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { useAgentSession } from '../context/AgentSessionContext';
 import { AgentInput, QueuedPromptList } from '../ui';
 
 export function AgentComposer() {
   const { composer, loadFailed } = useAgentSession();
+  const canAutofocus = useCanAutofocusSplitContent();
 
   return (
     <>
@@ -24,6 +27,7 @@ export function AgentComposer() {
         placeholder="Message the agent"
         busy={composer.busy()}
         disabled={loadFailed()}
+        autofocus={!isTouchDevice() && canAutofocus}
         onSend={composer.send}
         onStop={composer.stop}
         onReady={composer.attachInput}
