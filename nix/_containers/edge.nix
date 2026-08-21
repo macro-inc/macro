@@ -25,6 +25,8 @@ let
     extraContents = [ pkgs.nginx ];
     extraPath = [ pkgs.nginx ];
     extraCommands = ''
+      ${imageLib.writablePasswd}
+      echo 'nogroup:x:65534:' >> ./etc/group
       mkdir -p ./etc/nginx/conf.d ./var/log/nginx ./var/cache/nginx
       cp ${nginxConf} ./etc/nginx/nginx.conf
     '';
