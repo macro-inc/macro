@@ -72,6 +72,7 @@ fn resize_request_omits_unset_fields() {
 async fn live_hot_resize_increases_cpu_and_memory_without_touching_disk() {
     let Some(api_key) = live_env::DaytonaApiKey::new().and_then(|key| optional_env(key.value()))
     else {
+        eprintln!("skipping live Daytona hot-resize: DAYTONA_API_KEY is unset");
         return;
     };
     let snapshot = live_env::DaytonaSnapshot::new()
