@@ -8,18 +8,24 @@ import {
   CoordinatorRouter,
 } from './coordinator-router';
 
-class FakePort {
+class FakePort extends EventTarget {
   readonly messages: unknown[] = [];
   readonly events: string[] = [];
   closed = false;
   started = false;
   onmessage: ((event: MessageEvent<unknown>) => void) | null = null;
   onmessageerror: (() => void) | null = null;
+  effectProtocol = false;
+
+  constructor() {
+    super();
+  }
 
   postMessage(message: unknown): void {
     this.messages.push(message);
+    const payload = effectPayload(message);
     this.events.push(
-      `post:${String((message as { kind?: unknown })?.kind ?? 'unknown')}`
+      `post:${String((payload as { kind?: unknown })?.kind ?? 'unknown')}`
     );
   }
 
@@ -30,12 +36,24 @@ class FakePort {
 
   start(): void {
     this.started = true;
+    if (this.effectProtocol) this.effectReady();
   }
 
   receive(message: unknown): void {
+    if (this.effectProtocol) {
+      this.dispatchEvent(new MessageEvent('message', { data: [1, message] }));
+      return;
+    }
     this.onmessage?.({ data: message, ports: [] } as unknown as MessageEvent);
   }
+
+  effectReady(): void {
+    this.dispatchEvent(new MessageEvent('message', { data: [0] }));
+  }
 }
+
+const effectPayload = (message: unknown): unknown =>
+  Array.isArray(message) && message[0] === 0 ? message[1] : message;
 
 const version = {
   coordinatorVersion: CACHE_COORDINATOR_PROTOCOL_VERSION,
@@ -62,6 +80,7 @@ const attach = async (
   ownerEpoch: number,
   enginePort: FakePort
 ): Promise<void> => {
+  enginePort.effectProtocol = true;
   await router.handleTabMessage(
     tabPort as CoordinatorMessagePort,
     {
@@ -96,12 +115,14 @@ const ready = (
 };
 
 const messagesOfKind = <T extends string>(port: FakePort, kind: T) =>
-  port.messages.filter(
-    (message): message is Record<string, unknown> & { kind: T } =>
-      typeof message === 'object' &&
-      message !== null &&
-      (message as { kind?: unknown }).kind === kind
-  );
+  port.messages
+    .map(effectPayload)
+    .filter(
+      (message): message is Record<string, unknown> & { kind: T } =>
+        typeof message === 'object' &&
+        message !== null &&
+        (message as { kind?: unknown }).kind === kind
+    );
 
 describe('CoordinatorRouter', () => {
   afterEach(() => {
@@ -359,6 +380,13 @@ describe('CoordinatorRouter', () => {
 
     expect(
       engine.messages
+        .map(effectPayload)
+        .filter(
+          (message) =>
+            typeof message === 'object' &&
+            message !== null &&
+            'kind' in message
+        )
         .slice(-2)
         .map((message) => (message as { kind: string }).kind)
     ).toEqual(['engine-request', 'drain-engine']);

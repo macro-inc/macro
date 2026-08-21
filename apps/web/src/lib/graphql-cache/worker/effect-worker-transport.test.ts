@@ -1,5 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createEffectWorkerTransport } from './effect-worker-transport';
+import {
+  createEffectWorkerRunnerTransport,
+  createEffectWorkerTransport,
+} from './effect-worker-transport';
 
 class FakeMessagePort extends EventTarget {
   readonly sent: Array<{
@@ -93,6 +96,39 @@ describe('Effect worker transport', () => {
     ).toHaveLength(1);
     expect(closeEndpoint).toHaveBeenCalledOnce();
     channel.port2.close();
+  });
+
+  it('communicates with the Effect runner over a MessagePort', async () => {
+    const channel = new MessageChannel();
+    const parentMessages: unknown[] = [];
+    let runnerPortId: number | undefined;
+    let runnerMessage: unknown;
+    const runner = createEffectWorkerRunnerTransport<unknown, unknown>({
+      endpoint: channel.port2,
+      onMessage(portId, message) {
+        runnerPortId = portId;
+        runnerMessage = message;
+      },
+      onError: vi.fn(),
+    });
+    const parent = createEffectWorkerTransport<unknown, unknown>({
+      endpoint: channel.port1,
+      onMessage: (message) => parentMessages.push(message),
+      onError: vi.fn(),
+    });
+
+    await parent.ready;
+    parent.sendUnsafe({ kind: 'request' });
+    await flush();
+    expect(runnerMessage).toEqual({ kind: 'request' });
+    expect(runnerPortId).toBe(0);
+
+    runner.sendUnsafe(0, { kind: 'response' });
+    await flush();
+    expect(parentMessages).toEqual([{ kind: 'response' }]);
+
+    await parent.close();
+    await runner.close();
   });
 
   it('reports message decoding failures and rejects sends after close', async () => {

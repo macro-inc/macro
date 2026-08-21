@@ -69,21 +69,32 @@ function optimisticMutation(key: number, query: Operation['query']): Operation {
   } as never);
 }
 
-class LinkedMessagePort {
+class LinkedMessagePort extends EventTarget {
   peer: LinkedMessagePort | undefined;
   onmessage: ((event: MessageEvent<unknown>) => void) | null = null;
   onmessageerror: (() => void) | null = null;
   closed = false;
 
-  postMessage(message: unknown, transfer: Transferable[] = []): void {
+  constructor() {
+    super();
+  }
+
+  postMessage(
+    message: unknown,
+    transfer: Transferable[] | StructuredSerializeOptions = []
+  ): void {
     const peer = this.peer;
     if (this.closed || !peer || peer.closed) return;
+    const ports = Array.isArray(transfer)
+      ? transfer
+      : (transfer.transfer ?? []);
     queueMicrotask(() => {
       if (peer.closed) return;
       peer.onmessage?.({
         data: message,
-        ports: transfer,
+        ports,
       } as unknown as MessageEvent);
+      peer.dispatchEvent(new MessageEvent('message', { data: message }));
     });
   }
 

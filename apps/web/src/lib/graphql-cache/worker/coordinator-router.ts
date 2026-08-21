@@ -14,6 +14,10 @@ import {
   type CoordinatorSnapshot,
 } from './coordinator-core';
 import {
+  createEffectWorkerTransport,
+  type EffectWorkerTransport,
+} from './effect-worker-transport';
+import {
   type ActivationFailureCode,
   CACHE_COORDINATOR_PROTOCOL_VERSION,
   type CoordinatorToEngineEnvelope,
@@ -21,6 +25,7 @@ import {
   databaseOwnerLockName,
   type EngineFatalCode,
   type EngineOpenOutcome,
+  type EngineToCoordinatorEnvelope,
   type TabToCoordinatorEnvelope,
   tabLivenessLockName,
   validateEngineToCoordinatorEnvelope,
@@ -59,7 +64,7 @@ type PendingRegistration = { cancelled: boolean };
 type EngineRoute = {
   tabId: string;
   ownerEpoch: number;
-  port: CoordinatorMessagePort;
+  transport: EffectWorkerTransport<CoordinatorToEngineEnvelope>;
 };
 
 const DEFAULT_ACTIVATION_TIMEOUT_MS = 20_000;
@@ -438,31 +443,29 @@ export class CoordinatorRouter {
       return;
     }
 
-    const route: EngineRoute = {
-      tabId,
-      ownerEpoch,
-      port: transferredPort,
-    };
+    let route!: EngineRoute;
+    const transport = createEffectWorkerTransport<
+      EngineToCoordinatorEnvelope,
+      CoordinatorToEngineEnvelope
+    >({
+      endpoint: transferredPort,
+      onMessage: (message) => {
+        if (this.engineRoute === route) this.handleEngineMessage(route, message);
+      },
+      onError: (error) => {
+        if (this.engineRoute === route) {
+          this.failOwner(
+            tabId,
+            ownerEpoch,
+            `engine Effect transport failed: ${error.message}`
+          );
+        }
+      },
+      closeEndpoint: () => transferredPort.close(),
+    });
+    route = { tabId, ownerEpoch, transport };
     this.engineRoute = route;
-    transferredPort.onmessage = (event: MessageEvent<unknown>) => {
-      if (this.engineRoute !== route) return;
-      if (event.ports.length > 0) {
-        for (const port of event.ports) port.close();
-        this.failOwner(
-          tabId,
-          ownerEpoch,
-          'engine envelope transferred an unexpected port'
-        );
-        return;
-      }
-      this.handleEngineMessage(route, event.data);
-    };
-    transferredPort.onmessageerror = () => {
-      if (this.engineRoute === route) {
-        this.failOwner(tabId, ownerEpoch, 'engine MessagePort messageerror');
-      }
-    };
-    transferredPort.start();
+    void transport.ready.catch(() => undefined);
   }
 
   private handleEngineMessage(route: EngineRoute, rawMessage: unknown): void {
@@ -686,7 +689,7 @@ export class CoordinatorRouter {
             );
             break;
           }
-          route.port.postMessage(
+          route.transport.sendUnsafe(
             envelope<CoordinatorToEngineEnvelope>({
               kind: 'engine-request',
               ownerEpoch: action.ownerEpoch,
@@ -738,7 +741,7 @@ export class CoordinatorRouter {
             );
             break;
           }
-          route.port.postMessage(
+          route.transport.sendUnsafe(
             envelope<CoordinatorToEngineEnvelope>({
               kind: 'drain-engine',
               ownerEpoch: action.ownerEpoch,
@@ -752,8 +755,9 @@ export class CoordinatorRouter {
             this.engineRoute?.tabId === action.tabId &&
             this.engineRoute.ownerEpoch === action.ownerEpoch
           ) {
-            this.engineRoute.port.close();
+            const route = this.engineRoute;
             this.engineRoute = undefined;
+            void route.transport.close().catch(() => undefined);
           }
           break;
         case 'drop-tab':
@@ -1067,7 +1071,7 @@ export class CoordinatorRouter {
       }
       const heartbeatId = this.nextHeartbeatId++;
       this.pendingHeartbeat = { ownerEpoch, heartbeatId };
-      route.port.postMessage(
+      route.transport.sendUnsafe(
         envelope<CoordinatorToEngineEnvelope>({
           kind: 'heartbeat',
           ownerEpoch,

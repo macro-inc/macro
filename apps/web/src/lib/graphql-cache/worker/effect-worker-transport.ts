@@ -1,4 +1,5 @@
 import * as BrowserWorker from '@effect/platform-browser/BrowserWorker';
+import * as BrowserWorkerRunner from '@effect/platform-browser/BrowserWorkerRunner';
 import * as Cause from 'effect/Cause';
 import * as Effect from 'effect/Effect';
 import * as Fiber from 'effect/Fiber';
@@ -21,6 +22,8 @@ export interface EffectWorkerTransport<Outbound> {
   readonly ready: Promise<void>;
   /** Sends through Effect's worker protocol, including optional transferables. */
   send(message: Outbound, transfers?: readonly Transferable[]): Promise<void>;
+  /** Synchronous send for existing state-machine adapters. */
+  sendUnsafe(message: Outbound, transfers?: readonly Transferable[]): void;
   /** Closes the Effect scope and then the caller-owned browser endpoint. */
   close(): Promise<void>;
 }
@@ -109,6 +112,14 @@ export function createEffectWorkerTransport<Inbound, Outbound>(
       await Effect.runPromise(backing.send(message, transfers));
     },
 
+    sendUnsafe(
+      message: Outbound,
+      transfers?: readonly Transferable[]
+    ): void {
+      if (closed) throw new Error('Effect worker transport is closed');
+      Effect.runSync(backing.send(message, transfers));
+    },
+
     close(): Promise<void> {
       if (closePromise) return closePromise;
       closed = true;
@@ -122,6 +133,58 @@ export function createEffectWorkerTransport<Inbound, Outbound>(
           throw asError(error);
         }
       );
+      return closePromise;
+    },
+  };
+}
+
+export interface EffectWorkerRunnerOptions<Inbound> {
+  endpoint: MessagePort | Window;
+  onMessage(portId: number, message: Inbound): void | Promise<void>;
+  onError(error: Error): void;
+}
+
+export interface EffectWorkerRunnerTransport<Outbound> {
+  sendUnsafe(
+    portId: number,
+    message: Outbound,
+    transfers?: readonly Transferable[]
+  ): void;
+  close(): Promise<void>;
+}
+
+/** Runs Effect's worker-side protocol over a worker global or explicit port. */
+export function createEffectWorkerRunnerTransport<Inbound, Outbound>(
+  options: EffectWorkerRunnerOptions<Inbound>
+): EffectWorkerRunnerTransport<Outbound> {
+  const platform = BrowserWorkerRunner.make(options.endpoint);
+  const runner = Effect.runSync(platform.start<Outbound, Inbound>());
+  let closed = false;
+  let closePromise: Promise<void> | undefined;
+  const run = runner
+    .run((portId, message) => {
+      const handled = options.onMessage(portId, message);
+      return handled instanceof Promise ? Effect.promise(() => handled) : undefined;
+    })
+    .pipe(
+      Effect.catchCause((cause) =>
+        Effect.sync(() => {
+          if (!closed) options.onError(asError(Cause.squash(cause)));
+        })
+      )
+    );
+  const fiber = Effect.runFork(run);
+
+  return {
+    sendUnsafe(portId, message, transfers): void {
+      if (closed) throw new Error('Effect worker runner transport is closed');
+      Effect.runSync(runner.send(portId, message, transfers));
+    },
+
+    close(): Promise<void> {
+      if (closePromise) return closePromise;
+      closed = true;
+      closePromise = Effect.runPromise(Fiber.interrupt(fiber));
       return closePromise;
     },
   };

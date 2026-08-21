@@ -15,12 +15,16 @@ import {
 } from './coordinator-router';
 import type { CacheWorkerCoreOptions } from './worker-core';
 
-class FakePort {
+class FakePort extends EventTarget {
   readonly messages: unknown[] = [];
   closed = false;
   started = false;
   onmessage: ((event: MessageEvent<unknown>) => void) | null = null;
   onmessageerror: (() => void) | null = null;
+
+  constructor() {
+    super();
+  }
 
   postMessage(message: unknown): void {
     this.messages.push(message);
@@ -35,7 +39,8 @@ class FakePort {
   }
 
   receive(message: unknown): void {
-    this.onmessage?.({ data: message, ports: [] } as unknown as MessageEvent);
+    const event = new MessageEvent('message', { data: [0, message] });
+    this.dispatchEvent(event);
   }
 }
 
@@ -75,13 +80,18 @@ const activation = (
   hotCapacity: 11,
 });
 
+const effectPayload = (message: unknown): unknown =>
+  Array.isArray(message) && message[0] === 1 ? message[1] : message;
+
 const messagesOfKind = <T extends string>(port: FakePort, kind: T) =>
-  port.messages.filter(
-    (message): message is Record<string, unknown> & { kind: T } =>
-      typeof message === 'object' &&
-      message !== null &&
-      (message as { kind?: unknown }).kind === kind
-  );
+  port.messages
+    .map(effectPayload)
+    .filter(
+      (message): message is Record<string, unknown> & { kind: T } =>
+        typeof message === 'object' &&
+        message !== null &&
+        (message as { kind?: unknown }).kind === kind
+    );
 
 const registerTab = async (
   router: CoordinatorRouter,
@@ -110,7 +120,8 @@ const attachRuntime = async (
   if (outbound) {
     const postMessage = channel.port2.postMessage.bind(channel.port2);
     channel.port2.postMessage = ((message: unknown) => {
-      outbound.push(message);
+      const payload = effectPayload(message);
+      if (payload !== undefined) outbound.push(payload);
       postMessage(message);
     }) as MessagePort['postMessage'];
   }
@@ -380,6 +391,7 @@ describe('cache engine worker runtime', () => {
     expect(order).toEqual(['request', 'drain']);
     expect(
       direct.messages
+        .map(effectPayload)
         .filter(
           (message) =>
             typeof message === 'object' &&

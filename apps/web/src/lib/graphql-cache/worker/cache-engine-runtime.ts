@@ -19,6 +19,10 @@ import {
   validateCoordinatorToEngineEnvelope,
   validatePageToEngineEnvelope,
 } from './coordinator-protocol';
+import {
+  createEffectWorkerRunnerTransport,
+  type EffectWorkerRunnerTransport,
+} from './effect-worker-transport';
 import { cacheWasmLinearMemoryBytes } from './wasm-module';
 import { CacheWorkerCore, type CacheWorkerCoreOptions } from './worker-core';
 
@@ -176,8 +180,10 @@ async function activate(
       : 'opened-existing';
   let draining = false;
   const pendingAdmissions = new Set<Promise<void>>();
+  let runnerFailed = false;
+  let runner!: EffectWorkerRunnerTransport<EngineToCoordinatorEnvelope>;
   const post = (message: EngineToCoordinatorEnvelope): void => {
-    directPort.postMessage(message);
+    runner.sendUnsafe(0, message);
   };
   const fatal = (
     reason: string,
@@ -186,6 +192,7 @@ async function activate(
     if (failed) return;
     failed = true;
     emitEvent({ kind: 'fatal', activation, reason, fatalCode });
+    if (runnerFailed) return;
     post(
       withVersion<EngineToCoordinatorEnvelope>({
         kind: 'engine-fatal',
@@ -258,65 +265,71 @@ async function activate(
     void admission.finally(() => pendingAdmissions.delete(admission));
   };
 
-  directPort.onmessage = (event: MessageEvent<unknown>) => {
-    const parsed = validateCoordinatorToEngineEnvelope(event.data);
-    if (!parsed.ok) {
-      fatal(`invalid coordinator envelope: ${parsed.error}`);
-      return;
-    }
-    const message: CoordinatorToEngineEnvelope = parsed.value;
-    if (failed) return;
-    if (message.ownerEpoch !== activation.ownerEpoch) {
-      fatal('coordinator envelope owner epoch does not match activation');
-      return;
-    }
-    switch (message.kind) {
-      case 'engine-request':
-        if (draining) {
-          fatal('coordinator routed a request after drain began');
-          return;
-        }
-        admitRequest(message.request);
-        break;
-      case 'drain-engine':
-        if (draining) return;
-        draining = true;
-        void (async () => {
-          await Promise.all(pendingAdmissions);
-          await core.drain();
-          recordLinearMemory(true);
-          emitEvent({ kind: 'drained', activation });
-          telemetry.flush();
+  runner = createEffectWorkerRunnerTransport<
+    CoordinatorToEngineEnvelope,
+    EngineToCoordinatorEnvelope
+  >({
+    endpoint: directPort,
+    onMessage: (_portId, rawMessage) => {
+      const parsed = validateCoordinatorToEngineEnvelope(rawMessage);
+      if (!parsed.ok) {
+        fatal(`invalid coordinator envelope: ${parsed.error}`);
+        return;
+      }
+      const message: CoordinatorToEngineEnvelope = parsed.value;
+      if (failed) return;
+      if (message.ownerEpoch !== activation.ownerEpoch) {
+        fatal('coordinator envelope owner epoch does not match activation');
+        return;
+      }
+      switch (message.kind) {
+        case 'engine-request':
+          if (draining) {
+            fatal('coordinator routed a request after drain began');
+            return;
+          }
+          admitRequest(message.request);
+          break;
+        case 'drain-engine':
+          if (draining) return;
+          draining = true;
+          void (async () => {
+            await Promise.all(pendingAdmissions);
+            await core.drain();
+            recordLinearMemory(true);
+            emitEvent({ kind: 'drained', activation });
+            telemetry.flush();
+            post(
+              withVersion<EngineToCoordinatorEnvelope>({
+                kind: 'engine-drained',
+                tabId: activation.tabId,
+                ownerEpoch: activation.ownerEpoch,
+              })
+            );
+            await runner.close();
+            workerScope.close();
+          })().catch((error: unknown) =>
+            fatal(`engine drain failed: ${errorMessage(error)}`)
+          );
+          break;
+        case 'heartbeat':
+          recordLinearMemory(false);
+          core.recordCachedQueueDiagnostics?.();
           post(
             withVersion<EngineToCoordinatorEnvelope>({
-              kind: 'engine-drained',
-              tabId: activation.tabId,
+              kind: 'heartbeat-ack',
               ownerEpoch: activation.ownerEpoch,
+              heartbeatId: message.heartbeatId,
             })
           );
-          directPort.close();
-          workerScope.close();
-        })().catch((error: unknown) =>
-          fatal(`engine drain failed: ${errorMessage(error)}`)
-        );
-        break;
-      case 'heartbeat':
-        recordLinearMemory(false);
-        core.recordCachedQueueDiagnostics?.();
-        post(
-          withVersion<EngineToCoordinatorEnvelope>({
-            kind: 'heartbeat-ack',
-            ownerEpoch: activation.ownerEpoch,
-            heartbeatId: message.heartbeatId,
-          })
-        );
-        break;
-    }
-  };
-  directPort.onmessageerror = () => {
-    fatal('coordinator direct MessagePort messageerror');
-  };
-  directPort.start();
+          break;
+      }
+    },
+    onError: (error) => {
+      runnerFailed = true;
+      fatal(`coordinator Effect runner failed: ${error.message}`);
+    },
+  });
 
   try {
     await initializeCore(core, activation);
