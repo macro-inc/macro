@@ -7,7 +7,7 @@ use std::{collections::HashSet, ops::Deref};
 pub fn extract_reply_html(subject: Option<&str>, html_content: &str) -> String {
     let document = Html::parse_document(html_content);
 
-    if subject.is_some() && subject.unwrap().starts_with("Fwd:") {
+    if is_forward_subject(subject) {
         // If it's a forward, the entire original HTML is the desired content.
         return html_content.to_string();
     }
