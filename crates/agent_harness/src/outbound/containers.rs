@@ -16,7 +16,7 @@ use agent_session::domain::model::{AgentSessionId, SandboxSize};
 use crate::domain::error::Result;
 use crate::domain::model::SpawnContainer;
 use crate::domain::ports::ContainerManager;
-use crate::domain::sandbox::SandboxResizeKind;
+use crate::domain::sandbox::SandboxResizeEffect;
 use crate::outbound::daytona::{DaytonaContainer, DaytonaContainerManager};
 use crate::outbound::local::LocalContainerManager;
 use crate::outbound::sidecar::{SidecarSender, SidecarTransport};
@@ -59,15 +59,17 @@ impl ContainerManager for HarnessContainers {
         }
     }
 
-    async fn resize(
-        &self,
-        session: AgentSessionId,
-        size: SandboxSize,
-        kind: SandboxResizeKind,
-    ) -> Result<()> {
+    fn resize_effect(&self, from: SandboxSize, to: SandboxSize) -> SandboxResizeEffect {
         match self {
-            Self::Daytona(manager) => manager.resize(session, size, kind).await,
-            Self::Local(manager) => manager.resize(session, size, kind).await,
+            Self::Daytona(manager) => manager.resize_effect(from, to),
+            Self::Local(manager) => manager.resize_effect(from, to),
+        }
+    }
+
+    async fn resize(&self, session: AgentSessionId, size: SandboxSize) -> Result<()> {
+        match self {
+            Self::Daytona(manager) => manager.resize(session, size).await,
+            Self::Local(manager) => manager.resize(session, size).await,
         }
     }
 

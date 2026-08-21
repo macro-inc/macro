@@ -16,7 +16,7 @@ use crate::domain::error::{HarnessError, Result};
 use crate::domain::model::SpawnContainer;
 use crate::domain::ports::ContainerManager;
 use crate::domain::sandbox::{
-    SandboxResizeKind, SandboxResources, resize_kind_from_resources, resources,
+    SandboxResizeEffect, SandboxResources, resize_effect_from_resources, resources,
 };
 use crate::outbound::managed_containers::ManagedContainers;
 use crate::outbound::provision::{self, SESSION_LABEL};
@@ -272,7 +272,7 @@ impl DaytonaContainerManager {
             disk_gib: 96,
         };
         let next = resources(size);
-        let kind = resize_kind_from_resources(current, next);
+        let kind = resize_effect_from_resources(current, next);
         tracing::info!(
             sandbox_id = %id.as_str(),
             %size,
@@ -290,11 +290,14 @@ impl DaytonaContainerManager {
         &self,
         id: &DaytonaSandboxId,
         next: SandboxResources,
-        kind: SandboxResizeKind,
+        effect: SandboxResizeEffect,
     ) -> Result<()> {
-        match kind {
-            SandboxResizeKind::NoOp => Ok(()),
-            SandboxResizeKind::Hot => {
+        match effect {
+            SandboxResizeEffect::NoOp => Ok(()),
+            SandboxResizeEffect::Unsupported => Err(HarnessError::Container(
+                "daytona reported resize as unsupported".to_owned(),
+            )),
+            SandboxResizeEffect::InPlace => {
                 self.client
                     .resize(id.as_str(), Some(next.cpu), Some(next.memory_gib), None)
                     .await
@@ -305,7 +308,7 @@ impl DaytonaContainerManager {
                     .map_err(unavailable)?;
                 Ok(())
             }
-            SandboxResizeKind::Cold => {
+            SandboxResizeEffect::Restart => {
                 self.client.stop(id.as_str()).await.map_err(unavailable)?;
                 self.client
                     .wait_for_stopped(id.as_str(), STOP_TIMEOUT)
@@ -390,12 +393,19 @@ impl ContainerManager for DaytonaContainerManager {
         }
     }
 
+    fn resize_effect(
+        &self,
+        from: agent_session::domain::model::SandboxSize,
+        to: agent_session::domain::model::SandboxSize,
+    ) -> SandboxResizeEffect {
+        crate::domain::sandbox::resize_effect(from, to)
+    }
+
     #[tracing::instrument(err, skip(self))]
     async fn resize(
         &self,
         session: AgentSessionId,
         size: agent_session::domain::model::SandboxSize,
-        kind: SandboxResizeKind,
     ) -> Result<()> {
         let Some(id) = self
             .client
@@ -408,7 +418,25 @@ impl ContainerManager for DaytonaContainerManager {
                 "session {session} has no sandbox to resize"
             )));
         };
-        self.apply_resize(&id, resources(size), kind).await
+        let (cpu, memory, _) = self
+            .client
+            .resources(id.as_str())
+            .await
+            .map_err(unavailable)?;
+        let cpu = cpu.ok_or_else(|| {
+            HarnessError::Container("daytona did not report cpu for the sandbox".to_owned())
+        })?;
+        let memory = memory.ok_or_else(|| {
+            HarnessError::Container("daytona did not report memory for the sandbox".to_owned())
+        })?;
+        let current = SandboxResources {
+            cpu,
+            memory_gib: memory,
+            disk_gib: 96,
+        };
+        let next = resources(size);
+        self.apply_resize(&id, next, resize_effect_from_resources(current, next))
+            .await
     }
 
     #[tracing::instrument(err, skip(self))]

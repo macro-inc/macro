@@ -20,50 +20,62 @@ fn default_is_eight_cpu_sixteen_gib() {
 }
 
 #[test]
-fn upgrades_are_hot_and_downgrades_are_cold() {
+fn cpu_ram_increases_are_in_place_and_decreases_need_a_restart() {
     assert_eq!(
-        resize_kind(SandboxSize::Small, SandboxSize::Default),
-        SandboxResizeKind::Hot
+        resize_effect(SandboxSize::Small, SandboxSize::Default),
+        SandboxResizeEffect::InPlace
     );
     assert_eq!(
-        resize_kind(SandboxSize::Default, SandboxSize::Large),
-        SandboxResizeKind::Hot
+        resize_effect(SandboxSize::Default, SandboxSize::Large),
+        SandboxResizeEffect::InPlace
     );
     assert_eq!(
-        resize_kind(SandboxSize::Small, SandboxSize::Large),
-        SandboxResizeKind::Hot
+        resize_effect(SandboxSize::Small, SandboxSize::Large),
+        SandboxResizeEffect::InPlace
     );
     assert_eq!(
-        resize_kind(SandboxSize::Large, SandboxSize::Default),
-        SandboxResizeKind::Cold
+        resize_effect(SandboxSize::Large, SandboxSize::Default),
+        SandboxResizeEffect::Restart
     );
     assert_eq!(
-        resize_kind(SandboxSize::Default, SandboxSize::Small),
-        SandboxResizeKind::Cold
+        resize_effect(SandboxSize::Default, SandboxSize::Small),
+        SandboxResizeEffect::Restart
     );
     assert_eq!(
-        resize_kind(SandboxSize::Default, SandboxSize::Default),
-        SandboxResizeKind::NoOp
+        resize_effect(SandboxSize::Default, SandboxSize::Default),
+        SandboxResizeEffect::NoOp
     );
 }
 
 #[test]
-fn live_quotas_that_are_not_named_tiers_still_pick_hot_or_cold() {
+fn live_quotas_that_are_not_named_tiers_still_pick_in_place_or_restart() {
     let snapshot = SandboxResources {
         cpu: 4,
         memory_gib: 8,
         disk_gib: 10,
     };
     assert_eq!(
-        resize_kind_from_resources(snapshot, resources(SandboxSize::Default)),
-        SandboxResizeKind::Hot
+        resize_effect_from_resources(snapshot, resources(SandboxSize::Default)),
+        SandboxResizeEffect::InPlace
     );
     assert_eq!(
-        resize_kind_from_resources(resources(SandboxSize::Default), snapshot),
-        SandboxResizeKind::Cold
+        resize_effect_from_resources(resources(SandboxSize::Default), snapshot),
+        SandboxResizeEffect::Restart
     );
     assert_eq!(
-        resize_kind_from_resources(snapshot, snapshot),
-        SandboxResizeKind::NoOp
+        resize_effect_from_resources(snapshot, snapshot),
+        SandboxResizeEffect::NoOp
+    );
+}
+
+#[test]
+fn create_only_managers_cannot_change_size() {
+    assert_eq!(
+        create_only_resize_effect(SandboxSize::Default, SandboxSize::Default),
+        SandboxResizeEffect::NoOp
+    );
+    assert_eq!(
+        create_only_resize_effect(SandboxSize::Default, SandboxSize::Large),
+        SandboxResizeEffect::Unsupported
     );
 }

@@ -156,7 +156,7 @@ impl DaytonaClient {
 
     /// Resize CPU, RAM, and/or disk. Omit a field to leave it unchanged.
     ///
-    /// Hot resize (running sandbox) accepts CPU/RAM increases only. Disk
+    /// In-place resize (running sandbox) accepts CPU/RAM increases only. Disk
     /// changes and CPU/RAM decreases require a stopped sandbox.
     #[tracing::instrument(err, skip(self))]
     pub async fn resize(

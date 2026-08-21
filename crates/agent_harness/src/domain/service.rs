@@ -23,7 +23,7 @@ use crate::domain::model::{
     SessionAnnouncement, SessionDefaults, SpawnContainer, is_managed_bot,
 };
 use crate::domain::ports::{ContainerManager, RuntimeConnections, SessionAnnouncer};
-use crate::domain::sandbox::{SandboxResizeKind, resize_kind};
+use crate::domain::sandbox::SandboxResizeEffect;
 
 type SessionWorkers = DashMap<AgentSessionId, mpsc::UnboundedSender<QueuedCommand>>;
 
@@ -418,8 +418,8 @@ where
 
     /// Apply `size` to this session's sandbox and remember it as the owner's default.
     ///
-    /// CPU/RAM upgrades stay on the running box. Downgrades stop, resize, and
-    /// start it again, then reattach. Disk is never changed.
+    /// The container manager reports whether the change is in-place, needs a
+    /// stop, or is unsupported. Disk is never changed.
     #[tracing::instrument(err, skip(self), fields(%session_id, %size))]
     async fn apply_sandbox_size(
         &self,
@@ -427,13 +427,13 @@ where
         size: SandboxSize,
     ) -> Result<()> {
         let session = self.sessions.get_session(session_id).await?;
-        let kind = resize_kind(session.sandbox_size, size);
-        if is_managed_bot(session.bot_id) && kind != SandboxResizeKind::NoOp {
-            if kind == SandboxResizeKind::Cold {
+        let effect = self.containers.resize_effect(session.sandbox_size, size);
+        if is_managed_bot(session.bot_id) && effect != SandboxResizeEffect::NoOp {
+            if effect == SandboxResizeEffect::Restart {
                 self.sessions.close_session(session_id).await?;
             }
-            self.containers.resize(session_id, size, kind).await?;
-            if kind == SandboxResizeKind::Cold {
+            self.containers.resize(session_id, size).await?;
+            if effect == SandboxResizeEffect::Restart {
                 let container = self.containers.resume(session_id).await?;
                 self.sessions
                     .attach_session(session_id, RuntimeAttachment::solo(container))

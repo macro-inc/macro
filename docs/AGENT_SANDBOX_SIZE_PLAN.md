@@ -25,11 +25,11 @@ The wanted product is three named tiers (`small`, `default`, `large`), with `def
 1. **Named tiers, not raw integers.** The domain type is `SandboxSize::{Small, Default, Large}`. UI and API never send `cpu` / `memory` / `disk`. Those numbers are a provider mapping owned by the harness domain.
 2. **`default` is 8 / 16 / 96.** That is the new Macro Coder size. `small` and `large` are scaled off it (numbers below; confirm `large` against the live Daytona quota before shipping it).
 3. **One snapshot, size after create.** Do not build three snapshots. Rebuild `macro-agent-harness` at the default resource profile (`--cpu 8 --memory 16 --disk 96`). Daytona returns 400 if `cpu` / `memory` / `disk` are sent on `POST /sandbox` with a snapshot, so spawn creates from the snapshot, waits for start, and applies the named tier with `POST /sandbox/{id}/resize` (hot if CPU/RAM only increase, cold if either decreases). Disk is never sent on resize. Namespace maps the same tier onto `virtual_cpu` / `memory_megabytes` at create time.
-4. **Size is snapshotted onto the session at spawn and can be changed in place.** CPU/RAM upgrades hot-resize a running Daytona sandbox. Downgrades stop, resize, and start it again. Disk never changes. Namespace cannot resize in place.
+4. **Size is snapshotted onto the session at spawn and can be changed in place when the manager allows it.** CPU/RAM upgrades are in-place on a running Daytona sandbox. Downgrades stop, resize, and start it again. Disk never changes. Local Docker and Namespace report `Unsupported` (no in-place resize).
 5. **User default drives mention spawn.** `@coder` has no settings chrome. The harness reads the mentioning user's default size (falling back to `default`) and writes it onto the new session before `spawn`.
 6. **Sandbox size is not an `AgentAction`.** `AgentAction` is ACP (`prompt`, `set_model`, `compact`, `stop`). Size is harness/container policy. Do not send it to the agent. Use a dedicated settings endpoint for the user default, and a field on the session response for the size this session was spawned with.
 7. **Every authenticated user may pick any tier.** No plan gating, no locks, no team-admin override, no extra receipts. `GET`/`PUT` the caller's own default; mention spawn already knows the sender. Handlers do not branch on who may use `large`.
-8. **Policy lives in the harness domain.** Inbound parses the tier. Domain validates the name, resolves the user default, and puts it on `SpawnContainer`. Outbound adapters only map a validated size onto provider fields. Hexagonal boundary: no Daytona/Namespace types in domain, no size policy in axum handlers or the web picker.
+8. **Policy lives in the harness domain; resize capability lives on the container-manager port.** Inbound parses the tier. Domain validates the name, resolves the user default, and puts it on `SpawnContainer`. Named size → CPU/RAM/disk is harness mapping. Whether an existing container can take that change (`NoOp` / `InPlace` / `Restart` / `Unsupported`) is `ContainerManager::resize_effect`. Domain closes/resumes from that effect and calls `resize(session, size)` with no kind argument. Adapters implement the effect and the resize. Hexagonal boundary: no Daytona/Namespace types in domain, no size policy in axum handlers or the web picker.
 
 ## Goals
 
@@ -73,7 +73,7 @@ If the live Daytona quota cannot place `large`, ship `small` + `default` only an
 2. Harness loads the sender's default `SandboxSize`, or `Default`.
 3. Session row is created with that size.
 4. `spawn` passes the size to the container manager.
-5. Daytona create omits resource fields. After the sandbox starts, spawn resizes CPU/RAM to the session tier (hot if the snapshot is smaller, cold if it is larger). Disk stays at the snapshot's disk.
+5. Daytona create omits resource fields. After the sandbox starts, spawn resizes CPU/RAM to the session tier (in-place if the snapshot is smaller, restart if it is larger). Disk stays at the snapshot's disk.
 
 ### User default
 
@@ -160,9 +160,9 @@ disk: u32,   // GiB
 
 `configuration_parameters` sends `snapshot`, `env`, `labels`, and `auto_stop_interval: 0` only. Daytona rejects `cpu` / `memory` / `disk` on snapshot creates (HTTP 400: "Cannot specify Sandbox resources when using a snapshot"). Size is applied after start via `POST /sandbox/{id}/resize` with `cpu` and `memory` only.
 
-Snapshot create in `justfile` / `ensure-daytona` is `--cpu 8 --memory 16 --disk 96` so a `default` spawn is a no-op after create, `large` is a hot resize, and `small` is a cold resize. Rebuild the snapshot (delete + create); `snapshot create` will not replace an existing name.
+Snapshot create in `justfile` / `ensure-daytona` is `--cpu 8 --memory 16 --disk 96` so a `default` spawn is a no-op after create, `large` is an in-place resize, and `small` is a restart resize. Rebuild the snapshot (delete + create); `snapshot create` will not replace an existing name.
 
-Verify with a throwaway sandbox: create from the snapshot with no resource fields, wait until started, hot-resize CPU/RAM up without sending `disk`, and confirm disk is unchanged. Always delete the sandbox.
+Verify with a throwaway sandbox: create from the snapshot with no resource fields, wait until started, stay inside the org per-sandbox cap, shrink while stopped, then raise CPU/RAM in place without sending `disk`, and confirm disk is unchanged. Always delete the sandbox.
 
 ### Namespace
 
@@ -280,7 +280,7 @@ No picker on `AgentSplitHeader`. No mention-typeahead control.
 ## Risks
 
 - **Snapshot create rejects resource fields (HTTP 400).** Mitigated by inheriting snapshot quotas on create and applying the named tier with resize.
-- **`POST /sandbox/{id}/resize` 404s with `Cannot POST` when `SANDBOX_RESIZE` is off for the org.** An API key cannot enable that OpenFeature flag (org endpoints 401). A Daytona org owner emails `support@daytona.io` or checks `/dashboard/experimental`.
+- **`POST /sandbox/{id}/resize` 404s with `Cannot POST` when the route is not registered on this API.** Daytona documents resize as available to all organizations. The client maps that 404 to `ResizeNotEnabled`. A missing sandbox 404s with "not found" instead.
 - **Live per-sandbox cap is 4 vCPU / 8 GiB / 10 GiB.** `POST /snapshots` with `--cpu 8 --memory 16 --disk 96` returns 400: "CPU request 8 exceeds maximum allowed per sandbox (4)". Ask Daytona to raise per-sandbox limits to at least 16 / 32 / 96 (`large`) before rebuilding `macro-agent-harness`. Do not delete the live 4/8/10 snapshot until that create would succeed.
 - **`large` exceeds quota.** Keep it out of the public enum until a create succeeds.
 - **Users think the picker resizes the open session.** Header copy + toast. Size on the session response is the spawned size, not the pending default.
@@ -290,7 +290,8 @@ No picker on `AgentSplitHeader`. No mention-typeahead control.
 ## Files (expected)
 
 - `crates/agent_harness/justfile` — snapshot resources
-- `crates/agent_harness/src/domain/model.rs` — `SandboxSize`, `SpawnContainer`
+- `crates/agent_harness/src/domain/ports.rs` — `ContainerManager::resize_effect` + `resize` without a kind argument
+- `crates/agent_harness/src/domain/sandbox.rs` — named size → CPU/RAM/disk; in-place vs restart comparison
 - `crates/agent_harness/src/domain/service.rs` — resolve user default on `open`
 - `crates/agent_harness/src/outbound/daytona/client.rs` — create omits resources; resize sends `cpu`/`memory`
 - `crates/agent_harness/src/outbound/namespace/client.rs` — shape from tier

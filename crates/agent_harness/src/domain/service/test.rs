@@ -4,7 +4,7 @@
 
 use std::sync::Arc;
 
-use crate::domain::sandbox::SandboxResizeKind;
+use crate::domain::error::HarnessError;
 use agent_client_protocol::RawJsonRpcMessage;
 use agent_client_protocol::schema::v1::{
     AgentCapabilities, ClientRequest, ContentBlock, InitializeResponse, NewSessionResponse,
@@ -1188,10 +1188,7 @@ async fn set_sandbox_size_hot_resizes_and_updates_the_user_default() {
         .await
         .expect("hot resize should succeed");
 
-    assert_eq!(
-        containers.resizes(),
-        [(id, SandboxSize::Large, SandboxResizeKind::Hot)]
-    );
+    assert_eq!(containers.resizes(), [(id, SandboxSize::Large)]);
     assert_eq!(
         repo.get(id).await.expect("session").sandbox_size,
         SandboxSize::Large
@@ -1206,22 +1203,58 @@ async fn set_sandbox_size_hot_resizes_and_updates_the_user_default() {
 }
 
 #[tokio::test]
-async fn set_sandbox_size_cold_closes_resizes_and_resumes() {
+async fn set_sandbox_size_restart_closes_resizes_and_resumes() {
     let (service, repo, containers, _announcer, _runtimes) = harness();
     let id = disconnected_session(&repo, &containers).await;
 
     service
         .set_sandbox_size(id, SandboxSize::Small)
         .await
-        .expect("cold resize should succeed");
+        .expect("restart resize should succeed");
 
-    assert_eq!(
-        containers.resizes(),
-        [(id, SandboxSize::Small, SandboxResizeKind::Cold)]
-    );
+    assert_eq!(containers.resizes(), [(id, SandboxSize::Small)]);
     assert_eq!(containers.resumed(), 1);
     assert_eq!(
         repo.get(id).await.expect("session").sandbox_size,
         SandboxSize::Small
     );
+}
+
+#[tokio::test]
+async fn set_sandbox_size_same_tier_does_not_resize() {
+    let (service, repo, containers, _announcer, _runtimes) = harness();
+    let id = disconnected_session(&repo, &containers).await;
+
+    service
+        .set_sandbox_size(id, SandboxSize::Default)
+        .await
+        .expect("no-op size should succeed");
+
+    assert!(containers.resizes().is_empty());
+    assert_eq!(containers.resumed(), 0);
+    assert_eq!(
+        repo.get(id).await.expect("session").sandbox_size,
+        SandboxSize::Default
+    );
+}
+
+#[tokio::test]
+async fn set_sandbox_size_unsupported_does_not_persist() {
+    let (service, repo, containers, _announcer, _runtimes) = harness();
+    let id = disconnected_session(&repo, &containers).await;
+    containers.refuse_resize();
+
+    let error = service
+        .set_sandbox_size(id, SandboxSize::Large)
+        .await
+        .expect_err("unsupported resize should fail");
+    assert!(
+        matches!(error, HarnessError::Container(message) if message.contains("cannot resize")),
+        "unexpected error: {error}"
+    );
+    assert_eq!(
+        repo.get(id).await.expect("session").sandbox_size,
+        SandboxSize::Default
+    );
+    assert_eq!(containers.resumed(), 0);
 }

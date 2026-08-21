@@ -7,7 +7,7 @@ use bot_id::BotId;
 
 use super::error::Result;
 use super::model::{SessionAnnouncement, SpawnContainer};
-use super::sandbox::SandboxResizeKind;
+use super::sandbox::SandboxResizeEffect;
 
 #[cfg(test)]
 mod test;
@@ -57,15 +57,23 @@ pub trait ContainerManager: Send + Sync + 'static {
         command: SpawnContainer,
     ) -> impl Future<Output = Result<Self::Transport>> + Send;
 
+    /// How this manager applies a change from `from` to `to`.
+    ///
+    /// Domain uses this to decide whether to close the session before
+    /// [`Self::resize`]. Named size → CPU/RAM mapping is harness policy;
+    /// whether a running container can take that change is a manager
+    /// capability.
+    fn resize_effect(&self, from: SandboxSize, to: SandboxSize) -> SandboxResizeEffect;
+
     /// Change a live sandbox's compute to `size`.
     ///
-    /// [`SandboxResizeKind::Hot`] must not stop the sandbox. [`SandboxResizeKind::Cold`]
-    /// may stop, resize, and start it again. Disk is never changed.
+    /// Domain has already closed the session when [`Self::resize_effect`]
+    /// returned [`SandboxResizeEffect::Restart`]. [`SandboxResizeEffect::InPlace`]
+    /// must not stop the sandbox. Disk is never changed.
     fn resize(
         &self,
         session: AgentSessionId,
         size: SandboxSize,
-        kind: SandboxResizeKind,
     ) -> impl Future<Output = Result<()>> + Send;
 
     /// Reattach to a session's existing container, starting it if stopped.

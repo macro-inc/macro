@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use agent_runtime_protocol::domain::ports::Transport;
 use agent_runtime_protocol::domain::schema::v0::{ToRuntimeMessage, ToServerMessage};
-use agent_session::domain::model::AgentSessionId;
+use agent_session::domain::model::{AgentSessionId, SandboxSize};
 
 use super::client::NamespaceClient;
 use super::errors::NamespaceError;
@@ -10,7 +10,7 @@ use super::types::{ContainerSpec, Instance, NamespaceSettings};
 use crate::domain::error::{HarnessError, Result};
 use crate::domain::model::SpawnContainer;
 use crate::domain::ports::ContainerManager;
-use crate::domain::sandbox::{SandboxResizeKind, resources};
+use crate::domain::sandbox::{SandboxResizeEffect, create_only_resize_effect, resources};
 use crate::outbound::daytona::GithubToken;
 use crate::outbound::provision;
 use crate::outbound::sidecar::SidecarTransport;
@@ -118,18 +118,14 @@ impl ContainerManager for NamespaceContainerManager {
         }
     }
 
-    async fn resize(
-        &self,
-        _session: AgentSessionId,
-        _size: agent_session::domain::model::SandboxSize,
-        kind: SandboxResizeKind,
-    ) -> Result<()> {
-        match kind {
-            SandboxResizeKind::NoOp => Ok(()),
-            SandboxResizeKind::Hot | SandboxResizeKind::Cold => Err(HarnessError::Container(
-                "Namespace instances cannot be resized in place".to_owned(),
-            )),
-        }
+    fn resize_effect(&self, from: SandboxSize, to: SandboxSize) -> SandboxResizeEffect {
+        create_only_resize_effect(from, to)
+    }
+
+    async fn resize(&self, _session: AgentSessionId, _size: SandboxSize) -> Result<()> {
+        Err(HarnessError::Container(
+            "Namespace instances cannot be resized in place".to_owned(),
+        ))
     }
 
     async fn resume(&self, _session: AgentSessionId) -> Result<Self::Transport> {

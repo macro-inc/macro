@@ -66,7 +66,7 @@ fn resize_request_omits_unset_fields() {
 }
 
 #[test]
-fn resize_404_cannot_post_means_the_org_flag_is_off() {
+fn resize_404_cannot_post_means_the_route_is_missing() {
     assert!(resize_not_enabled(
         reqwest::StatusCode::NOT_FOUND,
         r#"{"message":"Cannot POST /api/sandbox/abc/resize"}"#,
@@ -109,48 +109,30 @@ async fn live_hot_resize_increases_cpu_and_memory_without_touching_disk() {
         let memory = memory.expect("daytona should report memory after start");
         eprintln!("snapshot sandbox started at cpu={cpu} memory_gib={memory} disk={disk:?}");
 
-        let (from_cpu, from_memory) = if cpu >= 16 && memory >= 32 {
-            eprintln!("already at large; cold-down to 8/16 so hot-up can run");
-            client.stop(&id).await?;
-            client.wait_for_stopped(&id, Duration::from_secs(60)).await?;
-            client.resize(&id, Some(8), Some(16), None).await?;
-            client
-                .wait_for_resize(&id, Duration::from_secs(300))
-                .await?;
-            client.start(&id).await?;
-            client
-                .wait_for_started(&id, Duration::from_secs(300))
-                .await?;
-            (8, 16)
-        } else {
-            (cpu, memory)
-        };
-
-        let (target_cpu, target_memory) = if from_cpu < 8 || from_memory < 16 {
-            (from_cpu.max(8), from_memory.max(16))
-        } else {
-            (from_cpu.max(16), from_memory.max(32))
-        };
+        // Stay inside Daytona's default per-sandbox cap (4 vCPU / 8 GiB).
+        // Create-from-snapshot inherits those quotas, so the only in-quota
+        // hot-up is: stop, shrink, start, then raise CPU/RAM without disk.
+        let (low_cpu, low_memory) = (cpu.min(2), memory.min(4));
         assert!(
-            target_cpu >= from_cpu && target_memory >= from_memory,
-            "hot-up must not decrease cpu/memory"
+            low_cpu < cpu || low_memory < memory,
+            "need headroom under the snapshot quota to hot-resize back up"
         );
-        assert!(
-            target_cpu > from_cpu || target_memory > from_memory,
-            "hot-up must increase cpu or memory"
-        );
-        eprintln!("hot-resizing cpu {from_cpu}->{target_cpu} memory_gib {from_memory}->{target_memory} without disk");
 
+        eprintln!("stopping to shrink cpu {cpu}->{low_cpu} memory_gib {memory}->{low_memory}");
+        client.stop(&id).await?;
+        client
+            .wait_for_stopped(&id, Duration::from_secs(60))
+            .await?;
         match client
-            .resize(&id, Some(target_cpu), Some(target_memory), None)
+            .resize(&id, Some(low_cpu), Some(low_memory), None)
             .await
         {
             Ok(()) => {}
             Err(DaytonaError::ResizeNotEnabled) => {
                 panic!(
                     "create-without-resources worked (cpu={cpu} memory_gib={memory} disk={disk:?}) \
-                     but POST /sandbox/{{id}}/resize 404s: Daytona SANDBOX_RESIZE is not enabled \
-                     for this organization"
+                     but POST /sandbox/{{id}}/resize 404s: the documented resize route is not \
+                     registered on this API"
                 );
             }
             Err(error) => return Err(error),
@@ -158,13 +140,21 @@ async fn live_hot_resize_increases_cpu_and_memory_without_touching_disk() {
         client
             .wait_for_resize(&id, Duration::from_secs(300))
             .await?;
-        let (after_cpu, after_memory, after_disk) = client.resources(&id).await?;
-        assert_eq!(after_cpu, Some(target_cpu), "cpu should hot-resize");
-        assert_eq!(
-            after_memory,
-            Some(target_memory),
-            "memory should hot-resize"
+        client.start(&id).await?;
+        client
+            .wait_for_started(&id, Duration::from_secs(300))
+            .await?;
+
+        eprintln!(
+            "hot-resizing cpu {low_cpu}->{cpu} memory_gib {low_memory}->{memory} without disk"
         );
+        client.resize(&id, Some(cpu), Some(memory), None).await?;
+        client
+            .wait_for_resize(&id, Duration::from_secs(300))
+            .await?;
+        let (after_cpu, after_memory, after_disk) = client.resources(&id).await?;
+        assert_eq!(after_cpu, Some(cpu), "cpu should hot-resize");
+        assert_eq!(after_memory, Some(memory), "memory should hot-resize");
         assert_eq!(after_disk, disk, "disk should be unchanged");
         Ok::<(), DaytonaError>(())
     }
