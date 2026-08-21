@@ -331,7 +331,7 @@ async function activate(
                   ownerEpoch: activation.ownerEpoch,
                 })
               );
-              yield* Effect.promise(() => runner.close());
+              yield* runner.close();
               workerScope.close();
             }).pipe(
               Effect.catchCause((cause) =>
@@ -369,9 +369,7 @@ async function activate(
   Effect.runSync(
     Scope.addFinalizer(
       lifecycleScope,
-      Effect.promise(() => runner.close()).pipe(
-        Effect.catchCause(() => Effect.void)
-      )
+      runner.close().pipe(Effect.catchCause(() => Effect.void))
     )
   );
 

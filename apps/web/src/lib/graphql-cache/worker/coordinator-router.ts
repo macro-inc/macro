@@ -759,7 +759,9 @@ export class CoordinatorRouter {
           ) {
             const route = this.engineRoute;
             this.engineRoute = undefined;
-            void route.transport.close().catch(() => undefined);
+            void Effect.runPromise(route.transport.close()).catch(
+              () => undefined
+            );
           }
           break;
         case 'drop-tab':

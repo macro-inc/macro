@@ -27,7 +27,7 @@ export interface EffectWorkerTransport<Outbound> {
     transfers?: readonly Transferable[]
   ): Effect.Effect<void, Error>;
   /** Closes the Effect scope and then the caller-owned browser endpoint. */
-  close(): Promise<void>;
+  close(): Effect.Effect<void>;
 }
 
 const asError = (cause: unknown): Error =>
@@ -53,7 +53,6 @@ export function createEffectWorkerTransport<Inbound, Outbound>(
 
   let readySettled = false;
   let closed = false;
-  let closePromise: Promise<void> | undefined;
   let resolveReady!: () => void;
   let rejectReady!: (error: Error) => void;
   const ready = new Promise<void>((resolve, reject) => {
@@ -123,25 +122,29 @@ export function createEffectWorkerTransport<Inbound, Outbound>(
       });
     },
 
-    close(): Promise<void> {
-      if (closePromise) return closePromise;
-      closed = true;
-      if (!readySettled) {
-        readySettled = true;
-        rejectReady(new Error('Effect worker transport closed before ready'));
-      }
-      messageTarget.removeEventListener('messageerror', onMessageError);
-      // Preserve the browser adapter's synchronous close behavior while still
-      // speaking Effect's explicit close protocol to the runner.
-      try {
-        messageTarget.postMessage([1]);
-      } catch {
-        // Endpoint teardown remains authoritative if close framing fails.
-      } finally {
-        options.closeEndpoint?.();
-      }
-      closePromise = Effect.runPromise(Fiber.interrupt(fiber));
-      return closePromise;
+    close(): Effect.Effect<void> {
+      return Effect.suspend(() => {
+        if (!closed) {
+          closed = true;
+          if (!readySettled) {
+            readySettled = true;
+            rejectReady(
+              new Error('Effect worker transport closed before ready')
+            );
+          }
+          messageTarget.removeEventListener('messageerror', onMessageError);
+          // Preserve the browser adapter's synchronous endpoint teardown while
+          // still speaking Effect's explicit close protocol to the runner.
+          try {
+            messageTarget.postMessage([1]);
+          } catch {
+            // Endpoint teardown remains authoritative if close framing fails.
+          } finally {
+            options.closeEndpoint?.();
+          }
+        }
+        return Fiber.interrupt(fiber);
+      });
     },
   };
 }
@@ -159,7 +162,7 @@ export interface EffectWorkerRunnerTransport<Outbound> {
     message: Outbound,
     transfers?: readonly Transferable[]
   ): Effect.Effect<void, Error>;
-  close(): Promise<void>;
+  close(): Effect.Effect<void>;
 }
 
 /** Runs Effect's worker-side protocol over a worker global or explicit port. */
@@ -169,7 +172,6 @@ export function createEffectWorkerRunnerTransport<Inbound, Outbound>(
   const platform = BrowserWorkerRunner.make(options.endpoint);
   const runner = Effect.runSync(platform.start<Outbound, Inbound>());
   let closed = false;
-  let closePromise: Promise<void> | undefined;
   const run = runner
     .run((portId, message) => {
       const handled = options.onMessage(portId, message);
@@ -208,19 +210,17 @@ export function createEffectWorkerRunnerTransport<Inbound, Outbound>(
       });
     },
 
-    close(): Promise<void> {
-      if (closePromise) return closePromise;
-      closed = true;
-      closePromise = Effect.runPromise(
-        Effect.all(
+    close(): Effect.Effect<void> {
+      return Effect.suspend(() => {
+        closed = true;
+        return Effect.all(
           [
             Fiber.interrupt(fiber),
             ...(disconnectFiber ? [Fiber.interrupt(disconnectFiber)] : []),
           ],
           { discard: true }
-        )
-      );
-      return closePromise;
+        );
+      });
     },
   };
 }

@@ -755,7 +755,7 @@ export class CacheCoordinatorPageAdapter {
       }
     }
     if (transport) {
-      void transport.close().catch(() => undefined);
+      void Effect.runPromise(transport.close()).catch(() => undefined);
     } else if (worker) {
       this.closePort(worker.port);
     }

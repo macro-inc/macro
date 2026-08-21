@@ -67,7 +67,7 @@ describe('Effect worker transport', () => {
     await flush();
     expect(received).toEqual([{ kind: 'response' }]);
 
-    await transport.close();
+    await Effect.runPromise(transport.close());
   });
 
   it('passes transferables and emits the Effect close frame once', async () => {
@@ -97,7 +97,9 @@ describe('Effect worker transport', () => {
     expect(endpoint.sent[0]?.transfers).toHaveLength(1);
     expect(endpoint.sent[0]?.transfers?.[0]).toBe(channel.port1);
 
-    await Promise.all([transport.close(), transport.close()]);
+    await Effect.runPromise(
+      Effect.all([transport.close(), transport.close()], { discard: true })
+    );
     expect(endpoint.sent.at(-1)?.message).toEqual([1]);
     expect(
       endpoint.sent.filter(({ message }) =>
@@ -137,8 +139,9 @@ describe('Effect worker transport', () => {
     await flush();
     expect(parentMessages).toEqual([{ kind: 'response' }]);
 
-    await parent.close();
-    await runner.close();
+    await Effect.runPromise(
+      Effect.all([parent.close(), runner.close()], { discard: true })
+    );
   });
 
   it('reports message decoding failures and rejects sends after close', async () => {
@@ -161,7 +164,7 @@ describe('Effect worker transport', () => {
       })
     );
 
-    await transport.close();
+    await Effect.runPromise(transport.close());
     await expect(
       Effect.runPromise(transport.send({ kind: 'late' }))
     ).rejects.toThrow('Effect worker transport is closed');
