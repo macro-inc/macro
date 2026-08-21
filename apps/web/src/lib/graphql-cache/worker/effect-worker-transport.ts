@@ -22,9 +22,10 @@ export interface EffectWorkerTransport<Outbound> {
   /** Resolves after the runner has installed its receive loop. */
   readonly ready: Promise<void>;
   /** Sends through Effect's worker protocol, including optional transferables. */
-  send(message: Outbound, transfers?: readonly Transferable[]): Promise<void>;
-  /** Synchronous send for existing state-machine adapters. */
-  sendUnsafe(message: Outbound, transfers?: readonly Transferable[]): void;
+  send(
+    message: Outbound,
+    transfers?: readonly Transferable[]
+  ): Effect.Effect<void, Error>;
   /** Closes the Effect scope and then the caller-owned browser endpoint. */
   close(): Promise<void>;
 }
@@ -32,20 +33,8 @@ export interface EffectWorkerTransport<Outbound> {
 const asError = (cause: unknown): Error =>
   cause instanceof Error ? cause : new Error(String(cause));
 
-const originalWorkerError = (error: unknown): Error => {
-  if (
-    typeof error === 'object' &&
-    error !== null &&
-    'reason' in error &&
-    typeof error.reason === 'object' &&
-    error.reason !== null &&
-    'cause' in error.reason &&
-    error.reason.cause instanceof Error
-  ) {
-    return error.reason.cause;
-  }
-  return asError(error);
-};
+const originalWorkerError = (error: WorkerError): Error =>
+  error.reason.cause instanceof Error ? error.reason.cause : error;
 
 /**
  * Starts Effect's parent-side browser worker protocol over an existing worker
@@ -123,25 +112,15 @@ export function createEffectWorkerTransport<Inbound, Outbound>(
   return {
     ready,
 
-    async send(
-      message: Outbound,
-      transfers?: readonly Transferable[]
-    ): Promise<void> {
-      if (closed) throw new Error('Effect worker transport is closed');
-      const exit = await Effect.runPromiseExit(
-        backing.send(message, transfers)
-      );
-      if (exit._tag === 'Failure') {
-        throw originalWorkerError(Cause.squash(exit.cause));
-      }
-    },
-
-    sendUnsafe(message: Outbound, transfers?: readonly Transferable[]): void {
-      if (closed) throw new Error('Effect worker transport is closed');
-      const exit = Effect.runSyncExit(backing.send(message, transfers));
-      if (exit._tag === 'Failure') {
-        throw originalWorkerError(Cause.squash(exit.cause));
-      }
+    send(message, transfers): Effect.Effect<void, Error> {
+      return Effect.suspend(() => {
+        if (closed) {
+          return Effect.fail(new Error('Effect worker transport is closed'));
+        }
+        return backing
+          .send(message, transfers)
+          .pipe(Effect.mapError(originalWorkerError));
+      });
     },
 
     close(): Promise<void> {
@@ -175,11 +154,11 @@ export interface EffectWorkerRunnerOptions<Inbound> {
 }
 
 export interface EffectWorkerRunnerTransport<Outbound> {
-  sendUnsafe(
+  send(
     portId: number,
     message: Outbound,
     transfers?: readonly Transferable[]
-  ): void;
+  ): Effect.Effect<void, Error>;
   close(): Promise<void>;
 }
 
@@ -218,9 +197,15 @@ export function createEffectWorkerRunnerTransport<Inbound, Outbound>(
     : undefined;
 
   return {
-    sendUnsafe(portId, message, transfers): void {
-      if (closed) throw new Error('Effect worker runner transport is closed');
-      Effect.runSync(runner.send(portId, message, transfers));
+    send(portId, message, transfers): Effect.Effect<void, Error> {
+      return Effect.suspend(() => {
+        if (closed) {
+          return Effect.fail(
+            new Error('Effect worker runner transport is closed')
+          );
+        }
+        return runner.send(portId, message, transfers);
+      });
     },
 
     close(): Promise<void> {

@@ -1,3 +1,4 @@
+import * as Effect from 'effect/Effect';
 import type { CacheRequest, WorkerMessage } from '../protocol';
 import {
   type CacheTelemetryRecorderLike,
@@ -671,7 +672,7 @@ export class CacheCoordinatorPageAdapter {
       return false;
     }
     try {
-      transport.sendUnsafe(message, transfer);
+      Effect.runSync(transport.send(message, transfer));
       return true;
     } catch (error) {
       for (const untransferredPort of untransferredPorts) {

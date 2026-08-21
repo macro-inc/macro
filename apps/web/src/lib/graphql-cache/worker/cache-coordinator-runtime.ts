@@ -1,5 +1,6 @@
 /// <reference lib="webworker" />
 
+import * as Effect from 'effect/Effect';
 import type {
   CoordinatorToTabEnvelope,
   TabToCoordinatorEnvelope,
@@ -33,10 +34,8 @@ export function installCacheCoordinatorWorker(
       onmessage: null,
       onmessageerror: null,
       postMessage(message: unknown, transfers?: Transferable[]): void {
-        runner.sendUnsafe(
-          portId,
-          message as CoordinatorToTabEnvelope,
-          transfers
+        Effect.runSync(
+          runner.send(portId, message as CoordinatorToTabEnvelope, transfers)
         );
       },
       start(): void {},

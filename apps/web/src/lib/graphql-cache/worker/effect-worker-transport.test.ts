@@ -1,3 +1,4 @@
+import * as Effect from 'effect/Effect';
 import { describe, expect, it, vi } from 'vitest';
 import {
   createEffectWorkerRunnerTransport,
@@ -51,8 +52,8 @@ describe('Effect worker transport', () => {
       onError: vi.fn(),
     });
 
-    await transport.send('first');
-    await transport.send('second');
+    await Effect.runPromise(transport.send('first'));
+    await Effect.runPromise(transport.send('second'));
     expect(endpoint.sent).toEqual([]);
 
     endpoint.ready();
@@ -85,7 +86,9 @@ describe('Effect worker transport', () => {
     await transport.ready;
 
     const channel = new MessageChannel();
-    await transport.send({ port: channel.port1 }, [channel.port1]);
+    await Effect.runPromise(
+      transport.send({ port: channel.port1 }, [channel.port1])
+    );
     const framed = endpoint.sent[0]?.message as
       | [number, { port: MessagePort }]
       | undefined;
@@ -125,12 +128,12 @@ describe('Effect worker transport', () => {
     });
 
     await parent.ready;
-    parent.sendUnsafe({ kind: 'request' });
+    Effect.runSync(parent.send({ kind: 'request' }));
     await flush();
     expect(runnerMessage).toEqual({ kind: 'request' });
     expect(runnerPortId).toBe(0);
 
-    runner.sendUnsafe(0, { kind: 'response' });
+    Effect.runSync(runner.send(0, { kind: 'response' }));
     await flush();
     expect(parentMessages).toEqual([{ kind: 'response' }]);
 
@@ -159,8 +162,8 @@ describe('Effect worker transport', () => {
     );
 
     await transport.close();
-    await expect(transport.send({ kind: 'late' })).rejects.toThrow(
-      'Effect worker transport is closed'
-    );
+    await expect(
+      Effect.runPromise(transport.send({ kind: 'late' }))
+    ).rejects.toThrow('Effect worker transport is closed');
   });
 });

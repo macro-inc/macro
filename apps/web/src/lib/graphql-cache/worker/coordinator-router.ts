@@ -1,3 +1,4 @@
+import * as Effect from 'effect/Effect';
 import type { CacheResponse } from '../protocol';
 import {
   type CacheResetReason,
@@ -686,13 +687,15 @@ export class CoordinatorRouter {
             );
             break;
           }
-          route.transport.sendUnsafe(
-            envelope<CoordinatorToEngineEnvelope>({
-              kind: 'engine-request',
-              ownerEpoch: action.ownerEpoch,
-              routeId: action.routeId,
-              request: action.request,
-            })
+          Effect.runSync(
+            route.transport.send(
+              envelope<CoordinatorToEngineEnvelope>({
+                kind: 'engine-request',
+                ownerEpoch: action.ownerEpoch,
+                routeId: action.routeId,
+                request: action.request,
+              })
+            )
           );
           break;
         }
@@ -738,11 +741,13 @@ export class CoordinatorRouter {
             );
             break;
           }
-          route.transport.sendUnsafe(
-            envelope<CoordinatorToEngineEnvelope>({
-              kind: 'drain-engine',
-              ownerEpoch: action.ownerEpoch,
-            })
+          Effect.runSync(
+            route.transport.send(
+              envelope<CoordinatorToEngineEnvelope>({
+                kind: 'drain-engine',
+                ownerEpoch: action.ownerEpoch,
+              })
+            )
           );
           break;
         }
@@ -1117,12 +1122,14 @@ export class CoordinatorRouter {
       }
       const heartbeatId = this.nextHeartbeatId++;
       this.pendingHeartbeat = { ownerEpoch, heartbeatId };
-      route.transport.sendUnsafe(
-        envelope<CoordinatorToEngineEnvelope>({
-          kind: 'heartbeat',
-          ownerEpoch,
-          heartbeatId,
-        })
+      Effect.runSync(
+        route.transport.send(
+          envelope<CoordinatorToEngineEnvelope>({
+            kind: 'heartbeat',
+            ownerEpoch,
+            heartbeatId,
+          })
+        )
       );
       this.heartbeatTimeoutTimer = this.setTimeoutFn(() => {
         if (

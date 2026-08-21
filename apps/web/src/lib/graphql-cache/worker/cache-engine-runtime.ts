@@ -206,7 +206,7 @@ async function activate(
   let runnerFailed = false;
   let runner!: EffectWorkerRunnerTransport<EngineToCoordinatorEnvelope>;
   const post = (message: EngineToCoordinatorEnvelope): void => {
-    runner.sendUnsafe(0, message);
+    Effect.runSync(runner.send(0, message));
   };
   const fatal = (
     reason: string,
