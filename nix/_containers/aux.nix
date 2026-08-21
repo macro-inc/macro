@@ -14,6 +14,14 @@ let
     caCertificates
     ;
 
+  # Host-installed workerd (wrangler) is FHS-linked against
+  # `/lib64/ld-linux-x86-64.so.2`. glibc in contents materialises that path.
+  fhsLibs = with pkgs; [
+    glibc
+    libgcc
+    zlib
+  ];
+
   nodeBunContents = [
     fakeNss
     binSh
@@ -25,12 +33,14 @@ let
     pkgs.dumb-init
     pkgs.nodejs_22
     pkgs.bun
-  ];
+  ]
+  ++ fhsLibs;
 
   nodeBunEnv = [
     "SSL_CERT_FILE=${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt"
     "NIX_SSL_CERT_FILE=${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt"
     "PATH=/bin:/usr/bin"
+    "LD_LIBRARY_PATH=${lib.makeLibraryPath fhsLibs}"
   ];
 
   nodeBunImage =
@@ -68,6 +78,7 @@ let
     PasswordAuthentication no
     KbdInteractiveAuthentication no
     PubkeyAuthentication yes
+    StrictModes no
     AuthorizedKeysFile /etc/ssh/authorized_keys/%u
     AllowTcpForwarding remote
     GatewayPorts clientspecified
@@ -96,7 +107,8 @@ let
       sshdEntrypoint
     ];
     extraCommands = ''
-      mkdir -p ./etc/ssh/authorized_keys ./run
+      mkdir -p ./etc/ssh/authorized_keys ./run ./var/empty/sshd
+      chmod 755 ./var/empty ./var/empty/sshd
       if [ -e ./etc/passwd ]; then
         cp --remove-destination "$(readlink -f ./etc/passwd)" ./etc/passwd
         chmod u+w ./etc/passwd
@@ -105,7 +117,9 @@ let
         cp --remove-destination "$(readlink -f ./etc/group)" ./etc/group
         chmod u+w ./etc/group
       fi
-      echo 'sdk-webhook:x:1000:1000:sdk-webhook:/:/sbin/nologin' >> ./etc/passwd
+      echo 'sshd:x:74:74:Privilege-separated SSH:/var/empty/sshd:/sbin/nologin' >> ./etc/passwd
+      echo 'sshd:x:74:' >> ./etc/group
+      echo 'sdk-webhook:x:1000:1000:sdk-webhook:/:/bin/false' >> ./etc/passwd
       echo 'sdk-webhook:x:1000:' >> ./etc/group
     '';
     config = {
