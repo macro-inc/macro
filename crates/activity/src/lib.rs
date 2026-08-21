@@ -26,8 +26,8 @@ pub mod inbound;
 pub mod outbound;
 
 pub use domain::models::{
-    Action, ActionDecodeError, Activity, ActivityRecord, ActivitySource, Actor, CallStart,
-    CommonAction, DomainActivity, EntityType, Ingest, ParticipantChange, PropertyChange,
+    Action, ActionDecodeError, Activity, ActivityRecord, ActivitySource, Actor, Attribution,
+    CallStart, CommonAction, DomainActivity, EntityType, Ingest, ParticipantChange, PropertyChange,
     RecordedAction, VIEW_ACTION_TAGS, activity_id, event_time,
 };
 pub use domain::ports::{ActivityFeedPage, ActivityReads, EntityActivityMap};

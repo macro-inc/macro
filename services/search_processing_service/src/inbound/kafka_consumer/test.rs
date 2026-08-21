@@ -828,6 +828,8 @@ fn document_event_cases() -> Vec<(DocumentTopicEvent, DocumentEventDescription)>
             DocumentTopicEvent::Created(DocumentCreatedMetadata {
                 document_id: DOCUMENT_ID.to_string(),
                 owner: owner.clone(),
+                actor: None,
+                on_behalf_of: None,
                 document_name: "Document".to_string(),
                 file_type: Some(FileType::Pdf),
                 project_id: Some(PROJECT_ID.to_string()),

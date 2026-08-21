@@ -1904,6 +1904,7 @@ fn create_document_repo_args(file_type: FileType) -> CreateDocumentRepoArgs {
         created_at: None,
         sub_type: None,
         skip_history: false,
+        attribution: None,
     }
 }
 
@@ -1989,6 +1990,52 @@ async fn create_document_repo_receives_disabled_share_when_team_turned_link_shar
 
     create_document_with_team_default(Some(TeamLinkShareDefault(None)), FileType::Md, None, None)
         .await;
+}
+
+#[tokio::test]
+async fn create_document_publishes_resolved_attribution() {
+    let mut repo = make_mock_repo();
+    repo.expect_get_team_default_link_share()
+        .returning(|_| Box::pin(std::future::ready(Ok(None))));
+    let created_metadata = make_test_metadata();
+    repo.expect_create_document()
+        .returning(move |_, _| Box::pin(std::future::ready(Ok(created_metadata.clone()))));
+    repo.expect_set_document_content()
+        .returning(|_, _| Box::pin(std::future::ready(Ok(()))));
+    repo.expect_get_team_task_metadata()
+        .returning(|_| Box::pin(std::future::ready(Ok(None))));
+
+    let (service, event_broker) = make_test_service_with_event_broker(repo);
+    let mut args = create_document_repo_args(FileType::Txt);
+    args.email_attachment_id = Some(uuid::Uuid::from_u128(7));
+
+    crate::domain::ports::DocumentService::create_document(
+        &service,
+        macro_user_id::user_id::MacroUserIdStr::parse_from_str("macro|user@user.com")
+            .unwrap()
+            .into_owned(),
+        args,
+        None,
+    )
+    .await
+    .unwrap();
+
+    let published = event_broker.published();
+    let published = published.lock().unwrap();
+    assert_eq!(published[0].payload["event_type"], "document.created");
+    assert_eq!(
+        published[0].payload["metadata"]["owner"],
+        "macro|user@user.com"
+    );
+    assert_eq!(
+        published[0].payload["metadata"]["actor"],
+        bot_id::MACRO_SYSTEM_BOT_ID.into_storage_id().as_ref()
+    );
+    assert!(
+        published[0].payload["metadata"]
+            .get("on_behalf_of")
+            .is_none()
+    );
 }
 
 #[tokio::test]

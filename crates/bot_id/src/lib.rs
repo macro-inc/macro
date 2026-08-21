@@ -60,6 +60,13 @@ pub const MACRO_AI_HANDLE: &str = "macro";
 /// Display name for the "Macro" system bot.
 pub const MACRO_AI_NAME: &str = "Macro";
 
+/// Stable [`BotId`] for autonomous Macro platform operations.
+pub const MACRO_SYSTEM_BOT_ID: BotId =
+    BotId::new_from_uuid(Uuid::from_u128(0x0000_0000_0000_0000_0000_0000_0000_5759));
+
+/// Display name for the autonomous Macro platform principal.
+pub const MACRO_SYSTEM_NAME: &str = "Macro System";
+
 /// Stable [`BotId`] for the "Macro Coder" system bot, our coding-agent harness.
 ///
 /// Distinct from [`MACRO_AI_BOT_ID`] on purpose: mentioning Macro AI answers in

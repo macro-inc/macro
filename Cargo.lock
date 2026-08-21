@@ -475,6 +475,7 @@ dependencies = [
 name = "ai_tools"
 version = "0.1.0"
 dependencies = [
+ "activity",
  "agent",
  "ai_toolset",
  "ai_usage",
@@ -485,6 +486,7 @@ dependencies = [
  "aws-sdk-secretsmanager",
  "aws-sdk-sqs",
  "axum",
+ "bot_id",
  "calendar_events",
  "call",
  "channels",
@@ -4862,6 +4864,7 @@ dependencies = [
  "axum",
  "axum-extra",
  "base64 0.22.1",
+ "bot_id",
  "bots",
  "bytes",
  "bzip2",
@@ -5078,6 +5081,7 @@ dependencies = [
  "axum",
  "axum-extra",
  "base64 0.22.1",
+ "bot_id",
  "chrono",
  "clap",
  "cloudfront_sign",
