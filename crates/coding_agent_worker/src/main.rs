@@ -45,6 +45,11 @@ async fn main() -> ExitCode {
         )
         .init();
 
+    // Dialing a `wss` gateway needs a process-wide provider, and rustls
+    // installs none by itself. Before any dial, and idempotent: an error only
+    // means somebody already did this.
+    let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
+
     let args = Args::parse();
     match run(&args.config).await {
         Ok(()) => ExitCode::SUCCESS,
