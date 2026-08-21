@@ -8,7 +8,8 @@ import {
   type SafeFetchInit,
   safeFetch,
 } from '@core/util/safeFetch';
-import { logger } from '@observability';
+import { Telemetry } from '@macro-inc/observability';
+
 import { makePersisted } from '@solid-primitives/storage';
 import { err, ok } from 'neverthrow';
 import { createSignal } from 'solid-js';
@@ -44,6 +45,8 @@ import type { PutUserNameQueryParams } from './generated/schemas/putUserNameQuer
 import type { Team } from './generated/schemas/team';
 import type { TeamInvitesResponse } from './generated/schemas/teamInvitesResponse';
 import type { TeamWithMembers } from './generated/schemas/teamWithMembers';
+import type { ToggleAutoJoinDomainResponse } from './generated/schemas/toggleAutoJoinDomainResponse';
+import type { ToggleNonAdminInvitesResponse } from './generated/schemas/toggleNonAdminInvitesResponse';
 import type { UserLinkResponse } from './generated/schemas/userLinkResponse';
 import type { UserName } from './generated/schemas/userName';
 import type { UserNames } from './generated/schemas/userNames';
@@ -51,6 +54,12 @@ import type { UserOrganizationResponse } from './generated/schemas/userOrganizat
 import type { UserTokensResponse } from './generated/schemas/userTokensResponse';
 
 const authHost = SERVER_HOSTS['auth-service'];
+
+/**
+ * Which permissions a Google consent screen asks for. `calendar` covers an
+ * inbox that is already connected, so the screen lists calendar access alone.
+ */
+export type ConsentScopes = 'gmail' | 'gmail_and_calendar' | 'calendar';
 
 const authApiFetch = <T extends ObjectLike>(
   input: string,
@@ -122,7 +131,9 @@ async function getAccessToken(): Promise<string | null> {
           return null;
         }
       } catch (error) {
-        logger.error('Error refreshing access token', { error });
+        Telemetry.error('Error refreshing access token', {
+          error: error instanceof Error ? error.message : String(error),
+        });
         return null;
       } finally {
         // Clear the ongoing refresh promise so future calls can start a new refresh
@@ -137,6 +148,10 @@ async function getAccessToken(): Promise<string | null> {
 }
 
 export type GithubReauthenticationErrorCode = 'REAUTHENTICATION_REQUIRED';
+
+/** The team owner's email domain is a generic provider (e.g. gmail.com),
+ *  so auto-join cannot be enabled for it. */
+export type ToggleAutoJoinDomainErrorCode = 'GENERIC_DOMAIN_NOT_ALLOWED';
 
 const githubErrorResponseHandler: ErrorResponseHandler<GithubReauthenticationErrorCode> =
   async function handleGithubErrorResponse(response) {
@@ -186,8 +201,11 @@ export const authServiceClient = {
     }));
   },
   async sessionLogin(args: { session_code: string }) {
+    // The session code stays valid server-side for 5 minutes and is
+    // replayable, so retrying transient failures is safe.
     const result = await authApiFetch<UserTokensResponse>(
-      `/session/login/${args.session_code}`
+      `/session/login/${args.session_code}`,
+      { retry: { maxTries: 3, delay: 'exponential' } }
     );
     if (result.isOk()) {
       setAccessTokenData({
@@ -199,10 +217,18 @@ export const authServiceClient = {
     return result;
   },
   async deleteUser() {
-    setAccessTokenData(null);
-    return fetchWithAuth<GenericSuccessResponse>(`${authHost}/user/me`, {
-      method: 'DELETE',
-    });
+    const result = await fetchWithAuth<GenericSuccessResponse>(
+      `${authHost}/user/me`,
+      {
+        method: 'DELETE',
+      }
+    );
+
+    if (result.isOk()) {
+      setAccessTokenData(null);
+    }
+
+    return result;
   },
   async appleLogin(args: AppleLoginRequest) {
     return authApiFetch<EmptyResponse>(`/login/apple`, {
@@ -330,7 +356,7 @@ export const authServiceClient = {
   async macroApiToken() {
     const accessToken = await getAccessToken();
     if (!accessToken) {
-      logger.warn('No access token found, fetching with cookies');
+      Telemetry.warn('No access token found, fetching with cookies');
       return authApiFetch<MacroApiTokenResponse>('/jwt/macro_api_token');
     }
 
@@ -401,6 +427,7 @@ export const authServiceClient = {
       hasTrialed: data.hasTrialed,
       aiDataConsent: data.aiDataConsent,
       referralCode: data.referralCode,
+      createdAt: data.createdAt,
     }));
   },
 
@@ -454,31 +481,6 @@ export const authServiceClient = {
   },
 
   // Stripe HTTP methods (replacing RPC calls)
-  async createCheckoutSession(args: {
-    successUrl: string;
-    cancelUrl: string;
-    discount?: string | null;
-    metadata?: {
-      gaClientId?: string | null;
-      fbp?: string | null;
-      fbc?: string | null;
-    };
-    tier?: string;
-  }) {
-    return (
-      await fetchWithAuth<{ url: string }>(`${authHost}/user/stripe/checkout`, {
-        method: 'POST',
-        body: JSON.stringify({
-          successUrl: args.successUrl,
-          cancelUrl: args.cancelUrl,
-          discount: args.discount ?? undefined,
-          metadata: args.metadata,
-          tier: args.tier ?? undefined,
-        }),
-      })
-    ).map((result) => result.url);
-  },
-
   async createCheckoutSessionV2(args: {
     successUrl: string;
     cancelUrl: string;
@@ -560,24 +562,52 @@ export const authServiceClient = {
    * Returns the OAuth authorization URL to redirect the browser to.
    * After Google consent, the user is redirected back to `originalUrl` with `?link_id=<uuid>`
    * appended; the frontend then calls `emailClient.init({ linkId })` to provision the inbox.
+   *
+   * `scopes` selects which permissions the consent screen asks for. Only
+   * calendar entry points may request calendar access, and an inbox that is
+   * already connected should ask for `calendar` alone so the user isn't
+   * re-consenting to mailbox access they have already granted.
    */
-  async initGmailLink(originalUrl?: string) {
-    const url = originalUrl
-      ? `${authHost}/link/gmail?original_url=${encodeURIComponent(originalUrl)}`
+  async initGmailLink(
+    originalUrl?: string,
+    options?: { scopes?: ConsentScopes }
+  ) {
+    const params = new URLSearchParams();
+    if (originalUrl) {
+      params.set('original_url', encodeURIComponent(originalUrl));
+    }
+    if (options?.scopes) {
+      params.set('scopes', options.scopes);
+    }
+    const query = params.toString();
+    const url = query
+      ? `${authHost}/link/gmail?${query}`
       : `${authHost}/link/gmail`;
     return (
-      await fetchWithAuth<InitGmailLinkResponse, 'PAYMENT_REQUIRED'>(url, {
+      await fetchWithAuth<
+        InitGmailLinkResponse,
+        'PAYMENT_REQUIRED' | 'TOO_MANY_PENDING_LINKS'
+      >(url, {
         method: 'POST',
         // The backend returns 402 when the user isn't entitled to additional
-        // inboxes; surface it as a distinct code so the add-inbox flow can open
-        // the paywall instead of showing a generic failure.
-        errorResponseHandler: async (response) =>
-          response.status === 402
-            ? { code: 'PAYMENT_REQUIRED', message: 'Payment required' }
-            : {
-                code: 'HTTP_ERROR',
-                message: `HTTP error! status: ${response.status}`,
-              },
+        // inboxes, and 429 when they have too many incomplete link attempts in
+        // flight. Surface each as a distinct code so the add-inbox flow can open
+        // the paywall or explain the wait instead of a generic failure.
+        errorResponseHandler: async (response) => {
+          if (response.status === 402) {
+            return { code: 'PAYMENT_REQUIRED', message: 'Payment required' };
+          }
+          if (response.status === 429) {
+            return {
+              code: 'TOO_MANY_PENDING_LINKS',
+              message: 'Too many pending inbox connections',
+            };
+          }
+          return {
+            code: 'HTTP_ERROR',
+            message: `HTTP error! status: ${response.status}`,
+          };
+        },
       })
     ).map((result) => result);
   },
@@ -711,6 +741,62 @@ export const authServiceClient = {
         body: JSON.stringify(args),
       })
     ).map(() => undefined);
+  },
+
+  /**
+   * Toggles automatic domain joining for the caller's team: sets the
+   * auto-join domain from the team owner's email domain when unset,
+   * removes it when set. Returns the domain after the toggle (null when
+   * it was just disabled). Admin/Owner only.
+   */
+  async toggleTeamAutoJoinDomain() {
+    return (
+      await fetchWithAuth<
+        ToggleAutoJoinDomainResponse,
+        ToggleAutoJoinDomainErrorCode
+      >(`${authHost}/team/auto-join-domain/toggle`, {
+        method: 'POST',
+        // The backend rejects enabling auto-join for generic email
+        // provider domains (e.g. gmail.com) with a 400 whose message
+        // names the domain — keep that message so the UI can toast it
+        // verbatim.
+        errorResponseHandler: async (response) => {
+          if (response.status === 400) {
+            const message = await response
+              .json()
+              .then((body) => body?.message)
+              .catch(() => undefined);
+            return {
+              code: 'GENERIC_DOMAIN_NOT_ALLOWED',
+              message:
+                typeof message === 'string'
+                  ? message
+                  : 'This domain cannot be used for auto-join',
+            };
+          }
+          return {
+            code: 'HTTP_ERROR',
+            message: `HTTP error! status: ${response.status}`,
+          };
+        },
+      })
+    ).map((result) => result);
+  },
+
+  /**
+   * Toggles whether non-admin members may invite users to the caller's
+   * team. Teams start with this on (any member can invite); turning it
+   * off restricts inviting to team admins and owners. Admin/Owner only.
+   */
+  async toggleTeamNonAdminInvites() {
+    return (
+      await fetchWithAuth<ToggleNonAdminInvitesResponse>(
+        `${authHost}/team/non-admin-invites/toggle`,
+        {
+          method: 'POST',
+        }
+      )
+    ).map((result) => result);
   },
 
   async deleteTeamInvite(teamInviteId: string) {

@@ -9,8 +9,11 @@ import {
   type JSX,
   onCleanup,
   type Ref,
+  Show,
   useContext,
 } from 'solid-js';
+import { MultiSelectCheckbox } from '../../components/MultiSelectCheckbox';
+import { UnreadIndicator } from '../../components/UnreadIndicator';
 import type { EntityRowConfig } from '../../extractors-notification';
 import type { EntityData, ProjectEntity } from '../../types/entity';
 import type { WithNotification } from '../../types/notification';
@@ -39,6 +42,9 @@ export interface BaseListEntityProps<E extends EntityData = EntityData> {
     location?: SearchLocation
   ) => void;
   entityRowConfig?: EntityRowConfig;
+  /** The row visually closes its group (or the list) — the next row is a
+   * group header or absent. Layouts use it to drop a trailing divider. */
+  isLastInGroup?: boolean;
 }
 
 const WIDE_BREAKPOINT = 512; // @lg container query = 32rem
@@ -61,14 +67,18 @@ export interface LayoutProps {
   ) => void;
 }
 
+export type NarrowLayoutVariant = 'standard' | 'condensed' | 'single-line';
+
 interface ListLayoutContextValue {
   isWide: Accessor<boolean>;
+  narrowLayout: Accessor<NarrowLayoutVariant>;
 }
 
 const ListLayoutContext = createContext<ListLayoutContextValue>();
 
 export function ListLayoutProvider(props: {
   ref: Accessor<HTMLElement | undefined>;
+  narrowLayout?: NarrowLayoutVariant;
   children: JSX.Element;
 }) {
   const [isWide, setIsWide] = createSignal(true);
@@ -84,7 +94,9 @@ export function ListLayoutProvider(props: {
   });
 
   return (
-    <ListLayoutContext.Provider value={{ isWide }}>
+    <ListLayoutContext.Provider
+      value={{ isWide, narrowLayout: () => props.narrowLayout ?? 'standard' }}
+    >
       {props.children}
     </ListLayoutContext.Provider>
   );
@@ -117,6 +129,36 @@ export function useCharacterCount(ref: Accessor<HTMLElement | undefined>) {
   });
 
   return chars;
+}
+
+/**
+ * The single-line rows' indicator cell: the multi-select checkbox while the
+ * row is checked, otherwise the unread dot in an always-reserved slot so
+ * toggling selection doesn't shift the row.
+ */
+export function RowIndicator(props: {
+  checked?: boolean;
+  hideCheckbox?: boolean;
+  onChecked?: (checked: boolean, shiftKey: boolean) => void;
+  unread: boolean;
+}) {
+  return (
+    <Show
+      when={!props.hideCheckbox && props.checked}
+      fallback={
+        <div class="size-4 p-0.5 flex items-center justify-center">
+          <UnreadIndicator active={props.unread} />
+        </div>
+      }
+    >
+      <div class="w-4 overflow-hidden">
+        <MultiSelectCheckbox
+          checked={props.checked}
+          onChecked={props.onChecked}
+        />
+      </div>
+    </Show>
+  );
 }
 
 export function InboxDivider() {

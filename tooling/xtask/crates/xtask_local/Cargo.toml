@@ -22,6 +22,8 @@ clap = { workspace = true }
 macro_aws_config = { path = "../../../../crates/macro_aws_config" }
 macro_queues = { path = "../../../../crates/macro_queues" }
 serde = { workspace = true }
+# Content-address the init snapshots (`stack up` restore/save keys).
+sha2 = { workspace = true }
 tokio = { workspace = true }
 # Source of truth for the declared Kafka topics (local-stack provisioning).
 macro_event_topics = { path = "../../../../crates/macro_event_topics" }
@@ -33,7 +35,9 @@ rdkafka = { workspace = true, optional = true }
 # Docker Engine API client for the discrete container/image ops.
 bollard = "0.21"
 console = "0.15"
-indicatif = "0.18"
+# 0.18.5 fixes clearing and wrapped-width accounting for progress rows, which
+# are exercised when the terminal is resized while a run-local spinner is live.
+indicatif = "0.18.5"
 docker-compose-types = { version = "0.24", features = ["indexmap"] }
 indexmap = { workspace = true }
 serde_yaml = { workspace = true }

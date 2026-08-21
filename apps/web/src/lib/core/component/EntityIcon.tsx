@@ -11,8 +11,12 @@ import type {
   DocumentEntity,
   EmailEntity,
   EntityData,
+  NamedSubType,
+  ReminderEntity,
 } from '@entity';
 import GithubIcon from '@icon/mcp-github.svg';
+import SkillIcon from '@icon/skill.svg';
+import WideAutomation from '@icon/wide-automation.svg';
 import WideBook from '@icon/wide-book.svg';
 import WideCalendar from '@icon/wide-calendar.svg';
 import PhoneCall from '@icon/wide-call.svg';
@@ -35,6 +39,7 @@ import WideStar from '@icon/wide-star.svg';
 import WideTask from '@icon/wide-task.svg';
 import WideUnknown from '@icon/wide-unknown.svg';
 import WideVideo from '@icon/wide-video.svg';
+import BellSimple from '@phosphor/bell-simple.svg';
 import Building from '@phosphor/building.svg';
 import Chat from '@phosphor/chat.svg';
 import Check from '@phosphor/check-fat.svg';
@@ -85,7 +90,8 @@ export type EntityWithValidIcon =
   | 'archive'
   | 'files'
   | 'crm_company'
-  | 'html';
+  | 'html'
+  | 'reminder';
 
 const ARCHIVE_EXTENSIONS = new Set(
   Object.values(FileTypeMap)
@@ -99,6 +105,12 @@ export const ENTITY_ICON_CONFIGS: Record<EntityWithValidIcon, IconConfig> = {
     foreground: 'text-default',
     background: 'bg-default/20',
     prettyName: 'Call',
+  },
+  calendar: {
+    icon: WideCalendar,
+    foreground: 'text-default',
+    background: 'bg-default/20',
+    prettyName: 'Calendar',
   },
   canvas: {
     icon: Canvas,
@@ -268,6 +280,12 @@ export const ENTITY_ICON_CONFIGS: Record<EntityWithValidIcon, IconConfig> = {
     background: 'bg-default/20',
     prettyName: 'Pull Request',
   },
+  agent: {
+    icon: Robot,
+    foreground: 'text-default',
+    background: 'bg-default/20',
+    prettyName: 'Agent',
+  },
   task: {
     icon: Check,
     foreground: 'text-task',
@@ -280,10 +298,16 @@ export const ENTITY_ICON_CONFIGS: Record<EntityWithValidIcon, IconConfig> = {
     background: 'bg-snippet/20',
     prettyName: 'Snippet',
   },
+  skill: {
+    icon: SkillIcon,
+    foreground: 'text-chat',
+    background: 'bg-chat/20',
+    prettyName: 'Skill',
+  },
   automation: {
-    icon: Robot,
-    foreground: 'text-default',
-    background: 'bg-default/20',
+    icon: WideAutomation,
+    foreground: 'text-chat',
+    background: 'bg-chat/20',
     prettyName: 'Automation',
   },
   crm_company: {
@@ -297,6 +321,12 @@ export const ENTITY_ICON_CONFIGS: Record<EntityWithValidIcon, IconConfig> = {
     foreground: 'text-default',
     background: 'bg-default/20',
     prettyName: 'Company',
+  },
+  reminder: {
+    icon: BellSimple,
+    foreground: 'text-default',
+    background: 'bg-default/20',
+    prettyName: 'Reminder',
   },
 };
 
@@ -330,6 +360,7 @@ const WIDE_ICONS: Record<
   Component<JSX.SvgSVGAttributes<SVGSVGElement>>
 > = {
   call: PhoneCall,
+  calendar: WideCalendar,
   canvas: WideDiagram,
   html: WideFileCode,
   channel: WideChannel,
@@ -358,11 +389,16 @@ const WIDE_ICONS: Record<
   emailInvite: WideCalendar,
   githubPullRequest: GithubIcon,
   pr: GithubIcon,
+  agent: Robot,
   task: WideTask,
   snippet: WideSnippet,
-  automation: Robot,
+  skill: SkillIcon,
+  automation: WideAutomation,
   crm_company: AnimatedCompanyIcon,
   company: AnimatedCompanyIcon,
+  // No wide bell asset exists; the phosphor one carries over, as it does for
+  // `organization` and the github icons.
+  reminder: BellSimple,
 };
 
 const ICON_SIZES = {
@@ -494,6 +530,8 @@ type EntityIconData = Pick<EntityData, 'type'> & {
   fileType?: DocumentEntity['fileType'] | null;
   subType?: DocumentEntity['subType'];
   isRead?: EmailEntity['isRead'];
+  /** Reminders icon as the entity they reference. */
+  referencedEntity?: ReminderEntity['referencedEntity'];
 };
 
 export function getEntityIconType(entity: EntityIconData): EntityWithValidIcon {
@@ -503,9 +541,46 @@ export function getEntityIconType(entity: EntityIconData): EntityWithValidIcon {
     .with({ type: 'document' }, (e) => itemToBlockName(e, true) ?? 'default')
     .with({ type: 'email', isRead: true }, () => 'emailRead')
     .with({ type: 'email' }, () => 'email')
+    // Always the bell, never the referenced entity's icon: a reminder is a
+    // reminder first, and what it points at is iconed beside its name instead
+    // — see `reminderReferenceIconType`.
+    .with({ type: 'reminder' }, () => 'reminder')
+    .with({ type: 'calendar_event' }, () => 'calendar')
     .otherwise((e) => e.type);
 
   return validateEntity(typeString);
+}
+
+/** What the block resolvers return when they cannot place something. */
+const UNRESOLVED_ICONS: ReadonlySet<string> = new Set(['default', 'unknown']);
+
+/**
+ * The icon for what a reminder is about, shown beside the reminder's name.
+ *
+ * Synchronous by design: the referenced entity's `fileType`/`subType` are
+ * resolved server-side precisely so this costs no fetch per row.
+ *
+ * A reference that resolves to nothing gets the bell, not the unknown-file
+ * glyph, which on a reminder row reads as breakage rather than as a reminder.
+ * That needs both sentinels and neither is falsy: `fileTypeToBlockName`
+ * returns the literal `unknown`, and `validateEntity` returns `default`.
+ */
+export function reminderReferenceIconType(
+  reference: NonNullable<ReminderEntity['referencedEntity']>
+): EntityWithValidIcon {
+  const blockName = itemToBlockName(
+    {
+      type: reference.type,
+      fileType: reference.fileType,
+      subType: reference.subType
+        ? { type: reference.subType as NamedSubType }
+        : undefined,
+    },
+    true
+  );
+
+  const iconType = blockName ? validateEntity(blockName) : 'default';
+  return UNRESOLVED_ICONS.has(iconType) ? 'reminder' : iconType;
 }
 
 export function getEntityIconConfig(entity: EntityData) {

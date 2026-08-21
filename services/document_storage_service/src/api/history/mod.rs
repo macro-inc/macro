@@ -19,7 +19,4 @@ pub fn router() -> Router<ApiContext> {
             "/{item_type}/{item_id}",
             delete(delete_history::delete_history_handler),
         )
-        .layer(axum::middleware::from_fn(
-            macro_middleware::auth::ensure_user_exists::handler,
-        ))
 }

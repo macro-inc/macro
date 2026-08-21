@@ -6,6 +6,7 @@ use axum::{
 };
 use entity_access::domain::ports::EntityAccessService;
 use entity_access::inbound::axum_extractors::DocumentAccessExtractor;
+use macro_authorization::MacroAuthorizationService;
 use models_permissions::share_permission::access_level::ViewAccessLevel;
 
 use super::{DocumentRouterState, Params};
@@ -44,9 +45,13 @@ pub struct BranchNameResponse {
     )
 )]
 #[tracing::instrument(skip(state, access), err)]
-pub async fn get_branch_name_handler<T: DocumentService, Svc: EntityAccessService>(
-    State(state): State<DocumentRouterState<T, Svc>>,
-    access: DocumentAccessExtractor<ViewAccessLevel, Svc>,
+pub async fn get_branch_name_handler<
+    T: DocumentService,
+    Svc: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
+    State(state): State<DocumentRouterState<T, Svc, Auth>>,
+    access: DocumentAccessExtractor<ViewAccessLevel, Svc, Auth>,
     Path(Params { document_id }): Path<Params>,
 ) -> Result<Json<BranchNameResponse>, DocumentError> {
     let receipt = access.entity_access_receipt;
@@ -67,8 +72,8 @@ pub async fn get_branch_name_handler<T: DocumentService, Svc: EntityAccessServic
                 branch_name: task_branch_name.branch_name,
             }))
         }
-        Some(DocumentSubType::Snippet) | None => Err(DocumentError::BadRequest(format!(
-            "document {document_id} is not a task"
-        ))),
+        Some(DocumentSubType::Snippet | DocumentSubType::Skill) | None => Err(
+            DocumentError::BadRequest(format!("document {document_id} is not a task")),
+        ),
     }
 }

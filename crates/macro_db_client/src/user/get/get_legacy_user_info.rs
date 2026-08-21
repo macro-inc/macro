@@ -1,3 +1,4 @@
+use chrono::{DateTime, Utc};
 use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId};
 use macro_uuid::ShortUuidConverter;
 
@@ -13,6 +14,9 @@ pub struct LegacyUserInfo {
     pub ai_data_consent: bool,
     pub has_trialed: bool,
     pub referral_code: String,
+    /// When the account was created. `None` for accounts that predate the
+    /// `createdAt` column.
+    pub created_at: Option<DateTime<Utc>>,
 }
 
 /// Gets the legacy user info
@@ -35,7 +39,8 @@ pub async fn get_legacy_user_info(
             u."hasChromeExt" as has_chrome_ext,
             u."aiDataConsent" as ai_data_consent,
             mu.has_trialed as has_trialed,
-            u.macro_user_id as "macro_user_id"
+            u.macro_user_id as "macro_user_id",
+            u."createdAt" as "created_at?"
         FROM "User" u
         JOIN "macro_user" mu ON u.macro_user_id = mu.id
         WHERE u."id" = $1
@@ -53,6 +58,7 @@ pub async fn get_legacy_user_info(
         ai_data_consent: row.ai_data_consent,
         has_trialed: row.has_trialed,
         referral_code: converter.from_uuid(&row.macro_user_id),
+        created_at: row.created_at,
     })
     .fetch_one(db)
     .await?;

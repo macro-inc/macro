@@ -1,15 +1,17 @@
 use std::sync::Arc;
 
 use crate::{
-    api::annotations::CommentNotifContext, service::conn_gateway::update_live_comment_state,
+    api::annotations::CommentNotifContext, api::context::AuthorizationService,
+    service::conn_gateway::update_live_comment_state,
 };
 use axum::{
     Json,
-    extract::{Extension, Path, State},
+    extract::{Path, State},
     http::StatusCode,
     response::{IntoResponse, Response},
 };
 use connection_gateway_client::ConnectionGatewayClient;
+use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
 use macro_db_client::annotations::edit_comment::edit_document_comment;
 use macro_user_id::user_id::MacroUserIdStr;
 use model::{
@@ -18,7 +20,6 @@ use model::{
         edit::{EditCommentRequest, EditCommentResponse},
     },
     response::ErrorResponse,
-    user::UserContext,
 };
 use model_notifications::NotificationDocumentSubType;
 use notification::domain::service::NotificationIngress;
@@ -50,10 +51,11 @@ pub async fn edit_comment_handler(
     State(db): State<PgPool>,
     State(notification_ingress_service): State<Arc<crate::api::context::NotificationIngressType>>,
     State(conn_gateway_client): State<Arc<ConnectionGatewayClient>>,
-    Extension(UserContext { user_id, .. }): Extension<UserContext>,
+    user: MacroAuthorizationExtractor<AuthorizationService, UserOrInternal>,
     Path(Params { comment_id }): Path<Params>,
     Json(req): Json<EditCommentRequest>,
 ) -> Result<Response, Response> {
+    let user_id = user.authorization.user.macro_user_id.to_string();
     // TODO: check if the user has comment access to the document
     match edit_document_comment(&db, comment_id, &user_id, &req).await {
         Ok(res) => {
@@ -84,6 +86,9 @@ pub async fn edit_comment_handler(
                         document_sub_type::DocumentSubType::Snippet => {
                             NotificationDocumentSubType::Snippet
                         }
+                        document_sub_type::DocumentSubType::Skill => {
+                            NotificationDocumentSubType::Skill
+                        }
                     }),
                     sender_id: user_id.clone().try_into().ok(),
                     sender_profile_picture_url,
@@ -94,19 +99,19 @@ pub async fn edit_comment_handler(
                     .filter_map(|id| MacroUserIdStr::try_from(id.clone()).ok())
                     .collect();
 
-                // If the document is public, grant the mentioned users access so
-                // the comment surfaces in their soup/inbox — a notification alone
+                // If the document is link-shared, grant the mentioned users access
+                // so the comment surfaces in their soup/inbox — a notification alone
                 // isn't enough for the document to appear there.
                 let mention_recipients: Vec<MacroUserIdStr<'_>> =
                     recipient_ids.iter().cloned().collect();
 
-                let _ = macro_db_client::share_on_mention::share_public_document_with_mentioned_users(
+                let _ = macro_db_client::share_on_mention::share_link_shared_document_with_mentioned_users(
                     &db,
                     &res.document_id,
                     &mention_recipients,
                 )
                 .await
-                .inspect_err(|e| tracing::error!(error =? e, "couldn't share public document with mentioned users"));
+                .inspect_err(|e| tracing::error!(error =? e, "couldn't share link-shared document with mentioned users"));
 
                 let request = notif_ctx
                     .build_mention_notif(recipient_ids, &mention_id)

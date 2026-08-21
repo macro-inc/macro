@@ -24,15 +24,23 @@ pub async fn depopulate_crm_for_user(
     payload: &DepopulateCrmForUserPayload,
 ) -> Result<(), ProcessingError> {
     let macro_id_str = payload.macro_id.0.as_ref();
+    // Must resolve the same link `populate_crm_for_user` seeded from — the
+    // inbox whose address matches the macro_id email — so teardown targets
+    // the link that was actually populated.
+    let email_address = payload.macro_id.email_str();
 
-    let link = email_db_client::links::get::fetch_link_by_macro_id(&ctx.db, macro_id_str)
-        .await
-        .map_err(|e| {
-            ProcessingError::Retryable(DetailedError {
-                reason: FailureReason::DatabaseQueryFailed,
-                source: e.context("Failed to fetch link by macro_id"),
-            })
-        })?;
+    let link = email_db_client::links::get::fetch_link_by_macro_id_and_email_address(
+        &ctx.db,
+        macro_id_str,
+        email_address,
+    )
+    .await
+    .map_err(|e| {
+        ProcessingError::Retryable(DetailedError {
+            reason: FailureReason::DatabaseQueryFailed,
+            source: e.context("Failed to fetch link by macro_id and email_address"),
+        })
+    })?;
 
     let Some(link) = link else {
         tracing::debug!("User has no email link; skipping CRM teardown");

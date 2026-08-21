@@ -1,7 +1,7 @@
 use anyhow::Context;
+use macro_auth::InternalApiKey;
 pub use macro_env::Environment;
 use macro_env_var::env_vars;
-use macro_middleware::auth::internal_access::InternalApiKey;
 use secretsmanager_client::LocalOrRemoteSecret;
 
 env_vars! {
@@ -55,6 +55,13 @@ pub struct Config {
     #[macro_config_default(false)]
     pub use_apollo_crm_enrichment: bool,
 
+    /// Master switch for calendar ingestion and sync. When `false` (the
+    /// default) inline ICS extraction is skipped, the calendar outbox stays
+    /// parked, and calendar backfill deliveries requeue their outbox rows.
+    /// Grant bookkeeping still runs so enabling later resumes cleanly.
+    #[macro_config_default(false)]
+    pub calendar_sync_enabled: bool,
+
     /// Apollo.io API key for CRM enrichment. Locally this is the key
     /// itself; in deployed envs it's the name of the Secrets Manager
     /// secret holding it (resolved at startup). Empty disables enrichment.
@@ -71,6 +78,14 @@ pub struct Config {
     /// The queue max messages per poll for backfill
     #[macro_config_default(1)]
     pub backfill_queue_max_messages: i32,
+
+    /// The number of workers we spawn for the nightly crm cleanup queue
+    #[macro_config_default(2)]
+    pub crm_cleanup_queue_workers: i32,
+
+    /// The queue max messages per poll for crm cleanup
+    #[macro_config_default(10)]
+    pub crm_cleanup_queue_max_messages: i32,
 
     /// The number of workers we spawn for gmail inbox sync
     #[macro_config_default(10)]

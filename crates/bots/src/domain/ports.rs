@@ -1,16 +1,17 @@
 //! Bot ports.
 
 use super::models::{
-    AuthenticatedBot, Bot, BotChannel, BotId, BotOwner, BotToken, BotTokenCandidate,
-    CreateBotRequest, CreateBotTokenRequest, CreateBotTokenResponse, CreateChannelScopedBotRequest,
-    CreateChannelScopedBotResponse, PatchBotRequest,
+    AuthenticatedBot, Bot, BotChannel, BotChannelListCaller, BotId, BotOwner, BotToken,
+    BotTokenCandidate, CreateBotRequest, CreateBotTokenRequest, CreateBotTokenResponse,
+    CreateChannelScopedBotRequest, CreateChannelScopedBotResponse, PatchBotRequest,
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use std::future::Future;
 use uuid::Uuid;
 
 /// Bot repository.
-pub trait BotRepo: Clone + Send + Sync + 'static {
+#[cfg_attr(feature = "test-utils", mockall::automock(type Err = anyhow::Error;))]
+pub trait BotRepo: Send + Sync + 'static {
     /// Repository error.
     type Err: Into<anyhow::Error> + Send;
 
@@ -44,6 +45,20 @@ pub trait BotRepo: Clone + Send + Sync + 'static {
 
     /// Check team membership.
     fn user_has_team(
+        &self,
+        caller: MacroUserIdStr<'static>,
+        team_id: Uuid,
+    ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
+
+    /// Check whether a bot is an active channel participant.
+    fn bot_active_in_channel(
+        &self,
+        channel_id: Uuid,
+        bot_id: BotId,
+    ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
+
+    /// Check whether a user is an administrator or owner of a team.
+    fn user_can_administer_team(
         &self,
         caller: MacroUserIdStr<'static>,
         team_id: Uuid,
@@ -125,15 +140,16 @@ pub trait BotRepo: Clone + Send + Sync + 'static {
 }
 
 /// Bot service.
-pub trait BotService: Clone + Send + Sync + 'static {
-    /// Create a bot owned by the caller or one of their teams.
+#[cfg_attr(feature = "test-utils", mockall::automock)]
+pub trait BotService: Send + Sync + 'static {
+    /// Create a bot owned by the caller or a team they administer.
     fn create_bot(
         &self,
         caller: MacroUserIdStr<'static>,
         req: CreateBotRequest,
     ) -> impl Future<Output = Result<Bot, BotError>> + Send;
 
-    /// Create a bot owned by the caller and scoped to a channel.
+    /// Create a bot owned by the caller or a team they administer and scoped to a channel.
     fn create_channel_scoped_bot(
         &self,
         caller: MacroUserIdStr<'static>,
@@ -153,6 +169,9 @@ pub trait BotService: Clone + Send + Sync + 'static {
         caller: MacroUserIdStr<'static>,
         bot_id: BotId,
     ) -> impl Future<Output = Result<Bot, BotError>> + Send;
+
+    /// Get the authenticated bot's own record.
+    fn get_self(&self, bot_id: BotId) -> impl Future<Output = Result<Bot, BotError>> + Send;
 
     /// Patch a manageable bot.
     fn patch_bot(
@@ -185,10 +204,11 @@ pub trait BotService: Clone + Send + Sync + 'static {
         bot_id: BotId,
     ) -> impl Future<Output = Result<(), BotError>> + Send;
 
-    /// List active channels containing a manageable bot.
+    /// List active channels containing a manageable bot, the calling bot itself,
+    /// or a bot requested by an authenticated internal service.
     fn list_bot_channels(
         &self,
-        caller: MacroUserIdStr<'static>,
+        caller: BotChannelListCaller,
         bot_id: BotId,
     ) -> impl Future<Output = Result<Vec<BotChannel>, BotError>> + Send;
 
@@ -219,6 +239,13 @@ pub trait BotService: Clone + Send + Sync + 'static {
         caller: MacroUserIdStr<'static>,
         bot_id: BotId,
         token_id: Uuid,
+    ) -> impl Future<Output = Result<(), BotError>> + Send;
+
+    /// Ensure that a bot is an active participant in a channel.
+    fn ensure_bot_in_channel(
+        &self,
+        bot_id: BotId,
+        channel_id: Uuid,
     ) -> impl Future<Output = Result<(), BotError>> + Send;
 
     /// Authenticate a raw bearer token.

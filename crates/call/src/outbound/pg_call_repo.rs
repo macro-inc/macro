@@ -8,12 +8,12 @@ mod test;
 use std::collections::{HashMap, HashSet};
 
 use channels::outbound::channel_name::batch_resolve_channel_names;
-use chrono::Utc;
+use chrono::{SubsecRound, Utc};
 use entity_access::domain::models::AccessLevel;
 use filter_ast::Expr;
 use item_filters::{
     CallStatus,
-    ast::{LiteralTree, call::CallLiteral},
+    ast::{LiteralTree, call::CallLiteral, properties::PropertyMatchValue},
 };
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use models_permissions::share_permission::SharePermissionV2;
@@ -22,7 +22,7 @@ use sqlx::PgPool;
 use uuid::Uuid;
 
 use crate::domain::models::{
-    AddParticipantError, Call, CallParticipant, CallRecord, CallRecordParticipant,
+    AddParticipantError, ArchivedCall, Call, CallParticipant, CallRecord, CallRecordParticipant,
     CallRecordPreview, CallRecordPreviewData, CallRecordTranscriptSegment, CustomSpeakerAssignment,
     DeletedCallRecordStorageKeys, EditCallRecordRequest, EnrichedCallTranscript,
     TranscriptSegmentRequest, WithCallId,
@@ -62,6 +62,8 @@ fn collect_channel_ids(expr: &Expr<CallLiteral>, ids: &mut Vec<Uuid>) {
         Expr::Literal(CallLiteral::Attended(_)) => {}
         // Speaker is transcript-segment-only; soup's call list ignores it.
         Expr::Literal(CallLiteral::Speaker(_)) => {}
+        // Tag/property conditions are handled by `extract_tag_option_ids`.
+        Expr::Literal(CallLiteral::Property(_)) => {}
         Expr::And(a, b) | Expr::Or(a, b) => {
             collect_channel_ids(a, ids);
             collect_channel_ids(b, ids);
@@ -80,6 +82,61 @@ fn extract_call_ids(filter: &LiteralTree<CallLiteral>) -> Vec<Uuid> {
     ids
 }
 
+/// Extract tag option ids (select-option UUIDs) from `CallLiteral::Property`
+/// literals. Tags are def-less: a call matches if any of its property values
+/// contains one of these option ids, mirroring the search-service tag filter.
+/// Structure (AND/OR/NOT) is flattened — soup only folds in a positive OR of
+/// tag literals, so a flat "any of" match is exact.
+fn extract_tag_option_ids(filter: &LiteralTree<CallLiteral>) -> Vec<String> {
+    let Some(expr) = filter else {
+        return Vec::new();
+    };
+    let mut ids = Vec::new();
+    collect_tag_option_ids(expr, &mut ids);
+    ids
+}
+
+fn collect_tag_option_ids(expr: &Expr<CallLiteral>, ids: &mut Vec<String>) {
+    match expr {
+        Expr::Literal(CallLiteral::Property(lit)) => {
+            if let PropertyMatchValue::SelectOption(option_id) = &lit.value {
+                ids.push(option_id.to_string());
+            }
+        }
+        Expr::Literal(_) => {}
+        Expr::And(a, b) | Expr::Or(a, b) => {
+            collect_tag_option_ids(a, ids);
+            collect_tag_option_ids(b, ids);
+        }
+        Expr::Not(inner) => collect_tag_option_ids(inner, ids),
+    }
+}
+
+/// Whether the tag filter requires ALL of its options rather than ANY. The
+/// tag filter is folded in as an OR of tag literals for ANY and an AND of tag
+/// literals for ALL (matching the search index's `match_all_tags`), so an
+/// `And` joining two tag-bearing branches marks ALL. A single option reads as
+/// ANY, which is equivalent.
+fn tag_filter_requires_all(filter: &LiteralTree<CallLiteral>) -> bool {
+    fn contains_tag(expr: &Expr<CallLiteral>) -> bool {
+        match expr {
+            Expr::Literal(CallLiteral::Property(_)) => true,
+            Expr::Literal(_) => false,
+            Expr::And(a, b) | Expr::Or(a, b) => contains_tag(a) || contains_tag(b),
+            Expr::Not(inner) => contains_tag(inner),
+        }
+    }
+    fn walk(expr: &Expr<CallLiteral>) -> bool {
+        match expr {
+            Expr::And(a, b) => (contains_tag(a) && contains_tag(b)) || walk(a) || walk(b),
+            Expr::Or(a, b) => walk(a) || walk(b),
+            Expr::Not(inner) => walk(inner),
+            Expr::Literal(_) => false,
+        }
+    }
+    filter.as_ref().is_some_and(|expr| walk(expr))
+}
+
 fn collect_call_ids(expr: &Expr<CallLiteral>, ids: &mut Vec<Uuid>) {
     match expr {
         Expr::Literal(CallLiteral::CallId(id)) => ids.push(*id),
@@ -87,6 +144,7 @@ fn collect_call_ids(expr: &Expr<CallLiteral>, ids: &mut Vec<Uuid>) {
         Expr::Literal(CallLiteral::Status(_)) => {}
         Expr::Literal(CallLiteral::Attended(_)) => {}
         Expr::Literal(CallLiteral::Speaker(_)) => {}
+        Expr::Literal(CallLiteral::Property(_)) => {}
         Expr::And(a, b) | Expr::Or(a, b) => {
             collect_call_ids(a, ids);
             collect_call_ids(b, ids);
@@ -210,7 +268,8 @@ fn status_set_for_expr(expr: &Expr<CallLiteral>) -> Option<CallStatusSet> {
         Expr::Literal(CallLiteral::Attended(false)) => Some(CallStatusSet::not_participant()),
         Expr::Literal(CallLiteral::CallId(_))
         | Expr::Literal(CallLiteral::ChannelId(_))
-        | Expr::Literal(CallLiteral::Speaker(_)) => None,
+        | Expr::Literal(CallLiteral::Speaker(_))
+        | Expr::Literal(CallLiteral::Property(_)) => None,
         Expr::And(a, b) => match (status_set_for_expr(a), status_set_for_expr(b)) {
             (Some(left), Some(right)) => Some(left.intersect(right)),
             (Some(status_set), None) | (None, Some(status_set)) => Some(status_set),
@@ -248,33 +307,40 @@ impl CallRepository for PgCallRepo {
         room_name: &str,
         created_by: MacroUserIdStr<'_>,
     ) -> Result<Option<Call>, Self::Err> {
-        // Create share permission
+        // Create share permission. Call access is channel-based by design, so
+        // the team default link-share preference intentionally does not apply:
+        // link sharing is off and the channel gets an explicit edit grant.
         let share_permission_id = uuid::Uuid::now_v7();
         let share_permission = SharePermissionV2 {
             id: share_permission_id.to_string(),
-            is_public: false,
-            public_access_level: None,
+            link_share: None,
+            link_share_access_level: None,
             owner: created_by.to_string(),
             channel_share_permissions: Some(vec![ChannelSharePermission {
                 channel_id: channel_id.to_string(),
                 access_level: AccessLevel::Edit,
             }]),
         };
+        let link_share = share_permission.link_share.map(|value| value.to_string());
+        let link_share_access_level = share_permission.link_share_access_level;
 
         let mut tx = self.pool.begin().await?;
 
         // insert share permission
         sqlx::query!(
             r#"
-            INSERT INTO "SharePermission" ("id", "isPublic","publicAccessLevel", "createdAt", "updatedAt")
+            INSERT INTO "SharePermission" (
+                "id",
+                "linkShare",
+                "linkShareAccessLevel",
+                "createdAt",
+                "updatedAt"
+            )
             VALUES ($1, $2, $3, NOW(), NOW())
-        "#,
+            "#,
             share_permission.id,
-            share_permission.is_public,
-            share_permission
-                .public_access_level
-                .as_ref()
-                .map(|s| s.to_string()),
+            link_share,
+            link_share_access_level as _,
         )
         .execute(tx.as_mut())
         .await?;
@@ -638,7 +704,7 @@ impl CallRepository for PgCallRepo {
     }
 
     #[tracing::instrument(err, skip(self))]
-    async fn archive_call(&self, call_id: &Uuid) -> Result<Uuid, Self::Err> {
+    async fn archive_call(&self, call_id: &Uuid) -> Result<ArchivedCall, Self::Err> {
         let mut tx = self.pool.begin().await?;
 
         // Fetch and lock the active call so concurrent archive_call callers serialize.
@@ -683,11 +749,12 @@ impl CallRepository for PgCallRepo {
             }
         }
 
-        let now = Utc::now();
-        let duration_ms = now
+        let ended_at = Utc::now().trunc_subsecs(6);
+        let duration_ms = ended_at
             .signed_duration_since(call.created_at)
             .num_milliseconds()
             .max(0);
+        let has_recording = call.egress_id.is_some();
         // Insert into call_records (including egress_id and any early recording keys).
         // The record keeps the same id as the original call.
         sqlx::query!(
@@ -700,7 +767,7 @@ impl CallRepository for PgCallRepo {
             call.room_name,
             call.created_by,
             call.created_at,
-            now,
+            ended_at,
             duration_ms,
             call.egress_id,
             call.recording_key,
@@ -712,8 +779,9 @@ impl CallRepository for PgCallRepo {
         .execute(tx.as_mut())
         .await?;
 
-        // Copy all participants (including soft-deleted) to call_record_participants.
-        sqlx::query!(
+        // Copy all lifetime-distinct participants (including soft-deleted) to
+        // call_record_participants. Each inserted row represents one participant.
+        let participant_count = sqlx::query!(
             r#"
             INSERT INTO call_record_participants (call_record_id, user_id, joined_at, left_at)
             SELECT $1, user_id, joined_at, left_at
@@ -724,7 +792,8 @@ impl CallRepository for PgCallRepo {
             call_id,
         )
         .execute(tx.as_mut())
-        .await?;
+        .await?
+        .rows_affected() as usize;
 
         // Copy transcripts to call_record_transcripts, rolling up consecutive
         // segments that share both speaker_id and diarized_speaker_id when the
@@ -816,8 +885,19 @@ impl CallRepository for PgCallRepo {
         .execute(tx.as_mut())
         .await?;
 
+        let archived = ArchivedCall {
+            call_id: call.id,
+            channel_id: call.channel_id,
+            created_by: call.created_by,
+            started_at: call.created_at,
+            ended_at,
+            duration_ms,
+            has_recording,
+            participant_count,
+        };
+
         tx.commit().await?;
-        Ok(*call_id)
+        Ok(archived)
     }
 
     #[tracing::instrument(err, skip(self))]
@@ -842,15 +922,16 @@ impl CallRepository for PgCallRepo {
     async fn get_call_record_by_egress_id(
         &self,
         egress_id: &str,
-    ) -> Result<Option<Uuid>, Self::Err> {
-        sqlx::query_scalar!(
+    ) -> Result<Option<(Uuid, Uuid)>, Self::Err> {
+        let record = sqlx::query!(
             r#"
-            SELECT id FROM call_records WHERE egress_id = $1
+            SELECT id, channel_id FROM call_records WHERE egress_id = $1
             "#,
             egress_id,
         )
         .fetch_optional(&self.pool)
-        .await
+        .await?;
+        Ok(record.map(|record| (record.id, record.channel_id)))
     }
 
     #[tracing::instrument(err, skip(self))]
@@ -1098,6 +1179,7 @@ impl CallRepository for PgCallRepo {
             tx.commit().await?;
             return Ok(Some(CallRecord {
                 call_id: active.id,
+                user_access_level: None,
                 channel_id: active.channel_id,
                 room_name: active.room_name,
                 created_by: active.created_by,
@@ -1183,6 +1265,7 @@ impl CallRepository for PgCallRepo {
         tx.commit().await?;
         Ok(Some(CallRecord {
             call_id: archived.id,
+            user_access_level: None,
             channel_id: archived.channel_id,
             room_name: archived.room_name,
             created_by: archived.created_by,
@@ -1329,6 +1412,9 @@ impl CallRepository for PgCallRepo {
             .map(call_status_sql_value)
             .map(str::to_string)
             .collect();
+        let tag_option_ids = extract_tag_option_ids(filter);
+        let has_tag_filter = !tag_option_ids.is_empty();
+        let match_all_tags = tag_filter_requires_all(filter);
 
         let rows = sqlx::query!(
             r#"
@@ -1382,6 +1468,25 @@ impl CallRepository for PgCallRepo {
                 )
                 AND ($3::bool IS FALSE OR c.channel_id = ANY($4))
                 AND ($5::bool IS FALSE OR c.id = ANY($6))
+                AND ($9::bool IS FALSE OR (
+                    ($11::bool IS FALSE AND EXISTS (
+                        SELECT 1 FROM entity_properties ep
+                        WHERE ep.entity_id = c.id::text
+                          AND ep.entity_type = 'CALL_RECORD'
+                          AND jsonb_typeof(ep.values -> 'value') = 'array'
+                          AND jsonb_exists_any(ep.values -> 'value', $10::text[])
+                    ))
+                    OR ($11::bool IS TRUE AND $10::text[] <@ (
+                        SELECT COALESCE(array_agg(elem), ARRAY[]::text[])
+                        FROM (
+                            SELECT values FROM entity_properties
+                            WHERE entity_id = c.id::text
+                              AND entity_type = 'CALL_RECORD'
+                              AND jsonb_typeof(values -> 'value') = 'array'
+                        ) ep
+                        CROSS JOIN LATERAL jsonb_array_elements_text(ep.values -> 'value') AS elem
+                    ))
+                ))
                 UNION ALL
                 SELECT
                     cr.id AS call_id,
@@ -1421,6 +1526,25 @@ impl CallRepository for PgCallRepo {
                 )
                 AND ($3::bool IS FALSE OR cr.channel_id = ANY($4))
                 AND ($5::bool IS FALSE OR cr.id = ANY($6))
+                AND ($9::bool IS FALSE OR (
+                    ($11::bool IS FALSE AND EXISTS (
+                        SELECT 1 FROM entity_properties ep
+                        WHERE ep.entity_id = cr.id::text
+                          AND ep.entity_type = 'CALL_RECORD'
+                          AND jsonb_typeof(ep.values -> 'value') = 'array'
+                          AND jsonb_exists_any(ep.values -> 'value', $10::text[])
+                    ))
+                    OR ($11::bool IS TRUE AND $10::text[] <@ (
+                        SELECT COALESCE(array_agg(elem), ARRAY[]::text[])
+                        FROM (
+                            SELECT values FROM entity_properties
+                            WHERE entity_id = cr.id::text
+                              AND entity_type = 'CALL_RECORD'
+                              AND jsonb_typeof(values -> 'value') = 'array'
+                        ) ep
+                        CROSS JOIN LATERAL jsonb_array_elements_text(ep.values -> 'value') AS elem
+                    ))
+                ))
             )
             SELECT
                 call_id as "call_id!",
@@ -1452,6 +1576,9 @@ impl CallRepository for PgCallRepo {
             &call_ids,
             has_status_filter,
             &status_filter_values,
+            has_tag_filter,
+            &tag_option_ids,
+            match_all_tags,
         )
         .fetch_all(&self.pool)
         .await?;
@@ -1509,6 +1636,7 @@ impl CallRepository for PgCallRepo {
 
             records.push(CallRecord {
                 call_id: row.call_id,
+                user_access_level: None,
                 channel_id: row.channel_id,
                 room_name: row.room_name,
                 created_by: row.created_by,
@@ -1806,9 +1934,9 @@ impl CallRepository for PgCallRepo {
     }
 
     #[tracing::instrument(skip(self, summary), err)]
-    async fn insert_call_summary(&self, call_id: &Uuid, summary: &str) -> Result<(), Self::Err> {
+    async fn insert_call_summary(&self, call_id: &Uuid, summary: &str) -> Result<bool, Self::Err> {
         // Tolerate missing rows: summarization can race with record deletion.
-        sqlx::query!(
+        let result = sqlx::query!(
             r#"
             UPDATE call_records SET summary = $2 WHERE id = $1
             "#,
@@ -1817,14 +1945,14 @@ impl CallRepository for PgCallRepo {
         )
         .execute(&self.pool)
         .await?;
-        Ok(())
+        Ok(result.rows_affected() > 0)
     }
 
     #[tracing::instrument(skip(self, name), err)]
-    async fn set_custom_name_if_null(&self, call_id: &Uuid, name: &str) -> Result<(), Self::Err> {
+    async fn set_custom_name_if_null(&self, call_id: &Uuid, name: &str) -> Result<bool, Self::Err> {
         let mut tx = self.pool.begin().await?;
-        edit::set_custom_name_if_null(&mut tx, call_id, name).await?;
+        let persisted = edit::set_custom_name_if_null(&mut tx, call_id, name).await?;
         tx.commit().await?;
-        Ok(())
+        Ok(persisted)
     }
 }

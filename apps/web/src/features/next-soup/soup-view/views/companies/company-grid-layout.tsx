@@ -1,5 +1,6 @@
 import { useDealStages } from '@companies/crm/deal-stages';
 import { useCrmDisplayOptions } from '@companies/crm/display-options';
+import { useCrmPermissions } from '@companies/crm/team-crm-config';
 import {
   Entity,
   type EntityData,
@@ -20,7 +21,6 @@ import {
 } from '@property/context/PropertiesContext';
 import type { Property, PropertyApiValues } from '@property/types';
 import { useBulkSaveEntityPropertiesMutation } from '@queries/properties/entity';
-import { useIsTeamAdmin } from '@queries/team/teams';
 import { EntityType } from '@service-properties/generated/schemas/entityType';
 import { cn } from '@ui/utils/classname';
 import { createMemo, For, Show, Suspense } from 'solid-js';
@@ -37,7 +37,7 @@ import {
  * Interaction timestamp, mirroring `TaskGridLayout`.
  */
 export function CompanyGridLayout(props: LayoutProps) {
-  const isTeamAdmin = useIsTeamAdmin();
+  const { canEditCrm } = useCrmPermissions();
   const dealStages = useDealStages();
   const displayOptions = useCrmDisplayOptions();
 
@@ -127,7 +127,7 @@ export function CompanyGridLayout(props: LayoutProps) {
   return (
     <PropertiesProvider
       entityType={EntityType.COMPANY}
-      canEdit={isTeamAdmin()}
+      canEdit={canEditCrm()}
       properties={properties}
       onRefresh={() => {}}
       onPropertyAdded={() => {}}

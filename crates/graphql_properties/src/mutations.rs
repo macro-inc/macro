@@ -6,7 +6,7 @@ use macro_user_id::user_id::MacroUserIdStr;
 use models_properties::api::requests::SetPropertyValue;
 use models_properties::service::entity_property_with_definition::EntityPropertyWithDefinition;
 use models_properties::shared::EntityReference;
-use properties::{PropertiesAccessReceipt, PropertiesService, access_entity_type};
+use properties::PropertiesService;
 use std::{marker::PhantomData, sync::Arc};
 use uuid::Uuid;
 
@@ -28,7 +28,7 @@ pub trait EntityPropertyWriter: Send + Sync + 'static {
     /// Set or attach one property on an entity.
     fn set_entity_property(
         &self,
-        entity_type: models_properties::EntityType,
+        entity_type: model_entity::EntityType,
         entity_id: String,
         property_definition_id: Uuid,
         value: Option<SetPropertyValue>,
@@ -42,7 +42,7 @@ pub struct NoOpEntityPropertyWriter;
 impl EntityPropertyWriter for NoOpEntityPropertyWriter {
     async fn set_entity_property(
         &self,
-        _entity_type: models_properties::EntityType,
+        _entity_type: model_entity::EntityType,
         _entity_id: String,
         _property_definition_id: Uuid,
         _value: Option<SetPropertyValue>,
@@ -53,8 +53,11 @@ impl EntityPropertyWriter for NoOpEntityPropertyWriter {
 
 /// Entity property writer backed by the properties and entity access services.
 pub struct PropertiesEntityPropertyWriter<P, A> {
+    /// Domain service used to write properties.
     properties_service: Arc<P>,
+    /// Access service used to authorize writes.
     entity_access_service: Arc<A>,
+    /// Authenticated user performing the write.
     user_id: MacroUserIdStr<'static>,
 }
 
@@ -80,7 +83,7 @@ where
 {
     async fn set_entity_property(
         &self,
-        entity_type: models_properties::EntityType,
+        entity_type: model_entity::EntityType,
         entity_id: String,
         property_definition_id: Uuid,
         value: Option<SetPropertyValue>,
@@ -91,44 +94,84 @@ where
                 &self.user_id,
                 None,
                 &entity_id,
-                access_entity_type(entity_type),
+                entity_type,
             )
             .await
             .map_err(|err| rootcause::report!(err))?;
-        let access = PropertiesAccessReceipt::try_from_entity_access_receipt(
-            entity_access_receipt,
-            entity_type,
-        )
-        .map_err(|err| rootcause::report!(err))?;
-
         Ok(self
             .properties_service
-            .set_entity_property(&access, property_definition_id, value)
+            .set_entity_property(&entity_access_receipt, property_definition_id, value)
             .await
             .map_err(|err| rootcause::report!(err))?)
     }
 }
 
+/// Canonical entity type accepted for property targets.
+#[derive(async_graphql::Enum, Copy, Clone, Eq, PartialEq)]
+pub enum GraphqlPropertyTargetEntityType {
+    /// Call record target.
+    CallRecord,
+    /// Channel target.
+    Channel,
+    /// Chat target.
+    Chat,
+    /// CRM company target.
+    Company,
+    /// Document target, including tasks and snippets.
+    Document,
+    /// Project target.
+    Project,
+    /// Email thread target.
+    Thread,
+    /// User target.
+    User,
+}
+
+impl GraphqlPropertyTargetEntityType {
+    /// Convert this GraphQL target type into the canonical entity model.
+    pub fn into_model(self) -> model_entity::EntityType {
+        match self {
+            Self::CallRecord => model_entity::EntityType::Call,
+            Self::Channel => model_entity::EntityType::Channel,
+            Self::Chat => model_entity::EntityType::Chat,
+            Self::Company => model_entity::EntityType::CrmCompany,
+            Self::Document => model_entity::EntityType::Document,
+            Self::Project => model_entity::EntityType::Project,
+            Self::Thread => model_entity::EntityType::EmailThread,
+            Self::User => model_entity::EntityType::User,
+        }
+    }
+}
+
+/// Input for assigning or updating an entity property.
 #[derive(async_graphql::InputObject)]
 struct SetEntityPropertyInput {
-    entity_type: GraphqlPropertyEntityType,
+    /// Type of entity receiving the property.
+    entity_type: GraphqlPropertyTargetEntityType,
+    /// Identifier of the entity receiving the property.
     entity_id: String,
+    /// Identifier of the property definition to assign.
     property_definition_id: ID,
     /// Omit or pass null to attach the property without a value.
     value: Option<GraphqlSetPropertyValue>,
 }
 
+/// Input identifying an entity referenced by a property value.
 #[derive(async_graphql::InputObject)]
 struct GraphqlEntityReferenceInput {
+    /// Type of the referenced entity.
     entity_type: GraphqlPropertyEntityType,
+    /// Identifier of the referenced entity.
     entity_id: String,
+    /// Specific message when the reference targets a thread message.
     specific_message_id: Option<ID>,
 }
 
 impl GraphqlEntityReferenceInput {
+    /// Convert the GraphQL reference into its properties-domain model.
     fn try_into_model(self) -> async_graphql::Result<EntityReference> {
         Ok(EntityReference {
-            entity_type: self.entity_type.into(),
+            entity_type: self.entity_type.into_model(),
             entity_id: self.entity_id,
             specific_message_id: self
                 .specific_message_id
@@ -138,21 +181,33 @@ impl GraphqlEntityReferenceInput {
     }
 }
 
+/// A typed value accepted when setting an entity property.
 #[derive(async_graphql::OneofObject)]
 enum GraphqlSetPropertyValue {
+    /// A Boolean value.
     Boolean(bool),
+    /// An RFC 3339 date-time value.
     Date(String),
+    /// A numeric value.
     Number(f64),
+    /// A string value.
     String(String),
+    /// A single selected option identifier.
     SelectOption(ID),
+    /// Multiple selected option identifiers.
     MultiSelectOption(Vec<ID>),
+    /// A single entity reference.
     EntityReference(GraphqlEntityReferenceInput),
+    /// Multiple entity references.
     MultiEntityReference(Vec<GraphqlEntityReferenceInput>),
+    /// A single URL value.
     Link(String),
+    /// Multiple URL values.
     MultiLink(Vec<String>),
 }
 
 impl GraphqlSetPropertyValue {
+    /// Convert the GraphQL value into its properties-domain request model.
     fn try_into_model(self) -> async_graphql::Result<SetPropertyValue> {
         Ok(match self {
             Self::Boolean(value) => SetPropertyValue::Boolean { value },
@@ -191,6 +246,7 @@ impl GraphqlSetPropertyValue {
     }
 }
 
+/// Mutations for assigning and updating entity properties.
 #[Object]
 impl<T> PropertiesMutationRoot<T>
 where
@@ -212,7 +268,7 @@ where
 
         let property = writer
             .set_entity_property(
-                input.entity_type.into(),
+                input.entity_type.into_model(),
                 input.entity_id,
                 property_definition_id,
                 value,
@@ -220,7 +276,7 @@ where
             .await
             .map_err(|err| async_graphql::Error::new(err.to_string()))?;
 
-        Ok(property.into())
+        Ok(GraphqlProperty::new(property))
     }
 }
 
@@ -243,7 +299,7 @@ mod tests {
     }
 
     type CapturedWrite = (
-        models_properties::EntityType,
+        model_entity::EntityType,
         String,
         Uuid,
         Option<SetPropertyValue>,
@@ -258,7 +314,7 @@ mod tests {
     impl EntityPropertyWriter for CapturingWriter {
         async fn set_entity_property(
             &self,
-            entity_type: models_properties::EntityType,
+            entity_type: model_entity::EntityType,
             entity_id: String,
             property_definition_id: Uuid,
             value: Option<SetPropertyValue>,
@@ -319,7 +375,7 @@ mod tests {
                 r#"
                 mutation {{
                     setEntityProperty(input: {{
-                        entityType: TASK,
+                        entityType: DOCUMENT,
                         entityId: "task-1",
                         propertyDefinitionId: "{property_definition_id}",
                         value: {{ selectOption: "{option_id}" }}
@@ -367,7 +423,7 @@ mod tests {
         assert_eq!(
             writer.write.lock().expect("capture mutex poisoned").clone(),
             Some((
-                models_properties::EntityType::Task,
+                model_entity::EntityType::Document,
                 "task-1".to_string(),
                 property_definition_id,
                 Some(SetPropertyValue::SelectOption { option_id }),

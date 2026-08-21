@@ -101,7 +101,7 @@ function GenerateActionMenu(props: GenerateMenuProps) {
   });
 
   return (
-    <div class="w-fit flex flex-col ring ring-edge rounded-md p-1 bg-surface shadow-md space-y-1">
+    <div class="w-fit flex flex-col border border-edge rounded-md p-1 bg-surface shadow-md space-y-1">
       <MenuItem
         onClick={() => {
           props.editor.dispatchCommand(ACCEPT_COMPLETION, undefined);
@@ -157,7 +157,7 @@ function InnerGenerateMenu(props: GenerateMenuProps) {
   return (
     <ScopedPortal scope="local">
       <div
-        class="z-full-page-modal-base flex flex-col rounded-md -mt-7"
+        class="z-action-menu flex flex-col rounded-md -mt-7"
         style={{
           width: targetWidth() + 'px',
         }}

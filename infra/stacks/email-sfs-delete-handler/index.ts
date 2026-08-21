@@ -37,7 +37,7 @@ const emailSfsDeleteHandler = new EmailSfsDeleteHandler(
     envVars: {
       DATABASE_URL: pulumi.interpolate`${MACRO_DB_URL}`,
       ENVIRONMENT: stack,
-      RUST_LOG: 'email_sfs_delete_handler=info',
+      RUST_LOG: 'email_sfs_delete_handler=info,macro_http_request=info',
     },
     tags,
   }

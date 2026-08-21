@@ -1,7 +1,4 @@
-use crate::{
-    map_soup_type,
-    outbound::pg_soup_repo::{populate_properties, type_err},
-};
+use crate::{map_soup_type, outbound::pg_soup_repo::type_err};
 use document_sub_type::DocumentSubType;
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use models_pagination::{Query, SimpleSortMethod};
@@ -24,7 +21,7 @@ pub async fn unexpanded_generic_cursor_soup(
     user_id: MacroUserIdStr<'_>,
     limit: u16,
     cursor: Query<Uuid, SimpleSortMethod, ()>,
-) -> Result<Vec<SoupItem>, sqlx::Error> {
+) -> Result<Vec<SoupItem<()>>, sqlx::Error> {
     let query_limit = limit as i64;
     let sort_method_str = cursor.sort_method().to_string();
     let (cursor_id, cursor_timestamp) = cursor.vals();
@@ -33,7 +30,7 @@ pub async fn unexpanded_generic_cursor_soup(
     let status_property_id = SystemPropertyKey::STATUS_UUID;
     let completed_option_id = StatusOption::COMPLETED_UUID.to_string();
 
-    let mut items: Vec<SoupItem> = sqlx::query!(
+    let items: Vec<SoupItem<()>> = sqlx::query!(
         r#"
         WITH user_source_ids AS (
             SELECT cp.channel_id::text as source_id FROM comms_channel_participants cp
@@ -206,8 +203,6 @@ pub async fn unexpanded_generic_cursor_soup(
     .try_map(map_soup_type!())
     .fetch_all(db)
     .await?;
-
-    populate_properties(db, user_id.copied(), &mut items).await?;
 
     Ok(items)
 }

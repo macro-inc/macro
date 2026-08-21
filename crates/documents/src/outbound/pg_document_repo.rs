@@ -14,6 +14,7 @@ mod share;
 use document_sub_type::DocumentSubType;
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use model::document::{DocumentBasic, DocumentMetadata};
+use models_permissions::share_permission::{SharePermissionV2, TeamLinkShareDefault};
 use sqlx::PgPool;
 
 use model_entity::{Entity, EntityType};
@@ -37,6 +38,21 @@ impl PgDocumentRepo {
     pub fn new(pool: PgPool) -> Self {
         Self { pool }
     }
+}
+
+async fn update_document_modified(pool: &PgPool, document_id: &str) -> Result<(), sqlx::Error> {
+    sqlx::query!(
+        r#"
+        UPDATE "Document"
+        SET "updatedAt" = NOW()
+        WHERE id = $1
+        "#,
+        document_id,
+    )
+    .execute(pool)
+    .await?;
+
+    Ok(())
 }
 
 impl DocumentRepo for PgDocumentRepo {
@@ -388,10 +404,19 @@ impl DocumentRepo for PgDocumentRepo {
         Ok(content.content)
     }
 
-    #[tracing::instrument(err, skip(self, args))]
+    #[tracing::instrument(err, skip(self))]
+    async fn get_team_default_link_share(
+        &self,
+        user_id: &str,
+    ) -> Result<Option<TeamLinkShareDefault>, Self::Err> {
+        share_permission_db_utils::get_team_default_link_share(&self.pool, user_id).await
+    }
+
+    #[tracing::instrument(err, skip(self, args, share_permission))]
     async fn create_document(
         &self,
         args: CreateDocumentRepoArgs,
+        share_permission: SharePermissionV2,
     ) -> Result<DocumentMetadata, Self::Err> {
         let CreateDocumentRepoArgs {
             id,
@@ -457,7 +482,7 @@ impl DocumentRepo for PgDocumentRepo {
         .await?;
 
         // Create share permission
-        create::set_share_permission(&mut transaction, &document_id, file_type).await?;
+        create::set_share_permission(&mut transaction, &document_id, &share_permission).await?;
 
         // Add to user history (if not skipped)
         if !skip_history {
@@ -529,33 +554,23 @@ impl DocumentRepo for PgDocumentRepo {
         .await?;
 
         if let Some(ref share_permission) = args.share_permission {
-            let mut document_now_private = false;
-
-            if let Some(is_public) = share_permission.is_public
-                && !is_public
-            {
-                document_now_private = true;
-            }
-
             edit::update_share_permission(&mut transaction, &args.document_id, share_permission)
                 .await?;
+        }
 
-            // The share permission changed, if the document became private we need to update
-            // entity_access
-            if document_now_private {
-                let owner = edit::get_document_owner(&mut transaction, &args.document_id).await?;
+        if args.revoke_non_owner_user_access {
+            let owner = edit::get_document_owner(&mut transaction, &args.document_id).await?;
 
-                // SAFETY: this will not fail
-                let entity_id = macro_uuid::string_to_uuid(&args.document_id).unwrap();
+            // SAFETY: document IDs are UUID strings.
+            let entity_id = macro_uuid::string_to_uuid(&args.document_id).unwrap();
 
-                entity_access_db_utils::remove_non_owner_user_entity_access(
-                    &mut transaction,
-                    &entity_id,
-                    EntityType::Document,
-                    &owner,
-                )
-                .await?;
-            }
+            entity_access_db_utils::remove_non_owner_user_entity_access(
+                &mut transaction,
+                &entity_id,
+                EntityType::Document,
+                &owner,
+            )
+            .await?;
         }
 
         transaction.commit().await?;
@@ -579,6 +594,11 @@ impl DocumentRepo for PgDocumentRepo {
         }
 
         Ok(())
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn update_document_modified(&self, document_id: &str) -> Result<(), Self::Err> {
+        update_document_modified(&self.pool, document_id).await
     }
 
     #[tracing::instrument(err, skip(self))]
@@ -726,6 +746,25 @@ impl DocumentRepo for PgDocumentRepo {
             team_id: row.team_id,
             task_num: row.task_num,
         }))
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn get_document_id_by_team_task_number(
+        &self,
+        team_id: &uuid::Uuid,
+        task_num: i32,
+    ) -> Result<Option<String>, Self::Err> {
+        sqlx::query_scalar!(
+            r#"
+            SELECT document_id
+            FROM team_task
+            WHERE team_id = $1 AND task_num = $2
+            "#,
+            team_id,
+            task_num,
+        )
+        .fetch_optional(&self.pool)
+        .await
     }
 
     #[tracing::instrument(err, skip(self))]
@@ -984,10 +1023,11 @@ impl DocumentRepo for PgDocumentRepo {
         Ok(children)
     }
 
-    #[tracing::instrument(err, skip(self, args))]
+    #[tracing::instrument(err, skip(self, args, share_permission))]
     async fn copy_document(
         &self,
         args: CopyDocumentRepoArgs,
+        share_permission: SharePermissionV2,
     ) -> Result<DocumentMetadata, Self::Err> {
         let CopyDocumentRepoArgs {
             original_document,
@@ -1030,9 +1070,7 @@ impl DocumentRepo for PgDocumentRepo {
         }
 
         // Create share permission
-        create::set_share_permission(&mut transaction, &document_id, file_type).await?;
-
-        // Insert user entity access (Owner level)
+        create::set_share_permission(&mut transaction, &document_id, &share_permission).await?;
 
         // Insert user entity access (Owner level)
         entity_access_db_utils::insert_entity_access_row(

@@ -1,4 +1,7 @@
+/// Event-to-activity mappings for this domain.
+pub mod activity;
 pub mod error;
+pub mod events;
 pub mod metadata;
 pub mod model;
 pub mod ports;

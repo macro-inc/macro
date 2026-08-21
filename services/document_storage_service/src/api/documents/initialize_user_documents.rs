@@ -1,19 +1,20 @@
-use crate::api::context::ApiContext;
+use crate::api::context::{ApiContext, AuthorizationService};
 use axum::{
     extract::State,
     response::{IntoResponse, Json, Response},
 };
 use futures::StreamExt;
+use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
+use macro_event_broker::MacroEventBroker;
 use macro_user_id::cowlike::CowLike;
 use model::{
     document::BasicDocument,
     response::{ErrorResponse, GenericErrorResponse, GenericSuccessResponse},
 };
-use model_user::axum_extractor::MacroUserExtractor;
 use models_permissions::share_permission::SharePermissionV2;
+use projects_hex::domain::events::{ProjectCreatedMetadata, ProjectMacroEvent};
 use reqwest::StatusCode;
 use s3_key::build_cloud_storage_bucket_document_key;
-use sqs_client::search::{SearchQueueMessage, project::UpsertProject};
 
 const ONBOARDING_FOLDER_NAME: &str = "ONBOARDING_DOCUMENTS";
 const PROJECT_NAME: &str = "Starter Docs";
@@ -33,10 +34,10 @@ const CANVAS_TEMPLATE: &str = include_str!("./template/canvas_template.canvas");
             (status = 500, body=GenericErrorResponse),
         )
     )]
-#[tracing::instrument(skip(state, user_context), fields(user_id=?user_context.macro_user_id))]
+#[tracing::instrument(skip(state, user_context), fields(user_id=?user_context.authorization.user.macro_user_id))]
 pub async fn handler(
     State(state): State<ApiContext>,
-    user_context: MacroUserExtractor,
+    user_context: MacroAuthorizationExtractor<AuthorizationService, UserOrInternal>,
 ) -> Result<Response, Response> {
     tracing::info!("initialize user documents");
     let start_time = std::time::Instant::now();
@@ -75,14 +76,16 @@ pub async fn handler(
             .into_response()
     })?;
 
-    // Create default share permission
-    let share_permission = SharePermissionV2::new_project_share_permission();
+    // Create default share permission. Onboarding documents are created at
+    // signup, before team membership is meaningful, so the team default
+    // link-share preference intentionally does not apply.
+    let share_permission = SharePermissionV2::new_project_share_permission(None);
 
     let start_time = std::time::Instant::now();
     let project =
         macro_db_client::document::initialize_onboarding_documents::create_project_transaction(
             &mut transaction,
-            user_context.macro_user_id.copied(),
+            user_context.authorization.user.macro_user_id.copied(),
             PROJECT_NAME,
             None,
             &share_permission,
@@ -105,7 +108,7 @@ pub async fn handler(
     let db_documents =
         macro_db_client::document::initialize_onboarding_documents::create_onboarding_documents(
             &mut transaction,
-            user_context.macro_user_id.clone(),
+            user_context.authorization.user.macro_user_id.clone(),
             &project.id,
             &share_permission,
             documents,
@@ -160,7 +163,7 @@ pub async fn handler(
             let s3_client = shared_s3_client.clone(); // Clone the client for parallel usage
             let markdown_template = shared_markdown_template.clone();
             let canvas_template = shared_canvas_template.clone();
-            let user_id = user_context.macro_user_id.clone();
+            let user_id = user_context.authorization.user.macro_user_id.clone();
             async move {
                 let uri_document_name = urlencoding::encode(document.document_name.as_str());
                 let deref_file_type = document.file_type.as_deref();
@@ -218,7 +221,7 @@ pub async fn handler(
     // Set the onboarding status to true so we don't do this again
     macro_db_client::user::onboarding_status::set_onboarding_status(
         &mut transaction,
-        user_context.macro_user_id.as_ref(),
+        user_context.authorization.user.macro_user_id.as_ref(),
     )
     .await
     .map_err(|e| {
@@ -246,23 +249,26 @@ pub async fn handler(
             .into_response()
     })?;
 
-    tokio::spawn({
-        let sqs_client = state.sqs_client.clone();
-        let project_id = project.id.clone();
-        async move {
-            let _ = sqs_client
-                .send_message_to_search_event_queue(SearchQueueMessage::UpsertProject(
-                    UpsertProject {
-                        project_id: project_id.clone(),
-                        index_override: None,
-                    },
-                ))
-                .await
-                .inspect_err(
-                    |e| tracing::error!(error=?e, project_id=?project_id, "unable to enqueue project search upsert"),
-                );
-        }
-    });
+    let project_event = ProjectMacroEvent::created(
+        project.id.clone(),
+        ProjectCreatedMetadata {
+            project_id: project.id.clone(),
+            owner: user_context.authorization.user.macro_user_id.clone(),
+            name: PROJECT_NAME.to_string(),
+            parent_project_id: None,
+            created_at: project.created_at,
+        },
+    );
+    let _ = state
+        .macro_event_broker
+        .send_event(&project_event)
+        .inspect_err(|error| {
+            tracing::error!(
+                error=?error,
+                project_id = %project.id,
+                "unable to enqueue project created event"
+            );
+        });
 
     Ok((StatusCode::OK, Json(GenericSuccessResponse::default())).into_response())
 }

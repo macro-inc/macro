@@ -5,13 +5,14 @@
 //! instead of duplicating the wiring logic.
 
 use crate::tool_context::{
-    NoOpCallRtcClient, NoOpConnectionService, NoOpNotificationIngress, NoOpSnsEndpointManager,
-    ToolNotificationQueue, ToolServiceContext,
+    ChannelSideEffectClients, NoOpCallRtcClient, NoOpConnectionService, NoOpNotificationIngress,
+    NoOpSnsEndpointManager, ToolImportToolContext, ToolNotificationQueue, ToolServiceContext,
 };
 use anthropic::toolset::AnthropicToolContext;
 use anyhow::Context;
 use channels::domain::list_service::ChannelListServiceImpl;
 use channels::outbound::pg_channels_repo::PgChannelsRepo;
+use connection_gateway_client::ConnectionGatewayClient;
 use documents::domain::models::CloudFrontConfig;
 use documents::inbound::toolset::DocumentToolContext;
 use documents::outbound::editing_worker_client::ReqwestEditingWorkerClient;
@@ -33,8 +34,8 @@ use lexical_client::LexicalClient;
 use macro_env::Environment;
 use macro_env_var::{env_var, maybe_env_var};
 use macro_service_urls::{
-    AiEditingWorkerUrl, DocumentStorageServiceUrl, EmailServiceUrl, LexicalServiceUrl,
-    SyncServiceUrl,
+    AiEditingWorkerUrl, ConnectionGatewayUrl, DocumentStorageServiceUrl, EmailServiceUrl,
+    LexicalServiceUrl, SyncServiceUrl,
 };
 use notification::domain::service::{NotificationReaderService, PlatformArnConfig};
 use notification::outbound::queue::SqsQueue;
@@ -46,6 +47,7 @@ use soup::domain::service::SoupImpl;
 use soup::outbound::pg_soup_repo::PgSoupRepo;
 use std::sync::Arc;
 use sync_service_client::SyncServiceClient;
+use tokio_util::task::TaskTracker;
 
 env_var! {
     struct ToolContextEnvVars {
@@ -57,6 +59,7 @@ env_var! {
         DocumentStorageServiceCloudfrontSignerPublicKeyId,
         DocumentStorageServiceCloudfrontSignerPrivateKeySecretName,
         DocumentPermissionJwt,
+        InternalApiKey,
         KafkaBrokers,
     }
 }
@@ -83,7 +86,8 @@ maybe_env_var! {
 /// `DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_DISTRIBUTION_URL`,
 /// `DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_SIGNER_PUBLIC_KEY_ID`,
 /// `DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_SIGNER_PRIVATE_KEY_SECRET_NAME`,
-/// `KAFKA_BROKERS`.
+/// `INTERNAL_API_KEY` (presented to the connection gateway for realtime
+/// channel side effects), `KAFKA_BROKERS`.
 ///
 /// Service URLs are resolved through the `macro_service_urls` crate, and queue
 /// names through the `macro_queues` crate (both using optional `OVERRIDE_*` env
@@ -94,9 +98,14 @@ maybe_env_var! {
 /// - `ENABLE_EMAIL_SCHEDULED_QUEUE`
 /// - `ENABLE_GMAIL_OPS_QUEUE` (if disabled, thread-label updates can't enqueue Gmail sync ops)
 /// - `ENABLE_NOTIFICATION_QUEUE` (if disabled, notification status updates skip push clearing)
-#[tracing::instrument(skip(pool), err)]
+///
+/// `event_task_tracker` tracks event publishes started by the context. Callers
+/// must retain the original tracker, pass a clone here, and close and drain the
+/// original after the host stops broker-backed work.
+#[tracing::instrument(skip(pool, event_task_tracker), err)]
 pub async fn build_tool_service_context_from_env(
     pool: sqlx::PgPool,
+    event_task_tracker: TaskTracker,
 ) -> anyhow::Result<ToolServiceContext> {
     let env = ToolContextEnvVars::new()?;
     let maybe_env = ToolContextMaybeEnvVars::new();
@@ -106,6 +115,7 @@ pub async fn build_tool_service_context_from_env(
     let email_service_url = EmailServiceUrl::new()?.to_string();
     let lexical_service_url = LexicalServiceUrl::new()?.to_string();
     let ai_editing_worker_url = AiEditingWorkerUrl::new()?.to_string();
+    let connection_gateway_url = ConnectionGatewayUrl::new()?.to_string();
 
     let aws_config = macro_aws_config::get_macro_aws_config().await;
     let aws_sqs_client = aws_sdk_sqs::Client::new(&aws_config);
@@ -140,7 +150,7 @@ pub async fn build_tool_service_context_from_env(
     let notification_queue = if enable_notification_queue {
         let notification_queue = macro_queues::NotificationIngressQueue::new();
         ToolNotificationQueue::Sqs(SqsQueue::new(
-            aws_sqs_client,
+            aws_sqs_client.clone(),
             notification_queue.to_string(),
         ))
     } else {
@@ -176,7 +186,7 @@ pub async fn build_tool_service_context_from_env(
         sync_service_auth_key.clone(),
         sync_service_url,
     ));
-    let email_ext_client = Arc::new(EmailServiceClientExternal::new(email_service_url));
+    let email_ext_client = Arc::new(EmailServiceClientExternal::new(email_service_url.clone()));
     let lexical_client = LexicalClient::new(
         env.document_storage_service_auth_key.to_string(),
         lexical_service_url,
@@ -203,7 +213,6 @@ pub async fn build_tool_service_context_from_env(
         PgChannelsRepo::new(pool.clone()),
         frecency_storage,
     );
-    let channel_tool_context = crate::tool_context::build_channel_tool_context(pool.clone());
     let email_service_for_tools: Arc<crate::tool_context::ToolEmailService> =
         Arc::new(email_service.clone());
     let foreign_entity_service =
@@ -213,9 +222,12 @@ pub async fn build_tool_service_context_from_env(
         frecency_service,
         ReadonlyEmailPreviewAdapter(email_service),
         channels_service,
-        call::domain::ports::NoOpCallRecordQueryService,
+        call::domain::service::CallRecordQueryServiceImpl::new(
+            call::outbound::pg_call_repo::PgCallRepo::new(pool.clone()),
+        ),
         crm::domain::service::NoOpCrmService,
         foreign_entity_service,
+        reminders::domain::service::NoOpRemindersService,
     ));
 
     let s3_client = macro_aws_config::s3_client().await;
@@ -249,6 +261,24 @@ pub async fn build_tool_service_context_from_env(
     let macro_event_broker = macro_event_broker::MacroEventBrokerService::new(
         macro_event_broker::KafkaEventPublisher::new(env.kafka_brokers.as_ref())
             .context("failed to create kafka event publisher")?,
+        event_task_tracker,
+    );
+    // Channel messages sent by AI tools dispatch the same side effects as the
+    // document-storage channel API (realtime, notifications, contact sync, and
+    // broker events that drive live search indexing), so agent-sent messages
+    // notify mentioned users and stream to connected clients instead of landing
+    // silently.
+    let channel_tool_context = crate::tool_context::build_channel_tool_context_with_side_effects(
+        pool.clone(),
+        Arc::new(lexical_client.clone()),
+        ChannelSideEffectClients {
+            connection_gateway: Arc::new(ConnectionGatewayClient::new(
+                env.internal_api_key.to_string(),
+                connection_gateway_url,
+            )),
+            sqs: aws_sqs_client,
+            macro_event_broker: macro_event_broker.clone(),
+        },
     );
     let document_service = documents::domain::service::DocumentServiceImpl {
         repo: document_repo,
@@ -281,20 +311,21 @@ pub async fn build_tool_service_context_from_env(
         entity_access_service.clone(),
     );
 
+    let user_email_service = Arc::new(
+        EmailServiceImpl::new(
+            EmailPgRepo::new(pool.clone()),
+            FrecencyQueryServiceImpl::new(FrecencyPgStorage::new(pool.clone())),
+            sqs_client,
+            crm_service.clone(),
+            entity_access_management::domain::service::EntityAccessManagementServiceImpl::new(
+                entity_access_management::outbound::PgRepository::new(pool.clone()),
+            ),
+            0,
+        )
+        .with_macro_event_broker(macro_event_broker.clone()),
+    );
     let email_tool_context = email::inbound::toolset::EmailToolContext::new(
-        Arc::new(
-            EmailServiceImpl::new(
-                EmailPgRepo::new(pool.clone()),
-                FrecencyQueryServiceImpl::new(FrecencyPgStorage::new(pool.clone())),
-                sqs_client,
-                crm_service.clone(),
-                entity_access_management::domain::service::EntityAccessManagementServiceImpl::new(
-                    entity_access_management::outbound::PgRepository::new(pool.clone()),
-                ),
-                0,
-            )
-            .with_macro_event_broker(macro_event_broker.clone()),
-        ),
+        user_email_service.clone(),
         Arc::new(email::domain::ports::NoOpGmailTokenProvider),
         Arc::new(EntityAccessServiceImpl::new(PgAccessRepository::new(
             pool.clone(),
@@ -310,13 +341,15 @@ pub async fn build_tool_service_context_from_env(
         None::<call::outbound::s3_recording_storage::S3RecordingStorage>,
         String::new(),
     );
-    let call_query_service = call::domain::service::CallRecordQueryServiceImpl::new(
-        call::outbound::pg_call_repo::PgCallRepo::new(pool.clone()),
-    );
     let call_tool_context = call::inbound::toolset::CallToolContext::new(
         call_service,
-        call_query_service,
         (*entity_access_service).clone(),
+    );
+
+    let calendar_tool_context = crate::tool_context::build_calendar_tool_context(
+        pool.clone(),
+        email_service_url,
+        env.internal_api_key.to_string(),
     );
 
     let notification_reader_service = NotificationReaderService {
@@ -347,10 +380,22 @@ pub async fn build_tool_service_context_from_env(
         (*entity_access_service).clone(),
     );
 
+    let project_tool_context = crate::tool_context::build_project_tool_context(
+        pool.clone(),
+        macro_event_broker.clone(),
+        entity_access_service.clone(),
+        document_tool_context.service.clone(),
+        chat_tool_context.service.clone(),
+        user_email_service,
+    );
+
     let anthropic_tool_context = build_anthropic_tool_context();
 
+    let skill_tool_context =
+        crate::tool_context::build_skill_tool_context(search_client.clone(), soup_service.clone());
+
     Ok(ToolServiceContext {
-        search_service_client: search_client,
+        search_service_client: search_client.clone(),
         email_service_client: email_ext_client,
         soup_service,
         email_service: email_service_for_tools,
@@ -358,11 +403,19 @@ pub async fn build_tool_service_context_from_env(
         properties_tool_context,
         email_tool_context,
         call_tool_context,
+        calendar_tool_context,
         notification_tool_context,
+        reminders_tool_context: crate::tool_context::build_reminders_tool_context(
+            pool.clone(),
+            entity_access_service.clone(),
+        ),
+        import_tool_context: ToolImportToolContext::unwired(),
         chat_tool_context,
         channel_tool_context,
+        project_tool_context,
         team_tool_context: crate::tool_context::build_team_tool_context(pool.clone()),
         crm_tool_context: crate::tool_context::build_crm_tool_context(pool.clone()),
+        skill_tool_context,
         schedule_tool_context: crate::NoOpScheduleContext,
         anthropic_tool_context,
         recorder: ai_usage::pg_recorder(pool.clone()),

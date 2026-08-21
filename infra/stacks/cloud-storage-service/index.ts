@@ -23,6 +23,8 @@ import {
   DocumentUploadFinalizerLambda,
   type DocumentUploadFinalizerLambdaEnvVars,
 } from './document-upload-finalizer-lambda';
+import { CalendarReminderDispatchQueue } from './calendar-reminder-dispatch-queue';
+import { ReminderDispatchQueue } from './reminder-dispatch-queue';
 
 const tags = {
   environment: stack,
@@ -145,6 +147,10 @@ const emailScheduledQueueArn: pulumi.Output<string> = emailServiceStack
   .getOutput('scheduledQueueArn')
   .apply((arn) => arn as string);
 
+const gmailOpsQueueArn: pulumi.Output<string> = emailServiceStack
+  .getOutput('gmailOpsQueueArn')
+  .apply((arn) => arn as string);
+
 const {
   notificationIngressQueueArn,
   notificationApnsVoipPlatformArn: snsApnsVoipPlatformArn,
@@ -203,7 +209,7 @@ const deleteChatHandler = new DeleteChatHandler(
     envVars: {
       DATABASE_URL: pulumi.interpolate`${DATABASE_URL_PROXY}`,
       ENVIRONMENT: stack,
-      RUST_LOG: 'delete_chat_handler=info',
+      RUST_LOG: 'delete_chat_handler=info,macro_http_request=info',
     },
     vpc: coparse_api_vpc,
     tags,
@@ -214,6 +220,24 @@ export const deleteChatHandlerRoleArn = deleteChatHandler.role.arn;
 export const deleteChatHandlerLambdaName = deleteChatHandler.lambda.name;
 export const deleteChatQueueArn = deleteChatHandler.queue.arn;
 export const deleteChatQueueName = deleteChatHandler.queue.name;
+
+const reminderDispatchQueue = new ReminderDispatchQueue(
+  `reminder-dispatch-${stack}`,
+  { tags }
+);
+
+export const reminderDispatchQueueArn = reminderDispatchQueue.queue.arn;
+export const reminderDispatchQueueName = reminderDispatchQueue.queue.name;
+
+const calendarReminderDispatchQueue = new CalendarReminderDispatchQueue(
+  `calendar-reminder-dispatch-${stack}`,
+  { tags }
+);
+
+export const calendarReminderDispatchQueueArn =
+  calendarReminderDispatchQueue.queue.arn;
+export const calendarReminderDispatchQueueName =
+  calendarReminderDispatchQueue.queue.name;
 
 const MACRO_API_TOKENS = getMacroApiToken();
 
@@ -261,6 +285,10 @@ const cloudStorageService = new CloudStorageService(
       notificationIngressQueueArn,
       contactsQueueArn,
       emailScheduledQueueArn,
+      gmailOpsQueueArn,
+      // Both directions: the sweep publishes onto it and the workers read it.
+      reminderDispatchQueue.queue.arn,
+      calendarReminderDispatchQueue.queue.arn,
     ],
     vpc: coparse_api_vpc,
     platform: {
@@ -322,7 +350,7 @@ const docxUnzipHandlerEnvVars: DocxUnzipLambdaEnvVars = {
   DATABASE_URL: pulumi.interpolate`${DATABASE_URL_PROXY}`,
   REDIS_URI: pulumi.interpolate`redis://${MACRO_CACHE}`,
   ENVIRONMENT: stack,
-  RUST_LOG: 'docx_unzip_handler=info',
+  RUST_LOG: 'docx_unzip_handler=info,macro_http_request=info',
   DOCUMENT_STORAGE_BUCKET: pulumi.interpolate`${documentStorageBucketId}`,
   DOCX_DOCUMENT_UPLOAD_BUCKET: pulumi.interpolate`${docxUploadBucketName}`,
   WEB_SOCKET_RESPONSE_LAMBDA: pulumi.interpolate`${jobUpdateHandlerLambdaName}`,
@@ -351,7 +379,8 @@ const documentUploadFinalizerEnvVars: DocumentUploadFinalizerLambdaEnvVars = {
   SYNC_SERVICE_AUTH_KEY: pulumi.interpolate`${syncServiceAuthKeyValue}`,
   LEXICAL_SERVICE_URL: getServiceUrl(ServiceUrl.LEXICAL_SERVICE_URL),
   SYNC_SERVICE_URL: getServiceUrl(ServiceUrl.SYNC_SERVICE_URL),
-  RUST_LOG: 'document_upload_finalizer_handler=info,documents=info',
+  RUST_LOG:
+    'document_upload_finalizer_handler=info,documents=info,macro_http_request=info',
 };
 
 const documentUploadFinalizer = new DocumentUploadFinalizerLambda(

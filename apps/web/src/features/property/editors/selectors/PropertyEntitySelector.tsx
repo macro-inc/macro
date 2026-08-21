@@ -78,13 +78,25 @@ function getEntityTypePluralLabel(
   }
 }
 
+type UserEntityParts = {
+  name: string;
+  email?: string;
+};
+
+function getUserEntityParts(entity: CombinedEntity): UserEntityParts | null {
+  if (entity.kind !== 'user') return null;
+
+  const { name, email } = entity.data;
+  if (!name || name === email) return { name: email };
+  return { name, email };
+}
+
 /** Gets display name for a CombinedEntity */
 function getEntityName(entity: CombinedEntity): string {
   if (entity.kind === 'user') {
-    const { name, email } = entity.data;
-    if (name === email) return email.split('@')[0] || email;
-    return `${name} | ${email}`;
+    return entity.data.name || entity.data.email;
   }
+
   const data = entity.data;
   if (data.type === 'email') {
     return data.name ?? 'No Subject';
@@ -188,6 +200,13 @@ export function PropertyEntitySelector(props: EntityInputProps) {
   // Convert quickAccess items to CombinedEntity format
   const entities = createMemo((): CombinedEntity[] => {
     const specificEntityType = props.config.specificEntityType;
+
+    // An explicit user pool replaces the quick-access people list.
+    if (specificEntityType === 'USER' && props.config.users) {
+      return props.config
+        .users()
+        .map((user) => userToEntity(augmentUserWithDmActivity(user)));
+    }
 
     // For THREAD type, use email data (not in quickAccess yet)
     if (specificEntityType === 'THREAD') {
@@ -528,7 +547,23 @@ export function PropertyEntitySelector(props: EntityInputProps) {
                           <span class="truncate min-w-0 max-w-full">
                             <Show
                               when={entity.kind === 'entity'}
-                              fallback={getEntityName(entity)}
+                              fallback={
+                                <Show
+                                  when={getUserEntityParts(entity)}
+                                  fallback={getEntityName(entity)}
+                                >
+                                  {(parts) => (
+                                    <>
+                                      {parts().name}
+                                      <Show when={parts().email}>
+                                        <span class="ml-[0.5em] opacity-50">
+                                          {parts().email}
+                                        </span>
+                                      </Show>
+                                    </>
+                                  )}
+                                </Show>
+                              }
                             >
                               <Entity.Title
                                 entity={entity.data as EntityData}

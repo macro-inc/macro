@@ -211,6 +211,7 @@ export function ComposeRecipients(props: {
       }}
       placeholder={isMobile() ? '' : 'Macro users or email addresses'}
       focusOnMount={opts?.focusOnMount}
+      openOnFocus={false}
       hideBorder
       class={cn(
         'bg-transparent [&_input]:ml-0!',
@@ -221,6 +222,7 @@ export function ComposeRecipients(props: {
       includeSelf={opts?.includeSelf}
       onChipDragStart={(option, e) => handleChipDragStart(field, option, e)}
       onChipDragEnd={handleChipDragEnd}
+      hideMenuOnEscape
     />
   );
 

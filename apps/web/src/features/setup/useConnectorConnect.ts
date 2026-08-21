@@ -1,0 +1,94 @@
+import type { FeaturedMcpServer } from '@core/component/AI/constant/mcpServers';
+import { toast } from '@core/component/Toast/Toast';
+import { usePipedreamMcpFlag } from '@core/pipedream/flag';
+import { isTauri } from '@core/util/platform';
+import { openExternalUrl } from '@core/util/url';
+import {
+  useAddMcpServerMutation,
+  useStartMcpAuthMutation,
+} from '@queries/mcp-servers';
+import { connectPipedreamApp } from '@queries/pipedream-connectors';
+import type { StartAuthResponse } from '@service-cognition/generated/schemas';
+import { type Accessor, createSignal } from 'solid-js';
+
+/**
+ * The connect-a-tool workflow used by onboarding's connector steps: add the
+ * MCP server if needed, then run OAuth in a popup. The popup opens
+ * synchronously, while the click's transient activation is still live —
+ * opening after the awaited mutations gets rejected by strict popup
+ * blockers. The OAuth URL is assigned once it's known; severing `opener`
+ * keeps the provider page from reaching back into the app (reverse
+ * tabnabbing).
+ *
+ * Inside the Tauri shell there are no popup blockers and `_blank` opens
+ * never reach the native navigation hook (on iOS they're silently dropped),
+ * so the popup dance is skipped and the URL is handed to the system browser
+ * via `openExternalUrl` once it's known.
+ *
+ * Completion is observed, not returned: the server reconciles the moment
+ * OAuth completes, and the caller's polled servers query flips the state.
+ */
+export function createConnectorConnect(options: {
+  server: FeaturedMcpServer;
+  connected: Accessor<boolean>;
+  authenticated: Accessor<boolean>;
+}) {
+  const addMutation = useAddMcpServerMutation();
+  const authMutation = useStartMcpAuthMutation();
+  const pipedreamMcp = usePipedreamMcpFlag();
+  const [busy, setBusy] = createSignal(false);
+
+  const connect = async () => {
+    if (options.authenticated() || busy()) return;
+    setBusy(true);
+    // Behind the PostHog flag, connectors go through Pipedream's hosted
+    // Connect UI (an iframe — no popup involved) instead of the native
+    // OAuth popup flow.
+    if (pipedreamMcp()) {
+      try {
+        const outcome = await connectPipedreamApp({
+          appSlug: options.server.app_slug,
+          serverName: options.server.server_name,
+        });
+        if (outcome === 'unsupported') {
+          toast.failure('Connectors are not available on this deployment');
+        }
+      } catch {
+        toast.failure(`Failed to connect ${options.server.server_name}`);
+      } finally {
+        setBusy(false);
+      }
+      return;
+    }
+    const popup = isTauri() ? null : window.open('about:blank', '_blank');
+    if (popup) popup.opener = null;
+    try {
+      if (!options.connected()) {
+        await addMutation.mutateAsync({
+          server_name: options.server.server_name,
+          url: options.server.url,
+        });
+      }
+      const result: StartAuthResponse = await authMutation.mutateAsync({
+        server_name: options.server.server_name,
+        server_url: options.server.url,
+      });
+      if (popup) {
+        popup.location.href = result.authorization_url;
+      } else {
+        // Native shell, or the popup was blocked outright — openExternalUrl
+        // routes through the system browser on Tauri and is a plain
+        // noopener open on web (may still be blocked, but nothing else to
+        // try).
+        openExternalUrl(result.authorization_url);
+      }
+    } catch {
+      popup?.close();
+      toast.failure(`Failed to connect ${options.server.server_name}`);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return { connect, busy };
+}

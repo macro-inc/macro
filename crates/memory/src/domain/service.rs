@@ -152,7 +152,9 @@ impl<Rpo> MemoryServiceImpl<Rpo>
 where
     Rpo: MemoryRepo,
 {
-    #[tracing::instrument(skip(self), err)]
+    // `previous_memory` carries the user's full personal-memory profile; it
+    // must never be captured as a span field or it ends up verbatim in logs.
+    #[tracing::instrument(skip(self, previous_memory), err)]
     async fn generate_memory(
         &self,
         user: macro_user_id::user_id::MacroUserIdStr<'static>,

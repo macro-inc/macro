@@ -6,34 +6,31 @@ use std::process::Command;
 use anyhow::{Context, Result};
 
 use super::instance::{Instance, Port};
-use super::{gen_compose, kickstart, stage::Stage};
+use super::{gen_compose, identity, kickstart, stage::Stage};
 
-/// The local populate-JWT lambda body, inlined into `kickstart.json`.
-///
-/// LOCAL-ONLY variant of the production populate-JWT lambda. Production enriches
-/// the JWT by calling authentication-service over HTTP, but Lambda HTTP Connect
-/// is a licensed FusionAuth feature that silently fails without a Reactor
-/// license. Local runs unlicensed, so we derive the claims instead: password
-/// users follow the `macro|<email>` convention (see `seed_cli`) and no Google
-/// IdP is configured locally, so every local user is a `macro|` user.
-/// Divergence from production: `root_macro_id` / `macro_organization_id` are
-/// never populated — org-scoped JWT flows need the licensed lambda + a license.
-///
-/// Inlined (not `include_str!`) because the canonical `.js` lives under
-/// `infra/` where a blanket `*.js` gitignore makes it untracked — a fresh
-/// checkout / CI / devcontainer wouldn't have it, breaking the build. Kept
-/// comment-free so it survives FusionAuth flattening the body to one line.
-const POPULATE_JWT_LAMBDA: &str = "function populate(jwt, user, _registration) {
-  jwt.fusion_user_id = user.id;
-  jwt.email = user.email;
-  jwt.macro_user_id = 'macro|' + user.email;
-}";
+/// The FusionAuth lambda sources, read from the tracked templates at
+/// generation time (anchored on [`xtask_paths::repo_root`], so any cwd works).
+/// `populate_jwt_local.js` is the unlicensed local variant (see its header);
+/// the reconcile lambda is the same file production deploys via Pulumi.
+const POPULATE_JWT_LAMBDA: xtask_paths::RepoFile<'static> =
+    xtask_paths::RepoFile::new("infra/stacks/fusionauth-instance/templates/populate_jwt_local.js");
+const RECONCILE_LAMBDA: xtask_paths::RepoFile<'static> = xtask_paths::RepoFile::new(
+    "infra/stacks/fusionauth-instance/templates/reconcile_secondary_idp_link.js",
+);
+
+fn read_lambda(file: xtask_paths::RepoFile<'static>) -> Result<String> {
+    let path = xtask_paths::repo_root().join(file.as_str());
+    std::fs::read_to_string(&path).with_context(|| format!("reading {}", path.display()))
+}
 
 /// Generate `kickstart.json` into the instance's kickstart dir, which the
 /// FusionAuth container mounts. The kickstart is pure identity-provider config:
 /// run_local pre-seeds no users — passwordless login auto-creates any user on
-/// demand.
-pub fn write_kickstart(instance: &Instance) -> Result<()> {
+/// demand. `google` (from the resolved run env) additionally configures the
+/// `google`/`google_gmail` OIDC IdPs so the email connect flows work locally;
+/// the generated file is gitignored, and the init-snapshot key hashes it, so
+/// adding/removing the Google client re-inits the stack automatically.
+pub fn write_kickstart(instance: &Instance, google: Option<&kickstart::GoogleIdp>) -> Result<()> {
     let dir = gen_compose::kickstart_dir(instance);
     std::fs::create_dir_all(&dir)
         .with_context(|| format!("creating kickstart dir {}", dir.display()))?;
@@ -41,7 +38,9 @@ pub fn write_kickstart(instance: &Instance) -> Result<()> {
     let doc = kickstart::build(
         instance.port(Port::Frontend),
         instance.port(Port::Auth),
-        POPULATE_JWT_LAMBDA,
+        &read_lambda(POPULATE_JWT_LAMBDA)?,
+        &read_lambda(RECONCILE_LAMBDA)?,
+        google,
     );
     let json = serde_json::to_string_pretty(&doc)? + "\n";
     std::fs::write(dir.join("kickstart.json"), json)
@@ -49,18 +48,30 @@ pub fn write_kickstart(instance: &Instance) -> Result<()> {
     Ok(())
 }
 
-/// Block until FusionAuth reports status Ok (it applies the kickstart on first
-/// boot against an empty DB, which is slow). Runs as a stage so it shows the
-/// spinner.
+/// Block until the kickstart has fully applied (first boot against an empty DB
+/// is slow). Runs as a stage so it shows the spinner.
+///
+/// Polls the kickstart's OWN artifacts — a tenant fetch authorized by the
+/// kickstart API key — NOT `/api/status`: FusionAuth reports status Ok while
+/// the kickstart is still applying, and the snapshot save stops the containers
+/// right after this wait. Gating on status alone once froze a mid-kickstart DB
+/// into a snapshot (no tenant), and every stack restored from it 500'd at
+/// login with `InvalidTenantIdException` — while the key never changed, so the
+/// bad snapshot was sticky. The fetch below succeeds only once the API key,
+/// the tenant, and the application all exist (the kickstart creates the
+/// application after the tenant).
 pub fn wait_ready(stage: &Stage, instance: &Instance) -> Result<()> {
     let url = format!(
-        "http://localhost:{}/api/status",
-        instance.port(Port::FusionAuth)
+        "http://localhost:{}/api/application/{}",
+        instance.port(Port::FusionAuth),
+        identity::APPLICATION_ID,
     );
     let script = format!(
-        "for i in $(seq 1 90); do curl -fsS {url} 2>/dev/null | grep -q '\"status\":\"Ok\"' && exit 0; sleep 2; done; echo 'timed out waiting for FusionAuth'; exit 1"
+        "for i in $(seq 1 120); do curl -fsS --max-time 3 -H 'Authorization: {key}' {url} >/dev/null 2>&1 && exit 0; sleep 2; done; \
+         echo 'timed out waiting for the FusionAuth kickstart'; exit 1",
+        key = identity::FUSIONAUTH_API_KEY,
     );
     let mut cmd = Command::new("bash");
     cmd.arg("-lc").arg(script);
-    stage.run("Waiting for FusionAuth", &mut cmd)
+    stage.run("Waiting for FusionAuth (kickstart)", &mut cmd)
 }

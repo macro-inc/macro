@@ -1,11 +1,15 @@
 #![recursion_limit = "256"]
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 
 use ai_tools::build_tool_service_context_from_env;
 use anyhow::{Context, Result};
 use axum::Router;
 use connection_gateway_client::client::ConnectionGatewayClient;
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
+use macro_authorization::{
+    InternalAuthConfig, MacroAuthJwtValidator, MacroAuthorizationServiceImpl,
+    MacroAuthorizationState,
+};
 use macro_entrypoint::MacroEntrypoint;
 use macro_service_urls::ConnectionGatewayUrl;
 use notification::domain::service::SqsNotificationIngress;
@@ -18,12 +22,17 @@ use scheduled_action::inbound::axum_router::{
 };
 use scheduled_action::outbound::conn_gateway_live_updates::ConnGatewayLiveUpdates;
 use scheduled_action::outbound::inprocess_executor::InProcessExecutor;
-use scheduled_action::outbound::pg_polling_dispatcher::PgPollingDispatcher;
+use scheduled_action::outbound::pg_polling_dispatcher::{
+    PgPollingDispatcher, PgPollingDispatcherLifecycle,
+};
 use scheduled_action::outbound::pg_scheduled_action_repo::PgScheduledActionRepo;
 use scheduled_action::swagger::ApiDoc;
 use sqlx::postgres::PgPoolOptions;
+use tokio_util::{sync::CancellationToken, task::TaskTracker};
 use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
+
+const EVENT_BROKER_DRAIN_TIMEOUT: Duration = Duration::from_secs(10);
 
 #[tokio::main]
 #[tracing::instrument(err)]
@@ -40,9 +49,11 @@ async fn main() -> Result<()> {
         .await
         .context("failed to connect to macrodb")?;
 
-    let tool_context = build_tool_service_context_from_env(db.clone())
-        .await
-        .context("failed to build tool service context")?;
+    let event_broker_tracker = TaskTracker::new();
+    let tool_context =
+        build_tool_service_context_from_env(db.clone(), event_broker_tracker.clone())
+            .await
+            .context("failed to build tool service context")?;
 
     let aws_config = macro_aws_config::get_macro_aws_config().await;
     let notification_ingress = Arc::new(SqsNotificationIngress {
@@ -83,7 +94,14 @@ async fn main() -> Result<()> {
         live_updates,
     ));
 
-    let dispatcher = PgPollingDispatcher::new(Arc::clone(&repo), dispatcher_executor);
+    let dispatcher_cancellation_token = CancellationToken::new();
+    let dispatcher_tracker = TaskTracker::new();
+    let dispatcher_lifecycle = PgPollingDispatcherLifecycle::new(
+        dispatcher_cancellation_token.clone(),
+        dispatcher_tracker.clone(),
+    );
+    let dispatcher = PgPollingDispatcher::new(Arc::clone(&repo), dispatcher_executor)
+        .with_lifecycle(dispatcher_lifecycle);
     let (dispatcher_tx, _execution_rx) = dispatcher.begin_dispatch_loop();
 
     let service = Arc::new(ScheduledActionServiceImpl::new(
@@ -96,10 +114,21 @@ async fn main() -> Result<()> {
         .await
         .context("failed to build jwt validation args")?;
 
-    let state = ScheduledActionRouterState { service };
-    let authed_routes = scheduled_action_router::<_, ()>(state).layer(
-        axum::middleware::from_fn_with_state(jwt_args, macro_middleware::auth::decode_jwt::handler),
+    let authorization_service = MacroAuthorizationServiceImpl::new(
+        MacroAuthJwtValidator::new(jwt_args),
+        InternalAuthConfig {
+            api_key: config.internal_api_key.to_string(),
+            default_user_id: None,
+        },
+        macro_authorization::NoBotAuthorizer,
     );
+    let authorization_state = MacroAuthorizationState::new(Arc::new(authorization_service));
+
+    let state = ScheduledActionRouterState {
+        service,
+        authorization_state,
+    };
+    let authed_routes = scheduled_action_router::<_, _, ()>(state);
 
     let router = Router::new()
         .route("/health", axum::routing::get(health))
@@ -115,8 +144,29 @@ async fn main() -> Result<()> {
 
     tracing::info!("scheduled_action service listening on {addr}");
 
-    axum::serve(listener, router.into_make_service())
+    let server_result = axum::serve(listener, router.into_make_service())
+        .with_graceful_shutdown(macro_entrypoint::shutdown_signal())
         .await
-        .context("server closed")?;
-    unreachable!();
+        .context("server closed");
+
+    tracing::info!("stopping scheduled action dispatcher");
+    dispatcher_cancellation_token.cancel();
+    dispatcher_tracker.close();
+    dispatcher_tracker.wait().await;
+    tracing::info!("scheduled action dispatcher stopped");
+
+    tracing::info!("waiting for event broker publishes to drain");
+    event_broker_tracker.close();
+    match tokio::time::timeout(EVENT_BROKER_DRAIN_TIMEOUT, event_broker_tracker.wait()).await {
+        Ok(()) => tracing::info!("event broker publishes drained"),
+        Err(error) => {
+            tracing::warn!(
+                error=?error,
+                timeout_seconds = EVENT_BROKER_DRAIN_TIMEOUT.as_secs(),
+                "timed out waiting for event broker publishes to drain"
+            );
+        }
+    }
+
+    server_result
 }

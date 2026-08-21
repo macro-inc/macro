@@ -1,5 +1,6 @@
 import { IS_MAC } from '@core/constant/isMac';
-import { logger } from '@observability/logger';
+import { Telemetry } from '@macro-inc/observability';
+
 import { createEffect, createMemo } from 'solid-js';
 import {
   macOptionReverse,
@@ -347,12 +348,10 @@ export function getActiveCommandByToken(
           commandScope.originalParentScopeId
         );
         if (!originalParentScope) {
-          logger.error('Original parent scope not found for command scope:', {
-            error: new Error(
-              'Original parent scope not found for command scope'
-            ),
-            commandScopeId: commandScope?.scopeId,
-          });
+          Telemetry.error(
+            new Error('Original parent scope not found for command scope'),
+            { commandScopeId: commandScope?.scopeId }
+          );
           return [];
         }
 
@@ -444,6 +443,14 @@ export function runCommand(
   let commandCaptured: HotkeyCommand | undefined;
   let commandScopeActivated = false;
   let stopPropagation = false;
+
+  // Key-rollover keyups re-match commands for the keys still held (e.g. the
+  // Enter that saved a message edit), so only keydown events — or programmatic
+  // calls without an event — may run keydown handlers or activate scopes.
+  // keyUpHandlers run through hotkeysAwaitingKeyUp, not here.
+  if (e?.type === 'keyup') {
+    return { commandCaptured, commandScopeActivated, stopPropagation };
+  }
 
   if (!command.condition || command.condition()) {
     if (command.activateCommandScopeId) {

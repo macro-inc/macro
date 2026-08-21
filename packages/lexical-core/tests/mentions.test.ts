@@ -8,14 +8,21 @@ import {
   parseGroupMentions,
   parseLinks,
   parsePullRequestMentions,
+  parseTagMentions,
   parseUserMentions,
 } from '../utils/parsers';
 
 describe('parseUserMentions', () => {
-  it('extracts email from user mention', () => {
+  it('extracts email local part from user mention', () => {
     const input =
       '<m-user-mention>{"email":"john@example.com"}</m-user-mention>';
-    expect(parseUserMentions(input)).toBe('john@example.com');
+    expect(parseUserMentions(input)).toBe('john');
+  });
+
+  it('prefers displayName over email', () => {
+    const input =
+      '<m-user-mention>{"displayName":"John","email":"john@example.com"}</m-user-mention>';
+    expect(parseUserMentions(input)).toBe('John');
   });
 
   it('returns empty string for missing email', () => {
@@ -31,7 +38,7 @@ describe('parseUserMentions', () => {
   it('handles multiple mentions', () => {
     const input =
       'Hello <m-user-mention>{"email":"a@b.com"}</m-user-mention> and <m-user-mention>{"email":"c@d.com"}</m-user-mention>';
-    expect(parseUserMentions(input)).toBe('Hello a@b.com and c@d.com');
+    expect(parseUserMentions(input)).toBe('Hello a and c');
   });
 
   it('passes through text without mentions', () => {
@@ -176,6 +183,18 @@ describe('parseGroupMentions', () => {
   });
 });
 
+describe('parseTagMentions', () => {
+  it('extracts #name from a tag mention', () => {
+    const input =
+      '<m-tag>{"optionId":"tag-1","propertyDefinitionId":"prop-1","scope":"team","name":"Launch","color":"#0091FF"}</m-tag>';
+    expect(parseTagMentions(input)).toBe('#Launch');
+  });
+
+  it('returns empty string for invalid JSON', () => {
+    expect(parseTagMentions('<m-tag>invalid</m-tag>')).toBe('');
+  });
+});
+
 describe('markdownToPlainText', () => {
   it('converts mixed content to plain text', () => {
     const input =
@@ -183,7 +202,7 @@ describe('markdownToPlainText', () => {
       'please review <m-document-mention>{"documentName":"Report"}</m-document-mention> ' +
       'by <m-date-mention>{"displayFormat":"Friday"}</m-date-mention>.';
     expect(markdownToPlainText(input)).toBe(
-      'Hello john@example.com, please review Report by Friday.'
+      'Hello john, please review Report by Friday.'
     );
   });
 
@@ -205,6 +224,12 @@ describe('markdownToPlainText', () => {
     const input =
       'See <m-pr-mention>{"id":"foreign-1","label":"macro/macro#123"}</m-pr-mention>.';
     expect(markdownToPlainText(input)).toBe('See macro/macro#123.');
+  });
+
+  it('handles text with tag mentions', () => {
+    const input =
+      'Ship <m-tag>{"optionId":"tag-1","propertyDefinitionId":"prop-1","scope":"team","name":"Launch"}</m-tag>.';
+    expect(markdownToPlainText(input)).toBe('Ship #Launch.');
   });
 
   it('returns original text when no mentions present', () => {
@@ -252,6 +277,12 @@ describe('markdownToEmbeddingText', () => {
     );
   });
 
+  it('keeps tag names', () => {
+    const input =
+      'Ship <m-tag>{"optionId":"tag-1","propertyDefinitionId":"prop-1","scope":"team","name":"Launch"}</m-tag>.';
+    expect(markdownToEmbeddingText(input)).toBe('Ship #Launch.');
+  });
+
   it('keeps link urls', () => {
     const input =
       'See <m-link>{"url":"https://example.com","text":"this link"}</m-link>.';
@@ -266,7 +297,7 @@ describe('markdownToEmbeddingText', () => {
       '<m-group-mention>{"groupAlias":"here"}</m-group-mention>, due ' +
       '<m-date-mention>{"displayFormat":"Friday"}</m-date-mention>.';
     expect(markdownToEmbeddingText(input)).toBe(
-      'Hello john@example.com and @here, due Friday.'
+      'Hello john and @here, due Friday.'
     );
   });
 
@@ -314,9 +345,7 @@ describe('markdownToEmbeddingText', () => {
       '<m-table-row><m-table-cell>Owner</m-table-cell><m-table-cell>Task</m-table-cell></m-table-row>' +
       '<m-table-row><m-table-cell><m-user-mention>{"email":"a@b.com"}</m-user-mention></m-table-cell><m-table-cell>fix\\nbug</m-table-cell></m-table-row>' +
       '</m-table>';
-    expect(markdownToEmbeddingText(input)).toBe(
-      'Owner | Task\na@b.com | fix bug'
-    );
+    expect(markdownToEmbeddingText(input)).toBe('Owner | Task\na | fix bug');
   });
 
   it('unwraps email thread embeds and resolves mentions inside them', () => {

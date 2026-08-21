@@ -23,6 +23,7 @@ import {
   useShareDialogContext,
 } from '@core/component/TopBar/ShareButton';
 import { isMobile } from '@core/mobile/isMobile';
+import { buildEntityData } from '@entity';
 import PhoneCallIcon from '@icon/wide-call.svg';
 import IconShared from '@icon/wide-share.svg';
 import type { CallRecord } from '@service-storage/generated/schemas/callRecord';
@@ -33,7 +34,7 @@ export function CallRecordingSplitHeaderLoading() {
   return (
     <SplitHeaderLeft>
       <div class="h-full my-auto flex min-w-0 items-center justify-start gap-3">
-        <div class="ph-no-capture z-page-overlay relative flex h-full max-w-full min-w-0 shrink items-center gap-2">
+        <div class="ph-no-capture z-split-header-content relative flex h-full max-w-full min-w-0 shrink items-center gap-2">
           <StaticSplitLabel
             label="Call Recording"
             icon={
@@ -119,7 +120,7 @@ export function CallRecordingSplitHeader(props: {
     <>
       <SplitHeaderLeft>
         <div class="h-full my-auto flex min-w-0 items-center justify-start gap-3">
-          <div class="ph-no-capture z-page-overlay relative flex h-full max-w-full min-w-0 shrink items-center gap-2">
+          <div class="ph-no-capture z-split-header-content relative flex h-full max-w-full min-w-0 shrink items-center gap-2">
             <StaticSplitLabel
               label={callName()}
               icon={
@@ -161,6 +162,16 @@ export function CallRecordingSplitHeader(props: {
         id={blockId}
         itemType="call"
         name={callName()}
+        // Generic chrome can't reconstruct a CallEntity (it lacks the
+        // channelId), so supply it for the menu's entity-gated items.
+        entity={buildEntityData({
+          id: record().callId,
+          name: callName(),
+          blockName: 'call',
+          channelId: record().channelId,
+          isActive: record().isActive,
+          status: record().status ?? undefined,
+        })}
       />
     </>
   );

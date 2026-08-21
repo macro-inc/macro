@@ -18,6 +18,7 @@ import type {
   LinksOptions,
   MediaOptions,
   MentionsOptions,
+  TagsOptions,
 } from './types';
 
 export class EditorConfigBuilder implements EditorBuilder {
@@ -50,6 +51,13 @@ export class EditorConfigBuilder implements EditorBuilder {
 
   withMentions(config: MentionsOptions = {}): this {
     this.state.mentions = {
+      ...config,
+    };
+    return this;
+  }
+
+  withTags(config: TagsOptions = {}): this {
+    this.state.tags = {
       ...config,
     };
     return this;
@@ -158,6 +166,17 @@ export class EditorConfigBuilder implements EditorBuilder {
 
   withDraggableBlocks(): this {
     this.state.draggableBlocks = true;
+    return this;
+  }
+
+  /**
+   * Enable the skills (`/`) typeahead menu — for AI markdown areas. Lists
+   * skill documents; selecting one inserts a document mention for the skill.
+   * Requires mentions and only takes effect when actions are disabled, since
+   * both own the `/` trigger.
+   */
+  withSkills(): this {
+    this.state.skills = true;
     return this;
   }
 

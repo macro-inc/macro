@@ -15,7 +15,6 @@
 //! `groq/llama-3.3-70b`); routing picks the provider from the segment, never by
 //! sniffing the id. Unroutable ids fall back to the default model.
 
-use std::borrow::Cow;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, OnceLock};
 
@@ -23,12 +22,13 @@ use ai_toolset::{RequestContext, SearchableTool};
 use ai_usage::{UsageContext, UsageRecorder};
 use futures::StreamExt;
 use macro_env_var::env_var;
-use rig_core::agent::{Agent, AgentBuilder, MultiTurnStreamItem};
+use rig_agent::agent::{Agent, AgentBuilder, MultiTurnStreamItem};
+use rig_agent::streaming::StreamingPrompt;
+use rig_agent::tool::server::ToolServerHandle;
 use rig_core::completion::{CompletionModel, GetTokenUsage};
 use rig_core::message::Message;
 use rig_core::providers::{anthropic, openai};
-use rig_core::streaming::{StreamedAssistantContent, StreamingPrompt};
-use rig_core::tool::server::ToolServerHandle;
+use rig_core::streaming::StreamedAssistantContent;
 
 use super::PredefinedModel;
 use super::anthropic::AnthropicModel;
@@ -362,13 +362,16 @@ impl ModelRouter {
         self.route(model).unwrap_or_else(|_| self.default_model())
     }
 
-    /// The default model: native Anthropic serving [`AgentModel::default`].
+    /// The fallback model: native Anthropic serving [`PredefinedModel::Smart`].
+    ///
+    /// Built via `From<PredefinedModel>` so the bound [`Model`] carries the
+    /// bare api id — `PredefinedModel`'s `Display` is the provider-qualified
+    /// routing id, which the Anthropic API rejects as a model name.
     fn default_model(&self) -> RoutedModel<'static> {
-        let model = Model {
-            provider: Cow::Borrowed(ANTHROPIC_PROVIDER),
-            name: Cow::Owned(PredefinedModel::default().to_string()),
-        };
-        RoutedModel::Anthropic(AnthropicModel::new(model, self.anthropic.clone()))
+        RoutedModel::Anthropic(AnthropicModel::new(
+            PredefinedModel::Smart.into(),
+            self.anthropic.clone(),
+        ))
     }
 }
 
@@ -426,10 +429,10 @@ where
 
     let mut rig_stream = agent
         .stream_prompt(prompt)
-        .with_history(history)
-        .multi_turn(max_turns)
+        .history(history)
+        .max_turns(max_turns)
         .max_invalid_tool_call_retries(crate::hook::MAX_INVALID_TOOL_CALL_RETRIES)
-        .with_hook(bridge)
+        .add_hook(bridge)
         .await;
 
     // Drive the rig stream on its own task. The hook emits a tool call the
@@ -458,7 +461,7 @@ where
                     }
                     match other {
                         Ok(MultiTurnStreamItem::FinalResponse(final_resp)) => {
-                            let usage = final_resp.usage();
+                            let usage = final_resp.usage;
                             // Best-effort cost logging; never fails the stream.
                             recorder.record(usage_ctx.clone().into_event(
                                 model.clone(),

@@ -128,8 +128,11 @@ const opensearchDomain = new aws.opensearch.Domain(
     // per instance storage
     ebsOptions: {
       ebsEnabled: true,
-      volumeSize: stack === 'prod' ? 256 : 50,
+      volumeSize: stack === 'prod' ? 1400 : 50,
       volumeType: 'gp3',
+      // Pin prod gp3 IOPS/throughput to the live values so a size change
+      // doesn't reset throughput to the gp3 default (125 MB/s).
+      ...(stack === 'prod' ? { iops: 4200, throughput: 350 } : {}),
     },
     nodeToNodeEncryption: {
       enabled: true,

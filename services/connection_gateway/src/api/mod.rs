@@ -4,8 +4,6 @@ use axum::Router;
 pub use connection_gateway_models::{
     BatchSendMessageBody, BatchSendUniqueMessagesBody, SendMessageBody,
 };
-use macro_middleware::auth::{attach_user, initialize_user_context};
-use tower::ServiceBuilder;
 use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
 
@@ -15,18 +13,12 @@ mod health;
 mod message;
 pub(crate) mod swagger;
 
+#[cfg(test)]
+mod test;
+
 pub fn router(state: AppState) -> Router {
     Router::new()
-        .merge(
-            connection::router().layer(
-                ServiceBuilder::new()
-                    .layer(axum::middleware::from_fn(initialize_user_context::handler))
-                    .layer(axum::middleware::from_fn_with_state(
-                        state.clone(),
-                        attach_user::handler,
-                    )),
-            ),
-        )
+        .merge(connection::router())
         .nest("/message", message::router(state.clone()))
         .nest("/track", entities::router(state.clone()))
         .merge(health::router())

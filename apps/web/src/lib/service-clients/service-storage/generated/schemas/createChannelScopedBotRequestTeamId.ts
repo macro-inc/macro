@@ -6,6 +6,6 @@
  */
 
 /**
- * Team owner. Omit for a user-owned bot.
+ * Team owner. The caller must be a team administrator or owner. Omit for a user-owned bot.
  */
 export type CreateChannelScopedBotRequestTeamId = string | null;

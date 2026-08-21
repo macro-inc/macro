@@ -7,6 +7,32 @@ use std::sync::LazyLock;
 use regex::Regex;
 use serde::Deserialize;
 
+use super::GithubError;
+
+/// Action reported by GitHub after an installation setup flow.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GithubInstallationSetupAction {
+    /// A new GitHub App installation was created.
+    Install,
+    /// An existing installation's repository selection was updated.
+    Update,
+    /// Installation was requested from an organization administrator.
+    Request,
+}
+
+impl TryFrom<&str> for GithubInstallationSetupAction {
+    type Error = GithubError;
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        match value {
+            "install" => Ok(Self::Install),
+            "update" => Ok(Self::Update),
+            "request" => Ok(Self::Request),
+            _ => Err(GithubError::InvalidInstallationSetupAction),
+        }
+    }
+}
+
 /// Github key used for tracking tasks
 #[derive(Debug, Clone)]
 pub struct GithubKey(String);
@@ -28,6 +54,47 @@ impl AsRef<str> for GithubKey {
     fn as_ref(&self) -> &str {
         &self.0
     }
+}
+
+/// OAuth access token returned after exchanging a GitHub App setup code.
+#[derive(Clone, Deserialize)]
+pub struct GithubSetupAccessToken {
+    access_token: String,
+}
+
+impl GithubSetupAccessToken {
+    /// Creates an access token from GitHub's OAuth response value.
+    pub fn new(access_token: String) -> Self {
+        Self { access_token }
+    }
+
+    /// Returns the access token without transferring ownership of the secret.
+    pub fn as_str(&self) -> &str {
+        &self.access_token
+    }
+}
+
+/// A GitHub App installation visible to an authenticated GitHub user.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+pub struct GithubUserInstallation {
+    /// GitHub's numeric installation identifier.
+    pub id: u64,
+}
+
+/// The GitHub user behind an OAuth user access token.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+pub struct GithubAuthenticatedUser {
+    /// GitHub's stable numeric user identifier.
+    pub id: u64,
+}
+
+/// One page of installations visible to an authenticated GitHub user.
+#[derive(Debug, Clone, Deserialize)]
+pub struct GithubUserInstallationsPage {
+    /// Number of installations visible across every page.
+    pub total_count: u64,
+    /// Installations returned on this page.
+    pub installations: Vec<GithubUserInstallation>,
 }
 
 /// GitHub App installation access token response
@@ -90,16 +157,22 @@ impl ValidatedGithubWebhookEvent {
     }
 
     /// Extract all text fields worth searching for task IDs, based on event type.
+    ///
+    /// Markdown code (fenced blocks and inline spans) is stripped from prose
+    /// fields before they are returned: quoted diffs and code snippets are full
+    /// of `identifier-number` tokens (e.g. the Tailwind class `py-6`) that must
+    /// never be mistaken for task references. Branch names are kept verbatim —
+    /// they cannot contain markdown.
     pub fn extract_searchable_text(&self) -> Vec<String> {
         let mut texts = Vec::new();
         match self.parsed_event_type() {
             GithubWebhookEventType::PullRequest => {
                 if let Some(pr) = self.payload.get("pull_request") {
                     if let Some(s) = pr.get("title").and_then(|v| v.as_str()) {
-                        texts.push(s.to_string());
+                        texts.push(strip_markdown_code(s));
                     }
                     if let Some(s) = pr.get("body").and_then(|v| v.as_str()) {
-                        texts.push(s.to_string());
+                        texts.push(strip_markdown_code(s));
                     }
                     if let Some(s) = pr
                         .get("head")
@@ -118,7 +191,7 @@ impl ValidatedGithubWebhookEvent {
                     .and_then(|c| c.get("body"))
                     .and_then(|v| v.as_str())
                 {
-                    texts.push(s.to_string());
+                    texts.push(strip_markdown_code(s));
                 }
             }
             GithubWebhookEventType::PullRequestReview => {
@@ -128,7 +201,7 @@ impl ValidatedGithubWebhookEvent {
                     .and_then(|r| r.get("body"))
                     .and_then(|v| v.as_str())
                 {
-                    texts.push(s.to_string());
+                    texts.push(strip_markdown_code(s));
                 }
             }
             GithubWebhookEventType::CheckRun
@@ -267,6 +340,22 @@ impl ValidatedGithubWebhookEvent {
             .map(|id| id.to_string())
     }
 
+    /// Extract the requester's GitHub user ID from the webhook payload.
+    ///
+    /// `requester` is only present on `installation` events created by an
+    /// org admin approving another user's installation request; it identifies
+    /// the user who originally requested the install (the `sender` is the
+    /// approving admin). Uses the numeric `requester.id` rather than
+    /// `requester.login` because GitHub usernames can change but user IDs are
+    /// stable.
+    pub fn requester_github_user_id(&self) -> Option<String> {
+        self.payload
+            .get("requester")
+            .and_then(|r| r.get("id"))
+            .and_then(|v| v.as_u64())
+            .map(|id| id.to_string())
+    }
+
     /// Extract text from the PR context (title, body, branch) regardless of
     /// event type. For comment/review events this returns the surrounding PR
     /// info so callers can determine which task IDs are already associated
@@ -292,10 +381,10 @@ impl ValidatedGithubWebhookEvent {
 
         if let Some(pr) = pr {
             if let Some(s) = pr.get("title").and_then(|v| v.as_str()) {
-                texts.push(s.to_string());
+                texts.push(strip_markdown_code(s));
             }
             if let Some(s) = pr.get("body").and_then(|v| v.as_str()) {
-                texts.push(s.to_string());
+                texts.push(strip_markdown_code(s));
             }
             if let Some(s) = pr
                 .get("head")
@@ -308,6 +397,114 @@ impl ValidatedGithubWebhookEvent {
 
         texts
     }
+}
+
+/// Remove markdown code from text before task reference extraction: fenced
+/// code blocks (``` or ~~~) and inline code spans (`...`).
+///
+/// Code-formatted text is where `identifier-number` tokens live — quoted
+/// diffs, CSS utility classes like `py-6`, config keys — and those must never
+/// be mistaken for team task references. Removed spans are replaced with a
+/// single space so the surrounding prose keeps its token boundaries.
+pub fn strip_markdown_code(text: &str) -> String {
+    strip_inline_code_spans(&strip_fenced_code_blocks(text))
+}
+
+/// Returns the fence marker (character and run length) opening or closing a
+/// fenced code block on this line, if any.
+fn fence_marker(line: &str) -> Option<(char, usize)> {
+    let trimmed = line.trim_start();
+    let first = trimmed.chars().next()?;
+    if first != '`' && first != '~' {
+        return None;
+    }
+    let run = trimmed.chars().take_while(|c| *c == first).count();
+    (run >= 3).then_some((first, run))
+}
+
+/// Drop every line belonging to a fenced code block, fences included. An
+/// unclosed fence swallows the rest of the text, matching how markdown
+/// renders it.
+fn strip_fenced_code_blocks(text: &str) -> String {
+    let mut kept = Vec::new();
+    let mut open_fence: Option<(char, usize)> = None;
+
+    for line in text.lines() {
+        match (open_fence, fence_marker(line)) {
+            // Closing fence: same character, at least as long, nothing else on
+            // the line after the marker.
+            (Some((open_char, open_run)), Some((close_char, close_run)))
+                if close_char == open_char
+                    && close_run >= open_run
+                    && line
+                        .trim_start()
+                        .trim_start_matches(open_char)
+                        .trim()
+                        .is_empty() =>
+            {
+                open_fence = None;
+            }
+            (Some(_), _) => {}
+            (None, Some(marker)) => {
+                open_fence = Some(marker);
+            }
+            (None, None) => kept.push(line),
+        }
+    }
+
+    kept.join("\n")
+}
+
+/// Drop inline code spans: a run of N backticks closed by the next run of
+/// exactly N backticks (CommonMark semantics). Unmatched backtick runs are
+/// kept as literal text.
+fn strip_inline_code_spans(text: &str) -> String {
+    let chars: Vec<char> = text.chars().collect();
+    let mut out = String::with_capacity(text.len());
+    let mut i = 0;
+
+    while i < chars.len() {
+        if chars[i] != '`' {
+            out.push(chars[i]);
+            i += 1;
+            continue;
+        }
+
+        let open_run = chars[i..].iter().take_while(|c| **c == '`').count();
+        let span_start = i + open_run;
+
+        // Find the next backtick run of exactly `open_run` length.
+        let mut j = span_start;
+        let mut close_at = None;
+        while j < chars.len() {
+            if chars[j] == '`' {
+                let run = chars[j..].iter().take_while(|c| **c == '`').count();
+                if run == open_run {
+                    close_at = Some(j);
+                    break;
+                }
+                j += run;
+            } else {
+                j += 1;
+            }
+        }
+
+        match close_at {
+            Some(close) => {
+                out.push(' ');
+                i = close + open_run;
+            }
+            None => {
+                // No closer: keep the backticks as literal text.
+                for _ in 0..open_run {
+                    out.push('`');
+                }
+                i = span_start;
+            }
+        }
+    }
+
+    out
 }
 
 /// Known GitHub webhook event types we handle.
@@ -427,6 +624,21 @@ impl TeamTaskReference {
 
         results
     }
+}
+
+/// A [`TeamTaskReference`] resolved against a concrete team.
+///
+/// Because team slugs are not unique, one reference can resolve in more than
+/// one of an installation's teams; callers must treat such references as
+/// ambiguous rather than linking every match.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct ResolvedTeamTaskReference {
+    /// The reference that was resolved.
+    pub reference: TeamTaskReference,
+    /// The team whose slug and task number matched the reference.
+    pub team_id: uuid::Uuid,
+    /// The task document backing the team task.
+    pub task_id: MacroTaskId,
 }
 
 /// A Macro task ID in the form `MACRO-{short_uuid}`.

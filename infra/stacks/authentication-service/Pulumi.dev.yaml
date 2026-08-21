@@ -4,6 +4,9 @@ config:
   authentication-service:macro_db_secret_key: macro-db-dev
   authentication-service:fusionauth_api_key_secret_key: fusionauth-api-key-dev
   authentication-service:authentication_service_internal_api_key: authentication-service-internal-api-key-dev
+  # Keep Microsoft OAuth credentials in the authentication_service Doppler config.
+  # Pulumi injects MICROSOFT_TOKEN_KMS_KEY_ID from the per-stack key; it is not a secret config value.
+  authentication-service:microsoft_token_kms_deletion_window_days: 7
   authentication-service:service_internal_auth_key: document-storage-service-auth-key-dev
   authentication-service:fusionauth_client_secret_key: fusionauth-client-secret-dev
   authentication-service:stripe_secret_key: stripe-dev

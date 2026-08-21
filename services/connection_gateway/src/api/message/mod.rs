@@ -1,4 +1,8 @@
-use crate::{context::AppState, model::message::Message, service::sender::send_message_to_entity};
+use crate::{
+    context::{AppState, AuthorizationService},
+    model::message::Message,
+    service::sender::send_message_to_entity,
+};
 use axum::{
     Json as JsonResponse, Router,
     extract::{Json, Path, State},
@@ -9,9 +13,8 @@ use connection_gateway_models::{
     BatchSendMessageBody, BatchSendUniqueMessagesBody, SendMessageBody, SendMessageResponse,
 };
 use futures::future::try_join_all;
-use macro_middleware::auth;
+use macro_authorization::{InternalOnly, MacroAuthorizationExtractor};
 use model_entity::Entity;
-use std::time::Instant;
 
 pub fn router<S>(state: AppState) -> Router<S>
 where
@@ -27,16 +30,13 @@ where
             "/batch_send_unique",
             post(batch_send_unique_messages_handler),
         )
-        .layer(axum::middleware::from_fn_with_state(
-            state.clone(),
-            auth::internal_access::handler,
-        ))
         .with_state(state)
 }
 
 #[utoipa::path(
         post,
         path = "/message/send/{entity_type}/{entity_id}",
+        security(("internal-api-key" = [])),
         params(
             ("entity_type" = String, Path, description = "the type of the entity to send the msssage to e.g. \"user\" | \"channel\" | \"document\" etc..."),
             ("entity_id" = String, Path, description = "the id of the entity to send the message to"),
@@ -48,9 +48,10 @@ where
             (status = 500, body=String),
         )
     )]
-#[tracing::instrument(skip(ctx))]
+#[tracing::instrument(skip(_internal_authorization, ctx))]
 #[axum::debug_handler(state = AppState)]
 pub async fn send_message_handler(
+    _internal_authorization: MacroAuthorizationExtractor<AuthorizationService, InternalOnly>,
     State(ctx): State<AppState>,
     Path(entity): Path<Entity<'static>>,
     Json(body): Json<SendMessageBody>,
@@ -84,19 +85,24 @@ pub async fn send_message_handler(
 #[utoipa::path(
     post,
     path = "/batch_send",
+    security(("internal-api-key" = [])),
     request_body = BatchSendMessageBody,
     responses(
         (status = 200, description = "Message sent successfully", body = SendMessageResponse),
         (status = 500, description = "Internal server error", body = String),
     )
 )]
-#[tracing::instrument(skip(ctx))]
+#[tracing::instrument(
+    name = "send_messages",
+    skip_all,
+    fields(batch_kind = "shared", message_count = body.entities.len()),
+    err(Debug)
+)]
 pub async fn batch_send_message_handler(
+    _internal_authorization: MacroAuthorizationExtractor<AuthorizationService, InternalOnly>,
     State(ctx): State<AppState>,
     Json(body): Json<BatchSendMessageBody<'static>>,
 ) -> Result<(StatusCode, JsonResponse<SendMessageResponse>), (StatusCode, String)> {
-    let now = Instant::now();
-
     let redis_connection = ctx.context.redis_connection.clone();
 
     let all_receipts = try_join_all(body.entities.iter().map(|entity| {
@@ -112,15 +118,15 @@ pub async fn batch_send_message_handler(
         )
     }))
     .await
-    .map_err(|e| {
-        tracing::error!(error=?e, "unable to send message");
+    .inspect_err(|error| {
+        tracing::error!(error = ?error, "unable to send message");
+    })
+    .map_err(|_| {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
             "unable to send message".to_string(),
         )
     })?;
-
-    tracing::trace!("batch send message took {:?}", now.elapsed());
 
     Ok((
         StatusCode::OK,
@@ -140,14 +146,18 @@ pub async fn batch_send_message_handler(
         (status = 500, description = "Internal server error", body = String),
     )
 )]
-#[tracing::instrument(skip(ctx))]
+#[tracing::instrument(
+    name = "send_messages",
+    skip_all,
+    fields(batch_kind = "unique", message_count = body.messages.len()),
+    err(Debug)
+)]
 #[axum::debug_handler(state = AppState)]
 pub async fn batch_send_unique_messages_handler(
+    _internal_authorization: MacroAuthorizationExtractor<AuthorizationService, InternalOnly>,
     State(ctx): State<AppState>,
     Json(body): Json<BatchSendUniqueMessagesBody>,
 ) -> Result<(StatusCode, JsonResponse<SendMessageResponse>), (StatusCode, String)> {
-    let now = Instant::now();
-
     let redis_connection = ctx.context.redis_connection.clone();
 
     let all_receipts = try_join_all(body.messages.iter().map(|message| {
@@ -163,15 +173,15 @@ pub async fn batch_send_unique_messages_handler(
         )
     }))
     .await
-    .map_err(|e| {
-        tracing::error!(error=?e, "unable to send message");
+    .inspect_err(|error| {
+        tracing::error!(error = ?error, "unable to send message");
+    })
+    .map_err(|_| {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
             "unable to send message".to_string(),
         )
     })?;
-
-    tracing::trace!("batch send unique message took {:?}", now.elapsed());
 
     Ok((
         StatusCode::OK,

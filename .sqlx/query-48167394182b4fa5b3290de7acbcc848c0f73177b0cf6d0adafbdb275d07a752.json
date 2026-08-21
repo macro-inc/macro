@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE import_entity\n            SET status = 'staged', last_error = $3, updated_at = NOW()\n            WHERE user_id = $1 AND id = $2 AND status = 'importing'\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "48167394182b4fa5b3290de7acbcc848c0f73177b0cf6d0adafbdb275d07a752"
+}

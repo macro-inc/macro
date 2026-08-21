@@ -1,3 +1,5 @@
+import { useSoupFilterPersistence } from '@app/features/next-soup/use-soup-filter-persistence';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import {
   clearAllDebugSettings,
   DEBUG_SETTINGS,
@@ -6,8 +8,12 @@ import {
   getDebugSetting,
   setDebugSetting,
 } from '@app/lib/debugSettings';
+import {
+  ENABLE_SOUP_FILTER_PERSISTENCE_FLAG,
+  ENABLE_SOUP_FILTER_PERSISTENCE_OVERRIDE,
+} from '@core/constant/featureFlags';
 import { Button, ToggleSwitch } from '@ui';
-import { For } from 'solid-js';
+import { For, Show } from 'solid-js';
 import { SettingsCard, SettingsPage, SettingsRow } from './primitives';
 
 function DebugSettingRow(props: { setting: DebugSettingDef }) {
@@ -29,6 +35,12 @@ function DebugSettingRow(props: { setting: DebugSettingDef }) {
 
 export function Admin() {
   const hasActiveSettings = () => Object.keys(debugSettings()).length > 0;
+  const soupFilterPersistenceFlag = useFeatureFlag(
+    ENABLE_SOUP_FILTER_PERSISTENCE_FLAG,
+    { enabledOverride: ENABLE_SOUP_FILTER_PERSISTENCE_OVERRIDE }
+  );
+  const [shouldPersistSoupFilters, setShouldPersistSoupFilters] =
+    useSoupFilterPersistence();
 
   return (
     <SettingsPage
@@ -46,6 +58,21 @@ export function Admin() {
         </Button>
       }
     >
+      <Show when={soupFilterPersistenceFlag().enabled}>
+        <SettingsCard>
+          <SettingsRow
+            label="Persist list filters"
+            description="Keep soup filters and the last selected tab across reloads on this device."
+          >
+            <ToggleSwitch
+              size="md"
+              checked={shouldPersistSoupFilters()}
+              onChange={setShouldPersistSoupFilters}
+            />
+          </SettingsRow>
+        </SettingsCard>
+      </Show>
+
       <SettingsCard>
         <For each={DEBUG_SETTINGS}>
           {(setting) => <DebugSettingRow setting={setting} />}

@@ -1,11 +1,11 @@
-use axum::{Extension, Json, extract::State};
+use axum::{Json, extract::State};
+use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
 use serde::Deserialize;
 use utoipa::ToSchema;
 
 use super::{StripeOperationError, StripeSessionResponse};
-use crate::api::context::ApiContext;
+use crate::api::context::{ApiContext, AuthorizationService};
 use model::response::ErrorResponse;
-use model::user::UserContext;
 
 /// Request body for creating a Stripe portal session
 #[derive(Debug, Deserialize, ToSchema)]
@@ -27,20 +27,19 @@ pub struct CreatePortalSessionRequest {
         (status = 500, body = ErrorResponse),
     )
 )]
-#[tracing::instrument(skip(ctx, user_context), err, fields(user_id = %user_context.user_id))]
+#[tracing::instrument(skip(ctx, authorization), err, fields(user_id = %authorization.authorization.user.macro_user_id))]
 pub async fn create_portal_session(
     State(ctx): State<ApiContext>,
-    user_context: Extension<UserContext>,
+    authorization: MacroAuthorizationExtractor<AuthorizationService, UserOrInternal>,
     Json(req): Json<CreatePortalSessionRequest>,
 ) -> Result<Json<StripeSessionResponse>, StripeOperationError> {
-    let user_id =
-        macro_user_id::user_id::MacroUserId::parse_from_str(&user_context.user_id)?.lowercase();
-
     // Get the stripe customer ID from the database
-    let stripe_customer_id =
-        macro_db_client::user::get::get_stripe_customer_id_by_user_id(&ctx.db, &user_id)
-            .await?
-            .ok_or(StripeOperationError::MissingStripeId)?;
+    let stripe_customer_id = macro_db_client::user::get::get_stripe_customer_id_by_user_id(
+        &ctx.db,
+        &authorization.authorization.user.macro_user_id,
+    )
+    .await?
+    .ok_or(StripeOperationError::MissingStripeId)?;
 
     let customer_id: stripe::CustomerId = stripe_customer_id.parse()?;
 

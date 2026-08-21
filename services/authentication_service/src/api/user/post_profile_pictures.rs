@@ -5,8 +5,9 @@ use axum::{
     response::{IntoResponse, Response},
 };
 
-use crate::api::context::ApiContext;
+use crate::api::context::{ApiContext, AuthorizationService};
 
+use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
 use macro_db_client::user::update_profile_picture::get_profile_pictures;
 use model::response::ErrorResponse;
 use model::user::ProfilePictures;
@@ -28,9 +29,10 @@ pub struct GetProfilePicturesRequestBody {
             (status = 500, body=ErrorResponse),
         )
     )]
-#[tracing::instrument(skip(ctx))]
+#[tracing::instrument(skip(ctx, _authorization))]
 pub async fn handler(
     State(ctx): State<ApiContext>,
+    _authorization: MacroAuthorizationExtractor<AuthorizationService, UserOrInternal>,
     extract::Json(req): extract::Json<GetProfilePicturesRequestBody>,
 ) -> Result<Response, Response> {
     let user_id_list = req.user_id_list;

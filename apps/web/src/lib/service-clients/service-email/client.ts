@@ -10,12 +10,15 @@ import type {
   AddDraftAttachmentRequest,
   AddDraftAttachmentResponse,
   ApiPaginatedThreadCursor,
+  CalendarEvent,
+  CreateCalendarEventRequest,
   CreateDraftRequest,
   CreateDraftResponse,
   GetAttachmentDocumentIDResponse,
   GetAttachmentResponse,
   GetThreadResponse,
   ListBackfillJobsResponse,
+  ListCalendarsResponse,
   ListContactsResponse,
   ListEmailFiltersResponse,
   ListLabelsResponse,
@@ -23,9 +26,11 @@ import type {
   PatchSettingsRequest,
   PatchSettingsResponse,
   ResyncResponse,
+  RsvpCalendarEventRequest,
   SendMessageRequest,
   SendMessageResponse,
   SharedInboxConflictResponse,
+  UpdateCalendarEventRequest,
   UpdateLabelBatchRequest,
   UpdateLabelBatchResponse,
   UpdateThreadLabelRequest,
@@ -35,6 +40,7 @@ import type {
   UpsertScheduledRequest,
   UpsertScheduledResponse,
 } from './generated/schemas';
+import { CalendarMutationErrorCode } from './generated/schemas/calendarMutationErrorCode';
 import type { EmptyResponse } from './generated/schemas/emptyResponse';
 
 const emailHost: string = SERVER_HOSTS['email-service'];
@@ -45,8 +51,36 @@ const emailHost: string = SERVER_HOSTS['email-service'];
  */
 const EMAIL_LINK_ID_HEADER = 'X-Email-Link-Id';
 
+/** How much of a recurring series a calendar deletion removes. */
+export type CalendarDeletionScope = 'all' | 'this_event' | 'this_and_following';
+
+/** How much of a recurring series a calendar RSVP answers for. */
+export type CalendarRsvpScope = 'all' | 'this_event';
+
 function emailLinkHeaders(linkId?: string): Record<string, string> | undefined {
   return linkId ? { [EMAIL_LINK_ID_HEADER]: linkId } : undefined;
+}
+
+/**
+ * Calendar mutation failures carry a machine-readable `{ code, message }`
+ * body; surface it so callers can branch on the code and show the message.
+ */
+async function calendarMutationErrorHandler(response: Response) {
+  const body = (await response.json().catch(() => null)) as {
+    code?: string;
+    message?: string;
+  } | null;
+  const code =
+    body?.code && body.code in CalendarMutationErrorCode
+      ? (body.code as CalendarMutationErrorCode)
+      : undefined;
+  if (code) {
+    return { code, message: body?.message ?? '' };
+  }
+  return {
+    code: 'HTTP_ERROR' as const,
+    message: `HTTP error! status: ${response.status}`,
+  };
 }
 
 function emailFetch(
@@ -350,6 +384,24 @@ export const emailClient = {
     ).map((result) => result);
   },
 
+  /**
+   * Turns calendar off for one connected inbox: its calendar data is removed
+   * and the calendar scopes leave its Google grant, so the inbox comes back as
+   * needing calendar permission until the user grants it again. Gmail sync is
+   * unaffected.
+   */
+  async disableLinkCalendar(args: { linkId: string }) {
+    const { linkId } = args;
+    return (
+      await emailFetch<EmptyResponse>(
+        `/email/links/${encodeURIComponent(linkId)}/calendar`,
+        {
+          method: 'DELETE',
+        }
+      )
+    ).map((result) => result);
+  },
+
   async resyncLink(args: { linkId: string }) {
     const { linkId } = args;
     return (
@@ -506,24 +558,87 @@ export const emailClient = {
       headers: emailLinkHeaders(linkId),
     });
   },
-  async listEmailFilters() {
+  // Filters are stored per linked inbox, so every filter call is scoped to
+  // `linkId` via the X-Email-Link-Id header; omit for the primary inbox.
+  async listEmailFilters(linkId?: string) {
     return (
       await emailFetch<ListEmailFiltersResponse>('/email/filters', {
         method: 'GET',
+        headers: emailLinkHeaders(linkId),
       })
     ).map((result) => result);
   },
-  async upsertEmailFilter(args: UpsertEmailFilterRequest) {
+  async upsertEmailFilter(args: UpsertEmailFilterRequest, linkId?: string) {
     return (
       await emailFetch<UpsertEmailFilterResponse>('/email/filters', {
         method: 'PUT',
         body: JSON.stringify(args),
+        headers: emailLinkHeaders(linkId),
       })
     ).map((result) => result);
   },
-  async deleteEmailFilter(args: { id: string }) {
+  async deleteEmailFilter(args: { id: string }, linkId?: string) {
     return emailFetch(`/email/filters/${args.id}`, {
       method: 'DELETE',
+      headers: emailLinkHeaders(linkId),
     });
+  },
+  async listCalendars() {
+    return fetchWithToken<ListCalendarsResponse>(
+      `${emailHost}/calendar/calendars`,
+      {
+        method: 'GET',
+      }
+    );
+  },
+  async createCalendarEvent(args: CreateCalendarEventRequest) {
+    return fetchWithToken<CalendarEvent, CalendarMutationErrorCode>(
+      `${emailHost}/calendar/events`,
+      {
+        method: 'POST',
+        body: JSON.stringify(args),
+        errorResponseHandler: calendarMutationErrorHandler,
+      }
+    );
+  },
+  async updateCalendarEvent(eventId: string, args: UpdateCalendarEventRequest) {
+    return fetchWithToken<CalendarEvent, CalendarMutationErrorCode>(
+      `${emailHost}/calendar/events/${eventId}`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify(args),
+        errorResponseHandler: calendarMutationErrorHandler,
+      }
+    );
+  },
+  async deleteCalendarEvent(
+    eventId: string,
+    options?: { scope?: CalendarDeletionScope; recurrenceId?: string }
+  ) {
+    const params = new URLSearchParams();
+    if (options?.scope && options.scope !== 'all') {
+      params.set('scope', options.scope);
+    }
+    if (options?.recurrenceId) {
+      params.set('recurrenceId', options.recurrenceId);
+    }
+    const query = params.toString();
+    return fetchWithToken<EmptyResponse, CalendarMutationErrorCode>(
+      `${emailHost}/calendar/events/${eventId}${query ? `?${query}` : ''}`,
+      {
+        method: 'DELETE',
+        errorResponseHandler: calendarMutationErrorHandler,
+      }
+    );
+  },
+  async rsvpCalendarEvent(eventId: string, args: RsvpCalendarEventRequest) {
+    return fetchWithToken<CalendarEvent, CalendarMutationErrorCode>(
+      `${emailHost}/calendar/events/${eventId}/rsvp`,
+      {
+        method: 'PUT',
+        body: JSON.stringify(args),
+        errorResponseHandler: calendarMutationErrorHandler,
+      }
+    );
   },
 };

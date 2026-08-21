@@ -1,0 +1,93 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO team_crm_settings (\n                team_id, edit_stages_role, move_closed_deals_role, delete_records_role,\n                closed_stage_ids, team_views, default_team_view_id\n            )\n            VALUES (\n                $1,\n                COALESCE($2::text::team_role, 'admin'),\n                COALESCE($3::text::team_role, 'admin'),\n                COALESCE($4::text::team_role, 'admin'),\n                CASE WHEN $5 THEN $6::uuid[] END,\n                COALESCE($7, '[]'::jsonb),\n                CASE WHEN $8 THEN $9 END\n            )\n            ON CONFLICT (team_id) DO UPDATE SET\n                edit_stages_role       = COALESCE($2::text::team_role, team_crm_settings.edit_stages_role),\n                move_closed_deals_role = COALESCE($3::text::team_role, team_crm_settings.move_closed_deals_role),\n                delete_records_role    = COALESCE($4::text::team_role, team_crm_settings.delete_records_role),\n                closed_stage_ids       = CASE WHEN $5 THEN $6::uuid[] ELSE team_crm_settings.closed_stage_ids END,\n                team_views             = COALESCE($7, team_crm_settings.team_views),\n                default_team_view_id   = CASE WHEN $8 THEN $9 ELSE team_crm_settings.default_team_view_id END,\n                updated_at             = now()\n            RETURNING\n                edit_stages_role AS \"edit_stages_role!: CrmPermissionRole\",\n                move_closed_deals_role AS \"move_closed_deals_role!: CrmPermissionRole\",\n                delete_records_role AS \"delete_records_role!: CrmPermissionRole\",\n                closed_stage_ids,\n                team_views AS \"team_views!\",\n                default_team_view_id\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "edit_stages_role!: CrmPermissionRole",
+        "type_info": {
+          "Custom": {
+            "name": "team_role",
+            "kind": {
+              "Enum": [
+                "member",
+                "admin",
+                "owner"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "move_closed_deals_role!: CrmPermissionRole",
+        "type_info": {
+          "Custom": {
+            "name": "team_role",
+            "kind": {
+              "Enum": [
+                "member",
+                "admin",
+                "owner"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "delete_records_role!: CrmPermissionRole",
+        "type_info": {
+          "Custom": {
+            "name": "team_role",
+            "kind": {
+              "Enum": [
+                "member",
+                "admin",
+                "owner"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "closed_stage_ids",
+        "type_info": "UuidArray"
+      },
+      {
+        "ordinal": 4,
+        "name": "team_views!",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 5,
+        "name": "default_team_view_id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text",
+        "Text",
+        "Bool",
+        "UuidArray",
+        "Jsonb",
+        "Bool",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      false,
+      true
+    ]
+  },
+  "hash": "ff405bc5e288a4914436b6811c883416459ce49e240e2eba19505303f06bec54"
+}

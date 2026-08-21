@@ -76,7 +76,7 @@ impl NotificationQueue for SqsQueue {
             .filter_map(|msg| {
                 let body_str = msg.body?;
                 let body = serde_json::from_str(&body_str)
-                    .inspect_err(|e| tracing::error!(error=?e, body=%body_str, "failed to deserialize queue message"))
+                    .inspect_err(|e| tracing::error!(error=?e, payload_length=body_str.len(), "failed to deserialize queue message"))
                     .ok()?;
                 let receipt_handle = msg.receipt_handle?;
                 Some(RawQueueMessage {
@@ -91,21 +91,6 @@ impl NotificationQueue for SqsQueue {
 
     async fn delete_message(&self, receipt_handle: &str) -> Result<(), Report> {
         self.delete(receipt_handle).await
-    }
-
-    async fn delay_message(
-        &self,
-        receipt_handle: &str,
-        delay: std::time::Duration,
-    ) -> Result<(), Report> {
-        self.client
-            .change_message_visibility()
-            .queue_url(&self.queue_url)
-            .receipt_handle(receipt_handle)
-            .visibility_timeout(delay.as_secs() as i32)
-            .send()
-            .await?;
-        Ok(())
     }
 }
 
@@ -131,7 +116,7 @@ impl NotificationIngressQueue for SqsQueue {
             .filter_map(|msg| {
                 let body_str = msg.body?;
                 let body = serde_json::from_str(&body_str)
-                    .inspect_err(|e| tracing::error!(error=?e, body=%body_str, "failed to deserialize ingress queue message"))
+                    .inspect_err(|e| tracing::error!(error=?e, payload_length=body_str.len(), "failed to deserialize ingress queue message"))
                     .ok()?;
                 let receipt_handle = msg.receipt_handle?;
                 Some(RawIngressQueueMessage {
@@ -230,15 +215,6 @@ impl NotificationQueue for FileQueue {
         if path.exists() {
             tokio::fs::remove_file(&path).await?;
         }
-        Ok(())
-    }
-
-    async fn delay_message(
-        &self,
-        _receipt_handle: &str,
-        _delay: std::time::Duration,
-    ) -> Result<(), Report> {
-        // No-op for file-based queue.
         Ok(())
     }
 }

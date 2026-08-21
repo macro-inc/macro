@@ -1,0 +1,16 @@
+query GroupSoupMembership($input: GroupedSoupInput!) {
+	user {
+		id
+		groupSoup(input: $input) {
+			bins {
+				key
+				totalCount
+				nextCursor
+				items {
+					__typename
+					id
+				}
+			}
+		}
+	}
+}

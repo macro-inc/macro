@@ -6,7 +6,7 @@
 use cached::proc_macro::cached;
 
 use anyhow::Context;
-
+use bot_id::BotIdStr;
 use macro_user_id::{
     cowlike::CowLike,
     lowercased::Lowercase,
@@ -15,6 +15,7 @@ use macro_user_id::{
 use model_entity::EntityType;
 use sqlx::{Pool, Postgres};
 
+pub mod agent_session_access;
 pub mod call_access;
 pub mod call_channel;
 pub mod channel_membership;
@@ -75,6 +76,59 @@ pub async fn get_user_source_ids(
     } else {
         Ok(SourceIds(vec![]))
     }
+}
+
+/// Grabs the source ids available to a bot operating in its owning team's scope.
+#[tracing::instrument(skip(pool), err)]
+#[cfg_attr(
+    not(test),
+    cached(
+        time = 30,
+        result = true,
+        key = "String",
+        convert = r#"{format!("{}:{}", bot_id, team_id)}"#,
+    )
+)]
+pub async fn get_team_scope_source_ids(
+    pool: &Pool<Postgres>,
+    bot_id: &BotIdStr<'_>,
+    team_id: &uuid::Uuid,
+) -> anyhow::Result<SourceIds> {
+    let source_ids = sqlx::query_scalar!(
+        r#"
+        WITH active_bot AS (
+            SELECT id
+            FROM bots
+            WHERE id = $2
+              AND team_id = $3
+              AND deleted_at IS NULL
+        )
+        SELECT $1::text AS "source_id!"
+        FROM active_bot
+        UNION
+        SELECT $3::text
+        FROM active_bot
+        UNION
+        SELECT c.id::text
+        FROM active_bot
+        JOIN comms_channels c
+          ON c.channel_type = 'team'
+         AND c.team_id = $3
+        UNION
+        SELECT cp.channel_id::text
+        FROM active_bot
+        JOIN comms_channel_participants cp
+          ON cp.user_id = $1
+         AND cp.left_at IS NULL
+        "#,
+        bot_id.as_ref(),
+        bot_id.as_uuid(),
+        team_id,
+    )
+    .fetch_all(pool)
+    .await?;
+
+    Ok(SourceIds(source_ids))
 }
 
 /// Grabs all user IDs with access to an entity via the entity_access table.

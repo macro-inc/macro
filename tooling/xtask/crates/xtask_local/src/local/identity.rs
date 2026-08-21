@@ -29,7 +29,9 @@ pub const POPULATE_JWT_LAMBDA_ID: &str = "a7f3e8d2-4b91-4c5a-9e6f-1a2b3c4d5e6f";
 /// create-application step fail with `[duplicate]applicationId`.
 pub const APPLICATION_ID: &str = "22222222-2222-4222-8222-222222222222";
 
-/// A fixed local tenant id (deterministic, local-only).
+/// A fixed local tenant id (deterministic, local-only). This is FusionAuth's
+/// built-in default tenant, pinned via the kickstart `defaultTenantId`
+/// variable and reconfigured in place — local is single-tenant by design.
 pub const TENANT_ID: &str = "11111111-1111-4111-8111-111111111111";
 
 /// A fixed OAuth client secret (deterministic, local-only).
@@ -40,6 +42,19 @@ pub const ISSUER: &str = "local.macro.com";
 
 /// Fixed id for the passwordless-login email template the kickstart creates.
 pub const PASSWORDLESS_EMAIL_TEMPLATE_ID: &str = "33333333-3333-4333-8333-333333333333";
+
+/// Fixed id for the `google` (plain login) OIDC identity provider. Only created
+/// when a Google OAuth client is configured (see `kickstart::GoogleIdp`).
+pub const GOOGLE_IDP_ID: &str = "44444444-4444-4444-8444-444444444444";
+
+/// Fixed id for the `google_gmail` (Gmail-scoped) OIDC identity provider.
+/// `authentication_service` resolves it by name, so the id only has to be
+/// stable, not shared with dev/prod.
+pub const GOOGLE_GMAIL_IDP_ID: &str = "55555555-5555-4555-8555-555555555555";
+
+/// Fixed id for the reconcile lambda attached to `google_gmail` (blocks
+/// sign-in with a Google account that is linked as a secondary inbox).
+pub const RECONCILE_LAMBDA_ID: &str = "66666666-6666-4666-8666-666666666666";
 
 /// Local from-address for FusionAuth-sent mail (lands in Mailpit).
 pub const MAIL_FROM: &str = "noreply@macro.local";

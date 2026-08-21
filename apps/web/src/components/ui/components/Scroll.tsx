@@ -1,5 +1,5 @@
 import type { JSX } from 'solid-js';
-import { createSignal, onCleanup, onMount } from 'solid-js';
+import { createSignal, onCleanup, onMount, splitProps } from 'solid-js';
 
 const THUMB_WIDTH = 2;
 const HIDE_DELAY = 500;
@@ -7,7 +7,12 @@ const GUTTER_WIDTH = 8;
 const MIN_THUMB_HEIGHT = 24;
 const THUMB_INSET = (GUTTER_WIDTH - THUMB_WIDTH) * 0.5;
 
-export function Scroll(props: JSX.HTMLAttributes<HTMLDivElement>) {
+type ScrollProps = JSX.HTMLAttributes<HTMLDivElement> & {
+  scrollRef?: (element: HTMLDivElement) => void;
+};
+
+export function Scroll(props: ScrollProps) {
+  const [local, rest] = splitProps(props, ['children', 'scrollRef']);
   const [translateY, setTranslateY] = createSignal(THUMB_INSET);
   const [thumbHeight, setThumbHeight] = createSignal(MIN_THUMB_HEIGHT);
   const [visible, setVisible] = createSignal(false);
@@ -95,7 +100,7 @@ export function Scroll(props: JSX.HTMLAttributes<HTMLDivElement>) {
 
   return (
     <div
-      {...props}
+      {...rest}
       style={{
         position: 'relative',
         'min-height': '0',
@@ -105,7 +110,10 @@ export function Scroll(props: JSX.HTMLAttributes<HTMLDivElement>) {
       }}
     >
       <div
-        ref={scrollRef}
+        ref={(element) => {
+          scrollRef = element;
+          local.scrollRef?.(element);
+        }}
         onScroll={handleScroll}
         style={{
           'scrollbar-width': 'none',
@@ -113,7 +121,7 @@ export function Scroll(props: JSX.HTMLAttributes<HTMLDivElement>) {
           height: '100%',
         }}
       >
-        <div ref={contentRef}>{props.children}</div>
+        <div ref={contentRef}>{local.children}</div>
       </div>
       <div
         ref={gutterRef}

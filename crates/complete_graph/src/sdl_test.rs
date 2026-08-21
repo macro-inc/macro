@@ -3,33 +3,261 @@ fn soup_response_schema_exposes_frontend_fields() {
     let sdl = crate::build_schema().sdl();
 
     for expected in [
-        "type GraphqlSoupChannel {",
+        "type GraphqlSoupChannel implements GraphqlSoupEntity {",
         "organizationId: ID",
         "interactedAt: String",
+        "isParticipant: Boolean!",
         "participantIds: [String!]!",
         "participants: [GraphqlSoupChannelParticipant!]!",
-        "latestMessage: GraphqlSoupChannelMessage",
-        "latestNonThreadMessage: GraphqlSoupChannelMessage",
-        "type GraphqlSoupEmailThread {",
+        "latestMessage: GraphqlSoupChannelMessagePreview",
+        "latestNonThreadMessage: GraphqlSoupChannelMessagePreview",
+        "input EmailThreadInput {",
+        "threadId: ID!",
+        "emailLabels: [GraphqlSoupEmailLabel!]!",
+        "emailLinks: [GraphqlEmailLink!]!",
+        "emailThread(input: EmailThreadInput!): GraphqlSoupEmailThread",
+        "type GraphqlSoupEmailThread implements GraphqlSoupEntity {",
         "providerId: String",
         "inboxVisible: Boolean!",
-        "linkId: ID",
+        "linkId: ID!",
+        "latestInboundMessageTs: String",
         "senderPhotoUrl: String",
         "participants: [GraphqlSoupEmailParticipant!]!",
         "attachments: [GraphqlSoupEmailAttachment!]!",
         "labels: [GraphqlSoupEmailLabel!]!",
+        "type GraphqlEmailLink {",
+        "macroId: String!",
+        "emailAddress: String!",
+        "photoUrl: String",
+        "provider: GraphqlEmailProvider!",
+        "isSyncActive: Boolean!",
+        "syncStatus: GraphqlEmailSyncStatus!",
+        "needsReauth: Boolean!",
+        "settings: GraphqlEmailLinkSettings!",
+        "isPrimary: Boolean!",
+        "type GraphqlEmailLinkSettings {",
+        "signatureOnRepliesForwards: Boolean!",
+        "signature: String",
         "properties: [GraphqlProperty!]!",
-        "type GraphqlSoupCall {",
+        "messages(offset: Int, limit: Int): [GraphqlSoupEmailMessage!]!",
+        "latestContentMessage: GraphqlSoupEmailMessage",
+        "type GraphqlSoupEmailMessage {",
+        "replyingToId: ID",
+        "scheduledSendTime: String",
+        "isDraft: Boolean!",
+        "bodyParsed: String",
+        "bodyHtmlSanitized: String",
+        "bodyReplyless: String",
+        "attachments: [GraphqlSoupEmailMessageAttachment!]!",
+        "attachmentsDraft: [GraphqlSoupEmailDraftAttachment!]!",
+        "attachmentsForwarded: [GraphqlSoupEmailForwardedAttachment!]!",
+        "type GraphqlSoupEmailMessageAttachment {",
+        "sfsId: ID",
+        "type GraphqlSoupEmailDraftAttachment {",
+        "type GraphqlSoupEmailForwardedAttachment {",
+        "type GraphqlSoupCall implements GraphqlSoupEntity {",
         "channelName: String",
         "customName: String",
         "status: String!",
         "participantIds: [String!]!",
         "participants: [GraphqlSoupCallParticipant!]!",
-        "type GraphqlSoupChat {",
+        "type GraphqlSoupChat implements GraphqlSoupEntity {",
         "deletedAt: String",
-        "type GraphqlSoupProject {",
+        "type GraphqlSoupProject implements GraphqlSoupEntity {",
+        "parent: GraphqlEntity",
+        "type GraphqlCacheDeletion {",
+        "graphqlTypeName: String!",
+        "entityId: ID!",
+        "type SoupUpdated {",
+        "item: GraphqlSoupEntity",
+        "union SoupPatch = SoupUpdated | GraphqlCacheDeletion",
+        "type GraphqlMutationSuccess {",
+        "effects: [SoupPatch!]!",
+        "recordChannelActivity(input: RecordChannelActivityInput!): GraphqlChannelActivity!",
+        "updateNotifications(input: UpdateNotificationsInput!): [GraphqlNotification!]!",
+        "updateNotificationsForEntity(input: UpdateNotificationsForEntityInput!): [GraphqlNotification!]!",
+        "input UpdateNotificationsForEntityInput {",
+        "entities: [NotificationEntityInput!]!",
+        "input NotificationEntityInput {",
+        "entityType: GraphqlEntityType!",
+        "entityId: ID!",
+        "markEmailThreadSeen(input: MarkEmailThreadSeenInput!): GraphqlSoupEmailThread!",
+        "updateEmailThreadLabel(input: UpdateEmailThreadLabelInput!): GraphqlSoupEmailThread!",
+        "input MarkEmailThreadSeenInput {",
+        "input UpdateEmailThreadLabelInput {",
+        "labelId: ID!",
+        "value: Boolean!",
+        "enum ChannelActivityType {",
+        "enum NotificationUpdateOperation {",
+        "MARK_SEEN",
+        "MARK_DONE",
+        "MARK_UNDONE",
+        "type CompleteSubscriptionRoot {",
+        "soupUpdates: [SoupPatch!]!",
+        "notificationUpdates: GraphqlNotificationPatch!",
+        "union GraphqlNotificationPatch = GraphqlNotification | GraphqlCacheDeletion",
+        "type GraphqlNotification {",
+        "metadata: GraphqlNotifEvent!",
     ] {
         assert_sdl_line(&sdl, expected);
+    }
+    assert!(
+        sdl.contains("union GraphqlNotifEvent = GraphqlChannelMentionMetadata |"),
+        "notification metadata must be represented by the typed event union"
+    );
+    assert_eq!(
+        sdl.lines()
+            .filter(|line| line.trim() == "metadata: GraphqlNotifEvent!")
+            .count(),
+        1,
+        "stored and realtime notifications must share one typed metadata field"
+    );
+    assert!(!sdl.contains("GraphqlRealtimeNotification"));
+    assert!(!sdl.contains("GraphqlSoupNotification"));
+    assert!(
+        !sdl.lines()
+            .any(|line| line.trim() == "type GraphqlEntityRef {"),
+        "Soup metadata must reuse the canonical GraphqlEntity object"
+    );
+    assert_eq!(
+        sdl.matches("type GraphqlSoupEmailLabel {").count(),
+        1,
+        "thread labels and the user catalog must share one normalized typename"
+    );
+    assert!(
+        !sdl.to_ascii_lowercase().contains("fusionauth"),
+        "internal FusionAuth identifiers must not enter the GraphQL contract"
+    );
+}
+
+#[test]
+fn soup_interface_exposes_the_complete_shared_entity_contract() {
+    use apollo_compiler::schema::ExtendedType;
+
+    let schema =
+        apollo_compiler::Schema::parse_and_validate(crate::build_schema().sdl(), "schema.graphql")
+            .expect("generated SDL is valid");
+    let ExtendedType::Interface(entity) = schema
+        .types
+        .get("GraphqlSoupEntity")
+        .expect("Soup entity interface exists")
+    else {
+        panic!("GraphqlSoupEntity must be an interface");
+    };
+
+    for shared_field in [
+        "id",
+        "entityType",
+        "displayName",
+        "metadata",
+        "properties",
+        "notifications",
+        "isFavorited",
+        "viewerPermission",
+        "frecencyScore",
+        "activity",
+    ] {
+        assert!(
+            entity.fields.contains_key(shared_field),
+            "Soup interface missing shared field {shared_field}"
+        );
+    }
+    assert!(
+        !schema.types.contains_key("GraphqlSoupItem"),
+        "soup items are entities directly; no query-scoped wrapper type"
+    );
+    assert!(
+        !entity.fields.contains_key("content"),
+        "entity-specific content must not be flattened into the shared Soup interface"
+    );
+
+    let ExtendedType::Object(document) = schema
+        .types
+        .get("GraphqlSoupDocument")
+        .expect("Soup document type exists")
+    else {
+        panic!("GraphqlSoupDocument must be an object");
+    };
+    for shared_field in [
+        "isFavorited",
+        "viewerPermission",
+        "properties",
+        "notifications",
+        "activity",
+    ] {
+        assert!(
+            document.fields.contains_key(shared_field),
+            "Soup document missing shared field {shared_field}"
+        );
+    }
+}
+
+#[test]
+fn schema_types_and_fields_have_descriptions() {
+    use apollo_compiler::schema::ExtendedType;
+
+    let schema =
+        apollo_compiler::Schema::parse_and_validate(crate::build_schema().sdl(), "schema.graphql")
+            .expect("generated SDL is valid");
+
+    let mut missing = Vec::new();
+    for (name, graphql_type) in &schema.types {
+        if graphql_type.is_built_in() {
+            continue;
+        }
+        if graphql_type.description().is_none() {
+            missing.push(format!("type {name}"));
+        }
+
+        match graphql_type {
+            ExtendedType::Object(ty) => collect_undocumented(
+                &mut missing,
+                name,
+                ty.fields
+                    .iter()
+                    .map(|(name, field)| (name, field.description.is_none())),
+            ),
+            ExtendedType::Interface(ty) => collect_undocumented(
+                &mut missing,
+                name,
+                ty.fields
+                    .iter()
+                    .map(|(name, field)| (name, field.description.is_none())),
+            ),
+            ExtendedType::InputObject(ty) => collect_undocumented(
+                &mut missing,
+                name,
+                ty.fields
+                    .iter()
+                    .map(|(name, field)| (name, field.description.is_none())),
+            ),
+            ExtendedType::Enum(ty) => collect_undocumented(
+                &mut missing,
+                name,
+                ty.values
+                    .iter()
+                    .map(|(name, value)| (name, value.description.is_none())),
+            ),
+            ExtendedType::Scalar(_) | ExtendedType::Union(_) => {}
+        }
+    }
+
+    assert!(
+        missing.is_empty(),
+        "GraphQL schema items missing descriptions: {}",
+        missing.join(", ")
+    );
+}
+
+fn collect_undocumented<'a>(
+    missing: &mut Vec<String>,
+    type_name: &str,
+    items: impl Iterator<Item = (&'a apollo_compiler::Name, bool)>,
+) {
+    for (name, is_undocumented) in items {
+        if is_undocumented {
+            missing.push(format!("{type_name}.{name}"));
+        }
     }
 }
 

@@ -1,23 +1,27 @@
 //! History access extractor.
 
+#[cfg(test)]
+mod test;
+
 use std::marker::PhantomData;
 use std::sync::Arc;
 
 use axum::{
-    Extension, RequestPartsExt,
     extract::{FromRef, FromRequestParts, Path},
     http::request::Parts,
 };
+use macro_authorization::{
+    AnyPrincipal, MacroAuthorization, MacroAuthorizationService, MacroAuthorizationState,
+    OptionalMacroAuthorizationExtractor,
+};
 
-use super::{ExtractorError, InternalUser, RequiredPermission};
+use super::{ExtractorError, RequiredPermission, bot::generate_bot_entity_access_receipt};
 use crate::domain::{
     models::{
         AccessLevel, Entity, EntityAccessAuth, EntityAccessReceipt, EntityPermission, EntityType,
     },
     ports::EntityAccessService,
 };
-use model_user::axum_extractor::OptionalMacroUserExtractor;
-
 /// Path parameters for history routes.
 #[derive(serde::Deserialize)]
 pub struct HistoryParams {
@@ -29,19 +33,23 @@ pub struct HistoryParams {
 
 /// Validates the user has access to view the history of a particular item.
 ///
-/// Extracts both item_id and item_type from the path parameters.
+/// Extracts both `item_id` and `item_type` from the path parameters. Type parameter `T` specifies
+/// the required access level, `Svc` is the entity access service, and `Auth` is the authorization
+/// service.
 #[derive(Debug)]
-pub struct HistoryAccessExtractor<T: RequiredPermission, Svc> {
+pub struct HistoryAccessExtractor<T: RequiredPermission, Svc, Auth> {
     /// The entity access receipt
     pub entity_access_receipt: EntityAccessReceipt<T>,
-    _marker: PhantomData<(T, Svc)>,
+    _marker: PhantomData<(T, Svc, Auth)>,
 }
 
-impl<T, S, Svc> FromRequestParts<S> for HistoryAccessExtractor<T, Svc>
+impl<T, S, Svc, Auth> FromRequestParts<S> for HistoryAccessExtractor<T, Svc, Auth>
 where
     T: RequiredPermission,
     Arc<Svc>: FromRef<S>,
     Svc: EntityAccessService,
+    MacroAuthorizationState<Auth>: FromRef<S>,
+    Auth: MacroAuthorizationService,
     S: Send + Sync + 'static,
 {
     type Rejection = ExtractorError;
@@ -50,31 +58,49 @@ where
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
         let service = <Arc<Svc>>::from_ref(state);
 
-        let OptionalMacroUserExtractor { macro_user_id, .. } = parts
-            .extract()
+        let authorization =
+            OptionalMacroAuthorizationExtractor::<Auth, AnyPrincipal>::from_request_parts(
+                parts, state,
+            )
             .await
-            .map_err(|_| ExtractorError::Internal)?;
+            .map_err(ExtractorError::from)?;
 
         let Path(HistoryParams { item_id, item_type }) =
             <Path<HistoryParams>>::from_request_parts(parts, state)
                 .await
                 .map_err(|_| ExtractorError::BadRequest("Missing item_id or item_type in path"))?;
 
-        // Parse the item_type string into EntityType
         let entity_type: EntityType = item_type
             .parse()
             .map_err(|_| ExtractorError::BadRequest("Invalid item_type"))?;
 
-        let internal_user: Option<Extension<InternalUser>> = if macro_user_id.is_none() {
-            parts
-                .extract()
-                .await
-                .map_err(|_| ExtractorError::Internal)?
-        } else {
-            None
-        };
+        if let Some(MacroAuthorization::Bot(authentication)) = authorization.authorization.as_ref()
+        {
+            let entity_access_receipt = generate_bot_entity_access_receipt::<T>(
+                service.as_ref(),
+                authentication,
+                &item_id,
+                entity_type,
+            )
+            .await?;
 
-        if internal_user.is_some() {
+            return Ok(Self {
+                entity_access_receipt,
+                _marker: PhantomData,
+            });
+        }
+
+        let is_internal_access = authorization
+            .authorization
+            .as_ref()
+            .is_some_and(MacroAuthorization::is_internal);
+        let macro_user_id = authorization
+            .authorization
+            .as_ref()
+            .and_then(MacroAuthorization::acting_user)
+            .map(|user| user.macro_user_id.clone());
+
+        if macro_user_id.is_none() && is_internal_access {
             return Ok(Self {
                 entity_access_receipt: EntityAccessReceipt {
                     entity: Entity {

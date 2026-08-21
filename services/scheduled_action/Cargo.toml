@@ -18,7 +18,7 @@ path = "src/doppler_config.rs"
 
 [features]
 default = []
-local_auth = ["macro_middleware/local_auth"]
+local_auth = ["macro_authorization/local_auth"]
 
 [dependencies]
 serde = { workspace = true }
@@ -26,27 +26,30 @@ serde_json = { workspace = true }
 macro_env_var = { path = "../../crates/macro_env_var" }
 macro_queues = { path = "../../crates/macro_queues" }
 macro_config = { path = "../../crates/macro_config" }
+macro_authorization = { path = "../../crates/macro_authorization" }
 database_env_vars = { path = "../../crates/database_env_vars" }
 doppler-config = { workspace = true }
 sqlx = { workspace = true }
 macro_user_id = { path = "../../crates/macro_user_id"}
-cron = { version = "0.16.0" }
+cron = { workspace = true }
 anyhow = { workspace = true }
 macro_uuid = { path = "../../crates/macro_uuid"}
 chrono = { workspace = true}
-chrono-tz = { version = "0.10.4", features = ["serde"] }
+chrono-tz = { workspace = true }
 agent = { path = "../../crates/agent" }
 ai_usage = { path = "../../crates/ai_usage" }
-tokio = { workspace = true }
+tokio = { workspace = true, features = ["signal"] }
+tokio-util = { workspace = true, features = ["rt"] }
 futures = { workspace = true }
 tracing = { workspace = true }
 axum = { workspace = true }
-model_user = { path = "../../crates/model_user", features = ["axum"] }
 ai_tools = { path = "../../crates/ai_tools" }
 ai_toolset = { path = "../../crates/ai_toolset" }
 aws-sdk-sqs = { workspace = true }
 chat = { path = "../../crates/chat" }
 connection_gateway_client = { path = "../../crates/connection_gateway_client" }
+share_permission_db_utils = { path = "../../crates/share_permission_db_utils" }
+models_permissions = { path = "../../crates/models_permissions" }
 macro_db_client = { path = "../../crates/macro_db_client" }
 memory = { path = "../../crates/memory" }
 model = { path = "../../crates/model" }
@@ -61,9 +64,6 @@ macro_cors = { path = "../../crates/macro_cors" }
 macro_auth = { path = "../../crates/macro_auth" }
 macro_entrypoint = { path = "../../crates/macro_entrypoint" }
 macro_env = { path = "../../crates/macro_env" }
-macro_middleware = { path = "../../crates/macro_middleware", default-features = false, features = [
-  "auth",
-] }
 secretsmanager_client = { path = "../../crates/secretsmanager_client" }
 aws-sdk-secretsmanager = { workspace = true }
 

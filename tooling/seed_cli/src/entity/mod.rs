@@ -4,6 +4,7 @@ pub mod channel;
 pub mod channel_message;
 pub mod document;
 pub mod email;
+pub mod gmail;
 pub mod scenario;
 pub mod user;
 
@@ -24,6 +25,8 @@ pub enum EntityCommand {
     Document(document::DocumentArgs),
     /// Manage email seed data
     Email(email::EmailArgs),
+    /// Seed real Gmail test mailboxes via the Gmail API
+    Gmail(gmail::GmailArgs),
     /// Apply predefined seed scenarios
     Scenario(scenario::ScenarioArgs),
 }
@@ -37,6 +40,15 @@ impl EntityCommand {
         }
     }
 
+    /// Run destructive pre-connection setup (e.g. `scenario apply --force`
+    /// dropping and re-migrating the database) before the pool opens.
+    pub async fn pre_connect(&self, database_url: &str) -> anyhow::Result<()> {
+        match self {
+            EntityCommand::Scenario(args) => args.pre_connect(database_url).await,
+            _ => Ok(()),
+        }
+    }
+
     /// Execute the entity command.
     pub async fn execute(self, ctx: SeedCliContext) -> anyhow::Result<()> {
         match self {
@@ -45,6 +57,7 @@ impl EntityCommand {
             EntityCommand::ChannelMessage(args) => args.execute(ctx).await,
             EntityCommand::Document(args) => args.execute(ctx).await,
             EntityCommand::Email(args) => args.execute(ctx).await,
+            EntityCommand::Gmail(args) => args.execute().await,
             EntityCommand::Scenario(args) => args.execute(ctx).await,
         }
     }

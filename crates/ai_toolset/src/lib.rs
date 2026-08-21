@@ -19,7 +19,10 @@
 //! ensures compile-time safety when extracting tool-specific contexts.
 //!
 //! ```
-//! use ai_toolset::{AsyncTool, AsyncToolCollection, RequestContext, ServiceContext, ToolResult};
+//! use ai_toolset::{
+//!     AsyncTool, AsyncToolCollection, RequestContext, ServiceContext, ToolAnnotated,
+//!     ToolAnnotations, ToolResult,
+//! };
 //! use axum_macros::FromRef;
 //! use schemars::JsonSchema;
 //! use serde::{Deserialize, Serialize};
@@ -48,6 +51,10 @@
 //! #[schemars(title = "ReadDocument", description = "Reads a document by ID")]
 //! struct ReadDocumentTool { document_id: String }
 //!
+//! impl ToolAnnotated for ReadDocumentTool {
+//!     const ANNOTATIONS: ToolAnnotations = ToolAnnotations::read_only("Read document");
+//! }
+//!
 //! #[async_trait::async_trait]
 //! impl AsyncTool<Arc<dyn DocumentApi>> for ReadDocumentTool {
 //!     type Output = serde_json::Value;
@@ -61,6 +68,10 @@
 //! #[derive(JsonSchema, Deserialize)]
 //! #[schemars(title = "UpdateProperty", description = "Updates a property value")]
 //! struct UpdatePropertyTool { property_id: String, value: String }
+//!
+//! impl ToolAnnotated for UpdatePropertyTool {
+//!     const ANNOTATIONS: ToolAnnotations = ToolAnnotations::destructive("Update property");
+//! }
 //!
 //! #[async_trait::async_trait]
 //! impl AsyncTool<Arc<dyn PropertyApi>> for UpdatePropertyTool {
@@ -84,7 +95,10 @@
 //! derivable from the parent context via `FromRef`.
 //!
 //! ```
-//! use ai_toolset::{AsyncTool, AsyncToolCollection, RequestContext, ServiceContext, ToolResult};
+//! use ai_toolset::{
+//!     AsyncTool, AsyncToolCollection, RequestContext, ServiceContext, ToolAnnotated,
+//!     ToolAnnotations, ToolResult,
+//! };
 //! use axum_macros::FromRef;
 //! use schemars::JsonSchema;
 //! use serde::{Deserialize, Serialize};
@@ -108,6 +122,10 @@
 //! #[schemars(title = "SubTool", description = "A tool using SubContext")]
 //! struct SubTool { value: String }
 //!
+//! impl ToolAnnotated for SubTool {
+//!     const ANNOTATIONS: ToolAnnotations = ToolAnnotations::read_only("Sub tool");
+//! }
+//!
 //! #[async_trait::async_trait]
 //! impl AsyncTool<SubContext> for SubTool {
 //!     type Output = serde_json::Value;
@@ -129,12 +147,14 @@
 
 #![deny(missing_docs)]
 
+mod annotations;
 mod context;
 pub mod schema;
 mod tool;
 pub mod tool_search;
 mod toolset;
 
+pub use annotations::{ToolAnnotated, ToolAnnotations, ToolKind};
 pub use context::{RequestContext, ServiceContext};
 pub use tool::{AsyncTool, NoContext, ToolCallError, ToolResult};
 pub use tool_search::{SearchableTool, ToolLoader};

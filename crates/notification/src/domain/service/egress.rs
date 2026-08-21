@@ -1,7 +1,7 @@
 //! Egress service for delivering notifications.
 //!
 //! This service handles the worker-facing side of notifications:
-//! consuming from the queue and delivering via WebSocket, push, and email.
+//! consuming from the queue and delivering via realtime, push, and email.
 
 use crate::domain::models::apple::APNSPushNotification;
 use crate::domain::models::email_notification_digest::ports::{
@@ -18,7 +18,7 @@ use crate::domain::models::queue_message::{
 use crate::domain::models::{NotificationExtEmail, NotificationTypeName, RateLimitResult};
 use crate::domain::ports::{
     EmailSender, NotificationEgress, NotificationQueue, NotificationRepository, NotificationSender,
-    RateLimitService, WebSocketSender,
+    RateLimitService, RealtimeSender,
 };
 use cowlike::CowLike;
 use either::Either;
@@ -60,14 +60,14 @@ impl<M: NotificationSender> NotificationSendChecker for IosPushSend<'_, M> {
 
 /// Service for delivering notifications (egress side).
 ///
-/// Handles consuming from queue and delivering via WebSocket, push, and email.
-pub struct NotificationEgressService<Q, N, W, M, E, R, S, D> {
+/// Handles consuming from queue and delivering via realtime, push, and email.
+pub struct NotificationEgressService<Q, N, RT, M, E, R, S, D> {
     /// Queue for receiving notification messages.
     pub queue: Q,
     /// Notification repository for DB operations.
     pub repository: N,
-    /// WebSocket sender for real-time delivery.
-    pub websocket: W,
+    /// Realtime notification sender.
+    pub realtime: RT,
     /// Mobile push sender (APNS/FCM).
     pub mobile: M,
     /// Email sender.
@@ -80,11 +80,11 @@ pub struct NotificationEgressService<Q, N, W, M, E, R, S, D> {
     pub digest_batcher: D,
 }
 
-impl<Q, N, W, M, E, R, S, D> NotificationEgressService<Q, N, W, M, E, R, S, D>
+impl<Q, N, RT, M, E, R, S, D> NotificationEgressService<Q, N, RT, M, E, R, S, D>
 where
     Q: NotificationQueue,
     N: NotificationRepository,
-    W: WebSocketSender,
+    RT: RealtimeSender,
     M: NotificationSender,
     E: EmailSender,
     R: RateLimitService,
@@ -126,7 +126,7 @@ where
         &self,
         conn: &ConnGatewayNotification<'static, serde_json::Value>,
     ) -> Result<DeliverySuccess, Report> {
-        self.websocket
+        self.realtime
             .send_notifications(&conn.recipients, &conn.notif)
             .await?;
         Ok(DeliverySuccess::ConnGateway)
@@ -251,12 +251,12 @@ where
     }
 }
 
-impl<Q, N, W, M, E, R, S, D> NotificationEgress
-    for NotificationEgressService<Q, N, W, M, E, R, S, D>
+impl<Q, N, RT, M, E, R, S, D> NotificationEgress
+    for NotificationEgressService<Q, N, RT, M, E, R, S, D>
 where
     Q: NotificationQueue,
     N: NotificationRepository,
-    W: WebSocketSender,
+    RT: RealtimeSender,
     M: NotificationSender,
     E: EmailSender,
     R: RateLimitService,
@@ -302,31 +302,20 @@ where
             let all_ios_failed = delivery_results.iter().all(
                 |e| matches!(e, Err(e) if matches!(e.current_context(), DeliveryFailure::Ios )),
             );
-            let rate_limited = delivery_results.iter().find_map(|e| {
-                match e.as_ref().map_err(Report::current_context) {
-                    Err(DeliveryFailure::RateLimit(rate_limit)) => Some(rate_limit),
-                    Ok(_)
-                    | Err(
-                        DeliveryFailure::Ios | DeliveryFailure::Other | DeliveryFailure::Timeout,
-                    ) => None,
-                }
+            let rate_limited = delivery_results.iter().any(|e| {
+                matches!(
+                    e.as_ref().map_err(Report::current_context),
+                    Err(DeliveryFailure::RateLimit(_))
+                )
             });
 
-            // Delete from queue if any deliveries succeeded
-            // or all the failed notifs were ios
-            if (any_succeeded || all_ios_failed)
+            // Delete from the queue if any delivery succeeded, all failures were
+            // iOS failures, or delivery was rejected by the rate limit. Rate-limit
+            // rejection is terminal; retrying the same notification would only
+            // deliver stale notifications after the limit window expires.
+            if (any_succeeded || all_ios_failed || rate_limited)
                 && let Err(e) = self.queue.delete_message(&receipt_handle).await
             {
-                // push the failed delete to errors
-                results.push(Err(e))
-            } else if let Some(rate_limited) = rate_limited
-                && let Err(e) = self
-                    .queue
-                    // if we got rate limited, delay this message by the rate limit expiry time
-                    .delay_message(&receipt_handle, rate_limited.retry_after)
-                    .await
-            {
-                // push the failed delay to errors
                 results.push(Err(e))
             }
 

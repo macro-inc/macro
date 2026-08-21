@@ -21,8 +21,10 @@ import {
   mentionsPlugin,
   selectionDataPlugin,
   singleLinePlugin,
+  skillsPlugin,
   snippetsPlugin,
   tabIndentationPlugin,
+  tagsPlugin,
   textPastePlugin,
 } from '../plugins';
 import { checkboxToTaskPlugin } from '../plugins/checkbox-to-task';
@@ -73,6 +75,7 @@ export function buildHandleFromConfig(config: EditorConfig): EditorHandle {
       ? createMenuOperations()
       : undefined;
   const mentionsMenuOps = config.mentions ? createMenuOperations() : undefined;
+  const tagsMenuOps = config.tags ? createMenuOperations() : undefined;
   const emojisMenuOps = config.emojis ? createMenuOperations() : undefined;
   // Snippets (`;` menu) follow mentions: any markdown area that can @-mention
   // can also insert snippets, unless explicitly opted out. Editors with a
@@ -80,6 +83,18 @@ export function buildHandleFromConfig(config: EditorConfig): EditorHandle {
   // snippets menu reads from quickAccess, which those editors bypass.
   const snippetsMenuOps =
     config.mentions && !config.mentions.entities && config.snippets !== false
+      ? createMenuOperations()
+      : undefined;
+  // Skills (`/` menu) are opt-in for AI markdown areas. They share the `/`
+  // trigger with the actions slash menu, so they only activate when actions
+  // are disabled, and they read from quickAccess like snippets, so editors
+  // with a custom mention entity source are excluded.
+  const skillsMenuOps =
+    config.skills &&
+    !actionsMenuOps &&
+    config.mentions &&
+    !config.mentions.entities &&
+    config.type !== 'plain-text'
       ? createMenuOperations()
       : undefined;
 
@@ -163,6 +178,20 @@ export function buildHandleFromConfig(config: EditorConfig): EditorHandle {
       );
     }
 
+    if (config.tags && tagsMenuOps) {
+      plugins.use(
+        tagsPlugin({
+          menu: tagsMenuOps,
+          insertTags: config.tags.insertTags,
+          onCreateTag: config.tags.applyTargetLabel
+            ? undefined
+            : config.tags.onCreate,
+          onRemoveTag: config.tags.onRemove,
+          setTags: config.tags.setTags,
+        })
+      );
+    }
+
     if (emojisMenuOps) {
       plugins.use(emojisPlugin({ menu: emojisMenuOps }));
     }
@@ -174,6 +203,10 @@ export function buildHandleFromConfig(config: EditorConfig): EditorHandle {
           sourceDocumentId: config.mentions?.sourceDocumentId,
         })
       );
+    }
+
+    if (skillsMenuOps) {
+      plugins.use(skillsPlugin({ menu: skillsMenuOps }));
     }
   }
 
@@ -270,8 +303,10 @@ export function buildHandleFromConfig(config: EditorConfig): EditorHandle {
         ignoreKeys: () =>
           (actionsMenuOps?.isOpen() ?? false) ||
           (mentionsMenuOps?.isOpen() ?? false) ||
+          (tagsMenuOps?.isOpen() ?? false) ||
           (emojisMenuOps?.isOpen() ?? false) ||
-          (snippetsMenuOps?.isOpen() ?? false),
+          (snippetsMenuOps?.isOpen() ?? false) ||
+          (skillsMenuOps?.isOpen() ?? false),
       })
     );
   }
@@ -292,10 +327,12 @@ export function buildHandleFromConfig(config: EditorConfig): EditorHandle {
     getLexical: () => editor,
     isInlineMenuOpen: () => {
       const mentions = mentionsMenuOps?.isOpen() ?? false;
+      const tags = tagsMenuOps?.isOpen() ?? false;
       const emojis = emojisMenuOps?.isOpen() ?? false;
       const actions = actionsMenuOps?.isOpen() ?? false;
       const snippets = snippetsMenuOps?.isOpen() ?? false;
-      return mentions || emojis || actions || snippets;
+      const skills = skillsMenuOps?.isOpen() ?? false;
+      return mentions || tags || emojis || actions || snippets || skills;
     },
   };
 
@@ -314,8 +351,10 @@ export function buildHandleFromConfig(config: EditorConfig): EditorHandle {
       markdownState,
       actionsMenuOps,
       mentionsMenuOps,
+      tagsMenuOps,
       emojisMenuOps,
       snippetsMenuOps,
+      skillsMenuOps,
       accessoryStore,
       dragInsertStore,
       draggableBlockStore,

@@ -1,8 +1,7 @@
 //! Thin bollard-backed helpers for the discrete Docker Engine operations the
-//! orchestrator needs outside of `docker compose` — checking whether the
-//! runtime image exists and idempotently ensuring the per-instance external
-//! networks/volumes. (Compose orchestration itself stays on the CLI; bollard
-//! has no compose support.)
+//! orchestrator needs outside of `docker compose` — idempotently ensuring the
+//! per-instance external networks/volumes. (Compose orchestration itself stays
+//! on the CLI; bollard has no compose support.)
 
 use anyhow::{Context, Result};
 use bollard::Docker;
@@ -30,15 +29,6 @@ fn connect() -> Result<Docker> {
         true => Docker::connect_with_podman_defaults().context("connecting to the Docker daemon"),
         false => Docker::connect_with_local_defaults().context("connecting to the Docker daemon"),
     }
-}
-
-/// Whether an image with `tag` exists locally.
-pub fn image_exists(tag: &str) -> bool {
-    block_on(async {
-        let docker = connect()?;
-        Ok::<_, anyhow::Error>(docker.inspect_image(tag).await.is_ok())
-    })
-    .unwrap_or(false)
 }
 
 /// Idempotently create a bridge network (no-op if it already exists).
@@ -80,4 +70,65 @@ pub fn ensure_volume(name: &str) -> Result<()> {
 fn already_exists(e: &bollard::errors::Error) -> bool {
     let s = e.to_string();
     s.contains("already exists") || s.contains("409")
+}
+
+/// A container belonging to a compose project, as `status-local` reports it.
+pub struct ProjectContainer {
+    /// Container name (without the leading slash).
+    pub name: String,
+    /// Whether the container is currently running.
+    pub running: bool,
+    /// Human-readable status, e.g. `Up 3 hours (healthy)`.
+    pub status: String,
+    /// Published host ports, sorted and deduplicated.
+    pub host_ports: Vec<u16>,
+}
+
+/// List every container (running or not) labeled with the compose `project`.
+pub fn project_containers(project: &str) -> Result<Vec<ProjectContainer>> {
+    use bollard::models::ContainerSummaryStateEnum;
+    use bollard::query_parameters::ListContainersOptionsBuilder;
+
+    block_on(async {
+        let docker = connect()?;
+        let filters = std::collections::HashMap::from([(
+            "label",
+            vec![format!("com.docker.compose.project={project}")],
+        )]);
+        let options = ListContainersOptionsBuilder::new()
+            .all(true)
+            .filters(&filters)
+            .build();
+        let mut containers: Vec<ProjectContainer> = docker
+            .list_containers(Some(options))
+            .await
+            .context("listing containers")?
+            .into_iter()
+            .map(|c| {
+                let name = c
+                    .names
+                    .unwrap_or_default()
+                    .first()
+                    .map(|n| n.trim_start_matches('/').to_string())
+                    .or(c.id)
+                    .unwrap_or_default();
+                let mut host_ports: Vec<u16> = c
+                    .ports
+                    .unwrap_or_default()
+                    .iter()
+                    .filter_map(|p| p.public_port)
+                    .collect();
+                host_ports.sort_unstable();
+                host_ports.dedup();
+                ProjectContainer {
+                    name,
+                    running: c.state == Some(ContainerSummaryStateEnum::RUNNING),
+                    status: c.status.unwrap_or_default(),
+                    host_ports,
+                }
+            })
+            .collect();
+        containers.sort_by(|a, b| a.name.cmp(&b.name));
+        Ok(containers)
+    })
 }

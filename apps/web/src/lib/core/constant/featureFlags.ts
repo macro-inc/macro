@@ -4,6 +4,10 @@ import { analytics } from '@app/lib/analytics';
  * This constant reflects whether the app is running locally with hot reload enabled
  *
  * @returns true in bun run dev, false otherwise
+ *
+ * Distinct from `import.meta.env.DEV` (true under vite serve *and* local-backend
+ * static bundles) and `DEV_MODE_ENV` (true whenever MODE=development, including
+ * dev.macro.com).
  */
 export const LOCAL_ONLY = !!import.meta.hot;
 
@@ -123,17 +127,78 @@ export const ENABLE_MARKDOWN_LIVE_COLLABORATION = resolveFeatureFlag(
 export const ENABLE_EMAIL = resolveFeatureFlag('ENABLE_EMAIL', true);
 
 // Email signatures: the settings editor, the compose / reply / AI-chat signature
-// previews, and the per-message include toggle. Dev/local only for now; override
-// with VITE_ENABLE_EMAIL_SIGNATURES.
-export const ENABLE_EMAIL_SIGNATURES = resolveFeatureFlag(
-  'ENABLE_EMAIL_SIGNATURES',
-  DEV_MODE_ENV
-);
+// previews, and the per-message include toggle. PostHog-gated with a dev-mode
+// default; override with VITE_ENABLE_EMAIL_SIGNATURES.
+export const ENABLE_EMAIL_SIGNATURES_FLAG = 'enable-email-signatures';
+// Honor an explicit VITE_ENABLE_EMAIL_SIGNATURES=false (don't coerce it to
+// undefined), else default on in dev and defer to PostHog in prod.
+export const ENABLE_EMAIL_SIGNATURES_OVERRIDE =
+  getFeatureFlagOverride('ENABLE_EMAIL_SIGNATURES') ??
+  (DEV_MODE_ENV ? true : undefined);
+
+/**
+ * Non-reactive check for imperative call sites. For reactive UI, prefer
+ * `useFeatureFlag(ENABLE_EMAIL_SIGNATURES_FLAG, { enabledOverride: ENABLE_EMAIL_SIGNATURES_OVERRIDE })`.
+ */
+export function ENABLE_EMAIL_SIGNATURES(): boolean {
+  if (ENABLE_EMAIL_SIGNATURES_OVERRIDE !== undefined) {
+    return ENABLE_EMAIL_SIGNATURES_OVERRIDE;
+  }
+  return (
+    analytics.posthog.isFeatureEnabled(ENABLE_EMAIL_SIGNATURES_FLAG) ?? false
+  );
+}
 
 // CRM companies & contacts frontend: the Companies view + sidebar entry, the
 // company/contact detail blocks, CRM mentions / quick-access, and CRM rows in
-// global search. override with VITE_ENABLE_CRM.
-export const ENABLE_CRM = resolveFeatureFlag('ENABLE_CRM', DEV_MODE_ENV);
+// global search. PostHog-gated (currently targeted at the Macro team in prod)
+// with a dev-mode default; override with VITE_ENABLE_CRM.
+export const ENABLE_CRM_FLAG = 'enable-crm';
+export const ENABLE_CRM_OVERRIDE =
+  resolveFeatureFlag('ENABLE_CRM', DEV_MODE_ENV) || undefined;
+
+/**
+ * Non-reactive check for imperative call sites. For reactive UI, prefer
+ * `useFeatureFlag(ENABLE_CRM_FLAG, { enabledOverride: ENABLE_CRM_OVERRIDE })`.
+ */
+export function ENABLE_CRM(): boolean {
+  if (ENABLE_CRM_OVERRIDE !== undefined) return ENABLE_CRM_OVERRIDE;
+  return analytics.posthog.isFeatureEnabled(ENABLE_CRM_FLAG) ?? false;
+}
+
+// Reminders: the "Remind me" entry in the command menu, the soup
+// context menu and the block ⋯ menu, its 'h' shortcut, and the composer modal.
+// Every surface routes through `makeCreateReminderAction().canExecute`, so this
+// is the single gate for all of them. PostHog-gated with a dev-mode default.
+export const ENABLE_REMINDERS_FLAG = 'enable-reminders';
+// Read statically rather than through `getFeatureFlagOverride`: Vite replaces
+// `import.meta.env.VITE_X` by text substitution at build time, so the dynamic
+// `import.meta.env[key]` lookup that helper does can come back undefined in a
+// production bundle. Same form as VITE_ENABLE_BROWSER_OTEL in observability/.
+//
+// Written out rather than using `|| undefined` so an explicit
+// VITE_ENABLE_REMINDERS=false stays false instead of being coerced to undefined
+// and falling through to PostHog.
+const REMINDERS_ENV_OVERRIDE = import.meta.env.VITE_ENABLE_REMINDERS;
+export const ENABLE_REMINDERS_OVERRIDE: boolean | undefined =
+  REMINDERS_ENV_OVERRIDE === 'true'
+    ? true
+    : REMINDERS_ENV_OVERRIDE === 'false'
+      ? false
+      : DEV_MODE_ENV
+        ? true
+        : undefined;
+
+/**
+ * Non-reactive check for imperative call sites. For reactive UI, prefer
+ * `useFeatureFlag(ENABLE_REMINDERS_FLAG, { enabledOverride: ENABLE_REMINDERS_OVERRIDE })`.
+ */
+export function ENABLE_REMINDERS(): boolean {
+  if (ENABLE_REMINDERS_OVERRIDE !== undefined) {
+    return ENABLE_REMINDERS_OVERRIDE;
+  }
+  return analytics.posthog.isFeatureEnabled(ENABLE_REMINDERS_FLAG) ?? false;
+}
 
 export const ENABLE_BLOCK_IN_BLOCK = resolveFeatureFlag(
   'ENABLE_BLOCK_IN_BLOCK',
@@ -253,12 +318,6 @@ const _ENABLE_SOUP_FROM_FILTER = resolveFeatureFlag(
   false
 );
 
-export const ENABLE_PREVIEW = resolveFeatureFlag('ENABLE_PREVIEW', true);
-export const ENABLE_PROJECT_VIEW_PREVIEW = resolveFeatureFlag(
-  'ENABLE_PROJECT_VIEW_PREVIEW',
-  true
-);
-
 const _ENABLE_DOCK_NOTITIFCATIONS = resolveFeatureFlag(
   'ENABLE_DOCK_NOTITIFCATIONS',
   DEV_MODE_ENV
@@ -305,6 +364,13 @@ export const ENABLE_UNIFIED_LIST_AI_INPUT = resolveFeatureFlag(
   'ENABLE_UNIFIED_LIST_AI_INPUT',
   true
 );
+
+// Inline AI editing: the floating document AI edit pill and the AI editing
+// tool in the selection formatting menu. Gated by PostHog; use the reactive
+// `useFeatureFlag(INLINE_AI_EDITING_FLAG, { enabledOverride: INLINE_AI_EDITING_OVERRIDE })`.
+export const INLINE_AI_EDITING_FLAG = 'inline-ai-editing';
+export const INLINE_AI_EDITING_OVERRIDE =
+  resolveFeatureFlag('INLINE_AI_EDITING', DEV_MODE_ENV) || undefined;
 
 export const ENABLE_EMAIL_SCHEDULED_SEND = resolveFeatureFlag(
   'ENABLE_EMAIL_SCHEDULED_SEND',
@@ -361,13 +427,8 @@ export const USE_MACRO_PR_SUMMARY_BLOCK = resolveFeatureFlag(
   true
 );
 
-// skips over posthog and sets the ENABLE_TEAMS feature to true if we are in dev mode
-// can also be overridden via VITE_ENABLE_TEAMS env var
-export const ENABLE_TEAMS_OVERRIDE =
-  resolveFeatureFlag('ENABLE_TEAMS', DEV_MODE_ENV) || undefined;
-
 // skips over posthog and sets the ENABLE_CALLS feature to true if we are in dev mode
-const ENABLE_CALLS_OVERRIDE = DEV_MODE_ENV ? true : undefined;
+const ENABLE_CALLS_OVERRIDE = DEV_MODE_ENV ? true : true;
 
 export function ENABLE_CALLS(): boolean {
   if (ENABLE_CALLS_OVERRIDE !== undefined) {
@@ -379,8 +440,6 @@ export function ENABLE_CALLS(): boolean {
 
 export const ENABLE_NEW_ONBOARDING_OVERRIDE = DEV_MODE_ENV ? true : undefined;
 
-export const ENABLE_NEW_LOGIN_OVERRIDE = DEV_MODE_ENV ? true : undefined;
-
 export const ENABLE_INVITE_TEAM_ONBOARDING_OVERRIDE = DEV_MODE_ENV
   ? true
   : undefined;
@@ -390,6 +449,14 @@ export const ENABLE_TEAM_INVITE_TIERS_OVERRIDE = DEV_MODE_ENV
   : undefined;
 
 export const ENABLE_SOUP_GROUP_BY_OVERRIDE = DEV_MODE_ENV ? true : undefined;
+
+// Persist soup filters, predicates and tabs across reloads. PostHog controls
+// production rollout; VITE_ENABLE_SOUP_FILTER_PERSISTENCE overrides locally.
+export const ENABLE_SOUP_FILTER_PERSISTENCE_FLAG =
+  'enable-soup-filter-persistence';
+export const ENABLE_SOUP_FILTER_PERSISTENCE_OVERRIDE = getFeatureFlagOverride(
+  'ENABLE_SOUP_FILTER_PERSISTENCE'
+);
 
 export const ENABLE_TASK_DUPLICATES_FLAG = 'enable-task-duplicates';
 export const ENABLE_TASK_DUPLICATES_OVERRIDE = DEV_MODE_ENV ? true : undefined;
@@ -419,6 +486,23 @@ export const ENABLE_SUPPORTED_SOUP_FOREIGN_ENTITIES_OVERRIDE = DEV_MODE_ENV
 export const ENABLE_GRAPHQL_SOUP_FLAG = 'enable-graphql-soup';
 export const ENABLE_GRAPHQL_SOUP_OVERRIDE = getFeatureFlagOverride(
   'ENABLE_GRAPHQL_SOUP'
+);
+
+const parseBooleanOverride = (value: unknown): boolean | undefined =>
+  value === 'true' ? true : value === 'false' ? false : undefined;
+
+/** Controls the cache-warming GraphQL soup backfill. */
+export const ENABLE_GRAPHQL_BACKFILL = resolveFeatureFlag(
+  'ENABLE_GRAPHQL_BACKFILL',
+  false
+);
+
+/** Independent emergency stop. Any true env/PostHog source wins. */
+export const DISABLE_BROWSER_TURSO_CACHE_FLAG = 'disable-browser-turso-cache';
+const DISABLE_BROWSER_TURSO_CACHE_ENV = import.meta.env
+  .VITE_DISABLE_BROWSER_TURSO_CACHE;
+export const DISABLE_BROWSER_TURSO_CACHE_OVERRIDE = parseBooleanOverride(
+  DISABLE_BROWSER_TURSO_CACHE_ENV
 );
 
 /**
@@ -464,7 +548,7 @@ export const ENABLE_REFOCUS_HIGHLIGHT = resolveFeatureFlag(
 
 export const ENABLE_CREATE_PROPERTY = resolveFeatureFlag(
   'ENABLE_CREATE_PROPERTY',
-  false
+  true
 );
 
 export const ENABLE_HOME_OVERRIDE = DEV_MODE_ENV ? true : undefined;
@@ -479,32 +563,6 @@ export const ENABLE_HOME_RECOMMENDATIONS_OVERRIDE =
 export const ENABLE_NEW_PRICING_OVERRIDE =
   resolveFeatureFlag('ENABLE_NEW_PRICING', DEV_MODE_ENV) || undefined;
 
-// New inbox: renders the Inbox list view with the notification card layout and
-// expandable thread reply sub-items. PostHog-gated with a dev-mode default;
-// override with VITE_ENABLE_NEW_INBOX.
-export const ENABLE_NEW_INBOX_FLAG = 'enable-new-inbox-view';
-export const ENABLE_NEW_INBOX_OVERRIDE =
-  resolveFeatureFlag('ENABLE_NEW_INBOX', DEV_MODE_ENV) || undefined;
-export function ENABLE_NEW_INBOX() {
-  if (ENABLE_NEW_INBOX_OVERRIDE !== undefined) {
-    return ENABLE_NEW_INBOX_OVERRIDE;
-  }
-
-  return analytics.posthog.isFeatureEnabled(ENABLE_NEW_INBOX_FLAG) ?? false;
-}
-
-export const ENABLE_TAGS_FE_FLAG = 'enable-tags-fe';
-export const ENABLE_TAGS_FE_OVERRIDE =
-  resolveFeatureFlag('ENABLE_TAGS_FE', DEV_MODE_ENV) || undefined;
-
-// Narrow rollout gate for the search-view tag surfaces (facet row + row
-// chips), layered on top of enable-tags-fe. PostHog-controlled per
-// environment with a dev-mode default. Override with
-// VITE_ENABLE_TAGS_SEARCH_FE.
-export const ENABLE_TAGS_SEARCH_FE_FLAG = 'enable-tags-search-fe';
-export const ENABLE_TAGS_SEARCH_FE_OVERRIDE =
-  resolveFeatureFlag('ENABLE_TAGS_SEARCH_FE', DEV_MODE_ENV) || undefined;
-
 // Channel mode where replying and editing do not happen inline, but in a single unified input instead.
 export const UNIFIED_CHANNEL_INPUT = resolveFeatureFlag(
   'UNIFIED_CHANNEL_INPUT',
@@ -516,3 +574,115 @@ export const UNIFIED_CHANNEL_INPUT = resolveFeatureFlag(
 export const BOT_MANAGEMENT_FLAG = 'bot-management';
 export const BOT_MANAGEMENT_OVERRIDE =
   resolveFeatureFlag('BOT_MANAGEMENT', DEV_MODE_ENV) || undefined;
+
+// Onboarding v4: the full-screen stepper new users land in after signup
+// (unified with /login), driving the import machinery with auto-import.
+// PostHog-gated with a dev-mode default; override with
+// VITE_ENABLE_ONBOARDING_V4. Read it through `useOnboardingV4Flag()` so the
+// gate reacts when PostHog answers (and so callers can wait instead of
+// treating "flags not loaded yet" as "off").
+export const ENABLE_ONBOARDING_V4_FLAG = 'enable-onboarding-v4';
+// Honor an explicit VITE_ENABLE_ONBOARDING_V4=false (don't coerce it to
+// undefined), else default on in dev and defer to PostHog in prod.
+export const ENABLE_ONBOARDING_V4_OVERRIDE =
+  getFeatureFlagOverride('ENABLE_ONBOARDING_V4') ??
+  (DEV_MODE_ENV ? true : undefined);
+
+// Calendar UI: calendar surfaces and the elevated-permissions upgrade flow
+// that re-runs Google consent for inboxes connected before the calendar
+// scope existed. PostHog-gated with a dev-mode default; override with
+// VITE_ENABLE_CALENDAR_UI.
+export const ENABLE_CALENDAR_UI_FLAG = 'enable-calendar-ui';
+export const ENABLE_CALENDAR_UI_OVERRIDE =
+  getFeatureFlagOverride('ENABLE_CALENDAR_UI') ??
+  (DEV_MODE_ENV ? true : undefined);
+
+/**
+ * Non-reactive check for imperative call sites (notification navigation).
+ * For reactive UI, prefer `useCalendarUiFlag()`.
+ */
+export function ENABLE_CALENDAR_UI(): boolean {
+  if (ENABLE_CALENDAR_UI_OVERRIDE !== undefined) {
+    return ENABLE_CALENDAR_UI_OVERRIDE;
+  }
+  return analytics.posthog.isFeatureEnabled(ENABLE_CALENDAR_UI_FLAG) ?? false;
+}
+
+// The "Enable calendar" prompt on phones. Off by default everywhere,
+// including dev: the mobile toast layout drops the body and the close button,
+// so the prompt lands as an undismissable one-line bar over the composer.
+// Settings › Email keeps a per-inbox "Enable calendar" button, so nothing
+// becomes unreachable while this is off. Flip it on in PostHog once the
+// mobile layout is fixed, or locally with
+// VITE_ENABLE_CALENDAR_PROMPT_MOBILE=true.
+export const ENABLE_CALENDAR_PROMPT_MOBILE_FLAG =
+  'enable-calendar-prompt-mobile';
+export const ENABLE_CALENDAR_PROMPT_MOBILE_OVERRIDE = getFeatureFlagOverride(
+  'ENABLE_CALENDAR_PROMPT_MOBILE'
+);
+
+// The "Enable calendar" prompt on desktop/web, the counterpart to
+// `enable-calendar-prompt-mobile`. Off by default everywhere, including dev,
+// until the PostHog rollout is raised; Settings › Email keeps a per-inbox
+// "Enable calendar" button, so nothing becomes unreachable while this is off.
+// Override locally with VITE_ENABLE_CALENDAR_PROMPT_WEB=true.
+export const ENABLE_CALENDAR_PROMPT_WEB_FLAG = 'enable-calendar-prompt-web';
+export const ENABLE_CALENDAR_PROMPT_WEB_OVERRIDE = getFeatureFlagOverride(
+  'ENABLE_CALENDAR_PROMPT_WEB'
+);
+
+// Sharing a personal tag with the team: the "Share with team" action on
+// personal tags in Settings › Tags, and the prompt that merges into an
+// existing team label when the names collide. The backend endpoints ship
+// ungated, so flipping this off only hides the entry point. PostHog-gated
+// with a dev-mode default; override with VITE_ENABLE_TAG_TEAM_SHARING.
+export const ENABLE_TAG_TEAM_SHARING_FLAG = 'enable-tag-team-sharing';
+export const ENABLE_TAG_TEAM_SHARING_OVERRIDE =
+  getFeatureFlagOverride('ENABLE_TAG_TEAM_SHARING') ??
+  (DEV_MODE_ENV ? true : undefined);
+
+// The "Activity" section in the entity side panel: the entity's recent
+// activity timeline from the GraphQL activity log (who did what, when).
+// Purely additive — when off, the section never mounts and no activity
+// query is issued. PostHog-gated with a dev-mode default; override with
+// VITE_ENABLE_ENTITY_ACTIVITY_SECTION.
+export const ENABLE_ENTITY_ACTIVITY_SECTION_FLAG =
+  'enable-entity-activity-section';
+export const ENABLE_ENTITY_ACTIVITY_SECTION_OVERRIDE =
+  getFeatureFlagOverride('ENABLE_ENTITY_ACTIVITY_SECTION') ??
+  (DEV_MODE_ENV ? true : undefined);
+
+// The Activity view: the user's own activity feed from the GraphQL activity
+// log, replacing the retired soup/notification-derived timeline. Gates the
+// view (the /activity route redirects to the inbox when off) and its
+// sidebar entry. PostHog-gated with a dev-mode default; override with
+// VITE_ENABLE_ACTIVITY_FEED.
+export const ENABLE_ACTIVITY_FEED_FLAG = 'enable-activity-feed';
+export const ENABLE_ACTIVITY_FEED_OVERRIDE =
+  getFeatureFlagOverride('ENABLE_ACTIVITY_FEED') ??
+  (DEV_MODE_ENV ? true : undefined);
+
+// AI agents: the Macro Coder mention entry and the folded agent-session view
+// in channels. Override with VITE_ENABLE_CHAT_V3_AGENTS.
+export const ENABLE_CHAT_V3_AGENTS_FLAG = 'enable-chat-v3-agents';
+export const ENABLE_CHAT_V3_AGENTS_OVERRIDE =
+  getFeatureFlagOverride('ENABLE_CHAT_V3_AGENTS') ??
+  (DEV_MODE_ENV ? true : undefined);
+export function ENABLE_CHAT_V3_AGENTS(): boolean {
+  if (ENABLE_CHAT_V3_AGENTS_OVERRIDE !== undefined) {
+    return ENABLE_CHAT_V3_AGENTS_OVERRIDE;
+  }
+
+  return (
+    analytics.posthog.isFeatureEnabled(ENABLE_CHAT_V3_AGENTS_FLAG) ?? false
+  );
+}
+
+// The Recent view: the touched-by-me feed (everything the viewer mutated,
+// newest own-touch first). Gates the view (the route redirects to the inbox
+// when off) and its sidebar entry. PostHog-gated with a dev-mode default;
+// override with VITE_ENABLE_RECENT_VIEW.
+export const ENABLE_RECENT_VIEW_FLAG = 'enable-recent-view';
+export const ENABLE_RECENT_VIEW_OVERRIDE =
+  getFeatureFlagOverride('ENABLE_RECENT_VIEW') ??
+  (DEV_MODE_ENV ? true : undefined);

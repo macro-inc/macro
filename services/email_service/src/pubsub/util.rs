@@ -1,6 +1,4 @@
 use crate::pubsub::context::PubSubContext;
-use crate::util::redis::RedisClient;
-use crate::util::redis::rate_limit::RateLimitArgs;
 use chrono::{DateTime, Utc};
 use connection_gateway_client::client::ConnectionGatewayClient;
 use email::domain::events::EmailMacroEvent;
@@ -12,11 +10,9 @@ use models_email::api::refresh::RefreshEmailEvent;
 #[cfg(test)]
 mod test;
 use models_email::email::service::backfill::{
-    BackfillOperation, BackfillPubsubMessage, DepopulateCrmContactPayload, LinkScopedPayload,
-    PopulateCrmContactPayload,
+    BackfillOperation, BackfillPubsubMessage, LinkScopedPayload, PopulateCrmContactPayload,
 };
 use models_email::email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
-use models_email::gmail::operations::GmailApiOperation;
 use std::collections::HashSet;
 use uuid::Uuid;
 
@@ -54,44 +50,6 @@ pub fn build_notification_recipients(
 /// contact's pre-aggregated MIN/MAX.
 pub type CrmContactRecipient = (String, Option<String>, DateTime<Utc>, DateTime<Utc>);
 
-/// Arguments for checking Gmail API rate limits
-pub struct CheckGmailRateLimitArgs<'a> {
-    pub redis_client: &'a RedisClient,
-    pub link_id: Uuid,
-    pub gmail_operation: GmailApiOperation,
-    pub retryable: bool,
-    pub is_backfill: bool,
-}
-
-// check if we are rate limited by gmail before making any requests to the api
-pub async fn check_gmail_rate_limit(
-    args: CheckGmailRateLimitArgs<'_>,
-) -> Result<(), ProcessingError> {
-    if args
-        .redis_client
-        .is_rate_limited(RateLimitArgs {
-            user_id: args.link_id,
-            operation: args.gmail_operation,
-            is_backfill: args.is_backfill,
-        })
-        .await
-    {
-        return if args.retryable {
-            Err(ProcessingError::Retryable(DetailedError {
-                reason: FailureReason::GmailApiRateLimited,
-                source: anyhow::Error::msg("Gmail API rate limit exceeded"),
-            }))
-        } else {
-            Err(ProcessingError::NonRetryable(DetailedError {
-                reason: FailureReason::GmailApiRateLimited,
-                source: anyhow::Error::msg("Gmail API rate limit exceeded"),
-            }))
-        };
-    }
-
-    Ok(())
-}
-
 #[tracing::instrument(skip(tx, result), level = "debug")]
 pub async fn complete_transaction_with_processing_error<T>(
     tx: sqlx::Transaction<'_, sqlx::Postgres>,
@@ -128,10 +86,9 @@ pub async fn complete_transaction_with_processing_error<T>(
 
 /// Publish an email event to the `macro.email` Kafka topic, logging and
 /// dropping failures — event emission must never fail the email operation.
-pub async fn publish_email_event<B: MacroEventBroker>(broker: &B, event: &EmailMacroEvent) {
+pub fn publish_email_event<B: MacroEventBroker>(broker: &B, event: &EmailMacroEvent) {
     let _ = broker
         .send_event(event)
-        .await
         .inspect_err(|e| tracing::error!(error=?e, "failed to publish email macro event"));
 }
 
@@ -148,6 +105,48 @@ pub async fn cg_refresh_email(
             .refresh_email(macro_id, payload)
             .await
             .inspect_err(|e| tracing::error!(macro_id = %macro_id, "Failed to refresh email: {e}"));
+    }
+}
+
+/// Signal every viewer of a connected inbox's calendars — the link owner
+/// plus its delegated users — that the calendar projection changed. Best
+/// effort: an inactive or unreachable viewer only misses a refresh nudge.
+#[tracing::instrument(skip(client, db), level = "debug")]
+pub async fn cg_refresh_calendar(
+    client: &ConnectionGatewayClient,
+    db: &sqlx::PgPool,
+    owner_macro_id: &str,
+    link_id: uuid::Uuid,
+) {
+    if !cfg!(feature = "connection_gateway") {
+        return;
+    }
+    let payload = serde_json::to_value(
+        calendar_events::domain::models::RefreshCalendarEvent::Synced { link_id },
+    )
+    .unwrap_or_default();
+    let mut recipients = vec![owner_macro_id.to_string()];
+    match sqlx::query_scalar!(
+        "SELECT primary_macro_id FROM macro_user_links WHERE link_id = $1",
+        link_id,
+    )
+    .fetch_all(db)
+    .await
+    {
+        Ok(delegates) => recipients.extend(delegates),
+        Err(error) => {
+            tracing::warn!(error=?error, %link_id, "failed to resolve calendar refresh delegates");
+        }
+    }
+    recipients.sort();
+    recipients.dedup();
+    for macro_id in recipients {
+        let _ = client
+            .refresh_calendar(&macro_id, payload.clone())
+            .await
+            .inspect_err(
+                |e| tracing::error!(macro_id = %macro_id, "Failed to refresh calendar: {e}"),
+            );
     }
 }
 
@@ -251,38 +250,28 @@ pub async fn enqueue_populate_crm_contacts(
     Ok(())
 }
 
-/// Producer-side fan-out helper for tearing CRM contacts down when a sent
-/// message is deleted. Mirrors [`enqueue_populate_crm_contacts`] and uses
-/// the same [`normalized_non_self_contact_emails`] filter.
-///
-/// Used by `delete_message` in the inbox-sync worker. The consumer
-/// (`depopulate_crm_contact`) re-checks whether the link still has any
-/// sent message to the contact before deleting, so duplicate enqueues
-/// from retries are harmless.
-pub async fn enqueue_depopulate_crm_contacts(
+/// Producer-side dedupe for deferred CRM teardown when a message is deleted.
+/// Uses the same [`normalized_non_self_contact_emails`] filter as the populate
+/// helper, then upserts one `crm_cleanup_candidates` row per distinct contact.
+/// The unique `(link_id, contact_email)` index collapses bulk deletes into a
+/// single pending row; the nightly cleanup job sweeps the table and
+/// depopulates contacts whose links no longer have messages with them.
+pub async fn insert_crm_cleanup_candidates(
     ctx: &PubSubContext,
     link_id: Uuid,
     self_email: &str,
     contact_emails: impl IntoIterator<Item = String>,
 ) -> Result<(), ProcessingError> {
-    for contact_email in normalized_non_self_contact_emails(self_email, contact_emails) {
-        let ps_message = BackfillPubsubMessage {
-            backfill_operation: BackfillOperation::DepopulateCrmContact(LinkScopedPayload {
-                link_id,
-                payload: DepopulateCrmContactPayload { contact_email },
-            }),
-        };
+    let emails = normalized_non_self_contact_emails(self_email, contact_emails);
 
-        ctx.sqs_client
-            .enqueue_email_backfill_message(ps_message)
-            .await
-            .map_err(|e| {
-                ProcessingError::Retryable(DetailedError {
-                    reason: FailureReason::SqsEnqueueFailed,
-                    source: e.context("Failed to enqueue DepopulateCrmContact message"),
-                })
-            })?;
-    }
+    email_db_client::crm_cleanup::candidates::insert_candidates(&ctx.db, link_id, &emails)
+        .await
+        .map_err(|e| {
+            ProcessingError::Retryable(DetailedError {
+                reason: FailureReason::DatabaseQueryFailed,
+                source: e.context("Failed to insert crm cleanup candidates"),
+            })
+        })?;
 
     Ok(())
 }

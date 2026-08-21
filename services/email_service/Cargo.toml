@@ -70,13 +70,14 @@ default = [
   "sfs_delete",
 ]
 gmail_webhook_auth = []
-local_auth = ["macro_middleware/local_auth"]
+local_auth = ["macro_authorization/local_auth"]
 local_queue = []
 sfs_map = []
 sfs_delete = []
 
 [dependencies]
-ammonia = "4.1.3"
+calendar_events = { path = "../../crates/calendar_events", features = ["google", "inbound", "postgres"] }
+ammonia = { workspace = true }
 anyhow = { workspace = true }
 authentication_service_client = { path = "../../crates/authentication_service_client" }
 macro_aws_config = { path = "../../crates/macro_aws_config", features = ["s3", "sqs"] }
@@ -99,30 +100,29 @@ ego-tree = { workspace = true }
 email = { path = "../../crates/email", features = ["axum", "gmail_token", "inbound", "outbound"] }
 entity_access = { path = "../../crates/entity_access", default-features = false, features = ["outbound"] }
 entity_access_management = { path = "../../crates/entity_access_management" }
+email_api_client = { path = "../../crates/email_api_client", features = ["ports", "outbound-gmail"] }
 email_db_client = { path = "../../crates/email_db_client" }
 email_utils = { path = "../../crates/email_utils" }
 filter_ast = { path = "../../crates/filter_ast" }
 frecency = { path = "../../crates/frecency", features = ["postgres"] }
 futures = { workspace = true }
 gmail_client = { path = "../../crates/gmail_client" }
-html-escape = "0.2"
+html-escape = { workspace = true }
 http-body-util = { workspace = true }
 infer = "0.19.0"
 item_filters = { path = "../../crates/item_filters" }
 lol_html = { workspace = true }
 macro_auth = { path = "../../crates/macro_auth" }
+macro_authorization = { path = "../../crates/macro_authorization" }
 macro_cors = { path = "../../crates/macro_cors" }
 macro_config = { path = "../../crates/macro_config" }
 macro_db_client = { path = "../../crates/macro_db_client" }
 macro_entrypoint = { path = "../../crates/macro_entrypoint" }
 macro_env = { path = "../../crates/macro_env" }
 macro_event_broker = { path = "../../crates/macro_event_broker" }
-mailparse = "0.16.1"
 macro_env_var = { path = "../../crates/macro_env_var" }
 macro_queues = { path = "../../crates/macro_queues" }
-macro_middleware = { path = "../../crates/macro_middleware", default-features = false, features = [
-  "auth", "cloud_storage"
-] }
+macro_middleware = { path = "../../crates/macro_middleware", default-features = false }
 last_online_tracker = { path = "../../crates/last_online_tracker" }
 notification = { path = "../../crates/notification" }
 macro_user_id = { path = "../../crates/macro_user_id" }
@@ -145,6 +145,7 @@ redis = { workspace = true, features = [
 ] }
 regex = { workspace = true }
 reqwest = { workspace = true, features = ["stream"] }
+rootcause = { workspace = true }
 s3_client = { path = "../../crates/s3_client" }
 schemars = { workspace = true }
 scraper = { workspace = true }
@@ -157,7 +158,6 @@ sqlx-core = { workspace = true }
 sqs_client = { path = "../../crates/sqs_client", default-features = false, features = [
   "email",
   "gmail",
-  "search",
   "sfs_delete",
   "sfs_uploader"
 ] }
@@ -167,6 +167,8 @@ strum_macros = { workspace = true }
 system_properties = { path = "../../crates/system_properties" }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["signal"] }
+tokio-util = { workspace = true, features = ["rt"] }
+tokio-retry.workspace = true
 tower = { workspace = true }
 tower-http = { workspace = true, features = [
   "compression-gzip",
@@ -183,3 +185,4 @@ workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
 
 [dev-dependencies]
 macro_auth = { path = "../../crates/macro_auth", features = ["testing"] }
+macro_db_migrator = { path = "../../crates/macro_db_migrator" }

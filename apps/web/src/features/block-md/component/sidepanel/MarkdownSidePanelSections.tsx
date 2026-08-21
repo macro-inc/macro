@@ -1,4 +1,8 @@
-import { EntityPropertiesSection } from '@app/features/property/side-panel/properties';
+import { EntityActivitySectionConditional } from '@app/features/activity/EntityActivitySection';
+import {
+  EntityPropertiesSection,
+  EntityTagsSection,
+} from '@app/features/property/side-panel/properties';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import {
   GithubPullRequestDetailsRows,
@@ -9,6 +13,7 @@ import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useBlockAliasedName, useBlockId, useBlockName } from '@core/block';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { openDocument } from '@core/component/LexicalMarkdown/component/core/BlockLink';
+import { ProgressMeter } from '@core/component/LexicalMarkdown/component/status/Progress';
 import { Wordcount } from '@core/component/LexicalMarkdown/component/status/Wordcount';
 import {
   $getPinnedProperties,
@@ -24,7 +29,7 @@ import {
 } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import type { Entity, EntityType } from '@core/types';
-import { tryMacroId, useDisplayName } from '@core/user';
+import { getDisplayName, tryMacroId } from '@core/user';
 import { type DateValue, formatDate } from '@core/util/date';
 import { openExternalUrl } from '@core/util/url';
 import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
@@ -85,6 +90,8 @@ export function MarkdownSidePanelSections(
 
   const itemType = blockNameToItemType(rawBlockName);
   const entity = (): Entity => ({ id: blockId, type: itemType as EntityType });
+  const propertiesEntityType = (): PropertiesEntityType =>
+    blockName === 'task' ? 'TASK' : 'DOCUMENT';
 
   return (
     <>
@@ -94,11 +101,17 @@ export function MarkdownSidePanelSections(
       <Show when={isSnippet()}>
         <SnippetSharingOwnerSectionConditional documentId={blockId} />
       </Show>
+      <EntityTagsSection
+        entityId={blockId}
+        entityType={propertiesEntityType()}
+        canEdit={props.canEdit}
+        order={20}
+      />
       <SidePanel.Section
         id="properties"
         title="Properties"
         defaultOpen
-        order={20}
+        order={25}
       >
         <PropertiesSectionContent
           canEdit={props.canEdit}
@@ -115,6 +128,11 @@ export function MarkdownSidePanelSections(
           <HistorySectionContent />
         </SidePanel.Section>
       </Show>
+      <EntityActivitySectionConditional
+        entityId={blockId}
+        entityType={propertiesEntityType()}
+        order={40}
+      />
       <GithubSectionConditional documentId={blockId} isTask={isTask()} />
       <NotificationsSectionConditional entity={entity()} />
       <ReferencesSectionConditional documentId={blockId} />
@@ -135,6 +153,16 @@ function HistorySectionContent() {
       sidePanel?.setOpenSectionIds(['history']);
     }
   });
+
+  // Discover whether history exists (to choose between the empty state and
+  // the scrubber) once the user actually expands this accordion section —
+  // nothing inside the section can trigger the load itself, since the
+  // scrubber and "Show activity" toggle only render once sessions exist.
+  createEffect(() => {
+    if (sidePanel?.openSectionIds().includes('history')) {
+      history.requestLoad();
+    }
+  });
   const isShowingSessions = () => history.isOpen() || showSessions();
 
   const totalEdits = createMemo(() => {
@@ -144,55 +172,74 @@ function HistorySectionContent() {
   });
 
   return (
-    <Show
-      when={
-        !history.loading.sessions() && totalEdits() > 1 && history.sessions()
-      }
-      fallback={<p class="text-xs text-ink-muted">No history yet</p>}
-    >
-      {(sessions) => (
-        <div class="hidden min-w-0 overflow-hidden md:block">
-          <HistoryScrubber compact />
-          <Show when={sessions().length > 0}>
-            <div class="mt-3 min-w-0 border-edge-muted border-t pt-2">
-              <button
-                type="button"
-                aria-expanded={isShowingSessions()}
-                class="flex w-full items-center gap-1.5 rounded-md px-1 py-1 text-ink-muted text-xs hover:bg-hover hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
-                onClick={() => {
-                  history.enter();
-                  setShowSessions(true);
-                }}
-              >
-                <CaretRightIcon
-                  class={cn(
-                    'size-3 shrink-0 transition-transform duration-90',
-                    isShowingSessions() && 'rotate-90'
-                  )}
-                />
-                <span>
-                  {isShowingSessions() ? 'Activity' : 'Show activity'}
-                </span>
-              </button>
-              <Show when={isShowingSessions()}>
-                <HistorySessionList
-                  sessions={sessions()}
-                  selectedAt={history.selectedAt}
-                  onSelect={history.enter}
-                  onViewSessionDiff={(session) => {
-                    if (history.diff.session()?.startMs === session.startMs) {
-                      history.diff.clear();
-                    } else {
-                      history.diff.view(session);
-                    }
+    <Show when={!history.loading.sessions()} fallback={<HistorySkeleton />}>
+      <Show
+        when={totalEdits() > 1 && history.sessions()}
+        fallback={
+          // Don't claim the document has no edits when we couldn't load them.
+          <p
+            class="text-xs text-ink-muted"
+            title={history.error() ?? undefined}
+          >
+            {history.error() ? "Couldn't load history" : 'No history yet'}
+          </p>
+        }
+      >
+        {(sessions) => (
+          <div class="hidden min-w-0 overflow-hidden md:block">
+            <HistoryScrubber compact />
+            <Show when={sessions().length > 0}>
+              <div class="mt-3 min-w-0 border-edge-muted border-t pt-2">
+                <button
+                  type="button"
+                  aria-expanded={isShowingSessions()}
+                  class="flex w-full items-center gap-1.5 rounded-md px-1 py-1 text-ink-muted text-xs hover:bg-hover hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+                  onClick={() => {
+                    history.enter();
+                    setShowSessions(true);
                   }}
-                />
-              </Show>
-            </div>
-          </Show>
-        </div>
-      )}
+                >
+                  <CaretRightIcon
+                    class={cn(
+                      'size-3 shrink-0 transition-transform duration-90',
+                      isShowingSessions() && 'rotate-90'
+                    )}
+                  />
+                  <span>
+                    {isShowingSessions() ? 'Activity' : 'Show activity'}
+                  </span>
+                </button>
+                <Show when={isShowingSessions()}>
+                  <HistorySessionList
+                    sessions={sessions()}
+                    selectedAt={history.selectedAt}
+                    onSelect={history.enter}
+                    onViewSessionDiff={(session) => {
+                      if (history.diff.session()?.startMs === session.startMs) {
+                        history.diff.clear();
+                      } else {
+                        history.diff.view(session);
+                      }
+                    }}
+                  />
+                </Show>
+              </div>
+            </Show>
+          </div>
+        )}
+      </Show>
     </Show>
+  );
+}
+
+function HistorySkeleton() {
+  return (
+    <div
+      aria-hidden="true"
+      class="hidden min-w-0 flex-col gap-2.5 overflow-hidden md:flex"
+    >
+      <div class="skeleton-shimmer h-12 w-full rounded-md bg-skeleton" />
+    </div>
   );
 }
 
@@ -346,7 +393,7 @@ function FolderLink(props: { projectId: string; projectName: string }) {
   return (
     <span
       {...navHandlers}
-      class="pointer-events-auto min-w-0 truncate py-0.5 rounded-xs hover:bg-hover focus:bg-active"
+      class="pointer-events-auto min-w-0 truncate py-0.5 rounded-xs text-link hover:text-link-hover hover:bg-hover focus:bg-active"
     >
       <span class="relative top-[0.125em] size-[1em] inline-flex mx-1">
         <EntityIcon targetType="project" size="fill" />
@@ -359,7 +406,7 @@ function FolderLink(props: { projectId: string; projectName: string }) {
 }
 
 function OwnerValue(props: { ownerId: string }) {
-  const [displayName] = useDisplayName(tryMacroId(props.ownerId));
+  const displayName = () => getDisplayName(tryMacroId(props.ownerId));
   return (
     <SidePanel.Pill>
       <UserIcon id={props.ownerId} size="sm" showTooltip suppressClick />
@@ -440,6 +487,7 @@ function PropertiesSectionContent(props: {
       pinnedPropertyDefinitionOrder={PINNED_ORDER}
       onPropertyPinned={handlePropertyPinned}
       onPropertyUnpinned={handlePropertyUnpinned}
+      showTags={false}
     />
   );
 }
@@ -476,6 +524,15 @@ function StatsSectionContent() {
             <SidePanel.Row label="Characters">
               <Wordcount.Characters />
             </SidePanel.Row>
+            <Show when={md.progressStats}>
+              {(progressStats) => (
+                <Show when={progressStats().total > 0}>
+                  <SidePanel.Row label="Progress">
+                    <ProgressMeter stats={progressStats()} />
+                  </SidePanel.Row>
+                </Show>
+              )}
+            </Show>
           </SidePanel.Grid>
         </Wordcount.Root>
       )}

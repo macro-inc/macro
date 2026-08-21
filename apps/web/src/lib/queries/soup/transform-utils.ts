@@ -10,6 +10,8 @@ import {
   mergeAdjacentMacroEmTags,
 } from '@core/util/searchHighlight';
 import type {
+  CalendarEventEntity,
+  CalendarEventEntityTime,
   CallEntity,
   ChannelEntity,
   ChannelMessageEntity,
@@ -23,10 +25,13 @@ import type {
   ForeignEntity,
   GithubPullRequestEntity,
   NamedSubType,
+  Notification,
   ProjectEntity,
+  ReminderEntity,
   SearchData,
   WithSearch,
 } from '@entity';
+import { resolveOwnTouch } from '@queries/soup/normalized-cache/own-touch';
 import type {
   CallRecordSearchResult,
   ChannelSearchResult,
@@ -39,14 +44,15 @@ import type {
 import type {
   GithubPullRequest,
   SoupApiItem,
-  SoupDocument,
+  SoupCalendarEventTime,
   SoupPage,
+  SoupReminderReference,
 } from '@service-storage/generated/schemas';
 import type { ChannelType } from '@service-storage/generated/schemas/channelType';
 import { formatDocumentName } from '@service-storage/util/filename';
 import type { UseQueryResult } from '@tanstack/solid-query';
 import { differenceInMilliseconds } from 'date-fns';
-import { match } from 'ts-pattern';
+import { match, P } from 'ts-pattern';
 
 type InnerSearchResult =
   | DocumentSearchResult
@@ -57,6 +63,7 @@ type InnerSearchResult =
   | CallRecordSearchResult;
 
 type DisplayableSoupItem = SoupPage['items'][number];
+type SoupDocument = Extract<DisplayableSoupItem, { tag: 'document' }>['data'];
 
 type SoupEntity =
   | DocumentEntity
@@ -67,7 +74,15 @@ type SoupEntity =
   | ChannelThreadEntity
   | CallEntity
   | CrmCompanyEntity
+  | ReminderEntity
+  | CalendarEventEntity
   | ForeignEntity;
+
+type SoupItemWithOptionalNotifications = DisplayableSoupItem & {
+  data: {
+    notifications?: Notification[] | null;
+  };
+};
 
 type TypedInnerSearchResult =
   | { results: InnerSearchResult[]; type?: undefined }
@@ -373,7 +388,9 @@ export const useSearchResponseItemMapper = () => {
                 ? { type: 'task' }
                 : result.sub_type === 'snippet'
                   ? { type: 'snippet' }
-                  : null,
+                  : result.sub_type === 'skill'
+                    ? { type: 'skill' }
+                    : null,
             id: result.document_id,
             name: formatDisplayName(
               result.name || blockNameToDefaultFile(result.file_type),
@@ -444,16 +461,65 @@ export const useSearchResponseItemMapper = () => {
         ];
       }
       case 'channel': {
-        return mapChannelSearchResultItem(
+        if (!result.metadata) return [];
+        const nameHighlight = result.highlight.name
+          ? mergeAdjacentMacroEmTags(result.highlight.name)
+          : null;
+        const search: SearchData = {
+          nameHighlight,
+          senderHighlightTerms: null,
+          contentHitData: null,
+          source: 'service',
+        };
+        const channelName =
+          channels().find((channel) => channel.id === result.channel_id)
+            ?.name ??
+          (search.nameHighlight
+            ? extractSearchSnippet(search.nameHighlight)
+            : blockNameToDefaultFile('channel'));
+        return [
           {
-            channel_id: result.channel_id,
-            channel_type: result.channel_type,
-            owner_id: result.owner_id,
-            channel_message_search_results:
-              result.channel_message_search_results,
+            type: 'channel',
+            id: result.channel_id,
+            name: channelName,
+            ownerId: result.owner_id ?? '',
+            channelType: result.channel_type as ChannelType,
+            createdAt: result.metadata.created_at,
+            updatedAt: result.metadata.updated_at,
+            viewedAt: result.metadata.viewed_at,
+            interactedAt: result.metadata.interacted_at,
+            search,
           },
-          channels()
-        );
+        ];
+      }
+      case 'channelMessage': {
+        const channelName =
+          channels().find((c) => c.id === result.channel_id)?.name ??
+          blockNameToDefaultFile('channel');
+        const search = getSearchData({ type: 'channel', results: [result] });
+        const content = search.contentHitData?.[0]?.content ?? '';
+        return [
+          {
+            type: 'channel_message',
+            id: `${result.channel_id}:${result.message_id}`,
+            channelId: result.channel_id,
+            channelName,
+            channelType: result.channel_type as ChannelType,
+            messageId: result.message_id,
+            threadId: result.thread_id ?? undefined,
+            target: {
+              messageId: result.message_id,
+              threadId: result.thread_id ?? undefined,
+            },
+            senderId: result.sender_id,
+            content,
+            name: channelName,
+            ownerId: result.owner_id ?? '',
+            createdAt: result.created_at,
+            updatedAt: result.updated_at,
+            search,
+          },
+        ];
       }
 
       case 'project': {
@@ -507,6 +573,7 @@ export const useSearchResponseItemMapper = () => {
             attended: status === 'ATTENDED',
             durationMs: result.metadata.duration_ms,
             participantIds: result.participant_ids,
+            properties: result.properties ?? undefined,
             search,
           },
         ];
@@ -552,8 +619,65 @@ function normalizeSentinelTs(
   return Date.parse(ts) > 0 ? ts : undefined;
 }
 
-export const mapApiSoupItemToEntity = (item: DisplayableSoupItem): SoupEntity =>
-  match(item)
+function withRawNotifications<T extends SoupEntity>(
+  entity: T,
+  item: DisplayableSoupItem
+): T {
+  const notifications = (item as SoupItemWithOptionalNotifications).data
+    .notifications;
+  if (!Array.isArray(notifications)) return entity;
+  return { ...entity, notifications } as T;
+}
+
+type ReferencedEntityType = NonNullable<
+  ReminderEntity['referencedEntity']
+>['type'];
+
+/**
+ * Map a reminder's referenced entity from canonical API names onto the display
+ * {@link EntityType} names used across the frontend. The inverse of
+ * `toNotificationEntity`.
+ *
+ * Types with no display entity (`user`, `team`, `static_file`, and a reminder
+ * referencing another reminder) yield `undefined`, which renders the reminder
+ * as standalone rather than linking somewhere unresolvable.
+ */
+function toReferencedEntity(
+  reference: SoupReminderReference | null | undefined
+): ReminderEntity['referencedEntity'] {
+  if (!reference) return undefined;
+  const type = match<string, ReferencedEntityType | undefined>(
+    reference.entityType
+  )
+    .with('email_thread', () => 'email')
+    .with('foreign_entity', () => 'foreign')
+    .with(
+      P.union(
+        'document',
+        'chat',
+        'project',
+        'channel',
+        'channel_message',
+        'call',
+        'crm_company',
+        'crm_contact'
+      ),
+      (t) => t
+    )
+    .otherwise(() => undefined);
+  if (!type) return undefined;
+  return {
+    id: reference.id,
+    type,
+    fileType: reference.fileType ?? undefined,
+    subType: reference.subType ?? undefined,
+  };
+}
+
+export const mapApiSoupItemToEntity = (
+  item: DisplayableSoupItem
+): SoupEntity => {
+  const entity = match(item)
     .with({ tag: 'chat' }, (item) => ({
       ...item.data,
       createdAt: item.data.createdAt,
@@ -642,6 +766,7 @@ export const mapApiSoupItemToEntity = (item: DisplayableSoupItem): SoupEntity =>
         durationMs: item.data.durationMs ?? undefined,
         participantIds: item.data.participants.map((p) => p.userId),
         summary: item.data.summary ?? undefined,
+        properties: item.data.properties,
       } satisfies CallEntity;
     })
     .with({ tag: 'channelThread' }, (item) => {
@@ -687,6 +812,7 @@ export const mapApiSoupItemToEntity = (item: DisplayableSoupItem): SoupEntity =>
         updatedAt: item.data.channel.updated_at,
         createdAt: item.data.channel.created_at,
         participantIds: item.data.participants.map((p) => p.user_id),
+        isParticipant: item.data.is_participant ?? true,
         viewedAt: item.data.viewed_at ?? item.data.interacted_at,
         interactedAt: item.data.interacted_at,
         latestMessage: latestMessage
@@ -791,6 +917,7 @@ export const mapApiSoupItemToEntity = (item: DisplayableSoupItem): SoupEntity =>
         hidden: item.data.hidden,
         createdAt: item.data.createdAt,
         updatedAt: item.data.updatedAt,
+        viewedAt: item.data.viewedAt,
         sortTs: item.data.updatedAt,
         frecencyScore: item.frecency_score,
         domains: item.data.domains.map((d) => ({
@@ -802,7 +929,65 @@ export const mapApiSoupItemToEntity = (item: DisplayableSoupItem): SoupEntity =>
         properties: item.data.properties,
       } satisfies CrmCompanyEntity;
     })
+    .with({ tag: 'reminder' }, (item) => {
+      const schedule = item.data.schedule;
+      const recurring = schedule.type === 'recurring';
+      return {
+        type: 'reminder',
+        id: item.data.id,
+        // A reminder has no separate title — its description is its name.
+        name: item.data.description,
+        description: item.data.description,
+        // Reminders are private to their owner, so the row carries no owner id.
+        ownerId: '',
+        referencedEntity: toReferencedEntity(item.data.referencedEntity),
+        scheduleType: recurring ? 'recurring' : 'once',
+        cron: recurring ? schedule.cron : undefined,
+        timezone: recurring ? schedule.timezone : undefined,
+        nextRunAt: item.data.nextRunAt,
+        enabled: item.data.enabled,
+        completedAt: item.data.completedAt,
+        createdAt: item.data.createdAt,
+        updatedAt: item.data.updatedAt,
+        // Soup orders reminders by when they fire, not when they changed.
+        sortTs: item.data.nextRunAt,
+        frecencyScore: item.frecency_score,
+      } satisfies ReminderEntity;
+    })
+    .with({ tag: 'calendarEvent' }, (item) => {
+      return {
+        type: 'calendar_event',
+        id: item.data.id,
+        name: item.data.title,
+        ownerId: item.data.ownerId,
+        status: item.data.status,
+        time: toCalendarEventTime(item.data.time),
+        conferenceUrl: item.data.conferenceUrl ?? undefined,
+        isReadOnly: item.data.isReadOnly,
+        createdAt: item.data.createdAt,
+        updatedAt: item.data.updatedAt,
+        properties: item.data.extra.properties,
+        frecencyScore: item.frecency_score,
+      } satisfies CalendarEventEntity;
+    })
     .exhaustive();
+
+  // Attached once for every tag: only touched_by_me pages carry the field,
+  // and the Recent feed's client sort reads it off the entity. Resolved
+  // through the own-touch floor so a touched refetch that outran the
+  // activity consumer can't move a freshly-touched row back down.
+  const touchedAt = resolveOwnTouch(entity.id, item.touched_at ?? null);
+  const touched = touchedAt ? { ...entity, touchedAt } : entity;
+
+  return withRawNotifications(touched, item);
+};
+
+const toCalendarEventTime = (
+  time: SoupCalendarEventTime
+): CalendarEventEntityTime =>
+  time.kind === 'timed'
+    ? { kind: 'timed', startsAt: time.startsAt, endsAt: time.endsAt }
+    : { kind: 'allDay', startDate: time.startDate, endDate: time.endDate };
 
 export const isInstructionsMdDoc = (
   item: SoupApiItem,

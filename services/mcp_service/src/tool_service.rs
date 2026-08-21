@@ -3,12 +3,24 @@ use macro_user_id::user_id::MacroUserIdStr;
 use rmcp::{
     handler::server::ServerHandler,
     model::{
-        Content, ListToolsResult, PaginatedRequestParams, ServerCapabilities, ServerInfo, Tool,
+        Content, Icon, ListToolsResult, PaginatedRequestParams, ServerCapabilities, ServerInfo,
+        Tool, ToolAnnotations,
     },
 };
-use roles_and_permissions::domain::model::PermissionId;
-use sqlx::PgPool;
 use std::sync::Arc;
+
+/// Maps our protocol-agnostic annotations onto the MCP wire representation.
+///
+/// [`ToolKind`](ai_toolset::ToolKind) collapses `readOnlyHint`/`destructiveHint`
+/// into one choice, so this is the only place the two booleans are derived —
+/// they can never disagree.
+fn mcp_annotations(annotations: &ai_toolset::ToolAnnotations) -> ToolAnnotations {
+    ToolAnnotations::with_title(annotations.title)
+        .read_only(annotations.kind.read_only_hint())
+        .destructive(annotations.kind.destructive_hint())
+        .idempotent(annotations.idempotent)
+        .open_world(annotations.open_world)
+}
 
 /// MCP server handler that extracts authenticated user identity from HTTP
 /// request parts injected by rmcp's `StreamableHttpService`.
@@ -19,7 +31,6 @@ use std::sync::Arc;
 pub struct AuthenticatedToolService<Context> {
     toolset: Arc<AsyncToolCollection<Context>>,
     context: Context,
-    db: PgPool,
     /// Base URL of the Macro web app used to build links to Macro items in MCP
     /// responses (e.g. `https://macro.com`). Comes from the `APP_BASE_URL`
     /// environment variable.
@@ -31,13 +42,11 @@ impl<Context> AuthenticatedToolService<Context> {
     pub fn new(
         toolset: Arc<AsyncToolCollection<Context>>,
         context: Context,
-        db: PgPool,
         item_base_url: String,
     ) -> Self {
         Self {
             toolset,
             context,
-            db,
             item_base_url,
         }
     }
@@ -52,6 +61,8 @@ impl<Context> AuthenticatedToolService<Context> {
                     value.description.to_owned(),
                     Arc::new(value.input_schema.clone()),
                 )
+                .with_title(value.annotations.title)
+                .annotate(mcp_annotations(&value.annotations))
             })
             .collect()
     }
@@ -66,33 +77,6 @@ impl<Context> AuthenticatedToolService<Context> {
                 rmcp::ErrorData::internal_error("missing user identity — is auth configured?", None)
             })
     }
-
-    async fn require_paid_subscription(
-        &self,
-        user_id: &MacroUserIdStr<'_>,
-    ) -> Result<(), rmcp::ErrorData> {
-        let permissions = macro_db_client::user::get_permissions::get_user_permissions(
-            &self.db,
-            user_id.0.as_ref(),
-        )
-        .await
-        .map_err(|e| {
-            tracing::error!(error=?e, "failed to check user permissions for MCP access");
-            rmcp::ErrorData::internal_error("failed to check permissions", None)
-        })?;
-
-        let is_paid = permissions.contains(&PermissionId::WriteProAi.to_string());
-
-        if !is_paid {
-            return Err(rmcp::ErrorData::new(
-                rmcp::model::ErrorCode::INVALID_REQUEST,
-                "MCP access requires a paid subscription",
-                None,
-            ));
-        }
-
-        Ok(())
-    }
 }
 
 #[cfg(test)]
@@ -104,6 +88,7 @@ where
 {
     fn get_info(&self) -> ServerInfo {
         let mut info = ServerInfo::new(ServerCapabilities::builder().enable_tools().build());
+        let base_url = self.item_base_url.trim_end_matches('/');
         info.server_info = rmcp::model::Implementation::new(
             "macro-tools",
             env!("CARGO_PKG_VERSION"),
@@ -111,8 +96,14 @@ where
         .with_title("Macro")
         .with_description(
             "Search, read, and create content across documents, emails, and messages in Macro.",
-        );
-        let base_url = self.item_base_url.trim_end_matches('/');
+        )
+        // The same icon the web app's <link rel="icon"> points at, so the
+        // server shows up in MCP clients with the Macro favicon.
+        .with_icons(vec![
+            Icon::new(format!("{base_url}/app/macro-favicon.svg"))
+                .with_mime_type("image/svg+xml")
+                .with_sizes(vec!["any".to_owned()]),
+        ]);
         info.instructions = Some(format!(
             "This server provides tools for interacting with a user's Macro workspace. \
              Use ContentSearch and NameSearch to find entities. \
@@ -130,8 +121,7 @@ where
         _request: Option<PaginatedRequestParams>,
         context: rmcp::service::RequestContext<rmcp::RoleServer>,
     ) -> Result<ListToolsResult, rmcp::ErrorData> {
-        let user_id = Self::authenticated_user_id(&context.extensions)?;
-        self.require_paid_subscription(&user_id).await?;
+        Self::authenticated_user_id(&context.extensions)?;
 
         Ok(ListToolsResult {
             tools: self.tool_definitions(),
@@ -145,7 +135,6 @@ where
         context: rmcp::service::RequestContext<rmcp::RoleServer>,
     ) -> Result<rmcp::model::CallToolResult, rmcp::ErrorData> {
         let user_id = Self::authenticated_user_id(&context.extensions)?;
-        self.require_paid_subscription(&user_id).await?;
 
         let request_context = RequestContext::new(user_id);
 

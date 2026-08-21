@@ -44,6 +44,7 @@ export function MobileEmailComposeDrawer(props: {
           side="bottom"
           open={context.mobileReplyComposer.open()}
           onOpenChange={setDrawerOpen}
+          closeOnOutsidePointerStrategy="pointerdown"
           preventScroll={false}
           preventScrollbarShift={false}
           breakPoints={[0.85]}

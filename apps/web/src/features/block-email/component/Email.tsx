@@ -6,12 +6,14 @@ import {
 } from '@block-email/component/EmailContext';
 import { SidePanel } from '@components/app/side-panel';
 import { useSplitLayout } from '@components/app/split-layout/layout';
-import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
+import {
+  useCanAutofocusSplitContent,
+  useSplitPanel,
+} from '@components/app/split-layout/layoutUtils';
 import { CustomScrollbar } from '@core/component/CustomScrollbar';
 import { useEmail, useUserContext } from '@core/context/user';
 import { TOKENS } from '@core/hotkey/tokens';
 import { registerScopeSignalHotkey } from '@core/hotkey/utils';
-import { isMobile } from '@core/mobile/isMobile';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import {
   blockElementSignal,
@@ -82,6 +84,7 @@ function EmailContent(props: EmailViewProps) {
 
   const context = useEmailContext();
   const splitPanel = useSplitPanel();
+  const canAutofocusSplitContent = useCanAutofocusSplitContent();
   const { isLoading: isUserLoading } = useUserContext();
   const userEmail = useEmail();
 
@@ -332,6 +335,8 @@ function EmailContent(props: EmailViewProps) {
   async function handleTargetMessage(messageId: string) {
     const messages = untrack(context.messages.list);
     if (!messages) return;
+    // Expand the target so the navigated-to hit isn't a collapsed row
+    context.messages.setExpandedBodyId(messageId, true);
     const targetIndex = messages.findIndex((m) => m.db_id === messageId);
 
     // Case 1: Message not in current loaded batch - need to load more
@@ -443,10 +448,11 @@ function EmailContent(props: EmailViewProps) {
   const navigateToPreviousMessage = () => navigateMessage('prev');
   const navigateToNextMessage = () => navigateMessage('next');
 
-  // In preview mode, switching between Soup tabs was causing this createEffect to overflow the stack. We should figure out that root cause, this flag fixes it for now.
+  // Wait for the block element before claiming focus on initial mount.
   let hasRun = false;
   createEffect(() => {
     if (hasRun) return;
+    if (!canAutofocusSplitContent) return;
     // Focus the email block on mount
     if (isTouchDevice()) return;
     if (!blockElement()) return;
@@ -508,6 +514,12 @@ function EmailContent(props: EmailViewProps) {
       forwardFocusedMessage: () => openHotkeyTarget('forward'),
       blockSender: context.blockSender,
       markDone: context.archiveThread,
+      markNotDone: context.markThreadNotDone,
+      isThreadDone: context.isThreadDone,
+      canMarkNotDone: context.canMarkThreadNotDone,
+      markUnread: context.markThreadUnread,
+      markRead: context.markThreadRead,
+      isThreadMarkedUnread: context.isThreadMarkedUnread,
       markSenderSignal: context.markSenderSignal,
       markSenderNoise: context.markSenderNoise,
       navigateToPreviousMessage,
@@ -536,11 +548,8 @@ function EmailContent(props: EmailViewProps) {
         });
       }
 
-      if (markdownDomRef) {
-        markdownDomRef.focus();
-        return true;
-      }
-      return false;
+      // No message focused: reply to the latest message, same as 'r'
+      return openHotkeyTarget('reply-all');
     },
     hotkeyToken: TOKENS.block.focus,
     hide: true,
@@ -602,7 +611,7 @@ function EmailContent(props: EmailViewProps) {
     const lastMessage = filtered.at(-1);
     if (!lastMessage?.db_id) return;
     if (context.drafts.getDraftForMessage(lastMessage.db_id)) {
-      if (isMobile()) {
+      if (isTouchDevice()) {
         context.mobileReplyComposer.openForMessage(lastMessage.db_id);
       } else {
         context.messages.setBottomReplyOpen(true);
@@ -673,7 +682,7 @@ function EmailContent(props: EmailViewProps) {
             {(draft) => (
               // The email block is bottom-anchored (no default panel inset),
               // so the compose branch pads around the chrome itself.
-              <div class="size-full mobile:pt-(--mobile-content-inset-top) mobile:pb-(--mobile-content-inset-bottom)">
+              <div class="size-full touch:pt-(--mobile-content-inset-top) touch:pb-(--mobile-content-inset-bottom)">
                 <EmailCompose draftID={draft().db_id!} />
               </div>
             )}
@@ -694,9 +703,9 @@ function EmailContent(props: EmailViewProps) {
                   ),
               }}
             >
-              {/* Edge-to-edge on mobile: the message list carries its own
+              {/* Edge-to-edge on mobile/tablet: the message list carries its own
                   insets in-scroll and under-scrolls the floating chrome. */}
-              <div class="size-full bg-surface select-none overscroll-none overflow-hidden flex flex-col">
+              <div class="size-full select-none overscroll-none overflow-hidden flex flex-col">
                 <TopBar
                   id={props.threadId()}
                   title={props.title}
@@ -733,7 +742,7 @@ function EmailContent(props: EmailViewProps) {
                   class="w-full flex-1 flex flex-col items-center overflow-hidden"
                   ref={context.registerMessagesContainer}
                 >
-                  <Show when={!isMobile()}>
+                  <Show when={!isTouchDevice()}>
                     <div class="shrink-0 w-full flex justify-center">
                       <div
                         class="macro-message-width macro-message-padding w-full border-b"
@@ -766,12 +775,12 @@ function EmailContent(props: EmailViewProps) {
                     scrollContainer={context.messagesListRef}
                   />
                 </div>
-                <Show when={isMobile() && mobileBottomReplyMessage()}>
+                <Show when={isTouchDevice() && mobileBottomReplyMessage()}>
                   {(lastMessage) => (
                     <BottomReplyButtons lastMessage={lastMessage()} />
                   )}
                 </Show>
-                <Show when={isMobile()}>
+                <Show when={isTouchDevice()}>
                   <MobileEmailComposeDrawer
                     markdownDomRef={(el) => {
                       markdownDomRef = el;
@@ -799,7 +808,7 @@ function EmailTaskButton(props: { onClick: () => void }) {
       onMouseLeave={() => setHovering(false)}
       onClick={props.onClick}
       depth={2}
-      class="gap-1.5 rounded-full px-2 text-ink-extra-muted ring ring-edge-muted"
+      class="gap-1.5 rounded-full border border-edge-muted px-2 text-ink-extra-muted"
     >
       <AnimatedTaskIcon triggerAnimation={hovering()} />
       <span class="text-xs font-semibold">Task</span>

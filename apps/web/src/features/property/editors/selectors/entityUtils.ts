@@ -29,6 +29,9 @@ export type EntityTypeItemMap = {
   TASK: EntityItem<TaskEntity>;
   THREAD: EntityItem<EmailEntity>;
   COMPANY: never;
+  // Call records aren't entity-reference targets in quickAccess.
+  CALL_RECORD: never;
+  CALENDAR_EVENT: never;
 };
 
 /**
@@ -44,6 +47,8 @@ function entityTypeToBuckets(entityType: EntityType): readonly Bucket[] {
     .with('TASK', () => ['task'] as const)
     .with('THREAD', () => ['email'] as const) // Note: emails aren't in quickAccess yet, handled separately
     .with('COMPANY', () => [] as const) // Companies aren't in quickAccess
+    .with('CALL_RECORD', () => [] as const) // Call records aren't in quickAccess
+    .with('CALENDAR_EVENT', () => [] as const) // Calendar events aren't in quickAccess
     .exhaustive();
   return buckets;
 }
@@ -67,12 +72,12 @@ export function useQuickAccessEntities<T extends EntityType>(
   const items = (): EntityTypeItemMap[T][] => {
     const b = buckets();
     if (b === null) {
-      return quickAccess.useList()() as EntityTypeItemMap[T][];
+      return quickAccess.useList().items() as EntityTypeItemMap[T][];
     }
     if (b.length === 0) {
       return [];
     }
-    return quickAccess.useList(...b)() as EntityTypeItemMap[T][];
+    return quickAccess.useList(...b).items() as EntityTypeItemMap[T][];
   };
   return { items, isLoading: quickAccess.isLoading };
 }

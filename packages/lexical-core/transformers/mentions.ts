@@ -9,6 +9,7 @@ import { DocumentCardNode } from '../nodes/DocumentCardNode';
 import { DocumentMentionNode } from '../nodes/DocumentMentionNode';
 import { GroupMentionNode } from '../nodes/GroupMentionNode';
 import { PullRequestMentionNode } from '../nodes/PullRequestMentionNode';
+import { TagMentionNode } from '../nodes/TagMentionNode';
 import { ThemeMentionNode } from '../nodes/ThemeMentionNode';
 import { UserMentionNode } from '../nodes/UserMentionNode';
 import {
@@ -30,6 +31,7 @@ export const I_USER_MENTION: TextMatchTransformer = {
     const data = JSON.stringify({
       userId: node.getUserId(),
       email: node.getEmail(),
+      displayName: node.getDisplayName(),
     });
     return `<m-user-mention>${data}</m-user-mention>`;
   },
@@ -39,7 +41,11 @@ export const I_USER_MENTION: TextMatchTransformer = {
       for (const field of ['userId', 'email']) {
         if (!(field in data)) throw new Error(`Missing field ${field}`);
       }
-      const userMentionNode = new UserMentionNode(data.userId, data.email);
+      const displayName =
+        typeof data.displayName === 'string' ? data.displayName : undefined;
+      const userMentionNode = new UserMentionNode(data.userId, data.email, {
+        displayName,
+      });
       node.replace(userMentionNode);
     } catch (e) {
       console.error('Error in I_USER_MENTION replace:', e);
@@ -480,6 +486,72 @@ export const I_THEME_MENTION: TextMatchTransformer = {
       console.error('Error in I_THEME_MENTION replace:', e);
       replaceTextWithUnknownMention(node, 'Unknown Theme');
     }
+  },
+};
+
+// Internal Tag Mentions
+export const I_TAG_MENTION: TextMatchTransformer = {
+  dependencies: [TagMentionNode, UnknownMentionNode],
+  type: 'text-match',
+  regExp: /<m-tag>(.*?)<\/m-tag>/,
+  importRegExp: /<m-tag>(.*?)<\/m-tag>/,
+  export: (node) => {
+    if (!(node instanceof TagMentionNode)) return null;
+    const data = JSON.stringify({
+      optionId: node.getOptionId(),
+      propertyDefinitionId: node.getPropertyDefinitionId(),
+      scope: node.getScope(),
+      name: node.getName(),
+      color: node.getColor(),
+    });
+    return `<m-tag>${data}</m-tag>`;
+  },
+  replace: (node: TextNode, match: RegExpMatchArray) => {
+    try {
+      const data = JSON.parse(match[1]);
+      for (const field of [
+        'optionId',
+        'propertyDefinitionId',
+        'scope',
+        'name',
+      ]) {
+        if (!(field in data)) throw new Error(`Missing field ${field}`);
+      }
+      if (data.scope !== 'user' && data.scope !== 'team') {
+        throw new Error('Invalid tag scope');
+      }
+      const tagMentionNode = new TagMentionNode(
+        data.optionId,
+        data.propertyDefinitionId,
+        data.scope,
+        data.name,
+        typeof data.color === 'string' ? data.color : undefined
+      );
+      node.replace(tagMentionNode);
+    } catch (e) {
+      console.error('Error in I_TAG_MENTION replace:', e);
+      replaceTextWithUnknownMention(node, 'Unknown Tag');
+    }
+  },
+};
+
+// External Tag Mentions
+export const E_TAG_MENTION: ElementTransformer = {
+  dependencies: [TagMentionNode],
+  type: 'element',
+  regExp: /$^/,
+  export: (node) => {
+    if (!(node instanceof TagMentionNode)) return null;
+    const name = node.getName();
+    return name ? `#${name}` : null;
+  },
+  replace: (
+    _parentNode: ElementNode,
+    _children: Array<LexicalNode>,
+    _match: Array<string>,
+    _isImport: boolean
+  ) => {
+    return false;
   },
 };
 

@@ -1,0 +1,67 @@
+fragment GraphqlDocumentHistoryFields on GraphqlSoupDocument {
+	__typename
+	id
+	documentName: name
+	ownerId
+	fileType
+	createdAt
+	updatedAt
+	viewedAt
+	deletedAt
+	subType {
+		__typename
+		... on GraphqlTaskSubType {
+			isCompleted
+		}
+	}
+}
+
+fragment GraphqlChatHistoryFields on GraphqlSoupChat {
+	__typename
+	id
+	chatName: name
+	ownerId
+	isPersistent
+	createdAt
+	updatedAt
+	viewedAt
+	deletedAt
+}
+
+fragment GraphqlProjectHistoryFields on GraphqlSoupProject {
+	__typename
+	id
+	projectName: name
+	ownerId
+	createdAt
+	updatedAt
+	viewedAt
+	deletedAt
+}
+
+fragment GraphqlDocumentQuickAccessName on GraphqlSoupDocument {
+	__typename
+	name
+	ownerId
+	createdAt
+	subType {
+		__typename
+		... on GraphqlTaskSubType {
+			isCompleted
+		}
+	}
+}
+
+fragment GraphqlChatQuickAccessName on GraphqlSoupChat {
+	__typename
+	name
+	ownerId
+	createdAt
+}
+
+fragment GraphqlProjectQuickAccessName on GraphqlSoupProject {
+	__typename
+	name
+	ownerId
+	createdAt
+}

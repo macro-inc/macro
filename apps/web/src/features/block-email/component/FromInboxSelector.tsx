@@ -1,9 +1,9 @@
 import { inboxIconProps } from '@core/component/inboxIcon';
 import { UserIcon } from '@core/component/UserIcon';
-import { emailToMacroId, useDisplayName } from '@core/user';
+import { emailToMacroId, getDisplayName } from '@core/user';
 import ChevronDown from '@phosphor/caret-down.svg';
 import Check from '@phosphor/check.svg';
-import { Dropdown } from '@ui';
+import { cn, Dropdown } from '@ui';
 import { For, Show } from 'solid-js';
 
 type FromInbox = {
@@ -14,7 +14,7 @@ type FromInbox = {
 
 /** A single inbox: the account's user icon, name, and address. */
 function FromInboxOption(props: { inbox: FromInbox }) {
-  const [name] = useDisplayName(emailToMacroId(props.inbox.email_address));
+  const name = () => getDisplayName(emailToMacroId(props.inbox.email_address));
   return (
     <>
       <UserIcon
@@ -34,11 +34,16 @@ function FromInboxOption(props: { inbox: FromInbox }) {
 }
 
 function FromInboxPill(props: { inbox: FromInbox; selectable: boolean }) {
-  const [name] = useDisplayName(emailToMacroId(props.inbox.email_address));
+  const name = () => getDisplayName(emailToMacroId(props.inbox.email_address));
   const label = () => name() || props.inbox.email_address;
 
   return (
-    <div class="flex flex-row shrink-0 py-1 pl-2 gap-1 pr-2 overflow-hidden items-center bg-active rounded-full text-ink">
+    <div
+      class={cn(
+        'flex flex-row shrink-0 py-1 pl-2 gap-1 pr-2 overflow-hidden items-center bg-active rounded-full text-ink',
+        props.selectable && 'hover:bg-hover'
+      )}
+    >
       <UserIcon
         {...inboxIconProps(props.inbox.email_address)}
         photoUrl={props.inbox.photo_url ?? undefined}
@@ -125,7 +130,10 @@ export function FromInboxSelector(props: {
           >
             <Dropdown>
               <Dropdown.Trigger
-                class={`inline-flex min-w-0 max-w-full ${props.class ?? ''}`}
+                class={cn(
+                  'inline-flex h-auto min-w-0 max-w-full rounded-full border-none bg-transparent p-0 not-disabled:hover:bg-transparent active:bg-transparent',
+                  props.class
+                )}
               >
                 <FromInboxPill inbox={active()} selectable={true} />
               </Dropdown.Trigger>

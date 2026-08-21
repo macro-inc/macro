@@ -2,8 +2,8 @@ use crate::domain::{
     events::ChannelEvent,
     models::{
         Activity, ActivityType, AddParticipantsRequest, AttachmentEntityReference, BotId,
-        BotSenderProfile, ChannelAttachmentType, ChannelContextMessage, ChannelMessage,
-        ChannelMessageFilters, ChannelMetadata, ChannelParticipant, ChannelPreview,
+        BotSenderProfile, ChannelAttachmentType, ChannelContextMessage, ChannelJoinCodeResponse,
+        ChannelMessage, ChannelMessageFilters, ChannelMetadata, ChannelParticipant, ChannelPreview,
         ChannelPreviewData, ChannelType, CreateEntityMentionOptions, DeleteMessageQuery,
         EntityMention, GetOrCreateAction, GetOrCreateChannelResponse, GetOrCreateDmRequest,
         GetOrCreatePrivateRequest, MessagePageDirection, NewChannelAttachment, ParticipantRole,
@@ -14,14 +14,15 @@ use crate::domain::{
         WithChannelId,
     },
     ports::{
-        ChannelAttachmentsPage, ChannelEventDispatcher, ChannelMessagesErr,
-        ChannelMessagesQueryResult, ChannelMutationErr, ChannelReferenceSharePermissions,
-        ChannelRepo, ChannelService,
+        ChannelAttachmentsPage, ChannelEventDispatcher, ChannelMentionExtractor,
+        ChannelMessagesErr, ChannelMessagesQueryResult, ChannelMutationErr,
+        ChannelReferenceSharePermissions, ChannelRepo, ChannelService,
     },
 };
 use bot_id::BotIdStr;
 use bot_id::cowlike::CowLike;
 use channel_sender::ChannelSender;
+use entity_access::domain::models::{EntityAccessReceipt, EntityType, MemberParticipantRole};
 use macro_user_id::user_id::MacroUserIdStr;
 use models_pagination::{CreatedAt, PaginateOn, Query};
 use std::collections::{HashMap, HashSet};
@@ -39,10 +40,12 @@ pub struct ChannelServiceImpl<
     R,
     E = NoopChannelEventDispatcher,
     P = NoopChannelReferenceSharePermissions,
+    M = NoopChannelMentionExtractor,
 > {
     repo: R,
     events: E,
     reference_share_permissions: P,
+    mention_extractor: M,
 }
 
 /// No-op event dispatcher used by read-only contexts.
@@ -70,6 +73,19 @@ impl ChannelReferenceSharePermissions for NoopChannelReferenceSharePermissions {
     }
 }
 
+/// No-op mention extractor used by contexts that don't derive mentions from
+/// message content.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct NoopChannelMentionExtractor;
+
+impl ChannelMentionExtractor for NoopChannelMentionExtractor {
+    type Err = anyhow::Error;
+
+    async fn extract_mentions(&self, _content: &str) -> Result<Vec<SimpleMention>, Self::Err> {
+        Ok(Vec::new())
+    }
+}
+
 impl<R> ChannelServiceImpl<R, NoopChannelEventDispatcher, NoopChannelReferenceSharePermissions>
 where
     R: ChannelRepo,
@@ -80,6 +96,7 @@ where
             repo,
             events: NoopChannelEventDispatcher,
             reference_share_permissions: NoopChannelReferenceSharePermissions,
+            mention_extractor: NoopChannelMentionExtractor,
         }
     }
 }
@@ -91,11 +108,28 @@ impl<R, E, P> ChannelServiceImpl<R, E, P> {
             repo,
             events,
             reference_share_permissions,
+            mention_extractor: NoopChannelMentionExtractor,
         }
     }
 }
 
-impl<R, E, P> ChannelServiceImpl<R, E, P>
+impl<R, E, P, M> ChannelServiceImpl<R, E, P, M> {
+    /// Replace the mention extractor used to derive mentions from
+    /// bot-authored message content.
+    pub fn with_mention_extractor<M2>(
+        self,
+        mention_extractor: M2,
+    ) -> ChannelServiceImpl<R, E, P, M2> {
+        ChannelServiceImpl {
+            repo: self.repo,
+            events: self.events,
+            reference_share_permissions: self.reference_share_permissions,
+            mention_extractor,
+        }
+    }
+}
+
+impl<R, E, P, M> ChannelServiceImpl<R, E, P, M>
 where
     R: ChannelRepo,
     anyhow::Error: From<R::Err>,
@@ -283,22 +317,12 @@ fn is_admin_or_owner(role: ParticipantRole) -> bool {
     matches!(role, ParticipantRole::Owner | ParticipantRole::Admin)
 }
 
-/// returns all user participants in a channel given an iterator of participants and the channel owner
-fn created_channel_participant_ids<'a>(
-    owner_id: MacroUserIdStr<'a>,
-    participants: impl IntoIterator<Item = MacroUserIdStr<'a>>,
-) -> HashSet<MacroUserIdStr<'a>> {
-    participants
-        .into_iter()
-        .chain(std::iter::once(owner_id))
-        .collect()
-}
-
-impl<R, E, P> ChannelServiceImpl<R, E, P>
+impl<R, E, P, M> ChannelServiceImpl<R, E, P, M>
 where
     R: ChannelRepo,
     E: ChannelEventDispatcher,
     P: ChannelReferenceSharePermissions,
+    M: ChannelMentionExtractor,
 {
     #[tracing::instrument(err, skip(self, req))]
     async fn create_channel(
@@ -308,6 +332,11 @@ where
         req: crate::domain::models::CreateChannelRequest,
     ) -> Result<crate::domain::models::CreateChannelResponse, ChannelMutationErr> {
         let actor = require_user_actor(&actor)?;
+        if req.auto_join_team && req.channel_type != ChannelType::Team {
+            return Err(ChannelMutationErr::BadRequest(
+                "auto-join is only available for team channels".to_string(),
+            ));
+        }
         if req.channel_type == ChannelType::Team {
             let team_id = req.team_id.ok_or_else(|| {
                 ChannelMutationErr::BadRequest("team id missing for team channel type".to_string())
@@ -331,32 +360,29 @@ where
         }
 
         let org_id = None;
-        if req.participants.is_empty() {
+        if req.participants.is_empty() && req.channel_type != ChannelType::Private {
             return Err(ChannelMutationErr::BadRequest(
                 "participants must be a non-empty list of 'macro|<email>'".to_string(),
             ));
         }
 
-        let participants_clone = req.participants.clone();
         let channel_type = req.channel_type;
         let channel_name = req.name.clone();
 
-        let channel_id = self
+        let created_channel = self
             .create_channel_record(actor.copied(), org_id, req)
             .await?;
 
         self.events.dispatch(ChannelEvent::ChannelCreated {
-            channel_id,
-            actor: Sender::new_from_user(actor.clone()),
+            channel_id: created_channel.id,
+            actor: Sender::new_from_user(actor),
             channel_type,
             channel_name,
-            participant_user_ids: created_channel_participant_ids(actor, participants_clone)
-                .into_iter()
-                .collect(),
+            participant_user_ids: created_channel.participant_user_ids,
         });
 
         Ok(crate::domain::models::CreateChannelResponse {
-            id: channel_id.to_string(),
+            id: created_channel.id.to_string(),
         })
     }
 
@@ -388,6 +414,7 @@ where
                 name: None,
                 channel_type: ChannelType::DirectMessage,
                 team_id: None,
+                auto_join_team: false,
                 participants: HashSet::from([actor, recipient_id.clone()]),
             },
         )
@@ -423,6 +450,7 @@ where
                 name: None,
                 channel_type: ChannelType::Private,
                 team_id: None,
+                auto_join_team: false,
                 participants: req.recipients,
             },
         )
@@ -434,8 +462,15 @@ where
         &self,
         actor: Sender,
         channel_id: Uuid,
-        req: PatchChannelRequest,
+        mut req: PatchChannelRequest,
     ) -> Result<(), ChannelMutationErr> {
+        if req.channel_name.is_none()
+            && req.convert_to_team_channel.is_none()
+            && req.auto_join_team.is_none()
+        {
+            return Ok(());
+        }
+
         let actor = require_user_actor(&actor)?;
         let info = self
             .repo
@@ -447,9 +482,62 @@ where
                 "cannot change channel_name for direct message channels".to_string(),
             ));
         }
+
+        let converting_to_team =
+            req.convert_to_team_channel == Some(true) && info.channel_type != ChannelType::Team;
+        let converting_to_private =
+            req.convert_to_team_channel == Some(false) && info.channel_type == ChannelType::Team;
+        let team_id = if converting_to_team {
+            Some(
+                self.repo
+                    .get_user_team_id(&actor)
+                    .await
+                    .map_err(|e| ChannelMutationErr::Repo(e.into()))?
+                    .ok_or_else(|| {
+                        ChannelMutationErr::BadRequest(
+                            "cannot convert channel because the user does not belong to a team"
+                                .to_string(),
+                        )
+                    })?,
+            )
+        } else if converting_to_private {
+            req.auto_join_team = Some(false);
+            None
+        } else {
+            info.team_id
+        };
+
+        let is_team_channel =
+            info.channel_type == ChannelType::Team && !converting_to_private || converting_to_team;
+        if req.auto_join_team == Some(true) && (!is_team_channel || team_id.is_none()) {
+            return Err(ChannelMutationErr::BadRequest(
+                "auto-join is only available for team channels".to_string(),
+            ));
+        }
+
+        if converting_to_team {
+            let requested_name = req
+                .channel_name
+                .as_deref()
+                .filter(|name| !name.trim().is_empty());
+            let stored_name = info.name.as_deref().filter(|name| !name.trim().is_empty());
+            if requested_name.is_none() {
+                req.channel_name = if stored_name.is_some() {
+                    None
+                } else {
+                    Some(
+                        self.repo
+                            .resolve_channel_name(&info, actor.clone())
+                            .await
+                            .map_err(|e| ChannelMutationErr::Repo(e.into()))?,
+                    )
+                };
+            }
+        }
+
         let channel_name = req.channel_name.clone();
         self.repo
-            .patch_channel(channel_id, actor.as_ref().to_string(), req)
+            .patch_channel(channel_id, actor.as_ref().to_string(), team_id, req)
             .await
             .map_err(|e| ChannelMutationErr::Repo(e.into()))?;
         if channel_name.is_some() {
@@ -481,6 +569,18 @@ where
         Ok(())
     }
 
+    /// Best-effort extraction of the mentions embedded in message content;
+    /// extraction failure yields no mentions rather than failing the send.
+    async fn extract_content_mentions(&self, content: &str) -> Vec<SimpleMention> {
+        match self.mention_extractor.extract_mentions(content).await {
+            Ok(mentions) => mentions,
+            Err(err) => {
+                tracing::error!(error=?err.into(), "unable to extract mentions from message content");
+                Vec::new()
+            }
+        }
+    }
+
     #[tracing::instrument(err, skip(self, req))]
     async fn post_message(
         &self,
@@ -488,6 +588,14 @@ where
         channel_id: Uuid,
         req: PostMessageRequest,
     ) -> Result<PostMessageResponse, ChannelMutationErr> {
+        // Bots send raw macro markdown without a tracked mention list (the web
+        // editor builds that list for user-authored messages), so derive it
+        // from the content to keep bot-created references tracked.
+        let mut req = req;
+        if actor.as_bot().is_some() && req.mentions.is_empty() {
+            req.mentions = self.extract_content_mentions(&req.content).await;
+        }
+
         let message = self
             .repo
             .create_message(
@@ -600,6 +708,16 @@ where
             notification_policy,
         } = req;
 
+        // As in post_message: bots don't track a mention list, so when a bot
+        // replaces message content (e.g. Macro AI swapping its "thinking"
+        // placeholder for the reply), derive the mentions from the new content.
+        let replacement_mentions = match (replacement_mentions, &content) {
+            (None, Some(content)) if actor.as_bot().is_some() => {
+                Some(self.extract_content_mentions(content).await)
+            }
+            (mentions, _) => mentions,
+        };
+
         let owner = self
             .repo
             .get_message_owner(channel_id, message_id)
@@ -659,20 +777,12 @@ where
                 }
             }
 
-            let participants = if let Some(thread_id) = message.thread_id {
-                self.repo
-                    .get_thread_participants(thread_id)
-                    .await
-                    .map_err(|e| ChannelMutationErr::Repo(e.into()))?
-            } else {
-                participant_ids(
-                    &self
-                        .repo
-                        .get_participants(channel_id)
-                        .await
-                        .map_err(|e| ChannelMutationErr::Repo(e.into()))?,
-                )
-            };
+            let channel_participants = self
+                .repo
+                .get_participants(channel_id)
+                .await
+                .map_err(|e| ChannelMutationErr::Repo(e.into()))?;
+            let recipients = participant_ids(&channel_participants);
 
             let posted_notification =
                 if notification_policy == PatchMessageNotificationPolicy::NotifyAsPostedMessage {
@@ -692,11 +802,6 @@ where
                             channel_name: info.name.unwrap_or_default(),
                         }
                     };
-                    let notification_participants = self
-                        .repo
-                        .get_participants(channel_id)
-                        .await
-                        .map_err(|e| ChannelMutationErr::Repo(e.into()))?;
                     let has_attachments = !self
                         .repo
                         .get_message_attachments(message_id)
@@ -706,7 +811,7 @@ where
 
                     Some(crate::domain::events::MessageChangedNotificationContext {
                         metadata,
-                        participants: notification_participants,
+                        participants: channel_participants,
                         mentions: replacement_mentions.clone().unwrap_or_default(),
                         has_attachments,
                     })
@@ -718,7 +823,7 @@ where
                 channel_id,
                 actor: actor.clone(),
                 message: message.clone(),
-                recipients: participants,
+                recipients,
                 nonce,
                 posted_notification,
             });
@@ -738,6 +843,13 @@ where
         {
             let err: anyhow::Error = err.into();
             tracing::error!(error=?err, "unable to upsert activity for attachment patch");
+        }
+
+        if attachments_changed || content.is_some() {
+            self.repo
+                .touch_channel_updated_at(channel_id)
+                .await
+                .map_err(|e| ChannelMutationErr::Repo(e.into()))?;
         }
 
         Ok(())
@@ -892,9 +1004,18 @@ where
             ));
         }
 
+        let mut membership_changed = false;
         for participant in &req.participants {
-            self.repo
+            let participant_changed = self
+                .repo
                 .add_participant(channel_id, participant.copied(), ParticipantRole::Member)
+                .await
+                .map_err(|e| ChannelMutationErr::Repo(e.into()))?;
+            membership_changed |= participant_changed;
+        }
+        if membership_changed {
+            self.repo
+                .touch_channel_updated_at(channel_id)
                 .await
                 .map_err(|e| ChannelMutationErr::Repo(e.into()))?;
         }
@@ -975,12 +1096,35 @@ where
     }
 
     #[tracing::instrument(err, skip(self))]
+    async fn get_channel_join_code(
+        &self,
+        channel_id: Uuid,
+    ) -> Result<ChannelJoinCodeResponse, ChannelMutationErr> {
+        let info = self
+            .repo
+            .get_channel_info(channel_id)
+            .await
+            .map_err(|e| ChannelMutationErr::Repo(e.into()))?;
+        if info.channel_type != ChannelType::Private {
+            return Err(ChannelMutationErr::Forbidden(
+                "join links are only available for private channels".to_string(),
+            ));
+        }
+
+        let join_code = self
+            .repo
+            .get_or_create_channel_join_code(channel_id)
+            .await
+            .map_err(|e| ChannelMutationErr::Repo(e.into()))?;
+        Ok(ChannelJoinCodeResponse { join_code })
+    }
+
+    #[tracing::instrument(err, skip(self))]
     async fn join_channel(
         &self,
         actor: Sender,
         channel_id: Uuid,
     ) -> Result<(), ChannelMutationErr> {
-        let actor_user = require_user_actor(&actor)?;
         let info = self
             .repo
             .get_channel_info(channel_id)
@@ -991,25 +1135,60 @@ where
                 "cannot join direct message channel".to_string(),
             ));
         }
+        self.join_channel_with_info(actor, info).await
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn join_channel_by_code(
+        &self,
+        actor: Sender,
+        join_code: Uuid,
+    ) -> Result<(), ChannelMutationErr> {
+        let info = self
+            .repo
+            .get_channel_info_by_join_code(join_code)
+            .await
+            .map_err(|e| ChannelMutationErr::Repo(e.into()))?
+            .ok_or_else(|| {
+                ChannelMutationErr::NotFound("channel join code not found".to_string())
+            })?;
+        if info.channel_type != ChannelType::Private {
+            return Err(ChannelMutationErr::Forbidden(
+                "join links are only valid for private channels".to_string(),
+            ));
+        }
+        self.join_channel_with_info(actor, info).await
+    }
+
+    async fn join_channel_with_info(
+        &self,
+        actor: Sender,
+        info: crate::domain::models::ChannelInfo,
+    ) -> Result<(), ChannelMutationErr> {
+        let actor_user = require_user_actor(&actor)?;
         let before = self
             .repo
-            .get_participants(channel_id)
+            .get_participants(info.id)
             .await
             .map_err(|e| ChannelMutationErr::Repo(e.into()))?;
+        let mut active_participant_user_ids = participant_ids(&before);
+        let changed = self
+            .repo
+            .add_participant(info.id, actor_user.copied(), ParticipantRole::Member)
+            .await
+            .map_err(|e| ChannelMutationErr::Repo(e.into()))?;
+        if !changed {
+            return Ok(());
+        }
+
         self.repo
-            .add_participant(channel_id, actor_user.copied(), ParticipantRole::Member)
+            .touch_channel_updated_at(info.id)
             .await
             .map_err(|e| ChannelMutationErr::Repo(e.into()))?;
 
-        let mut active_participant_user_ids = participant_ids(&before);
-        if !active_participant_user_ids
-            .iter()
-            .any(|participant| participant == &actor_user)
-        {
-            active_participant_user_ids.push(actor_user.clone());
-        }
+        active_participant_user_ids.push(actor_user.clone());
         self.events.dispatch(ChannelEvent::ParticipantJoined {
-            channel_id,
+            channel_id: info.id,
             channel_type: info.channel_type,
             user_id: Sender::new_from_user(actor_user),
             active_participant_user_ids,
@@ -1034,7 +1213,13 @@ where
             .get_participants(channel_id)
             .await
             .map_err(|e| ChannelMutationErr::Repo(e.into()))?;
-        match (info.channel_type, participants.len()) {
+        // Bots can be channel participants; only user participants count
+        // toward the minimum-membership guard.
+        let user_participant_count = participants
+            .iter()
+            .filter(|participant| MacroUserIdStr::try_from(participant.user_id.as_str()).is_ok())
+            .count();
+        match (info.channel_type, user_participant_count) {
             (ChannelType::Private, 2) | (ChannelType::DirectMessage, _) => {
                 return Err(ChannelMutationErr::BadRequest(
                     "cannot leave channel with only 2 participants".to_string(),
@@ -1056,18 +1241,19 @@ where
     }
 }
 
-impl<R, E, P> ChannelServiceImpl<R, E, P>
+impl<R, E, P, M> ChannelServiceImpl<R, E, P, M>
 where
     R: ChannelRepo,
     E: ChannelEventDispatcher,
     P: ChannelReferenceSharePermissions,
+    M: ChannelMentionExtractor,
 {
     async fn create_channel_record<'a>(
         &self,
         owner_id: MacroUserIdStr<'a>,
         org_id: Option<i64>,
         req: crate::domain::models::CreateChannelRequest,
-    ) -> Result<Uuid, ChannelMutationErr> {
+    ) -> Result<crate::domain::models::CreatedChannel, ChannelMutationErr> {
         self.repo
             .create_channel(owner_id, org_id, req)
             .await
@@ -1091,22 +1277,18 @@ where
         let channel_type = create_req.channel_type;
         let channel_name = create_req.name.clone();
         let owner_sender = ChannelSender::new_from_user(owner_id.clone());
-        let participant_user_ids =
-            created_channel_participant_ids(owner_id.clone(), create_req.participants.clone())
-                .into_iter()
-                .collect();
-        let channel_id = self
+        let created_channel = self
             .create_channel_record(owner_id, org_id, create_req)
             .await?;
         self.events.dispatch(ChannelEvent::ChannelCreated {
-            channel_id,
+            channel_id: created_channel.id,
             actor: owner_sender,
             channel_type,
             channel_name,
-            participant_user_ids,
+            participant_user_ids: created_channel.participant_user_ids,
         });
         Ok(GetOrCreateChannelResponse {
-            channel_id: channel_id.to_string(),
+            channel_id: created_channel.id.to_string(),
             action: GetOrCreateAction::Create,
         })
     }
@@ -1281,11 +1463,12 @@ fn center_window(
     }
 }
 
-impl<R, E, P> ChannelService for ChannelServiceImpl<R, E, P>
+impl<R, E, P, M> ChannelService for ChannelServiceImpl<R, E, P, M>
 where
     R: ChannelRepo,
     E: ChannelEventDispatcher,
     P: ChannelReferenceSharePermissions,
+    M: ChannelMentionExtractor,
     anyhow::Error: From<R::Err>,
 {
     #[tracing::instrument(err, skip(self))]
@@ -1438,10 +1621,20 @@ where
     #[tracing::instrument(err, skip(self))]
     async fn post_activity(
         &self,
-        actor: Sender,
-        channel_id: Uuid,
+        access: EntityAccessReceipt<MemberParticipantRole>,
         activity_type: ActivityType,
     ) -> Result<Activity, ChannelMutationErr> {
+        if access.entity().entity_type != EntityType::Channel {
+            return Err(ChannelMutationErr::BadRequest(
+                "channel access receipt required".to_string(),
+            ));
+        }
+        let channel_id = Uuid::parse_str(&access.entity().entity_id)
+            .map_err(|error| ChannelMutationErr::BadRequest(error.to_string()))?;
+        let actor = access.get_authenticated_user().map_err(|_| {
+            ChannelMutationErr::Unauthorized("authenticated user required".to_string())
+        })?;
+
         let activity = self
             .repo
             .set_activity(actor.as_ref().to_string(), channel_id, activity_type)
@@ -1595,6 +1788,42 @@ where
         ChannelServiceImpl::create_channel(self, actor, None, req).await
     }
 
+    #[tracing::instrument(err, skip(self, user_id))]
+    async fn auto_join_by_team_id(
+        &self,
+        team_id: &Uuid,
+        user_id: &MacroUserIdStr<'_>,
+    ) -> Result<(), ChannelMutationErr> {
+        self.repo
+            .auto_join_by_team_id(team_id, user_id)
+            .await
+            .map_err(|e| ChannelMutationErr::Repo(e.into()))
+    }
+
+    #[tracing::instrument(err, skip(self, user_id))]
+    async fn leave_by_team_id(
+        &self,
+        team_id: &Uuid,
+        user_id: &MacroUserIdStr<'_>,
+    ) -> Result<Vec<Uuid>, ChannelMutationErr> {
+        self.repo
+            .leave_by_team_id(team_id, user_id)
+            .await
+            .map_err(|e| ChannelMutationErr::Repo(e.into()))
+    }
+
+    #[tracing::instrument(err, skip(self, user_id, channel_ids))]
+    async fn restore_by_channel_ids(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+        channel_ids: &[Uuid],
+    ) -> Result<(), ChannelMutationErr> {
+        self.repo
+            .restore_by_channel_ids(user_id, channel_ids)
+            .await
+            .map_err(|e| ChannelMutationErr::Repo(e.into()))
+    }
+
     async fn get_or_create_dm(
         &self,
         actor: Sender,
@@ -1697,12 +1926,27 @@ where
         ChannelServiceImpl::remove_participants(self, actor, channel_id, req).await
     }
 
+    async fn get_channel_join_code(
+        &self,
+        channel_id: Uuid,
+    ) -> Result<ChannelJoinCodeResponse, ChannelMutationErr> {
+        ChannelServiceImpl::get_channel_join_code(self, channel_id).await
+    }
+
     async fn join_channel(
         &self,
         actor: Sender,
         channel_id: Uuid,
     ) -> Result<(), ChannelMutationErr> {
         ChannelServiceImpl::join_channel(self, actor, channel_id).await
+    }
+
+    async fn join_channel_by_code(
+        &self,
+        actor: Sender,
+        join_code: Uuid,
+    ) -> Result<(), ChannelMutationErr> {
+        ChannelServiceImpl::join_channel_by_code(self, actor, join_code).await
     }
 
     async fn leave_channel(
@@ -1718,11 +1962,16 @@ where
         &self,
         options: CreateEntityMentionOptions,
     ) -> Result<EntityMention, ChannelMutationErr> {
-        self.repo
+        let mention = self
+            .repo
             .create_entity_mention(options)
             .await
             .map_err(anyhow::Error::from)
-            .map_err(ChannelMutationErr::Repo)
+            .map_err(ChannelMutationErr::Repo)?;
+        self.events.dispatch(ChannelEvent::EntityMentionCreated {
+            mention: mention.clone(),
+        });
+        Ok(mention)
     }
 
     #[tracing::instrument(err, skip(self))]
@@ -1739,10 +1988,17 @@ where
 
     #[tracing::instrument(err, skip(self))]
     async fn delete_entity_mention(&self, id: Uuid) -> Result<bool, ChannelMutationErr> {
-        self.repo
+        let mention = self
+            .repo
             .delete_entity_mention_by_id(id)
             .await
             .map_err(anyhow::Error::from)
-            .map_err(ChannelMutationErr::Repo)
+            .map_err(ChannelMutationErr::Repo)?;
+        let deleted = mention.is_some();
+        if let Some(mention) = mention {
+            self.events
+                .dispatch(ChannelEvent::EntityMentionDeleted { mention });
+        }
+        Ok(deleted)
     }
 }

@@ -28,6 +28,8 @@ const callRecordingBucket = createBucket({
 
 export const callRecordingBucketId = callRecordingBucket.id;
 export const callRecordingBucketArn = callRecordingBucket.arn;
+export const callRecordingBucketRegionalDomainName =
+  callRecordingBucket.bucketRegionalDomainName;
 
 // ---------------------------------------------------------------------------
 // 1. IAM Policies (attach to users or roles)
@@ -210,6 +212,22 @@ const bucketPolicy = new aws.s3.BucketPolicy(
         Version: '2012-10-17',
         Statement: [
           {
+            Sid: 'AllowCloudFrontCallsRead',
+            Effect: 'Allow',
+            Principal: { Service: 'cloudfront.amazonaws.com' },
+            Action: 's3:GetObject',
+            Resource: `${bucketArn}/calls/*`,
+            Condition: {
+              StringEquals: {
+                'aws:SourceAccount': '569036502058',
+              },
+              ArnLike: {
+                'aws:SourceArn':
+                  'arn:aws:cloudfront::569036502058:distribution/*',
+              },
+            },
+          },
+          {
             Sid: 'DenyWithoutTag',
             Effect: 'Deny',
             Principal: '*',
@@ -222,6 +240,9 @@ const bucketPolicy = new aws.s3.BucketPolicy(
               // Never deny the account root — prevents lockout
               ArnNotEquals: {
                 'aws:PrincipalArn': `arn:aws:iam::569036502058:root`,
+              },
+              Bool: {
+                'aws:PrincipalIsAWSService': 'false',
               },
             },
           },
@@ -249,7 +270,7 @@ const previewLambdaEnvVars: CallRecordingPreviewLambdaEnvVars = {
   FFMPEG_PATH: '/opt/bin/ffmpeg',
   FFPROBE_PATH: '/opt/bin/ffprobe',
   ENVIRONMENT: stack,
-  RUST_LOG: 'call_recording_preview_handler=trace',
+  RUST_LOG: 'call_recording_preview_handler=trace,macro_http_request=info',
 };
 
 const callRecordingPreviewLambda = new CallRecordingPreviewLambda(

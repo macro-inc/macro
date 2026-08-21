@@ -1,5 +1,6 @@
 import type { TagFilterMode } from '@app/features/next-soup/filters/filter-store/types';
 import type { EntityData } from '@entity';
+import { hasOwnTouchFloor } from '@queries/soup/normalized-cache/own-touch';
 import type {
   SoupApiItem,
   SoupProperty,
@@ -8,6 +9,7 @@ import { match } from 'ts-pattern';
 
 export const LIST_VIEWS = [
   'inbox',
+  'recent',
   'agents',
   'mail',
   'documents',
@@ -16,6 +18,7 @@ export const LIST_VIEWS = [
   'calls',
   'companies',
   'folders',
+  'reminders',
   'search',
 ] as const;
 
@@ -23,6 +26,7 @@ export type ListView = (typeof LIST_VIEWS)[number];
 
 export const LIST_VIEW_PATHS = {
   inbox: '/inbox',
+  recent: '/recent',
   agents: '/agents',
   mail: '/mail',
   documents: '/documents',
@@ -31,11 +35,13 @@ export const LIST_VIEW_PATHS = {
   calls: '/calls',
   companies: '/companies',
   folders: '/folders',
+  reminders: '/reminders',
   search: '/search',
 } as const satisfies Record<ListView, string>;
 
 export const LIST_VIEW_ID = {
   inbox: 'inbox',
+  recent: 'recent',
   agents: 'agents',
   mail: 'mail',
   documents: 'documents',
@@ -44,6 +50,7 @@ export const LIST_VIEW_ID = {
   calls: 'calls',
   companies: 'companies',
   folders: 'folders',
+  reminders: 'reminders',
   search: 'search',
 } as const satisfies Record<ListView, string>;
 
@@ -53,12 +60,43 @@ export const isListViewID = (id: string | null | undefined): id is ListView => {
   return LIST_VIEWS.includes(id as 'inbox');
 };
 
+/**
+ * List views whose entities are taggable, so their filter bar surfaces the tag
+ * filter. Mirrors TAGGABLE_ENTITY_TYPES (document/task/thread/project/chat/
+ * call). Channels, companies, and the mixed inbox are omitted.
+ */
+export const TAGGABLE_LIST_VIEWS: ReadonlySet<ListView> = new Set<ListView>([
+  'documents',
+  'tasks',
+  'mail',
+  'folders',
+  'agents',
+  'calls',
+]);
+
+/** The entity id a soup item normalizes under (channels/calls nest theirs). */
+const soupItemEntityId = (item: SoupApiItem): string => {
+  switch (item.tag) {
+    case 'channel':
+      return item.data.channel.id;
+    case 'call':
+      return item.data.callId;
+    default:
+      return item.data.id;
+  }
+};
+
 export const soupItemMatchesListView = (
   item: SoupApiItem,
   view: ListView | undefined
 ): boolean =>
   match(view)
-    .with('agents', () => item.tag === 'chat')
+    .with(
+      'agents',
+      () =>
+        item.tag === 'chat' ||
+        (item.tag === 'document' && item.data.subType?.type === 'skill')
+    )
     .with('mail', () => item.tag === 'emailThread')
     .with(
       'documents',
@@ -72,7 +110,17 @@ export const soupItemMatchesListView = (
     .with('calls', () => item.tag === 'call')
     .with('folders', () => item.tag === 'project')
     .with('inbox', 'search', undefined, () => true)
+    // Membership in the recent view is "did I touch it", not a type check:
+    // only rows that carry a touch timestamp (from the touched_by_me page)
+    // or an outstanding optimistic own-touch belong. Without this, any
+    // websocket-inserted entity — including other people's — would enter
+    // the feed.
+    .with(
+      'recent',
+      () => item.touched_at != null || hasOwnTouchFloor(soupItemEntityId(item))
+    )
     .with('companies', () => item.tag === 'crmCompany')
+    .with('reminders', () => item.tag === 'reminder')
     .exhaustive();
 
 const propertiesMatchTagFilter = (
@@ -114,10 +162,10 @@ export const soupItemMatchesTagFilter = (
 
 /**
  * `soupItemMatchesTagFilter` for mapped entities. Rendered rows are checked
- * against the active tag filter because the server only tag-filters the
- * document/chat/project soup unions and the document search leg. Entity types
- * without loaded properties (channels, calls, search-service email results)
- * never match, so they are excluded rather than leaking through unfiltered.
+ * against the active tag filter as a client-side backstop, since the server
+ * does not tag-filter every soup union. Rows carrying loaded properties are
+ * matched on those (emails included); rows without loaded properties never
+ * match, so they are excluded rather than leaking through unfiltered.
  */
 export const entityMatchesTagFilter = (
   entity: EntityData,

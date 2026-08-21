@@ -28,6 +28,9 @@ export const getNormalizationObjectKey = (
       const channel = data?.channel as Record<string, unknown> | undefined;
       return channel?.id ? soupNormKey(channel.id as string) : undefined;
     }
+    if (obj.tag === 'call') {
+      return data?.callId ? soupNormKey(data.callId as string) : undefined;
+    }
     return data?.id ? soupNormKey(data.id as string) : undefined;
   }
   return undefined;

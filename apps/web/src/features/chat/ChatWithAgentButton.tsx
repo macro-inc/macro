@@ -1,26 +1,22 @@
 import { globalSplitManager } from '@app/signal/splitLayout';
+import type { SplitHandle } from '@components/app/split-layout/layoutManager';
 import { DEFAULT_MODEL } from '@core/component/AI/constant';
 import { setPendingSendData } from '@core/component/AI/signal/pendingSend';
 import type { Attachment } from '@core/component/AI/types';
+import {
+  type ChatAttachmentMention,
+  chatAttachmentMentionToMarkdown,
+} from '@core/component/AI/util/chatAttachmentMention';
 import { storeChatStateImmediate } from '@core/component/AI/util/storage';
 import { toast } from '@core/component/Toast/Toast';
+import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import { createChat } from '@core/util/create';
 import { AnimatedStarIcon } from '@icon/wide-star';
-import { ChannelType } from '@service-cognition/generated/schemas/channelType';
+import type { ChannelType } from '@service-cognition/generated/schemas/channelType';
 import { Button } from '@ui';
 import { createSignal } from 'solid-js';
-import { match } from 'ts-pattern';
 
 export { AnimatedStarIcon as ChatWithAgentIcon };
-
-const CHANNEL_TYPE_VALUES = new Set<string>(Object.values(ChannelType));
-
-function _toChatChannelType(
-  t: string | undefined | null
-): ChannelType | undefined {
-  if (t && CHANNEL_TYPE_VALUES.has(t)) return t as ChannelType;
-  return undefined;
-}
 
 type ChatWithAgentEntity =
   | { type: 'email'; id: string; name: string }
@@ -33,25 +29,31 @@ type ChatWithAgentEntity =
   | { type: 'project'; id: string; name: string }
   | { type: 'channel'; id: string; name: string; channelType: ChannelType };
 
-function buildAttachment(entity: ChatWithAgentEntity): Attachment | undefined {
-  return match(entity)
-    .with({ type: 'email' }, (e) => ({
-      entity_id: e.id,
-      entity_type: 'email_thread' as const,
-    }))
-    .with({ type: 'document' }, (e) => ({
-      entity_id: e.id,
-      entity_type: 'document' as const,
-    }))
-    .with({ type: 'project' }, (e) => ({
-      entity_id: e.id,
-      entity_type: 'project' as const,
-    }))
-    .with({ type: 'channel' }, (e) => ({
-      entity_id: e.id,
-      entity_type: 'channel' as const,
-    }))
-    .exhaustive();
+function buildSeed(entity: ChatWithAgentEntity): {
+  mention: ChatAttachmentMention;
+  attachment: Attachment;
+} {
+  const attachmentType: Attachment['entity_type'] =
+    entity.type === 'email' ? 'email_thread' : entity.type;
+  const blockName =
+    entity.type === 'document'
+      ? fileTypeToBlockName(entity.fileType, true)
+      : entity.type === 'email'
+        ? 'email'
+        : entity.type;
+
+  return {
+    mention: {
+      documentId: entity.id,
+      documentName: entity.name,
+      blockName,
+      ...(entity.type === 'channel' ? { channelType: entity.channelType } : {}),
+    },
+    attachment: {
+      entity_id: entity.id,
+      entity_type: attachmentType,
+    },
+  };
 }
 
 async function createAndOpenChat(seed: {
@@ -59,6 +61,8 @@ async function createAndOpenChat(seed: {
   attachments?: Attachment[];
   /** When set, sent immediately when the chat opens instead of seeding the input */
   message?: string;
+  /** When set, replaces this split's content in place instead of opening a new split. */
+  replaceSplit?: SplitHandle;
 }) {
   const result = await createChat();
   if ('error' in result || !result.chatId) {
@@ -67,7 +71,7 @@ async function createAndOpenChat(seed: {
     return;
   }
 
-  const { message, ...stored } = seed;
+  const { message, replaceSplit, ...stored } = seed;
   if (message) {
     setPendingSendData({
       content: message,
@@ -77,29 +81,51 @@ async function createAndOpenChat(seed: {
   } else {
     storeChatStateImmediate(result.chatId, stored);
   }
-  globalSplitManager()?.openWithSplit(
-    { type: 'chat', id: result.chatId },
-    { activate: true, preferNewSplit: true }
-  );
+  if (replaceSplit) {
+    replaceSplit.replace({ next: { type: 'chat', id: result.chatId } });
+  } else {
+    globalSplitManager()?.openWithSplit(
+      { type: 'chat', id: result.chatId },
+      { activate: true, preferNewSplit: true }
+    );
+  }
 }
 
 export async function openChatWithAgent(entity: ChatWithAgentEntity) {
-  const attachment = buildAttachment(entity);
-  if (!attachment) {
-    console.warn('openChatWithAgent: unable to build attachment', entity);
-    toast.failure("Can't attach this item to a chat");
-    return;
-  }
-  await createAndOpenChat({ attachments: [attachment] });
+  const { mention, attachment } = buildSeed(entity);
+  const input = chatAttachmentMentionToMarkdown(mention);
+  await createAndOpenChat({ input, attachments: [attachment] });
 }
 
 export async function openChatWithInput(initialInput: string) {
   await createAndOpenChat({ input: initialInput });
 }
 
+/**
+ * Replace `splitHandle`'s content with a new chat seeded with `initialInput`
+ * (not sent). Used by the search view's "Ask AI" button to hand off in place.
+ */
+export async function openChatWithInputReplacingSplit(
+  initialInput: string,
+  splitHandle: SplitHandle
+) {
+  await createAndOpenChat({ input: initialInput, replaceSplit: splitHandle });
+}
+
 /** Open a new chat and immediately send `message` (the chat picks it up via pending send) */
 export async function openChatWithMessage(message: string) {
   await createAndOpenChat({ message });
+}
+
+/**
+ * Replace `splitHandle`'s content with a new chat and immediately send
+ * `message`. Used by the search view's "Ask AI" button to hand off in place.
+ */
+export async function openChatWithMessageReplacingSplit(
+  message: string,
+  splitHandle: SplitHandle
+) {
+  await createAndOpenChat({ message, replaceSplit: splitHandle });
 }
 
 export function ChatWithAgentButton(props: { entity: ChatWithAgentEntity }) {
@@ -133,7 +159,7 @@ export function AskMacroButton(props: { entity: ChatWithAgentEntity }) {
       variant="ghost"
       size="sm"
       depth={2}
-      class="gap-1.5 rounded-full px-2 ring ring-edge-muted"
+      class="gap-1.5 rounded-full border border-edge-muted px-2"
     >
       <AnimatedStarIcon triggerAnimation={hovering()} />
       <span class="text-xs font-medium">Ask Macro</span>

@@ -1,9 +1,9 @@
+use crate::outbound::email_api::GmailApi;
 use crate::pubsub::gmail_ops::process;
-use crate::util::redis::RedisClient;
-use authentication_service_client::AuthServiceClient;
+use crate::pubsub::worker_lifecycle::run_until_cancelled;
 use futures::StreamExt;
-use gmail_client::GmailClient;
 use sqlx::PgPool;
+use tokio_util::sync::CancellationToken;
 
 /// Context for the Gmail operations worker. Simpler than PubSubContext since
 /// these operations only need Gmail API access and DB for reverts.
@@ -12,9 +12,7 @@ pub struct GmailOpsContext {
     pub db: PgPool,
     pub sqs_worker: sqs_worker::SQSWorker,
     pub sqs_client: sqs_client::SQS,
-    pub gmail_client: GmailClient,
-    pub auth_service_client: AuthServiceClient,
-    pub redis_client: RedisClient,
+    pub email_api: GmailApi,
     pub retry_worker: bool,
 }
 
@@ -23,18 +21,36 @@ pub async fn run_worker(
     db: PgPool,
     worker: sqs_worker::SQSWorker,
     sqs_client: sqs_client::SQS,
-    gmail_client: GmailClient,
-    auth_service_client: AuthServiceClient,
-    redis_client: RedisClient,
+    email_api: GmailApi,
     retry_worker: bool,
+) {
+    run_worker_with_cancellation(
+        db,
+        worker,
+        sqs_client,
+        email_api,
+        retry_worker,
+        CancellationToken::new(),
+    )
+    .await;
+}
+
+/// Ingests Gmail operations messages until cancellation is requested.
+///
+/// A batch already returned by SQS is fully processed before shutdown.
+pub async fn run_worker_with_cancellation(
+    db: PgPool,
+    worker: sqs_worker::SQSWorker,
+    sqs_client: sqs_client::SQS,
+    email_api: GmailApi,
+    retry_worker: bool,
+    cancellation_token: CancellationToken,
 ) {
     let ctx = GmailOpsContext {
         db,
         sqs_worker: worker.clone(),
         sqs_client,
-        gmail_client,
-        auth_service_client,
-        redis_client,
+        email_api,
         retry_worker,
     };
 
@@ -42,9 +58,19 @@ pub async fn run_worker(
         let worker_result = tokio::spawn({
             let ctx = ctx.clone();
             let worker = worker.clone();
+            let cancellation_token = cancellation_token.clone();
             async move {
                 loop {
-                    match worker.receive_messages().await {
+                    let Some(receive_result) = run_until_cancelled(
+                        &cancellation_token,
+                        worker.receive_messages(),
+                    )
+                    .await
+                    else {
+                        return;
+                    };
+
+                    match receive_result {
                         Ok(messages) => {
                             if messages.is_empty() {
                                 continue;
@@ -91,6 +117,10 @@ pub async fn run_worker(
         })
         .await;
 
+        if cancellation_token.is_cancelled() {
+            return;
+        }
+
         match worker_result {
             Ok(_) => {
                 tracing::error!("gmail ops worker exited successfully?");
@@ -101,6 +131,14 @@ pub async fn run_worker(
         }
 
         tracing::info!("GMAIL OPS WORKER RESTARTING...");
-        tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+        if run_until_cancelled(
+            &cancellation_token,
+            tokio::time::sleep(std::time::Duration::from_secs(5)),
+        )
+        .await
+        .is_none()
+        {
+            return;
+        }
     }
 }

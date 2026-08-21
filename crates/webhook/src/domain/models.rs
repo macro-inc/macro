@@ -318,7 +318,9 @@ impl std::str::FromStr for WebhookStatus {
 }
 
 /// Scope that owns a newly-created webhook.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+///
+/// Clients serialize this, so both derives are used.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum WebhookScope {
@@ -351,11 +353,16 @@ impl WebhookEndpointSchemePolicy {
 }
 
 /// Request to create a webhook.
-#[derive(Debug, Clone, Deserialize)]
+///
+/// Clients serialize this, so both derives are used.
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 pub struct CreateWebhookRequest {
     /// Scope that owns the webhook.
     pub scope: WebhookScope,
+    /// Caller-chosen namespace, unique among the owning workspace's webhooks.
+    /// Set at creation time only; it cannot be changed afterwards.
+    pub namespace: String,
     /// Display name.
     pub name: String,
     /// Endpoint URL. HTTPS is required outside local environments.
@@ -366,7 +373,8 @@ pub struct CreateWebhookRequest {
     pub filters: WebhookFilters,
 }
 
-/// Request to patch a webhook.
+/// Request to patch a webhook. The webhook's namespace is fixed at creation
+/// time and is deliberately not patchable.
 #[derive(Debug, Clone, Deserialize)]
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 pub struct PatchWebhookRequest {
@@ -382,7 +390,19 @@ pub struct PatchWebhookRequest {
     pub status: Option<WebhookStatus>,
 }
 
+/// Outcome of persisting a new webhook.
+#[cfg(feature = "ports")]
+#[derive(Debug, Clone)]
+pub enum CreateWebhookOutcome {
+    /// The webhook was created.
+    Created(Box<Webhook>),
+    /// A live webhook in the workspace already uses the requested namespace.
+    NamespaceConflict,
+}
+
 /// Webhook row returned by application APIs.
+///
+/// Clients deserialize this, so both derives are used.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 pub struct Webhook {
@@ -390,6 +410,9 @@ pub struct Webhook {
     pub id: WebhookId,
     /// Owning workspace id.
     pub workspace_id: String,
+    /// Caller-chosen namespace, unique among the owning workspace's webhooks.
+    /// Set at creation time only; it cannot be changed afterwards.
+    pub namespace: String,
     /// Display name.
     pub name: String,
     /// Endpoint URL. HTTPS is required outside local environments.
@@ -417,6 +440,8 @@ pub struct Webhook {
 }
 
 /// Webhook returned after creation, including its signing secret.
+///
+/// Clients deserialize this, so both derives are used.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 pub struct CreateWebhookResponse {
@@ -424,6 +449,9 @@ pub struct CreateWebhookResponse {
     pub id: WebhookId,
     /// Owning workspace id.
     pub workspace_id: String,
+    /// Caller-chosen namespace, unique among the owning workspace's webhooks.
+    /// Set at creation time only; it cannot be changed afterwards.
+    pub namespace: String,
     /// Display name.
     pub name: String,
     /// Endpoint URL. HTTPS is required outside local environments.
@@ -453,6 +481,7 @@ impl From<Webhook> for CreateWebhookResponse {
         Self {
             id: webhook.id,
             workspace_id: webhook.workspace_id,
+            namespace: webhook.namespace,
             name: webhook.name,
             endpoint_url: webhook.endpoint_url,
             signing_secret: webhook.signing_secret,
@@ -468,6 +497,16 @@ impl From<Webhook> for CreateWebhookResponse {
     }
 }
 
+/// Webhooks visible to the caller across their personal and team workspaces.
+///
+/// Clients deserialize this, so both derives are used.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+pub struct ListWebhooksResponse {
+    /// The caller's webhooks, newest first. Signing secrets are omitted.
+    pub webhooks: Vec<Webhook>,
+}
+
 /// Sanitized result of validating a webhook endpoint.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
@@ -480,6 +519,19 @@ pub struct ValidateWebhookResponse {
     pub response_status: Option<u16>,
     /// Sanitized message explaining validation failure.
     pub message: Option<String>,
+}
+
+/// Body of the `webhook.validation.test` delivery sent when validating an
+/// endpoint. Not part of the `WebhookEvent` entity-event union.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+pub struct WebhookValidationTestEvent {
+    /// Event id, with an `evt_` prefix.
+    pub id: String,
+    /// Event name; always `webhook.validation.test`.
+    pub event: String,
+    /// Webhook being validated.
+    pub webhook_id: WebhookId,
 }
 
 /// Sanitized result returned by the validation client port.

@@ -145,8 +145,8 @@ export const PropertyDateSelector = (props: DateSelectorProps) => {
   };
 
   return (
-    <div class="relative">
-      <div class="flex w-full items-center py-2 gap-2 px-2 border-b border-edge-muted">
+    <div class="relative flex min-h-0 flex-col">
+      <div class="flex w-full shrink-0 items-center py-2 gap-2 px-2 border-b border-edge-muted">
         <SearchIcon class="size-4 text-ink-muted" />
         <input
           class="w-full caret-accent"
@@ -169,8 +169,8 @@ export const PropertyDateSelector = (props: DateSelectorProps) => {
       </div>
       <Switch>
         <Match when={mode() === 'search'}>
-          <div class="p-1.5">
-            <div class="max-h-50 overflow-y-auto overflow-x-hidden scrollbar-hidden">
+          <div class="flex min-h-0 flex-1 p-1.5">
+            <div class="max-h-50 min-h-0 flex-1 overflow-y-auto overflow-x-hidden scrollbar-hidden">
               <Show
                 when={visibleDateOptions().length > 0}
                 fallback={
@@ -266,7 +266,7 @@ export const PropertyDateSelector = (props: DateSelectorProps) => {
           </div>
 
           {/* Help text */}
-          <div class="px-2 py-1.5 border-t border-edge-muted">
+          <div class="shrink-0 px-2 py-1.5 border-t border-edge-muted">
             <div class="text-xs text-ink-muted">
               <span>Use queries like </span>
               <code class="bg-active px-1">3d</code>,{' '}
@@ -278,7 +278,7 @@ export const PropertyDateSelector = (props: DateSelectorProps) => {
         </Match>
 
         <Match when={mode() === 'calendar'}>
-          <div class="border-b border-edge-muted text-sm flex justify-center">
+          <div class="min-h-0 overflow-y-auto border-b border-edge-muted text-sm flex justify-center">
             <DatePickerUI
               value={props.selectedDate || new Date()}
               onChange={handleCalendarChange}

@@ -8,7 +8,8 @@ import { MarkdownTextarea } from '@core/component/LexicalMarkdown/component/core
 import { createFilesReadyHandler } from '@core/component/LexicalMarkdown/utils/fileUploadUtils';
 import { fileFolderDrop } from '@core/directive/fileFolderDrop';
 import { handleFileFolderDrop } from '@core/util/upload';
-import { logger } from '@observability/logger';
+import { Telemetry } from '@macro-inc/observability';
+
 import { cn, Scroll } from '@ui';
 import type { LexicalEditor } from 'lexical';
 import {
@@ -88,7 +89,7 @@ export function ComposeBody(props: {
 
   const logComposeBody = (event: string, details?: Record<string, unknown>) => {
     if (!props.debugName) return;
-    logger.log(`[ComposeBody] ${event}`, {
+    Telemetry.info(`[ComposeBody] ${event}`, {
       debugName: props.debugName,
       ...details,
     });
@@ -137,7 +138,7 @@ export function ComposeBody(props: {
 
   return (
     <>
-      <div class="size-full min-h-0 sm:max-h-full mobile:flex-1 flex flex-col flex-1">
+      <div class="size-full min-h-0 sm:max-h-full touch:flex-1 flex flex-col flex-1">
         <div
           class="grow size-full flex flex-col cursor-text placeholder:text-ink-placeholder placeholder:opacity-50 overflow-hidden relative [&_.text-ink-placeholder]:left-0 [&_.text-ink-placeholder>p]:my-0"
           ref={bodyDiv}

@@ -1,12 +1,9 @@
-use std::str::FromStr;
-
 use anyhow::Context;
 use models_properties::EntityType;
 use opensearch_client::{OpensearchClient, upsert::properties::IndexedProperty};
 use properties::outbound::entity_properties_get_query::{
     IndexedEntityProperty, get_entity_properties_for_index,
 };
-use sqs_client::search::document::DocumentPropertiesUpdate;
 
 /// Refresh only the indexed `properties` of an entity after a property
 /// mutation, without re-extracting its content. Fetches once, then routes to
@@ -15,12 +12,9 @@ use sqs_client::search::document::DocumentPropertiesUpdate;
 pub async fn process_entity_property_update(
     opensearch_client: &OpensearchClient,
     db: &sqlx::Pool<sqlx::Postgres>,
-    message: &DocumentPropertiesUpdate,
+    entity_id: &str,
+    entity_type: EntityType,
 ) -> anyhow::Result<()> {
-    let entity_id = &message.document_id;
-    let entity_type = EntityType::from_str(&message.entity_type)
-        .with_context(|| format!("invalid entity_type '{}'", message.entity_type))?;
-
     let rows = get_entity_properties_for_index(db, entity_id, entity_type)
         .await
         .context("failed to fetch properties for reindex")?;
@@ -43,6 +37,10 @@ pub async fn process_entity_property_update(
             .update_project_properties(entity_id, &properties)
             .await
             .context("failed to update project properties in search index"),
+        EntityType::CallRecord => opensearch_client
+            .update_call_record_properties(entity_id, &properties)
+            .await
+            .context("failed to update call record properties in search index"),
         other => {
             tracing::warn!(
                 entity_type = %other,

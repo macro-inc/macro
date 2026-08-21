@@ -12,8 +12,6 @@ use utoipa::ToSchema;
 
 use crate::api::{context::ApiContext, middleware};
 
-static WELCOME_EMAIL_TEMPLATE: &str = include_str!("./_welcome_email_template.html");
-
 #[derive(Debug, Error)]
 pub enum SendMobileWelcomeEmailError {
     #[error("Invalid email address")]
@@ -52,7 +50,7 @@ pub struct SendMobileWelcomeEmailRequest {
 
 #[derive(Debug, serde::Serialize, ToSchema)]
 pub struct SendMobileWelcomeEmailResponse {
-    /// Whether the email was sent (false if it was already sent previously)
+    /// Whether the lead was enrolled (false if they were already enrolled previously)
     pub sent: bool,
 }
 
@@ -68,8 +66,9 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
     )
 }
 
-/// Sends a mobile welcome email to the given address, if it hasn't already been sent
-/// and the email is not blocked.
+/// Enrolls a mobile lead in the Loops nurture sequence, which sends the welcome
+/// email inviting them to register on desktop. No-ops if the address was already
+/// enrolled, and rejects blocked addresses.
 #[utoipa::path(
     post,
     path = "/mobile-welcome-email",
@@ -90,13 +89,7 @@ pub async fn handler(
         return Err(SendMobileWelcomeEmailError::InvalidEmail);
     }
 
-    let lowercase_email = req.email.to_lowercase();
-    let lowercase_email = if let Some((local, domain)) = lowercase_email.split_once('@') {
-        let local = local.split('+').next().unwrap_or(local);
-        format!("{local}@{domain}")
-    } else {
-        lowercase_email
-    };
+    let lowercase_email = loops_client::normalize_email(&req.email);
 
     // Check if the email is blocked
     let blocked_emails =
@@ -118,15 +111,27 @@ pub async fn handler(
         return Ok(Json(SendMobileWelcomeEmailResponse { sent: false }));
     }
 
-    let welcome_email_content = WELCOME_EMAIL_TEMPLATE.to_string();
-    ctx.ses_client
-        .send_email(
-            "noreply@macro.com",
+    // Enrolls the lead in the Loops nurture sequence, which owns the welcome
+    // email from here. Awaited rather than fire-and-forget: `sent: true` tells
+    // the caller mail is on the way, so it must not report success on a
+    // Loops failure. The key is namespaced by event so it can't collide with
+    // the `user_registered` event sent when the lead converts.
+    ctx.loops_client
+        .send_event(
             &lowercase_email,
-            "Welcome to Macro",
-            &welcome_email_content,
+            "mobile_lead_captured",
+            // `hasAccount` is set explicitly rather than left unset: the
+            // workflow's audience filter tests `isFalse`, which an absent
+            // property would not satisfy.
+            &serde_json::json!({
+                "signupStage": "lead",
+                "hasAccount": false,
+                "source": "mobile-lead-capture",
+            }),
+            Some(&format!("mobile-lead-{lowercase_email}")),
         )
-        .await?;
+        .await
+        .map_err(|e| SendMobileWelcomeEmailError::InternalError(e.into()))?;
 
     Ok(Json(SendMobileWelcomeEmailResponse { sent: true }))
 }

@@ -1,9 +1,11 @@
+import { EntityActivitySectionConditional } from '@app/features/activity/EntityActivitySection';
+import { EntityPropertiesSection } from '@app/features/property/side-panel/properties';
 import { useCallContextOptional } from '@channel/Call/CallContext';
 import { SidePanel } from '@components/app/side-panel';
 import { useBlockId } from '@core/block';
 import { References } from '@core/component/References';
 import { UserIcon } from '@core/component/UserIcon';
-import { tryMacroId, useDisplayName } from '@core/user';
+import { getDisplayName, tryMacroId } from '@core/user';
 import { type DateValue, formatDate } from '@core/util/date';
 import ClockIcon from '@phosphor/clock.svg';
 import {
@@ -28,9 +30,22 @@ export function CallSidePanelSections(props: CallSidePanelSectionsProps) {
       <SidePanel.Section id="details" title="Details" defaultOpen order={10}>
         <DetailsSectionContent record={props.record} />
       </SidePanel.Section>
+      <SidePanel.Section
+        id="properties"
+        title="Properties"
+        defaultOpen
+        order={15}
+      >
+        <PropertiesSectionContent record={props.record} />
+      </SidePanel.Section>
       <SidePanel.Section id="sharing" title="Sharing" order={20}>
         <SharingSectionContent record={props.record} />
       </SidePanel.Section>
+      <EntityActivitySectionConditional
+        entityId={props.record().callId}
+        entityType="CALL_RECORD"
+        order={40}
+      />
       <ReferencesSectionConditional callId={blockId} />
     </>
   );
@@ -87,8 +102,24 @@ function DetailsSectionContent(props: { record: Accessor<CallRecord> }) {
   );
 }
 
+function PropertiesSectionContent(props: { record: Accessor<CallRecord> }) {
+  // Tag/property writes are authorized server-side via the call's owning
+  // channel (edit access), mirroring the sharing control above, so the editor
+  // is always mounted and the backend rejects unauthorized mutations.
+  return (
+    <EntityPropertiesSection
+      entityId={props.record().callId}
+      entityType="CALL_RECORD"
+      canEdit
+      documentName={
+        props.record().customName ?? props.record().channelName ?? undefined
+      }
+    />
+  );
+}
+
 function OwnerValue(props: { ownerId: string }) {
-  const [displayName] = useDisplayName(tryMacroId(props.ownerId));
+  const displayName = () => getDisplayName(tryMacroId(props.ownerId));
   return (
     <SidePanel.Pill>
       <UserIcon id={props.ownerId} size="sm" showTooltip suppressClick />

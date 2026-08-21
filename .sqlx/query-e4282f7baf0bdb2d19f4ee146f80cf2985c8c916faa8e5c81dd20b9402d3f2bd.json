@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT auto_join_domain, owner_id\n            FROM team\n            WHERE id = $1\n            FOR UPDATE\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "auto_join_domain",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "owner_id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      true,
+      false
+    ]
+  },
+  "hash": "e4282f7baf0bdb2d19f4ee146f80cf2985c8c916faa8e5c81dd20b9402d3f2bd"
+}

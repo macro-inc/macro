@@ -2,19 +2,17 @@ import { GO_TO_COMMAND_SCOPE, GO_TO_LEADER_KEY } from '@app/constants/hotkeys';
 import { isListViewID, type ListView } from '@app/constants/list-views';
 import { CommandState } from '@app/features/command/state';
 import { VIEW_TAB_PRESETS } from '@app/features/next-soup/sidebar/soup-filter-presets';
-import { openEntityInSplitFromUnifiedList } from '@app/features/next-soup/utils';
+import {
+  markReminderSeenOnOpen,
+  openEntityInSplitFromUnifiedList,
+} from '@app/features/next-soup/utils';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { globalSplitManager } from '@app/signal/splitLayout';
+import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import type { SplitHandle } from '@components/app/split-layout/layoutManager';
 import { createHotkeyGroup, registerHotkey } from '@core/hotkey/hotkeys';
-import { activeScope, hotkeyScopeTree } from '@core/hotkey/state';
 import { TOKENS } from '@core/hotkey/tokens';
-import {
-  getHotkeyCommand,
-  getScopeElement,
-  isScopeInActiveBranch,
-  runCommand,
-} from '@core/hotkey/utils';
+import { isScopeInActiveBranch } from '@core/hotkey/utils';
 import {
   filterNotDoneNotifications,
   filterValidNotifications,
@@ -25,15 +23,17 @@ import { openSingleStackNotification } from '@notifications';
 import { type Accessor, onCleanup } from 'solid-js';
 import type { VirtualizerHandle } from 'virtua/solid';
 import type { SoupState } from '../create-soup-state';
-import { type TabbedListView, VIEW_TAB_LISTS } from './soup-view-tabs';
+import {
+  type TabbedListView,
+  useVisibleViewTabs,
+  VIEW_TAB_LISTS,
+} from './soup-view-tabs';
 
 type UseSoupViewHotkeysOptions = {
-  splitId: string;
   scopeId: string;
   soup: SoupState;
   splitHandle: SplitHandle;
   virtualizerHandle: Accessor<VirtualizerHandle | undefined>;
-  previewState: Accessor<boolean>;
   currentView: Accessor<ListView | undefined>;
   activeTab: Accessor<string | undefined>;
   applyTabPreset: (view: ListView, tabId: string) => void;
@@ -46,7 +46,6 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
     soup,
     splitHandle,
     virtualizerHandle,
-    previewState,
     currentView,
     activeTab,
     applyTabPreset,
@@ -54,6 +53,7 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
   } = options;
 
   const analytics = useAnalytics();
+  const notificationSource = useGlobalNotificationSource();
 
   const splitIsUnifiedList = () => isListViewID(splitHandle.content().id);
 
@@ -133,7 +133,12 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
     const splitManager = globalSplitManager();
     return (
       !!splitManager &&
-      openSingleStackNotification(validNotifs, splitManager, newSplit)
+      openSingleStackNotification(
+        validNotifs,
+        splitManager,
+        newSplit,
+        splitHandle
+      )
     );
   };
 
@@ -178,6 +183,7 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
       const location =
         contentHitData?.length === 1 ? contentHitData[0]?.location : undefined;
 
+      markReminderSeenOnOpen(entity, notificationSource);
       openEntityInSplitFromUnifiedList(entity, {
         splitHandle,
         location,
@@ -193,53 +199,39 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
     hotkey: ['cmd+enter'],
     scopeId,
     description: 'Focus Preview',
+    condition: () => splitHandle.isControllerSplit(),
     keyDownHandler: () => {
-      const preview = previewState();
-      const entity = soup.focus.item();
-      if (!entity) return false;
-
-      if (preview) {
-        // focus inside preview block
-        const blockEl = document.getElementById(`block-${entity.id}`);
-        if (blockEl) {
-          // TODO: use state instead to determine when preview block can receive focus
-          blockEl.setAttribute('data-allow-focus-in-preview', '');
-
-          blockEl.focus();
-          const getEnterCommand = () => {
-            const currentActiveScope = activeScope();
-            if (!currentActiveScope) return undefined;
-            const activeScopeNode = hotkeyScopeTree.get(currentActiveScope);
-            if (!activeScopeNode) return undefined;
-            if (activeScopeNode?.type !== 'dom') return;
-            const dom = getScopeElement(currentActiveScope);
-            if (!dom) return undefined;
-            const closestBlockScope = dom.closest(`[id="block-${entity.id}"]`);
-            if (
-              !closestBlockScope ||
-              !(closestBlockScope instanceof HTMLElement)
-            )
-              return;
-            const scopeId = closestBlockScope.dataset.hotkeyScope;
-            if (!scopeId) return undefined;
-
-            return getHotkeyCommand(scopeId, 'enter');
-          };
-          const command = getEnterCommand();
-          if (command) {
-            runCommand(command);
-          }
-        }
+      const manager = globalSplitManager();
+      const viewerId = splitHandle.viewerId();
+      if (splitHandle.isControllerSplit() && viewerId && manager) {
+        manager.activateSplit(viewerId);
+        manager.returnFocus();
         return true;
       }
+      return false;
+    },
+    displayPriority: 4,
+  }).withGroup(group);
 
+  // opt+enter - Open in place of the whole Preview Pair
+  registerHotkey({
+    hotkey: ['opt+enter'],
+    scopeId,
+    description: 'Open to replace preview',
+    condition: () =>
+      splitHandle.isControllerSplit() && soup.focus.id() !== undefined,
+    keyDownHandler: () => {
+      const entity = soup.focus.item();
+      if (!entity) return false;
+      markReminderSeenOnOpen(entity, notificationSource);
       openEntityInSplitFromUnifiedList(entity, {
         splitHandle,
+        replacePreview: true,
         referredFrom: currentView(),
       });
       return true;
     },
-    displayPriority: 4,
+    hide: true,
   }).withGroup(group);
 
   // x - Toggle select item
@@ -342,6 +334,7 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
 
       const entity = soup.focus.item();
       if (!entity) return false;
+      markReminderSeenOnOpen(entity, notificationSource);
       openEntityInSplitFromUnifiedList(entity, {
         splitHandle,
         openInNewSplit: true,
@@ -354,10 +347,11 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
 
   const isTabbedView = (v: string): v is TabbedListView => v in VIEW_TAB_LISTS;
 
+  const visibleViewTabs = useVisibleViewTabs();
   const getTabKeys = () => {
     const view = currentView();
     if (!view || !isTabbedView(view)) return [];
-    return VIEW_TAB_LISTS[view].map((t) => t.value);
+    return visibleViewTabs(view).map((t) => t.value);
   };
 
   const switchToTabIndex = (index: number) => {

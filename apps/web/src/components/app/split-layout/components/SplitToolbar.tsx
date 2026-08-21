@@ -1,3 +1,4 @@
+import { mergeRefs } from '@solid-primitives/refs';
 import {
   createRenderEffect,
   createSignal,
@@ -7,8 +8,15 @@ import {
 } from 'solid-js';
 import { Portal } from 'solid-js/web';
 import { useSplitPanelOrThrow } from '../layoutUtils';
+import {
+  type PriorityCollapseController,
+  PriorityCollapseOverflowSensor,
+} from './PriorityCollapseOverflowSensor';
 
-export function SplitToolbar(props: { ref: Setter<HTMLDivElement | null> }) {
+export function SplitToolbar(props: {
+  ref: Setter<HTMLDivElement | null>;
+  collapseController: PriorityCollapseController;
+}) {
   const panel = useSplitPanelOrThrow();
 
   // Layout / spacing / border / min-height live on <Panel.Toolbar> in
@@ -19,12 +27,14 @@ export function SplitToolbar(props: { ref: Setter<HTMLDivElement | null> }) {
     <div
       class="flex items-center justify-between w-full"
       data-split-toolbar
-      ref={props.ref}
+      ref={mergeRefs(props.collapseController.setRow, props.ref)}
     >
-      <div
-        class="flex-1 flex items-center gap-1"
-        ref={(ref) => {
-          panel.layoutRefs.toolbarLeft = ref;
+      <PriorityCollapseOverflowSensor
+        controller={props.collapseController}
+        class="min-w-0 flex-1 overflow-hidden"
+        contentClass="flex items-center gap-1"
+        contentRef={(element) => {
+          panel.layoutRefs.toolbarLeft = element;
         }}
       />
       <div
@@ -45,19 +55,10 @@ export function SplitToolbarLeft(
   const panel = useSplitPanelOrThrow();
   const [portalRef, setPortalRef] = createSignal<HTMLDivElement | null>(null);
 
-  const halfWidthClasses = () =>
-    'absolute h-full left-[30%] top-0 flex items-center'.split(' ');
-
   createRenderEffect(() => {
     const ref = portalRef();
     if (!ref) return;
     ref.style.width = '100%';
-    const halfSplitState = panel.halfSplitState?.();
-    if (halfSplitState?.side === 'right') {
-      ref.classList.add(...halfWidthClasses());
-    } else {
-      ref.classList.remove(...halfWidthClasses());
-    }
     if (props.class) {
       ref.classList.add(props.class);
     }
@@ -82,19 +83,10 @@ export function SplitToolbarRight(props: ParentProps<{ order?: number }>) {
   const panel = useSplitPanelOrThrow();
   const [portalRef, setPortalRef] = createSignal<HTMLDivElement | null>(null);
 
-  const halfWidthClasses = () =>
-    'absolute h-full right-[70%] top-0 flex items-center'.split(' ');
-
   createRenderEffect(() => {
     const ref = portalRef();
     if (!ref) return;
     ref.style.order = props.order?.toString() ?? '0';
-    const halfSplitState = panel.halfSplitState?.();
-    if (halfSplitState?.side === 'left') {
-      ref.classList.add(...halfWidthClasses());
-    } else {
-      ref.classList.remove(...halfWidthClasses());
-    }
   });
   return (
     <Show when={panel.layoutRefs.toolbarRight}>

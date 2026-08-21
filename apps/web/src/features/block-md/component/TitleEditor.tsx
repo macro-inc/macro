@@ -1,10 +1,16 @@
-import { createBlockSignal, useBlockAliasedName } from '@core/block';
+import {
+  createBlockSignal,
+  useBlockAliasedName,
+  useBlockId,
+} from '@core/block';
 import { EmojiMenu } from '@core/component/LexicalMarkdown/component/menu/EmojiMenu';
+import { TagsMenu } from '@core/component/LexicalMarkdown/component/menu/TagsMenu';
 import { createLexicalWrapper } from '@core/component/LexicalMarkdown/context/LexicalWrapperContext';
 import {
   autoRegister,
   emojisPlugin,
   singleLinePlugin,
+  tagsPlugin,
 } from '@core/component/LexicalMarkdown/plugins/';
 import { createMenuOperations } from '@core/component/LexicalMarkdown/shared/inlineMenu';
 import {
@@ -17,6 +23,8 @@ import {
 import { blockNameToDefaultFile } from '@core/constant/allBlocks';
 import { useCanEdit } from '@core/signal/permissions';
 import { mergeRegister } from '@lexical/utils';
+import { useDocTags } from '@property/tags';
+import { EntityType } from '@service-properties/generated/schemas/entityType';
 import { onElementConnect } from '@solid-primitives/lifecycle';
 import { debounce } from '@solid-primitives/scheduled';
 import {
@@ -147,7 +155,12 @@ export function TitleEditor(props: { autoFocusOnMount?: boolean } = {}) {
   const [titlePlaceholder, _setTitlePlaceholder] = TitlePlaceholderSignal;
   const [titleFocused, setTitleFocused] = createSignal(false);
 
+  const blockId = useBlockId();
   const blockName = useBlockAliasedName();
+  const documentTags = useDocTags(
+    blockId,
+    blockName === 'task' ? EntityType.TASK : EntityType.DOCUMENT
+  );
   const titlePlaceholderFallback = blockNameToDefaultFile(blockName);
 
   let pendingRename:
@@ -165,7 +178,11 @@ export function TitleEditor(props: { autoFocusOnMount?: boolean } = {}) {
   };
 
   const scheduleRename = (newName: string, oldName: string) => {
-    if (newName === oldName) return;
+    if (newName === oldName) {
+      pendingRename = undefined;
+      debouncedFlushRename.clear();
+      return;
+    }
     pendingRename = { newName, oldName };
     debouncedFlushRename();
   };
@@ -188,6 +205,9 @@ export function TitleEditor(props: { autoFocusOnMount?: boolean } = {}) {
   setMdData('titleEditor', editor);
 
   const emojiMenuOperations = createMenuOperations();
+  const tagMenuOperations = createMenuOperations();
+  const inlineMenuOpen = () =>
+    emojiMenuOperations.isOpen() || tagMenuOperations.isOpen();
 
   plugins
     .plainText()
@@ -196,6 +216,16 @@ export function TitleEditor(props: { autoFocusOnMount?: boolean } = {}) {
     .use(
       emojisPlugin({
         menu: emojiMenuOperations,
+      })
+    )
+    .use(
+      tagsPlugin({
+        menu: tagMenuOperations,
+        insertTags: false,
+        onCreateTag: (tag) => {
+          if (!canEdit()) return;
+          void documentTags.applyTag(tag.scope, tag.optionId);
+        },
       })
     )
     .state<string>(setState, 'plain');
@@ -214,11 +244,7 @@ export function TitleEditor(props: { autoFocusOnMount?: boolean } = {}) {
   createEffect(() => {
     const mainDocumentEditor = mdData.editor;
     if (!mainDocumentEditor) return;
-    plugins.use(
-      titleNavigationPlugin(mainDocumentEditor, () =>
-        emojiMenuOperations.isOpen()
-      )
-    );
+    plugins.use(titleNavigationPlugin(mainDocumentEditor, inlineMenuOpen));
   });
 
   function onBlur() {
@@ -274,8 +300,8 @@ export function TitleEditor(props: { autoFocusOnMount?: boolean } = {}) {
   );
 
   createEffect(() => {
-    if (emojiMenuOperations.isOpen()) return;
     const currentState = state();
+    if (untrack(inlineMenuOpen)) return;
     if (!untrack(initialized)) {
       setInitialized(true);
       return;
@@ -284,11 +310,14 @@ export function TitleEditor(props: { autoFocusOnMount?: boolean } = {}) {
     if (nextName !== untrack(mdDocumentName)) {
       setOptimisticName(nextName);
     }
-    if (nextName !== (untrack(persistedDocumentName) ?? '')) {
+    const persistedName = untrack(persistedDocumentName) ?? '';
+    if (nextName !== persistedName) {
       selfChangedTitle = true;
       if (canEdit()) {
-        scheduleRename(nextName, untrack(persistedDocumentName) ?? '');
+        scheduleRename(nextName, persistedName);
       }
+    } else {
+      scheduleRename(nextName, persistedName);
     }
   });
 
@@ -333,6 +362,11 @@ export function TitleEditor(props: { autoFocusOnMount?: boolean } = {}) {
       <EmojiMenu
         editor={editor}
         menu={emojiMenuOperations}
+        useBlockBoundary={true}
+      />
+      <TagsMenu
+        editor={editor}
+        menu={tagMenuOperations}
         useBlockBoundary={true}
       />
       <Show when={showFallback()}>

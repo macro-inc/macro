@@ -1,6 +1,7 @@
 import { isListViewID, LIST_VIEW_ID } from '@app/constants/list-views';
 import { useSoup } from '@app/features/next-soup/soup-context';
 import { openEntityInSplitFromUnifiedList } from '@app/features/next-soup/utils';
+import { CALENDAR_BLOCK_ID } from '@block-calendar/types';
 import { useSidebarCollapse } from '@components/app/sidebarVisibility';
 import type { BlockName } from '@core/block';
 import {
@@ -13,11 +14,14 @@ import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isMobile } from '@core/mobile/isMobile';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
-import type { EntityDragEvent } from '@entity';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { type EntityDragEvent, isEntityDragEvent } from '@entity';
 import { AnimatedSquareSidebarIcon } from '@icon/square-sidebar';
 import SplitIcon from '@icon/wide-newSplit.svg';
 import { ContextMenu } from '@kobalte/core/context-menu';
 import ArrowClockwise from '@phosphor/arrow-clockwise.svg';
+import ArrowLeft from '@phosphor/arrow-left.svg';
+import ArrowRight from '@phosphor/arrow-right.svg';
 import CollapseIcon from '@phosphor/arrows-in.svg';
 import ExpandIcon from '@phosphor/arrows-out.svg';
 import CaretDown from '@phosphor/caret-down.svg';
@@ -43,6 +47,10 @@ import { SplitLayoutContext, SplitPanelContext } from '../context';
 import type { SplitContent } from '../layoutManager';
 import { canSpotlight } from '../utils/canSpotlight';
 import { HeaderIsland } from './HeaderIsland';
+import {
+  type PriorityCollapseController,
+  PriorityCollapseOverflowSensor,
+} from './PriorityCollapseOverflowSensor';
 
 function getEntitySplitContent(data: EntityDragEvent['draggable']['data']):
   | {
@@ -65,6 +73,15 @@ function getEntitySplitContent(data: EntityDragEvent['draggable']['data']):
 
   if (data.type === 'foreign') return undefined;
 
+  // A reminder has no block of its own — it is opened through the entity it
+  // references, which the caller navigates to instead.
+  if (data.type === 'reminder') return undefined;
+
+  // Calendar events open the singleton calendar block; the full opening path
+  // supplies the event range used to focus the requested occurrence.
+  if (data.type === 'calendar_event')
+    return { type: 'calendar', id: CALENDAR_BLOCK_ID };
+
   // CRM entity types map to their dedicated blocks (entity type !== block name).
   if (data.type === 'crm_company') return { type: 'company', id: data.id };
   if (data.type === 'crm_contact') return { type: 'contact', id: data.id };
@@ -77,7 +94,7 @@ function SplitBackButton() {
   if (!context) return null;
   return (
     <Button
-      class="p-1 rounded-lg mobile:active:bg-transparent"
+      class="p-1 rounded-lg touch:active:bg-transparent"
       label="Go Back"
       hotkey={TOKENS.split.go.back}
       disabled={!context.handle.canGoBack()}
@@ -121,7 +138,9 @@ function SidebarExpandButton() {
     <div
       class={cn(
         'overflow-hidden transition-[width,opacity,margin] duration-[120ms] ease-in-out',
-        visible() ? 'w-8 opacity-100 mr-1' : 'w-0 opacity-0 mr-0'
+        visible()
+          ? 'w-8 @max-[380px]/split-header:w-0 @max-[380px]/split-header:opacity-0 opacity-100 mr-1 @max-[380px]/split-header:mr-0'
+          : 'w-0 opacity-0 mr-0'
       )}
       aria-hidden={!visible()}
     >
@@ -179,8 +198,22 @@ function SplitCloseButton() {
     return isOnlySplit && isNotUnifiedList ? 'Return to list' : 'Close';
   });
 
+  // A Viewer has no close affordance or close hotkey: it closes with its
+  // Controller, when its Preview Pair dissolves (external navigation or the
+  // Controller leaving its list view), or via the preview toggle.
+  const isPreviewViewer = () => context.handle.isViewerSplit();
+
+  // A Preview Pair occupies two split slots but is a single logical split: its
+  // Viewer isn't independently closable. Subtract one slot per pair so that
+  // when the only splits open are a single Preview Pair, the Controller hides
+  // its close button — just like a lone split does.
+  const hasMultipleSplits = createMemo(
+    () =>
+      layout.manager.splits().length - layout.manager.previewPairs().length > 1
+  );
+
   return (
-    <Show when={layout.manager.splits().length > 1}>
+    <Show when={hasMultipleSplits() && !isPreviewViewer()}>
       <Button
         class="p-1 rounded-lg"
         label={label()}
@@ -213,7 +246,7 @@ function SoupNavigationButtons() {
   const shouldShow = createMemo(() => {
     // The mobile swipe layout doesn't handle mergeHistory navigations, so
     // these controls would silently no-op there.
-    if (isMobile()) return false;
+    if (isTouchDevice()) return false;
 
     const referredFrom = navigationReferredFrom();
     const isNavigableListView =
@@ -231,7 +264,7 @@ function SoupNavigationButtons() {
   });
 
   const navigate = (offset: number) => {
-    const next = soup.navigate.by(offset);
+    const next = soup.navigate.by(offset, { skipGroupHeaders: true });
     if (!next) return;
 
     void openEntityInSplitFromUnifiedList(next.row.original, {
@@ -243,7 +276,7 @@ function SoupNavigationButtons() {
 
   return (
     <Show when={shouldShow()}>
-      <div class="flex items-center gap-0.5 pl-1">
+      <div class="flex items-center gap-0.5">
         <Button
           class="p-1 rounded-lg"
           label="Previous item"
@@ -280,6 +313,8 @@ function SplitHeaderContextMenu(props: ParentProps) {
     () => panel.handle.content().type === 'component'
   );
   const canToggleSpotlight = createMemo(() => canSpotlight(layout.manager));
+  const canSwapWith = (direction: 'left' | 'right') =>
+    layout.manager.canSwapSplit(panel.handle.id, direction);
 
   const newSplitContent = () => ({
     type: 'component' as const,
@@ -338,7 +373,7 @@ function SplitHeaderContextMenu(props: ParentProps) {
         {props.children}
       </ContextMenu.Trigger>
       <ContextMenu.Portal>
-        <ContextMenuContent width="md">
+        <ContextMenuContent class="w-60">
           <MenuItem
             icon={SplitIcon}
             iconClass="rotate-180"
@@ -360,7 +395,21 @@ function SplitHeaderContextMenu(props: ParentProps) {
           />
           <MenuSeparator />
           <MenuItem
+            icon={ArrowLeft}
+            text="Swap split left"
+            disabled={!canSwapWith('left')}
+            onClick={() => layout.manager.swapSplit(panel.handle.id, 'left')}
+          />
+          <MenuItem
+            icon={ArrowRight}
+            text="Swap split right"
+            disabled={!canSwapWith('right')}
+            onClick={() => layout.manager.swapSplit(panel.handle.id, 'right')}
+          />
+          <MenuSeparator />
+          <MenuItem
             icon={panel.handle.isSpotLight() ? CollapseIcon : ExpandIcon}
+            hotkeyToken={TOKENS.window.spotlight.toggle}
             text={
               panel.handle.isSpotLight() ? 'Minimize split' : 'Spotlight split'
             }
@@ -374,10 +423,18 @@ function SplitHeaderContextMenu(props: ParentProps) {
             disabled={!hasOtherSplits()}
             onClick={() => {
               const currentSplitId = panel.handle.id;
+              // A Preview Pair is one unit: keep the current split's partner so
+              // closing "other" splits from a Viewer doesn't strand it by
+              // removing its Controller (or vice versa).
+              const partnerId =
+                layout.manager.controllerOf(currentSplitId) ??
+                layout.manager.viewerOf(currentSplitId);
+              const kept = new Set([currentSplitId, partnerId]);
+
               const otherSplitIds = layout.manager
                 .splits()
                 .map((split) => split.id)
-                .filter((id) => id !== currentSplitId);
+                .filter((id) => !kept.has(id));
 
               for (const splitId of otherSplitIds) {
                 layout.manager.removeSplit(splitId);
@@ -404,7 +461,10 @@ function SplitHeaderContextMenu(props: ParentProps) {
   );
 }
 
-export function SplitHeader(props: { ref: Setter<HTMLDivElement | null> }) {
+export function SplitHeader(props: {
+  ref: Setter<HTMLDivElement | null>;
+  collapseController: PriorityCollapseController;
+}) {
   const panel = useContext(SplitPanelContext);
   if (!panel) {
     throw new Error('<SplitHeader> must be used within a <SplitLayout>');
@@ -427,11 +487,12 @@ export function SplitHeader(props: { ref: Setter<HTMLDivElement | null> }) {
     );
   });
 
-  onDragEnd((event: EntityDragEvent) => {
-    if (event.droppable?.id !== droppableId) return;
+  onDragEnd((event) => {
+    if (!isEntityDragEvent(event) || event.droppable?.id !== droppableId) {
+      return;
+    }
 
-    const data = event.draggable?.data;
-    if (!data || data.dragType !== 'entity') return;
+    const data = event.draggable.data;
 
     const current = panel.handle.content();
     const next = getEntitySplitContent(data);
@@ -448,15 +509,15 @@ export function SplitHeader(props: { ref: Setter<HTMLDivElement | null> }) {
     <SplitHeaderContextMenu>
       <div
         class={cn(
-          'isolate relative w-full h-full overflow-clip text-ink',
+          '@container/split-header isolate relative w-full h-full overflow-clip text-ink',
           // On mobile the header overlays the panel body as a transparent strip
-          // of floating islands
-          'mobile:absolute mobile:inset-x-0 mobile:top-(--safe-top) mobile:z-mobile-nav-bar mobile:h-11.25 mobile:overflow-visible mobile:pointer-events-none',
-          isMobile() && isListViewID(panel.handle.content().id) && 'hidden',
+          // of floating islands; the island utility's px min-size keeps them
+          // tappable regardless of the OS text-size setting (inert on desktop).
+          'touch:absolute touch:inset-x-0 touch:top-(--safe-top) touch:z-mobile-nav-bar touch:h-11.25 touch:overflow-visible touch:pointer-events-none',
           isMobile() &&
             !isNativeMobilePlatform() &&
-            'mobile:top-[calc(var(--safe-top)+6px)]',
-          isEntityDraggingOver() && 'bg-active/50'
+            'touch:top-[calc(var(--safe-top)+6px)]',
+          isEntityDraggingOver() && 'bg-active'
         )}
         data-split-header
         ref={mergeRefs(droppable, props.ref)}
@@ -479,23 +540,32 @@ export function SplitHeader(props: { ref: Setter<HTMLDivElement | null> }) {
             </Portal>
           )}
         </Show>
-        <div class="absolute inset-0 flex justify-start items-center mobile:px-(--mobile-chrome-gutter) mobile:gap-2">
+        <div
+          class="absolute inset-0 flex justify-start items-center touch:px-(--mobile-chrome-gutter) touch:gap-2"
+          ref={props.collapseController.setRow}
+        >
           <Show
-            when={isMobile()}
+            when={isTouchDevice()}
             fallback={
               <div class="relative flex items-center pl-2 h-full">
                 <SidebarExpandButton />
                 <SplitCloseButton />
-                <SplitBackButton />
-                <SplitForwardButton />
+                <div class="flex items-center @max-[380px]/split-header:hidden">
+                  <SplitBackButton />
+                  <SplitForwardButton />
+                </div>
               </div>
             }
           >
-            {/* Back/forward island. */}
+            {/* Back/forward island. List views never render the back button
+                (their header hosts the filter pills instead), so the island
+                hides for them even when history allows going back. */}
             <HeaderIsland
               class={cn(
                 'relative gap-0 px-1',
-                !panel.handle.canGoBack() && 'hidden'
+                (!panel.handle.canGoBack() ||
+                  isListViewID(panel.handle.content().id)) &&
+                  'hidden'
               )}
             >
               <Show when={!isListViewID(panel.handle.content().id)}>
@@ -504,14 +574,21 @@ export function SplitHeader(props: { ref: Setter<HTMLDivElement | null> }) {
             </HeaderIsland>
           </Show>
 
-          <div
-            class="relative min-w-0 h-full shrink pl-2 flex items-center gap-0.5 mobile:pl-0 mobile:gap-2"
-            ref={(ref) => {
-              panel.layoutRefs.headerLeft = ref;
+          {/* On mobile nothing clips this region (islands float over the
+              panel), so the max-content element is capped at the sensor's
+              width to let shrinkable islands truncate long titles instead of
+              painting off-screen. */}
+          <PriorityCollapseOverflowSensor
+            controller={props.collapseController}
+            truncateAsLastResort
+            class="relative min-w-0 h-full shrink overflow-hidden touch:overflow-visible"
+            contentClass="h-full flex items-center gap-0.5 pl-2 touch:pl-0 touch:gap-2 touch:max-w-full"
+            contentRef={(element) => {
+              panel.layoutRefs.headerLeft = element;
             }}
           />
 
-          <div class="h-full grow shrink flex items-center justify-end gap-0.5 px-2 mobile:px-0 mobile:gap-2">
+          <div class="h-full grow shrink flex items-center justify-end gap-0.5 px-2 touch:px-0 touch:gap-2">
             <div
               class="contents"
               ref={(ref) => {

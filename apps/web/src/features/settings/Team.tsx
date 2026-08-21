@@ -1,10 +1,14 @@
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
-import { useHasPaidAccess } from '@core/auth/license';
+import { toast } from '@core/component/Toast/Toast';
+import {
+  getLinkShareScope,
+  LINK_SHARE_SCOPE_OPTIONS,
+  type LinkShareScope,
+  NO_LINK_SHARE,
+} from '@core/component/TopBar/linkShare';
 import { UserIcon } from '@core/component/UserIcon';
-import { PaywallKey, usePaywallState } from '@core/constant/PaywallState';
 import { SERVER_HOSTS } from '@core/constant/servers';
 import { useUserId } from '@core/context/user';
-import { macroIdToEmail, tryMacroId, useDisplayName } from '@core/user';
+import { getDisplayName, macroIdToEmail, tryMacroId } from '@core/user';
 import { debouncedDependent } from '@core/util/debounce';
 import { fuzzyFilter } from '@core/util/fuzzy';
 import { getWebOrigin } from '@core/util/webOrigin';
@@ -15,6 +19,7 @@ import { Select } from '@kobalte/core/select';
 import ArrowUpRightIcon from '@phosphor/arrow-up-right.svg';
 import CaretDownIcon from '@phosphor/caret-down.svg';
 import CheckIcon from '@phosphor/check.svg';
+import CopyIcon from '@phosphor/copy.svg';
 import EnvelopeIcon from '@phosphor/envelope.svg';
 import LinkIcon from '@phosphor/link.svg';
 import MagnifyingGlassIcon from '@phosphor/magnifying-glass.svg';
@@ -23,6 +28,7 @@ import SpinnerIcon from '@phosphor/spinner.svg';
 import TrashIcon from '@phosphor/trash.svg';
 import UsersIcon from '@phosphor/users.svg';
 import XIcon from '@phosphor/x.svg';
+import { useGithubLinkStatusQuery } from '@queries/auth';
 import {
   useJoinTeamMutation,
   useRejectInvitationMutation,
@@ -39,12 +45,22 @@ import {
   useDeleteTeamMutation,
   usePatchTeamMutation,
   useTeamQuery,
+  useToggleAutoJoinDomainMutation,
+  useToggleNonAdminInvitesMutation,
   useUserTeamsQuery,
 } from '@queries/team/teams';
 import type { TeamInviteDetails } from '@service-auth/generated/schemas/teamInviteDetails';
 import type { TeamMember } from '@service-auth/generated/schemas/teamMember';
 import { TeamRole } from '@service-auth/generated/schemas/teamRole';
-import { Button, cn, Dialog, Panel, Tooltip } from '@ui';
+import {
+  Button,
+  cn,
+  Dialog,
+  Panel,
+  SegmentedControl,
+  ToggleSwitch,
+  Tooltip,
+} from '@ui';
 import {
   createMemo,
   createSignal,
@@ -65,13 +81,15 @@ import {
   SettingsRow,
   SettingsSection,
 } from './primitives';
-import { getTeamSlugError, normalizeTeamSlugInput } from './teamSlug';
-
-function useRequiresPaidUpgrade() {
-  const hasPaidAccess = useHasPaidAccess();
-  const newPricingFlag = useFeatureFlag('enable-new-pricing');
-  return createMemo(() => newPricingFlag().enabled && !hasPaidAccess());
-}
+import {
+  canRemoveTeamMember,
+  isTeamAdminOrOwner,
+} from './teamMemberPermissions';
+import {
+  buildTeamTaskAutolinkTargetUrl,
+  getTeamSlugError,
+  normalizeTeamSlugInput,
+} from './teamSlug';
 
 const roleOrder: Record<string, number> = {
   [TeamRole.owner]: 0,
@@ -127,7 +145,7 @@ function RoleSelect(props: {
         <CaretDownIcon class="size-3 text-ink-muted shrink-0" />
       </Select.Trigger>
       <Select.Portal>
-        <Select.Content class="z-50 bg-surface ring ring-edge rounded shadow-lg min-w-25 p-1">
+        <Select.Content class="z-action-menu border border-edge bg-surface rounded shadow-lg min-w-25 p-1">
           <Select.Listbox />
         </Select.Content>
       </Select.Portal>
@@ -158,12 +176,8 @@ function InviteEntryRow(props: {
           onInput={(e) => props.onEmailChange(e.currentTarget.value)}
           onBlur={() => props.onBlur()}
           placeholder="Enter email address"
-          class={cn(
-            'flex-1 min-w-0 px-3 py-2 text-sm border rounded-lg bg-surface text-ink placeholder:text-ink/30 outline-none',
-            props.error
-              ? 'border-failure focus:border-failure'
-              : 'border-edge-muted focus:border-accent'
-          )}
+          class="settings-input flex-1 min-w-0"
+          aria-invalid={!!props.error}
         />
         <Show when={props.showRemove}>
           <Tooltip label="Remove">
@@ -303,10 +317,12 @@ function MemberRow(props: {
   member: TeamMember;
   isOwner: boolean;
   isCurrentUser: boolean;
+  canManageRemovals: boolean;
+  canRemove: boolean;
   onRemove: () => void;
   onRoleChange: (role: TeamRole) => void;
 }) {
-  const [displayName] = useDisplayName(tryMacroId(props.member.user_id));
+  const displayName = () => getDisplayName(tryMacroId(props.member.user_id));
   const isMemberOwner = () => props.member.role === TeamRole.owner;
   const email = () => {
     const id = tryMacroId(props.member.user_id);
@@ -346,9 +362,9 @@ function MemberRow(props: {
         >
           <RoleSelect value={props.member.role} onChange={props.onRoleChange} />
         </Show>
-        <Show when={props.isOwner}>
+        <Show when={props.canManageRemovals}>
           <Show
-            when={!props.isCurrentUser && !isMemberOwner()}
+            when={props.canRemove}
             fallback={
               <Tooltip
                 label={
@@ -381,13 +397,13 @@ function MemberRow(props: {
 }
 
 function MemberName(props: { memberId: string }) {
-  const [displayName] = useDisplayName(tryMacroId(props.memberId));
+  const displayName = () => getDisplayName(tryMacroId(props.memberId));
   return <span class="font-medium">{displayName()}</span>;
 }
 
 function InviteRow(props: {
   invite: TeamInviteDetails;
-  isOwner: boolean;
+  canChange: boolean;
   onCancel: () => void;
 }) {
   const [copied, setCopied] = createSignal(false);
@@ -423,7 +439,7 @@ function InviteRow(props: {
           </div>
         </div>
       </div>
-      <Show when={props.isOwner}>
+      <Show when={props.canChange}>
         <Tooltip label={copied() ? 'Copied' : 'Copy invite link'}>
           <Button
             variant="ghost"
@@ -452,7 +468,7 @@ function InviteRow(props: {
 }
 
 function InviterName(props: { inviterId: string }) {
-  const [displayName] = useDisplayName(tryMacroId(props.inviterId));
+  const displayName = () => getDisplayName(tryMacroId(props.inviterId));
   return <span class="font-medium">{displayName()}</span>;
 }
 
@@ -462,8 +478,6 @@ function UserInviteRow(props: {
   onDecline: () => void;
   isAccepting: boolean;
   isDeclining: boolean;
-  requiresUpgrade: boolean;
-  onUpgrade: () => void;
 }) {
   return (
     <div class="flex items-center justify-between gap-3 px-6 py-3 bg-surface">
@@ -509,8 +523,6 @@ function TeamInvites() {
   const userInvitesQuery = useUserInvitesQuery();
   const joinTeamMutation = useJoinTeamMutation();
   const rejectMutation = useRejectInvitationMutation();
-  const requiresUpgrade = useRequiresPaidUpgrade();
-  const { showPaywall } = usePaywallState();
 
   const invites = () => userInvitesQuery.data?.invites ?? [];
 
@@ -541,8 +553,6 @@ function TeamInvites() {
                   }
                   isAccepting={isAccepting(invite.id)}
                   isDeclining={isDeclining(invite.id)}
-                  requiresUpgrade={requiresUpgrade()}
-                  onUpgrade={() => showPaywall()}
                 />
               )}
             </For>
@@ -577,7 +587,6 @@ function CreateTeamDialog(props: { open: boolean; onClose: () => void }) {
   );
 
   const createTeamMutation = useCreateTeamWithInvitesMutation();
-  const requiresUpgrade = useRequiresPaidUpgrade();
 
   const charCountColor = () => {
     const len = teamName().trim().length;
@@ -663,30 +672,24 @@ function CreateTeamDialog(props: { open: boolean; onClose: () => void }) {
               onInput={(e) => handleTeamNameChange(e.currentTarget.value)}
               onBlur={() => validateTeamName()}
               placeholder="My Team"
-              class={cn(
-                'w-full px-3 py-2 text-sm border rounded-lg bg-surface text-ink placeholder:text-ink/30 outline-none',
-                teamNameError()
-                  ? 'border-failure focus:border-failure'
-                  : 'border-edge-muted focus:border-accent'
-              )}
+              class="settings-input w-full"
+              aria-invalid={!!teamNameError()}
             />
             <Show when={teamNameError()}>
               <p class="text-xs text-failure-ink">{teamNameError()}</p>
             </Show>
           </div>
-          <Show when={!requiresUpgrade()}>
-            <div class="flex flex-col gap-1">
-              <label class="text-sm text-ink-muted">
-                Invite members (optional)
-              </label>
-              <InviteEmailsInput
-                invites={invites()}
-                onChange={setInvites}
-                errors={inviteErrors()}
-                onErrorsChange={setInviteErrors}
-              />
-            </div>
-          </Show>
+          <div class="flex flex-col gap-1">
+            <label class="text-sm text-ink-muted">
+              Invite members (optional)
+            </label>
+            <InviteEmailsInput
+              invites={invites()}
+              onChange={setInvites}
+              errors={inviteErrors()}
+              onErrorsChange={setInviteErrors}
+            />
+          </div>
           <div class="flex justify-end gap-1 pt-2">
             <Button
               variant="ghost"
@@ -719,8 +722,6 @@ function CreateTeamDialog(props: { open: boolean; onClose: () => void }) {
 
 function EmptyTeamState() {
   const [showCreateModal, setShowCreateModal] = createSignal(false);
-  const hasPaidAccess = useHasPaidAccess();
-  const { showPaywall } = usePaywallState();
 
   return (
     <SettingsPage title="Team">
@@ -731,37 +732,18 @@ function EmptyTeamState() {
               <UsersIcon class="size-6 text-accent" />
             </div>
             <h3 class="text-sm font-medium text-ink mb-1">No team yet</h3>
-            <Show
-              when={hasPaidAccess()}
-              fallback={
-                <>
-                  <p class="text-xs text-ink-muted max-w-xs mb-4">
-                    Teams are available on paid plans. Upgrade to create and
-                    manage teams.
-                  </p>
-                  <Button
-                    variant="active"
-                    class="rounded-xs"
-                    onClick={() => showPaywall(PaywallKey.TEAMS)}
-                  >
-                    Upgrade
-                  </Button>
-                </>
-              }
+            <p class="text-xs text-ink-muted max-w-xs mb-4">
+              Create a team to collaborate with others and manage access
+              together.
+            </p>
+            <Button
+              variant="active"
+              class="rounded-xs"
+              onClick={() => setShowCreateModal(true)}
             >
-              <p class="text-xs text-ink-muted max-w-xs mb-4">
-                Create a team to collaborate with others and manage access
-                together.
-              </p>
-              <Button
-                variant="active"
-                class="rounded-xs"
-                onClick={() => setShowCreateModal(true)}
-              >
-                <PlusIcon class="size-4" />
-                Create Team
-              </Button>
-            </Show>
+              <PlusIcon class="size-4" />
+              Create Team
+            </Button>
           </div>
         </SettingsCard>
       </SettingsSection>
@@ -844,14 +826,15 @@ function TeamManagement(props: {
 
   const teamQuery = useTeamQuery(() => props.teamId);
   const invitesQuery = useTeamInvitesQuery(() => props.teamId);
+  const githubLink = useGithubLinkStatusQuery();
 
   const deleteInviteMutation = useDeleteTeamInviteMutation();
   const removeUserMutation = useRemoveUserFromTeamMutation();
   const patchTeamMutation = usePatchTeamMutation();
   const inviteToTeamMutation = useInviteToTeamMutation();
   const deleteTeamMutation = useDeleteTeamMutation();
-  const requiresUpgrade = useRequiresPaidUpgrade();
-  const { showPaywall } = usePaywallState();
+  const toggleAutoJoinMutation = useToggleAutoJoinDomainMutation();
+  const toggleNonAdminInvitesMutation = useToggleNonAdminInvitesMutation();
 
   const [showDeleteTeamModal, setShowDeleteTeamModal] = createSignal(false);
   const [deleteConfirmation, setDeleteConfirmation] = createSignal('');
@@ -947,7 +930,7 @@ function TeamManagement(props: {
   // disposes it when the member leaves the list.
   const memberSearchIndex = mapArray(members, (member) => {
     const macroId = tryMacroId(member.user_id);
-    const [displayName] = useDisplayName(macroId);
+    const displayName = () => getDisplayName(macroId);
     const email = macroId ? macroIdToEmail(macroId) : '';
     // Memoized so the lowercased search string is built once (and only rebuilt
     // when the name resolves), not re-allocated for every member on each scan.
@@ -969,11 +952,60 @@ function TeamManagement(props: {
     );
   });
 
+  const currentUserRole = createMemo(() => {
+    const currentUserId = userId();
+    if (!currentUserId) return undefined;
+
+    return teamQuery.data?.members.find(
+      (member) => member.user_id === currentUserId
+    )?.role;
+  });
+  const isAdminOrOwner = () => isTeamAdminOrOwner(currentUserRole());
+  const canManageMemberRemovals = () => isAdminOrOwner();
   const isOwner = createMemo(() => {
     const currentUserId = userId();
     if (!currentUserId) return false;
     return props.ownerId === currentUserId;
   });
+
+  // The team's auto-join domain doubles as the toggle state: a string means
+  // auto-join is on for that domain, null/undefined means it's off.
+  const autoJoinDomain = () => teamQuery.data?.team.auto_join_domain ?? null;
+  const autoJoinDescription = () => {
+    const domain = autoJoinDomain();
+    return domain
+      ? `New sign-ups with an @${domain} email automatically join this team.`
+      : "Automatically add new sign-ups whose email matches the team owner's domain.";
+  };
+
+  const handleToggleAutoJoin = () => {
+    if (!props.teamId || toggleAutoJoinMutation.isPending) return;
+    toggleAutoJoinMutation.mutate({ teamId: props.teamId });
+  };
+
+  // Whether non-admin members may invite. Teams default to true; only the
+  // backend response flips it, so missing data reads as the default.
+  const allowNonAdminInvites = () =>
+    teamQuery.data?.team.allow_non_admin_invites ?? true;
+
+  const handleToggleNonAdminInvites = () => {
+    if (!props.teamId || toggleNonAdminInvitesMutation.isPending) return;
+    toggleNonAdminInvitesMutation.mutate({ teamId: props.teamId });
+  };
+
+  // The team-wide default link-share scope for newly shared items. NONE
+  // (stored as null) means link sharing starts off.
+  const defaultLinkShare = () =>
+    getLinkShareScope(teamQuery.data?.team.default_link_share);
+
+  const handleChangeDefaultLinkShare = (scope: LinkShareScope) => {
+    if (!props.teamId || patchTeamMutation.isPending) return;
+    if (scope === defaultLinkShare()) return;
+    patchTeamMutation.mutate({
+      teamId: props.teamId,
+      request: { default_link_share: scope === NO_LINK_SHARE ? null : scope },
+    });
+  };
 
   const handleSaveTeamName = () => {
     const newName = editingTeamName()?.trim();
@@ -1029,6 +1061,20 @@ function TeamManagement(props: {
   const handleCancelTeamSlugEdit = () => {
     setEditingTeamSlug(undefined);
     setTeamSlugError(undefined);
+  };
+
+  const handleCopyGithubAutolinkUrl = async () => {
+    const targetUrl = buildTeamTaskAutolinkTargetUrl(
+      props.teamSlug,
+      getWebOrigin()
+    );
+    try {
+      await navigator.clipboard.writeText(targetUrl);
+      toast.success('GitHub autolink URL copied');
+    } catch (error) {
+      console.error('Failed to copy GitHub autolink URL', error);
+      toast.failure('Failed to copy GitHub autolink URL');
+    }
   };
 
   const handleDeleteTeam = () => {
@@ -1227,6 +1273,78 @@ function TeamManagement(props: {
                 </div>
               </Show>
             </SettingsRow>
+
+            <SettingsRow
+              label="GitHub autolink"
+              description={
+                <>
+                  Use <code>{props.teamSlug}-</code> as the reference prefix in
+                  GitHub, then paste this target URL.
+                </>
+              }
+              hideDescriptionOnMobile
+            >
+              <Button
+                variant="base"
+                size="sm"
+                class="rounded-xs"
+                onClick={handleCopyGithubAutolinkUrl}
+              >
+                <CopyIcon class="size-4" />
+                Copy target URL
+              </Button>
+            </SettingsRow>
+
+            <Show when={isAdminOrOwner()}>
+              <SettingsRow
+                label="Auto-join on domain"
+                description={autoJoinDescription()}
+                hideDescriptionOnMobile
+              >
+                <ToggleSwitch
+                  size="md"
+                  checked={!!autoJoinDomain()}
+                  disabled={
+                    toggleAutoJoinMutation.isPending || teamQuery.isLoading
+                  }
+                  onChange={handleToggleAutoJoin}
+                />
+              </SettingsRow>
+
+              <SettingsRow
+                label="Members can invite"
+                description="Let every team member invite people. When off, only admins and the owner can send invites."
+                hideDescriptionOnMobile
+              >
+                <ToggleSwitch
+                  size="md"
+                  checked={allowNonAdminInvites()}
+                  disabled={
+                    toggleNonAdminInvitesMutation.isPending ||
+                    teamQuery.isLoading
+                  }
+                  onChange={handleToggleNonAdminInvites}
+                />
+              </SettingsRow>
+
+              <SettingsRow
+                label="Default link sharing"
+                description="The link-sharing scope newly shared items start with. None means link sharing starts off."
+                hideDescriptionOnMobile
+              >
+                <SegmentedControl
+                  aria-label="Default link sharing scope"
+                  size="sm"
+                  value={defaultLinkShare()}
+                  options={LINK_SHARE_SCOPE_OPTIONS.map((option) => ({
+                    ...option,
+                    disabled:
+                      patchTeamMutation.isPending || teamQuery.isLoading,
+                  }))}
+                  onChange={handleChangeDefaultLinkShare}
+                />
+              </SettingsRow>
+            </Show>
           </SettingsCard>
         </SettingsSection>
 
@@ -1237,15 +1355,29 @@ function TeamManagement(props: {
               title="GitHub App"
               description="Connect your team's repositories for pull request sync."
             >
-              <a
-                href={`${SERVER_HOSTS['document-storage-service']}/github/install-sync`}
-                target="_blank"
-                rel="noopener noreferrer"
-                class="inline-flex h-7 items-center gap-1.5 rounded-md px-2 text-sm font-medium text-ink-muted outline-none transition-colors hover:bg-ink/4 hover:text-ink focus-visible:bg-ink/6"
+              {/* The install callback rejects users without a linked GitHub
+                  account, so don't offer the flow until they've connected one
+                  in their personal settings. */}
+              <Show
+                when={githubLink.data?.status === 'linked'}
+                fallback={
+                  <span class="text-xs text-ink-muted">
+                    {githubLink.isLoading
+                      ? 'Loading…'
+                      : 'Connect your GitHub account first'}
+                  </span>
+                }
               >
-                Configure app
-                <ArrowUpRightIcon class="size-3.5 opacity-70" />
-              </a>
+                <a
+                  href={`${SERVER_HOSTS['document-storage-service']}/github/install-sync`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="inline-flex h-7 items-center gap-1.5 rounded-md px-2 text-sm font-medium text-ink-muted outline-none transition-colors hover:bg-ink/4 hover:text-ink focus-visible:bg-ink/6"
+                >
+                  Configure app
+                  <ArrowUpRightIcon class="size-3.5 opacity-70" />
+                </a>
+              </Show>
             </IntegrationRow>
           </SettingsCard>
         </SettingsSection>
@@ -1253,19 +1385,14 @@ function TeamManagement(props: {
         <SettingsSection
           title="Members"
           actions={
-            <Show when={isOwner()}>
+            // Members can invite unless the team has restricted inviting
+            // to admins; removals stay admin-only.
+            <Show when={isAdminOrOwner() || allowNonAdminInvites()}>
               <Button
                 variant="base"
                 size="sm"
                 class="rounded-xs"
-                tooltip={
-                  requiresUpgrade()
-                    ? 'Inviting members requires a paid plan'
-                    : undefined
-                }
-                onClick={() =>
-                  requiresUpgrade() ? showPaywall() : setShowInviteModal(true)
-                }
+                onClick={() => setShowInviteModal(true)}
               >
                 <PlusIcon class="size-4" />
                 Invite
@@ -1281,7 +1408,7 @@ function TeamManagement(props: {
                 value={memberQuery()}
                 onInput={(e) => setMemberQuery(e.currentTarget.value)}
                 placeholder="Filter members"
-                class="flex-1 min-w-0 bg-transparent text-sm text-ink outline-none placeholder:text-ink-extra-muted"
+                class="flex-1 min-w-0 bg-transparent text-sm text-ink outline-none placeholder:text-ink-placeholder"
               />
               <Show when={memberQuery()}>
                 <button
@@ -1300,7 +1427,7 @@ function TeamManagement(props: {
             when={!teamQuery.isLoading}
             fallback={
               <SettingsCard>
-                <div class="animate-pulse bg-ink-extra-muted rounded h-16 m-4" />
+                <div class="animate-pulse bg-skeleton rounded h-16 m-4" />
               </SettingsCard>
             }
           >
@@ -1321,6 +1448,12 @@ function TeamManagement(props: {
                       member={member}
                       isOwner={isOwner()}
                       isCurrentUser={member.user_id === userId()}
+                      canManageRemovals={canManageMemberRemovals()}
+                      canRemove={canRemoveTeamMember(
+                        userId(),
+                        currentUserRole(),
+                        member
+                      )}
                       onRemove={() => setShowRemoveModal(member)}
                       onRoleChange={(newRole) => {
                         if (!props.teamId) return;
@@ -1344,14 +1477,19 @@ function TeamManagement(props: {
           </Show>
         </SettingsSection>
 
-        <Show when={isOwner() && (invitesQuery.data?.invites?.length ?? 0) > 0}>
+        <Show
+          when={
+            (isOwner() || allowNonAdminInvites()) &&
+            (invitesQuery.data?.invites?.length ?? 0) > 0
+          }
+        >
           <SettingsSection title="Pending invites">
             <SettingsCard>
               <For each={invitesQuery.data?.invites ?? []}>
                 {(invite) => (
                   <InviteRow
                     invite={invite}
-                    isOwner={isOwner()}
+                    canChange={isOwner() || allowNonAdminInvites()}
                     onCancel={() => setShowCancelInviteModal(invite)}
                   />
                 )}
@@ -1392,7 +1530,7 @@ function TeamManagement(props: {
               value={deleteConfirmation()}
               onInput={(e) => setDeleteConfirmation(e.currentTarget.value)}
               placeholder={deleteConfirmationPhrase()}
-              class="w-full px-3 py-2 text-sm border border-edge-muted rounded-lg bg-surface text-ink placeholder:text-ink/30 outline-none focus:border-accent"
+              class="settings-input w-full"
             />
             <div class="flex justify-end gap-1 pt-2">
               <Button
@@ -1602,9 +1740,7 @@ export function Team() {
     // Each state renders its own SettingsPage (scrolling, centered column) so
     // Team matches the Account/Appearance layout.
     <Suspense
-      fallback={
-        <div class="animate-pulse bg-ink-extra-muted rounded h-4 w-32 m-6" />
-      }
+      fallback={<div class="animate-pulse bg-skeleton rounded h-4 w-32 m-6" />}
     >
       <TeamContent />
     </Suspense>

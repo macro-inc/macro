@@ -43,7 +43,7 @@ where
 
         for &entity in ids.iter() {
             match entity.entity_type {
-                EntityType::Document | EntityType::Project => doc.push(entity),
+                EntityType::Document | EntityType::Project | EntityType::Skill => doc.push(entity),
                 EntityType::StaticFile => sf.push(entity),
                 EntityType::EmailThread => email.push(entity),
                 EntityType::Chat => chat.push(entity),

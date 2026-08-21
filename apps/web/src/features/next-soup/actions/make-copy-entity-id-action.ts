@@ -7,17 +7,24 @@ export const makeCopyEntityIdAction = () => {
     return true;
   };
 
+  /** Copying an id needs nothing but the id, so callers that only have one
+   *  (e.g. a block, which is keyed by its entity id) can skip resolving the
+   *  entity. */
+  const executeById = async (id: string) => {
+    await navigator.clipboard.writeText(id);
+    toast.success('ID copied to clipboard');
+  };
+
   const execute = async (entities: EntityData[]) => {
     const entity = entities[0];
     if (!entity) return;
 
-    await navigator.clipboard.writeText(entity.id);
-    toast.success('ID copied to clipboard');
+    await executeById(entity.id);
   };
 
   const executeWithSoup = async (entities: EntityData[], _soup: SoupState) => {
     await execute(entities);
   };
 
-  return { canExecute, execute, executeWithSoup };
+  return { canExecute, execute, executeById, executeWithSoup };
 };

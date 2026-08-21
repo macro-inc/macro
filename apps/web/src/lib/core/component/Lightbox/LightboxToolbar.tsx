@@ -1,5 +1,4 @@
-import * as stackingContext from '@core/constant/stackingContext';
-import { isMobile } from '@core/mobile/isMobile';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { cn } from '@ui';
 import type { JSX } from 'solid-js';
 
@@ -13,11 +12,11 @@ export function LightboxToolbar(props: LightboxToolbarProps) {
     <div
       class={cn(
         'absolute top-4 right-4 bg-surface backdrop-blur-sm rounded-lg border border-edge p-1 flex flex-row items-center gap-1 shadow-md transition-opacity duration-300',
-        isMobile() || props.isVisible
+        isTouchDevice() || props.isVisible
           ? 'opacity-100'
           : 'opacity-0 pointer-events-none'
       )}
-      style={{ 'z-index': stackingContext.zModal + 1 }}
+      style={{ 'z-index': 'calc(var(--z-index-modal) + 1)' }}
     >
       {props.children}
     </div>

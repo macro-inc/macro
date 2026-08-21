@@ -5,11 +5,12 @@ use anyhow::Result;
 use model::document::list::ListDocumentsWithAccessResponse;
 use model::document::response::{CreateDocumentRequest, CreateDocumentResponse};
 use model::document::{
-    DocumentBasic,
+    DocumentBasic, FileType,
     response::{GetDocumentResponse, LocationResponseData, LocationResponseV3},
 };
 use model::document_storage_service_internal::{
-    GetDocumentsMetadataRequest, GetDocumentsMetadataResponse,
+    GetDocumentsMetadataRequest, GetDocumentsMetadataResponse, InitializeStarterDocsResponse,
+    StarterDocHowToGuide,
 };
 use models_permissions::share_permission::access_level::AccessLevel;
 use reqwest::StatusCode;
@@ -26,6 +27,12 @@ pub struct ExportDocumentResponse {
     pub presigned_url: String,
 }
 
+#[derive(Serialize)]
+struct ContentUploadedRequest {
+    file_type: FileType,
+    document_version_id: Option<String>,
+}
+
 impl DocumentStorageServiceClient {
     pub async fn get_document(&self, document_id: String) -> Result<GetDocumentResponse> {
         let res = self
@@ -38,6 +45,43 @@ impl DocumentStorageServiceClient {
 
         let doc_data: GetDocumentResponse = serde_json::from_value(res)?;
         Ok(doc_data)
+    }
+
+    /// Notify the document storage service that document content was uploaded.
+    #[tracing::instrument(skip(self), err)]
+    pub async fn publish_document_content_uploaded(
+        &self,
+        document_id: &str,
+        file_type: FileType,
+        document_version_id: Option<String>,
+    ) -> Result<()> {
+        let response = self
+            .client
+            .post(format!(
+                "{}/internal/documents/{}/content-uploaded",
+                self.url, document_id
+            ))
+            .json(&ContentUploadedRequest {
+                file_type,
+                document_version_id,
+            })
+            .send()
+            .await?;
+
+        let status = response.status();
+        if !status.is_success() {
+            let body = response
+                .text()
+                .await
+                .unwrap_or_else(|_| "<failed to read body>".to_string());
+            anyhow::bail!(
+                "publishing document content upload failed: {} - {}",
+                status,
+                body
+            );
+        }
+
+        Ok(())
     }
 
     pub async fn get_document_basic(&self, document_id: &str) -> Result<Option<DocumentBasic>> {
@@ -384,11 +428,17 @@ impl DocumentStorageServiceClient {
         Ok(response_data)
     }
 
-    /// Create the "Macro how to guide" onboarding document for a user and pin
-    /// it to their sidebar favorites
+    /// Create the starter documents for a user — the "Macro how to guide"
+    /// plus the starter tasks it links to — and pin the guide to their
+    /// sidebar favorites. Returns a reference to the guide document when it
+    /// could be resolved, so callers can link to it (e.g. the support
+    /// channel welcome message).
     #[tracing::instrument(skip(self))]
-    pub async fn initialize_how_to_guide(&self, user_id: &str) -> Result<()> {
-        let url = format!("{}/internal/documents/initialize_how_to_guide", self.url);
+    pub async fn initialize_starter_docs(
+        &self,
+        user_id: &str,
+    ) -> Result<Option<StarterDocHowToGuide>> {
+        let url = format!("{}/internal/documents/initialize_starter_docs", self.url);
 
         let res = self
             .client
@@ -410,7 +460,8 @@ impl DocumentStorageServiceClient {
             anyhow::bail!("HTTP {}: {}", status_code, body);
         }
 
-        Ok(())
+        let response: InitializeStarterDocsResponse = res.json().await?;
+        Ok(response.how_to_guide)
     }
 
     /// Create a document

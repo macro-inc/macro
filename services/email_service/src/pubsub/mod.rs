@@ -1,8 +1,11 @@
 pub mod backfill;
-pub(crate) mod context;
+/// Outbound adapters used by calendar backfill application services.
+pub mod calendar_backfill_adapters;
+pub mod context;
 /// The flag-selected CRM metadata resolver, re-exported for the
 /// pubsub_workers binary to construct.
 pub use context::CrmMetadataResolver;
+pub mod crm_cleanup;
 pub mod gmail_ops;
 pub mod inbox_sync;
 pub mod link_manager;
@@ -11,6 +14,7 @@ pub mod scheduled;
 pub mod sfs_deleter;
 pub mod sfs_uploader;
 pub(crate) mod util;
+pub(crate) mod worker_lifecycle;
 /// Log-and-drop publisher for `macro.email` events, re-exported for the
 /// HTTP binary's handlers.
 pub use util::publish_email_event;

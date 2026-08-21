@@ -321,8 +321,26 @@ fn mention_event(
     sender_email: &str,
     content: &str,
 ) -> BotEvent {
+    bot_event(
+        BotTrigger::Mention,
+        channel_id,
+        trigger_id,
+        thread_id,
+        sender_email,
+        content,
+    )
+}
+
+fn bot_event(
+    trigger: BotTrigger,
+    channel_id: Uuid,
+    trigger_id: Uuid,
+    thread_id: Option<Uuid>,
+    sender_email: &str,
+    content: &str,
+) -> BotEvent {
     BotEvent {
-        trigger: BotTrigger::Mention,
+        trigger,
         channel_id,
         message: MutatedMessage {
             id: trigger_id,
@@ -528,6 +546,45 @@ async fn thread_prompt_puts_thread_first_and_demotes_channel_noise() {
         1
     );
     assert!(prompt.ends_with("Reply to austin."));
+}
+
+#[tokio::test]
+async fn inferred_thread_prompt_does_not_claim_a_mention() {
+    let channel_id = Uuid::new_v4();
+    let parent_id = Uuid::new_v4();
+    let trigger_id = Uuid::new_v4();
+    let macro_ai = bot_id::MACRO_AI_BOT_ID.into_storage_id().to_string();
+
+    let channels = Arc::new(TestChannelService {
+        around_args: Mutex::new(None),
+        around_messages: vec![context_message(
+            channel_id,
+            parent_id,
+            "macro|alice@example.com",
+            "notifications are broken",
+        )],
+        thread_replies: vec![
+            thread_reply(Uuid::new_v4(), &macro_ai, "what is broken exactly?"),
+            thread_reply(trigger_id, "macro|alice@example.com", "it fires twice"),
+        ],
+    });
+    let handler = MacroAiHandler::new(channels.clone(), Arc::new(TestResponder));
+    let event = bot_event(
+        BotTrigger::Inferred,
+        channel_id,
+        trigger_id,
+        Some(parent_id),
+        "alice@example.com",
+        "it fires twice",
+    );
+
+    let prompt = handler.build_prompt(&event).await;
+
+    assert!(prompt.contains("alice replied in a channel thread you are part of."));
+    assert!(!prompt.contains("mentioned you (@macro)"));
+    assert!(prompt.contains("alice [respond to this message]: it fires twice"));
+    assert!(!prompt.contains("[this message mentioned you]"));
+    assert!(prompt.ends_with("Reply to alice."));
 }
 
 #[tokio::test]

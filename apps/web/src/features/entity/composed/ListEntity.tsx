@@ -45,19 +45,23 @@ import {
   filterValidNotifications,
 } from '../utils/notification';
 import { useIsShared } from '../utils/shared';
+import { NarrowCondensedLayout } from './list-entity/narrow-condensed-layout';
 import { NarrowInboxLayout } from './list-entity/narrow-inbox-layout';
 import { NarrowLayout } from './list-entity/narrow-layout';
+import { NarrowSingleLineLayout } from './list-entity/narrow-single-line-layout';
 import {
   type BaseListEntityProps,
   hasSearchContentHits,
-  InboxDivider,
   type LayoutProps,
   useCharacterCount,
   useListLayout,
 } from './list-entity/shared';
 import { WideLayout } from './list-entity/wide-layout';
 
-export { ListLayoutProvider } from './list-entity/shared';
+export {
+  ListLayoutProvider,
+  type NarrowLayoutVariant,
+} from './list-entity/shared';
 
 interface ListEntityProps extends BaseListEntityProps {
   showUnrollNotifications?: boolean;
@@ -70,7 +74,7 @@ export function MaybeEntityRow(props: {
 }) {
   const ctx = useContext(SwipableRowContext);
   return (
-    <Show when={isMobile() && ctx} fallback={props.children}>
+    <Show when={isTouchDevice() && ctx} fallback={props.children}>
       <SwipableRow
         id={props.entityId}
         swipeLeftColor={props.config?.swipeLeftColor}
@@ -153,10 +157,15 @@ export function ListEntity(props: ListEntityProps) {
     splitId: useSplitPanel()?.handle?.id,
   });
 
-  const isWide = useListLayout()?.isWide ?? (() => true);
+  const listLayout = useListLayout();
+  const isWide = listLayout?.isWide ?? (() => true);
+  const isCondensedVariant = () => listLayout?.narrowLayout() === 'condensed';
+  const usesCondensedNarrowLayout = () => !isWide() && isCondensedVariant();
+  const isSingleLineVariant = () =>
+    listLayout?.narrowLayout() === 'single-line';
 
   const mobileStacks = createMemo(() => {
-    if (!isMobile()) return [];
+    if (!isTouchDevice()) return [];
     if (!props.showUnrollNotifications) return [];
     const notifs = props.entity.notifications?.();
     if (!notifs?.length) return [];
@@ -165,28 +174,6 @@ export function ListEntity(props: ListEntityProps) {
     );
     if (!validNotifs.length) return [];
     return stackNotifications(validNotifs);
-  });
-
-  // A single stack collapses into the condensed entity row only when it's a
-  // new-messages-in-a-channel stack — the entity (channel) preview already
-  // conveys "new messages here". Replies, mentions, and other types carry
-  // per-stack context worth showing, so they render as a stack even when
-  // alone.
-  const shouldUnrollStacks = () => {
-    const stacks = mobileStacks();
-    if (stacks.length === 0) return false;
-    if (stacks.length > 1) return true;
-    return stacks[0].type !== 'channel_message_send';
-  };
-
-  // Latch to true once the stack view has ever been used (including async
-  // arrivals). Prevents a jarring layout switch when notifications drop back
-  // to a single condensable stack.
-  const [hasBeenUnrolled, setHasBeenUnrolled] = createSignal(
-    shouldUnrollStacks()
-  );
-  createEffect(() => {
-    if (shouldUnrollStacks()) setHasBeenUnrolled(true);
   });
 
   return (
@@ -203,12 +190,13 @@ export function ListEntity(props: ListEntityProps) {
       class={cn(
         'soup-list-entity rounded-lg @container/entity w-[calc(100%-0.5rem)] mr-1 relative group/narrow flex flex-col py-0.5',
         {
-          'min-h-10 mx-1': !isMobile(),
-          'bg-accent/8': props.checked,
-          'bg-accent/16': props.checked && props.highlighted,
-          'bg-hover/30':
+          'min-h-10 mx-1': !isMobile() && !usesCondensedNarrowLayout(),
+          'min-h-9 mx-1': !isMobile() && usesCondensedNarrowLayout(),
+          'bg-list-selected': props.checked,
+          'bg-list-selected-highlighted': props.checked && props.highlighted,
+          'bg-list-highlighted':
             props.highlighted && !props.checked && !isTouchDevice(),
-          'hover:bg-hover/30':
+          'hover:bg-list-hover':
             !props.highlighted && !props.checked && !isTouchDevice(),
         }
       )}
@@ -223,18 +211,27 @@ export function ListEntity(props: ListEntityProps) {
             <WideLayout {...layoutProps()} />
           </MaybeEntityRow>
         </Match>
-        <Match when={isMobile() && (hasBeenUnrolled() || shouldUnrollStacks())}>
-          <Entity.Notification.MobileStacks
+        {/* Mixed-type lists (Search) render every entity as one line, ahead
+            of the taller per-type mobile layouts below. */}
+        <Match when={isSingleLineVariant()}>
+          <MaybeEntityRow
+            entityId={props.entity.id}
+            config={props.entityRowConfig}
+          >
+            <NarrowSingleLineLayout {...layoutProps()} />
+          </MaybeEntityRow>
+        </Match>
+        <Match when={isTouchDevice() && mobileStacks().length > 0}>
+          <Entity.Notification.MobileStackRows
             stacks={mobileStacks()}
             entity={props.entity}
             entityRowConfig={props.entityRowConfig}
           />
-          <InboxDivider />
         </Match>
         <Match
           when={
-            isMobile() &&
-            (isChannelEntity(props.entity) ||
+            isTouchDevice() &&
+            ((isChannelEntity(props.entity) && !isCondensedVariant()) ||
               isEmailEntity(props.entity) ||
               props.showUnrollNotifications)
           }
@@ -244,6 +241,14 @@ export function ListEntity(props: ListEntityProps) {
             config={props.entityRowConfig}
           >
             <NarrowInboxLayout {...layoutProps()} />
+          </MaybeEntityRow>
+        </Match>
+        <Match when={!isMobile() && usesCondensedNarrowLayout()}>
+          <MaybeEntityRow
+            entityId={props.entity.id}
+            config={props.entityRowConfig}
+          >
+            <NarrowCondensedLayout {...layoutProps()} />
           </MaybeEntityRow>
         </Match>
         <Match when={true}>
@@ -256,7 +261,7 @@ export function ListEntity(props: ListEntityProps) {
         </Match>
       </Switch>
 
-      <Show when={hasNotifications() && !isMobile()}>
+      <Show when={hasNotifications() && !isTouchDevice()}>
         <div class="px-2 pb-1.5 -mt-1 min-w-0 overflow-hidden">
           <div class={cn('min-w-0 flex-1 ml-2 @lg/entity:ml-6')}>
             <Show when={isWithNotification(props.entity) && !showContentHits()}>

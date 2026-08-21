@@ -29,7 +29,9 @@
                 "THREAD",
                 "USER",
                 "COMPANY",
-                "TASK"
+                "TASK",
+                "CALL_RECORD",
+                "CALENDAR_EVENT"
               ]
             }
           }

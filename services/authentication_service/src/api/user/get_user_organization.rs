@@ -1,12 +1,12 @@
-use crate::api::context::ApiContext;
+use crate::api::context::{ApiContext, AuthorizationService};
 use axum::{
-    Extension, Json,
+    Json,
     extract::State,
     http::StatusCode,
     response::{IntoResponse, Response},
 };
+use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
 use model::response::ErrorResponse;
-use model::user::UserContext;
 
 #[derive(Debug, serde::Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
@@ -68,12 +68,14 @@ impl IntoResponse for GetUserOrganizationResponse {
             (status = 500, body=ErrorResponse),
         ),
     )]
-#[tracing::instrument(skip(ctx, user_context), err, fields(user_id=?user_context.user_id))]
+#[tracing::instrument(skip(ctx, user_context), err, fields(user_id=?user_context.authorization.user.user_context.user_id))]
 pub async fn handler(
     State(ctx): State<ApiContext>,
-    user_context: Extension<UserContext>,
+    user_context: MacroAuthorizationExtractor<AuthorizationService, UserOrInternal>,
 ) -> Result<GetUserOrganizationResponse, UserOrganizationError> {
-    let organization_id = if let Some(organization_id) = user_context.organization_id {
+    let organization_id = if let Some(organization_id) =
+        user_context.authorization.user.user_context.organization_id
+    {
         organization_id
     } else {
         return Ok(GetUserOrganizationResponse::NoOrganization);

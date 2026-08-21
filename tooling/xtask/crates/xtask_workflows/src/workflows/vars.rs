@@ -1,5 +1,5 @@
 //! Shared workflow environment: secrets, the repo-wide env block, concurrency,
-//! and the sccache-on-volume settings. This is the "environment" file.
+//! and Namespace cache names. This is the "environment" file.
 
 use gh_workflow::{Concurrency, Expression, Workflow};
 
@@ -13,14 +13,16 @@ macro_rules! secret {
 
 secret!(AWS_ACCESS_KEY);
 secret!(AWS_SECRET_ACCESS_KEY);
-secret!(CACHIX_AUTH_TOKEN);
 secret!(CLOUDFLARE_API_TOKEN);
+secret!(DAYTONA_API_KEY);
 secret!(DD_API_KEY);
 secret!(DD_APP_KEY);
-secret!(DD_WEB_APP_TOKEN);
+secret!(DOPPLER_PREVIEW_TOKEN);
 secret!(DOPPLER_TOKEN);
+secret!(FLY_API_TOKEN);
 secret!(MACOS_DEVELOPER_ID_CERTIFICATE_BASE64);
 secret!(MACOS_DEVELOPER_ID_CERTIFICATE_PASSWORD);
+secret!(NIX_CACHE_SIGNING_KEY);
 secret!(POSTHOG_API_KEY);
 secret!(PULUMI_ACCESS_TOKEN);
 secret!(SEGMENT_WRITE_KEY);
@@ -30,15 +32,51 @@ secret!(SEGMENT_WRITE_KEY_PRODUCTION);
 /// hand-written `deploy-lexical-service.yml`.
 pub const CLOUDFLARE_ACCOUNT_ID: &str = "${{ vars.CLOUDFLARE_ACCOUNT_ID }}";
 
+/// S3 nix binary cache store URL, a repo *variable* — e.g.
+/// `s3://macro-nix-cache?region=us-east-1`. The substituter role Cachix used
+/// to play: any /nix cache-volume miss becomes a signed-narinfo download
+/// instead of a from-source rebuild. Empty/unset disables all nix-cache
+/// wiring (setup skips the substituter config; push steps no-op), so the
+/// workflows are safe to run before the bucket exists.
+pub const NIX_CACHE_URL: &str = "${{ vars.NIX_CACHE_URL }}";
+
+/// Public counterpart of [`NIX_CACHE_SIGNING_KEY`], a repo *variable* — e.g.
+/// `nix-cache.macro.com-1:BASE64...`. Trusted by the nix daemon so substituted
+/// paths verify.
+pub const NIX_CACHE_PUBLIC_KEY: &str = "${{ vars.NIX_CACHE_PUBLIC_KEY }}";
+
 /// Nextest thread count for the test job. Tuned for the previous
 /// `linux-extra-beefy` runner; revisit if `namespace-profile-linux-mid` is
 /// smaller.
 pub const NEXTEST_TEST_THREADS: u32 = 32;
 
-/// Explicit Namespace cache tag for the heavy compile jobs (check + test). A
-/// fixed tag (instead of the default per-branch scoping) makes the cache volume
-/// global across all branches — see [`crate::workflows::runners::Runner::with_cache_tag`].
+/// Explicit Namespace cache-volume tag for the heavy compile jobs (check +
+/// test). A fixed tag (instead of the default per-branch scoping) makes the
+/// Cargo/Nix volume global across all branches — see
+/// [`crate::workflows::runners::Runner::with_cache_tag`]. The legacy tag name is
+/// retained so the existing warm volume is not invalidated.
 pub const CI_CACHE_TAG: &str = "sccache-ci";
+
+/// Namespace remote sccache shared by the cloud-storage compile/test jobs and
+/// the workspace dependency checks.
+pub const CI_SCCACHE_NAME: &str = "sccache-ci";
+
+/// Namespace cache tag for the Fly preview deploy job. Its own pool, NOT
+/// [`CI_CACHE_TAG`]: sharing looked economical but was measured cold both ways
+/// (run 28968155599: sccache 2.65% hits, cargo target dir absent). The
+/// check/test jobs compile for the host while this job zigbuilds with
+/// `--target x86_64-unknown-linux-gnu.2.36`, so their sccache entries hash
+/// differently and never serve this job — and they don't persist the cargo
+/// target dir at all, so a volume from the shared pool almost never carries
+/// one. A dedicated low-concurrency pool gives the job's target dir and init
+/// snapshots the best chance of a zero-copy hit; Rust objects use the durable
+/// remote sccache below instead of depending on this volume's placement.
+pub const PREVIEW_CACHE_TAG: &str = "fly-preview";
+
+/// Durable Namespace remote sccache shared by Fly preview jobs. Unlike the
+/// local cache volume, this has an artifact-backed cold tier, so a job placed
+/// on a runner that has never seen the volume can still reuse Rust objects.
+pub const PREVIEW_SCCACHE_NAME: &str = "fly-preview";
 
 /// Namespace cache tag for the web-app jobs (PR checks + preview deploys).
 /// Cache volumes are keyed workspace-wide by tag alone, so a dedicated tag
@@ -47,13 +85,25 @@ pub const CI_CACHE_TAG: &str = "sccache-ci";
 /// `linux-mid` volume.
 pub const WEB_CI_CACHE_TAG: &str = "web-ci";
 
-/// Directory sccache uses for its local-disk cache. Lives on the Namespace cache
-/// volume so it persists across runs — this is what replaces the S3 bucket.
-pub const SCCACHE_VOLUME_DIR: &str = "/home/runner/.cache/sccache";
+/// Namespace remote sccache used when the web checks compile Rust API schema
+/// generators. Kept separate from [`CI_SCCACHE_NAME`] because these jobs have
+/// a different workload and runner profile.
+pub const WEB_SCCACHE_NAME: &str = "web-ci";
 
-/// Max on-disk size for the sccache cache. Larger than the setup default since
-/// the persisted volume can hold a full-workspace cache.
-pub const SCCACHE_CACHE_SIZE: &str = "20G";
+/// Namespace cache tag for the sync-service worker deploy. Its own pool: this
+/// job compiles for `wasm32-unknown-unknown`, so nothing in the host-target
+/// volumes ([`CI_CACHE_TAG`]) would serve it anyway.
+pub const SYNC_SERVICE_CACHE_TAG: &str = "sync-service-deploy";
+
+/// Bun's global package cache. Mounted explicitly because Bun is supplied by
+/// the Nix dev shell and is not available to Namespace's cache planner yet.
+pub const BUN_CACHE_VOLUME_DIR: &str = "/home/runner/.bun/install/cache";
+
+/// Init-snapshot store for the preview job (`MACRO_STACK_SNAPSHOT_DIR`). Lives
+/// on the preview cache volume for the zero-copy fast path; the workflow also
+/// backs each content-addressed snapshot up to Namespace artifact storage so a
+/// cache-volume miss does not force another infra bake.
+pub const PREVIEW_SNAPSHOT_VOLUME_DIR: &str = "/home/runner/.cache/macro-preview-snapshots";
 
 /// The repo-wide env block (mirrors the original top-level `env:`). Defaults the
 /// linker to `lld`; the heavy jobs override `RUSTFLAGS` to use `mold`.

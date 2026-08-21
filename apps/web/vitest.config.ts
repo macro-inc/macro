@@ -64,6 +64,19 @@ export default defineConfig({
         },
       },
       {
+        plugins: [tsconfigPaths(), solidPlugin()],
+        ssr: {
+          resolve: {
+            conditions: ['browser', 'development'],
+          },
+        },
+        test: {
+          environment: 'jsdom',
+          include: ['src/lib/urql-solid/**/*.{test,spec}.{ts,tsx}'],
+          name: 'urql-solid',
+        },
+      },
+      {
         test: {
           include: ['scripts/**/*.{test,spec}.{ts,tsx}'],
           name: 'scripts',
@@ -129,6 +142,10 @@ export default defineConfig({
         },
       },
       {
+        // tsconfigPaths so tests can resolve `@`-aliased imports (e.g. a util
+        // that imports `@core/util/url`). Per-file `@vitest-environment jsdom`
+        // opts a test into a DOM; the default here stays node.
+        plugins: [tsconfigPaths()],
         test: {
           include: ['src/features/block-email/**/*.{test,spec}.{ts,tsx}'],
           name: 'block-email',
@@ -139,6 +156,13 @@ export default defineConfig({
         test: {
           include: ['src/lib/service-clients/**/*.{test,spec}.{ts,tsx}'],
           name: 'service-clients',
+        },
+      },
+      {
+        extends: './src/lib/core/vitest.config.ts',
+        test: {
+          include: ['src/lib/tauri/**/*.{test,spec}.{ts,tsx}'],
+          name: 'tauri',
         },
       },
       {
@@ -153,6 +177,9 @@ export default defineConfig({
           include: [
             'src/components/**/*.{test,spec}.{ts,tsx}',
             'src/features/**/*.{test,spec}.{ts,tsx}',
+            'src/lib/analytics/**/*.{test,spec}.{ts,tsx}',
+            'src/lib/constants/**/*.{test,spec}.{ts,tsx}',
+            'src/lib/fullcalendar-solid/**/*.{test,spec}.{ts,tsx}',
             'src/routes/**/*.{test,spec}.{ts,tsx}',
           ],
           name: 'app',

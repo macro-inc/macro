@@ -12,7 +12,11 @@ export const makeCopyAction = () => {
       entity.type !== 'email' &&
       entity.type !== 'channel_message' &&
       entity.type !== 'channel_thread' &&
-      entity.type !== 'foreign'
+      entity.type !== 'foreign' &&
+      entity.type !== 'automation' &&
+      // There is no duplicate endpoint for reminders; the bulk copy mutation
+      // only knows how to clone documents.
+      entity.type !== 'reminder'
     );
   };
 

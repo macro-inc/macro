@@ -1,6 +1,10 @@
 import { useChannelsContext } from '@core/context/channels';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { MaybeEntityRow, MultiSelectCheckbox, UnreadIndicator } from '@entity';
-import type { BaseListEntityProps } from '@entity/composed/list-entity/shared';
+import {
+  type BaseListEntityProps,
+  InboxDivider,
+} from '@entity/composed/list-entity/shared';
 import { cn } from '@ui';
 import { createMemo, Show } from 'solid-js';
 import { InboxCardLayout, toInboxCardDisplayItem } from './inbox-card-layouts';
@@ -29,7 +33,12 @@ export function InboxListEntity(props: BaseListEntityProps) {
 
   return (
     <div
-      class="group/inbox-item relative mx-2"
+      // `soup-list-entity` scopes the --soup-inbox-* geometry vars (defined in
+      // ListEntity.css) that the mobile narrow-inbox restyle of InboxCard
+      // reads, and opts the row into the shared touch-press highlight. On
+      // mobile the row is full-bleed with a hairline divider, like
+      // NarrowInboxLayout.
+      class="group/inbox-item soup-list-entity relative mx-2 mobile:mx-0"
       ref={props.ref}
       onMouseMove={props.onMouseMove}
     >
@@ -41,8 +50,12 @@ export function InboxListEntity(props: BaseListEntityProps) {
           onClick={props.onClick}
         />
       </MaybeEntityRow>
-      {/* Select checkbox lives in the gutter reserved by the card's `pl-9`. */}
-      <Show when={!props.hideCheckbox}>
+      <Show when={!props.isLastInGroup}>
+        <InboxDivider />
+      </Show>
+      {/* Select checkbox lives in the gutter reserved by the card's `pl-9`;
+          mobile has no gutter — the rail shows the unread dot instead. */}
+      <Show when={!isTouchDevice() && !props.hideCheckbox}>
         <div class="group/select-control absolute left-1 top-2.5 z-10 grid size-8 place-items-center">
           <Show when={!props.checked}>
             <div

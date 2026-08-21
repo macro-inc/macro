@@ -3,10 +3,13 @@ import {
   runCreateAction,
   setCreateMenuOpen,
 } from '@app/features/command/Launcher';
+import { openCreateCompanyModal } from '@app/features/companies/CreateCompanyModal';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
+import { openNewChannelModal } from '@channel/CreateChannelModal';
 import { hapticImpact } from '@core/mobile/haptics';
 import { ICON_ANIMATION_DURATION_MS } from '@icon/animation';
 import { AnimatedChannelIcon } from '@icon/wide-channel';
+import { AnimatedCompanyIcon } from '@icon/wide-company';
 import { AnimatedEmailIcon } from '@icon/wide-email';
 import { AnimatedPlusIcon } from '@icon/wide-plus';
 import { AnimatedStarIcon } from '@icon/wide-star';
@@ -36,6 +39,7 @@ const VIEW_CREATE_ICONS: Partial<Record<ListView, IconComponent>> = {
   documents: AnimatedPlusIcon,
   tasks: AnimatedTaskIcon,
   channels: AnimatedChannelIcon,
+  companies: AnimatedCompanyIcon,
   inbox: AnimatedPlusIcon,
 };
 
@@ -63,7 +67,10 @@ export function SoupViewMobileCreateButton(props: {
       runCreateAction('task', { source: 'mobile_dock' });
     },
     channels: () => {
-      runCreateAction('channel', { source: 'mobile_dock' });
+      openNewChannelModal();
+    },
+    companies: () => {
+      openCreateCompanyModal();
     },
   };
 

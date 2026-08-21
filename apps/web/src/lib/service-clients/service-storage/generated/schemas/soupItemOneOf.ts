@@ -4,7 +4,7 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
-import type { SoupDocument } from './soupDocument';
+import type { SoupDocumentSoupPropertiesField } from './soupDocumentSoupPropertiesField';
 import type { SoupItemOneOfTag } from './soupItemOneOfTag';
 
 /**
@@ -12,6 +12,6 @@ import type { SoupItemOneOfTag } from './soupItemOneOfTag';
  */
 export type SoupItemOneOf = {
   /** Document item. */
-  data: SoupDocument;
+  data: SoupDocumentSoupPropertiesField;
   tag: SoupItemOneOfTag;
 };

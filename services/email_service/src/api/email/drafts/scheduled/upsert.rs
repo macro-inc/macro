@@ -96,6 +96,10 @@ pub async fn handler(
         send_time: request.send_time,
         sent: false,
         processing: false,
+        // This legacy transport only knows the link; the owner is the best
+        // available attribution (matching the message_send_queued event
+        // below).
+        actor_id: Some(link.macro_id.to_string()),
     };
 
     // Upsert the scheduled message
@@ -132,8 +136,7 @@ pub async fn handler(
                 scheduled_send_at: request.send_time,
                 is_scheduled: true,
             }),
-        )
-        .await;
+        );
     }
 
     Ok(Json(UpsertScheduledResponse {

@@ -9,6 +9,7 @@ axum = [
   "dep:axum",
   "dep:axum-extra",
   "dep:ip_extractor",
+  "dep:macro_authorization",
   "dep:model-error-response",
   "dep:model_user",
   "dep:tower",
@@ -31,19 +32,22 @@ tracing = { workspace = true }
 uuid = { workspace = true }
 
 # Domain models
+invite_email = { path = "../invite_email" }
+macro_authorization = { path = "../macro_authorization", optional = true, default-features = false, features = [
+  "axum",
+] }
 macro_user_id = { path = "../macro_user_id" }
 macro_uuid = { path = "../macro_uuid" }
 model-entity = { path = "../model-entity" }
 notification = { path = "../notification" }
 rate_limit = { path = "../rate_limit", features = ["axum"] }
-invite_email = { path = "../invite_email" }
 
 # Axum dependencies (for inbound)
 axum = { workspace = true, optional = true }
 axum-extra = { workspace = true, optional = true }
 ip_extractor = { path = "../ip_extractor", optional = true }
 model-error-response = { path = "../model-error-response", optional = true }
-model_user = { path = "../model_user", optional = true, features = ["axum"] }
+model_user = { path = "../model_user", optional = true }
 tower = { workspace = true, optional = true }
 utoipa = { workspace = true, optional = true }
 

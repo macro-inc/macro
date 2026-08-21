@@ -22,7 +22,10 @@ export {
   createFrecencyTablePolicy,
 } from './resources/frecency';
 export { createImage } from './resources/image';
-export { serviceLoadBalancer } from './resources/load_balancer';
+export {
+  serviceLoadBalancer,
+  MacroApplicationLoadBalancer,
+} from './resources/load_balancer';
 export { Queue } from './resources/queue';
 export { QueueAlarms } from './resources/queue_alarms';
 export { Database } from './resources/rds';
@@ -33,3 +36,4 @@ export {
 } from './resources/role';
 export type { TopicArgs } from './resources/kafka-cluster';
 export { KafkaCluster } from './resources/kafka-cluster';
+export { ServiceTargetGroup } from './resources/service_target_group';

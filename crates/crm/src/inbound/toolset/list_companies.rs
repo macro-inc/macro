@@ -1,11 +1,14 @@
 //! ListCompanies tool for browsing the caller team's CRM companies.
 
 use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
+use ai_toolset::{ToolAnnotated, ToolAnnotations};
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
-use entity_access::domain::{models::TeamRole, ports::EntityAccessService};
-use models_properties::EntityType as PropertyEntityType;
-use properties::{EntityPropertiesKey, PropertiesService};
+use entity_access::domain::{
+    models::{EntityType, TeamRole},
+    ports::EntityAccessService,
+};
+use properties::{PropertiesService, PropertyTargetKey};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use system_properties::SystemPropertyKey;
@@ -104,6 +107,10 @@ pub struct ListCompanies {
     #[schemars(description = "Maximum number of companies to return. Defaults to 50; max 200.")]
     #[serde(default)]
     pub limit: Option<u16>,
+}
+
+impl ToolAnnotated for ListCompanies {
+    const ANNOTATIONS: ToolAnnotations = ToolAnnotations::read_only("List companies");
 }
 
 #[async_trait]
@@ -241,9 +248,9 @@ where
         let mut items: Vec<CompanyListItem> = Vec::new();
         let mut total_matching = 0usize;
         for company in companies {
-            let props_key = EntityPropertiesKey {
+            let props_key = PropertyTargetKey {
                 entity_id: company.company.id.to_string(),
-                entity_type: PropertyEntityType::Company,
+                entity_type: EntityType::CrmCompany,
             };
             let props = properties_map
                 .get(&props_key)

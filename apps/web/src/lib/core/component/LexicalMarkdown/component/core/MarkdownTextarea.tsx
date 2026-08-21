@@ -1,5 +1,6 @@
 import type { PortalScope } from '@core/component/ScopedPortal';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
+import type { ChannelWithParticipants } from '@core/user';
 import type { EditorType } from '@macro-inc/lexical-core';
 import type { HistoryItem } from '@queries/history/types';
 import { onElementConnect } from '@solid-primitives/lifecycle';
@@ -78,6 +79,19 @@ import { NodeAccessoryRenderer } from './NodeAccessoryRenderer';
  * @param onEscape - A callback function that is called when the user presses Escape in the textarea. If the function
  *     returns true Lexical's default behavior will be prevented.
  */
+function isHistoryItem(
+  item: HistoryItem | ChannelWithParticipants
+): item is HistoryItem {
+  if (!('ownerId' in item) || !('type' in item)) return false;
+  return (
+    typeof item.name === 'string' &&
+    typeof item.ownerId === 'string' &&
+    (item.type === 'document' ||
+      item.type === 'chat' ||
+      item.type === 'project')
+  );
+}
+
 interface MarkdownTextareaProps {
   editable: Accessor<boolean>;
   onChange?: (value: string, editor?: LexicalEditor) => void;
@@ -370,7 +384,9 @@ export function MarkdownTextarea(props: MarkdownTextareaProps) {
           menu={mentionsMenuOperations}
           anchor={props.anchor}
           onUserMention={props.onUserMention}
-          onDocumentMention={props.onDocumentMention}
+          onDocumentMention={(item) => {
+            if (isHistoryItem(item)) props.onDocumentMention?.(item);
+          }}
           useBlockBoundary={props.useBlockBoundary}
           portalScope={props.portalScope}
         />

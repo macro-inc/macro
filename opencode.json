@@ -1,0 +1,13 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "plugin": [
+    "@datadog/opencode-plugin"
+  ],
+  "mcp": {
+    "datadog": {
+      "type": "remote",
+      "url": "https://mcp.us5.datadoghq.com/api/unstable/mcp-server/mcp?referrer_ide=opencode-plugin&plugin_version=0.7.13",
+      "oauth": {}
+    }
+  }
+}

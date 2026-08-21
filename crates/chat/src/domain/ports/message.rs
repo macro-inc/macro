@@ -15,8 +15,8 @@ pub trait MessageRepo: Send + Sync + 'static {
         message: NewChatMessage,
     ) -> impl Future<Output = Result<String>> + Send;
 
-    /// Delete a message by ID.
-    fn delete(&self, message_id: &str) -> impl Future<Output = Result<()>> + Send;
+    /// Delete a message by ID, returning its parent chat ID.
+    fn delete(&self, message_id: &str) -> impl Future<Output = Result<String>> + Send;
 
     /// Get all messages for a chat, with attachment metadata.
     fn get_messages(

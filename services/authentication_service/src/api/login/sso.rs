@@ -35,6 +35,34 @@ pub(crate) struct LoginQueryParams {
     referral_code: Option<String>,
 }
 
+pub(crate) fn is_allowed_original_url(url: &Url) -> bool {
+    match url.scheme() {
+        // The app owns the custom scheme and handles all macro URI routes itself.
+        "macro" => true,
+        "tauri" => url.host_str() == Some("localhost"),
+        "http" => matches!(url.host_str(), Some("localhost" | "tauri.localhost")),
+        "https" => matches!(
+            url.host_str(),
+            Some("localhost" | "tauri.localhost" | "dev.macro.com" | "macro.com")
+        ),
+        _ => false,
+    }
+}
+
+/// Strips the userinfo, query, and fragment from an `original_url` so it is
+/// safe to log — all are client-controlled and may carry credentials, tokens,
+/// or PII. The path is kept because it distinguishes e.g. macro://login from
+/// macro:///login.
+pub(crate) fn redact_original_url_for_logging(url: &Url) -> Url {
+    let mut redacted_url = url.clone();
+    redacted_url.set_query(None);
+    redacted_url.set_fragment(None);
+    // These only fail for cannot-be-a-base URLs, which carry no userinfo.
+    let _ = redacted_url.set_username("");
+    let _ = redacted_url.set_password(None);
+    redacted_url
+}
+
 /// Initiates an SSO login
 #[utoipa::path(
         get,
@@ -54,7 +82,9 @@ pub(crate) struct LoginQueryParams {
             (status = 500, body=ErrorResponse),
         )
     )]
-#[tracing::instrument(skip(ctx))]
+// `query` is skipped: original_url is client-controlled (query/fragment may
+// carry tokens) and login_hint is a user email — neither belongs in span fields.
+#[tracing::instrument(skip(ctx, query), fields(idp_name = ?query.idp_name, idp_id = ?query.idp_id, is_mobile = query.is_mobile))]
 pub async fn handler(
     State(ctx): State<ApiContext>,
     query: Query<LoginQueryParams>,
@@ -67,6 +97,26 @@ pub async fn handler(
         is_mobile,
         referral_code,
     }) = query;
+
+    let original_url = original_url.map(|url| url.0);
+    if let Some(url) = original_url
+        .as_ref()
+        .filter(|url| !is_allowed_original_url(url))
+    {
+        let redacted_url = redact_original_url_for_logging(url);
+        tracing::error!(
+            auth_handoff_failure = "original_url_rejected",
+            original_url = %redacted_url,
+            "original_url is not allowed"
+        );
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(ErrorResponse {
+                message: "provided original_url is not allowed".into(),
+            }),
+        )
+            .into_response());
+    }
 
     if idp_name.is_none() && idp_id.is_none() {
         tracing::error!("idp_name and idp_id are both missing");
@@ -128,7 +178,7 @@ pub async fn handler(
 
     let state = SsoState {
         is_mobile,
-        original_url: original_url.map(|x| x.0),
+        original_url,
         referral_code,
     };
 

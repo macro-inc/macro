@@ -1,5 +1,4 @@
 import { ENABLE_SCRIPTING } from '@core/constant/featureFlags';
-import * as stackingContext from '@core/constant/stackingContext';
 import { showMessageBoxSync } from '@core/util/dialog';
 import debounce from 'lodash/debounce';
 import { AnnotationMode, type PageViewport } from 'pdfjs-dist';
@@ -386,7 +385,7 @@ export class InternalPDFViewer {
 
     const inner = document.createElement('div');
     inner.className = 'pdfPopupInner';
-    inner.style.zIndex = `${stackingContext.zPopupViewer}`;
+    inner.style.zIndex = 'var(--z-index-popup-viewer)';
     inner.style.visibility = 'visible';
 
     outer.appendChild(inner);
@@ -518,7 +517,7 @@ export class InternalPDFViewer {
     this._floatingPopupContainer.style.width = `${width + SCROLLBAR_OFFSET}px`;
     this._floatingPopupContainer.style.top = `${Math.ceil(top)}px`;
 
-    this._floatingPopupContainer.style.zIndex = `${stackingContext.zPopupViewer}`;
+    this._floatingPopupContainer.style.zIndex = 'var(--z-index-popup-viewer)';
     this._floatingPopupContainer.style.pointerEvents = 'all';
     this._viewer?.eventBus.dispatch('popupvisibilitychanged', {
       source: this,
@@ -541,7 +540,9 @@ export class InternalPDFViewer {
   }
 
   private overrideInternalLinks(annotationLayerDiv: HTMLDivElement) {
-    annotationLayerDiv.style.zIndex = `${stackingContext.zAnnotationLayer + (!this._popupViewer ? stackingContext.zPopupViewer : 0)}`;
+    annotationLayerDiv.style.zIndex = !this._popupViewer
+      ? 'calc(var(--z-index-annotation-layer) + var(--z-index-popup-viewer))'
+      : 'var(--z-index-annotation-layer)';
     annotationLayerDiv
       .querySelectorAll<HTMLAnchorElement>('a.internalLink')
       .forEach((el) => {
@@ -1124,10 +1125,19 @@ export class InternalPDFViewer {
     this._boundEvents.scriptingready = this._handleScriptingReady;
 
     for (const key in this._boundEvents) {
-      const event = key as keyof TEvents;
-      if (!this._boundEvents[event]) continue;
-      this._eventBus.on(event, this._boundEvents[event]);
+      this.#bindEvent(key as keyof TEvents);
     }
+  }
+
+  #bindEvent<TEvent extends keyof TEvents>(event: TEvent) {
+    const listener = this._boundEvents[event];
+    if (listener) this._eventBus.on(event, listener);
+  }
+
+  #unbindEvent<TEvent extends keyof TEvents>(event: TEvent) {
+    const listener = this._boundEvents[event];
+    if (listener) this._eventBus.off(event, listener);
+    this._boundEvents[event] = undefined;
   }
 
   #unbindEvents() {
@@ -1144,10 +1154,7 @@ export class InternalPDFViewer {
     this._container.removeEventListener('click', this._handleContainerClick);
 
     for (const key in this._boundEvents) {
-      const event = key as keyof TEvents;
-      if (!this._boundEvents[event]) continue;
-      this._eventBus.off(event, this._boundEvents[event]);
-      this._boundEvents[event] = undefined;
+      this.#unbindEvent(key as keyof TEvents);
     }
     this._eventBus._listeners = [];
     this._boundEvents = Object.create(null);

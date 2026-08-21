@@ -30,9 +30,11 @@ impl MacroScheme {
         };
 
         let mut rest = url.fragment().unwrap_or(url.path()).trim_start_matches('/');
-        // Mobile router uses '/' as base, so strip the 'app/' prefix from universal links
-        if rest.starts_with("app/") {
-            rest = &rest[4..];
+        // Mobile router uses '/' as base, so strip the 'app' prefix from universal links
+        if let Some(stripped) = rest.strip_prefix("app/") {
+            rest = stripped;
+        } else if rest == "app" {
+            rest = "";
         }
         let query = url.query();
         let inner = match query {

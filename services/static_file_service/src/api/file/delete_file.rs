@@ -1,12 +1,12 @@
+use crate::api::context::AuthorizationService;
 use crate::service::dynamodb::client::DynamodbClient;
 use crate::service::dynamodb::model::DeleteError;
 use crate::service::s3::client::S3Client;
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
-use axum::{Extension, response::Response};
-use macro_middleware::auth::internal_access::ValidInternalKey;
-use model::user::UserContext;
+use axum::response::Response;
+use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal, UserOrInternalCaller};
 use std::sync::Arc;
 
 #[derive(serde::Deserialize)]
@@ -28,12 +28,14 @@ pub struct Params {
     )
   )
 ]
-#[tracing::instrument(skip(metadata_client, storage_client, usr, internal_key), fields(user_id = usr.user_id))]
+#[tracing::instrument(
+    skip(metadata_client, storage_client, user),
+    fields(actor = %user.acting_entity())
+)]
 pub async fn handle_delete_file(
     State(metadata_client): State<DynamodbClient>,
     State(storage_client): State<Arc<S3Client>>,
-    usr: Extension<UserContext>,
-    internal_key: Option<ValidInternalKey>,
+    user: MacroAuthorizationExtractor<AuthorizationService, UserOrInternal>,
     Path(Params { file_id }): Path<Params>,
 ) -> Result<Response, Response> {
     let metadata = metadata_client
@@ -46,7 +48,8 @@ pub async fn handle_delete_file(
         .ok_or_else(|| (StatusCode::NOT_FOUND, "not found").into_response())?;
 
     // Skip owner check for internal requests
-    if internal_key.is_none() && metadata.owner_id != usr.user_id {
+    let is_internal = user.authorization.caller == UserOrInternalCaller::Internal;
+    if !is_internal && metadata.owner_id != user.authorization.user.macro_user_id.as_ref() {
         tracing::warn!("delete requested by non-owner");
         return Err((StatusCode::FORBIDDEN, "access denied").into_response());
     }

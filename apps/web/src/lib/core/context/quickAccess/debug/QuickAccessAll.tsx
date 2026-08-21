@@ -2,13 +2,13 @@ import { SplitHeaderLeft } from '@components/app/split-layout/components/SplitHe
 import { StaticSplitLabel } from '@components/app/split-layout/components/SplitLabel';
 import { InlineEntity } from '@entity';
 import { For, Match, Switch } from 'solid-js';
-import { useQuickAccess } from '../QuickAccessProvider';
+import { useQuickAccess } from '../context';
 
 export default function QuickAccessAll() {
   const { useList } = useQuickAccess();
 
   // @example const entities = useList('task', 'note', 'document', 'project');
-  const entities = useList();
+  const entities = useList().items;
 
   return (
     <>

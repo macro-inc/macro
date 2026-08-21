@@ -1,4 +1,4 @@
-import { LIST_VIEW_ID } from '@app/constants/list-views';
+import { isListViewID, LIST_VIEW_ID } from '@app/constants/list-views';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import type { BlockAlias, BlockName } from '@core/block';
 import { isBlockAlias, resolveBlockAlias } from '@core/constant/allBlocks';
@@ -10,17 +10,14 @@ import {
   onCleanup,
   useContext,
 } from 'solid-js';
-import {
-  type CollapsibleItemInput,
-  SplitLayoutContext,
-  SplitPanelContext,
-} from './context';
+import { SplitLayoutContext, SplitPanelContext } from './context';
 import type {
   SplitContent,
   SplitContentType,
   SplitHandle,
   SplitManager,
 } from './layoutManager';
+import type { CollapsibleItemInput } from './utils/createPriorityCollapser';
 
 export function decodePairs(segments: string[]): SplitContent[] {
   const pairs: SplitContent[] = [];
@@ -108,6 +105,17 @@ export function useSplitPanel() {
 }
 
 /**
+ * Whether content may claim focus automatically when it mounts in the current
+ * split. Preview Pair Viewers stay passive until the user focuses them.
+ *
+ * This is intentionally a snapshot: dissolving a Preview Pair later must not
+ * trigger delayed autofocus in content that is already mounted.
+ */
+export function useCanAutofocusSplitContent() {
+  return !useSplitPanel()?.handle.isViewerSplit();
+}
+
+/**
  * Remove all the items from all split histories that meet a certain criteria.
  * @param manager
  * @param predicate A function that returns true to remove a SplitContent entry
@@ -120,6 +128,27 @@ export function globalRemoveFromSplitHistory(
   for (const split of manager.splits()) {
     const handle = manager.getSplit(split.id);
     handle?.removeFromHistory(predicate);
+  }
+}
+
+/**
+ * Send a split back to the most recent soup list view in its history — e.g.
+ * after deleting the entity it was showing — falling back to a reset (the
+ * default inbox) when the history holds none. Reuses the stored entry, so
+ * its captured state (scroll, focus) restores like a history-back, while
+ * `mergeHistory` drops the split's current entry so the deleted entity does
+ * not linger as a back target.
+ */
+export function returnSplitToRecentListView(handle: SplitHandle) {
+  const target = handle
+    .history()
+    .slice(0, -1)
+    .reverse()
+    .find((item) => item.type === 'component' && isListViewID(item.id));
+  if (target) {
+    handle.replace({ next: target, mergeHistory: true });
+  } else {
+    handle.reset();
   }
 }
 
@@ -162,8 +191,9 @@ function _createIsActiveSplitContentMemo(
   });
 }
 
-export function useRegisterCollapsibleHeaderItem(
-  input: CollapsibleItemInput
+function useRegisterCollapsibleItem(
+  input: CollapsibleItemInput,
+  region: 'header' | 'toolbar'
 ): Accessor<boolean> {
   const [collapsed, setCollapsedInner] = createSignal(false);
   const setCollapsed = (value: boolean, opts?: { silent?: boolean }) => {
@@ -172,11 +202,25 @@ export function useRegisterCollapsibleHeaderItem(
   };
   input.onCollapsedChange?.(false);
   const ctx = useSplitPanelOrThrow();
-  const cleanup = ctx.headerCollapser.register({
+  const collapser =
+    region === 'header' ? ctx.headerCollapser : ctx.toolbarCollapser;
+  const cleanup = collapser.register({
     ...input,
     collapsed,
     setCollapsed,
   });
   onCleanup(cleanup);
   return collapsed;
+}
+
+export function useRegisterCollapsibleHeaderItem(
+  input: CollapsibleItemInput
+): Accessor<boolean> {
+  return useRegisterCollapsibleItem(input, 'header');
+}
+
+export function useRegisterCollapsibleToolbarItem(
+  input: CollapsibleItemInput
+): Accessor<boolean> {
+  return useRegisterCollapsibleItem(input, 'toolbar');
 }

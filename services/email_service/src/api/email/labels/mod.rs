@@ -10,19 +10,14 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
     let hex_list_labels_routes = email::inbound::axum::list_labels_router::list_labels_router::<
         ApiContext,
         crate::api::context::EmailSvc,
+        crate::api::context::AuthorizationService,
     >();
 
     Router::new()
-        .route(
-            "/",
-            post(create::handler).layer(axum::middleware::from_fn_with_state(
-                state.clone(),
-                crate::api::middleware::gmail_token::attach_gmail_token,
-            )),
-        )
+        .route("/", post(create::handler))
         .route("/{id}", delete(delete::handler))
         .layer(axum::middleware::from_fn_with_state(
-            state.email_service,
+            state.clone(),
             crate::api::middleware::link::attach_link_context,
         ))
         .merge(hex_list_labels_routes)

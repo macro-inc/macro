@@ -1,31 +1,98 @@
 ---
 title: "Agents"
 icon: "wand-magic-sparkles"
-description: "Use agents to summarize your workspace, check up on people's progress and create tasks, emails, or documents."
+description: "Agents that live inside your workspace — with full context on your email, tasks, docs, calls, and channels."
 ---
 
 <Frame>
-  ![Agents Screenshot](/images/agents_screenshot-1.png)
+  ![The Agents tab, with chat history and agents answering from workspace context](/images/agents_screenshot-1.png)
 </Frame>
 
-> To create a new chat use shortcut <kbd>c</kbd> \+ <kbd>a</kbd>
+Macro agents live inside your workspace and work from [unified memory](/product/unified-memory), so one prompt can reach your email, tasks, docs, calls, channels, and connected tools. They can search and read anything you can see, draft emails and documents, create and update tasks, post in channels, and run on a schedule. Everything they do is attributed to you and bounded by your permissions.
 
-Agents have access to everything in your workspace, so they always have full context. The agents tab shows every chat you've had with your agent, and you can continue any of them where you left off.
+> To start a new chat use shortcut <kbd>c</kbd> \+ <kbd>a</kbd>
 
-> Use <kbd>l</kbd> and <kbd>h</kbd> to preview different chat results and <kbd>j</kbd> and <kbd>k</kbd> to move up and down through them.
+### The Agents tab
 
-Ask for summaries, clarifications, and more. The agent answers using all the information in your workspace.
+The Agents module lists every chat you've had, named automatically from your first message, and you can pick any of them back up where you left off. Ask for summaries, clarifications, drafts, or a status check. Agents answer using everything in your workspace, not just the current thread.
+
+> Use shortcut <kbd>g</kbd> \+ <kbd>a</kbd> to go to Agents, and <kbd>j</kbd> and <kbd>k</kbd> to move up and down through chats.
 
 <Frame>
-  ![An agent chat answering a question using context from across the workspace](/images/Screenshot-2026-06-03-at-5.01.06-PM.png)
+  ![Agents answering a question using context from across the workspace](/images/Screenshot-2026-06-03-at-5.01.06-PM.png)
+</Frame>
+
+### Full workspace context
+
+Agents answer from [unified memory](/product/unified-memory), a continuously refreshed view of your email, messages, tasks, docs, calls, and connected tools, not just your chat history. That's why you can ask a broad question ("what's the latest on the Acme deal?") without pointing them at anything.
+
+When you want to be exact, @mention a specific channel, doc, task, or thread right in your prompt. That pins the context and skips the search, so agents work from precisely the item you mean. See [Mentions in Agents](/concepts/mentions#mentions-in-agents).
+
+<Note>
+  Agents inherit your permissions: they can only see what you can see, and anything they create or send is attributed to you. Start prompts with "draft, don't send" until you're comfortable letting them act.
+</Note>
+
+### What agents can do
+
+Agents have a broad tool set and will reach for the right tools on their own. In one conversation they can:
+
+- **Search & read** — find and read across docs, threads, chats, and records
+- **Write docs** — create, edit, and rename documents
+- **Tasks & CRM** — create tasks and set status, priority, assignees, and other properties on tasks and company records
+- **Email** — draft a reply in an editable composer for you to review and send
+- **Channels** — read a channel or thread and post messages back into it
+- **Calls** — read call recordings and transcripts and turn them into tasks or summaries
+- **Web** — search the web and fetch pages when the answer isn't in your workspace
+- **Import** — pull content in from Notion, Linear, and Slack when you migrate
+
+For copy-paste prompts that put these to work, see [Agent recipes](/AI/recipes).
+
+### Agents in channels
+
+Mention **@Macro** in any [channel](/product/channels) to pull agents into the conversation with the whole channel as context. They show up in the normal @-mention typeahead, read the thread, and reply inline. Agents can also post their results back into a channel or a specific thread as part of a longer task.
+
+<Note>
+  **@Macro** invokes the built-in agents. They're separate from **custom bots** — named integrations you create with their own API tokens and webhooks to post into channels programmatically.
+</Note>
+
+<Frame>
+  ![An @Macro mention in a channel and the agents' reply in-thread](/images/macro_in_channel.png)
 </Frame>
 
 ### Automations
 
-Agents can also run automations: scheduled jobs like daily reminders or weekly summaries. Responses from automations appear in the agents tab and in your inbox.
+Agents can run on a schedule. An automation is a saved prompt that runs on its own, like a daily inbox brief, a Friday team recap, or a weekly reminder to triage stale tasks.
 
-> Use shortcut <kbd>g</kbd> \+ <kbd>a</kbd> to go to agents
+**To create an automation**
 
-To create an automation, go to the agents module and toggle to the automations tab. Select **Create an automation** and fill out the form. You can @mention channels, docs, people, and more inside it.
+- Go to the Agents Block, press **Agents** in the top right corner, then **Automations**.
+- Fill out the form with your instructions and the schedule.
+- Hit **Create** and wait for your automation to run.
 
-Each time the automation runs, the result appears in your inbox. For example, a daily to-do summary will land in your inbox at the time you scheduled it each day.
+<Frame>
+  ![An example automation with instructions and a schedule](/images/example_automation.png)
+</Frame>
+
+### Choosing a model
+
+A model picker sits in the chat input. You can choose a model per chat depending on how difficult you deem the question. Your choice is remembered for that chat and carried forward when you start a new one from the composer.
+
+Without a Macro Pro account you can only use Haiku, the fast model. More capable models are available once you upgrade.
+
+<Frame>
+  ![The model picker, showing the available models](/images/model_options.png)
+</Frame>
+
+### MCP setup
+
+Macro's MCP server lets AI clients like Claude Code, Codex, and Cursor work with your workspace directly. Connect once by going to **Settings → MCP server** (authorize with your Macro account — MCP access is included on every plan, Free included), or point a client at the endpoint below.
+
+```text
+https://mcp-server.macro.com/mcp
+```
+
+See [MCP setup](/AI/mcp/overview) for client-by-client instructions and the full [MCP tool reference](/AI/mcp/tools/index).
+
+### @mentioning
+
+Agent chats are markdown entities like everything else in Macro, so you can @mention a chat from a doc, task, email, or channel to link back to a conversation. And it works the other way too: @mention docs, tasks, channels, people, and more inside a prompt to hand agents exactly the context you want.

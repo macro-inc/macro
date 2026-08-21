@@ -65,7 +65,9 @@
                 "THREAD",
                 "USER",
                 "COMPANY",
-                "TASK"
+                "TASK",
+                "CALL_RECORD",
+                "CALENDAR_EVENT"
               ]
             }
           }
@@ -119,7 +121,9 @@
                 "THREAD",
                 "USER",
                 "COMPANY",
-                "TASK"
+                "TASK",
+                "CALL_RECORD",
+                "CALENDAR_EVENT"
               ]
             }
           }

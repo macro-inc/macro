@@ -54,6 +54,12 @@ function getEntityType(entity: EntityData): EntityType {
     .with({ type: 'foreign' }, () => {
       throw new Error('foreign entities do not support properties');
     })
+    .with({ type: 'reminder' }, () => {
+      throw new Error('reminders do not support properties');
+    })
+    .with({ type: 'calendar_event' }, () => {
+      throw new Error('calendar events do not support properties');
+    })
     .exhaustive();
 }
 
@@ -112,29 +118,27 @@ export function EntityKeyProperties(props: EntityKeyPropertiesProps) {
   };
 
   return (
-    <Show when={keyProperties().length > 0}>
-      <PropertiesProvider
-        entityType={entityType()}
-        canEdit={true}
+    <PropertiesProvider
+      entityType={entityType()}
+      canEdit={true}
+      properties={keyProperties}
+      onRefresh={props.onRefresh ?? (() => {})}
+      onPropertyAdded={() => {}}
+      onPropertyDeleted={() => {}}
+      saveHandler={saveHandler}
+    >
+      <KeyPropertiesRow
         properties={keyProperties}
-        onRefresh={props.onRefresh ?? (() => {})}
-        onPropertyAdded={() => {}}
-        onPropertyDeleted={() => {}}
-        saveHandler={saveHandler}
-      >
-        <KeyPropertiesRow
-          properties={keyProperties}
-          onRefresh={props.onRefresh}
-          maxUserStackUsers={props.maxUserStackUsers}
-          showCaret={props.showCaret}
-        />
-        <ScopedPortal scope="split">
-          <Suspense>
-            <Modals />
-          </Suspense>
-        </ScopedPortal>
-      </PropertiesProvider>
-    </Show>
+        onRefresh={props.onRefresh}
+        maxUserStackUsers={props.maxUserStackUsers}
+        showCaret={props.showCaret}
+      />
+      <ScopedPortal scope="split">
+        <Suspense>
+          <Modals />
+        </Suspense>
+      </ScopedPortal>
+    </PropertiesProvider>
   );
 }
 

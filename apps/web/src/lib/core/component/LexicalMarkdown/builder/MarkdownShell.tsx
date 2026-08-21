@@ -25,7 +25,9 @@ import { EmojiMenu } from '../component/menu/EmojiMenu';
 import { FloatingFormatMenu } from '../component/menu/FloatingFormatMenu';
 import { FloatingLinkMenu } from '../component/menu/FloatingLinkMenu';
 import { MentionsMenu } from '../component/menu/MentionsMenu';
+import { SkillsMenu } from '../component/menu/SkillsMenu';
 import { SnippetsMenu } from '../component/menu/SnippetsMenu';
+import { TagsMenu } from '../component/menu/TagsMenu';
 import { DragInsertIndicator } from '../component/misc/DragInsertIndicator';
 import { FloatingMenuGroup } from '../context/FloatingMenuContext';
 import { LexicalWrapperContext } from '../context/LexicalWrapperContext';
@@ -267,6 +269,20 @@ export const MarkdownShell: Component<
           )}
         </Show>
 
+        <Show when={state.tagsMenuOps}>
+          {(menu) => (
+            <TagsMenu
+              editor={editor}
+              menu={menu()}
+              useBlockBoundary={false}
+              portalScope={props.portalScope}
+              applyTargetLabel={builderConfig.tags?.applyTargetLabel}
+              isApplied={builderConfig.tags?.isApplied}
+              onApplyTag={builderConfig.tags?.onCreate}
+            />
+          )}
+        </Show>
+
         <Show when={state.actionsMenuOps}>
           {(menu) => (
             <ActionMenu
@@ -315,6 +331,18 @@ export const MarkdownShell: Component<
               useBlockBoundary={false}
               portalScope={props.portalScope}
               sourceDocumentId={builderConfig.mentions?.sourceDocumentId}
+            />
+          )}
+        </Show>
+
+        {/* Skills Menu */}
+        <Show when={state.skillsMenuOps}>
+          {(menu) => (
+            <SkillsMenu
+              editor={editor}
+              menu={menu()}
+              useBlockBoundary={false}
+              portalScope={props.portalScope}
             />
           )}
         </Show>

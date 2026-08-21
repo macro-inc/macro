@@ -27,11 +27,15 @@ type ThreadPositionsOnPage = Partial<Record<number, CommentLayout<Root>[]>>;
 export const threadsOnPagePositionStore =
   createBlockStore<ThreadPositionsOnPage>({});
 
+const isPdfRootLayout = (
+  comment: (typeof commentsStore.get)[number]
+): comment is PdfRootLayout => isRoot(comment) && 'layout' in comment;
+
 const rootCommentsGroupedByPage = createBlockMemo(() => {
   const comments = commentsStore.get;
 
   const out: Record<number, PdfRootLayout[]> = {};
-  comments.filter(isRoot).forEach((comment: PdfRootLayout) => {
+  comments.filter(isPdfRootLayout).forEach((comment) => {
     const pageIndex = comment.layout.pageIndex;
     if (!out[pageIndex]) out[pageIndex] = [];
     out[pageIndex].push(comment);

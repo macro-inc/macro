@@ -9,6 +9,7 @@ import type {
   EmailEntity,
   EntityData,
   ProjectEntity,
+  SkillEntity,
   SnippetEntity,
   TaskEntity,
 } from '../types/entity';
@@ -74,6 +75,16 @@ export function buildEntityData(
           type: 'document',
           fileType: 'md',
           subType: { type: 'snippet' },
+          projectId: args.projectId,
+        })
+      )
+      .with(
+        'skill',
+        (): SkillEntity => ({
+          ...base,
+          type: 'document',
+          fileType: 'md',
+          subType: { type: 'skill' },
           projectId: args.projectId,
         })
       )
@@ -161,10 +172,14 @@ export function buildEntityData(
           participantIds: args.participantIds ?? [],
         };
       })
+      // The singleton calendar block has no entity-shaped block id.
+      .with('calendar', (): undefined => undefined)
       // CRM companies/contacts aren't constructed from block args; soup is the source.
       .with('company', 'contact', (): undefined => undefined)
       // PRs are virtual blocks backed by GitHub, not Macro entities.
       .with('pr', (): undefined => undefined)
+      // Agent sessions aren't constructed from block args; not soup-listed yet.
+      .with('agent', (): undefined => undefined)
       .exhaustive()
   );
 }

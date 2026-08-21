@@ -1,5 +1,6 @@
 //! PostgreSQL implementation for properties repository.
 
+use document_sub_type::DocumentSubType;
 use macro_user_id::user_id::MacroUserIdStr;
 use models_properties::service::entity_property_with_definition::EntityPropertyWithDefinition;
 use models_properties::service::property_value::PropertyValue;
@@ -10,10 +11,13 @@ use uuid::Uuid;
 
 use super::{
     entity_properties_get_query, entity_property_queries, metadata_queries,
-    property_definition_queries, property_option_queries, task_property_queries,
+    property_definition_queries, property_option_queries, tag_promotion_queries,
+    task_property_queries,
 };
 use crate::domain::model::{
-    EntityPropertiesKey, EntityPropertyInfo, PropertyDefinitionOwner, UpdatePropertyOptionOutcome,
+    EntityPropertiesKey, EntityPropertyInfo, EntityPropertyMutationSnapshot,
+    GetOrCreateTagDefinitionResult, PropertyDefinitionOwner, TagPromotionOutcome, TagRemapOutcome,
+    UpdatePropertyOptionOutcome,
 };
 use crate::domain::ports::PropertiesRepo;
 use models_properties::DataType;
@@ -227,8 +231,42 @@ impl PropertiesRepo for PropertiesPgRepo {
     async fn get_or_create_tag_definition(
         &self,
         owner: PropertyDefinitionOwner<'_>,
-    ) -> Result<PropertyDefinition, Self::Err> {
+    ) -> Result<GetOrCreateTagDefinitionResult, Self::Err> {
         property_definition_queries::get_or_create_tag_definition(&self.pool, owner).await
+    }
+
+    #[tracing::instrument(skip(self))]
+    async fn promote_tag_option(
+        &self,
+        option_id: Uuid,
+        source_definition_id: Uuid,
+        target_definition_id: Uuid,
+    ) -> Result<TagPromotionOutcome, Self::Err> {
+        tag_promotion_queries::promote_tag_option(
+            &self.pool,
+            option_id,
+            source_definition_id,
+            target_definition_id,
+        )
+        .await
+    }
+
+    #[tracing::instrument(skip(self))]
+    async fn merge_tag_option(
+        &self,
+        source_option_id: Uuid,
+        source_definition_id: Uuid,
+        target_option_id: Uuid,
+        target_definition_id: Uuid,
+    ) -> Result<Option<TagRemapOutcome>, Self::Err> {
+        tag_promotion_queries::merge_tag_option(
+            &self.pool,
+            source_option_id,
+            source_definition_id,
+            target_option_id,
+            target_definition_id,
+        )
+        .await
     }
 
     #[tracing::instrument(skip(self))]
@@ -252,7 +290,7 @@ impl PropertiesRepo for PropertiesPgRepo {
         entity_type: EntityType,
         property_definition_id: Uuid,
         value: Option<PropertyValue>,
-    ) -> Result<models_properties::service::entity_property::EntityProperty, Self::Err> {
+    ) -> Result<EntityPropertyMutationSnapshot, Self::Err> {
         entity_property_queries::upsert_entity_property(
             &self.pool,
             entity_id,
@@ -270,7 +308,7 @@ impl PropertiesRepo for PropertiesPgRepo {
         entity_type: EntityType,
         property_definition_id: Uuid,
         option_id: Uuid,
-    ) -> Result<(), Self::Err> {
+    ) -> Result<EntityPropertyMutationSnapshot, Self::Err> {
         entity_property_queries::add_entity_property_option(
             &self.pool,
             entity_id,
@@ -288,13 +326,29 @@ impl PropertiesRepo for PropertiesPgRepo {
         entity_type: EntityType,
         property_definition_id: Uuid,
         option_id: Uuid,
-    ) -> Result<(), Self::Err> {
+    ) -> Result<Option<EntityPropertyMutationSnapshot>, Self::Err> {
         entity_property_queries::remove_entity_property_option(
             &self.pool,
             entity_id,
             entity_type,
             property_definition_id,
             option_id,
+        )
+        .await
+    }
+
+    #[tracing::instrument(skip(self, updates), err)]
+    async fn bulk_update_entity_property_options(
+        &self,
+        entity_id: &str,
+        entity_type: EntityType,
+        updates: &[crate::domain::model::EntityPropertyOptionUpdate],
+    ) -> Result<Vec<crate::domain::model::EntityPropertyOptionSelection>, Self::Err> {
+        entity_property_queries::bulk_update_entity_property_options(
+            &self.pool,
+            entity_id,
+            entity_type,
+            updates,
         )
         .await
     }
@@ -417,6 +471,14 @@ impl PropertiesRepo for PropertiesPgRepo {
         entity_reference: &EntityReference,
     ) -> Result<(), Self::Err> {
         entity_property_queries::delete_entity_properties(&self.pool, entity_reference).await
+    }
+
+    #[tracing::instrument(skip(self, document_ids), fields(document_count = document_ids.len()), err)]
+    async fn get_document_sub_types(
+        &self,
+        document_ids: &[Uuid],
+    ) -> Result<HashMap<Uuid, DocumentSubType>, Self::Err> {
+        metadata_queries::get_document_sub_types(&self.pool, document_ids).await
     }
 
     #[tracing::instrument(skip(self), err)]

@@ -1,0 +1,46 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        WITH RECURSIVE project_hierarchy AS (\n            SELECT id FROM \"Project\" WHERE id = $1\n            UNION ALL\n            SELECT child.id\n            FROM \"Project\" child\n            JOIN project_hierarchy parent ON child.\"parentId\" = parent.id\n        ),\n        updated_projects AS (\n            UPDATE \"Project\"\n            SET \"uploadPending\" = false\n            WHERE id IN (SELECT id FROM project_hierarchy)\n              AND \"uploadPending\" = true\n            RETURNING id\n        )\n        SELECT\n            project.id,\n            project.name,\n            project.\"userId\" AS user_id,\n            project.\"parentId\" AS parent_id,\n            EXISTS (\n                SELECT 1 FROM updated_projects WHERE id = $1\n            ) AS \"upload_pending_transitioned!\"\n        FROM \"Project\" project\n        JOIN project_hierarchy hierarchy ON hierarchy.id = project.id\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "parent_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "upload_pending_transitioned!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      null
+    ]
+  },
+  "hash": "db481033a92727aba2a32a14415f6ef2d22fd91f94fa57d053192c08bcc63bfc"
+}

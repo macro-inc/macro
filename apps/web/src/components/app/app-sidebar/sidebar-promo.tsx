@@ -9,12 +9,13 @@ export const PROMO_HINT_DURATION_MS = 8000;
 type SidebarPromoCardAction = {
   label: string;
   onClick: () => void;
+  disabled?: boolean;
 };
 
 type SidebarPromoCardProps = {
   label: string;
   description: string;
-  onDismiss: () => void;
+  onDismiss?: () => void;
   onClick?: () => void;
   primaryAction?: SidebarPromoCardAction;
   secondaryAction?: SidebarPromoCardAction;
@@ -29,17 +30,21 @@ export const SidebarPromoCard = (props: SidebarPromoCardProps) => {
             <h3 class="flex-1 min-w-0 text-xs font-medium text-ink leading-tight m-0">
               {props.label}
             </h3>
-            <Button
-              variant="ghost"
-              class="shrink-0 size-5 rounded-sm p-0 [&_svg]:size-3"
-              label="Dismiss"
-              onClick={(e) => {
-                e.stopPropagation();
-                props.onDismiss();
-              }}
-            >
-              <XIcon />
-            </Button>
+            <Show when={props.onDismiss}>
+              {(onDismiss) => (
+                <Button
+                  variant="ghost"
+                  class="shrink-0 size-5 rounded-sm p-0 [&_svg]:size-3"
+                  label="Dismiss"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onDismiss()();
+                  }}
+                >
+                  <XIcon />
+                </Button>
+              )}
+            </Show>
           </header>
           <Dynamic
             component={props.onClick ? 'button' : 'div'}
@@ -65,6 +70,7 @@ export const SidebarPromoCard = (props: SidebarPromoCardProps) => {
                   <Button
                     variant="ghost"
                     size="sm"
+                    disabled={action().disabled}
                     onClick={(e) => {
                       e.stopPropagation();
                       action().onClick();
@@ -79,6 +85,7 @@ export const SidebarPromoCard = (props: SidebarPromoCardProps) => {
                   <Button
                     variant="cta"
                     size="sm"
+                    disabled={action().disabled}
                     onClick={(e) => {
                       e.stopPropagation();
                       action().onClick();

@@ -36,4 +36,3 @@ pub mod initialize_onboarding_documents;
 pub mod preview;
 pub mod revert_delete;
 pub mod track_document;
-pub mod update;

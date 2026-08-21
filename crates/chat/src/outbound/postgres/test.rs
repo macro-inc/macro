@@ -1,11 +1,132 @@
+use std::time::Duration;
+
+use agent::types::{ChatMessageContent, Role};
+use chrono::Utc;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
+use model::chat::NewChatMessage;
+use models_permissions::share_permission::access_level::AccessLevel;
+use models_permissions::share_permission::{
+    LinkShare, SharePermissionV2, UpdateSharePermissionRequestV2,
+};
 use sqlx::{Pool, Postgres, Row};
 
 use super::PgChatRepo;
 use crate::domain::models::{ChatErr, CopyChatArgs, CreateChatArgs, PatchChatArgs};
 use crate::domain::ports::ChatRepo;
+
+/// The no-team default permission for a chat — the repo persists whatever the
+/// domain layer resolved, so tests pass it explicitly.
+fn default_share_permission() -> SharePermissionV2 {
+    SharePermissionV2::new_chat_share_permission(None)
+}
+
+#[derive(Debug, Eq, PartialEq)]
+struct StoredSharePermission {
+    id: String,
+    link_share: Option<String>,
+    link_share_access_level: Option<String>,
+}
+
+async fn get_stored_share_permission(
+    pool: &Pool<Postgres>,
+    chat_id: &str,
+) -> StoredSharePermission {
+    let row = sqlx::query!(
+        r#"
+        SELECT
+            sp.id,
+            sp."linkShare" AS "link_share?",
+            sp."linkShareAccessLevel"::text AS "link_share_access_level?"
+        FROM "ChatPermission" cp
+        JOIN "SharePermission" sp ON cp."sharePermissionId" = sp.id
+        WHERE cp."chatId" = $1
+        "#,
+        chat_id,
+    )
+    .fetch_one(pool)
+    .await
+    .unwrap();
+
+    StoredSharePermission {
+        id: row.id,
+        link_share: row.link_share,
+        link_share_access_level: row.link_share_access_level,
+    }
+}
+
+async fn create_test_chat(repo: &PgChatRepo, name: &str) -> String {
+    let user_id = MacroUserIdStr::parse_from_str("macro|test@example.com")
+        .unwrap()
+        .into_owned();
+    repo.create(
+        user_id,
+        CreateChatArgs {
+            name: name.to_string(),
+            project_id: None,
+        },
+        default_share_permission(),
+    )
+    .await
+    .unwrap()
+}
+
+async fn patch_share_permission(
+    repo: &PgChatRepo,
+    chat_id: &str,
+    share_permission: UpdateSharePermissionRequestV2,
+) {
+    let user_id = MacroUserIdStr::parse_from_str("macro|test@example.com")
+        .unwrap()
+        .into_owned();
+    repo.patch(
+        user_id,
+        chat_id,
+        PatchChatArgs {
+            name: None,
+            project_id: None,
+            share_permission: Some(share_permission),
+        },
+    )
+    .await
+    .unwrap();
+}
+
+async fn create_chat_with_message(repo: &PgChatRepo) -> (String, String) {
+    let user_id = MacroUserIdStr::parse_from_str("macro|test@example.com")
+        .unwrap()
+        .into_owned();
+    let chat_id = repo
+        .create(
+            user_id,
+            CreateChatArgs {
+                name: "Message update test".to_string(),
+                project_id: None,
+            },
+            default_share_permission(),
+        )
+        .await
+        .unwrap();
+    let now = Utc::now();
+    let message_id = crate::domain::ports::MessageRepo::create(
+        repo,
+        &chat_id,
+        NewChatMessage {
+            id: None,
+            content: ChatMessageContent::Text("initial content".to_string()),
+            role: Role::User,
+            attachments: None,
+            model: "test-model".to_string(),
+            created_at: now,
+            updated_at: now,
+        },
+    )
+    .await
+    .unwrap();
+
+    (chat_id, message_id)
+}
 
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
@@ -24,6 +145,7 @@ async fn create_chat_returns_id(pool: Pool<Postgres>) {
                 name: "Test Chat".to_string(),
                 project_id: None,
             },
+            default_share_permission(),
         )
         .await
         .unwrap();
@@ -45,8 +167,8 @@ async fn create_chat_returns_id(pool: Pool<Postgres>) {
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "fixtures", scripts("users"))
 )]
-async fn create_chat_creates_permission(pool: Pool<Postgres>) {
-    let repo = PgChatRepo::new(pool.clone());
+async fn create_message_bumps_chat_updated_at(pool: Pool<Postgres>) {
+    let repo = PgChatRepo::new(pool);
     let user_id = MacroUserIdStr::parse_from_str("macro|test@example.com")
         .unwrap()
         .into_owned();
@@ -55,22 +177,174 @@ async fn create_chat_creates_permission(pool: Pool<Postgres>) {
         .create(
             user_id,
             CreateChatArgs {
-                name: "Perm Chat".to_string(),
+                name: "Active Chat".to_string(),
                 project_id: None,
             },
+            default_share_permission(),
         )
         .await
         .unwrap();
+    let original_updated_at = repo
+        .get_metadata(&chat_id)
+        .await
+        .unwrap()
+        .updated_at
+        .unwrap();
 
-    let row =
-        sqlx::query(r#"SELECT "sharePermissionId" FROM "ChatPermission" WHERE "chatId" = $1"#)
-            .bind(&chat_id)
-            .fetch_one(&pool)
-            .await
-            .unwrap();
+    tokio::time::sleep(Duration::from_millis(10)).await;
+    let now = Utc::now();
+    crate::domain::ports::MessageRepo::create(
+        &repo,
+        &chat_id,
+        NewChatMessage {
+            id: None,
+            content: ChatMessageContent::Text("hello".to_string()),
+            role: Role::User,
+            attachments: None,
+            model: "test-model".to_string(),
+            created_at: now,
+            updated_at: now,
+        },
+    )
+    .await
+    .unwrap();
 
-    let share_permission_id: String = row.get("sharePermissionId");
-    assert!(!share_permission_id.is_empty());
+    let updated_at = repo
+        .get_metadata(&chat_id)
+        .await
+        .unwrap()
+        .updated_at
+        .unwrap();
+    assert!(updated_at > original_updated_at);
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "fixtures", scripts("users"))
+)]
+async fn delete_message_returns_parent_chat_id_and_removes_message(pool: Pool<Postgres>) {
+    let repo = PgChatRepo::new(pool);
+    let (chat_id, message_id) = create_chat_with_message(&repo).await;
+
+    let deleted_from_chat_id = crate::domain::ports::MessageRepo::delete(&repo, &message_id)
+        .await
+        .unwrap();
+
+    assert_eq!(deleted_from_chat_id, chat_id);
+    assert!(matches!(
+        crate::domain::ports::MessageRepo::get_message_content(&repo, &chat_id, &message_id).await,
+        Err(ChatErr::NotFound)
+    ));
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "fixtures", scripts("users"))
+)]
+async fn update_message_content_bumps_chat_updated_at(pool: Pool<Postgres>) {
+    let repo = PgChatRepo::new(pool);
+    let (chat_id, message_id) = create_chat_with_message(&repo).await;
+    let original_updated_at = repo
+        .get_metadata(&chat_id)
+        .await
+        .unwrap()
+        .updated_at
+        .unwrap();
+
+    tokio::time::sleep(Duration::from_millis(10)).await;
+    repo.update_message_content(
+        &chat_id,
+        &message_id,
+        &ChatMessageContent::Text("final content".to_string()),
+    )
+    .await
+    .unwrap();
+
+    let updated_at = repo
+        .get_metadata(&chat_id)
+        .await
+        .unwrap()
+        .updated_at
+        .unwrap();
+    assert!(updated_at > original_updated_at);
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "fixtures", scripts("users"))
+)]
+async fn update_interim_message_content_does_not_bump_chat(pool: Pool<Postgres>) {
+    let repo = PgChatRepo::new(pool);
+    let (chat_id, message_id) = create_chat_with_message(&repo).await;
+    let original_updated_at = repo
+        .get_metadata(&chat_id)
+        .await
+        .unwrap()
+        .updated_at
+        .unwrap();
+
+    tokio::time::sleep(Duration::from_millis(10)).await;
+    repo.update_interim_message_content(
+        &chat_id,
+        &message_id,
+        &ChatMessageContent::Text("interim content".to_string()),
+    )
+    .await
+    .unwrap();
+
+    let updated_at = repo
+        .get_metadata(&chat_id)
+        .await
+        .unwrap()
+        .updated_at
+        .unwrap();
+    assert_eq!(updated_at, original_updated_at);
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "fixtures", scripts("users"))
+)]
+async fn nonexistent_message_does_not_bump_chat(pool: Pool<Postgres>) {
+    let repo = PgChatRepo::new(pool);
+    let (chat_id, _) = create_chat_with_message(&repo).await;
+    let original_updated_at = repo
+        .get_metadata(&chat_id)
+        .await
+        .unwrap()
+        .updated_at
+        .unwrap();
+
+    tokio::time::sleep(Duration::from_millis(10)).await;
+    repo.update_message_content(
+        &chat_id,
+        "nonexistent-message",
+        &ChatMessageContent::Text("final content".to_string()),
+    )
+    .await
+    .unwrap();
+
+    let updated_at = repo
+        .get_metadata(&chat_id)
+        .await
+        .unwrap()
+        .updated_at
+        .unwrap();
+    assert_eq!(updated_at, original_updated_at);
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "fixtures", scripts("users"))
+)]
+async fn create_chat_creates_public_view_permission(pool: Pool<Postgres>) {
+    let repo = PgChatRepo::new(pool.clone());
+    let chat_id = create_test_chat(&repo, "Perm Chat").await;
+
+    let permission = get_stored_share_permission(&pool, &chat_id).await;
+    assert!(!permission.id.is_empty());
+    assert_eq!(permission.link_share.as_deref(), Some("PUBLIC"));
+    assert_eq!(permission.link_share_access_level.as_deref(), Some("view"));
 }
 
 #[sqlx::test(
@@ -90,6 +364,7 @@ async fn create_chat_creates_user_item_access(pool: Pool<Postgres>) {
                 name: "Access Chat".to_string(),
                 project_id: None,
             },
+            default_share_permission(),
         )
         .await
         .unwrap();
@@ -130,6 +405,7 @@ async fn create_chat_creates_user_history(pool: Pool<Postgres>) {
                 name: "History Chat".to_string(),
                 project_id: None,
             },
+            default_share_permission(),
         )
         .await
         .unwrap();
@@ -166,6 +442,7 @@ async fn create_chat_with_project_id(pool: Pool<Postgres>) {
                 name: "Project Chat".to_string(),
                 project_id: Some("project-123".to_string()),
             },
+            default_share_permission(),
         )
         .await
         .unwrap();
@@ -199,6 +476,7 @@ async fn get_chat_returns_chat(pool: Pool<Postgres>) {
                 name: "Get Me".to_string(),
                 project_id: None,
             },
+            default_share_permission(),
         )
         .await
         .unwrap();
@@ -241,6 +519,7 @@ async fn soft_delete_chat_sets_deleted_at(pool: Pool<Postgres>) {
                 name: "Delete Me".to_string(),
                 project_id: None,
             },
+            default_share_permission(),
         )
         .await
         .unwrap();
@@ -274,6 +553,7 @@ async fn soft_delete_chat_removes_history(pool: Pool<Postgres>) {
                 name: "History Delete".to_string(),
                 project_id: None,
             },
+            default_share_permission(),
         )
         .await
         .unwrap();
@@ -308,6 +588,7 @@ async fn permanently_delete_chat_removes_row(pool: Pool<Postgres>) {
                 name: "Perm Delete".to_string(),
                 project_id: None,
             },
+            default_share_permission(),
         )
         .await
         .unwrap();
@@ -340,6 +621,7 @@ async fn permanently_delete_chat_removes_permissions(pool: Pool<Postgres>) {
                 name: "Perm Delete Perms".to_string(),
                 project_id: None,
             },
+            default_share_permission(),
         )
         .await
         .unwrap();
@@ -373,6 +655,7 @@ async fn permanently_delete_chat_removes_user_item_access(pool: Pool<Postgres>) 
                 name: "Perm Delete Access".to_string(),
                 project_id: None,
             },
+            default_share_permission(),
         )
         .await
         .unwrap();
@@ -408,6 +691,7 @@ async fn patch_chat_updates_name(pool: Pool<Postgres>) {
                 name: "Original".to_string(),
                 project_id: None,
             },
+            default_share_permission(),
         )
         .await
         .unwrap();
@@ -448,6 +732,7 @@ async fn patch_chat_updates_project(pool: Pool<Postgres>) {
                 name: "Project Chat".to_string(),
                 project_id: None,
             },
+            default_share_permission(),
         )
         .await
         .unwrap();
@@ -496,6 +781,7 @@ async fn patch_chat_clears_project(pool: Pool<Postgres>) {
                 name: "Clear Project".to_string(),
                 project_id: Some("project-123".to_string()),
             },
+            default_share_permission(),
         )
         .await
         .unwrap();
@@ -541,6 +827,7 @@ async fn get_chat_returns_full_response(pool: Pool<Postgres>) {
                 name: "Full Chat".to_string(),
                 project_id: None,
             },
+            default_share_permission(),
         )
         .await
         .unwrap();
@@ -582,6 +869,7 @@ async fn copy_chat_creates_new_chat_with_same_messages(pool: Pool<Postgres>) {
                 name: "Source Chat".to_string(),
                 project_id: None,
             },
+            default_share_permission(),
         )
         .await
         .unwrap();
@@ -606,6 +894,7 @@ async fn copy_chat_creates_new_chat_with_same_messages(pool: Pool<Postgres>) {
                 name: "Copied Chat".to_string(),
                 project_id: None,
             },
+            default_share_permission(),
         )
         .await
         .unwrap();
@@ -644,6 +933,7 @@ async fn revert_delete_restores_chat(pool: Pool<Postgres>) {
                 name: "Revert Me".to_string(),
                 project_id: None,
             },
+            default_share_permission(),
         )
         .await
         .unwrap();
@@ -676,26 +966,115 @@ async fn revert_delete_restores_chat(pool: Pool<Postgres>) {
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "fixtures", scripts("users"))
 )]
-async fn get_permissions_returns_share_permission(pool: Pool<Postgres>) {
+async fn patch_chat_sets_team_share_and_defaults_explicit_null_level_to_view(pool: Pool<Postgres>) {
     let repo = PgChatRepo::new(pool.clone());
-    let user_id = MacroUserIdStr::parse_from_str("macro|test@example.com")
-        .unwrap()
-        .into_owned();
+    let chat_id = create_test_chat(&repo, "Team Chat").await;
 
-    let chat_id = repo
-        .create(
-            user_id,
-            CreateChatArgs {
-                name: "Perms Chat".to_string(),
-                project_id: None,
-            },
-        )
-        .await
-        .unwrap();
+    patch_share_permission(
+        &repo,
+        &chat_id,
+        UpdateSharePermissionRequestV2 {
+            link_share: Some(Some(LinkShare::Team)),
+            link_share_access_level: Some(None),
+            channel_share_permissions: None,
+        },
+    )
+    .await;
 
-    let perms = repo.get_permissions(&chat_id).await.unwrap();
+    let permission = get_stored_share_permission(&pool, &chat_id).await;
+    assert_eq!(permission.link_share.as_deref(), Some("TEAM"));
+    assert_eq!(permission.link_share_access_level.as_deref(), Some("view"));
+}
 
-    assert!(!perms.id.is_empty());
-    assert_eq!(perms.owner, "macro|test@example.com");
-    assert!(perms.is_public);
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "fixtures", scripts("users"))
+)]
+async fn patch_chat_defaults_explicit_null_level_for_existing_link_share(pool: Pool<Postgres>) {
+    let repo = PgChatRepo::new(pool.clone());
+    let chat_id = create_test_chat(&repo, "Default View Chat").await;
+
+    patch_share_permission(
+        &repo,
+        &chat_id,
+        UpdateSharePermissionRequestV2 {
+            link_share: None,
+            link_share_access_level: Some(Some(AccessLevel::Edit)),
+            channel_share_permissions: None,
+        },
+    )
+    .await;
+    patch_share_permission(
+        &repo,
+        &chat_id,
+        UpdateSharePermissionRequestV2 {
+            link_share: None,
+            link_share_access_level: Some(None),
+            channel_share_permissions: None,
+        },
+    )
+    .await;
+
+    let permission = get_stored_share_permission(&pool, &chat_id).await;
+    assert_eq!(permission.link_share.as_deref(), Some("PUBLIC"));
+    assert_eq!(permission.link_share_access_level.as_deref(), Some("view"));
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "fixtures", scripts("users"))
+)]
+async fn patch_chat_disables_link_sharing_and_clears_both_levels(pool: Pool<Postgres>) {
+    let repo = PgChatRepo::new(pool.clone());
+    let chat_id = create_test_chat(&repo, "Private Chat").await;
+
+    patch_share_permission(
+        &repo,
+        &chat_id,
+        UpdateSharePermissionRequestV2 {
+            link_share: Some(None),
+            link_share_access_level: Some(Some(AccessLevel::Edit)),
+            channel_share_permissions: None,
+        },
+    )
+    .await;
+
+    let permission = get_stored_share_permission(&pool, &chat_id).await;
+    assert_eq!(permission.link_share, None);
+    assert_eq!(permission.link_share_access_level, None);
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "fixtures", scripts("users"))
+)]
+async fn get_permissions_reads_link_share_columns(pool: Pool<Postgres>) {
+    let repo = PgChatRepo::new(pool.clone());
+    let chat_id = create_test_chat(&repo, "Perms Chat").await;
+
+    let permission = repo.get_permissions(&chat_id).await.unwrap();
+    assert_eq!(permission.link_share, Some(LinkShare::Public));
+    assert_eq!(permission.link_share_access_level, Some(AccessLevel::View));
+
+    sqlx::query!(
+        r#"
+        UPDATE "SharePermission" sp
+        SET
+            "linkShare" = 'TEAM',
+            "linkShareAccessLevel" = 'edit'
+        FROM "ChatPermission" cp
+        WHERE cp."sharePermissionId" = sp.id AND cp."chatId" = $1
+        "#,
+        &chat_id,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let permission = repo.get_permissions(&chat_id).await.unwrap();
+
+    assert!(!permission.id.is_empty());
+    assert_eq!(permission.owner, "macro|test@example.com");
+    assert_eq!(permission.link_share, Some(LinkShare::Team));
+    assert_eq!(permission.link_share_access_level, Some(AccessLevel::Edit));
 }

@@ -1,7 +1,7 @@
 import { debounce } from '@core/util/debounce';
 
 import { authServiceClient } from '@service-auth/client';
-import { createEffect, createSignal } from 'solid-js';
+import { batch } from 'solid-js';
 import { createStore, unwrap } from 'solid-js/store';
 import { type MacroId, macroIdToEmail } from './macroId';
 import type { UserNameItem, UserNamePreviewFetcher } from './types';
@@ -49,17 +49,28 @@ const [userDisplayNames, setUserDisplayNames] = createStore<DisplayNameStore>(
   {}
 );
 
-const [displayNameFetchQueue, setDisplayNameFetchQueue] = createSignal<
-  string[]
->([]);
+const displayNameFetchQueue = new Set<string>();
 
 /** Adds items to fetch queue and schedules processing */
 function queueItemsForFetch(items: string[]) {
-  setDisplayNameFetchQueue((prev) => [...prev, ...items]);
+  let addedItem = false;
+  for (const item of items) {
+    if (displayNameFetchQueue.has(item)) continue;
+    displayNameFetchQueue.add(item);
+    addedItem = true;
+  }
+
+  if (addedItem) processFetchQueue();
 }
 
 type DisplayNameOptions = {
   emailFallback?: 'full' | 'local-part';
+};
+
+type DisplayNamePartStrings = {
+  firstName: string;
+  lastName: string;
+  fullName: string;
 };
 
 function formatEmailFallback(email: string, options?: DisplayNameOptions) {
@@ -120,28 +131,26 @@ async function fetchDisplayNames(ids: string[]): Promise<UserNameItem[]> {
 }
 
 const processFetchQueue = debounce(async () => {
-  const items = displayNameFetchQueue();
+  const items = [...displayNameFetchQueue];
   if (items.length === 0) return;
 
-  setDisplayNameFetchQueue([]);
+  displayNameFetchQueue.clear();
   await batchFetchNames(items);
-}, 50);
+}, 10);
 
 async function batchFetchNames(ids: string[]) {
   const [nameResults] = await Promise.all([
     ids.length > 0 ? fetchDisplayNames(ids) : Promise.resolve([]),
   ]);
 
-  const updates = nameResults.reduce((acc, result) => {
-    acc[result.id] = result;
-    return acc;
-  }, {} as DisplayNameStore);
-
-  setUserDisplayNames((prev) => ({ ...prev, ...updates }));
+  batch(() => {
+    for (const result of nameResults) {
+      setUserDisplayNames(result.id, result);
+    }
+  });
 }
 
-/** Shared hook that handles caching/fetching and returns the underlying UserNameItem */
-function useUserNameItem(id: MacroId) {
+function ensureUserNameItem(id: MacroId) {
   const cached = userDisplayNames[id];
   const cacheExpired =
     cached &&
@@ -157,13 +166,45 @@ function useUserNameItem(id: MacroId) {
     });
     queueItemsForFetch([id]);
   }
+}
 
-  createEffect(() => {
-    const queue = displayNameFetchQueue();
-    if (queue.length > 0) {
-      processFetchQueue();
-    }
-  });
+function getUserNameItem(id: MacroId): UserNameItem {
+  ensureUserNameItem(id);
+  return unwrap(userDisplayNames[id]);
+}
+
+/** Resolves a display name from the shared reactive cache. */
+export function getDisplayName(
+  id: MacroId | undefined | null,
+  options?: DisplayNameOptions
+): string {
+  if (!id) return '';
+  return defaultNameTransform(getUserNameItem(id), options);
+}
+
+/** Resolves structured display name parts from the shared reactive cache. */
+export function getDisplayNameParts(
+  id: MacroId | undefined | null,
+  options?: DisplayNameOptions
+): DisplayNamePartStrings {
+  if (!id) return { firstName: '', lastName: '', fullName: '' };
+
+  const item = getUserNameItem(id);
+  const fullName = defaultNameTransform(item, options);
+
+  if (item.loading) return { firstName: '', lastName: '', fullName };
+
+  const firstName =
+    item.firstName && item.firstName !== 'N/A' ? item.firstName : '';
+  const lastName =
+    item.lastName && item.lastName !== 'N/A' ? item.lastName : '';
+
+  return { firstName, lastName, fullName };
+}
+
+/** Shared hook that handles caching/fetching and returns the underlying UserNameItem */
+function useUserNameItem(id: MacroId) {
+  ensureUserNameItem(id);
 
   const getItem = () => unwrap(userDisplayNames[id]);
 
@@ -190,6 +231,10 @@ type DisplayNameParts = {
   refetch: () => void;
 };
 
+/**
+ * @deprecated Prefer `getDisplayNameParts` inside a reactive accessor so the
+ * current id is resolved when props/list rows change.
+ */
 export function useDisplayNameParts(
   id: MacroId | undefined | null,
   options?: DisplayNameOptions
@@ -224,6 +269,10 @@ export function useDisplayNameParts(
   return { firstName, lastName, fullName, refetch };
 }
 
+/**
+ * @deprecated Prefer `getDisplayName` inside a reactive accessor so the
+ * current id is resolved when props/list rows change.
+ */
 export function useDisplayName(
   id: MacroId | undefined | null,
   options?: DisplayNameOptions

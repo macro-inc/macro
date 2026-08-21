@@ -5,9 +5,10 @@ import { SoupViewContextProvider } from '@app/features/next-soup/soup-view/soup-
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { MobileTopEdgeFade } from '@components/app/mobile/MobileEdgeFade';
 import { isSoloSettings } from '@core/constant/SettingsState';
+import { BlockOpenTrackingDelayContext } from '@core/context/blockOpenTracking';
 import { splitContainerAttribute } from '@core/dom-selectors';
 import { useHotkeyDOMScope } from '@core/hotkey/hotkeys';
-import { isMobile } from '@core/mobile/isMobile';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { getSafeAreaInset } from '@core/mobile/safeAreaInsets';
 import CloseIcon from '@phosphor/x.svg';
 import { createElementSize } from '@solid-primitives/resize-observer';
@@ -29,11 +30,10 @@ import {
   SplitPanelContext,
   type SplitPanelContextType,
 } from '../context';
-import { splitPanelLayer } from '../layers';
 import { useSplitLayout } from '../layout';
 import type { SplitHandle, SplitState } from '../layoutManager';
 import { registerSplitHotkeys } from '../registerSplitHotkeys';
-import { createHeaderCollapser } from '../utils/createHeaderCollapser';
+import { createPriorityCollapseController } from './PriorityCollapseOverflowSensor';
 import { SplitDrawerGroup } from './SplitDrawerContext';
 import { SplitHeader } from './SplitHeader';
 import { SplitToolbar } from './SplitToolbar';
@@ -46,13 +46,18 @@ type SplitPanelProps = {
   index: number;
 };
 
+/**
+ * A Preview Pair Viewer displays content passively. Only record it as opened
+ * after the user lingers, so keyboard scanning does not mark every row viewed.
+ */
+const PREVIEW_VIEWER_OPEN_TRACK_DELAY_MS = 1_500;
+
 export function SplitPanel(props: SplitPanelProps) {
   const [attachHotKeys, splitHotkeyScope] = useHotkeyDOMScope(
     `split=${props.split.id}`
   );
   const [panelRef, setPanelRef] = createSignal<HTMLDivElement | null>(null);
   const [contentOffsetTop, setContentOffsetTop] = createSignal(0);
-  const [previewState, setPreviewState] = createSignal(false);
   const [titleFileMenuRef, setTitleFileMenuRef] =
     createSignal<HTMLDivElement>();
   const [titleFileMenuTrigger, setTitleFileMenuTrigger] =
@@ -64,23 +69,30 @@ export function SplitPanel(props: SplitPanelProps) {
   const panelSize = createElementSize(panelRef);
 
   const layoutRefs: SplitPanelContextType['layoutRefs'] = {};
-  const headerCollapser = createHeaderCollapser(
-    () => layoutRefs.headerLeft,
-    () => panelSize.width
-  );
+  const headerCollapseController = createPriorityCollapseController();
+  const toolbarCollapseController = createPriorityCollapseController();
 
   const splitLayoutHelpers = useSplitLayout();
 
   registerSplitHotkeys({
-    goHome: () =>
+    // Leaving a piece of content should return you to the list you reached it
+    // from, so walk this split's history back to the most recent list view.
+    // Only a split that never passed through one falls back to the inbox.
+    goToList: () => {
+      const wentBack = props.handle.goBackTo(
+        (content) => content.type === 'component' && isListViewID(content.id)
+      );
+      if (wentBack) return;
       props.handle.replace({
         next: { type: 'component', id: LIST_VIEW_ID.inbox },
         referredFrom: 'hotkey',
-      }),
+      });
+    },
     isNotUnifiedList: () => {
       const content = props.handle.content();
       return !isListViewID(content.id);
     },
+    isViewerSplit: () => props.handle.isViewerSplit(),
     getSplitCount: () => splitLayoutHelpers.getSplitCount(),
     toggleSpotlight: () => props.handle.toggleSpotlight(),
     canGoForward: () => props.handle.canGoForward(),
@@ -99,7 +111,11 @@ export function SplitPanel(props: SplitPanelProps) {
 
   createEffect(
     on([panelRef], () => {
-      if (isMobile()) return;
+      if (isTouchDevice()) return;
+      // Only the active split may claim focus on mount. A Preview Pair's Viewer
+      // is created with activate:false while its controller stays active, and
+      // must not steal the keyboard from it.
+      if (!props.active) return;
       panelRef()?.focus();
     })
   );
@@ -131,7 +147,7 @@ export function SplitPanel(props: SplitPanelProps) {
   });
 
   createEffect(() => {
-    const safeTop = isMobile() ? getSafeAreaInset('top') : 0;
+    const safeTop = isTouchDevice() ? getSafeAreaInset('top') : 0;
     const offset =
       safeTop + (headerSize.height ?? 0) + (toolbarSize.height ?? 0);
     setContentOffsetTop(offset);
@@ -142,25 +158,70 @@ export function SplitPanel(props: SplitPanelProps) {
     return Boolean(splits && splits.length > 1);
   }
 
-  const shouldHideSplitHeader = createMemo(
-    () =>
-      (isMobile() && isListViewID(props.handle.content().id)) ||
-      isSoloSettings()
-  );
+  // On mobile the header stays visible for list views too: it hosts the
+  // floating filter-pill strip (see MobileSoupViewTabs).
+  const shouldHideSplitHeader = createMemo(() => isSoloSettings());
 
-  const hasFocusedSplitBorder = createMemo(
-    () =>
-      !isMobile() &&
-      props.active &&
-      multipleSplits() &&
-      !props.handle.isSpotLight()
-  );
+  const splitFocusStyling = () =>
+    !isTouchDevice() &&
+    props.active &&
+    multipleSplits() &&
+    !props.handle.isSpotLight();
 
+  const splitUnfocusedStyling = () =>
+    !isTouchDevice() && !props.active && multipleSplits();
+
+  const gutterSize = () =>
+    globalSplitManager()?.resizeContext()?.gutterSize() ?? 0;
+
+  /**
+   * This split is a Viewer sitting immediately right of its Controller: the
+   * pane slides left across the gutter so it sits flush against the
+   * Controller, reading as tucked behind it.
+   */
+  const tuckedBehindController = createMemo(() => {
+    return (
+      !isTouchDevice() &&
+      !props.handle.isSpotLight() &&
+      props.handle.isViewerSplit()
+    );
+  });
+
+  /**
+   * This split is a preview controller with its viewer tucked flush against
+   * its right edge: paint above the viewer so the controller's card and
+   * shadow read as being in front.
+   */
+  const hasTuckedViewer = createMemo(() => {
+    return (
+      !isTouchDevice() &&
+      !props.handle.isSpotLight() &&
+      props.handle.isControllerSplit()
+    );
+  });
+
+  /**
+   * When either member of a tucked Preview Pair is active, the active member
+   * stays solid and its partner is dashed. Both retain the standard edge color.
+   */
+  const previewPairFocusStyling = createMemo(() => {
+    const manager = globalSplitManager();
+    if (!manager || isTouchDevice() || props.handle.isSpotLight()) return false;
+
+    const peerId = props.handle.isControllerSplit()
+      ? manager.viewerOf(props.split.id)
+      : props.handle.isViewerSplit()
+        ? manager.controllerOf(props.split.id)
+        : undefined;
+    if (!peerId || manager.getSplit(peerId)?.isSpotLight()) return false;
+
+    const activeId = manager.activeSplitId();
+    return activeId === props.split.id || activeId === peerId;
+  });
   return (
     <SoupContextProvider soup={nextSoup}>
       <SplitPanelContext.Provider
         value={{
-          previewState: [previewState, setPreviewState],
           isPanelActive: () => props.active,
           handle: props.handle,
           setContentOffsetTop,
@@ -175,7 +236,8 @@ export function SplitPanel(props: SplitPanelProps) {
               );
             };
           },
-          headerCollapser,
+          headerCollapser: headerCollapseController.collapser,
+          toolbarCollapser: toolbarCollapseController.collapser,
           layoutRefs,
           titleFileMenuRef,
           setTitleFileMenuRef,
@@ -201,16 +263,26 @@ export function SplitPanel(props: SplitPanelProps) {
               'fixed inset-16 z-modal-overlay isolate opacity-50':
                 props.handle.isSpotLight(),
               'opacity-100': props.active || props.handle.isSpotLight(),
-              'relative size-full': !props.handle.isSpotLight(),
+              // touch:isolate contains the floating SplitHeader within the panel's own stacking context, so the root-level mobile/tablet
+              // search overlay paints over it.
+              'relative size-full touch:isolate': !props.handle.isSpotLight(),
             }}
             style={{
               '--split-header-height': `${
                 shouldHideSplitHeader() ? 0 : (headerSize.height ?? 0)
               }px`,
               // The hard spacer for top-anchored content on full-frame
-              // mobile: status bar + floating header strip.
+              // mobile/tablet: status bar + floating header strip.
               '--mobile-content-inset-top':
                 'calc(var(--safe-top, 0px) + var(--split-header-height, 0px))',
+              // Slide the preview pane left across the gutter so it sits
+              // flush against the controller, keeping its right edge in
+              // place. The gutter's drag hit-area still paints (and
+              // hit-tests) above this extension, so resizing works.
+              ...(tuckedBehindController() && {
+                'margin-left': `-${gutterSize()}px`,
+                width: `calc(100% + ${gutterSize()}px)`,
+              }),
             }}
             ref={(ref) => {
               setPanelRef(ref);
@@ -223,44 +295,55 @@ export function SplitPanel(props: SplitPanelProps) {
             tabindex={-1}
           >
             <Panel
-              edgeColor={
-                hasFocusedSplitBorder()
-                  ? 'color-mix(in oklch, var(--color-edge) 80%, var(--color-ink))'
-                  : undefined
-              }
               class={cn(
-                'rounded-xl mobile:rounded-none mobile:after:hidden mobile:border-0!',
+                'rounded-xl touch:rounded-none touch:after:hidden touch:border-0! bg-panel',
+                splitUnfocusedStyling() && 'split-panel-inactive',
                 {
-                  'shadow-sm shadow-drop-shadow/50': !hasFocusedSplitBorder(),
-                  'shadow-lg shadow-drop-shadow/70': hasFocusedSplitBorder(),
+                  'shadow-sm shadow-drop-shadow/50': splitUnfocusedStyling(),
+                  'shadow-2xl shadow-drop-shadow': splitFocusStyling(),
+                  'border-solid!': previewPairFocusStyling() && props.active,
+                  'border-dashed!': previewPairFocusStyling() && !props.active,
+                  // Drawer look: both members square their seam corners. The
+                  // seam border always belongs to the Controller — the
+                  // Viewer's seam edge stays borderless so the line never
+                  // doubles, and keeping it on one fixed member regardless
+                  // of focus means switching focus can't shift layout by the
+                  // border width (the ! beats Surface's inline border
+                  // shorthand).
+                  'rounded-l-none border-l-0!': tuckedBehindController(),
+                  'rounded-r-none': hasTuckedViewer(),
                 }
               )}
-              depth={isMobile() ? 0 : 1}
+              depth={isTouchDevice() ? 0 : 1}
             >
               <Panel.Header
                 class={cn(
                   'relative block min-h-10.25 touch:min-h-11.25 p-0 overflow-visible border-b-0!',
-                  splitPanelLayer.controls,
-                  // On mobile the header collapses to a zero-height grid row;
+                  'z-split-panel-chrome',
+                  // On mobile/tablet the header collapses to a zero-height grid row;
                   // SplitHeader overlays the body as floating islands.
-                  'mobile:min-h-0 mobile:border-b-0',
+                  'touch:min-h-0 touch:border-b-0',
                   shouldHideSplitHeader() && 'hidden'
                 )}
               >
-                <SplitHeader ref={setHeaderRef} />
+                <SplitHeader
+                  ref={setHeaderRef}
+                  collapseController={headerCollapseController}
+                />
               </Panel.Header>
 
               <Panel.Toolbar
                 class={cn(
                   'items-start overflow-visible',
                   !hasToolbarContent() && 'hidden',
-                  isMobile() && 'hidden',
-                  (!previewState() ||
-                    isListViewID(props.handle.content().id)) &&
-                    'border-b-0' /* List views draw the preview border below their filter bar instead (see SoupView). */
+                  isTouchDevice() && 'hidden',
+                  'border-b-0'
                 )}
               >
-                <SplitToolbar ref={setToolbarRef} />
+                <SplitToolbar
+                  ref={setToolbarRef}
+                  collapseController={toolbarCollapseController}
+                />
               </Panel.Toolbar>
 
               <Panel.Body>
@@ -273,7 +356,15 @@ export function SplitPanel(props: SplitPanelProps) {
                   >
                     <Suspense>
                       <SoupViewContextProvider soup={nextSoup}>
-                        <Dynamic component={props.split.mount.element} />
+                        <BlockOpenTrackingDelayContext.Provider
+                          value={
+                            props.handle.isViewerSplit()
+                              ? PREVIEW_VIEWER_OPEN_TRACK_DELAY_MS
+                              : 0
+                          }
+                        >
+                          <Dynamic component={props.split.mount.element} />
+                        </BlockOpenTrackingDelayContext.Provider>
                       </SoupViewContextProvider>
                     </Suspense>
                   </div>

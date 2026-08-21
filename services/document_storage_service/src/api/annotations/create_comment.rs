@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use crate::{
     api::annotations::{CommentNotifContext, compute_notification_recipients},
+    api::context::AuthorizationService,
     service::conn_gateway::update_live_comment_state,
 };
 use axum::{
@@ -11,6 +12,8 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use connection_gateway_client::ConnectionGatewayClient;
+use entity_access::domain::models::{EntityAccessReceipt, ViewAccessLevel};
+use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
 use macro_db_client::annotations::create_comment::create_document_comment;
 use macro_user_id::user_id::MacroUserIdStr;
 use model::{
@@ -20,7 +23,6 @@ use model::{
     },
     document::DocumentBasic,
     response::ErrorResponse,
-    user::UserContext,
 };
 use model_notifications::NotificationDocumentSubType;
 use models_properties::service::property_value::PropertyValue;
@@ -59,11 +61,12 @@ pub async fn create_comment_handler(
     State(properties_service): State<Arc<crate::api::context::PropertiesService>>,
     State(db): State<PgPool>,
     State(conn_gateway_client): State<Arc<ConnectionGatewayClient>>,
-    Extension(UserContext { user_id, .. }): Extension<UserContext>,
+    user: MacroAuthorizationExtractor<AuthorizationService, UserOrInternal>,
     document_context: Extension<DocumentBasic>,
     Path(Params { document_id }): Path<Params>,
     Json(req): Json<CreateCommentRequest>,
 ) -> Result<Response, Response> {
+    let user_id = user.authorization.user.macro_user_id.to_string();
     if document_context.deleted_at.is_some() {
         return Err((
             StatusCode::BAD_REQUEST,
@@ -108,9 +111,9 @@ pub async fn create_comment_handler(
                 // outside the commenting user's session. The comment itself was
                 // already authorized by the document middleware.
                 let task_properties_access =
-                    properties::PropertiesAccessReceipt::dangerously_assert_internal(
+                    EntityAccessReceipt::<ViewAccessLevel>::dangerously_assert_internal_user(
                         &document_id,
-                        models_properties::EntityType::Task,
+                        model_entity::EntityType::Document,
                     );
                 let task_assignee_ids: Vec<String> = match properties_service
                     .get_system_property_value(
@@ -153,6 +156,9 @@ pub async fn create_comment_handler(
                         document_sub_type::DocumentSubType::Snippet => {
                             NotificationDocumentSubType::Snippet
                         }
+                        document_sub_type::DocumentSubType::Skill => {
+                            NotificationDocumentSubType::Skill
+                        }
                     }),
                     sender_id: sender_id.clone(),
                     sender_profile_picture_url,
@@ -162,13 +168,13 @@ pub async fn create_comment_handler(
                 if let Some(Mentions { mention_id, .. }) = &req.mentions
                     && !recipients.mention_recipients.is_empty()
                 {
-                    // If the document is public, grant the mentioned users access so
-                    // the comment surfaces in their soup/inbox — a notification alone
+                    // If the document is link-shared, grant the mentioned users access
+                    // so the comment surfaces in their soup/inbox — a notification alone
                     // isn't enough for the document to appear there.
                     let mention_recipients: Vec<MacroUserIdStr<'_>> =
                         recipients.mention_recipients.iter().cloned().collect();
 
-                    let _ = macro_db_client::share_on_mention::share_public_document_with_mentioned_users(
+                    let _ = macro_db_client::share_on_mention::share_link_shared_document_with_mentioned_users(
                         &db,
                         &document_id,
                         &mention_recipients,

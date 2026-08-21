@@ -7,7 +7,7 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use entity_access::domain::ports::EntityAccessService;
-use model::user::axum_extractor::MacroUserExtractor;
+use macro_authorization::{MacroAuthorizationExtractor, MacroAuthorizationService, UserOrInternal};
 use models_properties::api::{AddPropertyOptionRequest, UpdatePropertyOptionRequest};
 use models_properties::service::property_option::PropertyOption;
 use thiserror::Error;
@@ -56,15 +56,17 @@ impl IntoResponse for GetPropertyOptionsErr {
     tag = "Properties"
 )]
 #[tracing::instrument(skip(state, user, team), fields(property_id = %property_uuid), err)]
-pub async fn get_property_options<S: PropertiesService, A: EntityAccessService>(
+pub async fn get_property_options<
+    S: PropertiesService,
+    A: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
     Path(property_uuid): Path<Uuid>,
-    State(state): State<PropertiesRouterState<S, A>>,
-    MacroUserExtractor {
-        macro_user_id: user,
-        ..
-    }: MacroUserExtractor,
-    team: PropertyTeamExtractor<A>,
+    State(state): State<PropertiesRouterState<S, A, Auth>>,
+    user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+    team: PropertyTeamExtractor<A, Auth>,
 ) -> Result<Json<Vec<PropertyOption>>, GetPropertyOptionsErr> {
+    let user = user.authorization.user.macro_user_id;
     tracing::info!("retrieving property options");
 
     let options = state
@@ -122,16 +124,18 @@ impl IntoResponse for AddPropertyOptionErr {
     tags = ["Properties"]
 )]
 #[tracing::instrument(skip(state, user, team), fields(property_id = %property_uuid, request = ?request), err)]
-pub async fn add_property_option<S: PropertiesService, A: EntityAccessService>(
+pub async fn add_property_option<
+    S: PropertiesService,
+    A: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
     Path(property_uuid): Path<Uuid>,
-    State(state): State<PropertiesRouterState<S, A>>,
-    MacroUserExtractor {
-        macro_user_id: user,
-        ..
-    }: MacroUserExtractor,
-    team: PropertyTeamExtractor<A>,
+    State(state): State<PropertiesRouterState<S, A, Auth>>,
+    user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+    team: PropertyTeamExtractor<A, Auth>,
     Json(request): Json<AddPropertyOptionRequest>,
 ) -> Result<(StatusCode, Json<PropertyOption>), AddPropertyOptionErr> {
+    let user = user.authorization.user.macro_user_id;
     tracing::info!("adding property option");
 
     let option = state
@@ -193,16 +197,18 @@ impl IntoResponse for UpdatePropertyOptionErr {
     tags = ["Properties"]
 )]
 #[tracing::instrument(skip(state, user, team), fields(property_id = %def_uuid, option_id = %option_uuid, request = ?request), err)]
-pub async fn update_property_option<S: PropertiesService, A: EntityAccessService>(
+pub async fn update_property_option<
+    S: PropertiesService,
+    A: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
     Path((def_uuid, option_uuid)): Path<(Uuid, Uuid)>,
-    State(state): State<PropertiesRouterState<S, A>>,
-    MacroUserExtractor {
-        macro_user_id: user,
-        ..
-    }: MacroUserExtractor,
-    team: PropertyTeamExtractor<A>,
+    State(state): State<PropertiesRouterState<S, A, Auth>>,
+    user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+    team: PropertyTeamExtractor<A, Auth>,
     Json(request): Json<UpdatePropertyOptionRequest>,
 ) -> Result<(StatusCode, Json<PropertyOption>), UpdatePropertyOptionErr> {
+    let user = user.authorization.user.macro_user_id;
     let updated = state
         .properties_service
         .update_property_option(
@@ -259,15 +265,17 @@ impl IntoResponse for DeletePropertyOptionErr {
     tag = "Properties"
 )]
 #[tracing::instrument(skip(state, user, team), err)]
-pub async fn delete_property_option<S: PropertiesService, A: EntityAccessService>(
+pub async fn delete_property_option<
+    S: PropertiesService,
+    A: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
     Path((def_uuid, option_uuid)): Path<(Uuid, Uuid)>,
-    State(state): State<PropertiesRouterState<S, A>>,
-    MacroUserExtractor {
-        macro_user_id: user,
-        ..
-    }: MacroUserExtractor,
-    team: PropertyTeamExtractor<A>,
+    State(state): State<PropertiesRouterState<S, A, Auth>>,
+    user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+    team: PropertyTeamExtractor<A, Auth>,
 ) -> Result<StatusCode, DeletePropertyOptionErr> {
+    let user = user.authorization.user.macro_user_id;
     tracing::info!("deleting property option");
 
     state

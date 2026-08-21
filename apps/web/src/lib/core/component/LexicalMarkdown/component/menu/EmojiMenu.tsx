@@ -28,8 +28,11 @@ import { useMenuKeyboardNavigation } from './useMenuKeyboardNavigation';
 false && clickOutside;
 false && floatWithSelection;
 
-// py-2 on the menu container = 8px top + 8px bottom
-const MENU_DECORATION_HEIGHT = 16;
+// py-1.5 on the menu container = 6px top + 6px bottom
+const MENU_DECORATION_HEIGHT = 12;
+const EMOJI_ITEM_HEIGHT = 32;
+const MAX_EMOJI_LIST_ITEMS = 7;
+const MAX_EMOJI_LIST_HEIGHT = MAX_EMOJI_LIST_ITEMS * EMOJI_ITEM_HEIGHT;
 
 type EmojiMenuProps = {
   menu: MenuOperations;
@@ -90,8 +93,22 @@ export function EmojiMenu(props: EmojiMenuProps) {
   >(undefined);
   const contentMaxHeight = () => {
     const h = menuAvailableHeight();
-    if (h === undefined) return undefined;
-    return Math.min(200, Math.max(0, h - MENU_DECORATION_HEIGHT));
+    if (h === undefined) return MAX_EMOJI_LIST_HEIGHT;
+    const availableContentHeight = Math.max(0, h - MENU_DECORATION_HEIGHT);
+    const visibleItemCount = Math.floor(
+      availableContentHeight / EMOJI_ITEM_HEIGHT
+    );
+    return Math.min(
+      MAX_EMOJI_LIST_HEIGHT,
+      visibleItemCount * EMOJI_ITEM_HEIGHT
+    );
+  };
+  const contentHeight = () => {
+    const itemCount = emojiOptions().length;
+    if (itemCount === 0) return 0;
+    const itemHeight = itemCount * EMOJI_ITEM_HEIGHT;
+    if (contentMaxHeight() < EMOJI_ITEM_HEIGHT) return EMOJI_ITEM_HEIGHT;
+    return Math.min(contentMaxHeight(), itemHeight);
   };
 
   const { isKeypressActive } = useIsKeyPressActive();
@@ -271,12 +288,10 @@ export function EmojiMenu(props: EmojiMenuProps) {
                 <VList
                   data={emojiOptions()}
                   ref={setVirtualHandle}
+                  itemSize={EMOJI_ITEM_HEIGHT}
                   class="scrollbar-hidden"
                   style={{
-                    height:
-                      contentMaxHeight() !== undefined
-                        ? `${contentMaxHeight()}px`
-                        : '200px',
+                    height: `${contentHeight()}px`,
                     'max-height': '100%',
                     width: '100%',
                   }}

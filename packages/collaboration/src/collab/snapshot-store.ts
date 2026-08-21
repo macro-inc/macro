@@ -1,6 +1,6 @@
 import { type DBSchema, type IDBPDatabase, openDB as idbOpen } from 'idb';
 import { logSyncService } from './logger';
-import type { LoroManager } from './manager';
+import { type LoroManager, LoroManagerError } from './manager';
 import type { GenericRootSchema, RawUpdate } from './shared';
 import type { WALStore } from './wal';
 
@@ -97,9 +97,19 @@ export async function loadCachedState<S extends GenericRootSchema>(
   }
 
   const pending = await walStore.getAll();
+  let pendingCount = 0;
   for (const entry of pending) {
     const importResult = loroManager.importUpdate(entry.update);
     if (importResult.isErr()) {
+      const pendingOnly = importResult.error.every(
+        (e) => e.code === LoroManagerError.ImportPending
+      );
+      if (pendingOnly) {
+        // Loro holds the entry until its causal gap fills, so keep replaying:
+        // a later WAL entry may fill the gap, and held ops apply on their own.
+        pendingCount += 1;
+        continue;
+      }
       // Stop replaying. Skipped entries are safe: delivered ones are on the
       // server (server sync will bring them back) and undelivered ones are
       // still in the WAL (next edit or reconnect will flush them).
@@ -111,6 +121,14 @@ export async function loadCachedState<S extends GenericRootSchema>(
       });
       break;
     }
+  }
+  if (pendingCount > 0) {
+    logSyncService({
+      documentId: 'unknown',
+      level: 'warn',
+      context: { misc: { pendingCount } },
+      message: 'snapshot-store: WAL entries pending during cold load',
+    });
   }
   return true;
 }

@@ -2,6 +2,7 @@
 
 use crate::domain::ports::ChatService;
 use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
+use ai_toolset::{ToolAnnotated, ToolAnnotations};
 use async_trait::async_trait;
 use entity_access::domain::{
     models::{EntityType, ViewAccessLevel},
@@ -9,6 +10,7 @@ use entity_access::domain::{
 };
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 
 use super::ChatToolContext;
 
@@ -48,6 +50,10 @@ pub struct ReadChat {
     pub chat_id: String,
 }
 
+impl ToolAnnotated for ReadChat {
+    const ANNOTATIONS: ToolAnnotations = ToolAnnotations::read_only("Read chat history");
+}
+
 #[async_trait]
 impl<CSvc, ESvc> AsyncTool<ChatToolContext<CSvc, ESvc>> for ReadChat
 where
@@ -63,6 +69,18 @@ where
         request_context: RequestContext,
     ) -> ToolResult<Self::Output> {
         tracing::info!(params=?self, "Read chat");
+
+        if let Some(self_chat_id) = service_context.self_chat_id
+            && Uuid::parse_str(&self.chat_id) == Ok(self_chat_id)
+        {
+            return Err(ToolCallError {
+                description: "This is the chat you are currently running in — you already \
+                    have its full message history in context, so it cannot be read via this \
+                    tool. Use ReadChat only to read a different chat."
+                    .to_string(),
+                internal_error: anyhow::anyhow!("attempted to read the currently running chat"),
+            });
+        }
 
         let receipt = service_context
             .entity_access_service

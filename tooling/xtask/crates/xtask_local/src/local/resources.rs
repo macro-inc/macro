@@ -115,6 +115,15 @@ pub const QUEUES: &[Queue] = &[
         bindings: &[("BACKFILL_QUEUE", Name), ("EMAIL_BACKFILL_QUEUE", Url)],
     },
     Queue {
+        // Consumed by email_service's nightly CRM-cleanup workers; without the
+        // queue existing in LocalStack they tight-loop on receive errors.
+        name: macro_queues::EmailCrmCleanupQueue::LOCAL,
+        bindings: &[(
+            macro_queues::EmailCrmCleanupQueue::OVERRIDE_ENV_VAR_NAME,
+            Url,
+        )],
+    },
+    Queue {
         name: macro_queues::ChatDeleteQueue::LOCAL,
         bindings: &[("CHAT_DELETE_QUEUE", Name)],
     },
@@ -181,6 +190,30 @@ pub const QUEUES: &[Queue] = &[
     Queue {
         name: macro_queues::StaticFileServiceS3EventQueueUrl::LOCAL,
         bindings: &[("STATIC_FILE_SERVICE_S3_EVENT_QUEUE_URL", Url)],
+    },
+    Queue {
+        // Carries both the reminder sweep tick and the per-firing fan-out it
+        // publishes. Consumed by cloud-storage-service's dispatch worker, which
+        // tight-loops on receive errors if the queue is not there.
+        //
+        // No EventBridge locally — LocalStack has `events` disabled — so nothing
+        // puts the minutely tick on this queue. `just poke_reminder_sweep` (or
+        // `just tick_reminder_sweeps`) stands in for the schedule.
+        name: macro_queues::ReminderDispatchQueue::LOCAL,
+        bindings: &[(
+            macro_queues::ReminderDispatchQueue::OVERRIDE_ENV_VAR_NAME,
+            Url,
+        )],
+    },
+    Queue {
+        // Same EventBridge stand-in as the reminders queue above:
+        // `just poke_calendar_reminder_sweep` (or
+        // `just tick_calendar_reminder_sweeps`) supplies the minutely tick.
+        name: macro_queues::CalendarReminderDispatchQueue::LOCAL,
+        bindings: &[(
+            macro_queues::CalendarReminderDispatchQueue::OVERRIDE_ENV_VAR_NAME,
+            Url,
+        )],
     },
 ];
 

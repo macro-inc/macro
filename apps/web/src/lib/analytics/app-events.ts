@@ -18,6 +18,17 @@ export type EntityEventPayload = {
   source?: string;
 } & Record<string, unknown>;
 
+/** A normalized reason selected before deleting an account. */
+export type AccountDeletionReason =
+  | 'not_using_enough'
+  | 'missing_features'
+  | 'difficult_to_use'
+  | 'bugs_or_performance'
+  | 'too_expensive'
+  | 'prefer_another_product'
+  | 'privacy_or_security_concerns'
+  | 'other';
+
 export type AppEvents = {
   // --- Acquisition & auth -------------------------------------------------
   /**
@@ -32,6 +43,10 @@ export type AppEvents = {
   sign_up_click: { method?: string } & Record<string, unknown>;
   login: Record<string, unknown>; // payload - include link status
   sign_out: Record<string, unknown>;
+  account_deletion_feedback: {
+    reason: AccountDeletionReason | 'not_provided';
+    feedback?: string;
+  };
   login_from_onboarding: Record<string, unknown>;
   mobile_web_welcome_viewed: Record<string, unknown>;
   mobile_web_signup_sent_viewed: Record<string, unknown>;
@@ -45,6 +60,50 @@ export type AppEvents = {
   };
   tutorial_completed: { isFirstTime: boolean };
   tutorial_skipped: Record<string, unknown>;
+
+  // --- Onboarding v4 (the full-screen /onboarding stepper) -----------------
+  /**
+   * Flow entered. `signup_method` is inferred from the inbox state at
+   * entry: a Google SSO signup arrives with its Gmail inbox already
+   * linked, an email-code signup with none. `entry_step` is where the
+   * user landed ('email' unless a persisted step was restored).
+   */
+  onboarding_v4_started: {
+    signup_method: 'google' | 'email_code';
+    entry_step: string;
+  };
+  /** One per step transition: viewed on entry, completed/skipped on exit. */
+  onboarding_v4_step: {
+    step: string;
+    index: number;
+    state: 'viewed' | 'completed' | 'skipped';
+  };
+  /** A connect-inbox row was clicked (OAuth may still be abandoned). */
+  onboarding_v4_email_connect_clicked: { slot: string };
+  /** An inbox finished linking while onboarding. */
+  onboarding_v4_email_connected: { connected_count: number };
+  /** A connector completed OAuth from its step. */
+  onboarding_v4_connector_connected: { connector: string };
+  /** What happened on the team step. */
+  onboarding_v4_team: {
+    action: 'created' | 'joined_invite' | 'already_on_team';
+    invites_sent?: number;
+    /** Same-domain teammates the step pre-added to the invite list. */
+    invites_prefilled?: number;
+    /** How many of those the user removed before creating the team. */
+    invites_removed?: number;
+    used_domain_suggestion?: boolean;
+  };
+  /**
+   * The flow finished (free, premium, or plan skipped) with a rollup of
+   * everything connected along the way.
+   */
+  onboarding_v4_completed: {
+    plan: 'free' | 'premium';
+    plan_skipped: boolean;
+    emails_connected: number;
+    connectors_connected: string[];
+  };
 
   subscription_start: Record<string, unknown>;
   subscription_cancel: Record<string, unknown>;
@@ -106,10 +165,12 @@ export type AppEvents = {
   share_entity: EntityEventPayload & {
     shareMethod?:
       | 'public_link'
+      | 'team_link'
       | 'channel'
       | 'forward'
       | 'attachment_public'
       | (string & {});
+    linkShare?: 'PUBLIC' | 'TEAM';
   };
 
   task_copy_branch_name: Record<string, unknown>;

@@ -87,8 +87,11 @@ export class SyncServiceSource implements LiveSyncSource {
   private readonly ws: SyncSocket;
   private readonly newId: () => string;
   private readonly listeners = new Set<(event: SyncSourceEvent) => void>();
-  /** Events that arrive before any listener attaches; flushed on `listen()`. */
+  /** Events that arrive before the first listener attaches; flushed on
+   *  `listen()`. Once a listener has attached, listener-less windows (e.g. a
+   *  stopped engine) drop events instead — see `emit`. */
   private readonly buffered: SyncSourceEvent[] = [];
+  private hasEverHadListener = false;
   /** Pending request/response waiters, matched against each incoming message. */
   private readonly waiters = new Set<MessageWaiter>();
   private initialSyncReceived = false;
@@ -130,6 +133,11 @@ export class SyncServiceSource implements LiveSyncSource {
     });
 
     this.ws.addEventListener(WebsocketEvent.Message, this.onMessage);
+    this.ws.addEventListener(WebsocketEvent.Close, this.onClose);
+    this.ws.addEventListener(
+      WebsocketEvent.HeartbeatMissed,
+      this.onHeartbeatMissed
+    );
     this.ws.addEventListener(WebsocketEvent.Reconnect, this.onReconnect);
 
     this.registerEnvironmentListeners();
@@ -150,6 +158,7 @@ export class SyncServiceSource implements LiveSyncSource {
     this.initialSyncPromise;
 
   public listen: LiveSyncSource['listen'] = (listener) => {
+    this.hasEverHadListener = true;
     this.listeners.add(listener);
     // Flush anything that arrived before the first listener attached.
     if (this.buffered.length > 0) {
@@ -239,13 +248,22 @@ export class SyncServiceSource implements LiveSyncSource {
       document.removeEventListener('visibilitychange', this.onVisibilityChange);
     }
     this.ws.removeEventListener(WebsocketEvent.Message, this.onMessage);
+    this.ws.removeEventListener(WebsocketEvent.Close, this.onClose);
+    this.ws.removeEventListener(
+      WebsocketEvent.HeartbeatMissed,
+      this.onHeartbeatMissed
+    );
     this.ws.removeEventListener(WebsocketEvent.Reconnect, this.onReconnect);
     this.ws.close();
   };
 
   private emit(event: SyncSourceEvent) {
     if (this.listeners.size === 0) {
-      this.buffered.push(event);
+      // Buffer only the pre-first-listen window (source construction → engine
+      // start). After a listener has detached (engine stopped), drop events —
+      // buffering here is unbounded, and a restarted engine converges from
+      // the server instead of replaying a stale backlog.
+      if (!this.hasEverHadListener) this.buffered.push(event);
       return;
     }
     for (const listener of this.listeners) listener(event);
@@ -304,6 +322,45 @@ export class SyncServiceSource implements LiveSyncSource {
     }
   };
 
+  private onClose: WebsocketEventListener<
+    WebsocketEvent.Close,
+    IFromPeer,
+    FromRemote
+  > = (_ws, event) => {
+    logSyncService({
+      documentId: this.documentId,
+      level: 'warn',
+      context: {
+        misc: {
+          'ws.close.code': event.code,
+          'ws.close.clean': event.wasClean,
+          ...(event.reason && {
+            'ws.close.reason': event.reason.slice(0, 256),
+          }),
+        },
+      },
+      message: 'sync source: WebSocket disconnected',
+    });
+  };
+
+  private onHeartbeatMissed: WebsocketEventListener<
+    WebsocketEvent.HeartbeatMissed,
+    IFromPeer,
+    FromRemote
+  > = (_ws, event) => {
+    if (!event.detail.willReconnect) return;
+    logSyncService({
+      documentId: this.documentId,
+      level: 'warn',
+      context: {
+        misc: {
+          'ws.heartbeat.missed': event.detail.missedHeartbeats,
+        },
+      },
+      message: 'sync source: WebSocket heartbeat missed; reconnecting',
+    });
+  };
+
   private onReconnect: WebsocketEventListener<
     WebsocketEvent.Reconnect,
     IFromPeer,
@@ -339,7 +396,7 @@ export class SyncServiceSource implements LiveSyncSource {
         logSyncService({
           documentId: this.documentId,
           level: 'warn',
-          context: { misc: { error } },
+          context: { misc: { error: String(error) } },
           message: 'sync source: reconnect initial sync timed out',
         });
         // Heartbeat is already running, so the connection remains monitored

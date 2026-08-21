@@ -1,4 +1,4 @@
-use crate::domain::models::{MessageRow, ThreadRow};
+use crate::domain::models::{EmailThreadMetadata, MessageRow, ThreadRow};
 use chrono::Utc;
 use sqlx::PgPool;
 use std::collections::HashMap;
@@ -29,6 +29,31 @@ pub(super) async fn thread_by_id(
     Ok(row.map(ThreadRow::from))
 }
 
+#[tracing::instrument(err, skip(pool, thread_ids))]
+pub(super) async fn thread_metadata_by_ids(
+    pool: &PgPool,
+    thread_ids: &[Uuid],
+) -> Result<Vec<EmailThreadMetadata>, sqlx::Error> {
+    if thread_ids.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    sqlx::query_as!(
+        EmailThreadMetadata,
+        r#"
+        SELECT
+            id AS "thread_id!",
+            link_id,
+            latest_inbound_message_ts
+        FROM email_threads
+        WHERE id = ANY($1)
+        "#,
+        thread_ids,
+    )
+    .fetch_all(pool)
+    .await
+}
+
 #[tracing::instrument(err, skip(pool))]
 pub(super) async fn messages_by_thread_id_paginated(
     pool: &PgPool,
@@ -54,6 +79,53 @@ pub(super) async fn messages_by_thread_id_paginated(
         limit,
         offset,
     )
+    .fetch_all(pool)
+    .await?;
+
+    Ok(rows.into_iter().map(MessageRow::from).collect())
+}
+
+/// Fetch the newest non-draft content message in each thread using an
+/// effective timestamp and deterministic ID tiebreaker.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "runtime lateral query is covered by repository integration tests"
+)]
+pub(super) async fn latest_content_message_rows(
+    pool: &PgPool,
+    thread_ids: &[Uuid],
+) -> Result<Vec<MessageRow>, sqlx::Error> {
+    let rows = sqlx::query_as::<_, DbMessageRow>(
+        r#"
+        SELECT
+            message.id, message.provider_id, message.thread_id,
+            message.provider_thread_id, message.replying_to_id,
+            message.global_id, message.link_id, message.provider_history_id,
+            message.internal_date_ts, message.snippet, message.size_estimate,
+            message.subject, message.sent_at, message.has_attachments,
+            message.is_read, message.is_starred, message.is_sent,
+            message.is_draft, message.body_text, message.body_html_sanitized,
+            message.body_macro, message.headers_jsonb, message.created_at,
+            message.updated_at
+        FROM UNNEST($1::uuid[]) AS requested(thread_id)
+        CROSS JOIN LATERAL (
+            SELECT
+                id, provider_id, thread_id, provider_thread_id, replying_to_id,
+                global_id, link_id, provider_history_id, internal_date_ts,
+                snippet, size_estimate, subject, sent_at, has_attachments,
+                is_read, is_starred, is_sent, is_draft, body_text,
+                body_html_sanitized, body_macro, headers_jsonb, created_at,
+                updated_at
+            FROM email_messages
+            WHERE thread_id = requested.thread_id
+              AND is_draft = false
+            ORDER BY COALESCE(internal_date_ts, sent_at, created_at) DESC,
+                     id DESC
+            LIMIT 1
+        ) AS message
+        "#,
+    )
+    .bind(thread_ids)
     .fetch_all(pool)
     .await?;
 
@@ -97,12 +169,16 @@ pub(super) async fn cross_inbox_reply_drafts(
 }
 
 /// Insert a new thread record within a transaction.
+///
+/// On conflict the update is skipped entirely when it would be a no-op
+/// (incoming `latest_inbound_message_ts` is NULL or unchanged), so redundant
+/// inserts neither rewrite the row nor wipe a populated timestamp with NULL.
 pub(super) async fn insert_thread(
     tx: &mut sqlx::PgConnection,
     thread: &ThreadRow,
     link_id: Uuid,
 ) -> Result<Uuid, sqlx::Error> {
-    let result = sqlx::query!(
+    let result = sqlx::query_scalar!(
         r#"
         INSERT INTO email_threads (id, provider_id, link_id, inbox_visible, is_read,
                              latest_inbound_message_ts, latest_outbound_message_ts,
@@ -112,6 +188,9 @@ pub(super) async fn insert_thread(
         SET
             latest_inbound_message_ts = EXCLUDED.latest_inbound_message_ts,
             updated_at = NOW()
+        WHERE
+            EXCLUDED.latest_inbound_message_ts IS NOT NULL AND
+            email_threads.latest_inbound_message_ts IS DISTINCT FROM EXCLUDED.latest_inbound_message_ts
         RETURNING id
         "#,
         thread.db_id,
@@ -123,10 +202,24 @@ pub(super) async fn insert_thread(
         thread.latest_outbound_message_ts,
         thread.latest_non_spam_message_ts,
     )
-    .fetch_one(tx)
+    .fetch_optional(&mut *tx)
     .await?;
 
-    Ok(result.id)
+    if let Some(id) = result {
+        return Ok(id);
+    }
+
+    // The conflicting row already holds this data; fetch its id.
+    sqlx::query_scalar!(
+        r#"
+        SELECT id FROM email_threads
+        WHERE link_id = $1 AND provider_id = $2
+        "#,
+        link_id,
+        thread.provider_id,
+    )
+    .fetch_one(tx)
+    .await
 }
 
 // --- Thread metadata update ---
@@ -491,7 +584,9 @@ async fn update_db_thread_metadata(
             updated_at = NOW()
         WHERE
             id = $6 AND
-            link_id = $7
+            link_id = $7 AND
+            (inbox_visible, is_read, latest_inbound_message_ts, latest_outbound_message_ts, latest_non_spam_message_ts)
+                IS DISTINCT FROM ($1, $2, $3, $4, $5)
         "#,
         inbox_visible,
         is_read,
@@ -502,6 +597,34 @@ async fn update_db_thread_metadata(
         link_id,
     )
     .execute(tx)
+    .await?;
+
+    Ok(())
+}
+
+/// Update the denormalized thread-level read status, verified by link_id.
+#[tracing::instrument(err, skip(pool))]
+pub(super) async fn update_thread_read_status(
+    pool: &PgPool,
+    thread_id: Uuid,
+    link_id: Uuid,
+    is_read: bool,
+) -> Result<(), sqlx::Error> {
+    sqlx::query!(
+        r#"
+        UPDATE email_threads
+        SET
+            is_read = $1,
+            updated_at = NOW()
+        WHERE
+            id = $2 AND
+            link_id = $3
+        "#,
+        is_read,
+        thread_id,
+        link_id,
+    )
+    .execute(pool)
     .await?;
 
     Ok(())

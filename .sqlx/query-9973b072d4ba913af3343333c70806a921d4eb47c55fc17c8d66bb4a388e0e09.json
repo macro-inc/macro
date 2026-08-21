@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE email_backfill_completion_outbox\n        SET completed_at = now()\n        WHERE backfill_job_id = $1\n          AND completed_at IS NULL\n          AND effects_lease_token = $2\n          AND effects_lease_expires_at > now()\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "9973b072d4ba913af3343333c70806a921d4eb47c55fc17c8d66bb4a388e0e09"
+}

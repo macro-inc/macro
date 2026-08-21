@@ -1,6 +1,6 @@
 use crate::{
     constants::DEFAULT_TIMEOUT_THRESHOLD,
-    context::{ApiContext, AppState},
+    context::{ApiContext, AppState, AuthorizationService},
 };
 use anyhow::Result;
 use axum::{
@@ -10,7 +10,7 @@ use axum::{
     response::ErrorResponse,
     routing::get,
 };
-use macro_middleware::auth;
+use macro_authorization::{InternalOnly, MacroAuthorizationExtractor};
 use model_entity::Entity;
 use utoipa::ToSchema;
 
@@ -20,10 +20,6 @@ where
 {
     Router::new()
         .route("/{entity_type}/{entity_id}", get(get_entity_handler))
-        .layer(axum::middleware::from_fn_with_state(
-            state.clone(),
-            auth::internal_access::handler,
-        ))
         .with_state(state)
 }
 
@@ -36,6 +32,7 @@ pub struct QueryParams {
 #[utoipa::path(
         get,
         path = "/track/{entity_type}/{entity_id}",
+        security(("internal-api-key" = [])),
         params(
             ("entity_type" = String, Path, description = "the type of the entity to send the msssage to e.g. \"user\" | \"channel\" | \"document\" etc..."),
             ("entity_id" = String, Path, description = "the id of the entity to send the message to"),
@@ -46,9 +43,10 @@ pub struct QueryParams {
             (status = 500, body=String),
         )
     )]
-#[tracing::instrument(skip(ctx))]
+#[tracing::instrument(skip(_internal_authorization, ctx))]
 #[axum::debug_handler(state = AppState)]
 pub async fn get_entity_handler(
+    _internal_authorization: MacroAuthorizationExtractor<AuthorizationService, InternalOnly>,
     State(ctx): State<ApiContext>,
     Path(entity): Path<Entity<'static>>,
     Query(query_params): Query<QueryParams>,

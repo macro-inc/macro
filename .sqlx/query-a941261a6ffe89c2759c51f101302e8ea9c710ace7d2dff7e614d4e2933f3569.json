@@ -1,0 +1,47 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT entity_id, entity_type as \"entity_type: EntityType\"\n        FROM entity_properties\n        WHERE property_definition_id = $1\n          AND values ->> 'type' = 'SelectOption'\n          AND values -> 'value' @> jsonb_build_array($2::text)\n        ORDER BY entity_id, entity_type\n        FOR UPDATE\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "entity_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "entity_type: EntityType",
+        "type_info": {
+          "Custom": {
+            "name": "property_entity_type",
+            "kind": {
+              "Enum": [
+                "CHANNEL",
+                "CHAT",
+                "DOCUMENT",
+                "PROJECT",
+                "THREAD",
+                "USER",
+                "COMPANY",
+                "TASK",
+                "CALL_RECORD",
+                "CALENDAR_EVENT"
+              ]
+            }
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "a941261a6ffe89c2759c51f101302e8ea9c710ace7d2dff7e614d4e2933f3569"
+}

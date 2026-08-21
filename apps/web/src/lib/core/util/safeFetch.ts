@@ -1,7 +1,83 @@
+import { SERVER_HOSTS, SYNC_SERVICE_HOSTS } from '@core/constant/servers';
+import { Telemetry } from '@macro-inc/observability';
 import { err, ok, type Result } from 'neverthrow';
 import { platformFetch } from './platformFetch';
 import type { ObjectLike, ResultError } from './result';
 import { sleep } from './sleep';
+
+const tracedOrigins: ReadonlySet<string> = (() => {
+  const origins = new Set<string>();
+  for (const host of [
+    ...Object.values(SERVER_HOSTS),
+    SYNC_SERVICE_HOSTS.worker,
+  ]) {
+    try {
+      origins.add(new URL(host).origin);
+    } catch {}
+  }
+  if (typeof window !== 'undefined') origins.add(window.location.origin);
+  return origins;
+})();
+
+function isTracedOrigin(url: URL): boolean {
+  return tracedOrigins.has(url.origin);
+}
+
+function requestUrl(input: RequestInfo): URL | undefined {
+  const raw = typeof input === 'string' ? input : input.url;
+  try {
+    return new URL(
+      raw,
+      typeof window === 'undefined' ? undefined : window.location.origin
+    );
+  } catch {
+    return undefined;
+  }
+}
+
+function tracedFetch(
+  input: RequestInfo,
+  init: RequestInit & { headers: Record<string, string> },
+  traceOptions?: SafeFetchTraceOptions
+): Promise<Response> {
+  const url = requestUrl(input);
+  if (!url) return platformFetch(input, init);
+  const method = (init.method ?? 'GET').toUpperCase();
+  const span = Telemetry.clientSpan(`http ${method} ${url.pathname}`);
+  span.setAttr('http.method', method);
+  // Path only: query strings can carry tokens.
+  span.setAttr('http.url', `${url.origin}${url.pathname}`);
+  return span.run(async () => {
+    try {
+      if (isTracedOrigin(url)) {
+        span.injectTraceHeaders(init.headers);
+      }
+      const response = await platformFetch(input, init);
+      span.setAttr('http.status_code', response.status);
+      if (!response.ok) {
+        const expected = traceOptions?.expectedStatusCodes?.includes(
+          response.status
+        );
+        if (expected) {
+          span.setAttr('http.expected_status', true);
+          return response;
+        }
+        const message = `HTTP ${response.status} for ${method} ${url.pathname}`;
+        span.error({
+          name: 'HttpError',
+          message,
+          stack: new Error(message).stack,
+        });
+      }
+      return response;
+    } catch (error) {
+      span.error(error);
+      throw error;
+    } finally {
+      span.end();
+    }
+  });
+}
 
 /**
  * Base error codes for fetch operations.
@@ -61,11 +137,18 @@ export interface RetryConfig {
   delay?: 'exponential' | number;
 }
 
+/** Trace-only classification for responses that are expected by the caller. */
+export interface SafeFetchTraceOptions {
+  /** Non-OK responses that should not mark the HTTP span as failed. */
+  expectedStatusCodes?: readonly number[];
+}
+
 /**
  * Extended RequestInit interface that includes retry configuration.
  */
 export interface SafeFetchInit extends RequestInit {
   retry?: RetryConfig;
+  trace?: SafeFetchTraceOptions;
 }
 
 export type TextResponse = { contentType: 'text/plain'; body: string };
@@ -160,7 +243,7 @@ export async function safeFetch<
   init?: SafeFetchInit,
   errorResponseHandler?: ErrorResponseHandler<CustomErrorCode>
 ): Promise<Result<T, ResultError<BaseFetchErrorCode | CustomErrorCode>[]>> {
-  const { retry, ...fetchInit } = init || {};
+  const { retry, trace, ...fetchInit } = init || {};
   const maxTries = retry?.maxTries ?? 1;
   const delay = retry?.delay ?? 0;
   type ErrorCode = BaseFetchErrorCode | CustomErrorCode;
@@ -170,20 +253,24 @@ export async function safeFetch<
 
   for (let attempt = 1; attempt <= maxTries; attempt++) {
     try {
-      const response = await platformFetch(input, {
-        ...fetchInit,
-        headers: {
-          ...(fetchInit?.method !== 'GET' &&
-            fetchInit?.method !== 'HEAD' &&
-            !(fetchInit?.body instanceof FormData) && {
-              'Content-Type':
-                (fetchInit?.headers as Record<string, string> | undefined)?.[
-                  'Content-Type'
-                ] ?? 'application/json',
-            }),
-          ...fetchInit?.headers,
-        } as Record<string, string>,
-      });
+      const response = await tracedFetch(
+        input,
+        {
+          ...fetchInit,
+          headers: {
+            ...(fetchInit?.method !== 'GET' &&
+              fetchInit?.method !== 'HEAD' &&
+              !(fetchInit?.body instanceof FormData) && {
+                'Content-Type':
+                  (fetchInit?.headers as Record<string, string> | undefined)?.[
+                    'Content-Type'
+                  ] ?? 'application/json',
+              }),
+            ...fetchInit?.headers,
+          } as Record<string, string>,
+        },
+        trace
+      );
 
       if (!response.ok) {
         if (errorResponseHandler) {

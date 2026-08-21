@@ -18,7 +18,7 @@ pub struct Delivery {
     pub active: bool,
 }
 
-#[tracing::instrument(skip(ctx, redis_connection))]
+#[tracing::instrument(skip(ctx, redis_connection), err)]
 pub async fn send_message_to_entity<Ctx>(
     ctx: Ctx,
     entity: &Entity<'_>,
@@ -45,26 +45,48 @@ where
 
     tracing::trace!("sending message to {} connections", connections.len());
 
-    let instant = Instant::now();
-
     let local_connections: Vec<&StoredConnectionEntity> = connections
         .iter()
-        .filter(|c| {
+        .filter(|connection| {
             api_context
                 .connection_manager
-                .has_connection(&c.connection_id)
+                .has_connection(&connection.connection_id)
         })
         .collect();
 
     let remote_connections: Vec<&StoredConnectionEntity> = connections
         .iter()
-        .filter(|c| {
+        .filter(|connection| {
             !api_context
                 .connection_manager
-                .has_connection(&c.connection_id)
+                .has_connection(&connection.connection_id)
         })
         .collect();
 
+    Ok(send_messages_to_connections(
+        api_context,
+        local_connections,
+        remote_connections,
+        message,
+        redis_connection,
+    )
+    .await)
+}
+
+#[tracing::instrument(
+    skip_all,
+    fields(
+        local_connection_count = local_connections.len(),
+        remote_connection_count = remote_connections.len(),
+    )
+)]
+async fn send_messages_to_connections(
+    api_context: &ApiContext,
+    local_connections: Vec<&StoredConnectionEntity>,
+    remote_connections: Vec<&StoredConnectionEntity>,
+    message: Message,
+    redis_connection: MultiplexedConnection,
+) -> Vec<MessageReceipt> {
     let local_send_futures = local_connections.into_iter().map(|connection| {
         let message = message.clone();
 
@@ -145,7 +167,5 @@ where
         }
     }
 
-    tracing::trace!("sent message to connections in {:?}", instant.elapsed());
-
-    Ok(receipts.into_values().collect())
+    receipts.into_values().collect()
 }

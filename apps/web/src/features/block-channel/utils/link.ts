@@ -1,6 +1,9 @@
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { URL_PARAMS } from '@block-channel/constants';
-import type { SplitManager } from '@components/app/split-layout/layoutManager';
+import type {
+  SplitHandle,
+  SplitManager,
+} from '@components/app/split-layout/layoutManager';
 import type { BlockOrchestrator } from '@core/orchestrator';
 
 export function getChannelParams(
@@ -33,6 +36,21 @@ export async function goToChannelMessage(
   await handle?.goToLocationFromParams(getChannelParams(messageId, threadId));
 }
 
+/**
+ * Drive an (already-mounted) channel block to its latest message via the
+ * block handle — a scroll-to-bottom with no highlight. Used for channel rows
+ * that open at their latest activity rather than a targeted message; forces
+ * the scroll even when the channel is already open (where `reopen: 'latest'`
+ * would otherwise just reactivate the parked split).
+ */
+export async function goToChannelLatest(
+  orchestrator: BlockOrchestrator,
+  channelId: string
+) {
+  const handle = await orchestrator.getBlockHandle(channelId, 'channel');
+  await handle?.goToLatest();
+}
+
 export async function navigateToChannelMessage(
   orchestrator: BlockOrchestrator,
   channelId: string,
@@ -41,6 +59,12 @@ export async function navigateToChannelMessage(
   options?: {
     splitManager?: SplitManager;
     preferNewSplit?: boolean;
+    /**
+     * The split this navigation originates from. When it is an engaged
+     * preview controller, the open is redirected into its viewer split and
+     * never steals the keyboard from the controller.
+     */
+    sourceHandle?: SplitHandle;
   }
 ) {
   const splitManager = options?.splitManager ?? globalSplitManager();
@@ -48,7 +72,12 @@ export async function navigateToChannelMessage(
 
   const existing = splitManager.getSplitByContent('channel', channelId);
   if (existing) {
-    existing.activate();
+    // The channel already showing in the source's own viewer is a plain
+    // retarget; activating it would pull focus out of the controller.
+    const isSourcesViewer =
+      options?.sourceHandle?.isControllerSplit() &&
+      options.sourceHandle.viewerId() === existing.id;
+    if (!isSourcesViewer) existing.activate();
   } else {
     splitManager.openWithSplit(
       {
@@ -60,6 +89,7 @@ export async function navigateToChannelMessage(
         activate: true,
         referredFrom: null,
         preferNewSplit: options?.preferNewSplit,
+        handle: options?.sourceHandle,
       }
     );
   }

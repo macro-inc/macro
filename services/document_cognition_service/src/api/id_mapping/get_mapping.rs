@@ -1,11 +1,13 @@
 //! Handler for retrieving ID mappings.
 
+use crate::api::context::DcsAuthorizationService;
 use crate::service::id_mapping::get_id_mapping;
 use axum::{
     Json,
     extract::{Path, State},
     http::StatusCode,
 };
+use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 
@@ -36,9 +38,10 @@ pub struct GetIdMappingResponse {
         (status = 500, body = String),
     )
 )]
-#[tracing::instrument(skip(db))]
+#[tracing::instrument(skip(db, _user))]
 pub async fn get_id_mapping_handler(
     State(db): State<PgPool>,
+    _user: MacroAuthorizationExtractor<DcsAuthorizationService, UserOrInternal>,
     Path(Params { source_id }): Path<Params>,
 ) -> Result<Json<GetIdMappingResponse>, (StatusCode, String)> {
     let target_id = get_id_mapping(&db, &source_id).await.map_err(|e| {

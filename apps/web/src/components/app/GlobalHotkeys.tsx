@@ -15,6 +15,10 @@ import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useSubscribeToKeypress } from '@app/signal/hotkeyRoot';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { useHandleFileUpload } from '@app/util/handleFileUpload';
+import {
+  automationComposerOpen,
+  setAutomationComposerOpen,
+} from '@block-automation/component';
 import { useLogout } from '@core/auth/logout';
 import { useOpenInstructionsMd } from '@core/component/AI/util/instructions';
 import { toast } from '@core/component/Toast/Toast';
@@ -46,15 +50,24 @@ import { useMutationUndoContext } from '@queries/undo';
 import { debounce } from '@solid-primitives/scheduled';
 import { ThemeChips } from '@theme/components/ThemeChips';
 import {
+  darkModeTheme,
+  lightModeTheme,
   setDarkModeTheme,
   setLightModeTheme,
-  setThemeShouldMatchSystem,
-  themeShouldMatchSystem,
+  setThemeMode,
+  systemMode,
+  themeMode,
   themes,
 } from '@theme/signals/themeSignals';
-import type { ThemeV2 } from '@theme/types/themeTypes';
-import { applyTheme } from '@theme/utils/themeUtils';
-import { type Component, onCleanup } from 'solid-js';
+import type { ThemeV3 } from '@theme/types/themeTypes';
+import {
+  applySystemTheme,
+  applyTheme,
+  clearThemePreview,
+  previewTheme,
+  resolveActiveThemeId,
+} from '@theme/utils/themeUtils';
+import { type Component, onCleanup, Show } from 'solid-js';
 import { useSplitLayout } from './split-layout/layout';
 
 const COMMAND_MENU_CATEGORY_HOTKEYS: Array<{
@@ -138,9 +151,16 @@ export default function GlobalShortcuts() {
   });
 
   const handleCommandMenu = () => {
-    if (!CommandState.isOpen()) {
+    const willOpen = !CommandState.isOpen();
+
+    if (willOpen) {
+      if (automationComposerOpen()) {
+        setAutomationComposerOpen(false, false);
+      }
+
       analytics.track('command_menu_open', { from: 'global_hotkey' });
     }
+
     CommandState.toggle();
   };
 
@@ -150,6 +170,10 @@ export default function GlobalShortcuts() {
     scopeId: 'global',
     description: 'Create',
     keyDownHandler: () => {
+      if (automationComposerOpen()) {
+        return true;
+      }
+
       const willOpen = !createMenuOpen();
 
       if (willOpen) {
@@ -174,12 +198,15 @@ export default function GlobalShortcuts() {
       description: item.description,
       condition: () =>
         (item.condition?.() ?? true) &&
+        (item.enabled?.() ?? true) &&
         (item.blockName !== 'snippet' || snippetsFlag().enabled),
       keyDownHandler: item.keyDownHandler,
       icon: Plus,
       tags: item.tags,
       keywords: item.keywords,
-      hide: () => item.blockName === 'snippet' && !snippetsFlag().enabled,
+      hide: () =>
+        !(item.enabled?.() ?? true) ||
+        (item.blockName === 'snippet' && !snippetsFlag().enabled),
       runWithInputFocused: true,
     });
   });
@@ -355,24 +382,73 @@ export default function GlobalShortcuts() {
     displayPriority: 10,
   });
 
-  const ThemeDisplay: Component<{ theme: ThemeV2 }> = (props) => (
+  const ThemeDisplay: Component<{ theme: ThemeV3 }> = (props) => (
     <div class="flex items-center gap-2">
       {props.theme.name}
       <ThemeChips theme={props.theme} size="sm" />
     </div>
   );
 
+  // The per-mode theme the OS scheme currently resolves to — shown as the
+  // "System preference" option's swatch and previewed on highlight.
+  const systemResolvedTheme = (): ThemeV3 | undefined =>
+    themes().find(
+      (theme) =>
+        theme.id ===
+        (systemMode() === 'dark' ? darkModeTheme() : lightModeTheme())
+    );
+
+  const setVisibleTheme = (themeId: string) => {
+    const resolvedMode = themeMode() === 'system' ? systemMode() : themeMode();
+    if (resolvedMode === 'dark') {
+      setDarkModeTheme(themeId);
+    } else {
+      setLightModeTheme(themeId);
+    }
+  };
+
+  // "System preference" mirrors the Active-theme dropdown's first option: follow
+  // the OS scheme rather than pinning a fixed theme.
+  registerHotkey({
+    scopeId: setThemeScope.commandScopeId,
+    description: 'System preference',
+    keyDownHandler: () => {
+      applySystemTheme();
+      analytics.track('theme_changed', { themeId: 'system' });
+      return true;
+    },
+    runWithInputFocused: true,
+    displayComponent: () => (
+      <div class="flex items-center gap-2">
+        System preference
+        <Show when={systemResolvedTheme()}>
+          {(theme) => <ThemeChips theme={theme()} size="sm" />}
+        </Show>
+      </div>
+    ),
+    onHighlight: () => {
+      const theme = systemResolvedTheme();
+      if (theme) previewTheme(theme.id);
+    },
+    onHighlightEnd: clearThemePreview,
+  });
+
   themes().forEach((theme) => {
     registerHotkey({
       scopeId: setThemeScope.commandScopeId,
       description: `${theme.name}`,
       keyDownHandler: () => {
-        applyTheme(theme.id);
+        // Change the theme currently being viewed without switching between
+        // static and system-driven theme modes.
+        setVisibleTheme(theme.id);
+        applyTheme(resolveActiveThemeId());
         analytics.track('theme_changed', { themeId: theme.id });
         return true;
       },
       runWithInputFocused: true,
       displayComponent: () => <ThemeDisplay theme={theme} />,
+      onHighlight: () => previewTheme(theme.id),
+      onHighlightEnd: clearThemePreview,
     });
   });
 
@@ -397,6 +473,8 @@ export default function GlobalShortcuts() {
       },
       runWithInputFocused: true,
       displayComponent: () => <ThemeDisplay theme={theme} />,
+      onHighlight: () => previewTheme(theme.id),
+      onHighlightEnd: clearThemePreview,
     });
   });
 
@@ -421,15 +499,19 @@ export default function GlobalShortcuts() {
       },
       runWithInputFocused: true,
       displayComponent: () => <ThemeDisplay theme={theme} />,
+      onHighlight: () => previewTheme(theme.id),
+      onHighlightEnd: clearThemePreview,
     });
   });
 
   registerHotkey({
     scopeId: 'global',
     description: () =>
-      `${themeShouldMatchSystem() ? 'Turn off a' : 'A'}uto-detect color scheme`,
+      `${themeMode() === 'system' ? 'Turn off a' : 'A'}uto-detect color scheme`,
     keyDownHandler: () => {
-      setThemeShouldMatchSystem((prev) => !prev);
+      // Toggle system (auto-detect) on/off; turning it off pins the theme to the
+      // OS's current scheme so the appearance doesn't visibly change.
+      setThemeMode((prev) => (prev === 'system' ? systemMode() : 'system'));
       return true;
     },
     runWithInputFocused: true,

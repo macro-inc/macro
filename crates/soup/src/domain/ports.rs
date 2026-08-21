@@ -1,53 +1,65 @@
 use std::sync::Arc;
 
 use crate::domain::models::{
-    AdvancedSortParams, FrecencySoupItem, GroupedSortRequest, GroupedSoupItem, IntoSoupReqAst,
-    SimpleSortRequest, SoupErr, SoupRequest,
+    AdvancedSortParams, EnrichedSoupItem, GroupedSortRequest, IntoSoupReqAst, SimpleSortRequest,
+    SoupErr, SoupPropertiesField, SoupRequest, TouchedEntity, TouchedSoupRequest,
+    grouping::ItemGroupingInfo,
 };
-use either::Either;
 use entity_access::domain::models::{EntityAccessReceipt, MemberTeamRole};
 use macro_user_id::user_id::MacroUserIdStr;
-use models_pagination::{Frecency, PaginatedCursor, SimpleSortMethod};
+use models_pagination::{
+    Frecency, PaginatedCursor, PaginatedOpaqueCursor, SimpleSortMethod, TouchedByMe,
+    TypeEraseCursor,
+};
 use models_properties::service::property_definition_with_options::PropertyDefinitionWithOptions;
 use models_soup::item::SoupItem;
 use serde::Serialize;
 
 /// Repository abstraction for loading soup items from storage.
-#[cfg_attr(test, mockall::automock(type Err = anyhow::Error;))]
+#[cfg_attr(
+    test,
+    mockall::automock(
+        type Err = anyhow::Error;
+        type GroupedItems = std::vec::IntoIter<ItemGroupingInfo>;
+    )
+)]
 pub trait SoupRepo: Send + Sync + 'static {
     /// Error returned by repository operations.
     type Err;
+    /// Iterator returned by grouped Soup queries.
+    type GroupedItems: Iterator<Item = ItemGroupingInfo> + Send;
     /// Fetch expanded soup items for a simple sorted cursor query.
     fn expanded_generic_cursor_soup<'a>(
         &self,
         req: SimpleSortRequest<'a>,
-    ) -> impl Future<Output = Result<Vec<SoupItem>, Self::Err>> + Send;
+    ) -> impl Future<Output = Result<Vec<SoupItem<()>>, Self::Err>> + Send;
 
     /// Fetch unexpanded soup items for a simple sorted cursor query.
     fn unexpanded_generic_cursor_soup<'a>(
         &self,
         req: SimpleSortRequest<'a>,
-    ) -> impl Future<Output = Result<Vec<SoupItem>, Self::Err>> + Send;
+    ) -> impl Future<Output = Result<Vec<SoupItem<()>>, Self::Err>> + Send;
 
     /// Fetch expanded soup items for an explicit list of entity ids.
     fn expanded_soup_by_ids<'a>(
         &self,
         req: AdvancedSortParams<'a>,
-    ) -> impl Future<Output = Result<Vec<SoupItem>, Self::Err>> + Send;
+    ) -> impl Future<Output = Result<Vec<SoupItem<()>>, Self::Err>> + Send;
 
     /// Fetch unexpanded soup items for an explicit list of entity ids.
     fn unexpanded_soup_by_ids<'a>(
         &self,
         req: AdvancedSortParams<'a>,
-    ) -> impl Future<Output = Result<Vec<SoupItem>, Self::Err>> + Send;
+    ) -> impl Future<Output = Result<Vec<SoupItem<()>>, Self::Err>> + Send;
 
-    /// Populates properties for a slice of SoupItems. The user id scopes which
-    /// tag properties are visible (the caller's own and their team's).
+    /// Attaches properties to raw Soup items while preserving their order and
+    /// count. The user id scopes which tag properties are visible (the
+    /// caller's own and their team's).
     fn populate_properties<'a>(
         &self,
         user_id: MacroUserIdStr<'a>,
-        items: &'a mut [SoupItem],
-    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+        items: Vec<SoupItem<()>>,
+    ) -> impl Future<Output = Result<Vec<SoupItem<SoupPropertiesField>>, Self::Err>> + Send;
 
     /// Fetches the tag definitions visible to a user — their own plus their
     /// teams' — with options attached.
@@ -60,26 +72,96 @@ pub trait SoupRepo: Send + Sync + 'static {
     fn expanded_grouped_cursor_soup<'a>(
         &self,
         req: GroupedSortRequest<'a>,
-    ) -> impl Future<Output = Result<Vec<GroupedSoupItem>, Self::Err>> + Send;
+    ) -> impl Future<Output = Result<Self::GroupedItems, Self::Err>> + Send;
+
+    /// Fetch one page of touched-by-me candidates: entities the user has
+    /// mutated (views excluded), newest own-mutation first, already gated on
+    /// existence, deletion, access, and the request's entity filters.
+    fn touched_soup_page<'a>(
+        &self,
+        req: TouchedSoupRequest<'a>,
+    ) -> impl Future<Output = Result<Vec<TouchedEntity>, Self::Err>> + Send;
 }
 
-/// type alias which represents the posible outputs of soup
-/// The response is a paginated cursor where
-/// 1. The item type is [FrecencySoupItem]
+/// The possible outputs of soup — one paginated page per query mode.
+/// The page is a paginated cursor where
+/// 1. The item type is the requested raw or enriched Soup representation
 /// 1. The id type is [String] (this should be changed to uuid)
-/// 1. The sort method is [Either] [SimpleSortMethod] or [Frecency]
+/// 1. The sort method matches the variant's query mode
 /// 1. The filter type is an [Option] [EntityFilterAst]
-pub type SoupOutput<T> = Either<
-    PaginatedCursor<FrecencySoupItem, String, SimpleSortMethod, T>,
-    PaginatedCursor<FrecencySoupItem, String, Frecency, T>,
->;
+#[derive(Debug)]
+pub enum SoupOutput<T, Item = SoupItem<()>> {
+    /// Page of a timestamp-sorted query.
+    Simple(PaginatedCursor<Item, String, SimpleSortMethod, T>),
+    /// Page of a frecency-sorted query.
+    Frecency(PaginatedCursor<Item, String, Frecency, T>),
+    /// Page of a touched-by-me query.
+    Touched(PaginatedCursor<Item, String, TouchedByMe, T>),
+}
+
+impl<T, Item> SoupOutput<T, Item> {
+    /// Maps the item type of the page, preserving the cursor.
+    pub fn map<F, V>(self, f: F) -> SoupOutput<T, V>
+    where
+        F: FnMut(Item) -> V,
+    {
+        match self {
+            SoupOutput::Simple(page) => SoupOutput::Simple(page.map(f)),
+            SoupOutput::Frecency(page) => SoupOutput::Frecency(page.map(f)),
+            SoupOutput::Touched(page) => SoupOutput::Touched(page.map(f)),
+        }
+    }
+
+    /// Discards the cursor and returns the page's items.
+    pub fn into_items(self) -> Vec<Item> {
+        match self {
+            SoupOutput::Simple(page) => page.items,
+            SoupOutput::Frecency(page) => page.items,
+            SoupOutput::Touched(page) => page.items,
+        }
+    }
+
+    /// Returns the page when this is a [`SoupOutput::Simple`] output.
+    pub fn into_simple(self) -> Option<PaginatedCursor<Item, String, SimpleSortMethod, T>> {
+        match self {
+            SoupOutput::Simple(page) => Some(page),
+            SoupOutput::Frecency(_) | SoupOutput::Touched(_) => None,
+        }
+    }
+
+    /// Returns the page when this is a [`SoupOutput::Frecency`] output.
+    pub fn into_frecency(self) -> Option<PaginatedCursor<Item, String, Frecency, T>> {
+        match self {
+            SoupOutput::Frecency(page) => Some(page),
+            SoupOutput::Simple(_) | SoupOutput::Touched(_) => None,
+        }
+    }
+
+    /// Returns the page when this is a [`SoupOutput::Touched`] output.
+    pub fn into_touched(self) -> Option<PaginatedCursor<Item, String, TouchedByMe, T>> {
+        match self {
+            SoupOutput::Touched(page) => Some(page),
+            SoupOutput::Simple(_) | SoupOutput::Frecency(_) => None,
+        }
+    }
+}
+
+impl<T, Item> TypeEraseCursor<Item> for SoupOutput<T, Item> {
+    fn type_erase(self) -> PaginatedOpaqueCursor<Item> {
+        match self {
+            SoupOutput::Simple(page) => page.type_erase(),
+            SoupOutput::Frecency(page) => page.type_erase(),
+            SoupOutput::Touched(page) => page.type_erase(),
+        }
+    }
+}
 
 #[cfg(test)]
 mod test;
 
 /// Service abstraction for executing user-facing soup queries.
 pub trait SoupService: Send + Sync + 'static {
-    /// Run a soup query for the authenticated user.
+    /// Run a soup query without loading entity properties or frecency.
     ///
     /// `team_receipt` proves the user belongs to a team and may be used by
     /// filters that broaden visibility beyond the user's own mailboxes (e.g.
@@ -94,11 +176,46 @@ pub trait SoupService: Send + Sync + 'static {
         SoupRequest<T>: IntoSoupReqAst,
         T: Clone + Serialize + Send;
 
-    /// Run a grouped soup query for the authenticated user.
+    /// Run a soup query and attach entity properties to the returned page.
+    fn get_user_soup_with_properties<T>(
+        &self,
+        req: SoupRequest<T>,
+        team_receipt: Option<EntityAccessReceipt<MemberTeamRole>>,
+    ) -> impl Future<Output = Result<SoupOutput<T, EnrichedSoupItem>, SoupErr>> + Send
+    where
+        SoupRequest<T>: IntoSoupReqAst,
+        T: Clone + Serialize + Send;
+
+    /// Run a soup query and attach frecency to the returned page.
+    fn get_user_soup_with_frecency<T>(
+        &self,
+        req: SoupRequest<T>,
+        team_receipt: Option<EntityAccessReceipt<MemberTeamRole>>,
+    ) -> impl Future<Output = Result<SoupOutput<T, EnrichedSoupItem>, SoupErr>> + Send
+    where
+        SoupRequest<T>: IntoSoupReqAst,
+        T: Clone + Serialize + Send;
+
+    /// Run a soup query and attach both properties and frecency to the page.
+    fn get_user_soup_with_properties_and_frecency<T>(
+        &self,
+        req: SoupRequest<T>,
+        team_receipt: Option<EntityAccessReceipt<MemberTeamRole>>,
+    ) -> impl Future<Output = Result<SoupOutput<T, EnrichedSoupItem>, SoupErr>> + Send
+    where
+        SoupRequest<T>: IntoSoupReqAst,
+        T: Clone + Serialize + Send;
+
+    /// Run a grouped soup query for the authenticated user with properties.
     fn get_user_soup_grouped(
         &self,
         req: GroupedSortRequest<'_>,
-    ) -> impl Future<Output = Result<Vec<GroupedSoupItem>, SoupErr>> + Send;
+    ) -> impl Future<
+        Output = Result<
+            impl Iterator<Item = ItemGroupingInfo<SoupPropertiesField>> + Send,
+            SoupErr,
+        >,
+    > + Send;
 
     /// Fetch the tag definitions visible to a user — their own plus their
     /// teams' — with options attached.
@@ -124,10 +241,52 @@ where
         (**self).get_user_soup(req, team_receipt).await
     }
 
+    async fn get_user_soup_with_properties<T>(
+        &self,
+        req: SoupRequest<T>,
+        team_receipt: Option<EntityAccessReceipt<MemberTeamRole>>,
+    ) -> Result<SoupOutput<T, EnrichedSoupItem>, SoupErr>
+    where
+        SoupRequest<T>: IntoSoupReqAst,
+        T: Clone + Serialize + Send,
+    {
+        (**self)
+            .get_user_soup_with_properties(req, team_receipt)
+            .await
+    }
+
+    async fn get_user_soup_with_frecency<T>(
+        &self,
+        req: SoupRequest<T>,
+        team_receipt: Option<EntityAccessReceipt<MemberTeamRole>>,
+    ) -> Result<SoupOutput<T, EnrichedSoupItem>, SoupErr>
+    where
+        SoupRequest<T>: IntoSoupReqAst,
+        T: Clone + Serialize + Send,
+    {
+        (**self)
+            .get_user_soup_with_frecency(req, team_receipt)
+            .await
+    }
+
+    async fn get_user_soup_with_properties_and_frecency<T>(
+        &self,
+        req: SoupRequest<T>,
+        team_receipt: Option<EntityAccessReceipt<MemberTeamRole>>,
+    ) -> Result<SoupOutput<T, EnrichedSoupItem>, SoupErr>
+    where
+        SoupRequest<T>: IntoSoupReqAst,
+        T: Clone + Serialize + Send,
+    {
+        (**self)
+            .get_user_soup_with_properties_and_frecency(req, team_receipt)
+            .await
+    }
+
     async fn get_user_soup_grouped(
         &self,
         req: GroupedSortRequest<'_>,
-    ) -> Result<Vec<GroupedSoupItem>, SoupErr> {
+    ) -> Result<impl Iterator<Item = ItemGroupingInfo<SoupPropertiesField>> + Send, SoupErr> {
         (**self).get_user_soup_grouped(req).await
     }
 
@@ -162,11 +321,47 @@ impl SoupService for NoOpSoupService {
         Err(no_op_soup_err())
     }
 
+    async fn get_user_soup_with_properties<T>(
+        &self,
+        _req: SoupRequest<T>,
+        _team_receipt: Option<EntityAccessReceipt<MemberTeamRole>>,
+    ) -> Result<SoupOutput<T, EnrichedSoupItem>, SoupErr>
+    where
+        SoupRequest<T>: IntoSoupReqAst,
+        T: Clone + Serialize + Send,
+    {
+        Err(no_op_soup_err())
+    }
+
+    async fn get_user_soup_with_frecency<T>(
+        &self,
+        _req: SoupRequest<T>,
+        _team_receipt: Option<EntityAccessReceipt<MemberTeamRole>>,
+    ) -> Result<SoupOutput<T, EnrichedSoupItem>, SoupErr>
+    where
+        SoupRequest<T>: IntoSoupReqAst,
+        T: Clone + Serialize + Send,
+    {
+        Err(no_op_soup_err())
+    }
+
+    async fn get_user_soup_with_properties_and_frecency<T>(
+        &self,
+        _req: SoupRequest<T>,
+        _team_receipt: Option<EntityAccessReceipt<MemberTeamRole>>,
+    ) -> Result<SoupOutput<T, EnrichedSoupItem>, SoupErr>
+    where
+        SoupRequest<T>: IntoSoupReqAst,
+        T: Clone + Serialize + Send,
+    {
+        Err(no_op_soup_err())
+    }
+
     async fn get_user_soup_grouped(
         &self,
         _req: GroupedSortRequest<'_>,
-    ) -> Result<Vec<GroupedSoupItem>, SoupErr> {
-        Err(no_op_soup_err())
+    ) -> Result<impl Iterator<Item = ItemGroupingInfo<SoupPropertiesField>> + Send, SoupErr> {
+        Err::<std::vec::IntoIter<ItemGroupingInfo<SoupPropertiesField>>, _>(no_op_soup_err())
     }
 
     async fn caller_tag_sets<'a>(

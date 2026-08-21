@@ -1,41 +1,53 @@
 //! Foreign entity access extractor.
 
+#[cfg(test)]
+mod test;
+
 use std::collections::HashMap;
 use std::marker::PhantomData;
 use std::sync::Arc;
 
 use axum::{
-    Extension, RequestPartsExt,
+    RequestPartsExt,
     extract::{FromRef, FromRequestParts, Path},
     http::request::Parts,
 };
+use macro_authorization::{
+    AnyPrincipal, MacroAuthorization, MacroAuthorizationService, MacroAuthorizationState,
+    OptionalMacroAuthorizationExtractor,
+};
 use uuid::Uuid;
 
-use super::{ExtractorError, InternalUser, RequiredPermission};
+use super::{ExtractorError, RequiredPermission, bot::generate_bot_entity_access_receipt};
 use crate::domain::{
     models::{
         AccessLevel, Entity, EntityAccessAuth, EntityAccessReceipt, EntityPermission, EntityType,
     },
     ports::EntityAccessService,
 };
-use model_user::axum_extractor::MacroUserExtractor;
 
 /// Validates that the user satisfies the required permission for a foreign entity.
 ///
 /// Foreign entities grant View access only. The extractor reads either
 /// `foreign_entity_id` or `id` from the route path parameters.
+///
+/// Type parameter `T` specifies the required access level.
+/// Type parameter `Svc` is the entity access service implementation.
+/// Type parameter `Auth` is the authorization service implementation.
 #[derive(Debug)]
-pub struct ForeignEntityAccessLevelExtractor<T: RequiredPermission, Svc> {
+pub struct ForeignEntityAccessLevelExtractor<T: RequiredPermission, Svc, Auth> {
     /// The entity access receipt.
     pub entity_access_receipt: EntityAccessReceipt<T>,
-    _marker: PhantomData<(T, Svc)>,
+    _marker: PhantomData<(T, Svc, Auth)>,
 }
 
-impl<T, S, Svc> FromRequestParts<S> for ForeignEntityAccessLevelExtractor<T, Svc>
+impl<T, S, Svc, Auth> FromRequestParts<S> for ForeignEntityAccessLevelExtractor<T, Svc, Auth>
 where
     T: RequiredPermission,
     Arc<Svc>: FromRef<S>,
     Svc: EntityAccessService,
+    MacroAuthorizationState<Auth>: FromRef<S>,
+    Auth: MacroAuthorizationService,
     S: Send + Sync + 'static,
 {
     type Rejection = ExtractorError;
@@ -50,12 +62,39 @@ where
             })?;
         let foreign_entity_id = extract_foreign_entity_id(&path_params)?.to_string();
 
-        let internal_user: Option<Extension<InternalUser>> = parts
-            .extract()
+        let authorization =
+            OptionalMacroAuthorizationExtractor::<Auth, AnyPrincipal>::from_request_parts(
+                parts, state,
+            )
             .await
-            .map_err(|_| ExtractorError::Internal)?;
+            .map_err(ExtractorError::from)?;
 
-        if internal_user.is_some() {
+        if let Some(MacroAuthorization::Bot(authentication)) = &authorization.authorization {
+            let entity_access_receipt = generate_bot_entity_access_receipt::<T>(
+                service.as_ref(),
+                authentication,
+                &foreign_entity_id,
+                EntityType::ForeignEntity,
+            )
+            .await?;
+
+            return Ok(Self {
+                entity_access_receipt,
+                _marker: PhantomData,
+            });
+        }
+
+        let is_internal_access = authorization
+            .authorization
+            .as_ref()
+            .is_some_and(MacroAuthorization::is_internal);
+        let macro_user_id = authorization
+            .authorization
+            .as_ref()
+            .and_then(MacroAuthorization::acting_user)
+            .map(|user| user.macro_user_id.clone());
+
+        if macro_user_id.is_none() && is_internal_access {
             return Self::from_permission(
                 foreign_entity_id,
                 EntityAccessAuth::Internal,
@@ -63,10 +102,9 @@ where
             );
         }
 
-        let MacroUserExtractor { macro_user_id, .. } = parts
-            .extract()
-            .await
-            .map_err(|_| ExtractorError::Unauthorized)?;
+        let Some(macro_user_id) = macro_user_id else {
+            return Err(ExtractorError::Unauthorized);
+        };
 
         let permission = service
             .get_entity_permission(
@@ -86,7 +124,7 @@ where
     }
 }
 
-impl<T: RequiredPermission, Svc> ForeignEntityAccessLevelExtractor<T, Svc> {
+impl<T: RequiredPermission, Svc, Auth> ForeignEntityAccessLevelExtractor<T, Svc, Auth> {
     fn from_permission(
         foreign_entity_id: String,
         auth: EntityAccessAuth,

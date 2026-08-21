@@ -1,8 +1,11 @@
+import { DEFAULT_ROUTE } from '@app/constants/defaultRoute';
 import { ROUTER_BASE_CONCAT } from '@app/constants/routerBase';
 import Banner from '@app/features/auth/banner/Banner';
+import { CalendarPermissionPrompt } from '@app/features/auth/CalendarPermissionPrompt';
 import { GithubReauthenticationPrompt } from '@app/features/auth/GithubReauthenticationPrompt';
 import { GmailReauthenticationPrompt } from '@app/features/auth/GmailReauthenticationPrompt';
 import { SidebarActiveCallWidget } from '@app/features/block-call/sidebar/active-call-widget';
+import { useIncomingCallWidgetVisible } from '@app/features/block-call/sidebar/incoming-calls';
 import { CommandMenu } from '@app/features/command';
 import { FavoritesCommands } from '@app/features/command/FavoritesCommands';
 import {
@@ -10,7 +13,9 @@ import {
   Launcher,
   setCreateMenuOpen,
 } from '@app/features/command/Launcher';
-import { MobileSearchOuter } from '@app/features/command/mobile/MobileSearch';
+import { SearchState } from '@app/features/command/mobile/mobileSearchState';
+import { CreateCompanyModal } from '@app/features/companies/CreateCompanyModal';
+import { CreateContactModal } from '@app/features/companies/CreateContactModal';
 import { DevStatusBar } from '@app/features/devtools/DevStatusBar';
 import { GlobalBulkEditEntityModal } from '@app/features/entity/bulk-edit/BulkEditEntityModal';
 import {
@@ -20,32 +25,48 @@ import {
 import { MacroMcpSetupModal } from '@app/features/integrations/mcp-setup/MacroMcpSetupModal';
 import { Paywall } from '@app/features/paywall/Paywall';
 import { PropertyEditorModal } from '@app/features/property/editor/PropertyEditorModal';
+import { ReminderComposerModal } from '@app/features/reminders/ReminderComposerModal';
+import { useOnboardingV4Flag } from '@app/features/setup/flow/useOnboardingV4Flag';
 import { GlobalShareModal } from '@app/features/sharing/global-share-modal/GlobalShareModal';
 import { IosShareSheet } from '@app/features/sharing/ios-share-sheet/IosShareSheet';
+import { ShowFeatureFlag } from '@app/lib/analytics/posthog';
 import { mountGlobalFocusListener } from '@app/signal/focus';
 import { AutomationComposer } from '@block-automation/component';
 import { useCallContextOptional } from '@channel/Call/CallContext';
 import { InCallPanel } from '@channel/Call/InCallPanel';
+import { CreateChannelModal } from '@channel/CreateChannelModal';
 import {
   AppSidebar,
   GoToHotkeys,
   type SidebarState,
 } from '@components/app/app-sidebar/sidebar';
+import { registerMailtoComposerHandler } from '@components/app/mailtoComposerHandler';
 import {
   isSidebarVisible,
   SidebarCollapseContext,
   SidebarVisibilityContext,
 } from '@components/app/sidebarVisibility';
 import { useIsAuthenticated } from '@core/auth';
+import {
+  ENABLE_REMINDERS_FLAG,
+  ENABLE_REMINDERS_OVERRIDE,
+} from '@core/constant/featureFlags';
 import { usePaywallState } from '@core/constant/PaywallState';
 import { isSoloSettings } from '@core/constant/SettingsState';
 import { attachGlobalDOMScope } from '@core/hotkey/hotkeys';
 import { isMobile } from '@core/mobile/isMobile';
+import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
 import { updateCookie } from '@core/util/cookies';
+import { useUserInfoQuery } from '@queries/auth/user-info';
 import { makePersisted } from '@solid-primitives/storage';
-import { type RouteSectionProps, useLocation } from '@solidjs/router';
-import { cn } from '@ui';
+import {
+  type RouteSectionProps,
+  useLocation,
+  useNavigate,
+} from '@solidjs/router';
+import { cn, ImperativeDialogHost } from '@ui';
 import { ScreencastHotkeys } from '@ui/components/ScreencastHotkeys';
 import {
   createEffect,
@@ -62,8 +83,8 @@ import GlobalShortcuts from './GlobalHotkeys';
 import { ItemDndProvider } from './ItemDragAndDrop';
 import { FloatRegion } from './mobile/float-regions/FloatRegion';
 import { FloatRegionHost } from './mobile/float-regions/FloatRegionHost';
-import { MobileDock } from './mobile/MobileDock';
-import { MobileBottomEdgeFade } from './mobile/MobileEdgeFade';
+import { MobileDockRow } from './mobile/MobileDockRow';
+import { MobileViewsRow } from './mobile/MobileViewsRow';
 import { SwipeDownDismissKeyboard } from './mobile/SwipeDownDismissKeyboard';
 import { useAppSquishHandlers } from './useAppSquishHandlers';
 
@@ -72,14 +93,16 @@ const AUTH_URLS = [
   `${ROUTER_BASE_CONCAT}login/popup`,
   `${ROUTER_BASE_CONCAT}login/popup/success`,
   `${ROUTER_BASE_CONCAT}onboarding`,
+  `${ROUTER_BASE_CONCAT}setup`,
   `${ROUTER_BASE_CONCAT}signup`,
   `${ROUTER_BASE_CONCAT}email-signup-callback`,
   `${ROUTER_BASE_CONCAT}welcome`,
+  `${ROUTER_BASE_CONCAT}mobile-email-signup`,
   `${ROUTER_BASE_CONCAT}team-invite`,
 ];
 
 const [sidebarState, setSidebarState] = makePersisted(
-  createSignal<SidebarState>(!isMobile() ? 'expanded' : 'hidden'),
+  createSignal<SidebarState>(!isTouchDevice() ? 'expanded' : 'hidden'),
   {
     name: 'sidebar-state',
   }
@@ -90,7 +113,7 @@ export function Layout(props: RouteSectionProps) {
   const location = useLocation();
   const sidebarVisible = createMemo(
     () =>
-      !isMobile() &&
+      !isTouchDevice() &&
       isAuthenticated() === true &&
       !AUTH_URLS.includes(location.pathname) &&
       // Settings-as-the-sole-split has its own tab nav — hide app chrome.
@@ -111,12 +134,17 @@ export function Layout(props: RouteSectionProps) {
   );
 }
 
-function CollapsedSidebarCallWidget(props: { visible: boolean }) {
+function DraggableCallWidget(props: {
+  visible: boolean;
+  dragLabel: string;
+  defaultBottomGap?: number;
+  children: JSX.Element;
+}) {
   const EDGE_GAP = 12;
-  const DEFAULT_BOTTOM_GAP = 12;
   const [root, setRoot] = createSignal<HTMLDivElement>();
   const [dragging, setDragging] = createSignal(false);
   const [position, setPosition] = createSignal<{ left: number; top: number }>();
+  const defaultBottomGap = () => props.defaultBottomGap ?? 12;
 
   const clampPosition = (next: { left: number; top: number }) => {
     const el = root();
@@ -137,20 +165,21 @@ function CollapsedSidebarCallWidget(props: { visible: boolean }) {
     };
   };
 
-  const resetToDefaultPosition = () => {
+  const resetToDefaultPosition = (bottomGap = defaultBottomGap()) => {
     const el = root();
     if (!el) return;
     setPosition(
       clampPosition({
         left: Math.round((window.innerWidth - el.offsetWidth) / 2),
-        top: window.innerHeight - el.offsetHeight - DEFAULT_BOTTOM_GAP,
+        top: window.innerHeight - el.offsetHeight - bottomGap,
       })
     );
   };
 
   createEffect(() => {
     if (!props.visible) return;
-    requestAnimationFrame(() => resetToDefaultPosition());
+    const bottomGap = defaultBottomGap();
+    requestAnimationFrame(() => resetToDefaultPosition(bottomGap));
   });
 
   createEffect(() => {
@@ -170,12 +199,18 @@ function CollapsedSidebarCallWidget(props: { visible: boolean }) {
     });
   });
 
+  // Set while a drag is in flight so hiding/unmounting can tear it down; a
+  // cancelled pointer (touch interrupted, pointer takeover) never fires
+  // pointerup, which would otherwise leave the move listener stuck on window.
+  let stopActiveDrag: (() => void) | undefined;
+
   const startDrag: JSX.EventHandler<HTMLButtonElement, PointerEvent> = (e) => {
-    if (e.button !== 0) return;
+    if (!e.isPrimary || e.button !== 0) return;
 
     const el = root();
     if (!el) return;
 
+    stopActiveDrag?.();
     e.preventDefault();
     const rect = el.getBoundingClientRect();
     const pointerStartX = e.clientX;
@@ -194,43 +229,116 @@ function CollapsedSidebarCallWidget(props: { visible: boolean }) {
       );
     };
 
-    const handleUp = () => {
+    const stopDrag = () => {
       setDragging(false);
       window.removeEventListener('pointermove', handleMove);
-      window.removeEventListener('pointerup', handleUp);
+      window.removeEventListener('pointerup', stopDrag);
+      window.removeEventListener('pointercancel', stopDrag);
+      if (stopActiveDrag === stopDrag) stopActiveDrag = undefined;
     };
+    stopActiveDrag = stopDrag;
 
     window.addEventListener('pointermove', handleMove);
-    window.addEventListener('pointerup', handleUp);
+    window.addEventListener('pointerup', stopDrag);
+    window.addEventListener('pointercancel', stopDrag);
   };
+
+  createEffect(() => {
+    if (!props.visible) stopActiveDrag?.();
+  });
+  onCleanup(() => stopActiveDrag?.());
 
   return (
     <Show when={props.visible}>
       <div
         ref={setRoot}
-        class="fixed z-page-overlay w-72 max-w-[calc(100vw-1.5rem)] pointer-events-auto"
+        class="fixed z-float w-72 max-w-[calc(100vw-1.5rem)] pointer-events-auto"
         style={{
           left: position() ? `${position()!.left}px` : '50%',
           top: position() ? `${position()!.top}px` : undefined,
-          bottom: position() ? undefined : `${DEFAULT_BOTTOM_GAP}px`,
+          bottom: position() ? undefined : `${defaultBottomGap()}px`,
           transform: position() ? undefined : 'translateX(-50%)',
         }}
       >
         <div class="relative rounded-xl border border-edge-muted bg-surface shadow-menu p-1">
           <button
             type="button"
-            aria-label="Drag to move active call controls"
+            aria-label={props.dragLabel}
             class={cn(
               'absolute left-1 right-10 top-1 z-10 h-8 rounded-t-lg rounded-b-md bg-transparent select-none',
               dragging() ? 'cursor-grabbing' : 'cursor-grab'
             )}
             onPointerDown={startDrag}
           />
-          <InCallPanel isSlim={() => false} />
+          {props.children}
         </div>
       </div>
     </Show>
   );
+}
+
+function CollapsedSidebarCallWidget(props: { visible: boolean }) {
+  return (
+    <DraggableCallWidget
+      visible={props.visible}
+      dragLabel="Drag to move active call controls"
+    >
+      <InCallPanel isSlim={() => false} />
+    </DraggableCallWidget>
+  );
+}
+
+function CollapsedSidebarIncomingCallWidget(props: {
+  visible: boolean;
+  activeCallWidgetVisible: boolean;
+}) {
+  return (
+    <DraggableCallWidget
+      visible={props.visible}
+      dragLabel="Drag to move incoming calls"
+      defaultBottomGap={props.activeCallWidgetVisible ? 168 : 12}
+    >
+      <SidebarActiveCallWidget sidebarState="expanded" />
+    </DraggableCallWidget>
+  );
+}
+
+/**
+ * Sends first-time desktop users into the onboarding flow at /onboarding.
+ * Fires from anywhere in the app (marketing SSO lands on /app, not /login),
+ * but never off auth/full-screen routes — /onboarding itself included.
+ */
+function NewOnboardingRedirect() {
+  const userInfoQuery = useUserInfoQuery();
+  const navigate = useNavigate();
+  const location = useLocation();
+  const onboardingV4 = useOnboardingV4Flag();
+
+  createEffect(() => {
+    if (!onboardingV4().enabled || isMobile() || isNativeMobilePlatform()) {
+      return;
+    }
+    const data = userInfoQuery.data;
+    if (data?.authenticated !== true || data.tutorialComplete !== false) {
+      return;
+    }
+    if (AUTH_URLS.includes(location.pathname)) return;
+    // Preserve the deep link the user arrived on (a shared doc, an invite):
+    // /setup carries it as ?next and its finish() returns there instead of
+    // the post-setup landing. Base-relative so navigate() can resolve it
+    // against the router.
+    const target =
+      location.pathname.slice(ROUTER_BASE_CONCAT.length - 1) + location.search;
+    const isGenericEntry = target === '/' || target.startsWith(DEFAULT_ROUTE);
+    navigate(
+      isGenericEntry
+        ? '/onboarding'
+        : `/onboarding?next=${encodeURIComponent(target)}`,
+      { replace: true }
+    );
+  });
+
+  return null;
 }
 
 function LayoutInner(props: RouteSectionProps) {
@@ -241,8 +349,16 @@ function LayoutInner(props: RouteSectionProps) {
   const [sidebarOverlayTriggerHovered, setSidebarOverlayTriggerHovered] =
     createSignal(false);
   const callCtx = useCallContextOptional();
+  const incomingCallWidgetVisible = useIncomingCallWidgetVisible();
   const sidebarCollapsed = createMemo(
     () => isSidebarVisible() && sidebarState() === 'slim'
+  );
+  const activeCallWidgetVisible = createMemo(
+    () =>
+      isSidebarVisible() &&
+      sidebarState() === 'slim' &&
+      !!callCtx?.isInCall() &&
+      !callCtx?.isCallPage()
   );
   let sidebarOverlayCloseTimer: ReturnType<typeof setTimeout> | undefined;
 
@@ -302,6 +418,9 @@ function LayoutInner(props: RouteSectionProps) {
 
   mountGlobalFocusListener();
 
+  // Route mailto: links (via openExternalUrl) to the in-app email composer.
+  registerMailtoComposerHandler();
+
   attachGlobalDOMScope(document.body);
 
   return (
@@ -310,15 +429,18 @@ function LayoutInner(props: RouteSectionProps) {
         'relative flex flex-col justify-between w-dvw h-[calc(var(--dvh,1dvh)*100)] pl-(--safe-left) pr-(--safe-right)'
       )}
     >
+      <ImperativeDialogHost />
       <BundleUpdateProgressBar />
       <Suspense>
         <Show when={isAuthenticated()}>
+          <NewOnboardingRedirect />
           <Show when={!AUTH_URLS.includes(location.pathname)}>
             <GithubReauthenticationPrompt />
             <GmailReauthenticationPrompt />
+            <CalendarPermissionPrompt />
           </Show>
           <GlobalShortcuts />
-          <Show when={!isMobile()}>
+          <Show when={!isTouchDevice()}>
             <GoToHotkeys />
             <Suspense>
               <FavoritesCommands />
@@ -332,6 +454,18 @@ function LayoutInner(props: RouteSectionProps) {
           <GlobalShareModal />
           <IosShareSheet />
           <MacroMcpSetupModal />
+          <CreateChannelModal />
+          <CreateCompanyModal />
+          <CreateContactModal />
+          {/* Reactive, unlike the imperative ENABLE_REMINDERS() gate on the
+              action: this decides whether the composer is mounted at all, so it
+              has to pick up a late PostHog answer. */}
+          <ShowFeatureFlag
+            key={ENABLE_REMINDERS_FLAG}
+            enabledOverride={ENABLE_REMINDERS_OVERRIDE}
+          >
+            <ReminderComposerModal />
+          </ShowFeatureFlag>
           <Show when={isAddInboxDialogOpen()}>
             <AddInboxDialog />
           </Show>
@@ -363,7 +497,7 @@ function LayoutInner(props: RouteSectionProps) {
               onOverlayOpenChange={setSidebarOverlayOpenGuarded}
               onOpenChange={(open) => {
                 if (!open) {
-                  setSidebarState(isMobile() ? 'hidden' : 'slim');
+                  setSidebarState(isTouchDevice() ? 'hidden' : 'slim');
                   return;
                 }
 
@@ -390,42 +524,30 @@ function LayoutInner(props: RouteSectionProps) {
           </div>
         </ItemDndProvider>
       </div>
-      <Show when={isSidebarVisible()}>
-        <div
-          class="fixed bottom-3 z-page-overlay w-64 flex flex-col gap-2 transition-[left] duration-[120ms] ease-in-out"
-          style={{
-            left: sidebarState() === 'expanded' ? '15.75rem' : '0.75rem',
-          }}
-        >
-          <SidebarActiveCallWidget
-            sidebarState="expanded"
-            class="rounded-xl border border-edge-muted bg-surface shadow-menu p-1"
-          />
-        </div>
-      </Show>
-      <CollapsedSidebarCallWidget
+      <CollapsedSidebarIncomingCallWidget
         visible={
           isSidebarVisible() &&
           sidebarState() === 'slim' &&
-          !!callCtx?.isInCall() &&
-          !callCtx?.isCallPage()
+          incomingCallWidgetVisible()
         }
+        activeCallWidgetVisible={activeCallWidgetVisible()}
       />
+      <CollapsedSidebarCallWidget visible={activeCallWidgetVisible()} />
       <Show
         when={
-          isMobile() &&
+          isTouchDevice() &&
           isAuthenticated() &&
           !AUTH_URLS.includes(location.pathname)
         }
       >
         <FloatRegionHost />
-        <FloatRegion region="dock" active={() => !virtualKeyboardVisible()}>
-          <MobileBottomEdgeFade />
-          <MobileDock />
+        <MobileViewsRow />
+        <FloatRegion
+          region="dock"
+          active={() => !virtualKeyboardVisible() || SearchState.isOpen()}
+        >
+          <MobileDockRow />
         </FloatRegion>
-      </Show>
-      <Show when={isMobile()}>
-        <MobileSearchOuter />
       </Show>
       <SwipeDownDismissKeyboard />
       <Suspense>

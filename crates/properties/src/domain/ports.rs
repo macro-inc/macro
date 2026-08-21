@@ -5,6 +5,8 @@
 
 use std::collections::HashMap;
 
+use document_sub_type::DocumentSubType;
+use entity_access::domain::models::EntityType as AccessEntityType;
 use macro_user_id::user_id::MacroUserIdStr;
 use models_properties::service::document_metadata::DocumentMetadata;
 use models_properties::service::entity_property::EntityProperty;
@@ -19,8 +21,10 @@ use models_properties::{DataType, EntityPropertyReference, EntityReference, Enti
 use uuid::Uuid;
 
 use super::model::{
-    EditReceipt, EntityPropertiesKey, EntityPropertyInfo, PropertyDefinitionOwner,
-    TaskAssignedNotification, UpdatePropertyOptionOutcome, ViewReceipt,
+    EditReceipt, EntityPropertiesKey, EntityPropertyInfo, EntityPropertyMutationSnapshot,
+    EntityPropertyOptionSelection, EntityPropertyOptionUpdate, GetOrCreateTagDefinitionResult,
+    PropertyDefinitionOwner, TagPromotionOutcome, TagRemapOutcome, TaskAssignedNotification,
+    UpdatePropertyOptionOutcome, ViewReceipt,
 };
 
 /// Repository trait for property operations.
@@ -144,13 +148,43 @@ pub trait PropertiesRepo: Send + Sync + 'static {
         owner: PropertyDefinitionOwner<'a>,
     ) -> impl Future<Output = Result<Option<PropertyDefinition>, Self::Err>> + Send;
 
-    /// Return the owner's tag definition, creating it on first use.
+    /// Return the owner's tag definition and whether it was created on this call.
     // Explicit lifetime required by mockall's automock expansion.
     #[allow(clippy::needless_lifetimes)]
     fn get_or_create_tag_definition<'a>(
         &self,
         owner: PropertyDefinitionOwner<'a>,
-    ) -> impl Future<Output = Result<PropertyDefinition, Self::Err>> + Send;
+    ) -> impl Future<Output = Result<GetOrCreateTagDefinitionResult, Self::Err>> + Send;
+
+    /// Move a personal tag option into a team tag definition, keeping the option
+    /// id, and rewrite every entity value that referenced it so the label now
+    /// hangs off the team definition.
+    ///
+    /// The whole move is one transaction that first locks the target definition,
+    /// so two callers promoting the same label name into one team serialize and
+    /// the loser sees the winner's label as a
+    /// [`TagPromotionOutcome::Conflict`] instead of creating a duplicate.
+    /// Names are compared case-insensitively on the trimmed value.
+    fn promote_tag_option(
+        &self,
+        option_id: Uuid,
+        source_definition_id: Uuid,
+        target_definition_id: Uuid,
+    ) -> impl Future<Output = Result<TagPromotionOutcome, Self::Err>> + Send;
+
+    /// Replace a personal tag option with an existing team option: every entity
+    /// carrying the personal label is retagged with the team label (deduped if
+    /// it already has it), then the personal option is deleted.
+    ///
+    /// Returns `None` when `target_option_id` does not belong to
+    /// `target_definition_id`, which the caller reports as a missing option.
+    fn merge_tag_option(
+        &self,
+        source_option_id: Uuid,
+        source_definition_id: Uuid,
+        target_option_id: Uuid,
+        target_definition_id: Uuid,
+    ) -> impl Future<Output = Result<Option<TagRemapOutcome>, Self::Err>> + Send;
 
     /// Count how many of the provided option IDs exist for the property definition.
     fn count_valid_property_options(
@@ -161,35 +195,52 @@ pub trait PropertiesRepo: Send + Sync + 'static {
 
     /// Upsert an entity property value (insert or update).
     /// If the property doesn't exist, it will be created and attached to the entity.
-    /// If it exists, the value will be updated. Returns the persisted assignment.
+    /// If it exists, the value will be updated. Returns the persisted
+    /// assignment together with the pre-write value.
     fn upsert_entity_property(
         &self,
         entity_id: &str,
         entity_type: EntityType,
         property_definition_id: Uuid,
         value: Option<PropertyValue>,
-    ) -> impl Future<Output = Result<EntityProperty, Self::Err>> + Send;
+    ) -> impl Future<Output = Result<EntityPropertyMutationSnapshot, Self::Err>> + Send;
 
     /// Atomically add one option to a multi-select entity property value,
-    /// attaching the property if needed. Re-adding a present option is a no-op.
-    /// Composes with concurrent option changes without a lost update.
+    /// attaching the property if needed. Re-adding a present option is deduped.
+    /// Composes with concurrent option changes without a lost update and returns
+    /// the complete persisted state.
     fn add_entity_property_option(
         &self,
         entity_id: &str,
         entity_type: EntityType,
         property_definition_id: Uuid,
         option_id: Uuid,
-    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+    ) -> impl Future<Output = Result<EntityPropertyMutationSnapshot, Self::Err>> + Send;
 
     /// Atomically remove one option from a multi-select entity property value.
-    /// A no-op if the property is unattached or the option is not present.
+    /// Returns no snapshot if the property is unattached or the option is not
+    /// present, because no row was mutated.
     fn remove_entity_property_option(
         &self,
         entity_id: &str,
         entity_type: EntityType,
         property_definition_id: Uuid,
         option_id: Uuid,
-    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+    ) -> impl Future<Output = Result<Option<EntityPropertyMutationSnapshot>, Self::Err>> + Send;
+
+    /// Apply option deltas to several of an entity's multi-select property values
+    /// in a single transaction, returning each property's final option ids.
+    ///
+    /// Each property's row is locked (`SELECT ... FOR UPDATE`) before its current
+    /// value is read, diffed, and rewritten, so the whole selection composes with
+    /// concurrent edits without a lost update. The transaction is all-or-nothing:
+    /// any failure rolls back every property in the batch.
+    fn bulk_update_entity_property_options(
+        &self,
+        entity_id: &str,
+        entity_type: EntityType,
+        updates: &[EntityPropertyOptionUpdate],
+    ) -> impl Future<Output = Result<Vec<EntityPropertyOptionSelection>, Self::Err>> + Send;
 
     /// Atomically link or unlink a task's parent (for Parent Task property).
     ///
@@ -296,6 +347,15 @@ pub trait PropertiesRepo: Send + Sync + 'static {
         entity_reference: &EntityReference,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
+    /// Resolve document subtype facts in one batch.
+    ///
+    /// Missing IDs and documents without a subtype are omitted. Callers treat
+    /// either case as a regular document.
+    fn get_document_sub_types(
+        &self,
+        document_ids: &[Uuid],
+    ) -> impl Future<Output = Result<HashMap<Uuid, DocumentSubType>, Self::Err>> + Send;
+
     /// Get a document's metadata (name, owner, timestamps, project).
     /// Returns `None` if the document doesn't exist.
     /// Tasks are stored as documents, so this works for both.
@@ -340,7 +400,7 @@ pub trait PermissionService: Send + Sync + 'static {
         &self,
         user_id: Option<&'a MacroUserIdStr<'a>>,
         entity_id: &str,
-        entity_type: EntityType,
+        entity_type: AccessEntityType,
     ) -> impl Future<Output = Result<ViewReceipt, Self::Err>> + Send;
 
     /// Mint a proof that the user has edit (or owner) access to the entity.
@@ -351,7 +411,7 @@ pub trait PermissionService: Send + Sync + 'static {
         &self,
         user_id: &MacroUserIdStr<'a>,
         entity_id: &str,
-        entity_type: EntityType,
+        entity_type: AccessEntityType,
     ) -> impl Future<Output = Result<EditReceipt, Self::Err>> + Send;
 
     /// Grant edit permissions to users for a task.
@@ -378,20 +438,4 @@ pub trait NotificationService: Send + Sync + 'static {
         &self,
         notification: TaskAssignedNotification<'a>,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
-}
-
-/// Port for keeping an entity's indexed properties in sync after a mutation.
-///
-/// Mirrors the per-domain `*SearchIndexer` ports (e.g. `CallSearchIndexer`):
-/// the domain calls it on a write and an SQS-backed adapter in the composition
-/// root publishes the upsert. `dyn`-compatible (boxed future) so it can be an
-/// optional collaborator on the service without adding a generic parameter.
-pub trait PropertySearchIndexer: Send + Sync + std::fmt::Debug {
-    /// Enqueue an upsert of the entity's indexed properties. Best-effort —
-    /// callers log and continue on error.
-    fn enqueue_upsert(
-        &self,
-        entity_id: String,
-        entity_type: EntityType,
-    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = anyhow::Result<()>> + Send>>;
 }

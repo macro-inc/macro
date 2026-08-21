@@ -3,6 +3,7 @@ import {
   type FilterID,
   SOUP_FILTERS,
 } from '@app/features/next-soup/filters/configs/';
+import type { FilterContext } from '@app/features/next-soup/filters/configs/base';
 import {
   createPredicatesStore,
   type PredicateConfig,
@@ -12,7 +13,8 @@ import { SORT_CONFIGS } from '@app/features/next-soup/soup-view/sort-options';
 import { isModality } from '@core/mobile/inputModality';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import type { EntityData, WithNotification, WithSearch } from '@entity';
-import { createMemo, createSignal, type JSX } from 'solid-js';
+import { batch, createMemo, createSignal, type JSX } from 'solid-js';
+import { createStore, reconcile } from 'solid-js/store';
 
 /**
  * Active "focus" predicates that exclude done entities. When one of these is
@@ -43,6 +45,8 @@ export type GroupMeta = {
 };
 
 export type SoupRow = {
+  /** Stable identity used to preserve this row's store proxy across updates. */
+  identityKey: string;
   id: string;
   index: number;
   original: SoupEntity;
@@ -55,25 +59,30 @@ export type SoupRow = {
 
 type NavigationResult = { row: SoupRow; index: number } | undefined;
 
+type NavigationOptions = {
+  wrapNavigation?: boolean;
+  skipGroupHeaders?: boolean;
+  skipLoadMore?: boolean;
+  skip?: (row: SoupRow) => boolean;
+};
+
 export type SortConfig<T> = {
   id: string;
   fn: (a: T, b: T) => number;
 };
 
-interface SoupContextOptions<TId extends string = FilterID> {
+interface SoupContextOptions {
   initialData?: SoupEntity[];
   initialPredicates?: {
-    and?: TId[];
-    or?: TId[];
+    and?: string[];
+    or?: string[];
   };
-  predicateConfigs?: PredicateConfig<SoupEntity, string>[];
+  predicateConfigs?: PredicateConfig<SoupEntity, string, FilterContext>[];
   wrapNavigation?: boolean;
   skipGroupHeaders?: boolean;
 }
 
-export const createSoupState = <TId extends string = FilterID>(
-  options: SoupContextOptions<TId> = {}
-) => {
+export const createSoupState = (options: SoupContextOptions = {}) => {
   const {
     wrapNavigation,
     initialData,
@@ -86,7 +95,12 @@ export const createSoupState = <TId extends string = FilterID>(
     getItemId: (i) => i.id,
   });
 
-  const predicates = createPredicatesStore({
+  const predicates = createPredicatesStore<
+    SoupEntity,
+    FilterContext,
+    PredicateConfig<SoupEntity, string, FilterContext>,
+    string
+  >({
     configs: predicateConfigs ?? SOUP_FILTERS,
     initial: initialPredicates,
   });
@@ -94,9 +108,9 @@ export const createSoupState = <TId extends string = FilterID>(
   const sort = createSortState(SORT_CONFIGS, ['updated_at']);
 
   // Tracked by index (not id) so a row id duplicated across groups highlights
-  // only one occurrence. lastFocusedRowId follows that row across setRows.
+  // only one occurrence. The identity key follows that row across setRows.
   const [focusedIndex, setFocusedIndex] = createSignal(-1);
-  let lastFocusedRowId: string | undefined;
+  let lastFocusedRowIdentityKey: string | undefined;
 
   const [activeGroupId, setActiveGroupId] = createSignal<string | undefined>();
 
@@ -134,7 +148,24 @@ export const createSoupState = <TId extends string = FilterID>(
       isGrouped = false,
       isLoadMore = false,
     } = options;
+    const kind = isGrouped
+      ? 'group-header'
+      : isLoadMore
+        ? 'load-more'
+        : 'entity';
+    // Group membership distinguishes duplicate entities and makes a moved task
+    // a new row. Structural rows also include their representative entity so
+    // Solid never merges a new header/load-more entity into an aliased proxy.
+    const identityKey = JSON.stringify([
+      kind,
+      group?.key ?? null,
+      original.type,
+      original.id,
+      id,
+    ]);
+
     return {
+      identityKey,
       id,
       index,
       original,
@@ -147,20 +178,27 @@ export const createSoupState = <TId extends string = FilterID>(
     };
   };
 
-  const [rows, setRowsInternal] = createSignal<SoupRow[]>(
+  const initialRows =
     initialData?.map((e, i) => buildRow({ id: e.id, index: i, original: e })) ??
-      []
-  );
+    [];
+  const [rowStore, setRowStore] = createStore<SoupRow[]>(initialRows);
+  // The array snapshot changes only for structural updates, while its row
+  // proxies update nested entity/group fields reactively in place.
+  const rows = createMemo(() => [...rowStore]);
 
   const setRows = (newRows: SoupRow[]) => {
-    setRowsInternal(newRows);
-    if (!lastFocusedRowId) return;
-    const nextIndex = newRows.findIndex((r) => r.id === lastFocusedRowId);
-    setFocusedIndex(nextIndex);
-    if (nextIndex < 0) lastFocusedRowId = undefined;
-  };
+    batch(() => {
+      setRowStore(reconcile(newRows, { key: 'identityKey', merge: true }));
 
-  const [previewEntity, setPreviewEntity] = createSignal<string | undefined>();
+      if (lastFocusedRowIdentityKey) {
+        const nextIndex = rowStore.findIndex(
+          (row) => row.identityKey === lastFocusedRowIdentityKey
+        );
+        setFocusedIndex(nextIndex);
+        if (nextIndex < 0) lastFocusedRowIdentityKey = undefined;
+      }
+    });
+  };
 
   const [collapseEntityCallback, setCollapseEntityCallback] = createSignal<
     ((entityId: string) => Promise<void>) | undefined
@@ -207,49 +245,56 @@ export const createSoupState = <TId extends string = FilterID>(
 
     if (result) {
       setFocusedIndex(result.index);
-      lastFocusedRowId = result.row.id;
+      lastFocusedRowIdentityKey = result.row.identityKey;
     }
 
     return result;
   };
 
-  const peek = (offset: number): NavigationResult => {
-    const current = focusedIndex();
-    if (current === -1) {
-      return calculateFocusRow(offset > 0 ? 0 : rows().length - 1);
-    }
-    return calculateFocusRow(current + offset);
-  };
-
-  const shouldSkipRow = (row: SoupRow): boolean => {
+  const shouldSkipRow = (
+    row: SoupRow,
+    options?: NavigationOptions
+  ): boolean => {
+    if (options?.skip?.(row)) return true;
+    if (row.getIsLoadMore() && options?.skipLoadMore) return true;
     if (!row.group) return false;
     if (row.getIsGrouped()) {
-      return !!skipGroupHeaders;
+      return options?.skipGroupHeaders ?? !!skipGroupHeaders;
     }
     return !row.group.isExpanded();
   };
 
-  const findNextIndex = (startIndex: number, offset: number): number => {
+  const findNextIndex = (
+    startIndex: number,
+    offset: number,
+    options?: NavigationOptions
+  ): number => {
     const allRows = rows();
     if (allRows.length === 0) return -1;
+    if (offset === 0) return startIndex;
 
     const direction = offset > 0 ? 1 : -1;
     let steps = Math.abs(offset);
     let cursor = startIndex;
-    let lastValid = startIndex;
+    let lastValid = shouldSkipRow(allRows[startIndex], options)
+      ? -1
+      : startIndex;
+    let iterations = 0;
+    const maxIterations = allRows.length * steps;
+    const shouldWrap = options?.wrapNavigation ?? wrapNavigation;
 
-    while (steps > 0) {
+    while (steps > 0 && iterations < maxIterations) {
+      iterations++;
       cursor += direction;
 
       if (cursor < 0 || cursor >= allRows.length) {
-        if (!wrapNavigation) break;
+        if (!shouldWrap) break;
         cursor = (cursor + allRows.length) % allRows.length;
       }
 
       const row = allRows[cursor];
       if (!row) break;
-
-      if (shouldSkipRow(row)) continue;
+      if (shouldSkipRow(row, options)) continue;
 
       lastValid = cursor;
       steps--;
@@ -258,7 +303,10 @@ export const createSoupState = <TId extends string = FilterID>(
     return lastValid;
   };
 
-  const navigateBy = (offset: number): NavigationResult => {
+  const peek = (
+    offset: number,
+    options?: NavigationOptions
+  ): NavigationResult => {
     const current = focusedIndex();
     const allRows = rows();
 
@@ -266,20 +314,37 @@ export const createSoupState = <TId extends string = FilterID>(
       const startIndex = offset > 0 ? 0 : allRows.length - 1;
       const direction = offset > 0 ? 1 : -1;
       let i = startIndex;
-      while (i >= 0 && i < allRows.length && shouldSkipRow(allRows[i])) {
+      while (
+        i >= 0 &&
+        i < allRows.length &&
+        shouldSkipRow(allRows[i], options)
+      ) {
         i += direction;
       }
       if (i < 0 || i >= allRows.length) return;
-      return setFocus(i);
+
+      return calculateFocusRow(i);
     }
 
-    const nextIndex = findNextIndex(current, offset);
-    return setFocus(nextIndex);
+    const nextIndex = findNextIndex(current, offset, options);
+    if (nextIndex < 0) return;
+
+    return calculateFocusRow(nextIndex);
+  };
+
+  const navigateBy = (
+    offset: number,
+    options?: NavigationOptions
+  ): NavigationResult => {
+    const peeked = peek(offset, options);
+    if (!peeked) return;
+
+    return setFocus(peeked.index);
   };
 
   const clearFocus = () => {
     setFocusedIndex(-1);
-    lastFocusedRowId = undefined;
+    lastFocusedRowIdentityKey = undefined;
   };
 
   return {
@@ -313,19 +378,19 @@ export const createSoupState = <TId extends string = FilterID>(
         const idx = indexOf(id);
         if (idx < 0) return;
         setFocusedIndex(idx);
-        lastFocusedRowId = id;
+        lastFocusedRowIdentityKey = rows()[idx].identityKey;
       },
       setIndex: (index: number) => {
         const row = rows()[index];
         if (!row) return;
         setFocusedIndex(index);
-        lastFocusedRowId = row.id;
+        lastFocusedRowIdentityKey = row.identityKey;
       },
     },
 
     navigate: {
-      down: () => navigateBy(1),
-      up: () => navigateBy(-1),
+      down: (options?: NavigationOptions) => navigateBy(1, options),
+      up: (options?: NavigationOptions) => navigateBy(-1, options),
       by: navigateBy,
       toIndex: setFocus,
       toId: (id: string) => {
@@ -345,9 +410,6 @@ export const createSoupState = <TId extends string = FilterID>(
       at: getRowAt,
       indexOf,
     },
-
-    previewEntity,
-    setPreviewEntity,
 
     collapseEntity: {
       callback: collapseEntityCallback,

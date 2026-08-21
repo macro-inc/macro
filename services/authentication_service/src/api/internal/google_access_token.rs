@@ -6,10 +6,12 @@ use axum::{
 };
 use fusionauth::FusionAuthClient;
 use fusionauth::error::FusionAuthClientError;
-use macro_middleware::auth::internal_access::ValidInternalKey;
+use macro_authorization::{InternalOnly, MacroAuthorizationExtractor};
 use model::authentication::google_token::GoogleAccessToken;
 use model::response::ErrorResponse;
 use std::sync::Arc;
+
+use crate::api::context::AuthorizationService;
 
 #[derive(serde::Deserialize, Debug)]
 pub struct GoogleAccessTokenParams {
@@ -21,10 +23,10 @@ pub struct GoogleAccessTokenParams {
 }
 
 /// Gets link between user and identity provider
-#[tracing::instrument(skip(auth_client, _internal_access))]
+#[tracing::instrument(skip(auth_client, _internal_authorization))]
 pub async fn handler(
     State(auth_client): State<Arc<FusionAuthClient>>,
-    _internal_access: ValidInternalKey,
+    _internal_authorization: MacroAuthorizationExtractor<AuthorizationService, InternalOnly>,
     extract::Query(params): extract::Query<GoogleAccessTokenParams>,
 ) -> Result<Response, Response> {
     get_access_token(auth_client, &params, "google_gmail").await
@@ -45,6 +47,22 @@ async fn get_access_token(
         .get_identity_provider_id_by_name(identity_provider_name)
         .await
         .map_err(|e| {
+            // No Gmail identity provider configured (e.g. local / --no-doppler
+            // stacks, or a deployment without the Google integration). This is
+            // an expected "no grant" outcome, not a server fault: the email
+            // service treats a 404 as NoGmailGrant and skips inbox init, while
+            // a 500 would surface as a hard login failure.
+            if matches!(e, FusionAuthClientError::NoIdentityProviderFound) {
+                tracing::debug!(error=?e, "no {} identity provider configured", identity_provider_name);
+                return (
+                    StatusCode::NOT_FOUND,
+                    Json(ErrorResponse {
+                        message: format!("No {} link found for this user", identity_provider_name)
+                            .into(),
+                    }),
+                )
+                    .into_response();
+            }
             tracing::error!(error=?e, "unable to find idp id for {}", identity_provider_name);
             (
                 StatusCode::INTERNAL_SERVER_ERROR,

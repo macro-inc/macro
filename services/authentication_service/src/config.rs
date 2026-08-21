@@ -2,9 +2,9 @@ use std::sync::LazyLock;
 
 use anyhow::Context;
 use database_env_vars::{DatabaseUrl, RedisUri};
+use macro_auth::InternalApiKey;
 pub use macro_env::Environment;
 use macro_env_var::{env_vars, maybe_env_vars};
-use macro_middleware::auth::internal_access::InternalApiKey;
 
 // BASE_URL config value. This is validated when creating the config in main.rs
 pub static BASE_URL: LazyLock<String> = LazyLock::new(|| {
@@ -16,7 +16,6 @@ pub static BASE_URL: LazyLock<String> = LazyLock::new(|| {
 
 env_vars! {
     pub struct BaseUrl;
-    pub struct FusionAuthTenantId;
     pub struct FusionAuthApiSecretKey;
     pub struct FusionAuthClientId;
     pub struct FusionAuthClientSecretKey;
@@ -30,9 +29,17 @@ env_vars! {
     pub struct GithubClientSecret;
     pub struct GithubIdpId;
     pub struct StripePriceId;
+    /// Comma-separated Kafka bootstrap servers for the macro event broker.
+    pub struct KafkaBrokers;
 }
 
 maybe_env_vars! {
+    /// Browser-reachable FusionAuth origin used for OAuth authorization redirects.
+    pub struct FusionAuthPublicUrl;
+    pub struct MicrosoftClientId;
+    pub struct MicrosoftClientSecret;
+    pub struct MicrosoftTenantId;
+    pub struct MicrosoftTokenKmsKeyId;
     pub struct GaMeasurementId;
     pub struct GaApiSecret;
     pub struct MetaPixelId;
@@ -60,8 +67,6 @@ pub struct Config {
     pub database_url: DatabaseUrl,
     /// The Redis URI for the Redis this application should use.
     pub redis_uri: RedisUri,
-    /// FusionAuth Tenant Id
-    pub fusionauth_tenant_id: FusionAuthTenantId,
     /// FusionAuth API key secret name
     pub fusionauth_api_key_secret_key: FusionAuthApiSecretKey,
     /// FusionAuth client id
@@ -70,12 +75,22 @@ pub struct Config {
     pub fusionauth_client_secret_key: FusionAuthClientSecretKey,
     /// FusionAuth base url
     pub fusionauth_base_url: FusionAuthBaseUrl,
+    /// Browser-reachable FusionAuth URL. Falls back to the API base URL when unset.
+    pub fusionauth_public_url: FusionAuthPublicUrl,
     /// FusionAuth oauth redirect uri
     pub fusionauth_oauth_redirect_uri: FusionAuthOauthRedirectUri,
     /// Google client id
     pub google_client_id: GoogleClientId,
     /// Google client secret key
     pub google_client_secret_key: GoogleClientSecretKey,
+    /// Microsoft OAuth client ID.
+    pub microsoft_client_id: MicrosoftClientId,
+    /// Microsoft OAuth client secret.
+    pub microsoft_client_secret: MicrosoftClientSecret,
+    /// Microsoft Entra tenant ID.
+    pub microsoft_tenant_id: MicrosoftTenantId,
+    /// KMS key used to encrypt Microsoft refresh-token data keys.
+    pub microsoft_token_kms_key_id: MicrosoftTokenKmsKeyId,
     /// Stripe secret key
     pub stripe_secret_key: StripeSecretKey,
     /// The port to listen for HTTP requests on.
@@ -113,6 +128,21 @@ pub struct Config {
     pub stripe_price_id: StripePriceId,
     /// The internal api key
     pub internal_api_key: InternalApiKey,
+    /// Comma-separated Kafka bootstrap servers for the macro event broker.
+    pub kafka_brokers: KafkaBrokers,
+    /// Whether Gmail link consent requests the Google Calendar scope. Off by
+    /// default so deployed environments don't ask users for a scope the
+    /// calendar feature isn't using yet.
+    #[macro_config_default(false)]
+    pub calendar_scope_enabled: bool,
+}
+
+/// Complete Microsoft OAuth credentials used to enable Outlook account linking.
+pub(crate) struct MicrosoftCredentials {
+    pub(crate) client_id: String,
+    pub(crate) client_secret: String,
+    pub(crate) tenant_id: String,
+    pub(crate) token_kms_key_id: String,
 }
 
 impl Config {
@@ -120,4 +150,51 @@ impl Config {
         macro_config::ConfigLoader::load::<Config>()
             .context("failed to load authentication service config")
     }
+
+    /// Resolves Microsoft credentials, enforcing that all values are configured together.
+    pub(crate) fn microsoft_credentials(&self) -> anyhow::Result<Option<MicrosoftCredentials>> {
+        resolve_microsoft_credentials(
+            &self.microsoft_client_id,
+            &self.microsoft_client_secret,
+            &self.microsoft_tenant_id,
+            &self.microsoft_token_kms_key_id,
+        )
+    }
 }
+
+fn resolve_microsoft_credentials(
+    client_id: &MicrosoftClientId,
+    client_secret: &MicrosoftClientSecret,
+    tenant_id: &MicrosoftTenantId,
+    token_kms_key_id: &MicrosoftTokenKmsKeyId,
+) -> anyhow::Result<Option<MicrosoftCredentials>> {
+    let client_id = nonblank_value(client_id.value());
+    let client_secret = nonblank_value(client_secret.value());
+    let tenant_id = nonblank_value(tenant_id.value());
+    let token_kms_key_id = nonblank_value(token_kms_key_id.value());
+
+    match (client_id, client_secret, tenant_id) {
+        (None, None, None) => Ok(None),
+        (Some(client_id), Some(client_secret), Some(tenant_id)) => {
+            let token_kms_key_id = token_kms_key_id.context(
+                "MICROSOFT_TOKEN_KMS_KEY_ID must be set to a nonblank value when Microsoft OAuth is enabled",
+            )?;
+            Ok(Some(MicrosoftCredentials {
+                client_id: client_id.to_owned(),
+                client_secret: client_secret.to_owned(),
+                tenant_id: tenant_id.to_owned(),
+                token_kms_key_id: token_kms_key_id.to_owned(),
+            }))
+        }
+        _ => anyhow::bail!(
+            "MICROSOFT_CLIENT_ID, MICROSOFT_CLIENT_SECRET, and MICROSOFT_TENANT_ID must all be set to nonblank values or all be unset"
+        ),
+    }
+}
+
+fn nonblank_value(value: Option<&str>) -> Option<&str> {
+    value.filter(|value| !value.trim().is_empty())
+}
+
+#[cfg(test)]
+mod test;

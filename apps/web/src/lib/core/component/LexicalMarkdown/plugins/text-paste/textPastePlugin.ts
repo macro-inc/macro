@@ -4,10 +4,14 @@ import {
   type BlockName,
   BlockRegistry,
 } from '@core/block';
-import { isTauri } from '@core/util/platform';
+import { isValidMacroAppHostname } from '@core/util/macroAppUrl';
 import { mergeRegister } from '@lexical/utils';
 import { $createPasteNode, PasteNode } from '@macro-inc/lexical-core';
-import { parseThemeV2Json } from '@theme/utils/themeValidation';
+import { convertThemev2v3 } from '@theme/utils/themeMigrations';
+import {
+  parseThemeV2Json,
+  parseThemeV3Json,
+} from '@theme/utils/themeValidation';
 import {
   $getSelection,
   $isRangeSelection,
@@ -36,47 +40,16 @@ type MacroAppUrlParsed = {
   params: Record<string, string> | undefined;
 };
 
-const Hosts = {
-  Prod: 'macro.com',
-  Dev: 'dev.macro.com',
-  Localhost: 'localhost',
-} as const;
-
 const IgnoredParams = new Set(['referral_code']);
 
 const ValidBlockNames = [...BlockRegistry, ...BlockAliasRegistry];
-
-function cleanHostname(hostname: string): string {
-  return hostname.replace('www.', '').toLowerCase();
-}
-
-function isValidMentionHostname(hostname: string): boolean {
-  const current = cleanHostname(window.location.hostname);
-  const target = cleanHostname(hostname);
-  if (current === target) {
-    return true;
-  }
-  if (
-    (target === Hosts.Dev && current === Hosts.Localhost) ||
-    (target === Hosts.Localhost && current === Hosts.Dev)
-  ) {
-    return true;
-  }
-  // On Tauri, window.location.hostname is 'localhost', but Macro links are
-  // built with the real web origin (macro.com or dev.macro.com). Accept any
-  // recognized Macro host when running inside the native Tauri app.
-  if (isTauri() && current === Hosts.Localhost) {
-    return target === Hosts.Prod || target === Hosts.Dev;
-  }
-  return false;
-}
 
 export function parseMacroAppUrl(text: string): MacroAppUrlParsed {
   try {
     const url: URL = new URL(text);
     if (
       !url.pathname.startsWith('/app/') ||
-      !isValidMentionHostname(url.hostname)
+      !isValidMacroAppHostname(url.hostname)
     ) {
       return {
         isValid: false,
@@ -151,16 +124,21 @@ function registerTextPastePlugin(editor: LexicalEditor) {
             event.clipboardData?.getData('text/plain') || '';
 
           // Check for theme JSON before checking for Macro URL
-          const themeV2 = parseThemeV2Json(pastedText);
-          if (themeV2) {
+          const themeV3 =
+            parseThemeV3Json(pastedText) ??
+            (() => {
+              const legacy = parseThemeV2Json(pastedText);
+              return legacy ? convertThemev2v3(legacy) : null;
+            })();
+          if (themeV3) {
             const selection = $getSelection();
             if ($isRangeSelection(selection) && !selection.isCollapsed())
               return false;
 
             event.preventDefault();
             editor.dispatchCommand(INSERT_THEME_MENTION_COMMAND, {
-              name: themeV2.name,
-              data: themeV2,
+              name: themeV3.name,
+              data: themeV3,
             });
             return true;
           }
@@ -177,7 +155,7 @@ function registerTextPastePlugin(editor: LexicalEditor) {
             // clipboards, and only when the cursor is a collapsed selection.
             const clipboard = event.clipboardData;
             const isRichClipboard = Boolean(
-              clipboard?.getData('application/x-lexical-clipboard') ||
+              clipboard?.getData('application/x-lexical-editor') ||
                 clipboard?.getData('text/html')
             );
             if (

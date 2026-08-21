@@ -37,6 +37,10 @@ import type {
   HtmlRenderNode,
 } from './nodes/HtmlRenderNode';
 import type { ImageDecoratorProps, ImageNode } from './nodes/ImageNode';
+import type {
+  MagicChipDecoratorProps,
+  MagicChipNode,
+} from './nodes/MagicChipNode';
 import type { PasteNode, PasteNodeDecoratorProps } from './nodes/PasteNode';
 import type {
   PullRequestMentionDecoratorProps,
@@ -46,6 +50,10 @@ import type {
   SnapshotDecoratorProps,
   SnapshotNode,
 } from './nodes/SnapshotNode';
+import type {
+  TagMentionDecoratorProps,
+  TagMentionNode,
+} from './nodes/TagMentionNode';
 import type {
   ThemeMentionDecoratorProps,
   ThemeMentionNode,
@@ -135,6 +143,10 @@ export interface NodeDecoratorMap {
     klass: typeof ThemeMentionNode;
     props: ThemeMentionDecoratorProps;
   };
+  TagMentionNode: {
+    klass: typeof TagMentionNode;
+    props: TagMentionDecoratorProps;
+  };
   WatermarkNode: {
     klass: typeof WatermarkNode;
     props: WatermarkDecoratorProps;
@@ -146,6 +158,10 @@ export interface NodeDecoratorMap {
   AwaitNode: {
     klass: typeof AwaitNode;
     props: AwaitDecoratorProps;
+  };
+  MagicChipNode: {
+    klass: typeof MagicChipNode;
+    props: MagicChipDecoratorProps;
   };
 }
 

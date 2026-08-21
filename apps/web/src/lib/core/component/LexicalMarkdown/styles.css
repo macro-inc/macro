@@ -360,7 +360,9 @@ ol.static-md.depth-6 > li:not(.list-none)::before {
   width: fit-content;
   vertical-align: top;
   text-align: start;
-  padding: 0.5rem;
+  /* Roomy enough that the floating insert/delete buttons on cell edges don't
+     cover text. */
+  padding: 0.75rem;
   position: relative;
   outline: none;
   overflow: auto;
@@ -372,6 +374,16 @@ ref: https://bugzilla.mozilla.org/show_bug.cgi?id=1904159
 */
 .md-table-cell > * {
   overflow: inherit;
+}
+
+/*
+Lists indent with margin-left, so bullet/number markers paint outside the
+list's own box. The overflow inherited above clips them for top-level lists
+in a cell — move the indent inside the box so markers stay visible.
+*/
+.md-table-cell > .md-list {
+  margin-left: 0;
+  padding-left: 1.5em;
 }
 
 .md-table-cell-resizer {
@@ -470,30 +482,6 @@ ref: https://bugzilla.mozilla.org/show_bug.cgi?id=1904159
   top: 0;
 }
 
-.md-table-cell-action-button-container {
-  display: block;
-  right: 5px;
-  top: 6px;
-  position: absolute;
-  z-index: 4;
-  width: 20px;
-  height: 20px;
-}
-
-.md-table-cell-action-button {
-  display: block;
-  border: 0;
-  border-radius: 20px;
-  width: 20px;
-  height: 20px;
-  color: var(--color-ink-muted);
-  background-color: transparent;
-}
-
-.md-table-cell-action-button:hover {
-  background-color: rgb(from var(--color-edge) r g b / 0.15);
-}
-
 .md-editor-equation {
   user-select: none;
 }
@@ -517,25 +505,25 @@ mark {
 }
 
 .md-mark.comment {
-  background: oklch(from var(--color-comment) l c h / 0.1);
-  border-bottom: 2px solid oklch(from var(--color-comment) l c h / 0.3);
+  background: oklch(from var(--color-yellow) l c h / 0.1);
+  border-bottom: 2px solid oklch(from var(--color-yellow) l c h / 0.3);
   padding-bottom: 2px;
 }
 
 .md-mark-overlap.comment {
-  background: oklch(from var(--color-comment) l c h / 0.2);
-  border-bottom: 2px solid oklch(from var(--color-comment) l c h / 0.4);
+  background: oklch(from var(--color-yellow) l c h / 0.2);
+  border-bottom: 2px solid oklch(from var(--color-yellow) l c h / 0.4);
 }
 
 .md-mark.selected.comment {
-  background: oklch(from var(--color-comment) l c h / 0.3);
-  border-bottom: 2px solid oklch(from var(--color-comment) l c h / 0.5);
-  color: var(--color-comment-ink);
+  background: oklch(from var(--color-yellow) l c h / 0.3);
+  border-bottom: 2px solid oklch(from var(--color-yellow) l c h / 0.5);
+  color: var(--color-ink);
 }
 
 .md-mark-overlap.selected.comment {
-  background: oklch(from var(--color-comment) l c h / 0.4);
-  border-bottom: 2px solid oklch(from var(--color-comment) l c h / 0.6);
+  background: oklch(from var(--color-yellow) l c h / 0.4);
+  border-bottom: 2px solid oklch(from var(--color-yellow) l c h / 0.6);
 }
 
 .md-mark.draft.comment:not(.local) {

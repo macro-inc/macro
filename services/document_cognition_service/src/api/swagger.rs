@@ -22,11 +22,18 @@ use ai_projections::inbound::axum_router::upsert_projection::{
     ProjectionStateResponse, UpsertProjectionRequest,
 };
 use ai_usage::inbound::axum_router::{self as ai_usage_api};
+use import::inbound::axum_router::{self as import_api, RunImportRequest};
 use mcp_client::inbound::axum_router::{
     self as mcp_api, AddServerRequest, ServerResponse, StartAuthRequest, StartAuthResponse,
     UpdateServerRequest,
 };
 use memory::inbound::axum_router::{self as memory_api, MemoryErrorBody, MemoryResponse};
+use onboarding::inbound::axum_router::{self as onboarding_api, CompleteOnboardingRequest};
+use pipedream_mcp::inbound::axum_router::{
+    self as pipedream_api, PipedreamCatalogEntryResponse, PipedreamCatalogResponse,
+    PipedreamCompleteRequest, PipedreamConnectionResponse, PipedreamTokenResponse,
+    PipedreamUpdateRequest,
+};
 
 use crate::api::preview::get_batch_preview::{GetBatchPreviewRequest, GetBatchPreviewResponse};
 
@@ -84,6 +91,12 @@ use utoipa::OpenApi;
             stream_stop::stop_chat_stream,
             structured_completion::structured_completion,
             memory_api::get_memory_handler,
+            import_api::get_state_handler,
+            import_api::run_import_handler,
+            import_api::retry_gather_handler,
+            import_api::dismiss_run_handler,
+            onboarding_api::get_state_handler,
+            onboarding_api::complete_handler,
             ai_usage_api::get_usage_handler,
             ai_usage_api::set_pricing_handler,
             ai_projections::inbound::axum_router::upsert_projection::handler::<crate::api::context::DcsAiProjectionService>,
@@ -92,7 +105,14 @@ use utoipa::OpenApi;
             mcp_api::update_server,
             mcp_api::delete_server,
             mcp_api::start_auth,
-            mcp_api::auth_callback
+            mcp_api::client_metadata,
+            mcp_api::auth_callback,
+            pipedream_api::list_connections,
+            pipedream_api::update_connection,
+            pipedream_api::delete_connection,
+            pipedream_api::create_connect_token,
+            pipedream_api::complete_connection,
+            pipedream_api::browse_catalog_handler
         ),
         components(
             schemas(
@@ -101,7 +121,7 @@ use utoipa::OpenApi;
                 StringIDResponse,
                 GenericErrorResponse,
                 // Permissions V2
-                models_permissions::share_permission::access_level::AccessLevel, models_permissions::share_permission::SharePermissionV2, models_permissions::share_permission::UpdateSharePermissionRequestV2, // Share permission
+                models_permissions::share_permission::LinkShare, models_permissions::share_permission::access_level::AccessLevel, models_permissions::share_permission::SharePermissionV2, models_permissions::share_permission::UpdateSharePermissionRequestV2, // Share permission
                 models_permissions::share_permission::channel_share_permission::ChannelSharePermission, models_permissions::share_permission::channel_share_permission::UpdateChannelSharePermission, // Channel share permissions
 
                 // Chat
@@ -173,6 +193,28 @@ use utoipa::OpenApi;
                 MemoryResponse,
                 MemoryErrorBody,
 
+                // Import pipeline
+                import::domain::models::ImportState,
+                import::domain::models::ImportEntity,
+                import::domain::models::ImportRun,
+                import::domain::models::ImportSource,
+                import::domain::models::ImportStatus,
+                import::domain::models::Initiator,
+                import::domain::models::RunStatus,
+                import::domain::models::LinearIssueMeta,
+                import::domain::models::NotionDocMeta,
+                import::domain::models::SlackChannelMeta,
+                import::domain::models::SlackParticipant,
+                import::domain::service::RunImportOutcome,
+                RunImportRequest,
+
+                // Onboarding
+                onboarding::domain::models::OnboardingState,
+                onboarding::domain::models::OnboardingRow,
+                onboarding::domain::models::OnboardingStatus,
+                onboarding::domain::models::ConnectedServer,
+                CompleteOnboardingRequest,
+
                 // AI cost
                 ai_usage_api::UsageRequest,
                 ai_usage_api::SetPricingRequest,
@@ -198,6 +240,14 @@ use utoipa::OpenApi;
                 UpdateServerRequest,
                 StartAuthRequest,
                 StartAuthResponse,
+
+                // Pipedream MCP connectors
+                PipedreamConnectionResponse,
+                PipedreamUpdateRequest,
+                PipedreamTokenResponse,
+                PipedreamCompleteRequest,
+                PipedreamCatalogResponse,
+                PipedreamCatalogEntryResponse,
                 model_error_response::ErrorResponse,
             ),
         ),

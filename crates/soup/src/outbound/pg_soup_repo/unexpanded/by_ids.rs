@@ -1,7 +1,4 @@
-use crate::{
-    map_soup_type,
-    outbound::pg_soup_repo::{populate_properties, type_err},
-};
+use crate::{map_soup_type, outbound::pg_soup_repo::type_err};
 use document_sub_type::DocumentSubType;
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use model_entity::{Entity, EntityType};
@@ -17,13 +14,13 @@ use uuid::Uuid;
 /// If a user has access to a project that contains other items, those "child" items will NOT
 /// be included in the results unless the user has been explicitly granted permissions on them.
 /// This ensures that only directly authorized items are returned, not those with implicit
-/// (inherited) access. Results are sorted to match the input entity order.
+/// (inherited) access. Result order is unspecified.
 #[tracing::instrument(err, skip(db, entities))]
 pub async fn unexpanded_soup_by_ids<'a>(
     db: &PgPool,
     user_id: MacroUserIdStr<'_>,
     entities: impl IntoIterator<Item = &'a Entity<'a>>,
-) -> Result<Vec<SoupItem>, sqlx::Error> {
+) -> Result<Vec<SoupItem<()>>, sqlx::Error> {
     let mut document_ids = Vec::new();
     let mut chat_ids = Vec::new();
     let mut project_ids = Vec::new();
@@ -42,7 +39,7 @@ pub async fn unexpanded_soup_by_ids<'a>(
     let status_property_id = SystemPropertyKey::STATUS_UUID;
     let completed_option_id = StatusOption::COMPLETED_UUID.to_string();
 
-    let mut items: Vec<SoupItem> = sqlx::query!(
+    let items: Vec<SoupItem<()>> = sqlx::query!(
         r#"
         WITH user_source_ids AS (
             SELECT cp.channel_id::text as source_id FROM comms_channel_participants cp
@@ -198,8 +195,6 @@ pub async fn unexpanded_soup_by_ids<'a>(
     .try_map(map_soup_type!())
     .fetch_all(db)
     .await?;
-
-    populate_properties(db, user_id.copied(), &mut items).await?;
 
     Ok(items)
 }

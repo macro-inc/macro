@@ -7,14 +7,6 @@ import type { BlockAlias, BlockName } from '@core/block';
 
 export const NUMBER_DECIMAL_PLACES = 4;
 
-/** Prefix for internal, non-user-facing property definitions. */
-export const RESERVED_PROPERTY_DEFINITION_PREFIX = '__macro:';
-
-/** True for internal definitions that must not appear in property UIs. */
-export function isReservedPropertyDefinitionName(displayName: string): boolean {
-  return displayName.startsWith(RESERVED_PROPERTY_DEFINITION_PREFIX);
-}
-
 /**
  * Reserved display name of the team-scoped CRM deal-stage definition
  * (unique per team). Managed exclusively from CRM settings, so generic

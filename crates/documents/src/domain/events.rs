@@ -4,6 +4,9 @@
 //! per-variant metadata structs, a [`TopicEvent`] enum tagged by `event_type`,
 //! and a [`MacroEvent`] wrapper keyed by document id.
 
+#[cfg(test)]
+mod test;
+
 use chrono::{DateTime, Utc};
 use document_sub_type::DocumentSubType;
 use macro_event_broker::{Event, MacroEvent, TopicEvent};
@@ -16,6 +19,7 @@ use super::models::FileTypeUpdate;
 
 /// Metadata for [`DocumentTopicEvent::Created`].
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 pub struct DocumentCreatedMetadata {
     /// The id of the created document.
     pub document_id: String,
@@ -35,6 +39,7 @@ pub struct DocumentCreatedMetadata {
 
 /// Metadata for [`DocumentTopicEvent::Updated`].
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 pub struct DocumentUpdatedMetadata {
     /// The id of the updated document.
     pub document_id: String,
@@ -58,6 +63,7 @@ pub struct DocumentUpdatedMetadata {
 
 /// Metadata for [`DocumentTopicEvent::Deleted`].
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 pub struct DocumentDeletedMetadata {
     /// The id of the deleted document.
     pub document_id: String,
@@ -68,8 +74,68 @@ pub struct DocumentDeletedMetadata {
     pub project_id: Option<String>,
 }
 
+/// Metadata for [`DocumentTopicEvent::ContentUploaded`].
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+pub struct DocumentContentUploadedMetadata {
+    /// The id of the document whose stored bytes changed.
+    pub document_id: String,
+    /// The owner of the document (used by the extractor to resolve S3 keys).
+    pub owner: MacroUserIdStr<'static>,
+    /// File type of the uploaded object (may differ from the document's own
+    /// type, e.g. `pdf` for the converted rendition of a docx).
+    pub file_type: FileType,
+    /// Version written, or the converted-file marker; `None` for unversioned
+    /// writes (mirrors `SearchExtractorMessage::document_version_id`).
+    pub document_version_id: Option<String>,
+}
+
+/// Metadata for [`DocumentTopicEvent::SyncContentUpdated`].
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+pub struct DocumentSyncContentUpdatedMetadata {
+    /// The id of the live-collab document whose content changed.
+    pub document_id: String,
+    /// File type of the sync document (markdown today).
+    pub file_type: FileType,
+    /// Version marker for the sync snapshot, when the caller supplies one.
+    pub document_version_id: Option<String>,
+}
+
+/// Metadata for [`DocumentTopicEvent::Purged`].
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+pub struct DocumentPurgedMetadata {
+    /// The id of the hard-deleted document.
+    pub document_id: String,
+}
+
+/// Why a document interaction was reported.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[serde(rename_all = "snake_case")]
+pub enum InteractionReason {
+    /// A periodic save of pending content changes.
+    Edited,
+    /// The first peer joined the document session.
+    FirstJoin,
+    /// The last connected peer left the document session.
+    LastLeave,
+}
+
+/// Metadata for [`DocumentTopicEvent::Interaction`].
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+pub struct DocumentInteractionMetadata {
+    /// The id of the document.
+    pub document_id: String,
+    /// What triggered this interaction.
+    pub reason: InteractionReason,
+}
+
 /// Metadata for [`DocumentTopicEvent::Copied`].
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 pub struct DocumentCopiedMetadata {
     /// The id of the newly created copy.
     pub document_id: String,
@@ -91,6 +157,7 @@ pub struct DocumentCopiedMetadata {
 
 /// Events that can be published to [`MacroDocumentsTopic`].
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[serde(tag = "event_type", content = "metadata")]
 pub enum DocumentTopicEvent {
     /// A document was created.
@@ -102,17 +169,27 @@ pub enum DocumentTopicEvent {
     /// A document was soft-deleted.
     #[serde(rename = "document.deleted")]
     Deleted(DocumentDeletedMetadata),
+    /// The document's stored bytes were (re)written to S3.
+    #[serde(rename = "document.content_uploaded")]
+    ContentUploaded(DocumentContentUploadedMetadata),
+    /// A live-collab (sync) document's content changed and should be re-extracted.
+    #[serde(rename = "document.sync_content_updated")]
+    SyncContentUpdated(DocumentSyncContentUpdatedMetadata),
+    /// The document row was permanently deleted (hard delete).
+    #[serde(rename = "document.purged")]
+    Purged(DocumentPurgedMetadata),
     /// A document was copied.
     #[serde(rename = "document.copied")]
     Copied(DocumentCopiedMetadata),
+    /// A peer joined, left, or a periodic save occurred.
+    #[serde(rename = "document.interaction")]
+    Interaction(DocumentInteractionMetadata),
 }
 
 impl TopicEvent for DocumentTopicEvent {
     type Topic = MacroDocumentsTopic;
 
-    fn schema_version(&self) -> u8 {
-        1
-    }
+    const SCHEMA_VERSION: u8 = 1;
 }
 
 /// Publishable event for [`MacroDocumentsTopic`], keyed by document id.
@@ -137,9 +214,35 @@ impl DocumentMacroEvent {
         Self::new(key, DocumentTopicEvent::Deleted(metadata))
     }
 
+    /// Build a content-uploaded event keyed by the document id.
+    pub fn content_uploaded(
+        key: impl Into<String>,
+        metadata: DocumentContentUploadedMetadata,
+    ) -> Self {
+        Self::new(key, DocumentTopicEvent::ContentUploaded(metadata))
+    }
+
+    /// Build a sync-content-updated event keyed by the document id.
+    pub fn sync_content_updated(
+        key: impl Into<String>,
+        metadata: DocumentSyncContentUpdatedMetadata,
+    ) -> Self {
+        Self::new(key, DocumentTopicEvent::SyncContentUpdated(metadata))
+    }
+
+    /// Build a purged event keyed by the document id.
+    pub fn purged(key: impl Into<String>, metadata: DocumentPurgedMetadata) -> Self {
+        Self::new(key, DocumentTopicEvent::Purged(metadata))
+    }
+
     /// Build a copied event keyed by the new document id.
     pub fn copied(key: impl Into<String>, metadata: DocumentCopiedMetadata) -> Self {
         Self::new(key, DocumentTopicEvent::Copied(metadata))
+    }
+
+    /// Build an interaction event keyed by the document id.
+    pub fn interaction(key: impl Into<String>, metadata: DocumentInteractionMetadata) -> Self {
+        Self::new(key, DocumentTopicEvent::Interaction(metadata))
     }
 
     /// Build an event from a topic-specific event variant.

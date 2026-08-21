@@ -1,10 +1,10 @@
-import { tryMacroId, useDisplayNameParts } from '@core/user';
+import { getDisplayNameParts, tryMacroId } from '@core/user';
 
 export function useSenderName(senderId: string | null | undefined) {
-  const nameParts = useDisplayNameParts(tryMacroId(senderId ?? ''));
   return () => {
-    const firstName = nameParts.firstName();
-    const fullName = nameParts.fullName();
+    const { firstName, fullName } = getDisplayNameParts(
+      tryMacroId(senderId ?? '')
+    );
     if (firstName || fullName) {
       return firstName || fullName;
     }

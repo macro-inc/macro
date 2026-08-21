@@ -12,15 +12,13 @@ import { toast } from '@core/component/Toast/Toast';
 import { UserIcon, type UserIconProps } from '@core/component/UserIcon';
 import { VideoPreview } from '@core/component/VideoPreview';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
-import { isMobile } from '@core/mobile/isMobile';
-
-import { logger } from '@observability';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { Telemetry } from '@macro-inc/observability';
 import { refetchSoupEntity } from '@queries/soup/cache';
 import { emailClient } from '@service-email/client';
 import type { ApiMessage, Attachment } from '@service-email/generated/schemas';
 import { storageServiceClient } from '@service-storage/client';
 import type { FileType } from '@service-storage/generated/schemas/fileType';
-import { cn } from '@ui';
 import { createMemo, createSignal, For, Match, Show, Switch } from 'solid-js';
 import { BottomReplyButtons } from './BottomReplyButtons';
 
@@ -52,7 +50,7 @@ export function MessageContainer(props: MessageContainerProps) {
     context.messages.replyingToMessageId() === props.message.db_id;
 
   const showInlineReplyInput = createMemo(() => {
-    if (isMobile()) return false;
+    if (isTouchDevice()) return false;
     if (!props.isLastMessage) return showReply() || !!draftChild();
     return context.messages.bottomReplyOpen() || !!draftChild();
   });
@@ -61,7 +59,7 @@ export function MessageContainer(props: MessageContainerProps) {
     () =>
       props.isLastMessage &&
       !!props.message.db_id &&
-      !isMobile() &&
+      !isTouchDevice() &&
       context.drafts.initialDraftsSettled()
   );
 
@@ -169,11 +167,11 @@ export function MessageContainer(props: MessageContainerProps) {
     });
     if (response.isErr()) {
       toast.failure('Failed to get attachment. Please try again.');
-      return logger.error('Failed to get or create attachment document id', {
-        error: new Error(
+      return Telemetry.error(
+        new Error(
           'Failed to get or create attachment document id: ' + response.error
-        ),
-      });
+        )
+      );
     }
     const { document_id } = response.value;
 
@@ -183,14 +181,11 @@ export function MessageContainer(props: MessageContainerProps) {
       });
     if (maybeDocumentMetadata.isErr()) {
       toast.failure('Failed to get attachment. Please try again.');
-      return logger.error(
-        'Failed to get or create attachment document metadata',
-        {
-          error: new Error(
-            'Failed to get or create attachment document metadata: ' +
-              maybeDocumentMetadata.error
-          ),
-        }
+      return Telemetry.error(
+        new Error(
+          'Failed to get or create attachment document metadata: ' +
+            maybeDocumentMetadata.error
+        )
       );
     }
 
@@ -230,12 +225,12 @@ export function MessageContainer(props: MessageContainerProps) {
       <div class="shrink-0 flex justify-center w-full">
         <div class="macro-message-width macro-message-padding w-full">
           <div
-            class="relative rounded-lg overflow-hidden p-4 ring"
+            class="relative rounded-lg overflow-hidden p-4 border"
             style={{ '--user-icon-width': '1rem' }}
             classList={{
-              'bg-accent ring-transparent': props.isTarget,
-              'bg-active/60 ring-edge': !props.isTarget && props.isFocused,
-              'bg-ink-muted/4 ring-transparent':
+              'bg-accent border-transparent': props.isTarget,
+              'bg-active border-edge': !props.isTarget && props.isFocused,
+              'bg-ink-muted/4 border-transparent':
                 !props.isTarget && !props.isFocused,
             }}
             data-message-body-id={props.message.db_id}
@@ -356,8 +351,8 @@ export function MessageContainer(props: MessageContainerProps) {
               </Show>
             </div>
             <Show when={showInlineReplyArea()}>
-              <div class={cn('relative -mx-4 mb-0 border-t border-edge-muted')}>
-                <Show when={props.isLastMessage && !isMobile()}>
+              <div class="relative -mx-4 mb-0 border-t border-ink/20 mt-4">
+                <Show when={props.isLastMessage && !isTouchDevice()}>
                   <FloatingInputLoader
                     isLoading={context.query.isFetching}
                     loadingText="Loading messages"
@@ -376,7 +371,7 @@ export function MessageContainer(props: MessageContainerProps) {
                         unframed
                       />
                     </Match>
-                    <Match when={props.isLastMessage && !isMobile()}>
+                    <Match when={props.isLastMessage && !isTouchDevice()}>
                       <BottomReplyButtons lastMessage={props.message} />
                     </Match>
                   </Switch>

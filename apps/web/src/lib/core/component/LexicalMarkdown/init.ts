@@ -10,9 +10,11 @@ import {
   HorizontalRuleNode,
   HtmlRenderNode,
   ImageNode,
+  MagicChipNode,
   PasteNode as PasteNodeClass,
   PullRequestMentionNode,
   SnapshotNode,
+  TagMentionNode,
   ThemeMentionNode,
   UnknownMentionNode,
   UserMentionNode,
@@ -33,11 +35,13 @@ import { Equation } from './component/decorator/Equation';
 import { GroupMention } from './component/decorator/GroupMention';
 import { HorizontalRule } from './component/decorator/HorizontalRule';
 import { HtmlRender } from './component/decorator/HtmlRender';
+import { MagicChip } from './component/decorator/MagicChip';
 import { MarkdownImage } from './component/decorator/MarkdownImage';
 import { MarkdownVideo } from './component/decorator/MarkdownVideo';
 import { PasteNode } from './component/decorator/PasteNode';
 import { PullRequestMention } from './component/decorator/PullRequestMention';
 import { Snapshot } from './component/decorator/Snapshot';
+import { TagMention } from './component/decorator/TagMention';
 import { ThemeMention } from './component/decorator/ThemeMention';
 import { UnknownMention } from './component/decorator/UnknownMention';
 import { UserMention } from './component/decorator/UserMention';
@@ -65,8 +69,10 @@ export function initializeLexical() {
   setDecorator(SnapshotNode, Snapshot);
   setDecorator(HtmlRenderNode, HtmlRender);
   setDecorator(ThemeMentionNode, ThemeMention);
+  setDecorator(TagMentionNode, TagMention);
   setDecorator(UnknownMentionNode, UnknownMention);
   setDecorator(WatermarkNode, Watermark);
   setDecorator(AwaitNode, Await);
+  setDecorator(MagicChipNode, MagicChip);
   registerDiffNodeFactory();
 }

@@ -1,0 +1,37 @@
+# The agent harness service: agent-session trigger events in, sandboxed
+# coding agent sessions out.
+#
+# `run-local` mirrors agent_trigger_service's recipe: the binary runs on the
+# host against the compose-exposed Postgres/Kafka/connection-gateway. The
+# Daytona credentials are the only values with no local default - export them
+# (or put them in a `.env` next to this justfile) before running.
+set dotenv-load := true
+
+check:
+  SQLX_OFFLINE=true cargo check
+
+# Run against host-exposed local Postgres, Kafka, and connection gateway.
+# Needs DAYTONA_API_KEY, DAYTONA_SNAPSHOT, and GITHUB_TOKEN in the environment.
+run-local:
+  ENVIRONMENT=local \
+    DATABASE_URL=postgres://user:password@localhost:5432/macrodb \
+    KAFKA_BROKERS=localhost:9092 \
+    OVERRIDE_CONNECTION_GATEWAY_URL=http://localhost:8082 \
+    INTERNAL_API_KEY=local \
+    HARNESS_BOT_ID=00000000-0000-0000-0000-00000000a9e7 \
+    cargo run -p agent_harness_service
+
+# Print the full agent-session protocol log for a dedicated channel, oldest
+# first: which session owns the channel, then every logged envelope in both
+# directions. The channel id is the one from the announcement link.
+session-log channel_id:
+  @psql "${DATABASE_URL:-postgres://user:password@localhost:5432/macrodb}" \
+    --pset=pager=off \
+    -c "SELECT s.id AS session_id, s.status, s.model, s.harness, s.created_at \
+        FROM agent_session s WHERE s.channel_id = '{{channel_id}}';" \
+    -c "SELECT l.created_at, l.direction, COALESCE(l.user_id, '-') AS user_id, \
+               jsonb_pretty(l.content) AS content \
+        FROM agent_session_log l \
+        JOIN agent_session s ON s.id = l.agent_session_id \
+        WHERE s.channel_id = '{{channel_id}}' \
+        ORDER BY l.created_at ASC, l.id ASC;"

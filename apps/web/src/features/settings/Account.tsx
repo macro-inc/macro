@@ -1,4 +1,5 @@
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
+import type { AccountDeletionReason } from '@app/lib/analytics/app-events';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useLogout } from '@core/auth/logout';
 import { toast } from '@core/component/Toast/Toast';
@@ -14,8 +15,8 @@ import {
 } from '@core/constant/featureFlags';
 import { staticFileIdEndpoint } from '@core/constant/servers';
 import { useEmail, useUserId } from '@core/context/user';
-import { isMobile } from '@core/mobile/isMobile';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import {
   type ProfilePictureItem,
   useProfilePictureUrl,
@@ -34,22 +35,19 @@ import TrashIcon from '@phosphor/trash.svg';
 import WarningCircleIcon from '@phosphor/warning-circle.svg';
 import SignOutIcon from '@phosphor-icons/core/regular/sign-out.svg?component-solid';
 import IconUpload from '@phosphor-icons/core/regular/upload-simple.svg?component-solid';
+import {
+  invalidateOwnUserName,
+  useOwnUserName,
+} from '@queries/auth/user-name-self';
 import { authServiceClient } from '@service-auth/client';
 import { invoke } from '@tauri-apps/api/core';
-import {
-  Button,
-  cn,
-  Dialog,
-  Dropdown,
-  Panel,
-  ToggleSwitch,
-  Tooltip,
-} from '@ui';
+import { Button, Dialog, Dropdown, Panel, ToggleSwitch, Tooltip } from '@ui';
 import {
   createEffect,
   createMemo,
   createResource,
   createSignal,
+  For,
   type JSX,
   Match,
   onCleanup,
@@ -57,8 +55,18 @@ import {
   Switch,
 } from 'solid-js';
 import { Transition } from 'solid-transition-group';
-import { formatAssetUrl, loadEntryAssetInfo } from './entryAssetInfo';
-import { SettingsCard, SettingsPage, SettingsSection } from './primitives';
+import {
+  ACCOUNT_DELETION_FEEDBACK_MAX_LENGTH,
+  ACCOUNT_DELETION_REASON_OPTIONS,
+  buildAccountDeletionFeedbackPayload,
+  performAccountDeletion,
+} from './account-deletion-feedback';
+import {
+  SettingsCard,
+  SettingsPage,
+  SettingsRow,
+  SettingsSection,
+} from './primitives';
 
 // 16 megabytes
 const MAX_PROFILE_PICTURE_SIZE = 16 * 1000 * 1000;
@@ -127,6 +135,8 @@ function formatBundleUpdateStatus(status: BundleUpdateStatus): string {
 /**
  * Save one name field with an optimistic update and rollback on failure.
  * Returns whether the save succeeded, which drives NameInput's status icon.
+ * This panel renders its own value from a local signal, so the invalidation
+ * is for everything else reading the name (see invalidateOwnUserName).
  */
 async function saveUserName(
   value: string,
@@ -143,27 +153,12 @@ async function saveUserName(
       setValue(prev); // rollback on a returned error
       return false;
     }
+    void invalidateOwnUserName();
     return true;
   } catch {
     setValue(prev); // rollback if the call throws before returning a Result
     return false;
   }
-}
-
-function useUserName() {
-  const fetchUserName = async () => {
-    const response = await authServiceClient.getUserName();
-    return response.isOk() ? response.value : null;
-  };
-
-  const [userNameResource] = createResource(fetchUserName);
-
-  const userName = createMemo(() => {
-    if (userNameResource.loading) return undefined;
-    return userNameResource() || undefined;
-  });
-
-  return userName;
 }
 
 function ProfilePictureRow(props: { userId: string }) {
@@ -315,6 +310,7 @@ function ProfilePictureRow(props: { userId: string }) {
 
 // Not accessible if user is not authenticated
 export function Account() {
+  const analytics = useAnalytics();
   const email = useEmail();
   const userId = useUserId();
   const logout = useLogout();
@@ -325,8 +321,16 @@ export function Account() {
   const [showDeleteModal, setShowDeleteModal] = createSignal<boolean>(false);
   const [showDeleteConfirmModal, setShowDeleteConfirmModal] =
     createSignal<boolean>(false);
+  const [deleteReason, setDeleteReason] = createSignal<AccountDeletionReason>();
+  const [deleteFeedback, setDeleteFeedback] = createSignal('');
+  const [deleteFeedbackCaptured, setDeleteFeedbackCaptured] =
+    createSignal(false);
+  const [isDeleting, setIsDeleting] = createSignal(false);
 
-  const userName = useUserName();
+  // The shared own-name cache entry (the one saveUserName invalidates), so
+  // this panel and other readers (e.g. the Getting Started checklist) can't
+  // drift.
+  const userName = useOwnUserName();
   const [updatedFirstName, setUpdatedFirstName] = createSignal<
     string | undefined
   >(undefined);
@@ -354,9 +358,49 @@ export function Account() {
     return undefined;
   };
 
+  const resetDeleteFlow = () => {
+    setDeleteReason(undefined);
+    setDeleteFeedback('');
+    setDeleteFeedbackCaptured(false);
+  };
+
   const deleteAccountHandler = async () => {
-    await authServiceClient.deleteUser();
-    logout();
+    if (isDeleting()) return;
+    setIsDeleting(true);
+
+    try {
+      const deleted = await performAccountDeletion({
+        captureFeedback: () => {
+          if (deleteFeedbackCaptured()) return;
+
+          analytics.track(
+            'account_deletion_feedback',
+            buildAccountDeletionFeedbackPayload(
+              deleteReason(),
+              deleteFeedback()
+            ),
+            ['posthog'],
+            {
+              posthog: {
+                send_instantly: true,
+                transport: 'sendBeacon',
+              },
+            }
+          );
+          setDeleteFeedbackCaptured(true);
+        },
+        deleteUser: () => authServiceClient.deleteUser(),
+        logout,
+      });
+
+      if (!deleted) {
+        setIsDeleting(false);
+        toast.failure('Unable to delete your account. Please try again.');
+      }
+    } catch {
+      setIsDeleting(false);
+      toast.failure('Unable to delete your account. Please try again.');
+    }
   };
 
   return (
@@ -414,111 +458,185 @@ export function Account() {
         </SettingsCard>
       </SettingsSection>
 
-      <Show when={isMobile()}>
+      <Show when={isTouchDevice()}>
         <SettingsSection>
-          <div class="flex items-center justify-center">
-            <Button
-              variant="base"
-              size="md"
-              depth={3}
-              class="px-4"
-              onClick={() => logout()}
-            >
-              <SignOutIcon class="size-4" />
-              Log out
-            </Button>
-          </div>
+          <SettingsCard>
+            <div class="px-6 py-3.5">
+              <Button
+                fullWidth
+                variant="active"
+                depth={4}
+                onClick={() => logout()}
+              >
+                <SignOutIcon class="size-4" />
+                Log out
+              </Button>
+            </div>
+          </SettingsCard>
         </SettingsSection>
       </Show>
 
-      <Show when={isNativeMobilePlatform()}>
-        <SettingsSection title="Danger zone">
-          <div>
+      <SettingsSection title="Danger zone">
+        <SettingsCard>
+          <SettingsRow
+            label="Delete account"
+            description="Permanently delete your account and all associated data."
+          >
             <Button
               variant="danger"
               depth={3}
-              onClick={() => setShowDeleteModal(true)}
+              onClick={() => {
+                resetDeleteFlow();
+                setShowDeleteModal(true);
+              }}
             >
               Delete Account
             </Button>
-            <Dialog
-              open={showDeleteModal()}
-              onOpenChange={setShowDeleteModal}
-              position="center"
-              class="w-120"
-            >
-              <Panel depth={2} class="rounded-xl">
-                <Panel.Header class="px-6">
-                  <Dialog.Title class="text-ink text-sm font-semibold">
-                    Delete Account
-                  </Dialog.Title>
-                </Panel.Header>
-                <Panel.Body class="p-6 font-sans flex flex-col gap-3">
-                  <Dialog.Description class="text-ink-muted text-sm/tight font-normal">
-                    Are you sure you want to delete your account? This action is
-                    permanent and cannot be undone.
-                  </Dialog.Description>
-                  <div class="pt-3 justify-end items-center gap-3 inline-flex">
-                    <Button
-                      variant="base"
-                      depth={3}
-                      onClick={() => setShowDeleteModal(false)}
-                    >
-                      Cancel
-                    </Button>
-                    <Button
-                      variant="danger"
-                      depth={3}
-                      onClick={() => {
-                        setShowDeleteModal(false);
-                        setShowDeleteConfirmModal(true);
-                      }}
-                    >
-                      Delete
-                    </Button>
-                  </div>
-                </Panel.Body>
-              </Panel>
-            </Dialog>
-            <Dialog
-              open={showDeleteConfirmModal()}
-              onOpenChange={setShowDeleteConfirmModal}
-              position="center"
-              class="w-120"
-            >
-              <Panel depth={2} class="rounded-xl">
-                <Panel.Header class="px-6">
-                  <Dialog.Title class="text-ink text-sm font-semibold">
-                    Are you absolutely sure?
-                  </Dialog.Title>
-                </Panel.Header>
-                <Panel.Body class="p-6 font-sans flex flex-col gap-3">
-                  <Dialog.Description class="text-ink-muted text-sm/tight font-normal">
-                    This will permanently delete your account and all associated
-                    data. This cannot be undone.
-                  </Dialog.Description>
-                  <div class="pt-3 justify-end items-center gap-3 inline-flex">
-                    <Button
-                      variant="base"
-                      depth={3}
-                      onClick={() => setShowDeleteConfirmModal(false)}
-                    >
-                      Cancel
-                    </Button>
-                    <Button
-                      variant="danger"
-                      depth={3}
-                      onClick={deleteAccountHandler}
-                    >
-                      Delete My Account
-                    </Button>
-                  </div>
-                </Panel.Body>
-              </Panel>
-            </Dialog>
-          </div>
-        </SettingsSection>
-      </Show>
+          </SettingsRow>
+        </SettingsCard>
+      </SettingsSection>
+      <Dialog
+        open={showDeleteModal()}
+        onOpenChange={(open) => {
+          setShowDeleteModal(open);
+          if (!open && !showDeleteConfirmModal()) resetDeleteFlow();
+        }}
+        position="center"
+        class="w-120"
+      >
+        <Panel depth={2} class="rounded-xl">
+          <Panel.Header class="px-6">
+            <Dialog.Title class="text-ink text-sm font-semibold">
+              Delete Account
+            </Dialog.Title>
+          </Panel.Header>
+          <Panel.Body class="p-6 font-sans flex flex-col gap-3">
+            <Dialog.Description class="text-ink-muted text-sm/tight font-normal">
+              Are you sure you want to delete your account? This action is
+              permanent and cannot be undone.
+            </Dialog.Description>
+            <div class="flex flex-col gap-3 pt-2">
+              <label class="flex flex-col gap-1.5 text-sm" for="delete-reason">
+                <span>
+                  Why are you leaving?{' '}
+                  <span class="text-ink-muted">(optional)</span>
+                </span>
+                <select
+                  id="delete-reason"
+                  class="settings-input w-full"
+                  value={deleteReason() ?? ''}
+                  onChange={(event) =>
+                    setDeleteReason(
+                      (event.currentTarget.value || undefined) as
+                        | AccountDeletionReason
+                        | undefined
+                    )
+                  }
+                >
+                  <option value="">Select a reason</option>
+                  <For each={ACCOUNT_DELETION_REASON_OPTIONS}>
+                    {(option) => (
+                      <option value={option.value}>{option.label}</option>
+                    )}
+                  </For>
+                </select>
+              </label>
+              <label
+                class="flex flex-col gap-1.5 text-sm"
+                for="delete-feedback"
+              >
+                <span>
+                  Anything else you'd like us to know?{' '}
+                  <span class="text-ink-muted">(optional)</span>
+                </span>
+                <textarea
+                  id="delete-feedback"
+                  class="settings-input ph-no-capture min-h-24 w-full resize-y py-2"
+                  rows={3}
+                  maxLength={ACCOUNT_DELETION_FEEDBACK_MAX_LENGTH}
+                  value={deleteFeedback()}
+                  onInput={(event) =>
+                    setDeleteFeedback(event.currentTarget.value)
+                  }
+                  placeholder="Your feedback helps us improve Macro"
+                />
+                <span class="text-ink-extra-muted text-xs">
+                  Please don't include sensitive information.
+                </span>
+              </label>
+            </div>
+            <div class="pt-3 justify-end items-center gap-3 inline-flex">
+              <Button
+                variant="base"
+                depth={3}
+                onClick={() => {
+                  setShowDeleteModal(false);
+                  resetDeleteFlow();
+                }}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="danger"
+                depth={3}
+                onClick={() => {
+                  setShowDeleteConfirmModal(true);
+                  setShowDeleteModal(false);
+                }}
+              >
+                Continue
+              </Button>
+            </div>
+          </Panel.Body>
+        </Panel>
+      </Dialog>
+      <Dialog
+        open={showDeleteConfirmModal()}
+        onOpenChange={(open) => {
+          setShowDeleteConfirmModal(open);
+          if (!open) resetDeleteFlow();
+        }}
+        position="center"
+        class="w-120"
+      >
+        <Panel depth={2} class="rounded-xl">
+          <Panel.Header class="px-6">
+            <Dialog.Title class="text-ink text-sm font-semibold">
+              Are you absolutely sure?
+            </Dialog.Title>
+          </Panel.Header>
+          <Panel.Body class="p-6 font-sans flex flex-col gap-3">
+            <Dialog.Description class="text-ink-muted text-sm/tight font-normal">
+              This will permanently delete your account and all associated data.
+              This cannot be undone.
+            </Dialog.Description>
+            <div class="pt-3 justify-end items-center gap-3 inline-flex">
+              <Button
+                variant="base"
+                depth={3}
+                disabled={isDeleting()}
+                onClick={() => {
+                  setShowDeleteConfirmModal(false);
+                  resetDeleteFlow();
+                }}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="danger"
+                depth={3}
+                disabled={isDeleting()}
+                onClick={deleteAccountHandler}
+              >
+                <Show when={isDeleting()} fallback="Delete My Account">
+                  <SpinnerIcon class="size-4 animate-spin" />
+                  Deleting…
+                </Show>
+              </Button>
+            </div>
+          </Panel.Body>
+        </Panel>
+      </Dialog>
     </SettingsPage>
   );
 }
@@ -587,7 +705,7 @@ function NameInput(props: {
     <div class="ph-no-capture group relative flex items-center gap-1.5 rounded-lg h-9 px-3 border text-sm bg-transparent text-ink-muted border-edge-muted hover:text-ink focus-within:text-ink focus-within:border-accent">
       <input
         type="text"
-        class="flex-1 min-w-0 bg-transparent outline-none border-0 p-0 text-sm placeholder:text-ink-extra-muted"
+        class="flex-1 min-w-0 bg-transparent outline-none border-0 p-0 text-sm placeholder:text-ink-placeholder"
         value={inputValue()}
         onInput={(e) => setInputValue(e.currentTarget.value)}
         onFocus={() => {
@@ -709,15 +827,11 @@ type BundleDebugInfo = {
 
 function BundleVersionRow() {
   if (!isNativeMobilePlatform()) return null;
-  const [showBuildInfo, setShowBuildInfo] = createSignal(false);
   const [bundleDebugInfo] = createResource(() =>
     invoke<BundleDebugInfo>('get_bundle_debug_info').catch((error) => {
       console.error('[bundle-update] get_bundle_debug_info failed', error);
       return null;
     })
-  );
-  const [entryAssetInfo] = createResource(showBuildInfo, (open) =>
-    open ? loadEntryAssetInfo() : null
   );
 
   return (
@@ -725,103 +839,9 @@ function BundleVersionRow() {
       {(info) => (
         <>
           <Row label="Version">
-            <button
-              type="button"
-              class="appearance-none rounded-sm border-0 bg-transparent p-0 text-right text-sm text-ink-muted hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-              onClick={() => setShowBuildInfo(true)}
-            >
-              {info().bundleBuild} (
-              {info().source === 'embedded' ? 'app' : 'ota'}) -{' '}
-              {info().nativeBuild}
-            </button>
+            {info().bundleBuild} ({info().source === 'embedded' ? 'app' : 'ota'}
+            ) - {info().nativeBuild}
           </Row>
-          <Dialog
-            open={showBuildInfo()}
-            onOpenChange={setShowBuildInfo}
-            position="center"
-            class="w-120"
-          >
-            <Panel active depth={2} class="rounded-xl">
-              <Panel.Header class="px-6">
-                <Dialog.Title class="text-ink text-sm font-semibold">
-                  App Debug Info
-                </Dialog.Title>
-              </Panel.Header>
-              <Panel.Body class="p-6 font-sans flex flex-col gap-4">
-                <div class="grid gap-2 text-sm">
-                  <div class="flex items-center justify-between gap-4">
-                    <span class="text-ink-muted">Selected bundle</span>
-                    <span class="text-ink">
-                      {info().bundleBuild} (
-                      {info().source === 'embedded' ? 'app' : 'ota'})
-                    </span>
-                  </div>
-                  <div class="flex items-center justify-between gap-4">
-                    <span class="text-ink-muted">Native build</span>
-                    <span class="text-ink">{info().nativeBuild}</span>
-                  </div>
-                  <div class="flex items-center justify-between gap-4">
-                    <span class="text-ink-muted">Runtime entry</span>
-                    <span
-                      class={cn(
-                        'text-right break-all',
-                        entryAssetInfo()?.matches === false
-                          ? 'text-failure'
-                          : 'text-ink'
-                      )}
-                    >
-                      {entryAssetInfo.loading
-                        ? 'Loading...'
-                        : formatAssetUrl(entryAssetInfo()?.loadedEntryUrl)}
-                    </span>
-                  </div>
-                  <div class="flex items-center justify-between gap-4">
-                    <span class="text-ink-muted">Fresh index entry</span>
-                    <span
-                      class={cn(
-                        'text-right break-all',
-                        entryAssetInfo()?.matches === false
-                          ? 'text-failure'
-                          : 'text-ink'
-                      )}
-                    >
-                      {entryAssetInfo.loading
-                        ? 'Loading...'
-                        : formatAssetUrl(entryAssetInfo()?.freshIndexEntryUrl)}
-                    </span>
-                  </div>
-                  <div class="flex items-center justify-between gap-4">
-                    <span class="text-ink-muted">Matches</span>
-                    <span
-                      class={cn(
-                        entryAssetInfo()?.matches === false
-                          ? 'text-failure'
-                          : 'text-ink'
-                      )}
-                    >
-                      {entryAssetInfo.loading
-                        ? 'Loading...'
-                        : entryAssetInfo()?.matches == null
-                          ? 'unknown'
-                          : entryAssetInfo()?.matches
-                            ? 'true'
-                            : 'false'}
-                    </span>
-                  </div>
-                  <Show when={entryAssetInfo()?.error}>
-                    {(error) => (
-                      <div class="flex items-center justify-between gap-4">
-                        <span class="text-ink-muted">Error</span>
-                        <span class="text-right text-failure break-all">
-                          {error()}
-                        </span>
-                      </div>
-                    )}
-                  </Show>
-                </div>
-              </Panel.Body>
-            </Panel>
-          </Dialog>
         </>
       )}
     </Show>

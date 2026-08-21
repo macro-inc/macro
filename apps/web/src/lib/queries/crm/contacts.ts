@@ -1,12 +1,45 @@
 import { throwOnErr } from '@core/util/result';
 import { storageServiceClient } from '@service-storage/client';
-import { useMutation, useQuery } from '@tanstack/solid-query';
+import type { CrmContactResponse } from '@service-storage/generated/schemas/crmContactResponse';
+import { queryOptions, useMutation, useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
 import { queryClient } from '../client';
 import { soupKeys } from '../soup/keys';
 import { crmKeys } from './keys';
 
 const CONTACT_STALE_TIME = 60 * 1000;
+
+function crmContactByEmailQueryOptions(teamId: string, email: string) {
+  const normalizedEmail = email.trim().toLowerCase();
+  return queryOptions({
+    queryKey: crmKeys.contactByEmail(teamId, normalizedEmail).queryKey,
+    queryFn: async ({ signal }) => {
+      const { contact } = await throwOnErr(() =>
+        storageServiceClient.getContactByEmail({
+          email: normalizedEmail,
+          signal,
+        })
+      );
+      if (contact) {
+        queryClient.setQueryData(crmKeys.contact(contact.id).queryKey, contact);
+      }
+      return contact;
+    },
+    staleTime: CONTACT_STALE_TIME,
+  });
+}
+
+/** Resolves a team CRM contact by email and primes its detail cache. */
+export function useCrmContactByEmailQuery(
+  teamId: Accessor<string>,
+  email: Accessor<string>,
+  enabled: Accessor<boolean>
+) {
+  return useQuery(() => ({
+    ...crmContactByEmailQueryOptions(teamId(), email()),
+    enabled: enabled() && !!teamId() && !!email(),
+  }));
+}
 
 /**
  * Fetches a single CRM contact by id via `GET /crm/contacts/{id}`.
@@ -31,6 +64,65 @@ export function useContactQuery(contactId: Accessor<string>) {
       enabled: !!id,
     };
   });
+}
+
+/**
+ * Renames a contact via `PUT /crm/contacts/{id}/name`. Unlike company names
+ * there is no global directory involved — `crm_contacts.name` is already
+ * team-scoped, so the write is a plain overwrite. Optimistically updates the
+ * contact detail cache (with rollback on error) so the title flips
+ * immediately, then invalidates it plus the parent company (whose response
+ * embeds the contact list) and soup so every listing picks up the new name.
+ */
+export function useSetContactNameMutation() {
+  return useMutation(() => ({
+    mutationFn: ({
+      contactId,
+      name,
+    }: {
+      contactId: string;
+      companyId: string;
+      name: string;
+    }) =>
+      throwOnErr(() =>
+        storageServiceClient.setContactName({ contactId, name })
+      ),
+    onMutate: async ({ contactId, name }) => {
+      const queryKey = crmKeys.contact(contactId).queryKey;
+      await queryClient.cancelQueries({ queryKey });
+      const previous = queryClient.getQueryData<CrmContactResponse>(queryKey);
+      if (previous) {
+        queryClient.setQueryData<CrmContactResponse>(queryKey, {
+          ...previous,
+          name,
+        });
+      }
+      return { previous, optimisticName: name };
+    },
+    // Roll back only if the cache still holds this mutation's optimistic
+    // name — a stale failure must not clobber a newer rename's update.
+    onError: (_err, { contactId }, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData<CrmContactResponse>(
+          crmKeys.contact(contactId).queryKey,
+          (current) =>
+            current?.name === context.optimisticName
+              ? context.previous
+              : current
+        );
+      }
+    },
+    onSettled: (_data, _err, { contactId, companyId }) =>
+      Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: crmKeys.contact(contactId).queryKey,
+        }),
+        queryClient.invalidateQueries({
+          queryKey: crmKeys.company(companyId).queryKey,
+        }),
+        queryClient.invalidateQueries({ queryKey: soupKeys._def }),
+      ]),
+  }));
 }
 
 /**

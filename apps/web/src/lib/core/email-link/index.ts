@@ -6,6 +6,7 @@ import { getNativeMobilePlatform } from '@core/util/platform';
 import { useInitGmailLink } from '@queries/auth';
 import { invalidateUserInfo } from '@queries/auth/user-info';
 import { invalidateEmailLinks, useEmailLinksQuery } from '@queries/email/link';
+import type { ConsentScopes } from '@service-auth/client';
 import {
   ALREADY_INITIALIZED_CODE,
   emailClient,
@@ -196,9 +197,29 @@ function isPaymentRequired(errors: ReadonlyArray<{ code: string }>): boolean {
 }
 
 /**
+ * The backend answers `POST /link/gmail` with 429 when the user has too many
+ * incomplete link attempts in flight (each abandoned OAuth leaves a pending row
+ * that expires after 24h). The auth client maps that to `TOO_MANY_PENDING_LINKS`
+ * so the flow can explain the wait instead of a dead-end generic failure.
+ */
+function isTooManyPendingLinks(
+  errors: ReadonlyArray<{ code: string }>
+): boolean {
+  return errors.some((error) => error.code === 'TOO_MANY_PENDING_LINKS');
+}
+
+const TOO_MANY_PENDING_LINKS_MESSAGE =
+  'Too many inbox connections in progress.';
+
+/**
  * Starts the add-inbox flow: fetches the Gmail link authorization URL and
  * navigates the browser to the OAuth consent page. The callback returns to
  * `/inbox-link-callback`, which provisions the new link.
+ *
+ * `scopes` selects which permissions the consent screen asks for. Only calendar
+ * entry points may request calendar access, and they pass `calendar` for an
+ * inbox that is already connected so the user isn't shown mailbox permissions
+ * they have already granted.
  *
  * On native iOS the OAuth runs inline in an `ASWebAuthenticationSession` via
  * the Tauri auth plugin (the app never navigates away), and the link is
@@ -235,13 +256,18 @@ export function useAddInboxFlow() {
     );
   };
 
-  const startNativeFlow = async () => {
-    const result = await initGmailLink.mutateAsync(
-      'macro://inbox-link-callback'
-    );
+  const startNativeFlow = async (scopes: ConsentScopes) => {
+    const result = await initGmailLink.mutateAsync({
+      originalUrl: 'macro://inbox-link-callback',
+      scopes,
+    });
     if (result.isErr()) {
       if (isPaymentRequired(result.error)) {
         showPaywall(PaywallKey.MULTI_INBOX);
+        return;
+      }
+      if (isTooManyPendingLinks(result.error)) {
+        toast.failure(TOO_MANY_PENDING_LINKS_MESSAGE);
         return;
       }
       toast.failure('Failed to start Gmail link flow');
@@ -273,18 +299,24 @@ export function useAddInboxFlow() {
     await completeNativeLink(result.value.link_id, false);
   };
 
-  return async () => {
+  return async (options?: { scopes?: ConsentScopes }) => {
+    const scopes = options?.scopes ?? 'gmail';
     if (getNativeMobilePlatform() === 'ios') {
-      await startNativeFlow();
+      await startNativeFlow(scopes);
       return;
     }
 
     const callbackUrl = `${window.location.origin}${ROUTER_BASE_CONCAT}inbox-link-callback`;
-    const result = await initGmailLink.mutateAsync(callbackUrl);
+    const result = await initGmailLink.mutateAsync({
+      originalUrl: callbackUrl,
+      scopes,
+    });
     if (result.isOk()) {
       window.location.href = result.value.authorization_url;
     } else if (isPaymentRequired(result.error)) {
       showPaywall(PaywallKey.MULTI_INBOX);
+    } else if (isTooManyPendingLinks(result.error)) {
+      toast.failure(TOO_MANY_PENDING_LINKS_MESSAGE);
     } else {
       toast.failure('Failed to start Gmail link flow');
     }

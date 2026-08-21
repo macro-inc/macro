@@ -7,32 +7,72 @@ Normalized GraphQL cache with disk-backed persistence for urql. Design doc:
 
 | Crate | Purpose |
 |---|---|
-| `cache-core` | Pure engine: schema-metadata codegen (build.rs from `static_assets/schema.graphql`), normalize/denormalize, LRU hot tier, dependency index, async `Storage` trait |
-| `cache-sqlite` | `Storage` over SQLite — Tauri native host |
-| `cache-idb` | `Storage` over IndexedDB via the `idb` crate — browser wasm host (wasm32-only; empty shell elsewhere) |
+| `cache-core` | Pure engine: normalize/denormalize, LRU hot tier, dependency index, durable ordered optimistic-mutation queue, async `Storage` trait |
+| `cache-turso` | `Storage` over Turso core — browser WASM and Tauri native hosts |
+| `turso-opfs` | Browser OPFS `IO`/`File` adapter for the dedicated Turso engine worker |
+| `cache-wasm` | wasm-bindgen shell combining the engine, Turso storage, and OPFS adapter for browser worker glue (`apps/web/src/lib/graphql-cache/`) |
 
-Planned (Phase 3): `cache-wasm` (wasm-bindgen shell + worker RPC), `cache-tauri`
-(Tauri plugin) — see the design doc.
+The Tauri host lives in the tauri workspace (it needs the patched tauri fork
+pinned there): `apps/web/tauri/graphql_cache_plugin`, path-depending on
+`cache-core`/`cache-turso`. Test it from `apps/web/tauri` with
+`cargo test -p graphql_cache_plugin` (on NixOS use the `tauri-linux` dev shell —
+Tauri's Linux desktop stack needs its WebKitGTK/DBus system libraries).
 
 ## Tests
 
-From the repository root (these crates are workspace members; use
-`SQLX_OFFLINE=true` as usual):
+Run from the repository root:
 
 ```sh
-SQLX_OFFLINE=true cargo test -p cache-core -p cache-sqlite   # native
-cargo check --target wasm32-unknown-unknown -p cache-idb -p cache-wasm --all-targets
-wasm-pack test --headless --chrome crates/client/cache-idb   # browser tests (IDB backend)
+cargo test -p cache-core -p cache-turso -p turso-opfs
+cargo check --target wasm32-unknown-unknown -p cache-turso -p turso-opfs -p cache-wasm --all-targets
+wasm-pack test --headless --chrome crates/client/cache-turso
+wasm-pack test --headless --chrome crates/client/turso-opfs
 ```
 
 NixOS note: wasm-pack downloads a dynamically-linked chromedriver that won't
-run. Work around by invoking the runner directly with a nix chromedriver:
+run. Work around by resolving the cached runner whose reported version matches
+the workspace's `wasm-bindgen`, then invoke it with a Nix chromedriver:
 
 ```sh
-cd crates/client/cache-idb
-CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER=~/.cache/.wasm-pack/wasm-bindgen-*/wasm-bindgen-test-runner \
-CHROMEDRIVER=$(command -v chromedriver || echo /nix/store/*undetected-chromedriver*/bin/undetected-chromedriver) \
-WASM_BINDGEN_TEST_ONLY_WEB=1 cargo test --target wasm32-unknown-unknown
+wasm_bindgen_version=$(
+  cargo tree -p cache-turso --target wasm32-unknown-unknown -i wasm-bindgen --prefix none |
+    sed -n 's/^wasm-bindgen v//p' |
+    head -n 1
+)
+runner=
+for candidate in "$(command -v wasm-bindgen-test-runner || true)" \
+  "$HOME"/.cache/.wasm-pack/wasm-bindgen-*/wasm-bindgen-test-runner; do
+  [ -x "$candidate" ] || continue
+  [ "$("$candidate" --version)" = "wasm-bindgen-test-runner $wasm_bindgen_version" ] || continue
+  runner=$candidate
+  break
+done
+test -x "$runner" || {
+  echo "no wasm-bindgen-test-runner matching $wasm_bindgen_version" >&2
+  exit 1
+}
+
+chromedriver=$(command -v chromedriver || true)
+if [ -z "$chromedriver" ]; then
+  for candidate in /nix/store/*chromedriver*/bin/chromedriver \
+    /nix/store/*chromedriver*/bin/undetected-chromedriver; do
+    [ -x "$candidate" ] || continue
+    chromedriver=$candidate
+    break
+  done
+fi
+test -x "$chromedriver" || {
+  echo 'no Nix chromedriver found' >&2
+  exit 1
+}
+
+CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER="$runner" \
+CHROMEDRIVER="$chromedriver" \
+WASM_BINDGEN_TEST_ONLY_WEB=1 cargo test --target wasm32-unknown-unknown -p cache-turso
+
+CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER="$runner" \
+CHROMEDRIVER="$chromedriver" \
+WASM_BINDGEN_TEST_ONLY_WEB=1 cargo test --target wasm32-unknown-unknown -p turso-opfs --lib
 ```
 
 ## Key policy
@@ -49,3 +89,8 @@ because a property instance's value is per-entity).
 Identity is not the cache's concern: the engine accepts an opaque session
 tag on writes (extracted by the urql exchange from `data.user.id`) and
 wipes + rebinds atomically when the tag changes (silent restart).
+
+Optimistic GraphQL mutations are persisted with their replay request before
+becoming visible. The exchange claims and applies them strictly in enqueue
+order; a configurable callback decides whether an error remains queued or
+permanently rolls back.

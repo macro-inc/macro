@@ -72,13 +72,16 @@ impl McpServerStore for PgServerRepo {
             .map(|c| self.encrypt(c))
             .transpose()?;
 
+        // Never clobber stored credentials with NULL on conflict: re-adding
+        // an existing server (e.g. via the Add Server dialog) must not wipe
+        // a valid OAuth grant.
         sqlx::query!(
             r#"
             INSERT INTO mcp_servers (user_id, url, server_name, credentials, enabled)
             VALUES ($1, $2, $3, $4, $5)
             ON CONFLICT (user_id, url) DO UPDATE
             SET server_name = EXCLUDED.server_name,
-                credentials = EXCLUDED.credentials,
+                credentials = COALESCE(EXCLUDED.credentials, mcp_servers.credentials),
                 enabled     = EXCLUDED.enabled,
                 updated_at  = NOW()
             "#,

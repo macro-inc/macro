@@ -1,10 +1,11 @@
 //! Webhook domain ports.
 
 use super::models::{
-    CreateWebhookRequest, NormalizedWebhookEvent, PatchWebhookRequest, PreparedWebhookDelivery,
-    RawWebhookEventQueueMessage, ValidateWebhookResponse, Webhook, WebhookDeliveryAttempt,
-    WebhookEventQueueMessage, WebhookHttpOutcome, WebhookHttpOutcomeDetails, WebhookId,
-    WebhookValidationResult, WebhookWorkerDisposition,
+    CreateWebhookOutcome, CreateWebhookRequest, ListWebhooksResponse, NormalizedWebhookEvent,
+    PatchWebhookRequest, PreparedWebhookDelivery, RawWebhookEventQueueMessage,
+    ValidateWebhookResponse, Webhook, WebhookDeliveryAttempt, WebhookEventQueueMessage,
+    WebhookHttpOutcome, WebhookHttpOutcomeDetails, WebhookId, WebhookValidationResult,
+    WebhookWorkerDisposition,
 };
 use chrono::{DateTime, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
@@ -16,6 +17,10 @@ pub trait WebhookRepo: Clone + Send + Sync + 'static {
     type Err: Into<anyhow::Error> + Send;
 
     /// Create a webhook and its initial rule.
+    ///
+    /// Namespaces are unique among a workspace's live webhooks; implementations
+    /// must report a clash as [`CreateWebhookOutcome::NamespaceConflict`]
+    /// rather than an error.
     fn create_webhook(
         &self,
         created_by_user_id: MacroUserIdStr<'static>,
@@ -23,7 +28,7 @@ pub trait WebhookRepo: Clone + Send + Sync + 'static {
         request: CreateWebhookRequest,
         signing_secret: String,
         headers: serde_json::Value,
-    ) -> impl Future<Output = Result<Webhook, Self::Err>> + Send;
+    ) -> impl Future<Output = Result<CreateWebhookOutcome, Self::Err>> + Send;
 
     /// Get an active webhook by id.
     fn get_webhook(
@@ -31,10 +36,22 @@ pub trait WebhookRepo: Clone + Send + Sync + 'static {
         webhook_id: WebhookId,
     ) -> impl Future<Output = Result<Option<Webhook>, Self::Err>> + Send;
 
+    /// List all non-deleted webhooks owned by any of the given workspaces, newest first.
+    ///
+    /// Unlike [`list_active_webhooks_matching_event`], this is a management view: it returns
+    /// webhooks of every status and validity, not only delivery-eligible ones.
+    fn list_webhooks_for_workspaces(
+        &self,
+        workspace_ids: Vec<String>,
+    ) -> impl Future<Output = Result<Vec<Webhook>, Self::Err>> + Send;
+
     /// List delivery-eligible webhooks whose typed filters match an event and entity id.
     ///
     /// Delivery-eligible webhooks are active, valid, and not soft-deleted. A filter without
     /// `ids` matches every entity id.
+    /// List active, valid, non-bot-owned webhooks in the given workspaces
+    /// whose filters match `event` (and `entity_id`, when a filter names
+    /// ids).
     fn list_active_webhooks_matching_event(
         &self,
         workspace_ids: Vec<String>,
@@ -222,6 +239,19 @@ pub trait WebhookService: Clone + Send + Sync + 'static {
         request: CreateWebhookRequest,
     ) -> impl Future<Output = Result<Webhook, WebhookError>> + Send;
 
+    /// Get a webhook the caller is authorized to see.
+    fn get_webhook(
+        &self,
+        caller: MacroUserIdStr<'static>,
+        webhook_id: WebhookId,
+    ) -> impl Future<Output = Result<Webhook, WebhookError>> + Send;
+
+    /// List the webhooks the caller can see across their personal and team workspaces.
+    fn list_webhooks(
+        &self,
+        caller: MacroUserIdStr<'static>,
+    ) -> impl Future<Output = Result<ListWebhooksResponse, WebhookError>> + Send;
+
     /// Patch a webhook.
     fn patch_webhook(
         &self,
@@ -251,6 +281,9 @@ pub enum WebhookError {
     /// Bad request.
     #[error("{0}")]
     BadRequest(String),
+    /// Conflict with existing state.
+    #[error("{0}")]
+    Conflict(String),
     /// Unauthorized.
     #[error("unauthorized")]
     Unauthorized,

@@ -25,6 +25,7 @@ import {
 } from '@queries/ai/homeRecommendations';
 import { useEmailLinksQuery } from '@queries/email/link';
 import { useMcpServersQuery } from '@queries/mcp-servers';
+import { usePipedreamConnectionsQuery } from '@queries/pipedream-connectors';
 import { useNavigate } from '@solidjs/router';
 import { For, Match, Show, Switch } from 'solid-js';
 import { match } from 'ts-pattern';
@@ -217,12 +218,15 @@ export function RecommendedSection() {
 function useConnectionsCount() {
   const emailLinks = useEmailLinksQuery();
   const mcpServers = useMcpServersQuery();
+  const pipedreamConnections = usePipedreamConnectionsQuery();
 
   return () => {
     const inboxes = emailLinks.data?.links.length ?? 0;
-    const servers = (mcpServers.data ?? []).filter(
-      (server) => server.authenticated
-    ).length;
+    // Mirrors the backend's stack selection: Pipedream connectors win.
+    const pipedream = (pipedreamConnections.data ?? []).length;
+    const servers = pipedream
+      ? pipedream
+      : (mcpServers.data ?? []).filter((server) => server.authenticated).length;
     return inboxes + servers;
   };
 }

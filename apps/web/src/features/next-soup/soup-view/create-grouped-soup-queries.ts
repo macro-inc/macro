@@ -1,9 +1,11 @@
+import { createGraphqlGroupedSoupQueries } from '@app/features/next-soup/soup-view/create-graphql-grouped-soup-queries';
 import { createInfiniteQueries } from '@app/features/next-soup/soup-view/create-infinite-queries';
 import { throwOnErr } from '@core/util/result';
 import type { EntityData } from '@entity';
 import { useQueryClient } from '@queries/client';
 import { groupedCacheVersion } from '@queries/soup/cache';
 import {
+  groupedSortMethod,
   parseGroupMeta,
   serializeGroupByField,
 } from '@queries/soup/grouped/api';
@@ -51,12 +53,10 @@ export type GroupQueryData = {
 type CreateGroupedSoupQueriesArgs = {
   initialPage: Accessor<InitialGroupPage | undefined>;
   groupByField: Accessor<GroupByField | undefined>;
-  soupParams: Accessor<
-    Omit<SoupParams, 'sort_method'> & {
-      sort_method: Exclude<SoupParams['sort_method'], 'frecency'>;
-    }
-  >;
+  soupParams: Accessor<SoupParams>;
   soupBody: Accessor<SoupAstBody>;
+  /** True only when the live GraphQL grouped parent query owns the view. */
+  graphqlReactive: Accessor<boolean>;
   queryOptions: Accessor<{
     enabled?: boolean;
     meta?: {
@@ -123,7 +123,7 @@ export function createGroupedSoupQueries(args: CreateGroupedSoupQueriesArgs) {
     const field = args.groupByField();
     const initialGroupedPage = args.initialPage();
 
-    if (!field || !initialGroupedPage) {
+    if (args.graphqlReactive() || !field || !initialGroupedPage) {
       return [];
     }
 
@@ -148,11 +148,11 @@ export function createGroupedSoupQueries(args: CreateGroupedSoupQueriesArgs) {
           const response = await throwOnErr(async () =>
             storageServiceClient.getGroupedSoupAstGroupPage({
               params: {
-                cursor: ctx.pageParam ?? undefined,
+                cursor: ctx.pageParam,
                 group_by: serializeGroupByField(field),
                 group_key: group.key,
                 limit: args.soupParams().limit,
-                sort_method: args.soupParams().sort_method ?? undefined,
+                sort_method: groupedSortMethod(args.soupParams().sort_method),
               },
               body: args.soupBody(),
             })
@@ -188,11 +188,22 @@ export function createGroupedSoupQueries(args: CreateGroupedSoupQueriesArgs) {
     GroupQueryPage,
     GroupQueryData | undefined
   >(configs);
+  const graphqlQueries = createGraphqlGroupedSoupQueries({
+    initialPage: args.initialPage,
+    groupByField: args.groupByField,
+    soupParams: args.soupParams,
+    soupBody: args.soupBody,
+    enabled: () =>
+      args.graphqlReactive() && args.queryOptions().enabled === true,
+    itemFilter: () => args.queryOptions().meta?.itemFilter,
+  });
 
   const [groupDataVersion, setGroupDataVersion] = createSignal(0);
 
-  const list = createMemo(() =>
-    queries.list().map((query) => ({
+  const list = createMemo(() => {
+    if (args.graphqlReactive()) return graphqlQueries.list();
+
+    return queries.list().map((query) => ({
       ...query,
       data: () => {
         groupDataVersion();
@@ -206,8 +217,8 @@ export function createGroupedSoupQueries(args: CreateGroupedSoupQueriesArgs) {
         setGroupDataVersion((version) => version + 1);
         return result;
       },
-    }))
-  );
+    }));
+  });
 
   const map = createMemo(() => {
     const next = new Map<string, ReturnType<typeof list>[number]>();
@@ -222,7 +233,7 @@ export function createGroupedSoupQueries(args: CreateGroupedSoupQueriesArgs) {
       () => args.initialPage(),
       (initialGroupedPage) => {
         const field = args.groupByField();
-        if (!field || !initialGroupedPage) return;
+        if (args.graphqlReactive() || !field || !initialGroupedPage) return;
 
         batch(() => {
           for (const group of initialGroupedPage.groups) {
@@ -253,5 +264,8 @@ export function createGroupedSoupQueries(args: CreateGroupedSoupQueriesArgs) {
     ...queries,
     list,
     map,
+    resetToInitialPage: () => {
+      if (args.graphqlReactive()) graphqlQueries.resetToInitialPage();
+    },
   };
 }

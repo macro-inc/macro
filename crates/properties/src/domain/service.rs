@@ -5,13 +5,14 @@
 //! access, and owner-scoped methods take the caller's identity plus their
 //! team-membership receipt. User-facing callers mint receipts through the
 //! entity access service at the inbound edge; internal (machine) callers mint
-//! via [`PropertiesAccessReceipt::dangerously_assert_internal`](super::model::PropertiesAccessReceipt::dangerously_assert_internal),
-//! which makes unchecked paths explicit and greppable.
+//! via [`EntityAccessReceipt::dangerously_assert_internal_user`], which makes
+//! unchecked paths explicit and greppable.
 
 use std::collections::HashMap;
 
 use entity_access::domain::models::{EntityAccessReceipt, MemberTeamRole};
 use macro_user_id::user_id::MacroUserIdStr;
+use models_properties::EntityType;
 use models_properties::api::requests::SetPropertyValue;
 use models_properties::api::{
     AddPropertyOptionRequest, CreatePropertyDefinitionRequest, UpdatePropertyOptionRequest,
@@ -21,13 +22,13 @@ use models_properties::service::property_definition::PropertyDefinition;
 use models_properties::service::property_definition_with_options::PropertyDefinitionWithOptions;
 use models_properties::service::property_option::PropertyOption;
 use models_properties::service::property_value::PropertyValue;
-use models_properties::{EntityPropertyReference, EntityType};
 use system_properties::SystemPropertyKey;
 use uuid::Uuid;
 
 use super::error::PropertiesErr;
 use super::model::{
-    EditReceipt, EntityPropertiesKey, EntityPropertyInfo, TagScope, TagSet, ViewReceipt,
+    EditReceipt, EntityOptionUpdateOutcome, EntityPropertyInfo, EntityPropertyOptionSelection,
+    EntityPropertyOptionUpdate, PropertyTargetKey, TagScope, TagSet, ViewReceipt,
 };
 
 /// The caller's team-membership proof, used to scope definition/option/tag
@@ -104,6 +105,51 @@ pub trait PropertiesService: Send + Sync + 'static {
         property_definition_id: Uuid,
         option_id: Uuid,
     ) -> impl Future<Output = Result<(), PropertiesErr>> + Send;
+
+    /// Get a single property definition by ID, readable by the caller (their own,
+    /// their team's, or a system property). Returns [`PropertiesErr::NotFound`] if
+    /// the definition doesn't exist or isn't visible to the caller.
+    fn get_property_definition(
+        &self,
+        property_definition_id: Uuid,
+        user_id: &MacroUserIdStr<'_>,
+        team: Option<&TeamReceipt>,
+    ) -> impl Future<Output = Result<PropertyDefinition, PropertiesErr>> + Send;
+
+    /// Apply a complete tag-picker selection across one or more of an entity's
+    /// multi-select properties in a single transaction, returning each
+    /// property's final option ids for cache reconciliation.
+    ///
+    /// Each property change is a delta (options to add / remove) so the whole
+    /// selection composes with concurrent edits under a per-row lock rather than
+    /// clobbering them. Validates that every added option belongs to its
+    /// (multi-select) property before any write; the persistence is
+    /// all-or-nothing, so a failure on any property rolls back the whole batch.
+    fn bulk_update_entity_property_options(
+        &self,
+        access: &EditReceipt,
+        updates: Vec<EntityPropertyOptionUpdate>,
+    ) -> impl Future<Output = Result<Vec<EntityPropertyOptionSelection>, PropertiesErr>> + Send;
+
+    /// Apply one shared option delta to several entities at once, returning a
+    /// per-entity outcome aligned to `access` (same length and order).
+    ///
+    /// The shared delta (`add_option_ids` / `remove_option_ids` on one
+    /// multi-select `property_definition_id`) is validated once up front; a bad
+    /// property or option fails the whole call. Each entity is then updated in
+    /// its own transaction, so the batch is best-effort: an entity whose type
+    /// does not accept the property, or whose write fails, is reported as
+    /// [`EntityOptionUpdateOutcome::Failed`] without aborting the rest. Callers
+    /// mint one [`EditReceipt`] per entity at the edge and pass only the
+    /// entities the caller may edit; entities the caller cannot edit are handled
+    /// there, not here.
+    fn bulk_update_entities_property_options(
+        &self,
+        access: &[EditReceipt],
+        property_definition_id: Uuid,
+        add_option_ids: Vec<Uuid>,
+        remove_option_ids: Vec<Uuid>,
+    ) -> impl Future<Output = Result<Vec<EntityOptionUpdateOutcome>, PropertiesErr>> + Send;
 
     /// List property definitions owned by the given team and/or user, sorted by
     /// display name. Set `include_system` to true to also include system properties.
@@ -210,6 +256,37 @@ pub trait PropertiesService: Send + Sync + 'static {
         scope: TagScope,
     ) -> impl Future<Output = Result<TagSet, PropertiesErr>> + Send;
 
+    /// Share one of the caller's personal labels with their team by moving it
+    /// into the team tag set, provisioning that set if the team has none yet.
+    ///
+    /// The option id survives the move, so every entity already carrying the
+    /// label keeps resolving to it. Fails with
+    /// [`PropertiesErr::ConflictingTeamLabel`] when the team already has a label
+    /// of that name (trimmed, case-insensitive), carrying that label so the
+    /// caller can offer [`Self::merge_tag_option`] instead. Requires the option
+    /// to be a label in the caller's own tag set and the caller to be on a team.
+    fn promote_tag_option(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+        team: Option<&TeamReceipt>,
+        option_id: Uuid,
+    ) -> impl Future<Output = Result<PropertyOption, PropertiesErr>> + Send;
+
+    /// Replace one of the caller's personal labels with an existing team label:
+    /// every entity carrying the personal label is retagged with the team label
+    /// (deduped if it already has both), then the personal label is deleted.
+    ///
+    /// The team label's name and color win. Requires the source option to be a
+    /// label in the caller's own tag set and the target to be a label in their
+    /// team's tag set.
+    fn merge_tag_option(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+        team: Option<&TeamReceipt>,
+        option_id: Uuid,
+        target_option_id: Uuid,
+    ) -> impl Future<Output = Result<PropertyOption, PropertiesErr>> + Send;
+
     /// Get an entity's stored properties with definitions, values, and options,
     /// sorted by display name. Personal tag properties of other users are
     /// filtered out. Does not include computed metadata properties
@@ -238,7 +315,7 @@ pub trait PropertiesService: Send + Sync + 'static {
         property_ids: Vec<Uuid>,
     ) -> impl Future<
         Output = Result<
-            HashMap<EntityPropertiesKey, Vec<EntityPropertyWithDefinition>>,
+            HashMap<PropertyTargetKey, Vec<EntityPropertyWithDefinition>>,
             PropertiesErr,
         >,
     > + Send;
@@ -255,7 +332,7 @@ pub trait PropertiesService: Send + Sync + 'static {
     fn lookup_entity_property(
         &self,
         entity_property_id: Uuid,
-    ) -> impl Future<Output = Result<Option<EntityPropertyReference>, PropertiesErr>> + Send;
+    ) -> impl Future<Output = Result<Option<PropertyTargetKey>, PropertiesErr>> + Send;
 
     /// Delete a single entity property by its ID. The receipt must be for the
     /// entity the property is attached to. Fails when the property doesn't

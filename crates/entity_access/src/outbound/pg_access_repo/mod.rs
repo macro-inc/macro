@@ -2,15 +2,15 @@
 
 mod queries;
 
-pub use queries::{SourceIds, get_user_source_ids};
+pub use queries::{SourceIds, get_team_scope_source_ids, get_user_source_ids};
 
 #[cfg(test)]
 mod test;
 
 use crate::domain::{
     models::{
-        AccessError, AccessLevel, CallChannelInfo, ChannelRoleResult, CrmEntityAccess, EntityType,
-        UserTeamInfo,
+        AccessError, AccessLevel, BotId, CallChannelInfo, ChannelRoleResult, CrmEntityAccess,
+        EntityType, UserTeamInfo,
     },
     ports::AccessRepository,
 };
@@ -46,6 +46,16 @@ fn foreign_entity_source_pairs(
     }
 
     (source_ids, source_auth_entities)
+}
+
+fn team_foreign_entity_source_pairs(
+    team_id: Uuid,
+    bot_principal: &str,
+) -> (Vec<String>, Vec<String>) {
+    (
+        vec![team_id.to_string(), bot_principal.to_string()],
+        vec!["team".to_string(), "user".to_string()],
+    )
 }
 
 impl AccessRepository for PgAccessRepository {
@@ -122,6 +132,62 @@ impl AccessRepository for PgAccessRepository {
     }
 
     #[tracing::instrument(err, skip(self))]
+    async fn get_calendar_event_access(
+        &self,
+        event_id: &str,
+        user_id: Option<&MacroUserId<Lowercase<'_>>>,
+    ) -> Result<Option<AccessLevel>, AccessError> {
+        let event_id = event_id
+            .parse::<Uuid>()
+            .map_err(|_| AccessError::BadRequest("Invalid calendar event ID format"))?;
+        let Some(user_id) = user_id else {
+            return Ok(None);
+        };
+        let user_id = user_id.as_ref();
+        let is_owner = sqlx::query_scalar!(
+            r#"
+            SELECT event.owner_id = $2 AS "is_owner!"
+            FROM calendar_events event
+            WHERE event.id = $1
+              AND (
+                  event.owner_id = $2
+                  OR EXISTS (
+                      SELECT 1
+                      FROM macro_user_links link
+                      WHERE link.link_id = event.source_link_id
+                        AND link.primary_macro_id = $2
+                  )
+              )
+            "#,
+            event_id,
+            user_id,
+        )
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(AccessError::from)?;
+
+        Ok(is_owner.map(|is_owner| {
+            if is_owner {
+                AccessLevel::Owner
+            } else {
+                AccessLevel::Edit
+            }
+        }))
+    }
+
+    #[tracing::instrument(err, skip(self, thread_ids, user_id))]
+    async fn get_owned_email_thread_ids(
+        &self,
+        thread_ids: &[Uuid],
+        user_id: &MacroUserId<Lowercase<'_>>,
+    ) -> Result<Vec<Uuid>, AccessError> {
+        Ok(
+            queries::thread_access::get_owned_email_thread_ids(&self.pool, thread_ids, user_id)
+                .await?,
+        )
+    }
+
+    #[tracing::instrument(err, skip(self))]
     async fn get_call_access(
         &self,
         call_id: &str,
@@ -134,6 +200,209 @@ impl AccessRepository for PgAccessRepository {
             .await
             .map_err(|_| AccessError::Internal)?;
         Ok(queries::call_access::get_call_access(&self.pool, &call_uuid, &source_ids).await?)
+    }
+
+    async fn get_agent_session_access(
+        &self,
+        agent_session_id: &str,
+        user_id: Option<&MacroUserId<Lowercase<'_>>>,
+    ) -> Result<Option<AccessLevel>, AccessError> {
+        let agent_session_uuid = agent_session_id
+            .parse::<Uuid>()
+            .map_err(|_| AccessError::BadRequest("Invalid agent session ID format"))?;
+        let source_ids = queries::get_user_source_ids(&self.pool, user_id)
+            .await
+            .map_err(|_| AccessError::Internal)?;
+        Ok(queries::agent_session_access::get_agent_session_access(
+            &self.pool,
+            &agent_session_uuid,
+            &source_ids,
+        )
+        .await?)
+    }
+
+    // A macro user id embeds the user's email, so it stays out of the span; the
+    // reminder id is what identifies the lookup anyway.
+    #[tracing::instrument(err, skip(self, user_id))]
+    async fn get_reminder_access(
+        &self,
+        reminder_id: &str,
+        user_id: Option<&MacroUserId<Lowercase<'_>>>,
+    ) -> Result<Option<AccessLevel>, AccessError> {
+        let reminder_uuid = reminder_id
+            .parse::<Uuid>()
+            .map_err(|_| AccessError::BadRequest("Invalid reminder ID format"))?;
+        // An anonymous caller can never own a reminder, so skip the query.
+        let Some(user_id) = user_id else {
+            return Ok(None);
+        };
+
+        let owns = sqlx::query_scalar!(
+            r#"SELECT EXISTS (
+                   SELECT 1 FROM reminder WHERE id = $1 AND user_id = $2
+               ) AS "owns!""#,
+            reminder_uuid,
+            user_id.as_ref(),
+        )
+        .fetch_one(&self.pool)
+        .await
+        .map_err(|_| AccessError::Internal)?;
+
+        // Owner or nothing: a reminder has no sharing model to grade.
+        Ok(owns.then_some(AccessLevel::Owner))
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn get_team_entity_access(
+        &self,
+        bot_id: BotId,
+        team_id: Uuid,
+        entity_id: &str,
+        entity_type: EntityType,
+    ) -> Result<Option<AccessLevel>, AccessError> {
+        let entity_uuid = entity_id
+            .parse::<Uuid>()
+            .map_err(|_| AccessError::BadRequest("Invalid entity ID format"))?;
+        let bot_principal = bot_id.into_storage_id();
+        let source_ids = queries::get_team_scope_source_ids(&self.pool, &bot_principal, &team_id)
+            .await
+            .map_err(|_| AccessError::Internal)?;
+
+        let access = match entity_type {
+            EntityType::Document => {
+                queries::document_access::get_document_access(&self.pool, &entity_uuid, &source_ids)
+                    .await
+            }
+            EntityType::Chat => {
+                queries::chat_access::get_chat_access(&self.pool, &entity_uuid, &source_ids).await
+            }
+            EntityType::Project => {
+                queries::project_access::get_project_access(&self.pool, &entity_uuid, &source_ids)
+                    .await
+            }
+            EntityType::EmailThread => {
+                queries::thread_access::get_thread_access(
+                    &self.pool,
+                    &entity_uuid,
+                    &source_ids,
+                    None,
+                )
+                .await
+            }
+            EntityType::Call => {
+                queries::call_access::get_call_access(&self.pool, &entity_uuid, &source_ids).await
+            }
+            EntityType::AgentSession => {
+                queries::agent_session_access::get_agent_session_access(
+                    &self.pool,
+                    &entity_uuid,
+                    &source_ids,
+                )
+                .await
+            }
+            EntityType::User
+            | EntityType::Channel
+            | EntityType::ChannelMessage
+            | EntityType::CalendarEvent
+            | EntityType::Team
+            | EntityType::ForeignEntity
+            | EntityType::StaticFile
+            | EntityType::CrmCompany
+            | EntityType::CrmContact
+            | EntityType::Skill
+            // Reminders are user-owned, never reachable through a team scope.
+            | EntityType::Reminder => {
+                return Err(AccessError::BadRequest(
+                    "Unsupported entity type for team item access",
+                ));
+            }
+        };
+
+        access.map_err(AccessError::from)
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn get_team_channel_role(
+        &self,
+        channel_id: &Uuid,
+        team_id: Uuid,
+        bot_id: BotId,
+    ) -> Result<ChannelRoleResult, AccessError> {
+        let bot_principal = bot_id.into_storage_id();
+        Ok(queries::channel_role::get_team_channel_role(
+            &self.pool,
+            channel_id,
+            &team_id,
+            &bot_principal,
+        )
+        .await?)
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn has_team_foreign_entity_access(
+        &self,
+        foreign_entity_id: &str,
+        team_id: Uuid,
+        bot_id: BotId,
+    ) -> Result<bool, AccessError> {
+        let foreign_entity_uuid = foreign_entity_id
+            .parse::<Uuid>()
+            .map_err(|_| AccessError::BadRequest("Invalid foreign entity ID format"))?;
+        let bot_principal = bot_id.into_storage_id();
+        let scope_sources =
+            queries::get_team_scope_source_ids(&self.pool, &bot_principal, &team_id)
+                .await
+                .map_err(|_| AccessError::Internal)?;
+
+        if !scope_sources.0.contains(&team_id.to_string())
+            || !scope_sources.0.contains(&bot_principal.to_string())
+        {
+            return Ok(false);
+        }
+
+        let (source_ids, source_auth_entities) =
+            team_foreign_entity_source_pairs(team_id, bot_principal.as_ref());
+        Ok(queries::foreign_entity_access::has_foreign_entity_access(
+            &self.pool,
+            &foreign_entity_uuid,
+            &source_ids,
+            &source_auth_entities,
+        )
+        .await?)
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn get_team_crm_company_access(
+        &self,
+        company_id: &str,
+        team_id: Uuid,
+    ) -> Result<Option<CrmEntityAccess>, AccessError> {
+        let company_uuid = company_id
+            .parse::<Uuid>()
+            .map_err(|_| AccessError::BadRequest("Invalid CRM company ID format"))?;
+        Ok(queries::crm_company_access::get_team_crm_company_access(
+            &self.pool,
+            &company_uuid,
+            &team_id,
+        )
+        .await?)
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn get_team_crm_contact_access(
+        &self,
+        contact_id: &str,
+        team_id: Uuid,
+    ) -> Result<Option<CrmEntityAccess>, AccessError> {
+        let contact_uuid = contact_id
+            .parse::<Uuid>()
+            .map_err(|_| AccessError::BadRequest("Invalid CRM contact ID format"))?;
+        Ok(queries::crm_contact_access::get_team_crm_contact_access(
+            &self.pool,
+            &contact_uuid,
+            &team_id,
+        )
+        .await?)
     }
 
     #[tracing::instrument(err, skip(self))]

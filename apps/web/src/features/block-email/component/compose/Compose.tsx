@@ -1,3 +1,4 @@
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import type { EmailFormRecipients } from '@block-email/component/createEmailFormState';
 import {
   createEmailFormState,
@@ -28,14 +29,19 @@ import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useHasPaidAccess } from '@core/auth';
 import { EmailPermissionsBanner } from '@core/component/EmailPermissionsBanner';
 import { toast } from '@core/component/Toast/Toast';
-import { ENABLE_EMAIL_SIGNATURES } from '@core/constant/featureFlags';
+import {
+  ENABLE_EMAIL_SIGNATURES_FLAG,
+  ENABLE_EMAIL_SIGNATURES_OVERRIDE,
+} from '@core/constant/featureFlags';
 import { isMobile } from '@core/mobile/isMobile';
 import { WrapUnlessMobile } from '@core/mobile/WrapUnlessMobile';
 import { useCombinedRecipients } from '@core/signal/useCombinedRecipient';
 import {
   type ContactInfo,
+  emailToId,
+  getDisplayName,
+  recipientEntityMapper,
   tryMacroId,
-  useDisplayName,
   type WithCustomUserInput,
 } from '@core/user';
 import { $generateHtmlFromNodes } from '@lexical/html';
@@ -43,7 +49,8 @@ import {
   $appendWatermarkNodeToLast,
   $removeAllWatermarkNodes,
 } from '@macro-inc/lexical-core';
-import { logger } from '@observability/logger';
+import { Telemetry } from '@macro-inc/observability';
+
 import ArrowCounterClockwise from '@phosphor-icons/core/regular/arrow-counter-clockwise.svg?component-solid';
 import { queryClient } from '@queries/client';
 import {
@@ -71,6 +78,7 @@ import { emailClient } from '@service-email/client';
 import { debounce } from '@solid-primitives/scheduled';
 import { Surface } from '@ui';
 
+import * as EmailValidator from 'email-validator';
 import type { LexicalEditor } from 'lexical';
 import {
   createEffect,
@@ -105,6 +113,8 @@ let undoComposeSnapshot: UndoComposeSnapshot | null = null;
 
 type EmailComposeProps = {
   draftID?: string;
+  /** Prefill for the To field (e.g. from an intercepted mailto: link). Ignored when editing an existing draft. */
+  initialTo?: string[];
 };
 
 export function EmailCompose(props: EmailComposeProps) {
@@ -157,6 +167,9 @@ export function EmailCompose(props: EmailComposeProps) {
   // message. The backend injects it on send (see include_signature below); the
   // FE only renders the preview and signals an explicit dismiss.
   const signature = useEmailSignature(() => link()?.id);
+  const emailSignaturesFlag = useFeatureFlag(ENABLE_EMAIL_SIGNATURES_FLAG, {
+    enabledOverride: ENABLE_EMAIL_SIGNATURES_OVERRIDE,
+  });
   const [includeSignature, setIncludeSignature] = createSignal(true);
 
   const hasLinkError = createMemo(() => {
@@ -204,13 +217,26 @@ export function EmailCompose(props: EmailComposeProps) {
     undoComposeSnapshot = null;
   }
 
+  if (!props.draftID && props.initialTo?.length) {
+    form.setRecipients(
+      'to',
+      props.initialTo.map((email) =>
+        recipientEntityMapper('custom')({
+          id: emailToId(email),
+          email,
+          invalid: !EmailValidator.validate(email),
+        })
+      )
+    );
+  }
+
   // --- Draft persistence ---
 
   function collectDraft() {
     $removeAllWatermarkNodes(editor());
     const prepared = prepareEmailBody(editor());
     if (!prepared) {
-      logger.error(
+      Telemetry.error(
         new Error('Unable to prepare email body for draft collection.')
       );
       return null;
@@ -424,7 +450,7 @@ export function EmailCompose(props: EmailComposeProps) {
               },
             ]
           : undefined,
-        duration: 8_000,
+        duration: 5_000,
       });
       if (data.message.thread_db_id) {
         replaceSplit({
@@ -677,7 +703,7 @@ export function EmailCompose(props: EmailComposeProps) {
       let recipientName = recipients[0].data.email;
 
       if (recipients[0].kind === 'user') {
-        recipientName = useDisplayName(tryMacroId(recipients[0].data.id))[0]();
+        recipientName = getDisplayName(tryMacroId(recipients[0].data.id));
       }
 
       return recipientName ? `Email to ${recipientName}` : 'Draft email';
@@ -687,7 +713,7 @@ export function EmailCompose(props: EmailComposeProps) {
       .slice(0, 2)
       .map((r) => {
         if (r.kind === 'user') {
-          return useDisplayName(tryMacroId(r.data.id))[0]();
+          return getDisplayName(tryMacroId(r.data.id));
         }
         return r.data.email || 'Unknown';
       })
@@ -768,7 +794,11 @@ export function EmailCompose(props: EmailComposeProps) {
     // dismiss. Shown only when the sending inbox has a signature and it hasn't
     // been dismissed.
     signaturePreview: () => (
-      <Show when={ENABLE_EMAIL_SIGNATURES && includeSignature() && signature()}>
+      <Show
+        when={
+          emailSignaturesFlag().enabled && includeSignature() && signature()
+        }
+      >
         {(html) => (
           <SignaturePreview
             html={html()}
@@ -811,7 +841,7 @@ export function EmailCompose(props: EmailComposeProps) {
         </SplitHeaderLeft>
       </Show>
       <div class="relative flex flex-col size-full min-h-0 overflow-hidden text-sm">
-        <div class="macro-message-width sm:macro-message-padding mx-auto w-full min-h-120 max-h-full my-2 sm:my-12 mobile:my-0 px-2 sm:px-4 mobile:px-0 overflow-hidden mobile:overflow-y-auto mobile:scrollbar-hidden mobile:min-h-full">
+        <div class="macro-message-width sm:macro-message-padding mx-auto w-full min-h-120 max-h-full my-2 sm:my-12 touch:my-0 px-2 sm:px-4 touch:px-0 overflow-hidden touch:overflow-y-auto touch:scrollbar-hidden touch:min-h-full">
           <WrapUnlessMobile
             wrapper={(children) => (
               <Surface depth={2} class="rounded-xl border border-ink-muted/8">
@@ -822,7 +852,7 @@ export function EmailCompose(props: EmailComposeProps) {
             <ComposeLayout
               toolbar={<EmailComposeToolbar editor={editor} />}
               notice={hasLinkError() ? <EmailPermissionsBanner /> : undefined}
-              class="size-full p-4 bg-surface max-h-full mobile:max-h-none overflow-hidden flex flex-col min-h-0 mobile:min-h-full"
+              class="size-full p-4 bg-surface max-h-full touch:max-h-none overflow-hidden flex flex-col min-h-0 touch:min-h-full"
             />
           </WrapUnlessMobile>
         </div>

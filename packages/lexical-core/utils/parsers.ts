@@ -2,11 +2,20 @@ export function parseUserMentions(text: string): string {
   return text.replace(/<m-user-mention>(.*?)<\/m-user-mention>/g, (_, json) => {
     try {
       const data = JSON.parse(json);
-      return data.email || '';
+      return userMentionDisplayText(data);
     } catch {
       return '';
     }
   });
+}
+
+function userMentionDisplayText(data: {
+  displayName?: string;
+  email?: string;
+}) {
+  if (data.displayName) return data.displayName;
+  if (data.email) return data.email.split('@')[0] || data.email;
+  return '';
 }
 
 export function parseContactMentions(text: string): string {
@@ -53,6 +62,17 @@ export function parsePullRequestMentions(text: string): string {
     try {
       const data = JSON.parse(json);
       return data.label || data.id || '';
+    } catch {
+      return '';
+    }
+  });
+}
+
+export function parseTagMentions(text: string): string {
+  return text.replace(/<m-tag>(.*?)<\/m-tag>/g, (_, json) => {
+    try {
+      const data = JSON.parse(json);
+      return data.name ? `#${data.name}` : '';
     } catch {
       return '';
     }
@@ -131,11 +151,13 @@ export function markdownToPlainText(markdown: string): string {
   return parseLinks(
     parseDocumentCards(
       parseSnapshots(
-        parsePullRequestMentions(
-          parseDocumentMentions(
-            parseGroupMentions(
-              parseDateMentions(
-                parseContactMentions(parseUserMentions(markdown))
+        parseTagMentions(
+          parsePullRequestMentions(
+            parseDocumentMentions(
+              parseGroupMentions(
+                parseDateMentions(
+                  parseContactMentions(parseUserMentions(markdown))
+                )
               )
             )
           )
@@ -215,16 +237,22 @@ function snapshotToEmbeddingText(encoded: string): string {
  * `\n`; any tags nested in cells are handled by the leaf passes afterwards.
  */
 function flattenTables(text: string): string {
-  return text.replace(/<m-table>(.*?)<\/m-table>/gs, (_, table: string) =>
-    [...table.matchAll(/<m-table-row>(.*?)<\/m-table-row>/gs)]
-      .map((row) =>
-        [...row[1].matchAll(/<m-table-cell>(.*?)<\/m-table-cell>/gs)]
-          .map((cell) =>
-            cell[1].replace(/\\n/g, ' ').replaceAll('<br>', ' ').trim()
-          )
-          .join(' | ')
-      )
-      .join('\n')
+  return text.replace(
+    /<m-table(?:\s[^>]*)?>(.*?)<\/m-table>/gs,
+    (_, table: string) =>
+      [...table.matchAll(/<m-table-row(?:\s[^>]*)?>(.*?)<\/m-table-row>/gs)]
+        .map((row) =>
+          [
+            ...row[1].matchAll(
+              /<m-table-cell(?:\s[^>]*)?>(.*?)<\/m-table-cell>/gs
+            ),
+          ]
+            .map((cell) =>
+              cell[1].replace(/\\n/g, ' ').replaceAll('<br>', ' ').trim()
+            )
+            .join(' | ')
+        )
+        .join('\n')
   );
 }
 
@@ -296,7 +324,7 @@ export function markdownToEmbeddingText(markdown: string): string {
     'm-katex-equation',
     (data) => data.equation || ''
   );
-  text = replaceJsonTag(text, 'm-user-mention', (data) => data.email || '');
+  text = replaceJsonTag(text, 'm-user-mention', userMentionDisplayText);
   text = replaceJsonTag(
     text,
     'm-contact-mention',
@@ -311,6 +339,9 @@ export function markdownToEmbeddingText(markdown: string): string {
     text,
     'm-group-mention',
     (data) => `@${data.groupAlias || ''}`
+  );
+  text = replaceJsonTag(text, 'm-tag', (data) =>
+    data.name ? `#${data.name}` : ''
   );
   text = replaceJsonTag(text, 'm-theme-mention', (data) => data.name || '');
   text = replaceJsonTag(text, 'm-await', (data) => data.text || '');

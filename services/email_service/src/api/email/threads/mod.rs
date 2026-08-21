@@ -14,7 +14,11 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
     let routes = Router::new()
         .nest(
             "/previews",
-            email::inbound::axum::previews_router::router(state.email_service.clone()),
+            email::inbound::axum::previews_router::router::<
+                ApiContext,
+                crate::api::context::EmailSvc,
+                crate::api::context::AuthorizationService,
+            >(),
         )
         .route("/{id}/messages", get(get::get_thread_messages_handler))
         .route("/{id}/seen", post(seen::seen_handler))
@@ -26,7 +30,7 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
     let hex_thread_labels_routes = email::inbound::axum::thread_labels_router::thread_labels_router::<
         ApiContext,
         crate::api::context::EmailSvc,
-        email::outbound::GmailTokenProviderImpl,
+        crate::api::context::AuthorizationService,
     >();
 
     let hex_thread_project_routes =

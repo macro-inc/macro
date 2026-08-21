@@ -1,3 +1,4 @@
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { EmailAttachmentPill } from '@block-email/component/AttachmentPill';
 import type { DraftFormAttachment } from '@block-email/component/createEmailFormState';
 import { EmailDateSelector } from '@block-email/component/email-date-selector';
@@ -23,15 +24,16 @@ import { RecipientSelector } from '@core/component/RecipientSelector';
 import { toast } from '@core/component/Toast/Toast';
 import {
   ENABLE_EMAIL_SCHEDULED_SEND,
-  ENABLE_EMAIL_SIGNATURES,
+  ENABLE_EMAIL_SIGNATURES_FLAG,
+  ENABLE_EMAIL_SIGNATURES_OVERRIDE,
 } from '@core/constant/featureFlags';
 import { useEmail } from '@core/context/user';
 import { fileFolderDrop } from '@core/directive/fileFolderDrop';
 import { fileSelector } from '@core/directive/fileSelector';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
-import { isMobile } from '@core/mobile/isMobile';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { useTouchOutsideToDismissKeyboard } from '@core/mobile/useTouchOutsideToDismissKeyboard';
 import { trackMention } from '@core/signal/mention';
 import { plural } from '@core/util/string';
@@ -42,7 +44,7 @@ import {
   $appendWatermarkNodeToLast,
   $removeAllWatermarkNodes,
 } from '@macro-inc/lexical-core';
-import { logger } from '@observability';
+import { Telemetry } from '@macro-inc/observability';
 import ChevronDown from '@phosphor/caret-down.svg';
 import CaretRight from '@phosphor/caret-right.svg';
 import DotsThree from '@phosphor/dots-three.svg';
@@ -260,6 +262,7 @@ export function BaseInput(props: {
   onMarkDone?: (opts?: {
     silent?: boolean;
     onUndoHandle?: (handle: UndoHandle) => void;
+    nextEntityId?: string;
   }) => void;
   setShowReply?: Setter<boolean>;
   markdownDomRef?: (ref: HTMLDivElement) => void | HTMLDivElement;
@@ -327,6 +330,9 @@ export function BaseInput(props: {
     emailLinksQuery.data?.links.find((l) => l.id === activeLinkId())
   );
   const signature = useEmailSignature(activeLinkId);
+  const emailSignaturesFlag = useFeatureFlag(ENABLE_EMAIL_SIGNATURES_FLAG, {
+    enabledOverride: ENABLE_EMAIL_SIGNATURES_OVERRIDE,
+  });
   // Whether this reply includes the signature. Defaults on, reset per reply,
   // and dismissable via the preview ✕.
   const [includeSignature, setIncludeSignature] = createSignal(true);
@@ -335,7 +341,7 @@ export function BaseInput(props: {
   // and the user hasn't dismissed it. The backend does the actual injection on
   // send — this just mirrors when that will happen.
   const replySignatureHtml = (): string | undefined =>
-    ENABLE_EMAIL_SIGNATURES &&
+    emailSignaturesFlag().enabled &&
     props.replyingTo() &&
     includeSignature() &&
     sendingLink()?.settings.signature_on_replies_forwards
@@ -458,6 +464,7 @@ export function BaseInput(props: {
   // can reverse it. Cleared on each send: undo-send must only un-mark-done
   // when this send did the marking.
   let markDoneUndoHandle: UndoHandle | undefined;
+  let pendingMarkDoneNavigationTargetId: string | undefined;
 
   const undoSend = async (draftId: string) => {
     try {
@@ -554,7 +561,7 @@ export function BaseInput(props: {
               },
             ]
           : undefined,
-        duration: 10_000,
+        duration: 5_000,
       });
       pendingMentions.forEach((mention) => {
         trackMention(blockId, 'document', mention.documentId);
@@ -570,7 +577,9 @@ export function BaseInput(props: {
           onUndoHandle: (handle) => {
             markDoneUndoHandle = handle;
           },
+          nextEntityId: pendingMarkDoneNavigationTargetId,
         });
+        pendingMarkDoneNavigationTargetId = undefined;
         setShouldMarkDoneOnSuccess(false);
       }
     },
@@ -578,6 +587,7 @@ export function BaseInput(props: {
       // Restore autosave so the user can keep editing after a failed send.
       if (draftSaveTimer) window.clearTimeout(draftSaveTimer);
       pendingSend = false;
+      pendingMarkDoneNavigationTargetId = undefined;
       toast.failure('Failed to send email');
     },
   });
@@ -681,7 +691,7 @@ export function BaseInput(props: {
     $removeAllWatermarkNodes(editor());
     const prepared = prepareEmailBody(editor());
     if (!prepared) {
-      logger.error(
+      Telemetry.error(
         new Error('Unable to prepare email body for draft collection.')
       );
       return null;
@@ -707,7 +717,7 @@ export function BaseInput(props: {
     };
   }
 
-  async function executeSaveDraft() {
+  async function executeSaveDraft(skipSoupRefetch = false) {
     if (sendMutation.isPending || pendingDeletion || pendingSend) {
       return;
     }
@@ -719,6 +729,7 @@ export function BaseInput(props: {
           draftId,
           threadId: ctx.thread()?.db_id,
           linkId: headerLinkId(),
+          skipSoupRefetch,
         });
         refetchThreadMessages();
       }
@@ -729,12 +740,12 @@ export function BaseInput(props: {
     const newMessage = props.newMessage ?? false;
 
     if (!currentThread && !newMessage) {
-      logger.error(new Error('Failed to save draft: thread not found'));
+      Telemetry.error(new Error('Failed to save draft: thread not found'));
       return;
     }
 
     if (newMessage && currentThread) {
-      logger.error(
+      Telemetry.error(
         new Error(
           'Failed to save draft: new message and current thread cannot be provided together'
         )
@@ -750,6 +761,7 @@ export function BaseInput(props: {
         thread_db_id: currentThread?.db_id,
       },
       linkId: headerLinkId(),
+      skipSoupRefetch,
     });
 
     const draftId = draftResponse.draft.db_id;
@@ -974,14 +986,14 @@ export function BaseInput(props: {
     const newMessage = props.newMessage ?? false;
 
     if (!currentThread && !newMessage) {
-      logger.error(new Error("Can't send email, no email thread found"));
+      Telemetry.error(new Error("Can't send email, no email thread found"));
       toast.failure('Email failed to send');
       return;
     }
 
     if (newMessage && currentThread) {
       toast.failure('Email failed to send');
-      logger.error('New message and thread cannot be provided together');
+      Telemetry.error('New message and thread cannot be provided together');
       return;
     }
 
@@ -994,14 +1006,14 @@ export function BaseInput(props: {
 
       if (emailLinksQuery.isError) {
         toast.failure('Email failed to send: Could not load email accounts');
-        logger.error('Failed to load email links');
+        Telemetry.error('Failed to load email links');
         return;
       }
 
       const linksData = emailLinksQuery.data;
       if (!linksData || linksData.links.length < 1) {
         toast.failure('Email failed to send: No email account connected');
-        logger.error('No links found');
+        Telemetry.error('No links found');
         return;
       }
       linkId = primaryLinkId() ?? linksData.links[0].id;
@@ -1009,9 +1021,17 @@ export function BaseInput(props: {
 
     const currentEditor = editor();
 
+    // Sending a reply marks the thread done. Gated on inbox_visible because
+    // onMarkDone (archiveThread) toggles: an already-archived thread (e.g.
+    // replying from search or the sent view) would be unarchived.
+    const willMarkDone = markDone || (currentThread?.inbox_visible ?? false);
+    pendingMarkDoneNavigationTargetId = willMarkDone
+      ? ctx.getMarkDoneNavigationTargetId()
+      : undefined;
+
     // Ensure draft is saved before sending so undo-send always has a draft to restore
     if (draftSaveTimer) window.clearTimeout(draftSaveTimer);
-    await executeSaveDraft();
+    await executeSaveDraft(willMarkDone);
 
     // Snapshot editor state before watermark so undo-send can restore it.
     // Stored in undoSendSnapshot (not undoReplySnapshot) so it persists across
@@ -1062,10 +1082,6 @@ export function BaseInput(props: {
     }
 
     pendingMentions = prepared.mentions;
-    // Sending a reply marks the thread done. Gated on inbox_visible because
-    // onMarkDone (archiveThread) toggles: an already-archived thread (e.g.
-    // replying from search or the sent view) would be unarchived.
-    const willMarkDone = markDone || (currentThread?.inbox_visible ?? false);
     setShouldMarkDoneOnSuccess(willMarkDone);
     markDoneUndoHandle = undefined;
 
@@ -1267,7 +1283,7 @@ export function BaseInput(props: {
   // connect before focusing.
   createEffect(() => {
     if (!form().shouldFocusInput()) return;
-    if (isMobile()) {
+    if (isTouchDevice()) {
       form().setShouldFocusInput(false);
       return;
     }
@@ -1427,7 +1443,7 @@ export function BaseInput(props: {
   const isMobileDrawer = () => props.mobileDrawer !== undefined;
   const composePortalScope = () => (isMobileDrawer() ? 'local' : undefined);
   const sendActionHidden = () =>
-    isMobile() &&
+    isTouchDevice() &&
     !hasBodyText() &&
     // Forwards carry the quoted thread as content, so send is available without typing anything.
     effectiveReplyType() !== 'forward';
@@ -1714,6 +1730,7 @@ export function BaseInput(props: {
                         handleChipDragStart('to', option, e)
                       }
                       onChipDragEnd={handleChipDragEnd}
+                      hideMenuOnEscape
                     />
                   </RecipientDropRow>
                   {/* Expanded CC */}
@@ -1744,6 +1761,7 @@ export function BaseInput(props: {
                           handleChipDragStart('cc', option, e)
                         }
                         onChipDragEnd={handleChipDragEnd}
+                        hideMenuOnEscape
                       />
                     </RecipientDropRow>
                   </Show>
@@ -1775,6 +1793,7 @@ export function BaseInput(props: {
                           handleChipDragStart('bcc', option, e)
                         }
                         onChipDragEnd={handleChipDragEnd}
+                        hideMenuOnEscape
                       />
                     </RecipientDropRow>
                   </Show>
@@ -1795,6 +1814,11 @@ export function BaseInput(props: {
                 onInput={(e) => {
                   form().setSubject(e.currentTarget.value);
                   scheduleDraftSave();
+                }}
+                onKeyDown={(e) => {
+                  if (e.key !== 'Escape') return;
+                  e.preventDefault();
+                  e.currentTarget.blur();
                 }}
                 placeholder="Subject"
               />
@@ -1821,12 +1845,14 @@ export function BaseInput(props: {
                 form().setRecipients('to', v)
               )}
               triggerMode="input"
+              portalScope={composePortalScope()}
               hideBorder
               noPadding
               onChipDragStart={(option, e) =>
                 handleChipDragStart('to', option, e)
               }
               onChipDragEnd={handleChipDragEnd}
+              hideMenuOnEscape
             />
             <Button
               variant="ghost"
@@ -1864,12 +1890,14 @@ export function BaseInput(props: {
                   form().setRecipients('cc', v)
                 )}
                 triggerMode="input"
+                portalScope={composePortalScope()}
                 hideBorder
                 noPadding
                 onChipDragStart={(option, e) =>
                   handleChipDragStart('cc', option, e)
                 }
                 onChipDragEnd={handleChipDragEnd}
+                hideMenuOnEscape
               />
             </RecipientDropRow>
           </Show>
@@ -1893,12 +1921,14 @@ export function BaseInput(props: {
                   form().setRecipients('bcc', v)
                 )}
                 triggerMode="input"
+                portalScope={composePortalScope()}
                 hideBorder
                 noPadding
                 onChipDragStart={(option, e) =>
                   handleChipDragStart('bcc', option, e)
                 }
                 onChipDragEnd={handleChipDragEnd}
+                hideMenuOnEscape
               />
             </RecipientDropRow>
           </Show>
@@ -1926,6 +1956,11 @@ export function BaseInput(props: {
               onInput={(e) => {
                 form().setSubject(e.currentTarget.value);
                 scheduleDraftSave();
+              }}
+              onKeyDown={(e) => {
+                if (e.key !== 'Escape') return;
+                e.preventDefault();
+                e.currentTarget.blur();
               }}
               placeholder="Subject:"
             />
@@ -2124,7 +2159,7 @@ export function BaseInput(props: {
                   sendTime={form().sendTime() ?? null}
                   onSendTimeChange={handleSendTimeChange}
                   disabled={scheduleSendDisabled()}
-                  disablePortal={isMobile()}
+                  disablePortal={isTouchDevice()}
                 />
               </Show>
               <SendButton

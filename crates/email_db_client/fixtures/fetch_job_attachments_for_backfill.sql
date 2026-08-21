@@ -20,6 +20,17 @@ VALUES ('00000000-0000-0000-0000-00000000001a', 'macro|user_a@example.com', '000
 -- Contacts
 ------------------------------------------------------------
 
+-- The user's own contacts, used to verify self-only threads are excluded case-insensitively.
+INSERT INTO email_contacts (id, link_id, email_address, created_at, updated_at)
+VALUES ('00000000-0000-0000-0000-0000000c0000',
+        '00000000-0000-0000-0000-00000000001a',
+        'user_a@example.com',
+        NOW(), NOW()),
+       ('00000000-0000-0000-0000-0000000c0005',
+        '00000000-0000-0000-0000-00000000001a',
+        'USER_A@EXAMPLE.COM',
+        NOW(), NOW());
+
 -- Previously contacted person (user sent email to this person)
 INSERT INTO email_contacts (id, link_id, email_address, created_at, updated_at)
 VALUES ('00000000-0000-0000-0000-0000000c0001',
@@ -89,6 +100,9 @@ VALUES ('00000000-0000-0000-0000-0000000e0401',
 INSERT INTO email_message_recipients (message_id, contact_id, recipient_type)
 VALUES ('00000000-0000-0000-0000-0000000e0401',
         '00000000-0000-0000-0000-0000000c0001', -- previously_contacted@example.com
+        'TO'),
+       ('00000000-0000-0000-0000-0000000e0401',
+        '00000000-0000-0000-0000-0000000c0000', -- the user's own contact
         'TO');
 
 -- User sent message to also_contacted@example.com (creates another relationship)
@@ -241,5 +255,100 @@ VALUES ('00000000-0000-0000-0000-0000003a0302',
         NOW());
 
 ------------------------------------------------------------
+-- Additional completion-sweep edge cases
+
+-- Self-only eligible thread: self is contacted above but must not qualify.
+INSERT INTO email_threads (id, link_id, inbox_visible, is_read, created_at, updated_at)
+VALUES ('00000000-0000-0000-0000-000000000105', '00000000-0000-0000-0000-00000000001a', false, false, NOW(), NOW());
+INSERT INTO email_messages (id, thread_id, link_id, provider_id, is_sent, from_contact_id, internal_date_ts,
+                            has_attachments, is_read, is_starred, is_draft, created_at, updated_at)
+VALUES ('00000000-0000-0000-0000-0000000e0501', '00000000-0000-0000-0000-000000000105',
+        '00000000-0000-0000-0000-00000000001a', 'provider-msg-501', FALSE,
+        '00000000-0000-0000-0000-0000000c0000', '2025-01-02 14:00:00 +00:00',
+        true, false, false, false, NOW(), NOW());
+INSERT INTO email_attachments (id, message_id, provider_attachment_id, filename, mime_type, created_at)
+VALUES ('00000000-0000-0000-0000-0000005a0501', '00000000-0000-0000-0000-0000000e0501',
+        'provider-att-501', 'self_only.pdf', 'application/pdf', NOW());
+
+-- Attachment-bearing, contacted threads whose only attachments are filtered.
+INSERT INTO email_threads (id, link_id, inbox_visible, is_read, created_at, updated_at)
+VALUES ('00000000-0000-0000-0000-000000000106', '00000000-0000-0000-0000-00000000001a', false, false, NOW(), NOW()),
+       ('00000000-0000-0000-0000-000000000107', '00000000-0000-0000-0000-00000000001a', false, false, NOW(), NOW());
+INSERT INTO email_messages (id, thread_id, link_id, provider_id, is_sent, from_contact_id, internal_date_ts,
+                            has_attachments, is_read, is_starred, is_draft, created_at, updated_at)
+VALUES ('00000000-0000-0000-0000-0000000e0601', '00000000-0000-0000-0000-000000000106',
+        '00000000-0000-0000-0000-00000000001a', 'provider-msg-601', FALSE,
+        '00000000-0000-0000-0000-0000000c0001', '2025-01-02 15:00:00 +00:00',
+        true, false, false, false, NOW(), NOW()),
+       ('00000000-0000-0000-0000-0000000e0701', '00000000-0000-0000-0000-000000000107',
+        '00000000-0000-0000-0000-00000000001a', 'provider-msg-701', FALSE,
+        '00000000-0000-0000-0000-0000000c0001', '2025-01-02 16:00:00 +00:00',
+        true, false, false, false, NOW(), NOW());
+INSERT INTO email_attachments (id, message_id, provider_attachment_id, filename, mime_type, created_at)
+VALUES ('00000000-0000-0000-0000-0000006a0601', '00000000-0000-0000-0000-0000000e0601',
+        'provider-att-601', 'filtered_image.jpg', 'image/jpeg', NOW()),
+       ('00000000-0000-0000-0000-0000007a0701', '00000000-0000-0000-0000-0000000e0701',
+        'provider-att-701', NULL, 'application/pdf', NOW());
+
+-- Contacted participant without attachments: not eligible.
+INSERT INTO email_threads (id, link_id, inbox_visible, is_read, created_at, updated_at)
+VALUES ('00000000-0000-0000-0000-000000000108', '00000000-0000-0000-0000-00000000001a', false, false, NOW(), NOW());
+INSERT INTO email_messages (id, thread_id, link_id, provider_id, is_sent, from_contact_id, internal_date_ts,
+                            has_attachments, is_read, is_starred, is_draft, created_at, updated_at)
+VALUES ('00000000-0000-0000-0000-0000000e0801', '00000000-0000-0000-0000-000000000108',
+        '00000000-0000-0000-0000-00000000001a', 'provider-msg-801', FALSE,
+        '00000000-0000-0000-0000-0000000c0001', '2025-01-02 17:00:00 +00:00',
+        false, false, false, false, NOW(), NOW());
+
+-- Link B intentionally has no self-contact row.
+INSERT INTO email_links (id, macro_id, fusionauth_user_id, email_address, provider, is_sync_active, created_at, updated_at)
+VALUES ('00000000-0000-0000-0000-00000000002a', 'macro|missing-self@example.com',
+        '00000000-0000-0000-0000-00000000002a', 'missing-self@example.com', 'GMAIL', true, NOW(), NOW());
+INSERT INTO email_contacts (id, link_id, email_address, created_at, updated_at)
+VALUES ('00000000-0000-0000-0000-0000000c0021', '00000000-0000-0000-0000-00000000002a',
+        'contacted-b@example.com', NOW(), NOW());
+INSERT INTO email_threads (id, link_id, inbox_visible, is_read, created_at, updated_at)
+VALUES ('00000000-0000-0000-0000-000000000201', '00000000-0000-0000-0000-00000000002a', false, false, NOW(), NOW()),
+       ('00000000-0000-0000-0000-000000000202', '00000000-0000-0000-0000-00000000002a', false, false, NOW(), NOW());
+INSERT INTO email_messages (id, thread_id, link_id, provider_id, is_sent, from_contact_id, internal_date_ts,
+                            has_attachments, is_read, is_starred, is_draft, created_at, updated_at)
+VALUES ('00000000-0000-0000-0000-0000000e2001', '00000000-0000-0000-0000-000000000201',
+        '00000000-0000-0000-0000-00000000002a', 'provider-msg-2001', TRUE, NULL,
+        '2025-01-03 10:00:00 +00:00', false, false, false, false, NOW(), NOW()),
+       ('00000000-0000-0000-0000-0000000e2002', '00000000-0000-0000-0000-000000000202',
+        '00000000-0000-0000-0000-00000000002a', 'provider-msg-2002', FALSE,
+        '00000000-0000-0000-0000-0000000c0021', '2025-01-03 11:00:00 +00:00',
+        true, false, false, false, NOW(), NOW());
+INSERT INTO email_message_recipients (message_id, contact_id, recipient_type)
+VALUES ('00000000-0000-0000-0000-0000000e2001', '00000000-0000-0000-0000-0000000c0021', 'TO');
+INSERT INTO email_attachments (id, message_id, provider_attachment_id, filename, mime_type, created_at)
+VALUES ('00000000-0000-0000-0000-0000002a2002', '00000000-0000-0000-0000-0000000e2002',
+        'provider-att-2002', 'missing_self_contact.pdf', 'application/pdf', NOW());
+
+-- Link C has an independently eligible contacted thread that must not leak into Link A.
+INSERT INTO email_links (id, macro_id, fusionauth_user_id, email_address, provider, is_sync_active, created_at, updated_at)
+VALUES ('00000000-0000-0000-0000-00000000003a', 'macro|other@example.com',
+        '00000000-0000-0000-0000-00000000003a', 'other@example.com', 'GMAIL', true, NOW(), NOW());
+INSERT INTO email_contacts (id, link_id, email_address, created_at, updated_at)
+VALUES ('00000000-0000-0000-0000-0000000c0031', '00000000-0000-0000-0000-00000000003a',
+        'contacted-c@example.com', NOW(), NOW());
+INSERT INTO email_threads (id, link_id, inbox_visible, is_read, created_at, updated_at)
+VALUES ('00000000-0000-0000-0000-000000000301', '00000000-0000-0000-0000-00000000003a', false, false, NOW(), NOW()),
+       ('00000000-0000-0000-0000-000000000302', '00000000-0000-0000-0000-00000000003a', false, false, NOW(), NOW());
+INSERT INTO email_messages (id, thread_id, link_id, provider_id, is_sent, from_contact_id, internal_date_ts,
+                            has_attachments, is_read, is_starred, is_draft, created_at, updated_at)
+VALUES ('00000000-0000-0000-0000-0000000e3001', '00000000-0000-0000-0000-000000000301',
+        '00000000-0000-0000-0000-00000000003a', 'provider-msg-3001', TRUE, NULL,
+        '2025-01-04 10:00:00 +00:00', false, false, false, false, NOW(), NOW()),
+       ('00000000-0000-0000-0000-0000000e3002', '00000000-0000-0000-0000-000000000302',
+        '00000000-0000-0000-0000-00000000003a', 'provider-msg-3002', FALSE,
+        '00000000-0000-0000-0000-0000000c0031', '2025-01-04 11:00:00 +00:00',
+        true, false, false, false, NOW(), NOW());
+INSERT INTO email_message_recipients (message_id, contact_id, recipient_type)
+VALUES ('00000000-0000-0000-0000-0000000e3001', '00000000-0000-0000-0000-0000000c0031', 'TO');
+INSERT INTO email_attachments (id, message_id, provider_attachment_id, filename, mime_type, created_at)
+VALUES ('00000000-0000-0000-0000-0000003a3002', '00000000-0000-0000-0000-0000000e3002',
+        'provider-att-3002', 'other_link_document.pdf', 'application/pdf', NOW());
+
 -- End of fixture
 ------------------------------------------------------------

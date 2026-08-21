@@ -1,7 +1,7 @@
 use anyhow::Context;
+use macro_auth::InternalApiKey;
 pub use macro_env::Environment;
 use macro_env_var::env_vars;
-use macro_middleware::auth::internal_access::InternalApiKey;
 use macro_service_urls::StaticFileServiceUrl;
 
 env_vars! {

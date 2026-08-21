@@ -16,6 +16,8 @@
       "Bash(bun run check:*)",
       "Bash(bun run check:types:*)",
       "Bash(grep:*)",
+      "Bash(grep *)",
+      "Bash(rg *)",
       "Bash(ls *)",
       "Bash(git status*)",
       "Bash(git diff*)",

@@ -4,11 +4,15 @@ name = "channel_sender"
 publish = false
 version = "0.1.0"
 
+[features]
+schema = ["dep:utoipa"]
+
 [dependencies]
 bot_id = { path = "../bot_id" }
 either = { workspace = true }
 macro_user_id = { path = "../macro_user_id" }
 serde = { workspace = true }
+utoipa = { workspace = true, optional = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]

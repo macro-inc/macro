@@ -22,7 +22,7 @@ fn expand_document_name_highlight_yields_name_hit_without_goto() {
             document_name: "Q3 Report".to_string(),
             owner_id: "alice".to_string(),
             file_type: "md".to_string(),
-            updated_at_seconds: Some(1_779_000_000),
+            updated_at_millis: Some(1_779_000_000_000),
         }),
         highlight: Some(HashMap::from([(
             "document_name".to_string(),
@@ -84,10 +84,10 @@ fn test_deserialization() -> anyhow::Result<()> {
                 "IMPORTANT"
               ],
               "thread_id": "019a5a07-a1ed-7342-93a7-861582b59a55",
-              "sent_at_seconds": 1762447040,
+              "sent_at_millis": 1762447040000_i64,
               "sender": "notifications@github.com",
               "user_id": "macro|hutch@macro.com",
-              "updated_at_seconds": 1762447044,
+              "updated_at_millis": 1762447044000_i64,
               "recipients": [
                 "macro-api@noreply.github.com"
               ]
@@ -122,10 +122,10 @@ fn test_deserialization() -> anyhow::Result<()> {
               "sent_at": 1759241406,
               "thread_id": "01999c74-fb30-7c8a-b334-16035ee46783",
               "updated_at": 1759266586,
-              "sent_at_seconds": 1759241406,
+              "sent_at_millis": 1759241406000_i64,
               "sender": "events@pulumi.com",
               "user_id": "macro|hutch@macro.com",
-              "updated_at_seconds": 1759266586,
+              "updated_at_millis": 1759266586000_i64,
               "recipients": [
                 "hutch@macro.com"
               ]
@@ -145,7 +145,7 @@ fn test_deserialization() -> anyhow::Result<()> {
             "_source": {
               "document_name": "Rust for Rustaceans Idiomatic Programming for Experienced Developers (1)",
               "updated_at": 1752523635,
-              "updated_at_seconds": 1752523635,
+              "updated_at_millis": 1752523635000_i64,
               "file_type": "pdf",
               "owner_id": "macro|teo@macro.com",
               "document_id": "013021c7-5e14-4aab-855e-01413fff85dc",
@@ -182,10 +182,10 @@ fn test_deserialization() -> anyhow::Result<()> {
               "sent_at": 1761742081,
               "thread_id": "019a3002-d9ff-79ad-9a5f-c3116b5b229a",
               "updated_at": 1761742084,
-              "sent_at_seconds": 1761742081,
+              "sent_at_millis": 1761742081000_i64,
               "sender": "noreply@github.com",
               "user_id": "macro|hutch@macro.com",
-              "updated_at_seconds": 1761742084,
+              "updated_at_millis": 1761742084000_i64,
               "recipients": [
                 "will@thehutchery.com"
               ]
@@ -206,7 +206,7 @@ fn test_deserialization() -> anyhow::Result<()> {
             "_source": {
               "document_name": "Rust for Rustaceans Idiomatic Programming for Experienced Developers (1)",
               "updated_at": 1752522588,
-              "updated_at_seconds": 1752522588,
+              "updated_at_millis": 1752522588000_i64,
               "file_type": "pdf",
               "owner_id": "macro|teo@macro.com",
               "document_id": "71ff8822-b421-4cab-b23e-f65355bf90d4",
@@ -247,10 +247,10 @@ fn test_deserialization() -> anyhow::Result<()> {
               "sent_at": 1761313387,
               "thread_id": "019a1675-844c-7dcc-bd45-109c25b94fa0",
               "updated_at": 1761313391,
-              "sent_at_seconds": 1761313387,
+              "sent_at_millis": 1761313387000_i64,
               "sender": "notifications@github.com",
               "user_id": "macro|hutch@macro.com",
-              "updated_at_seconds": 1761313391,
+              "updated_at_millis": 1761313391000_i64,
               "recipients": [
                 "macro-api@noreply.github.com"
               ]
@@ -289,10 +289,10 @@ fn test_deserialization() -> anyhow::Result<()> {
               "sent_at": 1761848050,
               "thread_id": "019a3653-c914-769b-9454-3b70dc2ad966",
               "updated_at": 1761848053,
-              "sent_at_seconds": 1761848050,
+              "sent_at_millis": 1761848050000_i64,
               "sender": "notifications@github.com",
               "user_id": "macro|hutch@macro.com",
-              "updated_at_seconds": 1761848053,
+              "updated_at_millis": 1761848053000_i64,
               "recipients": [
                 "macro-api@noreply.github.com"
               ]
@@ -331,10 +331,10 @@ fn test_deserialization() -> anyhow::Result<()> {
               "sent_at": 1761252648,
               "thread_id": "019a12cf-ed6d-7cbc-b705-a78bbbe1bba0",
               "updated_at": 1761252711,
-              "sent_at_seconds": 1761252648,
+              "sent_at_millis": 1761252648000_i64,
               "sender": "notifications@github.com",
               "user_id": "macro|hutch@macro.com",
-              "updated_at_seconds": 1761252711,
+              "updated_at_millis": 1761252711000_i64,
               "recipients": [
                 "macro-api@noreply.github.com"
               ]
@@ -370,10 +370,10 @@ fn test_deserialization() -> anyhow::Result<()> {
               "sent_at": 1761833460,
               "thread_id": "019a3575-3540-7231-8b83-51279a1bf623",
               "updated_at": 1761833465,
-              "sent_at_seconds": 1761833460,
+              "sent_at_millis": 1761833460000_i64,
               "sender": "notifications@github.com",
               "user_id": "macro|hutch@macro.com",
-              "updated_at_seconds": 1761833465,
+              "updated_at_millis": 1761833465000_i64,
               "recipients": [
                 "macro-api@noreply.github.com"
               ]
@@ -412,10 +412,10 @@ fn test_deserialization() -> anyhow::Result<()> {
               "sent_at": 1761753544,
               "thread_id": "019a30ae-2a24-78b3-9eef-e3aa7594a1e4",
               "updated_at": 1761753548,
-              "sent_at_seconds": 1761753544,
+              "sent_at_millis": 1761753544000_i64,
               "sender": "notifications@github.com",
               "user_id": "macro|hutch@macro.com",
-              "updated_at_seconds": 1761753548,
+              "updated_at_millis": 1761753548000_i64,
               "recipients": [
                 "macro-api@noreply.github.com"
               ]
@@ -535,7 +535,8 @@ fn test_build_unified_search_request_content() -> anyhow::Result<()> {
           "bcc": { "number_of_fragments": 0, "post_tags": ["</macro_em>"], "pre_tags": ["<macro_em>"], "type": "plain" },
           "bcc_names": { "number_of_fragments": 0, "post_tags": ["</macro_em>"], "pre_tags": ["<macro_em>"], "type": "plain" }
         },
-        "require_field_match": true
+        "require_field_match": true,
+        "max_analyzer_offset": 999999
       },
       "query": {
         "bool": {
@@ -673,7 +674,7 @@ fn test_build_unified_search_request_content() -> anyhow::Result<()> {
                         {
                           "simple_query_string": {
                             "default_operator": "AND",
-                            "fields": ["sender", "reply_to", "recipients", "cc", "bcc"],
+                            "fields": ["sender", "reply_to", "recipients", "cc", "bcc", "sender.parts", "reply_to.parts", "recipients.parts", "cc.parts", "bcc.parts"],
                             "query": "(test | test@*)"
                           }
                         },
@@ -856,7 +857,8 @@ fn test_build_unified_search_request_single_index() -> anyhow::Result<()> {
           "bcc": { "number_of_fragments": 0, "post_tags": ["</macro_em>"], "pre_tags": ["<macro_em>"], "type": "plain" },
           "bcc_names": { "number_of_fragments": 0, "post_tags": ["</macro_em>"], "pre_tags": ["<macro_em>"], "type": "plain" }
         },
-        "require_field_match": true
+        "require_field_match": true,
+        "max_analyzer_offset": 999999
       },
       "query": {
         "bool": {
@@ -906,7 +908,7 @@ fn test_thread_sort_is_thread_id_then_message_id_field_sorts() {
 /// content query.
 fn doc_hit_with_chunks(
     entity_id: uuid::Uuid,
-    updated_at_seconds: i64,
+    updated_at_millis: i64,
     chunk_count: usize,
 ) -> Hit<UnifiedSearchIndex> {
     let chunks: Vec<serde_json::Value> = (0..chunk_count)
@@ -927,7 +929,7 @@ fn doc_hit_with_chunks(
             document_name: "Doc".to_string(),
             owner_id: "alice".to_string(),
             file_type: "md".to_string(),
-            updated_at_seconds: Some(updated_at_seconds),
+            updated_at_millis: Some(updated_at_millis),
         }),
         highlight: None,
         inner_hits: Some(serde_json::json!({ "term_0": { "hits": { "hits": chunks } } })),
@@ -946,8 +948,8 @@ fn paginate_counts_parent_entities_not_inner_hits() {
         .parse::<uuid::Uuid>()
         .unwrap();
     let hits = vec![
-        doc_hit_with_chunks(d1, 1_779_000_100, 30),
-        doc_hit_with_chunks(d2, 1_779_000_050, 30),
+        doc_hit_with_chunks(d1, 1_779_000_100_000, 30),
+        doc_hit_with_chunks(d2, 1_779_000_050_000, 30),
     ];
 
     let (results, cursor) = paginate_unified_hits(hits, 10);
@@ -977,9 +979,9 @@ fn paginate_has_more_when_parent_count_exceeds_page_size() {
         .parse::<uuid::Uuid>()
         .unwrap();
     let hits = vec![
-        doc_hit_with_chunks(d1, 1_779_000_300, 5),
-        doc_hit_with_chunks(d2, 1_779_000_200, 5),
-        doc_hit_with_chunks(d3, 1_779_000_100, 5),
+        doc_hit_with_chunks(d1, 1_779_000_300_000, 5),
+        doc_hit_with_chunks(d2, 1_779_000_200_000, 5),
+        doc_hit_with_chunks(d3, 1_779_000_100_000, 5),
     ];
 
     let (results, cursor) = paginate_unified_hits(hits, 2);
@@ -1012,7 +1014,7 @@ fn paginate_page_size_zero_terminates() {
     let d1 = "00000000-0000-0000-0000-000000000001"
         .parse::<uuid::Uuid>()
         .unwrap();
-    let hits = vec![doc_hit_with_chunks(d1, 1_779_000_100, 5)];
+    let hits = vec![doc_hit_with_chunks(d1, 1_779_000_100_000, 5)];
 
     let (results, cursor) = paginate_unified_hits(hits, 0);
 
@@ -1046,8 +1048,8 @@ fn project_hit_deserializes_and_converts() -> anyhow::Result<()> {
               "name": "Mobile Redesign",
               "owner_id": "macro|user@user.com",
               "parent_project_id": "0197a863-0000-7000-8000-000000000002",
-              "created_at_seconds": 1770000000,
-              "updated_at_seconds": 1783000000,
+              "created_at_millis": 1770000000000_i64,
+              "updated_at_millis": 1783000000000_i64,
               "properties": [
                 { "definition_id": "0197a863-0000-7000-8000-00000000000a", "values": ["opt-1"] }
               ]

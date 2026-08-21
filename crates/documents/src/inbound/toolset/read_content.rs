@@ -1,5 +1,6 @@
 //! ReadContent tool for reading document content.
 
+use ai_toolset::{ToolAnnotated, ToolAnnotations};
 use std::str::FromStr;
 
 use crate::domain::{
@@ -89,6 +90,10 @@ pub struct ReadContent {
     pub document_id: Uuid,
 }
 
+impl ToolAnnotated for ReadContent {
+    const ANNOTATIONS: ToolAnnotations = ToolAnnotations::read_only("Read document");
+}
+
 #[async_trait]
 impl<DSvc, ESvc, EDSvc> AsyncTool<DocumentToolContext<DSvc, ESvc, EDSvc>> for ReadContent
 where
@@ -105,6 +110,16 @@ where
         request_context: RequestContext,
     ) -> ToolResult<Self::Output> {
         tracing::info!(params=?self, "Read metadata");
+
+        // System skills are static, code-defined content with well-known ids
+        // rather than documents; serve them before any document lookup or
+        // access check (they are visible to every user).
+        if let Some(skill) = system_skills::system_skill(self.document_id) {
+            return Ok(ReadContentResponse {
+                content: Content::Text(skill.render_content()),
+                comments: Vec::new(),
+            });
+        }
 
         // Get EntityAccessReceipt
         let entity_access_receipt = service_context

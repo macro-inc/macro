@@ -7,11 +7,13 @@ import CaretDownIcon from '@phosphor/caret-down.svg';
 import CheckIcon from '@phosphor/check.svg';
 import HashIcon from '@phosphor/hash.svg';
 import XIcon from '@phosphor/x.svg';
-import { ChannelTypeEnum } from '@service-storage/client';
 import { Surface } from '@ui';
 import { type Component, createMemo, For, Show } from 'solid-js';
-
-export type BotChannelOption = { id: string; name: string };
+import {
+  type BotChannelOption,
+  botAssignableChannelOptions,
+  mergeChannelOptions,
+} from './botChannelOptions';
 
 const ChannelItem: Component<
   ComboboxRootItemComponentProps<BotChannelOption>
@@ -32,19 +34,16 @@ const ChannelItem: Component<
 
 export function ChannelMultiSelect(props: {
   channelIds: string[];
+  assignedChannels?: BotChannelOption[];
   onChange: (channelIds: string[]) => void;
   disabled?: boolean;
 }) {
   const channelsContext = useChannelsContext();
   const options = createMemo<BotChannelOption[]>(() =>
-    channelsContext
-      .channels()
-      .filter((channel) => channel.channel_type === ChannelTypeEnum.Private)
-      .map((channel) => ({
-        id: channel.id,
-        name: channel.name?.trim() || 'Unnamed channel',
-      }))
-      .sort((a, b) => a.name.localeCompare(b.name))
+    mergeChannelOptions(
+      props.assignedChannels ?? [],
+      botAssignableChannelOptions(channelsContext.channels())
+    )
   );
   const selectedOptions = createMemo(() => {
     const selected = new Set(props.channelIds);
@@ -103,8 +102,7 @@ export function ChannelMultiSelect(props: {
         <Combobox.Content
           as={Surface}
           depth={3}
-          bgToken="menu"
-          class="z-action-menu mt-1 w-[var(--kb-popper-anchor-width)] min-w-64 rounded-xl p-1.5 shadow-menu"
+          class="z-action-menu mt-1 w-[var(--kb-popper-anchor-width)] min-w-64 rounded-xl p-1.5 shadow-menu bg-menu"
         >
           <Show
             when={options().length > 0}

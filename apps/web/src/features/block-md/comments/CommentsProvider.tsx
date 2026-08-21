@@ -7,6 +7,7 @@ import { autoRegister } from '@core/component/LexicalMarkdown/plugins';
 import {
   commentPlugin,
   MARK_SELECTED_COMMENT_COMMAND,
+  REMOVE_ORPHANED_COMMENT_MARKS_COMMAND,
 } from '@core/component/LexicalMarkdown/plugins/comments/commentPlugin';
 import { useUserId } from '@core/context/user';
 import type { LoroManager } from '@macro-inc/collaboration/collab/manager';
@@ -16,6 +17,7 @@ import {
   type Accessor,
   createEffect,
   createMemo,
+  createSignal,
   untrack,
   useContext,
   type VoidComponent,
@@ -34,6 +36,8 @@ import {
 } from './commentStore';
 import { commentThreadsResource, sortComments } from './commentsResource';
 import type { Mark, ThreadMetadata, ThreadStore } from './commentType';
+
+const DISCUSSION_MARK_PREFIX = 'DISCUSSION:';
 
 function getHighlightThread(
   highlight: Mark
@@ -140,7 +144,6 @@ export const CommentsProvider: VoidComponent<{
         setMarks(markId, undefined);
         const rootId = existing.thread?.rootId;
         if (!rootId) {
-          console.error('Unable to delete comment: no root id');
           return;
         }
         deleteComment({ commentId: rootId });
@@ -259,8 +262,10 @@ export const CommentsProvider: VoidComponent<{
   // Map server comment threads to mark metadata once marks are initialized
   createEffect(() => {
     if (!commentMarksInitializedSignal()) return;
+    if (commentThreadsData.loading || commentThreadsData.error) return;
 
     const commentThreads = commentThreadsData() ?? [];
+    const validAnchorIds = new Set<string>();
 
     const mappedAnchors = commentThreads.map((commentThread) => {
       const threadMetadata = commentThread.thread.metadata as ThreadMetadata;
@@ -273,6 +278,7 @@ export const CommentsProvider: VoidComponent<{
         console.error('Unable to find anchor id');
         return undefined;
       }
+      validAnchorIds.add(anchorId);
 
       const sortedComments = commentThread.comments.sort(sortComments);
       const rootComment = sortedComments[0];
@@ -301,24 +307,57 @@ export const CommentsProvider: VoidComponent<{
       if (!anchor) continue;
       setMarks(anchor.id, anchor);
     }
+
+    editor.dispatchCommand(
+      REMOVE_ORPHANED_COMMENT_MARKS_COMMAND,
+      validAnchorIds
+    );
   });
 
-  // Navigate to comment from URL param once comments are loaded
+  const [targetRequest, setTargetRequest] = createSignal(0);
+  let pendingTargetCommentId: string | undefined;
+
   createEffect(() => {
-    if (!commentMarksInitializedSignal()) return;
-    const rawId = props.activeComment?.();
+    pendingTargetCommentId = props.activeComment?.();
+    setTargetRequest((request) => request + 1);
+  });
+
+  // Navigate to comment from URL param once comments are loaded.
+  // Keep this one-shot so a persistent `comment_id` does not steal focus from
+  // later user actions, like creating a new comment.
+  createEffect(() => {
+    targetRequest();
+    const rawId = pendingTargetCommentId;
     if (!rawId) return;
+
+    if (!commentMarksInitializedSignal()) return;
     const commentId = Number(rawId);
     if (isNaN(commentId)) return;
+
+    const commentThreads = commentThreadsData() ?? [];
+    const targetThread = commentThreads.find((thread) =>
+      thread.comments.some((comment) => comment.commentId === commentId)
+    );
+    const targetMetadata = targetThread?.thread.metadata as
+      | ThreadMetadata
+      | undefined;
+    if (targetMetadata?.markId?.startsWith(DISCUSSION_MARK_PREFIX)) {
+      activeCommentThreadSignal.set(null);
+      highlightedCommentIdSignal.set(null);
+      pendingTargetCommentId = undefined;
+      return;
+    }
+
     const comment = commentsStore.get[commentId];
     if (!comment) return;
-    activeCommentThreadSignal.set(comment.threadId);
     highlightedCommentIdSignal.set(commentId);
     const mark = marks[comment.anchorId];
     if (mark) {
       const firstEl = Object.values(mark.markNodes)[0];
       firstEl?.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
+    activeCommentThreadSignal.set(comment.threadId);
+    pendingTargetCommentId = undefined;
   });
 
   autoRegister(

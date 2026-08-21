@@ -1,7 +1,12 @@
 //! Domain layer: models, ports (trait interfaces), and service implementation.
 
+/// Event-to-activity mappings for this domain.
+pub mod activity;
 pub mod branch_name;
 pub mod content;
+/// Unified entity-mutation capability impls.
+#[cfg(feature = "service")]
+pub mod entity_mutation;
 pub mod events;
 #[cfg(feature = "ports")]
 pub mod markdown_backfill;

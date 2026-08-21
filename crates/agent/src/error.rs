@@ -1,18 +1,19 @@
-use rig_core::agent::StreamingError;
-use rig_core::completion::{CompletionError, PromptError};
+use rig_agent::agent::StreamingError;
+use rig_agent::completion::PromptError;
+use rig_core::completion::CompletionError;
 
 /// Errors produced by the agent crate.
 #[derive(Debug, thiserror::Error)]
 pub enum AgentError {
     /// An error from the RIG completion layer.
     #[error(transparent)]
-    Completion(#[from] rig_core::completion::CompletionError),
+    Completion(#[from] CompletionError),
     /// An error from the RIG prompt/agentic loop.
     #[error(transparent)]
-    Prompt(#[from] rig_core::completion::PromptError),
+    Prompt(#[from] PromptError),
     /// An error from the RIG streaming layer.
     #[error(transparent)]
-    Streaming(#[from] rig_core::agent::StreamingError),
+    Streaming(#[from] StreamingError),
     /// Serialization / deserialization failure.
     #[error(transparent)]
     Json(#[from] serde_json::Error),
@@ -39,8 +40,6 @@ pub enum AgentError {
 impl AgentError {
     /// is the error caused by a cancellation
     pub fn was_cancelled(&self) -> bool {
-        use rig_core::agent::StreamingError;
-        use rig_core::completion::PromptError;
         match self {
             // A direct prompt error.
             Self::Prompt(PromptError::PromptCancelled { .. }) => true,

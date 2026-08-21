@@ -1,0 +1,12 @@
+-- no-transaction
+-- idx_entity_access_source_type_entity keyed its third column on the
+-- expression (entity_id::text), which Postgres never uses to satisfy a
+-- reference to entity_id, so it could not serve index-only scans and its
+-- (source_id, entity_type) index conditions are covered by
+-- idx_entity_access_source_type_entity_plain. Deploy only after confirming
+-- the plain index is valid:
+--   SELECT indexrelid::regclass FROM pg_index WHERE NOT indisvalid;
+--
+-- Single statement on purpose: see the note in
+-- 20260715154137_add_entity_access_source_type_entity_plain_index.sql.
+DROP INDEX CONCURRENTLY IF EXISTS idx_entity_access_source_type_entity;

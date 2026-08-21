@@ -27,8 +27,14 @@ export function useChannelParticipantsQuery(channelId: Accessor<string>) {
   return useQuery(() => channelParticipantsQueryOptions(channelId()));
 }
 
+export function invalidateChannelParticipants(channelId: string) {
+  return queryClient.invalidateQueries({
+    queryKey: channelKeys.participants(channelId).queryKey,
+  });
+}
+
 export function softInvalidateChannelParticipants(channelId: string) {
-  queryClient.invalidateQueries({
+  return queryClient.invalidateQueries({
     queryKey: channelKeys.participants(channelId).queryKey,
     refetchType: 'inactive',
   });

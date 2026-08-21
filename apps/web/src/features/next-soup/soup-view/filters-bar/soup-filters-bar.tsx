@@ -4,121 +4,111 @@ import { SoupViewContextGroup } from '@app/features/next-soup/soup-view/filters-
 import { SoupViewContextSort } from '@app/features/next-soup/soup-view/filters-bar/soup-view-context-sort';
 import { UnifiedFilterDropdown } from '@app/features/next-soup/soup-view/filters-bar/unified-filter-dropdown';
 import { useFilterRefinements } from '@app/features/next-soup/soup-view/filters-bar/use-filter-refinements';
-import { useSoupView } from '@app/features/next-soup/soup-view/soup-view-context';
-import { usePreviewPaneVisiblity } from '@app/features/next-soup/soup-view/use-preview-pane-visibility';
-import { useAnalytics } from '@app/lib/analytics/analytics-context';
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import {
+  CompanyDisplayMenu,
+  CompanyViewsMenu,
+} from '@app/features/next-soup/soup-view/views/companies/CompanyViewsMenu';
+import { CollapsibleToolbarItem } from '@components/app/split-layout/components/CollapsibleItem';
+import { PreviewButton } from '@components/app/split-layout/components/PreviewButton';
 import {
   SplitToolbarLeft,
   SplitToolbarRight,
 } from '@components/app/split-layout/components/SplitToolbar';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
-import {
-  ENABLE_NEW_INBOX_FLAG,
-  ENABLE_NEW_INBOX_OVERRIDE,
-} from '@core/constant/featureFlags';
-import { registerHotkey } from '@core/hotkey/hotkeys';
-import { TOKENS } from '@core/hotkey/tokens';
-import { isMobile } from '@core/mobile/isMobile';
-import EyeIcon from '@phosphor-icons/core/regular/eye.svg?component-solid';
-import EyeSlashIcon from '@phosphor-icons/core/regular/eye-slash.svg?component-solid';
-import { Button, Tooltip } from '@ui';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { createMemo, createSignal, Show } from 'solid-js';
-import { useSoup } from '../../soup-context';
 
-export function SoupFiltersBar() {
+export function SoupFiltersBar(props: {
+  variant?: 'default' | 'tag';
+  hasPreviewItems: boolean;
+  onPreviewEngage: () => void;
+  onPreviewOpenChange?: (open: boolean) => void;
+}) {
   const { resetToTabDefaults, consolidatedFiltersList } =
     useFilterRefinements();
 
   const [filterDropdownOpen, setFilterDropdownOpen] = createSignal(false);
 
   const panel = useSplitPanelOrThrow();
-  const analytics = useAnalytics();
-  const soup = useSoup();
-  const { setPreviewOpen } = useSoupView();
-
-  const { isWideSplitPanel, previewOpen, selectedEntity } =
-    usePreviewPaneVisiblity();
-
-  const togglePreview = () => {
-    if (previewOpen()) {
-      setPreviewOpen(false);
-      soup.setPreviewEntity(undefined);
-      return;
-    }
-
-    analytics.track('preview_panel_use');
-    soup.setPreviewEntity(selectedEntity()?.id);
-    setPreviewOpen(true);
-  };
-
-  registerHotkey({
-    hotkeyToken: TOKENS.unifiedList.togglePreview,
-    scopeId: panel.splitHotkeyScope,
-    description: 'Toggle preview',
-    keyDownHandler: () => {
-      togglePreview();
-      return true;
-    },
-    hotkey: 'space',
-  });
 
   const isSearchView = createMemo(() => {
     const content = panel.handle.content();
     return content.type === 'component' && content.id === 'search';
   });
-
-  // The new inbox hides sort (it's fixed to updated_at for this view).
-  const newInboxFlag = useFeatureFlag(ENABLE_NEW_INBOX_FLAG, {
-    enabledOverride: ENABLE_NEW_INBOX_OVERRIDE,
-  });
-  const isNewInbox = createMemo(() => {
+  const isCompaniesView = createMemo(() => {
     const content = panel.handle.content();
-    return (
-      content.type === 'component' &&
-      content.id === 'inbox' &&
-      newInboxFlag().enabled
-    );
+    return content.type === 'component' && content.id === 'companies';
   });
+  const isTagView = createMemo(() => props.variant === 'tag');
+
+  // The inbox hides sort (it's fixed to updated_at for this view).
+  const isInboxView = createMemo(() => {
+    const content = panel.handle.content();
+    return content.type === 'component' && content.id === 'inbox';
+  });
+
+  const CollapsibleGroup = () => (
+    <CollapsibleToolbarItem id="soup-toolbar-group" priority={0}>
+      {(isCollapsed) => <SoupViewContextGroup hideLabel={isCollapsed()} />}
+    </CollapsibleToolbarItem>
+  );
+
+  const CollapsibleFilter = () => (
+    <CollapsibleToolbarItem id="soup-toolbar-filter" priority={1}>
+      {(isCollapsed) => (
+        <UnifiedFilterDropdown
+          open={filterDropdownOpen}
+          onOpenChange={setFilterDropdownOpen}
+          hideLabel={isCollapsed()}
+        />
+      )}
+    </CollapsibleToolbarItem>
+  );
 
   return (
-    <Show when={!isMobile()}>
+    <Show when={!isTouchDevice()}>
       <SplitToolbarLeft>
-        <div class="flex items-start gap-1 min-w-0 flex-1">
-          <Show when={!isSearchView()} fallback={<SearchFiltersRow />}>
-            <Show when={!isNewInbox()}>
-              <SoupViewContextSort />
+        <Show
+          when={!isSearchView() && !isTagView()}
+          fallback={
+            <Show when={isTagView()} fallback={<SearchFiltersRow />}>
+              <Show when={!isInboxView()}>
+                <SoupViewContextSort />
+              </Show>
+              <CollapsibleGroup />
             </Show>
-            <SoupViewContextGroup />
-            <UnifiedFilterDropdown
-              open={filterDropdownOpen}
-              onOpenChange={setFilterDropdownOpen}
-            />
+          }
+        >
+          <Show when={!isInboxView()}>
+            <SoupViewContextSort />
           </Show>
-        </div>
+          <CollapsibleGroup />
+          <CollapsibleFilter />
+          <Show when={isCompaniesView()}>
+            <CompanyDisplayMenu />
+          </Show>
+        </Show>
       </SplitToolbarLeft>
       <SplitToolbarRight>
-        <Tooltip
-          hotkey={
-            isWideSplitPanel() ? TOKENS.unifiedList.togglePreview : undefined
-          }
-          label={isWideSplitPanel() ? 'Preview' : 'No space for preview'}
-        >
-          <Button
-            onClick={togglePreview}
-            variant="base"
-            size="sm"
-            depth={2}
-            class="bg-surface"
-            disabled={!isWideSplitPanel()}
-          >
-            {previewOpen() ? <EyeSlashIcon /> : <EyeIcon />}
-            <span>Preview</span>
-          </Button>
-        </Tooltip>
+        <Show when={isCompaniesView()}>
+          <CollapsibleToolbarItem id="soup-toolbar-views" priority={2}>
+            {(isCollapsed) => <CompanyViewsMenu hideLabel={isCollapsed()} />}
+          </CollapsibleToolbarItem>
+        </Show>
+        <CollapsibleToolbarItem id="soup-toolbar-preview" priority={3}>
+          {(isCollapsed) => (
+            <PreviewButton
+              disabled={!props.hasPreviewItems}
+              disabledLabel="No items to preview"
+              onEngage={props.onPreviewEngage}
+              onOpenChange={props.onPreviewOpenChange}
+              hideLabel={isCollapsed()}
+            />
+          )}
+        </CollapsibleToolbarItem>
       </SplitToolbarRight>
       {/* Active filters bar - shown below the toolbar when there are filters */}
-      <Show when={!isSearchView()}>
+      <Show when={!isSearchView() && !isTagView()}>
         <SoupActiveFiltersBar
           filters={consolidatedFiltersList()}
           onClearAll={resetToTabDefaults}

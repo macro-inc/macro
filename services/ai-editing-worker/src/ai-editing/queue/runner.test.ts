@@ -11,6 +11,7 @@ const reader = (over: Partial<DocReader> = {}): DocReader => ({
   locate: () => [{ node: 't1', start: 0, end: 3 }],
   textLength: () => 4,
   cellNode: () => 'cell',
+    blockRef: (node: string) => node,
   ...over,
 });
 

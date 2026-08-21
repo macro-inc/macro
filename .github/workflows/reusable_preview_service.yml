@@ -41,8 +41,6 @@ on:
         required: true
       DD_API_KEY:
         required: true
-      CACHIX_AUTH_TOKEN:
-        required: true
 jobs:
   preview:
     runs-on: namespace-profile-linux-small
@@ -52,7 +50,7 @@ jobs:
     - name: Mount /nix cache volume
       uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
       with:
-        path: /nix
+        cache: nix
       continue-on-error: true
     - name: Setup Nix
       uses: ./.github/actions/setup-nix
@@ -75,7 +73,6 @@ jobs:
         use-lfs: ${{ inputs.use-lfs }}
         github-token: ${{ inputs.github-token }}
         cloud-storage-service-name: ${{ inputs.service-name }}
-        cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
     - name: Teardown Nix
       if: always()
       uses: ./.github/actions/teardown-nix

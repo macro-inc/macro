@@ -29,11 +29,6 @@ export function PrTimeline(props: {
   const [isExpanded, setIsExpanded] = createSignal(true);
   const [hideBots, setHideBots] = createSignal(false);
 
-  const visibleGithubItems = createMemo(() =>
-    hideBots()
-      ? props.githubItems.filter((item) => !isGithubBotLogin(item.authorLogin))
-      : props.githubItems
-  );
   const botCount = createMemo(
     () =>
       props.githubItems.filter((item) => isGithubBotLogin(item.authorLogin))
@@ -41,7 +36,9 @@ export function PrTimeline(props: {
   );
 
   const entries = createMemo(() =>
-    buildTimeline(visibleGithubItems(), props.source.threads())
+    buildTimeline(props.githubItems, props.source.threads(), {
+      hideBots: hideBots(),
+    })
   );
 
   let composerHandle: { clear: () => void } | undefined;
@@ -90,7 +87,10 @@ export function PrTimeline(props: {
                   <Switch>
                     <Match when={entry.kind === 'github-comment' && entry}>
                       {(commentEntry) => (
-                        <GithubMessageView comment={commentEntry().item} />
+                        <GithubMessageView
+                          comment={commentEntry().item}
+                          replies={commentEntry().replies}
+                        />
                       )}
                     </Match>
                     <Match when={entry.kind === 'macro-thread' && entry}>

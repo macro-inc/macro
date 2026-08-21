@@ -1,0 +1,85 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT edit_stages_role AS \"edit_stages_role: CrmPermissionRole\",\n                   move_closed_deals_role AS \"move_closed_deals_role: CrmPermissionRole\",\n                   delete_records_role AS \"delete_records_role: CrmPermissionRole\",\n                   closed_stage_ids,\n                   team_views,\n                   default_team_view_id\n            FROM team_crm_settings\n            WHERE team_id = $1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "edit_stages_role: CrmPermissionRole",
+        "type_info": {
+          "Custom": {
+            "name": "team_role",
+            "kind": {
+              "Enum": [
+                "member",
+                "admin",
+                "owner"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "move_closed_deals_role: CrmPermissionRole",
+        "type_info": {
+          "Custom": {
+            "name": "team_role",
+            "kind": {
+              "Enum": [
+                "member",
+                "admin",
+                "owner"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "delete_records_role: CrmPermissionRole",
+        "type_info": {
+          "Custom": {
+            "name": "team_role",
+            "kind": {
+              "Enum": [
+                "member",
+                "admin",
+                "owner"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "closed_stage_ids",
+        "type_info": "UuidArray"
+      },
+      {
+        "ordinal": 4,
+        "name": "team_views",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 5,
+        "name": "default_team_view_id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      false,
+      true
+    ]
+  },
+  "hash": "eaa347f84f5dbdaaf4afa3056a618956aab6be2b682414dab0ba8e50dbf65f00"
+}

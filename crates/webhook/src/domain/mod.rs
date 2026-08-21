@@ -3,6 +3,8 @@
 #[cfg(feature = "ports")]
 /// Webhook event delivery state machine and retry policy.
 pub mod delivery;
+/// Webhook lifecycle event contracts and deliverable event payloads.
+pub mod events;
 #[cfg(feature = "ingestion")]
 /// Webhook event ingestion service.
 pub mod ingestion;
@@ -16,5 +18,3 @@ pub mod ports;
 #[cfg(feature = "ports")]
 /// Webhook service implementation.
 pub mod service;
-#[cfg(test)]
-mod service_test;

@@ -276,9 +276,10 @@ type RecipientSelectorProps<K extends CombinedRecipientKind> = {
   disabled?: boolean;
   onChipDragStart?: (option: WithCustomUserInput<K>, e: DragEvent) => void;
   onChipDragEnd?: (e: DragEvent) => void;
+  hideMenuOnEscape?: boolean;
   horizontalScroll?: boolean;
   class?: string;
-  depth?: 0 | 1 | 2 | 3 | 4 | 5;
+  depth?: 0 | 1 | 2 | 3 | 4;
   portalScope?: 'local';
 };
 
@@ -303,8 +304,6 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
       portalSearchRef()?.closest<HTMLElement>('.portal-scope') ?? undefined
     );
   };
-  const shouldRenderPortal = () =>
-    props.portalScope !== 'local' || portalMount() !== undefined;
 
   // The chips container caps its height and scrolls; keep the input's line
   // visible as chips push it down.
@@ -322,7 +321,14 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
 
   const debouncedHandleChange = debounce(handleChange, 100);
 
-  const [isOpen, setIsOpen] = createSignal<boolean>();
+  const [isOpen, setIsOpen] = createSignal(false);
+  const [suppressOpenUntilInputChange, setSuppressOpenUntilInputChange] =
+    createSignal(Boolean(props.focusOnMount));
+
+  const setComboboxOpen = (next: boolean) => {
+    if (next && suppressOpenUntilInputChange()) return;
+    setIsOpen(next);
+  };
 
   const hasValidCustomEmail = () => {
     const input = inputValue();
@@ -332,7 +338,7 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
 
   createEffect(() => {
     if (hasValidCustomEmail()) {
-      setIsOpen(true);
+      setComboboxOpen(true);
     }
   });
 
@@ -571,8 +577,17 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
 
   const selectedLen = () => props.selectedOptions.length;
 
+  let contentEl: HTMLElement | undefined;
+
   const onInputChange = (next: string) => {
+    const previous = inputValue();
     setInputValue(next);
+    if (next !== previous) {
+      setSuppressOpenUntilInputChange(false);
+    }
+    if (next.length === 0) return;
+
+    setIsOpen(true);
 
     // Send the keydown event to the listbox so Kobalte's internal system can update the focus state
     // This makes it so it behaves the same as if you had manually pressed the down arrow to focus the item
@@ -592,7 +607,7 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
         triggerMode={props.triggerMode ?? 'input'}
         closeOnSelection={true}
         open={isOpen()}
-        onOpenChange={setIsOpen}
+        onOpenChange={setComboboxOpen}
         disabled={props.disabled}
         validationState={invalid() ? 'invalid' : 'valid'}
         options={optionsWithSelected()}
@@ -614,7 +629,7 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
         }
         class={cn(
           'ph-no-capture w-full text-sm offset-2 bg-surface rounded-2xl',
-          !props.hideBorder && 'ring ring-edge',
+          !props.hideBorder && 'border border-edge',
           !props.noPadding && 'p-2',
           props.class
         )}
@@ -761,7 +776,7 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
                     class="flex-1 min-h-7 p-1 min-w-50 outline-none placeholder:text-ink-placeholder"
                     classList={{ 'ml-1': selectedLen() === 0 }}
                     onFocus={() => {
-                      if (props.openOnFocus ?? true) setIsOpen(true);
+                      if (props.openOnFocus ?? true) setComboboxOpen(true);
                     }}
                     onKeyDown={(e) => {
                       if (
@@ -771,14 +786,33 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
                         setDisabled(true);
                         queueMicrotask(() => setDisabled(false));
                       }
-                      if (e.key === 'Escape') {
-                        if (inputValue().length === 0) {
-                          inputRef()?.blur();
-                        }
-                      }
                     }}
                     // use a non-delegated event here so that we can process it before Kobalte
                     on:keydown={(e: KeyboardEvent) => {
+                      if (e.key === 'Escape' && isOpen()) {
+                        e.preventDefault();
+                        if (props.hideMenuOnEscape) {
+                          e.stopPropagation();
+                        }
+                        setSuppressOpenUntilInputChange(true);
+                        setIsOpen(false);
+                        return;
+                      }
+
+                      if (e.key === 'Escape') {
+                        e.preventDefault();
+                        const inputEl = inputRef();
+                        const currentSearch = inputValue().trim();
+                        if (currentSearch.length > 0) {
+                          setInputValue('');
+                          if (inputEl) inputEl.value = '';
+                          return;
+                        }
+
+                        inputEl?.blur();
+                        return;
+                      }
+
                       if (e.key === 'Tab' && context.isOpen()) {
                         e.preventDefault();
                         e.stopPropagation();
@@ -806,60 +840,106 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
         </Combobox.Control>
 
         <div class="hidden" ref={setPortalSearchRef} />
-        <Show when={shouldRenderPortal()}>
-          <Combobox.Portal mount={portalMount()}>
-            <Layer depth={2}>
-              <Combobox.Content class="z-modal-content bg-surface translate-y-1 border-edge p-2 rounded-xl shadow-lg shadow-drop-shadow ring ring-edge">
-                <Combobox.Listbox
-                  ref={setListboxRef}
-                  class="flex flex-col gap-1"
-                  scrollToItem={scrollToItem()}
-                  autoFocus="first"
-                >
-                  {(items) => {
-                    const arr = Array.from(items());
-                    const count = arr.length;
-                    const visibleCount = Math.min(
-                      count,
-                      RECIPIENT_OPTION_MAX_VISIBLE_COUNT
-                    );
-                    const height = visibleCount * RECIPIENT_OPTION_HEIGHT_PX;
+        <Combobox.Portal mount={portalMount()}>
+          <Layer depth={2}>
+            <Combobox.Content
+              ref={(el: HTMLElement) => {
+                contentEl = el;
+              }}
+              // WebKit's tap handling moves focus to the tapped element's
+              // nearest focusable ancestor and does not treat that as a
+              // cancelable pointerdown default. With tabIndex={-1} the
+              // dropdown itself is that ancestor, so the focus event stays
+              // inside the dismissable layer instead of landing on e.g. a
+              // mobile drawer's tabindex="-1" content; the focusin handler
+              // below then hands focus straight back to the input so the
+              // virtual keyboard stays open.
+              tabIndex={-1}
+              on:focusin={(e: FocusEvent) => {
+                if (e.target === e.currentTarget) {
+                  inputRef()?.focus({ preventScroll: true });
+                }
+              }}
+              // Keep focus on the combobox input while pressing options: the
+              // browser's pointerdown default moves focus to the tapped
+              // element's nearest focusable ancestor — inside a mobile drawer
+              // that's corvu's tabindex="-1" content, which Kobalte's
+              // dismissable layer treats as focus-outside and closes the
+              // dropdown before a touch tap's `click` (where touch selection
+              // happens) can fire. `click` is not a compatibility mouse event,
+              // so it still fires with pointerdown's default canceled.
+              // (Chromium honors this; WebKit needs the tabIndex above.)
+              onPointerDown={(e: PointerEvent) => e.preventDefault()}
+              // Never let a press inside the dropdown start a corvu drawer
+              // drag (no-op outside drawers).
+              data-corvu-no-drag=""
+              onFocusOutside={(e) => {
+                // Focus landing on an ANCESTOR of the dropdown (a container
+                // like the mobile drawer's tabindex="-1" content receiving
+                // tap-focus) is fallout from pressing an option, not the user
+                // moving to another control — veto the dismissal and put
+                // focus back on the input.
+                const focused = e.detail.originalEvent.target;
+                if (
+                  contentEl &&
+                  focused instanceof Node &&
+                  focused.contains(contentEl)
+                ) {
+                  e.preventDefault();
+                  inputRef()?.focus({ preventScroll: true });
+                }
+              }}
+              class="z-modal-content border border-edge bg-surface translate-y-1 p-2 rounded-xl shadow-lg shadow-drop-shadow"
+            >
+              <Combobox.Listbox
+                ref={setListboxRef}
+                class="flex flex-col gap-1"
+                scrollToItem={scrollToItem()}
+                autoFocus="first"
+              >
+                {(items) => {
+                  const arr = Array.from(items());
+                  const count = arr.length;
+                  const visibleCount = Math.min(
+                    count,
+                    RECIPIENT_OPTION_MAX_VISIBLE_COUNT
+                  );
+                  const height = visibleCount * RECIPIENT_OPTION_HEIGHT_PX;
 
-                    const [handle, setHandle] =
-                      createSignal<VirtualizerHandle | null>(null);
+                  const [handle, setHandle] =
+                    createSignal<VirtualizerHandle | null>(null);
 
-                    setScrollToItem(() => (key: string) => {
-                      const virtualizerHandle = handle();
-                      if (virtualizerHandle) {
-                        const ndx = arr.findIndex((item) => item.key === key);
-                        if (ndx > -1) {
-                          virtualizerHandle.scrollToIndex(ndx, {
-                            align: 'nearest',
-                          });
-                        }
+                  setScrollToItem(() => (key: string) => {
+                    const virtualizerHandle = handle();
+                    if (virtualizerHandle) {
+                      const ndx = arr.findIndex((item) => item.key === key);
+                      if (ndx > -1) {
+                        virtualizerHandle.scrollToIndex(ndx, {
+                          align: 'nearest',
+                        });
                       }
-                    });
+                    }
+                  });
 
-                    return (
-                      <VList
-                        data={arr}
-                        itemSize={RECIPIENT_OPTION_HEIGHT_PX}
-                        style={{
-                          height: `${height}px`,
-                        }}
-                        ref={setHandle}
-                      >
-                        {(item) => {
-                          return <RecipientComboboxItem {...item} />;
-                        }}
-                      </VList>
-                    );
-                  }}
-                </Combobox.Listbox>
-              </Combobox.Content>
-            </Layer>
-          </Combobox.Portal>
-        </Show>
+                  return (
+                    <VList
+                      data={arr}
+                      itemSize={RECIPIENT_OPTION_HEIGHT_PX}
+                      style={{
+                        height: `${height}px`,
+                      }}
+                      ref={setHandle}
+                    >
+                      {(item) => {
+                        return <RecipientComboboxItem {...item} />;
+                      }}
+                    </VList>
+                  );
+                }}
+              </Combobox.Listbox>
+            </Combobox.Content>
+          </Layer>
+        </Combobox.Portal>
         <Combobox.ErrorMessage class="text-xs text-failure mt-1">
           *At least one participant is required
         </Combobox.ErrorMessage>

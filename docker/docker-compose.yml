@@ -120,6 +120,12 @@ services:
     environment:
       - OVERRIDE_DOCUMENT_STORAGE_SERVICE_URL=http://document-storage-service:8080
       - OVERRIDE_AI_EDITING_WORKER_URL=http://ai-editing-worker:8933
+      # The import pipeline (and chat's CreateDocument) create documents from
+      # inside DCS, which initializes content through lexical + sync.
+      - OVERRIDE_SYNC_SERVICE_URL=http://sync-service:8787
+      - OVERRIDE_LEXICAL_SERVICE_URL=http://lexical-service:8096
+      # Import/ai-projection completions push gateway nudges from inside DCS.
+      - OVERRIDE_CONNECTION_GATEWAY_URL=http://connection-gateway:8080
     networks:
       databases:
       services:
@@ -244,6 +250,7 @@ services:
       - "8089:8080"
     environment:
       LAST_ONLINE_REDIS_URI: ${LAST_ONLINE_REDIS_URI:-${REDIS_URI:-redis://redis:6379}}
+      OVERRIDE_CONNECTION_GATEWAY_URL: http://connection-gateway:8080
     depends_on:
       - redis
       - document_cognition_service
@@ -287,6 +294,32 @@ services:
       timeout: 10s
       retries: 3
       start_period: 10s
+
+  # ============================================================================
+  # agent_harness_service (Port 8101)
+  # Channel messages -> agent session trigger events -> sandboxed coding agent
+  # sessions, plus the session control routes, which have to be served from the
+  # process that owns the live transports they act on.
+  # Managed sandboxes require DAYTONA_API_KEY and GITHUB_TOKEN; trigger
+  # processing and external sessions run without them.
+  # ============================================================================
+  agent_harness_service:
+    <<: [*common-env, *rust-services-image]
+    command: ["/app/out/agent_harness_service"]
+    restart: on-failure
+    # No host port: everything reaches this through the proxy, and a second
+    # local instance would collide on a fixed publish.
+    environment:
+      # In-network gateway address; the local default (http://localhost:8082)
+      # would point at this container itself.
+      - OVERRIDE_CONNECTION_GATEWAY_URL=http://connection-gateway:8080
+    depends_on:
+      - postgres
+      - kafka
+      - connection_gateway
+    networks:
+      - databases
+      - services
 
   # ============================================================================
   # static_file_service (Port 8094)
@@ -398,13 +431,25 @@ services:
     environment:
       - INTERNAL_API_SECRET_KEY=${INTERNAL_API_SECRET_KEY}
       - DOCUMENT_PERMISSIONS_SECRET=${DOCUMENT_PERMISSION_JWT}
+      - DSS_INTERNAL_AUTH_KEY=${DOCUMENT_STORAGE_SERVICE_AUTH_KEY}
+      # This worker exports OTLP/JSON over HTTP, so it needs the
+      # HTTP intake (:4318) — NOT the gRPC :4317 endpoint the
+      # shared env (env_layer) injects for the .with_tonic() Rust services.
+      # Pinning it here overrides the shared env_file value for this service.
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318
     networks:
       services:
         aliases:
           - sync-service
       databases:
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8787/health"]
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://localhost:8787/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))",
+        ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -432,6 +477,28 @@ services:
       services:
         aliases:
           - ai-editing-worker
+
+  # ============================================================================
+  # analytics_proxy (Port 8098)
+  # First-party analytics/telemetry proxy (Cloudflare Worker, local wrangler
+  # dev). Fronts PostHog and OTLP telemetry so ad blockers don't drop them and
+  # the browser never holds the Datadog API key. Locally the
+  # /i/otlp route forwards to the otel-collector alias (jaeger/datadog profile);
+  # if neither profile is up, trace exports just fail harmlessly.
+  # ============================================================================
+  analytics_proxy:
+    <<: *common-env
+    build:
+      context: .
+      dockerfile: docker/analytics-proxy.Dockerfile
+    ports:
+      - "8098:8098"
+    volumes:
+      - .:/app
+    networks:
+      services:
+        aliases:
+          - analytics-proxy
 
   # ============================================================================
   # lexical_service (Port 8096)
@@ -473,6 +540,65 @@ services:
       timeout: 10s
       retries: 3
       start_period: 10s
+
+  # ============================================================================
+  # jaeger (UI port 16686, OTLP 4317/4318) — profile: jaeger
+  # Fully local trace viewer, no account needed. UI at http://localhost:16686.
+  # Start: docker compose --project-directory . -f docker/docker-compose.yml up -d jaeger
+  # ============================================================================
+  jaeger:
+    profiles:
+      - jaeger
+    image: jaegertracing/all-in-one:latest
+    environment:
+      COLLECTOR_OTLP_ENABLED: "true"
+    # Browser -> collector requests need CORS on the OTLP HTTP receiver.
+    # allowed-headers must include Content-Type: jaeger's default rejects the
+    # preflight the browser OTLP exporter sends, even with origins=*.
+    command:
+      [
+        "--collector.otlp.http.cors.allowed-origins=*",
+        "--collector.otlp.http.cors.allowed-headers=*",
+      ]
+    ports:
+      - "16686:16686"
+      - "4317:4317"
+      - "4318:4318"
+    networks:
+      services:
+        aliases:
+          - otel-collector
+
+  # ============================================================================
+  # datadog-agent (OTLP 4317/4318) — profile: datadog
+  # Forwards OTLP traces to Datadog (us5); no local UI. View at
+  # us5.datadoghq.com -> APM -> Traces, filtered by env:local (DD_ENV).
+  # Binds the same OTLP ports as jaeger — run one or the other, not both.
+  # Start: DD_API_KEY=<key> docker compose --project-directory . -f docker/docker-compose.yml up -d datadog-agent
+  # ============================================================================
+  datadog-agent:
+    profiles:
+      - datadog
+    image: gcr.io/datadoghq/agent:7
+    environment:
+      # Default-empty (not :?) so the var is only required when this profile
+      # actually runs; the agent itself fails fast without a key.
+      DD_API_KEY: ${DD_API_KEY:-}
+      DD_SITE: us5.datadoghq.com
+      DD_ENV: ${DD_ENV:-local}
+      DD_HOSTNAME: local-dev
+      DD_APM_ENABLED: "true"
+    volumes:
+      # Mounted config exists to enable CORS on the OTLP HTTP receiver
+      # (browser -> agent); that setting has no env-var form.
+      - ./docker/datadog-agent/datadog.yaml:/etc/datadog-agent/datadog.yaml:ro
+    ports:
+      - "4317:4317"
+      - "4318:4318"
+    networks:
+      services:
+        aliases:
+          - otel-collector
 
 networks:
   services:

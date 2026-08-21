@@ -60,7 +60,7 @@ test.describe('local app smoke', () => {
       `/channel/${SEEDED.channel.id}?channel_message_id=${SEEDED.channel.messageId}`
     );
     await expect(
-      page.getByText(SEEDED.channel.name, { exact: true })
+      page.getByText(SEEDED.channel.name, { exact: true }).last()
     ).toBeVisible();
     await expect(page.getByText(SEEDED.channel.message)).toBeVisible({
       timeout: 30_000,

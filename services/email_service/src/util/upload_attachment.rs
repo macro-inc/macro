@@ -1,13 +1,11 @@
-use crate::util::redis::RedisClient;
-use crate::util::redis::rate_limit::RateLimitArgs;
+use crate::outbound::email_api::GmailApi;
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
 use document_storage_service_client::DocumentStorageServiceClient;
-use gmail_client::GmailClient;
+use email_api_client::domain::models::EmailApiError;
 use macro_user_id::cowlike::ArcCowStr;
 use macro_user_id::user_id::MacroUserId;
 use model::document::response::{CreateDocumentRequest, CreateDocumentResponse};
-use models_email::gmail::operations::GmailApiOperation;
 use models_email::service::attachment::{
     AttachmentSfs, AttachmentUploadArgs, AttachmentUploadMetadata,
 };
@@ -24,11 +22,11 @@ use uuid::Uuid;
 
 #[derive(Error, Debug)]
 pub enum UploadAttachmentError {
-    #[error("Rate limit check failed: {0}")]
-    RateLimitCheckFailed(String),
+    #[error("Gmail API rate limit exceeded")]
+    RateLimited,
 
     #[error("Failed to fetch attachment data from Gmail: {0}")]
-    GmailFetchFailed(String),
+    GmailFetchFailed(EmailApiError),
 
     #[error("Failed to upload media to SFS: {0}")]
     SfsUploadFailed(String),
@@ -63,13 +61,11 @@ pub enum UploadAttachmentError {
 /// Context required for uploading an email attachment.
 pub struct UploadAttachmentContext<'a> {
     pub db: &'a sqlx::Pool<sqlx::Postgres>,
-    pub redis_client: &'a RedisClient,
-    pub gmail_client: &'a GmailClient,
+    pub email_api: &'a GmailApi,
     pub dss_client: &'a DocumentStorageServiceClient,
     pub sfs_client: &'a StaticFileServiceClient,
     pub system_properties_service:
         &'a Arc<SystemPropertiesServiceImpl<PgSystemPropertiesRepository>>,
-    pub access_token: &'a str,
     pub link: &'a link::Link,
 }
 
@@ -78,28 +74,9 @@ pub async fn upload_attachment(
     ctx: UploadAttachmentContext<'_>,
     args: &AttachmentUploadArgs,
 ) -> Result<String, UploadAttachmentError> {
-    // 1. Check rate limits before making a Gmail API call.
-    if ctx
-        .redis_client
-        .is_rate_limited(RateLimitArgs {
-            user_id: ctx.link.id,
-            operation: GmailApiOperation::MessagesAttachmentsGet,
-            is_backfill: args.backfill,
-        })
-        .await
-    {
-        return Err(UploadAttachmentError::RateLimitCheckFailed(
-            "Gmail API rate limit exceeded".to_string(),
-        ));
-    }
-
-    // 2. Fetch the raw attachment data from Gmail.
-    let attachment_data = fetch_gmail_attachment_data(
-        ctx.gmail_client,
-        ctx.access_token,
-        &args.attachment_metadata,
-    )
-    .await?;
+    // Fetching through the email API service applies this context's token and quota policy.
+    let attachment_data =
+        fetch_gmail_attachment_data(ctx.email_api, ctx.link, &args.attachment_metadata).await?;
 
     let mime_type = args.attachment_metadata.mime_type.clone();
 
@@ -192,18 +169,19 @@ async fn upload_document_attachment(
 
 /// Fetches the raw attachment data from the Gmail API.
 async fn fetch_gmail_attachment_data(
-    gmail_client: &GmailClient,
-    access_token: &str,
+    email_api: &GmailApi,
+    link: &link::Link,
     p: &AttachmentUploadMetadata,
 ) -> Result<Vec<u8>, UploadAttachmentError> {
-    gmail_client
-        .get_attachment_data(
-            access_token,
-            &p.email_provider_id,
-            &p.provider_attachment_id,
-        )
+    email_api
+        .get_attachment(link.id, &p.email_provider_id, &p.provider_attachment_id)
         .await
-        .map_err(|e| UploadAttachmentError::GmailFetchFailed(e.to_string()))
+        .map_err(|error| match error {
+            EmailApiError::RateLimited { .. } => UploadAttachmentError::RateLimited,
+            // Preserve the provider error so API handlers can map it to the
+            // right status instead of collapsing everything to 500.
+            error => UploadAttachmentError::GmailFetchFailed(error),
+        })
 }
 
 /// Calculates the SHA256 hash of the attachment data in both hex and base64 formats.

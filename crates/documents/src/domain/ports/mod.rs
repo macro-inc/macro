@@ -10,12 +10,14 @@ pub mod markdown;
 use std::future::Future;
 
 use entity_access::domain::models::{
-    EditAccessLevel, EntityAccessReceipt, OwnerAccessLevel, ViewAccessLevel,
+    EditAccessLevel, EntityAccessReceipt, MemberTeamRole, OwnerAccessLevel, ViewAccessLevel,
 };
 use macro_user_id::user_id::MacroUserIdStr;
-use model::document::{ContentType, DocumentBasic, DocumentMetadata};
+use model::document::{ContentType, DocumentBasic, DocumentMetadata, FileType};
+use models_permissions::share_permission::{SharePermissionV2, TeamLinkShareDefault};
 
 use super::content::DocumentContent;
+use super::events::InteractionReason;
 use super::response::{
     CreateDocumentResponseData, DocumentResponse, GetDocumentResponseData, LocationResponseV3,
 };
@@ -130,10 +132,21 @@ pub trait DocumentRepo: Send + Sync + 'static {
     /// Handles: Document row, version (DocumentInstance or DocumentBom),
     /// document_sub_type, SharePermission, DocumentPermission, UserHistory,
     /// ItemLastAccessed, UserItemAccess, and document_email.
+    ///
+    /// `share_permission` is the pre-resolved initial share permission — the
+    /// repository persists it verbatim and carries no share-policy of its own.
     fn create_document(
         &self,
         args: CreateDocumentRepoArgs,
+        share_permission: SharePermissionV2,
     ) -> impl Future<Output = Result<DocumentMetadata, Self::Err>> + Send;
+
+    /// Get the link-share preference of the user's team, or `None` when the
+    /// user is not on a team.
+    fn get_team_default_link_share(
+        &self,
+        user_id: &str,
+    ) -> impl Future<Output = Result<Option<TeamLinkShareDefault>, Self::Err>> + Send;
 
     /// Update an upload job to associate it with a document.
     fn update_upload_job(
@@ -148,6 +161,12 @@ pub trait DocumentRepo: Send + Sync + 'static {
     fn edit_document(
         &self,
         args: EditDocumentRepoArgs,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
+    /// Update a document's `updatedAt` timestamp.
+    fn update_document_modified(
+        &self,
+        document_id: &str,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
     /// Update a project's `updatedAt` timestamp.
@@ -173,6 +192,13 @@ pub trait DocumentRepo: Send + Sync + 'static {
         &self,
         document_id: &str,
     ) -> impl Future<Output = Result<Option<TeamTaskMetadata>, Self::Err>> + Send;
+
+    /// Get the document ID assigned to a task number within a team.
+    fn get_document_id_by_team_task_number(
+        &self,
+        team_id: &uuid::Uuid,
+        task_num: i32,
+    ) -> impl Future<Output = Result<Option<String>, Self::Err>> + Send;
 
     /// Get user/team data needed to build a branch name for this user and task.
     fn get_branch_name_context(
@@ -236,9 +262,13 @@ pub trait DocumentRepo: Send + Sync + 'static {
     ///
     /// Creates: Document row, version (DocumentBom or DocumentInstance),
     /// SharePermission, DocumentPermission, UserItemAccess, and user history.
+    ///
+    /// `share_permission` is the pre-resolved initial share permission for the
+    /// copy — the repository persists it verbatim.
     fn copy_document(
         &self,
         args: CopyDocumentRepoArgs,
+        share_permission: SharePermissionV2,
     ) -> impl Future<Output = Result<DocumentMetadata, Self::Err>> + Send;
 
     /// Copy PDF-specific data (DocumentText, DocumentProcessResult) for a copied document.
@@ -320,6 +350,17 @@ pub trait TaskPropertiesPort: Send + Sync + 'static {
     ) -> impl Future<Output = anyhow::Result<()>> + Send;
 }
 
+/// Use case for relaying document content-upload events.
+pub trait DocumentContentEventService: Send + Sync + 'static {
+    /// Load the document owner and publish a content-uploaded event.
+    fn publish_content_uploaded(
+        &self,
+        document_id: &str,
+        file_type: FileType,
+        document_version_id: Option<String>,
+    ) -> impl Future<Output = Result<(), DocumentError>> + Send;
+}
+
 /// Service interface for document operations.
 ///
 /// Orchestrates business logic using the repository and external services.
@@ -329,6 +370,13 @@ pub trait DocumentService: Send + Sync + 'static {
         &self,
         document_id: &str,
     ) -> impl Future<Output = Result<DocumentBasic, DocumentError>> + Send;
+
+    /// Resolve a team task slug to its document ID.
+    fn get_document_by_team_slug(
+        &self,
+        team_receipt: EntityAccessReceipt<MemberTeamRole>,
+        slug: &str,
+    ) -> impl Future<Output = Result<String, DocumentError>> + Send;
 
     /// Get a document with metadata, access level, and view location.
     fn get_document(
@@ -458,6 +506,14 @@ pub trait DocumentService: Send + Sync + 'static {
         &self,
         document_id: &str,
         bytes: Vec<u8>,
+    ) -> impl Future<Output = anyhow::Result<()>> + Send;
+
+    /// Publishes a `document.interaction` event: a real edit, a peer joining,
+    /// or the last peer leaving.
+    fn record_interaction(
+        &self,
+        document_id: &str,
+        reason: InteractionReason,
     ) -> impl Future<Output = anyhow::Result<()>> + Send;
     /// Get the team-share state of a document, resolved against the owner's team.
     fn get_team_share(

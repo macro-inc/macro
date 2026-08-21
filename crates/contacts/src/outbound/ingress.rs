@@ -1,4 +1,4 @@
-use crate::domain::models::messages::ContactsNodes;
+use crate::domain::models::messages::{ContactConnections, ContactsNodes};
 use crate::domain::ports::ContactsIngressQueue;
 use rootcause::Report;
 
@@ -16,10 +16,9 @@ impl SqsContactsQueue {
     }
 }
 
-impl ContactsIngressQueue for SqsContactsQueue {
-    #[tracing::instrument(skip(self, message), err)]
-    async fn publish(&self, message: ContactsNodes) -> Result<(), Report> {
-        let body = serde_json::to_string(&message)?;
+impl SqsContactsQueue {
+    async fn publish<T: serde::Serialize>(&self, message: &T) -> Result<(), Report> {
+        let body = serde_json::to_string(message)?;
         self.client
             .send_message()
             .queue_url(&self.queue_url)
@@ -27,5 +26,17 @@ impl ContactsIngressQueue for SqsContactsQueue {
             .send()
             .await?;
         Ok(())
+    }
+}
+
+impl ContactsIngressQueue for SqsContactsQueue {
+    #[tracing::instrument(skip(self, message), err)]
+    async fn publish_nodes(&self, message: ContactsNodes) -> Result<(), Report> {
+        self.publish(&message).await
+    }
+
+    #[tracing::instrument(skip(self, message), err)]
+    async fn publish_connections(&self, message: ContactConnections) -> Result<(), Report> {
+        self.publish(&message).await
     }
 }

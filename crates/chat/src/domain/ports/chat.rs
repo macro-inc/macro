@@ -10,17 +10,28 @@ use entity_access::domain::models::{
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use model::chat::Chat;
-use models_permissions::share_permission::SharePermissionV2;
 use models_permissions::share_permission::access_level::AccessLevel;
+use models_permissions::share_permission::{SharePermissionV2, TeamLinkShareDefault};
 
 /// Repository trait for low-level chat data access.
 pub trait ChatRepo: Send + Sync + 'static {
     /// Create a new chat, returning the chat ID.
+    ///
+    /// `share_permission` is the pre-resolved initial share permission — the
+    /// repository persists it verbatim and carries no share-policy of its own.
     fn create(
         &self,
         user_id: MacroUserIdStr<'static>,
         args: CreateChatArgs,
+        share_permission: SharePermissionV2,
     ) -> impl std::future::Future<Output = Result<String>> + Send;
+
+    /// Get the link-share preference of the user's team, or `None` when the
+    /// user is not on a team.
+    fn get_team_default_link_share(
+        &self,
+        user_id: &str,
+    ) -> impl std::future::Future<Output = Result<Option<TeamLinkShareDefault>>> + Send;
 
     /// Get the full chat response (metadata, messages, web citations).
     fn get_chat(
@@ -40,11 +51,15 @@ pub trait ChatRepo: Send + Sync + 'static {
     ) -> impl std::future::Future<Output = Result<AccessLevel>> + Send;
 
     /// Copy a chat (create a new chat and duplicate its messages), returning the new chat ID.
+    ///
+    /// `share_permission` is the pre-resolved initial share permission for the
+    /// copy — the repository persists it verbatim.
     fn copy_chat(
         &self,
         user_id: MacroUserIdStr<'static>,
         source_chat_id: &str,
         args: CopyChatArgs,
+        share_permission: SharePermissionV2,
     ) -> impl std::future::Future<Output = Result<String>> + Send;
 
     /// Revert a soft-deleted chat (clears `deleted_at`, restores history).
@@ -97,8 +112,16 @@ pub trait ChatRepo: Send + Sync + 'static {
         message_id: &str,
     ) -> impl std::future::Future<Output = Result<ChatMessageContent>> + Send;
 
-    /// Update the content of a specific message.
+    /// Update a specific message's final content and chat recency.
     fn update_message_content(
+        &self,
+        chat_id: &str,
+        message_id: &str,
+        content: &ChatMessageContent,
+    ) -> impl std::future::Future<Output = Result<()>> + Send;
+
+    /// Persist interim message content without updating chat recency.
+    fn update_interim_message_content(
         &self,
         chat_id: &str,
         message_id: &str,
@@ -136,6 +159,12 @@ pub trait ChatService: Send + Sync + 'static {
         &self,
         entity_access_receipt: EntityAccessReceipt<ViewAccessLevel>,
     ) -> impl std::future::Future<Output = Result<GetChatResponse>> + Send;
+
+    /// Get chat metadata without loading messages.
+    fn get_metadata(
+        &self,
+        entity_access_receipt: EntityAccessReceipt<ViewAccessLevel>,
+    ) -> impl std::future::Future<Output = Result<model::chat::Chat>> + Send;
 
     /// Copy a chat and its messages, returning the new chat ID.
     fn copy_chat(

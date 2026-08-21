@@ -9,6 +9,7 @@ use filter_ast::Expr;
 use item_filters::ast::properties::{
     EntityRefId, PropertiesLiteral, PropertyEntityType, PropertyMatchValue,
 };
+use serde::{Deserialize, Serialize};
 
 use crate::{IntoFilterExpr, filter_expr_input, parse_id};
 
@@ -35,7 +36,9 @@ impl IntoFilterExpr<PropertiesLiteral> for GraphqlPropertiesLiteral {
     fn into_expr(self) -> async_graphql::Result<Expr<PropertiesLiteral>> {
         Ok(Expr::val(PropertiesLiteral {
             property_definition_id: parse_id(self.property_definition_id, "propertyDefinitionId")?,
-            entity_type: self.entity_type.map(Into::into),
+            entity_type: self
+                .entity_type
+                .and_then(|et| PropertyEntityType::try_from(et).ok()),
             value: self.value.into_ast()?,
         }))
     }
@@ -51,6 +54,7 @@ pub enum GraphqlPropertyMatchValue {
 }
 
 impl GraphqlPropertyMatchValue {
+    /// Convert the GraphQL property match value into its domain representation.
     fn into_ast(self) -> async_graphql::Result<PropertyMatchValue> {
         Ok(match self {
             Self::SelectOption(id) => {
@@ -66,8 +70,13 @@ impl GraphqlPropertyMatchValue {
 }
 
 /// An entity type supported by the properties domain.
-#[derive(Enum, Copy, Clone, Eq, PartialEq)]
+#[derive(Enum, Debug, Copy, Clone, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum GraphqlPropertyEntityType {
+    /// Calendar event entity.
+    CalendarEvent,
+    /// Call record entity.
+    CallRecord,
     /// Channel entity.
     Channel,
     /// Chat entity.
@@ -86,24 +95,12 @@ pub enum GraphqlPropertyEntityType {
     User,
 }
 
-impl From<GraphqlPropertyEntityType> for models_properties::EntityType {
-    fn from(value: GraphqlPropertyEntityType) -> Self {
+impl GraphqlPropertyEntityType {
+    /// Construct a GraphQL property entity type from its properties-domain model.
+    pub fn new(value: models_properties::EntityType) -> Self {
         match value {
-            GraphqlPropertyEntityType::Channel => Self::Channel,
-            GraphqlPropertyEntityType::Chat => Self::Chat,
-            GraphqlPropertyEntityType::Company => Self::Company,
-            GraphqlPropertyEntityType::Document => Self::Document,
-            GraphqlPropertyEntityType::Project => Self::Project,
-            GraphqlPropertyEntityType::Task => Self::Task,
-            GraphqlPropertyEntityType::Thread => Self::Thread,
-            GraphqlPropertyEntityType::User => Self::User,
-        }
-    }
-}
-
-impl From<models_properties::EntityType> for GraphqlPropertyEntityType {
-    fn from(value: models_properties::EntityType) -> Self {
-        match value {
+            models_properties::EntityType::CalendarEvent => Self::CalendarEvent,
+            models_properties::EntityType::CallRecord => Self::CallRecord,
             models_properties::EntityType::Channel => Self::Channel,
             models_properties::EntityType::Chat => Self::Chat,
             models_properties::EntityType::Company => Self::Company,
@@ -114,11 +111,30 @@ impl From<models_properties::EntityType> for GraphqlPropertyEntityType {
             models_properties::EntityType::User => Self::User,
         }
     }
+
+    /// Convert this GraphQL entity type into its properties-domain model.
+    pub fn into_model(self) -> models_properties::EntityType {
+        match self {
+            Self::CalendarEvent => models_properties::EntityType::CalendarEvent,
+            Self::CallRecord => models_properties::EntityType::CallRecord,
+            Self::Channel => models_properties::EntityType::Channel,
+            Self::Chat => models_properties::EntityType::Chat,
+            Self::Company => models_properties::EntityType::Company,
+            Self::Document => models_properties::EntityType::Document,
+            Self::Project => models_properties::EntityType::Project,
+            Self::Task => models_properties::EntityType::Task,
+            Self::Thread => models_properties::EntityType::Thread,
+            Self::User => models_properties::EntityType::User,
+        }
+    }
 }
 
-impl From<GraphqlPropertyEntityType> for PropertyEntityType {
-    fn from(value: GraphqlPropertyEntityType) -> Self {
-        match value {
+impl TryFrom<GraphqlPropertyEntityType> for PropertyEntityType {
+    type Error = GraphqlPropertyEntityType;
+
+    fn try_from(value: GraphqlPropertyEntityType) -> Result<Self, Self::Error> {
+        Ok(match value {
+            GraphqlPropertyEntityType::CalendarEvent => Self::CalendarEvent,
             GraphqlPropertyEntityType::Channel => Self::Channel,
             GraphqlPropertyEntityType::Chat => Self::Chat,
             GraphqlPropertyEntityType::Company => Self::Company,
@@ -127,6 +143,9 @@ impl From<GraphqlPropertyEntityType> for PropertyEntityType {
             GraphqlPropertyEntityType::Task => Self::Task,
             GraphqlPropertyEntityType::Thread => Self::Thread,
             GraphqlPropertyEntityType::User => Self::User,
-        }
+            // Call records are not part of the generic property-filter AST.
+            // They are filtered through a dedicated call query instead.
+            other @ GraphqlPropertyEntityType::CallRecord => return Err(other),
+        })
     }
 }

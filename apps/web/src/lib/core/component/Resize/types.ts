@@ -17,6 +17,9 @@ export type Panel = {
   id: PanelId;
   minSize: number;
   maxSize: number;
+  redistributionPreferredSize?: number;
+  /** Panels with the same key form one layout unit for automatic sizing. */
+  shareGroup?: string;
   share: number;
   target: PanelSizeSpec;
 };
@@ -25,6 +28,8 @@ export type PanelConfig = {
   id: PanelId;
   minSize?: number;
   maxSize?: number;
+  redistributionPreferredSize?: number;
+  shareGroup?: string;
   target?: PanelSizeSpec;
 };
 
@@ -38,12 +43,22 @@ export type ResizeZoneCtx = {
   direction: Accessor<'horizontal' | 'vertical'>;
   register: (panel: PanelConfig, index?: number) => void;
   unregister: (id: PanelId) => void;
-  update: (id: PanelId, config: { minSize?: number; maxSize?: number }) => void;
+  update: (
+    id: PanelId,
+    config: {
+      minSize?: number;
+      maxSize?: number;
+      redistributionPreferredSize?: number;
+      shareGroup?: string;
+    }
+  ) => void;
   gutterSize: () => number;
   size: () => number;
   sizeOf: (id: PanelId) => () => number;
   offsetOf: (id: PanelId) => () => number;
   canFit: (panel: Partial<PanelConfig>) => boolean;
+  /** Swap two registered panels without changing their sizing intent. */
+  swap: (firstId: PanelId, secondId: PanelId) => void;
   hide: (id: PanelId) => void;
   show: (id: PanelId) => void;
   isHidden: (id: PanelId) => boolean;

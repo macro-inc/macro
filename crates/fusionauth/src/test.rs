@@ -1,19 +1,22 @@
 use super::*;
 
 #[test]
-fn test_transform_local_fusionauth_url() {
-    let urls = vec![
-        (
-            "http://fusionauth:9011/a/b/c/d",
-            "http://localhost:9011/a/b/c/d",
-        ),
-        (
-            "https://fusionauth-dev.macro.com",
-            "https://fusionauth-dev.macro.com",
-        ),
-    ];
+fn oauth_authorize_url_uses_public_url() {
+    let client = FusionAuthClient::new(
+        "api-key".into(),
+        "client-id".into(),
+        "client-secret".into(),
+        "http://fusionauth:9011".into(),
+        "http://localhost:28011/oauth/redirect".into(),
+        "google-client-id".into(),
+        "google-client-secret".into(),
+    )
+    .with_public_url("http://localhost:28005".into());
 
-    for (value, expected) in urls.iter() {
-        assert_eq!(&transform_local_fusionauth_url(value), expected);
-    }
+    let url = client
+        .construct_oauth2_authorize_url::<()>("idp-id", None, None)
+        .unwrap();
+
+    assert!(url.starts_with("http://localhost:28005/oauth2/authorize?"));
+    assert!(!url.contains("fusionauth:9011"));
 }

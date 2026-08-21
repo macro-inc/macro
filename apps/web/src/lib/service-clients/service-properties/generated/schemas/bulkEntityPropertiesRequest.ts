@@ -4,14 +4,14 @@
  * properties_service
  * OpenAPI spec version: 0.1.0
  */
-import type { EntityReference } from './entityReference';
+import type { PropertyTargetReference } from './propertyTargetReference';
 
 /**
  * Request for getting properties for multiple entities in bulk
  */
 export interface BulkEntityPropertiesRequest {
   /** Array of entity references (entity_id and entity_type pairs) */
-  entities: EntityReference[];
+  entities: PropertyTargetReference[];
   /** Optional: only return properties with these definition IDs. If empty, returns all. */
   property_ids?: string[];
 }

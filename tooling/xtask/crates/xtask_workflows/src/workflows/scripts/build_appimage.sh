@@ -1,10 +1,4 @@
 set -euo pipefail
-cachix_pid=
-if command -v cachix >/dev/null 2>&1 && [ -n "${CACHIX_CACHE_NAME:-}" ]; then
-  cachix watch-store "$CACHIX_CACHE_NAME" >/tmp/cachix-watch-store.log 2>&1 &
-  cachix_pid=$!
-  trap 'if [ -n "${cachix_pid:-}" ]; then kill "$cachix_pid" 2>/dev/null || true; wait "$cachix_pid" 2>/dev/null || true; fi' EXIT
-fi
 restart_nix_daemon() {
   echo "::warning::Restarting nix-daemon before retrying AppImage build."
   sudo systemctl restart nix-daemon.service 2>/dev/null || true
@@ -54,6 +48,3 @@ for attempt in 1 2 3; do
   restart_nix_daemon
   sleep $((attempt * 10))
 done
-if command -v cachix >/dev/null 2>&1 && [ -n "${CACHIX_CACHE_NAME:-}" ]; then
-  cachix push "$CACHIX_CACHE_NAME" result || echo "::warning::Failed to push AppImage result closure to Cachix."
-fi

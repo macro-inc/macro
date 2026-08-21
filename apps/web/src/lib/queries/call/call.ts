@@ -12,6 +12,7 @@ export function useActiveCallQuery(channelId: Accessor<string>) {
     queryKey: callKeys.active(channelId()).queryKey,
     queryFn: async () =>
       await throwOnErr(() => callServiceClient.checkActiveCall(channelId())),
+    placeholderData: null,
     refetchInterval: 15_000,
   }));
 }
@@ -150,7 +151,23 @@ export function useCallRecordQuery(callId: Accessor<string>) {
     queryKey: callKeys.record(callId()).queryKey,
     queryFn: async () =>
       await throwOnErr(() => callServiceClient.getCallRecord(callId())),
+    // The call block's load() primes this cache; a stale time keeps that
+    // primed record from triggering an immediate duplicate fetch on mount.
+    // Mutations still invalidate, so sharing edits stay reactive.
+    staleTime: 60_000,
   }));
+}
+
+export function fetchCallRecord(
+  callId: string,
+  staleTimeMs: number
+): Promise<CallRecord> {
+  return queryClient.fetchQuery({
+    queryKey: callKeys.record(callId).queryKey,
+    queryFn: async () =>
+      await throwOnErr(() => callServiceClient.getCallRecord(callId)),
+    staleTime: staleTimeMs,
+  });
 }
 
 export function setCallRecordShareWithTeamCache(

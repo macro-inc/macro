@@ -1,12 +1,13 @@
-use crate::api::ApiContext;
+use crate::api::{ApiContext, context::AuthorizationService};
 use axum::{
     extract::State,
     http::StatusCode,
     response::{IntoResponse, Json, Response},
 };
+use macro_authorization::{InternalOnly, MacroAuthorizationExtractor};
 use model::response::ErrorResponse;
 use models_email::email::service::backfill::{
-    BackfillJobStatus, BackfillOperation, BackfillPubsubMessage, InitPayload, JobScopedPayload,
+    BackfillOperation, BackfillPubsubMessage, InitPayload, JobScopedPayload,
 };
 use sqlx::types::Uuid;
 use utoipa::ToSchema;
@@ -32,6 +33,7 @@ pub struct LinkJobPair {
 #[tracing::instrument(skip(ctx))]
 pub async fn handler(
     State(ctx): State<ApiContext>,
+    _: MacroAuthorizationExtractor<AuthorizationService, InternalOnly>,
     Json(req_body): Json<BackfillParams>,
 ) -> Result<Response, Response> {
     let mut link_job_pairs: Vec<LinkJobPair> = Vec::new();
@@ -75,6 +77,7 @@ pub async fn handler(
             link.id,
             link.fusionauth_user_id.as_str(),
             req_body.num_threads,
+            false,
         )
         .await
         .map_err(|e| {
@@ -140,37 +143,44 @@ pub async fn handler(
             }),
         };
 
-        ctx.sqs_client.enqueue_email_backfill_message(ps_message)
+        if let Err(error) = ctx
+            .sqs_client
+            .enqueue_email_backfill_message(ps_message)
             .await
-            .map_err(|e| {
-                // Log the error
-                tracing::error!(error = ?e, backfill_id = %backfill_job.id, "Failed to enqueue backfill message");
-
-                // Update the job status to Failed
-                let db_pool = ctx.db.clone();
-                let job_id = backfill_job.id;
-                tokio::spawn(async move {
-                    if let Err(update_err) = email_db_client::backfill::job::update::update_backfill_job_status(
-                        &db_pool,
-                        job_id,
-                        BackfillJobStatus::Failed,
-                    ).await {
-                        tracing::error!(
-                        error = ?update_err,
-                        backfill_id = %job_id,
-                        "Failed to update backfill job status to Failed"
+        {
+            tracing::error!(error = ?error, backfill_id = %backfill_job.id, "Failed to enqueue backfill message");
+            email_db_client::backfill::job::update::fail_backfill_job(&ctx.db, backfill_job.id)
+                .await
+                .inspect_err(|update_error| {
+                    tracing::error!(
+                        error = ?update_error,
+                        backfill_id = %backfill_job.id,
+                        "Failed to persist backfill publication failure"
                     );
-                    }
-                });
+                })
+                .map_err(|_| {
+                    (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        Json(ErrorResponse {
+                            message: format!(
+                                "Failed to clean up backfill job for link {}",
+                                link_id
+                            )
+                            .into(),
+                        }),
+                    )
+                        .into_response()
+                })?;
 
-                (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    Json(ErrorResponse {
-                        message: format!("Failed to enqueue backfill message for link {}", link_id).into(),
-                    }),
-                )
-                    .into_response()
-            })?;
+            return Err((
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    message: format!("Failed to enqueue backfill message for link {}", link_id)
+                        .into(),
+                }),
+            )
+                .into_response());
+        }
     }
     Ok((
         StatusCode::OK,

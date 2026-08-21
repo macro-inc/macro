@@ -1,5 +1,6 @@
+import type { IUser } from '@core/user';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
-import type { JSX } from 'solid-js';
+import type { Accessor, JSX } from 'solid-js';
 
 export type SelectableOption = { id: string; label: string };
 
@@ -17,4 +18,7 @@ export type EntitySelectorConfig = {
   placeholder: string;
   specificEntityType?: EntityType | null;
   selfFilter?: { entityType: EntityType; blockId?: string };
+  /** Explicit pool for USER pickers (e.g. company owner → team members);
+   * replaces the default quick-access people list. */
+  users?: Accessor<IUser[]>;
 };

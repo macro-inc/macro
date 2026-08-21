@@ -10,10 +10,12 @@ use std::sync::Arc;
 
 use axum::{
     Json, Router,
+    extract::FromRef,
     http::StatusCode,
     response::{IntoResponse, Response},
     routing::post,
 };
+use macro_authorization::{MacroAuthorizationService, MacroAuthorizationState};
 use model_error_response::ErrorResponse;
 
 use crate::domain::{
@@ -21,29 +23,43 @@ use crate::domain::{
     model::{AiProjectionError, UpsertProjectionError},
 };
 
-/// Router state containing the ai projection service.
-pub struct AiProjectionRouterState<T> {
+/// Router state containing the ai projection service and the authorization
+/// state used to authenticate callers.
+pub struct AiProjectionRouterState<T, Auth> {
     /// The ai projection service implementation.
     pub service: Arc<T>,
+    /// The authorization state used by the request extractors.
+    pub authorization_state: MacroAuthorizationState<Auth>,
 }
 
 // Manual Clone impl so T doesn't need to be Clone (it's behind Arc).
-impl<T> Clone for AiProjectionRouterState<T> {
+impl<T, Auth> Clone for AiProjectionRouterState<T, Auth> {
     fn clone(&self) -> Self {
         Self {
             service: self.service.clone(),
+            authorization_state: self.authorization_state.clone(),
         }
     }
 }
 
+impl<T, Auth> FromRef<AiProjectionRouterState<T, Auth>> for MacroAuthorizationState<Auth> {
+    fn from_ref(state: &AiProjectionRouterState<T, Auth>) -> Self {
+        state.authorization_state.clone()
+    }
+}
+
 /// Build the ai projections router with all endpoints.
-pub fn ai_projections_router<T, S>(state: AiProjectionRouterState<T>) -> Router<S>
+pub fn ai_projections_router<T, Auth, S>(state: AiProjectionRouterState<T, Auth>) -> Router<S>
 where
     T: AiProjectionService,
+    Auth: MacroAuthorizationService,
     S: Send + Sync + 'static,
 {
     Router::new()
-        .route("/ai-projections", post(upsert_projection::handler::<T>))
+        .route(
+            "/ai-projections",
+            post(upsert_projection::handler::<T, Auth>),
+        )
         .with_state(state)
 }
 

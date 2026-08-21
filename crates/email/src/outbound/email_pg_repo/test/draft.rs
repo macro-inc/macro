@@ -5,6 +5,7 @@ use crate::domain::models::{
 };
 use chrono::Utc;
 use sqlx::Row;
+use std::time::Duration;
 
 // ── get_simple_message ────────────────────────────────────────────
 
@@ -502,6 +503,7 @@ async fn test_insert_draft_message_into_existing_thread(
         body_macro: None,
         headers_json: None,
         send_time: None,
+        actor_id: None,
     };
 
     let contacts = UpsertedContacts {
@@ -586,6 +588,7 @@ async fn test_insert_draft_message_with_new_thread(pool: Pool<Postgres>) -> anyh
         body_macro: None,
         headers_json: None,
         send_time: None,
+        actor_id: None,
     };
 
     let contacts = UpsertedContacts {
@@ -658,6 +661,7 @@ async fn test_insert_draft_message_with_scheduled_send(pool: Pool<Postgres>) -> 
         body_macro: None,
         headers_json: None,
         send_time: Some(send_time),
+        actor_id: None,
     };
 
     let contacts = UpsertedContacts {
@@ -693,6 +697,12 @@ async fn test_insert_draft_message_upsert_existing(pool: Pool<Postgres>) -> anyh
     let thread_db_id = Uuid::parse_str("11111111-1111-1111-1111-111111111111")?;
     // Re-use the existing draft message ID (msg2)
     let message_db_id = Uuid::parse_str("ee000002-0000-0000-0000-000000000002")?;
+    let thread_before = repo
+        .thread_by_id(thread_db_id)
+        .await?
+        .expect("draft thread should exist");
+
+    tokio::time::sleep(Duration::from_millis(10)).await;
 
     let input = ResolvedDraftInput {
         db_id: message_db_id,
@@ -709,6 +719,7 @@ async fn test_insert_draft_message_upsert_existing(pool: Pool<Postgres>) -> anyh
         body_macro: None,
         headers_json: None,
         send_time: None,
+        actor_id: None,
     };
 
     let contacts = UpsertedContacts {
@@ -732,6 +743,15 @@ async fn test_insert_draft_message_upsert_existing(pool: Pool<Postgres>) -> anyh
     assert_eq!(
         row.get::<Option<String>, _>("body_text").as_deref(),
         Some("Updated body")
+    );
+
+    let thread_after = repo
+        .thread_by_id(thread_db_id)
+        .await?
+        .expect("draft thread should still exist");
+    assert!(
+        thread_after.updated_at > thread_before.updated_at,
+        "editing an existing draft should advance its thread timestamp"
     );
 
     Ok(())
@@ -767,6 +787,7 @@ async fn test_insert_draft_message_updates_thread_metadata(
         body_macro: None,
         headers_json: None,
         send_time: None,
+        actor_id: None,
     };
 
     let contacts = UpsertedContacts {
@@ -819,6 +840,7 @@ async fn test_insert_message_with_is_draft_false(pool: Pool<Postgres>) -> anyhow
         body_macro: None,
         headers_json: None,
         send_time: None,
+        actor_id: None,
     };
 
     let contacts = UpsertedContacts {

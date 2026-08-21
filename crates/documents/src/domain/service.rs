@@ -5,6 +5,9 @@ mod tests;
 
 use entity_access_management::domain::ports::EntityAccessManagementService;
 use model_entity::EntityType;
+use models_permissions::share_permission::{
+    LinkShare, SharePermissionV2, UpdateSharePermissionRequestV2,
+};
 use models_properties::EntityReference;
 use models_properties::api::SetPropertyValue;
 use std::borrow::Cow;
@@ -18,7 +21,8 @@ use connection::domain::models::{InvalidationEvent, InvalidationReason};
 use connection::domain::ports::ConnectionService;
 use document_sub_type::DocumentSubType;
 use entity_access::domain::models::{
-    EditAccessLevel, EntityAccessAuth, EntityAccessReceipt, OwnerAccessLevel, ViewAccessLevel,
+    EditAccessLevel, EntityAccessAuth, EntityAccessReceipt, MemberTeamRole, OwnerAccessLevel,
+    ViewAccessLevel,
 };
 use foreign_entity::domain::models::{ForeignEntity, SourceId};
 use foreign_entity::domain::ports::ForeignEntityService;
@@ -40,8 +44,9 @@ use crate::domain::models::{
 use super::branch_name::{build_task_branch_name, user_branch_prefix};
 use super::content::{DocumentContent, DocumentContentLocation, DocumentContentState};
 use super::events::{
-    DocumentCopiedMetadata, DocumentCreatedMetadata, DocumentDeletedMetadata, DocumentMacroEvent,
-    DocumentUpdatedMetadata,
+    DocumentContentUploadedMetadata, DocumentCopiedMetadata, DocumentCreatedMetadata,
+    DocumentDeletedMetadata, DocumentInteractionMetadata, DocumentMacroEvent,
+    DocumentUpdatedMetadata, InteractionReason,
 };
 use super::models::{
     CloudFrontConfig, CommentThread, CopyDocumentRepoArgs, CreateDocumentRepoArgs,
@@ -51,7 +56,10 @@ use super::models::{
 };
 #[cfg(feature = "document_create")]
 use super::ports::create::DocumentCreationService;
-use super::ports::{DocumentRepo, DocumentService, PresignedUploadUrlPort, TaskPropertiesPort};
+use super::ports::{
+    DocumentContentEventService, DocumentRepo, DocumentService, PresignedUploadUrlPort,
+    TaskPropertiesPort,
+};
 use super::response::{
     CreateDocumentResponseData, DocumentMetadataWithContent, DocumentResponse,
     DocumentResponseMetadataWithContent, GetDocumentResponseData, LocationResponseV3,
@@ -126,12 +134,23 @@ fn pending_content_for_file_type(file_type: Option<FileType>) -> DocumentContent
     }
 }
 
+fn should_revoke_non_owner_user_access(
+    share_permission: Option<&UpdateSharePermissionRequestV2>,
+) -> bool {
+    match share_permission.and_then(|permission| permission.link_share) {
+        Some(Some(LinkShare::Team)) | Some(None) => true,
+        Some(Some(LinkShare::Public)) | None => false,
+    }
+}
+
 /// The user id to attribute a document lifecycle event to, when the caller is
 /// an authenticated user.
 fn event_actor_user_id(auth: &EntityAccessAuth) -> Option<MacroUserIdStr<'static>> {
     match auth {
         EntityAccessAuth::Authenticated(user_id) => Some(user_id.clone()),
-        EntityAccessAuth::Unauthenticated | EntityAccessAuth::Internal => None,
+        EntityAccessAuth::Bot(_)
+        | EntityAccessAuth::Unauthenticated
+        | EntityAccessAuth::Internal => None,
     }
 }
 
@@ -143,6 +162,42 @@ fn short_id_for_entity_id(entity_id: &str) -> Result<String, DocumentError> {
     let uuid = macro_uuid::string_to_uuid(entity_id)
         .map_err(|e| DocumentError::BadRequest(format!("invalid entity_id: {e}")))?;
     Ok(macro_uuid::ShortUuidConverter::default().from_uuid(&uuid))
+}
+
+fn invalid_team_task_slug() -> DocumentError {
+    DocumentError::BadRequest("invalid team task slug".to_string())
+}
+
+fn map_basic_document_error(document_id: &str, error: anyhow::Error) -> DocumentError {
+    if error
+        .to_string()
+        .contains("no rows returned by a query that expected to return at least one row")
+    {
+        DocumentError::NotFound(document_id.to_string())
+    } else {
+        DocumentError::Internal(error)
+    }
+}
+
+fn team_task_number_from_slug(slug: &str) -> Result<i32, DocumentError> {
+    let (prefix, number) = slug.rsplit_once('-').ok_or_else(invalid_team_task_slug)?;
+
+    let has_malformed_separator = prefix.split('-').any(str::is_empty);
+    if has_malformed_separator
+        || number.is_empty()
+        || !number.bytes().all(|byte| byte.is_ascii_digit())
+    {
+        return Err(invalid_team_task_slug());
+    }
+
+    let task_num = number
+        .parse::<i32>()
+        .map_err(|_| invalid_team_task_slug())?;
+    if task_num <= 0 {
+        return Err(invalid_team_task_slug());
+    }
+
+    Ok(task_num)
 }
 
 fn foreign_entity_matches_source_id(foreign_entity: &ForeignEntity, source_id: &SourceId) -> bool {
@@ -488,14 +543,10 @@ impl<
     }
 
     /// Publish a document lifecycle event; failures are logged and dropped.
-    async fn publish_document_event(&self, event: &DocumentMacroEvent) {
-        let _ = self
-            .macro_event_broker
-            .send_event(event)
-            .await
-            .inspect_err(|e| {
-                tracing::error!(error=?e, "failed to publish document event");
-            });
+    fn publish_document_event(&self, event: &DocumentMacroEvent) {
+        let _ = self.macro_event_broker.send_event(event).inspect_err(|e| {
+            tracing::error!(error=?e, "failed to publish document event");
+        });
     }
 }
 
@@ -562,8 +613,84 @@ impl<
     Eam: EntityAccessManagementService,
     F: ForeignEntityService,
     B: MacroEventBroker,
+> DocumentContentEventService for DocumentServiceImpl<R, U, T, C, Eam, F, B>
+{
+    #[tracing::instrument(err, skip(self))]
+    async fn publish_content_uploaded(
+        &self,
+        document_id: &str,
+        file_type: FileType,
+        document_version_id: Option<String>,
+    ) -> Result<(), DocumentError> {
+        let document = self
+            .repo
+            .get_basic_document(document_id)
+            .await
+            .map_err(|error| map_basic_document_error(document_id, error.into()))?;
+
+        self.macro_event_broker
+            .send_event(&DocumentMacroEvent::content_uploaded(
+                document_id,
+                DocumentContentUploadedMetadata {
+                    document_id: document_id.to_string(),
+                    owner: document.owner,
+                    file_type,
+                    document_version_id,
+                },
+            ))
+            .map(|_| ())
+            .map_err(|error| DocumentError::Internal(error.into()))
+    }
+}
+
+impl<
+    R: DocumentRepo,
+    U: PresignedUploadUrlPort,
+    T: TaskPropertiesPort,
+    C: ConnectionService,
+    Eam: EntityAccessManagementService,
+    F: ForeignEntityService,
+    B: MacroEventBroker,
 > DocumentService for DocumentServiceImpl<R, U, T, C, Eam, F, B>
 {
+    #[tracing::instrument(err, skip(self, team_receipt))]
+    async fn get_document_by_team_slug(
+        &self,
+        team_receipt: EntityAccessReceipt<MemberTeamRole>,
+        slug: &str,
+    ) -> Result<String, DocumentError> {
+        if team_receipt.entity().entity_type != EntityType::Team {
+            return Err(DocumentError::BadRequest(
+                "access receipt must be for a team".to_string(),
+            ));
+        }
+
+        let team_id = uuid::Uuid::parse_str(&team_receipt.entity().entity_id)
+            .map_err(|_| DocumentError::BadRequest("invalid team id".to_string()))?;
+        let task_num = team_task_number_from_slug(slug)?;
+        let document_id = self
+            .repo
+            .get_document_id_by_team_task_number(&team_id, task_num)
+            .await
+            .map_err(|error| DocumentError::Internal(error.into()))?
+            .ok_or_else(|| DocumentError::NotFound(slug.to_string()))?;
+        let document = self
+            .repo
+            .get_basic_document(&document_id)
+            .await
+            .map_err(|error| DocumentError::Internal(error.into()))?;
+
+        let is_owner = matches!(
+            team_receipt.auth(),
+            EntityAccessAuth::Authenticated(user_id) if document.owner == *user_id
+        );
+        if document.deleted_at.is_some() && !is_owner {
+            return Err(DocumentError::Unauthorized);
+        }
+
+        Ok(document_id)
+    }
+
     #[tracing::instrument(err, skip(self))]
     async fn get_document(
         &self,
@@ -594,7 +721,9 @@ impl<
                 .get_user_view_location(user_id.as_ref(), &document_id)
                 .await
                 .map_err(|e| DocumentError::Internal(e.into()))?,
-            EntityAccessAuth::Unauthenticated | EntityAccessAuth::Internal => None,
+            EntityAccessAuth::Bot(_)
+            | EntityAccessAuth::Unauthenticated
+            | EntityAccessAuth::Internal => None,
         };
 
         let access_level = match entity_access_receipt.entity_permission() {
@@ -731,8 +860,7 @@ impl<
                 actor_user_id: event_actor_user_id(entity_access_receipt.auth()),
                 project_id,
             },
-        ))
-        .await;
+        ));
 
         Ok(())
     }
@@ -744,16 +872,7 @@ impl<
         self.repo
             .get_basic_document(document_id)
             .await
-            .map_err(|e| {
-                let err: anyhow::Error = e.into();
-                if err.to_string().contains(
-                    "no rows returned by a query that expected to return at least one row",
-                ) {
-                    DocumentError::NotFound(document_id.to_string())
-                } else {
-                    DocumentError::Internal(err)
-                }
-            })
+            .map_err(|error| map_basic_document_error(document_id, error.into()))
     }
 
     async fn get_document_text(
@@ -822,9 +941,9 @@ impl<
                     context.team_task_id,
                 )
             }
-            EntityAccessAuth::Unauthenticated | EntityAccessAuth::Internal => {
-                ("macro".to_string(), None, None)
-            }
+            EntityAccessAuth::Bot(_)
+            | EntityAccessAuth::Unauthenticated
+            | EntityAccessAuth::Internal => ("macro".to_string(), None, None),
         };
 
         let branch_name = build_task_branch_name(
@@ -879,6 +998,7 @@ impl<
                 source_ids.extend(team_ids.into_iter().map(SourceId::team));
                 Some(source_ids)
             }
+            EntityAccessAuth::Bot(_) => Some(Vec::new()),
             EntityAccessAuth::Unauthenticated => Some(Vec::new()),
             EntityAccessAuth::Internal => None,
         };
@@ -932,15 +1052,29 @@ impl<
         let project_id = args.project_id;
         let sha = args.sha.clone();
 
+        // The owner's team default link-share preference decides the initial
+        // share permission; without a team the per-file-type default applies.
+        let team_default = self
+            .repo
+            .get_team_default_link_share(args.user_id.as_ref())
+            .await
+            .map_err(|e| DocumentError::Internal(e.into()))?;
+        let share_permission =
+            SharePermissionV2::new_document_share_permission(file_type, team_default);
+
         // Create document metadata in the database (full transaction)
-        let document_metadata = self.repo.create_document(args).await.map_err(|e| {
-            let err: anyhow::Error = e.into();
-            if err.to_string().contains("document with ID already exists") {
-                DocumentError::Conflict("document with ID already exists".to_string())
-            } else {
-                DocumentError::Internal(err)
-            }
-        })?;
+        let document_metadata = self
+            .repo
+            .create_document(args, share_permission)
+            .await
+            .map_err(|e| {
+                let err: anyhow::Error = e.into();
+                if err.to_string().contains("document with ID already exists") {
+                    DocumentError::Conflict("document with ID already exists".to_string())
+                } else {
+                    DocumentError::Internal(err)
+                }
+            })?;
 
         let document_id = document_metadata.document_id.clone();
 
@@ -1049,8 +1183,7 @@ impl<
                 sub_type: document_metadata.sub_type,
                 created_at: document_metadata.created_at,
             },
-        ))
-        .await;
+        ));
 
         Ok(CreateDocumentResponseData {
             document_response: DocumentResponse {
@@ -1137,6 +1270,8 @@ impl<
             .map(|s| FileType::clean_document_name(&s).unwrap_or(s));
 
         let share_permission_updated = args.share_permission.is_some();
+        let revoke_non_owner_user_access =
+            should_revoke_non_owner_user_access(args.share_permission.as_ref());
 
         self.repo
             .edit_document(EditDocumentRepoArgs {
@@ -1144,6 +1279,7 @@ impl<
                 document_name: document_name.clone(),
                 project_id: args.project_id.clone(),
                 share_permission: args.share_permission,
+                revoke_non_owner_user_access,
                 file_type: args.file_type.clone(),
             })
             .await
@@ -1208,8 +1344,7 @@ impl<
                 file_type: args.file_type,
                 share_permission_updated,
             },
-        ))
-        .await;
+        ));
 
         Ok(())
     }
@@ -1296,16 +1431,29 @@ impl<
             None
         };
 
+        // The copier becomes the owner, so their team default decides the
+        // copy's initial share permission.
+        let team_default = self
+            .repo
+            .get_team_default_link_share(user_id.as_ref())
+            .await
+            .map_err(|e| DocumentError::Internal(e.into()))?;
+        let share_permission =
+            SharePermissionV2::new_document_share_permission(file_type, team_default);
+
         // Create the copy in the database
         let new_metadata = self
             .repo
-            .copy_document(CopyDocumentRepoArgs {
-                original_document: original_metadata.clone(),
-                user_id: user_id.clone(),
-                document_name,
-                file_type,
-                team_id: copy_team_id,
-            })
+            .copy_document(
+                CopyDocumentRepoArgs {
+                    original_document: original_metadata.clone(),
+                    user_id: user_id.clone(),
+                    document_name,
+                    file_type,
+                    team_id: copy_team_id,
+                },
+                share_permission,
+            )
             .await
             .map_err(|e| DocumentError::Internal(e.into()))?;
 
@@ -1443,6 +1591,12 @@ impl<
             return Err(DocumentError::Internal(e.into()));
         }
 
+        if let Some(project_id) = &new_metadata.project_id {
+            let _ = self.repo.update_project_modified(project_id).await.inspect_err(
+                |e| tracing::error!(error=?e, project_id=?project_id, "unable to update project modified date"),
+            );
+        }
+
         let document_response_metadata =
             DocumentResponseMetadata::from_document_metadata(&new_metadata).map_err(|e| {
                 tracing::error!(error=?e, "unable to convert document metadata");
@@ -1465,8 +1619,7 @@ impl<
                 project_id: new_metadata.project_id.clone(),
                 sub_type: new_metadata.sub_type,
             },
-        ))
-        .await;
+        ));
 
         Ok(DocumentResponse {
             document_metadata: DocumentResponseMetadataWithContent::new(
@@ -1513,7 +1666,30 @@ impl<
     async fn upload_snapshot(&self, document_id: &str, bytes: Vec<u8>) -> anyhow::Result<()> {
         self.upload_url_service
             .upload_snapshot(document_id, bytes)
-            .await
+            .await?;
+        Ok(())
+    }
+
+    async fn record_interaction(
+        &self,
+        document_id: &str,
+        reason: InteractionReason,
+    ) -> anyhow::Result<()> {
+        if reason == InteractionReason::Edited {
+            self.repo
+                .update_document_modified(document_id)
+                .await
+                .map_err(Into::into)?;
+        }
+
+        self.publish_document_event(&DocumentMacroEvent::interaction(
+            document_id,
+            DocumentInteractionMetadata {
+                document_id: document_id.to_owned(),
+                reason,
+            },
+        ));
+        Ok(())
     }
 
     /// Assigns the task properties to a document

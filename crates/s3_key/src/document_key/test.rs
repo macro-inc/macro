@@ -44,6 +44,24 @@ fn test_temp_docx_key_from_s3_key() {
 }
 
 #[test]
+fn test_sync_service_snapshot_key_from_s3_key() {
+    let key = DocumentKey::from_s3_key("sync_service_snapshot/doc456").unwrap();
+    assert_eq!(
+        key,
+        DocumentKey::SyncServiceSnapshot {
+            document_id: "doc456".to_string(),
+        }
+    );
+    assert_eq!(key.to_key(), "sync_service_snapshot/doc456");
+    assert_eq!(key.document_id(), Some("doc456"));
+    assert_eq!(key.version_id_string(), None);
+    assert!(key.is_sync_service_snapshot());
+    assert!(!key.is_temp());
+    assert!(!key.is_bom_part());
+    assert!(!key.is_converted_pdf());
+}
+
+#[test]
 fn test_url_encoded_user_id() {
     let key = DocumentKey::from_s3_key("user%20123/doc456/789").unwrap();
     assert_eq!(
@@ -104,6 +122,9 @@ fn test_document_id_accessor() {
 
     let temp = DocumentKey::from_s3_key("temp_files/doc3.docx").unwrap();
     assert_eq!(temp.document_id(), Some("doc3"));
+
+    let snapshot = DocumentKey::from_s3_key("sync_service_snapshot/doc4").unwrap();
+    assert_eq!(snapshot.document_id(), Some("doc4"));
 }
 
 #[test]
@@ -116,6 +137,9 @@ fn test_version_id_string() {
 
     let temp = DocumentKey::from_s3_key("temp_files/doc.docx").unwrap();
     assert_eq!(temp.version_id_string(), None);
+
+    let snapshot = DocumentKey::from_s3_key("sync_service_snapshot/doc").unwrap();
+    assert_eq!(snapshot.version_id_string(), None);
 }
 
 #[test]

@@ -58,4 +58,14 @@ VALUES ('a0000000-0000-0000-0000-0000000e0004'::uuid, 'project', 'user-1', 'user
        ('a0000000-0000-0000-0000-0000000e0005'::uuid, 'chat', 'user-1', 'user', 'view'),
        ('a0000000-0000-0000-0000-0000000e0006'::uuid, 'document', 'user-1', 'user', 'view');
 
+-- A soft-deleted document shared with user-1: must never be returned
+INSERT INTO public."Document" ("id", "name", "owner", "deletedAt")
+VALUES ('a0000000-0000-0000-0000-0000000e0008', 'Deleted Shared Document', 'user-2', NOW());
+INSERT INTO public.entity_access ("entity_id", "entity_type", "source_id", "source_type", "access_level")
+VALUES ('a0000000-0000-0000-0000-0000000e0008'::uuid, 'document', 'user-1', 'user', 'view');
+
+-- A grant whose document row no longer exists: must never be returned
+INSERT INTO public.entity_access ("entity_id", "entity_type", "source_id", "source_type", "access_level")
+VALUES ('a0000000-0000-0000-0000-0000000e0009'::uuid, 'document', 'user-1', 'user', 'view');
+
 SET session_replication_role = 'origin';

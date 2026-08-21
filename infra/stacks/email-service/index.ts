@@ -118,6 +118,9 @@ const inbox_sync_queue = new Queue('email-service-gmail-webhook', {
   tags,
   maxReceiveCount: 3,
   visibilityTimeoutSeconds: 60,
+  alarm: {
+    approximateAgeOfOldestMessageThreshold: 300, // 5 minutes
+  },
 });
 
 export const inboxSyncQueueArn = pulumi.interpolate`${inbox_sync_queue.queue.arn}`;
@@ -127,6 +130,9 @@ const inbox_sync_retry_queue = new Queue('email-service-gmail-webhook-retry', {
   tags,
   maxReceiveCount: 100,
   visibilityTimeoutSeconds: 60,
+  alarm: {
+    approximateAgeOfOldestMessageThreshold: 300, // 5 minutes
+  },
 });
 
 export const inboxSyncRetryQueueArn = pulumi.interpolate`${inbox_sync_retry_queue.queue.arn}`;
@@ -136,6 +142,9 @@ const gmail_ops_queue = new Queue('email-service-gmail-ops', {
   tags,
   maxReceiveCount: 3,
   visibilityTimeoutSeconds: 60,
+  alarm: {
+    approximateAgeOfOldestMessageThreshold: 300, // 5 minutes
+  },
 });
 
 export const gmailOpsQueueArn = pulumi.interpolate`${gmail_ops_queue.queue.arn}`;
@@ -145,6 +154,9 @@ const gmail_ops_retry_queue = new Queue('email-service-gmail-ops-retry', {
   tags,
   maxReceiveCount: 100,
   visibilityTimeoutSeconds: 60,
+  alarm: {
+    approximateAgeOfOldestMessageThreshold: 300, // 5 minutes
+  },
 });
 
 export const gmailOpsRetryQueueArn = pulumi.interpolate`${gmail_ops_retry_queue.queue.arn}`;
@@ -170,10 +182,60 @@ const backfill_queue = new Queue('email-service-backfill', {
   tags,
   maxReceiveCount: 20,
   visibilityTimeoutSeconds: 60,
+  alarm: {
+    approximateAgeOfOldestMessageThreshold: 600, // 10 minutes
+  },
 });
 
 export const backfillQueueArn = pulumi.interpolate`${backfill_queue.queue.arn}`;
 export const backfillQueueName = pulumi.interpolate`${backfill_queue.queue.name}`;
+
+const crm_cleanup_queue = new Queue('email-service-crm-cleanup', {
+  tags,
+  maxReceiveCount: 5,
+  visibilityTimeoutSeconds: 60,
+  alarm: {
+    approximateAgeOfOldestMessageThreshold: 600, // 10 minutes
+  },
+});
+
+export const crmCleanupQueueArn = pulumi.interpolate`${crm_cleanup_queue.queue.arn}`;
+export const crmCleanupQueueName = pulumi.interpolate`${crm_cleanup_queue.queue.name}`;
+
+// Nightly at 08:00 UTC (midnight PT): EventBridge sends a static StartJob
+// payload straight to the crm cleanup queue; the pubsub worker creates the
+// job row and starts paging candidates.
+const crmCleanupRule = new aws.cloudwatch.EventRule('crm-cleanup-rule', {
+  name: `email-crm-cleanup-rule-${stack}`,
+  scheduleExpression: 'cron(0 8 * * ? *)',
+  tags,
+});
+
+new aws.cloudwatch.EventTarget('crm-cleanup-nightly-target', {
+  rule: crmCleanupRule.name,
+  arn: crmCleanupQueueArn,
+  input: JSON.stringify({ operation: 'start_job' }),
+});
+
+new aws.sqs.QueuePolicy('crm-cleanup-queue-policy', {
+  queueUrl: crm_cleanup_queue.queue.url,
+  policy: pulumi
+    .all([crmCleanupQueueArn, crmCleanupRule.arn])
+    .apply(([queueArn, ruleArn]) =>
+      JSON.stringify({
+        Version: '2012-10-17',
+        Statement: [
+          {
+            Effect: 'Allow',
+            Principal: { Service: 'events.amazonaws.com' },
+            Action: 'sqs:SendMessage',
+            Resource: queueArn,
+            Condition: { ArnEquals: { 'aws:SourceArn': ruleArn } },
+          },
+        ],
+      })
+    ),
+});
 
 const sfs_uploader_queue = new Queue('email-service-sfs-mapper', {
   tags,
@@ -233,6 +295,7 @@ const queueArns = [
   scheduledQueueArn,
   searchEventQueueArn,
   backfillQueueArn,
+  crmCleanupQueueArn,
   sfsUploaderQueueArn,
   sfsDeleteQueueArn,
   contactsQueueArn,
@@ -382,7 +445,7 @@ const emailRefreshHandler = new EmailRefreshHandler('email-refresh-handler', {
   envVars: {
     DATABASE_URL: pulumi.interpolate`${MACRO_DB_URL}`,
     ENVIRONMENT: stack,
-    RUST_LOG: 'email_refresh_handler=info',
+    RUST_LOG: 'email_refresh_handler=info,macro_http_request=info',
     DELETE_UNUSED_AFTER_DAYS: pulumi.interpolate`${DELETE_UNUSED_AFTER_DAYS}`,
     DELETE_INACTIVE_AFTER_DAYS: pulumi.interpolate`${DELETE_INACTIVE_AFTER_DAYS}`,
     INBOX_HEALTH_POLL_INTERVAL_HOURS: pulumi.interpolate`${INBOX_HEALTH_POLL_INTERVAL_HOURS}`,
@@ -398,7 +461,7 @@ const emailScheduledHandler = new EmailScheduledHandler(
     envVars: {
       DATABASE_URL: pulumi.interpolate`${MACRO_DB_URL}`,
       ENVIRONMENT: stack,
-      RUST_LOG: 'email_scheduled_handler=info',
+      RUST_LOG: 'email_scheduled_handler=info,macro_http_request=info',
     },
     tags,
   }

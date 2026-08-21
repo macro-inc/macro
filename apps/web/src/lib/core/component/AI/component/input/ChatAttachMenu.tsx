@@ -42,7 +42,7 @@ type ChatAttachMenuProps = {
   close: () => void;
   anchorRef: HTMLDivElement;
   containerRef: HTMLElement;
-  onAttach: (attachment: Attachment) => void;
+  onAttach: (attachment: Attachment, item: HistoryItem) => void;
 };
 
 function truncate(str: string, maxLength: number = 30) {
@@ -191,11 +191,7 @@ export function ChatAttachMenu(props: ChatAttachMenuProps) {
     }
 
     const attachment = getDocumentAttachment(item.id, item.fileType);
-
-    if (attachment) {
-      props.onAttach(attachment);
-    }
-
+    if (attachment) props.onAttach(attachment, item);
     props.close();
   };
 
@@ -228,12 +224,12 @@ export function ChatAttachMenu(props: ChatAttachMenuProps) {
   return (
     <Show when={props.open}>
       <div
-        class="fixed inset-0 bg-transparent z-99"
+        class="fixed inset-0 bg-transparent z-action-menu"
         onClick={handleOverlayClick}
         onMouseDown={handleOverlayClick}
       >
         <div
-          class="absolute z-full-page-modal-base"
+          class="absolute"
           ref={setPopupRef}
           use:clickOutside={props.close}
           onKeyDown={handleKeyDown}

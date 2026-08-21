@@ -1,18 +1,18 @@
 use crate::api::context::ApiContext;
-use crate::api::context::EntityAccessService;
+use crate::api::context::{AuthorizationService, EntityAccessService};
 use axum::extract::State;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::{Extension, Json, extract};
 use entity_access::domain::models::EntityPermission;
-use entity_access::inbound::axum_extractors::ProjectBodyAccessLevelExtractor;
+use entity_access::inbound::axum_extractors::ProjectBodyAccessLevelExtractorV2;
 use entity_access::inbound::axum_extractors::ThreadAccessLevelExtractor;
+use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
 use macro_db_client::share_permission::edit::edit_thread_permission;
 use model::response::{
     ErrorResponse, GenericErrorResponse, GenericSuccessResponse, SuccessResponse,
 };
 use model::thread::EmailThreadPermission;
-use model::user::UserContext;
 use models_permissions::share_permission::access_level::{
     AccessLevel, EditAccessLevel, OwnerAccessLevel,
 };
@@ -48,17 +48,22 @@ pub struct PatchThreadRequestV2 {
             (status = 500, body=GenericErrorResponse),
     )
 )]
-#[tracing::instrument(skip(ctx, user_context, project, thread_access), fields(user_id=?user_context.user_id))]
+#[tracing::instrument(skip(ctx, user, project, thread_access), fields(user_id=?user.authorization.user.macro_user_id))]
 pub async fn edit_thread_handler(
-    thread_access: ThreadAccessLevelExtractor<OwnerAccessLevel, EntityAccessService>,
+    thread_access: ThreadAccessLevelExtractor<
+        OwnerAccessLevel,
+        EntityAccessService,
+        AuthorizationService,
+    >,
     State(ctx): State<ApiContext>,
-    user_context: Extension<UserContext>,
+    user: MacroAuthorizationExtractor<AuthorizationService, UserOrInternal>,
     thread_context: Extension<EmailThreadPermission>,
     extract::Path(ThreadParams { thread_id }): extract::Path<ThreadParams>,
-    project: ProjectBodyAccessLevelExtractor<
+    project: ProjectBodyAccessLevelExtractorV2<
         EditAccessLevel,
         PatchThreadRequestV2,
         EntityAccessService,
+        AuthorizationService,
     >,
 ) -> Result<Response, Response> {
     let req = project.into_inner();

@@ -1,15 +1,16 @@
-use axum::extract::{Extension, State};
+use crate::api::context::DcsAuthorizationService;
+use axum::extract::State;
 use axum::{
     Json,
     http::StatusCode,
     response::{IntoResponse, Response},
 };
+use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
 use macro_db_client::{
     chat::get_chat_ids_for_messages, chat_history::get_chat_history_for_messages,
     share_permission::access_level::chat::get_highest_access_level_for_chats,
 };
 use model::chat::ChatHistory;
-use model::user::UserContext;
 use models_dcs::api::ChatHistoryBatchMessagesRequest;
 use sqlx::PgPool;
 
@@ -25,19 +26,21 @@ use sqlx::PgPool;
         (status = 500, body = String, description = "Internal server error")
     )
 )]
-#[tracing::instrument(skip(db, user_context, request), fields(user_id = %user_context.user_id, message_count = request.message_ids.len()))]
+#[tracing::instrument(skip(db, user, request), fields(user_id = %user.authorization.user.macro_user_id, message_count = request.message_ids.len()))]
 pub async fn get_chat_history_batch_messages_handler(
     State(db): State<PgPool>,
-    Extension(user_context): Extension<UserContext>,
+    user: MacroAuthorizationExtractor<DcsAuthorizationService, UserOrInternal>,
     Json(request): Json<ChatHistoryBatchMessagesRequest>,
 ) -> Result<Json<ChatHistory>, Response> {
+    let user_id = user.authorization.user.macro_user_id.as_ref();
+
     // Get all unique chat IDs and check access to each
     let chat_ids = get_chat_ids_for_messages(&db, &request.message_ids)
         .await
         .map_err(|err| {
             tracing::error!(
                 error = %err,
-                user_id = %user_context.user_id,
+                user_id = %user_id,
                 message_count = request.message_ids.len(),
                 "Failed to get chat IDs for messages"
             );
@@ -55,24 +58,23 @@ pub async fn get_chat_history_batch_messages_handler(
 
     // Check access to all chats in a single database query
     let chat_ids_vec: Vec<String> = chat_ids.into_iter().collect();
-    let access_levels =
-        get_highest_access_level_for_chats(&db, &chat_ids_vec, &user_context.user_id)
-            .await
-            .map_err(|err| {
-                tracing::error!(
-                    error = %err,
-                    user_id = %user_context.user_id,
-                    chat_count = chat_ids_vec.len(),
-                    "Failed to check chat access for batch"
-                );
-                (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    Json(serde_json::json!({
-                        "error": "Failed to check chat access"
-                    })),
-                )
-                    .into_response()
-            })?;
+    let access_levels = get_highest_access_level_for_chats(&db, &chat_ids_vec, user_id)
+        .await
+        .map_err(|err| {
+            tracing::error!(
+                error = %err,
+                user_id = %user_id,
+                chat_count = chat_ids_vec.len(),
+                "Failed to check chat access for batch"
+            );
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({
+                    "error": "Failed to check chat access"
+                })),
+            )
+                .into_response()
+        })?;
 
     // Check that user has access to all chats
     for chat_id in &chat_ids_vec {
@@ -81,7 +83,7 @@ pub async fn get_chat_history_batch_messages_handler(
         // Require at least View access to read messages from this chat
         if access_level.is_none() {
             tracing::warn!(
-                user_id = %user_context.user_id,
+                user_id = %user_id,
                 chat_id = %chat_id,
                 "User does not have access to chat containing requested messages"
             );
@@ -100,7 +102,7 @@ pub async fn get_chat_history_batch_messages_handler(
         .map_err(|err| {
             tracing::error!(
                 error = %err,
-                user_id = %user_context.user_id,
+                user_id = %user_id,
                 message_count = request.message_ids.len(),
                 "Failed to get chat history for messages"
             );

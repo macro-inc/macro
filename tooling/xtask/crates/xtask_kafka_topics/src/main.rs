@@ -27,8 +27,10 @@ fn run(check: bool) -> Result<()> {
 
     // Sorted for a deterministic file regardless of declaration order. A bare
     // array (no disclaimer wrapper) so infra can parse the file directly.
-    let topics: BTreeSet<&'static str> =
-        macro_event_topics::all_topic_names().into_iter().collect();
+    let topics: BTreeSet<&'static str> = macro_event_topics::all_topic_names()
+        .iter()
+        .copied()
+        .collect();
 
     let new_contents =
         serde_json::to_string_pretty(&topics).context("serializing kafka topics")? + "\n";

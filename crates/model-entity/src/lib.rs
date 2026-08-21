@@ -46,6 +46,8 @@ pub enum EntityType {
     Project,
     /// The entity is an email thread
     EmailThread,
+    /// The entity is a calendar event
+    CalendarEvent,
     /// The entity is a team
     Team,
     /// The entity is a voice/video call
@@ -58,6 +60,14 @@ pub enum EntityType {
     CrmCompany,
     /// The entity is a CRM contact tracked by a team
     CrmContact,
+    /// The entity is a reminder set by a user
+    Reminder,
+    /// The entity is an AI skill: either a skill document or a built-in
+    /// system skill (see the `system_skills` crate)
+    Skill,
+    /// The entity is an AI coding agent session (see the `agent_session`
+    /// crate)
+    AgentSession,
 }
 
 impl EntityType {
@@ -72,6 +82,9 @@ impl EntityType {
             EntityType::Document => true,
             EntityType::Project => true,
             EntityType::EmailThread => true,
+            // Calendar events use owner or inbox-delegation authorization and
+            // are not represented in entity_access/project membership.
+            EntityType::CalendarEvent => false,
             // Calls are handled by entity_access by resolving through the call's
             // owning channel (access is inherited from channel membership).
             EntityType::Call => true,
@@ -81,6 +94,17 @@ impl EntityType {
             // — they aren't rows in the `entity_access` table.
             EntityType::CrmCompany => false,
             EntityType::CrmContact => false,
+            // A reminder is private to the user who set it. Access resolves
+            // from its owner column, not from a row in the `entity_access`
+            // table — the same shape as channels and CRM entities.
+            EntityType::Reminder => false,
+            // Skill refs are access-checked against the underlying document
+            // (system skills are visible to everyone).
+            EntityType::Skill => false,
+            // Agent sessions hold `entity_access` rows - the owner with
+            // owner, the channel the bot was mentioned in as editor - but
+            // are not something you file into a project.
+            EntityType::AgentSession => false,
         }
     }
     /// provide an entity string slice to upgrade this type into an [Entity]

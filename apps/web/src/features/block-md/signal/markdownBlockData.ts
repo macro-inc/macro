@@ -1,9 +1,11 @@
 import { blockDataSignalAs, createBlockStore } from '@core/block';
 import type {
   PluginManager,
+  ProgressStats,
   SelectionData,
   WordcountStats,
 } from '@core/component/LexicalMarkdown/plugins';
+import type { NodeIdMappings } from '@macro-inc/lexical-core/plugins/nodeIdPlugin';
 import { createCallback } from '@solid-primitives/rootless';
 import type { LexicalEditor } from 'lexical';
 import type { Store } from 'solid-js/store';
@@ -21,17 +23,23 @@ export const blockDataSignal = blockDataSignalAs<MarkdownData>('md');
  *     clamped to a max width.
  * @property scrollContainer The scroll container is the direct sibling of the top bar
  *     and takes the full width of the block. This is where the scroll bar is attached.
+ * @property locationReady True after the editor is initialized and the first
+ *     location-scroll window has opened.
  */
 export type MdData = {
   editor?: LexicalEditor;
+  /** Durable nodeId <-> nodeKey mapping for the main editor (from the nodeId plugin). */
+  mapping?: NodeIdMappings;
   titleEditor?: LexicalEditor;
   plugins?: PluginManager;
   selection?: Store<SelectionData>;
   wordcountStats?: Store<WordcountStats>;
+  progressStats?: Store<ProgressStats>;
   notebook?: HTMLElement;
   scrollContainer?: HTMLElement;
   commentMargin?: HTMLElement;
   contentRef?: HTMLElement;
+  locationReady?: boolean;
 };
 
 export const mdStore = createBlockStore<MdData>({});

@@ -4,9 +4,9 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
 };
-use macro_middleware::auth::internal_access::ValidInternalKey;
+use macro_authorization::{InternalOnly, MacroAuthorizationExtractor};
 
-use crate::api::context::ApiContext;
+use crate::api::context::{ApiContext, AuthorizationService};
 
 use macro_db_client::user::update_user_name::update_user_name;
 
@@ -33,10 +33,10 @@ async fn process(
 }
 
 /// Update user's name
-#[tracing::instrument(skip(ctx, req, _internal_access))]
+#[tracing::instrument(skip(ctx, req, _internal_authorization))]
 pub async fn handler(
     State(ctx): State<ApiContext>,
-    _internal_access: ValidInternalKey,
+    _internal_authorization: MacroAuthorizationExtractor<AuthorizationService, InternalOnly>,
     extract::Json(req): extract::Json<UpdateNameWebhook>,
 ) -> Result<Response, Response> {
     let user_id = "macro|".to_string() + &req.email;

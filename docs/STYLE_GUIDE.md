@@ -211,3 +211,14 @@ TypeScript · `[ui]` UI / UX conventions
   small and free of queries/complex state. (also: AGENTS.md)
 - **FE-27** `[ui]` Don't add `cursor-pointer` to clickable elements. (enforced: ast-grep
   `tsx-no-cursor-pointer`, warning · also: AGENTS.md)
+- **FE-28** `[ui]` Dialogs rely on Kobalte's default autofocus: make the intended
+  target the first tabbable element and preserve focus ownership for restoration.
+  Override `onOpenAutoFocus` only for a proven lifecycle requirement, and verify
+  `document.activeElement` after both opening and reopening in the live app.
+- **FE-29** `[data]` Every new query call site (`useQuery`/`useInfiniteQuery` or a hook
+  from `src/lib/queries/**`) needs a deliberate `Suspense` boundary: reading
+  `query.data` suspends to the *nearest ancestor* boundary. When reviewing, walk up
+  the component tree from the call site and determine which boundary would catch it.
+  If none exists below the app root, or the nearest one is far outside the component's
+  own UI scope (e.g. the route-level boundary in `apps/web/src/routes/Root.tsx`, whose
+  fallback blanks unrelated UI), flag it and ask which boundary is intended.

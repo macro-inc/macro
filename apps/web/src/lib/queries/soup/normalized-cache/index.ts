@@ -1,6 +1,7 @@
 export { groupedCacheVersion } from './grouped-operations';
 export { initSoupNormalizer } from './normalizer';
 export {
+  bumpSoupEntityTouchedAt,
   getSoupEntityById,
   hasSoupEntity,
   invalidateAllSoup,
@@ -12,6 +13,7 @@ export {
   refetchSoupEntity,
   removeSearchEntities,
   removeSoupEntities,
+  removeSoupEntitiesFromDoneFilteredQueries,
   removeSoupEntitiesFromQueriesReferencing,
 } from './operations';
 export type {

@@ -180,6 +180,7 @@ const defaultTenant = new FusionAuthTenant(
       },
     ],
     externalIdentifierConfiguration: {
+      passwordlessLoginTimeToLiveInSeconds: 600, // 10 minutes for email codes
       passwordlessLoginGenerator: {
         length: 6,
         type: 'randomDigits',
@@ -328,6 +329,54 @@ const macroApplication = new FusionAuthApplication(
 export const macroApplicationClientId =
   macroApplication.oauthConfiguration.clientId;
 
+const GITHUB_CLIENT_ID = aws.secretsmanager
+  .getSecretVersionOutput({
+    secretId: config.require('github-client-id-secret-key'),
+  })
+  .apply((secret) => secret.secretString);
+
+const GITHUB_CLIENT_SECRET = aws.secretsmanager
+  .getSecretVersionOutput({
+    secretId: config.require('github-client-secret-secret-key'),
+  })
+  .apply((secret) => secret.secretString);
+
+// The github identity provider
+new FusionAuthIdpOpenIdConnect(
+  'github-idp',
+  {
+    enabled: true,
+    // idpId: GITHUB_IDP_ID,
+    name: 'github',
+    oauth2ClientId: GITHUB_CLIENT_ID,
+    oauth2ClientSecret: GITHUB_CLIENT_SECRET,
+    oauth2ClientAuthenticationMethod: 'client_secret_basic',
+    oauth2AuthorizationEndpoint: 'https://github.com/login/oauth/authorize',
+    oauth2TokenEndpoint: 'https://github.com/login/oauth/access_token',
+    oauth2UserInfoEndpoint: 'https://api.github.com/user',
+    buttonText: 'Github',
+    oauth2Scope: 'openid profile email offline user:email offline_access',
+    oauth2UniqueIdClaim: 'id',
+    oauth2EmailClaim: 'email',
+    oauth2EmailVerifiedClaim: 'email_verified',
+    oauth2UsernameClaim: 'preferred_username',
+    linkingStrategy: 'LinkByEmail',
+    debug: stack !== 'prod',
+    applicationConfigurations: [
+      {
+        applicationId: pulumi.interpolate`${macroApplication.oauthConfiguration.clientId}`,
+        enabled: true,
+        createRegistration: true,
+      },
+    ],
+  },
+  {
+    dependsOn: macroApplication,
+    provider: fusionAuthProvider,
+    protect: stack !== 'local',
+  }
+);
+
 // Google identity provider id
 const GOOGLE_IDP_ID =
   stack === 'local' ? undefined : config.require('fusionauth-google-idp-id');
@@ -385,6 +434,30 @@ new FusionAuthIdpOpenIdConnect(
   }
 );
 
+const enableGoogleCalendarIntegration = config.requireBoolean(
+  'enable-google-calendar'
+);
+const GOOGLE_CALENDAR_SCOPES = [
+  'https://www.googleapis.com/auth/calendar.events',
+  'https://www.googleapis.com/auth/calendar.calendarlist.readonly',
+];
+
+const GOOGLE_GMAIL_OAUTH_SCOPES = [
+  'openid',
+  'profile',
+  'email',
+  'https://www.googleapis.com/auth/gmail.modify',
+  'https://www.googleapis.com/auth/contacts.readonly',
+  'https://www.googleapis.com/auth/contacts.other.readonly',
+  'https://www.googleapis.com/auth/gmail.settings.basic',
+];
+
+let googleOauth2Scope = GOOGLE_GMAIL_OAUTH_SCOPES.join(' ');
+
+if (enableGoogleCalendarIntegration) {
+  googleOauth2Scope = `${googleOauth2Scope} ${GOOGLE_CALENDAR_SCOPES.join(' ')}`;
+}
+
 // The google gmail identity provider
 new FusionAuthIdpOpenIdConnect(
   'google-gmail-idp',
@@ -400,8 +473,7 @@ new FusionAuthIdpOpenIdConnect(
     oauth2TokenEndpoint: 'https://oauth2.googleapis.com/token',
     oauth2UserInfoEndpoint: 'https://openidconnect.googleapis.com/v1/userinfo',
     buttonText: 'GoogleGmail',
-    oauth2Scope:
-      'openid profile email https://www.googleapis.com/auth/gmail.modify https://www.googleapis.com/auth/contacts.readonly https://www.googleapis.com/auth/contacts.other.readonly https://www.googleapis.com/auth/gmail.settings.basic',
+    oauth2Scope: googleOauth2Scope,
     oauth2UniqueIdClaim: 'sub',
     linkingStrategy: 'LinkByEmail',
     debug: stack !== 'prod',
@@ -420,3 +492,55 @@ new FusionAuthIdpOpenIdConnect(
     protect: stack !== 'local',
   }
 );
+
+// -- Microsoft
+if (config.get('microsoft-idp-secret-key')) {
+  const { client_id, client_secret, tenant_id } = aws.secretsmanager
+    .getSecretVersionOutput({
+      secretId: config.require('microsoft-idp-secret-key'),
+    })
+    .apply(
+      (secret) =>
+        JSON.parse(secret.secretString) as {
+          client_id: string;
+          client_secret: string;
+          tenant_id: string;
+        }
+    );
+
+  if (!client_id || !client_secret || !tenant_id) {
+    throw new Error(
+      'incorrectly configured microsoft idp secret. expected {client_id:"", client_secret:"", tenant_id:""'
+    );
+  }
+
+  new FusionAuthIdpOpenIdConnect(
+    'microsoft-idp',
+    {
+      enabled: true,
+      name: 'microsoft',
+      oauth2ClientId: client_id,
+      oauth2ClientSecret: client_secret,
+      oauth2ClientAuthenticationMethod: 'client_secret_basic',
+      oauth2Issuer: pulumi.interpolate`https://login.microsoftonline.com/${tenant_id}/v2.0`,
+      buttonText: 'Microsoft',
+      oauth2Scope:
+        'openid email offline_access profile Mail.ReadWrite Mail.Send',
+      oauth2UniqueIdClaim: 'sub',
+      linkingStrategy: 'LinkByEmail',
+      debug: stack !== 'prod',
+      applicationConfigurations: [
+        {
+          applicationId: pulumi.interpolate`${macroApplication.oauthConfiguration.clientId}`,
+          enabled: true,
+          createRegistration: true,
+        },
+      ],
+    },
+    {
+      dependsOn: macroApplication,
+      provider: fusionAuthProvider,
+      protect: stack !== 'local',
+    }
+  );
+}

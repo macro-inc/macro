@@ -164,6 +164,26 @@ export default defineConfig({
     },
     input: {
       target: './service-storage/openapi.json',
+      filters: {
+        mode: 'exclude',
+        // Webhook delivery-event schemas: in the spec for the SDK's event
+        // typegen (js/sdk derives its EventName/EventPayload types from
+        // them); the app never consumes webhook deliveries.
+        schemas: [
+          /^WebhookEvent$/,
+          /^WebhookValidationTestEvent$/,
+          /^DocumentTopicEvent$/,
+          /^ChannelTopicEvent$/,
+          /^Document(Created|Updated|Deleted|Copied)Metadata$/,
+          /^Channel(Created|Updated|Deleted)Metadata$/,
+          /^ChannelParticipant(Added|Removed)Metadata$/,
+          /^ChannelMessage(Posted|Patched|Deleted)Metadata$/,
+          /^ChannelMessageAttachment(Created|Removed)Metadata$/,
+          /^ChannelMentionedMetadata$/,
+          /^ChannelEventAttachment$/,
+          /^ChannelSender$/,
+        ],
+      },
     },
   },
   unfurlService: {
@@ -177,6 +197,19 @@ export default defineConfig({
     },
     input: {
       target: './service-unfurl/openapi.json',
+    },
+  },
+  agentHarnessService: {
+    output: {
+      client: 'fetch',
+      target: './service-agent-harness/generated/client.ts',
+      schemas: './service-agent-harness/generated/schemas',
+      override: {
+        useDates: false,
+      },
+    },
+    input: {
+      target: './service-agent-harness/openapi.json',
     },
   },
 });

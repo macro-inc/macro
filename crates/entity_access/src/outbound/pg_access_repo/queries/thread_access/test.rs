@@ -24,6 +24,18 @@ async fn access_as_requester(pool: &PgPool, thread_id: &Uuid) -> Option<AccessLe
         .unwrap()
 }
 
+async fn access_as_requester_on_team(
+    pool: &PgPool,
+    thread_id: &Uuid,
+    team_id: Uuid,
+) -> Option<AccessLevel> {
+    let requester = user(REQUESTER);
+    let source_ids = SourceIds(vec![REQUESTER.to_string(), team_id.to_string()]);
+    get_thread_access(pool, thread_id, &source_ids, Some(&*requester))
+        .await
+        .unwrap()
+}
+
 // ---------------------------------------------------------------------------
 // Fixture helpers
 // ---------------------------------------------------------------------------
@@ -109,6 +121,39 @@ async fn insert_entity_access(pool: &PgPool, thread_id: Uuid, source_id: &str, l
         thread_id,
         source_id,
         level_str,
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+}
+
+async fn insert_thread_share_permission(
+    pool: &PgPool,
+    thread_id: Uuid,
+    owner_user_id: &str,
+    link_share: Option<&str>,
+    access_level: Option<AccessLevel>,
+) {
+    let share_permission_id = Uuid::new_v4().to_string();
+    let access_level = access_level.map(|level| level.to_string());
+
+    sqlx::query!(
+        r#"INSERT INTO "SharePermission" (id, "linkShare", "linkShareAccessLevel")
+           VALUES ($1, $2, $3::text::"AccessLevel")"#,
+        share_permission_id,
+        link_share,
+        access_level,
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+
+    sqlx::query!(
+        r#"INSERT INTO "EmailThreadPermission" ("threadId", "sharePermissionId", "userId")
+           VALUES ($1, $2, $3)"#,
+        thread_id.to_string(),
+        share_permission_id,
+        owner_user_id,
     )
     .execute(pool)
     .await
@@ -329,6 +374,21 @@ async fn returns_none_when_thread_does_not_exist(pool: PgPool) -> anyhow::Result
     Ok(())
 }
 
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn batch_owner_lookup_returns_only_owned_threads(pool: PgPool) -> anyhow::Result<()> {
+    insert_user(&pool, REQUESTER, "requester@corp.test").await;
+    insert_user(&pool, OWNER, "owner@corp.test").await;
+    let (_, owned_thread_id) = create_link_and_thread(&pool, REQUESTER).await;
+    let (_, other_thread_id) = create_link_and_thread(&pool, OWNER).await;
+    let requester = user(REQUESTER);
+
+    let owned =
+        get_owned_email_thread_ids(&pool, &[owned_thread_id, other_thread_id], &requester).await?;
+
+    assert_eq!(owned, vec![owned_thread_id]);
+    Ok(())
+}
+
 // ---------------------------------------------------------------------------
 // Delegated / shared inboxes (macro_user_links)
 // ---------------------------------------------------------------------------
@@ -435,7 +495,142 @@ async fn unauthenticated_user_never_gets_crm_access(pool: PgPool) -> anyhow::Res
 }
 
 // ---------------------------------------------------------------------------
-// Happy paths
+// Link sharing
+// ---------------------------------------------------------------------------
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn public_link_grants_anonymous_access(pool: PgPool) -> anyhow::Result<()> {
+    insert_user(&pool, OWNER, "owner@corp.test").await;
+    let (_, thread_id) = create_link_and_thread(&pool, OWNER).await;
+    insert_thread_share_permission(
+        &pool,
+        thread_id,
+        OWNER,
+        Some("PUBLIC"),
+        Some(AccessLevel::Comment),
+    )
+    .await;
+
+    let access = get_thread_access(&pool, &thread_id, &SourceIds(vec![]), None).await?;
+
+    assert_eq!(access, Some(AccessLevel::Comment));
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn null_link_share_denies_access(pool: PgPool) -> anyhow::Result<()> {
+    insert_user(&pool, OWNER, "owner@corp.test").await;
+    insert_user(&pool, REQUESTER, "requester@corp.test").await;
+    let (_, thread_id) = create_link_and_thread(&pool, OWNER).await;
+    insert_thread_share_permission(&pool, thread_id, OWNER, None, None).await;
+
+    assert_eq!(access_as_requester(&pool, &thread_id).await, None);
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn team_link_grants_same_team_member(pool: PgPool) -> anyhow::Result<()> {
+    insert_user(&pool, OWNER, "owner@corp.test").await;
+    insert_user(&pool, REQUESTER, "requester@corp.test").await;
+    let team_id = Uuid::new_v4();
+    insert_team_row(&pool, team_id, OWNER).await;
+    add_team_member(&pool, team_id, OWNER).await;
+    add_team_member(&pool, team_id, REQUESTER).await;
+    let (_, thread_id) = create_link_and_thread(&pool, OWNER).await;
+    insert_thread_share_permission(
+        &pool,
+        thread_id,
+        OWNER,
+        Some("TEAM"),
+        Some(AccessLevel::Edit),
+    )
+    .await;
+
+    assert_eq!(
+        access_as_requester_on_team(&pool, &thread_id, team_id).await,
+        Some(AccessLevel::Edit)
+    );
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn team_link_denies_other_team_member(pool: PgPool) -> anyhow::Result<()> {
+    insert_user(&pool, OWNER, "owner@corp.test").await;
+    insert_user(&pool, REQUESTER, "requester@corp.test").await;
+
+    let owner_team_id = Uuid::new_v4();
+    insert_team_row(&pool, owner_team_id, OWNER).await;
+    add_team_member(&pool, owner_team_id, OWNER).await;
+
+    let requester_team_id = Uuid::new_v4();
+    insert_team_row(&pool, requester_team_id, REQUESTER).await;
+    add_team_member(&pool, requester_team_id, REQUESTER).await;
+
+    let (_, thread_id) = create_link_and_thread(&pool, OWNER).await;
+    insert_thread_share_permission(
+        &pool,
+        thread_id,
+        OWNER,
+        Some("TEAM"),
+        Some(AccessLevel::View),
+    )
+    .await;
+
+    assert_eq!(
+        access_as_requester_on_team(&pool, &thread_id, requester_team_id).await,
+        None
+    );
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn team_link_denies_anonymous_access(pool: PgPool) -> anyhow::Result<()> {
+    insert_user(&pool, OWNER, "owner@corp.test").await;
+    let team_id = Uuid::new_v4();
+    insert_team_row(&pool, team_id, OWNER).await;
+    add_team_member(&pool, team_id, OWNER).await;
+    let (_, thread_id) = create_link_and_thread(&pool, OWNER).await;
+    insert_thread_share_permission(
+        &pool,
+        thread_id,
+        OWNER,
+        Some("TEAM"),
+        Some(AccessLevel::View),
+    )
+    .await;
+
+    let access = get_thread_access(&pool, &thread_id, &SourceIds(vec![]), None).await?;
+
+    assert_eq!(access, None);
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn team_link_denies_when_owner_has_no_team(pool: PgPool) -> anyhow::Result<()> {
+    insert_user(&pool, OWNER, "owner@corp.test").await;
+    insert_user(&pool, REQUESTER, "requester@corp.test").await;
+    let requester_team_id = Uuid::new_v4();
+    insert_team_row(&pool, requester_team_id, REQUESTER).await;
+    add_team_member(&pool, requester_team_id, REQUESTER).await;
+    let (_, thread_id) = create_link_and_thread(&pool, OWNER).await;
+    insert_thread_share_permission(
+        &pool,
+        thread_id,
+        OWNER,
+        Some("TEAM"),
+        Some(AccessLevel::View),
+    )
+    .await;
+
+    assert_eq!(
+        access_as_requester_on_team(&pool, &thread_id, requester_team_id).await,
+        None
+    );
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// CRM happy paths
 // ---------------------------------------------------------------------------
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]

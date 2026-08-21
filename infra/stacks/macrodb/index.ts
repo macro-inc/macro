@@ -50,6 +50,15 @@ const originalParameterGroup = new aws.rds.ParameterGroup(
       { name: 'auto_explain.log_nested_statements', value: 'on' },
       { name: 'auto_explain.sample_rate', value: '1' },
       { name: 'idle_in_transaction_session_timeout', value: '300000' },
+      // Tune planner costs and prefetch for gp3 SSD.
+      { name: 'random_page_cost', value: '1.1' },
+      { name: 'effective_io_concurrency', value: '256' },
+      // Reduce sort/hash disk spills; 16MB sized for the smallest (8GiB dev) instance.
+      { name: 'work_mem', value: '16384' },
+      // Avoid JIT startup cost for one-off dynamic Soup queries.
+      { name: 'jit', value: '0' },
+      // Log spills of at least 10MB for follow-up tuning.
+      { name: 'log_temp_files', value: '10240' },
     ],
     tags,
   },
@@ -84,6 +93,15 @@ if (stack === 'prod') {
         { name: 'auto_explain.log_nested_statements', value: 'on' },
         { name: 'auto_explain.sample_rate', value: '1' },
         { name: 'idle_in_transaction_session_timeout', value: '300000' },
+        // Tune planner costs and prefetch for gp3 SSD.
+        { name: 'random_page_cost', value: '1.1' },
+        { name: 'effective_io_concurrency', value: '256' },
+        // Reduce sort/hash disk spills; 16MB sized for the smallest (8GiB dev) instance.
+        { name: 'work_mem', value: '16384' },
+        // Avoid JIT startup cost for one-off dynamic Soup queries.
+        { name: 'jit', value: '0' },
+        // Log spills of at least 10MB for follow-up tuning.
+        { name: 'log_temp_files', value: '10240' },
       ],
       tags,
     },

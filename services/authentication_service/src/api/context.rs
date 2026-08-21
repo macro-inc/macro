@@ -2,6 +2,20 @@ use std::sync::Arc;
 
 use analytics_client::AnalyticsClient;
 use axum::extract::FromRef;
+use channels::{
+    domain::{
+        service::ChannelServiceImpl,
+        side_effects::{ChannelSideEffectService, SpawnedChannelEventDispatcher},
+    },
+    outbound::{
+        connection_gateway_realtime::ConnectionGatewayChannelRealtimePublisher,
+        contacts_dispatcher::ContactsChannelDispatcher,
+        notification_sender::NotificationChannelSender,
+        pg_channel_reference_share_permissions::PgChannelReferenceSharePermissions,
+        pg_channels_repo::PgChannelsRepo, pg_side_effect_context::PgChannelSideEffectContext,
+    },
+};
+use contacts::{domain::service::SqsContactsIngress, outbound::ingress::SqsContactsQueue};
 use entity_access::domain::service::EntityAccessServiceImpl;
 use entity_access::outbound::PgAccessRepository;
 use foreign_entity::domain::service::ForeignEntityServiceImpl;
@@ -11,11 +25,14 @@ use github::outbound::github_auth_client::GithubAuthImpl;
 use github::outbound::github_oauth_client::GithubOauthImpl;
 use github::outbound::pg_github_repo::PgGithubRepo;
 use loops_client::LoopsClient;
-use macro_auth::middleware::decode_jwt::JwtValidationArgs;
+use macro_auth::{InternalApiKey, middleware::decode_jwt::JwtValidationArgs};
+use macro_authorization::{
+    MacroAuthJwtValidator, MacroAuthorizationServiceImpl, MacroAuthorizationState,
+};
 use macro_cache_client::MacroCache;
 use macro_env::Environment;
 use macro_env_var::env_var;
-use macro_middleware::auth::internal_access::InternalApiKey;
+use macro_event_broker::{KafkaEventPublisher, MacroEventBrokerService};
 use native_app_service::{domain::service::NativeAppServiceImpl, outbound::DefaultBundleFetcher};
 use notification::outbound::queue::SqsQueue;
 use notification::{
@@ -31,21 +48,44 @@ use roles_and_permissions::{
     domain::service::UserRolesAndPermissionsServiceImpl, outbound::pgpool::MacroDB,
 };
 use sqlx::PgPool;
+use tokio_util::task::TaskTracker;
+
+use crate::microsoft_token_cipher::MicrosoftTokenCipher;
 
 pub(crate) type NotificationIngressType = SqsNotificationIngress<SqsQueue>;
+pub(crate) type AuthenticationEventBroker =
+    MacroEventBrokerService<KafkaEventPublisher, TaskTracker>;
+
+pub(crate) type ChannelServiceType = ChannelServiceImpl<
+    PgChannelsRepo,
+    SpawnedChannelEventDispatcher<
+        ChannelSideEffectService<
+            PgChannelSideEffectContext,
+            ConnectionGatewayChannelRealtimePublisher,
+            NotificationChannelSender<NotificationIngressType>,
+            ContactsChannelDispatcher<SqsContactsIngress<SqsContactsQueue>>,
+            AuthenticationEventBroker,
+        >,
+    >,
+    PgChannelReferenceSharePermissions<EntityAccessServiceType>,
+>;
 
 pub(crate) type TeamsServiceType = teams::domain::team_service::TeamServiceImpl<
     teams::outbound::team_repo::TeamRepositoryImpl,
     teams::outbound::customer_repo::CustomerRepositoryImpl,
-    teams::outbound::team_channels_repo::TeamChannelsRepositoryImpl,
+    ChannelServiceType,
     UserRolesAndPermissionsServiceImpl<MacroDB, MacroDB>,
     NotificationIngressType,
     teams::outbound::crm_enqueuer::SqsCrmEnqueuer,
     teams::outbound::team_crm_settings_repo::TeamCrmSettingsRepositoryImpl,
     teams::outbound::team_analytics::AnalyticsClientTeamAnalytics,
+    teams::outbound::contacts_enqueuer::ContactsIngressEnqueuer<
+        SqsContactsIngress<SqsContactsQueue>,
+    >,
+    AuthenticationEventBroker,
 >;
 
-type RateLimiter = RateLimitServiceImpl<RedisRateLimitAdapter<redis::Client>>;
+pub(crate) type RateLimiter = RateLimitServiceImpl<RedisRateLimitAdapter<redis::Client>>;
 
 pub(crate) type ReferralServiceType = ReferralServiceImpl<
     PgReferralRepo,
@@ -62,11 +102,18 @@ pub(crate) type GithubLinkServiceType = GithubLinkServiceImpl<
 
 pub(crate) type EntityAccessServiceType = EntityAccessServiceImpl<PgAccessRepository>;
 
+pub(crate) type FavoritesServiceType = favorites::domain::service::FavoritesServiceImpl<
+    favorites::outbound::pg_favorites_repo::PgFavoritesRepo,
+>;
+
+pub(crate) type AuthorizationService = MacroAuthorizationServiceImpl<MacroAuthJwtValidator>;
+
 #[derive(Clone, FromRef)]
 pub(crate) struct ApiContext {
     pub db: PgPool,
     pub github_link_service: Arc<GithubLinkServiceType>,
     pub auth_client: Arc<fusionauth::FusionAuthClient>,
+    pub microsoft_token_cipher: Option<Arc<dyn MicrosoftTokenCipher>>,
     pub macro_cache_client: Arc<MacroCache>,
     pub stripe_client: Arc<stripe::Client>,
     pub document_storage_service_client:
@@ -77,12 +124,15 @@ pub(crate) struct ApiContext {
     pub sqs_client: Arc<sqs_client::SQS>,
     pub environment: Environment,
     pub jwt_args: JwtValidationArgs,
+    pub authorization_state: MacroAuthorizationState<AuthorizationService>,
     pub token_context: MacroApiTokenContext,
     pub internal_api_key: InternalApiKey,
     pub stripe_webhook_secret: LocalOrRemoteSecret<StripeWebhookSecretKey>,
     pub user_roles_and_permissions_service:
         Arc<UserRolesAndPermissionsServiceImpl<MacroDB, MacroDB>>, // Note: since FromRef doesn't support generics we have to specify the concrete types here
     pub teams_service: Arc<TeamsServiceType>,
+    pub channel_service: Arc<ChannelServiceType>,
+    pub favorites_service: Arc<FavoritesServiceType>,
     pub entity_access_service: Arc<EntityAccessServiceType>,
     pub native_app_service: Arc<NativeAppServiceImpl<DefaultBundleFetcher>>,
     pub analytics_client: Arc<AnalyticsClient>,
@@ -91,6 +141,8 @@ pub(crate) struct ApiContext {
     pub rate_limit_service: RateLimiter,
     /// The stripe price id
     pub stripe_price_id: String,
+    /// Whether Gmail link consent requests the Google Calendar scope.
+    pub calendar_scope_enabled: bool,
 }
 
 env_var! {

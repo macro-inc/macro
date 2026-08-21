@@ -5,28 +5,36 @@
 //! [`TopicEvent`](domain::models::TopicEvent) enums, the
 //! [`MacroEvent`](domain::models::MacroEvent) event abstraction, the inbound
 //! [`MacroEventBroker`](domain::ports::MacroEventBroker) API, the outbound
-//! [`EventPublisher`](domain::ports::EventPublisher) port, and the
-//! [`MacroEventBrokerService`](domain::service::MacroEventBrokerService) that ties
-//! them together. Kafka topic definitions live in the `macro_event_topics` crate.
-//! The [`outbound`] layer provides the Kafka adapter implementation.
+//! [`EventPublisher`](domain::ports::EventPublisher) and
+//! [`Spawner`](domain::ports::Spawner) ports, the producing
+//! [`MacroEventBrokerService`](domain::service::MacroEventBrokerService), and the
+//! typed [`MacroEventConsumerService`](domain::service::MacroEventConsumerService),
+//! which receives messages through the [`EventConsumer`](domain::ports::EventConsumer) port.
+//! Kafka topic definitions live in the `macro_event_topics` crate. Shared Kafka
+//! producer and consumer transports live in `kafka_util`, while the [`outbound`]
+//! layer provides Kafka and Tokio adapters for the domain ports.
 
 /// Domain layer: models, ports, and service.
 pub mod domain;
 
-pub use domain::models::{Event, EventBrokerError, MacroEvent, TopicEvent};
+pub use domain::models::{Event, EventBrokerError, MacroEvent, MessageWrapper, TopicEvent};
 pub use macro_event_topics::{
-    MacroChannelsTopic, MacroDocumentsTopic, MacroEmailTopic, MacroExampleTopic, Topic,
+    MacroChannelsTopic, MacroDocumentsTopic, MacroEmailTopic, MacroExampleTopic,
+    MacroProjectsTopic, Topic,
 };
 
-#[cfg(feature = "ports")]
-pub use domain::ports::{EventPublisher, MacroEventBroker};
-#[cfg(feature = "ports")]
-pub use domain::service::{MacroEventBrokerService, NoopMacroEventBroker};
+pub use domain::ports::{
+    EventConsumer, EventPublisher, MacroEventBroker, MacroEventCollection, MessageParts, Spawner,
+};
+pub use domain::service::{
+    MacroEventBrokerService, MacroEventConsumerService, NoopMacroEventBroker,
+};
 #[cfg(feature = "outbound")]
-pub use outbound::kafka_event_publisher::KafkaEventPublisher;
-#[cfg(feature = "outbound")]
-pub use outbound::msk_iam::MskIamClientContext;
+pub use outbound::{
+    kafka_event_consumer::KafkaConsumerAdapter, kafka_event_publisher::KafkaEventPublisher,
+    spawner::GlobalSpawner,
+};
 
-/// Outbound layer: Kafka adapter for the [`EventPublisher`](domain::ports::EventPublisher) port.
+/// Outbound adapters for the macro event broker's required ports.
 #[cfg(feature = "outbound")]
 pub mod outbound;

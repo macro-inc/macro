@@ -10,7 +10,7 @@ import {
   type EntityIconSelector,
   isArchiveType,
 } from '@core/component/EntityIcon';
-import { isMobile } from '@core/mobile/isMobile';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { blockMetadataSignal } from '@core/signal/load';
 import {
   useCanComment,
@@ -54,7 +54,7 @@ export function StaticSplitLabel(props: {
     panel.handle.setDisplayName(props.label);
   });
   const openTitleFileMenu = (e: MouseEvent) => {
-    if (!isMobile()) return;
+    if (!isTouchDevice()) return;
     const trigger = panel.titleFileMenuTrigger();
     if (!trigger) return;
     e.preventDefault();
@@ -69,7 +69,7 @@ export function StaticSplitLabel(props: {
       >
         <div
           class={cn(
-            'z-page-overlay relative flex items-center gap-2 max-w-full h-full shrink',
+            'z-split-header-content relative flex items-center gap-2 max-w-full h-full shrink',
             props.class
           )}
         >
@@ -90,7 +90,7 @@ export function StaticSplitLabel(props: {
               {props.label}
             </span>
             <Show when={panel.titleFileMenuTrigger()}>
-              <CaretDownIcon class="hidden size-3.5 shrink-0 text-ink-muted mobile:block" />
+              <CaretDownIcon class="hidden size-3.5 shrink-0 text-ink-muted touch:block" />
             </Show>
           </span>
           <div
@@ -126,7 +126,7 @@ export function SplitLabel(props: {
   };
 
   const openTitleFileMenu = (e: MouseEvent) => {
-    if (!isMobile()) return;
+    if (!isTouchDevice()) return;
     const trigger = panel.titleFileMenuTrigger();
     if (!trigger) return;
     e.preventDefault();
@@ -140,7 +140,7 @@ export function SplitLabel(props: {
         {truncatedLabel()}
       </span>
       <Show when={panel.titleFileMenuTrigger()}>
-        <CaretDownIcon class="hidden size-4 shrink-0 text-ink-muted mobile:block" />
+        <CaretDownIcon class="hidden size-4 shrink-0 text-ink-muted touch:block" />
       </Show>
     </span>
   );
@@ -212,7 +212,7 @@ export function BlockItemSplitLabel(props: {
   });
 
   const openTitleFileMenu = (e: MouseEvent) => {
-    if (!isMobile()) return;
+    if (!isTouchDevice()) return;
     const trigger = panel.titleFileMenuTrigger();
     if (!trigger) return;
     e.preventDefault();
@@ -226,7 +226,7 @@ export function BlockItemSplitLabel(props: {
         class={cn('shrink', panel.titleFileMenuTrigger() && 'cursor-pointer')}
         onClick={openTitleFileMenu}
       >
-        <div class="ph-no-capture z-page-overlay relative flex items-center gap-2 min-w-0 max-w-full h-full shrink">
+        <div class="ph-no-capture z-split-header-content relative flex items-center gap-2 min-w-0 max-w-full h-full shrink">
           <EntityIcon class="shrink-0" targetType={targetType()} size="xs" />
           <Show when={props.badges}>{props.badges}</Show>
           <SplitLabel
@@ -264,6 +264,7 @@ function SplitLabelContextMenu(props: ParentProps) {
           <MenuItem
             icon={action.icon as Component<JSX.SvgSVGAttributes<SVGSVGElement>>}
             text={action.label}
+            hotkeyToken={action.hotkeyToken}
             onClick={() => action.action?.()}
           />
         }
@@ -273,7 +274,7 @@ function SplitLabelContextMenu(props: ParentProps) {
             icon={action.icon as Component<JSX.SvgSVGAttributes<SVGSVGElement>>}
             text={action.label}
           />
-          <ContextMenuContent submenu width="w-fit">
+          <ContextMenuContent submenu class="w-64">
             <For each={children()}>{item}</For>
           </ContextMenuContent>
         </ContextMenu.Sub>
@@ -305,7 +306,7 @@ function SplitLabelContextMenu(props: ParentProps) {
           {props.children}
         </ContextMenu.Trigger>
         <ContextMenu.Portal>
-          <ContextMenuContent width="w-fit">
+          <ContextMenuContent class="w-64">
             <For each={sections()}>
               {(section, index) => (
                 <>

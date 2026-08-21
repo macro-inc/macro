@@ -1,4 +1,3 @@
-import { ENABLE_CALLS } from '@core/constant/featureFlags';
 import { useChannelsContext } from '@core/context/channels';
 import { useUserId } from '@core/context/user';
 import { usePlatformNotificationState } from '@notifications';
@@ -8,20 +7,13 @@ import {
   setActiveCallEndedCache,
   setActiveCallStartedCache,
 } from '@queries/call/call';
-import { createConnectionWebsocketEffect } from '@service-connection/websocket';
 import { useCallContext } from './CallContext';
+import { createCallEventsEffect } from './call-events';
+import {
+  createCallResolutionsEffect,
+  publishCallResolution,
+} from './call-resolution';
 import { joinChannelCall } from './join-channel-call';
-
-type CallStartedPayload = {
-  channel_id?: string;
-  call_id?: string;
-  created_by?: string | null;
-};
-
-type CallEndedPayload = {
-  channel_id?: string;
-  call_id?: string;
-};
 
 const RING_VOLUME = 0.11;
 const RING_NOTE_DURATION_S = 0.09;
@@ -34,9 +26,12 @@ const RING_CHIME_FREQUENCIES_HZ = [
 ];
 // Phone-style cadence: re-ring every few seconds while the call is incoming.
 const RING_INTERVAL_MS = 4_000;
-// Stop ringing after this long if the user neither answers nor dismisses, so
-// a missed call doesn't keep noise-making forever.
-const MAX_RING_DURATION_MS = 30_000;
+/**
+ * Stop ringing after this long if the user neither answers nor dismisses, so
+ * a missed call doesn't keep noise-making forever. Shared with the incoming
+ * call store so its auto-dismiss stays in lockstep with the ringer.
+ */
+export const MAX_RING_DURATION_MS = 30_000;
 
 type WebkitWindow = Window & { webkitAudioContext?: typeof AudioContext };
 type RingSound = { durationMs: number; stop: () => void };
@@ -44,9 +39,26 @@ type Ringer = { stop: () => void };
 
 const activeCallRingers = new Map<string, Ringer>();
 
+// Incoming-call notification handles by call id, so the toast can be closed
+// when the ring resolves remotely (answered on another device). Best-effort:
+// the Tauri notification handle's close() is currently a no-op.
+const activeCallNotifications = new Map<string, { close: () => void }>();
+
+// Notifications still being created (showNotification is async), so a remote
+// answer that lands mid-flight can cancel the toast once it materializes
+// instead of leaving a stale requireInteraction toast up indefinitely.
+const pendingCallNotifications = new Map<string, { cancelled: boolean }>();
+
 export function stopCallRinger(callId: string) {
   activeCallRingers.get(callId)?.stop();
   activeCallRingers.delete(callId);
+}
+
+function closeCallNotification(callId: string) {
+  const pending = pendingCallNotifications.get(callId);
+  if (pending) pending.cancelled = true;
+  activeCallNotifications.get(callId)?.close();
+  activeCallNotifications.delete(callId);
 }
 
 function startCallRinger(
@@ -172,28 +184,19 @@ function startRingingLoop(
   return { stop };
 }
 
-function safeJsonParse(s: string): unknown {
-  try {
-    return JSON.parse(s);
-  } catch {
-    return null;
-  }
-}
-
-function parsePayload(raw: unknown): CallStartedPayload | null {
-  const obj =
-    typeof raw === 'string'
-      ? safeJsonParse(raw)
-      : typeof raw === 'object'
-        ? raw
-        : null;
-  if (!obj || typeof obj !== 'object') return null;
-  return obj as CallStartedPayload;
-}
-
 /**
  * Listens for `call_started` websocket events broadcast to channel members
  * and surfaces a browser notification + ring tone for the recipients.
+ *
+ * Also resolves the ring remotely: `call_answered` (sent to just this user
+ * when they join the call on any device, e.g. answering on iPhone) and
+ * `call_ended` both stop the ring; `call_answered` additionally closes the
+ * incoming-call notification since the user is already in the call.
+ *
+ * This component is the sole bridge from those one-shot websocket events to
+ * published call resolutions (`call-resolution.ts`) — resolution consumers
+ * like `IncomingCallEvents` rely on it being mounted for instant dismissal,
+ * falling back to their reconciliation poll otherwise.
  *
  * Mount once near the app root, inside `<CallProvider>` and
  * `<ChannelsContextProvider>`. The backend already excludes the caller from
@@ -203,56 +206,65 @@ function parsePayload(raw: unknown): CallStartedPayload | null {
  */
 export function CallStartedNotifier() {
   const callCtx = useCallContext();
-  const userId = useUserId();
   const channelsCtx = useChannelsContext();
   const notif = usePlatformNotificationState();
+  const userId = useUserId();
 
-  createConnectionWebsocketEffect((data) => {
-    if (!ENABLE_CALLS()) return;
-
-    const payload = parsePayload(data.data);
-    if (!payload) return;
-
-    if (data.type === 'call_ended') {
-      const { channel_id: channelId, call_id: callId } =
-        payload as CallEndedPayload;
-      if (!channelId || !callId) return;
-
-      stopCallRinger(callId);
-      setActiveCallEndedCache({ channelId, callId });
-      void invalidateActiveCallQueries();
+  createCallResolutionsEffect((resolution) => {
+    if (resolution.type === 'answered') {
+      if (resolution.answeredBy !== userId()) return;
+      stopCallRinger(resolution.callId);
+      closeCallNotification(resolution.callId);
       return;
     }
 
-    if (data.type !== 'call_started') return;
-
-    const {
-      channel_id: channelId,
-      call_id: callId,
-      created_by: createdBy,
-    } = payload;
-    if (!channelId || !callId) return;
-
-    const createdAt = new Date().toISOString();
-    setActiveCallStartedCache({
-      channelId,
-      callId,
-      createdAt,
-      createdBy: createdBy ?? '',
+    stopCallRinger(resolution.callId);
+    setActiveCallEndedCache({
+      channelId: resolution.channelId,
+      callId: resolution.callId,
     });
     void invalidateActiveCallQueries();
+  });
 
-    if (callCtx.activeCallId() === callId) return;
-    if (createdBy && createdBy === userId()) return;
+  createCallEventsEffect({
+    onCallEnded: ({ channelId, callId }) => {
+      publishCallResolution({ type: 'ended', channelId, callId });
+    },
 
-    void emitCallStartedNotification({
-      channelId,
-      callId,
-      createdBy: createdBy ?? null,
-      channelName: channelsCtx.channelsById()[channelId]?.name ?? undefined,
-      notif,
-      isJoined: () => callCtx.activeCallId() === callId,
-    });
+    onCallAnswered: ({ callId, answeredBy }) => {
+      const answeringUserId = answeredBy ?? userId();
+      if (!answeringUserId) return;
+      publishCallResolution({
+        type: 'answered',
+        callId,
+        answeredBy: answeringUserId,
+      });
+    },
+
+    onCallStarted: ({ channelId, callId, createdBy, isFromSelf }) => {
+      const createdAt = new Date().toISOString();
+      setActiveCallStartedCache({
+        channelId,
+        callId,
+        createdAt,
+        createdBy: createdBy ?? '',
+      });
+      void invalidateActiveCallQueries();
+
+      // The cache above is updated for every call, including our own; only the
+      // ring and the toast are skipped when we're already in it or started it.
+      if (callCtx.activeCallId() === callId) return;
+      if (isFromSelf) return;
+
+      void emitCallStartedNotification({
+        channelId,
+        callId,
+        createdBy,
+        channelName: channelsCtx.channelsById()[channelId]?.name ?? undefined,
+        notif,
+        isJoined: () => callCtx.activeCallId() === callId,
+      });
+    },
   });
 
   return null;
@@ -276,32 +288,55 @@ async function emitCallStartedNotification(args: {
 
   if (notif === 'not-supported') return;
 
-  const callerName =
-    (createdBy ? await DefaultUserNameResolver(createdBy) : undefined) ??
-    'Someone';
-  const target = channelName ? ` in #${channelName}` : '';
+  const pending = { cancelled: false };
+  pendingCallNotifications.set(callId, pending);
+  try {
+    const callerName =
+      (createdBy ? await DefaultUserNameResolver(createdBy) : undefined) ??
+      'Someone';
+    const target = channelName ? ` in ${channelName}` : '';
 
-  const handle = await notif.showNotification({
-    title: `Incoming call${target}`,
-    options: {
-      body: `${callerName} started a call`,
-      // Keep the toast visible until the user answers or dismisses it,
-      // instead of the browser's default few-second auto-dismiss.
-      requireInteraction: true,
-      // Collapse duplicate broadcasts (e.g. multi-device) into one toast.
-      tag: `call-${callId}`,
-    },
-  });
+    const handle = await notif.showNotification({
+      title: `Incoming call${target}`,
+      options: {
+        body: `${callerName} started a call`,
+        // Keep the toast visible until the user answers or dismisses it,
+        // instead of the browser's default few-second auto-dismiss.
+        requireInteraction: true,
+        // Collapse duplicate broadcasts (e.g. multi-device) into one toast.
+        tag: `call-${callId}`,
+      },
+    });
 
-  if (handle === 'not-granted' || handle === 'disabled-in-ui') return;
+    if (handle === 'not-granted' || handle === 'disabled-in-ui') return;
 
-  handle.onClick(() => {
-    window.focus();
-    void joinChannelCall(channelId);
-    handle.close();
-    ringer.stop();
-  });
-  handle.onDismiss(() => {
-    ringer.stop();
-  });
+    // The call was answered remotely while the toast was being created.
+    if (pending.cancelled) {
+      handle.close();
+      return;
+    }
+
+    activeCallNotifications.set(callId, handle);
+
+    const untrack = () => {
+      if (activeCallNotifications.get(callId) === handle) {
+        activeCallNotifications.delete(callId);
+      }
+    };
+    handle.onClick(() => {
+      window.focus();
+      void joinChannelCall(channelId);
+      handle.close();
+      untrack();
+      ringer.stop();
+    });
+    handle.onDismiss(() => {
+      untrack();
+      ringer.stop();
+    });
+  } finally {
+    if (pendingCallNotifications.get(callId) === pending) {
+      pendingCallNotifications.delete(callId);
+    }
+  }
 }

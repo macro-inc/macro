@@ -1,6 +1,6 @@
-import { useRowTagFilter } from '@app/features/next-soup/soup-view/filters-bar/use-row-tag-filter';
+import { useMaybeSoupView } from '@app/features/next-soup/soup-view/soup-view-context';
 import { UserIcon } from '@core/component/UserIcon';
-import { tryMacroId, useDisplayNameParts } from '@core/user';
+import { getDisplayNameParts, tryMacroId } from '@core/user';
 import {
   Entity,
   type EntityData,
@@ -65,16 +65,17 @@ function buildStubProperty(col: TaskGridColumn): Property {
 }
 
 export function TaskGridLayout(props: LayoutProps) {
+  const soupView = useMaybeSoupView();
   const currentId = useUserId();
-  const filterByTag = useRowTagFilter();
   const entity = () => props.entity as EntityWithProperties<EntityData>;
   const isShared = () => props.entity.ownerId !== currentId();
 
   // Get owner's first name for the Created By column
-  const ownerNameParts = () =>
-    useDisplayNameParts(tryMacroId(props.entity.ownerId));
   const ownerDisplayName = () =>
-    isShared() ? ownerNameParts().firstName() || 'Unknown' : 'Me';
+    isShared()
+      ? getDisplayNameParts(tryMacroId(props.entity.ownerId)).firstName ||
+        'Unknown'
+      : 'Me';
 
   const propertyMap = createMemo(() => {
     const map = new Map<string, Property>();
@@ -113,6 +114,7 @@ export function TaskGridLayout(props: LayoutProps) {
 
   return (
     <PropertiesProvider
+      entityId={props.entity.id}
       entityType={EntityType.TASK}
       canEdit={true}
       properties={properties}
@@ -194,7 +196,7 @@ export function TaskGridLayout(props: LayoutProps) {
             entityId={props.entity.id}
             entityType={EntityType.TASK}
             properties={entity().properties}
-            onFilterByTag={filterByTag}
+            onFilterByTag={soupView?.filterByTag}
             class="ml-auto"
           />
         </Entity.Slot>

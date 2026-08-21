@@ -3,6 +3,7 @@ import {
   ChatWithAgentIcon,
   openChatWithAgent,
 } from '@app/features/chat/ChatWithAgentButton';
+import { makeMoveToProjectAction } from '@app/features/next-soup/actions';
 import { useMaybeSoup } from '@app/features/next-soup/soup-context';
 import {
   openEntityInSplitFromUnifiedList,
@@ -11,11 +12,12 @@ import {
 import type { BlockTool } from '@components/app/ResponsiveBlockToolbar';
 import { ResponsiveBlockToolbar } from '@components/app/ResponsiveBlockToolbar';
 import { useSidePanel } from '@components/app/side-panel';
-import { SplitFileMenu } from '@components/app/split-layout/components/SplitFileMenu';
-import { SplitHeaderLeft } from '@components/app/split-layout/components/SplitHeader';
+import {
+  SplitHeaderLeft,
+  SplitHeaderRight,
+} from '@components/app/split-layout/components/SplitHeader';
 import {
   SplitHeaderBadge,
-  SplitTitleFileMenu,
   StaticSplitLabel,
 } from '@components/app/split-layout/components/SplitLabel';
 import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
@@ -30,13 +32,20 @@ import { registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
 import { getActiveCommandByToken, runCommand } from '@core/hotkey/utils';
 import { isMobile } from '@core/mobile/isMobile';
+import { buildEntityData } from '@entity';
+import { AnimatedNoiseIcon } from '@icon/wide-noise';
 import IconShared from '@icon/wide-share.svg';
 import { AnimatedTaskIcon } from '@icon/wide-task';
+import ArrowRightIcon from '@phosphor/arrow-right.svg';
 import CheckIcon from '@phosphor/check.svg';
+import EnvelopeSimpleIcon from '@phosphor/envelope-simple.svg';
+import EnvelopeSimpleOpenIcon from '@phosphor/envelope-simple-open.svg';
 import ProhibitIcon from '@phosphor/prohibit.svg';
 import TrashIcon from '@phosphor/trash.svg';
+import CheckBoldIcon from '@phosphor-icons/core/bold/check-bold.svg?component-solid';
 import ArrowCounterClockwise from '@phosphor-icons/core/regular/arrow-counter-clockwise.svg?component-solid';
 import { useEmailLinksQuery } from '@queries/email/link';
+import { Button } from '@ui';
 import { onCleanup, Show } from 'solid-js';
 import { useEmailContext } from './EmailContext';
 
@@ -52,6 +61,7 @@ export function TopBar(props: {
   const soup = useMaybeSoup();
   const linksQuery = useEmailLinksQuery();
   const sidePanel = useSidePanel();
+  const moveToProjectAction = makeMoveToProjectAction();
 
   if (splitPanel?.splitHotkeyScope) {
     const reg = registerHotkey({
@@ -80,6 +90,57 @@ export function TopBar(props: {
     const links = linksQuery.data?.links;
     if (!thread || !links) return false;
     return links.some((link) => link.id === thread.link_id);
+  };
+
+  const isDone = () => emailCtx.isThreadDone();
+
+  const emailEntity = () => {
+    const soupEntity = soup?.items.get(props.id)?.original;
+    if (soupEntity?.type === 'email') return soupEntity;
+
+    const thread = emailCtx.thread();
+    return buildEntityData({
+      id: props.id,
+      name: props.title,
+      blockName: 'email',
+      projectId: thread?.project_id ?? undefined,
+      isRead: thread?.is_read,
+      isDraft: props.isDraft,
+      done: thread ? !thread.inbox_visible : undefined,
+    });
+  };
+
+  const moveToFolder = () => {
+    const entity = emailEntity();
+    if (!entity || !moveToProjectAction.canExecute(entity)) return;
+    void moveToProjectAction.execute([entity]);
+  };
+
+  // A send-only thread is permanently done, so neither half of the toggle
+  // does anything — hide it rather than offer a no-op.
+  const showMarkDoneToggle = () => !isDone() || emailCtx.canMarkThreadNotDone();
+
+  const toggleMarkDone = () => {
+    if (isDone()) {
+      emailCtx.markThreadNotDone();
+      return;
+    }
+    // Prefer the active Mark done command so it drives soup navigation and
+    // notifications; fall back to archiving the thread directly. A command
+    // can be found but still decline (condition/handler returns false, e.g.
+    // the triage registration when not opened from inbox/mail), so gate on
+    // it actually capturing.
+    const command = getActiveCommandByToken(TOKENS.entity.action.markDone);
+    if (command && runCommand(command).commandCaptured) return;
+    emailCtx.archiveThread();
+  };
+
+  const toggleMarkUnread = () => {
+    if (emailCtx.isThreadMarkedUnread()) {
+      emailCtx.markThreadRead();
+    } else {
+      emailCtx.markThreadUnread();
+    }
   };
 
   const trashThread = () => {
@@ -124,6 +185,7 @@ export function TopBar(props: {
   };
 
   const shareTool: BlockTool = {
+    group: 'sharing',
     label: 'Share',
     icon: IconShared,
     action: () => shareCtx.open(),
@@ -134,6 +196,35 @@ export function TopBar(props: {
 
   const emailActions: BlockTool[] = [
     {
+      label: 'Mark done',
+      icon: CheckIcon,
+      action: toggleMarkDone,
+      condition: () => isOwnThread() && !isDone(),
+      hotkeyToken: TOKENS.entity.action.markDone,
+    },
+    {
+      label: 'Mark as not done',
+      icon: CheckBoldIcon,
+      action: toggleMarkDone,
+      condition: () =>
+        isOwnThread() && isDone() && emailCtx.canMarkThreadNotDone(),
+      hotkeyToken: TOKENS.entity.action.markNotDone,
+    },
+    {
+      label: 'Mark unread',
+      icon: EnvelopeSimpleOpenIcon,
+      action: toggleMarkUnread,
+      condition: () => isOwnThread() && !emailCtx.isThreadMarkedUnread(),
+      hotkeyToken: TOKENS.entity.action.markUnread,
+    },
+    {
+      label: 'Mark read',
+      icon: EnvelopeSimpleIcon,
+      action: toggleMarkUnread,
+      condition: () => isOwnThread() && emailCtx.isThreadMarkedUnread(),
+      hotkeyToken: TOKENS.entity.action.markRead,
+    },
+    {
       label: 'Ask Macro',
       icon: ChatWithAgentIcon,
       action: () => {
@@ -143,33 +234,39 @@ export function TopBar(props: {
       },
       condition: () => !!emailCtx.thread()?.db_id,
     },
-    shareTool,
     {
-      label: 'Task',
+      label: 'Create task',
       icon: AnimatedTaskIcon,
       action: () => props.onCreateTask?.(),
       condition: () => !!props.onCreateTask && !!emailCtx.thread()?.db_id,
     },
+    shareTool,
     {
-      label: 'Mark done',
-      icon: CheckIcon,
-      action: () => {
-        const command = getActiveCommandByToken(TOKENS.entity.action.markDone);
-        if (command) {
-          runCommand(command);
-        } else {
-          emailCtx.archiveThread();
-        }
+      group: 'file',
+      label: 'Move to folder',
+      icon: ArrowRightIcon,
+      action: moveToFolder,
+      condition: () => {
+        const entity = emailEntity();
+        return !!entity && moveToProjectAction.canExecute(entity);
       },
-      condition: isOwnThread,
     },
     {
+      group: 'delete',
       label: 'Delete',
       icon: TrashIcon,
       action: trashThread,
       condition: isOwnThread,
     },
     {
+      group: 'sender',
+      label: 'Sender → Noise',
+      icon: AnimatedNoiseIcon,
+      action: () => emailCtx.markSenderNoise(),
+      condition: isOwnThread,
+    },
+    {
+      group: 'sender',
       label: 'Block Sender',
       icon: ProhibitIcon,
       action: () => emailCtx.blockSender(),
@@ -206,7 +303,7 @@ export function TopBar(props: {
           class="ph-no-capture"
           iconType={isInvite() ? 'emailInvite' : 'email'}
           colorIcon={isInvite()}
-          label={isMobile() ? '' : props.title}
+          label={props.title}
           badges={
             props.isDraft
               ? [
@@ -220,24 +317,64 @@ export function TopBar(props: {
         />
       </SplitHeaderLeft>
 
-      <SplitTitleFileMenu>
-        <Show
-          when={emailActions.some(
-            (action) => !action.condition || action.condition()
-          )}
-        >
-          <SplitFileMenu
-            id={props.id}
-            itemType="email"
-            name={props.title}
-            ops={[]}
-            tools={emailActions}
-          />
-        </Show>
-      </SplitTitleFileMenu>
+      {/* Desktop-only Mark done button, sitting just left of the Previous item
+          caret. On mobile this action lives in the bottom reply bar instead.
+          A done thread shows a bold accent check and unarchives on click. */}
+      <Show when={!isMobile()}>
+        <SplitHeaderRight>
+          {/* Read-state toggle. Viewing the thread marks it read, so it
+              starts as Mark as unread; marking unread flips it to a bold
+              accent closed envelope that re-marks the thread read. */}
+          <Show when={isOwnThread()}>
+            <Button
+              class="p-1 rounded-lg"
+              label={
+                emailCtx.isThreadMarkedUnread()
+                  ? 'Mark as read'
+                  : 'Mark as unread'
+              }
+              hotkey={
+                emailCtx.isThreadMarkedUnread()
+                  ? TOKENS.entity.action.markRead
+                  : TOKENS.entity.action.markUnread
+              }
+              onClick={toggleMarkUnread}
+              // Keep focus (and the hotkey scope cmd-K reads) in the thread
+              // content: focusing the header would hide its commands.
+              onMouseDown={(e) => e.preventDefault()}
+            >
+              <Show
+                when={emailCtx.isThreadMarkedUnread()}
+                fallback={<EnvelopeSimpleOpenIcon class="size-4" />}
+              >
+                <EnvelopeSimpleIcon class="size-4 text-accent" />
+              </Show>
+            </Button>
+          </Show>
+          <Show when={isOwnThread() && showMarkDoneToggle()}>
+            <Button
+              class="p-1 rounded-lg"
+              label={isDone() ? 'Mark as not done' : 'Mark done'}
+              hotkey={
+                isDone()
+                  ? TOKENS.entity.action.markNotDone
+                  : TOKENS.entity.action.markDone
+              }
+              onClick={toggleMarkDone}
+              // Same focus-preservation as the read-state toggle above.
+              onMouseDown={(e) => e.preventDefault()}
+            >
+              <Show when={isDone()} fallback={<CheckIcon class="size-4" />}>
+                <CheckBoldIcon class="size-4 text-accent" />
+              </Show>
+            </Button>
+          </Show>
+        </SplitHeaderRight>
+      </Show>
 
       <ResponsiveBlockToolbar
         tools={tools}
+        menuTools={emailActions}
         ops={[]}
         id={props.id}
         itemType="email"

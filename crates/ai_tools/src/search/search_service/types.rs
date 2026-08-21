@@ -168,8 +168,9 @@ fn item_properties(item: &UnifiedSearchResponseItem) -> Option<&Vec<SoupProperty
         UnifiedSearchResponseItem::Chat(i) => i.properties.as_ref(),
         UnifiedSearchResponseItem::Email(i) => i.properties.as_ref(),
         UnifiedSearchResponseItem::Project(i) => i.properties.as_ref(),
+        UnifiedSearchResponseItem::Call(i) => i.properties.as_ref(),
         UnifiedSearchResponseItem::Channel(_)
-        | UnifiedSearchResponseItem::Call(_)
+        | UnifiedSearchResponseItem::ChannelMessage(_)
         | UnifiedSearchResponseItem::Company(_) => None,
     }
 }
@@ -180,8 +181,9 @@ fn item_properties_mut(item: &mut UnifiedSearchResponseItem) -> Option<&mut Vec<
         UnifiedSearchResponseItem::Chat(i) => i.properties.as_mut(),
         UnifiedSearchResponseItem::Email(i) => i.properties.as_mut(),
         UnifiedSearchResponseItem::Project(i) => i.properties.as_mut(),
+        UnifiedSearchResponseItem::Call(i) => i.properties.as_mut(),
         UnifiedSearchResponseItem::Channel(_)
-        | UnifiedSearchResponseItem::Call(_)
+        | UnifiedSearchResponseItem::ChannelMessage(_)
         | UnifiedSearchResponseItem::Company(_) => None,
     }
 }

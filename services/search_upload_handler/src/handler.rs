@@ -6,12 +6,10 @@ use lambda_runtime::{
     tracing::{self},
 };
 use s3_key::DocumentKey;
-use sqs_client::search::{SearchQueueMessage, document::SearchExtractorMessage};
 
 /// Handles the Eventbridge event
-#[tracing::instrument(skip(sqs_client, dss_client), err)]
+#[tracing::instrument(skip(dss_client), err)]
 pub async fn handler(
-    sqs_client: &sqs_client::SQS,
     dss_client: &DocumentStorageServiceClient,
     event: LambdaEvent<EventBridgeEvent>,
 ) -> Result<(), Error> {
@@ -34,7 +32,10 @@ pub async fn handler(
         }
     };
 
-    if document_key.is_temp() || document_key.is_bom_part() {
+    if document_key.is_temp()
+        || document_key.is_bom_part()
+        || document_key.is_sync_service_snapshot()
+    {
         tracing::trace!("skipping non-document key");
         return Ok(());
     }
@@ -57,22 +58,12 @@ pub async fn handler(
         }
     };
 
-    let search_extractor_message = SearchExtractorMessage {
-        user_id: document_basic.owner.to_string(),
-        document_id: document_id.to_string(),
-        document_version_id: document_key.version_id_string(),
-        file_type,
-        index_override: None,
-    };
-
-    // All other file types are to be sent to the search text extractor queue
-    let message_id = sqs_client
-        .send_message_to_search_event_queue(SearchQueueMessage::ExtractDocumentText(
-            search_extractor_message,
-        ))
+    let document_version_id = document_key.version_id_string();
+    dss_client
+        .publish_document_content_uploaded(document_id, file_type, document_version_id)
         .await?;
 
-    tracing::info!(message_id=?message_id, "sent message to search extractor queue");
+    tracing::info!(document_id, "relayed document content upload");
 
     Ok(())
 }

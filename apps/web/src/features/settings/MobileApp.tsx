@@ -16,7 +16,7 @@ export function MobileApp() {
             <a
               href="https://apps.apple.com/us/app/macro-app/id6743133649"
               rel="noopener noreferrer"
-              class="text-accent hover:underline"
+              class="text-link hover:text-link-hover visited:text-link-visited hover:underline"
               target="_blank"
             >
               App Store

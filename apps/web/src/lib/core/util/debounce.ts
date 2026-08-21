@@ -81,7 +81,10 @@ function _laggedGate(source: () => boolean, delay = 300): () => boolean {
  * @param delay the delay time in ms
  * @returns a derived signal
  */
-function _deferredGate(source: () => boolean, delay = 300): () => boolean {
+export function deferredGate(
+  source: () => boolean,
+  delay = 300
+): () => boolean {
   const [follow, setFollow] = createSignal(false);
   const up = solidDebounce(() => setFollow(true), delay);
   createEffect(() => {
@@ -92,6 +95,7 @@ function _deferredGate(source: () => boolean, delay = 300): () => boolean {
       setFollow(false);
     }
   });
+  onCleanup(() => up.clear());
   return follow;
 }
 
@@ -107,7 +111,7 @@ function _deferredGate(source: () => boolean, delay = 300): () => boolean {
  * @param delay the delay time in ms
  * @returns a derived signal
  */
-function _stickyGate(source: () => boolean, delay = 300): () => boolean {
+export function stickyGate(source: () => boolean, delay = 300): () => boolean {
   const [follow, setFollow] = createSignal(source());
   const down = solidDebounce(() => setFollow(false), delay);
   createEffect(() => {
@@ -119,5 +123,6 @@ function _stickyGate(source: () => boolean, delay = 300): () => boolean {
       down();
     }
   });
+  onCleanup(() => down.clear());
   return follow;
 }

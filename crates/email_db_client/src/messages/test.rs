@@ -1,4 +1,4 @@
-use crate::messages::get::draft_exists_with_id;
+use crate::messages::get::{draft_exists_with_id, filter_existing_provider_message_ids};
 use crate::messages::scheduled::get::get_scheduled_db_messages_by_link_id;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use sqlx::types::Uuid;
@@ -340,5 +340,155 @@ async fn delete_message_clears_calendar_flag_when_last_ics_message_removed(
     // because its attachments cascaded away with the message.
     assert!(deleted_thread.is_none());
     assert!(!fetch_calendar_flag(&pool, thread_id).await?);
+    Ok(())
+}
+
+const READ_STATUS_LINK: &str = "00000000-0000-0000-0000-000000000e11";
+const READ_STATUS_OTHER_LINK: &str = "00000000-0000-0000-0000-000000000e12";
+const READ_STATUS_MSG_A: &str = "00000000-0000-0000-0000-00000000e611";
+const READ_STATUS_MSG_B: &str = "00000000-0000-0000-0000-00000000e612";
+const READ_STATUS_OTHER_MSG: &str = "00000000-0000-0000-0000-00000000e613";
+
+async fn fetch_is_read(pool: &Pool<Postgres>, message_id: Uuid) -> anyhow::Result<bool> {
+    Ok(sqlx::query_scalar!(
+        "SELECT is_read FROM email_messages WHERE id = $1",
+        message_id
+    )
+    .fetch_one(pool)
+    .await?)
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../fixtures", scripts("message_read_status"))
+)]
+async fn update_message_read_status_batch_marks_messages_read(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let link_id = Uuid::parse_str(READ_STATUS_LINK)?;
+    let message_ids = vec![
+        Uuid::parse_str(READ_STATUS_MSG_A)?,
+        Uuid::parse_str(READ_STATUS_MSG_B)?,
+    ];
+
+    let updated = crate::messages::update::update_message_read_status_batch(
+        &pool,
+        message_ids.clone(),
+        link_id,
+        true,
+    )
+    .await?;
+
+    assert_eq!(updated, 2);
+    for id in message_ids {
+        assert!(fetch_is_read(&pool, id).await?);
+    }
+
+    Ok(())
+}
+
+/// The inbox that owns a thread is not always owned by the macro user acting on it:
+/// shared and delegated inboxes are owned by a separate fusion user. Scoping this
+/// update by anything other than the link silently matched zero rows, leaving
+/// `is_read` diverged from the labels and the denormalized thread flag.
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../fixtures", scripts("message_read_status"))
+)]
+async fn update_message_read_status_batch_scopes_to_owning_link(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let other_link_id = Uuid::parse_str(READ_STATUS_OTHER_LINK)?;
+    let message_id = Uuid::parse_str(READ_STATUS_MSG_A)?;
+
+    // Ids that belong to a different link than the one supplied must not be updated,
+    // and the mismatch is loud rather than silently absorbed.
+    let result = crate::messages::update::update_message_read_status_batch(
+        &pool,
+        vec![message_id],
+        other_link_id,
+        true,
+    )
+    .await;
+
+    assert!(result.is_err());
+    assert!(!fetch_is_read(&pool, message_id).await?);
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../fixtures", scripts("message_read_status"))
+)]
+async fn update_message_read_status_batch_leaves_other_inboxes_untouched(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let link_id = Uuid::parse_str(READ_STATUS_LINK)?;
+    let other_message_id = Uuid::parse_str(READ_STATUS_OTHER_MSG)?;
+
+    let updated = crate::messages::update::update_message_read_status_batch(
+        &pool,
+        vec![Uuid::parse_str(READ_STATUS_MSG_A)?],
+        link_id,
+        true,
+    )
+    .await?;
+
+    assert_eq!(updated, 1);
+    assert!(!fetch_is_read(&pool, other_message_id).await?);
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../fixtures", scripts("message_read_status"))
+)]
+async fn update_message_read_status_ignores_wrong_link(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let other_link_id = Uuid::parse_str(READ_STATUS_OTHER_LINK)?;
+    let message_id = Uuid::parse_str(READ_STATUS_MSG_A)?;
+
+    let mut conn = pool.acquire().await?;
+    let updated = crate::messages::update::update_message_read_status(
+        &mut conn,
+        message_id,
+        other_link_id,
+        true,
+    )
+    .await?;
+
+    assert!(updated.is_none());
+    assert!(!fetch_is_read(&pool, message_id).await?);
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../fixtures", scripts("draft_exists_with_id"))
+)]
+async fn filter_existing_provider_message_ids_partitions_known_and_missing(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let link_id = Uuid::parse_str("00000000-0000-0000-0000-000000000e01")?;
+    let other_link_id = Uuid::parse_str("00000000-0000-0000-0000-000000000e02")?;
+
+    let requested = vec![
+        "provider-msg-e501".to_string(),
+        "provider-msg-e502".to_string(),
+        "provider-msg-missing".to_string(),
+    ];
+
+    let existing = filter_existing_provider_message_ids(&pool, link_id, &requested).await?;
+    assert!(existing.contains("provider-msg-e501"));
+    assert!(existing.contains("provider-msg-e502"));
+    assert!(!existing.contains("provider-msg-missing"));
+    assert_eq!(existing.len(), 2);
+
+    // Messages belong to the first link only.
+    let cross_link = filter_existing_provider_message_ids(&pool, other_link_id, &requested).await?;
+    assert!(cross_link.is_empty());
+
     Ok(())
 }

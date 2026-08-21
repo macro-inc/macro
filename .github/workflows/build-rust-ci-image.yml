@@ -40,12 +40,6 @@ jobs:
           echo 'PATH="/nix/var/nix/profiles/default/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"' \
             | sudo tee /etc/environment >/dev/null
 
-      - name: Configure Cachix
-        uses: ./.github/actions/setup-cachix
-        with:
-          cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
-          sccache-bucket: ${{ vars.SCCACHE_BUCKET || secrets.SCCACHE_BUCKET }}
-
       - name: Materialize dev shell into /nix/store
         shell: bash
         run: |
@@ -54,13 +48,6 @@ jobs:
           export PATH="/nix/var/nix/profiles/default/bin:$PATH"
           sudo mkdir -p /var/cache/nix
           sudo chown runner:runner /var/cache/nix
-          if command -v cachix >/dev/null 2>&1; then
-            cachix watch-store "$CACHIX_CACHE_NAME" &
-            cachix_pid=$!
-            trap 'kill "$cachix_pid" || true' EXIT
-          else
-            echo "::warning::Cachix is unavailable; skipping Cachix store uploads."
-          fi
           nix develop --profile /var/cache/nix/dev-shell --command true
 
       - name: Write image markers
@@ -85,13 +72,6 @@ jobs:
           set -euo pipefail
           export NIX_REMOTE=daemon
           export PATH="/nix/var/nix/profiles/default/bin:$PATH"
-          if command -v cachix >/dev/null 2>&1; then
-            cachix watch-store "$CACHIX_CACHE_NAME" &
-            cachix_pid=$!
-            trap 'kill "$cachix_pid" || true' EXIT
-          else
-            echo "::warning::Cachix is unavailable; skipping Cachix store uploads."
-          fi
           nix --version
           test -L /var/cache/nix/dev-shell
           nix develop --profile /var/cache/nix/dev-shell --command bash -lc '

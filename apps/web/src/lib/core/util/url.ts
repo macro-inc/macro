@@ -1,4 +1,5 @@
 import shortuuid from 'short-uuid';
+import { isTauri } from './platform';
 import { getWebOrigin } from './webOrigin';
 
 const short = shortuuid(shortuuid.constants.flickrBase58, {
@@ -13,7 +14,47 @@ function unwrapShortId(id: string): string {
   return id;
 }
 
+/** Handles a URL before the default in-app / new-tab behavior. Returns true
+ * when it took ownership of the URL (so no further handling runs). */
+type ExternalUrlInterceptor = (url: string) => boolean;
+
+// Insertion-ordered; a Set dedupes a handler registered more than once (e.g.
+// if the registering component remounts).
+const externalUrlInterceptors = new Set<ExternalUrlInterceptor>();
+
+/**
+ * Registers a handler consulted by {@link openExternalUrl} before its default handling.
+ * Interceptors are tried in registration order and the first to return true takes ownership of the URL.
+ *
+ * Returns a function that unregisters the interceptor.
+ */
+export function registerExternalUrlInterceptor(
+  interceptor: ExternalUrlInterceptor
+): () => void {
+  externalUrlInterceptors.add(interceptor);
+  return () => {
+    externalUrlInterceptors.delete(interceptor);
+  };
+}
+
+/**
+ * The single entry point for opening a URL from user content or UI actions —
+ * use this instead of `window.open`. Registered interceptors are tried first,
+ * in registration order, and the first to claim the URL wins; anything left
+ * over opens a new tab on web / the system browser.
+ */
 export function openExternalUrl(url: string) {
+  for (const interceptor of externalUrlInterceptors) {
+    if (interceptor(url)) return;
+  }
+
+  if (isTauri()) {
+    // A same-window navigation reaches the native navigation plugin, which
+    // cancels the webview navigation and opens the URL in the system browser.
+    window.open(url, '_self')?.focus();
+    return;
+  }
+
   window.open(url, '_blank', 'noopener,noreferrer')?.focus();
 }
 

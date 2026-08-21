@@ -20,6 +20,10 @@ run_dev *ARGS:
 doctor-local *ARGS:
   {{ xtask }} doctor-local "$@"
 
+# Show an instance's endpoints and container states without starting anything.
+status_local *ARGS:
+  @{{ xtask }} status-local "$@"
+
 # Reset (drop, recreate, migrate) the instance database.
 reset_local *ARGS:
   {{ xtask }} reset-local "$@"
@@ -31,3 +35,27 @@ destroy_local *ARGS:
 # Stop an instance's containers, keeping volumes (xtask).
 stop_local *ARGS:
   {{ xtask }} stop-local "$@"
+
+# Headless stack orchestration for previews, agents, and CI.
+#   just stack up                      # full stack; static frontend served by the proxy
+#   just stack update                  # rebuild + reload only what changed (the `r` hotkey)
+#   just stack status --json           # machine-readable state
+#   just stack down                    # reclaim everything
+stack *ARGS:
+  {{ xtask }} stack "$@"
+
+# Start an isolated stack, seed it, and run the local Playwright suite.
+local-e2e *ARGS:
+  tooling/scripts/run-local-e2e.sh --suite web -- "$@"
+
+# Start and seed the same isolated stack, then run ignored Rust integration tests.
+local-e2e-rust *ARGS:
+  tooling/scripts/run-local-e2e.sh --suite rust -- "$@"
+
+# Start and seed once, then run the Rust and Playwright suites.
+local-e2e-all *ARGS:
+  tooling/scripts/run-local-e2e.sh --suite all -- "$@"
+
+# Start and seed the stack, then open Playwright UI mode.
+local-e2e-ui *ARGS:
+  tooling/scripts/run-local-e2e.sh --suite web --ui -- "$@"

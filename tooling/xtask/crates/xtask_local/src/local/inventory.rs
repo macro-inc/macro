@@ -62,10 +62,13 @@ impl RustService {
 
     /// Cargo features to re-enable alongside `--no-default-features` for this
     /// service's local build (empty = none). Only `search_processing_service`
-    /// needs this: dropping default features removes the amd64-only `pdf`
-    /// feature, but its bin still requires `processing`/`service`.
+    /// needs this: `authentication_service` opts into local passwordless code
+    /// responses, and dropping `search_processing_service` default features
+    /// removes the amd64-only `pdf` feature, but its bin still requires
+    /// `processing`/`service`.
     pub fn build_features(&self) -> &'static [&'static str] {
         match self.cargo_bin {
+            "authentication_service" => &["return_passwordless_code"],
             "search_processing_service" => &["processing", "service"],
             _ => &[],
         }
@@ -167,6 +170,20 @@ pub const RUST_SERVICES: &[RustService] = &[
         no_default_features: false,
     },
     RustService {
+        // Not a service: the seed CLI binary, shipped into /app/out so the
+        // gmail_forwarder sidecar (a bespoke gen_compose block, hence no
+        // modes) can run `seed_cli gmail forward` inside the stack.
+        compose_name: "gmail_forwarder",
+        cargo_bin: "seed_cli",
+        package: "seed_cli",
+        host_port: None,
+        path_prefix: None,
+        is_websocket: false,
+        modes: &[],
+        opt_in: false,
+        no_default_features: false,
+    },
+    RustService {
         compose_name: "notification_service",
         cargo_bin: "notification_service",
         package: "notification_service",
@@ -226,6 +243,19 @@ pub const RUST_SERVICES: &[RustService] = &[
         modes: &[Mode::Local],
         opt_in: false,
         no_default_features: true,
+    },
+    RustService {
+        compose_name: "agent_harness_service",
+        cargo_bin: "agent_harness_service",
+        package: "agent_harness_service",
+        host_port: Some(Port::AgentHarness),
+        path_prefix: Some("/agent-harness"),
+        is_websocket: false,
+        // Runs without sandbox credentials so channel triggers and external
+        // sessions remain available; managed spawns fail loudly when unarmed.
+        modes: &[Mode::Local],
+        opt_in: false,
+        no_default_features: false,
     },
 ];
 

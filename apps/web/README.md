@@ -12,8 +12,7 @@ If you have the [nix](https://nixos.org/learn/) package manager installed on you
 
 `nix develop`
 
-## Using Claude/Playwright
-To setup the authentication please make sure you create a `.env` file with **REFRESH_TOKEN** environment variable set to your dev macro refresh token. This can be found in your cookies.
+## Local Playwright
 
 For the local smoke suite, prefer the repo-level harness:
 
@@ -21,7 +20,14 @@ For the local smoke suite, prefer the repo-level harness:
 just local-e2e
 ```
 
-This starts the backend with local E2E compose overrides, seeds local fixture data, and runs `bun run local:e2e` with local bearer-token auth.
+This starts a named headless stack through the same xtask orchestration as
+`just run_local`, seeds local fixture data into that isolated instance, and
+runs Playwright against a Vite server connected to the instance proxy. The
+harness generates local bearer-token auth from the stack's generated env; it
+does not need a refresh token or the legacy local-E2E compose overlay.
+
+Set `LOCAL_E2E_INSTANCE` to reuse a different named stack. The default is
+`local-e2e`.
 
 The local smoke suite can import `localE2ESeed` from `tests/e2e/fixtures/local-e2e-seed.ts`. That helper loads the actual seed files used by `seed_cli` (`local_e2e/users.json`, `documents.json`, `channels.json`, and `channel_messages.json`) and exposes raw rows plus lookup maps by id/name/email. The small `local_e2e/manifest.json` only names the smoke aliases.
 
@@ -42,8 +48,17 @@ You will need the following dependencies installed on your system to develop in 
 1. *For Android Development* The [Android Studio IDE](https://developer.android.com/studio)
 1. *For iOS Development* [XCode](https://developer.apple.com/xcode/) for MacOS
 
-If you do not want to manage these dependencies manually, it is recommended to use `nix develop`
+The default shell contains the shared frontend and Tauri CLI tooling. Use the
+focused shells when developing targets with large platform dependencies:
 
+```bash
+nix develop .#tauri-linux    # GTK/WebKitGTK/GStreamer desktop stack
+nix develop .#tauri-android  # Android Studio, SDK/NDK, emulator, and Rust targets
+```
+
+`tauri-android` is available on x86_64 Linux. On macOS, use the default shell
+with the platform IDE installed outside Nix (Xcode for iOS or Android Studio
+for Android).
 
 ### Running Tauri
 

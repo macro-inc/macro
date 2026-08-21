@@ -5,13 +5,19 @@ import {
 } from '@notifications/notification-helpers';
 import type { UnifiedNotification } from '@notifications/types';
 import type { JSXElement } from 'solid-js';
-import { createEffect } from 'solid-js';
+import { createEffect, createSignal } from 'solid-js';
+
+const MAX_MARK_ATTEMPTS = 3;
 
 export function MarkMessageNotifications(props: {
   messageId: string;
   channelId: string;
   children: JSXElement;
 }) {
+  // TODO(dev-rb/notifications): Stop discovering message notifications through the
+  // global NotificationSource. Use an exact-message GraphQL edge or scope that
+  // matches metadata.messageId only; the current CHANNEL_MESSAGE entity scope
+  // is thread-aware, so targeting a root also includes reply notifications.
   const notificationSource = useGlobalNotificationSource();
   const notifications = useNotificationsForEntity(notificationSource, {
     type: 'channel',
@@ -21,15 +27,28 @@ export function MarkMessageNotifications(props: {
     isChannelNotification(n) &&
     n.notification_metadata.content.messageId === props.messageId;
 
-  let marked = false;
+  // Not a one-shot latch: a stale refetch can land after the optimistic write
+  // and flip the notification back to unviewed while this row stays mounted,
+  // so re-mark whenever the cache regresses, bounded per mount. inFlight is a
+  // signal so a regression that lands mid-mark re-runs the effect on settle.
+  const [inFlight, setInFlight] = createSignal(false);
+  let attempts = 0;
 
   createEffect(() => {
-    if (marked) return;
     const existing = notifications().find(isMessageNotification);
-    if (existing && !existing.viewed_at) {
-      marked = true;
-      notificationSource.markAsRead(existing);
+    if (
+      !existing ||
+      existing.viewed_at ||
+      inFlight() ||
+      attempts >= MAX_MARK_ATTEMPTS
+    ) {
+      return;
     }
+    attempts += 1;
+    setInFlight(true);
+    notificationSource.markAsRead(existing).finally(() => {
+      setInFlight(false);
+    });
   });
 
   return <>{props.children}</>;

@@ -1,0 +1,25 @@
+.pager {
+	position: relative;
+	overflow: hidden;
+}
+
+.pager-rail {
+	position: absolute;
+	inset: 0;
+}
+
+.pager-page {
+	position: absolute;
+	inset-block: 0;
+	left: calc(var(--pager-page-position) * 100%);
+	width: 100%;
+	min-width: 0;
+}
+
+.pager-page[aria-hidden="true"] {
+	pointer-events: none;
+}
+
+.pager[data-phase="dragging"] {
+	user-select: none;
+}

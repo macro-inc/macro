@@ -1,5 +1,6 @@
 use anyhow::Context;
 use axum::Router;
+use calendar_events::inbound::mutation_router::CalendarMutationRouterState;
 use context::ApiContext;
 use tower::ServiceBuilder;
 use tower_http::{compression::CompressionLayer, trace::TraceLayer};
@@ -9,6 +10,7 @@ use utoipa_swagger_ui::SwaggerUi;
 // Routes
 mod health;
 
+mod calendar_watch;
 mod email;
 
 // Misc
@@ -42,31 +44,29 @@ pub async fn setup_and_serve(state: ApiContext) -> anyhow::Result<()> {
         port
     );
     axum::serve(listener, app.into_make_service())
+        .with_graceful_shutdown(macro_entrypoint::shutdown_signal())
         .await
         .context("error starting service")
 }
 
 fn api_router(state: ApiContext) -> Router<ApiContext> {
-    Router::new()
-        .nest(
-            "/email",
-            email::router(state.clone()).layer(axum::middleware::from_fn_with_state(
-                state.clone(),
-                macro_middleware::auth::decode_jwt::handler,
-            )),
-        )
-        .nest("/gmail", gmail::router())
-        .nest(
-            "/internal",
-            internal::router().layer(
-                ServiceBuilder::new()
-                    .layer(axum::middleware::from_fn_with_state(
-                        state,
-                        macro_middleware::auth::internal_access::handler,
-                    ))
-                    .layer(axum::middleware::from_fn(
-                        macro_middleware::auth::initialize_user_context::handler,
-                    )),
+    // Calendar mutations follow the calendar sync kill switch: without sync
+    // a provider write would never be reflected locally.
+    let calendar_router = if state.config.calendar_sync_enabled {
+        calendar_watch::router().merge(
+            calendar_events::inbound::mutation_router::calendar_mutation_router(
+                CalendarMutationRouterState::new(
+                    state.calendar_mutation_service.clone(),
+                    state.authorization_state.clone(),
+                ),
             ),
         )
+    } else {
+        calendar_watch::router()
+    };
+    Router::new()
+        .nest("/email", email::router(state))
+        .nest("/gmail", gmail::router())
+        .nest("/internal", internal::router())
+        .nest("/calendar", calendar_router)
 }

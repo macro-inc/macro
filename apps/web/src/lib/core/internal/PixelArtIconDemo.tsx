@@ -1093,7 +1093,7 @@ function GlyphSidebar(props: GlyphSidebarProps) {
                   props.onGlyphRename(props.selectedGlyph, newName);
                 }
               }}
-              class="font-mono text-ink-muted text-sm text-left w-full ring ring-edge"
+              class="font-mono text-ink-muted text-sm text-left w-full border border-edge"
             />
             <div class="size-32 flex items-center justify-center border border-edge bg-background">
               <Show when={selectedPixels()}>

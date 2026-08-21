@@ -1,4 +1,4 @@
-import { isMobile } from '@core/mobile/isMobile';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { type Accessor, createMemo, createSignal } from 'solid-js';
 import type { ZoompinchHandle } from '../Zoompinch';
 
@@ -31,7 +31,7 @@ export function createZoomModel(
     return {
       w: containerEl.clientWidth,
       // Mirror the img's sm:max-h-[80vh] cap on desktop
-      h: isMobile()
+      h: isTouchDevice()
         ? containerEl.clientHeight
         : Math.min(containerEl.clientHeight, window.innerHeight * 0.8),
     };
@@ -70,7 +70,7 @@ export function createZoomModel(
     const nh = img.naturalHeight;
     if (!avail || !nw || !nh) return undefined;
     const fit = Math.min(avail.w / nw, avail.h / nh, 1);
-    const width = Math.max(nw * fit, isMobile() ? 0 : 200);
+    const width = Math.max(nw * fit, isTouchDevice() ? 0 : 200);
     const scale = width / nw;
     return { w: width, h: nh * scale };
   };

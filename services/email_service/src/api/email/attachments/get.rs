@@ -1,12 +1,12 @@
-use crate::api::context::ApiContext;
+use crate::api::context::{ApiContext, AuthorizationService};
 use anyhow::Context;
+use axum::Json;
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
-use axum::{Extension, Json};
 use cloudfront_sign::{SignedOptions, get_signed_url};
+use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
 use model::response::ErrorResponse;
-use model::user::UserContext;
 use models_email::email::service::attachment;
 use models_email::service;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -32,32 +32,37 @@ pub struct GetAttachmentResponse {
             (status = 200, body=GetAttachmentResponse),
             (status = 400, body=ErrorResponse),
             (status = 401, body=ErrorResponse),
+            (status = 403, body=ErrorResponse),
             (status = 404, body=ErrorResponse),
+            (status = 409, body=ErrorResponse),
+            (status = 429, body=ErrorResponse),
             (status = 500, body=ErrorResponse),
     )
 )]
-#[tracing::instrument(skip(ctx, user_context), fields(user_id=user_context.user_id, fusionauth_user_id=user_context.fusion_user_id
+#[tracing::instrument(skip(ctx, authorization), fields(user_id=authorization.authorization.user.user_context.user_id, fusionauth_user_id=authorization.authorization.user.user_context.fusion_user_id
 ))]
 pub async fn handler(
     State(ctx): State<ApiContext>,
-    user_context: Extension<UserContext>,
+    authorization: MacroAuthorizationExtractor<AuthorizationService, UserOrInternal>,
     Path(attachment_id): Path<Uuid>,
 ) -> Result<Response, Response> {
     // Resolve which of the caller's inboxes owns this attachment. Each inbox is a
     // distinct Google account, so the owning link also determines the Gmail token.
-    let links =
-        email_db_client::links::get::fetch_inboxes_for_macro_id(&ctx.db, &user_context.user_id)
-            .await
-            .map_err(|e| {
-                tracing::warn!(error=?e, "error fetching links");
-                (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    Json(ErrorResponse {
-                        message: "error fetching attachment".into(),
-                    }),
-                )
-                    .into_response()
-            })?;
+    let links = email_db_client::links::get::fetch_inboxes_for_macro_id(
+        &ctx.db,
+        &authorization.authorization.user.user_context.user_id,
+    )
+    .await
+    .map_err(|e| {
+        tracing::warn!(error=?e, "error fetching links");
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ErrorResponse {
+                message: "error fetching attachment".into(),
+            }),
+        )
+            .into_response()
+    })?;
 
     let mut owned = None;
     for link in links {
@@ -128,25 +133,7 @@ pub async fn handler(
             })?;
         presigned_request.to_string()
     } else {
-        // Object doesn't exist, need to fetch from Gmail and upload.
-        // Use the owning inbox's own token, not the caller's primary inbox token.
-        let gmail_token = email_service::util::gmail::auth::fetch_gmail_access_token_from_link(
-            &link,
-            &ctx.redis_client,
-            &ctx.auth_service_client,
-        )
-        .await
-        .map_err(|e| {
-            tracing::warn!(error=?e, "error fetching gmail token for attachment inbox");
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ErrorResponse {
-                    message: "error fetching attachment".into(),
-                }),
-            )
-                .into_response()
-        })?;
-
+        // Object doesn't exist, need to fetch it from the owning inbox and upload it.
         let provider_attachment_id = db_attachment.provider_id.as_ref().ok_or_else(|| {
             tracing::warn!(attachment_id=%attachment_id, "attachment is missing a provider_id");
             (
@@ -158,19 +145,15 @@ pub async fn handler(
                 .into_response()
         })?;
 
-        // fetch attachment data from gmail api
         let attachment_data = ctx
-            .gmail_client
-            .get_attachment_data(
-                gmail_token.as_str(),
-                &message_provider_id,
-                provider_attachment_id,
-            )
+            .email_api
+            .get_attachment(link.id, &message_provider_id, provider_attachment_id)
             .await
             .map_err(|e| {
-                tracing::warn!(error=?e, "error fetching attachment from Gmail API");
+                tracing::warn!(error=?e, "error fetching attachment from email provider");
                 (
-                    StatusCode::INTERNAL_SERVER_ERROR,
+                    crate::api::email::provider_error::provider_error_status(&e),
+                    crate::api::email::provider_error::provider_error_headers(&e),
                     Json(ErrorResponse {
                         message: "error fetching attachment".into(),
                     }),
@@ -214,7 +197,7 @@ pub async fn handler(
 
 /// Uploads the data for a single attachment to S3, updates the attachment's metadata,
 /// and returns a presigned URL for accessing the attachment
-#[tracing::instrument(skip(state, attachment_data), level = "info", err)]
+#[tracing::instrument(skip(state, attachment_data), err)]
 pub async fn upload_single_attachment(
     state: &ApiContext,
     bucket: &str,

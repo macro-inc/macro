@@ -1,8 +1,12 @@
-import { ENABLE_DOCUMENT_MENTION_NOTIFICATIONS } from '@core/constant/featureFlags';
+import {
+  ENABLE_DOCUMENT_MENTION_NOTIFICATIONS,
+  ENABLE_GRAPHQL_SOUP,
+} from '@core/constant/featureFlags';
 import type { Entity } from '@core/types';
 import { createSocketEffect } from '@macro-inc/collaboration/websocket';
 import {
   optimisticInsertNotification,
+  type UserNotificationsQuery,
   useMarkNotificationsAsDoneMutation,
   useMarkNotificationsAsSeenMutation,
   useUserNotificationsQuery,
@@ -10,22 +14,20 @@ import {
 import type { ConnectionGatewayWebsocket } from '@service-connection/websocket';
 import { notificationServiceClient } from '@service-notification/client';
 import type {
-  ConnGatewayInnerNotifValue,
+  ConnGatewayNotificationPayload,
   NotifEvent,
   UserUnsubscribe,
 } from '@service-notification/generated/schemas';
-import type {
-  UseInfiniteQueryResult,
-  UseQueryResult,
-} from '@tanstack/solid-query';
+import type { UseQueryResult } from '@tanstack/solid-query';
 import {
   type Accessor,
+  batch,
   createEffect,
   createMemo,
   createRoot,
   createSignal,
 } from 'solid-js';
-import { reconcile } from 'solid-js/store';
+import { createStore, reconcile } from 'solid-js/store';
 import { fromZodError } from 'zod-validation-error';
 import { createMutedEntitiesQuery } from './queries/muted-entities-query';
 import {
@@ -59,10 +61,7 @@ export type NotificationSource = {
   readonly mutedEntities: Accessor<UserUnsubscribe[]>;
   readonly isLoading: Accessor<boolean>;
 
-  readonly _notificationsQuery: UseInfiniteQueryResult<
-    UnifiedNotification[],
-    Error
-  >;
+  readonly _notificationsQuery: UserNotificationsQuery;
 
   readonly _mutedEntitiesQuery: UseQueryResult<UserUnsubscribe[], Error>;
 
@@ -115,6 +114,24 @@ export function setDoneOverride(
   });
 }
 
+// Client-asserted seen state, the `doneOverrides` twin for `viewed_at`. Seen
+// is monotone (there is no unsee API), so once a mark is initiated no fetch
+// snapshot may present the notification as unread: a full refetch reads its
+// pages over several seconds and a page read before the mark's POST commits
+// resurrects pre-write state when it lands. Entries are removed on mutation
+// failure (that rollback is deliberate) and pruned once the cache confirms
+// the seen state at a quiet moment.
+const [seenOverrides, setSeenOverrides] = createRoot(() =>
+  createStore<Record<string, string | undefined>>({})
+);
+
+function setSeenOverride(ids: readonly string[], viewedAt: string | undefined) {
+  if (ids.length === 0) return;
+  batch(() => {
+    for (const id of ids) setSeenOverrides(id, viewedAt);
+  });
+}
+
 export function createNotificationSource(
   ws: ConnectionGatewayWebsocket,
   onNotification?: (notification: UnifiedNotification) => void
@@ -123,20 +140,39 @@ export function createNotificationSource(
 
   const [mutedEntities, setMutedEntities] = createSignal<UserUnsubscribe[]>([]);
 
-  const notificationsQuery = useUserNotificationsQuery({ limit: QUERY_LIMIT });
+  const notificationsQuery = useUserNotificationsQuery(() => ({
+    limit: QUERY_LIMIT,
+  }));
   const mutedEntitiesQuery = createMutedEntitiesQuery({ limit: QUERY_LIMIT });
 
   const markNotificationsAsSeenMutation = useMarkNotificationsAsSeenMutation();
   const markNotificationsAsDoneMutation = useMarkNotificationsAsDoneMutation();
 
+  // Gate on data presence, not isSuccess: a failed or cancelled background
+  // refetch flips status to error while the cached pages remain, and blanking
+  // every unread surface over a transient refetch is worse than showing the
+  // cached state.
   const notifications = createMemo(() => {
-    if (!notificationsQuery.isSuccess) return [];
     const raw = notificationsQuery.data;
-    const overrides = doneOverrides();
-    if (overrides.size === 0) return raw;
-    return raw.map((n) => {
-      const override = overrides.get(n.id);
-      return override !== undefined ? { ...n, done: override } : n;
+    if (!raw) return [];
+    const done = doneOverrides();
+    return raw.map((notification) => {
+      const doneOverride = done.get(notification.id);
+      if (notification.viewed_at && doneOverride === undefined) {
+        return notification;
+      }
+
+      return {
+        ...notification,
+        ...(doneOverride !== undefined ? { done: doneOverride } : {}),
+        // Keep seen overrides granular. Reading one notification's viewed_at
+        // subscribes only to that id instead of invalidating the complete
+        // notifications array and every channel/favorite consumer.
+        get viewed_at() {
+          if (notification.viewed_at) return notification.viewed_at;
+          return seenOverrides[notification.id] ?? notification.viewed_at;
+        },
+      };
     });
   });
 
@@ -147,8 +183,8 @@ export function createNotificationSource(
   // pre-mutation value and a stale fetch could flip it back before the
   // API lands.
   createEffect(() => {
-    if (!notificationsQuery.isSuccess) return;
     const raw = notificationsQuery.data;
+    if (!raw) return;
     const overrides = doneOverrides();
     if (overrides.size === 0) return;
     const presentIds = new Set(raw.map((n) => n.id));
@@ -157,6 +193,29 @@ export function createNotificationSource(
       if (!presentIds.has(id)) toPrune.push(id);
     }
     if (toPrune.length > 0) setDoneOverride(toPrune, undefined);
+  });
+
+  // Prune seen overrides once they stop being load-bearing: the id left the
+  // cache, or the cache row itself is seen at a quiet moment. Quiet matters —
+  // while a mark is in flight the seen cache row is the optimistic write, and
+  // a fetch that is still running may hold a pre-write snapshot that will
+  // land later; in both cases the override must survive.
+  createEffect(() => {
+    const raw = notificationsQuery.data;
+    if (!raw) return;
+    const seenIds = Object.keys(seenOverrides);
+    if (seenIds.length === 0) return;
+    const quiet =
+      !notificationsQuery.isFetching &&
+      !markNotificationsAsSeenMutation.isPending;
+    const byId = new Map(raw.map((n) => [n.id, n]));
+    const toPrune: string[] = [];
+    for (const id of seenIds) {
+      const row = byId.get(id);
+      if (!row) toPrune.push(id);
+      else if (row.viewed_at && quiet) toPrune.push(id);
+    }
+    if (toPrune.length > 0) setSeenOverride(toPrune, undefined);
   });
 
   const notificationsByEntity = createMemo(() => {
@@ -173,7 +232,11 @@ export function createNotificationSource(
   });
 
   createEffect(() => {
-    if (!notificationsQuery.isSuccess) return;
+    // TODO(dev-rb/notifications): Remove this legacy eager pagination when the
+    // REST notification source is retired. GraphQL consumers should use Soup
+    // notification edges or dedicated notification queries instead.
+    if (ENABLE_GRAPHQL_SOUP()) return;
+    if (!notificationsQuery.data) return;
     if (notificationsQuery.hasNextPage && !notificationsQuery.isFetching) {
       notificationsQuery.fetchNextPage();
     }
@@ -189,6 +252,8 @@ export function createNotificationSource(
     setMutedEntities(reconcile(mutedEntities));
   });
 
+  // TODO(dev-rb/notifications): Verify whether document-mention suppression is
+  // still required, and remove this source-based cleanup when it is not.
   if (!ENABLE_DOCUMENT_MENTION_NOTIFICATIONS) {
     createEffect(() => {
       const toDiscard = notifications().filter(
@@ -202,7 +267,7 @@ export function createNotificationSource(
   }
 
   const mapWebsocketNotification = (
-    raw: ConnGatewayInnerNotifValue
+    raw: ConnGatewayNotificationPayload
   ): UnifiedNotification => {
     return {
       ...raw,
@@ -217,7 +282,7 @@ export function createNotificationSource(
     }
     let parsedNotification: UnifiedNotification;
     try {
-      const raw = JSON.parse(wsData.data) as ConnGatewayInnerNotifValue;
+      const raw = JSON.parse(wsData.data) as ConnGatewayNotificationPayload;
       const unsafeMapped = mapWebsocketNotification(raw);
       const parseResult = unifiedNotificationSchema.safeParse(unsafeMapped);
       if (!parseResult.success) {
@@ -238,19 +303,40 @@ export function createNotificationSource(
 
     subscriptions.forEach((subscribe) => subscribe(parsedNotification));
 
-    optimisticInsertNotification(parsedNotification);
+    if (notificationsQuery.transport === 'rest') {
+      optimisticInsertNotification(parsedNotification);
+    }
   });
 
+  // Skip empty batches: entity-level read markers fire on mount regardless
+  // of whether the entity has notifications, and an empty batch would still
+  // POST a no-op mutation.
   const bulkMarkAsDone = async (notifications: UnifiedNotification[]) => {
-    await markNotificationsAsDoneMutation.mutateAsync({
-      notificationIds: notifications.map((n) => n.id),
-    });
+    if (notifications.length === 0) return;
+    const ids = notifications.map((n) => n.id);
+    setDoneOverride(ids, true);
+    try {
+      await markNotificationsAsDoneMutation.mutateAsync({
+        notificationIds: ids,
+      });
+    } catch (err) {
+      setDoneOverride(ids, false);
+      throw err;
+    }
   };
 
   const bulkMarkAsRead = async (notifications: UnifiedNotification[]) => {
-    await markNotificationsAsSeenMutation.mutateAsync({
-      notificationIds: notifications.map((n) => n.id),
-    });
+    if (notifications.length === 0) return;
+    const ids = notifications.map((n) => n.id);
+    setSeenOverride(ids, new Date().toISOString());
+    try {
+      await markNotificationsAsSeenMutation.mutateAsync({
+        notificationIds: ids,
+      });
+    } catch (err) {
+      setSeenOverride(ids, undefined);
+      throw err;
+    }
   };
 
   const markAsDone = async (notification: UnifiedNotification) => {

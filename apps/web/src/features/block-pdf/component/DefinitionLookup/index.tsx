@@ -1,8 +1,4 @@
 import {
-  zPopupViewer,
-  zViewerDefinitionLookup,
-} from '@core/constant/stackingContext';
-import {
   autoUpdate,
   type ComputePositionReturn,
   computePosition,
@@ -241,7 +237,9 @@ export function DefinitionLookup(props: IProps) {
         ref={termRef}
         style={{
           ...styles(),
-          'z-index': zViewerDefinitionLookup + (isPopup ? zPopupViewer : 0),
+          'z-index': isPopup
+            ? 'calc(var(--z-index-viewer-definition-lookup) + var(--z-index-popup-viewer))'
+            : 'var(--z-index-viewer-definition-lookup)',
         }}
       >
         <Card class="pinned-terms shadow-lg" isPinsWindow={props.isPinsWindow}>

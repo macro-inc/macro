@@ -4,8 +4,6 @@ use macro_user_id::user_id::MacroUserIdStr;
 use models_properties::EntityType;
 use uuid::Uuid;
 
-use crate::SoupProperty;
-
 /// Sub type of a document with associated properties encoded in each variant.
 /// This ensures type-safety: task properties only exist when the document is a task.
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
@@ -21,6 +19,8 @@ pub enum SoupDocumentSubType {
     },
     /// A snippet document — reusable markdown
     Snippet {},
+    /// A skill document — markdown instructions for AI
+    Skill {},
 }
 
 impl SoupDocumentSubType {
@@ -32,6 +32,7 @@ impl SoupDocumentSubType {
                 is_completed: is_completed.unwrap_or_default(),
             }),
             DocumentSubType::Snippet => Some(Self::Snippet {}),
+            DocumentSubType::Skill => Some(Self::Skill {}),
         }
     }
 
@@ -39,7 +40,7 @@ impl SoupDocumentSubType {
     pub fn is_task_completed(&self) -> Option<bool> {
         match self {
             Self::Task { is_completed } => Some(*is_completed),
-            Self::Snippet {} => None,
+            Self::Snippet {} | Self::Skill {} => None,
         }
     }
 }
@@ -48,7 +49,7 @@ impl SoupDocumentSubType {
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
-pub struct SoupDocument {
+pub struct SoupDocument<T = ()> {
     /// The document id
     pub id: Uuid,
 
@@ -106,21 +107,24 @@ pub struct SoupDocument {
     /// The time the document was deleted
     pub deleted_at: Option<chrono::DateTime<Utc>>,
 
-    /// Properties
-    pub properties: Vec<SoupProperty>,
+    /// Extra fields passed from above
+    #[serde(flatten)]
+    pub extra: T,
 }
 
-impl SoupDocument {
+impl<T> SoupDocument<T> {
     /// Returns the entity type for this document.
     ///
     /// Documents with a `sub_type` of `Task` return `EntityType::Task`,
-    /// otherwise they return `EntityType::Document`. Snippets are documents
-    /// as far as the entity system is concerned — their snippet-ness only
-    /// lives in `sub_type`.
+    /// otherwise they return `EntityType::Document`. Snippets and skills are
+    /// documents as far as the entity system is concerned — their snippet-ness
+    /// or skill-ness only lives in `sub_type`.
     pub fn entity_type(&self) -> EntityType {
         match &self.sub_type {
             Some(SoupDocumentSubType::Task { .. }) => EntityType::Task,
-            Some(SoupDocumentSubType::Snippet {}) | None => EntityType::Document,
+            Some(SoupDocumentSubType::Snippet {} | SoupDocumentSubType::Skill {}) | None => {
+                EntityType::Document
+            }
         }
     }
 }

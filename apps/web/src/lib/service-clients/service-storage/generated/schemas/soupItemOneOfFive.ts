@@ -6,13 +6,13 @@
  */
 
 import type { SoupItemOneOfFiveTag } from './soupItemOneOfFiveTag';
-import type { SoupProject } from './soupProject';
+import type { SoupProjectSoupPropertiesField } from './soupProjectSoupPropertiesField';
 
 /**
  * Project item.
  */
 export type SoupItemOneOfFive = {
   /** Project item. */
-  data: SoupProject;
+  data: SoupProjectSoupPropertiesField;
   tag: SoupItemOneOfFiveTag;
 };

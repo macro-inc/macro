@@ -125,6 +125,23 @@ async fn test_get_user_names_with_email_not_found(pool: Pool<Postgres>) -> anyho
     Ok(())
 }
 
+#[sqlx::test(fixtures(path = "../../../fixtures", scripts("user_names_with_email")))]
+async fn deduplicates_requested_user_ids(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let user_profile_ids = parse_user_ids(vec![
+        "macro|user_profile_1@macro.com",
+        "macro|user_profile_1@macro.com",
+    ])?;
+
+    let names =
+        get_user_names_with_email(&pool, "macro|user_profile_1@macro.com", user_profile_ids)
+            .await?;
+
+    assert_eq!(names.len(), 1);
+    assert_eq!(names[0].id, "macro|user_profile_1@macro.com");
+
+    Ok(())
+}
+
 /// only fallback to using email contact names if the user has neither first nor last name set
 /// in macro. don't use the email contact last name with the macro first name if exists.
 #[sqlx::test(fixtures(path = "../../../fixtures", scripts("user_names_with_email")))]
@@ -155,5 +172,20 @@ async fn uses_macro_names_if_either_first_or_last_present(
     assert_eq!(u5.first_name.as_deref(), None);
     assert_eq!(u5.last_name.as_deref(), Some("OnlyLastMacro"));
 
+    Ok(())
+}
+
+#[sqlx::test]
+async fn test_get_user_name_without_info_row(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    // The macro_user_info row is created lazily by the first name write, so a
+    // brand-new user has none — the lookup must report "no name yet", not
+    // error.
+    let user_id = "00000000-0000-0000-0000-000000000042";
+
+    let name = get_user_name(&pool, user_id).await?;
+
+    assert_eq!(name.id, user_id);
+    assert_eq!(name.first_name, None);
+    assert_eq!(name.last_name, None);
     Ok(())
 }

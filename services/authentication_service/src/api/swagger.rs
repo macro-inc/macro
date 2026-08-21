@@ -10,6 +10,8 @@ use teams::domain::model::{
 };
 use teams::inbound::axum_router::get_team_invites::TeamInvitesResponse as TeamTeamInvitesResponse;
 use teams::inbound::axum_router::get_user_invites::TeamInvitesResponse as UserTeamInvitesResponse;
+use teams::inbound::axum_router::toggle_auto_join_domain::ToggleAutoJoinDomainResponse;
+use teams::inbound::axum_router::toggle_non_admin_invites::ToggleNonAdminInvitesResponse;
 use teams::inbound::axum_router::{
     create_team::CreateTeamRequest, invite_to_team::InviteToTeamRequest,
 };
@@ -22,6 +24,7 @@ use crate::api::jwt::macro_api_token::MacroApiTokenResponse;
 use crate::api::link::create_in_progress_link::CreateInProgressLinkResponse;
 use crate::api::link::github::{GithubLinkStatusResponse, InitGithubLinkResponse};
 use crate::api::link::gmail::{GmailLinkStatusResponse, InitGmailLinkResponse};
+use crate::api::link::outlook::InitOutlookLinkResponse;
 use crate::api::merge::create_merge_request::CreateAccountMergeRequest;
 use crate::api::user::create_user::CreateUserRequest;
 use crate::api::user::get_legacy_user_permissions::GetLegacyUserPermissionsResponse;
@@ -78,6 +81,7 @@ use model::user::{
                 link::github::check_github_link_status_handler,
                 link::gmail::init_gmail_link_handler,
                 link::gmail::check_gmail_link_status_handler,
+                link::outlook::init_outlook_link_handler,
 
                 /// /github_pull_requests
                 github_pull_requests::handler,
@@ -123,23 +127,25 @@ use model::user::{
                 email::verify_email_link::handler,
 
                 /// /team
-                teams::inbound::axum_router::create_team::handler::<crate::api::context::TeamsServiceType>,
-                teams::inbound::axum_router::delete_team::handler::<crate::api::context::TeamsServiceType>,
-                teams::inbound::axum_router::join_team::handler::<crate::api::context::TeamsServiceType>,
-                teams::inbound::axum_router::get_team::handler::<crate::api::context::TeamsServiceType>,
-                teams::inbound::axum_router::invite_to_team::handler::<crate::api::context::TeamsServiceType>,
-                teams::inbound::axum_router::get_team_invites::handler::<crate::api::context::TeamsServiceType>,
-                teams::inbound::axum_router::patch_team::handler::<crate::api::context::TeamsServiceType>,
-                teams::inbound::axum_router::patch_team_crm_settings::handler::<crate::api::context::TeamsServiceType>,
-                teams::inbound::axum_router::reject_invitation::handler::<crate::api::context::TeamsServiceType>,
-                teams::inbound::axum_router::get_user_invites::handler::<crate::api::context::TeamsServiceType>,
-                teams::inbound::axum_router::get_user_teams::handler::<crate::api::context::TeamsServiceType>,
-                teams::inbound::axum_router::remove_user_from_team::handler::<crate::api::context::TeamsServiceType>,
-                teams::inbound::axum_router::delete_team_invite::handler::<crate::api::context::TeamsServiceType>,
+                teams::inbound::axum_router::create_team::handler::<crate::api::context::TeamsServiceType, crate::api::context::EntityAccessServiceType, crate::api::context::AuthorizationService>,
+                teams::inbound::axum_router::delete_team::handler::<crate::api::context::TeamsServiceType, crate::api::context::EntityAccessServiceType, crate::api::context::AuthorizationService>,
+                teams::inbound::axum_router::join_team::handler::<crate::api::context::TeamsServiceType, crate::api::context::EntityAccessServiceType, crate::api::context::AuthorizationService>,
+                teams::inbound::axum_router::get_team::handler::<crate::api::context::TeamsServiceType, crate::api::context::EntityAccessServiceType, crate::api::context::AuthorizationService>,
+                teams::inbound::axum_router::invite_to_team::handler::<crate::api::context::TeamsServiceType, crate::api::context::EntityAccessServiceType, crate::api::context::AuthorizationService>,
+                teams::inbound::axum_router::get_team_invites::handler::<crate::api::context::TeamsServiceType, crate::api::context::EntityAccessServiceType, crate::api::context::AuthorizationService>,
+                teams::inbound::axum_router::patch_team::handler::<crate::api::context::TeamsServiceType, crate::api::context::EntityAccessServiceType, crate::api::context::AuthorizationService>,
+                teams::inbound::axum_router::patch_team_crm_settings::handler::<crate::api::context::TeamsServiceType, crate::api::context::EntityAccessServiceType, crate::api::context::AuthorizationService>,
+                teams::inbound::axum_router::toggle_auto_join_domain::handler::<crate::api::context::TeamsServiceType, crate::api::context::EntityAccessServiceType, crate::api::context::AuthorizationService>,
+                teams::inbound::axum_router::toggle_non_admin_invites::handler::<crate::api::context::TeamsServiceType, crate::api::context::EntityAccessServiceType, crate::api::context::AuthorizationService>,
+                teams::inbound::axum_router::reject_invitation::handler::<crate::api::context::TeamsServiceType, crate::api::context::EntityAccessServiceType, crate::api::context::AuthorizationService>,
+                teams::inbound::axum_router::get_user_invites::handler::<crate::api::context::TeamsServiceType, crate::api::context::EntityAccessServiceType, crate::api::context::AuthorizationService>,
+                teams::inbound::axum_router::get_user_teams::handler::<crate::api::context::TeamsServiceType, crate::api::context::EntityAccessServiceType, crate::api::context::AuthorizationService>,
+                teams::inbound::axum_router::remove_user_from_team::handler::<crate::api::context::TeamsServiceType, crate::api::context::EntityAccessServiceType, crate::api::context::AuthorizationService>,
+                teams::inbound::axum_router::delete_team_invite::handler::<crate::api::context::TeamsServiceType, crate::api::context::EntityAccessServiceType, crate::api::context::AuthorizationService>,
 
                 /// /referral
-                referral::inbound::axum_router::get_referral_code_handler::<crate::api::context::ReferralServiceType>,
-                referral::inbound::axum_router::post_referral_invite_handler::<crate::api::context::ReferralServiceType>,
+                referral::inbound::axum_router::get_referral_code_handler::<crate::api::context::ReferralServiceType, crate::api::context::RateLimiter, crate::api::context::AuthorizationService>,
+                referral::inbound::axum_router::post_referral_invite_handler::<crate::api::context::ReferralServiceType, crate::api::context::RateLimiter, crate::api::context::AuthorizationService>,
 
                 /// /mobile-welcome-email
                 mobile_welcome_email::handler,
@@ -177,6 +183,7 @@ use model::user::{
                         GithubLinkStatusResponse,
                         InitGmailLinkResponse,
                         GmailLinkStatusResponse,
+                        InitOutlookLinkResponse,
 
                         // GitHub pull requests
                         EnrichGithubPullRequestsProxyRequest,
@@ -202,6 +209,7 @@ use model::user::{
                         PatchUserOnboardingRequest,
 
                         // Teams
+                        models_permissions::share_permission::LinkShare,
                         TeamRole,
                         TeamMember,
                         Team,
@@ -214,6 +222,8 @@ use model::user::{
                         PatchTeamUserRole,
                         PatchTeamCrmSettingsRequest,
                         PatchTeamCrmSettingsResponse,
+                        ToggleAutoJoinDomainResponse,
+                        ToggleNonAdminInvitesResponse,
                         TeamTeamInvitesResponse,
                         UserTeamInvitesResponse,
 

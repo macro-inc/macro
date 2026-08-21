@@ -20,7 +20,7 @@ pub enum DocumentError {
     NoOperation,
     #[error("operation `{0}` not found")]
     UnknownOperation(String),
-    #[error("only queries and mutations are supported (got {0})")]
+    #[error("unsupported operation type: {0}")]
     UnsupportedOperationType(String),
     #[error("fragment `{0}` is not defined")]
     UnknownFragment(String),
@@ -44,6 +44,8 @@ pub struct FieldNode {
     pub response_key: String,
     /// Schema field name.
     pub name: String,
+    /// The field is persisted but omitted from hydration results.
+    pub cache_only: bool,
     pub arguments: Vec<(String, ArgValue)>,
     pub selection_set: Vec<Selection>,
 }
@@ -59,23 +61,33 @@ pub enum Selection {
     },
 }
 
-/// Kind of an executable operation. Subscriptions are rejected at parse.
+/// Kind of an executable operation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum OperationKind {
     Query,
     Mutation,
+    Subscription,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Operation {
     pub name: Option<String>,
     pub kind: OperationKind,
     pub selection_set: Vec<Selection>,
 }
 
-#[derive(Debug)]
+/// Named fragment definition retained for fragment-rooted record reads.
+#[derive(Debug, Clone)]
+pub struct Fragment {
+    pub name: String,
+    pub type_condition: String,
+    pub selection_set: Vec<Selection>,
+}
+
+#[derive(Debug, Clone)]
 pub struct Document {
     pub operations: Vec<Operation>,
+    pub fragments: Vec<Fragment>,
 }
 
 impl Document {
@@ -115,7 +127,7 @@ impl Document {
                 }
             }
         }
-        if operations_cst.is_empty() {
+        if operations_cst.is_empty() && fragments.is_empty() {
             return Err(DocumentError::NoOperation);
         }
 
@@ -126,7 +138,7 @@ impl Document {
                 None => OperationKind::Query,
                 Some(ty) if ty.query_token().is_some() => OperationKind::Query,
                 Some(ty) if ty.mutation_token().is_some() => OperationKind::Mutation,
-                // Subscriptions are not cacheable.
+                Some(ty) if ty.subscription_token().is_some() => OperationKind::Subscription,
                 Some(ty) => {
                     let label = ty.syntax().text().to_string();
                     return Err(DocumentError::UnsupportedOperationType(label));
@@ -144,12 +156,43 @@ impl Document {
                 selection_set,
             });
         }
-        Ok(Document { operations })
+
+        let mut fragment_names: Vec<_> = fragments.keys().cloned().collect();
+        fragment_names.sort();
+        let mut converted_fragments = Vec::with_capacity(fragment_names.len());
+        for name in fragment_names {
+            let definition = &fragments[&name];
+            let type_condition = definition
+                .type_condition()
+                .and_then(|condition| condition.named_type())
+                .and_then(|named| named.name())
+                .ok_or(DocumentError::Malformed("fragment without type condition"))?
+                .text()
+                .to_string();
+            let selection_set = convert_selection_set(
+                definition
+                    .selection_set()
+                    .ok_or(DocumentError::Malformed("fragment without selections"))?,
+                &fragments,
+                0,
+            )?;
+            converted_fragments.push(Fragment {
+                name,
+                type_condition,
+                selection_set,
+            });
+        }
+
+        Ok(Document {
+            operations,
+            fragments: converted_fragments,
+        })
     }
 
     /// Selects an operation by name (or the only one when unnamed).
     pub fn operation(&self, name: Option<&str>) -> Result<&Operation, DocumentError> {
         match name {
+            None if self.operations.is_empty() => Err(DocumentError::NoOperation),
             None => {
                 if self.operations.len() == 1 {
                     Ok(&self.operations[0])
@@ -165,6 +208,14 @@ impl Document {
                 .find(|o| o.name.as_deref() == Some(n))
                 .ok_or_else(|| DocumentError::UnknownOperation(n.to_string())),
         }
+    }
+
+    /// Selects a named fragment from this document.
+    pub fn fragment(&self, name: &str) -> Result<&Fragment, DocumentError> {
+        self.fragments
+            .iter()
+            .find(|fragment| fragment.name == name)
+            .ok_or_else(|| DocumentError::UnknownFragment(name.to_string()))
     }
 }
 
@@ -208,6 +259,13 @@ fn convert_selection_set(
                         arguments.push((arg_name, convert_value(value)?));
                     }
                 }
+                let cache_only = f.directives().is_some_and(|directives| {
+                    directives.directives().any(|directive| {
+                        directive
+                            .name()
+                            .is_some_and(|name| name.text() == "cacheOnly")
+                    })
+                });
                 let selection_set = match f.selection_set() {
                     Some(s) => convert_selection_set(s, fragments, depth + 1)?,
                     None => Vec::new(),
@@ -215,6 +273,7 @@ fn convert_selection_set(
                 out.push(Selection::Field(FieldNode {
                     response_key,
                     name,
+                    cache_only,
                     arguments,
                     selection_set,
                 }));
@@ -350,20 +409,35 @@ pub fn resolve_arg(
     })
 }
 
+/// Resolves all of a field's arguments against operation variables.
+pub fn resolve_args(
+    field: &FieldNode,
+    variables: &serde_json::Map<String, Json>,
+) -> Result<serde_json::Map<String, Json>, MissingVariable> {
+    let mut map = serde_json::Map::new();
+    for (name, value) in &field.arguments {
+        map.insert(name.clone(), resolve_arg(value, variables)?);
+    }
+    Ok(map)
+}
+
+/// Converts already-resolved field arguments to their canonical storage-key
+/// suffix (`None` when the field declares no arguments).
+pub fn resolved_args_key(
+    field: &FieldNode,
+    arguments: &serde_json::Map<String, Json>,
+) -> Option<String> {
+    (!field.arguments.is_empty()).then(|| canonical_json(&Json::Object(arguments.clone())))
+}
+
 /// Resolves a field's arguments to a canonical string (`None` when the field
 /// has no arguments), for use in field storage keys.
 pub fn resolve_args_key(
     field: &FieldNode,
     variables: &serde_json::Map<String, Json>,
 ) -> Result<Option<String>, MissingVariable> {
-    if field.arguments.is_empty() {
-        return Ok(None);
-    }
-    let mut map = serde_json::Map::new();
-    for (name, value) in &field.arguments {
-        map.insert(name.clone(), resolve_arg(value, variables)?);
-    }
-    Ok(Some(canonical_json(&Json::Object(map))))
+    let arguments = resolve_args(field, variables)?;
+    Ok(resolved_args_key(field, &arguments))
 }
 
 #[cfg(test)]
@@ -374,17 +448,15 @@ mod tests {
         query Soup($input: SoupInput!) {
           soup(input: $input) {
             items {
+              __typename
               id
-              entity {
-                __typename
-                ... on GraphqlSoupDocument { id docName: name }
-                ...ChatFields
-              }
+              ... on GraphqlSoupDocument { docName: name }
+              ...ChatFields
             }
             nextCursor
           }
         }
-        fragment ChatFields on GraphqlSoupChat { id chatName: name }
+        fragment ChatFields on GraphqlSoupChat { chatName: name }
     "#;
 
     #[test]
@@ -402,10 +474,7 @@ mod tests {
         let Selection::Field(items) = &soup.selection_set[0] else {
             panic!()
         };
-        let Selection::Field(entity) = &items.selection_set[1] else {
-            panic!()
-        };
-        let conditions: Vec<_> = entity
+        let conditions: Vec<_> = items
             .selection_set
             .iter()
             .filter_map(|s| match s {
@@ -452,15 +521,15 @@ mod tests {
             OperationKind::Mutation
         );
 
+        let doc = Document::parse("subscription S { soupUpdates { __typename } }").unwrap();
+        assert_eq!(
+            doc.operation(Some("S")).unwrap().kind,
+            OperationKind::Subscription
+        );
+
         // Shorthand operations are queries.
         let doc = Document::parse("{ user { id } }").unwrap();
         assert_eq!(doc.operation(None).unwrap().kind, OperationKind::Query);
-    }
-
-    #[test]
-    fn rejects_subscriptions() {
-        let err = Document::parse("subscription S { doThing }").unwrap_err();
-        assert!(matches!(err, DocumentError::UnsupportedOperationType(_)));
     }
 
     #[test]

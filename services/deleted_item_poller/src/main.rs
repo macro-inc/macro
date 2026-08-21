@@ -12,6 +12,7 @@ use lambda_runtime::{
     tracing::{self},
 };
 use macro_entrypoint::MacroEntrypoint;
+use macro_event_broker::{GlobalSpawner, KafkaEventPublisher};
 use sqlx::postgres::PgPoolOptions;
 use std::sync::Arc;
 
@@ -24,6 +25,12 @@ async fn main() -> Result<(), Error> {
 
     tracing::trace!("initialized config");
 
+    let macro_event_broker = context::PollerEventBroker::new(
+        KafkaEventPublisher::new(config.kafka_brokers.as_ref())
+            .context("failed to create kafka event publisher")?,
+        GlobalSpawner,
+    );
+
     // We should only ever need 1 connection
     let db = PgPoolOptions::new()
         .min_connections(3)
@@ -34,16 +41,15 @@ async fn main() -> Result<(), Error> {
 
     let document_delete_queue = macro_queues::DocumentDeleteQueue::new();
     let chat_delete_queue = macro_queues::ChatDeleteQueue::new();
-    let search_event_queue = macro_queues::SearchEventQueue::new();
     let sqs_client = sqs_client::SQS::new(aws_sdk_sqs::Client::new(
         &macro_aws_config::get_macro_aws_config().await,
     ))
     .document_delete_queue(&document_delete_queue)
-    .chat_delete_queue(&chat_delete_queue)
-    .search_event_queue(&search_event_queue);
+    .chat_delete_queue(&chat_delete_queue);
 
     let ctx = context::Context {
         db,
+        macro_event_broker,
         sqs_client: Arc::new(sqs_client),
     };
 

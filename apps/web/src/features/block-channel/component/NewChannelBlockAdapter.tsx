@@ -1,6 +1,10 @@
-import { useBlockEntityCommands } from '@app/features/next-soup/actions';
+import {
+  makeRenameAction,
+  useBlockEntityCommands,
+} from '@app/features/next-soup/actions';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { URL_PARAMS } from '@block-channel/constants';
+import { convertTargetMessage } from '@block-channel/utils/target-message';
 import { ChannelAttachmentsTab } from '@channel/Attachments/ChannelAttachmentsTab';
 import { useCallContextOptional } from '@channel/Call/CallContext';
 import { CallEventSync } from '@channel/Call/CallEventSync';
@@ -32,17 +36,32 @@ import {
   isOpenCallTabRequested,
 } from '@channel/Channel/link';
 import { ChannelParticipantsTab } from '@channel/Participants/ChannelParticipantsTab';
-import { useMaybePreviewPanel } from '@components/app/PreviewPanel';
 import { HeaderIsland } from '@components/app/split-layout/components/HeaderIsland';
+import { SplitFileMenu } from '@components/app/split-layout/components/SplitFileMenu';
 import { SplitHeaderRight } from '@components/app/split-layout/components/SplitHeader';
-import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
+import { SplitTitleFileMenu } from '@components/app/split-layout/components/SplitLabel';
+import {
+  useCanAutofocusSplitContent,
+  useSplitPanelOrThrow,
+} from '@components/app/split-layout/layoutUtils';
 import { useNavigatedFromJK } from '@components/app/useNavigatedFromJK';
 import { useBlockId } from '@core/block';
 import { EntityPermissionsGate } from '@core/component/EntityPermissionsGate';
 import { ENABLE_CALLS } from '@core/constant/featureFlags';
-import { useChannelName, useChannelType } from '@core/context/channels';
+import {
+  useChannel,
+  useChannelName,
+  useChannelType,
+} from '@core/context/channels';
+import { useUserId } from '@core/context/user';
+import { useHotkeyDOMScope } from '@core/hotkey/hotkeys';
+import { TOKENS } from '@core/hotkey/tokens';
+import { isMobile } from '@core/mobile/isMobile';
 import { awaitCondition, createMethodRegistration } from '@core/orchestrator';
+import { blockHotkeyScopeSignal } from '@core/signal/blockElement';
 import { blockHandleSignal } from '@core/signal/load';
+import { buildEntityData } from '@entity';
+import RenameIcon from '@phosphor/pencil-line.svg';
 import { useActiveCallQuery } from '@queries/call/call';
 import {
   fetchResolvedChannelMessage,
@@ -62,7 +81,7 @@ import {
   Suspense,
   Switch,
 } from 'solid-js';
-import { ChannelTopLeft } from './Top';
+import { CHANNEL_TAB_ICONS, ChannelTopLeft } from './Top';
 import { useChannelBotManagement } from './useChannelBotManagement';
 
 const CHANNEL_STATE_ENTRY_KEY = 'channel.state';
@@ -121,6 +140,9 @@ function NewTop(props: { channelId: string }) {
   const { activeTab, setActiveTab } = useChannelTab();
   const channelName = useChannelName(props.channelId);
   const channelType = useChannelType(props.channelId);
+  const channel = useChannel(props.channelId);
+  const userId = useUserId();
+  const renameAction = makeRenameAction({ userId });
   const participantsQuery = useChannelParticipantsQuery(() => props.channelId);
   const call = useCall(() => props.channelId);
   const activeCallQuery = useActiveCallQuery(() => props.channelId);
@@ -136,16 +158,48 @@ function NewTop(props: { channelId: string }) {
       call.isJoining() ||
       activeTab() === 'call' ||
       !!activeCallQuery.data);
-  const tabs = () => {
+  const availableTabs = () => {
     let filtered = [...CHANNEL_TABS];
     if (channelType() === ChannelTypeEnum.DirectMessage)
       filtered = filtered.filter((tab) => tab.value !== 'participants');
     if (!showCallTab())
       filtered = filtered.filter((tab) => tab.value !== 'call');
-    return filtered.map((tab) =>
+    return filtered;
+  };
+  const tabs = () =>
+    availableTabs().map((tab) =>
       tab.value === 'call' ? { ...tab, label: <CallTabLabel /> } : tab
     );
+
+  // The generic rename op is gated on the document block-load signals, which
+  // the channel block never sets — so the menu offers a channel-local rename
+  // built from the channels context instead. The action's own gate keeps it
+  // off DMs and channels the user does not own.
+  const channelEntity = () => {
+    const ch = channel();
+    if (!ch) return undefined;
+    return buildEntityData({
+      id: props.channelId,
+      name: ch.name ?? 'New Channel',
+      blockName: 'channel',
+      channelType: ch.channel_type,
+      ownerId: ch.owner_id,
+    });
   };
+
+  // Mobile has no room for inline tabs; the title file-menu drawer leads with
+  // them instead, as a titled radio group mirroring the active tab. Built
+  // from tabs() so the call tab keeps its live-call label.
+  const mobileViews = () => ({
+    title: 'View',
+    options: tabs().map((tab) => ({
+      value: tab.value,
+      label: tab.label,
+      icon: CHANNEL_TAB_ICONS[tab.value],
+    })),
+    value: activeTab(),
+    onSelect: (value: string) => setActiveTab(value as ChannelTabId),
+  });
 
   return (
     <Suspense>
@@ -158,6 +212,35 @@ function NewTop(props: { channelId: string }) {
         activeTab={activeTab()}
         onTabChange={setActiveTab}
       />
+      <SplitTitleFileMenu>
+        <SplitFileMenu
+          id={props.channelId}
+          itemType="channel"
+          name={channelName() ?? 'New Channel'}
+          ops={[]}
+          // Generic chrome can't reconstruct a ChannelEntity (it lacks the
+          // channelType), so supply it for the menu's entity-gated items.
+          entity={channelEntity()}
+          mobileViews={isMobile() ? mobileViews() : undefined}
+          tools={[
+            {
+              group: 'file',
+              label: 'Rename',
+              icon: RenameIcon,
+              hotkeyToken: TOKENS.entity.action.rename,
+              action: () => {
+                const entity = channelEntity();
+                if (!entity) return;
+                void renameAction.execute([entity]);
+              },
+              condition: () => {
+                const entity = channelEntity();
+                return !!entity && renameAction.canExecute(entity);
+              },
+            },
+          ]}
+        />
+      </SplitTitleFileMenu>
       {/* Hidden once the user has joined — the call surface owns the UI. */}
       <Show when={ENABLE_CALLS() && !call.isInThisChannel()}>
         <SplitHeaderRight>
@@ -182,10 +265,16 @@ function NewTop(props: { channelId: string }) {
 }
 
 export function NewChannelBlockAdapter(props: BlockChannelProps) {
+  // Every other block gets its hotkey scope from `BlockContainer`, which the
+  // channel block does not render — so `blockHotkeyScopeSignal` stayed empty
+  // here and `useBlockEntityCommands` registered nothing at all. Own the scope
+  // directly instead of adopting BlockContainer and its entity tracking.
+  const [attachHotkeys, hotkeyScope] = useHotkeyDOMScope('channel');
+  blockHotkeyScopeSignal.set(hotkeyScope);
   useBlockEntityCommands();
 
-  const isPreview = !!useMaybePreviewPanel();
   const splitPanel = useSplitPanelOrThrow();
+  const canAutofocusSplitContent = useCanAutofocusSplitContent();
   const { navigatedFromJK } = useNavigatedFromJK();
   const channelId = useBlockId();
   const blockHandle = blockHandleSignal.get;
@@ -194,21 +283,17 @@ export function NewChannelBlockAdapter(props: BlockChannelProps) {
   // Decide whether the user asked to auto-join the call (via ?join_call=true
   // deep link or programmatic open props) before creating signals so we
   // can land directly on the Call tab without flashing Messages first.
-  // Skipped inside a preview panel so hover-previews don't auto-join.
   const wantsJoinCall =
-    !isPreview &&
-    (isJoinCallRequested(props[CHANNEL_URL_PARAMS.joinCall]) ||
-      isJoinCallRequested(searchParams[CHANNEL_URL_PARAMS.joinCall]));
+    isJoinCallRequested(props[CHANNEL_URL_PARAMS.joinCall]) ||
+    isJoinCallRequested(searchParams[CHANNEL_URL_PARAMS.joinCall]);
 
   const callCtx = useCallContextOptional();
   const hasActiveCallHere = !!(
     callCtx?.isInCall() && callCtx.activeChannelId() === channelId
   );
-  const persistedChannelState = (
-    isPreview
-      ? undefined
-      : splitPanel.handle.currentEntryState()?.[CHANNEL_STATE_ENTRY_KEY]
-  ) as ChannelEntryStateSnapshot | undefined;
+  const persistedChannelState = splitPanel.handle.currentEntryState()?.[
+    CHANNEL_STATE_ENTRY_KEY
+  ] as ChannelEntryStateSnapshot | undefined;
 
   const hasInitialTargetRequest = () => {
     const hasPropsTarget =
@@ -226,7 +311,6 @@ export function NewChannelBlockAdapter(props: BlockChannelProps) {
   };
 
   const shouldHydratePersistedChannelState =
-    !isPreview &&
     !wantsJoinCall &&
     !hasActiveCallHere &&
     !isOpenCallTabRequested(props[CHANNEL_URL_PARAMS.openCallTab]) &&
@@ -261,7 +345,6 @@ export function NewChannelBlockAdapter(props: BlockChannelProps) {
   const botManagement = useChannelBotManagement({
     channelId,
     hotkeyScopeId: splitPanel.splitHotkeyScope,
-    isPreview,
     openParticipants: () => setActiveTab('participants'),
   });
 
@@ -269,14 +352,14 @@ export function NewChannelBlockAdapter(props: BlockChannelProps) {
   // `createComputed` (not `createEffect`) so this runs before paint and matches
   // `activeTab` on the first frame (e.g. deep-link opens on Call tab).
   createComputed(() => {
-    if (isPreview || !callCtx) return;
+    if (!callCtx) return;
     const tab = activeTab();
     callCtx.syncCallPageTab(channelId, tab === 'call');
   });
 
   // Nav away unmounts this block without switching tabs first — clear stale ownership.
   onCleanup(() => {
-    if (isPreview || !callCtx) return;
+    if (!callCtx) return;
     callCtx.syncCallPageTab(channelId, false);
   });
 
@@ -293,24 +376,6 @@ export function NewChannelBlockAdapter(props: BlockChannelProps) {
       { replace: true }
     );
   });
-
-  const convertTargetMessage = (
-    params: ChannelTargetMessageParams
-  ): ChannelPropsTargetMessage => {
-    const messageId = params[URL_PARAMS.message] as string | undefined;
-    const threadId = params[URL_PARAMS.thread] as string | undefined;
-
-    // For compatibility the naming is a little strange here.
-    // New channels index by top level message and then separately handle replies.
-    // If we have a threadId that is actually the top level message and the reply is the message id.
-    const topLevelMessageId = threadId ? threadId : messageId;
-    const messageReplyId = threadId ? messageId : threadId;
-
-    return {
-      targetMessageId: topLevelMessageId,
-      targetMessageReplyId: messageReplyId,
-    };
-  };
 
   // A mention/link to a thread reply may carry only the message id (the reply)
   // without its thread id. Left as-is `convertTargetMessage` would treat that
@@ -418,24 +483,21 @@ export function NewChannelBlockAdapter(props: BlockChannelProps) {
     setMessagesHandle(() => handle);
   };
 
-  if (!isPreview) {
-    const disposeChannelStateCaptor =
-      splitPanel.handle.registerEntryStateCaptor(
-        CHANNEL_STATE_ENTRY_KEY,
-        (): ChannelEntryStateSnapshot => {
-          const handle = messagesHandle();
-          const messages = handle
-            ? handle.getMessagesStateSnapshot()
-            : lastMessagesStateSnapshot;
-          lastMessagesStateSnapshot = messages;
-          return {
-            activeTab: activeTab(),
-            messages,
-          };
-        }
-      );
-    onCleanup(disposeChannelStateCaptor);
-  }
+  const disposeChannelStateCaptor = splitPanel.handle.registerEntryStateCaptor(
+    CHANNEL_STATE_ENTRY_KEY,
+    (): ChannelEntryStateSnapshot => {
+      const handle = messagesHandle();
+      const messages = handle
+        ? handle.getMessagesStateSnapshot()
+        : lastMessagesStateSnapshot;
+      lastMessagesStateSnapshot = messages;
+      return {
+        activeTab: activeTab(),
+        messages,
+      };
+    }
+  );
+  onCleanup(disposeChannelStateCaptor);
 
   const initialMessagesStateSnapshot = () =>
     shouldHydratePersistedChannelState
@@ -452,13 +514,14 @@ export function NewChannelBlockAdapter(props: BlockChannelProps) {
           onHandled={() => setPendingJoinCall(false)}
         />
         <div
+          ref={attachHotkeys}
           class={cn(
-            'h-full flex flex-col px-2 mobile:px-0',
+            'h-full flex flex-col px-2 touch:px-0',
             // The channel block is full-frame on mobile (messages scroll
             // behind the chrome); the other tabs still need to start below
             // the status bar + floating header.
             activeTab() !== 'messages' &&
-              'mobile:pt-(--mobile-content-inset-top)'
+              'touch:pt-(--mobile-content-inset-top)'
           )}
         >
           <Switch>
@@ -466,7 +529,7 @@ export function NewChannelBlockAdapter(props: BlockChannelProps) {
               <NewChannel
                 channelId={channelId}
                 onHandleReady={onChannelReady}
-                autofocus={!isPreview && !navigatedFromJK()}
+                autofocus={canAutofocusSplitContent && !navigatedFromJK()}
                 initialMessagesStateSnapshot={initialMessagesStateSnapshot()}
                 {...convertTargetMessage(initialTargetMessageParams())}
               />

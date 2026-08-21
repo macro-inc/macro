@@ -21,7 +21,12 @@ function getPredicateNotifications(
 ) {
   const attachedNotifications = (entity as WithNotification<EntityData>)
     .notifications;
-  if (attachedNotifications) return attachedNotifications();
+
+  if (typeof attachedNotifications === 'function') {
+    return attachedNotifications();
+  }
+
+  if (Array.isArray(attachedNotifications)) return attachedNotifications;
 
   return notificationSource.notificationsByEntity()[
     compositeEntity(toNotificationEntity(entity))
@@ -121,11 +126,11 @@ export function githubPrFilter(entity: EntityData): boolean {
 }
 
 export function channelsFilter(entity: EntityData): boolean {
-  return (
-    entity.type === 'channel' ||
-    entity.type === 'channel_message' ||
-    entity.type === 'channel_thread'
-  );
+  // Non-member team channels (surfaced by the Teams tab) must not leak into
+  // Recent through the shared soup cache; message/thread rows only exist for
+  // channels the user is in.
+  if (entity.type === 'channel') return entity.isParticipant !== false;
+  return entity.type === 'channel_message' || entity.type === 'channel_thread';
 }
 
 export function callsFilter(entity: EntityData): boolean {
@@ -134,6 +139,43 @@ export function callsFilter(entity: EntityData): boolean {
 
 export function crmCompanyFilter(entity: EntityData): boolean {
   return entity.type === 'crm_company';
+}
+
+export function remindersFilter(entity: EntityData): boolean {
+  return entity.type === 'reminder';
+}
+
+/**
+ * Reminders that have fired and are waiting on their owner.
+ *
+ * `completedAt` means the owner has dealt with the reminder, and firing
+ * deliberately does not set it — so a fired one is outstanding, not finished.
+ * The `nextRunAt` test is what separates these from reminders that simply have
+ * not come due yet; those live in Scheduled.
+ */
+export function firedRemindersFilter(entity: EntityData): boolean {
+  return (
+    entity.type === 'reminder' &&
+    !entity.completedAt &&
+    new Date(entity.nextRunAt).getTime() <= Date.now()
+  );
+}
+
+/**
+ * Reminders set for the future, which have not fired yet. Recurring reminders
+ * never complete, so between firings they sit here pointing at their next run.
+ */
+export function scheduledRemindersFilter(entity: EntityData): boolean {
+  return (
+    entity.type === 'reminder' &&
+    !entity.completedAt &&
+    new Date(entity.nextRunAt).getTime() > Date.now()
+  );
+}
+
+/** Reminders the owner has marked as dealt with. */
+export function doneRemindersFilter(entity: EntityData): boolean {
+  return entity.type === 'reminder' && !!entity.completedAt;
 }
 
 /**

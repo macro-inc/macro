@@ -100,7 +100,7 @@ const service = new FusionAuthService('fusionauth-service', {
       value: stack === 'prod' ? 'production' : 'development',
     },
     {
-      name: 'FUSIONAUTH_APP_SLENT_MODE',
+      name: 'FUSIONAUTH_APP_SILENT_MODE',
       value: 'true',
     },
   ],

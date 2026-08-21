@@ -1,9 +1,10 @@
 import { globalSplitManager } from '@app/signal/splitLayout';
-import { isMobile } from '@core/mobile/isMobile';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { useContext } from 'solid-js';
 import { SplitPanelContext } from './context';
 import type {
   OpenWithSplitOptions,
+  PopoverSplitOptions,
   ReferredFrom,
   SplitContent,
 } from './layoutManager';
@@ -16,16 +17,26 @@ export function useSplitLayout() {
     options?: OpenWithSplitOptions
   ) {
     const splitManager = globalSplitManager();
-    const preferNewSplit = isMobile() ? false : options?.preferNewSplit;
+    const preferNewSplit = isTouchDevice() ? false : options?.preferNewSplit;
 
     if (!splitManager) {
       console.error('No split manager found');
       return;
     }
 
+    // Navigation issued from inside a split panel (links, mentions, references)
+    // carries that panel as its source; callers outside any panel (sidebar,
+    // command menu) stay handle-less, which is what marks "external navigation"
+    // for Preview Pair routing. A popover's SplitPanelContext handle is a stub
+    // whose replace() is a no-op, so treat popover sources as handle-less too
+    // and let same-split navigation fall back to the active split.
+    const requestedHandle = options?.handle ?? splitPanelContext?.handle;
+    const handle = requestedHandle?.isPopover() ? undefined : requestedHandle;
+
     return splitManager.openWithSplit(content, {
       ...options,
       preferNewSplit,
+      handle,
     });
   }
 
@@ -68,13 +79,16 @@ export function useSplitLayout() {
     });
   }
 
-  function popoverSplit(content: SplitContent) {
+  function popoverSplit(
+    content: SplitContent,
+    options: Omit<PopoverSplitOptions, 'content'> = {}
+  ) {
     const splitManager = globalSplitManager();
     if (!splitManager) {
       console.error('no split manager found');
       return;
     }
-    return splitManager.createPopoverSplit({ content: content });
+    return splitManager.createPopoverSplit({ ...options, content });
   }
 
   function replaceAllSplits(

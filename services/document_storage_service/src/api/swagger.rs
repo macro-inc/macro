@@ -8,7 +8,7 @@ use crate::api::saved_views::{
 };
 use crate::{
     api::{
-        activity, annotations,
+        annotations,
         documents::{
             self,
             export_document::ExportDocumentResponse,
@@ -18,10 +18,6 @@ use crate::{
             },
         },
         entity, health, history, instructions, pins,
-        projects::{
-            self,
-            delete_project::{ProjectDeleteResponse, ProjectDeleteResponseData},
-        },
         recents::{
             self,
             recently_deleted::{RecentlyDeletedResponse, RecentlyDeletedResponseData},
@@ -38,7 +34,6 @@ use crate::{
             pins::{AddPinRequest, PinRequest},
         },
         response::{
-            activity::{GetActivitiesResponse, UserActivitiesResponse},
             documents::{
                 create::{CreateBulkDocumentResponse, CreateBulkDocumentResponseData},
                 get::{
@@ -87,7 +82,6 @@ use model::document::response::{
     DocumentResponseMetadata,
 };
 use model::{
-    activity::Activity,
     annotations::AnnotationIncrementalUpdate,
     chat::Chat,
     document::{
@@ -124,8 +118,13 @@ use models_soup::email_thread::{
     SoupLabelListVisibility, SoupLabelType, SoupMessageListVisibility,
 };
 use models_soup::foreign_entity::SoupForeignEntity;
-use models_soup::item::SoupItem;
 use models_soup::project::SoupProject;
+use projects_hex::inbound::axum_router::delete_project::{
+    ProjectDeleteResponse, ProjectDeleteResponseData,
+};
+use reminders::domain::models::{Reminder, ReminderSchedule, RemindersList};
+use reminders::inbound::axum_router::{CreateReminderRequest, UpdateReminderRequest};
+use soup::domain::models::{SoupItemWithProperties, SoupPropertiesField};
 use soup::inbound::axum_router::{
     ApiGroupByField, ApiGroupMeta, GroupedSoupGroupPage, GroupedSoupInitialPage, GroupedSoupPage,
     PostGroupedSoupAstGroupPageRequest, PostGroupedSoupAstInitialRequest,
@@ -141,9 +140,8 @@ use utoipa::OpenApi;
     ),
     paths(
         health::health_handler,
-
-        // activity
-        activity::get_recent_activity::get_recent_activity_handler,
+        calendar_events::inbound::axum_router::list_occurrences,
+        calendar_events::inbound::axum_router::mention_previews,
 
         // annotations
         annotations::get::get_document_comments_handler,
@@ -157,7 +155,9 @@ use utoipa::OpenApi;
 
         // documents
         documents::get_user_documents::get_user_documents_handler,
+        documents::get_starter_docs::handler,
         documents_hex::inbound::axum_router::get_document::get_document_handler,
+        documents_hex::inbound::axum_router::get_document_by_team_slug::get_document_by_team_slug_handler,
         documents::get_document_version::handler,
         documents_hex::inbound::axum_router::create_document::create_document_handler,
         documents_hex::inbound::axum_router::create_markdown::create_markdown_handler,
@@ -184,6 +184,8 @@ use utoipa::OpenApi;
         documents::export_document::handler,
         documents_hex::inbound::axum_router::create_task::create_task_handler,
         documents_hex::inbound::axum_router::create_snippet::create_snippet_handler,
+        documents_hex::inbound::axum_router::create_skill::create_skill_handler,
+        documents_hex::inbound::axum_router::system_skills::get_system_skills_handler,
         documents_hex::inbound::axum_router::team_share::get_team_share_handler,
         documents_hex::inbound::axum_router::team_share::set_team_share_handler,
 
@@ -211,6 +213,9 @@ use utoipa::OpenApi;
         soup::inbound::axum_router::post_soup_ast_handler,
         soup::inbound::axum_router::post_grouped_soup_ast_handler,
 
+        // channel list (comms hex)
+        channels::inbound::list_router::get_channels_handler,
+
         // channels
         channels::inbound::axum_router::create_channel_handler,
         channels::inbound::axum_router::get_or_create_dm_handler,
@@ -224,6 +229,8 @@ use utoipa::OpenApi;
         channels::inbound::axum_router::post_typing_handler,
         channels::inbound::axum_router::add_participants_handler,
         channels::inbound::axum_router::remove_participants_handler,
+        channels::inbound::axum_router::get_channel_join_link_handler,
+        channels::inbound::axum_router::join_channel_by_code_handler,
         channels::inbound::axum_router::join_channel_handler,
         channels::inbound::axum_router::leave_channel_handler,
         channels::inbound::axum_router::get_channel_messages_handler,
@@ -242,6 +249,7 @@ use utoipa::OpenApi;
         channels::inbound::axum_router::post_activity_handler,
 
         // bots
+        bots::inbound::axum_router::get_self_bot_handler,
         bots::inbound::axum_router::list_bot_channels_handler,
         bots::inbound::axum_router::remove_bot_channel_handler,
         bots::inbound::channel_webhook_router::create_channel_scoped_bot_handler,
@@ -260,6 +268,8 @@ use utoipa::OpenApi;
         call::inbound::axum_router::webhook_handler,
         webhook::inbound::axum_router::create_webhook,
         webhook::inbound::axum_router::delete_webhook,
+        webhook::inbound::axum_router::get_webhook,
+        webhook::inbound::axum_router::list_webhooks,
         webhook::inbound::axum_router::patch_webhook,
         webhook::inbound::axum_router::validate_webhook,
         call::inbound::axum_router::ring_status_handler,
@@ -272,20 +282,20 @@ use utoipa::OpenApi;
         pins::get_pins::get_pins_handler,
 
         // projects
-        projects::get_projects::get_projects_handler,
-        projects::get_projects::get_pending_projects_handler,
-        projects::get_project::get_project_content_handler,
-        projects::create_project::create_project_handler,
-        projects::edit_project::edit_project_handler_v2,
-        projects::delete_project::delete_project_handler,
-        projects::delete_project::permanently_delete_project_handler,
-        projects::upload_folder::upload_folder_handler,
-        projects::upload_folder::upload_extract_folder_handler,
-        projects::project_permission::get_project_permissions_handler,
-        projects::project_permission::get_project_access_level_handler,
-        projects::get_batch_preview::get_batch_preview_handler,
-        projects::get_project::get_project_handler,
-        projects::revert_delete_project::handler,
+        projects_hex::inbound::axum_router::get_projects::get_projects_handler,
+        projects_hex::inbound::axum_router::get_projects::get_pending_projects_handler,
+        projects_hex::inbound::axum_router::get_project::get_project_content_handler,
+        projects_hex::inbound::axum_router::create_project::create_project_handler,
+        projects_hex::inbound::axum_router::edit_project::edit_project_handler,
+        projects_hex::inbound::axum_router::delete_project::delete_project_handler,
+        projects_hex::inbound::axum_router::delete_project::permanently_delete_project_handler,
+        projects_hex::inbound::axum_router::upload_folder::upload_folder_handler,
+        projects_hex::inbound::axum_router::upload_folder::upload_extract_folder_handler,
+        projects_hex::inbound::axum_router::project_permission::get_project_permissions_handler,
+        projects_hex::inbound::axum_router::project_permission::get_project_access_level_handler,
+        projects_hex::inbound::axum_router::get_batch_preview::get_batch_preview_handler,
+        projects_hex::inbound::axum_router::get_project::get_project_handler,
+        projects_hex::inbound::axum_router::revert_delete_project::revert_delete_project_handler,
 
         entity::get_entity_permission::handler,
 
@@ -294,6 +304,13 @@ use utoipa::OpenApi;
         favorites::inbound::axum_router::add_favorite_handler,
         favorites::inbound::axum_router::remove_favorite_by_entity_handler,
         favorites::inbound::axum_router::reorder_favorites_handler,
+
+        // reminders
+        reminders::inbound::axum_router::list_reminders_handler,
+        reminders::inbound::axum_router::create_reminder_handler,
+        reminders::inbound::axum_router::get_reminder_handler,
+        reminders::inbound::axum_router::update_reminder_handler,
+        reminders::inbound::axum_router::delete_reminder_handler,
 
         // foreign_entity
         foreign_entity::inbound::axum_router::get_foreign_entity_handler,
@@ -318,14 +335,21 @@ use utoipa::OpenApi;
         // /crm
         crm::inbound::axum_router::set_email_sync::handler,
         crm::inbound::axum_router::set_company_hidden::handler,
+        crm::inbound::axum_router::set_company_name::handler,
         crm::inbound::axum_router::set_contact_hidden::handler,
+        crm::inbound::axum_router::set_contact_name::handler,
         crm::inbound::axum_router::list_company_contacts::handler,
         crm::inbound::axum_router::get_contact::handler,
+        crm::inbound::axum_router::get_contact_by_email::handler,
         crm::inbound::axum_router::get_company::handler,
+        crm::inbound::axum_router::create_company::handler,
+        crm::inbound::axum_router::create_contact::handler,
         crm::inbound::axum_router::comments::list_handler,
         crm::inbound::axum_router::comments::create_handler,
         crm::inbound::axum_router::comments::edit_handler,
         crm::inbound::axum_router::comments::delete_handler,
+        crm::inbound::axum_router::team_settings::get_handler,
+        crm::inbound::axum_router::team_settings::update_handler,
     ),
     components(
         schemas(
@@ -354,6 +378,8 @@ use utoipa::OpenApi;
             documents_hex::domain::models::CreateTaskResponse,
             documents_hex::domain::models::CreateSnippetRequest,
             documents_hex::domain::models::CreateSnippetResponse,
+            documents_hex::domain::models::CreateSkillRequest,
+            documents_hex::domain::models::CreateSkillResponse,
             documents_hex::domain::models::DocumentTeamShareResponse,
             documents_hex::domain::models::SetDocumentTeamShareRequest,
             documents_hex::domain::models::PropertyInput,
@@ -371,6 +397,7 @@ use utoipa::OpenApi;
             EditDocumentResponse, // Edit document
             UserDocumentsResponse,
             GetDocumentsResponse, // Get user documents
+            documents::get_starter_docs::StarterDocumentsResponse, // Get starter documents
             GetDocumentProcessingResult,
             GetDocumentProcessingResultResponse, // Document processing result
             GetDocumentKeyResponseData,
@@ -383,9 +410,6 @@ use utoipa::OpenApi;
             PreSaveDocumentRequest,
             PreSaveDocumentResponseData,
             PreSaveDocumentResponse, // pre save
-            GetActivitiesResponse,
-            UserActivitiesResponse,
-            Activity, // Get recent ativity
             PinnedItem,
             PinRequest, // Generic pins
             AddPinRequest, // Add pin
@@ -403,11 +427,21 @@ use utoipa::OpenApi;
             DocumentPermissionsTokenRequest,
             ExportDocumentResponse,
             SyncServiceVersionID,
-            SoupItem,
+            calendar_events::inbound::axum_router::CalendarOccurrenceItem,
+            calendar_events::inbound::axum_router::CalendarOccurrenceResponse,
+            calendar_events::inbound::axum_router::CalendarMentionPreviewRequest,
+            calendar_events::inbound::axum_router::CalendarMentionPreviewRequestItem,
+            calendar_events::inbound::axum_router::CalendarMentionPreviewResponse,
+            calendar_events::inbound::axum_router::CalendarMentionPreviewItem,
+            calendar_events::inbound::axum_router::CalendarMentionPreviewKind,
+            calendar_events::domain::models::CalendarMentionEvent,
+            calendar_events::domain::models::CalendarSyncStatus,
+            SoupItemWithProperties,
             SoupApiItem,
-            SoupDocument,
-            SoupChat,
-            SoupProject,
+            SoupDocument<SoupPropertiesField>,
+            SoupChat<SoupPropertiesField>,
+            SoupProject<SoupPropertiesField>,
+            SoupPropertiesField,
             SoupForeignEntity,
             ForeignEntity,
             Favorite,
@@ -415,9 +449,14 @@ use utoipa::OpenApi;
             AddFavoriteRequest,
             FavoriteEntityRef,
             ReorderFavoritesRequest,
+            Reminder,
+            RemindersList,
+            ReminderSchedule,
+            CreateReminderRequest,
+            UpdateReminderRequest,
             SoupApiSort,
             SoupPage,
-            SoupEnrichedEmailThreadPreview,
+            SoupEnrichedEmailThreadPreview<SoupPropertiesField>,
             SoupEmailThreadPreview,
             SoupAttachment,
             SoupContact,
@@ -435,6 +474,14 @@ use utoipa::OpenApi;
             GroupedSoupInitialPage,
             GroupedSoupGroupPage,
             GroupedSoupPage,
+
+            // Channel list (comms hex)
+            channels::inbound::list_router::ApiChannelListPage,
+            channels::inbound::list_router::ApiChannelWithLatest,
+            channels::inbound::list_router::ApiChannelListMessage,
+            channels::inbound::list_router::ApiChannelListParticipant,
+            channels::inbound::list_router::ApiChannelListType,
+            channels::inbound::list_router::ApiParticipantListRole,
 
             // Channels
             ApiChannelMessagesPage,
@@ -498,6 +545,8 @@ use utoipa::OpenApi;
             bots::domain::models::BotChannelType,
             bots::domain::models::ChannelWebhookRequest,
             bots::domain::models::ChannelWebhookResponse,
+            bots::domain::models::CreateBotRequest,
+            bots::domain::models::PatchBotRequest,
             bots::domain::models::CreateChannelScopedBotRequest,
             bots::domain::models::CreateChannelScopedBotResponse,
 
@@ -519,22 +568,26 @@ use utoipa::OpenApi;
             call::domain::models::GetBatchCallRecordPreviewResponse,
             call::domain::models::RingStatus,
             call::domain::models::RingStatusResponse,
-            SoupCallRecord,
+            SoupCallRecord<SoupPropertiesField>,
             SoupCallRecordParticipant,
 
             // Webhooks
+            webhook::domain::events::WebhookEvent,
             webhook::domain::models::CreateWebhookRequest,
             webhook::domain::models::CreateWebhookResponse,
+            webhook::domain::models::ListWebhooksResponse,
             webhook::domain::models::PatchWebhookRequest,
             webhook::domain::models::ValidateWebhookResponse,
             webhook::domain::models::Webhook,
             webhook::domain::models::WebhookFilter,
             webhook::domain::models::WebhookStatus,
+            webhook::domain::models::WebhookValidationTestEvent,
 
             DocumentSubType,
 
 
             // Permissions V2
+            models_permissions::share_permission::LinkShare,
             models_permissions::share_permission::access_level::AccessLevel,
             models_permissions::share_permission::SharePermissionV2,
             models_permissions::share_permission::UpdateSharePermissionRequestV2, // Share permission
@@ -596,10 +649,14 @@ use utoipa::OpenApi;
             // CRM
             crm::inbound::axum_router::set_email_sync::SetEmailSyncRequest,
             crm::inbound::axum_router::set_company_hidden::SetCompanyHiddenRequest,
+            crm::inbound::axum_router::set_company_name::SetCompanyNameRequest,
             crm::inbound::axum_router::set_contact_hidden::SetContactHiddenRequest,
+            crm::inbound::axum_router::set_contact_name::SetContactNameRequest,
             crm::inbound::axum_router::list_company_contacts::CrmContactResponse,
             crm::inbound::axum_router::get_company::CrmCompanyResponse,
             crm::inbound::axum_router::get_company::CrmDomainResponse,
+            crm::inbound::axum_router::create_company::CreateCrmCompanyRequest,
+            crm::inbound::axum_router::create_contact::CreateCrmContactRequest,
             crm::inbound::axum_router::comments::CreateCrmCommentRequest,
             crm::inbound::axum_router::comments::EditCrmCommentRequest,
             crm::domain::comment::CrmCommentEntityType,
@@ -607,6 +664,9 @@ use utoipa::OpenApi;
             crm::domain::comment::CrmComment,
             crm::domain::comment::CrmCommentThread,
             crm::domain::comment::DeleteCrmCommentResult,
+            crm::inbound::axum_router::team_settings::CrmTeamSettingsResponse,
+            crm::inbound::axum_router::team_settings::UpdateCrmTeamSettingsRequest,
+            crm::domain::model::CrmPermissionRole,
         ),
     ),
     tags(

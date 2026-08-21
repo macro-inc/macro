@@ -29,11 +29,14 @@ import type {
   InitGithubLinkResponse,
   InitGmailLinkParams,
   InitGmailLinkResponse,
+  InitOutlookLinkParams,
+  InitOutlookLinkResponse,
   InviteToTeamRequest,
   MacroApiTokenParams,
   MacroApiTokenResponse,
   PasswordlessCallbackParams,
   PasswordlessRequest,
+  PasswordlessStartedResponse,
   PasswordRequest,
   PatchTeamCrmSettingsRequest,
   PatchTeamCrmSettingsResponse,
@@ -56,6 +59,8 @@ import type {
   Team,
   TeamInvitesResponse,
   TeamWithMembers,
+  ToggleAutoJoinDomainResponse,
+  ToggleNonAdminInvitesResponse,
   UserLinkResponse,
   UserName,
   UserNames,
@@ -948,6 +953,91 @@ export const checkGmailLinkStatus = async (
 };
 
 /**
+ * @summary Initiates a Microsoft Outlook account link for an authenticated user.
+ */
+export type initOutlookLinkResponse200 = {
+  data: InitOutlookLinkResponse;
+  status: 200;
+};
+
+export type initOutlookLinkResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type initOutlookLinkResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type initOutlookLinkResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type initOutlookLinkResponse429 = {
+  data: ErrorResponse;
+  status: 429;
+};
+
+export type initOutlookLinkResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type initOutlookLinkResponseSuccess = initOutlookLinkResponse200 & {
+  headers: Headers;
+};
+export type initOutlookLinkResponseError = (
+  | initOutlookLinkResponse400
+  | initOutlookLinkResponse401
+  | initOutlookLinkResponse404
+  | initOutlookLinkResponse429
+  | initOutlookLinkResponse500
+) & {
+  headers: Headers;
+};
+
+export type initOutlookLinkResponse =
+  | initOutlookLinkResponseSuccess
+  | initOutlookLinkResponseError;
+
+export const getInitOutlookLinkUrl = (params?: InitOutlookLinkParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/link/outlook?${stringifiedParams}`
+    : `/link/outlook`;
+};
+
+export const initOutlookLink = async (
+  params?: InitOutlookLinkParams,
+  options?: RequestInit
+): Promise<initOutlookLinkResponse> => {
+  const res = await fetch(getInitOutlookLinkUrl(params), {
+    ...options,
+    method: 'POST',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: initOutlookLinkResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as initOutlookLinkResponse;
+};
+
+/**
  * @summary Completes the apple login flow
  */
 export type appleLoginResponse200 = {
@@ -1077,7 +1167,7 @@ export const passwordLogin = async (
  * @summary Initiates a passwordless login
  */
 export type passwordlessLoginResponse200 = {
-  data: EmptyResponse;
+  data: PasswordlessStartedResponse;
   status: 200;
 };
 
@@ -1367,8 +1457,9 @@ export const verifyMergeRequest = async (
 };
 
 /**
- * @summary Sends a mobile welcome email to the given address, if it hasn't already been sent
-and the email is not blocked.
+ * @summary Enrolls a mobile lead in the Loops nurture sequence, which sends the welcome
+email inviting them to register on desktop. No-ops if the address was already
+enrolled, and rejects blocked addresses.
  */
 export type sendMobileWelcomeEmailResponse200 = {
   data: SendMobileWelcomeEmailResponse;
@@ -2246,9 +2337,91 @@ export const patchTeam = async (
 };
 
 /**
- * @summary Enables or disables CRM for the team. On enable, kicks off a
-best-effort backfill that enqueues a `PopulateCrmForUser` message
-per team member (no-op if CRM is already enabled). On disable,
+ * @summary Toggles automatic domain joining for the team. When the team has no
+auto-join domain, sets it to the team owner's email domain — rejected
+with a 400 when that domain is a generic email provider domain (e.g.
+gmail.com). When one is already set, removes it. New users whose email
+domain matches a team's auto-join domain are added to that team on
+signup. Requires the caller to be an Admin or Owner of the team.
+ */
+export type toggleTeamAutoJoinDomainResponse200 = {
+  data: ToggleAutoJoinDomainResponse;
+  status: 200;
+};
+
+export type toggleTeamAutoJoinDomainResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type toggleTeamAutoJoinDomainResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type toggleTeamAutoJoinDomainResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type toggleTeamAutoJoinDomainResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type toggleTeamAutoJoinDomainResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type toggleTeamAutoJoinDomainResponseSuccess =
+  toggleTeamAutoJoinDomainResponse200 & {
+    headers: Headers;
+  };
+export type toggleTeamAutoJoinDomainResponseError = (
+  | toggleTeamAutoJoinDomainResponse400
+  | toggleTeamAutoJoinDomainResponse401
+  | toggleTeamAutoJoinDomainResponse403
+  | toggleTeamAutoJoinDomainResponse404
+  | toggleTeamAutoJoinDomainResponse500
+) & {
+  headers: Headers;
+};
+
+export type toggleTeamAutoJoinDomainResponse =
+  | toggleTeamAutoJoinDomainResponseSuccess
+  | toggleTeamAutoJoinDomainResponseError;
+
+export const getToggleTeamAutoJoinDomainUrl = () => {
+  return `/team/auto-join-domain/toggle`;
+};
+
+export const toggleTeamAutoJoinDomain = async (
+  options?: RequestInit
+): Promise<toggleTeamAutoJoinDomainResponse> => {
+  const res = await fetch(getToggleTeamAutoJoinDomainUrl(), {
+    ...options,
+    method: 'POST',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: toggleTeamAutoJoinDomainResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as toggleTeamAutoJoinDomainResponse;
+};
+
+/**
+ * @summary Enables or disables CRM for the team. On enable with `backfill`
+(the default), kicks off a best-effort backfill that enqueues a
+`PopulateCrmForUser` message per team member (no-op if CRM is
+already enabled); without `backfill` the CRM starts empty and fills
+from new activity only. On disable,
 flips the flag and purges the team's CRM data (cascading through
 `crm_companies` → `crm_domains` / `crm_contacts` /
 `crm_contact_sources`). Requires the caller to be an Admin or
@@ -2648,6 +2821,78 @@ export const rejectInvitation = async (
     status: res.status,
     headers: res.headers,
   } as rejectInvitationResponse;
+};
+
+/**
+ * @summary Toggles whether non-admin members may invite users to the team. Teams
+start with this on (any member can invite); turning it off restricts
+inviting to team admins and owners. Requires the caller to be an Admin
+or Owner of the team.
+ */
+export type toggleTeamNonAdminInvitesResponse200 = {
+  data: ToggleNonAdminInvitesResponse;
+  status: 200;
+};
+
+export type toggleTeamNonAdminInvitesResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type toggleTeamNonAdminInvitesResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type toggleTeamNonAdminInvitesResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type toggleTeamNonAdminInvitesResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type toggleTeamNonAdminInvitesResponseSuccess =
+  toggleTeamNonAdminInvitesResponse200 & {
+    headers: Headers;
+  };
+export type toggleTeamNonAdminInvitesResponseError = (
+  | toggleTeamNonAdminInvitesResponse401
+  | toggleTeamNonAdminInvitesResponse403
+  | toggleTeamNonAdminInvitesResponse404
+  | toggleTeamNonAdminInvitesResponse500
+) & {
+  headers: Headers;
+};
+
+export type toggleTeamNonAdminInvitesResponse =
+  | toggleTeamNonAdminInvitesResponseSuccess
+  | toggleTeamNonAdminInvitesResponseError;
+
+export const getToggleTeamNonAdminInvitesUrl = () => {
+  return `/team/non-admin-invites/toggle`;
+};
+
+export const toggleTeamNonAdminInvites = async (
+  options?: RequestInit
+): Promise<toggleTeamNonAdminInvitesResponse> => {
+  const res = await fetch(getToggleTeamNonAdminInvitesUrl(), {
+    ...options,
+    method: 'POST',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: toggleTeamNonAdminInvitesResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as toggleTeamNonAdminInvitesResponse;
 };
 
 /**

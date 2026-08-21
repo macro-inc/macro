@@ -1,4 +1,4 @@
-use crate::api::context::ApiContext;
+use crate::api::context::{ApiContext, AuthorizationService};
 use fusionauth::error::FusionAuthClientError;
 use fusionauth::identity_provider::Link;
 
@@ -8,7 +8,7 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
 };
-use macro_middleware::auth::internal_access::ValidInternalKey;
+use macro_authorization::{InternalOnly, MacroAuthorizationExtractor};
 use model::response::{EmptyResponse, ErrorResponse};
 
 #[cfg(test)]
@@ -41,10 +41,10 @@ fn find_idp_link(links: Vec<Link>, linked_email: &str) -> Option<Link> {
             (status = 500, body = ErrorResponse),
         ),
     )]
-#[tracing::instrument(skip(ctx, _valid_access))]
+#[tracing::instrument(skip(ctx, _internal_authorization))]
 pub async fn handler(
     State(ctx): State<ApiContext>,
-    _valid_access: ValidInternalKey,
+    _internal_authorization: MacroAuthorizationExtractor<AuthorizationService, InternalOnly>,
     extract::Query(RemoveLinkQueryParams {
         fusionauth_user_id,
         linked_email,

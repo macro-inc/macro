@@ -52,7 +52,9 @@
       # Include Cargo sources plus the .sqlx offline query cache.
       sqlxFilter = path: _type: builtins.match ".*\\.sqlx/.*\\.json$" path != null;
       pdfiumFilter = path: _type: builtins.match ".*pdfium-lib/.*\\.(so|dylib)$" path != null;
-      assetFilter = path: _type: builtins.match ".*\\.(md|html|txt|json|canvas|sql)$" path != null;
+      # `.sh` is required so `include_str!` of
+      # `crates/agent_harness/container/ensure_ready.sh` survives the prune.
+      assetFilter = path: _type: builtins.match ".*\\.(md|html|txt|json|canvas|sql|sh)$" path != null;
       binFilter = path: _type: builtins.match ".*\\.bin$" path != null;
       srcFilter =
         path: type:
@@ -76,7 +78,7 @@
       # manifest plus a crane stub target. A leaf's store hash then only
       # moves when a crate it actually depends on changes — an email-only
       # change leaves the other deploy derivations as pure substitutions
-      # (sticky disk / Cachix) instead of full workspace-subgraph rebuilds.
+      # from Namespace's Nix cache instead of full workspace-subgraph rebuilds.
       # Manifest or Cargo.lock changes still invalidate every leaf (the stub
       # layer embeds them all); those are the rare structural commits.
       #
@@ -188,7 +190,7 @@
         BINDGEN_EXTRA_CLANG_ARGS = "-I${pkgs.glibc.dev}/include -I${pkgs.gcc.cc}/lib/gcc/${pkgs.stdenv.hostPlatform.config}/${pkgs.gcc.version}/include";
       };
 
-      # Pre-built third-party deps — Cachix caches this; hash is driven by Cargo.lock
+      # Pre-built third-party deps cached by Namespace; hash is driven by Cargo.lock
       # (workspace member sources are stubbed by crane), so it survives most PRs.
       # --all-features matches the test job (cargo nextest --all-features) and clippy
       # so all consumers share the same dep feature unification.
@@ -201,9 +203,10 @@
 
       # Layered atop cargoArtifacts: pre-compile every workspace lib crate so
       # downstream derivations (openApiBins, clippy) inherit a warm target/. The
-      # hash is per-source so cachix only hits when the SHA matches across CI
-      # workflows — but since code-check-cloud-storage and web-app-check-main both
-      # run on the same SHA, whichever finishes first pushes for the other.
+      # hash is per-source so Namespace's Nix cache only hits when the SHA
+      # matches across CI workflows — but since code-check-cloud-storage and
+      # web-app-check-main both run on the same SHA, whichever finishes first
+      # populates the cache for the other.
       # sync_service is checked separately with its supported default feature
       # set because its KV and R2 storage features are mutually exclusive.
       workspaceArtifacts = craneLib.cargoBuild (
@@ -221,8 +224,7 @@
 
       cloudStorageCargoToml = builtins.fromTOML (builtins.readFile ../Cargo.toml);
       cloudStorageWorkspaceMembers =
-        cloudStorageCargoToml.workspace.members
-          or (throw "Cargo.toml is missing workspace.members");
+        cloudStorageCargoToml.workspace.members or (throw "Cargo.toml is missing workspace.members");
 
       dopplerConfigBinNames =
         let
@@ -313,7 +315,7 @@
       # Pre-built nextest archive — packages all compiled test binaries plus their
       # metadata into a single tar.zst. CI fetches this archive and runs
       # `cargo nextest run --archive-file` outside the sandbox so tests can hit
-      # postgres/redis services. Built in nix → cached by cachix.
+      # postgres/redis services. Built in Nix and cached by Namespace.
       nextestArchive = craneLib.mkCargoDerivation (
         commonArgs
         // {
@@ -337,6 +339,11 @@
       );
 
       deployServiceBinaryDefinitions = [
+        {
+          serviceName = "agent-harness-service";
+          packageName = "agent_harness_service";
+          binaries = [ "agent_harness_service" ];
+        }
         {
           serviceName = "agent-schedule-service";
           packageName = "scheduled_action";
@@ -412,6 +419,36 @@
         }
       ];
 
+      localStackBinaryDefinitions = [
+        {
+          serviceName = "local-authentication";
+          packageName = "authentication_service";
+          binaries = [ "authentication_service" ];
+          featureArgs = "--no-default-features --features return_passwordless_code";
+        }
+        {
+          serviceName = "local-search-processing";
+          packageName = "search_processing_service";
+          binaries = [ "search_processing_service" ];
+          featureArgs = "--no-default-features --features processing,service";
+        }
+        {
+          serviceName = "local-upload-finalizer";
+          packageName = "document_upload_finalizer_handler";
+          binaries = [ "document_upload_finalizer_local_worker" ];
+        }
+        {
+          serviceName = "local-agent-trigger";
+          packageName = "agent_trigger_service";
+          binaries = [ "agent_trigger_service" ];
+        }
+        {
+          serviceName = "local-seed-cli";
+          packageName = "seed_cli";
+          binaries = [ "seed_cli" ];
+        }
+      ];
+
       deployBinaryCargoExtraArgs =
         "--locked "
         + pkgs.lib.concatMapStringsSep " " (
@@ -438,6 +475,7 @@
           serviceName,
           packageName,
           binaries,
+          featureArgs ? "",
         }:
         craneLib.buildPackage (
           commonArgs
@@ -450,7 +488,8 @@
             doCheck = false;
             cargoExtraArgs =
               "--locked --package ${packageName} "
-              + pkgs.lib.concatMapStringsSep " " (binary: "--bin ${binary}") binaries;
+              + pkgs.lib.concatMapStringsSep " " (binary: "--bin ${binary}") binaries
+              + pkgs.lib.optionalString (featureArgs != "") " ${featureArgs}";
             CARGO_PROFILE = "release";
             installPhaseCommand = ''
               mkdir -p $out/bin
@@ -469,10 +508,40 @@
         }) deployServiceBinaryDefinitions
       );
 
+      localStackBinaryPackages = pkgs.lib.listToAttrs (
+        map (def: {
+          name = "local-stack-binaries-${def.serviceName}";
+          value = deployServiceBinaryPackage def;
+        }) localStackBinaryDefinitions
+      );
+
+      localStackDeployServiceNames = [
+        "agent-harness-service"
+        "connection-gateway"
+        "contacts-service"
+        "document-cognition-service"
+        "document-storage-service"
+        "email-service"
+        "image-proxy-service"
+        "notification-service"
+        "static-file-service"
+        "unfurl-service"
+      ];
+
+      localStackBinaries = pkgs.buildEnv {
+        name = "local-stack-binaries";
+        pathsToLink = [ "/bin" ];
+        paths =
+          pkgs.lib.attrValues localStackBinaryPackages
+          ++ map (
+            serviceName: deployServiceBinaryPackages."deploy-service-binaries-${serviceName}"
+          ) localStackDeployServiceNames;
+      };
+
       # ── Lambda builds (crane + cargo-zigbuild) ─────────────────────
       # SPIKE: build a Rust Lambda handler reproducibly under nix/crane so
       # lambdas ride the same content-addressed cache as the service binaries
-      # (nix store + Cachix + sticky disk) instead of a cargo-in-checkout that
+      # (Namespace Nix store volume) instead of a cargo-in-checkout that
       # recompiles the workspace every run. cargo-zigbuild pins the Lambda
       # glibc via a target *suffix* (no toolchain swap; host triple == lambda
       # triple, so no extra rust-std). The binary is renamed `bootstrap` and
@@ -660,18 +729,115 @@
         }) lambdaNames
       );
 
+      # The Namespace CLI, the other sandbox provider crates/agent_harness
+      # talks to. Only used to mint the bearer tokens its Compute API wants
+      # (`just namespace-token`); the harness itself speaks the API directly.
+      # Not in nixpkgs either, and shipped as goreleaser tarballs rather than
+      # bare binaries, so this unpacks and takes just the nsc binary.
+      nsc =
+        let
+          version = "0.0.551";
+          asset =
+            {
+              x86_64-linux = {
+                arch = "linux_amd64";
+                hash = "sha256-2Ip69WLe+VgbF2E74r4A4ZFfygMfiV+SMqgtGs87b7I=";
+              };
+              aarch64-linux = {
+                arch = "linux_arm64";
+                hash = "sha256-0+KpniE+7nQsFip1Tg5Z42xjAOlhPpdfmwEhQh5Ep4c=";
+              };
+              x86_64-darwin = {
+                arch = "darwin_amd64";
+                hash = "sha256-tpv81Cu1/7b2vq4Tiw4Z7pqCI3SCCiEKRRgJ2rEcX+g=";
+              };
+              aarch64-darwin = {
+                arch = "darwin_arm64";
+                hash = "sha256-x3FYe8DT+5U4D506ioSUfmiT5unG6CGMiGf4r/9jPpc=";
+              };
+            }
+            .${system};
+        in
+        pkgs.stdenvNoCC.mkDerivation {
+          pname = "nsc";
+          inherit version;
+          src = pkgs.fetchurl {
+            url = "https://github.com/namespacelabs/foundation/releases/download/v${version}/nsc_${version}_${asset.arch}.tar.gz";
+            inherit (asset) hash;
+          };
+          sourceRoot = ".";
+          nativeBuildInputs = pkgs.lib.optionals isLinux [ pkgs.autoPatchelfHook ];
+          installPhase = ''
+            runHook preInstall
+            install -Dm755 nsc $out/bin/nsc
+            runHook postInstall
+          '';
+        };
+
+      # The Daytona CLI (sandbox snapshots for crates/agent_harness) is not in
+      # nixpkgs and is only published as prebuilt release binaries, so this
+      # installs the asset rather than building from source. Pinned instead of
+      # tracking `latest` so the shell stays reproducible; bump the version and
+      # the four hashes together.
+      daytona =
+        let
+          version = "0.203.0";
+          asset =
+            {
+              x86_64-linux = {
+                arch = "linux-amd64";
+                hash = "sha256-5r+K1OgFcw1BF1sNJwdlbc0rGAVZSy16eEiCvQ/X8DI=";
+              };
+              aarch64-linux = {
+                arch = "linux-arm64";
+                hash = "sha256-bQa4KpU3gYf2m9+6ClG1qiCa5W+MjX/XgiCv59b1ptA=";
+              };
+              x86_64-darwin = {
+                arch = "darwin-amd64";
+                hash = "sha256-mcygBoN89RsMDmakGy8LEi1XgNc/+g4ImqaTEuPZrW4=";
+              };
+              aarch64-darwin = {
+                arch = "darwin-arm64";
+                hash = "sha256-X29vyGaEGQZN9bNb17SCrIlf3zmtMgaJmKThK7cY2kc=";
+              };
+            }
+            .${system};
+        in
+        pkgs.stdenvNoCC.mkDerivation {
+          pname = "daytona";
+          inherit version;
+          src = pkgs.fetchurl {
+            url = "https://github.com/daytona/clients/releases/download/v${version}/daytona-${asset.arch}";
+            inherit (asset) hash;
+          };
+          dontUnpack = true;
+          # The Linux builds are cgo, so they need their interpreter and
+          # libc rewritten to the store.
+          nativeBuildInputs = pkgs.lib.optionals isLinux [ pkgs.autoPatchelfHook ];
+          installPhase = ''
+            runHook preInstall
+            install -Dm755 $src $out/bin/daytona
+            runHook postInstall
+          '';
+        };
+
       shellTools =
         with pkgs;
         [
+          daytona
+          nsc
           parallel
           docker-compose
           curl
+          openssh
+          wget
           kcat
           xz
           unzip
           zip
           cargo-info
           cargo-udeps
+          cargo-tauri
           cargo-lambda
           cargo-zigbuild
           zig
@@ -707,12 +873,17 @@
           just-lsp
           taplo
           bun
+          brotli
           pnpm
+          postgresql
           sqlx-cli
           typescript-language-server
           nodejs_24
           pulumi
           pulumiPackages.pulumi-nodejs
+          pulumiPackages.pulumi-aws-native
+          playwright
+          playwright-mcp
           doppler
           biome
           jq
@@ -720,9 +891,12 @@
           sccache
           rustToolchain
           python3
-          vitejs
         ]
-        ++ pkgs.lib.optionals isLinux [ mold ];
+        ++ pkgs.lib.optionals isLinux [
+          mold
+          docker
+          fuse-overlayfs
+        ];
 
     in
     {
@@ -736,7 +910,7 @@
           commonArgs
           // {
             cargoArtifacts = workspaceArtifacts;
-            cargoClippyExtraArgs = "--workspace --all-features --exclude sync_service --exclude test_build_full_pdf_modification_data --exclude test_pdf_modification_data_deserialize -- -D warnings";
+            cargoClippyExtraArgs = "--workspace --all-features --exclude sync_service -- -D warnings";
             RUSTDOCFLAGS = "-Dwarnings";
           }
         );
@@ -803,7 +977,10 @@
       }
       // dopplerConfigBinPackages
       // deployServiceBinaryPackages
-      // deployLambdaPackages;
+      // deployLambdaPackages
+      // pkgs.lib.optionalAttrs isLinux {
+        local-stack-binaries = localStackBinaries;
+      };
 
       devShells = {
         default =
@@ -823,6 +1000,35 @@
               PKG_CONFIG_PATH_FOR_TARGET = pkgConfigPath;
               LIBCLANG_PATH = "${pkgs.libclang.lib}/lib";
               RUSTC_WRAPPER = "${pkgs.sccache}/bin/sccache";
+              # Local dev shells favor reusable sccache artifacts across JJ
+              # workspaces. CI derivations do not inherit devShell attributes.
+              CARGO_INCREMENTAL = "0";
+              SCCACHE_CACHE_SIZE = "30G";
+              # Namespace CI runners preserve Cargo's ignored target directory.
+              # A flake update can change the Nix C compiler while leaving CMake
+              # configure state behind; CMake then drops its command-line cache
+              # entries while switching compilers, breaking aws-lc and librdkafka.
+              # Remove only caches configured by another compiler so ordinary
+              # shell entry keeps reusable native build state.
+              shellHook = pkgs.lib.optionalString isLinux ''
+                target_dir="''${CARGO_TARGET_DIR:-target}"
+                current_cc="$(type -P "''${CC:-cc}" || true)"
+                if [ -n "$current_cc" ] && [ -d "$target_dir" ]; then
+                  while IFS= read -r -d "" cache; do
+                    cached_cc=""
+                    while IFS="=" read -r key value; do
+                      case "$key" in
+                        CMAKE_C_COMPILER:*) cached_cc="$value"; break ;;
+                      esac
+                    done < "$cache"
+                    if [ -n "$cached_cc" ] && [ "$cached_cc" != "$current_cc" ]; then
+                      dir="$(dirname "$cache")"
+                      echo "purging stale CMake state in $dir ($cached_cc != $current_cc)"
+                      rm -rf "$dir/CMakeFiles" "$cache"
+                    fi
+                  done < <(find "$target_dir" -name CMakeCache.txt -print0)
+                fi
+              '';
               # rdkafka's ssl-vendored feature exists for the Lambda
               # derivations (see lambdaCommonArgs); local builds keep using
               # the Nix openssl instead of vendoring, which would need perl

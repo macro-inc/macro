@@ -2,7 +2,7 @@ use models_opensearch::SearchIndex;
 
 use super::BulkUpsertResult;
 use super::properties::IndexedProperty;
-use crate::{Result, date_format::EpochSeconds, error::OpensearchClientError};
+use crate::{Result, date_format::EpochMillis, error::OpensearchClientError};
 
 /// The arguments for upserting an email message into the opensearch index
 #[derive(Debug, serde::Serialize)]
@@ -38,12 +38,12 @@ pub struct UpsertEmailArgs {
     pub link_id: String,
     /// The user id of the email message
     pub user_id: String,
-    /// The updated at time of the email message
-    pub updated_at_seconds: EpochSeconds,
+    /// The updated at time of the email message, in milliseconds
+    pub updated_at_millis: EpochMillis,
     /// The subject of the email message
     pub subject: Option<String>,
-    /// The sent at time of the email message
-    pub sent_at_seconds: Option<EpochSeconds>,
+    /// The sent at time of the email message, in milliseconds
+    pub sent_at_millis: Option<EpochMillis>,
     /// The content of the email message
     pub content: String,
     /// Denormalized thread properties (e.g. tags) used for search filtering.

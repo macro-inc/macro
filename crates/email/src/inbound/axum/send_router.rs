@@ -1,5 +1,8 @@
 use axum::{Json, Router, extract::State, http::StatusCode, response::IntoResponse, routing::post};
 use axum_extra::extract::Cached;
+use macro_authorization::{
+    MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState, UserOrInternal,
+};
 use model_error_response::ErrorResponse;
 use thiserror::Error;
 
@@ -12,14 +15,15 @@ use super::{
 };
 
 /// Create the send router with a `POST /` handler.
-pub fn send_router<S, T>(state: EmailRouterState<T>) -> Router<S>
+pub fn send_router<S, T, Auth>() -> Router<S>
 where
-    S: Send + Sync + 'static,
+    S: Send + Sync + Clone + 'static,
     T: EmailService,
+    Auth: MacroAuthorizationService,
+    EmailRouterState<T>: axum::extract::FromRef<S>,
+    MacroAuthorizationState<Auth>: axum::extract::FromRef<S>,
 {
-    Router::new()
-        .route("/", post(send_message_handler::<T>))
-        .with_state(state)
+    Router::new().route("/", post(send_message_handler::<T, Auth>))
 }
 
 /// Errors from the send message handler.
@@ -86,14 +90,20 @@ impl From<EmailErr> for SendMessageError {
         (status = 500, body = ErrorResponse),
     )
 )]
-#[tracing::instrument(err, skip(state, link, accessible_inboxes, body))]
-pub async fn send_message_handler<T: EmailService>(
+#[tracing::instrument(err, skip(state, link, accessible_inboxes, authorization, body))]
+pub async fn send_message_handler<T: EmailService, Auth: MacroAuthorizationService>(
     State(state): State<EmailRouterState<T>>,
-    Cached(EmailLinkExtractor(link, _)): Cached<EmailLinkExtractor<T>>,
-    Cached(MultiEmailLinkExtractor(accessible_inboxes, _)): Cached<MultiEmailLinkExtractor<T>>,
+    Cached(EmailLinkExtractor(link, _)): Cached<EmailLinkExtractor<T, Auth>>,
+    Cached(MultiEmailLinkExtractor(accessible_inboxes, _)): Cached<
+        MultiEmailLinkExtractor<T, Auth>,
+    >,
+    Cached(authorization): Cached<MacroAuthorizationExtractor<Auth, UserOrInternal>>,
     Json(body): Json<SendMessageRequest>,
 ) -> Result<impl IntoResponse, SendMessageError> {
-    let input = body.into_domain();
+    let mut input = body.into_domain();
+    // Attribute the send to the authenticated caller, who is not necessarily
+    // the link owner (delegated inboxes).
+    input.actor = Some(authorization.authorization.user.macro_user_id.clone());
     let created = state
         .inner
         .send_message(&link, &accessible_inboxes, input)

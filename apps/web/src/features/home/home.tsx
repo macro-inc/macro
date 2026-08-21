@@ -1,4 +1,3 @@
-import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { ShowFeatureFlag } from '@app/lib/analytics/posthog';
 import { FloatRegionOrInline } from '@components/app/mobile/float-regions/FloatRegion';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
@@ -127,7 +126,7 @@ function HomeContent() {
       }</style>
 
       <div class="min-h-0 flex-1 overflow-y-auto">
-        <div class="home-content mx-auto flex w-full max-w-3xl flex-col gap-6 px-4 pb-6 pt-10 mobile:pt-[calc(var(--mobile-content-inset-top,0px)+0.5rem)] mobile:pb-(--mobile-content-inset-bottom) md:pt-16">
+        <div class="home-content mx-auto flex w-full max-w-3xl flex-col gap-6 px-4 pb-6 pt-10 touch:pt-[calc(var(--mobile-content-inset-top,0px)+0.5rem)] touch:pb-(--mobile-content-inset-bottom) md:pt-16">
           <header class="flex items-center gap-2.5">
             <AnimatedHeroLogo class="size-6 shrink-0 text-accent" />
             <h1 class="text-xl font-normal tracking-tight text-ink">
@@ -159,7 +158,7 @@ function HomeContent() {
       </div>
 
       <FloatRegionOrInline region="accessory">
-        <div class="mx-auto w-full max-w-3xl shrink-0 px-4 pb-3 pointer-events-auto mobile:px-(--mobile-chrome-gutter) mobile:pb-0">
+        <div class="mx-auto w-full max-w-3xl shrink-0 px-4 pb-3 pointer-events-auto touch:px-(--mobile-chrome-gutter) touch:pb-0">
           <HomeChatInput />
         </div>
       </FloatRegionOrInline>
@@ -168,18 +167,16 @@ function HomeContent() {
 }
 
 const HomeChatInput = () => {
-  const analytics = useAnalytics();
   const splitPanelContext = useSplitPanelOrThrow();
   const input = useChatInputContext();
 
   const { getAttachmentFromMention } = useGetChatAttachmentInfo();
-
   const editor = buildChatEditor().withMentions({
     onCreate: (mention) => {
-      analytics.track('mentions_menu_use', { itemType: 'chat' });
       const attachment = getAttachmentFromMention(mention);
       if (attachment) input.attachments.addAttachment(attachment);
     },
+    onRemove: (mention) => input.attachments.removeAttachment(mention.itemId),
     block: 'chat',
     showOpenTabs: true,
   });

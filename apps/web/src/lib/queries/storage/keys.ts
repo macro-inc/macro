@@ -87,6 +87,12 @@ export const taskSimilaritySearchKeys = createQueryKeys(
   }
 );
 
+export const teamTaskKeys = createQueryKeys('teamTask', {
+  bySlug: (slug: string) => ({
+    queryKey: [slug],
+  }),
+});
+
 export const instructionsMdKeys = createQueryKeys('instructionsMd', {
   id: null,
   text: (id: string) => ({

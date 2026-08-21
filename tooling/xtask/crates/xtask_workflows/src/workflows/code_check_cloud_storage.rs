@@ -2,8 +2,9 @@
 //! workspace on pull requests. Generated into `code-check-cloud-storage.yml`.
 //!
 //! Ported from the hand-written workflow, with two infra changes: the runners
-//! moved to Namespace profiles, and sccache moved off the S3 bucket onto a
-//! persisted Namespace cache volume (so there are no AWS credentials anywhere).
+//! moved to Namespace profiles, and compiled objects moved off the S3/local
+//! volume backends onto Namespace's official remote sccache (so there are no
+//! AWS credentials anywhere).
 
 use gh_workflow::{
     Container, Env, Event, Expression, Job, Port, PullRequest, PullRequestType, Run, Step, Workflow,
@@ -69,11 +70,12 @@ fn check() -> Job {
         .add_step(steps::mount_cache_volume())
         .add_step(steps::setup_nix())
         .add_step(steps::setup_dev_shell())
-        .add_step(steps::pin_sccache_dir())
+        .add_step(steps::configure_namespace_sccache(vars::CI_SCCACHE_NAME))
         .add_step(validate_doppler_configs())
         .add_step(cargo_fmt())
         .add_step(cargo_clippy())
         .add_step(steps::show_sccache_stats())
+        .add_step(steps::teardown_nix())
 }
 
 /// cargo nextest against postgres + redis service containers.
@@ -92,11 +94,12 @@ fn test() -> Job {
         .add_step(steps::mount_cache_volume())
         .add_step(steps::setup_nix())
         .add_step(steps::setup_dev_shell())
-        .add_step(steps::pin_sccache_dir())
+        .add_step(steps::configure_namespace_sccache(vars::CI_SCCACHE_NAME))
         .add_step(configure_postgres())
         .add_step(prepare_tests())
         .add_step(run_tests())
         .add_step(steps::show_sccache_stats())
+        .add_step(steps::teardown_nix())
 }
 
 /// Always-run collector used as the required status check. Its name must stay
@@ -144,7 +147,9 @@ fn paths_filter() -> Step<gh_workflow::Use> {
                   - 'static_assets/**'
                   - 'flake.nix'
                   - 'flake.lock'
-                  - '.github/actions/setup-cachix/**'
+                  - '.github/actions/setup-nix/**'
+                  - '.github/actions/setup-nix-dev-shell/**'
+                  - '.github/actions/teardown-nix/**'
                   - '.github/actions/setup-sccache/**'
                   - '.github/services-config.json'
                   - '.github/scripts/build-cloud-storage-lambdas.sh'
@@ -186,9 +191,9 @@ fn compute_nextest_filter() -> Step<Run> {
         .shell("bash")
 }
 
-/// Build and run the Doppler config binaries affected by this PR. (sccache is
-/// local now, so this no longer needs AWS credentials — only the assertion that
-/// `RUSTC_WRAPPER` is wired stays.)
+/// Build and run the Doppler config binaries affected by this PR. Namespace's
+/// remote sccache needs no AWS credentials; only the assertion that
+/// `RUSTC_WRAPPER` is wired stays.
 fn validate_doppler_configs() -> Step<Run> {
     Step::new("validate Doppler configs")
         .run(include_str!("scripts/validate_doppler_configs.sh"))
@@ -207,13 +212,11 @@ fn cargo_fmt() -> Step<Run> {
     Step::new("fmt").run("cargo fmt --check")
 }
 
-/// `cargo clippy` (no AWS creds — sccache is local).
+/// `cargo clippy` (no AWS credentials; sccache uses Namespace's remote cache).
 fn cargo_clippy() -> Step<Run> {
     Step::new("clippy").run(indoc::indoc! {r#"
         cargo clippy --workspace --all-features \
-          --exclude sync_service \
-          --exclude test_build_full_pdf_modification_data \
-          --exclude test_pdf_modification_data_deserialize
+          --exclude sync_service
         # sync-service has mutually exclusive storage features, so lint its
         # supported default feature set separately. These two existing lints
         # predate its inclusion in the root workspace.
@@ -226,7 +229,7 @@ fn cargo_clippy() -> Step<Run> {
 /// pgvector service container, tuned env preserved.
 fn postgres_service() -> Container {
     Container::default()
-        .image("pgvector/pgvector:pg16")
+        .image("pgvector/pgvector:pg18")
         .env(
             Env::new("POSTGRES_USER", "user")
                 .add("POSTGRES_PASSWORD", "password")
@@ -261,7 +264,7 @@ fn prepare_tests() -> Step<Run> {
     Step::new("prepare tests").run("just setup_test_envs && just initialize_dbs")
 }
 
-/// Run the test suite (no AWS creds — sccache is local).
+/// Run the test suite (no AWS credentials; sccache uses Namespace's remote cache).
 fn run_tests() -> Step<Run> {
     Step::new("run tests").run(include_str!("scripts/run_tests.sh"))
 }

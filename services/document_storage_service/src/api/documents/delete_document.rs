@@ -1,6 +1,7 @@
 use crate::api::context::ApiContext;
-use crate::api::context::EntityAccessService;
+use crate::api::context::{AuthorizationService, EntityAccessService};
 use crate::api::util::count_occurrences;
+use crate::service::document_event_publisher::publish_document_purged_event;
 use axum::Json;
 use axum::extract::State;
 use axum::response::Response;
@@ -8,14 +9,13 @@ use axum::{Extension, extract::Path, http::StatusCode, response::IntoResponse};
 use entity_access::inbound::axum_extractors::DocumentAccessExtractor;
 #[allow(unused_imports)]
 use futures::stream::TryStreamExt;
+use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
 use model::document::DocumentBasic;
 use model::response::{
     ErrorResponse, GenericErrorResponse, GenericResponse, GenericSuccessResponse, SuccessResponse,
 };
-use model::user::UserContext;
 use models_permissions::share_permission::access_level::OwnerAccessLevel;
 use serde::Deserialize;
-use sqs_client::search::{SearchQueueMessage, document::DocumentId};
 
 #[derive(Deserialize)]
 pub struct Params {
@@ -38,11 +38,11 @@ pub struct Params {
             (status = 500, body=GenericErrorResponse),
         )
     )]
-#[tracing::instrument(skip(state, user_context, _access), fields(user_id=?user_context.user_id))]
+#[tracing::instrument(skip(state, user, _access), fields(user_id=?user.authorization.user.macro_user_id))]
 pub async fn permanently_delete_document_handler(
-    _access: DocumentAccessExtractor<OwnerAccessLevel, EntityAccessService>,
+    _access: DocumentAccessExtractor<OwnerAccessLevel, EntityAccessService, AuthorizationService>,
     State(state): State<ApiContext>,
-    user_context: Extension<UserContext>,
+    user: MacroAuthorizationExtractor<AuthorizationService, UserOrInternal>,
     document_context: Extension<DocumentBasic>,
     Path(Params { document_id }): Path<Params>,
 ) -> Result<Response, Response> {
@@ -130,22 +130,16 @@ pub async fn permanently_delete_document_handler(
                 .into_response()
         })?;
 
-    state
-        .sqs_client
-        .send_message_to_search_event_queue(SearchQueueMessage::RemoveDocument(DocumentId {
-            document_id,
-        }))
-        .await
-        .map_err(|e| {
-            tracing::error!(error=?e, "unable to send message to search extractor queue");
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ErrorResponse {
-                    message: "unable to send message to search extractor queue".into(),
-                }),
-            )
-                .into_response()
-        })?;
+    publish_document_purged_event(&state.macro_event_broker, &document_id).map_err(|e| {
+        tracing::error!(error=?e, "unable to publish document purged event");
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ErrorResponse {
+                message: "unable to publish document purged event".into(),
+            }),
+        )
+            .into_response()
+    })?;
 
     let response_data = GenericSuccessResponse { success: true };
 

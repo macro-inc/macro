@@ -56,7 +56,6 @@ export function createQueryPersistenceScopes(
             store: createPerQueryIDBStore({
               dbName: createPersistenceKey('user-info', 1),
             }),
-            maxAge: { value: 7, unit: 'd' },
             buster,
             shouldPersist: (queryKey: QueryKey) =>
               partialMatchKey(queryKey, authKeys.userInfo.queryKey),

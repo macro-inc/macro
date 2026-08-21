@@ -1,10 +1,11 @@
 use macro_user_id::user_id::MacroUserIdStr;
+use model_entity::Entity;
 use models_pagination::{CreatedAt, Query};
 use notification::domain::models::TaggedContent;
-use notification::domain::models::request::{NotificationEntityRef, NotificationListFilters};
+use notification::domain::models::request::NotificationListFilters;
 use notification::domain::models::{
-    DeviceEndpoint, NotificationIdAndCollapseKey, NotificationStatusPatch,
-    SendNotificationRequestBuilder, UserNotificationRow, device::DeviceType,
+    DeviceEndpoint, NotificationIdAndCollapseKey, SendNotificationRequestBuilder,
+    UserNotificationRow, device::DeviceType,
 };
 use notification::domain::ports::NotificationRepository;
 use notification::outbound::repository::DbNotificationRepository;
@@ -89,8 +90,7 @@ impl NotificationRepository for SandboxNotificationRepository {
         &self,
         user_id: MacroUserIdStr<'_>,
         notification_ids: &[Uuid],
-    ) -> Result<Vec<notification::domain::models::PatchDelete<Uuid, NotificationStatusPatch>>, Report>
-    {
+    ) -> Result<Vec<UserNotificationRow<serde_json::Value>>, Report> {
         self.inner
             .mark_notifications_seen(user_id, notification_ids)
             .await
@@ -101,10 +101,19 @@ impl NotificationRepository for SandboxNotificationRepository {
         user_id: &MacroUserIdStr<'_>,
         notification_ids: &[Uuid],
         done: bool,
-    ) -> Result<Vec<notification::domain::models::PatchDelete<Uuid, NotificationStatusPatch>>, Report>
-    {
+    ) -> Result<Vec<UserNotificationRow<serde_json::Value>>, Report> {
         self.inner
             .mark_notifications_done(user_id, notification_ids, done)
+            .await
+    }
+
+    async fn get_notification_ids_for_entities(
+        &self,
+        user_id: MacroUserIdStr<'_>,
+        entities: &[Entity<'_>],
+    ) -> Result<Vec<Uuid>, Report> {
+        self.inner
+            .get_notification_ids_for_entities(user_id, entities)
             .await
     }
 
@@ -159,11 +168,10 @@ impl NotificationRepository for SandboxNotificationRepository {
     async fn get_entity_notifications_batch(
         &self,
         user_id: MacroUserIdStr<'_>,
-        entity_refs: Vec<NotificationEntityRef>,
-    ) -> Result<HashMap<NotificationEntityRef, Vec<UserNotificationRow<serde_json::Value>>>, Report>
-    {
+        entities: Vec<Entity<'static>>,
+    ) -> Result<HashMap<Entity<'static>, Vec<UserNotificationRow<serde_json::Value>>>, Report> {
         self.inner
-            .get_entity_notifications_batch(user_id, entity_refs)
+            .get_entity_notifications_batch(user_id, entities)
             .await
     }
 
@@ -204,8 +212,14 @@ impl NotificationRepository for SandboxNotificationRepository {
         self.inner.delete_all_user_notifications(user_id).await
     }
 
-    async fn get_device_endpoint(&self, device_token: &str) -> Result<Option<String>, Report> {
-        self.inner.get_device_endpoint(device_token).await
+    async fn get_device_endpoint(
+        &self,
+        device_token: &str,
+        device_type: &DeviceType,
+    ) -> Result<Option<String>, Report> {
+        self.inner
+            .get_device_endpoint(device_token, device_type)
+            .await
     }
 
     async fn upsert_device(
@@ -220,13 +234,25 @@ impl NotificationRepository for SandboxNotificationRepository {
             .await
     }
 
-    async fn delete_device_by_token(
+    async fn delete_user_devices_by_token(
+        &self,
+        user_id: MacroUserIdStr<'_>,
+        device_token: &str,
+        device_type: &DeviceType,
+    ) -> Result<Vec<String>, Report> {
+        self.inner
+            .delete_user_devices_by_token(user_id, device_token, device_type)
+            .await
+    }
+
+    async fn delete_stale_devices_by_token(
         &self,
         device_token: &str,
         device_type: &DeviceType,
-    ) -> Result<String, Report> {
+        active_endpoint: &str,
+    ) -> Result<Vec<String>, Report> {
         self.inner
-            .delete_device_by_token(device_token, device_type)
+            .delete_stale_devices_by_token(device_token, device_type, active_endpoint)
             .await
     }
 

@@ -870,6 +870,10 @@ export function CanvasController(props: ParentProps) {
     // CRM companies/contacts aren't renderable as canvas mentions.
     if (entityType === 'crm_company') return;
     if (entityType === 'crm_contact') return;
+    // Nor are reminders — they have no canvas representation.
+    if (entityType === 'reminder') return;
+    // Nor are calendar events.
+    if (entityType === 'calendar_event') return;
 
     // Track document mention and get UUID
     let mentionUuid: string | undefined;
@@ -992,10 +996,7 @@ export function CanvasController(props: ParentProps) {
       use:droppable={!isDisabled()}
       use:observedSize={{ setSize: setDomRect }}
       // SCUFFED THEMING? The color-mix below is a little rough, not necessarily ideal
-      class={cn(
-        'relative size-full overflow-hidden z-0 bg-[oklch(from_color-mix(in_oklch,var(--color-surface)_75%,var(--color-ink)_25%)_l_0_var(--surface-h))]',
-        cursor()
-      )}
+      class={cn('relative size-full overflow-hidden z-0', cursor())}
       use:fileDrop={{
         disabled: isDisabled(),
         acceptedMimeTypes: acceptedMimeTypes,

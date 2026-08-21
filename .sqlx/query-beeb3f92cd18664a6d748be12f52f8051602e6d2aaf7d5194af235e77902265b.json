@@ -1,0 +1,35 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        WITH requested_ids AS (\n            SELECT DISTINCT id\n            FROM UNNEST($2::text[]) AS requested(id)\n        )\n        SELECT\n            req.id as \"user_profile_id!\",\n            CASE\n                WHEN NULLIF(mui.first_name, 'N/A') IS NOT NULL\n                  OR NULLIF(mui.last_name, 'N/A') IS NOT NULL\n                THEN NULLIF(mui.first_name, 'N/A')\n                ELSE SPLIT_PART(contact.name, ' ', 1)\n            END as \"first_name\",\n            CASE\n                WHEN NULLIF(mui.first_name, 'N/A') IS NOT NULL\n                  OR NULLIF(mui.last_name, 'N/A') IS NOT NULL\n                THEN NULLIF(mui.last_name, 'N/A')\n                ELSE CASE\n                    WHEN POSITION(' ' IN contact.name) > 0\n                    THEN NULLIF(TRIM(SUBSTRING(contact.name FROM POSITION(' ' IN contact.name) + 1)), '')\n                    ELSE NULL\n                END\n            END as \"last_name\"\n        FROM requested_ids req\n        LEFT JOIN \"User\" u ON u.id = req.id\n        LEFT JOIN macro_user_info mui ON mui.macro_user_id = u.macro_user_id\n        LEFT JOIN LATERAL (\n            SELECT ec.name\n            FROM email_links li\n            JOIN email_contacts ec\n                ON ec.link_id = li.id\n                AND ec.email_address = REPLACE(req.id, 'macro|', '')\n                AND ec.name IS NOT NULL\n            WHERE li.macro_id = $1\n              AND NULLIF(mui.first_name, 'N/A') IS NULL\n              AND NULLIF(mui.last_name, 'N/A') IS NULL\n            LIMIT 1\n        ) contact ON TRUE\n        WHERE u.id IS NOT NULL OR contact.name IS NOT NULL\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "user_profile_id!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "first_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "last_name",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "beeb3f92cd18664a6d748be12f52f8051602e6d2aaf7d5194af235e77902265b"
+}

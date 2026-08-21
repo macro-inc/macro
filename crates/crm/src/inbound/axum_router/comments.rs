@@ -14,9 +14,13 @@ use axum::{
     extract::{Path, State},
 };
 use entity_access::{
-    domain::{models::ViewAccessLevel, ports::EntityAccessService},
+    domain::{
+        models::{TeamRole, ViewAccessLevel},
+        ports::EntityAccessService,
+    },
     inbound::axum_extractors::EntityPermissionExtractor,
 };
+use macro_authorization::MacroAuthorizationService;
 use model_error_response::ErrorResponse;
 use serde::Deserialize;
 use serde_json::Value;
@@ -80,13 +84,17 @@ pub struct EditCrmCommentRequest {
     ),
 )]
 #[tracing::instrument(skip_all, err, fields(entity_id = %entity_id))]
-pub async fn list_handler<C: CrmService, Eas: EntityAccessService>(
-    access: EntityPermissionExtractor<Eas>,
-    State(state): State<CrmRouterState<C, Eas>>,
+pub async fn list_handler<
+    C: CrmService,
+    Eas: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
+    access: EntityPermissionExtractor<Eas, Auth>,
+    State(state): State<CrmRouterState<C, Eas, Auth>>,
     Path((_entity_type, entity_id)): Path<(CrmCommentEntityType, Uuid)>,
 ) -> Result<Json<Vec<CrmCommentThread>>, CrmError> {
-    let team_id = owning_team_for_entity(&state, &access).await?;
-    let receipt = CrmCommentReceipt::new(access.entity_access_receipt, team_id)?;
+    let (team_id, team_role) = owning_team_for_entity(&state, &access).await?;
+    let receipt = CrmCommentReceipt::new(access.entity_access_receipt, team_id, team_role)?;
 
     let threads = state.service.get_crm_comment_threads(&receipt).await?;
 
@@ -114,13 +122,17 @@ pub async fn list_handler<C: CrmService, Eas: EntityAccessService>(
     ),
 )]
 #[tracing::instrument(skip_all, err, fields(entity_id = %entity_id))]
-pub async fn create_handler<C: CrmService, Eas: EntityAccessService>(
-    access: EntityPermissionExtractor<Eas>,
-    State(state): State<CrmRouterState<C, Eas>>,
+pub async fn create_handler<
+    C: CrmService,
+    Eas: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
+    access: EntityPermissionExtractor<Eas, Auth>,
+    State(state): State<CrmRouterState<C, Eas, Auth>>,
     Path((_entity_type, entity_id)): Path<(CrmCommentEntityType, Uuid)>,
     Json(req): Json<CreateCrmCommentRequest>,
 ) -> Result<Json<CrmCommentThread>, CrmError> {
-    let team_id = owning_team_for_entity(&state, &access).await?;
+    let (team_id, team_role) = owning_team_for_entity(&state, &access).await?;
 
     let text = req.text.trim();
     if text.is_empty() {
@@ -129,7 +141,7 @@ pub async fn create_handler<C: CrmService, Eas: EntityAccessService>(
         ));
     }
 
-    let receipt = CrmCommentReceipt::new(access.entity_access_receipt, team_id)?;
+    let receipt = CrmCommentReceipt::new(access.entity_access_receipt, team_id, team_role)?;
     let owner = receipt
         .receipt()
         .get_authenticated_user()
@@ -168,9 +180,13 @@ pub async fn create_handler<C: CrmService, Eas: EntityAccessService>(
     ),
 )]
 #[tracing::instrument(skip_all, err, fields(comment_id = %comment_id))]
-pub async fn edit_handler<C: CrmService, Eas: EntityAccessService>(
-    access: CrmCommentAccessLevelExtractor<ViewAccessLevel, C, Eas>,
-    State(state): State<CrmRouterState<C, Eas>>,
+pub async fn edit_handler<
+    C: CrmService,
+    Eas: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
+    access: CrmCommentAccessLevelExtractor<ViewAccessLevel, C, Eas, Auth>,
+    State(state): State<CrmRouterState<C, Eas, Auth>>,
     Path(comment_id): Path<Uuid>,
     Json(req): Json<EditCrmCommentRequest>,
 ) -> Result<Json<CrmComment>, CrmError> {
@@ -207,9 +223,13 @@ pub async fn edit_handler<C: CrmService, Eas: EntityAccessService>(
     ),
 )]
 #[tracing::instrument(skip_all, err, fields(comment_id = %comment_id))]
-pub async fn delete_handler<C: CrmService, Eas: EntityAccessService>(
-    access: CrmCommentAccessLevelExtractor<ViewAccessLevel, C, Eas>,
-    State(state): State<CrmRouterState<C, Eas>>,
+pub async fn delete_handler<
+    C: CrmService,
+    Eas: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
+    access: CrmCommentAccessLevelExtractor<ViewAccessLevel, C, Eas, Auth>,
+    State(state): State<CrmRouterState<C, Eas, Auth>>,
     Path(comment_id): Path<Uuid>,
 ) -> Result<Json<DeleteCrmCommentResult>, CrmError> {
     let result = state
@@ -220,21 +240,26 @@ pub async fn delete_handler<C: CrmService, Eas: EntityAccessService>(
     Ok(Json(result))
 }
 
-/// Resolve the owning team of the entity the comment hangs off, derived from
-/// the same ownership lookup that grants access — not the caller's default
-/// team — so the bundled team can't drift from the authorized entity.
-/// `EntityPermissionExtractor` already validated access on that entity, so a
-/// failure here means corrupted state rather than a real authorization miss.
-async fn owning_team_for_entity<C: CrmService, Eas: EntityAccessService>(
-    state: &CrmRouterState<C, Eas>,
-    access: &EntityPermissionExtractor<Eas>,
-) -> Result<Uuid, CrmError> {
+/// Resolve the owning team of the entity the comment hangs off — and the
+/// caller's role on it — derived from the same ownership lookup that grants
+/// access, not the caller's default team, so the bundled team can't drift
+/// from the authorized entity. `EntityPermissionExtractor` already validated
+/// access on that entity, so a failure here means corrupted state rather
+/// than a real authorization miss.
+async fn owning_team_for_entity<
+    C: CrmService,
+    Eas: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
+    state: &CrmRouterState<C, Eas, Auth>,
+    access: &EntityPermissionExtractor<Eas, Auth>,
+) -> Result<(Uuid, TeamRole), CrmError> {
     let user_id = access
         .entity_access_receipt
         .get_authenticated_user()
         .map_err(|e| CrmError::StorageLayerError(e.into()))?;
     let entity = access.entity_access_receipt.entity();
-    let (_permission, team_id) = state
+    let (_permission, team_id, team_role) = state
         .entity_access_service
         .get_crm_entity_permission_with_team(
             Some(&user_id.0),
@@ -243,5 +268,5 @@ async fn owning_team_for_entity<C: CrmService, Eas: EntityAccessService>(
         )
         .await
         .map_err(|e| CrmError::StorageLayerError(anyhow::Error::msg(e.to_string())))?;
-    Ok(team_id)
+    Ok((team_id, team_role))
 }

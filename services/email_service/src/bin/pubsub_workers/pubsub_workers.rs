@@ -1,9 +1,14 @@
 #![recursion_limit = "256"]
 use anyhow::Context;
 use document_storage_service_client::DocumentStorageServiceClient;
+use email_api_client::GmailApiClientRepository;
 use email_service::config::Config;
+use email_service::outbound::email_api::{
+    EmailServiceTokenSource, GmailApi, RateBudget, RedisProviderRateLimiter,
+};
 use email_service::pubsub::CrmMetadataResolver;
-use macro_entrypoint::MacroEntrypoint;
+use email_service::util::redis::RedisClient;
+use macro_entrypoint::{MacroEntrypoint, shutdown_signal};
 use macro_env::Environment;
 use macro_event_broker::{KafkaEventPublisher, MacroEventBrokerService};
 use macro_service_urls::{
@@ -11,10 +16,31 @@ use macro_service_urls::{
 };
 use notification::domain::service::SqsNotificationIngress;
 use notification::outbound::queue::SqsQueue;
+use sqlx::PgPool;
 use sqlx::postgres::PgPoolOptions;
 use static_file_service_client::StaticFileServiceClient;
 use std::sync::Arc;
+use std::time::Duration;
 use system_properties::{PgSystemPropertiesRepository, SystemPropertiesServiceImpl};
+use tokio_util::{sync::CancellationToken, task::TaskTracker};
+
+const EVENT_BROKER_DRAIN_TIMEOUT: Duration = Duration::from_secs(10);
+
+fn compose_email_api(
+    db: PgPool,
+    subscription_topic: String,
+    auth_service_client: authentication_service_client::AuthServiceClient,
+    redis_client: RedisClient,
+    redis_conn: redis::aio::MultiplexedConnection,
+    sqs_client: sqs_client::SQS,
+    rate_budget: RateBudget,
+) -> GmailApi {
+    GmailApi::new(
+        GmailApiClientRepository::from_subscription_topic(subscription_topic),
+        EmailServiceTokenSource::new(db, redis_conn, auth_service_client, sqs_client),
+        RedisProviderRateLimiter::new(redis_client, rate_budget),
+    )
+}
 
 #[tokio::main]
 #[tracing::instrument(err)]
@@ -71,8 +97,8 @@ async fn main() -> anyhow::Result<()> {
     let gmail_inbox_sync_retry_queue = macro_queues::GmailInboxSyncRetryQueue::new();
     let gmail_ops_queue = macro_queues::GmailOpsQueue::new();
     let gmail_ops_retry_queue = macro_queues::GmailOpsRetryQueue::new();
-    let search_event_queue = macro_queues::SearchEventQueue::new();
     let backfill_queue = macro_queues::EmailBackfillQueue::new();
+    let crm_cleanup_queue = macro_queues::EmailCrmCleanupQueue::new();
     let email_scheduled_queue = macro_queues::EmailScheduledQueue::new();
     let sfs_uploader_queue = macro_queues::SfsUploaderQueue::new();
     let sfs_delete_queue = macro_queues::SfsDeleteQueue::new();
@@ -85,16 +111,30 @@ async fn main() -> anyhow::Result<()> {
         .gmail_inbox_sync_retry_queue(&gmail_inbox_sync_retry_queue)
         .gmail_ops_queue(&gmail_ops_queue)
         .gmail_ops_retry_queue(&gmail_ops_retry_queue)
-        .search_event_queue(&search_event_queue)
         .email_backfill_queue(&backfill_queue)
+        .email_crm_cleanup_queue(&crm_cleanup_queue)
         .email_scheduled_queue(&email_scheduled_queue)
         .sfs_uploader_queue(&sfs_uploader_queue)
         .sfs_delete_queue(&sfs_delete_queue)
         .email_link_manager_queue(&link_manager_queue);
 
+    let worker_cancellation_token = CancellationToken::new();
+    let worker_tracker = TaskTracker::new();
+    let event_broker_tracker = TaskTracker::new();
+
+    worker_tracker.spawn(email_service::calendar_outbox::run(
+        db.clone(),
+        sqs_client.clone(),
+        calendar_events::domain::service::GoogleCalendarSyncScheduler::new(
+            calendar_events::outbound::pg::PgCalendarRepository::new(db.clone()),
+        ),
+        config.calendar_sync_enabled,
+        worker_cancellation_token.clone(),
+    ));
     let macro_event_broker = MacroEventBrokerService::new(
         KafkaEventPublisher::new(config.kafka_brokers.as_ref())
             .context("failed to create kafka event publisher")?,
+        event_broker_tracker.clone(),
     );
 
     let contacts_ingress = Arc::new(contacts::domain::service::SqsContactsIngress {
@@ -118,6 +158,7 @@ async fn main() -> anyhow::Result<()> {
         config.queue_wait_time_seconds,
     );
 
+    #[cfg(feature = "sfs_map")]
     let sfs_uploader_workers = (0..config.sfs_uploader_workers)
         .map(|_| {
             sqs_worker::SQSWorker::new(
@@ -129,6 +170,7 @@ async fn main() -> anyhow::Result<()> {
         })
         .collect::<Vec<_>>();
 
+    #[cfg(feature = "sfs_delete")]
     let sfs_delete_worker = sqs_worker::SQSWorker::new(
         aws_sdk_sqs::Client::new(&gmail_queue_aws_config),
         sfs_delete_queue.to_string(),
@@ -142,6 +184,17 @@ async fn main() -> anyhow::Result<()> {
                 aws_sdk_sqs::Client::new(&gmail_queue_aws_config),
                 backfill_queue.to_string(),
                 config.backfill_queue_max_messages,
+                config.queue_wait_time_seconds,
+            )
+        })
+        .collect::<Vec<_>>();
+
+    let crm_cleanup_workers = (0..config.crm_cleanup_queue_workers)
+        .map(|_| {
+            sqs_worker::SQSWorker::new(
+                aws_sdk_sqs::Client::new(&gmail_queue_aws_config),
+                crm_cleanup_queue.to_string(),
+                config.crm_cleanup_queue_max_messages,
                 config.queue_wait_time_seconds,
             )
         })
@@ -199,8 +252,6 @@ async fn main() -> anyhow::Result<()> {
         AuthServiceUrl::new()?.to_string(),
     );
 
-    let gmail_client = gmail_client::GmailClient::new(config.gmail_gcp_queue.to_string());
-
     let redis_inner_client = redis::Client::open(config.redis_uri.as_ref())
         .inspect(|client| {
             client
@@ -221,11 +272,38 @@ async fn main() -> anyhow::Result<()> {
         queue: ingress_queue,
     });
 
-    let redis_client = email_service::util::redis::RedisClient::new(
+    let redis_client = RedisClient::new(
         redis_inner_client,
         config.redis_rate_limit_reqs,
         config.redis_rate_limit_reqs_backfill,
         config.redis_rate_limit_window_secs,
+    );
+
+    // One long-lived multiplexed connection shared by both token sources;
+    // cloning it is an Arc bump, not a new TCP dial per provider call.
+    let redis_conn = redis_client
+        .inner
+        .get_multiplexed_async_connection()
+        .await
+        .context("failed to get multiplexed redis connection for token sources")?;
+
+    let email_api_live = compose_email_api(
+        db.clone(),
+        config.gmail_gcp_queue.to_string(),
+        auth_service_client.clone(),
+        redis_client.clone(),
+        redis_conn.clone(),
+        sqs_client.clone(),
+        RateBudget::Live,
+    );
+    let email_api_backfill = compose_email_api(
+        db_backfill.clone(),
+        config.gmail_gcp_queue.to_string(),
+        auth_service_client.clone(),
+        redis_client.clone(),
+        redis_conn,
+        sqs_client.clone(),
+        RateBudget::Backfill,
     );
 
     let sfs_client = StaticFileServiceClient::new(
@@ -300,8 +378,7 @@ async fn main() -> anyhow::Result<()> {
         let db_inbox_sync = db.clone();
         let sqs_client_inbox_sync = sqs_client.clone();
         let contacts_ingress_inbox_sync = contacts_ingress.clone();
-        let gmail_client_inbox_sync = gmail_client.clone();
-        let auth_service_client_inbox_sync = auth_service_client.clone();
+        let email_api_inbox_sync = email_api_live.clone();
         let redis_client_inbox_sync = redis_client.clone();
         let notification_ingress_service_inbox_sync = notification_ingress_service.clone();
         let sfs_client_inbox_sync = sfs_client.clone();
@@ -310,14 +387,14 @@ async fn main() -> anyhow::Result<()> {
         let system_properties_service_inbox_sync = system_properties_service.clone();
         let crm_service_inbox_sync = crm_service.clone();
         let macro_event_broker_inbox_sync = macro_event_broker.clone();
-        tokio::spawn(async move {
-            email_service::pubsub::inbox_sync::worker::run_worker(
+        let cancellation_token = worker_cancellation_token.clone();
+        worker_tracker.spawn(async move {
+            email_service::pubsub::inbox_sync::worker::run_worker_with_cancellation(
                 db_inbox_sync,
                 worker,
                 sqs_client_inbox_sync,
                 contacts_ingress_inbox_sync,
-                gmail_client_inbox_sync,
-                auth_service_client_inbox_sync,
+                email_api_inbox_sync,
                 redis_client_inbox_sync,
                 notification_ingress_service_inbox_sync,
                 sfs_client_inbox_sync,
@@ -327,7 +404,9 @@ async fn main() -> anyhow::Result<()> {
                 crm_service_inbox_sync,
                 macro_event_broker_inbox_sync,
                 config.notifications_enabled,
+                config.calendar_sync_enabled,
                 false,
+                cancellation_token,
             )
             .await;
         });
@@ -342,8 +421,7 @@ async fn main() -> anyhow::Result<()> {
         let db_inbox_sync = db.clone();
         let sqs_client_inbox_sync = sqs_client.clone();
         let contacts_ingress_inbox_sync = contacts_ingress.clone();
-        let gmail_client_inbox_sync = gmail_client.clone();
-        let auth_service_client_inbox_sync = auth_service_client.clone();
+        let email_api_inbox_sync = email_api_live.clone();
         let redis_client_inbox_sync = redis_client.clone();
         let notification_ingress_service_inbox_sync = notification_ingress_service.clone();
         let sfs_client_inbox_sync = sfs_client.clone();
@@ -352,14 +430,14 @@ async fn main() -> anyhow::Result<()> {
         let system_properties_service_inbox_sync = system_properties_service.clone();
         let crm_service_inbox_sync = crm_service.clone();
         let macro_event_broker_inbox_sync = macro_event_broker.clone();
-        tokio::spawn(async move {
-            email_service::pubsub::inbox_sync::worker::run_worker(
+        let cancellation_token = worker_cancellation_token.clone();
+        worker_tracker.spawn(async move {
+            email_service::pubsub::inbox_sync::worker::run_worker_with_cancellation(
                 db_inbox_sync,
                 worker,
                 sqs_client_inbox_sync,
                 contacts_ingress_inbox_sync,
-                gmail_client_inbox_sync,
-                auth_service_client_inbox_sync,
+                email_api_inbox_sync,
                 redis_client_inbox_sync,
                 notification_ingress_service_inbox_sync,
                 sfs_client_inbox_sync,
@@ -369,7 +447,9 @@ async fn main() -> anyhow::Result<()> {
                 crm_service_inbox_sync,
                 macro_event_broker_inbox_sync,
                 config.notifications_enabled,
+                config.calendar_sync_enabled,
                 true,
+                cancellation_token,
             )
             .await;
         });
@@ -383,18 +463,16 @@ async fn main() -> anyhow::Result<()> {
     for worker in gmail_ops_workers {
         let db_gmail_ops = db.clone();
         let sqs_client_gmail_ops = sqs_client.clone();
-        let gmail_client_gmail_ops = gmail_client.clone();
-        let auth_service_client_gmail_ops = auth_service_client.clone();
-        let redis_client_gmail_ops = redis_client.clone();
-        tokio::spawn(async move {
-            email_service::pubsub::gmail_ops::worker::run_worker(
+        let email_api_gmail_ops = email_api_live.clone();
+        let cancellation_token = worker_cancellation_token.clone();
+        worker_tracker.spawn(async move {
+            email_service::pubsub::gmail_ops::worker::run_worker_with_cancellation(
                 db_gmail_ops,
                 worker,
                 sqs_client_gmail_ops,
-                gmail_client_gmail_ops,
-                auth_service_client_gmail_ops,
-                redis_client_gmail_ops,
+                email_api_gmail_ops,
                 false,
+                cancellation_token,
             )
             .await;
         });
@@ -408,18 +486,16 @@ async fn main() -> anyhow::Result<()> {
     for worker in gmail_ops_retry_workers {
         let db_gmail_ops = db.clone();
         let sqs_client_gmail_ops = sqs_client.clone();
-        let gmail_client_gmail_ops = gmail_client.clone();
-        let auth_service_client_gmail_ops = auth_service_client.clone();
-        let redis_client_gmail_ops = redis_client.clone();
-        tokio::spawn(async move {
-            email_service::pubsub::gmail_ops::worker::run_worker(
+        let email_api_gmail_ops = email_api_live.clone();
+        let cancellation_token = worker_cancellation_token.clone();
+        worker_tracker.spawn(async move {
+            email_service::pubsub::gmail_ops::worker::run_worker_with_cancellation(
                 db_gmail_ops,
                 worker,
                 sqs_client_gmail_ops,
-                gmail_client_gmail_ops,
-                auth_service_client_gmail_ops,
-                redis_client_gmail_ops,
+                email_api_gmail_ops,
                 true,
+                cancellation_token,
             )
             .await;
         });
@@ -434,8 +510,7 @@ async fn main() -> anyhow::Result<()> {
         let db_backfill = db_backfill.clone();
         let sqs_client_backfill = sqs_client.clone();
         let contacts_ingress_backfill = contacts_ingress.clone();
-        let gmail_client_backfill = gmail_client.clone();
-        let auth_service_client_backfill = auth_service_client.clone();
+        let email_api_backfill = email_api_backfill.clone();
         let redis_client_backfill = redis_client.clone();
         let notification_ingress_service_backfill = notification_ingress_service.clone();
         let sfs_client_backfill = sfs_client.clone();
@@ -444,14 +519,14 @@ async fn main() -> anyhow::Result<()> {
         let system_properties_service_backfill = system_properties_service.clone();
         let crm_service_backfill = crm_service_backfill.clone();
         let macro_event_broker_backfill = macro_event_broker.clone();
-        tokio::spawn(async move {
-            email_service::pubsub::backfill::worker::run_worker(
+        let cancellation_token = worker_cancellation_token.clone();
+        worker_tracker.spawn(async move {
+            email_service::pubsub::backfill::worker::run_worker_with_cancellation(
                 db_backfill,
                 worker,
                 sqs_client_backfill,
                 contacts_ingress_backfill,
-                gmail_client_backfill,
-                auth_service_client_backfill,
+                email_api_backfill,
                 redis_client_backfill,
                 notification_ingress_service_backfill,
                 sfs_client_backfill,
@@ -461,6 +536,8 @@ async fn main() -> anyhow::Result<()> {
                 crm_service_backfill,
                 macro_event_broker_backfill,
                 config.notifications_enabled,
+                config.calendar_sync_enabled,
+                cancellation_token,
             )
             .await;
         });
@@ -470,8 +547,31 @@ async fn main() -> anyhow::Result<()> {
         "backfill workers started"
     );
 
+    // nightly crm cleanup: pages crm_cleanup_candidates and depopulates
+    // contacts whose links no longer have messages with them
+    for worker in crm_cleanup_workers {
+        let db_crm_cleanup = db_backfill.clone();
+        let sqs_client_crm_cleanup = sqs_client.clone();
+        let crm_service_crm_cleanup = crm_service_backfill.clone();
+        let cancellation_token = worker_cancellation_token.clone();
+        worker_tracker.spawn(async move {
+            email_service::pubsub::crm_cleanup::worker::run_worker_with_cancellation(
+                db_crm_cleanup,
+                worker,
+                sqs_client_crm_cleanup,
+                crm_service_crm_cleanup,
+                cancellation_token,
+            )
+            .await;
+        });
+    }
+    tracing::info!(
+        num_workers = config.crm_cleanup_queue_workers,
+        "crm cleanup workers started"
+    );
+
     let db_link_manager = db.clone();
-    let gmail_client_link_manager = gmail_client.clone();
+    let email_api_link_manager = email_api_live.clone();
     let auth_service_client_link_manager = auth_service_client.clone();
     let redis_client_link_manager = redis_client.clone();
     let sqs_client_link_manager = sqs_client.clone();
@@ -479,12 +579,13 @@ async fn main() -> anyhow::Result<()> {
     let connection_gateway_client_link_manager = connection_gateway_client.clone();
     let notification_ingress_service_link_manager = notification_ingress_service.clone();
     let macro_event_broker_link_manager = macro_event_broker.clone();
+    let cancellation_token = worker_cancellation_token.clone();
     // daily link_manager operations for user contacts and inbox subscriptions
-    tokio::spawn(async move {
-        email_service::pubsub::link_manager::worker::run_worker(
+    worker_tracker.spawn(async move {
+        email_service::pubsub::link_manager::worker::run_worker_with_cancellation(
             link_manager_worker,
             db_link_manager,
-            gmail_client_link_manager,
+            email_api_link_manager,
             auth_service_client_link_manager,
             redis_client_link_manager,
             sqs_client_link_manager,
@@ -492,44 +593,46 @@ async fn main() -> anyhow::Result<()> {
             connection_gateway_client_link_manager,
             notification_ingress_service_link_manager,
             macro_event_broker_link_manager,
+            cancellation_token,
         )
         .await;
     });
 
     let db_scheduled = db.clone();
-    let gmail_client_scheduled = gmail_client.clone();
-    let auth_service_client_scheduled = auth_service_client.clone();
-    let redis_client_scheduled = redis_client.clone();
+    let email_api_scheduled = email_api_live;
     let s3_client_scheduled = s3_client.clone();
     let attachment_bucket_scheduled = config.attachment_bucket.to_string();
     let macro_event_broker_scheduled = macro_event_broker.clone();
+    let cancellation_token = worker_cancellation_token.clone();
     // send scheduled emails
-    tokio::spawn(async move {
-        email_service::pubsub::scheduled::worker::run_worker(
+    worker_tracker.spawn(async move {
+        email_service::pubsub::scheduled::worker::run_worker_with_cancellation(
             scheduled_worker,
             db_scheduled,
-            gmail_client_scheduled,
-            auth_service_client_scheduled,
-            redis_client_scheduled,
+            email_api_scheduled,
             s3_client_scheduled,
             attachment_bucket_scheduled,
             macro_event_broker_scheduled,
+            cancellation_token,
         )
         .await;
     });
 
-    if cfg!(feature = "sfs_map") {
+    #[cfg(feature = "sfs_map")]
+    {
         for worker in sfs_uploader_workers {
             let db_sfs_uploader = db.clone();
             let sfs_client_sfs_uploader = sfs_client.clone();
             let connection_gateway_client_sfs_uploader = connection_gateway_client.clone();
+            let cancellation_token = worker_cancellation_token.clone();
             // upload user contact images to sfs from contact sync
-            tokio::spawn(async move {
-                email_service::pubsub::sfs_uploader::worker::run_worker(
+            worker_tracker.spawn(async move {
+                email_service::pubsub::sfs_uploader::worker::run_worker_with_cancellation(
                     worker,
                     db_sfs_uploader,
                     sfs_client_sfs_uploader,
                     connection_gateway_client_sfs_uploader,
+                    cancellation_token,
                 )
                 .await;
             });
@@ -540,15 +643,18 @@ async fn main() -> anyhow::Result<()> {
         );
     }
 
-    if cfg!(feature = "sfs_delete") {
+    #[cfg(feature = "sfs_delete")]
+    {
         let db_sfs_delete = db.clone();
         let sfs_client_sfs_delete = sfs_client.clone();
+        let cancellation_token = worker_cancellation_token.clone();
         // delete orphaned sfs attachments
-        tokio::spawn(async move {
-            email_service::pubsub::sfs_deleter::worker::run_worker(
+        worker_tracker.spawn(async move {
+            email_service::pubsub::sfs_deleter::worker::run_worker_with_cancellation(
                 sfs_delete_worker,
                 db_sfs_delete,
                 sfs_client_sfs_delete,
+                cancellation_token,
             )
             .await;
         });
@@ -557,18 +663,23 @@ async fn main() -> anyhow::Result<()> {
 
     tracing::info!("All workers started successfully");
 
-    // Wait for shutdown signal (SIGTERM from ECS or SIGINT from Ctrl+C)
-    tokio::select! {
-        _ = tokio::signal::ctrl_c() => {
-            tracing::info!("Received SIGINT (Ctrl+C)");
-        }
-        _ = async {
-            let mut term = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
-                .expect("failed to install SIGTERM handler");
-            term.recv().await
-        } => {
-            tracing::info!("Received SIGTERM");
-        }
+    shutdown_signal().await;
+
+    worker_cancellation_token.cancel();
+    worker_tracker.close();
+    tracing::info!("Waiting for email workers to stop");
+    worker_tracker.wait().await;
+    tracing::info!("Email workers stopped");
+
+    event_broker_tracker.close();
+    tracing::info!("Waiting for event broker publishes to drain");
+    match tokio::time::timeout(EVENT_BROKER_DRAIN_TIMEOUT, event_broker_tracker.wait()).await {
+        Ok(()) => tracing::info!("Event broker publishes drained"),
+        Err(error) => tracing::warn!(
+            error = ?error,
+            timeout_seconds = EVENT_BROKER_DRAIN_TIMEOUT.as_secs(),
+            "Timed out waiting for event broker publishes to drain"
+        ),
     }
 
     tracing::info!("Shutdown signal received, exiting gracefully...");

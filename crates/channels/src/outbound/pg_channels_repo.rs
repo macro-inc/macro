@@ -12,12 +12,12 @@ use crate::domain::{
         ChannelAttachmentType, ChannelContextMessage, ChannelInfo, ChannelListItem, ChannelMessage,
         ChannelMessageFilters, ChannelMessageKind, ChannelMetadata, ChannelParticipant,
         ChannelPreviewRow, ChannelType, ChannelWithParticipants, CountedReaction,
-        CreateChannelRequest, CreateEntityMentionOptions, EntityMention, GetChannelsParams,
-        GetThreadReplyRowsParams, LatestMessage, MessageAttachment, MessagePageDirection,
-        MutatedAttachment, MutatedMessage, NameLookup, NewChannelAttachment, ParticipantRole,
-        PatchChannelRequest, RecentChannelMessage, ResolvedChannelMessage, SimpleMention,
-        ThreadData, ThreadInfo, ThreadReply, ThreadReplyRow, TopLevelMessageRow, UserName,
-        fallback_user_name,
+        CreateChannelRequest, CreateEntityMentionOptions, CreatedChannel, EntityMention,
+        GetChannelsParams, GetThreadReplyRowsParams, LatestMessage, MessageAttachment,
+        MessagePageDirection, MutatedAttachment, MutatedMessage, NameLookup, NewChannelAttachment,
+        ParticipantRole, PatchChannelRequest, RecentChannelMessage, ResolvedChannelMessage,
+        SimpleMention, ThreadData, ThreadInfo, ThreadReply, ThreadReplyRow, TopLevelMessageRow,
+        UserName, fallback_user_name,
     },
     ports::{ChannelRepo, TopLevelMessagesQueryResult},
 };
@@ -39,6 +39,8 @@ use sqlx::{Executor, PgPool, Postgres};
 #[cfg(feature = "list")]
 use sqlx::{QueryBuilder, Row, postgres::PgRow};
 use std::collections::{HashMap, HashSet};
+
+use indexmap::IndexMap;
 use uuid::Uuid;
 
 /// Postgres-backed repository for channels.
@@ -551,38 +553,78 @@ async fn resolve_channel_display_name(
             Ok(info.name.clone().unwrap_or_default())
         }
         ChannelType::Private | ChannelType::DirectMessage => {
-            let participant_ids = load_active_participant_ids(pool, info.id).await?;
-            let name_lookup = load_user_display_names(pool, &participant_ids).await?;
+            let principals = load_active_participant_principals(pool, info.id).await?;
+            let user_ids: Vec<MacroUserIdStr<'static>> = principals
+                .iter()
+                .filter_map(|principal| MacroUserIdStr::try_from(principal.clone()).ok())
+                .collect();
+            let bot_ids: Vec<BotId> = principals
+                .iter()
+                .filter_map(|principal| {
+                    bot_id::BotIdStr::parse_from_str(principal)
+                        .ok()
+                        .map(|id| id.bot_id())
+                })
+                .collect();
+            let name_lookup = load_user_display_names(pool, &user_ids).await?;
+            let bot_name_lookup = load_bot_display_names(pool, &bot_ids).await?;
+            let display_name = |principal: &String| {
+                principal_display_name(principal, &name_lookup, &bot_name_lookup)
+            };
 
             if matches!(info.channel_type, ChannelType::DirectMessage)
-                && participant_ids
+                && principals
                     .iter()
-                    .any(|participant_id| participant_id.as_ref() == viewer_user_id.as_ref())
+                    .any(|principal| principal == viewer_user_id.as_ref())
             {
-                if let Some(other_participant_id) = participant_ids
+                if let Some(name) = principals
                     .iter()
-                    .find(|participant_id| participant_id.as_ref() != viewer_user_id.as_ref())
+                    .filter(|principal| principal.as_str() != viewer_user_id.as_ref())
+                    .find_map(display_name)
                 {
-                    return Ok(id_to_display_name(other_participant_id, &name_lookup));
+                    return Ok(name);
                 }
 
                 tracing::warn!(channel_id=%info.id, "direct message channel has no other participant");
                 return Ok("Unknown".to_string());
             }
 
-            Ok(participant_ids
+            Ok(principals
                 .iter()
-                .map(|participant_id| id_to_display_name(participant_id, &name_lookup))
+                .filter_map(display_name)
                 .collect::<Vec<_>>()
                 .join(", "))
         }
     }
 }
 
-async fn load_active_participant_ids(
+/// Display name for a participant principal: users resolve through the name
+/// lookup, bots through the bot-name lookup (Macro AI is code-defined).
+/// Unrecognized principals yield `None`.
+fn principal_display_name(
+    principal: &str,
+    name_lookup: &NameLookup,
+    bot_name_lookup: &HashMap<BotId, String>,
+) -> Option<String> {
+    if let Ok(user_id) = MacroUserIdStr::try_from(principal.to_string()) {
+        return Some(id_to_display_name(&user_id, name_lookup));
+    }
+    let bot_id = bot_id::BotIdStr::parse_from_str(principal).ok()?.bot_id();
+    if bot_id == bot_id::MACRO_AI_BOT_ID {
+        return Some(bot_id::MACRO_AI_NAME.to_string());
+    }
+    Some(
+        bot_name_lookup
+            .get(&bot_id)
+            .cloned()
+            .unwrap_or_else(|| "Bot".to_string()),
+    )
+}
+
+async fn load_active_participant_principals(
     pool: &PgPool,
     channel_id: Uuid,
-) -> anyhow::Result<Vec<MacroUserIdStr<'static>>> {
+) -> anyhow::Result<Vec<String>> {
     let rows = sqlx::query_as!(
         UserIdRow,
         r#"
@@ -595,9 +637,31 @@ async fn load_active_participant_ids(
     )
     .fetch_all(pool)
     .await?;
-    rows.into_iter()
-        .map(|row| MacroUserIdStr::try_from(row.user_id).map_err(Into::into))
-        .collect()
+    Ok(rows.into_iter().map(|row| row.user_id).collect())
+}
+
+async fn load_bot_display_names(
+    pool: &PgPool,
+    bot_ids: &[BotId],
+) -> anyhow::Result<HashMap<BotId, String>> {
+    if bot_ids.is_empty() {
+        return Ok(HashMap::new());
+    }
+    let uuids: Vec<Uuid> = bot_ids.iter().map(|bot_id| bot_id.as_uuid()).collect();
+    let rows = sqlx::query!(
+        r#"
+        SELECT id, name
+        FROM bots
+        WHERE id = ANY($1) AND deleted_at IS NULL
+        "#,
+        &uuids,
+    )
+    .fetch_all(pool)
+    .await?;
+    Ok(rows
+        .into_iter()
+        .map(|row| (BotId::new_from_uuid(row.id), row.name))
+        .collect())
 }
 
 async fn load_user_display_names(
@@ -667,18 +731,56 @@ fn id_to_display_name(user_id: &MacroUserIdStr<'static>, name_lookup: &NameLooku
 #[cfg(feature = "list")]
 static CHANNEL_LIST_PREFIX: &str = r#"
     WITH user_channels AS (
-        SELECT DISTINCT c.*
+        SELECT c.*
         FROM comms_channels c
         INNER JOIN comms_channel_participants cp ON cp.channel_id = c.id
         WHERE cp.user_id = $1 AND cp.left_at IS NULL
 "#;
 
+/// Candidate set used when the filter mentions [`ChannelLiteral::IsParticipant`]:
+/// channels the user actively participates in, plus team channels of their teams
+/// they have not joined (so `IsParticipant(false)` has rows to match).
+#[cfg(feature = "list")]
+static CHANNEL_LIST_PREFIX_WITH_TEAM_CHANNELS: &str = r#"
+    WITH user_channels AS (
+        SELECT c.*
+        FROM comms_channels c
+        WHERE (
+            EXISTS (
+                SELECT 1
+                FROM comms_channel_participants cp
+                WHERE cp.channel_id = c.id
+                  AND cp.user_id = $1
+                  AND cp.left_at IS NULL
+            )
+            OR (
+                c.channel_type = 'team'
+                AND EXISTS (
+                    SELECT 1
+                    FROM team_user tu
+                    WHERE tu.team_id = c.team_id
+                      AND tu.user_id = $1
+                )
+            )
+        )
+"#;
+
 #[cfg(feature = "list")]
 static CHANNEL_LIST_SELECT: &str = r#"
     ),
+    paged_channels AS (
+        SELECT uc.*
+        FROM user_channels uc
+        WHERE
+            ($4::timestamptz IS NULL)
+            OR
+            ((CASE $2 WHEN 'created_at' THEN uc.created_at ELSE uc.updated_at END), uc.id::text) < ($4, $5)
+        ORDER BY (CASE $2 WHEN 'created_at' THEN uc.created_at ELSE uc.updated_at END) DESC, uc.id::text DESC
+        LIMIT $3
+    ),
     channel_participants_json AS (
         SELECT
-            uc.id as channel_id,
+            pc.id as channel_id,
             ARRAY_AGG(
                 json_build_object(
                     'channel_id', cp.channel_id,
@@ -688,29 +790,32 @@ static CHANNEL_LIST_SELECT: &str = r#"
                     'left_at', cp.left_at
                 )
             ) as participants
-        FROM user_channels uc
-        JOIN comms_channel_participants cp ON cp.channel_id = uc.id
+        FROM paged_channels pc
+        JOIN comms_channel_participants cp ON cp.channel_id = pc.id
         WHERE cp.left_at IS NULL
-        GROUP BY uc.id
+        GROUP BY pc.id
     )
     SELECT
-        uc.id as "id",
-        uc.name as "name",
-        uc.channel_type as "channel_type",
-        uc.org_id as "org_id",
-        uc.team_id as "team_id",
-        uc.created_at as "created_at",
-        uc.updated_at as "updated_at",
-        uc.owner_id as "owner_id",
-        cpj.participants as "participants_json"
-    FROM user_channels uc
-    LEFT JOIN channel_participants_json cpj ON cpj.channel_id = uc.id
-    WHERE
-        ($4::timestamptz IS NULL)
-        OR
-        ((CASE $2 WHEN 'created_at' THEN uc.created_at ELSE uc.updated_at END), uc.id::text) < ($4, $5)
-    ORDER BY (CASE $2 WHEN 'created_at' THEN uc.created_at ELSE uc.updated_at END) DESC, uc.id::text DESC
-    LIMIT $3
+        pc.id as "id",
+        pc.name as "name",
+        pc.channel_type as "channel_type",
+        pc.org_id as "org_id",
+        pc.team_id as "team_id",
+        pc.auto_join_team as "auto_join_team",
+        pc.created_at as "created_at",
+        pc.updated_at as "updated_at",
+        pc.owner_id as "owner_id",
+        cpj.participants as "participants_json",
+        EXISTS (
+            SELECT 1
+            FROM comms_channel_participants cp_active
+            WHERE cp_active.channel_id = pc.id
+              AND cp_active.user_id = $1
+              AND cp_active.left_at IS NULL
+        ) as "is_participant"
+    FROM paged_channels pc
+    LEFT JOIN channel_participants_json cpj ON cpj.channel_id = pc.id
+    ORDER BY (CASE $2 WHEN 'created_at' THEN pc.created_at ELSE pc.updated_at END) DESC, pc.id::text DESC
 "#;
 
 #[cfg(feature = "list")]
@@ -773,6 +878,18 @@ fn build_channel_list_filter(ast: Option<&Expr<ChannelLiteral>>) -> String {
         | filter_ast::ExprFrame::Literal(ChannelLiteral::Sender(_))
         | filter_ast::ExprFrame::Literal(ChannelLiteral::Importance(true)) => String::new(),
         filter_ast::ExprFrame::Literal(ChannelLiteral::Importance(false)) => "1=0".to_string(),
+        filter_ast::ExprFrame::Literal(ChannelLiteral::IsParticipant(is_participant)) => {
+            let negation = if is_participant { "" } else { "NOT " };
+            format!(
+                r#"({negation}EXISTS (
+                    SELECT 1
+                    FROM comms_channel_participants fcp
+                    WHERE fcp.channel_id = c.id
+                      AND fcp.user_id = $1
+                      AND fcp.left_at IS NULL
+                ))"#
+            )
+        }
         filter_ast::ExprFrame::Literal(ChannelLiteral::NotificationDone(done)) => {
             build_channel_notification_exists_clause(
                 "c.id",
@@ -803,11 +920,32 @@ fn build_channel_list_filter(ast: Option<&Expr<ChannelLiteral>>) -> String {
     }
 }
 
+/// Whether the filter mentions [`ChannelLiteral::IsParticipant`] anywhere in the AST.
+#[cfg(feature = "list")]
+fn channel_filter_mentions_participation(expr: &Expr<ChannelLiteral>) -> bool {
+    expr.collapse_frames(|frame: filter_ast::ExprFrame<bool, _>| match frame {
+        filter_ast::ExprFrame::And(a, b) | filter_ast::ExprFrame::Or(a, b) => a || b,
+        filter_ast::ExprFrame::Not(a) => a,
+        filter_ast::ExprFrame::Literal(ChannelLiteral::IsParticipant(_)) => true,
+        filter_ast::ExprFrame::Literal(_) => false,
+    })
+}
+
 #[cfg(feature = "list")]
 fn build_channel_list_query(
     filter_ast: &LiteralTree<ChannelLiteral>,
 ) -> QueryBuilder<'_, Postgres> {
-    let mut builder = QueryBuilder::new(CHANNEL_LIST_PREFIX);
+    // QueryBuilder is required because the channel filter is an AST with arbitrary
+    // AND/OR/NOT shape. Dynamic literals are constrained to parsed domain types.
+    let prefix = if filter_ast
+        .as_deref()
+        .is_some_and(channel_filter_mentions_participation)
+    {
+        CHANNEL_LIST_PREFIX_WITH_TEAM_CHANNELS
+    } else {
+        CHANNEL_LIST_PREFIX
+    };
+    let mut builder = QueryBuilder::new(prefix);
     builder.push(build_channel_list_filter(filter_ast.as_deref()));
     builder.push(CHANNEL_LIST_SELECT);
     builder
@@ -1052,10 +1190,12 @@ struct ChannelListRow {
     channel_type: ChannelType,
     org_id: Option<i64>,
     team_id: Option<Uuid>,
+    auto_join_team: bool,
     created_at: DateTime<Utc>,
     updated_at: DateTime<Utc>,
     owner_id: String,
     participants_json: Option<Vec<serde_json::Value>>,
+    is_participant: bool,
 }
 
 #[cfg(feature = "list")]
@@ -1067,6 +1207,7 @@ impl ChannelListRow {
             channel_type: self.channel_type,
             org_id: self.org_id,
             team_id: self.team_id,
+            auto_join_team: self.auto_join_team,
             created_at: self.created_at,
             updated_at: self.updated_at,
             owner_id: MacroUserIdStr::parse_from_str(&self.owner_id)
@@ -1089,6 +1230,7 @@ impl ChannelListRow {
         Ok(ChannelWithParticipants {
             channel,
             participants,
+            is_participant: self.is_participant,
         })
     }
 }
@@ -1120,10 +1262,12 @@ impl ChannelListRepo for PgChannelsRepo {
                     channel_type: row.try_get("channel_type")?,
                     org_id: row.try_get("org_id")?,
                     team_id: row.try_get("team_id")?,
+                    auto_join_team: row.try_get("auto_join_team")?,
                     created_at: row.try_get("created_at")?,
                     updated_at: row.try_get("updated_at")?,
                     owner_id: row.try_get("owner_id")?,
                     participants_json: row.try_get("participants_json")?,
+                    is_participant: row.try_get("is_participant")?,
                 }
                 .into_channel_with_participants()
             })
@@ -1925,8 +2069,10 @@ impl ChannelRepo for PgChannelsRepo {
         .fetch_all(&self.pool)
         .await?;
 
-        // Group by message_id, then fold by emoji within each message.
-        let mut map: HashMap<Uuid, HashMap<String, Vec<String>>> = HashMap::new();
+        // Group by message_id, then fold by emoji within each message. Rows arrive
+        // ordered by created_at ASC, so an IndexMap preserves first-reacted order per
+        // emoji instead of the random order a HashMap would iterate in.
+        let mut map: HashMap<Uuid, IndexMap<String, Vec<String>>> = HashMap::new();
         for r in rows {
             map.entry(r.message_id)
                 .or_default()
@@ -2529,6 +2675,48 @@ impl ChannelRepo for PgChannelsRepo {
         })
     }
 
+    async fn get_or_create_channel_join_code(&self, channel_id: Uuid) -> Result<Uuid, Self::Err> {
+        let candidate_join_code = macro_uuid::generate_uuid_v7();
+        let join_code = sqlx::query_scalar!(
+            r#"
+            UPDATE comms_channels
+            SET join_code = COALESCE(join_code, $2)
+            WHERE id = $1
+            RETURNING join_code AS "join_code!"
+            "#,
+            channel_id,
+            candidate_join_code,
+        )
+        .fetch_one(&self.pool)
+        .await
+        .context("failed to get or create channel join code")?;
+        Ok(join_code)
+    }
+
+    async fn get_channel_info_by_join_code(
+        &self,
+        join_code: Uuid,
+    ) -> Result<Option<ChannelInfo>, Self::Err> {
+        let row = sqlx::query_as!(
+            ChannelInfoRow,
+            r#"
+            SELECT id, name, channel_type AS "channel_type: ChannelType", org_id, team_id
+            FROM comms_channels
+            WHERE join_code = $1
+            "#,
+            join_code,
+        )
+        .fetch_optional(&self.pool)
+        .await?;
+        Ok(row.map(|row| ChannelInfo {
+            id: row.id,
+            name: row.name,
+            channel_type: row.channel_type,
+            org_id: row.org_id,
+            team_id: row.team_id,
+        }))
+    }
+
     async fn get_channel_metadata(
         &self,
         channel_id: Uuid,
@@ -2617,25 +2805,52 @@ impl ChannelRepo for PgChannelsRepo {
         Ok(has_team)
     }
 
+    async fn get_user_team_id(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+    ) -> Result<Option<Uuid>, Self::Err> {
+        sqlx::query_scalar!(
+            r#"
+            SELECT team_id
+            FROM team_user
+            WHERE user_id = $1
+            "#,
+            user_id.as_ref(),
+        )
+        .fetch_optional(&self.pool)
+        .await
+        .context("unable to get user's team")
+    }
+
     async fn create_channel(
         &self,
         owner_id: MacroUserIdStr<'_>,
         _org_id: Option<i64>,
         req: CreateChannelRequest,
-    ) -> Result<Uuid, Self::Err> {
+    ) -> Result<CreatedChannel, Self::Err> {
+        let CreateChannelRequest {
+            name,
+            channel_type,
+            team_id,
+            auto_join_team,
+            participants,
+        } = req;
         let channel_id = macro_uuid::generate_uuid_v7();
         let mut transaction = self.pool.begin().await?;
         sqlx::query!(
             r#"
-            INSERT INTO comms_channels (id, name, owner_id, org_id, team_id, channel_type)
-            VALUES ($1, $2, $3, $4, $5, $6)
+            INSERT INTO comms_channels (
+                id, name, owner_id, org_id, team_id, channel_type, auto_join_team
+            )
+            VALUES ($1, $2, $3, $4, $5, $6, $7)
             "#,
             channel_id,
-            req.name.as_deref(),
+            name.as_deref(),
             owner_id.as_ref(),
             None::<i64>,
-            req.team_id,
-            req.channel_type as ChannelType,
+            team_id,
+            channel_type as ChannelType,
+            auto_join_team,
         )
         .execute(&mut *transaction)
         .await
@@ -2654,8 +2869,7 @@ impl ChannelRepo for PgChannelsRepo {
         .await
         .context("unable to create channel participant for owner")?;
 
-        for participant in req
-            .participants
+        for participant in participants
             .into_iter()
             .filter(|participant| participant.as_ref() != owner_id.as_ref())
         {
@@ -2673,14 +2887,124 @@ impl ChannelRepo for PgChannelsRepo {
             .context("unable to create channel participant")?;
         }
 
+        if auto_join_team {
+            sqlx::query!(
+                r#"
+                INSERT INTO comms_channel_participants (channel_id, role, user_id)
+                SELECT $1, 'member'::comms_participant_role, user_id
+                FROM team_user
+                WHERE team_id = $2
+                ON CONFLICT (channel_id, user_id) DO NOTHING
+                "#,
+                channel_id,
+                team_id,
+            )
+            .execute(&mut *transaction)
+            .await
+            .context("unable to add current team members to channel")?;
+        }
+
         create_activity(&mut *transaction, channel_id, owner_id.as_ref())
             .await
             .context("unable to create activity for channel")?;
+
+        let participant_user_ids = sqlx::query_scalar!(
+            r#"
+            SELECT user_id
+            FROM comms_channel_participants
+            WHERE channel_id = $1 AND left_at IS NULL
+            ORDER BY user_id
+            "#,
+            channel_id,
+        )
+        .fetch_all(&mut *transaction)
+        .await
+        .context("unable to fetch created channel participants")?
+        .into_iter()
+        .map(MacroUserIdStr::try_from)
+        .collect::<Result<Vec<_>, _>>()
+        .context("created channel contains an invalid user id")?;
+
         transaction
             .commit()
             .await
             .context("unable to commit transaction")?;
-        Ok(channel_id)
+        Ok(CreatedChannel {
+            id: channel_id,
+            participant_user_ids,
+        })
+    }
+
+    async fn auto_join_by_team_id(
+        &self,
+        team_id: &Uuid,
+        user_id: &MacroUserIdStr<'_>,
+    ) -> Result<(), Self::Err> {
+        sqlx::query!(
+            r#"
+            INSERT INTO comms_channel_participants (channel_id, user_id, role)
+            SELECT id, $2, 'member'::comms_participant_role
+            FROM comms_channels
+            WHERE team_id = $1 AND auto_join_team = TRUE
+            ON CONFLICT (channel_id, user_id) DO UPDATE
+            SET role = EXCLUDED.role,
+                joined_at = NOW(),
+                left_at = NULL
+            WHERE comms_channel_participants.left_at IS NOT NULL
+            "#,
+            team_id,
+            user_id.as_ref(),
+        )
+        .execute(&self.pool)
+        .await
+        .context("unable to auto-join team channels")?;
+        Ok(())
+    }
+
+    async fn leave_by_team_id(
+        &self,
+        team_id: &Uuid,
+        user_id: &MacroUserIdStr<'_>,
+    ) -> Result<Vec<Uuid>, Self::Err> {
+        sqlx::query_scalar!(
+            r#"
+            UPDATE comms_channel_participants AS cp
+            SET left_at = NOW()
+            FROM comms_channels AS cc
+            WHERE cp.channel_id = cc.id
+              AND cc.team_id = $1
+              AND cp.user_id = $2
+              AND cp.left_at IS NULL
+            RETURNING cp.channel_id
+            "#,
+            team_id,
+            user_id.as_ref(),
+        )
+        .fetch_all(&self.pool)
+        .await
+        .context("unable to leave team channels")
+    }
+
+    async fn restore_by_channel_ids(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+        channel_ids: &[Uuid],
+    ) -> Result<(), Self::Err> {
+        sqlx::query!(
+            r#"
+            UPDATE comms_channel_participants
+            SET left_at = NULL
+            WHERE user_id = $1
+              AND channel_id = ANY($2)
+              AND left_at IS NOT NULL
+            "#,
+            user_id.as_ref(),
+            channel_ids,
+        )
+        .execute(&self.pool)
+        .await
+        .context("unable to restore channel memberships")?;
+        Ok(())
     }
 
     async fn maybe_get_dm(
@@ -2756,8 +3080,21 @@ impl ChannelRepo for PgChannelsRepo {
         &self,
         channel_id: Uuid,
         user_id: String,
+        team_id: Option<Uuid>,
         req: PatchChannelRequest,
     ) -> Result<(), Self::Err> {
+        let PatchChannelRequest {
+            channel_name,
+            convert_to_team_channel,
+            auto_join_team,
+        } = req;
+        let enables_auto_join =
+            auto_join_team == Some(true) && convert_to_team_channel != Some(false);
+        if (convert_to_team_channel == Some(true) || enables_auto_join) && team_id.is_none() {
+            anyhow::bail!("team id is required to patch team channel settings");
+        }
+
+        let mut transaction = self.pool.begin().await?;
         let row = sqlx::query_as!(
             ExistsRow,
             r#"
@@ -2775,7 +3112,7 @@ impl ChannelRepo for PgChannelsRepo {
             channel_id,
             user_id,
         )
-        .fetch_one(&self.pool)
+        .fetch_one(&mut *transaction)
         .await
         .context("failed to check user authorization")?;
 
@@ -2785,19 +3122,63 @@ impl ChannelRepo for PgChannelsRepo {
             );
         }
 
-        if let Some(channel_name) = req.channel_name {
+        sqlx::query!(
+            r#"
+            UPDATE comms_channels
+            SET name = COALESCE($2, name),
+                channel_type = CASE
+                    WHEN $3 IS TRUE THEN 'team'::comms_channel_type
+                    WHEN $3 IS FALSE AND channel_type = 'team'::comms_channel_type
+                        THEN 'private'::comms_channel_type
+                    ELSE channel_type
+                END,
+                team_id = CASE
+                    WHEN $3 IS TRUE THEN $4
+                    WHEN $3 IS FALSE AND channel_type = 'team'::comms_channel_type THEN NULL
+                    ELSE team_id
+                END,
+                auto_join_team = CASE
+                    WHEN $3 IS FALSE AND channel_type = 'team'::comms_channel_type THEN FALSE
+                    ELSE COALESCE($5, auto_join_team)
+                END,
+                updated_at = NOW()
+            WHERE id = $1
+            "#,
+            channel_id,
+            channel_name,
+            convert_to_team_channel,
+            team_id,
+            auto_join_team,
+        )
+        .execute(&mut *transaction)
+        .await
+        .context("unable to patch channel")?;
+
+        if enables_auto_join {
             sqlx::query!(
                 r#"
-                UPDATE comms_channels
-                SET name = $1
-                WHERE id = $2
+                INSERT INTO comms_channel_participants (channel_id, role, user_id)
+                SELECT $1, 'member'::comms_participant_role, user_id
+                FROM team_user
+                WHERE team_id = $2
+                ON CONFLICT (channel_id, user_id) DO UPDATE
+                SET role = EXCLUDED.role,
+                    joined_at = NOW(),
+                    left_at = NULL
+                WHERE comms_channel_participants.left_at IS NOT NULL
                 "#,
-                channel_name,
                 channel_id,
+                team_id,
             )
-            .execute(&self.pool)
-            .await?;
+            .execute(&mut *transaction)
+            .await
+            .context("unable to add current team members to channel")?;
         }
+
+        transaction
+            .commit()
+            .await
+            .context("unable to commit channel patch")?;
         Ok(())
     }
 
@@ -2834,11 +3215,16 @@ impl ChannelRepo for PgChannelsRepo {
         channel_id: Uuid,
         user_id: MacroUserIdStr<'_>,
         role: ParticipantRole,
-    ) -> Result<(), Self::Err> {
-        sqlx::query!(
+    ) -> Result<bool, Self::Err> {
+        let result = sqlx::query!(
             r#"
             INSERT INTO comms_channel_participants (channel_id, user_id, role)
             VALUES ($1, $2, $3)
+            ON CONFLICT (channel_id, user_id) DO UPDATE
+            SET role = EXCLUDED.role,
+                joined_at = now(),
+                left_at = NULL
+            WHERE comms_channel_participants.left_at IS NOT NULL
             "#,
             channel_id,
             user_id.as_ref(),
@@ -2847,7 +3233,7 @@ impl ChannelRepo for PgChannelsRepo {
         .execute(&self.pool)
         .await
         .context("unable to add participant to channel")?;
-        Ok(())
+        Ok(result.rows_affected() > 0)
     }
 
     async fn remove_participant(&self, channel_id: Uuid, user_id: String) -> Result<(), Self::Err> {
@@ -3084,18 +3470,23 @@ impl ChannelRepo for PgChannelsRepo {
         Ok(mention)
     }
 
-    async fn delete_entity_mention_by_id(&self, id: Uuid) -> Result<bool, Self::Err> {
-        let result = sqlx::query!(
+    async fn delete_entity_mention_by_id(
+        &self,
+        id: Uuid,
+    ) -> Result<Option<EntityMention>, Self::Err> {
+        let mention = sqlx::query_as!(
+            EntityMention,
             r#"
             DELETE FROM comms_entity_mentions
             WHERE id = $1
+            RETURNING id, source_entity_type, source_entity_id, entity_type, entity_id, user_id, created_at
             "#,
             id,
         )
-        .execute(&self.pool)
+        .fetch_optional(&self.pool)
         .await
         .context("failed to delete entity mention")?;
-        Ok(result.rows_affected() > 0)
+        Ok(mention)
     }
 
     async fn patch_message_attachments(
@@ -3234,15 +3625,12 @@ impl ChannelRepo for PgChannelsRepo {
 
         Ok(rows
             .into_iter()
-            .filter_map(|row| {
-                let user_id = MacroUserIdStr::try_from(row.user_id).ok()?;
-                Some(ChannelParticipant {
-                    channel_id: row.channel_id,
-                    user_id: user_id.as_ref().to_string(),
-                    role: row.role,
-                    joined_at: row.joined_at,
-                    left_at: row.left_at,
-                })
+            .map(|row| ChannelParticipant {
+                channel_id: row.channel_id,
+                user_id: row.user_id,
+                role: row.role,
+                joined_at: row.joined_at,
+                left_at: row.left_at,
             })
             .collect())
     }

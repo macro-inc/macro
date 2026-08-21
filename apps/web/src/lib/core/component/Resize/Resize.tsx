@@ -103,7 +103,15 @@ function Zone(props: ParentProps<ZoneProps>) {
     solver.dropPanel(id);
   }
 
-  function update(id: PanelId, config: { minSize?: number; maxSize?: number }) {
+  function update(
+    id: PanelId,
+    config: {
+      minSize?: number;
+      maxSize?: number;
+      redistributionPreferredSize?: number;
+      shareGroup?: string;
+    }
+  ) {
     solver.updatePanel(id, config);
   }
 
@@ -136,6 +144,7 @@ function Zone(props: ParentProps<ZoneProps>) {
     offsetOf,
     sizeOf,
     canFit: solver.canFitPanel,
+    swap: solver.swap,
     hide: solver.hide,
     show: solver.show,
     isHidden: solver.isHidden,
@@ -189,6 +198,9 @@ function Zone(props: ParentProps<ZoneProps>) {
  * @property id - Unique identifier for the panel
  * @property minSize - Minimum size constraint for the panel in pixels
  * @property maxSize - Maximum size constraint for the panel in pixels (defaults to Infinity)
+ * @property redistributionPreferredSize - Preferred size used only during
+ *     automatic layout redistribution. It is reduced when neighboring panel
+ *     minimums leave insufficient room.
  * @property collapsed - Accessor that returns whether the panel should be collapsed. This
  *     is currently kind of COPE and should be avoided. Is used for the side-bar which should
  *     be toggled without being unmounted. It is WAY preferred to let the system derive its
@@ -202,6 +214,14 @@ type PanelProps = {
   id: PanelId;
   minSize: number;
   maxSize?: number;
+  redistributionPreferredSize?: number;
+  /**
+   * Panels sharing a `shareGroup` count as ONE unit for automatic share
+   * allocation: an incoming member carves its share out of the group, a
+   * departing member returns it, and redistribution-preference deltas settle
+   * within the group before touching other panels.
+   */
+  shareGroup?: string;
   /**
    * Initial target size for the panel at registration time.
    * - number: interpreted as a percentage (e.g., 25 = 25%)
@@ -268,6 +288,8 @@ function Panel(props: ParentProps<PanelProps>) {
           id: props.id,
           minSize: props.minSize,
           maxSize: props.maxSize ?? Infinity,
+          redistributionPreferredSize: props.redistributionPreferredSize,
+          shareGroup: props.shareGroup,
           target: getTarget(),
         },
         props.index
@@ -279,6 +301,8 @@ function Panel(props: ParentProps<PanelProps>) {
     ctx.update(props.id, {
       minSize: props.minSize,
       maxSize: props.maxSize ?? Infinity,
+      redistributionPreferredSize: props.redistributionPreferredSize,
+      shareGroup: props.shareGroup,
     });
   });
 
@@ -293,6 +317,8 @@ function Panel(props: ParentProps<PanelProps>) {
           id: props.id,
           minSize: props.minSize,
           maxSize: props.maxSize ?? Infinity,
+          redistributionPreferredSize: props.redistributionPreferredSize,
+          shareGroup: props.shareGroup,
           target: getTarget(),
         },
         props.index
@@ -319,6 +345,8 @@ function Panel(props: ParentProps<PanelProps>) {
             id: props.id,
             minSize: props.minSize,
             maxSize: props.maxSize ?? Infinity,
+            redistributionPreferredSize: props.redistributionPreferredSize,
+            shareGroup: props.shareGroup,
             target: getTarget(),
           },
           props.index

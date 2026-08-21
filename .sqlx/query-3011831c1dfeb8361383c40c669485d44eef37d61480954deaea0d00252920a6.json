@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        WITH active_bot AS (\n            SELECT id\n            FROM bots\n            WHERE id = $2\n              AND team_id = $3\n              AND deleted_at IS NULL\n        )\n        SELECT $1::text AS \"source_id!\"\n        FROM active_bot\n        UNION\n        SELECT $3::text\n        FROM active_bot\n        UNION\n        SELECT c.id::text\n        FROM active_bot\n        JOIN comms_channels c\n          ON c.channel_type = 'team'\n         AND c.team_id = $3\n        UNION\n        SELECT cp.channel_id::text\n        FROM active_bot\n        JOIN comms_channel_participants cp\n          ON cp.user_id = $1\n         AND cp.left_at IS NULL\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "source_id!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "3011831c1dfeb8361383c40c669485d44eef37d61480954deaea0d00252920a6"
+}

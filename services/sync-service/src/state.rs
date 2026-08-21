@@ -151,6 +151,7 @@ impl DocumentState {
             let Some(LoroValue::String(id)) = id_voc.into_value().ok() else {
                 continue;
             };
+
             return Some(id.to_string());
         }
         None

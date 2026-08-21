@@ -1,4 +1,8 @@
-import { EntityPropertiesSection } from '@app/features/property/side-panel/properties';
+import { EntityActivitySectionConditional } from '@app/features/activity/EntityActivitySection';
+import {
+  EntityPropertiesSection,
+  EntityTagsSection,
+} from '@app/features/property/side-panel/properties';
 import { SidePanel } from '@components/app/side-panel';
 import { useBlockId } from '@core/block';
 import { useCanEdit } from '@core/signal/permissions';
@@ -26,11 +30,17 @@ export function ProjectSidePanelSections() {
           />
         </Suspense>
       </SidePanel.Section>
+      <EntityTagsSection
+        entityId={projectId}
+        entityType="PROJECT"
+        canEdit={canEdit()}
+        order={20}
+      />
       <SidePanel.Section
         id="properties"
         title="Properties"
         defaultOpen
-        order={20}
+        order={30}
       >
         <Suspense fallback={<SidePanel.Loading />}>
           <EntityPropertiesSection
@@ -39,9 +49,15 @@ export function ProjectSidePanelSections() {
             canEdit={canEdit()}
             documentName={projectName()}
             propertyFilter={(property) => property.isMetadata !== true}
+            showTags={false}
           />
         </Suspense>
       </SidePanel.Section>
+      <EntityActivitySectionConditional
+        entityId={projectId}
+        entityType="PROJECT"
+        order={40}
+      />
     </>
   );
 }

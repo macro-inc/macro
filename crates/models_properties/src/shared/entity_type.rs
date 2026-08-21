@@ -13,6 +13,8 @@ use utoipa::ToSchema;
     rename_all = "SCREAMING_SNAKE_CASE"
 )]
 pub enum EntityType {
+    CalendarEvent,
+    CallRecord,
     Channel,
     Chat,
     Company,
@@ -26,6 +28,8 @@ pub enum EntityType {
 impl fmt::Display for EntityType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            EntityType::CalendarEvent => write!(f, "calendar_event"),
+            EntityType::CallRecord => write!(f, "call_record"),
             EntityType::Channel => write!(f, "channel"),
             EntityType::Chat => write!(f, "chat"),
             EntityType::Company => write!(f, "company"),
@@ -46,6 +50,8 @@ impl FromStr for EntityType {
     type Err = NoConversion;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_lowercase().as_str() {
+            "calendar_event" => Ok(Self::CalendarEvent),
+            "call_record" => Ok(Self::CallRecord),
             "channel" => Ok(Self::Channel),
             "chat" => Ok(Self::Chat),
             "company" => Ok(Self::Company),
@@ -63,8 +69,8 @@ impl From<DocumentSubType> for EntityType {
     fn from(sub_type: DocumentSubType) -> Self {
         match sub_type {
             DocumentSubType::Task => EntityType::Task,
-            // No dedicated property entity type for snippets; they key under Document.
-            DocumentSubType::Snippet => EntityType::Document,
+            // No dedicated property entity type for snippets or skills; they key under Document.
+            DocumentSubType::Snippet | DocumentSubType::Skill => EntityType::Document,
         }
     }
 }

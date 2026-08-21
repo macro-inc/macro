@@ -1,10 +1,9 @@
-import { toast } from '@core/component/Toast/Toast';
+import { useKeyedPersistentToasts } from '@core/component/Toast/useKeyedPersistentToasts';
 import { useAddInboxFlow } from '@core/email-link';
 import {
   useEmailLinksQuery,
   useInboxHealthProbeQuery,
 } from '@queries/email/link';
-import { createEffect, onCleanup } from 'solid-js';
 
 /**
  * Surfaces a per-inbox "Reconnect Gmail" prompt for every linked inbox whose grant
@@ -21,77 +20,27 @@ export function GmailReauthenticationPrompt() {
   // user was away surfaces here instead of only after the daily refresh.
   useInboxHealthProbeQuery();
 
-  // One persistent toast per broken inbox, keyed by link id.
-  const toastIds = new Map<string, number>();
-  // Inboxes the user dismissed this session; not re-prompted until they recover.
-  const dismissed = new Set<string>();
-
-  const dismissToast = (linkId: string) => {
-    const id = toastIds.get(linkId);
-    if (id !== undefined) {
-      toast.dismiss(id);
-      toastIds.delete(linkId);
-    }
-  };
-
-  createEffect(() => {
-    const links = linksQuery.data?.links ?? [];
-    const needingReauth = new Set(
-      links.filter((link) => link.needs_reauth).map((link) => link.id)
-    );
-
-    // Clear toasts and dismissals for inboxes that recovered or were removed, so a
-    // later failure can prompt again.
-    for (const linkId of [...toastIds.keys()]) {
-      if (!needingReauth.has(linkId)) dismissToast(linkId);
-    }
-    for (const linkId of [...dismissed]) {
-      if (!needingReauth.has(linkId)) dismissed.delete(linkId);
-    }
-
-    for (const link of links) {
-      if (
-        !link.needs_reauth ||
-        toastIds.has(link.id) ||
-        dismissed.has(link.id)
-      ) {
-        continue;
-      }
-
-      const linkId = link.id;
-      const id = toast.custom(
+  useKeyedPersistentToasts({
+    items: () =>
+      (linksQuery.data?.links ?? []).filter((link) => link.needs_reauth),
+    key: (link) => link.id,
+    toast: (link, dismiss) => ({
+      title: 'Reconnect Gmail',
+      content(): string {
+        return `Sync stopped for ${link.email_address}. Reconnect to restore email sync.`;
+      },
+      actions: [
         {
-          title: 'Reconnect Gmail',
-          content(): string {
-            return `Sync stopped for ${link.email_address}. Reconnect to restore email sync.`;
+          label: 'Reconnect',
+          onClick: () => {
+            // Suppress re-prompting until the inbox recovers; on native the page
+            // stays mounted while the OAuth flow runs.
+            dismiss();
+            startAddInbox();
           },
-          actions: [
-            {
-              label: 'Reconnect',
-              onClick: () => {
-                // Suppress re-prompting until the inbox recovers; on native the page
-                // stays mounted while the OAuth flow runs.
-                dismissed.add(linkId);
-                dismissToast(linkId);
-                void startAddInbox();
-              },
-            },
-          ],
         },
-        {
-          persistent: true,
-          onDismiss: () => {
-            toastIds.delete(linkId);
-            dismissed.add(linkId);
-          },
-        }
-      );
-      toastIds.set(linkId, id);
-    }
-  });
-
-  onCleanup(() => {
-    for (const linkId of [...toastIds.keys()]) dismissToast(linkId);
+      ],
+    }),
   });
 
   return null;

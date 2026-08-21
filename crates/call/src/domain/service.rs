@@ -5,9 +5,11 @@ mod test;
 
 use connection::domain::ports::ConnectionService;
 use entity_access::domain::models::{
-    EditAccessLevel, EntityAccessReceipt, EntityType, ViewAccessLevel,
+    EditAccessLevel, EntityAccessAuth, EntityAccessReceipt, EntityPermission, EntityType,
+    ViewAccessLevel,
 };
 use entity_access::domain::ports::EntityAccessService;
+use macro_event_broker::{MacroEventBroker, NoopMacroEventBroker};
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use notification::domain::models::apple::VoipPushPayload;
@@ -24,20 +26,25 @@ use std::collections::{HashMap, HashSet};
 
 use uuid::Uuid;
 
+use crate::domain::events::{
+    CallArchiveReason, CallMacroEvent, CallRecordArchivedMetadata, CallRecordDeletedMetadata,
+    CallRecordSummarizedMetadata, CallRecordUpdatedMetadata, CallRecordingReadyMetadata,
+    CallStartedMetadata,
+};
 use crate::domain::models::{
     EditCallRecordRequest, EditCallTranscriptRequest, VoipPushPayloadRequest,
 };
 
 use super::models::{
-    AddParticipantError, Call, CallActiveResponse, CallError, CallRecord,
+    AddParticipantError, ArchivedCall, Call, CallActiveResponse, CallError, CallRecord,
     CallRecordTranscriptSegment, CallTokenResponse, CallTranscriptCustomSpeakerResult,
     EgressS3Config, EnrichedCallTranscript, GetBatchCallRecordPreviewRequest,
     GetBatchCallRecordPreviewResponse, GetCallRecordsRequest, LeaveCallResponse, RingStatus,
     RingStatusResponse, TranscriptSegmentRequest,
 };
 use super::ports::{
-    CallRecordQueryService, CallRepository, CallRtcClient, CallSearchIndexer, CallService,
-    CallSummarizer, NoOpCallSearchIndexer, NoOpVoiceRepository, RecordingStorage, VoiceRepository,
+    CallRecordQueryService, CallRepository, CallRtcClient, CallService, CallSummarizer,
+    NoOpVoiceRepository, RecordingStorage, VoiceRepository,
 };
 
 /// The concrete call service implementation.
@@ -49,9 +56,9 @@ pub struct CallServiceImpl<
     N: NotificationIngress,
     S: RecordingStorage,
     Sm: CallSummarizer = NoopCallSummarizer,
-    I: CallSearchIndexer = NoOpCallSearchIndexer,
     V: VoipPushSender = (),
     Vr: VoiceRepository = NoOpVoiceRepository,
+    B: MacroEventBroker = NoopMacroEventBroker,
 > {
     repo: R,
     rtc_client: C,
@@ -59,7 +66,6 @@ pub struct CallServiceImpl<
     entity_access_service: E,
     notification_ingress: N,
     recording_storage: S,
-    search_indexer: I,
     server_url: String,
     egress_s3_config: Option<EgressS3Config>,
     internal_call_secret: Option<String>,
@@ -67,6 +73,7 @@ pub struct CallServiceImpl<
     voip_push_sender: V,
     voice_repo: Vr,
     ring_status_base_url: Option<String>,
+    event_broker: B,
 }
 
 impl<
@@ -77,7 +84,7 @@ impl<
     N: NotificationIngress,
     S: RecordingStorage,
     Sm: CallSummarizer,
-> CallServiceImpl<R, C, Cn, E, N, S, Sm, NoOpCallSearchIndexer, (), NoOpVoiceRepository>
+> CallServiceImpl<R, C, Cn, E, N, S, Sm, (), NoOpVoiceRepository>
 {
     /// Create a new call service.
     pub fn new(
@@ -96,7 +103,6 @@ impl<
             entity_access_service,
             notification_ingress,
             recording_storage,
-            search_indexer: NoOpCallSearchIndexer,
             server_url: server_url.into(),
             egress_s3_config: None,
             internal_call_secret: None,
@@ -104,6 +110,7 @@ impl<
             voip_push_sender: (),
             voice_repo: NoOpVoiceRepository,
             ring_status_base_url: None,
+            event_broker: NoopMacroEventBroker,
         }
     }
 }
@@ -116,10 +123,10 @@ impl<
     N: NotificationIngress,
     S: RecordingStorage,
     Sm: CallSummarizer,
-    I: CallSearchIndexer,
     V: VoipPushSender,
     Vr: VoiceRepository,
-> CallServiceImpl<R, C, Cn, E, N, S, Sm, I, V, Vr>
+    B: MacroEventBroker,
+> CallServiceImpl<R, C, Cn, E, N, S, Sm, V, Vr, B>
 {
     /// Enable auto-recording with the given S3 configuration.
     pub fn with_egress(mut self, s3_config: EgressS3Config) -> Self {
@@ -153,7 +160,7 @@ impl<
     pub fn with_voip_push_sender<V2: VoipPushSender>(
         self,
         sender: V2,
-    ) -> CallServiceImpl<R, C, Cn, E, N, S, Sm, I, V2, Vr> {
+    ) -> CallServiceImpl<R, C, Cn, E, N, S, Sm, V2, Vr, B> {
         CallServiceImpl {
             repo: self.repo,
             rtc_client: self.rtc_client,
@@ -161,7 +168,6 @@ impl<
             entity_access_service: self.entity_access_service,
             notification_ingress: self.notification_ingress,
             recording_storage: self.recording_storage,
-            search_indexer: self.search_indexer,
             server_url: self.server_url,
             egress_s3_config: self.egress_s3_config,
             internal_call_secret: self.internal_call_secret,
@@ -169,29 +175,7 @@ impl<
             voip_push_sender: sender,
             voice_repo: self.voice_repo,
             ring_status_base_url: self.ring_status_base_url,
-        }
-    }
-
-    /// Swap the search indexer.
-    pub fn with_search_indexer<I2: CallSearchIndexer>(
-        self,
-        indexer: I2,
-    ) -> CallServiceImpl<R, C, Cn, E, N, S, Sm, I2, V, Vr> {
-        CallServiceImpl {
-            repo: self.repo,
-            rtc_client: self.rtc_client,
-            connection_service: self.connection_service,
-            entity_access_service: self.entity_access_service,
-            notification_ingress: self.notification_ingress,
-            recording_storage: self.recording_storage,
-            search_indexer: indexer,
-            server_url: self.server_url,
-            egress_s3_config: self.egress_s3_config,
-            internal_call_secret: self.internal_call_secret,
-            summarizer: self.summarizer,
-            voip_push_sender: self.voip_push_sender,
-            voice_repo: self.voice_repo,
-            ring_status_base_url: self.ring_status_base_url,
+            event_broker: self.event_broker,
         }
     }
 
@@ -199,7 +183,7 @@ impl<
     pub fn with_voice_repo<Vr2: VoiceRepository>(
         self,
         voice_repo: Vr2,
-    ) -> CallServiceImpl<R, C, Cn, E, N, S, Sm, I, V, Vr2> {
+    ) -> CallServiceImpl<R, C, Cn, E, N, S, Sm, V, Vr2, B> {
         CallServiceImpl {
             repo: self.repo,
             rtc_client: self.rtc_client,
@@ -207,7 +191,6 @@ impl<
             entity_access_service: self.entity_access_service,
             notification_ingress: self.notification_ingress,
             recording_storage: self.recording_storage,
-            search_indexer: self.search_indexer,
             server_url: self.server_url,
             egress_s3_config: self.egress_s3_config,
             internal_call_secret: self.internal_call_secret,
@@ -215,7 +198,67 @@ impl<
             voip_push_sender: self.voip_push_sender,
             voice_repo,
             ring_status_base_url: self.ring_status_base_url,
+            event_broker: self.event_broker,
         }
+    }
+
+    /// Replace the event broker while preserving every other service dependency.
+    pub fn with_event_broker<B2: MacroEventBroker>(
+        self,
+        event_broker: B2,
+    ) -> CallServiceImpl<R, C, Cn, E, N, S, Sm, V, Vr, B2> {
+        CallServiceImpl {
+            repo: self.repo,
+            rtc_client: self.rtc_client,
+            connection_service: self.connection_service,
+            entity_access_service: self.entity_access_service,
+            notification_ingress: self.notification_ingress,
+            recording_storage: self.recording_storage,
+            server_url: self.server_url,
+            egress_s3_config: self.egress_s3_config,
+            internal_call_secret: self.internal_call_secret,
+            summarizer: self.summarizer,
+            voip_push_sender: self.voip_push_sender,
+            voice_repo: self.voice_repo,
+            ring_status_base_url: self.ring_status_base_url,
+            event_broker,
+        }
+    }
+
+    fn publish_call_event(&self, event: &CallMacroEvent) {
+        publish_call_event(&self.event_broker, event);
+    }
+
+    fn publish_archived_call_event(
+        &self,
+        archived: &ArchivedCall,
+        archive_reason: CallArchiveReason,
+    ) {
+        let created_by = match MacroUserIdStr::parse_from_str(&archived.created_by) {
+            Ok(created_by) => created_by.into_owned(),
+            Err(error) => {
+                tracing::error!(
+                    error = ?error,
+                    call_id = %archived.call_id,
+                    "failed to parse stored call creator; skipping archived event"
+                );
+                return;
+            }
+        };
+
+        self.publish_call_event(&CallMacroEvent::record_archived(
+            CallRecordArchivedMetadata {
+                call_id: archived.call_id,
+                channel_id: archived.channel_id,
+                created_by,
+                started_at: archived.started_at,
+                ended_at: archived.ended_at,
+                duration_ms: Some(archived.duration_ms),
+                participant_count: archived.participant_count,
+                has_recording: archived.has_recording,
+                archive_reason,
+            },
+        ));
     }
 
     /// Send a call event to all channel members (best-effort).
@@ -294,6 +337,33 @@ impl<
             .await
             .inspect_err(|e| tracing::error!(error=?e, message_type, "failed to send call participant event"));
     }
+
+    /// Notify a user's own connections that they answered a call (best-effort).
+    ///
+    /// Unlike [`Self::send_call_event`], this targets only the answering
+    /// user, across all their connected clients, so devices still showing
+    /// the incoming-call UI can dismiss it when the call is answered
+    /// elsewhere (e.g. stop the desktop ring after an iPhone pickup).
+    async fn send_call_answered_event(
+        &self,
+        channel_id: &Uuid,
+        call_id: &Uuid,
+        user_id: MacroUserIdStr<'_>,
+    ) {
+        let _ = self
+            .connection_service
+            .send_channel_message(
+                &[user_id.copied()],
+                "call_answered",
+                serde_json::json!({
+                    "channel_id": channel_id,
+                    "call_id": call_id,
+                    "user_id": user_id,
+                }),
+            )
+            .await
+            .inspect_err(|e| tracing::error!(error=?e, "failed to send call answered event"));
+    }
 }
 
 /// Decide the per-user ring status from the room's active call (if any),
@@ -312,6 +382,15 @@ fn resolve_ring_status(
         Some(call) if call.id != *requested_call_id => RingStatus::Ended,
         Some(_) if is_participant => RingStatus::Answered,
         Some(_) => RingStatus::Ringing,
+    }
+}
+
+fn event_actor_user_id(auth: &EntityAccessAuth) -> Option<MacroUserIdStr<'static>> {
+    match auth {
+        EntityAccessAuth::Authenticated(user_id) => Some(user_id.clone().into_owned()),
+        EntityAccessAuth::Bot(_)
+        | EntityAccessAuth::Unauthenticated
+        | EntityAccessAuth::Internal => None,
     }
 }
 
@@ -391,10 +470,10 @@ impl<
     N: NotificationIngress,
     S: RecordingStorage,
     Sm: CallSummarizer + Clone,
-    I: CallSearchIndexer,
     V: VoipPushSender,
     Vr: VoiceRepository + Clone,
-> CallService for CallServiceImpl<R, C, Cn, E, N, S, Sm, I, V, Vr>
+    B: MacroEventBroker + Clone,
+> CallService for CallServiceImpl<R, C, Cn, E, N, S, Sm, V, Vr, B>
 {
     fn validate_internal_call(&self, token: &str) -> bool {
         self.internal_call_secret
@@ -478,6 +557,27 @@ impl<
                                 Err(e) => {
                                     tracing::error!(error=?e, "failed to start egress recording");
                                 }
+                            }
+                        }
+
+                        match MacroUserIdStr::parse_from_str(&call.created_by) {
+                            Ok(created_by) => {
+                                self.publish_call_event(&CallMacroEvent::started(
+                                    CallStartedMetadata {
+                                        call_id: call.id,
+                                        channel_id: call.channel_id,
+                                        created_by: created_by.into_owned(),
+                                        created_at: call.created_at,
+                                        recording_enabled: self.egress_s3_config.is_some(),
+                                    },
+                                ));
+                            }
+                            Err(error) => {
+                                tracing::error!(
+                                    error = ?error,
+                                    call_id = %call.id,
+                                    "failed to parse stored call creator; skipping started event"
+                                );
                             }
                         }
 
@@ -685,6 +785,11 @@ impl<
             }
         }
 
+        // Tell the user's other devices the call was answered here so they
+        // can stop showing the incoming-call UI (best-effort).
+        self.send_call_answered_event(channel_id, &call.id, user_id.copied())
+            .await;
+
         // Always generate a fresh token (supports reconnection from different devices).
         let token = self
             .rtc_client
@@ -802,27 +907,24 @@ impl<
                         .map_err(|e| CallError::Internal(e.into()))?
                 {
                     tracing::info!(call_id = %call.id, room_name, "archiving call on room_finished");
-                    let channel_id = call.channel_id;
-                    self.repo
+                    let archived = self
+                        .repo
                         .archive_call(&call.id)
                         .await
                         .map_err(|e| CallError::Internal(e.into()))?;
+                    self.publish_archived_call_event(&archived, CallArchiveReason::RoomFinished);
 
                     // Fire-and-forget summarization now that the
                     // `call_records` row is persisted.
-                    self.spawn_summarize_call(call.id);
-                    self.spawn_process_voices_for_call(call.id);
-
-                    if let Err(e) = self.search_indexer.enqueue_upsert(&call.id).await {
-                        tracing::error!(error=?e, call_id=%call.id, "failed to enqueue call record for search indexing");
-                    }
+                    self.spawn_summarize_call(archived.call_id);
+                    self.spawn_process_voices_for_call(archived.call_id);
 
                     self.send_call_event(
-                        &channel_id,
+                        &archived.channel_id,
                         "call_ended",
                         &serde_json::json!({
-                            "channel_id": channel_id,
-                            "call_id": call.id,
+                            "channel_id": archived.channel_id,
+                            "call_id": archived.call_id,
                         }),
                         None,
                     )
@@ -863,6 +965,16 @@ impl<
                             participant = participant_identity.as_ref(),
                             "reconciled participant_joined via webhook"
                         );
+                        // Native answers (e.g. iPhone CallKit pickup) connect
+                        // straight to LiveKit without hitting the join API, so
+                        // this webhook is where the user's other devices learn
+                        // the ring was answered (best-effort).
+                        self.send_call_answered_event(
+                            &call.channel_id,
+                            &call.id,
+                            participant_identity.copied(),
+                        )
+                        .await;
                     }
                     Err(AddParticipantError::UserAlreadyActive) => {
                         tracing::warn!(
@@ -911,21 +1023,21 @@ impl<
 
                 if remaining == 0 {
                     tracing::info!(call_id = %call.id, room_name, "last participant left, archiving call");
-                    let channel_id = call.channel_id;
                     let egress_id = call.egress_id.clone();
-                    self.repo
+                    let archived = self
+                        .repo
                         .archive_call(&call.id)
                         .await
                         .map_err(|e| CallError::Internal(e.into()))?;
+                    self.publish_archived_call_event(
+                        &archived,
+                        CallArchiveReason::LastParticipantLeft,
+                    );
 
                     // Fire-and-forget summarization now that the
                     // `call_records` row is persisted.
-                    self.spawn_summarize_call(call.id);
-                    self.spawn_process_voices_for_call(call.id);
-
-                    if let Err(e) = self.search_indexer.enqueue_upsert(&call.id).await {
-                        tracing::error!(error=?e, call_id=%call.id, "failed to enqueue call record for search indexing");
-                    }
+                    self.spawn_summarize_call(archived.call_id);
+                    self.spawn_process_voices_for_call(archived.call_id);
 
                     // Stop egress explicitly before deleting the room. DeleteRoom
                     // is expected to cascade-stop egress, but a failed or slow
@@ -948,11 +1060,11 @@ impl<
                         .ok();
 
                     self.send_call_event(
-                        &channel_id,
+                        &archived.channel_id,
                         "call_ended",
                         &serde_json::json!({
-                            "channel_id": channel_id,
-                            "call_id": call.id,
+                            "channel_id": archived.channel_id,
+                            "call_id": archived.call_id,
                         }),
                         None,
                     )
@@ -1002,16 +1114,22 @@ impl<
                 tracing::info!(egress_id, recording_key, "egress recording completed");
 
                 // Find the archived call record by egress_id and update the recording key.
-                if let Some(call_record_id) = self
+                if let Some((call_id, channel_id)) = self
                     .repo
                     .get_call_record_by_egress_id(egress_id)
                     .await
                     .map_err(|e| CallError::Internal(e.into()))?
                 {
                     self.repo
-                        .set_recording_key(&call_record_id, recording_key)
+                        .set_recording_key(&call_id, recording_key)
                         .await
                         .map_err(|e| CallError::Internal(e.into()))?;
+                    self.publish_call_event(&CallMacroEvent::recording_ready(
+                        CallRecordingReadyMetadata {
+                            call_id,
+                            channel_id,
+                        },
+                    ));
                 } else {
                     // Call not yet archived — store on the active call so
                     // archive_call can carry it forward.
@@ -1062,6 +1180,11 @@ impl<
             .map_err(|e| CallError::Internal(e.into()))?
             .ok_or_else(|| CallError::NotFound(call_id.to_string()))?;
 
+        record.user_access_level = match receipt.entity_permission() {
+            EntityPermission::AccessLevel { access_level } => Some(*access_level),
+            _ => None,
+        };
+
         if let Some(recording_key) = &record.recording_key {
             record.recording_url = self
                 .recording_storage
@@ -1105,8 +1228,9 @@ impl<
         }
         let call_id = Uuid::parse_str(&entity.entity_id)
             .map_err(|_| CallError::Internal(anyhow::anyhow!("invalid call_id in receipt")))?;
+        let actor_user_id = event_actor_user_id(receipt.auth());
 
-        // Look up channel_id before deletion to keep the search-remove message id unique.
+        // Look up channel_id before deletion so the deleted event includes channel context.
         let channel_id = self
             .repo
             .get_call_record_by_call_id(&call_id)
@@ -1120,13 +1244,14 @@ impl<
             .await
             .map_err(|e| CallError::Internal(e.into()))?;
 
-        if let Some(channel_id) = channel_id
-            && let Err(e) = self
-                .search_indexer
-                .enqueue_remove(&channel_id, &call_id)
-                .await
+        if storage_keys.is_some()
+            && let Some(channel_id) = channel_id
         {
-            tracing::error!(error=?e, call_id=%call_id, "failed to enqueue call record removal from search");
+            self.publish_call_event(&CallMacroEvent::record_deleted(CallRecordDeletedMetadata {
+                call_id,
+                channel_id,
+                actor_user_id,
+            }));
         }
 
         if let Some(storage_keys) = storage_keys {
@@ -1241,11 +1366,32 @@ impl<
 
         let call_id = macro_uuid::string_to_uuid(&entity.entity_id)
             .map_err(|_| CallError::Internal(anyhow::anyhow!("invalid call entity receipt")))?;
+        let actor_user_id = event_actor_user_id(receipt.auth());
+        let custom_name = request.custom_name.clone();
+        let share_with_team = request.share_with_team;
+        let channel_id = self
+            .repo
+            .get_call_record_by_call_id(&call_id)
+            .await
+            .map_err(|e| CallError::Internal(e.into()))?
+            .map(|record| record.channel_id);
 
         self.repo
             .patch_call_record(&call_id, &request)
             .await
-            .map_err(|e| CallError::Internal(e.into()))
+            .map_err(|e| CallError::Internal(e.into()))?;
+
+        if let Some(channel_id) = channel_id {
+            self.publish_call_event(&CallMacroEvent::record_updated(CallRecordUpdatedMetadata {
+                call_id,
+                channel_id,
+                actor_user_id,
+                custom_name,
+                share_with_team,
+            }));
+        }
+
+        Ok(())
     }
 
     #[tracing::instrument(err, skip(self, request), fields(num_assignments = request.assignments.len()))]
@@ -1286,12 +1432,21 @@ impl<
 
         let call_id = macro_uuid::string_to_uuid(&entity.entity_id)
             .map_err(|_| CallError::Internal(anyhow::anyhow!("invalid call entity receipt")))?;
+        let actor_user_id = event_actor_user_id(receipt.auth());
 
         let (new_value, channel_id) = self
             .repo
             .toggle_share_with_team(&call_id)
             .await
             .map_err(|e| CallError::Internal(e.into()))?;
+
+        self.publish_call_event(&CallMacroEvent::record_updated(CallRecordUpdatedMetadata {
+            call_id,
+            channel_id,
+            actor_user_id,
+            custom_name: None,
+            share_with_team: Some(new_value),
+        }));
 
         self.send_call_participant_event(
             &call_id,
@@ -1367,38 +1522,30 @@ impl<
             return Ok(());
         };
 
-        self.repo
+        let summary_persisted = self
+            .repo
             .insert_call_summary(call_id, &summary)
             .await
             .inspect_err(|e| tracing::error!(error=?e, %call_id, "failed to persist call summary"))
             .map_err(|e| CallError::Internal(e.into()))?;
 
-        // Auto-generate a display name from the summary; only persisted when
-        // the user has not already set one (`set_custom_name_if_null`). Best
-        // effort — naming failures must not fail summarization.
-        if record.custom_name.is_none() {
-            match summarizer.generate_call_name(call_id, &summary).await {
-                Ok(Some(name)) => {
-                    if let Err(e) = self.repo.set_custom_name_if_null(call_id, &name).await {
-                        tracing::error!(
-                            error=?e, %call_id,
-                            "failed to persist ai-generated call name"
-                        );
-                    }
-                }
-                Ok(None) => {
-                    tracing::info!(
-                        %call_id,
-                        "ai call naming returned no title; leaving name unset"
-                    );
-                }
-                Err(e) => {
-                    tracing::error!(
-                        error=?e, %call_id,
-                        "ai call naming failed after summary; leaving name unset"
-                    );
-                }
-            }
+        let ai_name_generated = generate_and_persist_call_name(
+            &self.repo,
+            summarizer,
+            call_id,
+            &summary,
+            record.custom_name.is_none(),
+        )
+        .await;
+
+        if summary_persisted {
+            self.publish_call_event(&CallMacroEvent::record_summarized(
+                CallRecordSummarizedMetadata {
+                    call_id: *call_id,
+                    channel_id: record.channel_id,
+                    ai_name_generated,
+                },
+            ));
         }
 
         Ok(())
@@ -1439,23 +1586,24 @@ impl<
     N: NotificationIngress,
     S: RecordingStorage,
     Sm: CallSummarizer + Clone,
-    I: CallSearchIndexer,
     V: VoipPushSender,
     Vr: VoiceRepository + Clone,
-> CallServiceImpl<R, C, Cn, E, N, S, Sm, I, V, Vr>
+    B: MacroEventBroker + Clone,
+> CallServiceImpl<R, C, Cn, E, N, S, Sm, V, Vr, B>
 {
     /// Fire-and-forget spawn of [`CallService::summarize_call`] for `call_id`.
     ///
     /// Called after the `call_records` row is persisted so that summarization
     /// can run off the request path without blocking call completion. The
-    /// spawned task owns cloned handles to `repo` and `summarizer`; errors
-    /// are logged, never propagated. When no summarizer is configured this is
-    /// a no-op and no task is spawned.
+    /// spawned task owns cloned handles to `repo`, `summarizer`, and the event
+    /// broker; errors are logged, never propagated. When no summarizer is
+    /// configured this is a no-op and no task is spawned.
     fn spawn_summarize_call(&self, call_id: Uuid) {
         let Some(summarizer) = self.summarizer.clone() else {
             return;
         };
         let repo = self.repo.clone();
+        let event_broker = self.event_broker.clone();
         tokio::spawn(async move {
             if let Err(e) = generate_and_persist_custom_speakers(&repo, &summarizer, &call_id).await
             {
@@ -1494,34 +1642,32 @@ impl<
                 }
             };
 
-            if let Err(e) = repo.insert_call_summary(&call_id, &summary).await {
-                tracing::error!(error=?e, %call_id, "failed to persist call summary");
-                return;
-            }
-
-            if record.custom_name.is_none() {
-                match summarizer.generate_call_name(&call_id, &summary).await {
-                    Ok(Some(name)) => {
-                        if let Err(e) = repo.set_custom_name_if_null(&call_id, &name).await {
-                            tracing::error!(
-                                error=?e, %call_id,
-                                "failed to persist ai-generated call name"
-                            );
-                        }
-                    }
-                    Ok(None) => {
-                        tracing::info!(
-                            %call_id,
-                            "ai call naming returned no title; leaving name unset"
-                        );
-                    }
-                    Err(e) => {
-                        tracing::error!(
-                            error=?e, %call_id,
-                            "ai call naming failed after summary; leaving name unset"
-                        );
-                    }
+            let summary_persisted = match repo.insert_call_summary(&call_id, &summary).await {
+                Ok(persisted) => persisted,
+                Err(e) => {
+                    tracing::error!(error=?e, %call_id, "failed to persist call summary");
+                    return;
                 }
+            };
+
+            let ai_name_generated = generate_and_persist_call_name(
+                &repo,
+                &summarizer,
+                &call_id,
+                &summary,
+                record.custom_name.is_none(),
+            )
+            .await;
+
+            if summary_persisted {
+                publish_call_event(
+                    &event_broker,
+                    &CallMacroEvent::record_summarized(CallRecordSummarizedMetadata {
+                        call_id,
+                        channel_id: record.channel_id,
+                        ai_name_generated,
+                    }),
+                );
             }
         });
     }
@@ -1539,6 +1685,55 @@ impl<
         tokio::spawn(async move {
             enroll_stable_speaker_voices_for_call_record(&repo, &voice_repo, call_record_id).await;
         });
+    }
+}
+
+fn publish_call_event<B: MacroEventBroker>(event_broker: &B, event: &CallMacroEvent) {
+    drop(event_broker.send_event(event).inspect_err(|error| {
+        tracing::error!(error = ?error, "failed to schedule call lifecycle event");
+    }));
+}
+
+async fn generate_and_persist_call_name<R, Sm>(
+    repo: &R,
+    summarizer: &Sm,
+    call_id: &Uuid,
+    summary: &str,
+    should_generate_name: bool,
+) -> bool
+where
+    R: CallRepository,
+    Sm: CallSummarizer,
+{
+    if !should_generate_name {
+        return false;
+    }
+
+    match summarizer.generate_call_name(call_id, summary).await {
+        Ok(Some(name)) => match repo.set_custom_name_if_null(call_id, &name).await {
+            Ok(name_persisted) => name_persisted,
+            Err(e) => {
+                tracing::error!(
+                    error=?e, %call_id,
+                    "failed to persist ai-generated call name"
+                );
+                false
+            }
+        },
+        Ok(None) => {
+            tracing::info!(
+                %call_id,
+                "ai call naming returned no title; leaving name unset"
+            );
+            false
+        }
+        Err(e) => {
+            tracing::error!(
+                error=?e, %call_id,
+                "ai call naming failed after summary; leaving name unset"
+            );
+            false
+        }
     }
 }
 

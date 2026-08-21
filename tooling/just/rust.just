@@ -3,11 +3,11 @@ import './database.just'
 mod sqlx './sqlx.just'
 
 rust-check:
-    RUSTFLAGS=-Dwarnings RUSTDOCFLAGS=-Dwarnings CARGO_TERM_COLOR=always SQLX_OFFLINE=true cargo check --workspace --all-features --exclude test_build_full_pdf_modification_data --exclude test_pdf_modification_data_deserialize --exclude sync_service
+    RUSTFLAGS=-Dwarnings RUSTDOCFLAGS=-Dwarnings CARGO_TERM_COLOR=always SQLX_OFFLINE=true cargo check --workspace --all-features --exclude sync_service
     RUSTFLAGS="-Dwarnings -Dclippy::disallowed_methods" RUSTDOCFLAGS=-Dwarnings CARGO_TERM_COLOR=always SQLX_OFFLINE=true cargo check -p sync_service
 
 clippy:
-    RUSTFLAGS="-Dwarnings -Dclippy::disallowed_methods" RUSTDOCFLAGS=-Dwarnings CARGO_TERM_COLOR=always SQLX_OFFLINE=true cargo clippy --workspace --all-features --exclude sync_service --exclude test_build_full_pdf_modification_data --exclude test_pdf_modification_data_deserialize
+    RUSTFLAGS="-Dwarnings -Dclippy::disallowed_methods" RUSTDOCFLAGS=-Dwarnings CARGO_TERM_COLOR=always SQLX_OFFLINE=true cargo clippy --workspace --all-features --exclude sync_service
     RUSTFLAGS="-Dwarnings -Dclippy::disallowed_methods" RUSTDOCFLAGS=-Dwarnings CARGO_TERM_COLOR=always SQLX_OFFLINE=true cargo clippy -p sync_service -- -A clippy::unnecessary_map_or -A clippy::collapsible_if
 
 # This can be used in any crate that uses macrodb under the hood
@@ -67,7 +67,6 @@ build_lambdas compiler="":
 setup_test_envs:
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/contacts/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./services/delete_chat_handler/.env
-    echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/integration_tests/test_pdf_modification_data_deserialize/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./services/email_sfs_delete_handler/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./services/scheduled_action/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/notification_db_client/.env
@@ -86,6 +85,7 @@ setup_test_envs:
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/teams/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/frecency/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/favorites/.env
+    echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/reminders/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/soup/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/email/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/system_properties/.env
@@ -95,9 +95,9 @@ setup_test_envs:
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/saved_views/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/channels/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/documents/.env
+    echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/projects/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/foreign_entity/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/stream/.env
-    echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/macro_project_utils/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/entity_access/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/github/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/referral/.env
@@ -118,6 +118,8 @@ setup_test_envs:
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/ai_projections/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./services/ai_projections_refresh_handler/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/webhook/.env
+    echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/calendar_events/.env
+    echo "DATABASE_URL={{ DATABASE_URL }}" >> ./services/email_service/.env
 
 setup_macrodb:
     just crates/macro_db_client/create_db

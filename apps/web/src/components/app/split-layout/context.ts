@@ -1,3 +1,4 @@
+import type { HotkeyToken } from '@core/hotkey/tokens';
 import type { NullableSize } from '@solid-primitives/resize-observer';
 import {
   type Accessor,
@@ -5,39 +6,13 @@ import {
   createContext,
   type JSX,
   type Setter,
-  type Signal,
 } from 'solid-js';
 import type { SplitHandle, SplitManager } from './layoutManager';
-
-export type CollapsibleRegistration = {
-  id: string;
-  priority: number; // lower = higher priority to collapse first
-  collapsed: Accessor<boolean>;
-  // silent skips onCollapsedChange — used for pre-paint trial measurements
-  setCollapsed: (value: boolean, opts?: { silent?: boolean }) => void;
-  ref: Accessor<HTMLElement | null | undefined>; // uncollapsed element — measured before collapse
-  collapsedRef?: Accessor<HTMLElement | null | undefined>; // collapsed element — measured while collapsed
-};
-
-export type CollapsibleItemInput = Omit<
-  CollapsibleRegistration,
-  'collapsed' | 'setCollapsed'
-> & {
-  onCollapsedChange?: (isCollapsed: boolean) => void;
-};
-
-export type HeaderCollapser = {
-  register: (reg: CollapsibleRegistration) => () => void; // returns cleanup
-};
+import type { PriorityCollapser } from './utils/createPriorityCollapser';
 
 export const SplitLayoutContext = createContext<{
   manager: SplitManager;
 }>();
-
-export type HalfSplitState = {
-  percentage: number;
-  side: 'left' | 'right';
-};
 
 export type SplitBottomPanelRegistration = {
   id: string;
@@ -51,14 +26,35 @@ export type SplitFileMenuAction = {
   icon: Component;
   action?: (e?: MouseEvent) => void;
   children?: SplitFileMenuAction[];
-  group?: 'delete';
+  /** Only set when the token's shortcut is executable from the split. */
+  hotkeyToken?: HotkeyToken;
+  group?: SplitFileMenuActionGroup;
 };
 
+/** Menu sections, in render order. */
 export type SplitFileMenuActionGroups = {
-  primaryOps: SplitFileMenuAction[];
-  tools: SplitFileMenuAction[];
-  deleteOps: SplitFileMenuAction[];
+  /** Actions specific to the block's entity type, e.g. email's Mark done. */
+  entity: SplitFileMenuAction[];
+  /** Email sender actions. */
+  sender: SplitFileMenuAction[];
+  /** Share, Copy Link, Copy ID, and friends. */
+  sharing: SplitFileMenuAction[];
+  /** Macro platform features: Favorite, Remind me, Add tag. */
+  macro: SplitFileMenuAction[];
+  /** Non-destructive operations on the file itself: Duplicate, Rename, Move, Download. */
+  file: SplitFileMenuAction[];
+  /** Destructive actions, always last. */
+  delete: SplitFileMenuAction[];
 };
+
+/**
+ * Menu section an action renders in. Untagged tools and ops default to the
+ * entity section — a block's own actions are entity-specific unless said
+ * otherwise; a `group` tag moves an action to another section (Share and
+ * Download live with their injected siblings, email keeps sender actions
+ * right below its entity actions).
+ */
+export type SplitFileMenuActionGroup = keyof SplitFileMenuActionGroups;
 
 export type SplitFileMenuActionSection = {
   key: keyof SplitFileMenuActionGroups;
@@ -69,9 +65,12 @@ export function getSplitFileMenuActionSections(
   groups: SplitFileMenuActionGroups
 ): SplitFileMenuActionSection[] {
   const sections: SplitFileMenuActionSection[] = [
-    { key: 'tools', actions: groups.tools },
-    { key: 'primaryOps', actions: groups.primaryOps },
-    { key: 'deleteOps', actions: groups.deleteOps },
+    { key: 'entity', actions: groups.entity },
+    { key: 'sender', actions: groups.sender },
+    { key: 'sharing', actions: groups.sharing },
+    { key: 'macro', actions: groups.macro },
+    { key: 'file', actions: groups.file },
+    { key: 'delete', actions: groups.delete },
   ];
 
   return sections.filter((section) => section.actions.length > 0);
@@ -85,10 +84,8 @@ export type SplitPanelContextType = {
   panelSize: NullableSize;
   contentOffsetTop: Accessor<number>;
   setContentOffsetTop: Setter<number>;
-  halfSplitState?: Accessor<HalfSplitState | undefined>;
   bottomPanel: Accessor<SplitBottomPanelRegistration | undefined>;
   registerBottomPanel: (panel: SplitBottomPanelRegistration) => () => void;
-  previewState: Signal<boolean>;
   layoutRefs: {
     headerLeft?: HTMLDivElement;
     headerRight?: HTMLDivElement;
@@ -101,7 +98,8 @@ export type SplitPanelContextType = {
   setTitleFileMenuTrigger: Setter<(() => void) | undefined>;
   titleFileMenuActions: Accessor<SplitFileMenuActionGroups | undefined>;
   setTitleFileMenuActions: Setter<SplitFileMenuActionGroups | undefined>;
-  headerCollapser: HeaderCollapser;
+  headerCollapser: PriorityCollapser;
+  toolbarCollapser: PriorityCollapser;
 };
 
 export const SplitPanelContext = createContext<SplitPanelContextType>();

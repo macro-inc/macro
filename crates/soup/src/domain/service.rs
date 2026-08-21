@@ -1,8 +1,10 @@
 use crate::domain::{
     models::{
-        AdvancedSortParams, FrecencyQueryInner, FrecencySoupItem, GetCrmCompaniesRequest,
-        GroupedSortRequest, GroupedSoupItem, IntoSoupReqAst, SimpleQueryInner, SimpleSortQuery,
-        SimpleSortRequest, SoupErr, SoupQuery, SoupRequest, SoupType,
+        AdvancedSortParams, EnrichedSoupItem, FrecencyQueryInner, GetCrmCompaniesRequest,
+        GetRemindersRequest, GroupedSortRequest, IntoSoupReqAst, SimpleQueryInner, SimpleSortQuery,
+        SimpleSortRequest, SoupErr, SoupPropertiesField, SoupQuery, SoupRequest, SoupSortDirection,
+        SoupType, TouchedPagePosition, TouchedQueryInner, TouchedSoupRequest,
+        grouping::ItemGroupingInfo,
     },
     ports::{SoupOutput, SoupRepo, SoupService},
 };
@@ -16,22 +18,27 @@ use crm::domain::service::CrmService;
 use doppleganger::Mirror;
 use either::Either;
 use email::domain::{
-    models::{EnrichedEmailThreadPreview, GetEmailsRequest},
+    models::{EnrichedEmailThreadPreview, GetEmailsRequest, PreviewView, PreviewViewStandardLabel},
     ports::EmailPreviewServiceReadOnly,
 };
 use entity_access::domain::models::{EntityAccessReceipt, MemberTeamRole};
+use filter_ast::Expr;
 use foreign_entity::domain::{
     models::{ForeignEntity, SourceId},
     ports::{ForeignEntityListQuery, ForeignEntityService},
 };
 use frecency::domain::{
-    models::{AggregateId, FrecencyPageRequest, JoinFrecency},
+    models::{
+        AggregateFrecency, AggregateId, FrecencyByIdsRequest, FrecencyPageRequest, JoinFrecency,
+    },
     ports::FrecencyQueryService,
 };
-use item_filters::ast::EntityFilterAst;
+use item_filters::ast::{EntityFilterAst, channel::ChannelLiteral, email::EmailLiteral};
 use macro_user_id::user_id::MacroUserIdStr;
+use model_entity::EntityType;
 use models_pagination::{
-    Cursor, CursorVal, Frecency, FrecencyValue, PaginateOn, Query, SimpleSortMethod,
+    Base64Str, Cursor, CursorVal, Frecency, FrecencyValue, Identify, PaginateOn, Paginated, Query,
+    SimpleSortMethod, SortOn, TouchedByMe,
 };
 use models_properties::service::property_definition_with_options::PropertyDefinitionWithOptions;
 use models_soup::{
@@ -44,15 +51,82 @@ use models_soup::{
     },
     foreign_entity::SoupForeignEntity,
     item::SoupItem,
+    reminder::SoupReminder,
 };
+use reminders::domain::{models::SoupReminderQuery, ports::RemindersService};
 use serde::Serialize;
 use std::cmp::Ordering;
+use std::collections::HashMap;
+use std::sync::Arc;
 use uuid::Uuid;
 
 #[cfg(test)]
 mod tests;
 
-fn foreign_entity_to_soup_item(entity: ForeignEntity) -> SoupItem {
+#[derive(Debug)]
+struct SoupCandidate {
+    item: SoupItem<()>,
+    frecency_score: Option<AggregateFrecency>,
+    touched_at: Option<chrono::DateTime<chrono::Utc>>,
+}
+
+impl SoupCandidate {
+    /// A candidate with no frecency or touch timestamp loaded yet.
+    fn plain(item: SoupItem<()>) -> Self {
+        SoupCandidate {
+            item,
+            frecency_score: None,
+            touched_at: None,
+        }
+    }
+}
+
+impl Identify for SoupCandidate {
+    type Id = String;
+
+    fn id(&self) -> Self::Id {
+        self.item.entity().entity_id.to_string()
+    }
+}
+
+impl SortOn<Frecency> for SoupCandidate {
+    fn sort_on(sort_type: Frecency) -> impl FnMut(&Self) -> CursorVal<Frecency> {
+        move |candidate| CursorVal {
+            sort_type,
+            last_val: match &candidate.frecency_score {
+                Some(frecency) => FrecencyValue::FrecencyScore(frecency.data.frecency_score),
+                None => FrecencyValue::UpdatedAt(candidate.item.updated_at()),
+            },
+        }
+    }
+}
+
+impl SortOn<SimpleSortMethod> for SoupCandidate {
+    fn sort_on(sort: SimpleSortMethod) -> impl FnMut(&Self) -> CursorVal<SimpleSortMethod> {
+        let mut sort_item = SoupItem::sort_on(sort);
+        move |candidate| sort_item(&candidate.item)
+    }
+}
+
+/// Builds a balanced `Or` tree over the given expressions. Balanced rather
+/// than a linear fold: a full 500-item page folded linearly produces a
+/// recursion-deep tree that downstream walkers and serializers reject.
+fn balanced_or_tree<T>(mut nodes: Vec<Expr<T>>) -> Option<Arc<Expr<T>>> {
+    while nodes.len() > 1 {
+        let mut next = Vec::with_capacity(nodes.len().div_ceil(2));
+        let mut iter = nodes.into_iter();
+        while let Some(first) = iter.next() {
+            next.push(match iter.next() {
+                Some(second) => Expr::or(first, second),
+                None => first,
+            });
+        }
+        nodes = next;
+    }
+    nodes.pop().map(Arc::new)
+}
+
+fn foreign_entity_to_soup_item(entity: ForeignEntity) -> SoupItem<()> {
     SoupItem::ForeignEntity(SoupForeignEntity {
         id: entity.id,
         foreign_entity_id: entity.foreign_entity_id,
@@ -66,7 +140,7 @@ fn foreign_entity_to_soup_item(entity: ForeignEntity) -> SoupItem {
 }
 
 /// struct which handles the actual implementation of soup with abstracted interfaces for mocking
-pub struct SoupImpl<T, U, V, C, K, Crm, F> {
+pub struct SoupImpl<T, U, V, C, K, Crm, F, Rem> {
     /// the interface for interacting with the db
     soup_storage: T,
     /// the interface for interacting with frecency
@@ -81,9 +155,11 @@ pub struct SoupImpl<T, U, V, C, K, Crm, F> {
     crm_service: Crm,
     /// the interface for interacting with foreign entities
     foreign_entity_service: F,
+    /// the interface for interacting with reminders
+    reminders_service: Rem,
 }
 
-impl<T, U, V, C, K, Crm, F> SoupImpl<T, U, V, C, K, Crm, F>
+impl<T, U, V, C, K, Crm, F, Rem> SoupImpl<T, U, V, C, K, Crm, F, Rem>
 where
     T: SoupRepo,
     anyhow::Error: From<T::Err>,
@@ -93,8 +169,10 @@ where
     K: CallRecordQueryService,
     Crm: CrmService,
     F: ForeignEntityService,
+    Rem: RemindersService,
 {
     /// Creates a soup service from its repository and dependent domain services.
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         soup_storage: T,
         frecency: U,
@@ -103,6 +181,7 @@ where
         call_record_service: K,
         crm_service: Crm,
         foreign_entity_service: F,
+        reminders_service: Rem,
     ) -> Self {
         SoupImpl {
             soup_storage,
@@ -112,6 +191,7 @@ where
             call_record_service,
             crm_service,
             foreign_entity_service,
+            reminders_service,
         }
     }
 
@@ -120,7 +200,7 @@ where
         &self,
         soup_type: SoupType,
         req: SimpleSortRequest<'_>,
-    ) -> Result<impl Iterator<Item = FrecencySoupItem>, SoupErr> {
+    ) -> Result<impl Iterator<Item = SoupCandidate>, SoupErr> {
         let res = match soup_type {
             SoupType::Expanded => self
                 .soup_storage
@@ -133,18 +213,14 @@ where
                 .await
                 .map_err(anyhow::Error::from)?,
         };
-
-        Ok(res.into_iter().map(|item| FrecencySoupItem {
-            item,
-            frecency_score: None,
-        }))
+        Ok(res.into_iter().map(SoupCandidate::plain))
     }
 
     #[tracing::instrument(err, skip(self, req))]
     async fn handle_grouped_soup_request(
         &self,
         req: GroupedSortRequest<'_>,
-    ) -> Result<Vec<GroupedSoupItem>, SoupErr> {
+    ) -> Result<T::GroupedItems, SoupErr> {
         self.soup_storage
             .expanded_grouped_cursor_soup(req)
             .await
@@ -157,7 +233,7 @@ where
         &self,
         soup_type: SoupType,
         req: AdvancedSortParams<'_>,
-    ) -> Result<Vec<SoupItem>, T::Err> {
+    ) -> Result<Vec<SoupItem<()>>, T::Err> {
         match soup_type {
             SoupType::Expanded => self.soup_storage.expanded_soup_by_ids(req).await,
             SoupType::UnExpanded => self.soup_storage.unexpanded_soup_by_ids(req).await,
@@ -170,9 +246,9 @@ where
         &self,
         soup_type: SoupType,
         user: MacroUserIdStr<'_>,
-        frecency_items: impl ExactSizeIterator<Item = FrecencySoupItem>,
+        frecency_items: impl ExactSizeIterator<Item = SoupCandidate>,
         limit: u16,
-    ) -> Result<impl Iterator<Item = FrecencySoupItem>, SoupErr> {
+    ) -> Result<impl Iterator<Item = SoupCandidate>, SoupErr> {
         let len = frecency_items.len();
         let remainder_to_fetch = (limit as usize).saturating_sub(len);
 
@@ -199,7 +275,7 @@ where
         soup_type: SoupType,
         user: MacroUserIdStr<'static>,
         limit: u16,
-    ) -> Result<impl Iterator<Item = FrecencySoupItem>, SoupErr> {
+    ) -> Result<impl Iterator<Item = SoupCandidate>, SoupErr> {
         let from_score = match cursor {
             Query::Sort(_, _) => None,
             Query::Cursor(Cursor {
@@ -272,7 +348,7 @@ where
         soup_type: SoupType,
         user: MacroUserIdStr<'static>,
         limit: u16,
-    ) -> Result<impl Iterator<Item = FrecencySoupItem>, SoupErr> {
+    ) -> Result<impl Iterator<Item = SoupCandidate>, SoupErr> {
         let (from_score, filters) = match from_value {
             None => (None, None),
             Some((s, f)) => (Some(s), f),
@@ -306,9 +382,10 @@ where
                 user_id: user.copied().into_owned(),
             })
             .into_iter()
-            .map(|(soup_item, frecency)| FrecencySoupItem {
+            .map(|(soup_item, frecency)| SoupCandidate {
                 item: soup_item,
                 frecency_score: Some(frecency),
+                touched_at: None,
             });
 
         Ok(match res.len().cmp(&(limit as usize)) {
@@ -320,12 +397,209 @@ where
         })
     }
 
+    /// Runs one page of the touched-by-me feed: fetches (entity, touched_at)
+    /// candidates from the activity log, hydrates each entity type by id, and
+    /// reassembles the page in touched order. Returns the ordered candidates
+    /// plus the next keyset position when the candidate page was full.
+    #[tracing::instrument(err, skip(self, cursor))]
+    async fn handle_touched_request(
+        &self,
+        cursor: Query<String, TouchedByMe, Option<EntityFilterAst>>,
+        soup_type: SoupType,
+        user: MacroUserIdStr<'static>,
+        limit: u16,
+        link_ids: Vec<Uuid>,
+    ) -> Result<(Vec<SoupCandidate>, Option<TouchedPagePosition>), SoupErr> {
+        // Channel and email filter trees fold in their own domains' query
+        // builders, which the touched candidate query cannot reach.
+        // Rejecting beats accepting the filter and silently returning a
+        // feed with that whole type missing.
+        if let Some(ast) = cursor.filter() {
+            if ast.channel_filter.is_some() {
+                return Err(SoupErr::TouchedUnsupportedFilter("channel"));
+            }
+            if ast.email_filter.tree.is_some() || ast.email_filter.crm_scope.is_some() {
+                return Err(SoupErr::TouchedUnsupportedFilter("email"));
+            }
+        }
+
+        let after = match &cursor {
+            Query::Sort(_, _) => None,
+            Query::Cursor(c) => Some(TouchedPagePosition {
+                occurred_at: c.val.last_val,
+                entity_id: c.id.clone(),
+            }),
+        };
+        let touched = self
+            .soup_storage
+            .touched_soup_page(TouchedSoupRequest {
+                user_id: user.copied(),
+                limit,
+                after,
+                filter: cursor.filter().as_ref(),
+                link_ids: &link_ids,
+            })
+            .await
+            .map_err(anyhow::Error::from)?;
+
+        // The next cursor comes from the candidate page's own keyset, not
+        // the hydrated item count: the candidate query already gates on
+        // existence/access, so hydration only loses items to races, and a
+        // race must not end the feed early.
+        let next = (touched.len() == usize::from(limit))
+            .then(|| {
+                touched.last().map(|last| TouchedPagePosition {
+                    occurred_at: last.touched_at,
+                    entity_id: last.entity.entity_id.to_string(),
+                })
+            })
+            .flatten();
+
+        let mut main_entities = Vec::new();
+        let mut project_entities = Vec::new();
+        let mut channel_ids = Vec::new();
+        let mut email_ids = Vec::new();
+        for candidate in &touched {
+            match candidate.entity.entity_type {
+                EntityType::Document | EntityType::Chat => {
+                    main_entities.push(candidate.entity.copied())
+                }
+                // Projects are rows of this feed in both soup types, but the
+                // expanded by-ids query deliberately omits project rows, so
+                // under Expanded they hydrate through a separate unexpanded
+                // query. Under UnExpanded the main query is already the
+                // unexpanded one — projects ride it, saving a round trip.
+                EntityType::Project => match soup_type {
+                    SoupType::Expanded => project_entities.push(candidate.entity.copied()),
+                    SoupType::UnExpanded => main_entities.push(candidate.entity.copied()),
+                },
+                EntityType::Channel => match Uuid::parse_str(&candidate.entity.entity_id) {
+                    Ok(id) => channel_ids.push(id),
+                    Err(error) => {
+                        tracing::warn!(error = ?error, "touched channel id is not a uuid; skipping")
+                    }
+                },
+                EntityType::EmailThread => match Uuid::parse_str(&candidate.entity.entity_id) {
+                    Ok(id) => email_ids.push(id),
+                    Err(error) => {
+                        tracing::warn!(error = ?error, "touched thread id is not a uuid; skipping")
+                    }
+                },
+                // The candidate query only returns the types above.
+                _ => {}
+            }
+        }
+
+        let comms_request = balanced_or_tree(
+            channel_ids
+                .iter()
+                .map(|id| Expr::val(ChannelLiteral::ChannelId(*id)))
+                .collect(),
+        )
+        .map(|tree| GetChannelsRequest {
+            macro_id: user.clone(),
+            limit: Some(channel_ids.len() as u32),
+            include_frecency: false,
+            query: Query::Sort(SimpleSortMethod::UpdatedAt, Some(tree)),
+        });
+        let email_request = balanced_or_tree(
+            email_ids
+                .iter()
+                .map(|id| Expr::val(EmailLiteral::ThreadId(*id)))
+                .collect(),
+        )
+        .map(|tree| GetEmailsRequest {
+            // The `All` view adds no thread/message conditions. Any other
+            // view would re-filter threads the candidate query already
+            // admitted (Inbox drops just-sent and archived threads), and a
+            // candidate that fails hydration is lost from the page.
+            view: PreviewView::StandardLabel(PreviewViewStandardLabel::All),
+            link_ids: link_ids.clone(),
+            macro_id: user.clone(),
+            limit: Some(email_ids.len() as u32),
+            query: Query::Sort(SimpleSortMethod::UpdatedAt, Some(tree)),
+            include_frecency: false,
+            team_receipt: None,
+            crm_scope: None,
+        });
+
+        // The repo error type is not Send, so it cannot ride through
+        // tokio::join!; convert inside the future instead.
+        let main_items_fut = async {
+            self.handle_soup_by_ids(
+                soup_type,
+                AdvancedSortParams {
+                    entities: &main_entities,
+                    user_id: user.copied(),
+                },
+            )
+            .await
+            .map_err(anyhow::Error::from)
+            .map_err(SoupErr::from)
+        };
+        let project_items_fut = async {
+            if project_entities.is_empty() {
+                return Ok(Vec::new());
+            }
+            self.soup_storage
+                .unexpanded_soup_by_ids(AdvancedSortParams {
+                    entities: &project_entities,
+                    user_id: user.copied(),
+                })
+                .await
+                .map_err(anyhow::Error::from)
+                .map_err(SoupErr::from)
+        };
+        let (main_items, project_items, channel_candidates, email_candidates) = tokio::join!(
+            main_items_fut,
+            project_items_fut,
+            self.handle_comms_request(comms_request),
+            self.handle_email_request(email_request),
+        );
+
+        let mut items_by_entity: HashMap<(EntityType, String), SoupItem<()>> = HashMap::new();
+        for item in main_items?
+            .into_iter()
+            .chain(project_items?)
+            .chain(channel_candidates?.map(|c| c.item))
+            .chain(email_candidates?.map(|c| c.item))
+        {
+            let key = {
+                let entity = item.entity();
+                (entity.entity_type, entity.entity_id.to_string())
+            };
+            items_by_entity.insert(key, item);
+        }
+
+        let candidates = touched
+            .into_iter()
+            .filter_map(|candidate| {
+                let key = (
+                    candidate.entity.entity_type,
+                    candidate.entity.entity_id.to_string(),
+                );
+                let item = items_by_entity.remove(&key).or_else(|| {
+                    // The candidate query gates on existence and access, so
+                    // a miss is a race (revoked/deleted mid-request).
+                    tracing::warn!(entity_type = ?key.0, "touched entity did not hydrate; skipping");
+                    None
+                })?;
+                Some(SoupCandidate {
+                    item,
+                    frecency_score: None,
+                    touched_at: Some(candidate.touched_at),
+                })
+            })
+            .collect();
+
+        Ok((candidates, next))
+    }
+
     #[tracing::instrument(err, skip(self, req))]
     async fn handle_email_request(
         &self,
-        user_id: MacroUserIdStr<'_>,
         req: Option<GetEmailsRequest>,
-    ) -> Result<impl Iterator<Item = FrecencySoupItem>, SoupErr> {
+    ) -> Result<impl Iterator<Item = SoupCandidate>, SoupErr> {
         use frecency::domain::models::AggregateFrecency;
 
         let Some(req) = req else {
@@ -336,7 +610,7 @@ where
 
         let mut frecency_scores: Vec<Option<AggregateFrecency>> =
             Vec::with_capacity(email_response.items.len());
-        let mut items: Vec<SoupItem> = email_response
+        let items: Vec<SoupItem<()>> = email_response
             .items
             .into_iter()
             .map(
@@ -354,35 +628,27 @@ where
                         attachments: Vec::<SoupAttachment>::mirror(attachments),
                         participants: Vec::<SoupContact>::mirror(participants),
                         labels: Vec::<SoupLabel>::mirror(labels),
-                        properties: Default::default(),
+                        extra: (),
                     };
                     SoupItem::EmailThread(soup_email)
                 },
             )
             .collect();
 
-        self.soup_storage
-            .populate_properties(user_id, &mut items)
-            .await
-            .map_err(anyhow::Error::from)?;
-
-        let emails_with_props: Vec<FrecencySoupItem> = items
-            .into_iter()
-            .zip(frecency_scores)
-            .map(|(item, frecency_score)| FrecencySoupItem {
+        Ok(Either::Right(items.into_iter().zip(frecency_scores).map(
+            |(item, frecency_score)| SoupCandidate {
                 item,
                 frecency_score,
-            })
-            .collect();
-
-        Ok(Either::Right(emails_with_props.into_iter()))
+                touched_at: None,
+            },
+        )))
     }
 
     #[tracing::instrument(err, skip(self, req))]
     async fn handle_comms_request(
         &self,
         req: Option<GetChannelsRequest>,
-    ) -> Result<impl Iterator<Item = FrecencySoupItem>, SoupErr> {
+    ) -> Result<impl Iterator<Item = SoupCandidate>, SoupErr> {
         let Some(req) = req else {
             return Ok(Either::Left(None.into_iter()));
         };
@@ -396,9 +662,10 @@ where
                     r.into_iter().map(|mut c| {
                         let frecency_score = c.frecency_score.take();
                         let soup_channel = SoupChannel::new_from_channels(c);
-                        FrecencySoupItem {
+                        SoupCandidate {
                             item: SoupItem::Channel(soup_channel),
                             frecency_score,
+                            touched_at: None,
                         }
                     })
                 })?,
@@ -409,7 +676,7 @@ where
     async fn handle_comms_thread_request(
         &self,
         req: Option<GetThreadReplyRowsRequest>,
-    ) -> Result<impl Iterator<Item = FrecencySoupItem>, SoupErr> {
+    ) -> Result<impl Iterator<Item = SoupCandidate>, SoupErr> {
         let Some(req) = req else {
             return Ok(Either::Left(None.into_iter()));
         };
@@ -420,11 +687,10 @@ where
                 .await
                 .map_err(|_| SoupErr::CommsErr)?
                 .into_iter()
-                .map(|message| FrecencySoupItem {
-                    item: SoupItem::ChannelThread(SoupChannelThread::new_from_channel_message(
-                        message,
-                    )),
-                    frecency_score: None,
+                .map(|message| {
+                    SoupCandidate::plain(SoupItem::ChannelThread(
+                        SoupChannelThread::new_from_channel_message(message),
+                    ))
                 }),
         ))
     }
@@ -433,7 +699,7 @@ where
     async fn handle_crm_company_request(
         &self,
         req: Option<GetCrmCompaniesRequest>,
-    ) -> Result<impl Iterator<Item = FrecencySoupItem>, SoupErr> {
+    ) -> Result<impl Iterator<Item = SoupCandidate>, SoupErr> {
         let Some(req) = req else {
             return Ok(Either::Left(None.into_iter()));
         };
@@ -448,7 +714,7 @@ where
             limit,
         } = req;
 
-        let mut items: Vec<SoupItem> = self
+        let items: Vec<SoupItem<()>> = self
             .crm_service
             .list_companies_for_soup(
                 &access,
@@ -468,49 +734,76 @@ where
             .map(|company| SoupItem::CrmCompany(SoupCrmCompany::from(company)))
             .collect();
 
-        // Companies are fetched outside the main soup queries (which hydrate
-        // their own items), so attach entity properties here.
-        if !items.is_empty() {
-            self.soup_storage
-                .populate_properties(user_id, &mut items)
-                .await
-                .map_err(anyhow::Error::from)?;
-        }
+        Ok(Either::Right(items.into_iter().map(SoupCandidate::plain)))
+    }
 
-        Ok(Either::Right(items.into_iter().map(|item| {
-            FrecencySoupItem {
-                item,
-                frecency_score: None,
-            }
-        })))
+    #[tracing::instrument(err, skip(self, req))]
+    async fn handle_reminder_request(
+        &self,
+        req: Option<GetRemindersRequest<'_>>,
+    ) -> Result<impl Iterator<Item = SoupCandidate>, SoupErr> {
+        let Some(req) = req else {
+            return Ok(Either::Left(None.into_iter()));
+        };
+
+        let GetRemindersRequest {
+            user_id,
+            reminder_ids,
+            entities,
+            completed,
+            fired,
+            order,
+            limit,
+        } = req;
+
+        let items: Vec<SoupItem<()>> = self
+            .reminders_service
+            .list_reminders_for_soup(
+                &user_id,
+                SoupReminderQuery {
+                    ids: &reminder_ids,
+                    entities: &entities,
+                    completed,
+                    fired,
+                    order,
+                    limit,
+                },
+            )
+            .await
+            .map_err(|err| {
+                tracing::error!(error = ?err, "reminder soup request failed");
+                SoupErr::ReminderErr
+            })?
+            .into_iter()
+            .map(|reminder| SoupItem::Reminder(SoupReminder::from(reminder)))
+            .collect();
+
+        Ok(Either::Right(items.into_iter().map(SoupCandidate::plain)))
     }
 
     #[tracing::instrument(err, skip(self, req))]
     async fn handle_call_request(
         &self,
         req: Option<GetCallRecordsRequest>,
-    ) -> Result<impl Iterator<Item = FrecencySoupItem>, SoupErr> {
+    ) -> Result<impl Iterator<Item = SoupCandidate>, SoupErr> {
         let Some(req) = req else {
             return Ok(Either::Left(None.into_iter()));
         };
 
-        let user_id = req.user_id.as_ref().to_string();
+        let user_id_str = req.user_id.as_ref().to_string();
 
-        Ok(Either::Right(
-            self.call_record_service
-                .get_user_call_records(req)
-                .await
-                .map_err(|_| SoupErr::CallErr)
-                .map(|records| {
-                    records.into_iter().map(move |record| {
-                        let soup_record = SoupCallRecord::from_record_for_user(record, &user_id);
-                        FrecencySoupItem {
-                            item: SoupItem::Call(soup_record),
-                            frecency_score: None,
-                        }
-                    })
-                })?,
-        ))
+        let items: Vec<SoupItem<()>> = self
+            .call_record_service
+            .get_user_call_records(req)
+            .await
+            .map_err(|_| SoupErr::CallErr)?
+            .into_iter()
+            .map(|record| {
+                SoupItem::Call(SoupCallRecord::from_record_for_user(record, &user_id_str))
+            })
+            .collect();
+
+        Ok(Either::Right(items.into_iter().map(SoupCandidate::plain)))
     }
 
     #[tracing::instrument(err, skip(self, source_ids, query))]
@@ -520,7 +813,7 @@ where
         source_ids: Vec<SourceId>,
         limit: u32,
         query: Option<ForeignEntityListQuery>,
-    ) -> Result<impl Iterator<Item = FrecencySoupItem>, SoupErr> {
+    ) -> Result<impl Iterator<Item = SoupCandidate>, SoupErr> {
         let Some(query) = query else {
             return Ok(Either::Left(None.into_iter()));
         };
@@ -530,38 +823,207 @@ where
                 .get_foreign_entities_for_user(requesting_user, source_ids, limit, query)
                 .await?
                 .into_iter()
-                .map(|entity| FrecencySoupItem {
-                    item: foreign_entity_to_soup_item(entity),
-                    frecency_score: None,
-                }),
+                .map(|entity| SoupCandidate::plain(foreign_entity_to_soup_item(entity))),
         ))
     }
-}
 
-impl<T, U, V, C, K, Crm, F> SoupService for SoupImpl<T, U, V, C, K, Crm, F>
-where
-    T: SoupRepo,
-    anyhow::Error: From<T::Err>,
-    U: FrecencyQueryService,
-    V: EmailPreviewServiceReadOnly,
-    C: ChannelListService,
-    K: CallRecordQueryService,
-    Crm: CrmService,
-    F: ForeignEntityService,
-{
-    #[tracing::instrument(err, skip(self, req, team_receipt))]
-    async fn get_user_soup<R>(
+    async fn populate_properties_items(
+        &self,
+        user_id: MacroUserIdStr<'_>,
+        items: Vec<SoupCandidate>,
+    ) -> Result<Vec<EnrichedSoupItem>, SoupErr> {
+        if items.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let (items, enrichments): (Vec<_>, Vec<_>) = items
+            .into_iter()
+            .map(|item| (item.item, (item.frecency_score, item.touched_at)))
+            .unzip();
+        let items = self
+            .soup_storage
+            .populate_properties(user_id, items)
+            .await
+            .map_err(anyhow::Error::from)?;
+        if items.len() != enrichments.len() {
+            return Err(SoupErr::SoupDbErr(anyhow::anyhow!(
+                "property hydration changed the number of Soup items"
+            )));
+        }
+
+        Ok(items
+            .into_iter()
+            .zip(enrichments)
+            .map(|(item, (frecency_score, touched_at))| EnrichedSoupItem {
+                item,
+                frecency_score,
+                touched_at,
+            })
+            .collect())
+    }
+
+    async fn populate_properties_page<Cursor>(
+        &self,
+        user_id: MacroUserIdStr<'_>,
+        page: Paginated<SoupCandidate, Cursor>,
+    ) -> Result<Paginated<EnrichedSoupItem, Cursor>, SoupErr> {
+        let (items, next_cursor) = page.into_parts();
+        let items = self.populate_properties_items(user_id, items).await?;
+        Ok(Paginated::from_parts(items, next_cursor))
+    }
+
+    async fn populate_properties_output<R>(
+        &self,
+        user_id: MacroUserIdStr<'_>,
+        output: SoupOutput<R, SoupCandidate>,
+    ) -> Result<SoupOutput<R, EnrichedSoupItem>, SoupErr> {
+        match output {
+            SoupOutput::Simple(page) => Ok(SoupOutput::Simple(
+                self.populate_properties_page(user_id, page).await?,
+            )),
+            SoupOutput::Frecency(page) => Ok(SoupOutput::Frecency(
+                self.populate_properties_page(user_id, page).await?,
+            )),
+            SoupOutput::Touched(page) => Ok(SoupOutput::Touched(
+                self.populate_properties_page(user_id, page).await?,
+            )),
+        }
+    }
+
+    async fn populate_frecency_page<Cursor>(
+        &self,
+        user_id: MacroUserIdStr<'_>,
+        mut page: Paginated<SoupCandidate, Cursor>,
+    ) -> Result<Paginated<SoupCandidate, Cursor>, SoupErr> {
+        if page.items.is_empty() {
+            return Ok(page);
+        }
+
+        let entities: Vec<_> = page.items.iter().map(|item| item.item.entity()).collect();
+        let mut frecency = self
+            .frecency
+            .get_frecencies_by_ids(FrecencyByIdsRequest {
+                user_id: user_id.clone(),
+                ids: &entities,
+            })
+            .await?
+            .into_inner();
+
+        for item in &mut page.items {
+            let id = AggregateId {
+                user_id: user_id.clone().into_owned(),
+                entity: item.item.entity(),
+            };
+            item.frecency_score = frecency.remove(&id).map(|data| id.into_aggregate(data));
+        }
+
+        Ok(page)
+    }
+
+    async fn populate_frecency_output<R>(
+        &self,
+        user_id: MacroUserIdStr<'_>,
+        output: SoupOutput<R, SoupCandidate>,
+    ) -> Result<SoupOutput<R, SoupCandidate>, SoupErr> {
+        match output {
+            // Simple sorting does not need frecency to construct the page, so
+            // load it once for only the final page.
+            SoupOutput::Simple(page) => Ok(SoupOutput::Simple(
+                self.populate_frecency_page(user_id, page).await?,
+            )),
+            // Frecency sorting already loaded the scores needed for ordering
+            // and cursor construction. Reuse them rather than issuing a
+            // duplicate by-id lookup.
+            SoupOutput::Frecency(page) => Ok(SoupOutput::Frecency(page)),
+            // Touched sorting orders on the activity log, so scores are not
+            // loaded during page construction; load them for the final page.
+            SoupOutput::Touched(page) => Ok(SoupOutput::Touched(
+                self.populate_frecency_page(user_id, page).await?,
+            )),
+        }
+    }
+
+    fn into_raw_output<R>(output: SoupOutput<R, SoupCandidate>) -> SoupOutput<R> {
+        output.map(|candidate| candidate.item)
+    }
+
+    fn into_enriched_output<R>(
+        output: SoupOutput<R, SoupCandidate>,
+    ) -> SoupOutput<R, EnrichedSoupItem> {
+        output.map(|candidate| EnrichedSoupItem {
+            item: candidate
+                .item
+                .map_extra(|()| SoupPropertiesField::default()),
+            frecency_score: candidate.frecency_score,
+            touched_at: candidate.touched_at,
+        })
+    }
+
+    fn clear_frecency<R>(
+        output: SoupOutput<R, EnrichedSoupItem>,
+    ) -> SoupOutput<R, EnrichedSoupItem> {
+        output.map(|mut item| {
+            item.frecency_score = None;
+            item
+        })
+    }
+
+    async fn populate_grouped_items(
+        &self,
+        user_id: MacroUserIdStr<'_>,
+        items: impl Iterator<Item = ItemGroupingInfo> + Send,
+    ) -> Result<impl Iterator<Item = ItemGroupingInfo<SoupPropertiesField>>, SoupErr> {
+        let (items, metadata): (Vec<_>, Vec<_>) = items
+            .map(|item| {
+                (
+                    item.item,
+                    (item.key, item.total_group_count, item.index_in_group),
+                )
+            })
+            .unzip();
+
+        if items.is_empty() {
+            return Ok(Vec::new().into_iter());
+        }
+
+        let items = self
+            .soup_storage
+            .populate_properties(user_id, items)
+            .await
+            .map_err(anyhow::Error::from)?;
+        if items.len() != metadata.len() {
+            return Err(SoupErr::SoupDbErr(anyhow::anyhow!(
+                "property hydration changed the number of grouped Soup items"
+            )));
+        }
+
+        Ok(items
+            .into_iter()
+            .zip(metadata)
+            .map(
+                |(item, (key, total_group_count, index_in_group))| ItemGroupingInfo {
+                    item,
+                    key,
+                    total_group_count,
+                    index_in_group,
+                },
+            )
+            .collect::<Vec<_>>()
+            .into_iter())
+    }
+
+    async fn get_user_soup_internal<R>(
         &self,
         req: SoupRequest<R>,
         team_receipt: Option<EntityAccessReceipt<MemberTeamRole>>,
-    ) -> Result<SoupOutput<R>, SoupErr>
+    ) -> Result<SoupOutput<R, SoupCandidate>, SoupErr>
     where
         SoupRequest<R>: IntoSoupReqAst,
         R: Clone + Serialize + Send,
     {
         let entity_filter = req.filters().clone();
         let req = req.into_ast()?;
-        let limit = req.limit.clamp(20, 500);
+        let limit = req.limit.clamp(1, 500);
 
         // CRM-scoped visibility (team-wide email scope or hidden CRM
         // companies) requires a team receipt. Without this check the CRM
@@ -584,6 +1046,8 @@ where
         let comms_request = req.build_comms_request();
         let comms_thread_request = req.build_comms_thread_request();
         let call_request = req.build_call_request();
+        let reminder_request = req.build_reminder_request(limit.into());
+        let sort_direction = req.sort_direction;
 
         match req.cursor {
             SoupQuery::Simple(SimpleQueryInner(cursor)) => {
@@ -597,17 +1061,12 @@ where
                         user_id: req.user.copied(),
                     },
                 );
-
-                let email_soup_fut = self.handle_email_request(req.user.copied(), email_request);
-
+                let email_soup_fut = self.handle_email_request(email_request);
                 let comms_soup_fut = self.handle_comms_request(comms_request);
-
                 let comms_thread_soup_fut = self.handle_comms_thread_request(comms_thread_request);
-
                 let call_soup_fut = self.handle_call_request(call_request);
-
                 let crm_company_soup_fut = self.handle_crm_company_request(crm_company_request);
-
+                let reminder_soup_fut = self.handle_reminder_request(reminder_request);
                 let foreign_entity_soup_fut = self.handle_foreign_entity_request(
                     Some(req.user.to_string()),
                     foreign_entity_source_ids,
@@ -622,6 +1081,7 @@ where
                     comms_thread_soup,
                     call_soup,
                     crm_company_soup,
+                    reminder_soup,
                     foreign_entity_soup,
                 ) = tokio::join!(
                     main_soup_fut,
@@ -630,39 +1090,144 @@ where
                     comms_thread_soup_fut,
                     call_soup_fut,
                     crm_company_soup_fut,
+                    reminder_soup_fut,
                     foreign_entity_soup_fut,
                 );
 
-                let page = main_soup?
+                let paginator = main_soup?
                     .chain(email_soup?)
                     .chain(comms_soup?)
                     .chain(comms_thread_soup?)
                     .chain(call_soup?)
                     .chain(crm_company_soup?)
+                    .chain(reminder_soup?)
                     .chain(foreign_entity_soup?)
                     .paginate_on(limit.into(), sort_method)
-                    .filter_on(entity_filter)
-                    .sort_desc()
-                    .into_page();
+                    .filter_on(entity_filter);
 
-                Ok(Either::Left(page))
+                let page = match sort_direction {
+                    SoupSortDirection::Asc => paginator.sort_asc(),
+                    SoupSortDirection::Desc => paginator.sort_desc(),
+                }
+                .into_page();
+
+                Ok(SoupOutput::Simple(page))
             }
-            SoupQuery::Frecency(FrecencyQueryInner(cursor)) => Ok(Either::Right(
+            SoupQuery::Frecency(FrecencyQueryInner(cursor)) => Ok(SoupOutput::Frecency(
                 self.handle_advanced_sort(cursor, req.soup_type, req.user, limit)
                     .await?
                     .paginate_on(limit.into(), Frecency)
                     .filter_on(entity_filter)
                     .into_page(),
             )),
+            SoupQuery::Touched(TouchedQueryInner(cursor)) => {
+                let (candidates, next) = self
+                    .handle_touched_request(cursor, req.soup_type, req.user, limit, req.link_ids)
+                    .await?;
+                let next_cursor = next.map(|position| {
+                    Base64Str::encode_json(Cursor {
+                        id: position.entity_id,
+                        limit: limit.into(),
+                        val: CursorVal {
+                            sort_type: TouchedByMe,
+                            last_val: position.occurred_at,
+                        },
+                        filter: entity_filter,
+                    })
+                });
+                Ok(SoupOutput::Touched(Paginated::from_parts(
+                    candidates,
+                    next_cursor,
+                )))
+            }
         }
+    }
+}
+
+impl<T, U, V, C, K, Crm, F, Rem> SoupService for SoupImpl<T, U, V, C, K, Crm, F, Rem>
+where
+    T: SoupRepo,
+    anyhow::Error: From<T::Err>,
+    U: FrecencyQueryService,
+    V: EmailPreviewServiceReadOnly,
+    C: ChannelListService,
+    K: CallRecordQueryService,
+    Crm: CrmService,
+    F: ForeignEntityService,
+    Rem: RemindersService,
+{
+    #[tracing::instrument(err, skip(self, req, team_receipt))]
+    async fn get_user_soup<R>(
+        &self,
+        req: SoupRequest<R>,
+        team_receipt: Option<EntityAccessReceipt<MemberTeamRole>>,
+    ) -> Result<SoupOutput<R>, SoupErr>
+    where
+        SoupRequest<R>: IntoSoupReqAst,
+        R: Clone + Serialize + Send,
+    {
+        let output = self.get_user_soup_internal(req, team_receipt).await?;
+        Ok(Self::into_raw_output(output))
+    }
+
+    #[tracing::instrument(err, skip(self, req, team_receipt))]
+    async fn get_user_soup_with_frecency<R>(
+        &self,
+        req: SoupRequest<R>,
+        team_receipt: Option<EntityAccessReceipt<MemberTeamRole>>,
+    ) -> Result<SoupOutput<R, EnrichedSoupItem>, SoupErr>
+    where
+        SoupRequest<R>: IntoSoupReqAst,
+        R: Clone + Serialize + Send,
+    {
+        let user_id = req.user.clone();
+        let output = self.get_user_soup_internal(req, team_receipt).await?;
+        let output = self.populate_frecency_output(user_id, output).await?;
+        Ok(Self::into_enriched_output(output))
+    }
+
+    #[tracing::instrument(err, skip(self, req, team_receipt))]
+    async fn get_user_soup_with_properties<R>(
+        &self,
+        req: SoupRequest<R>,
+        team_receipt: Option<EntityAccessReceipt<MemberTeamRole>>,
+    ) -> Result<SoupOutput<R, EnrichedSoupItem>, SoupErr>
+    where
+        SoupRequest<R>: IntoSoupReqAst,
+        R: Clone + Serialize + Send,
+    {
+        let user_id = req.user.clone();
+        let output = self.get_user_soup_internal(req, team_receipt).await?;
+        let output = self.populate_properties_output(user_id, output).await?;
+        Ok(Self::clear_frecency(output))
+    }
+
+    #[tracing::instrument(err, skip(self, req, team_receipt))]
+    async fn get_user_soup_with_properties_and_frecency<R>(
+        &self,
+        req: SoupRequest<R>,
+        team_receipt: Option<EntityAccessReceipt<MemberTeamRole>>,
+    ) -> Result<SoupOutput<R, EnrichedSoupItem>, SoupErr>
+    where
+        SoupRequest<R>: IntoSoupReqAst,
+        R: Clone + Serialize + Send,
+    {
+        let user_id = req.user.clone();
+        let output = self.get_user_soup_internal(req, team_receipt).await?;
+        let output = self
+            .populate_frecency_output(user_id.clone(), output)
+            .await?;
+        self.populate_properties_output(user_id, output).await
     }
 
     #[tracing::instrument(err, skip(self, req))]
     async fn get_user_soup_grouped(
         &self,
         req: GroupedSortRequest<'_>,
-    ) -> Result<Vec<GroupedSoupItem>, SoupErr> {
-        self.handle_grouped_soup_request(req).await
+    ) -> Result<impl Iterator<Item = ItemGroupingInfo<SoupPropertiesField>> + Send, SoupErr> {
+        let user_id = req.user_id.clone();
+        let items = self.handle_grouped_soup_request(req).await?;
+        self.populate_grouped_items(user_id, items).await
     }
 
     #[tracing::instrument(err, skip(self))]

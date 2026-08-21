@@ -1,12 +1,11 @@
 use crate::{
-    api::context::ApiContext, model::response::instructions::GetInstructionsDocumentResponse,
+    api::context::{ApiContext, AuthorizationService},
+    model::response::instructions::GetInstructionsDocumentResponse,
 };
 use axum::{Json, extract::State, http::StatusCode, response::IntoResponse};
+use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
 use macro_user_id::cowlike::CowLike;
-use model::{
-    response::{GenericErrorResponse, GenericResponse},
-    user::axum_extractor::MacroUserExtractor,
-};
+use model::response::{GenericErrorResponse, GenericResponse};
 
 /// Gets the instructions document for the current user
 #[utoipa::path(
@@ -19,14 +18,14 @@ use model::{
         (status = 500, body = GenericErrorResponse),
     )
 )]
-#[tracing::instrument(skip(ctx, user_context), fields(user_id=%user_context.macro_user_id))]
+#[tracing::instrument(skip(ctx, user_context), fields(user_id=%user_context.authorization.user.macro_user_id))]
 pub async fn get_instructions_handler(
     State(ctx): State<ApiContext>,
-    user_context: MacroUserExtractor,
+    user_context: MacroAuthorizationExtractor<AuthorizationService, UserOrInternal>,
 ) -> impl IntoResponse {
     match macro_db_client::instructions::get::get_instructions_document(
         &ctx.db,
-        user_context.macro_user_id.copied(),
+        user_context.authorization.user.macro_user_id.copied(),
     )
     .await
     {
@@ -39,7 +38,7 @@ pub async fn get_instructions_handler(
             .is_error(true)
             .send(StatusCode::NOT_FOUND),
         Err(err) => {
-            tracing::error!(error=?err, user_id=%user_context.macro_user_id, "failed to get instructions document");
+            tracing::error!(error=?err, user_id=%user_context.authorization.user.macro_user_id, "failed to get instructions document");
             GenericResponse::builder()
                 .message("Failed to get instructions document")
                 .is_error(true)

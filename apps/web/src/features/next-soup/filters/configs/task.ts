@@ -26,6 +26,7 @@ import {
   type Predicate,
   propFilter,
 } from './base';
+import { getMyTasksQuery, isMyTask } from './my-tasks';
 
 const statusFilter = <TId extends string>(
   id: TId,
@@ -182,6 +183,12 @@ export const TASK_PRIORITY_FILTERS = [
   taskLowPriorityFilter,
   taskNoPriorityFilter,
 ] as const;
+
+export const myTasksFilter = config({
+  id: 'my-tasks',
+  predicate: (e, ctx) => isMyTask(e, ctx.userId),
+  query: (ctx) => getMyTasksQuery(ctx.userId ?? ''),
+});
 
 export const assignedToMeFilter = config({
   id: 'assigned-to',

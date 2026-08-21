@@ -1,4 +1,5 @@
 import { useUnfurl } from '@core/signal/unfurl';
+import { openExternalUrl } from '@core/util/url';
 import LinkIcon from '@phosphor/link.svg';
 import DeleteIcon from '@phosphor/x.svg';
 import { proxyResource } from '@service-unfurl/client';
@@ -224,7 +225,7 @@ const LinkChip: Component<LinkChipProps> = (props) => {
   const handleLinkClick = (e: MouseEvent) => {
     if ((e.target as HTMLElement).closest('.remove-button')) return;
     e.preventDefault();
-    window.open(props.url, '_blank');
+    openExternalUrl(props.url);
   };
 
   return (

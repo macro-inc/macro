@@ -3,13 +3,16 @@ import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { buildConfig } from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
 import { EmojiMenu } from '@core/component/LexicalMarkdown/component/menu/EmojiMenu';
+import { TagsMenu } from '@core/component/LexicalMarkdown/component/menu/TagsMenu';
 import { createLexicalWrapper } from '@core/component/LexicalMarkdown/context/LexicalWrapperContext';
 import {
   autoRegister,
   emojisPlugin,
   singleLinePlugin,
+  tagsPlugin,
 } from '@core/component/LexicalMarkdown/plugins';
 import { addMediaFromFile } from '@core/component/LexicalMarkdown/plugins/media';
+import type { TagMentionLifecycle } from '@core/component/LexicalMarkdown/plugins/tags';
 import { createMenuOperations } from '@core/component/LexicalMarkdown/shared/inlineMenu';
 import {
   $getCaretRect,
@@ -18,11 +21,10 @@ import {
   isRectFlushWith,
   trimWhitespace,
 } from '@core/component/LexicalMarkdown/utils';
+import type { PortalScope } from '@core/component/ScopedPortal';
 import { toast } from '@core/component/Toast/Toast';
 import { useUserId } from '@core/context/user';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
-import { createTask } from '@core/util/create';
-import { filterMap } from '@core/util/list';
 import { buildSimpleEntityUrl } from '@core/util/url';
 import { mergeRegister } from '@lexical/utils';
 import ArrowSquareOutIcon from '@phosphor/arrow-square-out.svg';
@@ -30,28 +32,13 @@ import ArrowsOutIcon from '@phosphor/arrows-out.svg';
 import PaperclipIcon from '@phosphor/paperclip.svg';
 import SplitIcon from '@phosphor/square-half.svg';
 import XIcon from '@phosphor/x.svg';
-import {
-  propertyApiValuesToNormalized,
-  propertyValueToApi,
-} from '@property/api/converters';
 import { Modals } from '@property/component/modal';
-import { PROPERTY_OPTION_IDS, SYSTEM_PROPERTY_IDS } from '@property/constants';
-import {
-  PropertiesProvider,
-  type PropertySaveHandler,
-} from '@property/context/PropertiesContext';
-import type {
-  Property,
-  PropertyApiValues,
-  PropertyOption,
-} from '@property/types';
+import { PropertiesProvider } from '@property/context/PropertiesContext';
+import { InlineTagsPill } from '@property/tags';
+import type { PropertyApiValues } from '@property/types';
 import { useUpsertToHistoryMutation } from '@queries/history/history';
-import { refetchSoupEntity } from '@queries/soup/cache';
-import { propertiesServiceClient } from '@service-properties/client';
-import type { PropertyDefinition } from '@service-properties/generated/schemas/propertyDefinition';
 import { onElementConnect } from '@solid-primitives/lifecycle';
 import { debounce } from '@solid-primitives/scheduled';
-import { useQuery } from '@tanstack/solid-query';
 import { Button, Hotkey, Scroll, ToggleSwitch } from '@ui';
 import {
   $getRoot,
@@ -60,6 +47,7 @@ import {
   COMMAND_PRIORITY_NORMAL,
   KEY_ARROW_DOWN_COMMAND,
   KEY_ARROW_RIGHT_COMMAND,
+  KEY_BACKSPACE_COMMAND,
   KEY_ENTER_COMMAND,
   KEY_ESCAPE_COMMAND,
   type LexicalEditor,
@@ -76,8 +64,13 @@ import {
   Suspense,
   untrack,
 } from 'solid-js';
-import { createStore, reconcile, type Store, unwrap } from 'solid-js/store';
+import { reconcile, unwrap } from 'solid-js/store';
 import { tabbable } from 'tabbable';
+import {
+  createTaskComposerProperties,
+  createTaskWithProperties,
+  defaultTaskPropertyValues,
+} from '../util/taskComposerProperties';
 import {
   clearTaskComposerDraft,
   loadTaskComposerDraft,
@@ -87,13 +80,7 @@ import {
 import { InlinePropertyValue } from './InlinePropertyValue';
 import { SimilarTasksSection } from './TaskDuplicateList';
 
-// Show these props in the composer (Linear-style left-to-right order).
-const COMPOSER_PROPERTIES = [
-  SYSTEM_PROPERTY_IDS.STATUS,
-  SYSTEM_PROPERTY_IDS.PRIORITY,
-  SYSTEM_PROPERTY_IDS.ASSIGNEES,
-  SYSTEM_PROPERTY_IDS.DUE_DATE,
-];
+type ComposerTagLayoutMode = 'bottom' | 'title';
 
 function composerTitleNavigationPlugin(
   bodyEditor: Accessor<LexicalEditor | undefined>,
@@ -153,13 +140,44 @@ function composerTitleNavigationPlugin(
     );
 }
 
-function ComposeTaskTitleEditor(props: {
+function isTitleSelectionAtStart() {
+  const selection = $getSelection();
+  if (
+    !$isRangeSelection(selection) ||
+    !selection.isCollapsed() ||
+    selection.anchor.offset !== 0
+  ) {
+    return false;
+  }
+
+  const root = $getRoot();
+  let topLevel = selection.anchor.getNode();
+  while (topLevel.getParent() !== root) {
+    const parent = topLevel.getParent();
+    if (!parent) return false;
+    topLevel = parent;
+  }
+
+  let previous = topLevel.getPreviousSibling();
+  while (previous) {
+    if (previous.getTextContent().length > 0) return false;
+    previous = previous.getPreviousSibling();
+  }
+
+  return true;
+}
+
+export function ComposeTaskTitleEditor(props: {
   value: Accessor<string>;
   onChange: (value: string) => void;
   disabled: Accessor<boolean>;
   bodyEditor: Accessor<LexicalEditor | undefined>;
   containerRef: Accessor<HTMLDivElement | undefined>;
   onUserInput: () => void;
+  onTagSelected: (tag: TagMentionLifecycle) => void;
+  onDeleteTagsAtStart: () => boolean;
+  portalScope?: PortalScope;
+  ref?: (el: HTMLDivElement) => void;
 }) {
   const [state, setState] = createSignal(props.value());
   const [showPlaceholder, setShowPlaceholder] = createSignal(
@@ -174,6 +192,9 @@ function ComposeTaskTitleEditor(props: {
   });
 
   const emojiMenuOperations = createMenuOperations();
+  const tagMenuOperations = createMenuOperations();
+  const inlineMenuOpen = () =>
+    emojiMenuOperations.isOpen() || tagMenuOperations.isOpen();
 
   initializeEditorEmpty(editor);
   forceSetTextContent(editor, props.value());
@@ -184,11 +205,13 @@ function ComposeTaskTitleEditor(props: {
     .use(singleLinePlugin())
     .use(emojisPlugin({ menu: emojiMenuOperations }))
     .use(
-      composerTitleNavigationPlugin(
-        props.bodyEditor,
-        emojiMenuOperations.isOpen
-      )
+      tagsPlugin({
+        menu: tagMenuOperations,
+        insertTags: false,
+        onCreateTag: props.onTagSelected,
+      })
     )
+    .use(composerTitleNavigationPlugin(props.bodyEditor, inlineMenuOpen))
     .state<string>(setState, 'plain');
 
   plugins.onUpdate(({ editorState }) => {
@@ -222,15 +245,28 @@ function ComposeTaskTitleEditor(props: {
   });
 
   autoRegister(
-    editor.registerCommand(
-      KEY_ESCAPE_COMMAND,
-      (event) => {
-        props.containerRef()?.focus();
-        event?.preventDefault();
-        event?.stopPropagation();
-        return true;
-      },
-      COMMAND_PRIORITY_NORMAL
+    mergeRegister(
+      editor.registerCommand(
+        KEY_BACKSPACE_COMMAND,
+        (event) => {
+          if (!isTitleSelectionAtStart()) return false;
+          if (!props.onDeleteTagsAtStart()) return false;
+          event?.preventDefault();
+          event?.stopPropagation();
+          return true;
+        },
+        COMMAND_PRIORITY_NORMAL
+      ),
+      editor.registerCommand(
+        KEY_ESCAPE_COMMAND,
+        (event) => {
+          props.containerRef()?.focus();
+          event?.preventDefault();
+          event?.stopPropagation();
+          return true;
+        },
+        COMMAND_PRIORITY_NORMAL
+      )
     )
   );
 
@@ -244,11 +280,12 @@ function ComposeTaskTitleEditor(props: {
   };
 
   return (
-    <div class="relative w-full mb-4">
+    <div class="relative w-full">
       <div
         contentEditable={!props.disabled()}
         class="ph-no-capture w-full text-xl font-medium outline-none whitespace-pre-wrap wrap-break-words"
         ref={(el) => {
+          props.ref?.(el);
           onElementConnect(el, () => onConnect(el));
         }}
       />
@@ -256,6 +293,13 @@ function ComposeTaskTitleEditor(props: {
         editor={editor}
         menu={emojiMenuOperations}
         useBlockBoundary={true}
+        portalScope={props.portalScope}
+      />
+      <TagsMenu
+        editor={editor}
+        menu={tagMenuOperations}
+        useBlockBoundary={true}
+        portalScope={props.portalScope}
       />
       <Show when={showPlaceholder()}>
         <div class="pointer-events-none absolute top-1.5 text-xl font-medium text-ink-placeholder">
@@ -264,85 +308,6 @@ function ComposeTaskTitleEditor(props: {
       </Show>
     </div>
   );
-}
-
-/**
- * Make a task and append props using the create_task endpoint.
- * @param taskTitle Title string
- * @param taskContent content markdown string
- * @param properties Stored prop value map
- * @param definitions The definitions map for extra meta data
- * @returns
- */
-async function createTaskWithProperties(
-  taskTitle: string,
-  taskContent: string,
-  properties: Array<[string, PropertyApiValues]>,
-  definitions: Map<string, PropertyDefinition>,
-  upsertToHistory: (params: { itemId: string; itemType: 'document' }) => void
-) {
-  // Convert properties to API format (filter out null values)
-  const propertyValues = properties.flatMap(([id, value]) => {
-    const isMultiSelect = definitions.get(id)?.is_multi_select ?? false;
-    const apiValue = propertyValueToApi(value, isMultiSelect);
-    if (apiValue === null) return [];
-    return [{ propertyId: id, value: apiValue }];
-  });
-
-  const documentId = await createTask({
-    title: taskTitle,
-    content: taskContent,
-    propertyValues: propertyValues.length > 0 ? propertyValues : undefined,
-  });
-
-  if (!documentId) {
-    toast.failure('Failed to create Task');
-    return null;
-  }
-
-  // refetchSoupEntity is already called inside createTask — just upsert to history
-  refetchSoupEntity(documentId, 'document');
-
-  // Upsert the new task to history
-  upsertToHistory({
-    itemId: documentId,
-    itemType: 'document',
-  });
-
-  return documentId;
-}
-
-/**
- * Helper to get display value of local property
- * @param definition The prop definition
- * @param savedValues The map of saved vals by propDef id
- * @param options The map of the options for the prop from the server
- * @returns
- */
-function extractPropertyValue(
-  definition: PropertyDefinition,
-  savedValues: Store<Record<string, PropertyApiValues>>,
-  options: Map<string, PropertyOption[]>
-) {
-  const { type, value } = propertyApiValuesToNormalized(
-    savedValues[definition.id]
-  );
-  if (type === 'EMPTY') return null;
-  if (
-    definition.data_type === 'SELECT_NUMBER' ||
-    definition.data_type === 'SELECT_STRING'
-  ) {
-    const opts = options.get(definition.id);
-    if (!opts) return null;
-    if (Array.isArray(value)) {
-      return filterMap(value as string[], (id) => {
-        const opt = opts.find((opt) => opt.id === id);
-        return opt ? opt.id : undefined;
-      });
-    }
-  } else {
-    return value;
-  }
 }
 
 /**
@@ -390,24 +355,12 @@ export function ComposeTask(props: ComposeTaskProps) {
   const getDefaultPropertyValues = (): Record<string, PropertyApiValues> => {
     const ids = (() => {
       if (props.initialAssigneeIds && props.initialAssigneeIds.length > 0) {
-        return [...new Set(props.initialAssigneeIds)];
+        return props.initialAssigneeIds;
       }
       const id = currentUserId();
       return id ? [id] : [];
     })();
-    return {
-      [SYSTEM_PROPERTY_IDS.ASSIGNEES]: {
-        valueType: 'ENTITY' as const,
-        refs: ids.map((entity_id) => ({
-          entity_id,
-          entity_type: 'USER' as const,
-        })),
-      },
-      [SYSTEM_PROPERTY_IDS.STATUS]: {
-        valueType: 'SELECT_STRING' as const,
-        values: [PROPERTY_OPTION_IDS.STATUS.NOT_STARTED],
-      },
-    };
+    return defaultTaskPropertyValues(ids);
   };
 
   // draft init logic
@@ -452,6 +405,9 @@ export function ComposeTask(props: ComposeTaskProps) {
   const [createMore, setCreateMore] = createSignal(false);
   const [errorMessage, setErrorMessage] = createSignal<string>('');
   const [isCreating, setIsCreating] = createSignal(false);
+  const [tagLayoutMode, setTagLayoutMode] =
+    createSignal<ComposerTagLayoutMode>('bottom');
+  let titleEditorRoot: HTMLDivElement | undefined;
   let attachInputRef: HTMLInputElement | undefined;
 
   const handleAttachFiles = async (event: Event) => {
@@ -466,9 +422,17 @@ export function ComposeTask(props: ComposeTaskProps) {
     }
   };
 
-  const [propertyValues, setPropertyValues] = createStore<
-    Record<string, PropertyApiValues>
-  >(initialState.propertyValues);
+  const {
+    propertyValues,
+    setPropertyValues,
+    properties,
+    saveHandler,
+    composerTags,
+    clearComposerTags,
+    createDefinitions,
+  } = createTaskComposerProperties({
+    initialValues: initialState.propertyValues,
+  });
 
   // History upsert mutation
   const upsertToHistoryMutation = useUpsertToHistoryMutation();
@@ -499,83 +463,17 @@ export function ComposeTask(props: ComposeTaskProps) {
     });
   });
 
-  const systemPropertiesQuery = useQuery(() => ({
-    queryKey: ['compose-task', 'system-properties'],
-    queryFn: async () => {
-      const result = await propertiesServiceClient.listProperties({
-        scope: 'system',
-        include_options: true,
-      });
-      if (result.isErr()) {
-        throw new Error('Failed to fetch system properties');
-      }
-      const data = result.value;
-      return data;
-    },
-    staleTime: 1000 * 60 * 10, // TODO (seamus) Ask daniel what might make us wanna refetch this
-    retry: 1,
-    refetchOnWindowFocus: false,
-    refetchOnMount: false,
-    refetchOnReconnect: false,
-    placeholderData: (prev) => prev,
-  }));
-
-  const definitions = () => {
-    if (!systemPropertiesQuery.isSuccess) return new Map();
-    const data = systemPropertiesQuery.data;
-    return new Map(
-      data.map((p) => {
-        const definition = 'definition' in p ? p.definition : p;
-        return [definition.id, definition];
-      })
-    );
+  const deleteTitleTagsAtStart = () => {
+    if (tagLayoutMode() !== 'title') return false;
+    clearComposerTags();
+    setTagLayoutMode('bottom');
+    return true;
   };
 
-  const options = () => {
-    if (!systemPropertiesQuery.isSuccess) return new Map();
-    const data = systemPropertiesQuery.data;
-    return new Map(
-      data.map((p) => {
-        const definition = 'definition' in p ? p.definition : p;
-        const options = 'property_options' in p ? p.property_options : [];
-        return [definition.id, options];
-      })
-    );
-  };
-
-  const properties = (): Property[] => {
-    return filterMap(COMPOSER_PROPERTIES, (id) => {
-      const definition = definitions().get(id);
-      if (!definition) return;
-      return {
-        propertyId: `compose-${definition.display_name}`,
-        propertyDefinitionId: definition.id,
-        displayName: definition.display_name,
-        isMultiSelect: definition.is_multi_select,
-        owner: definition.owner,
-        specificEntityType: definition.specific_entity_type ?? null,
-        updatedAt: new Date(0),
-        createdAt: new Date(0),
-        valueType: definition.data_type,
-        value: extractPropertyValue(definition, propertyValues, options()),
-        options: options().get(definition.id),
-      } as Property;
-    });
-  };
-
-  const saveHandler: PropertySaveHandler = {
-    saveProperty: async (property: Property, value: PropertyApiValues) => {
-      setPropertyValues(property.propertyDefinitionId, value);
-    },
-    saveDate: async (property: Property, date: Date) => {
-      setPropertyValues(property.propertyDefinitionId, {
-        valueType: 'DATE',
-        value: date,
-      });
-    },
-  };
-
-  const showTaskCreatedToast = async (documentId: string) => {
+  const showTaskCreatedToast = async (
+    documentId: string,
+    optimisticSnapshot: Uint8Array | undefined
+  ) => {
     // Auto-copy link to clipboard
     const url = buildSimpleEntityUrl({ type: 'task', id: documentId });
     let linkCopied = false;
@@ -586,6 +484,10 @@ export function ComposeTask(props: ComposeTaskProps) {
       toast.failure('Failed to copy link to clipboard');
     }
 
+    const snapshotParams = optimisticSnapshot
+      ? { params: { optimisticSnapshot }, preserveParams: true as const }
+      : {};
+
     toast.success('Task created', {
       subtext: linkCopied ? 'Link copied' : undefined,
       actions: [
@@ -594,7 +496,7 @@ export function ComposeTask(props: ComposeTaskProps) {
           icon: ArrowSquareOutIcon,
           onClick: () => {
             openWithSplit(
-              { type: 'task', id: documentId },
+              { type: 'task', id: documentId, ...snapshotParams },
               { referredFrom: null }
             );
           },
@@ -604,7 +506,7 @@ export function ComposeTask(props: ComposeTaskProps) {
           icon: SplitIcon,
           onClick: () => {
             openWithSplit(
-              { type: 'task', id: documentId },
+              { type: 'task', id: documentId, ...snapshotParams },
               { referredFrom: null, preferNewSplit: true }
             );
           },
@@ -628,6 +530,15 @@ export function ComposeTask(props: ComposeTaskProps) {
     setIsCreating(true);
 
     const properties = structuredClone(Object.entries(unwrap(propertyValues)));
+    const resetTitleAndBody = () => {
+      clearTaskComposerDraft();
+      setTitle('');
+      setContent('');
+      setIsDraftLoaded(false);
+      const ed = bodyEditor();
+      ed && initializeEditorEmpty(ed);
+      requestAnimationFrame(() => titleEditorRoot?.focus());
+    };
 
     if (!createMore()) {
       // Snapshot the draft locally, then clear localStorage so a new dialog
@@ -647,17 +558,17 @@ export function ComposeTask(props: ComposeTaskProps) {
       );
       props.onCreateStart?.({ title: taskTitle, content: taskContent });
 
-      const documentId = await createTaskWithProperties(
+      const createdTask = await createTaskWithProperties(
         taskTitle,
         taskContent,
         properties,
-        definitions(),
+        createDefinitions(),
         (params) => upsertToHistoryMutation.mutate(params)
       );
 
       setIsCreating(false);
 
-      if (!documentId) {
+      if (!createdTask) {
         props.onCreateFailure?.();
         // Restore the draft and re-open so the user can retry
         saveTaskComposerDraft(draftSnapshot);
@@ -665,47 +576,40 @@ export function ComposeTask(props: ComposeTaskProps) {
         return;
       }
 
+      const { documentId, initialSnapshot } = createdTask;
       if (props.onSuccess) {
         props.onSuccess({ documentId, title: taskTitle, content: taskContent });
       } else {
-        showTaskCreatedToast(documentId);
+        showTaskCreatedToast(documentId, initialSnapshot);
       }
       props.onCreateTask?.(taskTitle, taskContent);
       return;
     }
 
-    const documentId = await createTaskWithProperties(
+    resetTitleAndBody();
+    setIsCreating(false);
+
+    const createdTask = await createTaskWithProperties(
       taskTitle,
       taskContent,
       properties,
-      definitions(),
+      createDefinitions(),
       (params) => upsertToHistoryMutation.mutate(params)
     );
 
-    setIsCreating(false);
-
-    if (!documentId) {
+    if (!createdTask) {
       return;
     }
 
     // Success: clear draft and notify
     clearTaskComposerDraft();
+    const { documentId, initialSnapshot } = createdTask;
     if (props.onSuccess) {
       props.onSuccess({ documentId, title: taskTitle, content: taskContent });
     } else {
-      showTaskCreatedToast(documentId);
+      showTaskCreatedToast(documentId, initialSnapshot);
     }
     props.onCreateTask?.(taskTitle, taskContent);
-
-    if (createMore()) {
-      // Reset form for next task
-      setTitle('');
-      setContent('');
-      setPropertyValues(reconcile(getDefaultPropertyValues()));
-      setIsDraftLoaded(false);
-      const ed = bodyEditor();
-      ed && initializeEditorEmpty(ed);
-    }
   };
 
   const handleContinueInSplit = async () => {
@@ -733,32 +637,40 @@ export function ComposeTask(props: ComposeTaskProps) {
       { referredFrom: 'launcher', preferNewSplit: true }
     );
 
-    const documentId = await createTaskWithProperties(
+    const createdTask = await createTaskWithProperties(
       taskTitle,
       taskContent,
       properties,
-      definitions(),
+      createDefinitions(),
       (params) => upsertToHistoryMutation.mutate(params)
     );
 
     setIsCreating(false);
 
-    if (!documentId) {
+    if (!createdTask) {
       split?.goBack();
       saveTaskComposerDraft(draftSnapshot);
       popoverSplit({ type: 'component', id: 'task-compose' });
       return;
     }
 
+    const { documentId, initialSnapshot } = createdTask;
+    const snapshotParams = initialSnapshot
+      ? {
+          params: { optimisticSnapshot: initialSnapshot },
+          preserveParams: true as const,
+        }
+      : {};
+
     if (split) {
       split.replace({
-        next: { type: 'task', id: documentId },
+        next: { type: 'task', id: documentId, ...snapshotParams },
         mergeHistory: true,
         referredFrom: 'launcher',
       });
     } else {
       openWithSplit(
-        { type: 'task', id: documentId },
+        { type: 'task', id: documentId, ...snapshotParams },
         { referredFrom: 'launcher', preferNewSplit: true }
       );
     }
@@ -793,6 +705,7 @@ export function ComposeTask(props: ComposeTaskProps) {
     setTitle('');
     setContent('');
     setPropertyValues(reconcile(getDefaultPropertyValues()));
+    setTagLayoutMode('bottom');
     setIsDraftLoaded(false);
     const ed = bodyEditor();
     ed && initializeEditorEmpty(ed);
@@ -843,6 +756,13 @@ export function ComposeTask(props: ComposeTaskProps) {
 
   const editorConfig = buildConfig('markdown')
     .withMentions()
+    .withTags({
+      applyTargetLabel: 'Task',
+      isApplied: (tag) => composerTags.isApplied(tag.optionId),
+      onCreate: (tag) => {
+        void composerTags.applyTag(tag.scope, tag.optionId);
+      },
+    })
     .withEmojis()
     .withActions()
     .withCode()
@@ -861,10 +781,12 @@ export function ComposeTask(props: ComposeTaskProps) {
 
   const editor = editorConfig.buildHandle().lexical;
   setBodyEditor(editor);
+  const portalScope = (): PortalScope =>
+    splitPanel.handle.isPopover() ? 'local' : 'block';
 
   return (
     <div
-      class="flex flex-col relative h-full max-h-full min-h-0 p-4 gap-4"
+      class="portal-scope flex flex-col relative h-full max-h-full min-h-0 p-4 gap-4"
       tabIndex={-1}
       ref={setContainerRef}
     >
@@ -907,7 +829,14 @@ export function ComposeTask(props: ComposeTaskProps) {
         </Show>
       </div>
       <div class="flex-1 min-h-0 flex flex-col overflow-hidden">
-        <div class="shrink-0 flex gap-2 items-start px-2">
+        <div class="shrink-0 flex gap-2 items-center px-2 mb-4">
+          <Show when={tagLayoutMode() === 'title'}>
+            <InlineTagsPill
+              docTags={composerTags}
+              showPlaceholder
+              class="shrink-0"
+            />
+          </Show>
           <ComposeTaskTitleEditor
             value={title}
             onChange={setTitle}
@@ -918,6 +847,15 @@ export function ComposeTask(props: ComposeTaskProps) {
               if (errorMessage()) {
                 setErrorMessage('');
               }
+            }}
+            onTagSelected={(tag) => {
+              setTagLayoutMode('title');
+              void composerTags.applyTag(tag.scope, tag.optionId);
+            }}
+            onDeleteTagsAtStart={deleteTitleTagsAtStart}
+            portalScope={portalScope()}
+            ref={(el) => {
+              titleEditorRoot = el;
             }}
           />
         </div>
@@ -933,7 +871,7 @@ export function ComposeTask(props: ComposeTaskProps) {
                   : initialState.content || undefined
               }
               placeholder={props.placeholder ?? 'Add description...'}
-              portalScope={splitPanel.handle.isPopover() ? 'local' : 'block'}
+              portalScope={portalScope()}
             />
           </Scroll>
         </div>
@@ -989,6 +927,9 @@ export function ComposeTask(props: ComposeTaskProps) {
                   />
                 )}
               </For>
+              <Show when={tagLayoutMode() === 'bottom'}>
+                <InlineTagsPill docTags={composerTags} showPlaceholder />
+              </Show>
             </div>
             <Modals />
           </PropertiesProvider>

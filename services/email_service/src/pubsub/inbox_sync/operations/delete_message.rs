@@ -1,6 +1,6 @@
 use crate::pubsub::context::PubSubContext;
 use crate::pubsub::util::{
-    cg_refresh_email, complete_transaction_with_processing_error, enqueue_depopulate_crm_contacts,
+    cg_refresh_email, complete_transaction_with_processing_error, insert_crm_cleanup_candidates,
     publish_email_event,
 };
 use email::domain::events::{EmailMacroEvent, MessageDeletedMetadata};
@@ -8,8 +8,6 @@ use models_email::api::refresh::RefreshEmailEvent;
 use models_email::email::service::link;
 use models_email::gmail::inbox_sync::DeleteMessagePayload;
 use models_email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
-use sqs_client::search::SearchQueueMessage;
-use sqs_client::search::email::EmailMessage;
 use std::result;
 use uuid::Uuid;
 
@@ -80,17 +78,16 @@ pub async fn delete_message(
         sender.into_iter().filter_map(|c| c.email_address).collect()
     };
 
-    // Enqueue CRM teardown BEFORE the delete commits, so a transient
-    // enqueue failure here doesn't strand the depopulate job after the
-    // message row is already gone (SQS retry would then short-circuit
-    // at the `None` arm above and never re-enqueue). If enqueue
-    // succeeds but the delete below fails, the depopulate consumer's
+    // Record CRM cleanup candidates BEFORE the delete commits, so a
+    // transient insert failure here doesn't strand the teardown after the
+    // message row is already gone (SQS retry would then short-circuit at
+    // the `None` arm above and never re-record). If the insert succeeds
+    // but the delete below fails, the nightly cleanup job's
     // `link_has_any_message_with` pre-check sees the message still in
-    // place and acks without touching CRM — so the ordering is safe in
-    // both directions.
+    // place and skips — so the ordering is safe in both directions.
     if !crm_emails.is_empty() {
         let self_email = link.email_address.0.as_ref().to_ascii_lowercase();
-        enqueue_depopulate_crm_contacts(ctx, link.id, &self_email, crm_emails).await?;
+        insert_crm_cleanup_candidates(ctx, link.id, &self_email, crm_emails).await?;
     }
 
     let mut tx = ctx.db.begin().await.map_err(|e| {
@@ -125,8 +122,7 @@ pub async fn delete_message(
             provider_message_id: payload.provider_message_id.clone(),
             thread_id: message.thread_db_id,
         }),
-    )
-    .await;
+    );
 
     // tell FE to refresh user's inbox
     cg_refresh_email(
@@ -135,20 +131,6 @@ pub async fn delete_message(
         RefreshEmailEvent::DeleteMessage { link_id: link.id },
     )
     .await;
-
-    // send message to search text extractor queue
-    let _ = ctx
-        .sqs_client
-        .bulk_send_message_to_search_event_queue(vec![SearchQueueMessage::RemoveEmailMessage(
-            EmailMessage {
-                message_id: message.db_id.to_string(),
-                macro_user_id: link.macro_id.to_string(),
-            },
-        )])
-        .await
-        .inspect_err(
-            |e| tracing::error!(error = ?e, "failed to send message to search extractor queue"),
-        );
 
     Ok(())
 }

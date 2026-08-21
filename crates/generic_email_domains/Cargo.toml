@@ -1,0 +1,8 @@
+[package]
+name = "generic_email_domains"
+version = "0.1.0"
+publish = false
+edition = "2024"
+
+[dependencies]
+workspace-hack = { version = "0.1", path = "../workspace-hack" }

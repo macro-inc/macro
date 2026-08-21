@@ -22,13 +22,9 @@ on:
         required: true
       DD_API_KEY:
         required: true
-      DD_WEB_APP_TOKEN:
-        required: true
       SEGMENT_WRITE_KEY:
         required: true
       POSTHOG_API_KEY:
-        required: true
-      CACHIX_AUTH_TOKEN:
         required: true
   workflow_dispatch:
     inputs:
@@ -56,22 +52,20 @@ jobs:
     - name: Mount Namespace cache volume
       uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
       with:
-        cache: bun
-        path: /nix
+        cache: nix
+        path: /home/runner/.bun/install/cache
       continue-on-error: true
     - name: Setup Nix
       uses: ./.github/actions/setup-nix
     - name: Setup
       uses: ./.github/actions/setup-reqs-web
-      with:
-        cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
     - name: Build
       run: just build-${{ inputs.environment }}
       env:
-        VITE_DD_WEB_APP_TOKEN: ${{ secrets.DD_WEB_APP_TOKEN }}
-        VITE_DD_HASH: ${{ github.sha }}
         VITE_SEGMENT_WRITE_KEY: ${{ secrets.SEGMENT_WRITE_KEY }}
         VITE_POSTHOG_API_KEY: ${{ secrets.POSTHOG_API_KEY }}
+        VITE_OTEL_EXPORTER_URL: ${{ inputs.environment == 'prod' && 'https://macro-prox-prod.macroverse.workers.dev/i/otlp/v1/traces' || 'https://macro-prox-dev.macroverse.workers.dev/i/otlp/v1/traces' }}
+        VITE_OTEL_ENV: ${{ inputs.environment == 'prod' && 'prod' || 'development' }}
       working-directory: apps/web
     - name: Install infra dependencies
       run: bun install
@@ -107,6 +101,9 @@ jobs:
         name: web-app-build
         path: apps/web/dist
         overwrite: 'true'
+    - name: Teardown Nix
+      if: always()
+      uses: ./.github/actions/teardown-nix
 concurrency:
   group: deploy-web-app-${{ inputs.environment }}
   cancel-in-progress: false

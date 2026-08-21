@@ -5,17 +5,20 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
 };
+use calendar_events::domain::models::google_calendar_scope_parameter;
+use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
 use macro_middleware::tracking::ClientIp;
-use macro_middleware::user_permissions::attach_user_permissions::PermissionsExtractor;
 use macro_user_id::user_id::MacroUserIdStr;
 use model::response::ErrorResponse;
-use model_user::axum_extractor::MacroUserExtractor;
 use roles_and_permissions::domain::model::PermissionId;
 use serde_utils::urlencode::UrlEncoded;
 use url::Url;
 
 use crate::api::{
-    context::ApiContext, link::github::REAUTHENTICATION_REQUIRED_MESSAGE, oauth2::OAuthState,
+    context::{ApiContext, AuthorizationService},
+    link::github::REAUTHENTICATION_REQUIRED_MESSAGE,
+    oauth2::OAuthState,
+    permissions_extractor::DbPermissionsExtractor,
 };
 
 #[cfg(test)]
@@ -24,7 +27,27 @@ mod test;
 const GOOGLE_AUTHORIZATION_URL: &str = "https://accounts.google.com/o/oauth2/v2/auth";
 const GMAIL_IDENTITY_PROVIDER_NAME: &str = "google_gmail";
 const GMAIL_SCOPES: &str = "openid profile email https://www.googleapis.com/auth/gmail.modify https://www.googleapis.com/auth/contacts.readonly https://www.googleapis.com/auth/contacts.other.readonly https://www.googleapis.com/auth/gmail.settings.basic";
+/// The identity scopes every consent needs: the callback resolves the account
+/// that consented from the `sub` and `email` claims on Google's id_token, and
+/// Google only mints one when `openid` is requested.
+const IDENTITY_SCOPES: &str = "openid email";
 const FREE_INBOX_LIMIT: i64 = 2;
+
+/// Which capabilities a consent request covers. Calendar surfaces ask for
+/// [`ConsentScopes::Calendar`] when the mailbox is already connected, so the
+/// consent screen lists the calendar permissions alone; Google's incremental
+/// authorization carries the mailbox grant forward untouched.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub(crate) enum ConsentScopes {
+    /// Connecting or reconnecting a mailbox.
+    #[default]
+    Gmail,
+    /// Connecting a first mailbox from a calendar surface.
+    GmailAndCalendar,
+    /// Adding calendar access to a mailbox that is already connected.
+    Calendar,
+}
 
 #[derive(serde::Deserialize, serde::Serialize, Debug, utoipa::ToSchema)]
 pub struct InitGmailLinkResponse {
@@ -77,6 +100,8 @@ pub(crate) struct InitGmailLinkQueryParams {
     /// Once the frontend is update to NOT 2x urlencode this then this should be changed to
     /// `Option<Url>`
     original_url: Option<UrlEncoded<Url>>,
+    #[serde(default)]
+    scopes: ConsentScopes,
 }
 
 /// Initiates a Gmail link for a user
@@ -85,7 +110,8 @@ pub(crate) struct InitGmailLinkQueryParams {
         operation_id = "init_gmail_link",
         path = "/link/gmail",
         params(
-            ("original_url" = String, Query, description = "**OPTIONAL**. The original url to redirect to.")
+            ("original_url" = String, Query, description = "**OPTIONAL**. The original url to redirect to."),
+            ("scopes" = Option<String>, Query, description = "**OPTIONAL**. Which capabilities to request consent for: `gmail` (default), `gmail_and_calendar`, or `calendar`. The calendar variants are only honored when the deployment allows calendar scope requests.")
         ),
         responses(
             (status = 200, body=InitGmailLinkResponse),
@@ -96,36 +122,47 @@ pub(crate) struct InitGmailLinkQueryParams {
             (status = 500, body=ErrorResponse),
         )
     )]
-#[tracing::instrument(skip(ctx, ip_context, user_context, permissions), fields(client_ip=%ip_context, user_id=%user_context.user_context.user_id, fusion_user_id=%user_context.user_context.fusion_user_id), err)]
+#[tracing::instrument(skip(ctx, ip_context, db_permissions), fields(client_ip=%ip_context, user_id=%db_permissions.authorization.authorization.user.user_context.user_id, fusion_user_id=%db_permissions.authorization.authorization.user.user_context.fusion_user_id), err)]
 pub async fn init_gmail_link_handler(
     State(ctx): State<ApiContext>,
     query: Query<InitGmailLinkQueryParams>,
     ip_context: ClientIp,
-    user_context: MacroUserExtractor,
-    PermissionsExtractor(permissions): PermissionsExtractor,
+    db_permissions: DbPermissionsExtractor,
 ) -> Result<Json<InitGmailLinkResponse>, InitGmailLinkError> {
-    let Query(InitGmailLinkQueryParams { original_url }) = query;
+    let Query(InitGmailLinkQueryParams {
+        original_url,
+        scopes,
+    }) = query;
+    let authorization = &db_permissions.authorization;
 
     enforce_inbox_paywall(
-        permissions.contains(&PermissionId::ReadProfessionalFeatures.to_string()),
-        || count_accessible_email_inboxes(&ctx.db, &user_context.macro_user_id),
+        db_permissions
+            .permissions
+            .contains(&PermissionId::ReadProfessionalFeatures.to_string()),
+        || count_accessible_email_inboxes(&ctx.db, &authorization.authorization.user.macro_user_id),
     )
     .await?;
 
     let count =
         macro_db_client::in_progress_user_link::count_existing_in_progress_user_links_for_user(
             &ctx.db,
-            &user_context.user_context.fusion_user_id,
+            &authorization.authorization.user.user_context.fusion_user_id,
         )
         .await?;
 
-    if count >= 5 {
+    if count >= 10 {
         return Err(InitGmailLinkError::TooManyInProgressLinks);
     }
 
-    let link_id = macro_db_client::in_progress_user_link::create_in_progress_user_link(
+    let authorization_scopes = gmail_authorization_scopes(ctx.calendar_scope_enabled, scopes);
+    let requested_google_scopes: Vec<String> = authorization_scopes
+        .split_ascii_whitespace()
+        .map(ToOwned::to_owned)
+        .collect();
+    let link_id = macro_db_client::in_progress_user_link::create_in_progress_google_link(
         &ctx.db,
-        &user_context.user_context.fusion_user_id,
+        &authorization.authorization.user.user_context.fusion_user_id,
+        &requested_google_scopes,
     )
     .await?;
 
@@ -145,22 +182,56 @@ pub async fn init_gmail_link_handler(
     let redirect_uri = crate::api::oauth2::format_redirect_uri("google");
     let state_str = serde_json::to_string(&state).context("failed to serialize OAuth state")?;
 
-    let mut authorization_url =
-        Url::parse(GOOGLE_AUTHORIZATION_URL).context("invalid Google authorization URL")?;
-    authorization_url
-        .query_pairs_mut()
-        .append_pair("client_id", ctx.auth_client.google_client_id())
-        .append_pair("redirect_uri", &redirect_uri)
-        .append_pair("response_type", "code")
-        .append_pair("scope", GMAIL_SCOPES)
-        .append_pair("state", &state_str)
-        .append_pair("access_type", "offline")
-        .append_pair("prompt", "consent");
+    let authorization_url = google_authorization_url(
+        ctx.auth_client.google_client_id(),
+        &redirect_uri,
+        &authorization_scopes,
+        &state_str,
+    )?;
 
     Ok(Json(InitGmailLinkResponse {
         authorization_url: authorization_url.to_string(),
         link_id,
     }))
+}
+
+/// The calendar scopes must never ride along on plain Gmail connects: they are
+/// requested only when the caller explicitly asks, and never when the
+/// deployment-level `CALENDAR_SCOPE_ENABLED` kill switch is off. A caller whose
+/// calendar request is vetoed by the kill switch falls back to the mailbox
+/// consent, which is what it would have gotten before calendar existed.
+fn gmail_authorization_scopes(calendar_scope_enabled: bool, scopes: ConsentScopes) -> String {
+    let calendar = google_calendar_scope_parameter();
+    match scopes {
+        ConsentScopes::Calendar if calendar_scope_enabled => {
+            format!("{IDENTITY_SCOPES} {calendar}")
+        }
+        ConsentScopes::GmailAndCalendar if calendar_scope_enabled => {
+            format!("{GMAIL_SCOPES} {calendar}")
+        }
+        _ => GMAIL_SCOPES.to_string(),
+    }
+}
+
+fn google_authorization_url(
+    client_id: &str,
+    redirect_uri: &str,
+    scopes: &str,
+    state: &str,
+) -> anyhow::Result<Url> {
+    let mut authorization_url =
+        Url::parse(GOOGLE_AUTHORIZATION_URL).context("invalid Google authorization URL")?;
+    authorization_url
+        .query_pairs_mut()
+        .append_pair("client_id", client_id)
+        .append_pair("redirect_uri", redirect_uri)
+        .append_pair("response_type", "code")
+        .append_pair("scope", scopes)
+        .append_pair("state", state)
+        .append_pair("access_type", "offline")
+        .append_pair("include_granted_scopes", "true")
+        .append_pair("prompt", "consent");
+    Ok(authorization_url)
 }
 
 #[tracing::instrument(skip(db, macro_user_id), err)]
@@ -240,20 +311,26 @@ impl IntoResponse for GmailLinkStatusError {
             (status = 500, body=ErrorResponse),
         )
     )]
-#[tracing::instrument(skip(ctx, ip_context, user_context), fields(client_ip=%ip_context, user_id=%user_context.macro_user_id), err)]
+#[tracing::instrument(skip(ctx, ip_context, authorization), fields(client_ip=%ip_context, user_id=%authorization.authorization.user.macro_user_id), err)]
 pub async fn check_gmail_link_status_handler(
     State(ctx): State<ApiContext>,
     ip_context: ClientIp,
-    user_context: MacroUserExtractor,
+    authorization: MacroAuthorizationExtractor<AuthorizationService, UserOrInternal>,
 ) -> Result<Json<GmailLinkStatusResponse>, GmailLinkStatusError> {
     // Check if the user has an email link in db
-    if macro_db_client::email::check_user_email_link(&ctx.db, &user_context.macro_user_id)
-        .await
-        .map_err(GmailLinkStatusError::Internal)?
+    if macro_db_client::email::check_user_email_link(
+        &ctx.db,
+        &authorization.authorization.user.macro_user_id,
+    )
+    .await
+    .map_err(GmailLinkStatusError::Internal)?
     {
         let links = ctx
             .auth_client
-            .get_links(&user_context.user_context.fusion_user_id, None)
+            .get_links(
+                &authorization.authorization.user.user_context.fusion_user_id,
+                None,
+            )
             .await
             .map_err(|e| GmailLinkStatusError::Internal(e.into()))?;
 

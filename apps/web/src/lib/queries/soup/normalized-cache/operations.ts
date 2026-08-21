@@ -32,6 +32,7 @@ import {
   soupNormKey,
   stripSoupNormPrefix,
 } from './normalizer';
+import { ownTouchStamp } from './own-touch';
 import type {
   SoupEntityPartial,
   SoupEntityTag,
@@ -131,6 +132,48 @@ export function getSoupEntityById(entityId: string): SoupApiItem | undefined {
 }
 
 /**
+ * Optimistically stamp the viewer's own touch on a cached entity so the
+ * touched_by_me (Recent) order moves it to the top immediately, ahead of the
+ * activity consumer. Call it only from mutations whose server side records
+ * an activity — see the allowlist rule in `own-touch.ts`, which also records
+ * the stamp as a floor so touched-mode refetches that outrun the consumer
+ * can't clobber the optimistic order; the floor clears once the server's
+ * value catches up. Non-touched responses omit the field entirely, so the
+ * field-merge never clears the stamp either.
+ */
+export function bumpSoupEntityTouchedAt(
+  entityId: string
+): SoupTransaction | undefined {
+  const current = getSoupEntityById(entityId);
+  if (!current) return undefined;
+  const touched_at = ownTouchStamp(entityId);
+  const frecency_score = current.frecency_score;
+
+  if (current.tag === 'channel') {
+    return optimisticUpdateSoupEntity({
+      tag: 'channel',
+      data: { channel: { id: current.data.channel.id } },
+      frecency_score,
+      touched_at,
+    });
+  }
+  if (current.tag === 'call') {
+    return optimisticUpdateSoupEntity({
+      tag: 'call',
+      data: { callId: current.data.callId },
+      frecency_score,
+      touched_at,
+    });
+  }
+  return optimisticUpdateSoupEntity({
+    tag: current.tag,
+    data: { id: current.data.id },
+    frecency_score,
+    touched_at,
+  } as SoupEntityPartial);
+}
+
+/**
  * Mark stale only the soup queries containing a specific entity.
  * Prefer this over `invalidateAllSoup` when you know the affected entity ID.
  */
@@ -161,6 +204,12 @@ export function invalidateAllSoup(): void {
   });
   queryClient.invalidateQueries({
     queryKey: soupKeys.astItems._def,
+  });
+  // Expanded single-group caches back grouped views' rows (mail/inbox group
+  // by date); leaving them stale keeps removed rows hidden even after their
+  // parent queries refetch.
+  queryClient.invalidateQueries({
+    queryKey: soupKeys.groupedGroup._def,
   });
 }
 
@@ -336,11 +385,51 @@ export function removeSoupEntitiesFromQueriesReferencing(
 ): SoupTransaction {
   if (referenceIds.length === 0) return { rollback: () => {} };
 
-  const referencesIds = (key: QueryKey) => {
+  return removeSoupEntitiesWhere(entityIds, (key: QueryKey) => {
     const serialized = JSON.stringify(key);
     return referenceIds.some((id) => serialized.includes(id));
-  };
+  });
+}
 
+/**
+ * Serialized-key test for soup queries that exclude done content. The markers
+ * a compiled soup query key can carry: `emailView: 'inbox'` (server-side
+ * inbox scoping of email views, e.g. mail Important/Noise) and compiled
+ * done-filter literals — `NotificationDone` (emails/channels) or `nd`
+ * (documents/chats/folders/foreign entities) with a `false` value, produced
+ * by the `*Done: false` filter presets.
+ */
+function soupQueryExcludesDone(key: QueryKey): boolean {
+  const serialized = JSON.stringify(key);
+  return (
+    serialized.includes('"emailView":"inbox"') ||
+    serialized.includes('"NotificationDone":false') ||
+    serialized.includes('"nd":false') ||
+    // Reminders carry their done state on themselves rather than on a
+    // notification, so `reminderCompleted` — compiled to `remf.comp` — is the
+    // shape the Reminders Active and Scheduled tabs filter on. Without it,
+    // marking a reminder done left the row sitting there until the refetch.
+    serialized.includes('"comp":false')
+  );
+}
+
+/**
+ * Remove entities from soup queries that filter out done content, leaving
+ * them in place everywhere else (e.g. mail "All", which shows done threads).
+ * Use with an entity-level done patch so the remaining rows reflect the new
+ * state.
+ */
+export function removeSoupEntitiesFromDoneFilteredQueries(
+  entityIds: Set<string>
+): SoupTransaction {
+  return removeSoupEntitiesWhere(entityIds, soupQueryExcludesDone);
+}
+
+/** Remove entities from the soup queries whose key matches the predicate. */
+function removeSoupEntitiesWhere(
+  entityIds: Set<string>,
+  referencesIds: (key: QueryKey) => boolean
+): SoupTransaction {
   // Scoped equivalent of cancelSoupQueries (same data !== undefined guard)
   const cancelPredicate = (query: Query) =>
     query.state.data !== undefined && referencesIds(query.queryKey);
@@ -455,11 +544,19 @@ export function removeSearchEntities(entityIds: Set<string>): SoupTransaction {
  * Fetch a single entity from the server and merge it into the cache.
  * If the entity is already cached, updates it via normy (deep-merge).
  * If it's new, prepends it to the first page of every active soup list query.
+ *
+ * `ownTouch` marks the refetch as caused by the viewer's own mutation (e.g.
+ * entity creation): the fetched item is stamped with an optimistic
+ * `touched_at` — the single-entity response never carries one — so the
+ * Recent feed's insert gate admits it, and the touched queries are spared
+ * from the follow-up invalidation, which would replace their pages with
+ * server state that can't include the entity until the activity consumer
+ * catches up.
  */
 export async function refetchSoupEntity(
   entityId: string,
   entityType: SoupEntityTag,
-  options?: { includeRoot?: boolean }
+  options?: { includeRoot?: boolean; ownTouch?: boolean }
 ): Promise<void> {
   const { storageServiceClient } = await import('@service-storage/client');
 
@@ -481,15 +578,45 @@ export async function refetchSoupEntity(
   const page = result.value;
   if (!page.items.length) return;
 
-  for (const item of page.items) {
+  for (let item of page.items) {
     const itemId = getSoupItemId(item);
+    if (options?.ownTouch) {
+      item = { ...item, touched_at: ownTouchStamp(itemId) };
+    }
     if (hasSoupEntity(itemId)) {
       optimisticUpdateSoupEntity(item);
     } else {
       insertSoupEntity(item);
-      invalidateAllSoup();
+      if (options?.ownTouch) {
+        invalidateAllSoupExceptTouched();
+      } else {
+        invalidateAllSoup();
+      }
     }
   }
+}
+
+/**
+ * `invalidateAllSoup` minus the touched_by_me queries: an own-touch insert
+ * must survive in the Recent feed until the activity consumer has recorded
+ * the touch, so those pages keep the optimistic row instead of refetching
+ * a server list that would drop it.
+ */
+function invalidateAllSoupExceptTouched(): void {
+  const notTouched = (query: Query) =>
+    !JSON.stringify(query.queryKey).includes('touched_by_me');
+  queryClient.invalidateQueries({
+    queryKey: soupKeys.items._def,
+    predicate: notTouched,
+  });
+  queryClient.invalidateQueries({
+    queryKey: soupKeys.astItems._def,
+    predicate: notTouched,
+  });
+  queryClient.invalidateQueries({
+    queryKey: soupKeys.groupedGroup._def,
+    predicate: notTouched,
+  });
 }
 
 /** @private */
@@ -539,6 +666,14 @@ export function buildSingleEntityFilter(
       ...base,
       channel_thread_filters: { thread_ids: [entityId] },
     }))
+    .with('calendarEvent', () => ({
+      ...base,
+      calendar_event_filters: { calendar_event_ids: [entityId] },
+    }))
+    .with('reminder', () => ({
+      ...base,
+      reminder_filters: { ids: [entityId] },
+    }))
     .exhaustive();
 }
 
@@ -578,6 +713,13 @@ export function optimisticUpdateSoupItemViewedAt(itemId: string) {
 /**
  * Optimistically update the updatedAt/updated_at timestamp for a soup item.
  * Updates the item across all soup queries if it exists and matches the expected tag.
+ *
+ * Deliberately does NOT stamp `touched_at`: this helper's caller is the
+ * incoming-notification path, i.e. *other people's* actions (your own don't
+ * notify you). `updated_at` is global recency, `touched_at` is the viewer's
+ * own touch — stamping it here would pull entities a teammate mutated into
+ * the viewer's Recent feed. Own-mutation flows stamp `touched_at` at their
+ * call sites (see `bumpSoupEntityTouchedAt`).
  */
 export function optimisticUpdateSoupItemUpdatedAt(
   itemId: string,
@@ -636,6 +778,7 @@ function getSearchResultId(result: UnifiedSearchResponseItem): string {
     .with({ type: 'document' }, (r) => r.document_id)
     .with({ type: 'chat' }, (r) => r.chat_id)
     .with({ type: 'channel' }, (r) => r.channel_id)
+    .with({ type: 'channelMessage' }, (r) => `${r.channel_id}:${r.message_id}`)
     .with({ type: 'email' }, (r) => r.thread_id)
     .with({ type: 'project' }, (r) => r.id)
     .with({ type: 'call' }, (r) => r.call_id)

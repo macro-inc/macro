@@ -4,14 +4,20 @@ import { DebugSuspense } from '@channel/DebugSuspense';
 import type { ChannelInputProps } from '@channel/Input/ChannelInput';
 import { buildPostMessageSendPayload } from '@channel/Input/message-payload';
 import {
+  TaskModeChannelInput,
+  type TaskModeChannelInputProps,
+} from '@channel/Input/TaskModeChannelInput';
+import {
   makeAttachmentTrackerPersistenceKey,
   makeInputValuePersistenceKey,
+  makeTaskPersistence,
 } from '@channel/Input/utils/persistence';
 import {
   type MessageData,
   SearchHighlightTermsProvider,
 } from '@channel/Message';
 import { MaybeMessageActionDrawerManager } from '@channel/Mobile/MessageActionDrawerManager';
+import { useChannelBotMentionUsers } from '@channel/use-channel-bot-mention-users';
 import { useChannelParticipants } from '@channel/use-channel-participants';
 import { FloatRegionOrInline } from '@components/app/mobile/float-regions/FloatRegion';
 import { FloatRegions } from '@components/app/mobile/float-regions/float-region-state';
@@ -21,9 +27,13 @@ import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
 import { FindBar } from '@core/component/FindBar';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { toast } from '@core/component/Toast/Toast';
-import { useChannelActivity, useChannelName } from '@core/context/channels';
+import {
+  useChannelActivity,
+  useChannelName,
+  useChannelType,
+} from '@core/context/channels';
 import { useUserId } from '@core/context/user';
-import { isMobile } from '@core/mobile/isMobile';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import type { DateValue } from '@core/util/date';
 import {
   extractUserMentions,
@@ -53,8 +63,10 @@ import {
   useAddReactionMutation,
   useRemoveReactionMutation,
 } from '@queries/channel/reaction';
+import { threadRepliesQueryOptions } from '@queries/channel/thread-replies';
 import { usePostTypingUpdateMutation } from '@queries/channel/typing';
 import { queryClient } from '@queries/client';
+import { ChannelTypeEnum } from '@service-storage/client';
 import { useBeforeLeave } from '@solidjs/router';
 import {
   type Accessor,
@@ -69,7 +81,6 @@ import {
   Switch,
 } from 'solid-js';
 import {
-  ChannelInput,
   createInputAttachmentTracker,
   type InputHandle,
   type InputSnapshot,
@@ -124,7 +135,7 @@ export type ChannelProps = {
   lastViewedAt?: DateValue | null;
   initialMessagesStateSnapshot?: ChannelMessagesStateSnapshot;
   onHandleReady?: (handle: ChannelHandle) => void;
-  /** Whether to auto-focus the channel input on mount. Defaults to `!isMobile()`. */
+  /** Whether to auto-focus the channel input on mount. Defaults to `!isTouchDevice()`. */
   autofocus?: boolean;
 };
 
@@ -145,11 +156,11 @@ export function Channel(props: ChannelProps) {
   const userId = useUserId();
   const splitPanel = useSplitPanel();
 
-  // Full-frame mobile: the thread list spans the whole screen and messages
+  // Full-frame mobile/tablet: the thread list spans the whole screen and messages
   // scroll behind the floating header islands (top) and the floating
   // input + dock (bottom). contentOffsetTop already includes the safe area.
   const threadListScrollInsets = () =>
-    isMobile()
+    isTouchDevice()
       ? {
           start: splitPanel?.contentOffsetTop() ?? 0,
           // '4' here is a magic offset so that the ThreadRail correctly hits the the curved edge of the floating input. Not idea, but low impact and it works.
@@ -220,8 +231,21 @@ export function Channel(props: ChannelProps) {
 
   const messages = createMemo(() => [...messageIndex.items]);
   const messageById = () => messageIndex.byId;
+  const keepMountedTargetThreadIndexes = createMemo(() => {
+    const threadId = targetMessageController.activeTargetMessageId();
+    const hasPendingElementScroll =
+      targetMessageController.pendingScrollTargetId() !== undefined ||
+      targetMessageController.pendingTargetReplyId() !== undefined;
+    if (!threadId || !hasPendingElementScroll) return [];
+
+    const index = messageIndex.keys.indexOf(threadId);
+    return index === -1 ? [] : [index];
+  });
 
   const participants = useChannelParticipants(() => props.channelId);
+  const channelBotMentionUsers = useChannelBotMentionUsers(
+    () => props.channelId
+  );
 
   const activity = useChannelActivity(props.channelId);
 
@@ -259,6 +283,22 @@ export function Channel(props: ChannelProps) {
   const threadManager = createThreadManager(
     props.initialMessagesStateSnapshot?.threads
   );
+
+  const prepareTargetReply = (threadId: string) => {
+    // Expand before the virtualized row mounts so navigation never presents a
+    // collapsed parent and then grows it in the viewport.
+    threadManager.getOrCreateThreadState(threadId).setIsExpanded(true);
+    // Reply data and the load-around message window can load in parallel. The
+    // mounted query reuses this request and remains the owner of render state.
+    void queryClient.prefetchQuery(
+      threadRepliesQueryOptions(props.channelId, threadId)
+    );
+  };
+
+  if (props.targetMessageId && props.targetMessageReplyId) {
+    prepareTargetReply(props.targetMessageId);
+  }
+
   const threadPaginator = createThreadPaginator(messagesQuery);
   const messageEditor = createMessageEditor({
     channelId: () => props.channelId,
@@ -306,7 +346,23 @@ export function Channel(props: ChannelProps) {
   });
 
   const channelName = useChannelName(props.channelId);
-  const { popoverSplit } = useSplitLayout();
+  const channelType = useChannelType(props.channelId);
+  const { popoverSplit, openWithSplit } = useSplitLayout();
+
+  // Placeholder name: channels render as "#name"; a 1:1 DM named "First Last"
+  // shortens to the first name, and group DMs like "A, B" keep their full name.
+  const inputPlaceholderName = () => {
+    const name = channelName();
+    if (!name) return undefined;
+    if (channelType() !== ChannelTypeEnum.DirectMessage) return `#${name}`;
+    const parts = name.split(' ');
+    return parts.length === 2 && !parts[0]?.endsWith(',') ? parts[0] : name;
+  };
+
+  const inputPlaceholder = () => {
+    const name = inputPlaceholderName();
+    return name ? `Type @ to share with ${name}` : 'Type @ to share';
+  };
 
   const buildChannelMessageMention = (message: {
     id: string;
@@ -422,6 +478,7 @@ export function Channel(props: ChannelProps) {
   const goToMessage: ChannelHandle['goToMessage'] = (messageId, replyId) => {
     if (replyId) {
       clearSelection();
+      prepareTargetReply(messageId);
     } else {
       selectMessage(messageId);
     }
@@ -480,6 +537,13 @@ export function Channel(props: ChannelProps) {
   // fully loaded data.
   createEffect(() => {
     if (!pendingScrollToLatest()) return;
+    // A specific message navigation supersedes scroll-to-latest: once a target
+    // scroll is pending, abandon the latest-scroll so it can't yank the view
+    // back to the bottom.
+    if (targetMessageController.pendingScrollTargetId()) {
+      setPendingScrollToLatest(false);
+      return;
+    }
     const navigation = threadListNavigation();
     const scrollState = threadListScrollState();
     if (!navigation || !scrollState?.didInitialScroll) return;
@@ -555,6 +619,50 @@ export function Channel(props: ChannelProps) {
     );
   };
 
+  // Task mode: post the freshly created task into the channel as a message
+  // carrying a task mention.
+  const onSendTask: TaskModeChannelInputProps['onSendTask'] = (task) => {
+    const senderId = userId();
+    if (!senderId) return;
+    sendMessageMutation.mutate(
+      {
+        channelID: props.channelId,
+        senderId,
+        optimisticId: crypto.randomUUID(),
+        message: {
+          content: buildMentionMarkdownString({
+            type: 'document',
+            documentId: task.documentId,
+            documentName: task.title,
+            blockName: 'task',
+          }),
+          mentions: [{ entity_type: 'document', entity_id: task.documentId }],
+          attachments: [],
+        },
+        optimisticAttachments: [],
+      },
+      {
+        // The task itself was created before this send, so don't restore the
+        // composer (retrying there would create a duplicate) — point at the
+        // task instead.
+        onError: () => {
+          toast.failure('Task created, but sharing it to the channel failed', {
+            actions: [
+              {
+                label: 'Open task',
+                onClick: () =>
+                  openWithSplit(
+                    { type: 'task', id: task.documentId },
+                    { referredFrom: null }
+                  ),
+              },
+            ],
+          });
+        },
+      }
+    );
+  };
+
   const isChannelReady = () => {
     return (
       messagesQuery.isFetched &&
@@ -591,7 +699,7 @@ export function Channel(props: ChannelProps) {
               >
                 <Show when={findBar.isOpen()}>
                   <FindBar
-                    class="absolute top-2 right-3 z-10 w-80 max-w-[calc(100%-1.5rem)] mobile:top-[calc(var(--mobile-content-inset-top,0)+0.5rem)]"
+                    class="absolute top-2 right-3 z-10 w-80 max-w-[calc(100%-1.5rem)] touch:top-[calc(var(--mobile-content-inset-top,0)+0.5rem)]"
                     controller={findBar}
                     direction="desc"
                   />
@@ -606,8 +714,14 @@ export function Channel(props: ChannelProps) {
                       triggerBehavior="spring-back"
                     >
                       <ThreadList
+                        channelId={props.channelId}
                         keys={() => messageIndex.keys}
                         initialScrollTarget={threadListInitialScrollTarget()}
+                        initialScrollHandledByTargetElement={
+                          targetMessageController.pendingScrollTargetId() !==
+                          undefined
+                        }
+                        keepMounted={keepMountedTargetThreadIndexes}
                         fullFrameScrollInsets={threadListScrollInsets}
                         shift={shift}
                         prepend={threadPaginator.isPrepending}
@@ -638,16 +752,40 @@ export function Channel(props: ChannelProps) {
                                   channelId={() => props.channelId}
                                   isNewestThread={isNewestThread()}
                                   getMessageActions={getMessageActions}
-                                  targetThreadId={targetMessageController.activeTargetMessageId()}
-                                  targetReplyId={targetMessageController.pendingTargetReplyId()}
-                                  activeTargetReplyId={targetMessageController.activeTargetMessageReplyId()}
-                                  unifiedReplyTarget={unifiedInput.replyTarget()}
-                                  onTargetReplyScrolled={(replyId) => {
-                                    targetMessageController.completePendingReplyScroll(
-                                      m().id,
-                                      replyId
-                                    );
+                                  isFindBarOpen={findBar.isOpen}
+                                  targetNavigation={{
+                                    targetThreadId:
+                                      targetMessageController.activeTargetMessageId,
+                                    targetMessageId: () =>
+                                      !targetMessageController.pendingTargetReplyId()
+                                        ? targetMessageController.pendingScrollTargetId()
+                                        : undefined,
+                                    targetReplyId: () =>
+                                      targetMessageController.pendingScrollTargetId()
+                                        ? undefined
+                                        : targetMessageController.pendingTargetReplyId(),
+                                    activeTargetReplyId:
+                                      targetMessageController.activeTargetMessageReplyId,
+                                    positionTarget: (
+                                      threadRow,
+                                      targetElement
+                                    ) =>
+                                      threadListNavigation()?.scrollToElementInItem(
+                                        item.id,
+                                        threadRow,
+                                        targetElement
+                                      ) ?? false,
+                                    onTargetMessageScrolled:
+                                      targetMessageController.completePendingScroll,
+                                    onTargetReplyScrolled: (replyId) => {
+                                      targetMessageController.completePendingReplyScroll(
+                                        item.id,
+                                        replyId
+                                      );
+                                    },
+                                    onClearTarget: releaseSelectionAndTarget,
                                   }}
+                                  unifiedReplyTarget={unifiedInput.replyTarget()}
                                   isExpanded={state.isExpanded}
                                   setIsExpanded={state.setIsExpanded}
                                   isReplying={state.isReplying}
@@ -673,7 +811,6 @@ export function Channel(props: ChannelProps) {
                                   selectedMessageId={selection.selectedId}
                                   onSelectMessage={selectMessage}
                                   onClearSelection={clearSelection}
-                                  onClearTarget={releaseSelectionAndTarget}
                                   messageListScopeId={messageListScopeId}
                                 />
                               )}
@@ -686,12 +823,14 @@ export function Channel(props: ChannelProps) {
                       <ScrollToBottomOverlay
                         scrollState={threadListScrollState}
                         onScrollToBottom={handleScrollToBottom}
-                        class="mobile:top-[calc(var(--mobile-content-inset-top,0)+1rem)]"
+                        class="touch:top-[calc(var(--mobile-content-inset-top,0)+1rem)]"
                       />
                     </Show>
                   </div>
                 </Show>
-                <ActiveCallMessage channelId={props.channelId} />
+                <DebugSuspense name="Channel.active-call">
+                  <ActiveCallMessage channelId={props.channelId} />
+                </DebugSuspense>
               </div>
               <DebugSuspense name="Channel.input">
                 <FloatRegionOrInline region="accessory">
@@ -744,6 +883,10 @@ export function Channel(props: ChannelProps) {
                               if (target?.replyId) return undefined;
                               return messageById().get(threadId);
                             }}
+                            threadHasReplies={() =>
+                              (messageById().get(threadId)?.thread
+                                .reply_count ?? 0) > 0
+                            }
                             onNavigateToTarget={() =>
                               goToMessage(
                                 threadId,
@@ -755,15 +898,16 @@ export function Channel(props: ChannelProps) {
                         )}
                       </Match>
                       <Match when={true}>
-                        <ChannelInput
+                        <TaskModeChannelInput
                           autofocus={props.autofocus}
                           collapsible
                           input={{
                             mode: 'channel',
                             id: `channel-input-${props.channelId}`,
-                            placeholder: 'Message channel',
+                            placeholder: inputPlaceholder(),
                           }}
                           participants={participants.users}
+                          bots={channelBotMentionUsers}
                           attachmentTracker={attachmentTracker}
                           persistenceKey={makeInputValuePersistenceKey({
                             channelId: props.channelId,
@@ -779,6 +923,10 @@ export function Channel(props: ChannelProps) {
                             void setChannelInputSnapshot(snapshot)
                           }
                           onSend={onSend}
+                          onSendTask={onSendTask}
+                          taskPersistence={makeTaskPersistence({
+                            channelId: props.channelId,
+                          })}
                           onStartTyping={() =>
                             typingMutation.mutate({
                               channelId: props.channelId,

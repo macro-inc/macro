@@ -7,6 +7,7 @@ import {
   processEmailColors,
   type ThemeColorParams,
 } from '@core/email';
+import { interceptMailtoLinks } from '@core/util/interceptMailtoLinks';
 import DotsThree from '@phosphor/dots-three.svg';
 import type { ApiMessage } from '@service-email/generated/schemas';
 import { Button, cn } from '@ui';
@@ -172,7 +173,14 @@ export function EmailMessageBody(props: EmailMessageBodyProps) {
       a.setAttribute('target', '_blank');
       a.setAttribute('rel', 'noopener noreferrer');
     }
+    // Raw mailto: anchors open the in-app composer instead of the OS mail client
+    interceptMailtoLinks(messageDiv);
     messageDiv.style.userSelect = 'text';
+    // Safari resolves only the -webkit- prefixed form of user-select
+    // (unprefixed shipped in Safari 26.4), and WebKit inherits the app-wide
+    // `user-select: none` through the shadow boundary — without the prefix,
+    // email text isn't selectable in Safari.
+    messageDiv.style.setProperty('-webkit-user-select', 'text');
     messageDiv.style.cursor = 'auto';
     shadow.appendChild(messageDiv);
     return hostContainer;
@@ -284,9 +292,10 @@ export function EmailMessageBody(props: EmailMessageBodyProps) {
         // Use zoom instead of transform: scale() so that backgrounds,
         // borders, and layout all shrink together without clipping.
         messageDiv.style.zoom = `${scale}`;
-      } else {
-        messageDiv.style.overflow = 'auto';
       }
+      // When content fits, leave overflow alone — an overflow:auto wrapper
+      // turns hidden tracking-pixel divs (e.g. max-height:1px) into a
+      // message-height scrollbar.
     };
 
     // Re-run on container resize (e.g. orientation change, split resize)

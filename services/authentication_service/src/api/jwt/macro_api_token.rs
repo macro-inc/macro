@@ -1,12 +1,12 @@
-use crate::api::context::MacroApiTokenContext;
+use crate::api::context::{AuthorizationService, MacroApiTokenContext};
 use axum::{
-    Extension, Json,
+    Json,
     extract::{Query, State},
     http::StatusCode,
     response::{IntoResponse, Response},
 };
 use macro_auth::macro_api_token::EncodeMacroApiTokenArgs;
-use model::user::UserContext;
+use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
 use sqlx::PgPool;
 use utoipa::ToSchema;
 
@@ -40,13 +40,14 @@ pub struct MacroApiTokenQuery {
             (status = 500, body=String),
         )
     )]
-#[tracing::instrument(skip(db, macro_api_token_context, user_context))]
+#[tracing::instrument(skip(db, macro_api_token_context, authorization))]
 pub async fn handler(
     State(db): State<PgPool>,
     State(macro_api_token_context): State<MacroApiTokenContext>,
-    user_context: Extension<UserContext>,
+    authorization: MacroAuthorizationExtractor<AuthorizationService, UserOrInternal>,
     Query(query): Query<MacroApiTokenQuery>,
 ) -> Result<Response, Response> {
+    let user_context = &authorization.authorization.user.user_context;
     let email = if let Some(email) = query.email.clone() {
         // TODO: figure out if email is url_encoded by default
         let email = urlencoding::decode(email.as_ref()).map_err(|e| {

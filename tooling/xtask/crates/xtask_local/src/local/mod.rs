@@ -1,7 +1,7 @@
 //! xtask-owned local & dev orchestration.
 //!
 //! `just run_local`, `just run_dev`, and the supporting
-//! `doctor`/`validate`/`stop`/`reset`/`destroy` recipes all delegate here.
+//! `doctor`/`validate`/`status`/`stop`/`reset`/`destroy` recipes all delegate here.
 //! This module owns: building Linux service binaries on the host (zigbuild),
 //! the minimal runtime image, the typed service inventory, per-instance
 //! isolation, environment layering, generated docker-compose overrides, local
@@ -19,6 +19,7 @@ pub mod cli;
 pub mod db;
 pub mod docker;
 pub mod doctor;
+pub mod e2e;
 pub mod env_layer;
 pub mod frontend;
 pub mod fusionauth;
@@ -32,9 +33,15 @@ pub mod local_env;
 pub mod localstack;
 pub mod mailpit;
 pub mod opensearch;
+pub mod portmap;
 pub mod proxy;
 pub mod resources;
+pub mod sdk_webhook;
+pub mod seed_env;
+pub mod snapshot;
+pub mod stack;
 pub mod stage;
+pub mod status;
 pub mod summary;
 pub mod validate;
 
@@ -150,7 +157,46 @@ use anyhow::Result;
 use instance::Instance;
 use stage::Stage;
 
-const AUX_SERVICE_IMAGES: &[&str] = &["websocket_service", "sync_service", "lexical_service"];
+/// Every non-Rust local service whose image is built from this repository.
+/// `docker compose up` builds a missing image implicitly, but an Environment
+/// Build must materialize all of them so a fresh agent never discovers one at
+/// stack-start time.
+const LOCAL_BUILD_SERVICE_IMAGES: &[&str] = &[
+    "websocket_service",
+    "sync_service",
+    "lexical_service",
+    "ai_editing_worker",
+    "analytics_proxy",
+    "sdk-webhook-relay",
+    "search",
+];
+
+/// Repository-built app containers safe to recreate during `stack update`.
+/// OpenSearch is built for cold-stack correctness but remains under the infra
+/// lifecycle, which waits for health before Rust services can reconnect.
+const LOCAL_RECREATE_SERVICE_IMAGES: &[&str] = &[
+    "websocket_service",
+    "sync_service",
+    "lexical_service",
+    "ai_editing_worker",
+    "analytics_proxy",
+    "sdk-webhook-relay",
+];
+
+/// Image-only app services that infra-only bake mode does not otherwise start.
+/// Infra images are pulled by `bring_up_infra`; the Rust runtime image is built
+/// separately by [`build::ensure_runtime_image`].
+const LOCAL_PULL_SERVICE_IMAGES: &[&str] = &["proxy", "mailpit", "static_file_cdn"];
+
+/// The artifact-driven preview updater can refresh every Docker-built app
+/// service. Keep this separate so enabling local aux rebuilds does not make the
+/// existing `run_local` edit loop rebuild the AI worker too.
+const PREVIEW_AUX_SERVICE_IMAGES: &[&str] = &[
+    "websocket_service",
+    "sync_service",
+    "lexical_service",
+    "ai_editing_worker",
+];
 
 /// Bring up a Local or Dev stack and (unless `--no-frontend`) the frontend.
 pub fn run_stack(mode: Mode, args: &cli::RunArgs) -> Result<()> {
@@ -166,6 +212,16 @@ pub fn run_stack(mode: Mode, args: &cli::RunArgs) -> Result<()> {
         mode.label(),
         instance.name()
     ));
+    if !stage.is_dry_run() {
+        stack::clear_state(&instance)?;
+    }
+
+    // Before `prepare` (which resolves env and reads the OTLP port to decide
+    // whether to wire `OTEL_EXPORTER_OTLP_ENDPOINT`), so a `--traces` run gets
+    // the same auto-wiring as a collector started manually beforehand.
+    if let Some(backend) = args.traces {
+        ensure_tracing_backend(&stage, backend)?;
+    }
 
     // `run_local`/`run_dev` are full delete + full create: tear the previous
     // stack and ALL its stateful volumes down so the bring-up is always from a
@@ -183,7 +239,7 @@ pub fn run_stack(mode: Mode, args: &cli::RunArgs) -> Result<()> {
     // Foreground: resolve env, build binaries + runtime image, generate the
     // compose override / Caddyfile / kickstart. None of this touches the volumes
     // or containers the teardown is removing, so it's safe to overlap.
-    let (env, target) = prepare(&stage, mode, &instance, args)?;
+    let (env, target) = prepare(&stage, mode, &instance, args, false, false)?;
 
     // Join the background teardown before we (re)create volumes + bring infra up,
     // surfaced as a live spinner so it's clear what we're blocked on. It
@@ -206,8 +262,11 @@ pub fn run_stack(mode: Mode, args: &cli::RunArgs) -> Result<()> {
     // start. The teardown means everything is freshly created each run, so
     // otherwise the services race their backends on startup (no `macrodb`,
     // DynamoDB/OpenSearch connection refused).
-    bring_up_infra(&stage, mode, &instance, &env)?;
+    bring_up_infra(&stage, mode, &instance, &env, InfraInit::Full)?;
     bring_up_app(&stage, mode, &instance, &env)?;
+    let _sdk_webhook_tunnel = (mode == Mode::Local && !stage.is_dry_run())
+        .then(|| sdk_webhook::start(&instance))
+        .transpose()?;
 
     // No restart-to-reload step: the teardown means `up` always creates fresh
     // containers, which start on the just-built binaries bind-mounted at
@@ -222,10 +281,16 @@ pub fn run_stack(mode: Mode, args: &cli::RunArgs) -> Result<()> {
         stage.note("frontend disabled (--no-frontend)");
         None
     } else {
-        frontend::start(&stage, &instance, mode)?
+        frontend::start(&stage, &instance, mode, args.traces.is_some())?
     };
 
-    summary::print(mode, &instance, &env);
+    summary::print(
+        mode,
+        &instance,
+        &env,
+        &frontend::url(&instance),
+        &mailpit::direct_ui_url(&instance),
+    );
 
     match frontend {
         // Interactive terminal: stay attached with a hotkey loop.
@@ -430,18 +495,22 @@ fn interact(
 /// runtime image + service binaries, and generate the compose override /
 /// Caddyfile / kickstart. Deliberately does NOT create the external
 /// networks/volumes — that's done after the background teardown joins, since
-/// teardown removes them. Returns the resolved env + build target.
+/// teardown removes them. `static_frontend` wires the proxy to serve the staged
+/// app bundle (headless `stack up`). Returns the resolved env + build target.
 fn prepare(
     stage: &Stage,
     mode: Mode,
     instance: &Instance,
     args: &cli::RunArgs,
+    static_frontend: bool,
+    pull_app_images: bool,
 ) -> Result<(env_layer::ResolvedEnv, arch::Target)> {
     let env = env_layer::resolve(
         mode,
         instance,
         args.env.no_doppler,
         args.env.env_file.as_deref(),
+        static_frontend,
     )?;
     stage.note(&format!("env: {}", env_layer::summarize(&env.merged)));
 
@@ -461,13 +530,24 @@ fn prepare(
     // through the proxy in every mode), and — for the self-contained local
     // stacks — the FusionAuth kickstart. (External networks/volumes are created
     // by the caller after the background teardown joins.)
-    gen_compose::generate(mode, instance, &binaries)?;
-    proxy::write_caddyfile(instance, mode)?;
+    let gmail_forwarder = env
+        .merged
+        .get("GMAIL_FORWARDER_SA_KEY")
+        .is_some_and(|key| !key.trim().is_empty());
+    gen_compose::generate(mode, instance, &binaries, static_frontend, gmail_forwarder)?;
+    proxy::write_caddyfile(instance, mode, static_frontend)?;
+    if mode == Mode::Local {
+        portmap::write(instance)?;
+    }
     if mode.spec().runs_local_infra {
-        fusionauth::write_kickstart(instance)?;
+        let google = kickstart::GoogleIdp::from_env(&env.merged);
+        fusionauth::write_kickstart(instance, google.as_ref())?;
     }
     if args.build.build_aux_services {
         build_aux_service_images(stage, instance, &env)?;
+    }
+    if pull_app_images {
+        pull_app_service_images(stage, instance, &env)?;
     }
     Ok((env, target))
 }
@@ -485,8 +565,18 @@ fn build_aux_service_images(
     env: &env_layer::ResolvedEnv,
 ) -> Result<()> {
     let mut build = compose_cmd(instance, env);
-    build.arg("build").args(AUX_SERVICE_IMAGES);
+    build.arg("build").args(LOCAL_BUILD_SERVICE_IMAGES);
     stage.run("Building auxiliary service images", &mut build)
+}
+
+fn pull_app_service_images(
+    stage: &Stage,
+    instance: &Instance,
+    env: &env_layer::ResolvedEnv,
+) -> Result<()> {
+    let mut pull = compose_cmd(instance, env);
+    pull.arg("pull").args(LOCAL_PULL_SERVICE_IMAGES);
+    stage.run("Pulling image-only app services", &mut pull)
 }
 
 fn recreate_aux_service_containers(
@@ -496,8 +586,31 @@ fn recreate_aux_service_containers(
 ) -> Result<()> {
     let mut up = compose_cmd(instance, env);
     up.args(["up", "-d", "--force-recreate", "--no-deps"])
-        .args(AUX_SERVICE_IMAGES);
+        .args(LOCAL_RECREATE_SERVICE_IMAGES);
     stage.run("Recreating auxiliary service containers", &mut up)
+}
+
+fn recreate_preview_aux_service_containers(
+    stage: &Stage,
+    instance: &Instance,
+    env: &env_layer::ResolvedEnv,
+) -> Result<()> {
+    let mut up = compose_cmd(instance, env);
+    up.args(["up", "-d", "--force-recreate", "--no-deps"])
+        .args(PREVIEW_AUX_SERVICE_IMAGES);
+    stage.run("Recreating preview auxiliary services", &mut up)
+}
+
+/// How the local infra reaches its initialized state on bring-up.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum InfraInit {
+    /// Run the real init: migrate the DB, let FusionAuth apply its kickstart,
+    /// create the OpenSearch indices.
+    Full,
+    /// The volumes were restored from an init snapshot — the state already
+    /// exists, so the init steps are skipped (LocalStack is provisioned either
+    /// way; its state isn't volume-backed).
+    FromSnapshot,
 }
 
 /// Bring up the backend infra the app services connect to at startup, and get it
@@ -511,6 +624,7 @@ fn bring_up_infra(
     mode: Mode,
     instance: &Instance,
     env: &env_layer::ResolvedEnv,
+    init: InfraInit,
 ) -> Result<()> {
     if stage.is_dry_run() {
         return Ok(());
@@ -545,7 +659,7 @@ fn bring_up_infra(
         localstack::provision(instance)
     })?;
 
-    if spec.migrates_db {
+    if spec.migrates_db && init == InfraInit::Full {
         // Postgres is ready (`--wait`); create + migrate the freshly-wiped DB.
         db::migrate(stage, instance)?;
     }
@@ -553,11 +667,18 @@ fn bring_up_infra(
         // Kafka is healthy (`--wait` gates on its broker healthcheck); create
         // the event topics declared in `macro_event_topics` — the local
         // equivalent of the MSK topic provisioning driven by the generated
-        // `.github/kafka-cluster-topics.json`.
-        stage.run_step("Creating Kafka topics", || kafka::provision(instance))?;
+        // `.github/kafka-cluster-topics.json`. Restored volumes already carry
+        // the topics (they live in the broker's data dir), so only a full init
+        // provisions — which also means a snapshot-restoring `stack up` (e.g.
+        // the preview VM) never needs the rdkafka-backed `local-stack` feature.
+        if init == InfraInit::Full {
+            stage.run_step("Creating Kafka topics", || kafka::provision(instance))?;
+        }
 
         // Start FusionAuth on its own (impatient healthcheck → no `--wait`) and
-        // poll it patiently until the kickstart has applied.
+        // poll it patiently until it's up. On a full init that wait covers the
+        // ~minute kickstart; on a snapshot restore the kickstart is already in
+        // the restored volumes, so this is just JVM boot.
         let mut fa = compose_cmd(instance, env);
         fa.arg("up").arg("-d").arg("fusionauth");
         stage.run("Starting FusionAuth", &mut fa)?;
@@ -566,7 +687,10 @@ fn bring_up_infra(
         // OpenSearch is up (`--wait`) but empty. Create the search indices +
         // aliases (idempotent) so the unified search path works out of the box
         // instead of 404ing on the missing `documents`/`chats`/… indices.
-        opensearch::provision_indices(stage, instance, &env.merged)?;
+        // Restored volumes already contain them.
+        if init == InfraInit::Full {
+            opensearch::provision_indices(stage, instance, &env.merged)?;
+        }
     }
     Ok(())
 }
@@ -590,7 +714,93 @@ fn bring_up_app(
         }
         up.arg("proxy");
     }
-    stage.run("Starting services (docker compose up -d)", &mut up)
+    stage.run("Starting services (docker compose up -d)", &mut up)?;
+    connect_tracing_network(instance);
+    Ok(())
+}
+
+/// Start the requested trace collector (`--traces`) under its own compose
+/// project, the same one a developer would use manually — see
+/// `docker/docker-compose.yml`'s `jaeger`/`datadog-agent` services. Global and
+/// idempotent (like `start_localstack`): one collector per machine, shared
+/// across instances, left running across `run_local` invocations.
+fn ensure_tracing_backend(stage: &Stage, backend: cli::TracesBackend) -> Result<()> {
+    // A keyed backend with a missing key accepts telemetry locally and drops
+    // every payload at the vendor intake (403), which looks like "traces are
+    // broken" rather than "key is missing" — so fail loud up front.
+    if let Some(var) = backend.required_env()
+        && macro_env_var::maybe_read_env(var).is_none_or(|v| v.is_empty())
+    {
+        anyhow::bail!(
+            "--traces {} requires the {var} env var to be set (export it in \
+             the shell you run this from)",
+            backend.compose_profile()
+        );
+    }
+    let compose = repo_root().join("docker/docker-compose.yml");
+    let mut up = Command::new("docker");
+    up.arg("compose")
+        .arg("--project-directory")
+        .arg(repo_root())
+        .arg("-f")
+        .arg(&compose)
+        .arg("--profile")
+        .arg(backend.compose_profile())
+        .arg("up")
+        .arg("-d")
+        .arg("--remove-orphans")
+        .arg(backend.compose_service());
+    stage.run(
+        &format!("Starting {} trace collector", backend.compose_profile()),
+        &mut up,
+    )?;
+
+    // `up -d` returns once the container starts, not once it's accepting
+    // connections; `env_layer::resolve` (which runs right after this, in
+    // `prepare`) needs the OTLP port live NOW to decide whether to wire
+    // `OTEL_EXPORTER_OTLP_ENDPOINT`, so wait for it here instead of racing.
+    for _ in 0..50 {
+        if summary::port_open(4318) {
+            return Ok(());
+        }
+        std::thread::sleep(std::time::Duration::from_millis(100));
+    }
+    anyhow::bail!(
+        "{} trace collector did not come up on port 4318 in time",
+        backend.compose_profile()
+    )
+}
+
+/// If the global trace collector (Jaeger or the Datadog agent) is running,
+/// attach it to this instance's `services` network under the `otel-collector`
+/// alias that the injected `OTEL_EXPORTER_OTLP_ENDPOINT` points at (see
+/// `env_layer::resolve`). The collectors are started under their own compose
+/// project (`docker/docker-compose.yml`, profiles `jaeger`/`datadog`), and
+/// Compose prefixes networks per project — so without this, instance
+/// containers can't resolve `otel-collector` and span exports fail with DNS
+/// errors. Best-effort: "already connected" (rerun) and other failures are
+/// ignored, they only mean traces don't flow.
+fn connect_tracing_network(instance: &Instance) {
+    if !summary::port_open(4318) {
+        return;
+    }
+    // Find the collector container (Jaeger or Datadog agent — both publish the
+    // OTLP HTTP port) by that port rather than assuming a container name, in
+    // case it was started under a different project.
+    let Some(collector) = Command::new("docker")
+        .args(["ps", "--filter", "publish=4318", "--format", "{{.Names}}"])
+        .output()
+        .ok()
+        .map(|out| String::from_utf8_lossy(&out.stdout).trim().to_string())
+        .filter(|name| !name.is_empty())
+    else {
+        return;
+    };
+    let _ = Command::new("docker")
+        .args(["network", "connect", "--alias", "otel-collector"])
+        .arg(format!("{}_services", instance.project_name()))
+        .arg(collector)
+        .output();
 }
 
 /// Restart the given services' containers so they re-exec their freshly built
@@ -654,6 +864,7 @@ fn instance_networks(instance: &Instance) -> [String; 2] {
 /// is best-effort and noisy) so callers surface it as a single line; absent
 /// containers/volumes are ignored.
 fn teardown_commands(instance: &Instance) {
+    sdk_webhook::stop(instance);
     let project = instance.project_name();
     // `-t 0`: SIGKILL immediately, no graceful-shutdown grace. The default 10s
     // SIGTERM timeout per container (Postgres' smart shutdown, OpenSearch, …)
@@ -709,7 +920,7 @@ fn ensure_external_resources(stage: &Stage, instance: &Instance) -> Result<()> {
 
 fn wait_http(stage: &Stage, label: &str, url: &str) -> Result<()> {
     let script = format!(
-        "for i in $(seq 1 60); do curl -fsS {url} >/dev/null 2>&1 && exit 0; sleep 2; done; echo 'not ready: {url}'; exit 1"
+        "for i in $(seq 1 60); do curl -fsS --max-time 3 {url} >/dev/null 2>&1 && exit 0; sleep 2; done; echo 'not ready: {url}'; exit 1"
     );
     let mut cmd = Command::new("bash");
     cmd.arg("-lc").arg(script);
@@ -743,7 +954,7 @@ pub fn gen_compose_only(args: &cli::InstanceArgs) -> Result<()> {
     let instance = Instance::derive(args.instance.as_deref(), args.port_base)?;
     let target = arch::detect()?;
     let binaries = build::BinariesDir::TargetDir(workspace_root().join(target.debug_dir()));
-    let path = gen_compose::generate(Mode::Local, &instance, &binaries)?;
+    let path = gen_compose::generate(Mode::Local, &instance, &binaries, false, false)?;
     println!("{}", path.display());
     Ok(())
 }
@@ -752,6 +963,7 @@ pub fn gen_compose_only(args: &cli::InstanceArgs) -> Result<()> {
 pub fn stop(args: &cli::InstanceArgs) -> Result<()> {
     let stage = Stage::from_env();
     let instance = Instance::derive(args.instance.as_deref(), args.port_base)?;
+    sdk_webhook::stop(&instance);
     let mut cmd = Command::new("docker");
     cmd.args(["compose", "-p", instance.project_name(), "stop"]);
     stage.run(&format!("Stopping {}", instance.project_name()), &mut cmd)

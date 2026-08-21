@@ -13,14 +13,13 @@ use crate::domain::models::queue_message::{
     QueueMessageNeedsStateMachine, UserApnsEndpoints,
 };
 use crate::domain::models::request::{
-    BuildApnsOutput, GetNotificationsByEventItemIdsRequest, NotificationEntityRef,
-    NotificationListFilters, NotificationStatus, SendNotificationRequest,
+    BuildApnsOutput, GetNotificationsByEventItemIdsRequest, NotificationListFilters,
+    NotificationStatus, SendNotificationRequest, UpdateNotificationsForEntitiesRequest,
     UpdateNotificationsRequest,
 };
 use crate::domain::models::{
     DeviceEndpoint, DisabledNotificationType, Notification, NotificationResult,
-    NotificationStatusUpdate, NotificationTypeName, UserNotificationRow,
-    UserNotificationStatusUpdate,
+    NotificationStatusPayload, NotificationTypeName, PatchDelete, UserNotificationRow,
 };
 use crate::domain::ports::{
     NoopNotificationRealtimePublisher, NotificationIngressQueue, NotificationQueue,
@@ -30,11 +29,13 @@ use crate::domain::service::SendNotificationError;
 use ::futures::future::join_all;
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
+use model_entity::Entity;
 use models_pagination::{CreatedAt, PaginateOn, Paginated, Query, TypeEraseCursor};
 use rootcause::Report;
 use rootcause::prelude::ResultExt;
 use serde::Serialize;
 use serde::de::DeserializeOwned;
+use std::borrow::Cow;
 use std::collections::{HashMap, HashSet};
 use uuid::Uuid;
 
@@ -56,11 +57,23 @@ pub trait NotificationIngress: Send + Sync + 'static {
 /// This is separated from [`NotificationIngress`] because these operations
 /// do not require the bulk-digest state machine.
 pub trait NotificationReader: Send + Sync + 'static {
-    /// Mark notifications as seen for a user and enqueue push notification clearing.
+    /// Update notifications for a user and enqueue any required push notification clearing.
     fn update_notifications(
         &self,
         req: UpdateNotificationsRequest,
     ) -> impl Future<Output = Result<(), Report>> + Send;
+
+    /// Update notifications and return the authoritative active rows owned by the user.
+    fn update_notifications_and_return<T: DeserializeOwned + Send>(
+        &self,
+        req: UpdateNotificationsRequest,
+    ) -> impl Future<Output = Result<Vec<UserNotificationRow<T>>, Report>> + Send;
+
+    /// Update every active notification associated with any requested entity for a user.
+    fn update_notifications_for_entities<T: DeserializeOwned + Send>(
+        &self,
+        req: UpdateNotificationsForEntitiesRequest,
+    ) -> impl Future<Output = Result<Vec<UserNotificationRow<T>>, Report>> + Send;
 
     /// Get a user's non-deleted notifications, paginated.
     ///
@@ -81,16 +94,13 @@ pub trait NotificationReader: Send + Sync + 'static {
     ) -> impl Future<Output = Result<Paginated<UserNotificationRow<T>, String>, Report>> + Send;
 
     /// Get a user's active notifications for multiple entities, grouped by requested entity.
-    fn get_entity_notifications_batch(
+    ///
+    /// Metadata is deserialized from the event-type-tagged notification representation.
+    fn get_entity_notifications_batch<T: DeserializeOwned + Send>(
         &self,
         user_id: MacroUserIdStr<'_>,
-        entity_refs: Vec<NotificationEntityRef>,
-    ) -> impl Future<
-        Output = Result<
-            HashMap<NotificationEntityRef, Vec<UserNotificationRow<serde_json::Value>>>,
-            Report,
-        >,
-    > + Send;
+        entities: Vec<Entity<'static>>,
+    ) -> impl Future<Output = Result<HashMap<Entity<'static>, Vec<UserNotificationRow<T>>>, Report>> + Send;
 
     /// Get a single user notification by ID.
     fn get_user_notification_by_id<T: DeserializeOwned + Send>(
@@ -124,12 +134,16 @@ pub trait NotificationReader: Send + Sync + 'static {
         device_type: &DeviceType,
     ) -> impl std::future::Future<Output = Result<(), Report>> + Send;
 
-    /// Unregister a device from push notifications.
+    /// Unregister the user's device from push notifications.
     ///
-    /// Deletes the device registration from the database (by token + type),
-    /// then deletes the SNS endpoint.
+    /// Deletes the user's device registrations matching the token + type, then
+    /// best-effort deletes the associated SNS endpoints (an SNS failure does
+    /// not fail the call — the DB rows are already gone). Succeeds when
+    /// nothing matched, so logout can call this without checking prior
+    /// registration state.
     fn unregister_device(
         &self,
+        user_id: MacroUserIdStr<'_>,
         device_token: &str,
         device_type: &DeviceType,
     ) -> impl std::future::Future<Output = Result<(), Report>> + Send;
@@ -486,10 +500,10 @@ where
     ///    b. Look up the user's iOS device endpoints
     ///    c. Publish silent background push messages to clear badges on devices
     #[tracing::instrument(err, skip(self))]
-    async fn update_notifications_impl(
+    async fn update_notifications_impl<T: DeserializeOwned + Send>(
         &self,
         req: UpdateNotificationsRequest<'_>,
-    ) -> Result<(), Report> {
+    ) -> Result<Vec<UserNotificationRow<T>>, Report> {
         let changed = match &req.status {
             NotificationStatus::Seen => {
                 self.repository
@@ -504,17 +518,23 @@ where
         };
 
         if !changed.is_empty() {
-            let update = UserNotificationStatusUpdate {
+            let updates = changed
+                .iter()
+                .map(|notification| PatchDelete::Patch {
+                    diff: Cow::Borrowed(notification),
+                })
+                .collect();
+            let payload = NotificationStatusPayload::UserNotifications {
                 user: req.user_id.copied(),
-                update: NotificationStatusUpdate::new(changed),
+                updates,
             };
-            if let Err(err) = self.realtime.publish_updates(&[update]).await {
+            if let Err(err) = self.realtime.publish_updates(&payload).await {
                 tracing::warn!(error = ?err, "failed to publish notification status realtime update");
             }
         }
 
         if !req.status.should_clear_push_notifs() {
-            return Ok(());
+            return deserialize_updated_notifications(changed);
         }
 
         let notifications_with_keys = self
@@ -523,7 +543,7 @@ where
             .await?;
 
         if notifications_with_keys.is_empty() {
-            return Ok(());
+            return deserialize_updated_notifications(changed);
         }
 
         let device_endpoints = self
@@ -556,7 +576,7 @@ where
             .collect();
 
         if ios_endpoints.is_empty() {
-            return Ok(());
+            return deserialize_updated_notifications(changed);
         }
 
         let messages: Vec<QueueMessage<'_, ClearPushIdentifier, ClearPushIdentifier>> =
@@ -594,8 +614,33 @@ where
 
         self.queue.publish(messages).await?;
 
-        Ok(())
+        deserialize_updated_notifications(changed)
     }
+}
+
+/// Deserialize updated rows from their persisted event-tagged metadata representation.
+fn deserialize_updated_notifications<T: DeserializeOwned>(
+    notifications: Vec<UserNotificationRow<serde_json::Value>>,
+) -> Result<Vec<UserNotificationRow<T>>, Report> {
+    Ok(notifications
+        .into_iter()
+        .filter_map(|notification| {
+            let notification_id = notification.notification_id;
+            let notification_event_type = notification.notification_event_type.clone();
+            match notification.into_tagged().deserialize_metadata::<T>() {
+                Ok(notification) => Some(notification),
+                Err(error) => {
+                    tracing::warn!(
+                        error = ?error,
+                        %notification_id,
+                        notification_event_type,
+                        "skipping updated notification with invalid metadata"
+                    );
+                    None
+                }
+            }
+        })
+        .collect())
 }
 
 impl<N, Q, S, R> NotificationReader for NotificationReaderService<N, Q, S, R>
@@ -605,11 +650,43 @@ where
     S: SnsEndpointManager,
     R: NotificationRealtimePublisher,
 {
-    fn update_notifications(
+    async fn update_notifications(
         &self,
         req: UpdateNotificationsRequest<'_>,
-    ) -> impl Future<Output = Result<(), Report>> + Send {
-        self.update_notifications_impl(req)
+    ) -> Result<(), Report> {
+        self.update_notifications_impl::<serde_json::Value>(req)
+            .await
+            .map(|_| ())
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn update_notifications_and_return<T: DeserializeOwned + Send>(
+        &self,
+        req: UpdateNotificationsRequest<'_>,
+    ) -> Result<Vec<UserNotificationRow<T>>, Report> {
+        self.update_notifications_impl(req).await
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn update_notifications_for_entities<T: DeserializeOwned + Send>(
+        &self,
+        req: UpdateNotificationsForEntitiesRequest<'_>,
+    ) -> Result<Vec<UserNotificationRow<T>>, Report> {
+        let notification_ids = self
+            .repository
+            .get_notification_ids_for_entities(req.user_id.copied(), &req.entities)
+            .await?;
+
+        if notification_ids.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        self.update_notifications_impl(UpdateNotificationsRequest {
+            user_id: req.user_id,
+            notification_ids: &notification_ids,
+            status: req.status,
+        })
+        .await
     }
 
     #[tracing::instrument(err, skip(self))]
@@ -664,15 +741,42 @@ where
     }
 
     #[tracing::instrument(err, skip(self))]
-    async fn get_entity_notifications_batch(
+    async fn get_entity_notifications_batch<T: DeserializeOwned + Send>(
         &self,
         user_id: MacroUserIdStr<'_>,
-        entity_refs: Vec<NotificationEntityRef>,
-    ) -> Result<HashMap<NotificationEntityRef, Vec<UserNotificationRow<serde_json::Value>>>, Report>
-    {
-        self.repository
-            .get_entity_notifications_batch(user_id, entity_refs)
-            .await
+        entities: Vec<Entity<'static>>,
+    ) -> Result<HashMap<Entity<'static>, Vec<UserNotificationRow<T>>>, Report> {
+        Ok(self
+            .repository
+            .get_entity_notifications_batch(user_id, entities)
+            .await?
+            .into_iter()
+            .map(|(entity, notifications)| {
+                let notifications = notifications
+                    .into_iter()
+                    .filter_map(|notification| {
+                        let notification_id = notification.notification_id;
+                        let notification_event_type = notification.notification_event_type.clone();
+                        match notification.into_tagged().deserialize_metadata::<T>() {
+                            Ok(notification) => Some(notification),
+                            Err(error) => {
+                                tracing::warn!(
+                                    error = ?error,
+                                    %notification_id,
+                                    notification_event_type,
+                                    entity_type = ?entity.entity_type,
+                                    entity_id = %entity.entity_id,
+                                    "skipping notification with invalid metadata"
+                                );
+                                None
+                            }
+                        }
+                    })
+                    .collect();
+
+                (entity, notifications)
+            })
+            .collect())
     }
 
     #[tracing::instrument(err, skip(self))]
@@ -722,7 +826,11 @@ where
         };
 
         // Get endpoint if exists, otherwise create new one
-        let endpoint = match self.repository.get_device_endpoint(device_token).await {
+        let endpoint = match self
+            .repository
+            .get_device_endpoint(device_token, device_type)
+            .await
+        {
             Ok(Some(endpoint)) => endpoint,
             _ => {
                 self.sns_endpoint
@@ -762,21 +870,51 @@ where
             .upsert_device(user_id, device_token, &endpoint, device_type)
             .await?;
 
+        // A device token must map to a single registration. When SNS minted a
+        // different endpoint for this token in the past (e.g. under another
+        // user), those rows would keep receiving that user's notifications on
+        // this device — remove them and their SNS endpoints.
+        let stale_endpoints = self
+            .repository
+            .delete_stale_devices_by_token(device_token, device_type, &endpoint)
+            .await?;
+        for stale_endpoint in stale_endpoints {
+            let _ = self
+                .sns_endpoint
+                .delete_endpoint(&stale_endpoint)
+                .await
+                .inspect_err(|e| {
+                    tracing::warn!(error=?e, endpoint = %stale_endpoint, "failed to delete stale SNS endpoint");
+                });
+        }
+
         Ok(())
     }
 
     #[tracing::instrument(err, skip(self))]
     async fn unregister_device(
         &self,
+        user_id: MacroUserIdStr<'_>,
         device_token: &str,
         device_type: &DeviceType,
     ) -> Result<(), Report> {
-        let endpoint = self
+        let endpoints = self
             .repository
-            .delete_device_by_token(device_token, device_type)
+            .delete_user_devices_by_token(user_id, device_token, device_type)
             .await?;
 
-        self.sns_endpoint.delete_endpoint(&endpoint).await?;
+        // The DB rows are gone, so the unregistration has already succeeded;
+        // SNS endpoint deletion is best-effort cleanup and must not fail the
+        // call or abort the remaining endpoints.
+        for endpoint in endpoints {
+            let _ = self
+                .sns_endpoint
+                .delete_endpoint(&endpoint)
+                .await
+                .inspect_err(|e| {
+                    tracing::warn!(error=?e, endpoint = %endpoint, "failed to delete SNS endpoint during unregister");
+                });
+        }
 
         Ok(())
     }

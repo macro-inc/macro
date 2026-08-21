@@ -1,2 +1,8 @@
-export type { EntityPropertiesSectionProps } from './EntityPropertiesSection';
-export { EntityPropertiesSection } from './EntityPropertiesSection';
+export type {
+  EntityPropertiesSectionProps,
+  EntityTagsSectionProps,
+} from './EntityPropertiesSection';
+export {
+  EntityPropertiesSection,
+  EntityTagsSection,
+} from './EntityPropertiesSection';

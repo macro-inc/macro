@@ -1,5 +1,5 @@
 import type { JSX } from 'solid-js';
-import { createEffect, createSignal, onCleanup, Show } from 'solid-js';
+import { createEffect, createSignal, onCleanup, onMount, Show } from 'solid-js';
 
 export function CallRecordingVideo(props: {
   url: string;
@@ -16,6 +16,7 @@ export function CallRecordingVideo(props: {
   const hasVisibleVideo = () =>
     isLoaded() || !!posterBlobUrl() || playbackError();
   let rafId: number | null = null;
+  let videoRef: HTMLVideoElement | undefined;
 
   createEffect<string | undefined>((previousUrl) => {
     const url = props.url;
@@ -91,18 +92,23 @@ export function CallRecordingVideo(props: {
     setPlaybackError(true);
   }
 
+  onMount(() => videoRef?.load());
   onCleanup(stopTicking);
 
   return (
     <div class="p-4 flex flex-col justify-center items-center gap-3 overflow-hidden">
       <video
-        ref={props.setVideoRef}
+        ref={(element) => {
+          videoRef = element;
+          props.setVideoRef?.(element);
+        }}
         class="max-w-full max-h-full rounded transition-opacity duration-200"
         classList={{
           'opacity-0': !hasVisibleVideo(),
           'opacity-100': hasVisibleVideo(),
         }}
         controls
+        preload="metadata"
         crossorigin="anonymous"
         poster={posterBlobUrl()}
         src={props.url}

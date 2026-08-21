@@ -1,19 +1,21 @@
 use anyhow::Context;
 use axum::{
-    Extension, Json,
+    Json,
     extract::{self, State},
     http::StatusCode,
     response::{IntoResponse, Response},
 };
+use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
 use macro_middleware::tracking::ClientIp;
 use utoipa::ToSchema;
 
-use crate::{api::context::ApiContext, config::BASE_URL, rate_limit_config::RATE_LIMIT_CONFIG};
-
-use model::{
-    response::{EmptyResponse, ErrorResponse},
-    user::UserContext,
+use crate::{
+    api::context::{ApiContext, AuthorizationService},
+    config::BASE_URL,
+    rate_limit_config::RATE_LIMIT_CONFIG,
 };
+
+use model::response::{EmptyResponse, ErrorResponse};
 
 #[derive(serde::Deserialize, serde::Serialize, ToSchema)]
 pub struct GenerateEmailLinkRequest {
@@ -34,14 +36,15 @@ static VERIFY_EMAIL_TEMPLATE: &str = include_str!("./_verify_email_template.html
             (status = 500, body=ErrorResponse),
         ),
     )]
-#[tracing::instrument(skip(ctx, user_context, ip_context,req), fields(client_ip=%ip_context, email=%req.email, fusion_user_id=%user_context.fusion_user_id), err(Debug))]
+#[tracing::instrument(skip(ctx, authorization, ip_context,req), fields(client_ip=%ip_context, email=%req.email, fusion_user_id=%authorization.authorization.user.user_context.fusion_user_id), err(Debug))]
 pub async fn handler(
     State(ctx): State<ApiContext>,
-    user_context: Extension<UserContext>,
+    authorization: MacroAuthorizationExtractor<AuthorizationService, UserOrInternal>,
     ip_context: ClientIp,
     extract::Json(mut req): extract::Json<GenerateEmailLinkRequest>,
 ) -> Result<Response, Response> {
     tracing::info!("generate_email_link");
+    let user_context = &authorization.authorization.user.user_context;
     // normalize the email before linking
     req.email = email_validator::normalize_email(&req.email)
         .context("failed to normalize email")

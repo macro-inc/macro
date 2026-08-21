@@ -1,23 +1,81 @@
+#[cfg(test)]
+mod test;
+
+use analytics_client::{MetaActionSource, MetaUserData};
 use anyhow::Context;
 use axum::{
     extract::{self, State},
     http::StatusCode,
     response::{IntoResponse, Response},
 };
-use macro_middleware::auth::internal_access::ValidInternalKey;
+use macro_authorization::{InternalOnly, MacroAuthorizationExtractor};
 use rand::Rng;
 
-use crate::{api::context::ApiContext, rate_limit_config::RATE_LIMIT_CONFIG};
+use crate::{
+    api::context::{ApiContext, AuthorizationService},
+    rate_limit_config::RATE_LIMIT_CONFIG,
+};
 use authentication_service::service::user::create_user::create_user;
+use authentication_service::service::user::support_channel_welcome::post_support_channel_welcome;
+use channels::domain::{
+    models::{ChannelType, CreateChannelRequest, Sender},
+    ports::ChannelService,
+};
+use favorites::domain::ports::FavoritesService;
 use fusionauth::error::FusionAuthClientError;
-use macro_user_id::email::Email;
-use model::authentication::webhooks::FusionAuthUserWebhook;
+use macro_user_id::{
+    email::{Email, ReadEmailParts},
+    user_id::MacroUserIdStr,
+};
+use model::authentication::webhooks::{FusionAuthUserWebhook, User as FusionAuthWebhookUser};
+use model_entity::EntityType;
+use std::collections::HashSet;
+use teams::domain::team_repo::TeamService;
+
+/// Macro support team members added to every new user's support channel.
+const MACRO_SUPPORT_EMAILS: [&str; 3] = ["jacob@macro.com", "julia@macro.com", "teo@macro.com"];
+
+fn support_channel_name<T: AsRef<str>>(email: &Email<T>) -> String {
+    format!("Macro Support x {}", email.local_part())
+}
+
+/// Name the identity provider gave us, as (first, last).
+///
+/// Google SSO fills firstName/lastName via the IdP reconcile lambda; fall back to
+/// splitting fullName at the first space for providers that only send a display
+/// name. Passwordless signups have none of these and yield (None, None).
+fn identity_provider_name(user: &FusionAuthWebhookUser) -> (Option<String>, Option<String>) {
+    fn trimmed(value: &Option<String>) -> Option<String> {
+        value
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(str::to_string)
+    }
+
+    let first_name = trimmed(&user.first_name);
+    let last_name = trimmed(&user.last_name);
+    if first_name.is_some() || last_name.is_some() {
+        return (first_name, last_name);
+    }
+
+    match trimmed(&user.full_name) {
+        Some(full_name) => match full_name.split_once(' ') {
+            Some((first, last)) => (
+                Some(first.to_string()),
+                Some(last.trim().to_string()).filter(|last| !last.is_empty()),
+            ),
+            None => (Some(full_name), None),
+        },
+        None => (None, None),
+    }
+}
 
 /// FusionAuth create user webhook
-#[tracing::instrument(skip(ctx, req, _internal_access), fields(email=%req.event.user.email, fusionauth_user_id=%req.event.user.id, username=?req.event.user.username, event_type=%req.event.event_type, ip_address=%req.event.info.ip_address))]
+#[tracing::instrument(skip(ctx, req, _internal_authorization), fields(email=%req.event.user.email, fusionauth_user_id=%req.event.user.id, username=?req.event.user.username, event_type=%req.event.event_type, ip_address=%req.event.info.ip_address))]
 pub async fn handler(
     State(ctx): State<ApiContext>,
-    _internal_access: ValidInternalKey,
+    _internal_authorization: MacroAuthorizationExtractor<AuthorizationService, InternalOnly>,
     extract::Json(req): extract::Json<FusionAuthUserWebhook>,
 ) -> Result<Response, Response> {
     tracing::info!("create_user_webhook");
@@ -91,15 +149,18 @@ async fn create_user_webhook_complete(
 async fn create_user_webhook(ctx: &ApiContext, req: FusionAuthUserWebhook) -> anyhow::Result<()> {
     let ip_address = req.event.info.ip_address;
     let email = req.event.user.email.to_lowercase();
+    let (first_name, last_name) = identity_provider_name(&req.event.user);
     let username = req.event.user.username.unwrap_or(email.clone());
     let fusionauth_user_id = req.event.user.id;
 
     // FusionAuth's own email validation is more permissive than ours (e.g. it allows
     // single quotes). The user.create event is transactional (AbsoluteMajority), so
     // returning an error here aborts the FusionAuth user creation entirely.
-    if let Err(e) = Email::parse_from_str(&email) {
-        anyhow::bail!("email is not a valid macro email: {e}");
-    }
+    let parsed_email = match Email::parse_from_str(&email) {
+        Ok(email) => email,
+        Err(e) => anyhow::bail!("email is not a valid macro email: {e}"),
+    };
+    let support_channel_name = support_channel_name(&parsed_email);
 
     // rate limit check for user creation
     let rate_limit = ctx
@@ -146,17 +207,42 @@ async fn create_user_webhook(ctx: &ApiContext, req: FusionAuthUserWebhook) -> an
         .await
         .inspect_err(|e| tracing::error!(error=?e, "unable to mark user as just signed up"));
 
-    // Authoritative product-analytics signup event: fired here so every
-    // creation path (SSO, passwordless, iOS) counts exactly once, even if the
-    // user never returns to the app. The browser fires the ad-platform
-    // conversions instead — it holds the click-id cookies. Uses the same
-    // distinct id ("macro|{email}") the app identifies with. Fire-and-forget.
+    // Authoritative signup analytics: fired here so every creation path
+    // (SSO, passwordless, iOS) counts exactly once, even if the user never
+    // returns to the app. Meta's CompleteRegistration fires here too
+    // (Conversions API) — only a minority of new accounts ever load the web
+    // app with the `signed_up=true` marker, so the browser pixel alone
+    // misses most signups. The browser still fires the same event with the
+    // shared `signup:{user_id}` event id purely to contribute click-id
+    // cookies for attribution; Meta dedupes the pair on that id (see the
+    // web app's signupCompletion.ts). Uses the same distinct id
+    // ("macro|{email}") the app identifies with. Fire-and-forget.
     tokio::spawn({
         let analytics_client = ctx.analytics_client.clone();
+        let db = ctx.db.clone();
+        let fusionauth_user_id = fusionauth_user_id.clone();
         let user_id = user_id.clone();
+        let email = email.clone();
+        let ip_address = ip_address.clone();
         let verified = req.event.user.verified;
         let has_organization = organization_id.is_some();
         async move {
+            // Seed the profile with the name the identity provider gave us (Google
+            // SSO). Keyed on the FusionAuth id, which is macro_user.id — `user_id`
+            // here is the "macro|{email}" User profile id.
+            if first_name.is_some() || last_name.is_some() {
+                let _ = macro_db_client::user::update_user_name::update_user_name(
+                    &db,
+                    &fusionauth_user_id,
+                    first_name,
+                    last_name,
+                )
+                .await
+                .inspect_err(
+                    |e| tracing::error!(error=?e, "unable to set user name from identity provider"),
+                );
+            }
+
             let _ = analytics_client
                 .track_posthog(
                     &user_id,
@@ -168,19 +254,64 @@ async fn create_user_webhook(ctx: &ApiContext, req: FusionAuthUserWebhook) -> an
                 )
                 .await
                 .inspect_err(|e| tracing::warn!(error=?e, "failed to track PostHog sign_up event"));
+
+            let user_data = MetaUserData {
+                email: Some(email),
+                client_ip_address: Some(ip_address),
+                ..Default::default()
+            };
+            let _ = analytics_client
+                .track_meta(
+                    "CompleteRegistration",
+                    &user_data,
+                    MetaActionSource::Website,
+                    Some(&format!("signup:{user_id}")),
+                    serde_json::json!({
+                        // Must mirror the browser payload in the web app's
+                        // signupCompletion.ts: Meta keeps whichever of the
+                        // deduped pair lands first, so diverging payloads
+                        // would report a value that depends on race timing.
+                        // Accounts are always free at creation (value =
+                        // SIGNUP_LEAD_VALUE_DEFAULT in leadValues.ts); paid
+                        // value is tracked separately via the Stripe events.
+                        "content_name": "account_created",
+                        "content_category": "free",
+                        "value": 20,
+                        "currency": "USD",
+                    }),
+                )
+                .await
+                .inspect_err(|e| {
+                    tracing::warn!(error=?e, "failed to track Meta CompleteRegistration");
+                });
         }
     });
 
-    // Add the new sign-up to Loops (our email marketing audience / mailing
-    // list). Fire-and-forget: a Loops failure must never block user creation.
+    // Tell Loops the account now exists. This upserts the contact into our
+    // marketing audience, triggers the welcome sequence, and is the exit
+    // condition for the mobile-lead nurture sequence — so a lead who converts
+    // stops being asked to sign up. Fire-and-forget: a Loops failure must never
+    // block user creation.
     tokio::spawn({
         let loops_client = ctx.loops_client.clone();
-        let email = email.clone();
+        let email = loops_client::normalize_email(&email);
+        let user_id = user_id.clone();
         async move {
             let _ = loops_client
-                .add_contact(&email, "macro-signup")
+                .send_event(
+                    &email,
+                    "user_registered",
+                    &serde_json::json!({
+                        "signupStage": "registered",
+                        "hasAccount": true,
+                        "source": "macro-signup",
+                    }),
+                    Some(&format!("user-registered-{user_id}")),
+                )
                 .await
-                .inspect_err(|e| tracing::warn!(error=?e, "failed to add contact to Loops"));
+                .inspect_err(
+                    |e| tracing::error!(error=?e, "failed to send Loops user_registered event"),
+                );
         }
     });
 
@@ -195,30 +326,103 @@ async fn create_user_webhook(ctx: &ApiContext, req: FusionAuthUserWebhook) -> an
         }
     });
 
-    // Seed the "Macro how to guide" document and pin it to the new user's
-    // sidebar favorites. Fire-and-forget with retries — signup must not fail
-    // if document storage is temporarily unavailable.
+    // Automatically add the new user to a team whose auto-join domain
+    // matches their email domain. Fire-and-forget: a failed auto-join must
+    // never block user creation.
     tokio::spawn({
-        let document_storage_service_client = ctx.document_storage_service_client.clone();
+        let teams_service = ctx.teams_service.clone();
         let user_id = user_id.clone();
         async move {
-            const MAX_ATTEMPTS: u32 = 3;
-            const RETRY_DELAY_SECS: u64 = 2;
-            for attempt in 1..=MAX_ATTEMPTS {
-                match document_storage_service_client
-                    .initialize_how_to_guide(&user_id)
-                    .await
-                {
-                    Ok(()) => return,
-                    Err(e) if attempt < MAX_ATTEMPTS => {
-                        tracing::warn!(error=?e, attempt, "failed to initialize how to guide, retrying");
-                        tokio::time::sleep(std::time::Duration::from_secs(RETRY_DELAY_SECS)).await;
-                    }
-                    Err(e) => {
-                        tracing::error!(error=?e, "failed to initialize how to guide after {MAX_ATTEMPTS} attempts");
-                    }
+            let user_id = match MacroUserIdStr::parse_from_str(&user_id) {
+                Ok(user_id) => user_id,
+                Err(e) => {
+                    tracing::error!(error=?e, "unable to parse user id for team auto-join");
+                    return;
+                }
+            };
+            match teams_service.try_join_team_by_domain(&user_id).await {
+                Ok(Some(member)) => {
+                    tracing::info!(team_id=%member.team_id, %user_id, "auto-joined user to team by email domain");
+                }
+                Ok(None) => {}
+                Err(e) => {
+                    tracing::error!(error=?e, %user_id, "failed to auto-join user to team by email domain");
                 }
             }
+        }
+    });
+
+    // Seed the starter documents (the "Macro how to guide" and the starter
+    // tasks it links to, with the guide pinned to the new user's sidebar
+    // favorites), then create a private support channel connecting the new
+    // user with the Macro support team and post the welcome script — which
+    // mentions the guide, so seeding runs first. Fire-and-forget: neither a
+    // failed seeding (retried, then skipped) nor a failed channel creation
+    // may block user creation.
+    tokio::spawn({
+        let document_storage_service_client = ctx.document_storage_service_client.clone();
+        let channel_service = ctx.channel_service.clone();
+        let favorites_service = ctx.favorites_service.clone();
+        let user_id = user_id.clone();
+        let email = email.clone();
+        let support_channel_name = support_channel_name.clone();
+        async move {
+            initialize_starter_docs_with_retries(&document_storage_service_client, &user_id).await;
+
+            let owner_id = match MacroUserIdStr::try_from(user_id) {
+                Ok(owner_id) => owner_id,
+                Err(e) => {
+                    tracing::error!(error=?e, "unable to parse user id for support channel");
+                    return;
+                }
+            };
+
+            let participants = match MACRO_SUPPORT_EMAILS
+                .into_iter()
+                .map(MacroUserIdStr::try_from_email)
+                .collect::<Result<HashSet<_>, _>>()
+            {
+                Ok(participants) => participants,
+                Err(e) => {
+                    tracing::error!(error=?e, "unable to parse support user ids for support channel");
+                    return;
+                }
+            };
+
+            let channel = match channel_service
+                .create_channel(
+                    Sender::new_from_user(owner_id.clone()),
+                    None,
+                    CreateChannelRequest {
+                        name: Some(support_channel_name),
+                        channel_type: ChannelType::Private,
+                        team_id: None,
+                        auto_join_team: false,
+                        participants,
+                    },
+                )
+                .await
+            {
+                Ok(channel) => channel,
+                Err(e) => {
+                    tracing::error!(error=?e, %email, "failed to create Macro support channel");
+                    return;
+                }
+            };
+
+            let channel_entity = EntityType::Channel.with_entity_str(&channel.id);
+            if let Err(e) = favorites_service
+                .add_favorite_with_established_access(&owner_id, &channel_entity)
+                .await
+            {
+                tracing::error!(error=?e, channel_id=%channel.id, %email, "failed to favorite Macro support channel");
+            }
+
+            let _ = post_support_channel_welcome(channel_service.as_ref(), &channel.id, owner_id)
+                .await
+                .inspect_err(|e| {
+                tracing::error!(error=?e, channel_id=%channel.id, %email, "failed to post Macro support welcome message");
+            });
         }
     });
 
@@ -232,6 +436,27 @@ async fn create_user_webhook(ctx: &ApiContext, req: FusionAuthUserWebhook) -> an
         .inspect_err(|e| tracing::error!(error=?e, "unable to increment create user rate limit"));
 
     Ok(())
+}
+
+/// Seed the starter documents with retries.
+async fn initialize_starter_docs_with_retries(
+    client: &document_storage_service_client::DocumentStorageServiceClient,
+    user_id: &str,
+) {
+    const MAX_ATTEMPTS: u32 = 3;
+    const RETRY_DELAY_SECS: u64 = 2;
+    for attempt in 1..=MAX_ATTEMPTS {
+        match client.initialize_starter_docs(user_id).await {
+            Ok(_) => return,
+            Err(e) if attempt < MAX_ATTEMPTS => {
+                tracing::warn!(error=?e, attempt, "failed to initialize starter docs, retrying");
+                tokio::time::sleep(std::time::Duration::from_secs(RETRY_DELAY_SECS)).await;
+            }
+            Err(e) => {
+                tracing::error!(error=?e, "failed to initialize starter docs after {MAX_ATTEMPTS} attempts");
+            }
+        }
+    }
 }
 
 /// Initializes the experiments for a provided user

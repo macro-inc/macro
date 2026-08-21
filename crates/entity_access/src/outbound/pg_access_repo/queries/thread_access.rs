@@ -9,6 +9,46 @@ use sqlx::PgPool;
 use std::str::FromStr;
 use uuid::Uuid;
 
+#[derive(sqlx::FromRow)]
+struct OwnedEmailThreadRow {
+    id: Uuid,
+}
+
+/// Return the requested threads owned by, or inbox-delegated to, `user_id`.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "runtime query is covered by the repository integration test"
+)]
+pub async fn get_owned_email_thread_ids(
+    pool: &PgPool,
+    thread_ids: &[Uuid],
+    user_id: &MacroUserId<Lowercase<'_>>,
+) -> Result<Vec<Uuid>, sqlx::Error> {
+    let rows = sqlx::query_as::<_, OwnedEmailThreadRow>(
+        r#"
+        SELECT t.id
+        FROM email_threads t
+        JOIN email_links l ON l.id = t.link_id
+        WHERE t.id = ANY($1)
+          AND (
+              l.macro_id = $2
+              OR EXISTS (
+                  SELECT 1
+                  FROM macro_user_links mul
+                  WHERE mul.link_id = l.id
+                    AND mul.primary_macro_id = $2
+              )
+          )
+        "#,
+    )
+    .bind(thread_ids)
+    .bind(user_id.as_ref())
+    .fetch_all(pool)
+    .await?;
+
+    Ok(rows.into_iter().map(|row| row.id).collect())
+}
+
 /// Get the highest access level a user has for an email thread.
 #[tracing::instrument(err, skip(pool, source_ids))]
 pub async fn get_thread_access(
@@ -54,10 +94,10 @@ pub async fn get_thread_access(
         let access_level = sqlx::query_scalar!(
             r#"
             SELECT
-                "publicAccessLevel" as "access_level!"
+                "linkShareAccessLevel" as "access_level!: AccessLevel"
             FROM "SharePermission"
-            WHERE "isPublic" = true
-            AND "publicAccessLevel" IS NOT NULL
+            WHERE "linkShare" = 'PUBLIC'
+            AND "linkShareAccessLevel" IS NOT NULL
             AND id IN (
                 SELECT "sharePermissionId" FROM "EmailThreadPermission" WHERE "threadId" = $1
             )
@@ -68,7 +108,7 @@ pub async fn get_thread_access(
         .fetch_optional(pool)
         .await?;
 
-        return Ok(access_level.and_then(|level| AccessLevel::from_str(&level).ok()));
+        return Ok(access_level);
     }
 
     // Owner is handled above and short-circuits. The remaining sources —
@@ -88,13 +128,26 @@ pub async fn get_thread_access(
             AND source_id = ANY($2)
 
             UNION ALL
-            -- Source 2: items share permission
+            -- Source 2: item share permission
             SELECT
-                "publicAccessLevel"::text AS access_level
-            FROM "SharePermission"
-            WHERE "isPublic" = true
-            AND "publicAccessLevel" IS NOT NULL
-            AND id IN (
+                sp."linkShareAccessLevel"::text AS access_level
+            FROM "SharePermission" sp
+            WHERE sp."linkShareAccessLevel" IS NOT NULL
+            AND (
+                sp."linkShare" = 'PUBLIC'
+                OR (
+                    sp."linkShare" = 'TEAM'
+                    AND EXISTS (
+                        SELECT 1
+                        FROM email_threads t
+                        JOIN email_links l ON l.id = t.link_id
+                        JOIN team_user owner_tu ON owner_tu.user_id = l.macro_id
+                        WHERE t.id = $1::uuid
+                          AND owner_tu.team_id::text = ANY($2)
+                    )
+                )
+            )
+            AND sp.id IN (
                 SELECT "sharePermissionId" FROM "EmailThreadPermission" WHERE "threadId" = $3
             )
 

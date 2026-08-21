@@ -17,6 +17,12 @@ export type EntityBase = {
   name: string;
   ownerId: string;
   frecencyScore?: number;
+  /**
+   * The viewer's latest own mutation of this entity, present only on rows
+   * from `touched_by_me` pages. The Recent feed sorts on it, so mutation
+   * helpers may bump it optimistically.
+   */
+  touchedAt?: DateValue | null;
   createdAt?: DateValue | null;
   updatedAt?: DateValue | null;
   viewedAt?: DateValue | null;
@@ -80,11 +86,30 @@ export type ChannelEntityTarget = {
   threadId?: string;
 };
 
+/**
+ * The resolved click intent for a channel-family row. Either a specific
+ * message to jump to and highlight, or `latest` — open the channel at its
+ * newest message with no highlight. A whole `channel` row with no unread
+ * notification resolves to `latest` so the click lands where the row's
+ * preview points (the latest message, which may be your own send) instead of
+ * an older notification or nothing at all.
+ */
+export type ChannelClickTarget =
+  | { kind: 'message'; messageId: string; threadId?: string }
+  | { kind: 'latest' };
+
 export type ChannelEntity = EntityBase & {
   type: 'channel';
   channelType: 'direct_message' | 'private' | 'public' | 'team';
   interactedAt?: DateValue | null;
   participantIds?: string[];
+  /**
+   * Whether the viewer is an active participant of the channel. `false` only
+   * for team channels of the viewer's teams they haven't joined (surfaced in
+   * the Channels → Teams tab with a Join affordance); absent means the row
+   * predates the flag and is treated as joined.
+   */
+  isParticipant?: boolean;
   latestMessage?: ChannelEntityLatestMessage;
   latestRootMessage?: ChannelEntityLatestMessage;
   target?: ChannelEntityTarget;
@@ -131,10 +156,10 @@ export type ChatEntity = EntityBase & {
   properties?: SoupProperty[];
 };
 
-/** Named sub types - 'task' and 'snippet' */
-export type NamedSubType = 'task' | 'snippet';
+/** Named sub types - 'task', 'snippet' and 'skill' */
+export type NamedSubType = 'task' | 'snippet' | 'skill';
 
-/** SubType for documents - tasks and snippets */
+/** SubType for documents - tasks, snippets and skills */
 export type SubType = {
   type: NamedSubType;
   is_completed?: boolean;
@@ -159,6 +184,13 @@ export type SnippetEntity = EntityBase & {
   type: 'document';
   fileType: 'md';
   subType: { type: 'snippet' };
+  projectId?: string;
+};
+
+export type SkillEntity = EntityBase & {
+  type: 'document';
+  fileType: 'md';
+  subType: { type: 'skill' };
   projectId?: string;
 };
 
@@ -223,6 +255,7 @@ export type CallEntity = EntityBase & {
   durationMs?: number;
   participantIds: string[];
   summary?: string;
+  properties?: SoupProperty[];
 };
 
 export type AutomationEntity = EntityBase & {
@@ -278,6 +311,63 @@ export type CrmContactEntity = EntityBase & {
   hidden: boolean;
 };
 
+export type ReminderEntity = EntityBase & {
+  type: 'reminder';
+  /** What to remind the user about. Doubles as {@link EntityBase.name}. */
+  description: string;
+  /** The entity the reminder is about, when it is attached to one. Clicking a
+   * reminder navigates here rather than to the reminder itself, and the row
+   * borrows this entity's icon.
+   *
+   * `type` is already mapped to the display {@link EntityType} (`email`,
+   * `foreign`), not the canonical API names (`email_thread`,
+   * `foreign_entity`). `fileType`/`subType` are resolved server-side and only
+   * present for documents — without them a referenced document has no
+   * resolvable block, since the icon and open paths are both synchronous.
+   *
+   * A reminder never references another reminder — the mapper yields
+   * `undefined` for that — so the type excludes it and the reference stays
+   * assignable to the preview/open helpers, which only know real targets. */
+  referencedEntity?: {
+    id: string;
+    // Calendar events are excluded alongside reminders: neither has a
+    // previewable block, and the mapper yields `undefined` for both.
+    type: Exclude<EntityType, 'reminder' | 'calendar_event'>;
+    fileType?: string;
+    subType?: string;
+  };
+  /** Whether the reminder fires once or on a cron schedule. */
+  scheduleType: 'once' | 'recurring';
+  /** Cron expression, for a recurring reminder. */
+  cron?: string;
+  /** Timezone the cron is evaluated in, for a recurring reminder. */
+  timezone?: string;
+  /** The next firing. Soup orders reminders on this. */
+  nextRunAt: DateValue;
+  /** When false, the dispatcher skips this reminder. */
+  enabled: boolean;
+  /** Set once a one-shot reminder has fired. */
+  completedAt?: DateValue | null;
+};
+
+/** Normalized time shape of a calendar event soup row. */
+export type CalendarEventEntityTime =
+  | { kind: 'timed'; startsAt: string; endsAt: string }
+  | { kind: 'allDay'; startDate: string; endDate: string };
+
+export type CalendarEventEntity = EntityBase & {
+  type: 'calendar_event';
+  /** Canonical event status (`confirmed`, `tentative`, `cancelled`). */
+  status: string;
+  /** Master event time. Absent when the wire shape could not be read. */
+  time?: CalendarEventEntityTime;
+  /** Direct join URL when known. */
+  conferenceUrl?: string;
+  /** Whether the canonical source prohibits mutation. */
+  isReadOnly: boolean;
+  properties?: SoupProperty[];
+};
+
 export type EntityData =
   | ChannelEntity
   | ChannelMessageEntity
@@ -292,6 +382,8 @@ export type EntityData =
   | CrmCompanyEntity
   | CrmContactEntity
   | AutomationEntity
+  | ReminderEntity
+  | CalendarEventEntity
   | ForeignEntity;
 
 const ENTITY_TYPE_VALUES = new Set<EntityData['type']>([
@@ -306,6 +398,8 @@ const ENTITY_TYPE_VALUES = new Set<EntityData['type']>([
   'crm_company',
   'crm_contact',
   'automation',
+  'reminder',
+  'calendar_event',
   'foreign',
 ]);
 
@@ -339,6 +433,14 @@ export const isSnippetEntity = (
   );
 };
 
+export const isSkillEntity = (entity: EntityData): entity is SkillEntity => {
+  return (
+    entity.type === 'document' &&
+    entity.fileType === 'md' &&
+    entity.subType?.type === 'skill'
+  );
+};
+
 export const isGithubPrEntity = (
   entity: EntityData
 ): entity is GithubPullRequestEntity => {
@@ -357,6 +459,17 @@ export const isChannelEntity = (
   entity: EntityData
 ): entity is ChannelEntity => {
   return entity.type === 'channel';
+};
+
+/**
+ * A channel the viewer can see but is not a participant of (a team channel of
+ * their team they haven't joined). These rows render a Join affordance and
+ * are not navigable — the viewer can't read the channel until they join.
+ *
+ * Deliberately not a type guard: a `false` result still includes channels.
+ */
+export const isNonMemberChannelEntity = (entity: EntityData): boolean => {
+  return isChannelEntity(entity) && entity.isParticipant === false;
 };
 
 export const isChannelMessageEntity = (
@@ -387,6 +500,12 @@ export const isProjectEntity = (
 
 export const isCallEntity = (entity: EntityData): entity is CallEntity => {
   return entity.type === 'call';
+};
+
+export const isReminderEntity = (
+  entity: EntityData
+): entity is ReminderEntity => {
+  return entity.type === 'reminder';
 };
 
 export const isAutomationEntity = (
@@ -425,13 +544,14 @@ const _isPureDocumentEntity = (
   return (
     entity.type === 'document' &&
     entity.subType?.type !== 'task' &&
-    entity.subType?.type !== 'snippet'
+    entity.subType?.type !== 'snippet' &&
+    entity.subType?.type !== 'skill'
   );
 };
 
 export type EntityType = EntityData['type'];
 
-export type ExpandedEntityType = EntityType | 'task' | 'snippet';
+export type ExpandedEntityType = EntityType | 'task' | 'snippet' | 'skill';
 
 export type EntityWithProperties<T extends EntityData> = T & {
   properties?: SoupProperty[];
