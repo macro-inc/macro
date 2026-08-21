@@ -6,10 +6,10 @@
  */
 
 import { useAgentSession } from '../context/AgentSessionContext';
-import { AgentInput, QueuedPromptList } from '../ui';
+import { AgentInput, AgentModelSelector, QueuedPromptList } from '../ui';
 
 export function AgentComposer() {
-  const { composer, loadFailed } = useAgentSession();
+  const { composer, loadFailed, metadata } = useAgentSession();
 
   return (
     <>
@@ -26,6 +26,14 @@ export function AgentComposer() {
         disabled={loadFailed()}
         onSend={composer.send}
         onStop={composer.stop}
+        modelControl={
+          <AgentModelSelector
+            model={metadata()?.model ?? null}
+            options={metadata()?.supportedModels ?? []}
+            disabled={loadFailed()}
+            onSelect={composer.setModel}
+          />
+        }
       />
     </>
   );
