@@ -11,6 +11,10 @@ let
   imageLib = pkgs.callPackage ./image-lib.nix { };
   python = pkgs.python313;
   requirements = ../../services/transcription/requirements.txt;
+  constraints = pkgs.writeText "transcription-constraints.txt" ''
+    # webrtcvad still does `import pkg_resources` (removed from setuptools 82+).
+    setuptools>=70,<81
+  '';
 
   wheels = pkgs.stdenv.mkDerivation {
     pname = "transcription-wheels";
@@ -26,7 +30,7 @@ let
     NIX_SSL_CERT_FILE = "${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt";
     outputHashMode = "recursive";
     outputHashAlgo = "sha256";
-    outputHash = "sha256-VQFEL2F6dEcq2lL1jyjfSOGeTQBri3rwSjtAZZFof9U=";
+    outputHash = "sha256-u/AjsG0Z9ub3hUITvg/kYGu3ua1Mud/p4OjCAXDI9NU=";
     buildPhase = ''
       mkdir -p "$out"
       # Resemblyzer pulls torch; the default PyPI wheel is the CUDA build.
@@ -34,6 +38,7 @@ let
       pip download --dest "$out" --no-cache-dir --disable-pip-version-check \
         --index-url https://download.pytorch.org/whl/cpu \
         --extra-index-url https://pypi.org/simple \
+        --constraint ${constraints} \
         -r ${requirements}
     '';
     installPhase = "true";
@@ -61,6 +66,7 @@ let
       python -m venv "$out"
       "$out/bin/pip" install --no-cache-dir --no-index --find-links ${wheels} \
         --disable-pip-version-check \
+        --constraint ${constraints} \
         -r ${requirements}
     '';
     installPhase = "true";
@@ -89,7 +95,8 @@ in
       python
       layout
     ]
-    ++ imageLib.fhsLibs;
+    ++ imageLib.fhsLibs
+    ++ [ pkgs.stdenv.cc.cc.lib ];
     extraCommands = ''
       mkdir -p ./app ./tmp
       chmod 1777 ./tmp
@@ -103,7 +110,9 @@ in
         "HF_HOME=/app/.cache/huggingface"
         "SSL_CERT_FILE=${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt"
         "NIX_SSL_CERT_FILE=${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt"
-        "LD_LIBRARY_PATH=${lib.makeLibraryPath imageLib.fhsLibs}"
+        "LD_LIBRARY_PATH=${
+          lib.makeLibraryPath (imageLib.fhsLibs ++ [ pkgs.stdenv.cc.cc.lib ])
+        }"
       ];
       Cmd = [
         "python"
