@@ -507,8 +507,10 @@ export type NativeCallStateBeforeLeave = {
  * Clears stale in-call state when native has no call (missed call-ended /
  * disconnect events) and restores the snapshot when native has a call the
  * webview does not know about (fresh webview during an active call). A live
- * snapshot is never overwritten by this point-in-time query — the connection
- * state watcher stays authoritative while events are flowing.
+ * snapshot for the same call is never overwritten by this point-in-time
+ * query — the connection state watcher stays authoritative while events are
+ * flowing — but a snapshot tracking a different call than native reports is
+ * stale (both an end and an answer were missed) and is replaced.
  *
  * By default the destructive clear requires a quiet period (see
  * hasRecentNativeCallActivity). An explicit leave passes
@@ -561,7 +563,13 @@ async function syncNativeCallState(
   }
   markNativeCallActivity();
   nativeCall.setParticipantIdentities(state.participantIdentities ?? []);
-  if (nativeCall.snapshot() !== null) return;
+  const currentSnapshot = nativeCall.snapshot();
+  if (
+    currentSnapshot !== null &&
+    currentSnapshot.callId.toLowerCase() === state.callId.toLowerCase()
+  ) {
+    return;
+  }
   nativeCall.setBootstrapChannelId(state.channelId);
   nativeCall.setSnapshot({
     channelId: state.channelId,

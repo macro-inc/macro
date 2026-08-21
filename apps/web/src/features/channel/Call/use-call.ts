@@ -64,6 +64,10 @@ let leaveInFlightSince: number | null = null;
 
 function isLeaveInFlight(): boolean {
   if (leaveInFlightSince === null) return false;
+  // Deliberately wall-clock, not performance.now(): the performance timeline
+  // freezes while iOS suspends the webview, so a monotonic delta would keep a
+  // pre-suspension leave "in flight" after resume — the stuck-leave symptom
+  // this latch exists to prevent.
   const elapsed = Date.now() - leaveInFlightSince;
   // A backwards wall-clock jump must release the latch, not extend it.
   return elapsed >= 0 && elapsed < LEAVE_IN_FLIGHT_STALE_MS;
