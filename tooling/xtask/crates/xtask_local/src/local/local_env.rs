@@ -506,10 +506,7 @@ impl BootStubEnv {
             "GITHUB_CLIENT_SECRET".into(),
             "local-github-client-secret".into(),
         );
-        env.insert(
-            "GITHUB_IDP_ID".into(),
-            "99999999-9999-4999-8999-999999999999".into(),
-        );
+        env.insert("GITHUB_IDP_ID".into(), identity::GITHUB_IDP_ID.into());
         env.insert("STRIPE_SECRET_KEY".into(), "local-stripe-secret".into());
         env.insert("STRIPE_PRICE_ID".into(), "local-stripe-price".into());
         env.insert(

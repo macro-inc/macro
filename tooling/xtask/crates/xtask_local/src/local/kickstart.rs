@@ -51,6 +51,60 @@ impl GoogleIdp {
     }
 }
 
+/// The GitHub OAuth app the local `github` identity provider authenticates
+/// against. Optional on the same terms as [`GoogleIdp`]: without it the
+/// kickstart is unchanged and `POST /link/github` stays unreachable locally.
+pub struct GithubIdp {
+    pub client_id: String,
+    pub client_secret: String,
+    pub idp_id: String,
+}
+
+impl GithubIdp {
+    /// Extract the GitHub OAuth client from the resolved run env. The same
+    /// `GITHUB_CLIENT_ID`/`GITHUB_CLIENT_SECRET` pair `authentication_service`
+    /// builds its authorization URL from - the provider and the service have to
+    /// agree on the client or the callback cannot be linked.
+    ///
+    /// The id comes from the same env rather than from [`identity`], because
+    /// unlike the Google providers - which are only ever resolved by name -
+    /// `authentication_service` reads `GITHUB_IDP_ID` as config, and Doppler
+    /// overrides it with the dev instance's id. Pinning our own constant here
+    /// would create the provider somewhere the service never looks: the
+    /// by-name lookup that starts a link would succeed while every link call
+    /// addressed a provider that does not exist. The constant is the fallback
+    /// for a stack with no Doppler layer.
+    ///
+    /// The `local-` check is load-bearing, not cosmetic: a no-Doppler stack
+    /// fills both with `local-github-client…` placeholders so the service's
+    /// config loader is satisfied, and creating the provider with those would
+    /// bake a broken FusionAuth config into the init snapshot - which then
+    /// looks like a *configured* GitHub connector that fails at the callback,
+    /// rather than one that is plainly absent.
+    pub fn from_env(env: &BTreeMap<String, String>) -> Option<Self> {
+        let client_id = env.get("GITHUB_CLIENT_ID")?.trim().to_string();
+        let client_secret = env.get("GITHUB_CLIENT_SECRET")?.trim().to_string();
+        if client_id.is_empty()
+            || client_secret.is_empty()
+            || client_id.starts_with("local-")
+            || client_secret.starts_with("local-")
+        {
+            return None;
+        }
+        let idp_id = env
+            .get("GITHUB_IDP_ID")
+            .map(|id| id.trim())
+            .filter(|id| !id.is_empty())
+            .unwrap_or(identity::GITHUB_IDP_ID)
+            .to_string();
+        Some(GithubIdp {
+            client_id,
+            client_secret,
+            idp_id,
+        })
+    }
+}
+
 /// Build the kickstart document. `lambda_body` is the JS source of
 /// `populate_jwt_local.js`; `reconcile_lambda_body` is the reconcile lambda
 /// attached to `google_gmail` (only used when `google` is configured); redirect
@@ -61,6 +115,7 @@ pub fn build(
     lambda_body: &str,
     reconcile_lambda_body: &str,
     google: Option<&GoogleIdp>,
+    github: Option<&GithubIdp>,
 ) -> Value {
     let app_id = identity::APPLICATION_ID;
     let tenant_id = identity::TENANT_ID;
@@ -326,6 +381,58 @@ pub fn build(
                 "lambdaConfiguration": { "reconcileId": identity::RECONCILE_LAMBDA_ID },
                 "oauth2": oauth2_base("openid profile email https://www.googleapis.com/auth/gmail.modify https://www.googleapis.com/auth/contacts.readonly https://www.googleapis.com/auth/contacts.other.readonly https://www.googleapis.com/auth/gmail.settings.basic https://www.googleapis.com/auth/calendar"),
                 "applicationConfiguration": app_config,
+            }}
+        }));
+    }
+
+    // The `github` identity provider, when a real GitHub client is configured
+    // (see `GithubIdp::from_env`). Generic OIDC with GitHub's endpoints spelled
+    // out, like the Google providers above - FusionAuth has no GitHub provider
+    // type at all (it rejects one with `[invalidJSON]`, listing the types it
+    // does accept), and GitHub publishes no discovery document to point at.
+    // Nothing drives this provider's own OAuth flow: Macro builds the
+    // authorization URL and only uses FusionAuth to record the resulting link,
+    // so these endpoints exist to make the provider well-formed rather than to
+    // be dialled.
+    //
+    // The name is fixed and the id is the service's own `GITHUB_IDP_ID`.
+    // `authentication_service` resolves this provider by name to start a link,
+    // then addresses it by that id for the link itself, so one provider has to
+    // answer to both. Macro builds the authorization URL itself and only uses
+    // FusionAuth to record the link, which is why the client here must be the
+    // same one the service holds.
+    if let Some(github) = github {
+        requests.push(json!({
+            "method": "POST",
+            "url": format!("/api/identity-provider/{}", github.idp_id),
+            "body": { "identityProvider": {
+                "type": "OpenIDConnect",
+                "name": "github",
+                "enabled": true,
+                "debug": true,
+                "buttonText": "GitHub",
+                "linkingStrategy": "LinkByEmail",
+                "oauth2": {
+                    "authorization_endpoint": "https://github.com/login/oauth/authorize",
+                    "token_endpoint": "https://github.com/login/oauth/access_token",
+                    "userinfo_endpoint": "https://api.github.com/user",
+                    "client_id": github.client_id.as_str(),
+                    "client_secret": github.client_secret.as_str(),
+                    "clientAuthenticationMethod": "client_secret_basic",
+                    // Enough to identify the account being linked. A GitHub
+                    // user can keep their address private, so the email scope
+                    // is explicit rather than assumed.
+                    "scope": "read:user user:email",
+                    // GitHub's `/user` names these differently from OIDC: `id`
+                    // rather than `sub`, `login` rather than
+                    // `preferred_username`.
+                    "uniqueIdClaim": "id",
+                    "emailClaim": "email",
+                    "usernameClaim": "login",
+                },
+                "applicationConfiguration": json!({
+                    identity::APPLICATION_ID: { "enabled": true, "createRegistration": true }
+                }),
             }}
         }));
     }

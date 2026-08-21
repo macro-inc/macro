@@ -45,6 +45,7 @@ fn kickstart_without_google_has_no_idp_requests() {
         "function populate() {}",
         "function reconcile() {}",
         None,
+        None,
     );
     let urls: Vec<&str> = doc["requests"]
         .as_array()
@@ -70,6 +71,7 @@ fn kickstart_with_google_adds_lambda_and_both_idps_after_the_application() {
         "function populate() {}",
         "function reconcile() {}",
         Some(&google),
+        None,
     );
     let requests = doc["requests"].as_array().unwrap();
 
@@ -120,6 +122,7 @@ fn kickstart_adopts_the_default_tenant() {
         "function populate() {}",
         "function reconcile() {}",
         None,
+        None,
     );
     assert_eq!(
         doc["variables"]["defaultTenantId"],
@@ -135,5 +138,144 @@ fn kickstart_adopts_the_default_tenant() {
     assert_eq!(
         tenant["method"], "PATCH",
         "the tenant is reconfigured in place, not created — local stays single-tenant"
+    );
+}
+
+/// A no-Doppler stack fills these with placeholders so the service's config
+/// loader is satisfied. Building the provider from them would bake a broken
+/// FusionAuth config into the init snapshot, which reads as a *configured*
+/// GitHub connector that fails at the callback rather than an absent one.
+#[test]
+fn github_idp_requires_a_real_client() {
+    assert!(GithubIdp::from_env(&env(&[])).is_none());
+    assert!(
+        GithubIdp::from_env(&env(&[
+            ("GITHUB_CLIENT_ID", "local-github-client"),
+            ("GITHUB_CLIENT_SECRET", "local-github-client-secret"),
+        ]))
+        .is_none()
+    );
+    assert!(
+        GithubIdp::from_env(&env(&[
+            ("GITHUB_CLIENT_ID", "Iv23livpJoVJw98dlKCk"),
+            ("GITHUB_CLIENT_SECRET", "local-github-client-secret"),
+        ]))
+        .is_none()
+    );
+    assert!(
+        GithubIdp::from_env(&env(&[
+            ("GITHUB_CLIENT_ID", ""),
+            ("GITHUB_CLIENT_SECRET", "realsecret"),
+        ]))
+        .is_none()
+    );
+
+    let ok = GithubIdp::from_env(&env(&[
+        ("GITHUB_CLIENT_ID", "Iv23livpJoVJw98dlKCk"),
+        ("GITHUB_CLIENT_SECRET", "a-real-github-secret"),
+    ]))
+    .expect("a real github client must parse");
+    assert_eq!(ok.client_id, "Iv23livpJoVJw98dlKCk");
+    assert_eq!(ok.client_secret, "a-real-github-secret");
+    // No Doppler layer, so the local constant stands in.
+    assert_eq!(ok.idp_id, identity::GITHUB_IDP_ID);
+}
+
+/// `authentication_service` reads `GITHUB_IDP_ID` as config and Doppler
+/// overrides it with the dev instance's id. Creating the provider at our own
+/// constant instead would put it somewhere the service never looks: starting a
+/// link (by name) would work while every link call addressed nothing.
+#[test]
+fn the_github_idp_id_follows_the_env_the_service_reads() {
+    let github = GithubIdp::from_env(&env(&[
+        ("GITHUB_CLIENT_ID", "Iv23livpJoVJw98dlKCk"),
+        ("GITHUB_CLIENT_SECRET", "a-real-github-secret"),
+        ("GITHUB_IDP_ID", "c8014fe7-aeb4-4898-a460-4047e0fdf6d8"),
+    ]))
+    .expect("a real github client must parse");
+    assert_eq!(github.idp_id, "c8014fe7-aeb4-4898-a460-4047e0fdf6d8");
+
+    let doc = build(
+        3000,
+        8080,
+        "function populate() {}",
+        "function reconcile() {}",
+        None,
+        Some(&github),
+    );
+    assert!(
+        doc["requests"]
+            .as_array()
+            .expect("requests")
+            .iter()
+            .any(|request| request["url"].as_str()
+                == Some("/api/identity-provider/c8014fe7-aeb4-4898-a460-4047e0fdf6d8"))
+    );
+}
+
+/// `authentication_service` resolves this provider by name to start a link and
+/// then addresses it by `GITHUB_IDP_ID` for the link itself, so one provider
+/// has to answer to both or the two halves address different things.
+#[test]
+fn the_github_idp_is_created_under_both_the_name_and_the_id_the_service_uses() {
+    let github = GithubIdp {
+        client_id: "Iv23livpJoVJw98dlKCk".to_string(),
+        client_secret: "a-real-github-secret".to_string(),
+        idp_id: identity::GITHUB_IDP_ID.to_string(),
+    };
+    let doc = build(
+        3000,
+        8080,
+        "function populate() {}",
+        "function reconcile() {}",
+        None,
+        Some(&github),
+    );
+
+    let requests = doc["requests"].as_array().expect("requests");
+    let idp = requests
+        .iter()
+        .find(|request| {
+            request["url"]
+                .as_str()
+                .is_some_and(|url| url.ends_with(identity::GITHUB_IDP_ID))
+        })
+        .expect("the github identity provider must be created at its fixed id");
+
+    let provider = &idp["body"]["identityProvider"];
+    assert_eq!(provider["name"], "github");
+    // FusionAuth has no GitHub provider type; it rejects one outright.
+    assert_eq!(provider["type"], "OpenIDConnect");
+    assert_eq!(provider["enabled"], true);
+    // The provider and the service must share one OAuth client.
+    assert_eq!(provider["oauth2"]["client_id"], "Iv23livpJoVJw98dlKCk");
+    assert_eq!(provider["oauth2"]["client_secret"], "a-real-github-secret");
+    assert_eq!(
+        provider["applicationConfiguration"][identity::APPLICATION_ID]["enabled"],
+        true
+    );
+}
+
+/// Absent client, absent provider - the connector is plainly unavailable
+/// rather than misconfigured.
+#[test]
+fn kickstart_without_github_creates_no_github_idp() {
+    let doc = build(
+        3000,
+        8080,
+        "function populate() {}",
+        "function reconcile() {}",
+        None,
+        None,
+    );
+
+    assert!(
+        !doc["requests"]
+            .as_array()
+            .expect("requests")
+            .iter()
+            .any(|request| request["url"]
+                .as_str()
+                .is_some_and(|url| url.contains(identity::GITHUB_IDP_ID)))
     );
 }
