@@ -389,3 +389,29 @@ async fn an_unknown_bot_is_a_404() {
     assert_eq!(response.status(), StatusCode::NOT_FOUND);
     assert!(opener.opened.lock().unwrap().is_empty());
 }
+
+#[tokio::test]
+async fn a_session_whose_runtime_is_gone_is_a_409() {
+    let error =
+        AgentSessionApiError::Domain(AgentSessionError::Disconnected(AgentSessionId::new()));
+
+    let response = error.into_response();
+
+    assert_eq!(response.status(), StatusCode::CONFLICT);
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    assert_eq!(
+        body.as_ref(),
+        b"the agent's runtime is not connected to this session"
+    );
+}
+
+#[test]
+fn other_domain_failures_stay_500() {
+    let error = AgentSessionApiError::Domain(AgentSessionError::UnknownOwner);
+
+    let response = error.into_response();
+
+    assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
+}
