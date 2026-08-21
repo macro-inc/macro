@@ -29,9 +29,9 @@ use super::{Mode, repo_root};
 /// Flake attr that renders the Arion composition to a Compose YAML file.
 const ARION_COMPOSE_ATTR: &str = ".#arion-compose-yaml";
 
-pub const LOCALSTACK_IMAGE: &str = "localstack/localstack:4";
-pub const MAILPIT_IMAGE: &str = "axllent/mailpit:v1.20";
-pub const CADDY_IMAGE: &str = "caddy:2-alpine";
+pub const LOCALSTACK_IMAGE: &str = "macro-local-localstack:dev";
+pub const MAILPIT_IMAGE: &str = "macro-local-mailpit:dev";
+pub const CADDY_IMAGE: &str = "macro-local-caddy:dev";
 pub const SDK_WEBHOOK_RELAY_IMAGE: &str = "macro-sdk-webhook-relay:dev";
 
 /// Base-compose services that bind fixed host ports but aren't in our inventory

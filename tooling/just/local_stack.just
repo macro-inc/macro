@@ -1,11 +1,12 @@
 # LocalStack recipes for local AWS emulation
 export AWS_PAGER := ""
 
-# Start LocalStack for local AWS emulation
-# Pinned to v4 — `latest` requires LOCALSTACK_AUTH_TOKEN for all features.
+# Start LocalStack for local AWS emulation.
+# Uses the Nix dockerTools image (`macro-local-localstack:dev`).
 start_localstack:
   #!/usr/bin/env bash
   set -euo pipefail
+  bash tooling/scripts/load-nix-docker-streams.sh stream-docker-image-local-localstack
   if docker ps --format '{{ "{{.Names}}" }}' | grep -qx localstack; then
     echo "LocalStack already running"
   elif docker ps -a --format '{{ "{{.Names}}" }}' | grep -qx localstack; then
@@ -16,7 +17,7 @@ start_localstack:
       --network databases \
       -p 4566:4566 \
       -e SERVICES=sqs,dynamodb,s3 \
-      localstack/localstack:4
+      macro-local-localstack:dev
     echo "LocalStack started"
   fi
   docker network connect databases localstack 2>/dev/null || true

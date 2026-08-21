@@ -1,9 +1,9 @@
 # Small constructors for Arion service modules.
 #
-# Every service here sets `image.nixBuild = false`. Rust services use the
-# preloaded dockerTools runtime; JS services use the preloaded Node/Bun
-# runtime; everything else is a registry image. That keeps
-# `nix build .#arion-compose-yaml` a cheap eval (no crane, no dummy images).
+# Every service here sets `image.nixBuild = false`. Images are realized with
+# `dockerTools.streamLayeredImage` and `docker load` (see xtask
+# `ensure_aux_images`); Arion only emits Compose YAML, so eval stays cheap
+# (no crane, no dummy images).
 { pkgs }:
 let
   inherit (pkgs) lib;
@@ -43,9 +43,6 @@ in
 
   rustRuntimeImage = "macro-local-runtime:dev";
   nodeBunImage = "macro-local-node-bun:dev";
-
-  # Unpacked analysis-icu plugin bind-mounted into the official OpenSearch image.
-  analysisIcuPlugin = (pkgs.callPackage ../_containers/opensearch.nix { }).plugin;
 
   rustService =
     {

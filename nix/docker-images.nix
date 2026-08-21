@@ -22,6 +22,27 @@
       aux = linuxPkgs.callPackage ./_containers/aux.nix { };
       sandbox = linuxPkgs.callPackage ./_containers/sandbox.nix { };
       transcription = linuxPkgs.callPackage ./_containers/transcription.nix { };
+      localStack = builtins.removeAttrs (linuxPkgs.callPackage ./_containers/local-stack.nix { }) [
+        "override"
+        "overrideDerivation"
+      ];
+
+      localStackPackages = lib.mapAttrs' (name: img: {
+        name = "docker-image-local-${name}";
+        value = img.image;
+      }) localStack
+      // lib.mapAttrs' (name: img: {
+        name = "stream-docker-image-local-${name}";
+        value = img.stream;
+      }) localStack
+      // {
+        local-infra-image-streams = linuxPkgs.linkFarm "local-infra-image-streams" (
+          lib.mapAttrsToList (name: img: {
+            name = "stream-docker-image-local-${name}";
+            path = img.stream;
+          }) localStack
+        );
+      };
 
       # Baked service images need crane packages from this system. Those
       # packages are Linux-only deploy artifacts (CI).
@@ -44,6 +65,7 @@
         docker-image-coding-agent-sandbox = sandbox.docker-image-coding-agent-sandbox;
         docker-image-transcription = transcription.docker-image-transcription;
       }
+      // localStackPackages
       // serviceImages;
     };
 }

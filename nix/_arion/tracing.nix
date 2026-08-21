@@ -3,14 +3,10 @@ let
   inherit (lib) paths;
 in
 {
-  jaeger = lib.pulled "jaegertracing/all-in-one:latest" {
+  jaeger = lib.pulled "macro-local-jaeger:dev" {
     environment = {
       COLLECTOR_OTLP_ENABLED = "true";
     };
-    command = [
-      "--collector.otlp.http.cors.allowed-origins=*"
-      "--collector.otlp.http.cors.allowed-headers=*"
-    ];
     ports = [
       "16686:16686"
       "4317:4317"
@@ -26,7 +22,7 @@ in
     out.service.profiles = [ "jaeger" ];
   };
 
-  datadog-agent = lib.pulled "gcr.io/datadoghq/agent:7" {
+  datadog-agent = lib.pulled "macro-local-datadog-agent:dev" {
     environment = {
       DD_API_KEY = "";
       DD_SITE = "us5.datadoghq.com";

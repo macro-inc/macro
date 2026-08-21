@@ -18,10 +18,10 @@ generate_keys_prod:
     rm -rf ./output && mkdir output && cargo run --bin generate_keys prod
 
 create_localstack:
-    docker run -d --name localstack -p 4566:4566 -e SERVICES=sqs localstack/localstack
+    docker run -d --name localstack -p 4566:4566 -e SERVICES=sqs macro-local-localstack:dev
 
 start_localstack:
-    docker run -p 4566:4566 -e SERVICES=sqs localstack/localstack
+    docker run -p 4566:4566 -e SERVICES=sqs macro-local-localstack:dev
 
 create_queue:
     AWS_REGION=us-east-1 aws --endpoint-url=http://localhost:4566 sqs create-queue --queue-name notification-queue

@@ -3,7 +3,7 @@ let
   inherit (lib) paths;
 in
 {
-  db = lib.pulled "postgres:16.0-bookworm" {
+  db = lib.pulled "macro-local-fusionauth-db:dev" {
     environment = {
       PGDATA = "/var/lib/postgresql/data/pgdata";
       POSTGRES_USER = "postgres";
@@ -22,7 +22,7 @@ in
     };
   };
 
-  fusionauth = lib.pulled "fusionauth/fusionauth-app:1.62.1" {
+  fusionauth = lib.pulled "macro-local-fusionauth:dev" {
     depends_on = {
       db.condition = "service_healthy";
     };

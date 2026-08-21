@@ -1,6 +1,6 @@
-postgres_container="$(docker ps --format '{{.ID}} {{.Image}}' | awk '$2 == "pgvector/pgvector:pg18" { print $1; exit }')"
+postgres_container="$(docker ps --format '{{.ID}} {{.Image}}' | awk '$2 ~ /^macro-local-postgres(:|$)/ { print $1; exit }')"
 if [ -z "$postgres_container" ]; then
-  echo "pgvector/pgvector:pg18 service container not found" >&2
+  echo "macro-local-postgres service container not found" >&2
   docker ps
   exit 1
 fi

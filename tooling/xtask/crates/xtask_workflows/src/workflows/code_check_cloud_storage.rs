@@ -6,9 +6,7 @@
 //! volume backends onto Namespace's official remote sccache (so there are no
 //! AWS credentials anywhere).
 
-use gh_workflow::{
-    Container, Env, Event, Expression, Job, Port, PullRequest, PullRequestType, Run, Step, Workflow,
-};
+use gh_workflow::{Event, Expression, Job, PullRequest, PullRequestType, Run, Step, Workflow};
 
 use crate::workflows::{
     runners,
@@ -78,7 +76,7 @@ fn check() -> Job {
         .add_step(steps::teardown_nix())
 }
 
-/// cargo nextest against postgres + redis service containers.
+/// cargo nextest against postgres + redis (Nix dockerTools images).
 fn test() -> Job {
     steps::gated_job()
         .runs_on(runners::Runner::RustCi.with_cache_tag(vars::CI_CACHE_TAG))
@@ -88,13 +86,12 @@ fn test() -> Job {
         ))
         .add_env(("NEXTEST_TEST_THREADS", vars::NEXTEST_TEST_THREADS))
         .add_env(("RUSTFLAGS", "-Dwarnings -C link-arg=-fuse-ld=mold"))
-        .add_service("postgres", postgres_service())
-        .add_service("redis", redis_service())
         .add_step(steps::checkout(false, false))
         .add_step(steps::mount_cache_volume())
         .add_step(steps::setup_nix())
         .add_step(steps::setup_dev_shell())
         .add_step(steps::configure_namespace_sccache(vars::CI_SCCACHE_NAME))
+        .add_step(start_nix_ci_databases())
         .add_step(configure_postgres())
         .add_step(prepare_tests())
         .add_step(run_tests())
@@ -147,6 +144,7 @@ fn paths_filter() -> Step<gh_workflow::Use> {
                   - 'static_assets/**'
                   - 'flake.nix'
                   - 'flake.lock'
+                  - 'nix/**'
                   - '.github/actions/setup-nix/**'
                   - '.github/actions/setup-nix-dev-shell/**'
                   - '.github/actions/teardown-nix/**'
@@ -226,31 +224,9 @@ fn cargo_clippy() -> Step<Run> {
     "#})
 }
 
-/// pgvector service container, tuned env preserved.
-fn postgres_service() -> Container {
-    Container::default()
-        .image("pgvector/pgvector:pg18")
-        .env(
-            Env::new("POSTGRES_USER", "user")
-                .add("POSTGRES_PASSWORD", "password")
-                .add("POSTGRES_DB", "macrodb"),
-        )
-        .ports(vec![Port::Name("5432:5432".to_string())])
-        .options(
-            "--health-cmd pg_isready --health-interval 10s --health-timeout 5s \
-             --health-retries 5 --shm-size 1g",
-        )
-}
-
-/// redis service container.
-fn redis_service() -> Container {
-    Container::default()
-        .image("redis:7")
-        .ports(vec![Port::Name("6379:6379".to_string())])
-        .options(
-            "--health-cmd \"redis-cli ping\" --health-interval 10s \
-             --health-timeout 5s --health-retries 5",
-        )
+/// Load and start Nix dockerTools Postgres + Redis on localhost.
+fn start_nix_ci_databases() -> Step<Run> {
+    Step::new("start nix postgres and redis").run(include_str!("scripts/start_nix_ci_databases.sh"))
 }
 
 /// Tune the postgres service container for fast concurrent tests.

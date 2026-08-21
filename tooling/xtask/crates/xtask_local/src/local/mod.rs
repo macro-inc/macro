@@ -160,7 +160,9 @@ use stage::Stage;
 /// Every non-Rust local service whose image is produced from this repository
 /// (Nix dockerTools, or a bind-mounted Node/Bun runtime). An Environment
 /// Build must materialize all of them so a fresh agent never discovers one at
-/// stack-start time.
+/// stack-start time. Infra images (Postgres, Redis, Kafka, OpenSearch,
+/// FusionAuth, Caddy, nginx, Mailpit, LocalStack, snapshot helper) are loaded
+/// as the `local-infra-image-streams` farm, not started as app services.
 const LOCAL_BUILD_SERVICE_IMAGES: &[&str] = &[
     "websocket_service",
     "sync_service",
@@ -168,7 +170,6 @@ const LOCAL_BUILD_SERVICE_IMAGES: &[&str] = &[
     "ai_editing_worker",
     "analytics_proxy",
     "sdk-webhook-relay",
-    "search",
 ];
 
 /// Repository-built app containers safe to recreate during `stack update`.
@@ -183,10 +184,9 @@ const LOCAL_RECREATE_SERVICE_IMAGES: &[&str] = &[
     "sdk-webhook-relay",
 ];
 
-/// Image-only app services that infra-only bake mode does not otherwise start.
-/// Infra images are pulled by `bring_up_infra`; the Rust runtime image is built
-/// separately by [`build::ensure_runtime_image`].
-const LOCAL_PULL_SERVICE_IMAGES: &[&str] = &["proxy", "mailpit", "static_file_cdn"];
+/// Previously registry-pulled app services. Every local image is now a Nix
+/// dockerTools load (`ensure_aux_images`); this list must stay empty.
+const LOCAL_PULL_SERVICE_IMAGES: &[&str] = &[];
 
 /// The artifact-driven preview updater can refresh every Nix-built app
 /// service. Keep this separate so enabling local aux rebuilds does not make the
@@ -571,6 +571,9 @@ fn pull_app_service_images(
     instance: &Instance,
     env: &env_layer::ResolvedEnv,
 ) -> Result<()> {
+    if LOCAL_PULL_SERVICE_IMAGES.is_empty() {
+        return Ok(());
+    }
     let mut pull = compose_cmd(instance, env);
     pull.arg("pull").args(LOCAL_PULL_SERVICE_IMAGES);
     stage.run("Pulling image-only app services", &mut pull)

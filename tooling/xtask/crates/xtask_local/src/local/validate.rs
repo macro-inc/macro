@@ -101,6 +101,15 @@ fn local_compose_flavor(instance: &Instance, mode: Mode, static_frontend: bool) 
             failures.push(format!("required non-Rust service '{required}' is absent"));
         }
     }
+    for (name, node) in services {
+        if let Some(img) = node.get("image").and_then(Value::as_str)
+            && !is_nix_local_image(img)
+        {
+            failures.push(format!(
+                "'{name}' image is {img:?} — local stack images must be Nix dockerTools tags (macro-local-* or macro-sdk-*)"
+            ));
+        }
+    }
     // The sidecar is not in `services_for_mode` (modes-less inventory entry) —
     // assert its presence and runtime-image shape when the env gates it in.
     if gmail_forwarder {
@@ -133,6 +142,11 @@ fn local_compose_flavor(instance: &Instance, mode: Mode, static_frontend: bool) 
         }
     );
     Ok(())
+}
+
+fn is_nix_local_image(image: &str) -> bool {
+    let name = image.rsplit('/').next().unwrap_or(image);
+    name.starts_with("macro-local-") || name.starts_with("macro-sdk-")
 }
 
 fn flavor_label(static_frontend: bool) -> &'static str {

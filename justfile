@@ -10,6 +10,14 @@ ensure_arion:
   mkdir -p target/nix
   nix build .#arion-compose-yaml --out-link {{ arion_yaml }}
 
+ensure_db_images:
+  bash tooling/scripts/load-nix-docker-streams.sh \
+    stream-docker-image-local-postgres \
+    stream-docker-image-local-redis
+
+ensure_local_infra_images:
+  bash tooling/scripts/load-nix-docker-streams.sh --infra-farm
+
 compose := "docker compose --project-directory . -f " + arion_yaml
 database_compose := compose
 
@@ -44,6 +52,7 @@ get_environment CONFIG="lcl":
 run_dbs *ARGS:
   just create_networks
   just ensure_arion
+  just ensure_db_images
   {{ database_compose }} up postgres redis --wait {{ ARGS }}
 
 # Spins up main docker-compose

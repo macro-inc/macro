@@ -30,10 +30,10 @@ purge-queue:
     AWS_REGION=us-east-1 aws --endpoint-url=http://localhost:4566 sqs purge-queue --queue-url http://localhost:4566/000000000000/my-test-queue
 
 create-localstack:
-    docker run -d --name localstack -p 4566:4566 -e SERVICES=sqs localstack/localstack
+    docker run -d --name localstack -p 4566:4566 -e SERVICES=sqs macro-local-localstack:dev
 
 start-localstack:
-    docker run -p 4566:4566 -e SERVICES=sqs localstack/localstack
+    docker run -p 4566:4566 -e SERVICES=sqs macro-local-localstack:dev
 
 create-queue:
     AWS_REGION=us-east-1 aws --endpoint-url=http://localhost:4566 sqs create-queue --queue-name my-test-queue

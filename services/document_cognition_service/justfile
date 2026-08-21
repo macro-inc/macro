@@ -28,7 +28,7 @@ dev-lq:
     cargo run --features local_auth,local_queue
 
 create-localstack:
-    docker run -d --name localstack -p 4566:4566 -e SERVICES=sqs localstack/localstack
+    docker run -d --name localstack -p 4566:4566 -e SERVICES=sqs macro-local-localstack:dev
 
 create-queue:
     AWS_REGION=us-east-1 aws --endpoint-url=http://localhost:4566 sqs create-queue --queue-name my-test-queue

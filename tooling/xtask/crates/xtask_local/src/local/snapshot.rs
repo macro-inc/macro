@@ -35,11 +35,12 @@ use super::{env_layer, fusionauth, gen_compose, repo_root, workspace_root};
 /// be mid-flight (the readiness gate only checked `/api/status`, so a save
 /// could freeze a tenant-less FusionAuth DB — and the key never changed, so
 /// the bad snapshot was sticky).
-const FORMAT: u32 = 3;
+/// 4: Nix dockerTools infra images (Postgres/OpenSearch/Kafka data-dir layout
+/// no longer matches the previously pulled registry images).
+const FORMAT: u32 = 4;
 
-/// The throwaway container image used to tar/untar volumes. Alpine for its
-/// size; only needs `tar` + `sh`.
-const HELPER_IMAGE: &str = "alpine:3";
+/// Throwaway dockerTools image (`tar` + `gzip` + `sh`) used to archive volumes.
+const HELPER_IMAGE: &str = "macro-local-snapshot-helper:dev";
 
 /// The stateful volumes a snapshot captures, as `(archive name, volume)`
 /// pairs. Redis is deliberately absent — it's a cache, and an empty cache is

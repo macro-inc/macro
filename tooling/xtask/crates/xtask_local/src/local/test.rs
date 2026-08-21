@@ -40,15 +40,14 @@ fn durable_bake_covers_every_repository_built_local_image() {
         "ai_editing_worker",
         "analytics_proxy",
         "sdk-webhook-relay",
-        "search",
     ]
     .into_iter()
     .map(str::to_string)
     .collect();
     assert_eq!(actual, expected);
-    assert_eq!(
-        LOCAL_PULL_SERVICE_IMAGES,
-        ["proxy", "mailpit", "static_file_cdn"]
+    assert!(
+        LOCAL_PULL_SERVICE_IMAGES.is_empty(),
+        "local stack must load Nix images, not docker compose pull: {LOCAL_PULL_SERVICE_IMAGES:?}"
     );
 }
 

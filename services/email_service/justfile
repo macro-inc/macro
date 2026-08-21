@@ -18,10 +18,10 @@ debug:
     RUST_LOG=email_service=debug,info cargo run --features macro_middleware/local_auth
 
 create-localstack:
-    docker run -d --name localstack -p 4566:4566 -e SERVICES=sqs,s3 localstack/localstack
+    docker run -d --name localstack -p 4566:4566 -e SERVICES=sqs,s3 macro-local-localstack:dev
 
 start-localstack:
-    docker run -p 4566:4566 -e SERVICES=sqs localstack/localstack
+    docker run -p 4566:4566 -e SERVICES=sqs macro-local-localstack:dev
 
 create-queues:
     AWS_REGION=us-east-1 aws --endpoint-url=http://localhost:4566 sqs create-queue \

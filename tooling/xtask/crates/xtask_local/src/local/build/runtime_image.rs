@@ -25,6 +25,7 @@ pub const SDK_WEBHOOK_IMAGE_TAG: &str = "macro-sdk-webhook-relay:dev";
 const NIX_STREAM_RUNTIME: &str = ".#stream-docker-image-local-runtime";
 const NIX_STREAM_NODE_BUN: &str = ".#stream-docker-image-local-node-bun";
 const NIX_STREAM_SDK_WEBHOOK: &str = ".#stream-docker-image-sdk-webhook-relay";
+const NIX_INFRA_FARM: &str = ".#local-infra-image-streams";
 
 /// Reconcile the runtime image for the host arch.
 pub fn ensure_runtime_image(stage: &Stage, _target: Target, force: bool) -> Result<()> {
@@ -37,7 +38,9 @@ pub fn ensure_runtime_image(stage: &Stage, _target: Target, force: bool) -> Resu
     )
 }
 
-/// Load the Node/Bun runtime and the SDK webhook relay used by aux services.
+/// Load the Node/Bun runtime, the SDK webhook relay, and every infra image
+/// (`postgres`, `redis`, `kafka`, OpenSearch, FusionAuth, Caddy, nginx,
+/// Mailpit, LocalStack, snapshot helper, tracing backends).
 pub fn ensure_aux_images(stage: &Stage, force: bool) -> Result<()> {
     nix_load_stream(
         stage,
@@ -53,7 +56,36 @@ pub fn ensure_aux_images(stage: &Stage, force: bool) -> Result<()> {
         SDK_WEBHOOK_IMAGE_TAG,
         force,
     )?;
+    load_infra_farm(stage, force)?;
     ensure_sync_worker(stage)
+}
+
+fn load_infra_farm(stage: &Stage, force: bool) -> Result<()> {
+    let ws = workspace_root();
+    let out_link = ws.join("target/nix/local-infra-image-streams");
+    if let Some(parent) = out_link.parent() {
+        std::fs::create_dir_all(parent)
+            .with_context(|| format!("creating {}", parent.display()))?;
+    }
+    let mut build = Command::new("nix");
+    build
+        .current_dir(&ws)
+        .args(["build", "--print-build-logs", NIX_INFRA_FARM])
+        .args(["--out-link"])
+        .arg(&out_link);
+    if force {
+        build.arg("--rebuild");
+    }
+    stage.run("Building Nix infra images", &mut build)?;
+    let entries =
+        std::fs::read_dir(&out_link).with_context(|| format!("reading {}", out_link.display()))?;
+    for entry in entries {
+        let entry = entry?;
+        let path = entry.path();
+        let name = entry.file_name().to_string_lossy().into_owned();
+        load_stream(stage, &path, &name)?;
+    }
+    Ok(())
 }
 
 /// `wrangler.docker.toml` serves a prebuilt wasm worker. Docker no longer

@@ -3,7 +3,7 @@ let
   inherit (lib) envFile paths;
 in
 {
-  static_file_cdn = lib.pulled "nginx:alpine" {
+  static_file_cdn = lib.pulled "macro-local-nginx:dev" {
     ports = [ "8100:80" ];
     volumes = [
       "${paths.staticFileCdnConf}:/etc/nginx/conf.d/default.conf:ro"

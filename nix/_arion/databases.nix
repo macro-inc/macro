@@ -1,7 +1,6 @@
 { lib }:
 {
-  postgres = lib.pulled "pgvector/pgvector:pg18" {
-    command = "postgres -c max_connections=500";
+  postgres = lib.pulled "macro-local-postgres:dev" {
     ports = [ "5432:5432" ];
     expose = [ "5432" ];
     environment = {
@@ -22,19 +21,25 @@
     };
   };
 
-  redis = lib.pulled "redis/redis-stack:latest" {
+  redis = lib.pulled "macro-local-redis:dev" {
     ports = [
       "6379:6379"
       "8001:8001"
     ];
-    environment = {
-      ALLOW_EMPTY_PASSWORD = "yes";
-    };
     volumes = [ "cache:/data" ];
     networks = [ "databases" ];
+    healthcheck = {
+      test = [
+        "CMD-SHELL"
+        "redis-cli ping"
+      ];
+      interval = "2s";
+      timeout = "3s";
+      retries = 10;
+    };
   };
 
-  kafka = lib.pulled "apache/kafka:3.9.1" {
+  kafka = lib.pulled "macro-local-kafka:dev" {
     environment = {
       KAFKA_NODE_ID = 1;
       KAFKA_PROCESS_ROLES = "broker,controller";
@@ -66,15 +71,9 @@
   };
 
   search =
-    lib.pulled "opensearchproject/opensearch:3.5.0" {
+    lib.pulled "macro-local-opensearch:dev" {
       environment = {
-        "cluster.name" = "search";
-        "discovery.type" = "single-node";
-        "node.name" = "search";
-        "plugins.security.disabled" = "true";
-        "bootstrap.memory_lock" = "true";
         OPENSEARCH_JAVA_OPTS = "-Xms512m -Xmx512m";
-        OPENSEARCH_INITIAL_ADMIN_PASSWORD = "yourStrongPassword123!";
       };
       ports = [
         "9200:9200"
@@ -82,7 +81,6 @@
       ];
       volumes = [
         "opensearch_data:/usr/share/opensearch/data"
-        "${lib.analysisIcuPlugin}:/usr/share/opensearch/plugins/analysis-icu:ro"
       ];
       networks = [ "databases" ];
       healthcheck = {

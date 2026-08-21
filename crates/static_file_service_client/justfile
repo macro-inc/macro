@@ -1,8 +1,8 @@
 create-localstack:
-	docker run --name localstack -p 4566:4566 -e SERVICES=s3,sqs -e DEBUG=1 localstack/localstack
+	docker run --name localstack -p 4566:4566 -e SERVICES=s3,sqs -e DEBUG=1 macro-local-localstack:dev
 
 start-localstack:
-	docker run -p 4566:4566 -e SERVICES=s3,sqs -e DEBUG=1 localstack/localstack
+	docker run -p 4566:4566 -e SERVICES=s3,sqs -e DEBUG=1 macro-local-localstack:dev
 
 create-bucket:
 	AWS_REGION=us-east-1 aws --endpoint-url=http://localhost:4566 s3 mb s3://test-bucket
