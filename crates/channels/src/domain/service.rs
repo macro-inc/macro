@@ -19,6 +19,7 @@ use crate::domain::{
         ChannelMessagesErr, ChannelMessagesQueryResult, ChannelMutationErr,
         ChannelReferenceSharePermissions, ChannelRepo, ChannelService,
     },
+    side_effects::bot_mention_ids,
 };
 use bot_id::BotIdStr;
 use bot_id::cowlike::CowLike;
@@ -591,7 +592,16 @@ where
         }
     }
 
-    #[tracing::instrument(err, skip(self, req))]
+    #[tracing::instrument(
+        err,
+        skip(self, req),
+        fields(
+            channel.id = %channel_id,
+            channel.message.scope = tracing::field::Empty,
+            channel.message.mention_count = tracing::field::Empty,
+            agent.mention.bot_count = tracing::field::Empty,
+        )
+    )]
     async fn post_message(
         &self,
         actor: Sender,
@@ -605,6 +615,19 @@ where
         if actor.as_bot().is_some() && req.mentions.is_empty() {
             req.mentions = self.extract_content_mentions(&req.content).await;
         }
+        tracing::Span::current().record(
+            "channel.message.scope",
+            if req.thread_id.is_some() {
+                "thread"
+            } else {
+                "channel_top_level"
+            },
+        );
+        tracing::Span::current().record("channel.message.mention_count", req.mentions.len());
+        tracing::Span::current().record(
+            "agent.mention.bot_count",
+            bot_mention_ids(&req.mentions).len(),
+        );
 
         let message = self
             .repo

@@ -5,6 +5,8 @@ use std::sync::Arc;
 use channels::domain::ports::ChannelService;
 use channels::domain::side_effects::ChannelBotTrigger;
 use tokio::sync::mpsc::UnboundedReceiver;
+use tokio_util::{sync::CancellationToken, task::TaskTracker};
+use tracing::Instrument as _;
 
 use crate::domain::{
     models::BotEvent,
@@ -53,16 +55,42 @@ where
     }
 
     /// Start consuming channel bot trigger candidates.
-    pub fn spawn(self, mut candidates: UnboundedReceiver<ChannelBotTrigger>)
-    where
+    pub fn spawn(
+        self,
+        mut candidates: UnboundedReceiver<ChannelBotTrigger>,
+        cancellation: CancellationToken,
+        tasks: TaskTracker,
+    ) where
         R: 'static,
         D: 'static,
     {
-        tokio::spawn(async move {
+        let candidate_tasks = tasks.clone();
+        tasks.spawn(async move {
+            loop {
+                let candidate = tokio::select! {
+                    () = cancellation.cancelled() => {
+                        candidates.close();
+                        break;
+                    }
+                    candidate = candidates.recv() => match candidate {
+                        Some(candidate) => candidate,
+                        None => break,
+                    },
+                };
+                let router = self.clone();
+                let span = candidate.span.clone();
+                candidate_tasks.spawn(async move {
+                    router.run(candidate).instrument(span).await;
+                });
+            }
+
+            // Cancellation closed the channel; drain what was already queued so
+            // a trigger that made it in never disappears silently.
             while let Some(candidate) = candidates.recv().await {
                 let router = self.clone();
-                tokio::spawn(async move {
-                    router.run(candidate).await;
+                let span = candidate.span.clone();
+                candidate_tasks.spawn(async move {
+                    router.run(candidate).instrument(span).await;
                 });
             }
         });

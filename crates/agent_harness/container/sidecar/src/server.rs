@@ -51,31 +51,34 @@ async fn bridge(State(config): State<Config>, ws: WebSocketUpgrade) -> Response 
         )
             .into_response();
     };
+    let child = match spawn_harness(&config.harness, &config.workspace) {
+        Ok(child) => child,
+        Err(error) => {
+            tracing::error!(error = ?error, harness = %config.harness, "failed to spawn harness");
+            return (StatusCode::INTERNAL_SERVER_ERROR, "failed to spawn harness").into_response();
+        }
+    };
     // ACP frames carry file contents; don't limit their size.
     ws.max_message_size(usize::MAX)
         .max_frame_size(usize::MAX)
         .on_upgrade(move |socket| async move {
-            pipe(socket, &config.harness, &config.workspace).await;
+            pipe(socket, child).await;
             drop(permit);
         })
         .into_response()
 }
 
-async fn pipe(socket: WebSocket, harness: &str, workspace: &str) {
-    let mut child = match Command::new(harness)
+fn spawn_harness(harness: &str, workspace: &str) -> std::io::Result<tokio::process::Child> {
+    Command::new(harness)
         .args(["acp", "--cwd", workspace])
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::inherit()) // → sandbox logs
         .kill_on_drop(true)
         .spawn()
-    {
-        Ok(child) => child,
-        Err(e) => {
-            tracing::error!(error = ?e, harness, "failed to spawn harness");
-            return;
-        }
-    };
+}
+
+async fn pipe(socket: WebSocket, mut child: tokio::process::Child) {
     let mut stdin = child.stdin.take().expect("stdin was piped");
     let stdout = child.stdout.take().expect("stdout was piped");
     tracing::info!("agent connected, harness spawned");

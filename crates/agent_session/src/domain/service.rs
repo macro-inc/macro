@@ -37,6 +37,8 @@ use dashmap::mapref::entry::Entry;
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
 use tokio::sync::{mpsc, oneshot};
+use tokio_util::{sync::CancellationToken, task::TaskTracker};
+use tracing::instrument::WithSubscriber as _;
 
 use bots::domain::models::BotId;
 
@@ -136,11 +138,14 @@ pub trait AgentSessionService: Send + Sync + 'static {
 /// `Folds` answers "what messages does this session's log derive" -
 /// `agent_fold` folding the log on read - and `Rt` streams each frame to
 /// whoever is watching the session's channel right now.
+#[derive(Clone)]
 pub struct AgentSessionServiceImpl<R, Folds, Rt> {
     repo: R,
     folds: Folds,
     realtime: Rt,
     active: Arc<ActiveSessions>,
+    tasks: TaskTracker,
+    cancellation: CancellationToken,
 }
 
 impl<R, Folds, Rt> AgentSessionServiceImpl<R, Folds, Rt> {
@@ -156,7 +161,17 @@ impl<R, Folds, Rt> AgentSessionServiceImpl<R, Folds, Rt> {
             folds,
             realtime,
             active: Arc::new(DashMap::new()),
+            tasks: TaskTracker::new(),
+            cancellation: CancellationToken::new(),
         }
+    }
+
+    /// Stop active actors and wait for their tasks to release their transports.
+    pub async fn shutdown(&self) {
+        self.cancellation.cancel();
+        self.active.clear();
+        self.tasks.close();
+        self.tasks.wait().await;
     }
 
     fn register_transport<Connector>(
@@ -195,7 +210,15 @@ impl<R, Folds, Rt> AgentSessionServiceImpl<R, Folds, Rt> {
             command_rx,
             attachment.handshake,
         );
-        tokio::spawn(run_session(actor, Arc::downgrade(&self.active), commands));
+        self.tasks.spawn(
+            run_session(
+                actor,
+                Arc::downgrade(&self.active),
+                commands,
+                self.cancellation.clone(),
+            )
+            .with_current_subscriber(),
+        );
         Ok(())
     }
 
@@ -213,12 +236,23 @@ impl<R, Folds, Rt> AgentSessionServiceImpl<R, Folds, Rt> {
             .ok_or(AgentSessionError::Disconnected(id))?;
 
         let (completed, result) = oneshot::channel();
+        let action_name = match &action {
+            AgentAction::Prompt(_) => "prompt",
+            _ => "unknown",
+        };
         if commands
             .send(SessionCommand {
                 user_id,
                 action,
                 action_id,
                 completed,
+                span: tracing::info_span!(
+                    "agent.session.command",
+                    agent.session.id = %id,
+                    agent.action.name = action_name,
+                    otel.status_code = tracing::field::Empty,
+                    otel.status_description = tracing::field::Empty,
+                ),
             })
             .await
             .is_err()
@@ -261,6 +295,7 @@ where
     }
 
     async fn delete_session(&self, id: AgentSessionId) -> Result<()> {
+        self.active.remove(&id);
         self.repo.delete(id).await
     }
 
@@ -537,11 +572,21 @@ async fn run_session<Connector, Logs>(
     mut actor: SessionActor<Connector, Logs>,
     active: std::sync::Weak<ActiveSessions>,
     commands: mpsc::Sender<SessionCommand>,
+    cancellation: CancellationToken,
 ) where
     Connector: AgentConnector,
     Logs: AgentSessionLogWriter + AgentSessionRepo,
 {
-    while actor.step().await == Stepped::Continue {}
+    loop {
+        let stepped = tokio::select! {
+            biased;
+            () = cancellation.cancelled() => actor.shutdown().await,
+            stepped = actor.step() => stepped,
+        };
+        if stepped == Stepped::Stopped {
+            break;
+        }
+    }
 
     // Refuse late commands before releasing the registry entry, so a caller
     // cannot enqueue into an actor that will never step again.

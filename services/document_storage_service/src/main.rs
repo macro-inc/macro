@@ -167,7 +167,13 @@ maybe_env_vars! {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    MacroEntrypoint::default().init();
+    let entrypoint = MacroEntrypoint::default().init();
+    let result = run().await;
+    entrypoint.shutdown();
+    result
+}
+
+async fn run() -> anyhow::Result<()> {
     let env = Environment::new_or_prod();
 
     let aws_config = macro_aws_config::get_macro_aws_config().await;
@@ -891,11 +897,15 @@ async fn main() -> anyhow::Result<()> {
     )
     .with_bot_trigger_sender(bot_trigger_sender)
     .with_macro_event_broker(macro_event_broker.clone());
+    let channel_side_effect_tracker = TaskTracker::new();
 
     let channels_service = Arc::new(
         ChannelServiceImpl::with_dependencies(
             channels_repo,
-            SpawnedChannelEventDispatcher::new(channel_side_effects.clone()),
+            SpawnedChannelEventDispatcher::with_task_tracker(
+                channel_side_effects.clone(),
+                channel_side_effect_tracker.clone(),
+            ),
             PgChannelReferenceSharePermissions::new(db.clone(), entity_access_service.clone()),
         )
         .with_mention_extractor(lexical_mention_extractor::LexicalMentionExtractor::new(
@@ -958,7 +968,10 @@ async fn main() -> anyhow::Result<()> {
     macro_agent_tool_context.channel_tool_context =
         ai_tools::build_channel_tool_context_with_dispatcher(
             db.clone(),
-            std::sync::Arc::new(SpawnedChannelEventDispatcher::new(channel_side_effects)),
+            std::sync::Arc::new(SpawnedChannelEventDispatcher::with_task_tracker(
+                channel_side_effects,
+                channel_side_effect_tracker.clone(),
+            )),
             lexical_client.clone(),
         );
     let macro_agent_tools = ai_tools::all_tools();
@@ -977,7 +990,13 @@ async fn main() -> anyhow::Result<()> {
             ),
         ),
     );
-    bot_trigger_router.spawn(bot_trigger_receiver);
+    let bot_trigger_cancellation = CancellationToken::new();
+    let bot_trigger_tracker = TaskTracker::new();
+    bot_trigger_router.spawn(
+        bot_trigger_receiver,
+        bot_trigger_cancellation.clone(),
+        bot_trigger_tracker.clone(),
+    );
 
     let channel_bot_webhook_state =
         bots::inbound::channel_webhook_router::ChannelBotWebhookRouterState::new(
@@ -1363,6 +1382,21 @@ async fn main() -> anyhow::Result<()> {
     consumer_tracker.close();
     consumer_tracker.wait().await;
     tracing::info!("event consumers stopped");
+
+    tracing::info!("waiting for channel side effects to drain");
+    channel_side_effect_tracker.close();
+    channel_side_effect_tracker.wait().await;
+    tracing::info!("channel side effects drained");
+
+    tracing::info!("waiting for bot triggers to drain");
+    bot_trigger_cancellation.cancel();
+    bot_trigger_tracker.close();
+    bot_trigger_tracker.wait().await;
+    tracing::info!("bot triggers drained");
+
+    // Bot handlers can post final replies through the same side-effect tracker.
+    channel_side_effect_tracker.wait().await;
+    tracing::info!("bot channel side effects drained");
 
     tracing::info!("waiting for event broker publishes to drain");
     event_broker_tracker.close();

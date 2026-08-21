@@ -16,6 +16,7 @@ use dashmap::DashMap;
 use dashmap::mapref::entry::Entry;
 use macro_user_id::user_id::MacroUserIdStr;
 use tokio::sync::{mpsc, oneshot};
+use tracing::instrument::WithSubscriber as _;
 
 use crate::domain::error::{HarnessError, Result};
 use crate::domain::model::{
@@ -121,7 +122,11 @@ where
         session_id: AgentSessionId,
         receiver: mpsc::UnboundedReceiver<QueuedCommand>,
     ) {
-        tokio::spawn(run_session_worker(session_id, self.inner.clone(), receiver));
+        // The worker outlives the call that created it, so it has to carry the
+        // subscriber forward itself or every command it runs traces nowhere.
+        tokio::spawn(
+            run_session_worker(session_id, self.inner.clone(), receiver).with_current_subscriber(),
+        );
     }
 
     /// Post the announcement for a prompt an external runtime delivers.
@@ -407,9 +412,14 @@ where
         %session_id,
         bot_id = %command.bot_id,
         message_id = %command.origin.message_id,
+        channel_id = %command.origin.channel_id,
+        thread_id = %command.origin.thread_id,
+        agent.trigger.kind = "mention",
+        agent.session.id = tracing::field::Empty,
     ))]
     async fn open(&self, session_id: AgentSessionId, command: OpenSession) -> Result<()> {
         let OpenSession { bot_id, origin } = command;
+        tracing::Span::current().record("agent.session.id", tracing::field::display(session_id));
         let repo_url = self.defaults.repo_url.clone();
 
         self.sessions
@@ -483,7 +493,7 @@ where
     /// Three steps, in this order: persist whatever the action changes about
     /// the session, work out whether anyone needs telling, then deliver it.
     /// Announcing last means nothing is announced that was never sent.
-    #[tracing::instrument(err, skip(self, command), fields(%session_id))]
+    #[tracing::instrument(err, skip(self, command), fields(agent.session.id = %session_id))]
     async fn deliver(&self, session_id: AgentSessionId, command: DeliverAction) -> Result<()> {
         let DeliverAction {
             id,

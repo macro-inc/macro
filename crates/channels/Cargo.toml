@@ -78,7 +78,7 @@ entity_mutation = [
   "entity_access/ports",
   "ports",
 ]
-ports = ["dep:entity_access", "dep:tokio", "entity_access/ports"]
+ports = ["dep:entity_access", "dep:tokio", "dep:tokio-util", "entity_access/ports"]
 schema = ["channel_sender/schema", "dep:utoipa", "macro_user_id/schema"]
 
 [dependencies]
@@ -126,6 +126,7 @@ sqlx = { workspace = true, optional = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["macros", "sync"], optional = true }
 tokio-retry = { workspace = true, optional = true }
+tokio-util = { workspace = true, features = ["rt"], optional = true }
 tracing = { workspace = true }
 utoipa = { workspace = true, optional = true }
 uuid = { workspace = true }

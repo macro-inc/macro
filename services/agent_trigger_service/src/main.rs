@@ -10,7 +10,7 @@ use bots::domain::ports::BotRepo as _;
 use bots::outbound::pg_bots_repo::PgBotsRepo;
 use channels::domain::broker_events::{ChannelMacroEvent, ChannelTopicEvent};
 use config::Config;
-use kafka_util::{GroupName, KafkaEventConsumer};
+use kafka_util::{GroupName, KafkaEventConsumer, consumer_span};
 use macro_entrypoint::{MacroEntrypoint, shutdown_signal};
 use macro_event_broker::{
     KafkaConsumerAdapter, KafkaEventPublisher, MacroEvent as _, MacroEventBroker as _,
@@ -19,6 +19,7 @@ use macro_event_broker::{
 use rdkafka::consumer::CommitMode;
 use rdkafka::message::{BorrowedMessage, Message as _};
 use sqlx::postgres::PgPoolOptions;
+use tracing::Instrument as _;
 
 struct AgentTriggerConsumerGroup;
 
@@ -51,9 +52,14 @@ impl AgentBotLookup for PgAgentBotLookup {
 }
 
 #[tokio::main]
-#[tracing::instrument(err)]
 async fn main() -> anyhow::Result<()> {
-    MacroEntrypoint::default().init();
+    let entrypoint = MacroEntrypoint::default().init();
+    let result = run().await;
+    entrypoint.shutdown();
+    result
+}
+
+async fn run() -> anyhow::Result<()> {
     let config = Config::from_env()?;
     let pool = PgPoolOptions::new()
         .min_connections(1)
@@ -84,6 +90,7 @@ async fn main() -> anyhow::Result<()> {
     );
 
     let mut shutdown = std::pin::pin!(shutdown_signal());
+    let mut run_error = None;
     loop {
         tokio::select! {
             () = &mut shutdown => {
@@ -98,40 +105,59 @@ async fn main() -> anyhow::Result<()> {
                         continue;
                     }
                 };
-                let kafka_message = message.inner();
-                let event = match message.decode_payload() {
-                    Ok(DeclaredMacroEvent::ChannelMacroEvent(event)) => event,
-                    Err(error) => {
-                        tracing::error!(
-                            error = ?error,
-                            partition = kafka_message.partition(),
-                            offset = kafka_message.offset(),
-                            "dropping undecodable channel event"
-                        );
+                let span = consumer_span(message.inner(), AgentTriggerConsumerGroup::GROUP_NAME);
+                let result = async {
+                    let kafka_message = message.inner();
+                    let event = match message.decode_payload() {
+                        Ok(DeclaredMacroEvent::ChannelMacroEvent(event)) => event,
+                        Err(error) => {
+                            tracing::error!(
+                                error = ?error,
+                                partition = kafka_message.partition(),
+                                offset = kafka_message.offset(),
+                                "dropping undecodable channel event"
+                            );
+                            commit_message(&consumer, kafka_message)?;
+                            return Ok::<(), anyhow::Error>(());
+                        }
+                    };
+                    tracing::Span::current().record("macro.event.id", tracing::field::display(event.event().event_id));
+
+                    let ChannelTopicEvent::MessagePosted(posted) = &event.event().event else {
                         commit_message(&consumer, kafka_message)?;
-                        continue;
+                        return Ok(());
+                    };
+                    tracing::Span::current().record("macro.event.type", "channel.message_posted");
+                    let yielded_events = trigger.evaluate(posted).await?;
+                    if yielded_events.is_empty() {
+                        tracing::debug!(message_id = %posted.message_id, "agent trigger yielded no event");
                     }
-                };
+                    for yielded in yielded_events {
+                        let json = serde_json::to_string(yielded.event())?;
+                        tracing::info!(yielded_event = %json, "agent trigger yielded event");
+                        let publish = publisher.send_event(&yielded)?;
+                        publish.await.context("agent event publication task failed")??;
+                    }
 
-                let ChannelTopicEvent::MessagePosted(posted) = &event.event().event else {
                     commit_message(&consumer, kafka_message)?;
-                    continue;
-                };
-                let yielded_events = trigger.evaluate(posted).await?;
-                if yielded_events.is_empty() {
-                    tracing::debug!(message_id = %posted.message_id, "agent trigger yielded no event");
+                    Ok(())
                 }
-                for yielded in yielded_events {
-                    let json = serde_json::to_string(yielded.event())?;
-                    tracing::info!(yielded_event = %json, "agent trigger yielded event");
-                    let publish = publisher.send_event(&yielded)?;
-                    publish.await.context("agent event publication task failed")??;
+                .instrument(span.clone())
+                .await;
+                if let Err(error) = &result {
+                    span.record("otel.status_code", "ERROR");
+                    span.record("otel.status_description", tracing::field::display(error));
                 }
-
-                commit_message(&consumer, kafka_message)?;
+                if let Err(error) = result {
+                    run_error = Some(error);
+                    break;
+                }
             }
         }
     }
 
-    Ok(())
+    match run_error {
+        Some(error) => Err(error),
+        None => Ok(()),
+    }
 }
