@@ -12,7 +12,7 @@ use agent_client_protocol::schema::v1::{
 use agent_fold::domain::model::{AuthorKind, MessageId};
 use agent_fold::domain::service::FoldedMessageService;
 use agent_runtime_protocol::domain::{
-    action::AgentAction,
+    action::{AgentAction, AgentActionId},
     schema::v0::{AcpMessage, SystemEvent, ToRuntimeMessage, ToServerMessage},
 };
 use agent_session::PROTOCOL_VERSION;
@@ -123,6 +123,7 @@ async fn complete_handshake(container: &ContainerMock) {
     agent.completes_initialize(InitializeResponse::new(PROTOCOL_VERSION));
     agent.wait_for_requests(already + 2).await;
     agent.opens_session(NewSessionResponse::new("acp-test"));
+    agent.completes_prompt().await;
 }
 
 async fn complete_resume(container: &ContainerMock) {
@@ -142,6 +143,73 @@ async fn complete_resume(container: &ContainerMock) {
         ClientRequest::ResumeSessionRequest(request) if request.session_id.to_string() == "acp-test"
     ));
     agent.resumes_session(ResumeSessionResponse::new());
+    agent.completes_prompt().await;
+}
+
+#[tokio::test]
+async fn shutdown_rejects_new_commands() {
+    let (service, _repo, _containers, _announcer, _runtimes) = harness();
+
+    service.shutdown().await;
+
+    assert!(matches!(
+        service
+            .execute(AgentSessionId::new(), HarnessCommand::Open(open_command()))
+            .await,
+        Err(HarnessError::ShuttingDown)
+    ));
+}
+
+#[tokio::test]
+async fn shutdown_cancels_an_active_command_worker() {
+    let (service, _repo, containers, _announcer, _runtimes) = harness();
+    let session_id = AgentSessionId::new();
+    let pending = service.execute(session_id, HarnessCommand::Open(open_command()));
+
+    while containers.spawned() == 0 {
+        tokio::task::yield_now().await;
+    }
+    service.shutdown().await;
+
+    assert!(matches!(
+        pending.await,
+        Err(HarnessError::CommandWorkerStopped(id)) if id == session_id
+    ));
+}
+
+#[tokio::test]
+async fn stopping_admission_rejects_new_work_and_drains_accepted_work() {
+    let (service, _repo, containers, _announcer, _runtimes) = harness();
+    let id = AgentSessionId::new();
+    let container = live_session(&service, &containers, id).await;
+    let agent = container.agent();
+
+    let prompt_a = service.execute(id, HarnessCommand::Deliver(forward_message("prompt a")));
+    agent.wait_for_requests(4).await;
+    prompt_a.await.expect("prompt a should be sent");
+    let prompt_b = service.execute(id, HarnessCommand::Deliver(forward_message("prompt b")));
+
+    service.stop_accepting();
+    assert!(matches!(
+        service
+            .execute(id, HarnessCommand::Deliver(forward_message("too late")))
+            .await,
+        Err(HarnessError::ShuttingDown)
+    ));
+
+    agent.completes_prompt().await;
+    agent.wait_for_requests(5).await;
+    agent.completes_prompt().await;
+    let (prompt_b, ()) = tokio::join!(prompt_b, service.drain());
+    prompt_b.expect("prompt b should drain after prompt a completes");
+    assert_eq!(
+        prompts(&agent),
+        [
+            vec![ContentBlock::from("@claude fix the failing test")],
+            vec![ContentBlock::from("prompt a")],
+            vec![ContentBlock::from("prompt b")],
+        ]
+    );
 }
 
 fn prompts(agent: &FakeAgent) -> Vec<Vec<ContentBlock>> {
@@ -306,6 +374,89 @@ async fn open_announces_while_the_container_is_still_booting() {
 }
 
 #[tokio::test]
+async fn stop_during_open_waits_for_open_to_finish() {
+    let (service, _repo, containers, _announcer, _runtimes) = harness();
+    let id = AgentSessionId::new();
+    let open = service.execute(id, HarnessCommand::Open(open_command()));
+    while containers.spawned() == 0 {
+        tokio::task::yield_now().await;
+    }
+    let container = containers
+        .container(id)
+        .expect("the opening container is findable");
+    let stop = service.execute(
+        id,
+        HarnessCommand::Deliver(DeliverAction::control(
+            AgentActionId::mint(),
+            ControlEvent {
+                action: AgentAction::Stop,
+                actor: Some(sender()),
+            },
+        )),
+    );
+    tokio::pin!(stop);
+
+    assert!(
+        tokio::time::timeout(std::time::Duration::from_millis(25), &mut stop)
+            .await
+            .is_err(),
+        "stop must remain queued while open owns the session worker"
+    );
+    assert!(
+        !container.sent().iter().any(|message| {
+            AgentAction::control_from_runtime(message) == Some(AgentAction::Stop)
+        }),
+        "stop must not run concurrently with open"
+    );
+
+    let (opened, ()) = tokio::join!(open, complete_handshake(&container));
+    opened.expect("open should finish before stop");
+    stop.await.expect("stop should run after open");
+    assert!(
+        container.sent().iter().any(|message| {
+            AgentAction::control_from_runtime(message) == Some(AgentAction::Stop)
+        })
+    );
+}
+
+#[tokio::test]
+async fn delete_during_open_waits_for_open_to_finish() {
+    let (service, repo, containers, _announcer, _runtimes) = harness();
+    let id = AgentSessionId::new();
+    let open = service.execute(id, HarnessCommand::Open(open_command()));
+    while containers.spawned() == 0 {
+        tokio::task::yield_now().await;
+    }
+    let container = containers
+        .container(id)
+        .expect("the opening container is findable");
+    let delete = service.execute(id, HarnessCommand::Delete);
+    tokio::pin!(delete);
+
+    assert!(
+        tokio::time::timeout(std::time::Duration::from_millis(25), &mut delete)
+            .await
+            .is_err(),
+        "delete must remain queued while open owns the session worker"
+    );
+    assert_eq!(
+        containers.torn_down(),
+        0,
+        "delete must not tear down a container that open still owns"
+    );
+    assert!(repo.get(id).await.is_ok(), "open's row must still exist");
+
+    let (opened, ()) = tokio::join!(open, complete_handshake(&container));
+    opened.expect("open should finish before delete");
+    delete.await.expect("delete should run after open");
+    assert_eq!(containers.torn_down(), 1);
+    assert!(
+        repo.get(id).await.is_err(),
+        "delete removes the session row"
+    );
+}
+
+#[tokio::test]
 async fn forward_to_a_live_session_reuses_the_transport() {
     let (service, _repo, containers, announcer, _runtimes) = harness();
     let command = open_command();
@@ -327,13 +478,13 @@ async fn forward_to_a_live_session_reuses_the_transport() {
     let (opened, container) = tokio::join!(open, drive);
     opened.expect("open should succeed");
 
-    service
-        .execute(
-            id,
-            HarnessCommand::Deliver(forward_message("and add a regression test")),
-        )
-        .await
-        .expect("forward to a live session should succeed");
+    let forward = service.execute(
+        id,
+        HarnessCommand::Deliver(forward_message("and add a regression test")),
+    );
+    let agent = container.agent();
+    let (result, ()) = tokio::join!(forward, agent.completes_prompt());
+    result.expect("forward to a live session should succeed");
 
     assert_eq!(containers.spawned(), 1, "no second container");
     assert_eq!(containers.resumed(), 0, "no resume for a live session");
@@ -454,6 +605,7 @@ async fn concurrent_forwards_share_one_session_recovery() {
             .expect("the resumed container is findable");
         complete_resume(&resumed).await;
         resumed.agent().wait_for_requests(4).await;
+        resumed.agent().completes_prompt().await;
         resumed
     };
 
@@ -667,16 +819,16 @@ async fn a_prompt_through_control_reaches_the_agent_without_announcing() {
     let container = live_session(&service, &containers, id).await;
     let announced_before = announcer.announced().len();
 
-    service
-        .control_event(
-            id,
-            ControlEvent {
-                action: AgentAction::prompt("and now the docs"),
-                actor: Some(sender()),
-            },
-        )
-        .await
-        .expect("prompting through control should succeed");
+    let prompted = service.control_event(
+        id,
+        ControlEvent {
+            action: AgentAction::prompt("and now the docs"),
+            actor: Some(sender()),
+        },
+    );
+    let agent = container.agent();
+    let (result, ()) = tokio::join!(prompted, agent.completes_prompt());
+    result.expect("prompting through control should succeed");
 
     assert_eq!(
         prompts(&container.agent()).len(),
@@ -691,21 +843,103 @@ async fn a_prompt_through_control_reaches_the_agent_without_announcing() {
 }
 
 #[tokio::test]
+async fn stop_overtakes_a_serialized_prompt_and_supersedes_it() {
+    let (service, _repo, containers, _announcer, _runtimes) = harness();
+    let id = AgentSessionId::new();
+    let container = live_session(&service, &containers, id).await;
+    let agent = container.agent();
+
+    let prompt_a = service.execute(id, HarnessCommand::Deliver(forward_message("prompt a")));
+    agent.wait_for_requests(4).await;
+    prompt_a.await.expect("prompt a should be sent");
+
+    let prompt_b = service.execute(id, HarnessCommand::Deliver(forward_message("prompt b")));
+    let stop = service.execute(
+        id,
+        HarnessCommand::Deliver(DeliverAction::control(
+            AgentActionId::mint(),
+            ControlEvent {
+                action: AgentAction::Stop,
+                actor: Some(sender()),
+            },
+        )),
+    );
+    let (prompt_b, stop) = tokio::time::timeout(std::time::Duration::from_secs(1), async {
+        tokio::join!(prompt_b, stop)
+    })
+    .await
+    .expect("stop should not wait for prompt a's response");
+
+    prompt_b.expect("prompt b was accepted before stop superseded it");
+    stop.expect("stop should reach the live session");
+    assert_eq!(
+        prompts(&agent),
+        [
+            vec![ContentBlock::from("@claude fix the failing test")],
+            vec![ContentBlock::from("prompt a")],
+        ],
+        "prompt b must never reach the agent"
+    );
+    assert!(
+        container.sent().iter().any(|message| {
+            AgentAction::control_from_runtime(message) == Some(AgentAction::Stop)
+        }),
+        "stop must be delivered while prompt a is unanswered"
+    );
+}
+
+#[tokio::test]
+async fn delete_overtakes_a_serialized_prompt_and_supersedes_it() {
+    let (service, repo, containers, _announcer, _runtimes) = harness();
+    let id = AgentSessionId::new();
+    let container = live_session(&service, &containers, id).await;
+    let agent = container.agent();
+
+    let prompt_a = service.execute(id, HarnessCommand::Deliver(forward_message("prompt a")));
+    agent.wait_for_requests(4).await;
+    prompt_a.await.expect("prompt a should be sent");
+
+    let prompt_b = service.execute(id, HarnessCommand::Deliver(forward_message("prompt b")));
+    let delete = service.execute(id, HarnessCommand::Delete);
+    let (prompt_b, delete) = tokio::time::timeout(std::time::Duration::from_secs(1), async {
+        tokio::join!(prompt_b, delete)
+    })
+    .await
+    .expect("delete should not wait for prompt a's response");
+
+    prompt_b.expect("prompt b was accepted before delete superseded it");
+    delete.expect("delete should complete");
+    assert_eq!(
+        prompts(&agent),
+        [
+            vec![ContentBlock::from("@claude fix the failing test")],
+            vec![ContentBlock::from("prompt a")],
+        ],
+        "prompt b must never reach the agent"
+    );
+    assert_eq!(containers.torn_down(), 1);
+    assert!(
+        repo.get(id).await.is_err(),
+        "delete removes the session row"
+    );
+}
+
+#[tokio::test]
 async fn compact_through_control_reaches_opencode_as_a_slash_command() {
     let (service, _repo, containers, _announcer, _runtimes) = harness();
     let id = AgentSessionId::new();
     let container = live_session(&service, &containers, id).await;
 
-    service
-        .control_event(
-            id,
-            ControlEvent {
-                action: AgentAction::Compact,
-                actor: Some(sender()),
-            },
-        )
-        .await
-        .expect("compaction should reach the running agent");
+    let compacted = service.control_event(
+        id,
+        ControlEvent {
+            action: AgentAction::Compact,
+            actor: Some(sender()),
+        },
+    );
+    let agent = container.agent();
+    let (result, ()) = tokio::join!(compacted, agent.completes_prompt());
+    result.expect("compaction should reach the running agent");
 
     assert_eq!(
         prompts(&container.agent()),
@@ -778,6 +1012,7 @@ async fn complete_bound_handshake(runtime: &ContainerMock) {
     agent.completes_initialize(InitializeResponse::new(PROTOCOL_VERSION));
     agent.wait_for_requests(2).await;
     agent.opens_session(NewSessionResponse::new("acp-test"));
+    agent.completes_prompt().await;
 }
 
 /// As [`complete_bound_handshake`], for a session the runtime is restoring.
@@ -800,6 +1035,7 @@ async fn complete_bound_resume(runtime: &ContainerMock) {
         ClientRequest::ResumeSessionRequest(request) if request.session_id.to_string() == "acp-test"
     ));
     agent.resumes_session(ResumeSessionResponse::new());
+    agent.completes_prompt().await;
 }
 
 /// Wait until a session has noticed that its transport ended.
@@ -912,9 +1148,10 @@ async fn a_bound_session_stays_on_its_connection_until_it_drops() {
 
     // Already bound: a second prompt goes straight down the same connection,
     // with no second handshake to drive.
-    prompt(&service, session.id, "and now the docs")
-        .await
-        .expect("a bound session needs no rebinding");
+    let prompted = prompt(&service, session.id, "and now the docs");
+    let agent = first.agent();
+    let (result, ()) = tokio::join!(prompted, agent.completes_prompt());
+    result.expect("a bound session needs no rebinding");
     assert_eq!(
         prompts(&first.agent()),
         ["fix the failing test", "and now the docs"]

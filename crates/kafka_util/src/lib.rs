@@ -116,6 +116,12 @@ pub fn consumer_span<M: Message>(message: &M, consumer_group: &'static str) -> t
     span
 }
 
+/// Marks a manually-created messaging span as failed.
+pub fn record_span_error(span: &tracing::Span, error: &(impl std::fmt::Display + ?Sized)) {
+    span.record("otel.status_code", "ERROR");
+    span.record("otel.status_description", tracing::field::display(error));
+}
+
 /// Failure to construct an environment-specific Kafka consumer.
 #[derive(Debug, thiserror::Error)]
 pub enum KafkaConsumerError {

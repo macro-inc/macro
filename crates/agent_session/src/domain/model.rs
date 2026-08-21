@@ -127,6 +127,10 @@ pub struct LogAppended {
 pub struct StoredAgentSessionLog {
     /// When the entry was appended to the log.
     pub created_at: DateTime<Utc>,
+    /// W3C parent identifying the trace active when this entry was persisted.
+    pub traceparent: Option<String>,
+    /// Optional W3C vendor trace state accompanying [`Self::traceparent`].
+    pub tracestate: Option<String>,
     /// The frame, exactly as the log stored it.
     pub entry: AgentSessionLog,
 }

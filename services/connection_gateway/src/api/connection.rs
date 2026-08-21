@@ -2,7 +2,9 @@ use crate::{
     config::Config,
     context::{ApiContext, AppState, AuthorizationService},
     model::{
-        connection::ConnectionContext, message::OutgoingMessage, tracking::EntityConnectionExt,
+        connection::ConnectionContext,
+        message::{OutgoingMessage, record_span_error},
+        tracking::EntityConnectionExt,
     },
 };
 use anyhow::Result;
@@ -16,7 +18,7 @@ use axum::{
     routing::get,
 };
 use futures::{
-    FutureExt,
+    FutureExt, Sink,
     sink::SinkExt,
     stream::{SplitSink, StreamExt},
 };
@@ -27,8 +29,13 @@ use model::user::UserContext;
 use model_entity::EntityType;
 use std::sync::Arc;
 use tokio::sync::mpsc::Receiver;
+use tracing::Instrument as _;
+use tracing_opentelemetry::OpenTelemetrySpanExt as _;
 
 mod messages;
+
+#[cfg(test)]
+mod test;
 
 pub fn router() -> Router<AppState> {
     Router::new().route("/", get(ws_handler))
@@ -137,9 +144,7 @@ pub async fn forwarder(
     mut receiver: Receiver<OutgoingMessage>,
 ) -> Result<()> {
     while let Some(message) = receiver.recv().await {
-        if let Ok(msg) = message.try_into()
-            && let Err(err) = sink.send(msg).await
-        {
+        if let Err(err) = send_outgoing_message(&mut sink, message).await {
             tracing::warn!(
                 error=?err,
                 "Failed to send message to WebSocket, client likely disconnected"
@@ -149,4 +154,45 @@ pub async fn forwarder(
     }
 
     Ok(())
+}
+
+pub(crate) async fn send_outgoing_message<S, E>(
+    sink: &mut S,
+    message: OutgoingMessage,
+) -> Result<()>
+where
+    S: Sink<AxumWebsocketMessage, Error = E> + Unpin,
+    E: std::error::Error + Send + Sync + 'static,
+{
+    let OutgoingMessage::Message(mut message) = message else {
+        return sink
+            .send(AxumWebsocketMessage::Text("pong".into()))
+            .await
+            .map_err(anyhow::Error::from);
+    };
+
+    let span = tracing::info_span!(
+        "connection_gateway.websocket_send",
+        otel.kind = "producer",
+        message_type = %message.message_type,
+        otel.status_code = tracing::field::Empty,
+        otel.status_description = tracing::field::Empty,
+    );
+    if let Some(parent) = message.remote_trace_context() {
+        let _ = span.set_parent(parent);
+    }
+
+    let result = async move {
+        message = message.with_current_trace_context();
+        let websocket_message = AxumWebsocketMessage::try_from(message)?;
+        sink.send(websocket_message)
+            .await
+            .map_err(anyhow::Error::from)
+    }
+    .instrument(span.clone())
+    .await;
+    if let Err(error) = &result {
+        record_span_error(&span, error);
+    }
+    result
 }

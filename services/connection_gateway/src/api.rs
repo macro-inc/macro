@@ -8,6 +8,8 @@ use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
 
 mod connection;
+#[cfg(test)]
+pub(crate) use connection::send_outgoing_message;
 mod entities;
 mod health;
 mod message;

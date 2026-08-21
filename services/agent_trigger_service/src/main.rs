@@ -3,18 +3,19 @@
 mod config;
 
 use agent_session::outbound::postgres::PgAgentSessionRepo;
+use agent_trigger::domain::processing::process_channel_event;
 use agent_trigger::domain::service::{AgentBotLookup, AgentTriggerService};
 use anyhow::Context as _;
 use bots::domain::models::BotId;
 use bots::domain::ports::BotRepo as _;
 use bots::outbound::pg_bots_repo::PgBotsRepo;
-use channels::domain::broker_events::{ChannelMacroEvent, ChannelTopicEvent};
+use channels::domain::broker_events::ChannelMacroEvent;
 use config::Config;
-use kafka_util::{GroupName, KafkaEventConsumer, consumer_span};
+use kafka_util::{GroupName, KafkaEventConsumer, consumer_span, record_span_error};
 use macro_entrypoint::{MacroEntrypoint, shutdown_signal};
 use macro_event_broker::{
-    KafkaConsumerAdapter, KafkaEventPublisher, MacroEvent as _, MacroEventBroker as _,
-    MacroEventBrokerService, MacroEventCollection as _, MacroEventConsumerService,
+    KafkaConsumerAdapter, KafkaEventPublisher, MacroEvent as _, MacroEventBrokerService,
+    MacroEventCollection as _, MacroEventConsumerService,
 };
 use rdkafka::consumer::CommitMode;
 use rdkafka::message::{BorrowedMessage, Message as _};
@@ -111,6 +112,7 @@ async fn run() -> anyhow::Result<()> {
                     let event = match message.decode_payload() {
                         Ok(DeclaredMacroEvent::ChannelMacroEvent(event)) => event,
                         Err(error) => {
+                            record_span_error(&tracing::Span::current(), &error);
                             tracing::error!(
                                 error = ?error,
                                 partition = kafka_message.partition(),
@@ -123,30 +125,14 @@ async fn run() -> anyhow::Result<()> {
                     };
                     tracing::Span::current().record("macro.event.id", tracing::field::display(event.event().event_id));
 
-                    let ChannelTopicEvent::MessagePosted(posted) = &event.event().event else {
-                        commit_message(&consumer, kafka_message)?;
-                        return Ok(());
-                    };
-                    tracing::Span::current().record("macro.event.type", "channel.message_posted");
-                    let yielded_events = trigger.evaluate(posted).await?;
-                    if yielded_events.is_empty() {
-                        tracing::debug!(message_id = %posted.message_id, "agent trigger yielded no event");
-                    }
-                    for yielded in yielded_events {
-                        let json = serde_json::to_string(yielded.event())?;
-                        tracing::info!(yielded_event = %json, "agent trigger yielded event");
-                        let publish = publisher.send_event(&yielded)?;
-                        publish.await.context("agent event publication task failed")??;
-                    }
-
+                    process_channel_event(&trigger, &publisher, &event).await?;
                     commit_message(&consumer, kafka_message)?;
                     Ok(())
                 }
                 .instrument(span.clone())
                 .await;
                 if let Err(error) = &result {
-                    span.record("otel.status_code", "ERROR");
-                    span.record("otel.status_description", tracing::field::display(error));
+                    record_span_error(&span, error);
                 }
                 if let Err(error) = result {
                     run_error = Some(error);

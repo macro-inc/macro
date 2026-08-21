@@ -65,6 +65,7 @@ outbound = [
   "dep:serde_json",
   "dep:share_permission_db_utils",
   "dep:sqlx",
+  "dep:tokio-util",
   "entity_access/ports",
   "list",
   "macro_user_id/sqlx",
@@ -78,7 +79,7 @@ entity_mutation = [
   "entity_access/ports",
   "ports",
 ]
-ports = ["dep:entity_access", "dep:tokio", "dep:tokio-util", "entity_access/ports"]
+ports = ["dep:entity_access", "dep:tokio", "entity_access/ports"]
 schema = ["channel_sender/schema", "dep:utoipa", "macro_user_id/schema"]
 
 [dependencies]

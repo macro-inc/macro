@@ -123,6 +123,8 @@ pub enum CloseReason {
     SendFailed,
     /// The runtime did not finish its ACP handshake before the deadline.
     HandshakeTimedOut,
+    /// The runtime did not finish the active turn before the deadline.
+    TurnTimedOut,
     /// The shell could not persist a log entry, and an unlogged session may
     /// not keep running: the log stream is the session's history.
     LogFailed,
@@ -136,6 +138,7 @@ impl std::fmt::Display for CloseReason {
             Self::TransportFailed => "the transport failed",
             Self::SendFailed => "an action could not be sent",
             Self::HandshakeTimedOut => "the ACP handshake timed out",
+            Self::TurnTimedOut => "the active turn timed out",
             Self::LogFailed => "a log entry could not be persisted",
         })
     }
@@ -202,6 +205,13 @@ pub enum Effect<Token> {
         token: Token,
         /// Whether the action reached the transport.
         result: Result<()>,
+    },
+    /// The response matching the active turn arrived.
+    TurnFinished {
+        /// Request id that exactly identifies the completed prompt.
+        request_id: RequestId,
+        /// ACP error message when the prompt failed.
+        error: Option<String>,
     },
     /// Tear the connection down. Always the final effect of its batch; the
     /// machine is [`RuntimeStatus::Dead`] once it appears.

@@ -20,7 +20,7 @@ use crate::domain::models::{
     UserName,
 };
 use crate::domain::side_effects::{
-    ChannelDocumentMention, ChannelNotificationEffect, ChannelRealtimeEffect,
+    ChannelBotTrigger, ChannelDocumentMention, ChannelNotificationEffect, ChannelRealtimeEffect,
     ThreadNotificationContext,
 };
 use crate::domain::{
@@ -1088,6 +1088,12 @@ pub trait ChannelEventHandler: Clone + Send + Sync + 'static {
 pub trait ChannelEventDispatcher: Send + Sync + 'static {
     /// Fire-and-forget dispatch of a channel event.
     fn dispatch(&self, event: ChannelEvent);
+}
+
+/// Dispatcher for bot-trigger candidates derived from channel messages.
+pub trait ChannelBotTriggerDispatcher: Clone + Send + Sync + 'static {
+    /// Enqueue a bot-trigger candidate for asynchronous handling.
+    fn dispatch(&self, trigger: ChannelBotTrigger);
 }
 
 /// Allows a boxed dispatcher to be used wherever a `ChannelEventDispatcher` is

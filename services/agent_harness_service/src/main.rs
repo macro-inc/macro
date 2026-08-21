@@ -11,7 +11,7 @@ mod bots_directory;
 mod config;
 mod trigger;
 
-use std::{sync::Arc, time::Duration};
+use std::{future::Future, pin::Pin, sync::Arc, time::Duration};
 
 use agent_fold::domain::service::FoldedMessageService;
 use agent_harness::domain::model::{HarnessCommand, SessionDefaults};
@@ -38,8 +38,9 @@ use anyhow::Context as _;
 use bot_id::BotId;
 use bots::outbound::pg_bots_repo::PgBotsRepo;
 use bots_directory::PgBotDirectory;
+use channels::SpawnedChannelEventDispatcher;
 use channels::domain::service::ChannelServiceImpl;
-use channels::domain::side_effects::{ChannelSideEffectService, SpawnedChannelEventDispatcher};
+use channels::domain::side_effects::ChannelSideEffectService;
 use channels::outbound::connection_gateway_realtime::ConnectionGatewayChannelRealtimePublisher;
 use channels::outbound::contacts_dispatcher::ContactsChannelDispatcher;
 use channels::outbound::notification_sender::NotificationChannelSender;
@@ -47,7 +48,7 @@ use channels::outbound::pg_channels_repo::PgChannelsRepo;
 use channels::outbound::pg_side_effect_context::PgChannelSideEffectContext;
 use config::{Config, Environment};
 use connection_gateway_client::ConnectionGatewayClient;
-use kafka_util::{GroupName, KafkaEventConsumer, consumer_span};
+use kafka_util::{GroupName, KafkaEventConsumer, consumer_span, record_span_error};
 use lexical_client::LexicalClient;
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_authorization::{
@@ -89,9 +90,14 @@ fn commit_message(consumer: &HarnessConsumer, message: &BorrowedMessage<'_>) -> 
         .map_err(|error| anyhow::anyhow!("failed to commit agent session offset: {error:?}"))
 }
 
-fn record_span_error(span: &tracing::Span, error: &(impl std::fmt::Display + ?Sized)) {
-    span.record("otel.status_code", "ERROR");
-    span.record("otel.status_description", tracing::field::display(error));
+type HarnessWork =
+    Pin<Box<dyn Future<Output = agent_harness::domain::error::Result<()>> + Send + 'static>>;
+
+struct PendingHarnessWork {
+    session_id: agent_session::domain::model::AgentSessionId,
+    span: tracing::Span,
+    work: HarnessWork,
+    description: &'static str,
 }
 
 #[tokio::main]
@@ -329,6 +335,7 @@ async fn run() -> anyhow::Result<()> {
     let mut shutdown = std::pin::pin!(shutdown_signal());
     let mut tasks = tokio::task::JoinSet::new();
     let mut run_error = None;
+    let mut trigger_finished = false;
     loop {
         tokio::select! {
             () = &mut shutdown => {
@@ -336,6 +343,7 @@ async fn run() -> anyhow::Result<()> {
                 break;
             }
             result = &mut trigger => {
+                trigger_finished = true;
                 run_error = Some(match result {
                     Ok(()) => anyhow::anyhow!("agent trigger stopped unexpectedly"),
                     Err(error) => anyhow::anyhow!("agent trigger task failed: {error}"),
@@ -351,84 +359,111 @@ async fn run() -> anyhow::Result<()> {
                     }
                 };
                 let span = consumer_span(message.inner(), AgentHarnessConsumerGroup::GROUP_NAME);
-                let kafka_message = message.inner();
-                let event = match message.decode_payload() {
-                    Ok(DeclaredMacroEvent::AgentSessionMacroEvent(event)) => event,
+                let processing = async {
+                    let kafka_message = message.inner();
+                    let event = match message.decode_payload() {
+                        Ok(DeclaredMacroEvent::AgentSessionMacroEvent(event)) => event,
+                        Err(error) => {
+                            record_span_error(&tracing::Span::current(), &error);
+                            tracing::error!(
+                                error = ?error,
+                                partition = kafka_message.partition(),
+                                offset = kafka_message.offset(),
+                                "dropping undecodable agent session event"
+                            );
+                            commit_message(&consumer, kafka_message)?;
+                            return Ok::<_, anyhow::Error>(None);
+                        }
+                    };
+                    tracing::Span::current()
+                        .record("macro.event.id", tracing::field::display(event.event().event_id));
+
+                    let routed = match route_agent_trigger(event.event().event.clone(), bot_id) {
+                        Ok(routed) => routed,
+                        Err(skipped) => {
+                            tracing::debug!(?skipped, "skipped an agent session event");
+                            commit_message(&consumer, kafka_message)?;
+                            return Ok(None);
+                        }
+                    };
+
+                    let pending = match routed {
+                        RoutedTrigger::Command(session_id, command) => {
+                            tracing::Span::current()
+                                .record("agent.session.id", tracing::field::display(session_id));
+                            let event_type = match &command {
+                                HarnessCommand::Open(_) => "agent_trigger.new",
+                                HarnessCommand::Deliver(_) => "agent_trigger.existing",
+                                HarnessCommand::Delete => "agent_trigger.delete",
+                            };
+                            tracing::Span::current().record("macro.event.type", event_type);
+                            let execution_span = tracing::info_span!(
+                                "harness.execute",
+                                agent.session.id = %session_id,
+                                agent.command.type = event_type,
+                                otel.status_code = tracing::field::Empty,
+                                otel.status_description = tracing::field::Empty,
+                            );
+                            // `execute` admits synchronously, so entering here is
+                            // what carries this child context through the queue.
+                            let execution = execution_span
+                                .in_scope(|| harness.execute(session_id, command));
+                            PendingHarnessWork {
+                                session_id,
+                                span: execution_span,
+                                work: Box::pin(execution),
+                                description: "executed an agent harness command",
+                            }
+                        }
+                        RoutedTrigger::Announce(session_id, prompt) => {
+                            tracing::Span::current()
+                                .record("agent.session.id", tracing::field::display(session_id));
+                            tracing::Span::current()
+                                .record("macro.event.type", "agent_trigger.announce");
+                            let execution_span = tracing::info_span!(
+                                "harness.announce",
+                                agent.session.id = %session_id,
+                                otel.status_code = tracing::field::Empty,
+                                otel.status_description = tracing::field::Empty,
+                            );
+                            let harness = harness.clone();
+                            PendingHarnessWork {
+                                session_id,
+                                span: execution_span,
+                                work: Box::pin(async move {
+                                    harness.announce_external_prompt(session_id, prompt).await
+                                }),
+                                description: "announced an external prompt",
+                            }
+                        }
+                    };
+
+                    // Intentionally at-most-once: admission precedes commit, but
+                    // long-running harness work is independent of Kafka afterward.
+                    commit_message(&consumer, kafka_message)?;
+                    Ok(Some(pending))
+                }
+                .instrument(span.clone())
+                .await;
+
+                let pending = match processing {
+                    Ok(pending) => pending,
                     Err(error) => {
                         record_span_error(&span, &error);
-                        tracing::error!(
-                            error = ?error,
-                            partition = kafka_message.partition(),
-                            offset = kafka_message.offset(),
-                            "dropping undecodable agent session event"
-                        );
-                        match commit_message(&consumer, kafka_message) {
-                            Ok(()) => continue,
-                            Err(error) => {
-                                run_error = Some(error);
-                                break;
-                            }
-                        }
+                        run_error = Some(error);
+                        break;
                     }
                 };
-                span.record("macro.event.id", tracing::field::display(event.event().event_id));
-
-                let routed = match route_agent_trigger(event.event().event.clone(), bot_id) {
-                    Ok(routed) => routed,
-                    Err(skipped) => {
-                        tracing::debug!(?skipped, "skipped an agent session event");
-                        match commit_message(&consumer, kafka_message) {
-                            Ok(()) => continue,
+                if let Some(PendingHarnessWork { session_id, span, work, description }) = pending {
+                    tasks.spawn(async move {
+                        match work.instrument(span.clone()).await {
+                            Ok(()) => tracing::info!(%session_id, description, "agent harness work completed"),
                             Err(error) => {
-                                run_error = Some(error);
-                                break;
+                                record_span_error(&span, &error);
+                                tracing::error!(error = ?error, %session_id, "agent harness work failed");
                             }
                         }
-                    }
-                };
-                // Intentionally at-most-once: keep ingestion simple and never
-                // let concurrent task completion commit Kafka offsets out of order.
-                if let Err(error) = commit_message(&consumer, kafka_message) {
-                    run_error = Some(error);
-                    break;
-                }
-                match routed {
-                    RoutedTrigger::Command(session_id, command) => {
-                        span.record("agent.session.id", tracing::field::display(session_id));
-                        span.record("macro.event.type", match &command {
-                            HarnessCommand::Open(_) => "agent_trigger.new",
-                            HarnessCommand::Deliver(_) => "agent_trigger.existing",
-                            HarnessCommand::Delete => "agent_trigger.delete",
-                        });
-                        let execution = harness.execute(session_id, command);
-                        tasks.spawn(async move {
-                            match execution.instrument(span.clone()).await {
-                                Ok(()) => tracing::info!(%session_id, "executed an agent harness command"),
-                                Err(error) => {
-                                    record_span_error(&span, &error);
-                                    tracing::error!(error = ?error, %session_id, "failed to execute an agent harness command");
-                                }
-                            }
-                        });
-                    }
-                    RoutedTrigger::Announce(session_id, prompt) => {
-                        span.record("agent.session.id", tracing::field::display(session_id));
-                        span.record("macro.event.type", "agent_trigger.announce");
-                        let harness = harness.clone();
-                        tasks.spawn(async move {
-                            match harness
-                                .announce_external_prompt(session_id, prompt)
-                                .instrument(span.clone())
-                                .await
-                            {
-                                Ok(()) => tracing::info!(%session_id, "announced an external prompt"),
-                                Err(error) => {
-                                    record_span_error(&span, &error);
-                                    tracing::error!(error = ?error, %session_id, "failed to announce an external prompt");
-                                }
-                            }
-                        });
-                    }
+                    });
                 }
             }
             Some(result) = tasks.join_next(), if !tasks.is_empty() => {
@@ -440,18 +475,22 @@ async fn run() -> anyhow::Result<()> {
     }
 
     http.abort();
-    trigger.abort();
+    let _ = http.await;
+    if !trigger_finished {
+        trigger.abort();
+        let _ = trigger.await;
+    }
+    harness.stop_accepting();
 
-    // Sandboxes go first so in-flight commands fail fast rather than block the
-    // drains below on a transport that is never going to answer.
-    container_shutdown.shutdown_all().await;
-
+    // Intake is stopped above. Give committed Kafka work and admitted HTTP
+    // commands a chance to finish before cancelling their workers.
     let drain_tasks = async {
         while let Some(result) = tasks.join_next().await {
             if let Err(error) = result {
                 tracing::error!(error = ?error, "agent harness task failed during shutdown");
             }
         }
+        harness.drain().await;
     };
     if tokio::time::timeout(TASK_DRAIN_TIMEOUT, drain_tasks)
         .await
@@ -461,6 +500,15 @@ async fn run() -> anyhow::Result<()> {
             timeout_seconds = TASK_DRAIN_TIMEOUT.as_secs(),
             "timed out waiting for agent harness commands to drain"
         );
+        harness.shutdown().await;
+        tasks.abort_all();
+        while let Some(result) = tasks.join_next().await {
+            if let Err(error) = result
+                && !error.is_cancelled()
+            {
+                tracing::error!(error = ?error, "agent harness task failed during cancellation");
+            }
+        }
     }
 
     if tokio::time::timeout(TASK_DRAIN_TIMEOUT, session_runtime.shutdown())
@@ -493,6 +541,8 @@ async fn run() -> anyhow::Result<()> {
         );
     }
 
+    // Container cleanup is final and has a single owner: all work that could
+    // still use a sandbox has now drained or been cancelled.
     let stop_failures = container_shutdown.shutdown_all().await;
     if stop_failures > 0 {
         tracing::error!(stop_failures, "some sandboxes failed to stop");

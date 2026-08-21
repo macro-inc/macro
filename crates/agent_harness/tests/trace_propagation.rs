@@ -43,18 +43,19 @@ fn session_of(containers: &MockContainerManager) -> AgentSessionId {
 
 /// Open a managed session and drive its handshake to completion.
 ///
-/// The `execute` call happens inside `caller` so the exported spans show
-/// whether the per-session worker stayed inside the caller's trace.
+/// Queue admission happens inside a dedicated child of `caller`, matching the
+/// Kafka adapter's consumer -> harness boundary.
 async fn open_a_session_under(caller: &tracing::Span) {
     let containers = MockContainerManager::new();
     let repo = InMemoryAgentSessionRepo::new();
     let runtimes: Arc<RuntimeRegistry<ContainerSender>> = RuntimeRegistry::new();
+    let sessions = AgentSessionServiceImpl::new(
+        repo.clone(),
+        FoldedMessageService::new(repo.clone()),
+        NoOpRealtime,
+    );
     let service = AgentHarnessService::new(
-        AgentSessionServiceImpl::new(
-            repo.clone(),
-            FoldedMessageService::new(repo.clone()),
-            NoOpRealtime,
-        ),
+        sessions.clone(),
         containers.clone(),
         AnnouncerMock::new(),
         Arc::clone(&runtimes),
@@ -64,7 +65,8 @@ async fn open_a_session_under(caller: &tracing::Span) {
             repo_url: "https://github.com/macro-inc/macro".to_owned(),
         },
     );
-    let open = caller
+    let execution = tracing::info_span!(parent: caller, "harness.execute");
+    let open = execution
         .in_scope(|| service.execute(AgentSessionId::new(), HarnessCommand::Open(open_command())));
     let drive = async {
         loop {
@@ -82,9 +84,12 @@ async fn open_a_session_under(caller: &tracing::Span) {
         agent.completes_initialize(InitializeResponse::new(PROTOCOL_VERSION));
         agent.wait_for_requests(2).await;
         agent.opens_session(NewSessionResponse::new("acp-test"));
+        agent.completes_prompt().await;
     };
     let (opened, ()) = tokio::join!(open, drive);
     opened.expect("open should succeed");
+    service.shutdown().await;
+    sessions.shutdown().await;
 }
 
 /// Record every span one harness open produces, plus the `harness.caller` span
@@ -99,7 +104,7 @@ async fn spans_for_one_open() -> Vec<SpanData> {
         .with(tracing_opentelemetry::layer().with_tracer(provider.tracer("test")));
 
     async {
-        let caller = tracing::info_span!("harness.caller");
+        let caller = tracing::info_span!("kafka.process");
         open_a_session_under(&caller).await;
     }
     .with_subscriber(subscriber)
@@ -132,10 +137,12 @@ async fn queued_prompt_keeps_the_open_trace_when_handshake_finishes_later() {
 #[tokio::test]
 async fn worker_spans_descend_from_the_span_the_caller_held() {
     let spans = spans_for_one_open().await;
-    let caller = span_named(&spans, "harness.caller");
+    let caller = span_named(&spans, "kafka.process");
+    let execute = span_named(&spans, "harness.execute");
     let open = span_named(&spans, "open");
 
-    assert_eq!(open.parent_span_id, caller.span_context.span_id());
+    assert_eq!(execute.parent_span_id, caller.span_context.span_id());
+    assert_eq!(open.parent_span_id, execute.span_context.span_id());
     for span in &spans {
         assert_eq!(
             span.span_context.trace_id(),

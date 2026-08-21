@@ -43,7 +43,6 @@ where
     /// Receives the next message from the underlying consumer.
     ///
     /// Call [`MessageWrapper::decode_payload`] to decode its declared event.
-    #[tracing::instrument(skip(self), err)]
     pub async fn recv<'a>(
         &'a self,
     ) -> Result<MessageWrapper<C::MessageType<'a>, M>, rootcause::Report> {
