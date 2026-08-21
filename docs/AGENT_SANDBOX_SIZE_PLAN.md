@@ -26,7 +26,8 @@ The wanted product is three named tiers (`small`, `default`, `large`), with `def
 4. **Size is snapshotted onto the session at spawn and is immutable for that session.** Changing size does not resize a live sandbox in v1. Resume reattaches to the existing box. A new `@coder` thread gets a new session and can use a new size.
 5. **User default drives mention spawn.** `@coder` has no settings chrome. The harness reads the mentioning user's default size (falling back to `default`) and writes it onto the new session before `spawn`.
 6. **Sandbox size is not an `AgentAction`.** `AgentAction` is ACP (`prompt`, `set_model`, `compact`, `stop`). Size is harness/container policy. Do not send it to the agent. Use a dedicated settings endpoint for the user default, and a field on the session response for the size this session was spawned with.
-7. **Policy lives in the harness domain.** Inbound parses the tier. Domain validates it, resolves the user default, and puts it on `SpawnContainer`. Outbound adapters only map a validated size onto provider fields. Hexagonal boundary: no Daytona/Namespace types in domain, no size policy in axum handlers or the web picker.
+7. **Every authenticated user may pick any tier.** No plan gating, no locks, no team-admin override, no extra receipts. `GET`/`PUT` the caller's own default; mention spawn already knows the sender. Handlers do not branch on who may use `large`.
+8. **Policy lives in the harness domain.** Inbound parses the tier. Domain validates the name, resolves the user default, and puts it on `SpawnContainer`. Outbound adapters only map a validated size onto provider fields. Hexagonal boundary: no Daytona/Namespace types in domain, no size policy in axum handlers or the web picker.
 
 ## Goals
 
@@ -40,7 +41,8 @@ The wanted product is three named tiers (`small`, `default`, `large`), with `def
 ## Non-goals (v1)
 
 - Mid-session Daytona `resize`.
-- Per-team or per-org size caps beyond "only these three tiers".
+- Per-team or per-org size caps, plan gating, or paywalled `large`.
+- Extra authorization beyond "the caller sets their own default."
 - Billing, metering, or showing remaining Daytona quota in the UI.
 - GPU tiers.
 - Letting external (non-managed) agent runtimes declare a size. They bring their own machine.
@@ -57,7 +59,7 @@ Units match Daytona: CPU cores, memory GiB, disk GiB.
 | `default` | 8    | 16  | 96   | The new Macro Coder size                   |
 | `large`   | 16   | 32  | 200  | Confirm against Daytona quota before ship  |
 
-Namespace has no disk dimension. It gets vCPU + RAM only (`virtual_cpu`, `memory_megabytes` = RAM GiB × 1024). Disk stays whatever Namespace gives the instance.
+Namespace create gets the same tier, mapped onto its shape (`virtual_cpu`, `memory_megabytes` = RAM GiB × 1024). It has no disk field today, so disk is Daytona-only until Namespace exposes one.
 
 If the live Daytona quota cannot place `large`, ship `small` + `default` only and keep `Large` out of the public enum until it can.
 
@@ -73,19 +75,13 @@ If the live Daytona quota cannot place `large`, ship `small` + `default` only an
 
 ### User default
 
-- Owner-only. Stored server-side, not in `localStorage` — mention spawn is backend-only and would ignore a browser preference.
+- Stored server-side in `user_agent_sandbox_size`, not in `localStorage` — mention spawn is backend-only and would ignore a browser preference.
+- Any signed-in user can read and write **their own** row. All three sizes are available. No extra authz layer.
 - New endpoint, not `POST /agent-sessions` (that route still rejects managed bots) and not `/control` (that route is ACP).
 - Suggested shape:
   - `GET /agent-sandbox-size` → `{ size: "small" | "default" | "large" }`
   - `PUT /agent-sandbox-size` `{ size }` → same
 - First-time users have no row; reads return `default`.
-
-### Existing session UI
-
-- Session header shows the size this session was spawned with (read-only pill).
-- The same control also sets "for new sessions" by calling `PUT /agent-sandbox-size`.
-- Copy: changing the picker does **not** resize the open session. Next `@coder` thread uses the new size.
-- No size picker in the mention typeahead.
 
 ### Resume / idle stop
 
@@ -142,15 +138,11 @@ CREATE TABLE user_agent_sandbox_size (
 );
 ```
 
-Port: `AgentSandboxSizePreference` with `get(user) -> SandboxSize` and `set(user, size)`. Missing row → `Default`.
+Port: `AgentSandboxSizePreference` with `get(user) -> SandboxSize` and `set(user, size)`. Missing row → `Default`. The authenticated user is the `user_id`; do not add role checks, receipts, or per-tier permission.
 
 ### Authorization
 
-- Reading a session's size: existing session view receipt.
-- Setting the user default: the authenticated user, for themselves only. No team-admin override in v1.
-- Spawn path is the mention trigger; it already trusts the observed sender. It must not take a size from the message body.
-
-Inbound adapters mint identity / receipts and forward. They do not branch on "is this user allowed to pick large". If we later cap `large` per plan, that check belongs in the harness domain service.
+None beyond the existing session view extractor and "this is my user id." Every user can pick `small`, `default`, or `large`. Spawn uses the observed mention sender; it must not take a size from the message body.
 
 ## Provider mapping
 
@@ -172,7 +164,16 @@ Verify before the UI ships: one `POST /sandbox` with the existing snapshot plus 
 
 ### Namespace
 
-Replace the hardcoded `virtual_cpu: 2, memory_megabytes: 4096` with the tier mapping. No disk field.
+Same idea as Daytona: create-time resources from the tier, not a hardcoded shape.
+
+Replace
+
+```rust
+virtual_cpu: 2,
+memory_megabytes: 4096,
+```
+
+with the mapped `virtual_cpu` and `memory_megabytes` for `SpawnContainer.size`. Namespace's `ShapeRequest` has no disk field, so do not invent one. If Namespace adds disk later, thread `disk_gib` through the same mapping.
 
 ### coding-agent-worker
 
@@ -187,11 +188,56 @@ Out of scope unless it is still used to boot Macro Coder. Production harness is 
 
 ## UI
 
-- Feature stays behind `ENABLE_CHAT_V3_AGENTS`.
-- Read-only size on `AgentSplitHeader` (or a small pill next to the harness title).
-- Picker for the user default in that same header: Small / Default / Large, with RAM/disk in the menu subtitle so the names mean something.
-- Changing the picker `PUT`s the user default and toasts that it applies to new sessions.
-- Composer (`AgentInput`) stays a prompt box. Do not copy Macro AI's model picker into ACP control for this.
+Small composer control, same family as Macro AI's `ModelSelector` — not a header setting, not in the `@` mention typeahead.
+
+`AgentInput` today is a `Surface` with the editor and a send/stop button in the bottom-right. Add a ghost `Dropdown` to the left of send, mirroring `ChatInput`'s right-controls cluster.
+
+### Closed
+
+```
+┌──────────────────────────────────────────────────────┐
+│  Message the agent                                   │
+│                           [Default ▾]  (send)        │
+└──────────────────────────────────────────────────────┘
+```
+
+Trigger: `Dropdown.Trigger` `variant="ghost"` `size="sm"`, `text-xs`, caret, no CPU icon required. Label is the **user default** (`Small` / `Default` / `Large`), not raw resources.
+
+When the editor wraps past one line, the chip stays bottom-right with send, same as ChatInput.
+
+### Open
+
+```
+                              ┌──────────────────────────┐
+                              │ Small                    │
+                              │ 2 vCPU · 4 GB · 20 GB    │
+                              │ ✓ Default                │
+                              │ 8 vCPU · 16 GB · 96 GB   │
+                              │ Large                    │
+                              │ 16 vCPU · 32 GB · 200 GB │
+                              │                          │
+                              │ Applies to new @coder    │
+                              │ sessions                 │
+                              └──────────────────────────┘
+┌──────────────────────────────────────────────────────┐
+│  Message the agent                                   │
+│                           [Default ▾]  (send)        │
+└──────────────────────────────────────────────────────┘
+```
+
+All three rows are always enabled. No lock icons, no paywall, no "unavailable." Checkmark on the current user default.
+
+Footer copy is required: picking a size does not resize the open sandbox. `PUT /agent-sandbox-size`, toast on success ("New @coder sessions will use Large").
+
+If this session's snapshotted size differs from the user default, the trigger can stay as the default (what you will get next) rather than the current session. Optional muted line under the footer: `This session: Default`. Skip that if it feels noisy; the session response still has `sandboxSize` for later.
+
+### Component split
+
+- `apps/web/src/features/block-agent/ui/SandboxSizeSelector.tsx` — pure: `size`, `onSelect`, options hardcoded. Reuse `@ui` `Dropdown` like `ModelSelector`.
+- `AgentInput` grows an optional `size` / `onSizeSelect` slot in the right-controls cluster. Keep the ui/ component free of queries.
+- `AgentComposer` loads `GET /agent-sandbox-size` (fallback `default`) and `PUT`s on select.
+
+No picker on `AgentSplitHeader`. No mention-typeahead control.
 
 ## Phasing
 
@@ -212,14 +258,14 @@ Out of scope unless it is still used to boot Macro Coder. Production harness is 
 
 ### 3. UI picker
 
-- Header pill + default-size menu.
+- `SandboxSizeSelector` on `AgentInput`, wired from `AgentComposer`.
 - Generated client from phase 2.
-- Copy that this session does not resize.
+- Footer copy + toast that this session does not resize.
 
 ### 4. Later (not this plan)
 
 - Daytona `resize` for CPU/RAM on a live session (disk grow-only).
-- Team default / plan-gated `large`.
+- Team default.
 - "Restart this session at a new size" (teardown + new sandbox; loses the live workspace unless we snapshot first).
 
 ## Testing
@@ -227,7 +273,7 @@ Out of scope unless it is still used to boot Macro Coder. Production harness is 
 - `cargo test -p agent_harness` for spawn mapping, preference fallback, and Daytona request body.
 - `cargo test -p agent_session` for the new column on create/get fixtures.
 - SQLX: `just prepare_db` after the migration, from the repo root, with `SQLX_OFFLINE` unset.
-- Web: component test that the picker calls `PUT` and does not call session control.
+- Web: `SandboxSizeSelector` test that every tier is enabled; composer test that select calls `PUT` and does not call session `/control`.
 - Manual: one real Daytona create per tier against the quota (phase 1 spike for override; phase 2 for `small` vs `default`).
 
 ## Risks
@@ -248,5 +294,7 @@ Out of scope unless it is still used to boot Macro Coder. Production harness is 
 - `crates/agent_session/src/domain/model.rs` + postgres outbound — `sandbox_size` column
 - `crates/macro_db_client/migrations/` — session column + `user_agent_sandbox_size`
 - `crates/agent_session/src/inbound/axum_router.rs` — response field; new default-size handlers (or a small harness inbound module)
-- `apps/web/src/features/block-agent/component/AgentSplitHeader.tsx` — pill + picker
+- `apps/web/src/features/block-agent/ui/SandboxSizeSelector.tsx` — dropdown
+- `apps/web/src/features/block-agent/ui/AgentInput.tsx` — right-controls slot next to send
+- `apps/web/src/features/block-agent/component/AgentComposer.tsx` — GET/PUT default size
 - Generated OpenAPI / SDK clients after the new routes
