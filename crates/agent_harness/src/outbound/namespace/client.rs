@@ -8,7 +8,6 @@ use super::types::{CommandOutput, ContainerSpec, Instance, InstanceId, Namespace
 
 const COMPUTE_SERVICE: &str = "namespace.cloud.compute.v1beta.ComputeService";
 const COMMAND_SERVICE: &str = "namespace.cloud.compute.v1beta.CommandService";
-const REQUEST_TIMEOUT: Duration = Duration::from_secs(310);
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -178,10 +177,7 @@ impl NamespaceClient {
     #[must_use]
     pub fn new(api_url: String, token: NamespaceToken) -> Self {
         Self {
-            http: reqwest::Client::builder()
-                .timeout(REQUEST_TIMEOUT)
-                .build()
-                .expect("static Namespace HTTP client configuration should be valid"),
+            http: reqwest::Client::new(),
             base: api_url.trim_end_matches('/').to_owned(),
             token,
         }

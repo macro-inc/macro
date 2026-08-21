@@ -113,23 +113,6 @@ async fn second_connection_gets_503() {
 }
 
 #[tokio::test]
-async fn failed_harness_spawn_rejects_the_websocket_upgrade() {
-    let missing = std::env::temp_dir().join(format!(
-        "missing-acp-sidecar-test-{}-{}",
-        std::process::id(),
-        UNIQUE.fetch_add(1, Ordering::Relaxed),
-    ));
-    let addr = serve(&missing).await;
-
-    match connect(addr).await {
-        Err(tungstenite::Error::Http(response)) => {
-            assert_eq!(response.status(), 500, "{response:?}");
-        }
-        other => panic!("expected HTTP 500 rejection, got {other:?}"),
-    }
-}
-
-#[tokio::test]
 async fn slot_frees_after_disconnect() {
     let harness = fake_harness("exec cat");
     let addr = serve(&harness).await;

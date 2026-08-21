@@ -7,8 +7,6 @@
 //! stream. This type is that step: it wraps and unwraps `Acp` variants, and
 //! originates the one [`SystemEvent`] the domain acts on.
 
-use std::time::Duration;
-
 use agent_client_protocol::RawJsonRpcMessage;
 use agent_runtime_protocol::domain::ports::{Transport, TransportError, TransportSender};
 use agent_runtime_protocol::domain::schema::v0::{
@@ -24,8 +22,6 @@ use tracing::instrument::WithSubscriber as _;
 
 #[cfg(test)]
 mod test;
-
-const WEBSOCKET_SEND_TIMEOUT: Duration = Duration::from_secs(30);
 
 /// A [`Transport`] carrying the runtime protocol over a sidecar's ACP socket.
 ///
@@ -170,19 +166,10 @@ async fn pump<Socket, Observer>(
                     span.record("rpc.system.name", "jsonrpc");
                     span.record("rpc.method", method);
                 }
-                let result = match tokio::time::timeout(
-                    WEBSOCKET_SEND_TIMEOUT,
-                    send.instrument(span.clone()),
-                )
-                .await
-                {
-                    Ok(Ok(())) => Ok(()),
-                    Ok(Err(error)) => Err(format!("sending an ACP websocket frame failed: {error}")),
-                    Err(_) => Err(format!(
-                        "sending an ACP websocket frame timed out after {} seconds",
-                        WEBSOCKET_SEND_TIMEOUT.as_secs()
-                    )),
-                };
+                let result = send
+                    .instrument(span.clone())
+                    .await
+                    .map_err(|error| format!("sending an ACP websocket frame failed: {error}"));
                 if let Err(error) = result {
                     span.record("otel.status_code", "ERROR");
                     span.record("otel.status_description", tracing::field::display(&error));

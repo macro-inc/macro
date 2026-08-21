@@ -115,6 +115,7 @@ impl<P: EventPublisher, S: Spawner> MacroEventBroker for MacroEventBrokerService
                     tracing::error!(
                         error = ?error,
                         topic,
+                        key = %key,
                         "failed to publish event",
                     );
                 })

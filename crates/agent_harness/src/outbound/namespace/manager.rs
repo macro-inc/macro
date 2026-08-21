@@ -76,14 +76,10 @@ impl NamespaceContainerManager {
             .create_ingress(&instance.id, provision::SIDECAR_PORT)
             .await
             .map_err(unavailable)?;
-        let socket = tokio::time::timeout(
-            provision::PING_TIMEOUT,
-            dial_sidecar(&sidecar_url)
-                .instrument(tracing::info_span!("agent.container.websocket_connect")),
-        )
-        .await
-        .map_err(|_| HarnessError::Container("sidecar WebSocket connection timed out".to_owned()))?
-        .map_err(unavailable)?;
+        let socket = dial_sidecar(&sidecar_url)
+            .instrument(tracing::info_span!("agent.container.websocket_connect"))
+            .await
+            .map_err(unavailable)?;
 
         Ok(NamespaceContainer {
             instance: Arc::new(instance),
