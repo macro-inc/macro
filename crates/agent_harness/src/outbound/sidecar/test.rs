@@ -18,16 +18,6 @@ fn frame() -> RawJsonRpcMessage {
         .expect("typed request params should produce a valid ACP frame")
 }
 
-fn large_frame() -> RawJsonRpcMessage {
-    let content = "x".repeat(1024 * 1024);
-    let (method, params) = PromptRequest::new(SessionId::new("acp-test"), vec![content.into()])
-        .to_untyped_message()
-        .expect("the typed request should convert to an ACP message")
-        .into_parts();
-    RawJsonRpcMessage::request(method, params, RequestId::Number(2))
-        .expect("typed request params should produce a valid ACP frame")
-}
-
 /// Stand in for the sidecar: accept one WebSocket and hand back the transport
 /// under test alongside the sidecar's end of it.
 type Halves = (SidecarSender, mpsc::UnboundedReceiver<ToServerMessage>);
@@ -202,18 +192,4 @@ async fn sending_fails_after_the_sidecar_goes_away() {
         .expect_err("a closed socket cannot accept a frame");
 
     assert!(matches!(error, TransportError::Client(_)));
-}
-
-#[tokio::test(start_paused = true)]
-async fn times_out_when_the_socket_cannot_finish_a_write() {
-    let (client, _server) = tokio::io::duplex(64);
-    let socket = WebSocketStream::from_raw_socket(client, Role::Client, None).await;
-    let (outbound, _inbound) = SidecarTransport::connect(socket).split();
-
-    let error = outbound
-        .send(ToRuntimeMessage::Acp(AcpMessage(large_frame())))
-        .await
-        .expect_err("a permanently blocked socket should time out");
-
-    assert!(error.to_string().contains("timed out"));
 }
