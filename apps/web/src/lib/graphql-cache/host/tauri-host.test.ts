@@ -82,31 +82,65 @@ describe('createTauriCacheHost', () => {
     host.dispose();
   });
 
-  it('reads selected records with fragment and cursor arguments', async () => {
-    const page = { records: [], nextCursor: null };
+  it('projects selected records by explicit key', async () => {
+    const records = [
+      {
+        recordKey: 'GraphqlSoupDocument:item-1',
+        record: { id: 'item-1' },
+      },
+    ];
     invokeMock.mockImplementation((command: string) =>
-      Promise.resolve(command === 'graphql_cache_read_records' ? page : null)
+      Promise.resolve(
+        command === 'graphql_cache_read_records_by_keys' ? records : null
+      )
     );
     const host = createTauriCacheHost({ scope: 'scope-1' });
-    const cursor = 'cursor-1';
 
     await expect(
-      host.readRecords({
-        document: 'fragment Item on GraphqlSoupItem { id }',
+      host.readRecordsByKeys({
+        document: 'fragment Item on GraphqlSoupDocument { id }',
         fragmentName: 'Item',
-        cursor,
+        keys: ['GraphqlSoupDocument:item-1'],
+      })
+    ).resolves.toEqual(records);
+    expect(invokeMock).toHaveBeenCalledWith(
+      'graphql_cache_read_records_by_keys',
+      {
+        document: 'fragment Item on GraphqlSoupDocument { id }',
+        fragmentName: 'Item',
+        keys: ['GraphqlSoupDocument:item-1'],
+      }
+    );
+  });
+
+  it('searches the compact native projection with the same typed request', async () => {
+    const page = { documents: [], nextCursor: null };
+    invokeMock.mockImplementation((command: string) =>
+      Promise.resolve(command === 'graphql_cache_search' ? page : null)
+    );
+    const host = createTauriCacheHost({ scope: 'scope-1' });
+
+    await expect(
+      host.search({
+        profile: 'quick-access-v1',
+        buckets: ['document'],
+        query: 'plan',
         limit: 25,
+        nowMs: 123,
       })
     ).resolves.toEqual(page);
-    expect(invokeMock).toHaveBeenCalledWith('graphql_cache_read_records', {
-      document: 'fragment Item on GraphqlSoupItem { id }',
-      fragmentName: 'Item',
-      cursor,
-      limit: 25,
+    expect(invokeMock).toHaveBeenCalledWith('graphql_cache_search', {
+      request: {
+        profile: 'quick-access-v1',
+        buckets: ['document'],
+        query: 'plan',
+        limit: 25,
+        nowMs: 123,
+      },
     });
   });
 
-  it('sends writes with origin op id and identity', async () => {
+  it('sends writes with origin and dependency registration', async () => {
     const host = createTauriCacheHost({ scope: 'scope-1' });
     const writeResult = { changed: ['A:1'], affectedOps: [], reset: false };
     invokeMock.mockImplementation((command: string) =>
@@ -115,17 +149,60 @@ describe('createTauriCacheHost', () => {
 
     const result = await host.writeQuery({
       opKey: 3,
+      registerDependencies: true,
       query: '{ x }',
       data: { x: 1 },
       identity: 'user-1',
+      entityResolvers: [
+        {
+          parentType: 'GraphqlUser',
+          fieldName: 'emailThread',
+          targetType: 'GraphqlSoupEmailThread',
+          argumentPath: ['input', 'threadId'],
+        },
+      ],
     });
     expect(result).toEqual(writeResult);
     expect(invokeMock).toHaveBeenCalledWith('graphql_cache_write', {
       originOpId: `${host.clientId}:3`,
+      registration: {
+        opId: `${host.clientId}:3`,
+        entityResolvers: [
+          {
+            parentType: 'GraphqlUser',
+            fieldName: 'emailThread',
+            targetType: 'GraphqlSoupEmailThread',
+            argumentPath: ['input', 'threadId'],
+          },
+        ],
+      },
       query: '{ x }',
       operationName: undefined,
       variables: undefined,
       data: { x: 1 },
+      identity: 'user-1',
+    });
+  });
+
+  it('returns only the native hydration projection', async () => {
+    const host = createTauriCacheHost({ scope: 'scope-1' });
+    const hydration = { kind: 'data' as const, data: { cursor: 'next' } };
+    invokeMock.mockImplementation((command: string) =>
+      Promise.resolve(command === 'graphql_cache_hydrate' ? hydration : null)
+    );
+
+    await expect(
+      host.hydrateQuery({
+        query: 'query Backfill { items @cacheOnly { id } cursor }',
+        data: { items: [{ id: '1' }], cursor: 'next' },
+        identity: 'user-1',
+      })
+    ).resolves.toEqual(hydration);
+    expect(invokeMock).toHaveBeenCalledWith('graphql_cache_hydrate', {
+      query: 'query Backfill { items @cacheOnly { id } cursor }',
+      operationName: undefined,
+      variables: undefined,
+      data: { items: [{ id: '1' }], cursor: 'next' },
       identity: 'user-1',
     });
   });

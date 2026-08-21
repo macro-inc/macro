@@ -14,6 +14,7 @@ macro_rules! secret {
 secret!(AWS_ACCESS_KEY);
 secret!(AWS_SECRET_ACCESS_KEY);
 secret!(CLOUDFLARE_API_TOKEN);
+secret!(DAYTONA_API_KEY);
 secret!(DD_API_KEY);
 secret!(DD_APP_KEY);
 secret!(DOPPLER_PREVIEW_TOKEN);

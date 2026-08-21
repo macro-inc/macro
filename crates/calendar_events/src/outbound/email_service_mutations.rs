@@ -21,6 +21,7 @@ use crate::domain::{
     },
     ports::{
         CalendarDeletionScope, CalendarMutationError, CalendarMutationService, CalendarRsvpScope,
+        CalendarUpdateScope,
     },
 };
 
@@ -123,6 +124,7 @@ fn error_from_response(status: StatusCode, body: Option<String>) -> CalendarMuta
     };
     match error.code.as_str() {
         "not_found" => CalendarMutationError::NotFound,
+        "occurrence_not_found" => CalendarMutationError::OccurrenceNotFound,
         "read_only" => CalendarMutationError::ReadOnly,
         "no_writable_calendar" => CalendarMutationError::NoWritableCalendar,
         "not_attendee" => CalendarMutationError::NotAttendee,
@@ -173,7 +175,13 @@ fn create_body(
 }
 
 /// Wire body for an event patch, matching `UpdateCalendarEventRequest`.
-fn update_body(patch: &CalendarEventPatch) -> serde_json::Value {
+fn update_body(patch: &CalendarEventPatch, scope: &CalendarUpdateScope) -> serde_json::Value {
+    let (scope_name, recurrence_id) = match scope {
+        CalendarUpdateScope::All => ("all", None),
+        CalendarUpdateScope::ThisEvent { recurrence_id } => {
+            ("this_event", Some(recurrence_id.as_str()))
+        }
+    };
     serde_json::json!({
         "title": patch.title,
         "description": patch.description,
@@ -188,6 +196,8 @@ fn update_body(patch: &CalendarEventPatch) -> serde_json::Value {
         "transparency": patch.transparency,
         "reminders": patch.reminders,
         "conference": patch.conference,
+        "scope": scope_name,
+        "recurrenceId": recurrence_id,
     })
 }
 
@@ -274,6 +284,7 @@ impl CalendarMutationService for EmailServiceCalendarMutations {
         requester_id: &str,
         event_id: Uuid,
         patch: CalendarEventPatch,
+        scope: CalendarUpdateScope,
     ) -> Result<CalendarEvent, CalendarMutationError> {
         self.event_from(
             self.request(
@@ -281,7 +292,7 @@ impl CalendarMutationService for EmailServiceCalendarMutations {
                 &format!("/calendar/events/{event_id}"),
                 requester_id,
             )
-            .json(&update_body(&patch)),
+            .json(&update_body(&patch, &scope)),
         )
         .await
     }

@@ -21,6 +21,8 @@ import {
 const BASE_NAME = pulumi.getProject();
 const REPO_ROOT = '../../..';
 
+const MICROSOFT_TOKEN_KMS_ACTIONS = ['kms:GenerateDataKey', 'kms:Decrypt'];
+
 export const SERVICE_DOMAIN_NAME = `auth-service${
   stack === 'prod' ? '' : `-${stack}`
 }.${BASE_DOMAIN}`;
@@ -41,6 +43,7 @@ type Args = {
   healthCheckPath: string;
   tags: { [key: string]: string };
   queueArns: pulumi.Output<string>[];
+  microsoftTokenKmsDeletionWindowInDays: number;
 };
 
 export class AuthenticationService extends pulumi.ComponentResource {
@@ -70,6 +73,7 @@ export class AuthenticationService extends pulumi.ComponentResource {
       tags,
       secretKeyArns,
       queueArns,
+      microsoftTokenKmsDeletionWindowInDays,
     }: Args,
     opts?: pulumi.ComponentResourceOptions
   ) {
@@ -158,6 +162,80 @@ export class AuthenticationService extends pulumi.ComponentResource {
           queuePolicy.arn,
           getKafkaClusterPolicy(),
         ],
+      },
+      { parent: this }
+    );
+
+    const accountRootArn = pulumi.interpolate`arn:aws:iam::${aws.getCallerIdentityOutput().accountId}:root`;
+    const microsoftTokenKmsKeyPolicy = aws.iam.getPolicyDocumentOutput({
+      statements: [
+        {
+          sid: 'AllowAccountKeyAdministration',
+          effect: 'Allow',
+          principals: [{ type: 'AWS', identifiers: [accountRootArn] }],
+          actions: [
+            'kms:CancelKeyDeletion',
+            'kms:Create*',
+            'kms:Delete*',
+            'kms:Describe*',
+            'kms:Disable*',
+            'kms:Enable*',
+            'kms:Get*',
+            'kms:List*',
+            'kms:Put*',
+            'kms:Revoke*',
+            'kms:ScheduleKeyDeletion',
+            'kms:TagResource',
+            'kms:UntagResource',
+            'kms:Update*',
+          ],
+          resources: ['*'],
+        },
+        {
+          sid: 'AllowAuthenticationServiceTokenEncryption',
+          effect: 'Allow',
+          principals: [{ type: 'AWS', identifiers: [this.role.arn] }],
+          actions: MICROSOFT_TOKEN_KMS_ACTIONS,
+          resources: ['*'],
+        },
+      ],
+    });
+
+    const microsoftTokenKmsKey = new aws.kms.Key(
+      `${BASE_NAME}-microsoft-token-key`,
+      {
+        description: `Microsoft refresh-token envelope key for ${stack}`,
+        deletionWindowInDays: microsoftTokenKmsDeletionWindowInDays,
+        enableKeyRotation: true,
+        policy: microsoftTokenKmsKeyPolicy.json,
+        tags: this.tags,
+      },
+      { parent: this, protect: stack === 'prod' }
+    );
+
+    new aws.kms.Alias(
+      `${BASE_NAME}-microsoft-token-key-alias`,
+      {
+        name: `alias/${BASE_NAME}-microsoft-token-${stack}`,
+        targetKeyId: microsoftTokenKmsKey.keyId,
+      },
+      { parent: this }
+    );
+
+    new aws.iam.RolePolicy(
+      `${BASE_NAME}-microsoft-token-kms-policy`,
+      {
+        role: this.role.id,
+        policy: {
+          Version: '2012-10-17',
+          Statement: [
+            {
+              Action: MICROSOFT_TOKEN_KMS_ACTIONS,
+              Resource: microsoftTokenKmsKey.arn,
+              Effect: 'Allow',
+            },
+          ],
+        },
       },
       { parent: this }
     );

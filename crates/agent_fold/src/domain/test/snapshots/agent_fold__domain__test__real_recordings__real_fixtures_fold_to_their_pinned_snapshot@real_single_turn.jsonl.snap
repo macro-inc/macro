@@ -1,0 +1,44 @@
+---
+source: crates/agent_fold/src/domain/test/real_recordings.rs
+assertion_line: 258
+expression: messages
+input_file: crates/agent_fold/fixtures/real/real_single_turn.jsonl
+---
+[
+    FoldedMessage {
+        id: TurnId(
+            0,
+        ),
+        author: User {
+            user_id: Some(
+                macro|eric@example.com,
+            ),
+        },
+        request_id: None,
+        parts: NonEmpty {
+            inner: [
+                Text {
+                    text: "hi",
+                },
+            ],
+        },
+        stop: None,
+    },
+    FoldedMessage {
+        id: TurnId(
+            0,
+        ),
+        author: Agent,
+        request_id: None,
+        parts: NonEmpty {
+            inner: [
+                Text {
+                    text: "Hey! What are we working on today?",
+                },
+            ],
+        },
+        stop: Some(
+            EndTurn,
+        ),
+    },
+]

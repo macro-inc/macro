@@ -11,6 +11,7 @@ browser-test-hooks = []
 [dependencies]
 cache-core = { path = "../cache-core" }
 maybe_send = { path = "../../maybe_send" }
+predicate-index = { path = "../../predicate_index" }
 thiserror = { workspace = true }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
@@ -25,7 +26,7 @@ pollster = { workspace = true }
 serde_json = { workspace = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
-cache-sqlite = { path = "../cache-sqlite" }
+tempfile = "3"
 
 [target.'cfg(target_arch = "wasm32")'.dev-dependencies]
 wasm-bindgen-test = { workspace = true }

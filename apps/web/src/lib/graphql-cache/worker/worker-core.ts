@@ -9,8 +9,11 @@ import type {
   CacheRequest,
   CacheResponse,
   EnqueueOptimisticMutationResult,
+  EntityFilterCacheResult,
+  HydrationResult,
   ReadResult,
-  SelectedRecordPageWire,
+  SearchCachePage,
+  SelectedRecordByKeyWire,
   WriteResult,
 } from '../protocol';
 import {
@@ -78,6 +81,7 @@ function requestPriority(request: CacheRequest): number {
   }
   if (
     request.kind === 'write' ||
+    request.kind === 'hydrate' ||
     request.kind === 'enqueue-optimistic-mutation' ||
     request.kind === 'claim-next-mutation' ||
     request.kind === 'commit-optimistic-write' ||
@@ -186,7 +190,7 @@ export class CacheWorkerCore {
         });
       }
       if (
-        request.kind === 'write' &&
+        (request.kind === 'write' || request.kind === 'hydrate') &&
         typeof result === 'object' &&
         result !== null &&
         'reset' in result &&
@@ -372,20 +376,33 @@ export class CacheWorkerCore {
         );
         return result;
       })
-      .with({ kind: 'read-records' }, async (request) => {
-        const engine = this.requireEngine();
-        const result: SelectedRecordPageWire = await engine.readRecords(
-          request.document,
-          request.fragmentName,
-          request.cursor,
-          request.limit
+      .with({ kind: 'read-records-by-keys' }, async (request) => {
+        const result: SelectedRecordByKeyWire[] =
+          await this.requireEngine().readRecordsByKeys(
+            request.document,
+            request.fragmentName,
+            request.keys
+          );
+        return result;
+      })
+      .with({ kind: 'search' }, async (request) => {
+        const result: SearchCachePage = await this.requireEngine().search(
+          request.request
         );
+        return result;
+      })
+      .with({ kind: 'entity-filter' }, async (request) => {
+        const result: EntityFilterCacheResult =
+          await this.requireEngine().entityFilter(request.request);
         return result;
       })
       .with({ kind: 'write' }, async (request) => {
         const engine = this.requireEngine();
         const result = await engine.writeQuery(
-          request.originOpId,
+          {
+            originOpId: request.originOpId,
+            registration: request.registration,
+          },
           request.query,
           request.operationName,
           request.variables,
@@ -394,6 +411,21 @@ export class CacheWorkerCore {
         );
         this.fanOut(result, true);
         return result;
+      })
+      .with({ kind: 'hydrate' }, async (request) => {
+        const result = await this.requireEngine().hydrateQuery(
+          request.query,
+          request.operationName,
+          request.variables,
+          request.data,
+          request.identity
+        );
+        this.fanOut(result, true);
+        const hydration: HydrationResult & Pick<WriteResult, 'reset'> =
+          result.data === null
+            ? { kind: 'void', reset: result.reset }
+            : { kind: 'data', data: result.data, reset: result.reset };
+        return hydration;
       })
       .with({ kind: 'enqueue-optimistic-mutation' }, async (request) => {
         const engine = this.requireEngine();

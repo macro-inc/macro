@@ -1,5 +1,6 @@
 import {
   PdfCoParseSchema as CoParseSchema,
+  PdfModificationDataOnServerSchema,
   PdfSegmentSchema as TSegmentSchema,
 } from '@coparse/document-processing-types';
 import {
@@ -12,6 +13,7 @@ import {
 } from '@core/service';
 import { z } from 'zod';
 import * as schemas from './generated/zod';
+import { ITEM_TYPES } from './itemType';
 
 const _ChatMessageSchema = z.object({
   content: z.string().describe('Content of the message'),
@@ -20,6 +22,11 @@ const _ChatMessageSchema = z.object({
 });
 
 const _ChatResponseSchema = z.object({});
+
+const ProcessingResultTypeSchema = z.enum(['PREPROCESS', 'SPLIT_TEXTS']);
+
+/** Available document processing result variants. */
+export type ProcessingResultType = z.infer<typeof ProcessingResultTypeSchema>;
 
 const DocxDocumentPartLocation = z.object({
   sha: z.string(),
@@ -336,7 +343,7 @@ export const StorageService = new Svc('Document++ Storage Service API')
     description: schemas.upsertHistoryHandlerResponse.description!,
     args: {
       itemId: schemas.upsertHistoryHandlerParams.shape.item_id,
-      itemType: schemas.upsertHistoryHandlerParams.shape.item_type,
+      itemType: z.enum(ITEM_TYPES),
     },
     result: schemas.upsertHistoryHandlerResponse.shape.data.shape,
     modifies: true,
@@ -347,7 +354,7 @@ export const StorageService = new Svc('Document++ Storage Service API')
     description: schemas.deleteHistoryHandlerResponse.description!,
     args: {
       itemId: schemas.deleteHistoryHandlerParams.shape.item_id,
-      itemType: schemas.deleteHistoryHandlerParams.shape.item_type,
+      itemType: z.enum(ITEM_TYPES),
     },
     result: schemas.deleteHistoryHandlerResponse.shape.data.shape,
     modifies: true,
@@ -484,6 +491,7 @@ export const StorageService = new Svc('Document++ Storage Service API')
     description: schemas.getDocumentProcessingResultParams.description!,
     args: {
       documentId: schemas.getDocumentProcessingResultParams.shape.document_id,
+      type: ProcessingResultTypeSchema,
     },
     result: {
       preprocess: CoParseSchema.optional(),
@@ -496,6 +504,7 @@ export const StorageService = new Svc('Document++ Storage Service API')
     args: {
       documentId: schemas.jobProcessingResultHandlerParams.shape.document_id,
       jobId: schemas.jobProcessingResultHandlerParams.shape.job_id,
+      type: ProcessingResultTypeSchema,
     },
     result: {
       preprocess: CoParseSchema.optional(),
@@ -514,7 +523,8 @@ export const StorageService = new Svc('Document++ Storage Service API')
     description: schemas.saveDocumentHandlerResponse.description!,
     args: {
       documentId: schemas.saveDocumentHandlerParams.shape.document_id,
-      ...schemas.saveDocumentHandlerBody.shape,
+      modificationData: PdfModificationDataOnServerSchema,
+      sha: z.string(),
     },
     result:
       schemas.saveDocumentHandlerResponse.shape.data.shape.documentMetadata

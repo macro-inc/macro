@@ -31,6 +31,7 @@ inbound = [
   "rate_limit/axum",
 ]
 ingestion = [
+  "dep:agent_trigger",
   "dep:channels",
   "dep:documents",
   "dep:entity_access",
@@ -39,11 +40,9 @@ ingestion = [
   "ports",
 ]
 outbound = [
-  "dep:hex",
-  "dep:hmac",
+  "dep:webhook_signature",
   "dep:macro_uuid",
   "dep:reqwest",
-  "dep:sha2",
   "dep:sqlx",
   "dep:sqs_client",
   "dep:tokio",
@@ -57,6 +56,7 @@ worker = ["dep:tokio", "ports"]
 anyhow = { workspace = true }
 axum = { workspace = true, optional = true }
 axum-extra = { workspace = true, optional = true }
+agent_trigger = { path = "../agent_trigger", optional = true }
 channels = { path = "../channels", default-features = false, optional = true }
 chrono = { workspace = true }
 documents = { path = "../documents", default-features = false, optional = true }
@@ -64,8 +64,6 @@ entity_access = { path = "../entity_access", default-features = false, features 
   "ports",
 ], optional = true }
 futures = { workspace = true, optional = true }
-hex = { workspace = true, optional = true }
-hmac = { workspace = true, optional = true }
 kafka_util = { path = "../kafka_util", optional = true }
 macro_authorization = { path = "../macro_authorization", optional = true, default-features = false, features = [
   "axum",
@@ -82,7 +80,7 @@ reqwest = { workspace = true, optional = true }
 rootcause = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true, optional = true }
-sha2 = { workspace = true, optional = true }
+webhook_signature = { path = "../webhook_signature", optional = true }
 sqlx = { workspace = true, optional = true }
 sqs_client = { path = "../sqs_client", default-features = false, optional = true }
 thiserror = { workspace = true }
@@ -95,7 +93,8 @@ uuid = { workspace = true, optional = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
-bot_id = { path = "../bot_id" }
+agent_session = { path = "../agent_session", features = ["test-utils"] }
+bot_id = { path = "../bot_id", features = ["test-utils"] }
 channel_sender = { path = "../channel_sender" }
 macro_db_migrator = { path = "../macro_db_migrator" }
 rate_limit = { path = "../rate_limit", default-features = false, features = [

@@ -201,6 +201,7 @@ deny = [
   ], reason = "Use macro_aws_config for AWS configuration in workspace crates" },
   { crate = "tracing-subscriber", wrappers = [
     "channels",                  # Dev logging only
+    "coding_agent_worker",       # Standalone daemon logging setup
     "documents",                 # Dev logging only
     "email",                     # Dev logging only
     "lambda_runtime_api_client", # External crate allowed to use tracing-subscriber
@@ -339,7 +340,10 @@ unknown-git = "warn"
 # if not specified. If it is specified but empty, no registries are allowed.
 allow-registry = ["https://github.com/rust-lang/crates.io-index"]
 # List of URLs for allowed Git repositories
-allow-git = ["git+https://github.com/whutchinson98/jsonwebtoken"]
+allow-git = [
+  "git+https://github.com/agentclientprotocol/rust-sdk",
+  "git+https://github.com/whutchinson98/jsonwebtoken",
+]
 
 [sources.allow-org]
 # github.com organizations to allow git sources for

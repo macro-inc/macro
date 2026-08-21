@@ -1,15 +1,26 @@
+import { openBulkEditModal } from '@app/features/entity/bulk-edit/BulkEditEntityModal';
 import { HeaderIsland } from '@components/app/split-layout/components/HeaderIsland';
+import { SplitFileMenu } from '@components/app/split-layout/components/SplitFileMenu';
 import { SplitHeaderLeft } from '@components/app/split-layout/components/SplitHeader';
+import { SplitTitleFileMenu } from '@components/app/split-layout/components/SplitLabel';
 import { useSplitLayout } from '@components/app/split-layout/layout';
-import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
+import {
+  returnSplitToRecentListView,
+  useSplitPanelOrThrow,
+} from '@components/app/split-layout/layoutUtils';
 import { useBlockId } from '@core/block';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { toast } from '@core/component/Toast/Toast';
 import { blockNameToDefaultFile } from '@core/constant/allBlocks';
 import { whenSettled } from '@core/util/whenSettled';
 import { formatDateAndTime } from '@entity';
+import CopyIcon from '@phosphor/copy.svg';
+import RenameIcon from '@phosphor/pencil-line.svg';
+import TrashIcon from '@phosphor/trash-simple.svg';
+import { scheduleToEntity } from '@queries/agent-schedule/entities';
 import {
   invalidateSchedules,
+  useCreateScheduleMutation,
   useRunScheduleNowMutation,
   useScheduleHistoryQuery,
   useSchedulesQuery,
@@ -116,11 +127,16 @@ function HistoryList(props: { records: HistoryRecord[]; isPending: boolean }) {
 export function Automation() {
   const scheduleId = useBlockId();
   const panel = useSplitPanelOrThrow();
+  const { replaceOrInsertSplit } = useSplitLayout();
 
   const schedulesQuery = useSchedulesQuery(() => true);
   const schedule = createMemo(() =>
     schedulesQuery.data?.find((item) => item.id === scheduleId)
   );
+  const scheduleEntity = () => {
+    const current = schedule();
+    return current ? scheduleToEntity(current) : undefined;
+  };
 
   const [state, setRawState] = createSignal<ScheduleDraft | undefined>();
 
@@ -198,6 +214,51 @@ export function Automation() {
       toast.alert('Failed to start run', { subtext: getErrorMessage(error) }),
   });
 
+  const duplicateMutation = useCreateScheduleMutation({
+    onSuccess: (created) => {
+      toast.success('Duplicated');
+      if (created.id) {
+        replaceOrInsertSplit(
+          { type: 'automation', id: created.id },
+          'entity-actions-menu'
+        );
+      }
+    },
+    onError: (error) =>
+      toast.alert('Failed to duplicate automation', {
+        subtext: getErrorMessage(error),
+      }),
+  });
+
+  const duplicateAutomation = () => {
+    const current = schedule();
+    if (!current || duplicateMutation.isPending) return;
+    duplicateMutation.mutate({
+      enabled: current.enabled,
+      kind: current.kind,
+      name: `${current.name} copy`,
+      schedule: current.schedule,
+      task: current.task,
+      timezone: current.timezone,
+    });
+  };
+
+  // Confirms via the shared bulk-delete modal, which routes automations to
+  // the scheduled-action API and evicts them from the schedules cache.
+  const deleteAutomation = () => {
+    const entity = scheduleEntity();
+    if (!entity) return;
+    openBulkEditModal({
+      view: 'delete',
+      entities: [entity],
+      onFinish: () => {
+        toast.success('Deleted');
+        returnSplitToRecentListView(panel.handle);
+      },
+      onError: () => toast.failure('Failed to delete'),
+    });
+  };
+
   // Treat an action as "running" when the server has a fresh claim on it.
   // The backend's MAX_ACTION_TIME is 20 minutes — after that a claim is
   // considered stale (e.g. executor crashed) and we stop showing the
@@ -252,9 +313,44 @@ export function Automation() {
                 >
                   {d().name || blockNameToDefaultFile('automation')}
                 </span>
+                <div
+                  class="shrink-0 flex items-center h-full"
+                  ref={(ref) => panel.setTitleFileMenuRef(ref)}
+                />
               </div>
             </HeaderIsland>
           </SplitHeaderLeft>
+          <SplitTitleFileMenu>
+            <SplitFileMenu
+              id={scheduleId}
+              itemType="automation"
+              name={d().name || blockNameToDefaultFile('automation')}
+              ops={[]}
+              // Generic chrome can't reconstruct an AutomationEntity (it
+              // lacks the cron), so supply it for entity-gated menu items.
+              entity={scheduleEntity()}
+              tools={[
+                {
+                  group: 'file',
+                  label: 'Rename',
+                  icon: RenameIcon,
+                  action: () => setRenameOpen(true),
+                },
+                {
+                  group: 'file',
+                  label: 'Duplicate',
+                  icon: CopyIcon,
+                  action: duplicateAutomation,
+                },
+                {
+                  group: 'delete',
+                  label: 'Delete',
+                  icon: TrashIcon,
+                  action: deleteAutomation,
+                },
+              ]}
+            />
+          </SplitTitleFileMenu>
           <AutomationRenameModal
             isOpen={renameOpen}
             setIsOpen={setRenameOpen}

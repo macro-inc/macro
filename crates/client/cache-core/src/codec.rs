@@ -1,5 +1,5 @@
-//! Binary record codec shared by all persistent backends (browser Turso and
-//! native SQLite). Records are stored as postcard bytes; the logical namespace
+//! Binary record codec shared by all persistent Turso backends (browser and
+//! native hosts). Records are stored as postcard bytes; the logical namespace
 //! embeds [`CACHE_FORMAT_VERSION`] and [`CACHE_SCHEMA_COMPATIBILITY_EPOCH`].
 //! A healthy, graceful browser reopen with matching versions preserves records,
 //! queued mutations, and optimistic layers. A compatibility/format mismatch or

@@ -233,6 +233,10 @@ const ROUTES: RouteDefinition[] = [
     component: LAYOUT_ROUTE.component,
   },
   {
+    path: '/recent',
+    component: LAYOUT_ROUTE.component,
+  },
+  {
     path: '/activity',
     component: LAYOUT_ROUTE.component,
   },

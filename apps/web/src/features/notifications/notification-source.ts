@@ -1,4 +1,7 @@
-import { ENABLE_DOCUMENT_MENTION_NOTIFICATIONS } from '@core/constant/featureFlags';
+import {
+  ENABLE_DOCUMENT_MENTION_NOTIFICATIONS,
+  ENABLE_GRAPHQL_SOUP,
+} from '@core/constant/featureFlags';
 import type { Entity } from '@core/types';
 import { createSocketEffect } from '@macro-inc/collaboration/websocket';
 import {
@@ -18,12 +21,13 @@ import type {
 import type { UseQueryResult } from '@tanstack/solid-query';
 import {
   type Accessor,
+  batch,
   createEffect,
   createMemo,
   createRoot,
   createSignal,
 } from 'solid-js';
-import { reconcile } from 'solid-js/store';
+import { createStore, reconcile } from 'solid-js/store';
 import { fromZodError } from 'zod-validation-error';
 import { createMutedEntitiesQuery } from './queries/muted-entities-query';
 import {
@@ -38,6 +42,7 @@ export const CHANNEL_EVENT_TYPES = [
   'channel_mention',
   'channel_message_send',
   'channel_message_reply',
+  'document_mention',
 ] as const;
 
 export const DOCUMENT_COMMENT_EVENT_TYPES = [
@@ -118,18 +123,13 @@ export function setDoneOverride(
 // failure (that rollback is deliberate) and pruned once the cache confirms
 // the seen state at a quiet moment.
 const [seenOverrides, setSeenOverrides] = createRoot(() =>
-  createSignal<ReadonlyMap<string, string>>(new Map())
+  createStore<Record<string, string | undefined>>({})
 );
 
 function setSeenOverride(ids: readonly string[], viewedAt: string | undefined) {
   if (ids.length === 0) return;
-  setSeenOverrides((prev) => {
-    const next = new Map(prev);
-    for (const id of ids) {
-      if (viewedAt === undefined) next.delete(id);
-      else next.set(id, viewedAt);
-    }
-    return next;
+  batch(() => {
+    for (const id of ids) setSeenOverrides(id, viewedAt);
   });
 }
 
@@ -157,16 +157,22 @@ export function createNotificationSource(
     const raw = notificationsQuery.data;
     if (!raw) return [];
     const done = doneOverrides();
-    const seen = seenOverrides();
-    if (done.size === 0 && seen.size === 0) return raw;
-    return raw.map((n) => {
-      const doneOverride = done.get(n.id);
-      const seenOverride = n.viewed_at ? undefined : seen.get(n.id);
-      if (doneOverride === undefined && seenOverride === undefined) return n;
+    return raw.map((notification) => {
+      const doneOverride = done.get(notification.id);
+      if (notification.viewed_at && doneOverride === undefined) {
+        return notification;
+      }
+
       return {
-        ...n,
+        ...notification,
         ...(doneOverride !== undefined ? { done: doneOverride } : {}),
-        ...(seenOverride !== undefined ? { viewed_at: seenOverride } : {}),
+        // Keep seen overrides granular. Reading one notification's viewed_at
+        // subscribes only to that id instead of invalidating the complete
+        // notifications array and every channel/favorite consumer.
+        get viewed_at() {
+          if (notification.viewed_at) return notification.viewed_at;
+          return seenOverrides[notification.id] ?? notification.viewed_at;
+        },
       };
     });
   });
@@ -198,14 +204,14 @@ export function createNotificationSource(
   createEffect(() => {
     const raw = notificationsQuery.data;
     if (!raw) return;
-    const seen = seenOverrides();
-    if (seen.size === 0) return;
+    const seenIds = Object.keys(seenOverrides);
+    if (seenIds.length === 0) return;
     const quiet =
       !notificationsQuery.isFetching &&
       !markNotificationsAsSeenMutation.isPending;
     const byId = new Map(raw.map((n) => [n.id, n]));
     const toPrune: string[] = [];
-    for (const id of seen.keys()) {
+    for (const id of seenIds) {
       const row = byId.get(id);
       if (!row) toPrune.push(id);
       else if (row.viewed_at && quiet) toPrune.push(id);
@@ -227,6 +233,10 @@ export function createNotificationSource(
   });
 
   createEffect(() => {
+    // TODO(dev-rb/notifications): Remove this legacy eager pagination when the
+    // REST notification source is retired. GraphQL consumers should use Soup
+    // notification edges or dedicated notification queries instead.
+    if (ENABLE_GRAPHQL_SOUP()) return;
     if (!notificationsQuery.data) return;
     if (notificationsQuery.hasNextPage && !notificationsQuery.isFetching) {
       notificationsQuery.fetchNextPage();
@@ -243,6 +253,8 @@ export function createNotificationSource(
     setMutedEntities(reconcile(mutedEntities));
   });
 
+  // TODO(dev-rb/notifications): Verify whether document-mention suppression is
+  // still required, and remove this source-based cleanup when it is not.
   if (!ENABLE_DOCUMENT_MENTION_NOTIFICATIONS) {
     createEffect(() => {
       const toDiscard = notifications().filter(

@@ -1,68 +1,50 @@
-import { useCalendarUiFlag } from '@app/features/calendar/hooks/use-calendar-ui-flag';
 import { SearchState } from '@app/features/command/mobile/mobileSearchState';
-import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
-import IconGear from '@icon/macro-gear.svg';
-import WideCalendarIcon from '@icon/wide-calendar.svg';
-import BellIcon from '@phosphor/bell-simple.svg';
 import { createMemo } from 'solid-js';
+import { Dynamic } from 'solid-js/web';
 import { FloatRegion } from './float-regions/FloatRegion';
-import { MobileBottomEdgeFade } from './MobileEdgeFade';
+import { useMobileDockViews } from './mobile-dock-views';
+import type { MobileNavViewId } from './mobile-nav-views';
+import { type PillTabItem, PillTabs } from './PillTabs';
 import {
   useForegroundMobileView,
   useMobileNavNavigate,
-} from './mobile-nav-state';
-import type { MobileNavViewId } from './mobile-nav-views';
-import { type PillTabItem, PillTabs } from './PillTabs';
+} from './use-mobile-nav';
 
 /**
- * The global views pill row in the bottom (dock) slot, beneath the search
- * row. Doubles as the search scope switcher: it stays visible while the
- * search session is active (even with the keyboard up).
+ * The views pill row in the accessory slot, above the dock row. It shows
+ * only while a search session is active (the dock is in its search layout),
+ * acting as the search scope switcher — even with the keyboard up.
  */
 export function MobileViewsRow() {
-  const calendarUiEnabled = useCalendarUiFlag();
   // Highlight only the view that is actually the foreground split content —
   // with an entity (or anything else) open, no pill is active.
   const activeView = useForegroundMobileView();
   const navigate = useMobileNavNavigate();
+  const dockViews = useMobileDockViews();
 
   const items = createMemo<PillTabItem<MobileNavViewId>[]>(() => [
-    {
-      value: 'inbox',
-      label: <BellIcon class="size-5" />,
-      iconOnly: true,
-      ariaLabel: 'Inbox',
-    },
-    ...(calendarUiEnabled()
-      ? [
-          {
-            value: 'calendar' as const,
-            label: <WideCalendarIcon class="size-5" />,
+    { value: 'search', label: 'All' },
+    ...dockViews().map((view) =>
+      view.pillIcon
+        ? {
+            value: view.id,
+            label: <Dynamic component={view.pillIcon} class="size-5" />,
             iconOnly: true,
-            ariaLabel: 'Calendar',
-          },
-        ]
-      : []),
-    { value: 'mail', label: 'Email' },
-    { value: 'channels', label: 'Messages' },
-    { value: 'documents', label: 'Files' },
-    { value: 'agents', label: 'Agents' },
-    { value: 'tasks', label: 'Tasks' },
-    { value: 'calls', label: 'Calls' },
-    {
-      value: 'settings',
-      label: <IconGear class="size-5" />,
-      iconOnly: true,
-      ariaLabel: 'Settings',
-    },
+            ariaLabel: view.label,
+          }
+        : { value: view.id, label: view.label }
+    ),
   ]);
 
   return (
     <FloatRegion
-      region="dock"
-      active={() => !virtualKeyboardVisible() || SearchState.isOpen()}
+      region="accessory"
+      // While a search session is open the scope pills outbid any other
+      // accessory contributor (per-view compose/reply bars own the slot the
+      // rest of the time).
+      priority={100}
+      active={() => SearchState.isOpen()}
     >
-      <MobileBottomEdgeFade />
       {/* Full-bleed strip: the pills scroll to the device edge, and the
           chrome gutter travels with the scrolled content instead of insetting
           the scroll box. */}

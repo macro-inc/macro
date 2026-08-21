@@ -284,6 +284,12 @@ async fn object_shaped_filters_are_rejected_by_check_constraint(
     Ok(())
 }
 
+// EXPLAIN output is planner text rather than application data, so the SQLx
+// macros have no types to check here.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "EXPLAIN output is planner text; the macros have nothing to validate"
+)]
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn containment_query_uses_filters_gin_index(pool: PgPool) -> anyhow::Result<()> {
     let mut connection = pool.acquire().await?;

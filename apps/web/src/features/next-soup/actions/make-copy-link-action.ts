@@ -67,10 +67,19 @@ export const makeCopyLinkAction = () => {
     toast.success('Link copied to clipboard');
   };
 
+  /** Blocks already know their id and URL discriminator even when their full
+   * entity is absent from Quick Access (notably email threads and calls). */
+  const executeByBlock = async (id: string, blockType: string) => {
+    await navigator.clipboard.writeText(
+      buildSimpleEntityUrl({ id, type: blockType })
+    );
+    toast.success('Link copied to clipboard');
+  };
+
   const executeWithSoup = async (entities: EntityData[], _soup: SoupState) => {
     await execute(entities);
     // Don't clear selection or change focus for copy link
   };
 
-  return { canExecute, execute, executeWithSoup };
+  return { canExecute, execute, executeByBlock, executeWithSoup };
 };

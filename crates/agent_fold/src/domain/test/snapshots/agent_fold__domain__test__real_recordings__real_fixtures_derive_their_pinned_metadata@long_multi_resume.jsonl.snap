@@ -1,0 +1,388 @@
+---
+source: crates/agent_fold/src/domain/test/real_recordings.rs
+assertion_line: 270
+expression: machine.metadata()
+input_file: crates/agent_fold/fixtures/real/long_multi_resume.jsonl
+---
+SessionMetadata {
+    model: Some(
+        "opus[1m]",
+    ),
+    supported_models: [
+        ModelOption {
+            id: "default",
+            name: "Default (recommended)",
+            description: Some(
+                "Use the default model (currently Opus 5 (1M context)) · $5/$25 per Mtok",
+            ),
+        },
+        ModelOption {
+            id: "opus[1m]",
+            name: "Opus (1M context)",
+            description: Some(
+                "Opus 5 with 1M context · Best for everyday, complex tasks · $5/$25 per Mtok",
+            ),
+        },
+        ModelOption {
+            id: "claude-fable-5[1m]",
+            name: "Fable",
+            description: Some(
+                "Fable 5 · Most capable for your hardest and longest-running tasks · $10/$50 per Mtok",
+            ),
+        },
+        ModelOption {
+            id: "sonnet",
+            name: "Sonnet",
+            description: Some(
+                "Sonnet 5 · Efficient for routine tasks · $2/$10 per Mtok · promo through Aug 31",
+            ),
+        },
+        ModelOption {
+            id: "haiku",
+            name: "Haiku",
+            description: Some(
+                "Haiku 4.5 · Fastest for quick answers · $1/$5 per Mtok",
+            ),
+        },
+    ],
+    title: Some(
+        "Test session",
+    ),
+    available_commands: [
+        AvailableCommand {
+            name: "add-sdk-endpoint",
+            description: "Wrap a new backend endpoint in the TypeScript SDK (packages/sdk), or record it as skipped. Use when `just coverage` fails, or after adding an endpoint to a Rust service. (project)",
+            input_hint: None,
+        },
+        AvailableCommand {
+            name: "cloud-storage-hexagonal-architecture",
+            description: "Enforce hexagonal architecture in the Rust backend. Use before modifying crates/ or Rust services, especially inbound axum/tool/listener adapters, domain services/ports, outbound adapters, authorization, permissions, database access, or external clients. (project)",
+            input_hint: None,
+        },
+        AvailableCommand {
+            name: "create-ai-tool",
+            description: "Build a new AI tool end-to-end — Rust implementation, toolset wiring, infra, schema generation, and frontend UI. (project)",
+            input_hint: None,
+        },
+        AvailableCommand {
+            name: "debug-service",
+            description: "You are going to help me interactively debug the rust binary (project)",
+            input_hint: None,
+        },
+        AvailableCommand {
+            name: "dump-schema",
+            description: "Dump clean Postgres schema to a file and copy path to clipboard. (project)",
+            input_hint: None,
+        },
+        AvailableCommand {
+            name: "qc",
+            description: "Quality gate. 5 parallel agents review changes. All must pass. (project)",
+            input_hint: None,
+        },
+        AvailableCommand {
+            name: "upgrade-model",
+            description: "Upgrade an AI chat model (fast or good) across backend and frontend. (project)",
+            input_hint: None,
+        },
+        AvailableCommand {
+            name: "swagger",
+            description: "Launch local Swagger UI for a service's OpenAPI spec (project)",
+            input_hint: None,
+        },
+        AvailableCommand {
+            name: "deep-research",
+            description: "Deep research harness — fan-out web searches, fetch sources, adversarially verify claims, synthesize a cited report. (dynamic workflow)",
+            input_hint: None,
+        },
+        AvailableCommand {
+            name: "honeycomb:honeycomb-setup",
+            description: "(honeycomb) Set up the Honeycomb MCP server connection for Claude Code",
+            input_hint: None,
+        },
+        AvailableCommand {
+            name: "honeycomb:beeline-migration",
+            description: "(honeycomb) Step-by-step guide for migrating from Honeycomb Beelines (End of Life) to OpenTelemetry instrumentation. Trigger phrases: \"migrate from Beelines\", \"upgrade from Beeline to OpenTelemetry\", \"migrate to OTel\", \"replace Beelines\", \"Beeline end of life\", \"Beeline EOL\", \"switch from Beeline to OTel\", \"migrate Go Beeline\", \"migrate Python Beeline\", \"migrate Node Beeline\", \"migrate Java Beeline\", \"migrate Ruby Beeline\", \"W3C trace headers\", \"W3C propagation\", \"incremental migration to OpenTelemetry\", or any request about migrating from Honeycomb Beelines to OpenTelemetry SDKs.",
+            input_hint: None,
+        },
+        AvailableCommand {
+            name: "honeycomb:create-honeycomb-board",
+            description: "(honeycomb) Design and then create a board (dashboard) in Honeycomb with queries and SLOs. Trigger phrases: \"create a board\", \"make a board\", \"build a dashboard\", \"create a Honeycomb board\", \"make a dashboard in Honeycomb\", \"set up a board\", \"dashboard for my service\", \"visualize service health\", \"golden signals dashboard\", \"set up monitoring board\", or any request to design and create or build a Honeycomb board or dashboard.",
+            input_hint: None,
+        },
+        AvailableCommand {
+            name: "honeycomb:metrics-queries",
+            description: "(honeycomb) How to query OpenTelemetry metrics datasets in Honeycomb correctly. Metrics datasets follow different rules from trace/event datasets — many operations (bare COUNT, RATE_SUM, RATE_AVG, RATE_MAX, CONCURRENCY) are forbidden, temporal aggregation is automatic, and each metric has its own attributes. Use this skill when querying a metrics dataset (gauges, counters, histograms, sums), asking about temporal aggregation (RATE, INCREASE, SUMMARIZE, LAST), finding the metrics dataset or discovering metric names and attributes, debugging unexpected metrics query results, or querying infrastructure metrics like CPU, memory, disk I/O, or network stats. Do NOT use for instrumenting metrics (use otel-instrumentation), querying event datasets with \"metrics\" in their name, or conceptual questions (use observability-fundamentals).",
+            input_hint: None,
+        },
+        AvailableCommand {
+            name: "honeycomb:observability-fundamentals",
+            description: "(honeycomb) First principles behind observability — wide events, high cardinality, the core analysis loop, events vs metrics vs logs, and how instrumentation connects to debugging outcomes. Grounds recommendations in first principles rather than tool-specific how-to. Trigger phrases: \"what is observability\", \"why observability\", \"why Honeycomb\", \"events vs metrics vs logs\", \"events vs metrics\", \"events vs logs\", \"metrics vs logs\", \"why wide events\", \"what is high cardinality\", \"core analysis loop\", \"observability vs monitoring\", \"what is dimensionality\", \"explain observability\", or any conceptual question about observability or why Honeycomb's approach differs from traditional monitoring.",
+            input_hint: None,
+        },
+        AvailableCommand {
+            name: "honeycomb:otel-genai-instrumentation",
+            description: "(honeycomb) Guides instrumentation of GenAI/LLM applications with OpenTelemetry for Honeycomb, including content capture and agent failure detection. Trigger phrases: \"instrument my GenAI app\", \"add tracing to LLM calls\", \"trace AI agent\", \"instrument OpenAI\", \"instrument Anthropic\", \"GenAI observability\", \"trace tool calling\", \"LLM token usage\", \"instrument embeddings\", \"trace MCP\", \"GenAI metrics\", \"instrument LangChain\", \"add GenAI spans\", \"capture prompts\", \"capture LLM responses\", \"enable GenAI content capture\", \"streaming tracing\", \"trace streaming responses\", or any request about instrumenting GenAI/LLM applications.",
+            input_hint: None,
+        },
+        AvailableCommand {
+            name: "honeycomb:otel-instrumentation",
+            description: "(honeycomb) Provides guidance on OpenTelemetry SDK setup, custom instrumentation, and sending data to Honeycomb. Trigger phrases: \"instrument my app\", \"add tracing\", \"set up OpenTelemetry\", \"configure OTel\", \"add custom spans\", \"add attributes to spans\", \"send traces to Honeycomb\", \"set up OTLP\", \"configure sampling\", \"add span events\", \"add span links\", \"set up tracing for [any language]\", \"configure the OTel Collector\", or any request about OpenTelemetry SDK setup, custom instrumentation, or sending data to Honeycomb.",
+            input_hint: None,
+        },
+        AvailableCommand {
+            name: "honeycomb:otel-migration",
+            description: "(honeycomb) Guide for retrofitting OpenTelemetry into an existing, uninstrumented application. Trigger phrases: \"migrate existing app to OTel\", \"add OpenTelemetry to existing project\", \"retrofit OTel into my codebase\", \"thread context through my code\", \"context propagation\", \"bridge Prometheus metrics to OTel\", \"logging bridge\", \"migrate logging to OTel\", \"slog bridge\", \"logback bridge\", \"verify my instrumentation\", \"traces are disconnected\", \"orphaned spans\", \"migrate to OpenTelemetry\", \"OTel migration plan\", \"how do I sequence an OTel migration\", \"add tracing to existing code\", \"refactor for context propagation\", \"Fiber context gotcha\", \"keep existing logging working with OTel\", \"add OTel without breaking Prometheus\", \"bridge existing metrics\", \"coexist with existing monitoring\", or any request about retrofitting OpenTelemetry into an existing application. This skill is for migrating existing codebases, NOT greenfield instrumentation (use otel-instrumentation) or Beeline-specific migration (use beeline-migration).",
+            input_hint: None,
+        },
+        AvailableCommand {
+            name: "honeycomb:production-investigation",
+            description: "(honeycomb) Structured workflows for investigating production issues in Honeycomb — the sequence of tool calls (context priming, broad query, BubbleUp, trace analysis, verification) and how to chain results between steps to reach root causes. Trigger phrases: \"investigate production issue\", \"debug latency spike\", \"find root cause\", \"use BubbleUp\", \"analyze traces\", \"debug an outage\", \"why is my API slow\", \"errors are increasing\", \"health check\", \"SLO burning\", or any request to investigate or debug production problems.",
+            input_hint: None,
+        },
+        AvailableCommand {
+            name: "honeycomb:query-patterns",
+            description: "(honeycomb) Opinionated guidance for constructing and interpreting Honeycomb queries on trace and event datasets — operation selection (percentiles not AVG, HEATMAP for distributions), relational field patterns (root., parent., any., none.), calculated fields, query math, and result interpretation (P99/P50 ratios, heatmap bands, TOTAL/OTHER rows, raw JSON via query_result_json). Use this skill when the user wants to query spans, traces, or log/event data in Honeycomb — requests like \"show me latency\", \"error rate\", \"find slow requests\", \"find outliers\", \"interpret results\", \"relational fields\", \"calculated fields\", or \"download raw results\". This skill covers all dataset types except metrics datasets (dataset_type=metrics) — for those, use metrics-queries instead.",
+            input_hint: None,
+        },
+        AvailableCommand {
+            name: "honeycomb:slos-and-triggers",
+            description: "(honeycomb) Decision heuristics for interpreting Honeycomb SLO compliance, budget burn rates, and trigger status — what the numbers mean and what action to take, including detecting misconfigured SLIs, deciding when to freeze deploys vs page on-call, and designing burn alert thresholds. Load this skill before calling get_slos or get_triggers. Trigger phrases: \"check our SLOs\", \"are we meeting our SLOs\", \"which SLOs are healthy\", \"is the error budget OK\", \"are any alerts firing\", \"what's the burn rate\", \"set up an SLO\", \"create a trigger\", \"configure alerts\", \"set up burn alerts\", \"check trigger status\", \"starting on-call\", \"reliability picture\", \"should we freeze deploys\", \"is this SLO misconfigured\", \"are we within budget\", \"SLO is broken\", \"budget is negative\", or any request about service level objectives, error budgets, burn rates, or alerting in Honeycomb.",
+            input_hint: None,
+        },
+        AvailableCommand {
+            name: "honeycomb:verify-recent-trace",
+            description: "(honeycomb) Find a recent trace in Honeycomb, to see what happened in a recent test. Use when asked to \"verify in Honeycomb\", \"find the most recent trace\", or \"show me the trace\".",
+            input_hint: None,
+        },
+        AvailableCommand {
+            name: "design-sync",
+            description: "Push a React design system to claude.ai/design. This runs a converter that bundles the real component code (from Storybook or a bare package) and uploads it. Use when the user runs /design-sync or says \"sync my design system to Claude Design\".",
+            input_hint: Some(
+                "[<project hint, e.g. \"Acme DS\">]",
+            ),
+        },
+        AvailableCommand {
+            name: "dataviz",
+            description: "Use this skill whenever you are about to create ANY chart, graph, plot, dashboard, or data visualization, in ANY output medium — an HTML or React artifact, inline SVG, plotting code in any library (matplotlib, plotly, d3, Recharts, …), an image/PNG you will render and upload, or a chart shared into Slack. Read it BEFORE writing the first line of chart code, choosing chart colors, building a stat tile / meter / KPI row, or laying out a dashboard. Produces visualizations that read as one system — elegant, accessible, consistent in light and dark — using a brand-neutral placeholder palette you swap for your own. Teaches a design-system-agnostic method: a form heuristic, a color formula with a runnable validator, mark specs, and interaction rules. A validated default palette is documented in `references/palette.md` — swap that file's values for your brand's. Triggers on: \"chart\", \"graph\", \"plot\", \"data viz\", \"visualization\", \"dashboard\", \"analytics\", \"visualize data\", \"categorical colors\", \"sequential / diverging palette\", \"stat tile\", \"sparkline\", \"heatmap\", \"legend\", \"axis\", \"tooltip\", \"chart colors\", \"color by series\".",
+            input_hint: None,
+        },
+        AvailableCommand {
+            name: "update-config",
+            description: "Use this skill to configure the Claude Code harness via settings.json. Automated behaviors (\"from now on when X\", \"each time X\", \"whenever X\", \"before/after X\") require hooks configured in settings.json - the harness executes these, not Claude, so memory/preferences cannot fulfill them. Also use for: permissions (\"allow X\", \"add permission\", \"move permission to\"), env vars (\"set X=Y\"), hook troubleshooting, or any changes to settings.json/settings.local.json files. Examples: \"allow npm commands\", \"add bq permission to global settings\", \"move permission to user settings\", \"set DEBUG=true\", \"when claude stops show X\". For simple settings like theme/model, suggest the /config command.",
+            input_hint: None,
+        },
+        AvailableCommand {
+            name: "verify",
+            description: "Verify that a code change actually does what it's supposed to by exercising it end-to-end and observing behavior — drive the affected flow, not just tests or typecheck. Run before committing nontrivial changes; bootstraps this repo's project verify skill if none exists yet. Don't invoke it on a diff that only touches tests, docs, or other code with no runtime surface to drive (a change to product source always has one) — there's nothing to observe.",
+            input_hint: None,
+        },
+        AvailableCommand {
+            name: "debug",
+            description: "Enable debug logging for this session and help diagnose issues",
+            input_hint: Some(
+                "[issue description]",
+            ),
+        },
+        AvailableCommand {
+            name: "code-review",
+            description: "Review the current diff for correctness bugs and reuse/simplification/efficiency cleanups at the given effort level (low/medium: fewer, high-confidence findings; high→max: broader coverage, may include uncertain findings). Pass --comment to post findings as inline PR comments, or --fix to apply the findings to the working tree after the review.",
+            input_hint: Some(
+                "[low|medium|high|xhigh|max] [--fix] [--comment] [<target>]",
+            ),
+        },
+        AvailableCommand {
+            name: "simplify",
+            description: "Review the changed code for reuse, simplification, efficiency, and altitude cleanups, then apply the fixes. Quality only — it does not hunt for bugs; use /code-review for that.",
+            input_hint: Some(
+                "[<target>]",
+            ),
+        },
+        AvailableCommand {
+            name: "batch",
+            description: "Research and plan a large-scale change, then execute it in parallel across 5–30 isolated worktree agents that each open a PR.",
+            input_hint: Some(
+                "<instruction>",
+            ),
+        },
+        AvailableCommand {
+            name: "fewer-permission-prompts",
+            description: "Scan your transcripts for common read-only Bash and MCP tool calls, then add a prioritized allowlist to project .claude/settings.json to reduce permission prompts.",
+            input_hint: None,
+        },
+        AvailableCommand {
+            name: "doctor",
+            description: "Health-check the user's Claude Code setup and fix issues: diagnose installation health — what the `claude doctor` terminal diagnostics cover — from local data (duplicate or leftover installs, PATH, unparseable settings files, broken or colliding agent definitions); find unused skills, MCP servers, and plugins versus their context cost and disable dead weight; deduplicate local CLAUDE.md files against checked-in ones; trim checked-in CLAUDE.md files by cutting content a session could derive from the codebase (directory layouts, tech-stack lists, architecture overviews) while keeping gotchas, rationale, and non-standard conventions; migrate always-loaded CLAUDE.md guidance into lazy skills and nested CLAUDE.md files; flag slow hooks and context-heavy extensions; check the installed version is current; make auto mode the default permission mode; and pre-approve frequently denied read-only commands. Use when the user asks for a doctor run, checkup, audit, tune-up, or cleanup of their Claude Code setup or configuration.",
+            input_hint: None,
+        },
+        AvailableCommand {
+            name: "loop",
+            description: "Run a prompt or slash command on a recurring interval (e.g. /loop 5m /foo). Omit the interval to let the model self-pace.",
+            input_hint: Some(
+                "[interval] [prompt]",
+            ),
+        },
+        AvailableCommand {
+            name: "claude-api",
+            description: "Reference for the Claude API / Anthropic SDK — model ids, pricing, params, streaming, tool use, MCP, agents, caching, token counting, model migration.\nTRIGGER — read BEFORE opening the target file; don't skip because it \"looks like a one-liner\" — whenever: the prompt names Claude/Anthropic in any form (Claude, Anthropic, Fable, Opus, Sonnet, Haiku, `anthropic`, `@anthropic-ai`, `claude-*`, `us.anthropic.*`, `[1m]`); the user asks about an LLM (pricing/model choice/limits/caching) — never answer from memory; OR the task is LLM-shaped with provider unstated (agent/MCP/tool-definition/multi-agent/RAG/LLM-judge/computer-use; generate/summarize/extract/classify/rewrite/converse over NL; debugging refusals/cutoffs/streaming/tool-calls/tokens).\nSKIP only when another provider is being worked on (overrides all triggers): OpenAI/GPT/Gemini/Llama/Mistral/Cohere/Ollama named in the query; OR `grep -rE 'openai|langchain_openai|google.generativeai|genai|mistralai|cohere|ollama'` over the project hits (run this grep FIRST if no provider named — don't Read the file).",
+            input_hint: None,
+        },
+        AvailableCommand {
+            name: "run",
+            description: "Launch and drive this project's app to see a change working. Use when asked to run, start, or screenshot the app, or to confirm a change works in the real app (not just tests). First looks for a project skill that already covers launching the app; otherwise falls back to built-in patterns per project type (CLI, server, TUI, Electron, browser-driven, library).",
+            input_hint: None,
+        },
+        AvailableCommand {
+            name: "run-skill-generator",
+            description: "Author or improve the run-<unit> skill — a per-project skill that tells agents how to build, launch, and drive this project's app. Use when the user asks to set up the project, get it running, write run instructions, or verify build/run steps work from a clean environment.",
+            input_hint: None,
+        },
+        AvailableCommand {
+            name: "agents",
+            description: "(removed) Ask Claude to create/manage subagents, or edit .claude/agents/",
+            input_hint: None,
+        },
+        AvailableCommand {
+            name: "color",
+            description: "Set the prompt bar color for this session",
+            input_hint: Some(
+                "[red|blue|green|yellow|purple|orange|pink|cyan|default]",
+            ),
+        },
+        AvailableCommand {
+            name: "compact",
+            description: "Free up context by summarizing the conversation so far",
+            input_hint: Some(
+                "<optional custom summarization instructions>",
+            ),
+        },
+        AvailableCommand {
+            name: "config",
+            description: "Set a setting by key",
+            input_hint: Some(
+                "key=value",
+            ),
+        },
+        AvailableCommand {
+            name: "context",
+            description: "Show current context usage",
+            input_hint: None,
+        },
+        AvailableCommand {
+            name: "effort",
+            description: "Set effort level for model usage",
+            input_hint: Some(
+                "<low|medium|high|xhigh|max|ultracode|auto>",
+            ),
+        },
+        AvailableCommand {
+            name: "fast",
+            description: "Toggle fast mode (Opus 5)",
+            input_hint: Some(
+                "[on|off]",
+            ),
+        },
+        AvailableCommand {
+            name: "heapdump",
+            description: "Dump the JS heap to ~/Desktop",
+            input_hint: None,
+        },
+        AvailableCommand {
+            name: "init",
+            description: "Initialize a new CLAUDE.md file with codebase documentation",
+            input_hint: None,
+        },
+        AvailableCommand {
+            name: "mcp",
+            description: "Manage MCP servers",
+            input_hint: Some(
+                "[reconnect|enable|disable [<server>|all]]",
+            ),
+        },
+        AvailableCommand {
+            name: "model",
+            description: "Set the AI model for Claude Code",
+            input_hint: Some(
+                "<model>",
+            ),
+        },
+        AvailableCommand {
+            name: "__remote-workflow",
+            description: "Run the workflow script delivered in this session environment (server-launched sessions only)",
+            input_hint: None,
+        },
+        AvailableCommand {
+            name: "workflow-launch-exec",
+            description: "Execute a server-launched workflow handoff (workflow_launch event sessions only)",
+            input_hint: None,
+        },
+        AvailableCommand {
+            name: "reload-skills",
+            description: "Pick up skills added or changed on disk during this session",
+            input_hint: None,
+        },
+        AvailableCommand {
+            name: "rename",
+            description: "Rename the current conversation",
+            input_hint: Some(
+                "[name]",
+            ),
+        },
+        AvailableCommand {
+            name: "review",
+            description: "Review a GitHub pull request; for your working diff use /code-review",
+            input_hint: Some(
+                "[pr number]",
+            ),
+        },
+        AvailableCommand {
+            name: "security-review",
+            description: "Complete a security review of the pending changes on the current branch",
+            input_hint: None,
+        },
+        AvailableCommand {
+            name: "usage",
+            description: "Show session cost, plan usage, and what's contributing to your limits",
+            input_hint: None,
+        },
+        AvailableCommand {
+            name: "insights",
+            description: "Generate a report analyzing your Claude Code sessions",
+            input_hint: None,
+        },
+        AvailableCommand {
+            name: "recap",
+            description: "Generate a one-line session recap now",
+            input_hint: None,
+        },
+        AvailableCommand {
+            name: "goal",
+            description: "Set a goal — keep working until the condition is met",
+            input_hint: None,
+        },
+        AvailableCommand {
+            name: "design",
+            description: "Grant or revoke Claude agent access to your Design projects",
+            input_hint: Some(
+                "consent | revoke",
+            ),
+        },
+        AvailableCommand {
+            name: "design-consent",
+            description: "Grant Claude agent access to your Design projects",
+            input_hint: None,
+        },
+        AvailableCommand {
+            name: "design-revoke",
+            description: "Revoke Claude agent access to your Design projects",
+            input_hint: None,
+        },
+        AvailableCommand {
+            name: "team-onboarding",
+            description: "Help teammates ramp on Claude Code with a guide from your usage",
+            input_hint: None,
+        },
+    ],
+    status: Some(
+        "acp_ready",
+    ),
+}

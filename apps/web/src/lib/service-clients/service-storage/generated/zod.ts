@@ -682,6 +682,11 @@ export const getSelfBotResponse = zod
       .describe('Soft-delete timestamp.'),
     description: zod.string().nullish().describe('Optional description.'),
     handle: zod.string().describe('Stable handle.'),
+    has_agent: zod
+      .boolean()
+      .describe(
+        'Whether mentioning this bot opens a sandboxed coding-agent session.'
+      ),
     id: zod.string(),
     kind: zod.enum(['owned', 'system']).describe('Bot kind.'),
     name: zod.string().describe('Display name.'),
@@ -708,7 +713,7 @@ export const getSelfBotResponse = zod
       .optional(),
     updated_at: zod.iso.datetime({}).describe('Update timestamp.'),
   })
-  .describe('Bot row.');
+  .describe('Bot row.\n\nClients deserialize this, so both derives are used.');
 
 /**
  * @summary Handler for `GET /bots/{bot_id}/channels`.
@@ -1026,6 +1031,129 @@ export const listOccurrencesResponse = zod
       ),
   })
   .describe('Paginated calendar occurrence viewport response.');
+
+/**
+ * @summary Resolve mentioned calendar events to the requester's own projections.
+ */
+export const mentionPreviewsBody = zod
+  .object({
+    items: zod
+      .array(
+        zod
+          .object({
+            eventId: zod.uuid().describe('Mentioned calendar event id.'),
+            occurrenceKey: zod
+              .string()
+              .nullish()
+              .describe(
+                'Occurrence the mention points at, when it targets one instance.'
+              ),
+          })
+          .describe('One mentioned event to resolve for the requester.')
+      )
+      .describe('Mentioned events to resolve, at most 100.'),
+  })
+  .describe('Batch calendar mention preview request.');
+
+export const mentionPreviewsResponseItemsItemEventAttendeeCountMin = 0;
+
+export const mentionPreviewsResponse = zod
+  .object({
+    items: zod.array(
+      zod
+        .object({
+          event: zod
+            .union([
+              zod.null(),
+              zod
+                .object({
+                  attendeeCount: zod
+                    .number()
+                    .min(mentionPreviewsResponseItemsItemEventAttendeeCountMin)
+                    .describe("Number of attendees on the requester's copy."),
+                  isRecurring: zod
+                    .boolean()
+                    .describe('Whether the event repeats.'),
+                  location: zod
+                    .string()
+                    .nullish()
+                    .describe('Location label, when set.'),
+                  occurrenceKey: zod
+                    .string()
+                    .nullish()
+                    .describe(
+                      'Key of the previewed instance, absent when no occurrence is\nmaterialized.'
+                    ),
+                  organizerEmail: zod
+                    .string()
+                    .nullish()
+                    .describe('Organizer email.'),
+                  organizerName: zod
+                    .string()
+                    .nullish()
+                    .describe('Organizer display name.'),
+                  time: zod
+                    .union([
+                      zod
+                        .object({
+                          endsAt: zod.iso
+                            .datetime({})
+                            .describe('Exclusive end instant.'),
+                          kind: zod.enum(['timed']),
+                          startsAt: zod.iso
+                            .datetime({})
+                            .describe('Inclusive start instant.'),
+                          timeZone: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              'Original IANA time-zone identifier, when supplied.'
+                            ),
+                        })
+                        .describe('An event with absolute instants.'),
+                      zod
+                        .object({
+                          endDate: zod.iso
+                            .date()
+                            .describe('Exclusive local end date.'),
+                          kind: zod.enum(['allDay']),
+                          startDate: zod.iso
+                            .date()
+                            .describe('Inclusive local start date.'),
+                        })
+                        .describe(
+                          "An all-day event using RFC 5545's exclusive end date."
+                        ),
+                    ])
+                    .describe(
+                      'The mutually exclusive time shape of a calendar event.\n\nFields are renamed per variant rather than with `rename_all_fields`\nbecause utoipa only honors variant-level serde renames when it\nderives the OpenAPI schema.'
+                    ),
+                  title: zod.string().describe('Display title.'),
+                  updatedAt: zod.iso
+                    .datetime({})
+                    .describe("Entity update time of the requester's copy."),
+                  viewerEventId: zod
+                    .uuid()
+                    .describe(
+                      "The requester's own event entity for the mentioned meeting. Differs\nfrom the mentioned id when the mention came from another attendee."
+                    ),
+                })
+                .describe(
+                  "Meeting-level fields shown in a calendar event mention preview, taken from\nthe requester's own projection of the meeting."
+                ),
+            ])
+            .optional(),
+          eventId: zod
+            .uuid()
+            .describe('The mentioned event id, echoed from the request.'),
+          type: zod
+            .enum(['access', 'no_access', 'does_not_exist'])
+            .describe('Requester-relative visibility of one mentioned event.'),
+        })
+        .describe('Resolution of one mentioned event, in request order.')
+    ),
+  })
+  .describe('Batch calendar mention preview response.');
 
 /**
  * Batch-fetches lightweight previews for a list of call ids. Mirrors the
@@ -2159,6 +2287,12 @@ export const createChannelScopedBotBody = zod
     avatar_url: zod.string().nullish().describe('Optional avatar URL.'),
     description: zod.string().nullish().describe('Optional description.'),
     handle: zod.string().describe('Stable handle.'),
+    has_agent: zod
+      .boolean()
+      .nullish()
+      .describe(
+        'Whether mentioning this bot opens a sandboxed coding-agent session. Defaults to false.'
+      ),
     name: zod.string().describe('Display name.'),
     team_id: zod
       .uuid()
@@ -3918,6 +4052,60 @@ export const setCrmCompanyNameBody = zod
       ),
   })
   .describe('Request body for `PUT \/companies\/{company_id}\/name`.');
+
+/**
+ * @summary Look up a CRM contact by email in the caller's team. Returns a null
+`contact` when no visible contact exists. Any team member may resolve a
+visible contact; admin/owner callers may also resolve hidden contacts and
+contacts under hidden companies.
+ */
+export const getContactByEmailQueryParams = zod.object({
+  email: zod
+    .string()
+    .describe("The contact email to resolve within the caller's team."),
+});
+
+export const getContactByEmailResponse = zod
+  .object({
+    contact: zod
+      .union([
+        zod.null(),
+        zod
+          .object({
+            companyId: zod
+              .uuid()
+              .describe('The id of the company the contact belongs to.'),
+            createdAt: zod.iso
+              .datetime({})
+              .describe('When the contact record was created.'),
+            email: zod.string().describe("The contact's email address."),
+            firstInteraction: zod.iso
+              .datetime({})
+              .describe('Earliest known interaction with this contact.'),
+            hidden: zod
+              .boolean()
+              .describe(
+                'Whether the contact is hidden from CRM listings for the\nrequesting team. Non-admin viewers never see `hidden = true`\nrows (the endpoint filters them out); admin\/owner callers see\nhidden contacts so they can render the right toggle state.'
+              ),
+            id: zod.uuid().describe('The id of the contact record.'),
+            lastInteraction: zod.iso
+              .datetime({})
+              .describe('Most recent known interaction with this contact.'),
+            name: zod
+              .string()
+              .nullish()
+              .describe('Display name observed for the contact, if any.'),
+            updatedAt: zod.iso
+              .datetime({})
+              .describe('When the contact record was last updated.'),
+          })
+          .describe(
+            'A CRM contact as returned by `GET \/crm\/companies\/{company_id}\/contacts`.'
+          ),
+      ])
+      .optional(),
+  })
+  .describe('Response from looking up a CRM contact by email.');
 
 /**
  * @summary Fetch a single CRM contact by id. Access is enforced by
@@ -7327,6 +7515,7 @@ export const listFavoritesResponse = zod
                 'crm_contact',
                 'reminder',
                 'skill',
+                'agent_session',
               ])
               .describe('The type of an entity in Macro')
               .describe('The type of the favorited entity.'),
@@ -7372,6 +7561,7 @@ export const addFavoriteBody = zod
         'crm_contact',
         'reminder',
         'skill',
+        'agent_session',
       ])
       .describe('The type of an entity in Macro')
       .describe('The type of the entity to favorite.'),
@@ -7418,6 +7608,7 @@ export const addFavoriteResponse = zod
         'crm_contact',
         'reminder',
         'skill',
+        'agent_session',
       ])
       .describe('The type of an entity in Macro')
       .describe('The type of the favorited entity.'),
@@ -7461,6 +7652,7 @@ export const reorderFavoritesBody = zod
                 'crm_contact',
                 'reminder',
                 'skill',
+                'agent_session',
               ])
               .describe('The type of an entity in Macro')
               .describe('The type of the favorited entity.'),
@@ -7497,6 +7689,7 @@ export const removeFavoriteByEntityParams = zod.object({
       'crm_contact',
       'reminder',
       'skill',
+      'agent_session',
     ])
     .describe('The type of the favorited entity.'),
   entity_id: zod.string().describe('The id of the favorited entity.'),
@@ -10649,6 +10842,7 @@ export const getItemsSoupResponse = zod
                                 'crm_contact',
                                 'reminder',
                                 'skill',
+                                'agent_session',
                               ])
                               .describe('The type of an entity in Macro')
                               .describe("The referenced entity's type."),
@@ -10725,9 +10919,17 @@ export const getItemsSoupResponse = zod
               .describe(
                 'Whether the requesting user has favorited this entity.'
               ),
+            touched_at: zod.iso
+              .datetime({})
+              .nullish()
+              .describe(
+                "The caller's latest own mutation of this entity, present only when the\npage was ordered by `touched_by_me`. Clients keep the touched feed\nordered on this value, so it can be bumped optimistically."
+              ),
           })
         )
-        .describe('API representation of a soup item with its frecency score.')
+        .describe(
+          'API representation of a soup item with its per-viewer enrichments.'
+        )
     ),
     next_cursor: zod.string().nullish(),
   })
@@ -14283,6 +14485,7 @@ export const postItemsSoupResponse = zod
                                 'crm_contact',
                                 'reminder',
                                 'skill',
+                                'agent_session',
                               ])
                               .describe('The type of an entity in Macro')
                               .describe("The referenced entity's type."),
@@ -14359,9 +14562,17 @@ export const postItemsSoupResponse = zod
               .describe(
                 'Whether the requesting user has favorited this entity.'
               ),
+            touched_at: zod.iso
+              .datetime({})
+              .nullish()
+              .describe(
+                "The caller's latest own mutation of this entity, present only when the\npage was ordered by `touched_by_me`. Clients keep the touched feed\nordered on this value, so it can be bumped optimistically."
+              ),
           })
         )
-        .describe('API representation of a soup item with its frecency score.')
+        .describe(
+          'API representation of a soup item with its per-viewer enrichments.'
+        )
     ),
     next_cursor: zod.string().nullish(),
   })
@@ -17383,6 +17594,7 @@ export const postItemsSoupAstResponse = zod
                                 'crm_contact',
                                 'reminder',
                                 'skill',
+                                'agent_session',
                               ])
                               .describe('The type of an entity in Macro')
                               .describe("The referenced entity's type."),
@@ -17459,9 +17671,17 @@ export const postItemsSoupAstResponse = zod
               .describe(
                 'Whether the requesting user has favorited this entity.'
               ),
+            touched_at: zod.iso
+              .datetime({})
+              .nullish()
+              .describe(
+                "The caller's latest own mutation of this entity, present only when the\npage was ordered by `touched_by_me`. Clients keep the touched feed\nordered on this value, so it can be bumped optimistically."
+              ),
           })
         )
-        .describe('API representation of a soup item with its frecency score.')
+        .describe(
+          'API representation of a soup item with its per-viewer enrichments.'
+        )
     ),
     next_cursor: zod.string().nullish(),
   })
@@ -20834,6 +21054,7 @@ export const postItemsSoupAstGroupedResponse = zod
                                       'crm_contact',
                                       'reminder',
                                       'skill',
+                                      'agent_session',
                                     ])
                                     .describe('The type of an entity in Macro')
                                     .describe("The referenced entity's type."),
@@ -20910,10 +21131,16 @@ export const postItemsSoupAstGroupedResponse = zod
                     .describe(
                       'Whether the requesting user has favorited this entity.'
                     ),
+                  touched_at: zod.iso
+                    .datetime({})
+                    .nullish()
+                    .describe(
+                      "The caller's latest own mutation of this entity, present only when the\npage was ordered by `touched_by_me`. Clients keep the touched feed\nordered on this value, so it can be bumped optimistically."
+                    ),
                 })
               )
               .describe(
-                'API representation of a soup item with its frecency score.'
+                'API representation of a soup item with its per-viewer enrichments.'
               )
           )
           .describe(
@@ -23937,6 +24164,7 @@ export const postItemsSoupAstGroupedResponse = zod
                                       'crm_contact',
                                       'reminder',
                                       'skill',
+                                      'agent_session',
                                     ])
                                     .describe('The type of an entity in Macro')
                                     .describe("The referenced entity's type."),
@@ -24013,10 +24241,16 @@ export const postItemsSoupAstGroupedResponse = zod
                     .describe(
                       'Whether the requesting user has favorited this entity.'
                     ),
+                  touched_at: zod.iso
+                    .datetime({})
+                    .nullish()
+                    .describe(
+                      "The caller's latest own mutation of this entity, present only when the\npage was ordered by `touched_by_me`. Clients keep the touched feed\nordered on this value, so it can be bumped optimistically."
+                    ),
                 })
               )
               .describe(
-                'API representation of a soup item with its frecency score.'
+                'API representation of a soup item with its per-viewer enrichments.'
               )
           )
           .describe(
@@ -25997,6 +26231,7 @@ export const listRemindersQueryParams = zod.object({
       'crm_contact',
       'reminder',
       'skill',
+      'agent_session',
     ])
     .optional()
     .describe(
@@ -26079,6 +26314,7 @@ export const listRemindersResponse = zod
                     'crm_contact',
                     'reminder',
                     'skill',
+                    'agent_session',
                   ])
                   .describe('The type of an entity in Macro'),
               ])
@@ -26164,6 +26400,7 @@ export const createReminderBody = zod
             'crm_contact',
             'reminder',
             'skill',
+            'agent_session',
           ])
           .describe('The type of an entity in Macro'),
       ])
@@ -26246,6 +26483,7 @@ export const getReminderResponse = zod
             'crm_contact',
             'reminder',
             'skill',
+            'agent_session',
           ])
           .describe('The type of an entity in Macro'),
       ])
@@ -26388,6 +26626,7 @@ export const updateReminderResponse = zod
             'crm_contact',
             'reminder',
             'skill',
+            'agent_session',
           ])
           .describe('The type of an entity in Macro'),
       ])
@@ -26773,14 +27012,16 @@ export const listWebhooksResponse = zod
             updated_at: zod.iso.datetime({}).describe('Update timestamp.'),
             workspace_id: zod.string().describe('Owning workspace id.'),
           })
-          .describe('Webhook row returned by application APIs.')
+          .describe(
+            'Webhook row returned by application APIs.\n\nClients deserialize this, so both derives are used.'
+          )
       )
       .describe(
         "The caller's webhooks, newest first. Signing secrets are omitted."
       ),
   })
   .describe(
-    'Webhooks visible to the caller across their personal and team workspaces.'
+    'Webhooks visible to the caller across their personal and team workspaces.\n\nClients deserialize this, so both derives are used.'
   );
 
 /**
@@ -26819,9 +27060,13 @@ export const createWebhookBody = zod
       ),
     scope: zod
       .enum(['user', 'team'])
-      .describe('Scope that owns a newly-created webhook.'),
+      .describe(
+        'Scope that owns a newly-created webhook.\n\nClients serialize this, so both derives are used.'
+      ),
   })
-  .describe('Request to create a webhook.');
+  .describe(
+    'Request to create a webhook.\n\nClients serialize this, so both derives are used.'
+  );
 
 /**
  * @summary Get a webhook.
@@ -26877,7 +27122,9 @@ export const getWebhookResponse = zod
     updated_at: zod.iso.datetime({}).describe('Update timestamp.'),
     workspace_id: zod.string().describe('Owning workspace id.'),
   })
-  .describe('Webhook row returned by application APIs.');
+  .describe(
+    'Webhook row returned by application APIs.\n\nClients deserialize this, so both derives are used.'
+  );
 
 /**
  * @summary Delete a webhook.
@@ -26985,7 +27232,9 @@ export const patchWebhookResponse = zod
     updated_at: zod.iso.datetime({}).describe('Update timestamp.'),
     workspace_id: zod.string().describe('Owning workspace id.'),
   })
-  .describe('Webhook row returned by application APIs.');
+  .describe(
+    'Webhook row returned by application APIs.\n\nClients deserialize this, so both derives are used.'
+  );
 
 /**
  * @summary Validate a webhook endpoint.

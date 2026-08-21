@@ -8,6 +8,7 @@
 use crate::link_patch::{OptimisticLinkPatch, QueryRevalidation};
 use crate::normalize::RecordUpdates;
 use crate::value::canonical_json;
+use predicate_index::OptimisticProjectionMutation;
 use serde::{Deserialize, Serialize};
 use serde_json::Value as Json;
 
@@ -65,7 +66,7 @@ impl StoredMutation {
 }
 
 /// Current version of the durable optimistic source envelope.
-pub const OPTIMISTIC_SOURCE_VERSION: u8 = 2;
+pub const OPTIMISTIC_SOURCE_VERSION: u8 = 3;
 
 const OPTIMISTIC_SOURCE_ENVELOPE_PREFIX: &str = "@macro-cache/optimistic-source:";
 
@@ -81,11 +82,26 @@ pub struct OptimisticSource {
     /// Revalidations for relevant fields that could not be patched.
     #[serde(default)]
     pub revalidations: Vec<QueryRevalidation>,
+    /// Ordered generic projection changes composed with this optimistic layer.
+    #[serde(default)]
+    pub projection_mutations: Vec<OptimisticProjectionMutation>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct OptimisticSourceEnvelope {
+    version: u8,
+    mutation_data: Json,
+    #[serde(default)]
+    link_patches: Vec<OptimisticLinkPatch>,
+    #[serde(default)]
+    revalidations: Vec<QueryRevalidation>,
+    projection_mutations: Vec<OptimisticProjectionMutation>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+struct OptimisticSourceEnvelopeV2 {
     version: u8,
     mutation_data: Json,
     #[serde(default)]
@@ -102,6 +118,7 @@ pub fn encode_optimistic_source(source: &OptimisticSource) -> String {
             mutation_data: source.mutation_data.clone(),
             link_patches: source.link_patches.clone(),
             revalidations: source.revalidations.clone(),
+            projection_mutations: source.projection_mutations.clone(),
         })
         .expect("optimistic source serializes"),
     );
@@ -116,21 +133,38 @@ pub fn decode_optimistic_source(value: &str) -> Result<OptimisticSource, String>
             mutation_data: serde_json::from_str(value).map_err(|error| error.to_string())?,
             link_patches: Vec::new(),
             revalidations: Vec::new(),
+            projection_mutations: Vec::new(),
         });
     };
-    let envelope: OptimisticSourceEnvelope =
-        serde_json::from_str(envelope).map_err(|error| error.to_string())?;
-    if envelope.version != OPTIMISTIC_SOURCE_VERSION {
-        return Err(format!(
-            "unsupported optimistic source version {}",
-            envelope.version
-        ));
+    let value: Json = serde_json::from_str(envelope).map_err(|error| error.to_string())?;
+    let version = value
+        .get("version")
+        .and_then(Json::as_u64)
+        .ok_or_else(|| "optimistic source version is missing or invalid".to_string())?;
+    match version {
+        2 => {
+            let envelope: OptimisticSourceEnvelopeV2 =
+                serde_json::from_value(value).map_err(|error| error.to_string())?;
+            debug_assert_eq!(envelope.version, 2);
+            Ok(OptimisticSource {
+                mutation_data: envelope.mutation_data,
+                link_patches: envelope.link_patches,
+                revalidations: envelope.revalidations,
+                projection_mutations: Vec::new(),
+            })
+        }
+        version if version == u64::from(OPTIMISTIC_SOURCE_VERSION) => {
+            let envelope: OptimisticSourceEnvelope =
+                serde_json::from_value(value).map_err(|error| error.to_string())?;
+            Ok(OptimisticSource {
+                mutation_data: envelope.mutation_data,
+                link_patches: envelope.link_patches,
+                revalidations: envelope.revalidations,
+                projection_mutations: envelope.projection_mutations,
+            })
+        }
+        version => Err(format!("unsupported optimistic source version {version}")),
     }
-    Ok(OptimisticSource {
-        mutation_data: envelope.mutation_data,
-        link_patches: envelope.link_patches,
-        revalidations: envelope.revalidations,
-    })
 }
 
 /// One durable optimistic layer paired one-to-one with a queued mutation.

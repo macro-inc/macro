@@ -14,6 +14,7 @@ import {
   convertTimesForAllDay,
   createEventEditorState,
   type EventEditorCalendarOption,
+  type EventEditorConferenceChoice,
   type EventEditorGuestOption,
   type EventEditorInitialValues,
   type EventEditorSubmitValues,
@@ -33,6 +34,7 @@ interface EventComposerFormSnapshot {
   guestEmails: readonly string[];
   location: string;
   description: string;
+  conference: EventEditorConferenceChoice;
   reminderMinutes: readonly number[];
 }
 
@@ -74,6 +76,7 @@ function isEventComposerFormDirty(
     initial.calendarId !== current.calendarId ||
     initial.location !== current.location ||
     initial.description !== current.description ||
+    initial.conference !== current.conference ||
     !arraysEqual(
       normalizedGuestEmails(initial.guestEmails),
       normalizedGuestEmails(current.guestEmails)
@@ -213,6 +216,7 @@ export function createCalendarEventFormController(
     guestEmails: selectedGuests().map(guestEmail),
     location: state().location,
     description: state().description,
+    conference: state().conference,
     reminderMinutes: normalizedReminderMinutes(reminderMinutes()),
   });
 
@@ -226,6 +230,7 @@ export function createCalendarEventFormController(
     guestEmails: initialGuestEmails(),
     location: initialValue().location,
     description: initialValue().description,
+    conference: initialValue().conference,
     reminderMinutes: normalizedReminderMinutes(initialReminderMinutes()),
   });
 
@@ -287,6 +292,11 @@ export function createCalendarEventFormController(
     if (!time || !recurrence.canSave()) return undefined;
     const current = state();
     const reminders = reminderUpdate();
+    const conference =
+      current.conference === 'existing' ||
+      current.conference === initialValue().conference
+        ? undefined
+        : current.conference;
     return {
       title: current.title,
       time,
@@ -295,6 +305,7 @@ export function createCalendarEventFormController(
       guestEmails: selectedGuests().map(guestEmail),
       location: current.location,
       description: current.description,
+      ...(conference ? { conference } : {}),
       ...(reminders ? { reminders } : {}),
     };
   };
@@ -320,6 +331,7 @@ export function createCalendarEventFormController(
     selectedGuests,
     effectiveCalendarId,
     selectedCalendarOption,
+    initialConferenceChoice: () => initialValue().conference,
     reminderMinutes,
     preservedReminderCount,
     canAddReminder,

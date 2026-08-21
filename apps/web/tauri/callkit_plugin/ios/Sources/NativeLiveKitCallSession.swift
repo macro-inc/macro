@@ -37,6 +37,8 @@ final class NativeLiveKitCallSession: NSObject, RoomDelegate, @unchecked Sendabl
     private var pinnedRemoteVideoParticipantId: String?
     private var speakingRemoteParticipantIds: [String] = []
     private var participantDisplayNamesByIdentity: [String: String] = [:]
+    private var lastPublishedVideoParticipants: [NativeVideoParticipant]?
+    private var lastPublishedPrimaryParticipantId: String?
     private var didPrepareAudio = false
     private var isCallKitAudioActive = false
     private var isActivatingAudioEngine = false
@@ -249,6 +251,8 @@ final class NativeLiveKitCallSession: NSObject, RoomDelegate, @unchecked Sendabl
         )
         pinnedRemoteVideoParticipantId = nil
         speakingRemoteParticipantIds = []
+        lastPublishedVideoParticipants = nil
+        lastPublishedPrimaryParticipantId = nil
         videoOverlay.setAudioMuted(desiredAudioMuted)
         videoOverlay.setLocalVideoEnabled(false)
         emitSnapshot()
@@ -358,6 +362,13 @@ final class NativeLiveKitCallSession: NSObject, RoomDelegate, @unchecked Sendabl
         let trimmedIdentity = identity.trimmingCharacters(in: .whitespacesAndNewlines)
         let normalizedIdentity = normalizedParticipantIdentity(trimmedIdentity)
         let trimmedName = displayName?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let normalizedName = (trimmedName?.isEmpty == false) ? trimmedName : nil
+        // The JS side re-syncs every participant's name whenever its query
+        // settles; skip the full layout rebuild when nothing actually changed.
+        if participantDisplayNamesByIdentity[trimmedIdentity] == normalizedName,
+           participantDisplayNamesByIdentity[normalizedIdentity] == normalizedName {
+            return
+        }
         if let trimmedName, !trimmedName.isEmpty {
             participantDisplayNamesByIdentity[trimmedIdentity] = trimmedName
             participantDisplayNamesByIdentity[normalizedIdentity] = trimmedName
@@ -551,9 +562,11 @@ final class NativeLiveKitCallSession: NSObject, RoomDelegate, @unchecked Sendabl
     func room(_ room: Room, didUpdateSpeakingParticipants participants: [Participant]) {
         DispatchQueue.main.async { [weak self, weak room] in
             guard let self, let room, self.room === room else { return }
-            self.speakingRemoteParticipantIds = participants
+            let speakingIds = participants
                 .filter { $0 is RemoteParticipant && !self.isAgentParticipant($0) }
                 .map { self.participantId($0) }
+            guard speakingIds != self.speakingRemoteParticipantIds else { return }
+            self.speakingRemoteParticipantIds = speakingIds
             print("[CallKit] LiveKit speaking participants updated participants=\(participants.map { self.describeParticipant($0) })")
             self.rebuildRemoteVideoLayout(from: room)
         }
@@ -709,6 +722,9 @@ final class NativeLiveKitCallSession: NSObject, RoomDelegate, @unchecked Sendabl
                 isScreenShare: false
             )
         }
+        // Dictionary iteration order is unstable; sort so strip tiles don't
+        // randomly permute between rebuilds.
+        .sorted { $0.id < $1.id }
 
         if let pinnedId = pinnedRemoteVideoParticipantId,
            !participants.contains(where: { $0.id == pinnedId }) {
@@ -722,9 +738,16 @@ final class NativeLiveKitCallSession: NSObject, RoomDelegate, @unchecked Sendabl
             }.first
             ?? participants.first
 
-        videoOverlay.setRemoteVideoParticipants(participants, primaryId: primary?.id)
+        // Tracks compare by identity in NativeVideoParticipant's Equatable, so
+        // skip republishing when nothing the overlay renders actually changed —
+        // speaker churn and JS name re-syncs otherwise flood it with no-ops.
+        if participants != lastPublishedVideoParticipants || primary?.id != lastPublishedPrimaryParticipantId {
+            lastPublishedVideoParticipants = participants
+            lastPublishedPrimaryParticipantId = primary?.id
+            videoOverlay.setRemoteVideoParticipants(participants, primaryId: primary?.id)
+            print("[CallKit] Rebuilt remote video layout participants=\(participants.map { "\($0.id):\($0.title)" }) primary=\(primary?.id ?? "nil") pinned=\(pinnedRemoteVideoParticipantId ?? "nil")")
+        }
         updatePictureInPicture(from: room, primary: primary)
-        print("[CallKit] Rebuilt remote video layout participants=\(participants.map { "\($0.id):\($0.title)" }) primary=\(primary?.id ?? "nil") pinned=\(pinnedRemoteVideoParticipantId ?? "nil")")
     }
 
     private func updatePictureInPicture(from room: Room, primary: NativeVideoParticipant?) {
@@ -1162,6 +1185,8 @@ final class NativeLiveKitCallSession: NSObject, RoomDelegate, @unchecked Sendabl
         lastAudioEngineOutputAvailable = nil
         pinnedRemoteVideoParticipantId = nil
         speakingRemoteParticipantIds = []
+        lastPublishedVideoParticipants = nil
+        lastPublishedPrimaryParticipantId = nil
         participantDisplayNamesByIdentity = [:]
         onParticipantIdentitiesChanged([])
         pictureInPicture.stopAndReset()

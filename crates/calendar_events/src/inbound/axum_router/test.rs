@@ -39,3 +39,54 @@ fn occurrence_cursor_round_trips_equal_start_tie_breakers() {
     assert_eq!(decode_cursor(Some(encoded)).unwrap(), Some(cursor));
     assert!(decode_cursor(Some("not-base64".to_string())).is_err());
 }
+
+#[test]
+fn mention_preview_items_serialize_the_preview_contract() {
+    let event_id = uuid::Uuid::now_v7();
+    let starts_at = Utc.with_ymd_and_hms(2026, 8, 19, 19, 0, 0).unwrap();
+    let accessible = CalendarMentionPreviewItem {
+        event_id,
+        kind: CalendarMentionPreviewKind::Access,
+        event: Some(CalendarMentionEvent {
+            viewer_event_id: event_id,
+            title: "Smart Macro Discussion".to_string(),
+            time: crate::domain::models::EventTime::Timed {
+                starts_at,
+                ends_at: starts_at + chrono::Duration::minutes(90),
+                time_zone: Some("America/New_York".to_string()),
+            },
+            occurrence_key: Some(starts_at.to_rfc3339()),
+            is_recurring: false,
+            location: None,
+            organizer_email: Some("teo@example.com".to_string()),
+            organizer_name: None,
+            attendee_count: 3,
+            updated_at: starts_at,
+        }),
+    };
+    let json = serde_json::to_value(&accessible).unwrap();
+    assert_eq!(json["type"], "access");
+    assert_eq!(json["eventId"], event_id.to_string());
+    assert_eq!(json["event"]["viewerEventId"], event_id.to_string());
+    assert_eq!(json["event"]["time"]["kind"], "timed");
+    assert_eq!(json["event"]["attendeeCount"], 3);
+
+    let no_access = CalendarMentionPreviewItem {
+        event_id,
+        kind: CalendarMentionPreviewKind::NoAccess,
+        event: None,
+    };
+    let json = serde_json::to_value(&no_access).unwrap();
+    assert_eq!(json["type"], "no_access");
+    assert!(json.get("event").is_none());
+
+    let deleted = CalendarMentionPreviewItem {
+        event_id,
+        kind: CalendarMentionPreviewKind::DoesNotExist,
+        event: None,
+    };
+    assert_eq!(
+        serde_json::to_value(&deleted).unwrap()["type"],
+        "does_not_exist"
+    );
+}

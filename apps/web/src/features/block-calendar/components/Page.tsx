@@ -1,8 +1,6 @@
 import {
   CalendarGrid,
   type CalendarGridHandle,
-  type CalendarGridSelection,
-  type CalendarGridSettings,
 } from '@app/features/calendar/components/CalendarGrid';
 import {
   type CalendarPageId,
@@ -23,6 +21,10 @@ import {
   calendarEventTimeFromFullCalendar,
   canEditCalendarEventTime,
 } from '@app/features/calendar/utils/event-interaction';
+import {
+  scrollEventChipIntoView,
+  timeGridScroller,
+} from '@app/features/calendar/utils/time-grid-scroller';
 import { toast } from '@core/component/Toast/Toast';
 import { ScrollIndicators } from '@core/component/VerticalScrollIndicators';
 import { isMobile } from '@core/mobile/isMobile';
@@ -71,9 +73,7 @@ function CalendarScrollIndicators(props: {
 
       let updateFrame: number | undefined;
       const updateScrollElements = () => {
-        const scrollElement = element.querySelector<HTMLElement>(
-          '.fc-timegrid .fc-scroller-harness-liquid > .fc-scroller'
-        );
+        const scrollElement = timeGridScroller(element);
         const fadeContainer = scrollElement?.parentElement;
         setTarget((current) => {
           if (!scrollElement || !fadeContainer) return undefined;
@@ -301,46 +301,27 @@ export function Page(props: {
     );
   };
 
-  const gridSettings: CalendarGridSettings = {
-    get initialView() {
-      return calendarView.displaySettings.periodView;
-    },
-    get showWeekends() {
-      return calendarView.displaySettings.showWeekends;
-    },
-    get weekStartsOn() {
-      return calendarView.displaySettings.weekStartsOn;
-    },
-    get timeFormat() {
-      return calendarView.displaySettings.timeFormat;
-    },
-    get useNarrowDayHeaders() {
-      return useNarrowWeekdayHeaders();
-    },
-    get useNarrowEventContent() {
-      return props.useNarrowDayHeaders;
-    },
-  };
-  const gridSelection: CalendarGridSelection = {
-    get color() {
-      return effectiveSelectionColor();
-    },
-    get eventId() {
-      return isActive() ? calendarView.selectedEvent()?.id : undefined;
-    },
-    onDateSelect: handleSelect,
-    onEventSelect: (event, element) => {
-      if (isActive()) calendarView.selectEvent(event, element);
-    },
-  };
-
   return (
     <CalendarGrid
       initialDate={props.initialDate}
       events={data.visibleEvents()}
       eventsById={data.eventsById()}
-      settings={gridSettings}
-      selection={gridSelection}
+      settings={{
+        initialView: calendarView.displaySettings.periodView,
+        showWeekends: calendarView.displaySettings.showWeekends,
+        weekStartsOn: calendarView.displaySettings.weekStartsOn,
+        timeFormat: calendarView.displaySettings.timeFormat,
+        useNarrowDayHeaders: useNarrowWeekdayHeaders(),
+        useNarrowEventContent: props.useNarrowDayHeaders,
+      }}
+      selection={{
+        color: effectiveSelectionColor(),
+        eventId: isActive() ? calendarView.selectedEvent()?.id : undefined,
+        onDateSelect: isMobile() ? undefined : handleSelect,
+        onEventSelect: (event, element) => {
+          if (isActive()) calendarView.selectEvent(event, element);
+        },
+      }}
       eventTimeChangePending={updateEventTime.isPending}
       onDatesSet={handleDatesSet}
       onEventTimeChange={handleEventTimeChange}
@@ -383,6 +364,7 @@ function CalendarPageHost(props: {
     const chip = props.grid.eventElements.get(targetId);
     if (!event || !chip?.isConnected) return;
     calendarFocus.consume(target.requestId);
+    scrollEventChipIntoView(props.grid.element(), chip);
     calendarView.selectEvent(event, chip);
   });
 

@@ -1,31 +1,112 @@
 import { describe, expect, it } from 'vitest';
+import type { SearchCacheArgs } from './protocol';
 import {
   isCachePush,
   isCacheResponse,
   isWorkerMessage,
   MAX_RECORD_SELECTION_PAGE_SIZE,
-  validateRecordSelectionLimit,
+  validateCacheSearchArgs,
+  validateRecordSelectionKeys,
 } from './protocol';
 
-describe('validateRecordSelectionLimit', () => {
-  it('accepts bounded positive integers', () => {
-    expect(validateRecordSelectionLimit(1)).toBe(1);
-    expect(validateRecordSelectionLimit(MAX_RECORD_SELECTION_PAGE_SIZE)).toBe(
-      MAX_RECORD_SELECTION_PAGE_SIZE
-    );
+describe('validateRecordSelectionKeys', () => {
+  it('accepts bounded canonical entity keys, including an empty set', () => {
+    expect(validateRecordSelectionKeys([])).toEqual([]);
+    expect(validateRecordSelectionKeys(['GraphqlSoupDocument:one'])).toEqual([
+      'GraphqlSoupDocument:one',
+    ]);
   });
 
-  it.each([
-    0,
-    -1,
-    1.5,
-    MAX_RECORD_SELECTION_PAGE_SIZE + 1,
-    Number.NaN,
-    Number.POSITIVE_INFINITY,
-  ])('rejects invalid limit %s', (limit) => {
-    expect(() => validateRecordSelectionLimit(limit)).toThrow(
-      'record selection limit must be an integer between 1 and 500'
+  it('rejects invalid or unbounded key sets', () => {
+    expect(() => validateRecordSelectionKeys(['ROOT_QUERY'])).toThrow(
+      'invalid normalized record key'
     );
+    expect(() =>
+      validateRecordSelectionKeys([`Thing:${'x'.repeat(1024)}`])
+    ).toThrow('invalid normalized record key');
+    expect(() =>
+      validateRecordSelectionKeys(
+        Array.from(
+          { length: MAX_RECORD_SELECTION_PAGE_SIZE + 1 },
+          (_, index) => `Thing:${index}`
+        )
+      )
+    ).toThrow('accepts at most 500 keys');
+  });
+});
+
+describe('validateCacheSearchArgs', () => {
+  it('fills transport-neutral defaults and preserves deterministic clocks', () => {
+    expect(
+      validateCacheSearchArgs({
+        profile: 'quick-access-v1',
+        limit: 25,
+        nowMs: 123,
+      })
+    ).toEqual({
+      profile: 'quick-access-v1',
+      buckets: [],
+      query: '',
+      limit: 25,
+      nowMs: 123,
+    });
+  });
+
+  it('rejects unbounded text, invalid buckets and page sizes', () => {
+    expect(() =>
+      validateCacheSearchArgs({
+        profile: 'quick-access-v1',
+        query: 'x'.repeat(513),
+        limit: 25,
+      })
+    ).toThrow('query is too long');
+    expect(() =>
+      validateCacheSearchArgs({
+        profile: 'quick-access-v1',
+        query: 'é'.repeat(257),
+        limit: 25,
+      })
+    ).toThrow('query is too long');
+    expect(() =>
+      validateCacheSearchArgs({
+        profile: 'quick-access-v1',
+        buckets: ['Document; DROP TABLE records'],
+        limit: 25,
+      })
+    ).toThrow('invalid cache search bucket');
+    expect(() =>
+      validateCacheSearchArgs({ profile: 'quick-access-v1', limit: 501 })
+    ).toThrow('cache search limit');
+  });
+
+  it('rejects invalid profiles, clocks and cursors at the public ingress', () => {
+    expect(() =>
+      validateCacheSearchArgs({
+        profile: 'future-profile',
+        limit: 25,
+      } as unknown as SearchCacheArgs)
+    ).toThrow('invalid cache search profile');
+    expect(() =>
+      validateCacheSearchArgs({
+        profile: 'quick-access-v1',
+        limit: 25,
+        nowMs: -1,
+      })
+    ).toThrow('invalid cache search nowMs');
+    expect(() =>
+      validateCacheSearchArgs({
+        profile: 'quick-access-v1',
+        limit: 25,
+        cursor: { timestampMs: 1.5, recordKey: 'Thing:one' },
+      })
+    ).toThrow('invalid cache search cursor');
+    expect(() =>
+      validateCacheSearchArgs({
+        profile: 'quick-access-v1',
+        limit: 25,
+        cursor: { timestampMs: 1, recordKey: 'ROOT_QUERY' },
+      })
+    ).toThrow('invalid cache search cursor');
   });
 });
 

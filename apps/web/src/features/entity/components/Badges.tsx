@@ -155,6 +155,24 @@ export function ReminderReferenceBadge(props: ParentProps<{ name: string }>) {
   );
 }
 
+/**
+ * How often a recurring reminder fires, e.g. "Every weekday at 9:00 AM".
+ *
+ * A reminder row shows its next firing in the timestamp column, which for a
+ * recurring one says when it next comes due but not that it will come due
+ * again. This is the part that says so.
+ */
+export function ReminderRecurrenceBadge(props: { recurrence: string }) {
+  return (
+    <Badge
+      class="max-w-40 min-w-0 shrink-0 normal-case font-sans text-ink-extra-muted border-edge-muted px-2"
+      title={props.recurrence}
+    >
+      <span class="truncate">{props.recurrence}</span>
+    </Badge>
+  );
+}
+
 export function CallDurationBadge(props: { duration: string }) {
   return (
     <Badge class="normal-case text-ink-extra-muted border-edge-muted px-2">

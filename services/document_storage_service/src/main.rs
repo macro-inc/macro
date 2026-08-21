@@ -855,6 +855,7 @@ async fn main() -> anyhow::Result<()> {
 
     let sqs_client = Arc::new(sqs_client);
     let conn_gateway_client = Arc::new(conn_gateway_client);
+
     // The OpenAI key is injected as the required `OPENAI_API_KEY` env var
     // (resolved from the `openai-key` secret at deploy time by the infra stack),
     // the same way `document_cognition_service` consumes it. Fail fast if it's

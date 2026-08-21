@@ -30,6 +30,7 @@ fn create_req(handle: &str) -> CreateBotRequest {
         handle: handle.to_string(),
         description: Some("Posts alarm notifications".to_string()),
         avatar_url: None,
+        has_agent: None,
     }
 }
 
@@ -42,6 +43,7 @@ fn create_channel_scoped_req(handle: &str) -> CreateChannelScopedBotRequest {
         avatar_url: None,
         token_label: Some("Webhook".to_string()),
         token_expires_at: None,
+        has_agent: None,
     }
 }
 
@@ -327,6 +329,85 @@ async fn create_user_owned_bot_records_user_owner(pool: PgPool) -> anyhow::Resul
     );
     assert_eq!(bot.created_by.as_deref(), Some(USER_OWNER));
     assert_eq!(bot.handle, "datadog");
+    assert!(!bot.has_agent);
+
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn create_bot_stores_requested_has_agent(pool: PgPool) -> anyhow::Result<()> {
+    let service = service(&pool);
+    let mut request = create_req("agent-bot");
+    request.has_agent = Some(true);
+
+    let bot = service.create_bot(user_id(USER_OWNER), request).await?;
+
+    assert!(bot.has_agent);
+    assert!(
+        service
+            .get_bot(user_id(USER_OWNER), bot.id)
+            .await?
+            .has_agent
+    );
+
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn patch_bot_toggles_has_agent_and_leaves_it_unchanged_when_omitted(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    let service = service(&pool);
+    let bot = service
+        .create_bot(user_id(USER_OWNER), create_req("agent-toggle"))
+        .await?;
+    assert!(!bot.has_agent);
+
+    let enabled = service
+        .patch_bot(
+            user_id(USER_OWNER),
+            bot.id,
+            PatchBotRequest {
+                name: None,
+                handle: None,
+                description: None,
+                avatar_url: None,
+                has_agent: Some(true),
+            },
+        )
+        .await?;
+    assert!(enabled.has_agent);
+
+    let renamed = service
+        .patch_bot(
+            user_id(USER_OWNER),
+            bot.id,
+            PatchBotRequest {
+                name: Some("Renamed".to_string()),
+                handle: None,
+                description: None,
+                avatar_url: None,
+                has_agent: None,
+            },
+        )
+        .await?;
+    assert_eq!(renamed.name, "Renamed");
+    assert!(renamed.has_agent);
+
+    let disabled = service
+        .patch_bot(
+            user_id(USER_OWNER),
+            bot.id,
+            PatchBotRequest {
+                name: None,
+                handle: None,
+                description: None,
+                avatar_url: None,
+                has_agent: Some(false),
+            },
+        )
+        .await?;
+    assert!(!disabled.has_agent);
 
     Ok(())
 }
@@ -523,12 +604,16 @@ async fn create_channel_scoped_bot_creates_bot_participant_and_token(
         .create_channel_scoped_bot(
             user_id(USER_OWNER),
             channel_id,
-            create_channel_scoped_req("scoped-alerts"),
+            CreateChannelScopedBotRequest {
+                has_agent: Some(true),
+                ..create_channel_scoped_req("scoped-alerts")
+            },
         )
         .await?;
 
     assert_eq!(created.bot.kind, BotKind::Owned);
     assert_eq!(created.bot.handle, "scoped-alerts");
+    assert!(created.bot.has_agent);
     assert_eq!(created.bot.created_by.as_deref(), Some(USER_OWNER));
     assert_eq!(created.token.bot_id, created.bot.id);
     assert_eq!(created.token.label.as_deref(), Some("Webhook"));
@@ -850,6 +935,7 @@ async fn patch_and_delete_publish_requested_fields_and_team_owner(
         handle: None,
         description: Some("Replacement description".to_string()),
         avatar_url: None,
+        has_agent: None,
     };
     let patched = service
         .patch_bot(user_id(TEAM_ADMIN), bot.id, patch_request)
@@ -942,6 +1028,7 @@ async fn non_lifecycle_and_failed_operations_do_not_publish(pool: PgPool) -> any
                 handle: None,
                 description: None,
                 avatar_url: None,
+                has_agent: None,
             },
         )
         .await;
@@ -993,6 +1080,7 @@ async fn scheduling_failures_do_not_change_successful_mutations(
                 handle: None,
                 description: None,
                 avatar_url: None,
+                has_agent: None,
             },
         )
         .await?;

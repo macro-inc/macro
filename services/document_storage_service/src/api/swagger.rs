@@ -141,6 +141,7 @@ use utoipa::OpenApi;
     paths(
         health::health_handler,
         calendar_events::inbound::axum_router::list_occurrences,
+        calendar_events::inbound::axum_router::mention_previews,
 
         // annotations
         annotations::get::get_document_comments_handler,
@@ -339,6 +340,7 @@ use utoipa::OpenApi;
         crm::inbound::axum_router::set_contact_name::handler,
         crm::inbound::axum_router::list_company_contacts::handler,
         crm::inbound::axum_router::get_contact::handler,
+        crm::inbound::axum_router::get_contact_by_email::handler,
         crm::inbound::axum_router::get_company::handler,
         crm::inbound::axum_router::create_company::handler,
         crm::inbound::axum_router::create_contact::handler,
@@ -427,6 +429,12 @@ use utoipa::OpenApi;
             SyncServiceVersionID,
             calendar_events::inbound::axum_router::CalendarOccurrenceItem,
             calendar_events::inbound::axum_router::CalendarOccurrenceResponse,
+            calendar_events::inbound::axum_router::CalendarMentionPreviewRequest,
+            calendar_events::inbound::axum_router::CalendarMentionPreviewRequestItem,
+            calendar_events::inbound::axum_router::CalendarMentionPreviewResponse,
+            calendar_events::inbound::axum_router::CalendarMentionPreviewItem,
+            calendar_events::inbound::axum_router::CalendarMentionPreviewKind,
+            calendar_events::domain::models::CalendarMentionEvent,
             calendar_events::domain::models::CalendarSyncStatus,
             SoupItemWithProperties,
             SoupApiItem,
@@ -537,6 +545,8 @@ use utoipa::OpenApi;
             bots::domain::models::BotChannelType,
             bots::domain::models::ChannelWebhookRequest,
             bots::domain::models::ChannelWebhookResponse,
+            bots::domain::models::CreateBotRequest,
+            bots::domain::models::PatchBotRequest,
             bots::domain::models::CreateChannelScopedBotRequest,
             bots::domain::models::CreateChannelScopedBotResponse,
 

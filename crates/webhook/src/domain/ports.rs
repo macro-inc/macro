@@ -49,6 +49,9 @@ pub trait WebhookRepo: Clone + Send + Sync + 'static {
     ///
     /// Delivery-eligible webhooks are active, valid, and not soft-deleted. A filter without
     /// `ids` matches every entity id.
+    /// List active, valid, non-bot-owned webhooks in the given workspaces
+    /// whose filters match `event` (and `entity_id`, when a filter names
+    /// ids).
     fn list_active_webhooks_matching_event(
         &self,
         workspace_ids: Vec<String>,

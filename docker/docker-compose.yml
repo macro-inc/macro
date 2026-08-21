@@ -296,6 +296,32 @@ services:
       start_period: 10s
 
   # ============================================================================
+  # agent_harness_service (Port 8101)
+  # Channel messages -> agent session trigger events -> sandboxed coding agent
+  # sessions, plus the session control routes, which have to be served from the
+  # process that owns the live transports they act on.
+  # Managed sandboxes require DAYTONA_API_KEY and GITHUB_TOKEN; trigger
+  # processing and external sessions run without them.
+  # ============================================================================
+  agent_harness_service:
+    <<: [*common-env, *rust-services-image]
+    command: ["/app/out/agent_harness_service"]
+    restart: on-failure
+    # No host port: everything reaches this through the proxy, and a second
+    # local instance would collide on a fixed publish.
+    environment:
+      # In-network gateway address; the local default (http://localhost:8082)
+      # would point at this container itself.
+      - OVERRIDE_CONNECTION_GATEWAY_URL=http://connection-gateway:8080
+    depends_on:
+      - postgres
+      - kafka
+      - connection_gateway
+    networks:
+      - databases
+      - services
+
+  # ============================================================================
   # static_file_service (Port 8094)
   # Static file serving - DynamoDB
   # ============================================================================
@@ -417,7 +443,13 @@ services:
           - sync-service
       databases:
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8787/health"]
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://localhost:8787/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))",
+        ]
       interval: 30s
       timeout: 10s
       retries: 3

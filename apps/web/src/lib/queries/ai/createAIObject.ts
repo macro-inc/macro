@@ -214,8 +214,8 @@ function stringifyVariables(variables: unknown): string {
   return typeof variables === 'string' ? variables : JSON.stringify(variables);
 }
 
-function buildMessages<Variables>(
-  options: CreateAIObjectOptions<z.ZodType, Variables>,
+function buildMessages<Schema extends z.ZodType, Variables, OnMutateResult>(
+  options: CreateAIObjectOptions<Schema, Variables, OnMutateResult>,
   variables: Variables
 ): ChatMessage[] {
   if (typeof options.messages === 'function') {
@@ -239,8 +239,12 @@ function buildMessages<Variables>(
   return messages;
 }
 
-async function generateAIObject<Schema extends z.ZodType, Variables>(
-  options: CreateAIObjectOptions<Schema, Variables>,
+async function generateAIObject<
+  Schema extends z.ZodType,
+  Variables,
+  OnMutateResult,
+>(
+  options: CreateAIObjectOptions<Schema, Variables, OnMutateResult>,
   variables: Variables
 ): Promise<z.infer<Schema>> {
   const response = await dcsCompletion({

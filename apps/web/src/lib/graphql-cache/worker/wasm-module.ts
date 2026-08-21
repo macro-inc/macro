@@ -14,11 +14,14 @@ import type {
   CachedQueryVariantWire,
   ClaimedMutation,
   EnqueueOptimisticMutationResult,
+  EntityFilterCacheArgs,
+  EntityFilterCacheResult,
   OptimisticLinkPatchWire,
   QueryRevalidationWire,
   ReadResult,
-  RecordCursor,
-  SelectedRecordPageWire,
+  SearchCacheArgs,
+  SearchCachePage,
+  SelectedRecordByKeyWire,
   WriteResult,
 } from '../protocol';
 import { workerCacheTelemetry } from '../telemetry-relay';
@@ -54,6 +57,10 @@ export interface CacheOpenResult {
   outcome: CacheOpenOutcome;
 }
 
+export type CacheEngineHydrationResult = WriteResult & {
+  data: unknown | null;
+};
+
 export interface CacheEngine {
   boundIdentity(): Promise<string | null>;
   /** Optional for compatibility engines; absence means unavailable. */
@@ -65,20 +72,38 @@ export interface CacheEngine {
     variables: Record<string, unknown> | undefined,
     entityResolvers: readonly EntityResolverWire[] | undefined
   ): Promise<ReadResult>;
-  readRecords(
+  readRecordsByKeys(
     document: string,
     fragmentName: string,
-    cursor: RecordCursor | undefined,
-    limit: number
-  ): Promise<SelectedRecordPageWire>;
+    keys: string[]
+  ): Promise<SelectedRecordByKeyWire[]>;
+  search(
+    request: SearchCacheArgs & { nowMs: number }
+  ): Promise<SearchCachePage>;
+  entityFilter(
+    request: EntityFilterCacheArgs
+  ): Promise<EntityFilterCacheResult>;
   writeQuery(
-    originOpId: string | undefined,
+    context: {
+      originOpId?: string;
+      registration?: {
+        opId: string;
+        entityResolvers?: readonly EntityResolverWire[];
+      };
+    },
     query: string,
     operationName: string | undefined,
     variables: Record<string, unknown> | undefined,
     data: unknown,
     identity: string | undefined
   ): Promise<WriteResult>;
+  hydrateQuery(
+    query: string,
+    operationName: string | undefined,
+    variables: Record<string, unknown> | undefined,
+    data: unknown,
+    identity: string | undefined
+  ): Promise<CacheEngineHydrationResult>;
   enqueueOptimisticMutation(
     originOpId: string | undefined,
     query: string,

@@ -113,6 +113,7 @@ export const TOKENS = {
       home: 'sidebar.goTo.home',
       gettingStarted: 'sidebar.goTo.gettingStarted',
       inbox: 'sidebar.goTo.inbox',
+      recent: 'sidebar.goTo.recent',
       activity: 'sidebar.goTo.activity',
       calendar: 'sidebar.goTo.calendar',
       search: 'sidebar.goTo.search',
@@ -125,7 +126,6 @@ export const TOKENS = {
       calls: 'sidebar.goTo.calls',
       companies: 'sidebar.goTo.companies',
       folders: 'sidebar.goTo.folders',
-      reminders: 'sidebar.goTo.reminders',
     },
   },
 
@@ -280,6 +280,7 @@ export const TOKENS = {
     snippetNewSplit: 'create.snippetNewSplit',
     automation: 'create.automation',
     skill: 'create.skill',
+    reminder: 'create.reminder',
     close_menu: 'create.close_menu',
   },
 

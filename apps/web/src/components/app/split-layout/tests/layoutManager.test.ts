@@ -271,6 +271,87 @@ describe('layoutManager', () => {
         dispose();
       });
     });
+
+    it('jumps back to the nearest earlier entry matching a predicate', () => {
+      createRoot((dispose) => {
+        const manager = createSplitLayout(createMockOrchestrator(), [
+          { type: 'component', id: 'inbox' },
+        ]);
+        const split = manager.getSplit(manager.splits()[0].id)!;
+
+        split.replace({ next: { type: 'md', id: 'doc-1' } });
+        split.replace({ next: { type: 'component', id: 'tasks' } });
+        split.replace({ next: { type: 'md', id: 'doc-2' } });
+        split.replace({ next: { type: 'channel', id: 'ch-1' } });
+
+        const moved = split.goBackTo(
+          (content) => content.type === 'component' && content.id === 'tasks'
+        );
+
+        expect(moved).toBe(true);
+        expect(split.content()).toMatchObject({
+          type: 'component',
+          id: 'tasks',
+        });
+        // The skipped entries stay ahead, so forward still reaches them.
+        expect(split.canGoForward()).toBe(true);
+
+        dispose();
+      });
+    });
+
+    it('skips history entries another split already displays', () => {
+      createRoot((dispose) => {
+        const manager = createSplitLayout(createMockOrchestrator(), [
+          { type: 'component', id: 'inbox' },
+          { type: 'md', id: 'doc-1' },
+        ]);
+        const [listSplitState, docSplitState] = manager.splits();
+        const listSplit = manager.getSplit(listSplitState.id)!;
+        const docSplit = manager.getSplit(docSplitState.id)!;
+
+        // The list split walks through doc-1 — which the other split is
+        // already showing — before landing on a channel.
+        listSplit.replace({ next: { type: 'md', id: 'doc-1' } });
+        listSplit.replace({ next: { type: 'channel', id: 'ch-1' } });
+
+        const moved = listSplit.goBackTo(
+          (content) => content.type === 'md' && content.id === 'doc-1'
+        );
+
+        // doc-1 is unmountable here, so nothing moves: the split keeps showing
+        // the channel rather than stranding its history on an entry it never
+        // mounted.
+        expect(moved).toBe(false);
+        expect(listSplit.content()).toMatchObject({
+          type: 'channel',
+          id: 'ch-1',
+        });
+        expect(docSplit.content()).toMatchObject({ type: 'md', id: 'doc-1' });
+
+        dispose();
+      });
+    });
+
+    it('leaves the split put when nothing earlier matches', () => {
+      createRoot((dispose) => {
+        const manager = createSplitLayout(createMockOrchestrator(), [
+          { type: 'component', id: 'inbox' },
+        ]);
+        const split = manager.getSplit(manager.splits()[0].id)!;
+
+        split.replace({ next: { type: 'md', id: 'doc-1' } });
+
+        const moved = split.goBackTo(
+          (content) => content.type === 'component' && content.id === 'tasks'
+        );
+
+        expect(moved).toBe(false);
+        expect(split.content()).toMatchObject({ type: 'md', id: 'doc-1' });
+
+        dispose();
+      });
+    });
   });
 
   describe('navigation params', () => {

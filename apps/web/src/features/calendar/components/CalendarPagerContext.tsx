@@ -13,12 +13,10 @@ import {
 } from 'solid-js';
 import type { CalendarOccurrenceData } from '../hooks/use-calendar-occurrence-data';
 import type { CalendarPeriodView } from '../types';
+import { timeGridScroller } from '../utils/time-grid-scroller';
 
 export const CALENDAR_PAGE_IDS = ['previous', 'current', 'next'] as const;
 export type CalendarPageId = (typeof CALENDAR_PAGE_IDS)[number];
-
-const TIME_GRID_SCROLLER_SELECTOR =
-  '.fc-timegrid .fc-scroller-harness-liquid > .fc-scroller';
 
 interface CalendarPageHandle {
   id: CalendarPageId;
@@ -83,12 +81,8 @@ function createCalendarPagerContext(props: CalendarPagerContextProps) {
   const activeData = createMemo(() => activePage()?.data);
   const activeDateInfo = createMemo(() => activePage()?.dateInfo());
 
-  const scrollElementFor = (handle: CalendarPageHandle | undefined) => {
-    const element = handle?.element();
-    if (!element) return undefined;
-
-    return element.querySelector<HTMLElement>(TIME_GRID_SCROLLER_SELECTOR);
-  };
+  const scrollElementFor = (handle: CalendarPageHandle | undefined) =>
+    timeGridScroller(handle?.element());
 
   const copyActiveScrollPosition = () => {
     const activeScrollElement = scrollElementFor(activePage());

@@ -1,7 +1,7 @@
 use std::sync::Mutex;
 
 use ai_toolset::schema::generate_validated_input_schema;
-use ai_toolset::{AsyncTool, RequestContext, ServiceContext};
+use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolSet};
 use chrono::{NaiveDate, TimeZone, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;
@@ -9,12 +9,13 @@ use uuid::Uuid;
 use super::*;
 use crate::domain::models::{
     AttendeeResponseStatus, CalendarAttendee, CalendarEventDraft, CalendarEventPatch,
-    CalendarOccurrence, CalendarSyncStatus, ConferenceChange, EventReminders, EventStatus,
-    EventTransparency, EventVisibility, OccurrenceRange, VisibleCalendar,
+    CalendarOccurrence, CalendarSyncStatus, ConferenceChange, EventReminderOverride,
+    EventReminders, EventStatus, EventTransparency, EventVisibility, OccurrenceRange,
+    VisibleCalendar,
 };
 use crate::domain::ports::{
     CalendarDeletionScope, CalendarMutationError, CalendarMutationService,
-    CalendarOccurrenceService, CalendarRsvpScope,
+    CalendarOccurrenceService, CalendarRsvpScope, CalendarUpdateScope,
 };
 
 #[test]
@@ -138,7 +139,7 @@ type RecordedCreate = (Option<Uuid>, Option<Uuid>, CalendarEventDraft);
 struct MockMutations {
     created: Mutex<Vec<RecordedCreate>>,
     create_error: Mutex<Option<CalendarMutationError>>,
-    updated: Mutex<Vec<(Uuid, CalendarEventPatch)>>,
+    updated: Mutex<Vec<(Uuid, CalendarEventPatch, CalendarUpdateScope)>>,
     deleted: Mutex<Vec<(Uuid, CalendarDeletionScope)>>,
     calendars: Mutex<Vec<VisibleCalendar>>,
 }
@@ -173,8 +174,9 @@ impl CalendarMutationService for MockMutations {
         _requester_id: &str,
         event_id: Uuid,
         patch: CalendarEventPatch,
+        scope: CalendarUpdateScope,
     ) -> Result<crate::domain::models::CalendarEvent, CalendarMutationError> {
-        self.updated.lock().unwrap().push((event_id, patch));
+        self.updated.lock().unwrap().push((event_id, patch, scope));
         Ok(sample_event(Vec::new()))
     }
 
@@ -240,6 +242,14 @@ impl CalendarOccurrenceService for MockOccurrences {
     ) -> Result<CalendarSyncStatus, rootcause::Report> {
         Ok(self.status)
     }
+
+    async fn mention_previews(
+        &self,
+        _requester_id: &str,
+        _items: Vec<crate::domain::models::CalendarMentionRequestItem>,
+    ) -> Result<Vec<crate::domain::models::CalendarMentionPreview>, rootcause::Report> {
+        unreachable!("no calendar tool resolves mention previews")
+    }
 }
 
 fn context(
@@ -265,6 +275,49 @@ fn empty_occurrences() -> MockOccurrences {
     }
 }
 
+fn create_tool_args() -> serde_json::Value {
+    serde_json::json!({
+        "title": "Design review",
+        "time": {
+            "kind": "timed",
+            "startsAt": "2026-08-20T17:00:00Z",
+            "endsAt": "2026-08-20T18:00:00Z",
+            "timeZone": "America/New_York"
+        },
+        "attendees": [],
+        "recurrenceLines": [],
+        "addGoogleMeet": false
+    })
+}
+
+#[tokio::test]
+async fn ai_toolset_defers_create_without_mutating_calendar() {
+    let (mutations, context) = context(MockMutations::default(), empty_occurrences());
+    let args = create_tool_args();
+    let pending = calendar_toolset()
+        .try_tool_call(context.0, request_context(), "CreateCalendarEvent", &args)
+        .await
+        .unwrap()
+        .unwrap();
+
+    assert_eq!(pending, serde_json::json!("PendingUserExecution"));
+    assert!(mutations.created.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn mcp_toolset_executes_create_directly() {
+    let (mutations, context) = context(MockMutations::default(), empty_occurrences());
+    let args = create_tool_args();
+    let event = mcp_toolset()
+        .try_tool_call(context.0, request_context(), "CreateCalendarEvent", &args)
+        .await
+        .unwrap()
+        .unwrap();
+
+    assert_eq!(event["eventId"], Uuid::from_u128(7).to_string());
+    assert_eq!(mutations.created.lock().unwrap().len(), 1);
+}
+
 #[tokio::test]
 async fn create_converts_input_into_a_domain_draft() {
     let (mutations, context) = context(MockMutations::default(), empty_occurrences());
@@ -284,6 +337,13 @@ async fn create_converts_input_into_a_domain_draft() {
         }],
         recurrence_lines: vec!["RRULE:FREQ=WEEKLY".to_string()],
         calendar_id: Some(calendar_id),
+        reminders: Some(EventRemindersInput {
+            use_default: false,
+            overrides: vec![EventReminderOverrideInput {
+                method: "popup".to_string(),
+                minutes: 15,
+            }],
+        }),
         add_google_meet: true,
     };
     let response = tool.call(context, request_context()).await.unwrap();
@@ -301,6 +361,16 @@ async fn create_converts_input_into_a_domain_draft() {
         vec!["RRULE:FREQ=WEEKLY".to_string()]
     );
     assert_eq!(draft.conference, Some(ConferenceChange::GoogleMeet));
+    assert_eq!(
+        draft.reminders,
+        Some(EventReminders {
+            use_default: false,
+            overrides: vec![EventReminderOverride {
+                method: "popup".to_string(),
+                minutes: 15,
+            }],
+        })
+    );
     assert!(matches!(draft.time, EventTime::AllDay { .. }));
 }
 
@@ -324,6 +394,7 @@ async fn create_surfaces_missing_calendar_as_an_actionable_error() {
         attendees: Vec::new(),
         recurrence_lines: Vec::new(),
         calendar_id: None,
+        reminders: None,
         add_google_meet: false,
     };
     let error = tool.call(context, request_context()).await.unwrap_err();
@@ -343,6 +414,8 @@ async fn update_converts_input_into_a_domain_patch() {
 
     let tool = UpdateCalendarEvent {
         event_id,
+        scope: UpdateScopeInput::All,
+        recurrence_id: None,
         title: Some("Renamed".to_string()),
         description: Some(String::new()),
         location: None,
@@ -357,8 +430,9 @@ async fn update_converts_input_into_a_domain_patch() {
     tool.call(context, request_context()).await.unwrap();
 
     let updated = mutations.updated.lock().unwrap();
-    let (patched_id, patch) = updated.first().expect("one update call");
+    let (patched_id, patch, scope) = updated.first().expect("one update call");
     assert_eq!(*patched_id, event_id);
+    assert_eq!(*scope, CalendarUpdateScope::All);
     assert_eq!(patch.title.as_deref(), Some("Renamed"));
     assert_eq!(patch.description.as_deref(), Some(""));
     assert_eq!(patch.location, None);
@@ -367,6 +441,84 @@ async fn update_converts_input_into_a_domain_patch() {
         Some(1)
     );
     assert_eq!(patch.conference, Some(ConferenceChange::Removed));
+}
+
+#[tokio::test]
+async fn update_passes_the_selected_occurrence_scope() {
+    let (mutations, context) = context(MockMutations::default(), empty_occurrences());
+    let event_id = Uuid::from_u128(11);
+
+    let tool = UpdateCalendarEvent {
+        event_id,
+        scope: UpdateScopeInput::ThisEvent,
+        recurrence_id: Some("2026-08-18T20:00:00+00:00".to_string()),
+        title: None,
+        description: None,
+        location: None,
+        time: Some(EventTimeInput::Timed {
+            starts_at: Utc.with_ymd_and_hms(2026, 8, 18, 20, 0, 0).unwrap(),
+            ends_at: Utc.with_ymd_and_hms(2026, 8, 18, 22, 0, 0).unwrap(),
+            time_zone: None,
+        }),
+        attendees: None,
+        recurrence_lines: None,
+        conference: None,
+    };
+    tool.call(context, request_context()).await.unwrap();
+
+    let updated = mutations.updated.lock().unwrap();
+    let (_, _, scope) = updated.first().expect("one update call");
+    assert_eq!(
+        *scope,
+        CalendarUpdateScope::ThisEvent {
+            recurrence_id: "2026-08-18T20:00:00+00:00".to_string(),
+        }
+    );
+}
+
+#[tokio::test]
+async fn scoped_update_requires_a_recurrence_id() {
+    let (mutations, context) = context(MockMutations::default(), empty_occurrences());
+
+    let tool = UpdateCalendarEvent {
+        event_id: Uuid::from_u128(11),
+        scope: UpdateScopeInput::ThisEvent,
+        recurrence_id: None,
+        title: Some("Renamed".to_string()),
+        description: None,
+        location: None,
+        time: None,
+        attendees: None,
+        recurrence_lines: None,
+        conference: None,
+    };
+    let error = tool.call(context, request_context()).await.unwrap_err();
+    assert!(error.description.contains("recurrenceId"));
+    assert!(mutations.updated.lock().unwrap().is_empty());
+}
+
+/// A series-wide update carrying an occurrence key is contradictory input;
+/// silently dropping the key would apply a one-occurrence intent to the
+/// whole series — the exact failure scoping exists to prevent.
+#[tokio::test]
+async fn series_update_rejects_a_stray_recurrence_id() {
+    let (mutations, context) = context(MockMutations::default(), empty_occurrences());
+
+    let tool = UpdateCalendarEvent {
+        event_id: Uuid::from_u128(11),
+        scope: UpdateScopeInput::All,
+        recurrence_id: Some("2026-08-18T20:00:00+00:00".to_string()),
+        title: Some("Renamed".to_string()),
+        description: None,
+        location: None,
+        time: None,
+        attendees: None,
+        recurrence_lines: None,
+        conference: None,
+    };
+    let error = tool.call(context, request_context()).await.unwrap_err();
+    assert!(error.description.contains("this_event"));
+    assert!(mutations.updated.lock().unwrap().is_empty());
 }
 
 #[tokio::test]

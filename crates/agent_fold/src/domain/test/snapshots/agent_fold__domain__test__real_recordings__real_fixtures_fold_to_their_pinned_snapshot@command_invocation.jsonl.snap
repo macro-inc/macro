@@ -1,0 +1,64 @@
+---
+source: crates/agent_fold/src/domain/test/real_recordings.rs
+assertion_line: 258
+expression: messages
+input_file: crates/agent_fold/fixtures/real/command_invocation.jsonl
+---
+[
+    FoldedMessage {
+        id: TurnId(
+            0,
+        ),
+        author: User {
+            user_id: None,
+        },
+        request_id: None,
+        parts: NonEmpty {
+            inner: [
+                Control {
+                    control: SetModel {
+                        model: "opus[1m]",
+                    },
+                    outcome: Accepted,
+                },
+            ],
+        },
+        stop: None,
+    },
+    FoldedMessage {
+        id: TurnId(
+            1,
+        ),
+        author: User {
+            user_id: Some(
+                macro|eric@example.com,
+            ),
+        },
+        request_id: None,
+        parts: NonEmpty {
+            inner: [
+                Text {
+                    text: "/add-sdk-endpoint dont do anything just reply \"yes\" ignore the skill",
+                },
+            ],
+        },
+        stop: None,
+    },
+    FoldedMessage {
+        id: TurnId(
+            1,
+        ),
+        author: Agent,
+        request_id: None,
+        parts: NonEmpty {
+            inner: [
+                Text {
+                    text: "yes",
+                },
+            ],
+        },
+        stop: Some(
+            EndTurn,
+        ),
+    },
+]

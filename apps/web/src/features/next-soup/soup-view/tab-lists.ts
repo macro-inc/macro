@@ -21,6 +21,10 @@ export const VIEW_TAB_LISTS: Record<TabbedListView, TabItem[]> = {
     { value: 'signal', label: 'Signal' },
     { value: 'noise', label: 'Noise' },
     { value: 'all', label: 'All' },
+    // Hidden from every tab surface for unflagged users (see
+    // `useVisibleViewTabs`); listed here so the tab/preset consistency tests
+    // still cover it.
+    { value: 'reminders', label: 'Reminders' },
   ],
   agents: [
     { value: 'owned', label: 'Owned' },

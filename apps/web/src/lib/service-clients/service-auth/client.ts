@@ -131,7 +131,9 @@ async function getAccessToken(): Promise<string | null> {
           return null;
         }
       } catch (error) {
-        Telemetry.error('Error refreshing access token', { error });
+        Telemetry.error('Error refreshing access token', {
+          error: error instanceof Error ? error.message : String(error),
+        });
         return null;
       } finally {
         // Clear the ongoing refresh promise so future calls can start a new refresh

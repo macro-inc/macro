@@ -1,10 +1,10 @@
-//! Engine host: the cache engine + SQLite storage behind an async mutex.
+//! Engine host: the cache engine + Turso storage behind an async mutex.
 //!
 //! `cache-core`'s `Storage` futures are `MaybeSend` — `Send` on native
 //! targets — so the engine is driven directly from the tauri/tokio runtime;
 //! the async mutex serializes commands the same way the browser worker's
-//! queue does. SQLite work completes immediately (blocking IO is the point
-//! of the native host), so holding a runtime thread through it is fine.
+//! queue does. Turso work completes immediately on its native synchronous IO
+//! driver, so holding a runtime thread through it is fine.
 //!
 //! Operation ids cross the IPC boundary as strings (`"{clientId}:{urqlKey}"`)
 //! so multiple webviews can register operations against the one shared
@@ -13,15 +13,17 @@
 
 use cache_core::deps::OpId;
 use cache_core::engine::{
-    BeginOptimisticWrite, Engine, InitialClaimOutcome, ReadResult, WriteResult,
+    BeginOptimisticWrite, Engine, InitialClaimOutcome, NetworkWrite, QueryRegistration, ReadResult,
+    WriteResult,
 };
 use cache_core::entity_resolver::EntityResolver;
 use cache_core::link_patch::{OptimisticLinkPatch, QueryRevalidation};
 use cache_core::query_inspection::{CachedQueryInstance, CachedQueryVariant, QueryInspection};
 use cache_core::queue::{ClaimedMutation, MutationClaimRequest, MutationClaimToken};
-use cache_core::record_selection::{RecordCursor, RecordSelection, SelectedRecordPage};
+use cache_core::record_selection::RecordSelection;
+use cache_core::search::{SearchPage, SearchRequest};
 use cache_core::value::EntityKey;
-use cache_sqlite::SqliteStorage;
+use cache_turso::{TursoStorage, TursoStorageCloseOutcome};
 use serde::Serialize;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -53,6 +55,15 @@ pub struct WriteResultWire {
     pub reset: bool,
     /// Queries to fetch after successful optimistic settlement.
     pub revalidations: Vec<QueryRevalidation>,
+}
+
+/// Internal hydration result used to fan out changes before returning only
+/// the caller-visible projection across IPC.
+pub struct HydrationWriteResultWire {
+    /// Cache changes required for host notifications.
+    pub write_result: WriteResultWire,
+    /// Fields not marked `@cacheOnly`, or `None` when there are none.
+    pub data: Option<serde_json::Value>,
 }
 
 /// Result of durably enqueueing an optimistic mutation and attempting to
@@ -160,8 +171,34 @@ impl OpInterner {
 
 type Variables = serde_json::Map<String, serde_json::Value>;
 
+/// Optional active-query registration installed by a network write.
+pub struct WriteRegistration {
+    /// Host operation id.
+    pub op_id: String,
+    /// Synthetic read relations used by the query.
+    pub entity_resolvers: Vec<EntityResolver>,
+}
+
+/// Owned inputs for a network response write.
+pub struct WriteRequest {
+    /// Origin operation excluded from immediate invalidation.
+    pub origin_op_id: Option<String>,
+    /// Active query registration to install.
+    pub registration: Option<WriteRegistration>,
+    /// GraphQL document.
+    pub query: String,
+    /// Selected operation name.
+    pub operation_name: Option<String>,
+    /// Operation variables.
+    pub variables: Variables,
+    /// GraphQL response data.
+    pub data: serde_json::Value,
+    /// Opaque identity witness.
+    pub identity: Option<String>,
+}
+
 struct EngineState {
-    engine: Engine<SqliteStorage>,
+    engine: Engine<TursoStorage>,
     ops: OpInterner,
 }
 
@@ -200,7 +237,7 @@ fn parse_transaction_id(id: &str) -> Result<u64, String> {
 impl EngineHandle {
     /// Wraps an opened storage backend. A `hot_capacity` of 0 is treated as
     /// unset (engine default).
-    pub fn new(storage: SqliteStorage, hot_capacity: Option<u32>) -> Self {
+    pub fn new(storage: TursoStorage, hot_capacity: Option<u32>) -> Self {
         let engine = match hot_capacity.filter(|c| *c > 0) {
             Some(cap) => Engine::with_capacity(storage, cap as usize),
             None => Engine::new(storage),
@@ -210,6 +247,23 @@ impl EngineHandle {
                 engine,
                 ops: OpInterner::default(),
             })),
+        }
+    }
+
+    /// Consumes the sole handle and explicitly closes native Turso storage.
+    pub fn shutdown(self) -> Result<(), String> {
+        let mutex = Arc::try_unwrap(self.inner)
+            .map_err(|_| "graphql cache still has active command handles".to_string())?;
+        let state = mutex.into_inner();
+        let outcome = state
+            .engine
+            .into_storage()
+            .try_close()
+            .map_err(|error| error.to_string())?;
+        match outcome {
+            TursoStorageCloseOutcome::Healthy | TursoStorageCloseOutcome::ResetRequired(_) => {
+                Ok(())
+            }
         }
     }
 
@@ -241,21 +295,32 @@ impl EngineHandle {
             .map_err(|e| e.to_string())
     }
 
-    /// Projects normalized records through a named GraphQL fragment.
-    pub async fn read_records(
+    /// Projects explicit normalized entity keys without scanning storage.
+    pub async fn read_records_by_keys(
         &self,
         document: String,
         fragment_name: String,
-        cursor: Option<RecordCursor>,
-        limit: u32,
-    ) -> Result<SelectedRecordPage, String> {
+        keys: Vec<String>,
+    ) -> Result<Vec<cache_core::record_selection::SelectedRecord>, String> {
         let selection =
             RecordSelection::parse(&document, &fragment_name).map_err(|error| error.to_string())?;
+        let keys: Vec<_> = keys.into_iter().map(|key| EntityKey(key.into())).collect();
         self.inner
             .lock()
             .await
             .engine
-            .read_records(&selection, cursor.as_ref(), limit as usize)
+            .read_records_by_keys(&selection, &keys)
+            .await
+            .map_err(|error| error.to_string())
+    }
+
+    /// Searches the compact materialized projection without record scans.
+    pub async fn search(&self, request: SearchRequest) -> Result<SearchPage, String> {
+        self.inner
+            .lock()
+            .await
+            .engine
+            .search(&request)
             .await
             .map_err(|error| error.to_string())
     }
@@ -304,21 +369,59 @@ impl EngineHandle {
     }
 
     /// Normalizes and stores a network response.
-    pub async fn write(
+    pub async fn write(&self, request: WriteRequest) -> Result<WriteResultWire, String> {
+        let WriteRequest {
+            origin_op_id,
+            registration,
+            query,
+            operation_name,
+            variables,
+            data,
+            identity,
+        } = request;
+        let mut state = self.inner.lock().await;
+        let EngineState { engine, ops } = &mut *state;
+        let origin = origin_op_id.map(|name| ops.intern(&name));
+        let registration = registration.map(|registration| {
+            let op_id = ops.intern(&registration.op_id);
+            (op_id, registration.entity_resolvers)
+        });
+        engine
+            .write_query_with_registration(
+                origin,
+                registration
+                    .as_ref()
+                    .map(|(op_id, entity_resolvers)| QueryRegistration {
+                        op_id: *op_id,
+                        entity_resolvers,
+                    }),
+                NetworkWrite {
+                    query: &query,
+                    operation_name: operation_name.as_deref(),
+                    variables: &variables,
+                    data: &data,
+                    identity: identity.as_deref(),
+                },
+            )
+            .await
+            .map(|result| wire_write_result(ops, result))
+            .map_err(|e| e.to_string())
+    }
+
+    /// Stores a query response and returns only fields not marked
+    /// `@cacheOnly`.
+    pub async fn hydrate_query(
         &self,
-        origin_op_id: Option<String>,
         query: String,
         operation_name: Option<String>,
         variables: Variables,
         data: serde_json::Value,
         identity: Option<String>,
-    ) -> Result<WriteResultWire, String> {
+    ) -> Result<HydrationWriteResultWire, String> {
         let mut state = self.inner.lock().await;
         let EngineState { engine, ops } = &mut *state;
-        let origin = origin_op_id.map(|name| ops.intern(&name));
         engine
-            .write_query(
-                origin,
+            .hydrate_query(
                 &query,
                 operation_name.as_deref(),
                 &variables,
@@ -326,8 +429,11 @@ impl EngineHandle {
                 identity.as_deref(),
             )
             .await
-            .map(|result| wire_write_result(ops, result))
-            .map_err(|e| e.to_string())
+            .map(|result| HydrationWriteResultWire {
+                write_result: wire_write_result(ops, result.write_result),
+                data: result.data,
+            })
+            .map_err(|error| error.to_string())
     }
 
     /// Durably queues a mutation and its optimistic layer, then attempts to

@@ -1,0 +1,19 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "model": "anthropic/claude-sonnet-5",
+  "instructions": ["/etc/macro-agent/SYSTEM.md"],
+  "permission": {
+    "*": "allow",
+    "external_directory": "deny"
+  },
+  "mcp": {
+    "github": {
+      "type": "local",
+      "command": ["github-mcp-server", "stdio", "--toolsets", "issues,pull_requests"],
+      "environment": {
+        "GITHUB_PERSONAL_ACCESS_TOKEN": "{env:GITHUB_TOKEN}"
+      },
+      "enabled": true
+    }
+  }
+}

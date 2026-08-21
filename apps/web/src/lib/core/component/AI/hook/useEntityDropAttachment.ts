@@ -3,7 +3,7 @@ import type { Attachment, Attachments } from '@core/component/AI/types';
 import type { ChatAttachmentMention } from '@core/component/AI/util/chatAttachmentMention';
 import { toast } from '@core/component/Toast/Toast';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
-import type { EntityDragData, EntityDragEvent } from '@entity';
+import { isEntityDragData, isEntityDragEvent } from '@entity';
 import { createDroppable, useDragDropContext } from '@thisbeyond/solid-dnd';
 import { type Accessor, createMemo } from 'solid-js';
 
@@ -35,8 +35,8 @@ export function useEntityDropAttachment(
     const draggable = state?.active.draggable;
     if (!draggable) return;
     const dragData = draggable.data;
-    if (!dragData || dragData.dragType !== 'entity') return;
-    return dragData as EntityDragData;
+    if (!isEntityDragData(dragData)) return;
+    return dragData;
   });
 
   const isDraggingOver = createMemo(() => {
@@ -52,8 +52,8 @@ export function useEntityDropAttachment(
     return SUPPORTED_CHAT_ATTACHMENT_BLOCKS.includes(blockName);
   });
 
-  onDragEnd((event: EntityDragEvent) => {
-    if (!event.droppable) return;
+  onDragEnd((event) => {
+    if (!isEntityDragEvent(event) || !event.droppable) return;
     if (event.droppable.id !== droppableId) return;
 
     const data = event.draggable?.data;

@@ -4,6 +4,7 @@
 use cache_core::engine::{
     BeginOptimisticWrite, Engine, EngineError, InitialClaimOutcome, ReadResult,
 };
+use cache_core::predicate::ProjectionMutation;
 use cache_core::queue::{
     ClaimedMutation, MutationClaimRequest, MutationClaimToken, MutationId, NewQueuedMutation,
     QueuedMutation,
@@ -83,22 +84,21 @@ impl Storage for ClaimFailingStorage {
         Ok(())
     }
 
-    async fn delete_batch(&mut self, keys: &[EntityKey<'static>]) -> Result<(), Self::Error> {
-        self.inner.delete_batch(keys).await.unwrap();
+    async fn put_batch_with_projections(
+        &mut self,
+        entries: Vec<(EntityKey<'static>, Record)>,
+        projections: Vec<ProjectionMutation>,
+    ) -> Result<(), Self::Error> {
+        self.inner
+            .put_batch_with_projections(entries, projections)
+            .await
+            .unwrap();
         Ok(())
     }
 
-    async fn scan_records(
-        &self,
-        type_names: &[String],
-        after: Option<&EntityKey<'static>>,
-        limit: usize,
-    ) -> Result<Vec<(EntityKey<'static>, Record)>, Self::Error> {
-        Ok(self
-            .inner
-            .scan_records(type_names, after, limit)
-            .await
-            .unwrap())
+    async fn delete_batch(&mut self, keys: &[EntityKey<'static>]) -> Result<(), Self::Error> {
+        self.inner.delete_batch(keys).await.unwrap();
+        Ok(())
     }
 
     async fn enqueue_mutation(
@@ -145,6 +145,20 @@ impl Storage for ClaimFailingStorage {
         Ok(self
             .inner
             .complete_mutation(id, claim, entries)
+            .await
+            .unwrap())
+    }
+
+    async fn complete_mutation_with_projections(
+        &mut self,
+        id: MutationId,
+        claim: MutationClaimToken,
+        entries: Vec<(EntityKey<'static>, Record)>,
+        projections: Vec<ProjectionMutation>,
+    ) -> Result<bool, Self::Error> {
+        Ok(self
+            .inner
+            .complete_mutation_with_projections(id, claim, entries, projections)
             .await
             .unwrap())
     }

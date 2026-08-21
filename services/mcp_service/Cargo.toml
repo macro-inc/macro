@@ -18,6 +18,8 @@ ai_tools = { path = "../../crates/ai_tools" }
 ai_toolset = { path = "../../crates/ai_toolset" }
 ai_usage = { path = "../../crates/ai_usage" }
 anyhow = { workspace = true }
+async-trait = { workspace = true }
+attachment = { path = "../../crates/attachment" }
 aws-sdk-secretsmanager = { workspace = true }
 aws-sdk-sqs = { workspace = true }
 axum = { workspace = true, features = ["tower-log"] }
@@ -58,6 +60,7 @@ prompt = { path = "../../crates/prompt" }
 readonly_pool = { path = "../../crates/readonly_pool" }
 redis = { workspace = true, features = ["aio", "tokio-comp"] }
 reminders = { path = "../../crates/reminders", default-features = false, features = ["ports"] }
+reqwest = { workspace = true }
 rmcp = { workspace = true, features = ["transport-streamable-http-server"] }
 search_service_client = { path = "../../crates/search_service_client" }
 secretsmanager_client = { path = "../../crates/secretsmanager_client" }
@@ -75,6 +78,7 @@ sync_service_client = { path = "../../crates/sync_service_client" }
 tokio = { workspace = true, features = ["signal"] }
 tokio-util = { workspace = true, features = ["rt"] }
 tracing = { workspace = true }
+url = { workspace = true }
 
 macro_service_urls = { path = "../../crates/macro_service_urls" }
 workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }

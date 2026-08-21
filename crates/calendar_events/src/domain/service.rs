@@ -36,7 +36,13 @@ pub enum CalendarValidationError {
     /// A page size was outside the supported bound.
     #[error("calendar repository query limit must be between 1 and 2001")]
     InvalidLimit,
+    /// A mention preview batch exceeded the supported size.
+    #[error("calendar mention previews accept at most {MENTION_PREVIEWS_MAX} events per request")]
+    TooManyMentions,
 }
+
+/// The most mentioned events one preview request resolves.
+pub const MENTION_PREVIEWS_MAX: usize = 100;
 
 /// Calendar use cases with provider and persistence details behind ports.
 pub struct CalendarService<R> {
@@ -100,6 +106,24 @@ where
         self.repository.sync_status(requester_id).await
     }
 
+    /// Resolve mentioned events to the requester's own projections.
+    #[tracing::instrument(skip(self, requester_id, items), err)]
+    pub async fn mention_previews(
+        &self,
+        requester_id: &str,
+        items: Vec<super::models::CalendarMentionRequestItem>,
+    ) -> Result<Vec<super::models::CalendarMentionPreview>, Report> {
+        if items.len() > MENTION_PREVIEWS_MAX {
+            return Err(rootcause::report!(CalendarValidationError::TooManyMentions).into());
+        }
+        if items.is_empty() {
+            return Ok(Vec::new());
+        }
+        self.repository
+            .mention_previews(requester_id, items, Utc::now())
+            .await
+    }
+
     /// Re-arm the watched inbox's sync job for a push notification whose
     /// channel token the adapter already verified. Returns whether the
     /// notification matched an active channel.
@@ -150,6 +174,15 @@ where
         requester_id: &str,
     ) -> impl Future<Output = Result<super::models::CalendarSyncStatus, Report>> + Send {
         CalendarService::sync_status(self, requester_id)
+    }
+
+    fn mention_previews(
+        &self,
+        requester_id: &str,
+        items: Vec<super::models::CalendarMentionRequestItem>,
+    ) -> impl Future<Output = Result<Vec<super::models::CalendarMentionPreview>, Report>> + Send
+    {
+        CalendarService::mention_previews(self, requester_id, items)
     }
 }
 

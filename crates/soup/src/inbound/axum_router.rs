@@ -692,12 +692,17 @@ where
         .with_state(state)
 }
 
-/// API representation of a soup item with its frecency score.
+/// API representation of a soup item with its per-viewer enrichments.
 #[derive(Debug, Serialize, utoipa::ToSchema)]
 pub struct SoupApiItem {
     #[serde(flatten)]
     item: SoupItemWithProperties,
     frecency_score: f64,
+    /// The caller's latest own mutation of this entity, present only when the
+    /// page was ordered by `touched_by_me`. Clients keep the touched feed
+    /// ordered on this value, so it can be bumped optimistically.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    touched_at: Option<chrono::DateTime<chrono::Utc>>,
     /// Whether the requesting user has favorited this entity.
     is_favorited: bool,
 }
@@ -707,6 +712,7 @@ impl SoupApiItem {
         let EnrichedSoupItem {
             item,
             frecency_score,
+            touched_at,
             ..
         } = item;
         SoupApiItem {
@@ -714,6 +720,7 @@ impl SoupApiItem {
             frecency_score: frecency_score
                 .map(|f| f.data.frecency_score)
                 .unwrap_or_default(),
+            touched_at,
             is_favorited: false,
         }
     }

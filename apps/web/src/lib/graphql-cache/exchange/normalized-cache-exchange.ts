@@ -44,6 +44,7 @@ import {
   Kind,
   type OperationDefinitionNode,
   parse,
+  visit,
 } from 'graphql';
 import { match } from 'ts-pattern';
 import {
@@ -86,9 +87,13 @@ import {
 const QUEUE_ATTEMPT_CONTEXT_KEY = 'normalizedCacheQueueAttempt';
 /** Marks dependency-pushed reads as latency-sensitive worker work. */
 const AFFECTED_READ_CONTEXT_KEY = 'normalizedCacheAffectedRead';
-/** Prevents a post-network dependency refresh from forwarding the API again. */
+/** Prevents a replacement-registration cache read from forwarding the API again. */
 const REPLACEMENT_REGISTRATION_ONLY_CONTEXT_KEY =
   'normalizedCacheReplacementRegistrationOnly';
+/** Marks a query as network-to-cache hydration with a projected result. */
+export const HYDRATE_ONLY_CONTEXT_KEY = 'normalizedCacheHydrateOnly';
+/** Retains the client-annotated document while the transport uses a stripped copy. */
+const HYDRATION_DOCUMENT_CONTEXT_KEY = 'normalizedCacheHydrationDocument';
 const QUEUE_REQUEST_TIMEOUT_MS = 60_000;
 const QUEUE_LEASE_MS = 5 * 60_000;
 const EMPTY_QUEUE_POLL_MS = 30_000;
@@ -124,6 +129,51 @@ function queryText(op: Operation): string {
     queryTextCache.set(doc, text);
   }
   return text;
+}
+
+function hydrationDocument(op: Operation): DocumentNode | undefined {
+  const document: unknown = op.context[HYDRATION_DOCUMENT_CONTEXT_KEY];
+  return document && typeof document === 'object'
+    ? (document as DocumentNode)
+    : undefined;
+}
+
+function cacheQueryText(op: Operation): string {
+  const document = hydrationDocument(op);
+  if (!document) return queryText(op);
+  let text = queryTextCache.get(document);
+  if (text === undefined) {
+    text = stringifyDocument(document);
+    queryTextCache.set(document, text);
+  }
+  return text;
+}
+
+function isHydrateOnly(op: Operation): boolean {
+  return op.context[HYDRATE_ONLY_CONTEXT_KEY] === true;
+}
+
+const transportDocumentCache = new WeakMap<object, DocumentNode>();
+
+function hydrationTransportOperation(op: Operation): Operation {
+  let document = transportDocumentCache.get(op.query);
+  if (!document) {
+    document = visit(op.query, {
+      Directive(node) {
+        return node.name.value === 'cacheOnly' ? null : undefined;
+      },
+    });
+    transportDocumentCache.set(op.query, document);
+  }
+  return makeOperation(
+    op.kind,
+    { ...op, query: document },
+    {
+      ...op.context,
+      requestPolicy: 'network-only',
+      [HYDRATION_DOCUMENT_CONTEXT_KEY]: op.query,
+    }
+  );
 }
 
 function operationName(op: Operation): string | undefined {
@@ -334,12 +384,8 @@ export function normalizedCacheExchange(
   return ({ forward, client }) => {
     /** Operations registered with the host, for push-driven re-execution. */
     const activeOps = new Map<number, Operation>();
-    /**
-     * Network-bound queries whose initial cache read could not register their
-     * complete normalized dependencies. Refresh these after write-through so
-     * later optimistic entity writes can affect the active operation.
-     */
-    const dependencyRefreshOps = new Set<number>();
+    const { source: affectedResults$, next: emitAffectedResult } =
+      makeSubject<OperationResult>();
     type RetainedReplacementFallback = {
       version: number;
       writeArgs: Parameters<CacheHost['writeQuery']>[0];
@@ -451,7 +497,10 @@ export function normalizedCacheExchange(
         ) {
           retained.readyPending = false;
           try {
-            await host.writeQuery(retained.writeArgs);
+            await host.writeQuery({
+              ...retained.writeArgs,
+              registerDependencies: true,
+            });
             if (
               queryStates.get(key) !== state ||
               state.retainedReplacementFallback !== retained ||
@@ -460,15 +509,6 @@ export function normalizedCacheExchange(
             ) {
               return;
             }
-            // Register the complete normalized dependency set directly. This
-            // cannot enqueue another API request or replay the old cache RPC.
-            await host.readQuery({
-              opKey: retained.writeArgs.opKey,
-              query: retained.writeArgs.query,
-              operationName: retained.writeArgs.operationName,
-              variables: retained.writeArgs.variables,
-              entityResolvers: retained.writeArgs.entityResolvers,
-            });
             if (
               queryStates.get(key) !== state ||
               state.retainedReplacementFallback !== retained ||
@@ -477,7 +517,6 @@ export function normalizedCacheExchange(
               return;
             }
             state.retainedReplacementFallback = undefined;
-            dependencyRefreshOps.delete(key);
             state.replacementFallback = false;
             state.deferredAffected = false;
             state.completedReplacementFallback = false;
@@ -518,12 +557,41 @@ export function normalizedCacheExchange(
       });
     };
 
+    const emitAffectedWhileNetworkBound = (key: number): void => {
+      const operation = activeOps.get(key);
+      if (!operation) return;
+      void host
+        .readQuery({
+          opKey: operation.key,
+          query: queryText(operation),
+          operationName: operationName(operation),
+          variables: operation.variables as Record<string, unknown> | undefined,
+          priority: 'user-visible',
+          entityResolvers,
+        })
+        .then((read) => {
+          const active = activeOps.get(key);
+          if (read.kind !== 'hit' || !active) return;
+          // Preserve the authoritative request while immediately surfacing the
+          // newer local view. Its eventual result still gets the deferred
+          // cache reread below when it could not register fresh dependencies.
+          emitAffectedResult(cacheResult(active, read.data, true));
+        })
+        .catch((error) => options.onCacheError?.(error, operation));
+    };
+
     const unsubscribePush = host.onOpsAffected((opKeys) => {
       for (const key of opKeys) {
         if (!activeOps.has(key)) continue;
         const state = queryState(key);
         if (state.networkBoundQueries > 0) {
           state.deferredAffected = true;
+          if (
+            !state.replacementFallback &&
+            !state.retainedReplacementFallback
+          ) {
+            emitAffectedWhileNetworkBound(key);
+          }
           continue;
         }
         const registrationOnly = state.completedReplacementFallback;
@@ -744,9 +812,12 @@ export function normalizedCacheExchange(
       async function readThenRoute(
         op: Operation
       ): Promise<OperationResult | undefined> {
+        if (isHydrateOnly(op)) {
+          enqueueForward(hydrationTransportOperation(op));
+          return undefined;
+        }
         const policy = op.context.requestPolicy;
         if (policy === 'network-only') {
-          dependencyRefreshOps.add(op.key);
           enqueueQueryForward(op);
           return undefined;
         }
@@ -770,7 +841,6 @@ export function normalizedCacheExchange(
           if (policy === 'cache-only') {
             return cacheResult(op, undefined, false);
           }
-          dependencyRefreshOps.add(op.key);
         } catch (error) {
           options.onCacheError?.(error, op);
           if (isOwnerEpochLostError(error)) {
@@ -941,6 +1011,32 @@ export function normalizedCacheExchange(
               subscriptionEffectChains.delete(op.key);
             }
           }
+        } else if (op.kind === 'query' && isHydrateOnly(op)) {
+          if (result.data == null) return result;
+          try {
+            const hydration = await host.hydrateQuery({
+              query: cacheQueryText(op),
+              operationName: operationName(op),
+              variables: op.variables as Record<string, unknown> | undefined,
+              data: result.data,
+              identity: options.extractIdentity?.(result.data),
+              entityResolvers,
+            });
+            return {
+              ...result,
+              data: hydration.kind === 'data' ? hydration.data : undefined,
+            };
+          } catch (error) {
+            options.onCacheError?.(error, op);
+            return {
+              ...result,
+              data: undefined,
+              error: new CombinedError({
+                networkError:
+                  error instanceof Error ? error : new Error(String(error)),
+              }),
+            };
+          }
         } else if (op.kind === 'query') {
           const releaseTurn = await acquireQueryResultTurn(op.key);
           try {
@@ -962,6 +1058,7 @@ export function normalizedCacheExchange(
                 ...readArgs,
                 data: result.data,
                 identity: options.extractIdentity?.(result.data),
+                registerDependencies: activeOps.has(op.key),
               };
               const retained: RetainedReplacementFallback | undefined =
                 result.error === undefined &&
@@ -983,16 +1080,8 @@ export function normalizedCacheExchange(
               }
               try {
                 await host.writeQuery(writeArgs);
-                if (
-                  activeOps.has(op.key) &&
-                  (dependencyRefreshOps.has(op.key) || state.deferredAffected)
-                ) {
-                  // A miss or replacement fallback needs one successful read
-                  // on the current generation after network write-through.
-                  await host.readQuery(readArgs);
-                  dependencyRefreshOps.delete(op.key);
-                  state.networkRegistrationSatisfied = true;
-                }
+                state.networkRegistrationSatisfied =
+                  writeArgs.registerDependencies;
                 if (state.retainedReplacementFallback === retained) {
                   state.retainedReplacementFallback = undefined;
                 }
@@ -1001,7 +1090,6 @@ export function normalizedCacheExchange(
               }
             }
             if (result.hasNext !== true) {
-              dependencyRefreshOps.delete(op.key);
               const registrationSatisfied = state.networkRegistrationSatisfied;
               state.networkRegistrationSatisfied = false;
               finishNetworkQuery(op.key, registrationSatisfied);
@@ -1114,7 +1202,7 @@ export function normalizedCacheExchange(
         shared,
         filter((op) => op.kind === 'query'),
         mergeMap((op) => {
-          activeOps.set(op.key, op);
+          if (!isHydrateOnly(op)) activeOps.set(op.key, op);
           return pipe(
             fromPromise(readThenRoute(op)),
             mergeMap((result) =>
@@ -1146,7 +1234,6 @@ export function normalizedCacheExchange(
         tap((op) => {
           if (op.kind === 'teardown') {
             activeOps.delete(op.key);
-            dependencyRefreshOps.delete(op.key);
             queryStates.delete(op.key);
             host.teardown(op.key).catch(() => undefined);
           }
@@ -1166,7 +1253,12 @@ export function normalizedCacheExchange(
         }
       }
       void unsubscribePush;
-      return merge([cacheResults$, mutationPrep$, forwarded$]);
+      return merge([
+        affectedResults$,
+        cacheResults$,
+        mutationPrep$,
+        forwarded$,
+      ]);
     };
   };
 }

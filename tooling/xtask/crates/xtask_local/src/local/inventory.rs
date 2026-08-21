@@ -244,6 +244,19 @@ pub const RUST_SERVICES: &[RustService] = &[
         opt_in: false,
         no_default_features: true,
     },
+    RustService {
+        compose_name: "agent_harness_service",
+        cargo_bin: "agent_harness_service",
+        package: "agent_harness_service",
+        host_port: Some(Port::AgentHarness),
+        path_prefix: Some("/agent-harness"),
+        is_websocket: false,
+        // Runs without sandbox credentials so channel triggers and external
+        // sessions remain available; managed spawns fail loudly when unarmed.
+        modes: &[Mode::Local],
+        opt_in: false,
+        no_default_features: false,
+    },
 ];
 
 /// The Rust services that participate in `mode` (opt-in services list no modes,

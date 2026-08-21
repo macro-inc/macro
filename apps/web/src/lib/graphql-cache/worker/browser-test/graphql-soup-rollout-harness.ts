@@ -82,7 +82,6 @@ function overrideRolloutFlags(
   analytics.posthog.featureFlags.overrideFeatureFlags({
     flags: {
       'enable-graphql-soup': true,
-      'enable-browser-turso-cache': true,
       'disable-browser-turso-cache': disabled,
     },
     suppressWarning: true,
@@ -124,8 +123,6 @@ const api = {
     overrideRolloutFlags(analytics, false);
     const overrideApplied =
       analytics.posthog.isFeatureEnabled('enable-graphql-soup') === true &&
-      analytics.posthog.isFeatureEnabled('enable-browser-turso-cache') ===
-        true &&
       analytics.posthog.isFeatureEnabled('disable-browser-turso-cache') ===
         false;
     if (!overrideApplied) {

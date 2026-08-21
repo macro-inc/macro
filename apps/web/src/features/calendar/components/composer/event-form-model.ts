@@ -3,6 +3,7 @@ import {
   recipientEntityMapper,
   type WithCustomUserInput,
 } from '@core/user/combinedRecipient';
+import type { ConferenceChange } from '@service-email/generated/schemas/conferenceChange';
 import type { EventTime } from '@service-email/generated/schemas/eventTime';
 import type { EventReminderOverride } from '@service-storage/generated/schemas/eventReminderOverride';
 import type { EventReminders } from '@service-storage/generated/schemas/eventReminders';
@@ -50,6 +51,9 @@ function defaultEditorTimes(reference: Date) {
   return { start, end: addHours(start, 1) };
 }
 
+/** Conferencing displayed by the editor before it is submitted. */
+export type EventEditorConferenceChoice = 'none' | 'google_meet' | 'existing';
+
 /** Values used to initialize the shared event editor form. */
 export interface EventEditorInitialValues {
   title: string;
@@ -63,6 +67,8 @@ export interface EventEditorInitialValues {
   guests: string;
   location: string;
   description: string;
+  /** What conferencing the saved event should carry. */
+  conference: EventEditorConferenceChoice;
   /** Per-user reminder configuration; absent means the calendar default. */
   reminders?: EventReminders;
 }
@@ -87,6 +93,7 @@ type EventEditorField =
   | 'guests'
   | 'location'
   | 'description'
+  | 'conference'
   | 'reminders';
 
 /** Field-level disabled state supplied by a create/edit owner. */
@@ -103,6 +110,8 @@ export interface EventEditorSubmitValues {
   guestEmails: string[];
   location: string;
   description: string;
+  /** Present only when conferencing should be attached, replaced, or removed. */
+  conference?: ConferenceChange;
   /** Present only when the user changed the event's reminder configuration. */
   reminders?: EventReminders;
 }
@@ -121,6 +130,7 @@ export function defaultEditorInitialValues(
     guests: '',
     location: '',
     description: '',
+    conference: 'none',
     reminders: undefined,
   };
 }
@@ -146,6 +156,15 @@ export function calendarSelectionToEditorInitialValues(selection: {
     start: format(selection.start, DATETIME_VALUE),
     end: format(selection.end, DATETIME_VALUE),
   };
+}
+
+function initialConferenceChoice(
+  event: CalendarEvent
+): EventEditorConferenceChoice {
+  if (!event.conferenceUrl) return 'none';
+  return event.conferenceProvider === 'google_meet'
+    ? 'google_meet'
+    : 'existing';
 }
 
 /** Converts an existing event into values for the shared editor. */
@@ -174,6 +193,7 @@ export function calendarEventToEditorInitialValues(
       guests,
       location: event.location ?? '',
       description: event.description ?? '',
+      conference: initialConferenceChoice(event),
       reminders: event.reminders,
     };
   }
@@ -188,6 +208,7 @@ export function calendarEventToEditorInitialValues(
     guests,
     location: event.location ?? '',
     description: event.description ?? '',
+    conference: initialConferenceChoice(event),
     reminders: event.reminders,
   };
 }

@@ -38,7 +38,7 @@ import {
   SoupViewTabs,
   useApplyPreset,
 } from '@app/features/next-soup/soup-view/soup-view-tabs';
-import { useIsNewInboxEnabled } from '@app/features/next-soup/soup-view/use-is-new-inbox-enabled';
+import { useIsInboxView } from '@app/features/next-soup/soup-view/use-is-inbox-view';
 import { CompanyKanban } from '@app/features/next-soup/soup-view/views/companies/CompanyKanban';
 import { CompanyListEntity } from '@app/features/next-soup/soup-view/views/companies/CompanyListEntity';
 import { ResponsiveCompanyListHeader } from '@app/features/next-soup/soup-view/views/companies/CompanyListHeader';
@@ -208,6 +208,11 @@ const DEFAULT_PREVIEW_VIEWS = new Set(['inbox', 'channels']);
 const CONDENSED_NARROW_LIST_VIEWS: ReadonlySet<ListView> = new Set([
   'channels',
 ]);
+// Mixed-type lists render every entity as one specially designed line (see
+// NarrowSingleLineLayout) instead of the taller per-type narrow layouts.
+const SINGLE_LINE_NARROW_LIST_VIEWS: ReadonlySet<ListView> = new Set([
+  'search',
+]);
 type SoupListEntryState = {
   focus: string | undefined;
   virtualCache?: CacheSnapshot;
@@ -230,6 +235,13 @@ interface SoupViewProps {
   initialGroupBy?: string;
   disableLocalSearch?: boolean;
   /**
+   * Client sort ids applied when the user has no persisted sort preference.
+   * Defaults to `['updated_at']`. Pass `[]` for views whose ordering is the
+   * server's (e.g. Recent's touched-by-me order) so rows render as paged —
+   * an explicit user sort still wins once chosen.
+   */
+  initialClientSort?: string[];
+  /**
    * Client-side entities to merge into the soup results. Useful for entity
    * types (e.g. automation) that don't come back from the soup API.
    * Visibility is controlled by the active client filter set — use a tab
@@ -247,7 +259,7 @@ export const SoupView = (props: SoupViewProps) => {
   const soup = useSoup();
   const panel = useSplitPanelOrThrow();
   const soupView = useSoupView();
-  const isNewInboxEnabled = useIsNewInboxEnabled();
+  const isInboxView = useIsInboxView();
   const openFocusedEntityInPreview = () => {
     const focusedRow = soup.focus.row();
     if (
@@ -350,9 +362,17 @@ export const SoupView = (props: SoupViewProps) => {
         ? (initialCrmView.groupBy ?? undefined)
         : (persistedGroupBy ?? props.initialGroupBy);
 
-      let initialSortIds = initialCrmView?.sort ?? sortPref();
+      // The inbox exposes no sort control on either desktop (the toolbar
+      // hides SoupViewContextSort) or mobile, so its order is always
+      // updated_at. Ignore any sort persisted back when the control was
+      // reachable: honoring it would pin the list to an order the user can
+      // no longer change.
+      let initialSortIds =
+        contentId === 'inbox'
+          ? ['updated_at']
+          : (initialCrmView?.sort ?? sortPref());
       if (initialSortIds.length === 0) {
-        initialSortIds = ['updated_at'];
+        initialSortIds = props.initialClientSort ?? ['updated_at'];
       }
 
       const persistedViewActiveTab = isListViewID(contentId)
@@ -693,7 +713,7 @@ export const SoupView = (props: SoupViewProps) => {
           when={
             ENABLE_UNIFIED_LIST_AI_INPUT &&
             !isTouchDevice() &&
-            !isNewInboxEnabled() &&
+            !isInboxView() &&
             !panel.handle.isControllerSplit() &&
             !isBoardRendered() &&
             !isComponentListView('search')
@@ -761,9 +781,9 @@ const SoupViewListContent = (props: SoupViewListProps) => {
 
   const narrowLayout = createMemo<NarrowLayoutVariant>(() => {
     const view = currentView();
-    return view && CONDENSED_NARROW_LIST_VIEWS.has(view)
-      ? 'condensed'
-      : 'standard';
+    if (!view) return 'standard';
+    if (SINGLE_LINE_NARROW_LIST_VIEWS.has(view)) return 'single-line';
+    return CONDENSED_NARROW_LIST_VIEWS.has(view) ? 'condensed' : 'standard';
   });
 
   const focusFirstEntity = () => {
@@ -873,13 +893,13 @@ const SoupViewListContent = (props: SoupViewListProps) => {
   // Register soup view hotkeys (jump navigation, enter, escape, cmd+k, etc.)
   const { applyTabPreset } = useApplyPreset();
 
-  const isNewInboxEnabled = useIsNewInboxEnabled();
+  const isInboxView = useIsInboxView();
 
-  // The per-row component depends on the active view (and the inbox flag).
+  // The per-row component depends on the active view.
   const listEntityComponent = () => {
     if (currentView() === 'tasks') return TaskListEntity;
     if (currentView() === 'companies') return CompanyListEntity;
-    if (isNewInboxEnabled()) return InboxListEntity;
+    if (isInboxView()) return InboxListEntity;
     return ListEntity;
   };
 

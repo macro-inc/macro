@@ -17,9 +17,9 @@ import { blockHotkeyScopeSignal } from '@core/signal/blockElement';
 import { type EntityData, isDocumentEntity, isTaskEntity } from '@entity';
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import type { Property, PropertyDefinitionDomain } from '@property/types';
-import { macroEntityToPropertyEntityType } from '@property/utils';
 import { createEffect, onCleanup } from 'solid-js';
 import {
+  makeAddTagAction,
   makeCopyAction,
   makeCopyBranchNameAction,
   makeCopyEntityIdAction,
@@ -70,6 +70,7 @@ export const useBlockEntityCommands = (
   const copyBranchNameAction = makeCopyBranchNameAction();
   const copyEntityIdAction = makeCopyEntityIdAction();
   const favoriteAction = makeFavoriteAction();
+  const addTagAction = makeAddTagAction();
 
   const allProperties = useAllProperties();
 
@@ -101,15 +102,6 @@ export const useBlockEntityCommands = (
       });
     }
   };
-  const canAssignTags = (entity: EntityData) => {
-    try {
-      macroEntityToPropertyEntityType(entity);
-      return true;
-    } catch {
-      return false;
-    }
-  };
-
   // The 'e' hotkey from inside a block is reserved for entities opened from
   // the inbox/mail lists, mirroring the j/k gating in
   // use-soup-navigation-hotkeys.
@@ -463,7 +455,7 @@ export const useBlockEntityCommands = (
       keyDownHandler: () => {
         const entity = getEntity();
         if (!entity) return false;
-        openPropertyEditor([entity], 'tag', undefined, {
+        addTagAction.execute([entity], {
           restoreFocus: () => {
             if (soup) return restoreSoupFocus(entity.id);
           },
@@ -472,7 +464,7 @@ export const useBlockEntityCommands = (
       },
       condition: () => {
         const entity = getEntity();
-        return entity !== undefined && canAssignTags(entity);
+        return entity !== undefined && addTagAction.canExecute(entity);
       },
       displayPriority: 10,
       tags: [HotkeyTags.SelectionModification],
