@@ -95,8 +95,6 @@ export function createEffectWorkerTransport<Inbound, Outbound>(
         })
       )
     );
-  const fiber = Effect.runFork(run);
-
   const messageTarget =
     'port' in options.endpoint ? options.endpoint.port : options.endpoint;
   const onMessageError: EventListener = (event): void => {
@@ -107,6 +105,7 @@ export function createEffectWorkerTransport<Inbound, Outbound>(
     );
   };
   messageTarget.addEventListener('messageerror', onMessageError);
+  const fiber = Effect.runFork(run);
 
   return {
     ready,

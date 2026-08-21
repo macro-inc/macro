@@ -60,6 +60,11 @@ export interface PageAdapterDisposeOptions {
   preserveDatabase?: boolean;
 }
 
+interface CoordinatorConnection {
+  worker: SharedWorkerLike;
+  transport: EffectWorkerTransport<TabToCoordinatorEnvelope>;
+}
+
 const DEFAULT_GRACEFUL_TIMEOUT_MS = 10_000;
 
 const withVersion = <T extends { coordinatorVersion: 2 }>(
@@ -101,10 +106,7 @@ export class CacheCoordinatorPageAdapter {
   ) => DedicatedWorkerLike;
   private readonly lockManager: Pick<LockManager, 'request'> | undefined;
   private readonly gracefulTimeoutMs: number;
-  private sharedWorker: SharedWorkerLike | undefined;
-  private sharedTransport:
-    | EffectWorkerTransport<TabToCoordinatorEnvelope>
-    | undefined;
+  private coordinatorConnection: CoordinatorConnection | undefined;
   private engineWorker: DedicatedWorkerLike | undefined;
   private ownerEpoch: number | undefined;
   private registered = false;
@@ -225,7 +227,7 @@ export class CacheCoordinatorPageAdapter {
       this.settleDispose();
       return this.disposePromise;
     }
-    if (!this.sharedWorker) {
+    if (!this.coordinatorConnection) {
       this.disposeMode = 'abrupt';
       this.closed = true;
       this.registered = false;
@@ -389,35 +391,57 @@ export class CacheCoordinatorPageAdapter {
     if (this.closed) return;
 
     const worker = this.createSharedWorker(this.options.scope);
-    this.sharedWorker = worker;
-    worker.onerror = (event) => {
-      event.preventDefault();
-      this.failTerminal(
-        new Error(event.message || 'SharedWorker transport error')
-      );
+    const closeUnpublishedWorker = (): void => {
+      try {
+        worker.onerror = null;
+      } catch {
+        // Raw endpoint closure remains authoritative during failed setup.
+      }
+      this.closePort(worker.port);
     };
-    const transport = createEffectWorkerTransport<
-      CoordinatorToTabEnvelope,
-      TabToCoordinatorEnvelope
-    >({
-      endpoint: worker as SharedWorker,
-      onMessage: (message) => {
-        try {
-          this.handleCoordinatorMessage(message);
-        } catch (error) {
-          this.failTerminal(
-            error instanceof Error ? error : new Error(String(error))
-          );
-        }
-      },
-      onError: (error) => {
+    let transport: EffectWorkerTransport<TabToCoordinatorEnvelope>;
+    try {
+      worker.onerror = (event) => {
+        event.preventDefault();
         this.failTerminal(
-          new Error(`coordinator Effect transport failed: ${error.message}`)
+          new Error(event.message || 'SharedWorker transport error')
         );
-      },
-      closeEndpoint: () => this.closePort(worker.port),
-    });
-    this.sharedTransport = transport;
+      };
+      transport = createEffectWorkerTransport<
+        CoordinatorToTabEnvelope,
+        TabToCoordinatorEnvelope
+      >({
+        endpoint: worker as SharedWorker,
+        onMessage: (message) => {
+          try {
+            this.handleCoordinatorMessage(message);
+          } catch (error) {
+            this.failTerminal(
+              error instanceof Error ? error : new Error(String(error))
+            );
+          }
+        },
+        onError: (error) => {
+          this.failTerminal(
+            new Error(`coordinator Effect transport failed: ${error.message}`)
+          );
+        },
+        closeEndpoint: () => this.closePort(worker.port),
+      });
+    } catch (error) {
+      closeUnpublishedWorker();
+      throw error;
+    }
+    if (this.closed) {
+      try {
+        worker.onerror = null;
+      } catch {
+        // The transport still owns endpoint closure below.
+      }
+      void Effect.runPromise(transport.close()).catch(() => undefined);
+      return;
+    }
+    this.coordinatorConnection = { worker, transport };
     void transport.ready.catch(() => undefined);
     this.postCoordinator(
       withVersion<TabToCoordinatorEnvelope>({
@@ -639,7 +663,7 @@ export class CacheCoordinatorPageAdapter {
     }
     if (cleanupError) {
       this.failTerminal(cleanupError);
-    } else if (reportLoss && this.sharedWorker && !this.closed) {
+    } else if (reportLoss && this.coordinatorConnection && !this.closed) {
       this.postCoordinator(
         withVersion<TabToCoordinatorEnvelope>({
           kind: 'engine-lost',
@@ -661,8 +685,8 @@ export class CacheCoordinatorPageAdapter {
     transfer: Transferable[] = [],
     untransferredPorts: MessagePort[] = []
   ): boolean {
-    const transport = this.sharedTransport;
-    if (!transport) {
+    const connection = this.coordinatorConnection;
+    if (!connection) {
       for (const untransferredPort of untransferredPorts) {
         this.closePort(untransferredPort);
       }
@@ -672,7 +696,7 @@ export class CacheCoordinatorPageAdapter {
       return false;
     }
     try {
-      Effect.runSync(transport.send(message, transfer));
+      Effect.runSync(connection.transport.send(message, transfer));
       return true;
     } catch (error) {
       for (const untransferredPort of untransferredPorts) {
@@ -743,22 +767,15 @@ export class CacheCoordinatorPageAdapter {
   }
 
   private closeCoordinatorPort(): void {
-    const worker = this.sharedWorker;
-    const transport = this.sharedTransport;
-    this.sharedWorker = undefined;
-    this.sharedTransport = undefined;
-    if (worker) {
-      try {
-        worker.onerror = null;
-      } catch {
-        // Continue closing even if a test double rejects detachment.
-      }
+    const connection = this.coordinatorConnection;
+    this.coordinatorConnection = undefined;
+    if (!connection) return;
+    try {
+      connection.worker.onerror = null;
+    } catch {
+      // Continue closing even if a test double rejects detachment.
     }
-    if (transport) {
-      void Effect.runPromise(transport.close()).catch(() => undefined);
-    } else if (worker) {
-      this.closePort(worker.port);
-    }
+    void Effect.runPromise(connection.transport.close()).catch(() => undefined);
   }
 
   private closePort(port: Pick<MessagePort, 'close'>): void {

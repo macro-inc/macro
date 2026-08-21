@@ -70,6 +70,30 @@ describe('Effect worker transport', () => {
     await Effect.runPromise(transport.close());
   });
 
+  it('does not start its protocol fiber when listener setup fails', () => {
+    const endpoint = new FakeMessagePort();
+    const addEventListener = endpoint.addEventListener.bind(endpoint);
+    vi.spyOn(endpoint, 'addEventListener').mockImplementation(
+      (type, listener, options) => {
+        if (type === 'messageerror') {
+          throw new Error('listener setup failed');
+        }
+        addEventListener(type, listener, options);
+      }
+    );
+    const onError = vi.fn();
+
+    expect(() =>
+      createEffectWorkerTransport({
+        endpoint: endpoint as unknown as MessagePort,
+        onMessage: vi.fn(),
+        onError,
+      })
+    ).toThrow('listener setup failed');
+    endpoint.ready();
+    expect(onError).not.toHaveBeenCalled();
+  });
+
   it('passes transferables and emits the Effect close frame once', async () => {
     const endpoint = new FakeMessagePort();
     const closeEndpoint = vi.fn();

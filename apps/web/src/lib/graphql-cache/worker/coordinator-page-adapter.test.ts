@@ -320,6 +320,45 @@ describe('CacheCoordinatorPageAdapter', () => {
     expect(terminalErrors).toEqual(['coordinator construction failed']);
   });
 
+  it('closes an unpublished SharedWorker when Effect transport setup fails', async () => {
+    const coordinatorPort = new FakeCoordinatorPort();
+    const addEventListener =
+      coordinatorPort.addEventListener.bind(coordinatorPort);
+    vi.spyOn(coordinatorPort, 'addEventListener').mockImplementation(
+      (type, listener, options) => {
+        if (type === 'messageerror') {
+          throw new Error('transport listener setup failed');
+        }
+        addEventListener(type, listener, options);
+      }
+    );
+    const terminalErrors: string[] = [];
+    const messages: unknown[] = [];
+    const adapter = createCacheCoordinatorPageAdapter({
+      scope: 'scope',
+      tabId: 'tab-a',
+      lockManager: heldLockManager(),
+      createSharedWorker: () => ({
+        port: coordinatorPort as unknown as MessagePort,
+      }),
+      createDedicatedWorker: () => new FakeWorker(),
+      onTerminalError: (error) => terminalErrors.push(error.message),
+    });
+    adapter.onmessage = (event) => messages.push(event.data);
+
+    adapter.postMessage({ id: 1, kind: 'clear' });
+    await vi.waitFor(() => expect(messages).toHaveLength(1));
+
+    expect(coordinatorPort.closed).toBe(true);
+    expect(coordinatorPort.events.filter((event) => event === 'close')).toEqual(
+      ['close']
+    );
+    expect(messages).toEqual([
+      { id: 1, ok: false, error: 'transport listener setup failed' },
+    ]);
+    expect(terminalErrors).toEqual(['transport listener setup failed']);
+  });
+
   it('keeps registered coordinator protocol diagnostics advisory', async () => {
     const coordinatorPort = new FakeCoordinatorPort();
     const protocolErrors: string[] = [];
