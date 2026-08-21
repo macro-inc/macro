@@ -29,6 +29,7 @@ export const REPLAY_OWNER = 'macro|replay@example.com';
 
 /** POST ack → frame in the log, same ordering the harness produces. */
 const PROMPT_ECHO_DELAY_MS = 150;
+const STOP_ECHO_DELAY_MS = 50;
 
 export type ReplayDriverOptions = {
   agentSessionId: string;
@@ -81,6 +82,21 @@ function sessionFixture(id: string): AgentSessionResponse {
     repoUrl: 'https://example.com/replay.git',
     status: { kind: 'no_messages' },
     workspace: '/workspace',
+  };
+}
+
+/** The frame the harness would append for a stop accepted over `control`. */
+function stopEcho(): AgentSessionLogEntryDto {
+  return {
+    createdAt: new Date().toISOString(),
+    userId: REPLAY_OWNER,
+    direction: 'to_runtime',
+    content: {
+      type: 'acp',
+      jsonrpc: '2.0',
+      method: 'session/cancel',
+      params: {},
+    },
   };
 }
 
@@ -164,8 +180,15 @@ export function createReplayDriver(options: ReplayDriverOptions): ReplayDriver {
           if (!disposed) emit(promptEcho(prompt));
         }, PROMPT_ECHO_DELAY_MS);
       }
-      // Every other action — stop, permissions — acks and does nothing:
-      // their observable effects come from frames, which playback owns.
+      if (request.type === 'stop') {
+        // Pause playback so later recorded chunks cannot reopen the turn
+        // after cancel, then emit the same `session/cancel` the harness
+        // would append — that is what closes the agent row.
+        pause();
+        setTimeout(() => {
+          if (!disposed) emit(stopEcho());
+        }, STOP_ECHO_DELAY_MS);
+      }
       return ok(undefined);
     },
   };

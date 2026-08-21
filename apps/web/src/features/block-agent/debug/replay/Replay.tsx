@@ -20,6 +20,7 @@ import {
 } from '../../context/AgentSessionContext';
 import { SessionStatusPill } from '../../ui';
 import { createReplayDriver, type ReplayDriver } from './driver';
+import inFlightTurnFixture from './fixtures/in-flight-turn.jsonl?raw';
 import { registerReplaySession } from './interceptor';
 import { parseRecording } from './recording';
 
@@ -139,6 +140,19 @@ export default function AgentReplay() {
               if (file) void loadFile(file);
             }}
           />
+          <button
+            type="button"
+            class="rounded border border-edge-muted px-2 py-0.5 text-xs text-ink-muted hover:bg-surface-muted"
+            onClick={() =>
+              void loadFile(
+                new File([inFlightTurnFixture], 'in-flight-turn.jsonl', {
+                  type: 'application/jsonl',
+                })
+              )
+            }
+          >
+            load in-flight demo
+          </button>
           <Show when={recording()}>
             {(loaded) => (
               <span class="text-xs text-ink-extra-muted">
