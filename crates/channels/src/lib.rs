@@ -14,3 +14,5 @@ pub mod inbound;
 /// Outbound layer: postgres repository.
 #[cfg(feature = "outbound")]
 pub mod outbound;
+#[cfg(feature = "outbound")]
+pub use outbound::spawned_event_dispatcher::SpawnedChannelEventDispatcher;

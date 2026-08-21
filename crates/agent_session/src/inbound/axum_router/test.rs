@@ -1,5 +1,6 @@
 use super::*;
-use crate::domain::model::SessionStatus;
+use crate::domain::model::{AgentSessionLog, SessionStatus};
+use agent_runtime_protocol::domain::schema::v0::ToServerMessage;
 use axum::body::Body;
 use axum::http::{Request, header};
 use chrono::Utc;
@@ -372,6 +373,29 @@ async fn an_unauthenticated_request_is_rejected() {
 
     assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
     assert!(opener.opened.lock().unwrap().is_empty());
+}
+
+#[test]
+fn log_entry_dto_serializes_optional_trace_context() {
+    let dto = AgentSessionLogEntryDto::from(StoredAgentSessionLog {
+        created_at: Utc::now(),
+        traceparent: Some("00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01".to_owned()),
+        tracestate: Some("vendor=value".to_owned()),
+        entry: AgentSessionLog {
+            agent_session_id: AgentSessionId::TEST_A,
+            user_id: None,
+            content: Message::ToServer(ToServerMessage::Event {
+                event: agent_runtime_protocol::domain::schema::v0::SystemEvent::AcpReady,
+            }),
+        },
+    });
+
+    let value = serde_json::to_value(dto).expect("the DTO serializes");
+    assert_eq!(
+        value["traceparent"],
+        "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01"
+    );
+    assert_eq!(value["tracestate"], "vendor=value");
 }
 
 #[tokio::test]

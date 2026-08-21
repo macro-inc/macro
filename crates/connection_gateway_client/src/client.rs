@@ -10,6 +10,9 @@ use model_entity::Entity;
 mod calendar;
 mod email;
 
+#[cfg(test)]
+mod test;
+
 /// HTTP client for communicating with the connection gateway service.
 #[derive(Clone, Debug)]
 pub struct ConnectionGatewayClient {
@@ -23,6 +26,12 @@ struct Response {
 }
 
 impl ConnectionGatewayClient {
+    fn with_trace_headers(&self, request: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
+        let mut headers = reqwest::header::HeaderMap::new();
+        macro_tower_layers::inject_trace_headers(&mut headers);
+        request.headers(headers)
+    }
+
     /// Create a new connection gateway client.
     pub fn new(internal_auth_key: String, connection_gateway_url: String) -> Self {
         let mut headers = reqwest::header::HeaderMap::new();
@@ -51,12 +60,12 @@ impl ConnectionGatewayClient {
             message,
         };
 
+        let request = self.client.post(format!(
+            "{}/message/send/{}/{}",
+            self.connection_gateway_url, entity.entity_type, entity.entity_id
+        ));
         let res = self
-            .client
-            .post(format!(
-                "{}/message/send/{}/{}",
-                self.connection_gateway_url, entity.entity_type, entity.entity_id
-            ))
+            .with_trace_headers(request)
             .json(&body)
             .send()
             .await?
@@ -80,15 +89,11 @@ impl ConnectionGatewayClient {
             entities,
             message_type,
         };
-        let res = self
-            .client
-            .post(format!(
-                "{}/message/batch_send",
-                self.connection_gateway_url
-            ))
-            .json(&body)
-            .send()
-            .await?;
+        let request = self.client.post(format!(
+            "{}/message/batch_send",
+            self.connection_gateway_url
+        ));
+        let res = self.with_trace_headers(request).json(&body).send().await?;
 
         let json = res.json().await?;
 
@@ -103,15 +108,11 @@ impl ConnectionGatewayClient {
         messages: Vec<UniqueMessage>,
     ) -> anyhow::Result<Vec<MessageReceipt>> {
         let body = BatchSendUniqueMessagesBody { messages };
-        let res = self
-            .client
-            .post(format!(
-                "{}/message/batch_send_unique",
-                self.connection_gateway_url
-            ))
-            .json(&body)
-            .send()
-            .await?;
+        let request = self.client.post(format!(
+            "{}/message/batch_send_unique",
+            self.connection_gateway_url
+        ));
+        let res = self.with_trace_headers(request).json(&body).send().await?;
 
         let json = res.json().await?;
 
@@ -122,14 +123,11 @@ impl ConnectionGatewayClient {
 
     /// Get users who are interacting with a given entity.
     pub async fn track_entity_users(&self, entity: Entity<'_>) -> anyhow::Result<Vec<String>> {
-        let res = self
-            .client
-            .get(format!(
-                "{}/track/{}/{}",
-                self.connection_gateway_url, entity.entity_type, entity.entity_id
-            ))
-            .send()
-            .await?;
+        let request = self.client.get(format!(
+            "{}/track/{}/{}",
+            self.connection_gateway_url, entity.entity_type, entity.entity_id
+        ));
+        let res = self.with_trace_headers(request).send().await?;
 
         let json = res.json().await?;
 

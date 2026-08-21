@@ -110,6 +110,13 @@ fn sent_methods(effects: &[Effect<u32>]) -> Vec<String> {
                 message: ToRuntimeMessage::Acp(AcpMessage(RawJsonRpcMessage::Request(request))),
                 ..
             } => Some(request.method.to_string()),
+            Effect::Send {
+                message:
+                    ToRuntimeMessage::Acp(AcpMessage(RawJsonRpcMessage::Notification(
+                        notification,
+                    ))),
+                ..
+            } => Some(notification.method.to_string()),
             _ => None,
         })
         .collect()
@@ -192,7 +199,7 @@ fn a_second_acp_ready_only_logs() {
 }
 
 #[test]
-fn session_new_success_flushes_the_queue_positionally() {
+fn session_new_success_sends_only_one_turn_at_a_time() {
     let mut machine = machine();
     machine.handle(command("first", 1));
     machine.handle(command("second", 2));
@@ -200,8 +207,8 @@ fn session_new_success_flushes_the_queue_positionally() {
 
     let effects = machine.handle(session_opened("acp-42"));
 
-    // Each action's completion directly follows its send: delivery is
-    // positional, not counted.
+    // The second prompt has no prompt id on its updates, so it cannot be sent
+    // until the first prompt's response closes the attribution window.
     assert!(matches!(
         effects[..],
         [
@@ -212,19 +219,71 @@ fn session_new_success_flushes_the_queue_positionally() {
                 token: 1,
                 result: Ok(())
             },
-            Effect::Send { .. },
-            Effect::Complete {
-                token: 2,
-                result: Ok(())
-            },
         ]
     ));
     assert!(matches!(machine.status(), RuntimeStatus::Live { .. }));
-    assert_eq!(machine.pending_count(), 0);
+    assert_eq!(machine.pending_count(), 1);
     assert_eq!(
         machine.status().session_id().map(ToString::to_string),
         Some("acp-42".to_owned())
     );
+}
+
+#[test]
+fn matching_success_response_releases_the_next_turn() {
+    let first = AgentActionId::mint();
+    let mut machine = machine();
+    machine.handle(command_with_id("first", first.clone(), 1));
+    machine.handle(command("second", 2));
+    begin_opening(&mut machine);
+    machine.handle(session_opened("acp-42"));
+
+    let effects = machine.handle(frame(RawJsonRpcMessage::response(
+        first.to_request_id(),
+        Ok(serde_json::json!({ "stopReason": "end_turn" })),
+    )));
+
+    assert!(matches!(
+        effects.as_slice(),
+        [
+            Effect::Log { .. },
+            Effect::TurnFinished { error: None, .. },
+            Effect::Send { .. },
+            Effect::Complete {
+                token: 2,
+                result: Ok(())
+            }
+        ]
+    ));
+    assert_eq!(machine.pending_count(), 0);
+}
+
+#[test]
+fn matching_error_response_also_releases_the_next_turn() {
+    let first = AgentActionId::mint();
+    let mut machine = machine();
+    machine.handle(command_with_id("first", first.clone(), 1));
+    machine.handle(command("second", 2));
+    begin_opening(&mut machine);
+    machine.handle(session_opened("acp-42"));
+
+    let effects = machine.handle(frame(RawJsonRpcMessage::response(
+        first.to_request_id(),
+        Err(agent_client_protocol::Error::internal_error()),
+    )));
+
+    assert!(matches!(
+        effects.as_slice(),
+        [
+            Effect::Log { .. },
+            Effect::TurnFinished { error: Some(_), .. },
+            Effect::Send { .. },
+            Effect::Complete {
+                token: 2,
+                result: Ok(())
+            }
+        ]
+    ));
 }
 
 #[test]
@@ -517,6 +576,31 @@ fn closing_fails_the_queue_and_stops() {
 }
 
 #[test]
+fn turn_timeout_fails_queued_work_and_stops_the_session() {
+    let mut machine = machine();
+    begin_opening(&mut machine);
+    machine.handle(session_opened("acp-42"));
+    machine.handle(command("active", 1));
+    machine.handle(command("queued", 2));
+
+    let effects = machine.handle(Input::Closed(CloseReason::TurnTimedOut));
+
+    assert!(matches!(
+        effects.as_slice(),
+        [
+            Effect::Complete {
+                token: 2,
+                result: Err(AgentSessionError::Disconnected(_))
+            },
+            Effect::Stop {
+                reason: StopReason::Closed(CloseReason::TurnTimedOut)
+            }
+        ]
+    ));
+    assert_eq!(machine.status(), RuntimeStatus::Dead);
+}
+
+#[test]
 fn closing_twice_is_idempotent() {
     let mut machine = machine();
     machine.handle(Input::Closed(CloseReason::TransportClosed));
@@ -576,9 +660,13 @@ fn actions_go_out_under_the_ids_they_were_accepted_with() {
     let open = machine.handle(initialized());
     let flushed = machine.handle(session_opened("acp-42"));
     let live = machine.handle(command_with_id("live", live_id.clone(), 2));
+    let released = machine.handle(frame(RawJsonRpcMessage::response(
+        queued_id.to_request_id(),
+        Ok(serde_json::json!({ "stopReason": "end_turn" })),
+    )));
 
     let mut ids = Vec::new();
-    for effects in [&initialize, &open, &flushed, &live] {
+    for effects in [&initialize, &open, &flushed, &live, &released] {
         ids.extend(sent_request_ids(effects));
     }
 
@@ -655,6 +743,43 @@ fn a_stop_while_booting_drops_the_queued_prompts_instead_of_sending_them() {
         methods.iter().any(|method| method == "session/cancel"),
         "the stop itself is still delivered, sent {methods:?}"
     );
+}
+
+#[test]
+fn a_stop_during_a_turn_drops_queued_turns_and_is_sent_immediately() {
+    let active = AgentActionId::mint();
+    let mut machine = machine();
+    begin_opening(&mut machine);
+    machine.handle(session_opened("acp-1"));
+    machine.handle(command_with_id("active", active.clone(), 1));
+    assert!(machine.handle(command("queued", 2)).is_empty());
+
+    let effects = machine.handle(stop(3));
+
+    assert!(matches!(
+        effects.as_slice(),
+        [
+            Effect::Complete {
+                token: 2,
+                result: Ok(())
+            },
+            Effect::Send { .. },
+            Effect::Complete {
+                token: 3,
+                result: Ok(())
+            }
+        ]
+    ));
+    assert_eq!(sent_methods(&effects), ["session/cancel"]);
+
+    let terminal = machine.handle(frame(RawJsonRpcMessage::response(
+        active.to_request_id(),
+        Ok(serde_json::json!({ "stopReason": "cancelled" })),
+    )));
+    assert!(matches!(
+        terminal.as_slice(),
+        [Effect::Log { .. }, Effect::TurnFinished { error: None, .. }]
+    ));
 }
 
 #[test]

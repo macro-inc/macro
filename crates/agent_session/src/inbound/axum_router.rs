@@ -662,6 +662,12 @@ pub struct AgentSessionLogEntryDto {
     /// session and nothing more.
     #[serde(rename = "createdAt")]
     pub created_at: DateTime<Utc>,
+    /// W3C trace parent active when this frame was persisted.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub traceparent: Option<String>,
+    /// Optional W3C vendor trace state accompanying `traceparent`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tracestate: Option<String>,
     /// The user whose action produced the frame, absent when no user did.
     ///
     /// Only prompts carry one, and only when the frame was attributed at the
@@ -709,6 +715,8 @@ impl From<StoredAgentSessionLog> for AgentSessionLogEntryDto {
     fn from(stored: StoredAgentSessionLog) -> Self {
         Self {
             created_at: stored.created_at,
+            traceparent: stored.traceparent,
+            tracestate: stored.tracestate,
             user_id: stored.entry.user_id.map(|user| user.to_string()),
             message: stored.entry.content,
         }

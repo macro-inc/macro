@@ -66,6 +66,12 @@ pub struct AgentSessionLogEvent {
     /// When the durable log recorded the frame.
     #[serde(rename = "createdAt")]
     pub created_at: chrono::DateTime<chrono::Utc>,
+    /// W3C trace parent active when this frame was persisted.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub traceparent: Option<String>,
+    /// Optional W3C vendor trace state accompanying `traceparent`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tracestate: Option<String>,
     /// The user whose action produced the frame, when one did.
     #[serde(rename = "userId", skip_serializing_if = "Option::is_none")]
     pub user_id: Option<String>,
@@ -100,6 +106,8 @@ impl AgentSessionLogEvent {
     pub fn new(event: LogAppended) -> Self {
         let StoredAgentSessionLog {
             created_at,
+            traceparent,
+            tracestate,
             entry: AgentSessionLog {
                 user_id, content, ..
             },
@@ -108,6 +116,8 @@ impl AgentSessionLogEvent {
         Self {
             agent_session_id: event.agent_session_id.as_uuid(),
             created_at,
+            traceparent,
+            tracestate,
             user_id: user_id.map(|user| user.to_string()),
             message: content,
         }
@@ -213,6 +223,8 @@ mod test {
             created_at: chrono::DateTime::parse_from_rfc3339("2026-08-13T12:34:56.789Z")
                 .expect("valid timestamp")
                 .to_utc(),
+            traceparent: None,
+            tracestate: None,
             entry,
         }
     }
@@ -283,5 +295,29 @@ mod test {
         .expect("the event serializes");
 
         assert!(value.get("userId").is_none(), "got {value}");
+    }
+
+    #[test]
+    fn an_event_includes_persisted_trace_context() {
+        let entry = parse_log_as(test_session(), TURN)
+            .into_iter()
+            .next()
+            .expect("the fixture has a frame");
+        let mut stored = stored(entry);
+        stored.traceparent =
+            Some("00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01".to_owned());
+        stored.tracestate = Some("vendor=value".to_owned());
+
+        let value = serde_json::to_value(AgentSessionLogEvent::new(LogAppended {
+            agent_session_id: test_session(),
+            entry: stored,
+        }))
+        .expect("the event serializes");
+
+        assert_eq!(
+            value["traceparent"],
+            "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01"
+        );
+        assert_eq!(value["tracestate"], "vendor=value");
     }
 }

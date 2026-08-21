@@ -35,6 +35,8 @@ pub struct SessionMachine<Token> {
     next_request: u64,
     /// Held outside the phase so a partial flush strands nothing.
     pending: VecDeque<PendingAction<Token>>,
+    /// The one turn-producing request whose untagged updates belong here.
+    active_turn: Option<RequestId>,
     resume_session_id: Option<SessionId>,
     /// Directory the agent works in, snapshotted on the session row at
     /// creation; `session/new`, `session/resume`, and `session/load` all
@@ -51,6 +53,7 @@ impl<Token> SessionMachine<Token> {
             phase: SessionPhase::Booting,
             next_request: INITIAL_REQUEST_NUM,
             pending: VecDeque::new(),
+            active_turn: None,
             resume_session_id: None,
             workspace,
         }
@@ -63,6 +66,7 @@ impl<Token> SessionMachine<Token> {
             phase: SessionPhase::Booting,
             next_request: INITIAL_REQUEST_NUM,
             pending: VecDeque::new(),
+            active_turn: None,
             resume_session_id: Some(session_id),
             workspace,
         }
@@ -220,6 +224,9 @@ impl<Token> SessionMachine<Token> {
 
     fn on_frame(&mut self, frame: RawJsonRpcMessage, effects: &mut Vec<Effect<Token>>) {
         if matches!(self.phase, SessionPhase::Live { .. }) {
+            if self.finish_turn(&frame, effects) {
+                return;
+            }
             self.respond_to_permission_request(&frame, effects);
             return;
         }
@@ -235,6 +242,34 @@ impl<Token> SessionMachine<Token> {
             }
             _ => {}
         }
+    }
+
+    fn finish_turn(&mut self, frame: &RawJsonRpcMessage, effects: &mut Vec<Effect<Token>>) -> bool {
+        let Some(request_id) = frame.response_id() else {
+            return false;
+        };
+        if self.active_turn.as_ref() != Some(request_id) {
+            return false;
+        }
+
+        let error = match frame {
+            RawJsonRpcMessage::Response(Response::Error { error, .. }) => {
+                Some(error.message.to_string())
+            }
+            RawJsonRpcMessage::Response(Response::Result { .. }) => None,
+            RawJsonRpcMessage::Request(_) | RawJsonRpcMessage::Notification(_) => return false,
+        };
+        let request_id = self
+            .active_turn
+            .take()
+            .expect("the matching turn is active");
+        effects.push(Effect::TurnFinished { request_id, error });
+        let SessionPhase::Live { session_id } = &self.phase else {
+            unreachable!("turns only finish while live")
+        };
+        let session_id = session_id.clone();
+        self.flush(&session_id, effects);
+        true
     }
 
     fn on_initialized(&mut self, frame: &RawJsonRpcMessage, effects: &mut Vec<Effect<Token>>) {
@@ -471,10 +506,26 @@ impl<Token> SessionMachine<Token> {
     /// mid-way strands no false completions - and an action that cannot be
     /// expressed as ACP fails alone, without taking the connection down.
     fn flush(&mut self, session_id: &SessionId, effects: &mut Vec<Effect<Token>>) {
-        while let Some(queued) = self.pending.pop_front() {
+        while self.active_turn.is_none()
+            || self
+                .pending
+                .front()
+                .is_some_and(|queued| !is_turn(&queued.action))
+        {
+            let Some(queued) = self.pending.pop_front() else {
+                break;
+            };
             let request_id = queued.action_id.to_request_id();
             match queued.action.to_runtime(session_id, request_id) {
                 Ok(message) => {
+                    if is_turn(&queued.action) {
+                        let ToRuntimeMessage::Acp(AcpMessage(RawJsonRpcMessage::Request(request))) =
+                            &message
+                        else {
+                            unreachable!("turn actions are ACP requests")
+                        };
+                        self.active_turn = Some(request.id.clone());
+                    }
                     effects.push(Effect::Send {
                         from: queued.from,
                         message,
@@ -511,6 +562,7 @@ impl<Token> SessionMachine<Token> {
     /// last so the shell resolves waiting callers before it tears down.
     fn die(&mut self, reason: StopReason, effects: &mut Vec<Effect<Token>>) {
         self.phase = SessionPhase::Dead;
+        self.active_turn = None;
         while let Some(queued) = self.pending.pop_front() {
             effects.push(Effect::Complete {
                 token: queued.token,
@@ -522,6 +574,7 @@ impl<Token> SessionMachine<Token> {
 
     fn resume_unsupported(&mut self, effects: &mut Vec<Effect<Token>>) {
         self.phase = SessionPhase::Dead;
+        self.active_turn = None;
         while let Some(queued) = self.pending.pop_front() {
             effects.push(Effect::Complete {
                 token: queued.token,
@@ -541,4 +594,8 @@ impl<Token> SessionMachine<Token> {
         self.next_request += 1;
         id
     }
+}
+
+fn is_turn(action: &AgentAction) -> bool {
+    matches!(action, AgentAction::Prompt(_) | AgentAction::Compact)
 }

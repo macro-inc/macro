@@ -2,9 +2,9 @@
 
 use std::sync::Arc;
 
-use channels::domain::ports::ChannelService;
+use channels::domain::ports::{ChannelBotTriggerDispatcher, ChannelService};
 use channels::domain::side_effects::ChannelBotTrigger;
-use tokio::sync::mpsc::UnboundedReceiver;
+use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use tokio_util::{sync::CancellationToken, task::TaskTracker};
 use tracing::Instrument as _;
 
@@ -13,6 +13,50 @@ use crate::domain::{
     ports::{AgentResponder, TriggerDetector},
     service::MacroAiHandler,
 };
+
+#[derive(Debug)]
+struct QueuedBotTrigger {
+    trigger: ChannelBotTrigger,
+    span: tracing::Span,
+}
+
+/// In-process queue sender for channel bot triggers.
+#[derive(Debug, Clone)]
+pub struct BotTriggerQueueSender {
+    sender: UnboundedSender<QueuedBotTrigger>,
+}
+
+/// In-process queue receiver for channel bot triggers.
+#[derive(Debug)]
+pub struct BotTriggerQueueReceiver {
+    receiver: UnboundedReceiver<QueuedBotTrigger>,
+}
+
+/// Create the in-process channel bot trigger queue.
+pub fn bot_trigger_queue() -> (BotTriggerQueueSender, BotTriggerQueueReceiver) {
+    let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
+    (
+        BotTriggerQueueSender { sender },
+        BotTriggerQueueReceiver { receiver },
+    )
+}
+
+impl ChannelBotTriggerDispatcher for BotTriggerQueueSender {
+    fn dispatch(&self, trigger: ChannelBotTrigger) {
+        let span = tracing::info_span!(
+            "channel.bot_trigger",
+            channel.id = %trigger.channel_id,
+            channel.message.id = %trigger.message.id,
+        );
+        if let Err(error) = self.sender.send(QueuedBotTrigger { trigger, span }) {
+            tracing::warn!(
+                channel_id = %error.0.trigger.channel_id,
+                message_id = %error.0.trigger.message.id,
+                "unable to enqueue channel bot trigger; receiver was dropped"
+            );
+        }
+    }
+}
 
 /// Resolves the bot invocations for a candidate channel message and runs their
 /// handlers.
@@ -57,13 +101,14 @@ where
     /// Start consuming channel bot trigger candidates.
     pub fn spawn(
         self,
-        mut candidates: UnboundedReceiver<ChannelBotTrigger>,
+        candidates: BotTriggerQueueReceiver,
         cancellation: CancellationToken,
         tasks: TaskTracker,
     ) where
         R: 'static,
         D: 'static,
     {
+        let mut candidates = candidates.receiver;
         let candidate_tasks = tasks.clone();
         tasks.spawn(async move {
             loop {
@@ -78,9 +123,9 @@ where
                     },
                 };
                 let router = self.clone();
-                let span = candidate.span.clone();
+                let span = candidate.span;
                 candidate_tasks.spawn(async move {
-                    router.run(candidate).instrument(span).await;
+                    router.run(candidate.trigger).instrument(span).await;
                 });
             }
 
@@ -88,9 +133,9 @@ where
             // a trigger that made it in never disappears silently.
             while let Some(candidate) = candidates.recv().await {
                 let router = self.clone();
-                let span = candidate.span.clone();
+                let span = candidate.span;
                 candidate_tasks.spawn(async move {
-                    router.run(candidate).instrument(span).await;
+                    router.run(candidate.trigger).instrument(span).await;
                 });
             }
         });
@@ -123,3 +168,6 @@ where
         }
     }
 }
+
+#[cfg(test)]
+mod test;

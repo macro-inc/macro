@@ -99,6 +99,7 @@ async fn container_session_runs_and_logs_end_to_end() {
     agent.wait_for_requests(2).await;
     agent.opens_session(NewSessionResponse::new("acp-container-test"));
     agent.wait_for_requests(3).await;
+    agent.completes_prompt().await;
     send.await.unwrap().unwrap();
 
     assert_eq!(
@@ -116,15 +117,14 @@ async fn container_session_runs_and_logs_end_to_end() {
     assert!(matches!(logs[5].entry.content, Message::ToRuntime(_)));
     assert_eq!(logs[5].entry.user_id, Some(owner()));
 
-    sessions
-        .send_action(
-            id,
-            Some(owner()),
-            AgentAction::prompt("and run clippy"),
-            AgentActionId::mint(),
-        )
-        .await
-        .unwrap();
+    let send = sessions.send_action(
+        id,
+        Some(owner()),
+        AgentAction::prompt("and run clippy"),
+        AgentActionId::mint(),
+    );
+    let (result, ()) = tokio::join!(send, agent.completes_prompt());
+    result.unwrap();
     assert_eq!(containers.spawned(), 1);
     assert_eq!(containers.resumed(), 0);
     assert_eq!(

@@ -11,9 +11,10 @@ use call::domain::service::{CallRecordQueryServiceImpl, CallServiceImpl};
 use call::inbound::toolset::CallToolContext;
 use call::outbound::pg_call_repo::PgCallRepo;
 use call::outbound::s3_recording_storage::S3RecordingStorage;
+use channels::SpawnedChannelEventDispatcher;
 use channels::domain::ports::ChannelEventDispatcher;
 use channels::domain::service::{NoopChannelEventDispatcher, NoopChannelReferenceSharePermissions};
-use channels::domain::side_effects::{ChannelSideEffectService, SpawnedChannelEventDispatcher};
+use channels::domain::side_effects::ChannelSideEffectService;
 use channels::domain::{list_service::ChannelListServiceImpl, service::ChannelServiceImpl};
 use channels::inbound::toolset::ChannelToolContext;
 use channels::outbound::{

@@ -162,7 +162,6 @@ fn candidate(
             deleted_at: None,
         },
         mentioned_bot_ids,
-        span: tracing::Span::none(),
     }
 }
 

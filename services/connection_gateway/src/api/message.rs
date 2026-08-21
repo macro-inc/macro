@@ -48,7 +48,10 @@ where
             (status = 500, body=String),
         )
     )]
-#[tracing::instrument(skip(_internal_authorization, ctx))]
+#[tracing::instrument(
+    skip_all,
+    fields(message_type = %body.message_type, recipient_count = 1)
+)]
 #[axum::debug_handler(state = AppState)]
 pub async fn send_message_handler(
     _internal_authorization: MacroAuthorizationExtractor<AuthorizationService, InternalOnly>,
@@ -61,10 +64,7 @@ pub async fn send_message_handler(
     let res = send_message_to_entity(
         &ctx,
         &entity,
-        Message {
-            message_type: body.message_type.clone(),
-            data: body.message.to_string(),
-        },
+        Message::new(body.message_type.clone(), body.message.to_string()),
         redis_connection,
     )
     .await
@@ -95,7 +95,7 @@ pub async fn send_message_handler(
 #[tracing::instrument(
     name = "send_messages",
     skip_all,
-    fields(batch_kind = "shared", message_count = body.entities.len()),
+    fields(message_type = %body.message_type, recipient_count = body.entities.len()),
     err(Debug)
 )]
 pub async fn batch_send_message_handler(
@@ -110,10 +110,7 @@ pub async fn batch_send_message_handler(
         send_message_to_entity(
             &ctx,
             entity,
-            Message {
-                message_type: body.message_type.clone(),
-                data: body.message.to_string(),
-            },
+            Message::new(body.message_type.clone(), body.message.to_string()),
             redis_connection,
         )
     }))
@@ -149,7 +146,7 @@ pub async fn batch_send_message_handler(
 #[tracing::instrument(
     name = "send_messages",
     skip_all,
-    fields(batch_kind = "unique", message_count = body.messages.len()),
+    fields(recipient_count = body.messages.len()),
     err(Debug)
 )]
 #[axum::debug_handler(state = AppState)]
@@ -165,10 +162,10 @@ pub async fn batch_send_unique_messages_handler(
         send_message_to_entity(
             &ctx,
             &message.entity,
-            Message {
-                message_type: message.message_type.clone(),
-                data: message.message_content.to_string(),
-            },
+            Message::new(
+                message.message_type.clone(),
+                message.message_content.to_string(),
+            ),
             redis_connection,
         )
     }))

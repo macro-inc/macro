@@ -1,21 +1,22 @@
 //! Channel-message consumer that emits agent-session trigger events.
 
 use agent_session::outbound::postgres::PgAgentSessionRepo;
+use agent_trigger::domain::processing::process_channel_event;
 use agent_trigger::domain::service::{AgentBotLookup, AgentTriggerService};
-use anyhow::Context as _;
 use bot_id::BotId;
 use bots::domain::ports::BotRepo as _;
 use bots::outbound::pg_bots_repo::PgBotsRepo;
-use channels::domain::broker_events::{ChannelMacroEvent, ChannelTopicEvent};
-use kafka_util::{GroupName, KafkaEventConsumer};
+use channels::domain::broker_events::ChannelMacroEvent;
+use kafka_util::{GroupName, KafkaEventConsumer, consumer_span, record_span_error};
 use macro_event_broker::{
-    KafkaConsumerAdapter, KafkaEventPublisher, MacroEvent as _, MacroEventBroker as _,
-    MacroEventBrokerService, MacroEventCollection as _, MacroEventConsumerService,
+    KafkaConsumerAdapter, KafkaEventPublisher, MacroEvent as _, MacroEventBrokerService,
+    MacroEventCollection as _, MacroEventConsumerService,
 };
 use rdkafka::consumer::CommitMode;
 use rdkafka::message::{BorrowedMessage, Message as _};
 use sqlx::PgPool;
 use tokio::time::{Duration, sleep};
+use tracing::Instrument as _;
 
 struct AgentTriggerConsumerGroup;
 
@@ -87,38 +88,37 @@ async fn run(pool: PgPool, kafka_brokers: String) -> anyhow::Result<()> {
                 continue;
             }
         };
-        let kafka_message = message.inner();
-        let event = match message.decode_payload() {
-            Ok(DeclaredChannelEvent::ChannelMacroEvent(event)) => event,
-            Err(error) => {
-                tracing::error!(
-                    error = ?error,
-                    partition = kafka_message.partition(),
-                    offset = kafka_message.offset(),
-                    "dropping undecodable channel event"
-                );
-                commit_message(&consumer, kafka_message)?;
-                continue;
-            }
-        };
+        let span = consumer_span(message.inner(), AgentTriggerConsumerGroup::GROUP_NAME);
+        let result = async {
+            let kafka_message = message.inner();
+            let event = match message.decode_payload() {
+                Ok(DeclaredChannelEvent::ChannelMacroEvent(event)) => event,
+                Err(error) => {
+                    record_span_error(&tracing::Span::current(), &error);
+                    tracing::error!(
+                        error = ?error,
+                        partition = kafka_message.partition(),
+                        offset = kafka_message.offset(),
+                        "dropping undecodable channel event"
+                    );
+                    commit_message(&consumer, kafka_message)?;
+                    return Ok::<(), anyhow::Error>(());
+                }
+            };
+            tracing::Span::current().record(
+                "macro.event.id",
+                tracing::field::display(event.event().event_id),
+            );
 
-        let ChannelTopicEvent::MessagePosted(posted) = &event.event().event else {
+            process_channel_event(&trigger, &publisher, &event).await?;
             commit_message(&consumer, kafka_message)?;
-            continue;
-        };
-        let yielded_events = trigger.evaluate(posted).await?;
-        if yielded_events.is_empty() {
-            tracing::debug!(message_id = %posted.message_id, "agent trigger yielded no event");
+            Ok(())
         }
-        for yielded in yielded_events {
-            let json = serde_json::to_string(yielded.event())?;
-            tracing::info!(yielded_event = %json, "agent trigger yielded event");
-            let publish = publisher.send_event(&yielded)?;
-            publish
-                .await
-                .context("agent event publication task failed")??;
+        .instrument(span.clone())
+        .await;
+        if let Err(error) = &result {
+            record_span_error(&span, error);
         }
-
-        commit_message(&consumer, kafka_message)?;
+        result?;
     }
 }

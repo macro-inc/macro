@@ -38,9 +38,8 @@ use call::{
 };
 use channels::{
     domain::{
-        list_service::ChannelListServiceImpl,
-        service::ChannelServiceImpl,
-        side_effects::{ChannelSideEffectService, SpawnedChannelEventDispatcher},
+        list_service::ChannelListServiceImpl, service::ChannelServiceImpl,
+        side_effects::ChannelSideEffectService,
     },
     inbound::{axum_router::ChannelsRouterState, list_router::ChannelListRouterState},
     outbound::{
@@ -49,6 +48,7 @@ use channels::{
         notification_sender::NotificationChannelSender,
         pg_channel_reference_share_permissions::PgChannelReferenceSharePermissions,
         pg_channels_repo::PgChannelsRepo, pg_side_effect_context::PgChannelSideEffectContext,
+        spawned_event_dispatcher::SpawnedChannelEventDispatcher,
     },
 };
 use config::{Config, Environment};
@@ -887,7 +887,7 @@ async fn run() -> anyhow::Result<()> {
         Arc::new(PgTaskMatchRepo::new(db.clone())),
     ));
     let channels_repo = PgChannelsRepo::new(db.clone());
-    let (bot_trigger_sender, bot_trigger_receiver) = tokio::sync::mpsc::unbounded_channel();
+    let (bot_trigger_sender, bot_trigger_receiver) = channel_bots::inbound::bot_trigger_queue();
 
     let channel_side_effects = ChannelSideEffectService::new(
         PgChannelSideEffectContext::new(db.clone()),
@@ -895,7 +895,7 @@ async fn run() -> anyhow::Result<()> {
         NotificationChannelSender::new(notification_ingress_service.clone()),
         ContactsChannelDispatcher::new(contacts_ingress.clone()),
     )
-    .with_bot_trigger_sender(bot_trigger_sender)
+    .with_bot_trigger_dispatcher(bot_trigger_sender)
     .with_macro_event_broker(macro_event_broker.clone());
     let channel_side_effect_tracker = TaskTracker::new();
 
@@ -1383,21 +1383,16 @@ async fn run() -> anyhow::Result<()> {
     consumer_tracker.wait().await;
     tracing::info!("event consumers stopped");
 
-    tracing::info!("waiting for channel side effects to drain");
-    channel_side_effect_tracker.close();
-    drain_or_warn(channel_side_effect_tracker.wait(), "channel side effects").await;
-
     tracing::info!("waiting for bot triggers to drain");
     bot_trigger_cancellation.cancel();
     bot_trigger_tracker.close();
     drain_or_warn(bot_trigger_tracker.wait(), "bot triggers").await;
 
-    // Bot handlers can post final replies through the same side-effect tracker.
-    drain_or_warn(
-        channel_side_effect_tracker.wait(),
-        "bot channel side effects",
-    )
-    .await;
+    // Bot handlers can post final replies through this tracker, so close it
+    // only after every bot trigger has finished producing channel events.
+    tracing::info!("waiting for channel side effects to drain");
+    channel_side_effect_tracker.close();
+    drain_or_warn(channel_side_effect_tracker.wait(), "channel side effects").await;
 
     tracing::info!("waiting for event broker publishes to drain");
     event_broker_tracker.close();

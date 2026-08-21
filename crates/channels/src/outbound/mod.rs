@@ -12,3 +12,5 @@ pub mod pg_channel_reference_share_permissions;
 pub mod pg_channels_repo;
 /// Postgres context adapter for channel side-effect policy.
 pub mod pg_side_effect_context;
+/// Task-tracked asynchronous dispatcher for channel events.
+pub mod spawned_event_dispatcher;
