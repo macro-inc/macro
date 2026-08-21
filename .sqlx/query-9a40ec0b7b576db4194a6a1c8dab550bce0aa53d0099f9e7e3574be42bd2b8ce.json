@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            UPDATE bots\n            SET name = COALESCE($2, name),\n                handle = COALESCE($3, handle),\n                description = COALESCE($4, description),\n                avatar_url = COALESCE($5, avatar_url),\n                updated_at = now()\n            WHERE id = $1\n              AND deleted_at IS NULL\n            RETURNING\n                id,\n                kind,\n                owner_user_id,\n                team_id,\n                name,\n                handle,\n                description,\n                avatar_url,\n                created_by,\n                created_at,\n                updated_at,\n                deleted_at,\n                has_agent\n            ",
+  "query": "\n            UPDATE bots\n            SET name = COALESCE($2, name),\n                handle = COALESCE($3, handle),\n                description = COALESCE($4, description),\n                avatar_url = COALESCE($5, avatar_url),\n                has_agent = COALESCE($6, has_agent),\n                updated_at = now()\n            WHERE id = $1\n              AND deleted_at IS NULL\n            RETURNING\n                id,\n                kind,\n                owner_user_id,\n                team_id,\n                name,\n                handle,\n                description,\n                avatar_url,\n                created_by,\n                created_at,\n                updated_at,\n                deleted_at,\n                has_agent\n            ",
   "describe": {
     "columns": [
       {
@@ -75,7 +75,8 @@
         "Text",
         "Text",
         "Text",
-        "Text"
+        "Text",
+        "Bool"
       ]
     },
     "nullable": [
@@ -94,5 +95,5 @@
       false
     ]
   },
-  "hash": "2193ea6a085a6ca908e4f050ff8772232065f9ea07d8c413853fe3f391a2b02f"
+  "hash": "9a40ec0b7b576db4194a6a1c8dab550bce0aa53d0099f9e7e3574be42bd2b8ce"
 }

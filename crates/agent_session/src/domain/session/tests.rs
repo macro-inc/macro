@@ -18,10 +18,12 @@ use crate::PROTOCOL_VERSION;
 use crate::domain::error::AgentSessionError;
 use crate::domain::model::AgentSessionId;
 
-use super::{CloseReason, Effect, Input, RuntimeStatus, SessionMachine, StopReason};
+use super::{
+    CloseReason, Effect, Input, RuntimeStatus, SessionMachine, SessionRestoreSupport, StopReason,
+};
 
 fn machine() -> SessionMachine<u32> {
-    SessionMachine::new(AgentSessionId::TEST_A)
+    SessionMachine::new(AgentSessionId::TEST_A, "/workspace".to_owned())
 }
 
 fn command(text: &str, token: u32) -> Input<u32> {
@@ -73,7 +75,7 @@ fn begin_opening(machine: &mut SessionMachine<u32>) {
 /// The answer to `session/new`, sent after initialization completes.
 fn session_opened(session_id: &'static str) -> Input<u32> {
     frame(RawJsonRpcMessage::response(
-        RequestId::Str("agent_session:1".to_owned()),
+        request_id(1),
         Ok(serde_json::to_value(NewSessionResponse::new(session_id))
             .expect("a serializable response")),
     ))
@@ -81,7 +83,7 @@ fn session_opened(session_id: &'static str) -> Input<u32> {
 
 fn session_refused() -> Input<u32> {
     frame(RawJsonRpcMessage::response(
-        RequestId::Str("agent_session:1".to_owned()),
+        request_id(1),
         Err(agent_client_protocol::Error::internal_error()),
     ))
 }
@@ -113,8 +115,10 @@ fn sent_methods(effects: &[Effect<u32>]) -> Vec<String> {
         .collect()
 }
 
+/// The machine's own request ids carry the session, so sessions sharing one
+/// connection cannot collide.
 fn request_id(n: u64) -> RequestId {
-    RequestId::Str(format!("agent_session:{n}"))
+    RequestId::Str(format!("agent_session:{}:{n}", AgentSessionId::TEST_A))
 }
 
 #[test]
@@ -225,7 +229,11 @@ fn session_new_success_flushes_the_queue_positionally() {
 
 #[test]
 fn reconnect_uses_session_resume_when_the_agent_supports_it() {
-    let mut machine = SessionMachine::resume(AgentSessionId::TEST_A, "acp-42".into());
+    let mut machine = SessionMachine::resume(
+        AgentSessionId::TEST_A,
+        "acp-42".into(),
+        "/workspace".to_owned(),
+    );
     machine.handle(command("continue", 1));
     machine.handle(acp_ready());
     let initialized = InitializeResponse::new(PROTOCOL_VERSION).agent_capabilities(
@@ -257,7 +265,11 @@ fn reconnect_uses_session_resume_when_the_agent_supports_it() {
 
 #[test]
 fn reconnect_falls_back_to_session_load() {
-    let mut machine = SessionMachine::resume(AgentSessionId::TEST_A, "acp-42".into());
+    let mut machine = SessionMachine::resume(
+        AgentSessionId::TEST_A,
+        "acp-42".into(),
+        "/workspace".to_owned(),
+    );
     machine.handle(acp_ready());
     let initialized = InitializeResponse::new(PROTOCOL_VERSION)
         .agent_capabilities(AgentCapabilities::new().load_session(true));
@@ -269,16 +281,24 @@ fn reconnect_falls_back_to_session_load() {
 
 #[test]
 fn reconnect_stops_when_the_agent_cannot_restore_sessions() {
-    let mut machine = SessionMachine::resume(AgentSessionId::TEST_A, "acp-42".into());
+    let mut machine = SessionMachine::resume(
+        AgentSessionId::TEST_A,
+        "acp-42".into(),
+        "/workspace".to_owned(),
+    );
     machine.handle(command("cannot continue", 1));
     machine.handle(acp_ready());
 
     let effects = machine.handle(initialized());
 
+    // The handshake itself succeeded, so its result is still announced: this
+    // session cannot restore itself, but the connection is initialized and a
+    // new session on it would not have to handshake again.
     assert!(matches!(
         effects[..],
         [
             Effect::Log { .. },
+            Effect::Initialized { .. },
             Effect::Complete {
                 token: 1,
                 result: Err(AgentSessionError::ResumeUnsupported(_))
@@ -359,7 +379,7 @@ fn an_unintelligible_session_new_answer_stops() {
     begin_opening(&mut machine);
 
     let effects = machine.handle(frame(RawJsonRpcMessage::response(
-        RequestId::Str("agent_session:1".to_owned()),
+        request_id(1),
         Ok(serde_json::json!({ "not": "a session" })),
     )));
 
@@ -391,7 +411,7 @@ fn a_live_frame_only_logs() {
     machine.handle(session_opened("acp-42"));
 
     let effects = machine.handle(frame(RawJsonRpcMessage::response(
-        RequestId::Str("agent_session:2".to_owned()),
+        request_id(2),
         Ok(serde_json::json!({})),
     )));
 
@@ -657,5 +677,162 @@ fn a_model_change_does_not_disturb_the_queue() {
         machine.pending_count(),
         2,
         "both are still queued, in order"
+    );
+}
+
+/// The `cwd` of every sent request with the given method.
+fn sent_cwds(effects: &[Effect<u32>], method: &str) -> Vec<String> {
+    effects
+        .iter()
+        .filter_map(|effect| match effect {
+            Effect::Send {
+                message: ToRuntimeMessage::Acp(AcpMessage(RawJsonRpcMessage::Request(request))),
+                ..
+            } if request.method.as_ref() == method => {
+                let params = request
+                    .params
+                    .clone()
+                    .expect("the request has params")
+                    .into_value();
+                Some(params["cwd"].as_str().expect("cwd is a string").to_owned())
+            }
+            _ => None,
+        })
+        .collect()
+}
+
+#[test]
+fn session_new_carries_the_sessions_workspace() {
+    let mut machine = SessionMachine::new(AgentSessionId::TEST_A, "/home/operator/code".to_owned());
+    machine.handle(acp_ready());
+    let effects = machine.handle(initialized());
+
+    // The session/new request works in the row's directory, not a constant.
+    assert_eq!(sent_cwds(&effects, "session/new"), ["/home/operator/code"]);
+}
+
+#[test]
+fn resume_carries_the_sessions_workspace() {
+    let mut machine = SessionMachine::resume(
+        AgentSessionId::TEST_A,
+        "acp-42".into(),
+        "/home/operator/code".to_owned(),
+    );
+    machine.handle(acp_ready());
+    let effects = machine.handle(initialized_with(
+        InitializeResponse::new(PROTOCOL_VERSION).agent_capabilities(
+            AgentCapabilities::new().session_capabilities(
+                SessionCapabilities::new().resume(SessionResumeCapabilities::new()),
+            ),
+        ),
+    ));
+
+    assert_eq!(
+        sent_cwds(&effects, "session/resume"),
+        ["/home/operator/code"]
+    );
+}
+
+#[test]
+fn a_session_on_an_initialized_connection_opens_without_handshaking() {
+    let mut machine = machine();
+    machine.handle(command("fix the flaky test", 1));
+
+    // No `AcpReady`, no `initialize`: another session on this connection
+    // already ran the handshake and this one is told the result.
+    let opening = machine.handle(Input::Ready {
+        restore: SessionRestoreSupport {
+            resume: false,
+            load: false,
+        },
+    });
+
+    assert_eq!(sent_methods(&opening), ["session/new"]);
+    assert_eq!(
+        machine.pending_count(),
+        1,
+        "the prompt still waits to flush"
+    );
+}
+
+#[test]
+fn a_ready_connection_still_picks_resume_for_a_session_that_has_one() {
+    let mut machine = SessionMachine::resume(
+        AgentSessionId::TEST_A,
+        "acp-42".into(),
+        "/workspace".to_owned(),
+    );
+
+    let opening = machine.handle(Input::Ready {
+        restore: SessionRestoreSupport {
+            resume: true,
+            load: false,
+        },
+    });
+
+    assert_eq!(sent_methods(&opening), ["session/resume"]);
+}
+
+#[test]
+fn a_ready_connection_that_cannot_restore_stops_the_session() {
+    let mut machine: SessionMachine<u32> = SessionMachine::resume(
+        AgentSessionId::TEST_A,
+        "acp-42".into(),
+        "/workspace".to_owned(),
+    );
+
+    let effects = machine.handle(Input::Ready {
+        restore: SessionRestoreSupport {
+            resume: false,
+            load: false,
+        },
+    });
+
+    assert!(matches!(
+        effects[..],
+        [Effect::Stop {
+            reason: StopReason::ResumeUnsupported
+        }]
+    ));
+}
+
+#[test]
+fn the_session_that_ran_the_handshake_ignores_being_told_it_is_ready() {
+    let mut machine = machine();
+    machine.handle(acp_ready());
+    let opened = machine.handle(initialized());
+    assert_eq!(sent_methods(&opened), ["session/new"]);
+
+    // The gate is shared, so the machine that published `Ready` reads it back.
+    // Opening twice would leave the agent with a session nobody tracks.
+    let echo = machine.handle(Input::Ready {
+        restore: SessionRestoreSupport {
+            resume: true,
+            load: true,
+        },
+    });
+
+    assert!(echo.is_empty());
+}
+
+#[test]
+fn the_handshake_result_is_announced_for_the_connection() {
+    let mut machine = machine();
+    machine.handle(acp_ready());
+    let initialized = InitializeResponse::new(PROTOCOL_VERSION)
+        .agent_capabilities(AgentCapabilities::new().load_session(true));
+
+    let effects = machine.handle(initialized_with(initialized));
+
+    let announced = effects.iter().find_map(|effect| match effect {
+        Effect::Initialized { restore } => Some(*restore),
+        _ => None,
+    });
+    assert_eq!(
+        announced,
+        Some(SessionRestoreSupport {
+            resume: false,
+            load: true
+        })
     );
 }

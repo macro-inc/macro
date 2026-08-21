@@ -713,7 +713,7 @@ export const getSelfBotResponse = zod
       .optional(),
     updated_at: zod.iso.datetime({}).describe('Update timestamp.'),
   })
-  .describe('Bot row.');
+  .describe('Bot row.\n\nClients deserialize this, so both derives are used.');
 
 /**
  * @summary Handler for `GET /bots/{bot_id}/channels`.
@@ -2287,6 +2287,12 @@ export const createChannelScopedBotBody = zod
     avatar_url: zod.string().nullish().describe('Optional avatar URL.'),
     description: zod.string().nullish().describe('Optional description.'),
     handle: zod.string().describe('Stable handle.'),
+    has_agent: zod
+      .boolean()
+      .nullish()
+      .describe(
+        'Whether mentioning this bot opens a sandboxed coding-agent session. Defaults to false.'
+      ),
     name: zod.string().describe('Display name.'),
     team_id: zod
       .uuid()
@@ -27006,14 +27012,16 @@ export const listWebhooksResponse = zod
             updated_at: zod.iso.datetime({}).describe('Update timestamp.'),
             workspace_id: zod.string().describe('Owning workspace id.'),
           })
-          .describe('Webhook row returned by application APIs.')
+          .describe(
+            'Webhook row returned by application APIs.\n\nClients deserialize this, so both derives are used.'
+          )
       )
       .describe(
         "The caller's webhooks, newest first. Signing secrets are omitted."
       ),
   })
   .describe(
-    'Webhooks visible to the caller across their personal and team workspaces.'
+    'Webhooks visible to the caller across their personal and team workspaces.\n\nClients deserialize this, so both derives are used.'
   );
 
 /**
@@ -27052,9 +27060,13 @@ export const createWebhookBody = zod
       ),
     scope: zod
       .enum(['user', 'team'])
-      .describe('Scope that owns a newly-created webhook.'),
+      .describe(
+        'Scope that owns a newly-created webhook.\n\nClients serialize this, so both derives are used.'
+      ),
   })
-  .describe('Request to create a webhook.');
+  .describe(
+    'Request to create a webhook.\n\nClients serialize this, so both derives are used.'
+  );
 
 /**
  * @summary Get a webhook.
@@ -27110,7 +27122,9 @@ export const getWebhookResponse = zod
     updated_at: zod.iso.datetime({}).describe('Update timestamp.'),
     workspace_id: zod.string().describe('Owning workspace id.'),
   })
-  .describe('Webhook row returned by application APIs.');
+  .describe(
+    'Webhook row returned by application APIs.\n\nClients deserialize this, so both derives are used.'
+  );
 
 /**
  * @summary Delete a webhook.
@@ -27218,7 +27232,9 @@ export const patchWebhookResponse = zod
     updated_at: zod.iso.datetime({}).describe('Update timestamp.'),
     workspace_id: zod.string().describe('Owning workspace id.'),
   })
-  .describe('Webhook row returned by application APIs.');
+  .describe(
+    'Webhook row returned by application APIs.\n\nClients deserialize this, so both derives are used.'
+  );
 
 /**
  * @summary Validate a webhook endpoint.

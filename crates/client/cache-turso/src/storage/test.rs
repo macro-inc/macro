@@ -1489,6 +1489,55 @@ fn fault_storage(io: Arc<FaultIo>) -> TursoStorage {
 }
 
 #[test]
+fn predicate_query_plan_uses_fact_indexes_and_never_scans_record_blobs() {
+    let storage = TursoStorage::open_in_memory("predicate-query-plan").unwrap();
+    let token = |value| Token::new(value).unwrap();
+    let query = ValidatedIndexQuery::new(predicate_index::IndexQuery {
+        profile: Profile::new(token("soup-flat-v1")),
+        partitions: vec![predicate_index::PartitionPredicate {
+            partition: token("document"),
+            predicate: PredicateExpr::And(
+                Box::new(PredicateExpr::Exact {
+                    attribute: token("owner"),
+                    value: predicate_index::ExactValue::utf8("owner-1").unwrap(),
+                }),
+                Box::new(PredicateExpr::I64Range {
+                    attribute: token("updated-at"),
+                    lower: Some(RangeBound::Inclusive(10)),
+                    upper: None,
+                }),
+            ),
+        }],
+        sort_attribute: token("updated-at"),
+        sort_direction: SortDirection::Desc,
+        tie_break_direction: SortDirection::Desc,
+        limit: 20,
+    })
+    .unwrap();
+    let (sql, parameters) = compile_predicate_sql(&query);
+    let details = driver::query(
+        &storage.connection(),
+        &format!("EXPLAIN QUERY PLAN {sql}"),
+        parameters,
+    )
+    .unwrap()
+    .into_iter()
+    .map(|row| required_text(&row, 3).unwrap())
+    .collect::<Vec<_>>();
+    assert!(
+        details
+            .iter()
+            .any(|detail| detail.contains("exact_facts_lookup_idx"))
+    );
+    assert!(
+        details
+            .iter()
+            .any(|detail| detail.contains("integer_facts_lookup_idx"))
+    );
+    assert!(details.iter().all(|detail| !detail.contains("records")));
+}
+
+#[test]
 fn injected_memory_io_quota_and_sync_failures_require_reset() {
     block_on(async {
         for fault in [IoFault::StorageFull, IoFault::Sync] {

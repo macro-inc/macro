@@ -11,6 +11,8 @@ import type { WebhookScope } from './webhookScope';
 
 /**
  * Request to create a webhook.
+
+Clients serialize this, so both derives are used.
  */
 export interface CreateWebhookRequest {
   /** Endpoint URL. HTTPS is required outside local environments. */

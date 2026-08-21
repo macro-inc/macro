@@ -5,6 +5,7 @@ import {
   closeReminderComposer,
   openReminderComposer,
   openReminderEditor,
+  openStandaloneReminderComposer,
   reminderComposerOpen,
   reminderComposerState,
   takeReminderCreatedHandler,
@@ -110,6 +111,65 @@ describe('reminder composer edit mode', () => {
 
     expect(reminderComposerState.editing?.id).toBe('rem-2');
     expect(reminderComposerState.editing?.description).toBe('Send the invoice');
+  });
+});
+
+describe('reminder composer standalone mode', () => {
+  beforeEach(() => {
+    closeReminderComposer();
+  });
+
+  // The flag is what the modal reads to know it is composing at all: with no
+  // entity and no draft, a closed composer and a standalone one look alike.
+  it('opens with no target of any kind', () => {
+    openStandaloneReminderComposer();
+
+    expect(reminderComposerOpen()).toBe(true);
+    expect(reminderComposerState.standalone).toBe(true);
+    expect(reminderComposerState.entity).toBeUndefined();
+    expect(reminderComposerState.editing).toBeUndefined();
+  });
+
+  it('clears the flag on close', () => {
+    openStandaloneReminderComposer();
+    closeReminderComposer();
+
+    expect(reminderComposerOpen()).toBe(false);
+    expect(reminderComposerState.standalone).toBeUndefined();
+  });
+
+  // The three modes are exclusive. A leftover flag would make the modal treat
+  // an entity's reminder as being about nothing, and drop the attachment.
+  it('drops a create target when opened standalone', () => {
+    openReminderComposer(doc('doc-1', 'Q3 Contract'));
+    openStandaloneReminderComposer();
+
+    expect(reminderComposerState.entity).toBeUndefined();
+    expect(reminderComposerState.standalone).toBe(true);
+  });
+
+  it('drops an edit target when opened standalone', () => {
+    openReminderEditor(draft('rem-1', 'Chase the contract'));
+    openStandaloneReminderComposer();
+
+    expect(reminderComposerState.editing).toBeUndefined();
+    expect(reminderComposerState.standalone).toBe(true);
+  });
+
+  it('drops the standalone flag when opened for an entity', () => {
+    openStandaloneReminderComposer();
+    openReminderComposer(doc('doc-1', 'Q3 Contract'));
+
+    expect(reminderComposerState.standalone).toBeUndefined();
+    expect(reminderComposerState.entity?.id).toBe('doc-1');
+  });
+
+  it('drops the standalone flag when opened to edit', () => {
+    openStandaloneReminderComposer();
+    openReminderEditor(draft('rem-1', 'Chase the contract'));
+
+    expect(reminderComposerState.standalone).toBeUndefined();
+    expect(reminderComposerState.editing?.id).toBe('rem-1');
   });
 });
 

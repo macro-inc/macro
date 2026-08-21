@@ -40,6 +40,13 @@ fn js(json: serde_json::Value) -> JsValue {
         .expect("serialize test value")
 }
 
+fn write_context(origin_op_id: Option<&str>) -> JsValue {
+    js(serde_json::json!({
+        "originOpId": origin_op_id,
+        "registration": null
+    }))
+}
+
 fn from_js<T: DeserializeOwned>(value: JsValue) -> T {
     serde_wasm_bindgen::from_value(value).expect("deserialize wasm result")
 }
@@ -153,7 +160,7 @@ async fn operations_preserve_js_boundary_interner_and_ordering() {
 
     let write: serde_json::Value = from_js(
         resolved(engine.write_query(
-            Some("tab:writer".into()),
+            write_context(Some("tab:writer")),
             QUERY.into(),
             Some("Soup".into()),
             js(vars.clone()),
@@ -251,7 +258,7 @@ async fn entity_resolvers_cross_the_js_boundary() {
     const SCOPE: &str = "cache-wasm-wp07-entity-resolver";
     let engine = fresh_engine(SCOPE).await;
     resolved(engine.write_query(
-        None,
+        write_context(None),
         QUERY.into(),
         Some("Soup".into()),
         js(variables()),
@@ -301,7 +308,7 @@ async fn queue_and_optimistic_layers_survive_preserve_reopen_in_id_order() {
     let engine = fresh_engine(SCOPE).await;
     let vars = variables();
     resolved(engine.write_query(
-        None,
+        write_context(None),
         PROPERTY_QUERY.into(),
         Some("Soup".into()),
         js(vars.clone()),
@@ -415,7 +422,7 @@ async fn optimistic_commit_reports_affected_ops_and_rejects_settled_or_malformed
     let engine = fresh_engine(SCOPE).await;
     let vars = variables();
     resolved(engine.write_query(
-        None,
+        write_context(None),
         PROPERTY_QUERY.into(),
         Some("Soup".into()),
         js(vars.clone()),
@@ -522,7 +529,7 @@ async fn destroy_recovery_wipes_records_and_queue() {
     const SCOPE: &str = "cache-wasm-wp07-destroy";
     let engine = fresh_engine(SCOPE).await;
     resolved(engine.write_query(
-        None,
+        write_context(None),
         PROPERTY_QUERY.into(),
         Some("Soup".into()),
         js(variables()),
@@ -577,7 +584,7 @@ async fn recovery_open_wipes_existing_data_before_opening_fresh_turso() {
     const SCOPE: &str = "cache-wasm-wp08-recovery-open";
     let engine = fresh_engine(SCOPE).await;
     resolved(engine.write_query(
-        None,
+        write_context(None),
         QUERY.into(),
         Some("Soup".into()),
         js(variables()),
@@ -654,7 +661,7 @@ async fn incompatible_initialization_resets_and_identity_reset_does_not_latch() 
 
     let first_identity: serde_json::Value = from_js(
         resolved(engine.write_query(
-            None,
+            write_context(None),
             QUERY.into(),
             Some("Soup".into()),
             js(variables()),
@@ -666,7 +673,7 @@ async fn incompatible_initialization_resets_and_identity_reset_does_not_latch() 
     assert_eq!(first_identity["reset"], false);
     let normal_identity_reset: serde_json::Value = from_js(
         resolved(engine.write_query(
-            None,
+            write_context(None),
             QUERY.into(),
             Some("Soup".into()),
             js(variables()),
@@ -687,7 +694,7 @@ async fn storage_reset_errors_latch_and_block_hot_read_write_and_control_methods
     const SCOPE: &str = "cache-wasm-wp07-reset-latch";
     let engine = fresh_engine(SCOPE).await;
     resolved(engine.write_query(
-        None,
+        write_context(None),
         QUERY.into(),
         Some("Soup".into()),
         js(variables()),
@@ -719,7 +726,7 @@ async fn storage_reset_errors_latch_and_block_hot_read_write_and_control_methods
     ))
     .await;
     assert_reset_required(engine.write_query(
-        None,
+        write_context(None),
         QUERY.into(),
         Some("Soup".into()),
         js(variables()),
@@ -734,7 +741,7 @@ async fn storage_reset_errors_latch_and_block_hot_read_write_and_control_methods
     assert_eq!(identity, None);
 
     resolved(engine.write_query(
-        None,
+        write_context(None),
         PROPERTY_QUERY.into(),
         Some("Soup".into()),
         js(variables()),
@@ -772,7 +779,7 @@ async fn physical_reset_serializes_recreates_and_preserves_interner_registration
     const SCOPE: &str = "cache-wasm-wp07-physical-reset";
     let engine = fresh_engine(SCOPE).await;
     resolved(engine.write_query(
-        None,
+        write_context(None),
         PROPERTY_QUERY.into(),
         Some("Soup".into()),
         js(variables()),
@@ -814,7 +821,7 @@ async fn physical_reset_serializes_recreates_and_preserves_interner_registration
     let concurrent = js_sys::Array::new();
     concurrent.push(&engine.physical_reset());
     concurrent.push(&engine.write_query(
-        None,
+        write_context(None),
         PROPERTY_QUERY.into(),
         Some("Soup".into()),
         js(variables()),
@@ -845,7 +852,7 @@ async fn physical_reset_serializes_recreates_and_preserves_interner_registration
     assert_eq!(read["kind"], "hit");
     let write: serde_json::Value = from_js(
         resolved(engine.write_query(
-            Some("tab:writer".into()),
+            write_context(Some("tab:writer")),
             PROPERTY_QUERY.into(),
             Some("Soup".into()),
             js(variables()),
@@ -904,7 +911,7 @@ async fn every_method_rejects_after_consuming_close() {
     ))
     .await;
     assert_closed(engine.write_query(
-        None,
+        write_context(None),
         QUERY.into(),
         Some("Soup".into()),
         js(variables()),
@@ -985,7 +992,7 @@ async fn calls_serialize_and_owner_lock_excludes_a_second_open() {
 
     let writes = js_sys::Array::new();
     writes.push(&engine.write_query(
-        None,
+        write_context(None),
         QUERY.into(),
         Some("Soup".into()),
         js(variables()),
@@ -993,7 +1000,7 @@ async fn calls_serialize_and_owner_lock_excludes_a_second_open() {
         None,
     ));
     writes.push(&engine.write_query(
-        None,
+        write_context(None),
         QUERY.into(),
         Some("Soup".into()),
         js(variables()),

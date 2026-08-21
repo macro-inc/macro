@@ -38,7 +38,7 @@ import {
   SoupViewTabs,
   useApplyPreset,
 } from '@app/features/next-soup/soup-view/soup-view-tabs';
-import { useIsNewInboxEnabled } from '@app/features/next-soup/soup-view/use-is-new-inbox-enabled';
+import { useIsInboxView } from '@app/features/next-soup/soup-view/use-is-inbox-view';
 import { CompanyKanban } from '@app/features/next-soup/soup-view/views/companies/CompanyKanban';
 import { CompanyListEntity } from '@app/features/next-soup/soup-view/views/companies/CompanyListEntity';
 import { ResponsiveCompanyListHeader } from '@app/features/next-soup/soup-view/views/companies/CompanyListHeader';
@@ -259,7 +259,7 @@ export const SoupView = (props: SoupViewProps) => {
   const soup = useSoup();
   const panel = useSplitPanelOrThrow();
   const soupView = useSoupView();
-  const isNewInboxEnabled = useIsNewInboxEnabled();
+  const isInboxView = useIsInboxView();
   const openFocusedEntityInPreview = () => {
     const focusedRow = soup.focus.row();
     if (
@@ -362,7 +362,15 @@ export const SoupView = (props: SoupViewProps) => {
         ? (initialCrmView.groupBy ?? undefined)
         : (persistedGroupBy ?? props.initialGroupBy);
 
-      let initialSortIds = initialCrmView?.sort ?? sortPref();
+      // The inbox exposes no sort control on either desktop (the toolbar
+      // hides SoupViewContextSort) or mobile, so its order is always
+      // updated_at. Ignore any sort persisted back when the control was
+      // reachable: honoring it would pin the list to an order the user can
+      // no longer change.
+      let initialSortIds =
+        contentId === 'inbox'
+          ? ['updated_at']
+          : (initialCrmView?.sort ?? sortPref());
       if (initialSortIds.length === 0) {
         initialSortIds = props.initialClientSort ?? ['updated_at'];
       }
@@ -705,7 +713,7 @@ export const SoupView = (props: SoupViewProps) => {
           when={
             ENABLE_UNIFIED_LIST_AI_INPUT &&
             !isTouchDevice() &&
-            !isNewInboxEnabled() &&
+            !isInboxView() &&
             !panel.handle.isControllerSplit() &&
             !isBoardRendered() &&
             !isComponentListView('search')
@@ -885,13 +893,13 @@ const SoupViewListContent = (props: SoupViewListProps) => {
   // Register soup view hotkeys (jump navigation, enter, escape, cmd+k, etc.)
   const { applyTabPreset } = useApplyPreset();
 
-  const isNewInboxEnabled = useIsNewInboxEnabled();
+  const isInboxView = useIsInboxView();
 
-  // The per-row component depends on the active view (and the inbox flag).
+  // The per-row component depends on the active view.
   const listEntityComponent = () => {
     if (currentView() === 'tasks') return TaskListEntity;
     if (currentView() === 'companies') return CompanyListEntity;
-    if (isNewInboxEnabled()) return InboxListEntity;
+    if (isInboxView()) return InboxListEntity;
     return ListEntity;
   };
 

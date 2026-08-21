@@ -390,6 +390,22 @@ export function resolveReminderDescription(
 }
 
 /**
+ * What to store as a standalone reminder's description, or undefined when
+ * there is nothing usable to store.
+ *
+ * A reminder about nothing has no name to fall back on, so unlike every other
+ * description path this one can come back empty — which is also the answer to
+ * "may the composer move off the description step yet?". Both questions go
+ * through here so the step's gate and its submit cannot disagree about a
+ * description made only of spaces.
+ */
+export function resolveStandaloneDescription(
+  input: string
+): string | undefined {
+  return clampDescription(input) || undefined;
+}
+
+/**
  * The same entity-derived description, from a resolved name rather than a whole
  * entity.
  *

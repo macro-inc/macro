@@ -6,4 +6,5 @@ pub mod daytona;
 pub(crate) mod managed_containers;
 pub mod namespace;
 pub(crate) mod provision;
+pub mod runtime_registry;
 pub mod sidecar;

@@ -77,6 +77,7 @@ import {
   repeatPartsFromSchedule,
   resolveEditedDescription,
   resolveReminderDescription,
+  resolveStandaloneDescription,
 } from './reminder-schedule';
 
 /** The composer's questions, asked in this order. */
@@ -137,6 +138,17 @@ export function ReminderComposerModal() {
 
   const entity = () => reminderComposerState.entity;
   const editing = () => reminderComposerState.editing;
+  const standalone = () => reminderComposerState.standalone === true;
+
+  /**
+   * The description as it would be stored, for a reminder about nothing.
+   *
+   * `undefined` means the field has nothing usable in it, which is what both
+   * the step's gate and its submit read — one answer, so a description of
+   * spaces cannot pass one and fail the other.
+   */
+  const standaloneDescription = () =>
+    resolveStandaloneDescription(description());
 
   /**
    * Escape steps back to the description before it closes the composer,
@@ -204,7 +216,21 @@ export function ReminderComposerModal() {
     })
   );
 
-  const advanceFromDescription = () => setStep('when');
+  /**
+   * Whether the description step has been answered well enough to leave.
+   *
+   * Only a standalone reminder can fail this. Everywhere else the field is
+   * optional because there is an entity to name the reminder after, so an
+   * empty one is an answer; with nothing to fall back on it is not, and the API
+   * rejects it.
+   */
+  const canAdvanceFromDescription = () =>
+    !standalone() || standaloneDescription() !== undefined;
+
+  const advanceFromDescription = () => {
+    if (!canAdvanceFromDescription()) return;
+    setStep('when');
+  };
 
   // The dialog's Enter binding is a single shared slot, so whichever step is on
   // screen has to claim it or the other step's stale handler stays live. The
@@ -249,6 +275,38 @@ export function ReminderComposerModal() {
     await onCreated?.();
   };
 
+  /**
+   * Create a reminder attached to nothing.
+   *
+   * Sends no entity at all rather than an empty one — the API rejects an
+   * `entityType` without an `entityId` — and the description is whatever was
+   * typed, since there is nothing to derive one from.
+   */
+  const submitStandalone = async (schedule: ReminderSchedule) => {
+    const resolved = standaloneDescription();
+    // Unreachable: the date step cannot be reached without a description. Kept
+    // as the last word on it rather than a `!` on the value above.
+    if (!resolved) {
+      setStep('description');
+      return;
+    }
+
+    // Taken before the close, which clears it. Nothing passes one today, but
+    // taking it is what keeps a handler from leaking into the next open.
+    const onCreated = takeReminderCreatedHandler();
+    closeReminderComposer();
+
+    try {
+      await createReminder.mutateAsync({ description: resolved, schedule });
+      toast.success('Reminder set');
+    } catch {
+      toast.failure('Failed to create reminder');
+      return;
+    }
+
+    await onCreated?.();
+  };
+
   const submitEdit = async (
     schedule: ReminderSchedule,
     draft: ReminderDraft
@@ -284,6 +342,8 @@ export function ReminderComposerModal() {
 
     const target = entity();
     if (target) return await submitCreate(schedule, target);
+
+    if (standalone()) return await submitStandalone(schedule);
   };
 
   const submit = async (date: Date) => {
@@ -327,11 +387,13 @@ export function ReminderComposerModal() {
    * dialog animates shut — otherwise the reset back to the description step
    * would be visible as the date list flicking back to a Continue button.
    */
-  const hasTarget = () => entity() !== undefined || editing() !== undefined;
+  const hasTarget = () =>
+    entity() !== undefined || editing() !== undefined || standalone();
 
   // The chip row carries the entity a new reminder is about, and — on the date
-  // step — the description typed so far as a way back to it. Editing has no
-  // entity, so the row is only there once something has been typed.
+  // step — the description typed so far as a way back to it. Editing and
+  // standalone have no entity, so the row is only there once something has been
+  // typed.
   const showsToolbar = () =>
     entity() !== undefined ||
     (step() !== 'description' && !!description().trim());
@@ -360,7 +422,12 @@ export function ReminderComposerModal() {
                 placeholder={
                   editing()
                     ? 'Reminder description'
-                    : "What's the reminder? (optional)"
+                    : // Not optional for a standalone reminder: there is no
+                      // entity to name it after, so this is all it will ever
+                      // say.
+                      standalone()
+                      ? "What's the reminder?"
+                      : "What's the reminder? (optional)"
                 }
                 value={description()}
                 onInput={setDescription}
@@ -412,7 +479,12 @@ export function ReminderComposerModal() {
           </Show>
           <Switch>
             <Match when={step() === 'description'}>
-              <DescriptionStep onContinue={advanceFromDescription} />
+              <DescriptionStep
+                onContinue={advanceFromDescription}
+                // An affordance, not the check: `advanceFromDescription` holds
+                // the gate for every way through this step.
+                disabled={!canAdvanceFromDescription()}
+              />
             </Match>
             <Match when={step() === 'when'}>
               <CommandMenuShell.Body>
@@ -525,8 +597,14 @@ function StepInput(props: {
  * pre-filled, so skipping stays a single keystroke instead of a select-all and
  * delete. When editing it necessarily is pre-filled — clearing it back out asks
  * for that same fallback.
+ *
+ * Not optional for a standalone reminder, which has no fallback: `disabled`
+ * says so, and the caller's gate is what enforces it.
  */
-function DescriptionStep(props: { onContinue: VoidFunction }) {
+function DescriptionStep(props: {
+  onContinue: VoidFunction;
+  disabled?: boolean;
+}) {
   return (
     <CommandMenuShell.Footer class="gap-2 border-t-0 py-3">
       <CommandMenuHotkeyHint
@@ -538,6 +616,7 @@ function DescriptionStep(props: { onContinue: VoidFunction }) {
         size="sm"
         depth={3}
         class="ml-auto gap-3 rounded-lg border-0"
+        disabled={props.disabled}
         onClick={props.onContinue}
       >
         Continue

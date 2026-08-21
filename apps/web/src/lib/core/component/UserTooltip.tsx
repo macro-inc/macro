@@ -136,7 +136,7 @@ export function UserTooltip(props: UserTooltipProps) {
             </Show>
             <Show when={crmFlag().enabled ? props.email : undefined}>
               {(email) => (
-                <Suspense fallback={<div class="h-8" />}>
+                <Suspense fallback={null}>
                   <OpenContactAction email={email()} onClose={props.onClose} />
                 </Suspense>
               )}

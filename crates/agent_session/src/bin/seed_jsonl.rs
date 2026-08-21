@@ -81,6 +81,10 @@ struct Args {
     /// Repository the session is nominally working in.
     #[arg(long, default_value = "https://github.com/macro/cloud-storage")]
     repo_url: String,
+
+    /// Directory the session's harness nominally ran in.
+    #[arg(long, default_value = "/workspace")]
+    workspace: String,
 }
 
 /// Why seeding failed.
@@ -242,7 +246,8 @@ async fn seed(args: &Args) -> Result<(), SeedError> {
             originating_message_id: None,
             model: args.model.clone(),
             harness: args.harness.clone(),
-            repo_url: args.repo_url.clone(),
+            repo_url: Some(args.repo_url.clone()),
+            workspace: args.workspace.clone(),
         },
     )
     .await

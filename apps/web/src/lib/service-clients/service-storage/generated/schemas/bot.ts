@@ -14,6 +14,8 @@ import type { BotOwnerProperty } from './botOwnerProperty';
 
 /**
  * Bot row.
+
+Clients deserialize this, so both derives are used.
  */
 export interface Bot {
   /** Optional avatar URL. */

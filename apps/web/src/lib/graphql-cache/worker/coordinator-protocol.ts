@@ -520,6 +520,25 @@ export function isCacheRequest(value: unknown): value is CacheRequest {
         hasOnlyKeys(value, ['id', 'kind', 'request']) &&
         isSearchRequest(value.request)
       );
+    case 'entity-filter': {
+      const request = value.request;
+      return (
+        hasOnlyKeys(value, ['id', 'kind', 'request']) &&
+        isRecord(request) &&
+        hasOnlyKeys(request, [
+          'filters',
+          'sortMethod',
+          'sortDirection',
+          'limit',
+        ]) &&
+        isRecord(request.filters) &&
+        ['CREATED_AT', 'UPDATED_AT', 'VIEWED_AT', 'VIEWED_UPDATED'].includes(
+          request.sortMethod as string
+        ) &&
+        (request.sortDirection === 'ASC' || request.sortDirection === 'DESC') &&
+        isValidCacheSearchLimit(request.limit)
+      );
+    }
     case 'inspect-query':
       return (
         hasOnlyKeys(value, [

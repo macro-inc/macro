@@ -280,6 +280,7 @@ export const TOKENS = {
     snippetNewSplit: 'create.snippetNewSplit',
     automation: 'create.automation',
     skill: 'create.skill',
+    reminder: 'create.reminder',
     close_menu: 'create.close_menu',
   },
 

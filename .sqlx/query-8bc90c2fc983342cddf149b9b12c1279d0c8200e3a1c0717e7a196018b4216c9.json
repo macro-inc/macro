@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            INSERT INTO bots (\n                id, kind, owner_user_id, team_id, name, handle, description, avatar_url, created_by\n            )\n            VALUES ($1, 'owned', $2, $3, $4, $5, $6, $7, $8)\n            RETURNING\n                id,\n                kind,\n                owner_user_id,\n                team_id,\n                name,\n                handle,\n                description,\n                avatar_url,\n                created_by,\n                created_at,\n                updated_at,\n                deleted_at,\n                has_agent\n            ",
+  "query": "\n            INSERT INTO bots (\n                id, kind, owner_user_id, team_id, name, handle, description, avatar_url,\n                created_by, has_agent\n            )\n            VALUES ($1, 'owned', $2, $3, $4, $5, $6, $7, $8, COALESCE($9, false))\n            RETURNING\n                id,\n                kind,\n                owner_user_id,\n                team_id,\n                name,\n                handle,\n                description,\n                avatar_url,\n                created_by,\n                created_at,\n                updated_at,\n                deleted_at,\n                has_agent\n            ",
   "describe": {
     "columns": [
       {
@@ -78,7 +78,8 @@
         "Text",
         "Text",
         "Text",
-        "Text"
+        "Text",
+        "Bool"
       ]
     },
     "nullable": [
@@ -97,5 +98,5 @@
       false
     ]
   },
-  "hash": "0c12508f0a369f8b12d80ea6c8b8ab09f9e95fa463585e5a5d2ba884909abe01"
+  "hash": "8bc90c2fc983342cddf149b9b12c1279d0c8200e3a1c0717e7a196018b4216c9"
 }

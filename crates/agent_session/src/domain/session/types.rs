@@ -44,6 +44,40 @@ pub(super) enum SessionOpening {
     Load(SessionId),
 }
 
+/// What the agent said it can do about a session it has seen before, distilled
+/// from the `initialize` response.
+///
+/// Only these two facts decide how a session opens, and one connection's
+/// answer serves every session on it - so this is what gets shared, rather
+/// than the protocol's whole capability set.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SessionRestoreSupport {
+    /// The agent offers `session/resume`.
+    pub resume: bool,
+    /// The agent offers `session/load`.
+    pub load: bool,
+}
+
+/// Where the sessions on one connection learn that its ACP handshake is done.
+///
+/// Exactly one session runs `initialize` per connection; the rest wait for
+/// its answer here rather than initializing again. Retained rather than
+/// broadcast, because a session can bind long after the handshake finished
+/// and still needs to be told - it reads the current value on subscribe.
+///
+/// The states are a claim as much as a status: exactly one session may run
+/// the handshake, so moving `Pending` to `InFlight` is how a session takes
+/// that job and how every other session knows not to.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HandshakeStatus {
+    /// Nobody has started initializing this connection.
+    Pending,
+    /// A session is initializing it; the rest wait rather than initialize too.
+    InFlight,
+    /// The connection is initialized and sessions may open.
+    Ready(SessionRestoreSupport),
+}
+
 /// Observable phase of a session connection.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RuntimeStatus {
@@ -121,6 +155,14 @@ pub enum Input<Token> {
     },
     /// The transport produced a message.
     Inbound(ToServerMessage),
+    /// Somebody else on this connection completed the ACP handshake, so this
+    /// session may open without initializing anything. Ignored unless the
+    /// machine is still booting - the machine that ran the handshake sees its
+    /// own result come back this way too.
+    Ready {
+        /// What that handshake learned about restoring sessions.
+        restore: SessionRestoreSupport,
+    },
     /// The connection is over. Idempotent: a dead machine ignores it.
     Closed(CloseReason),
 }
@@ -143,6 +185,13 @@ pub enum Effect<Token> {
     PersistAcpSession {
         /// Agent-assigned session identifier.
         session_id: SessionId,
+    },
+    /// This machine ran the connection's `initialize` and learned what the
+    /// agent can do. Emitted so the connection can answer for every session
+    /// that opens after this one, including those that bind hours later.
+    Initialized {
+        /// What the handshake learned about restoring sessions.
+        restore: SessionRestoreSupport,
     },
     /// Resolve a caller's delivery future.
     Complete {

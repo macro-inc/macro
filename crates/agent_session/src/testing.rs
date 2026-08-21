@@ -109,6 +109,7 @@ impl AgentSessionRepo for InMemoryAgentSessionRepo {
             model: params.model,
             harness: params.harness,
             repo_url: params.repo_url,
+            workspace: params.workspace,
             acp_session_id: None,
             status: SessionStatus::default(),
             created_at: now,
@@ -171,7 +172,7 @@ impl AgentSessionRepo for InMemoryAgentSessionRepo {
         let session = sessions.get_mut(&id).ok_or_else(|| {
             AgentSessionError::Unknown(anyhow::anyhow!("no agent session {}", id.as_uuid()))
         })?;
-        session.acp_session_id = Some(acp_session_id.to_string());
+        session.acp_session_id = Some(acp_session_id);
         session.modified_at = chrono::Utc::now();
         Ok(())
     }
@@ -243,7 +244,7 @@ impl AgentSessionLogRepo for InMemoryAgentSessionRepo {
                 .lock()
                 .expect("in-memory session store is not poisoned")
                 .get_mut(&session_id)
-            && session.acp_session_id.as_deref() == Some(acp_session_id.to_string().as_str())
+            && session.acp_session_id.as_ref() == Some(&acp_session_id)
         {
             session.model = change.model;
             session.modified_at = chrono::Utc::now();
@@ -297,7 +298,8 @@ pub fn test_agent_session(id: AgentSessionId) -> AgentSession {
         bot_id: BotId::new_from_uuid(Uuid::from_u128(0xb07)),
         model: "claude-sonnet-5".to_string(),
         harness: "claude-code".to_string(),
-        repo_url: "https://github.com/example/example".to_string(),
+        repo_url: Some("https://github.com/example/example".to_string()),
+        workspace: "/workspace".to_string(),
         acp_session_id: None,
         status: SessionStatus::NoMessages,
         created_at: now,

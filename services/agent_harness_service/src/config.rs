@@ -26,14 +26,20 @@ pub struct Config {
     /// Base URL of the Daytona REST API.
     #[macro_config_default(String::from("https://app.daytona.io/api"))]
     pub daytona_api_url: String,
-    /// API key the Daytona client authenticates with.
+    /// API key the Daytona client authenticates with. Empty means the
+    /// managed (sandbox-provisioning) path is unarmed: external sessions
+    /// still work, and a managed spawn fails loudly at spawn time.
+    #[macro_config_default(String::new())]
     pub daytona_api_key: String,
     /// Name of the prebuilt Daytona snapshot to create sandboxes from. The
     /// image is expected to be built and pushed as a snapshot out of band,
     /// keeping image builds off the first-prompt critical path.
     #[macro_config_default(String::from("macro-agent-harness"))]
     pub daytona_snapshot: String,
-    /// Token with read access to the repo cloned into sandboxes.
+    /// Token with read access to the repo cloned into sandboxes. Empty
+    /// means managed sandboxes cannot clone; external sessions are
+    /// unaffected.
+    #[macro_config_default(String::new())]
     pub github_token: String,
     /// The bot this deployment answers for.
     ///

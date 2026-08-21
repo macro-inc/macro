@@ -17,25 +17,26 @@ pub const RUNTIME_IMAGE_TAG: &str = "macro-local-runtime:dev";
 
 const DOCKERFILE_REL: &str = "docker/Dockerfile.runtime";
 
-/// Build the runtime image for the host arch if it is missing (or `force`).
+/// Reconcile the runtime image for the host arch through BuildKit.
+///
+/// BuildKit's content cache makes an unchanged build cheap while still
+/// invalidating the image when the Dockerfile or build context changes.
+/// Existence alone is not a valid cache key because the tag survives branch
+/// checkouts. `force` disables BuildKit's layer cache.
 pub fn ensure_runtime_image(stage: &Stage, target: Target, force: bool) -> Result<()> {
-    if !force && image_exists() {
-        return Ok(());
-    }
     let ws = workspace_root();
     let mut cmd = Command::new("docker");
     cmd.current_dir(&ws)
         .args(["buildx", "build", "--platform", target.docker_platform])
         .args(["-f", DOCKERFILE_REL])
         .args(["-t", RUNTIME_IMAGE_TAG])
-        .arg("--load")
-        .arg(".");
+        .arg("--load");
+    if force {
+        cmd.arg("--no-cache");
+    }
+    cmd.arg(".");
     stage.run(
         &format!("Building runtime image {RUNTIME_IMAGE_TAG}"),
         &mut cmd,
     )
-}
-
-fn image_exists() -> bool {
-    super::super::docker::image_exists(RUNTIME_IMAGE_TAG)
 }

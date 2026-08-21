@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT\n                id, owner_id, thread_id, originating_message_id, bot_id,\n                model, harness, repo_url, acp_session_id, status, status_event_name,\n                created_at, modified_at,\n                (SELECT channel_id FROM comms_messages WHERE id = agent_session.thread_id)\n                    AS \"thread_channel_id?\"\n            FROM agent_session\n            WHERE thread_id = $1 AND bot_id = $2\n            ORDER BY created_at DESC\n            LIMIT 1\n            ",
+  "query": "\n            SELECT\n                id, owner_id, thread_id, originating_message_id, bot_id,\n                model, harness, repo_url, workspace, acp_session_id, status,\n                status_event_name, created_at, modified_at,\n                (SELECT channel_id FROM comms_messages WHERE id = agent_session.thread_id)\n                    AS \"thread_channel_id?\"\n            FROM agent_session\n            WHERE thread_id = $1 AND bot_id = $2\n            ORDER BY created_at DESC\n            LIMIT 1\n            ",
   "describe": {
     "columns": [
       {
@@ -45,31 +45,36 @@
       },
       {
         "ordinal": 8,
-        "name": "acp_session_id",
+        "name": "workspace",
         "type_info": "Text"
       },
       {
         "ordinal": 9,
-        "name": "status",
+        "name": "acp_session_id",
         "type_info": "Text"
       },
       {
         "ordinal": 10,
-        "name": "status_event_name",
+        "name": "status",
         "type_info": "Text"
       },
       {
         "ordinal": 11,
+        "name": "status_event_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 12,
         "name": "created_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 12,
+        "ordinal": 13,
         "name": "modified_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 13,
+        "ordinal": 14,
         "name": "thread_channel_id?",
         "type_info": "Uuid"
       }
@@ -88,6 +93,7 @@
       false,
       false,
       false,
+      true,
       false,
       true,
       false,
@@ -97,5 +103,5 @@
       null
     ]
   },
-  "hash": "97ce7a26f2d9eb32dc03bddef530bddccb8b87cefe615ad257f10c179245ba0c"
+  "hash": "1b01a7091a13b8088a31b1f4d539a47e43f866d1cc6ff35e2046924f71011039"
 }

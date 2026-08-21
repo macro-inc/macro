@@ -10,6 +10,86 @@
     "version": "0.1.0"
   },
   "paths": {
+    "/agent-sessions": {
+      "post": {
+        "tags": ["agent-sessions"],
+        "summary": "Open an agent session served by an external runtime.",
+        "description": "Nothing here tells the runtime where to dial: one connection per bot\ncarries every session it runs, so a runtime that has already dialed serves\nthis session too, and one that has not dials the gateway its own\nconfiguration names. The triggering mention reaches the session as its\nfirst prompt through the control endpoint.",
+        "operationId": "create_agent_session",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateAgentSessionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateAgentSessionResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/agent-sessions/{session_id}": {
       "get": {
         "tags": ["agent-sessions"],
@@ -383,14 +463,14 @@
       },
       "AgentSessionResponse": {
         "type": "object",
-        "description": "Response body describing an agent session.",
+        "description": "Response body describing an agent session.\n\nClients deserialize this, so both derives are used.",
         "required": [
           "id",
           "ownerId",
           "botId",
           "model",
           "harness",
-          "repoUrl",
+          "workspace",
           "status",
           "createdAt",
           "modifiedAt"
@@ -438,8 +518,8 @@
             "description": "The user who created and owns the session."
           },
           "repoUrl": {
-            "type": "string",
-            "description": "The repository the session works with."
+            "type": ["string", "null"],
+            "description": "The repository the session works with, when one was stated."
           },
           "status": {
             "$ref": "#/components/schemas/SessionStatusDto",
@@ -454,6 +534,10 @@
             "type": ["string", "null"],
             "format": "uuid",
             "description": "The root message of the thread the session was created from, if any."
+          },
+          "workspace": {
+            "type": "string",
+            "description": "The directory the session's harness runs in on its runtime."
           }
         }
       },
@@ -478,7 +562,79 @@
             "description": "The operation to perform."
           }
         ],
-        "description": "Request body for a control operation on a live session.\n\nA wrapper around the operation rather than the bare enum so that fields\nwhich are about the request rather than the operation have somewhere to go.\nThe acting user is deliberately not one of them: it comes from the caller's\ncredentials, so that a caller cannot attribute an operation to someone else."
+        "description": "Request body for a control operation on a live session.\n\nA wrapper around the operation rather than the bare enum so that fields\nwhich are about the request rather than the operation have somewhere to go.\nThe acting user is deliberately not one of them: it comes from the caller's\ncredentials, so that a caller cannot attribute an operation to someone else.\n\nClients serialize this, so both derives are used."
+      },
+      "CreateAgentSessionRequest": {
+        "type": "object",
+        "description": "Request body for `POST /agent-sessions`.\n\nClients serialize this, so both derives are used.",
+        "required": ["workspace"],
+        "properties": {
+          "botId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Bot the session runs for. Bot callers may omit it (their own identity\nis used) and must not name another bot; user callers must supply a\nbot they own."
+          },
+          "owner": {
+            "type": ["string", "null"],
+            "description": "The user who owns the session. Ignored for user callers, who always\nown their own sessions; required for bot callers without verified\nacting-user claims.\n\nFor bot callers this is a claim, not a verified fact: it is scoped to\nthe bot's own sessions, but the named user owns the session on the\nbot's say-so."
+          },
+          "repoUrl": {
+            "type": ["string", "null"],
+            "description": "Repository nominally checked out at `workspace`. Informational and\noptional: having it cloned there is the runtime operator's job."
+          },
+          "thread": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/CreateSessionThread",
+                "description": "The thread whose mention triggered the session, when one did.\nLinkage only - the mention's text is delivered by the runtime as the\nfirst prompt through the control endpoint, never through here."
+              }
+            ]
+          },
+          "workspace": {
+            "type": "string",
+            "description": "Absolute directory the bot's harness runs in on its runtime."
+          }
+        }
+      },
+      "CreateAgentSessionResponse": {
+        "type": "object",
+        "description": "Response body for `POST /agent-sessions`.\n\nClients deserialize this, so both derives are used.",
+        "required": ["session"],
+        "properties": {
+          "session": {
+            "$ref": "#/components/schemas/AgentSessionResponse",
+            "description": "The created session."
+          }
+        }
+      },
+      "CreateSessionThread": {
+        "type": "object",
+        "description": "The triggering mention on a create request.\n\nClients serialize this, so both derives are used.",
+        "required": ["channelId", "messageId"],
+        "properties": {
+          "channelId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Channel the mentioning message was posted in."
+          },
+          "content": {
+            "type": "string",
+            "description": "The mention's text, quoted in the session's announcement."
+          },
+          "messageId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The mentioning message."
+          },
+          "threadId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Thread the session belongs to; defaults to the message itself, which\nis how a top-level mention roots its own thread."
+          }
+        }
       },
       "LogDirectionDto": {
         "type": "string",

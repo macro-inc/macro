@@ -53,8 +53,6 @@ import { useEntryState } from '@components/app/split-layout/entry-state';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import {
   ENABLE_FEATURED_SEARCH_RESULTS,
-  ENABLE_NEW_INBOX_FLAG,
-  ENABLE_NEW_INBOX_OVERRIDE,
   ENABLE_REMINDERS,
   ENABLE_SUPPORTED_SOUP_FOREIGN_ENTITIES_FLAG,
   ENABLE_SUPPORTED_SOUP_FOREIGN_ENTITIES_OVERRIDE,
@@ -718,15 +716,11 @@ export const SoupViewContextProvider: FlowComponent<
       : groupByField()
   );
 
-  // The new inbox surfaces channel threads the current user participates in —
+  // The inbox surfaces channel threads the current user participates in —
   // the root sender, anyone who replied, or anyone @-mentioned — via the
   // `channelThreadParticipantId` filter, since soup otherwise only surfaces
   // whole channels.
-  const newInboxFlag = useFeatureFlag(ENABLE_NEW_INBOX_FLAG, {
-    enabledOverride: ENABLE_NEW_INBOX_OVERRIDE,
-  });
-  const isNewInbox = () =>
-    activeListView() === 'inbox' && newInboxFlag().enabled;
+  const isInboxView = () => activeListView() === 'inbox';
 
   const applyInboxFilter = (state: QueryState): QueryState => {
     const inboxes = inboxFilter();
@@ -741,7 +735,7 @@ export const SoupViewContextProvider: FlowComponent<
   };
 
   const applyInboxThreadFilter = (state: QueryState): QueryState => {
-    if (!isNewInbox()) {
+    if (!isInboxView()) {
       return {
         ...state,
         include: { ...state.include, channelThreadId: [NIL_UUID] },
@@ -759,10 +753,10 @@ export const SoupViewContextProvider: FlowComponent<
     };
   };
 
-  // Unread/read/all filter for the new inbox: injects the per-entity-type seen
+  // Unread/read/all filter for the inbox: injects the per-entity-type seen
   // filters ('all' leaves them unset). Matches the experimental inbox.
   const applyInboxReadFilter = (state: QueryState): QueryState => {
-    if (!isNewInbox()) return state;
+    if (!isInboxView()) return state;
     const filter = readFilter();
     if (filter === 'all') return state;
     const seen = filter === 'read';
@@ -905,7 +899,7 @@ export const SoupViewContextProvider: FlowComponent<
       return {
         ...entityWithoutRawNotifications,
         notifications: () =>
-          isNewInbox()
+          isInboxView()
             ? scopeChannelNotificationsForEntity(
                 entityWithoutRawNotifications,
                 rawNotifications
@@ -921,7 +915,7 @@ export const SoupViewContextProvider: FlowComponent<
     return {
       ...entity,
       notifications: () =>
-        isNewInbox()
+        isInboxView()
           ? scopeChannelNotificationsForEntity(entity, notifications())
           : notifications(),
     };

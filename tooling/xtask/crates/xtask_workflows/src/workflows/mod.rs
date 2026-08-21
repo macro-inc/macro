@@ -11,6 +11,7 @@
 
 mod assign_author;
 mod assign_labels;
+mod build_agent_daemon_on_tag;
 mod build_appimage_on_tag;
 mod build_desktop_on_tag;
 mod build_dmg_on_tag;
@@ -33,9 +34,11 @@ mod deploy_preview;
 mod deploy_sync_service;
 mod deploy_web_app;
 mod docs_check;
+mod ensure_daytona_snapshot;
 mod path_validation;
 mod preview_fly;
 mod pulumi_preview_pr;
+mod push_local_stack_binaries;
 mod reusable_deploy_service;
 mod reusable_preview_service;
 mod runners;
@@ -108,6 +111,11 @@ const WORKFLOWS: &[WorkflowFile] = &[
         slug: "assign_labels",
         file_name: "assign-labels.yml",
         render_yaml: || render_gh_workflow(assign_labels::assign_labels)(),
+    },
+    WorkflowFile {
+        slug: "build_agent_daemon_on_tag",
+        file_name: "build_agent_daemon_on_tag.yml",
+        render_yaml: || render_gh_workflow(build_agent_daemon_on_tag::build_agent_daemon_on_tag)(),
     },
     WorkflowFile {
         slug: "build_appimage_on_tag",
@@ -225,6 +233,16 @@ const WORKFLOWS: &[WorkflowFile] = &[
         slug: "deploy_web_app",
         file_name: "deploy_web_app.yml",
         render_yaml: || render_patched(deploy_web_app::deploy_web_app, deploy_web_app::patch),
+    },
+    WorkflowFile {
+        slug: "ensure_daytona_snapshot",
+        file_name: "ensure_daytona_snapshot.yml",
+        render_yaml: || render_gh_workflow(ensure_daytona_snapshot::ensure_daytona_snapshot)(),
+    },
+    WorkflowFile {
+        slug: "push_local_stack_binaries",
+        file_name: "push_local_stack_binaries.yml",
+        render_yaml: || render_gh_workflow(push_local_stack_binaries::push_local_stack_binaries)(),
     },
     WorkflowFile {
         slug: "pulumi_preview_pr",

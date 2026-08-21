@@ -425,11 +425,11 @@ The two operands of a recursive `CalendarEventFilterExpr` binary expression.
 """
 input GraphqlCalendarEventBinaryExpr {
 	"""
-	The left-hand expression.
+	Left expression.
 	"""
 	left: GraphqlCalendarEventExpr!
 	"""
-	The right-hand expression.
+	Right expression.
 	"""
 	right: GraphqlCalendarEventExpr!
 }
@@ -439,19 +439,19 @@ A recursive `CalendarEventFilterExpr` filter expression.
 """
 input GraphqlCalendarEventExpr @oneOf {
 	"""
-	Matches when both expressions match.
+	Both expressions must match.
 	"""
 	and: GraphqlCalendarEventBinaryExpr
 	"""
-	Matches when either expression matches.
+	Either expression may match.
 	"""
 	or: GraphqlCalendarEventBinaryExpr
 	"""
-	Negates an expression.
+	Negate an expression.
 	"""
 	not: GraphqlCalendarEventExpr
 	"""
-	Matches a domain-specific literal condition.
+	Match a literal.
 	"""
 	literal: GraphqlCalendarEventLiteral
 }
@@ -537,11 +537,11 @@ The two operands of a recursive `CallFilterExpr` binary expression.
 """
 input GraphqlCallBinaryExpr {
 	"""
-	The left-hand expression.
+	Left expression.
 	"""
 	left: GraphqlCallExpr!
 	"""
-	The right-hand expression.
+	Right expression.
 	"""
 	right: GraphqlCallExpr!
 }
@@ -551,19 +551,19 @@ A recursive `CallFilterExpr` filter expression.
 """
 input GraphqlCallExpr @oneOf {
 	"""
-	Matches when both expressions match.
+	Both expressions must match.
 	"""
 	and: GraphqlCallBinaryExpr
 	"""
-	Matches when either expression matches.
+	Either expression may match.
 	"""
 	or: GraphqlCallBinaryExpr
 	"""
-	Negates an expression.
+	Negate an expression.
 	"""
 	not: GraphqlCallExpr
 	"""
-	Matches a domain-specific literal condition.
+	Match a literal.
 	"""
 	literal: GraphqlCallLiteral
 }
@@ -665,11 +665,11 @@ The two operands of a recursive `ChannelFilterExpr` binary expression.
 """
 input GraphqlChannelBinaryExpr {
 	"""
-	The left-hand expression.
+	Left expression.
 	"""
 	left: GraphqlChannelExpr!
 	"""
-	The right-hand expression.
+	Right expression.
 	"""
 	right: GraphqlChannelExpr!
 }
@@ -679,19 +679,19 @@ A recursive `ChannelFilterExpr` filter expression.
 """
 input GraphqlChannelExpr @oneOf {
 	"""
-	Matches when both expressions match.
+	Both expressions must match.
 	"""
 	and: GraphqlChannelBinaryExpr
 	"""
-	Matches when either expression matches.
+	Either expression may match.
 	"""
 	or: GraphqlChannelBinaryExpr
 	"""
-	Negates an expression.
+	Negate an expression.
 	"""
 	not: GraphqlChannelExpr
 	"""
-	Matches a domain-specific literal condition.
+	Match a literal.
 	"""
 	literal: GraphqlChannelLiteral
 }
@@ -925,11 +925,11 @@ The two operands of a recursive `ChannelThreadFilterExpr` binary expression.
 """
 input GraphqlChannelThreadBinaryExpr {
 	"""
-	The left-hand expression.
+	Left expression.
 	"""
 	left: GraphqlChannelThreadExpr!
 	"""
-	The right-hand expression.
+	Right expression.
 	"""
 	right: GraphqlChannelThreadExpr!
 }
@@ -939,19 +939,19 @@ A recursive `ChannelThreadFilterExpr` filter expression.
 """
 input GraphqlChannelThreadExpr @oneOf {
 	"""
-	Matches when both expressions match.
+	Both expressions must match.
 	"""
 	and: GraphqlChannelThreadBinaryExpr
 	"""
-	Matches when either expression matches.
+	Either expression may match.
 	"""
 	or: GraphqlChannelThreadBinaryExpr
 	"""
-	Negates an expression.
+	Negate an expression.
 	"""
 	not: GraphqlChannelThreadExpr
 	"""
-	Matches a domain-specific literal condition.
+	Match a literal.
 	"""
 	literal: GraphqlChannelThreadLiteral
 }
@@ -1023,11 +1023,11 @@ The two operands of a recursive `ChatFilterExpr` binary expression.
 """
 input GraphqlChatBinaryExpr {
 	"""
-	The left-hand expression.
+	Left expression.
 	"""
 	left: GraphqlChatExpr!
 	"""
-	The right-hand expression.
+	Right expression.
 	"""
 	right: GraphqlChatExpr!
 }
@@ -1037,19 +1037,19 @@ A recursive `ChatFilterExpr` filter expression.
 """
 input GraphqlChatExpr @oneOf {
 	"""
-	Matches when both expressions match.
+	Both expressions must match.
 	"""
 	and: GraphqlChatBinaryExpr
 	"""
-	Matches when either expression matches.
+	Either expression may match.
 	"""
 	or: GraphqlChatBinaryExpr
 	"""
-	Negates an expression.
+	Negate an expression.
 	"""
 	not: GraphqlChatExpr
 	"""
-	Matches a domain-specific literal condition.
+	Match a literal.
 	"""
 	literal: GraphqlChatLiteral
 }
@@ -1157,11 +1157,11 @@ The two operands of a recursive `CrmCompanyFilterExpr` binary expression.
 """
 input GraphqlCrmCompanyBinaryExpr {
 	"""
-	The left-hand expression.
+	Left expression.
 	"""
 	left: GraphqlCrmCompanyExpr!
 	"""
-	The right-hand expression.
+	Right expression.
 	"""
 	right: GraphqlCrmCompanyExpr!
 }
@@ -1171,19 +1171,19 @@ A recursive `CrmCompanyFilterExpr` filter expression.
 """
 input GraphqlCrmCompanyExpr @oneOf {
 	"""
-	Matches when both expressions match.
+	Both expressions must match.
 	"""
 	and: GraphqlCrmCompanyBinaryExpr
 	"""
-	Matches when either expression matches.
+	Either expression may match.
 	"""
 	or: GraphqlCrmCompanyBinaryExpr
 	"""
-	Negates an expression.
+	Negate an expression.
 	"""
 	not: GraphqlCrmCompanyExpr
 	"""
-	Matches a domain-specific literal condition.
+	Match a literal.
 	"""
 	literal: GraphqlCrmCompanyLiteral
 }
@@ -1253,11 +1253,11 @@ The two operands of a recursive `DocumentFilterExpr` binary expression.
 """
 input GraphqlDocumentBinaryExpr {
 	"""
-	The left-hand expression.
+	Left expression.
 	"""
 	left: GraphqlDocumentExpr!
 	"""
-	The right-hand expression.
+	Right expression.
 	"""
 	right: GraphqlDocumentExpr!
 }
@@ -1267,19 +1267,19 @@ A recursive `DocumentFilterExpr` filter expression.
 """
 input GraphqlDocumentExpr @oneOf {
 	"""
-	Matches when both expressions match.
+	Both expressions must match.
 	"""
 	and: GraphqlDocumentBinaryExpr
 	"""
-	Matches when either expression matches.
+	Either expression may match.
 	"""
 	or: GraphqlDocumentBinaryExpr
 	"""
-	Negates an expression.
+	Negate an expression.
 	"""
 	not: GraphqlDocumentExpr
 	"""
-	Matches a domain-specific literal condition.
+	Match a literal.
 	"""
 	literal: GraphqlDocumentLiteral
 }
@@ -1419,11 +1419,11 @@ The two operands of a recursive `EmailFilterExpr` binary expression.
 """
 input GraphqlEmailBinaryExpr {
 	"""
-	The left-hand expression.
+	Left expression.
 	"""
 	left: GraphqlEmailExpr!
 	"""
-	The right-hand expression.
+	Right expression.
 	"""
 	right: GraphqlEmailExpr!
 }
@@ -1433,19 +1433,19 @@ A recursive `EmailFilterExpr` filter expression.
 """
 input GraphqlEmailExpr @oneOf {
 	"""
-	Matches when both expressions match.
+	Both expressions must match.
 	"""
 	and: GraphqlEmailBinaryExpr
 	"""
-	Matches when either expression matches.
+	Either expression may match.
 	"""
 	or: GraphqlEmailBinaryExpr
 	"""
-	Negates an expression.
+	Negate an expression.
 	"""
 	not: GraphqlEmailExpr
 	"""
-	Matches a domain-specific literal condition.
+	Match a literal.
 	"""
 	literal: GraphqlEmailLiteral
 }
@@ -1769,7 +1769,7 @@ input GraphqlEntityFilterAst {
 	"""
 	The properties filter to apply.
 	"""
-	propertiesFilter: GraphqlPropertiesExpr
+	propertiesFilter: GraphqlFilterPropertiesExpr
 }
 
 """
@@ -1948,15 +1948,83 @@ enum GraphqlEntityType {
 }
 
 """
+The two operands of a recursive `PropertiesFilterExpr` binary expression.
+"""
+input GraphqlFilterPropertiesBinaryExpr {
+	"""
+	Left expression.
+	"""
+	left: GraphqlFilterPropertiesExpr!
+	"""
+	Right expression.
+	"""
+	right: GraphqlFilterPropertiesExpr!
+}
+
+"""
+A recursive `PropertiesFilterExpr` filter expression.
+"""
+input GraphqlFilterPropertiesExpr @oneOf {
+	"""
+	Both expressions must match.
+	"""
+	and: GraphqlFilterPropertiesBinaryExpr
+	"""
+	Either expression may match.
+	"""
+	or: GraphqlFilterPropertiesBinaryExpr
+	"""
+	Negate an expression.
+	"""
+	not: GraphqlFilterPropertiesExpr
+	"""
+	Match a literal.
+	"""
+	literal: GraphqlFilterPropertiesLiteral
+}
+
+"""
+GraphQL input for matching a property value on an entity.
+"""
+input GraphqlFilterPropertiesLiteral {
+	"""
+	Property definition id to match.
+	"""
+	propertyDefinitionId: ID!
+	"""
+	Optional entity type scope for the property match.
+	"""
+	entityType: GraphqlPropertyEntityType
+	"""
+	Value to compare against the property.
+	"""
+	value: GraphqlFilterPropertyMatchValue!
+}
+
+"""
+GraphQL input value used when matching a property.
+"""
+input GraphqlFilterPropertyMatchValue @oneOf {
+	"""
+	Select option id to match.
+	"""
+	selectOption: ID
+	"""
+	Entity reference id to match.
+	"""
+	entityRef: ID
+}
+
+"""
 The two operands of a recursive `ForeignEntityFilterExpr` binary expression.
 """
 input GraphqlForeignEntityBinaryExpr {
 	"""
-	The left-hand expression.
+	Left expression.
 	"""
 	left: GraphqlForeignEntityExpr!
 	"""
-	The right-hand expression.
+	Right expression.
 	"""
 	right: GraphqlForeignEntityExpr!
 }
@@ -1966,19 +2034,19 @@ A recursive `ForeignEntityFilterExpr` filter expression.
 """
 input GraphqlForeignEntityExpr @oneOf {
 	"""
-	Matches when both expressions match.
+	Both expressions must match.
 	"""
 	and: GraphqlForeignEntityBinaryExpr
 	"""
-	Matches when either expression matches.
+	Either expression may match.
 	"""
 	or: GraphqlForeignEntityBinaryExpr
 	"""
-	Negates an expression.
+	Negate an expression.
 	"""
 	not: GraphqlForeignEntityExpr
 	"""
-	Matches a domain-specific literal condition.
+	Match a literal.
 	"""
 	literal: GraphqlForeignEntityLiteral
 }
@@ -2840,11 +2908,11 @@ The two operands of a recursive `ProjectFilterExpr` binary expression.
 """
 input GraphqlProjectBinaryExpr {
 	"""
-	The left-hand expression.
+	Left expression.
 	"""
 	left: GraphqlProjectExpr!
 	"""
-	The right-hand expression.
+	Right expression.
 	"""
 	right: GraphqlProjectExpr!
 }
@@ -2854,19 +2922,19 @@ A recursive `ProjectFilterExpr` filter expression.
 """
 input GraphqlProjectExpr @oneOf {
 	"""
-	Matches when both expressions match.
+	Both expressions must match.
 	"""
 	and: GraphqlProjectBinaryExpr
 	"""
-	Matches when either expression matches.
+	Either expression may match.
 	"""
 	or: GraphqlProjectBinaryExpr
 	"""
-	Negates an expression.
+	Negate an expression.
 	"""
 	not: GraphqlProjectExpr
 	"""
-	Matches a domain-specific literal condition.
+	Match a literal.
 	"""
 	literal: GraphqlProjectLiteral
 }
@@ -2907,60 +2975,6 @@ input GraphqlProjectLiteral @oneOf {
 	The updated at option.
 	"""
 	updatedAt: GraphqlDateLiteral
-}
-
-"""
-The two operands of a recursive `PropertiesFilterExpr` binary expression.
-"""
-input GraphqlPropertiesBinaryExpr {
-	"""
-	The left-hand expression.
-	"""
-	left: GraphqlPropertiesExpr!
-	"""
-	The right-hand expression.
-	"""
-	right: GraphqlPropertiesExpr!
-}
-
-"""
-A recursive `PropertiesFilterExpr` filter expression.
-"""
-input GraphqlPropertiesExpr @oneOf {
-	"""
-	Matches when both expressions match.
-	"""
-	and: GraphqlPropertiesBinaryExpr
-	"""
-	Matches when either expression matches.
-	"""
-	or: GraphqlPropertiesBinaryExpr
-	"""
-	Negates an expression.
-	"""
-	not: GraphqlPropertiesExpr
-	"""
-	Matches a domain-specific literal condition.
-	"""
-	literal: GraphqlPropertiesLiteral
-}
-
-"""
-GraphQL input for matching a property value on an entity.
-"""
-input GraphqlPropertiesLiteral {
-	"""
-	Property definition id to match.
-	"""
-	propertyDefinitionId: ID!
-	"""
-	Optional entity type scope for the property match.
-	"""
-	entityType: GraphqlPropertyEntityType
-	"""
-	Value to compare against the property.
-	"""
-	value: GraphqlPropertyMatchValue!
 }
 
 """
@@ -3112,20 +3126,6 @@ enum GraphqlPropertyEntityType {
 }
 
 """
-GraphQL input value used when matching a property.
-"""
-input GraphqlPropertyMatchValue @oneOf {
-	"""
-	Select option id to match.
-	"""
-	selectOption: ID
-	"""
-	Entity reference id to match.
-	"""
-	entityRef: String
-}
-
-"""
 Canonical entity type accepted for property targets.
 """
 enum GraphqlPropertyTargetEntityType {
@@ -3173,11 +3173,11 @@ The two operands of a recursive `ReminderFilterExpr` binary expression.
 """
 input GraphqlReminderBinaryExpr {
 	"""
-	The left-hand expression.
+	Left expression.
 	"""
 	left: GraphqlReminderExpr!
 	"""
-	The right-hand expression.
+	Right expression.
 	"""
 	right: GraphqlReminderExpr!
 }
@@ -3187,19 +3187,19 @@ A recursive `ReminderFilterExpr` filter expression.
 """
 input GraphqlReminderExpr @oneOf {
 	"""
-	Matches when both expressions match.
+	Both expressions must match.
 	"""
 	and: GraphqlReminderBinaryExpr
 	"""
-	Matches when either expression matches.
+	Either expression may match.
 	"""
 	or: GraphqlReminderBinaryExpr
 	"""
-	Negates an expression.
+	Negate an expression.
 	"""
 	not: GraphqlReminderExpr
 	"""
-	Matches a domain-specific literal condition.
+	Match a literal.
 	"""
 	literal: GraphqlReminderLiteral
 }

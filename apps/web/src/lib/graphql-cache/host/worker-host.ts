@@ -13,6 +13,8 @@ import {
   type CacheResponseErrorCode,
   type ClaimedMutation,
   type EnqueueOptimisticMutationResult,
+  type EntityFilterCacheArgs,
+  type EntityFilterCacheResult,
   type HydrationResult,
   isCachePush,
   isCacheResponse,
@@ -614,6 +616,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
           : msg.kind === 'read' ||
               msg.kind === 'read-records-by-keys' ||
               msg.kind === 'search' ||
+              msg.kind === 'entity-filter' ||
               msg.kind === 'inspect-query' ||
               msg.kind === 'inspect-query-variants'
             ? requestTimeoutMs
@@ -803,6 +806,16 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
         kind: 'search',
         request: requestArgs,
       })) as SearchCachePage;
+    },
+
+    async entityFilter(
+      args: EntityFilterCacheArgs
+    ): Promise<EntityFilterCacheResult> {
+      await ensureInitialized();
+      return (await request({
+        kind: 'entity-filter',
+        request: args,
+      })) as EntityFilterCacheResult;
     },
 
     async writeQuery(args: CacheWriteArgs): Promise<WriteResult> {

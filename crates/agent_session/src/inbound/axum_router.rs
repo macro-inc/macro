@@ -8,6 +8,10 @@
 //! from any channel the session was once rendered in. Handlers only map
 //! transport DTOs to domain types and call the [`AgentSessionService`]; they
 //! make no authorization or business decisions of their own.
+//!
+//! The one exception is session creation: there is no session yet to resolve
+//! access against, so `create_agent_session_handler` gates on the bot's own
+//! facts - ownership, agent-hood, managedness - through [`BotDirectory`].
 
 use std::sync::Arc;
 
@@ -29,7 +33,9 @@ use entity_access::domain::ports::EntityAccessService;
 use entity_access::inbound::axum_extractors::AgentSessionAccessLevelExtractor;
 use macro_authorization::{
     MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState, UserOrBot,
+    UserOrBotAuthorization,
 };
+use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
@@ -38,8 +44,15 @@ use crate::domain::error::AgentSessionError;
 use crate::domain::model::{
     AgentSession, AgentSessionId, Message, SessionBot, SessionStatus, StoredAgentSessionLog,
 };
-use crate::domain::ports::{AgentSessionNotificationRecipient, ControlEvent};
+use crate::domain::ports::{
+    AgentSessionNotificationRecipient, BotDirectory, BotFacts, ControlEvent, ExternalSessionOpener,
+    OpenExternalAgentSession, SessionThread,
+};
 use crate::domain::service::AgentSessionService;
+use bots::domain::models::BotId;
+
+#[cfg(test)]
+mod test;
 
 /// Shared state for the agent session router: the agent session service plus
 /// the authorization state the request extractors authenticate against.
@@ -258,7 +271,9 @@ impl From<SessionStatusDto> for SessionStatus {
 /// which are about the request rather than the operation have somewhere to go.
 /// The acting user is deliberately not one of them: it comes from the caller's
 /// credentials, so that a caller cannot attribute an operation to someone else.
-#[derive(Debug, Deserialize, ToSchema)]
+///
+/// Clients serialize this, so both derives are used.
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ControlRequest {
     /// The operation to perform.
@@ -267,7 +282,9 @@ pub struct ControlRequest {
 }
 
 /// Response body describing an agent session.
-#[derive(Debug, Serialize, ToSchema)]
+///
+/// Clients deserialize this, so both derives are used.
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct AgentSessionResponse {
     /// The session id.
@@ -287,8 +304,11 @@ pub struct AgentSessionResponse {
     pub model: String,
     /// Harness slug.
     pub harness: String,
-    /// The repository the session works with.
-    pub repo_url: String,
+    /// The repository the session works with, when one was stated.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub repo_url: Option<String>,
+    /// The directory the session's harness runs in on its runtime.
+    pub workspace: String,
     /// The ACP session id, if one exists.
     pub acp_session_id: Option<String>,
     /// The session's status.
@@ -311,7 +331,8 @@ impl From<AgentSession> for AgentSessionResponse {
             model: session.model,
             harness: session.harness,
             repo_url: session.repo_url,
-            acp_session_id: session.acp_session_id,
+            workspace: session.workspace,
+            acp_session_id: session.acp_session_id.map(|id| id.to_string()),
             status: session.status.into(),
             created_at: session.created_at,
             modified_at: session.modified_at,
@@ -571,4 +592,400 @@ pub async fn get_agent_session_log_handler<
         bot: log.bot,
         entries: log.entries.into_iter().map(Into::into).collect(),
     }))
+}
+
+/// Shared state for the create route: the opener that owns session-opening
+/// semantics, the bot directory that gates it, and the authorization state the
+/// extractor runs against.
+///
+/// Nothing about the gateway: a runtime dials once per bot, at an address its
+/// own configuration names, so creating a session says nothing about where to
+/// connect.
+pub struct CreateSessionState<Opener, Bots, Auth> {
+    opener: Arc<Opener>,
+    bots: Arc<Bots>,
+    authorization_state: MacroAuthorizationState<Auth>,
+}
+
+impl<Opener, Bots, Auth> CreateSessionState<Opener, Bots, Auth> {
+    /// Create route state.
+    pub fn new(
+        opener: Arc<Opener>,
+        bots: Arc<Bots>,
+        authorization_state: MacroAuthorizationState<Auth>,
+    ) -> Self {
+        Self {
+            opener,
+            bots,
+            authorization_state,
+        }
+    }
+}
+
+// Manual Clone impl so Opener and Bots don't need to be Clone (both are
+// behind Arcs).
+impl<Opener, Bots, Auth> Clone for CreateSessionState<Opener, Bots, Auth> {
+    fn clone(&self) -> Self {
+        Self {
+            opener: Arc::clone(&self.opener),
+            bots: Arc::clone(&self.bots),
+            authorization_state: self.authorization_state.clone(),
+        }
+    }
+}
+
+impl<Opener, Bots, Auth> FromRef<CreateSessionState<Opener, Bots, Auth>>
+    for MacroAuthorizationState<Auth>
+{
+    fn from_ref(state: &CreateSessionState<Opener, Bots, Auth>) -> Self {
+        state.authorization_state.clone()
+    }
+}
+
+/// Build the router serving `POST /agent-sessions`. Mount it under the same
+/// prefix as [`agent_session_read_router`] and [`agent_session_control_router`].
+pub fn agent_session_create_router<Opener, Bots, Auth, S>(
+    state: CreateSessionState<Opener, Bots, Auth>,
+) -> Router<S>
+where
+    Opener: ExternalSessionOpener,
+    Bots: BotDirectory,
+    Auth: MacroAuthorizationService,
+    S: Clone + Send + Sync + 'static,
+{
+    Router::new()
+        .route(
+            "/",
+            post(create_agent_session_handler::<Opener, Bots, Auth>),
+        )
+        .with_state(state)
+}
+
+/// Request body for `POST /agent-sessions`.
+///
+/// Clients serialize this, so both derives are used.
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct CreateAgentSessionRequest {
+    /// Bot the session runs for. Bot callers may omit it (their own identity
+    /// is used) and must not name another bot; user callers must supply a
+    /// bot they own.
+    pub bot_id: Option<Uuid>,
+    /// Absolute directory the bot's harness runs in on its runtime.
+    pub workspace: String,
+    /// Repository nominally checked out at `workspace`. Informational and
+    /// optional: having it cloned there is the runtime operator's job.
+    pub repo_url: Option<String>,
+    /// The user who owns the session. Ignored for user callers, who always
+    /// own their own sessions; required for bot callers without verified
+    /// acting-user claims.
+    ///
+    /// For bot callers this is a claim, not a verified fact: it is scoped to
+    /// the bot's own sessions, but the named user owns the session on the
+    /// bot's say-so.
+    pub owner: Option<String>,
+    /// The thread whose mention triggered the session, when one did.
+    /// Linkage only - the mention's text is delivered by the runtime as the
+    /// first prompt through the control endpoint, never through here.
+    pub thread: Option<CreateSessionThread>,
+}
+
+/// The triggering mention on a create request.
+///
+/// Clients serialize this, so both derives are used.
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct CreateSessionThread {
+    /// Channel the mentioning message was posted in.
+    pub channel_id: Uuid,
+    /// Thread the session belongs to; defaults to the message itself, which
+    /// is how a top-level mention roots its own thread.
+    pub thread_id: Option<Uuid>,
+    /// The mentioning message.
+    pub message_id: Uuid,
+    /// The mention's text, quoted in the session's announcement.
+    #[serde(default)]
+    pub content: String,
+}
+
+/// Response body for `POST /agent-sessions`.
+///
+/// Clients deserialize this, so both derives are used.
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct CreateAgentSessionResponse {
+    /// The created session.
+    pub session: AgentSessionResponse,
+}
+
+/// What the 409 from `POST /agent-sessions` says when a thread already
+/// routes to a session.
+const THREAD_SESSION_EXISTS_MESSAGE: &str = "this bot already has a session for this thread";
+
+/// Body of the 409 answered by `POST /agent-sessions` when the request's
+/// thread already routes to one of this bot's sessions.
+///
+/// Clients deserialize this, so both derives are used.
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ThreadSessionExistsResponse {
+    /// Human-readable explanation.
+    pub message: String,
+    /// The session the thread already routes to, when it could be resolved.
+    #[serde(default)]
+    #[schema(value_type = Option<String>)]
+    pub session_id: Option<AgentSessionId>,
+}
+
+/// Transport error for the create route.
+#[derive(Debug)]
+pub enum CreateSessionApiError {
+    /// The request named no usable bot.
+    BotRequired,
+    /// The named bot does not exist.
+    UnknownBot,
+    /// The caller may not open sessions for this bot.
+    NotYourBot,
+    /// The bot is not an agent bot.
+    NotAnAgentBot,
+    /// The bot's sessions are opened by the trigger pipeline, not this route.
+    ManagedBot,
+    /// The caller identified no user to own the session.
+    OwnerRequired,
+    /// The owner is not a parseable user id.
+    UnparseableOwner,
+    /// The workspace is not an acceptable path.
+    InvalidWorkspace(&'static str),
+    /// The thread already routes to a session; carries it for recovery.
+    ThreadSessionExists {
+        /// The existing session, when it could be resolved.
+        session_id: Option<AgentSessionId>,
+    },
+    /// The domain rejected the open.
+    Domain(AgentSessionError),
+}
+
+impl From<AgentSessionError> for CreateSessionApiError {
+    fn from(error: AgentSessionError) -> Self {
+        Self::Domain(error)
+    }
+}
+
+impl IntoResponse for CreateSessionApiError {
+    fn into_response(self) -> Response {
+        let (status, message) = match self {
+            Self::BotRequired => (
+                StatusCode::UNPROCESSABLE_ENTITY,
+                "botId is required for user callers".to_owned(),
+            ),
+            Self::UnknownBot => (StatusCode::NOT_FOUND, "no such bot".to_owned()),
+            Self::NotYourBot => (
+                StatusCode::FORBIDDEN,
+                "you may not open sessions for this bot".to_owned(),
+            ),
+            Self::NotAnAgentBot => (
+                StatusCode::UNPROCESSABLE_ENTITY,
+                "this bot does not run an agent".to_owned(),
+            ),
+            Self::ManagedBot => (
+                StatusCode::UNPROCESSABLE_ENTITY,
+                "this bot's sessions are opened by the trigger pipeline".to_owned(),
+            ),
+            Self::OwnerRequired => (
+                StatusCode::UNPROCESSABLE_ENTITY,
+                "owner is required for bot callers".to_owned(),
+            ),
+            Self::UnparseableOwner => (
+                StatusCode::UNPROCESSABLE_ENTITY,
+                "owner is not a user id".to_owned(),
+            ),
+            Self::InvalidWorkspace(reason) => (StatusCode::UNPROCESSABLE_ENTITY, reason.to_owned()),
+            Self::ThreadSessionExists { session_id } => {
+                let body = ThreadSessionExistsResponse {
+                    message: THREAD_SESSION_EXISTS_MESSAGE.to_owned(),
+                    session_id,
+                };
+                return (StatusCode::CONFLICT, Json(body)).into_response();
+            }
+            Self::Domain(AgentSessionError::ThreadSessionExists) => (
+                StatusCode::CONFLICT,
+                "this bot already has a session for this thread".to_owned(),
+            ),
+            Self::Domain(AgentSessionError::UnknownOwner) => (
+                StatusCode::UNPROCESSABLE_ENTITY,
+                "owner is not a known user".to_owned(),
+            ),
+            Self::Domain(error) => {
+                tracing::error!(error = ?error, "failed to open an agent session");
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "failed to open the session".to_owned(),
+                )
+            }
+        };
+        (status, message).into_response()
+    }
+}
+
+/// Reject paths a harness cannot meaningfully run in. Rejection over
+/// normalization: a runtime that sends a relative path is confused about its
+/// own filesystem, and no server-side guess fixes that.
+fn validate_workspace(workspace: &str) -> Result<(), CreateSessionApiError> {
+    if !workspace.starts_with('/') {
+        return Err(CreateSessionApiError::InvalidWorkspace(
+            "workspace must be an absolute path",
+        ));
+    }
+    if workspace.len() > 4096 {
+        return Err(CreateSessionApiError::InvalidWorkspace(
+            "workspace is too long",
+        ));
+    }
+    if workspace.contains('\0') {
+        return Err(CreateSessionApiError::InvalidWorkspace(
+            "workspace must not contain NUL",
+        ));
+    }
+    if workspace.len() > 1 && workspace.ends_with('/') {
+        return Err(CreateSessionApiError::InvalidWorkspace(
+            "workspace must not end with a slash",
+        ));
+    }
+    Ok(())
+}
+
+/// Resolve which bot the session runs for, from the principal and the body.
+fn resolve_bot(
+    caller: &UserOrBotAuthorization,
+    body_bot: Option<Uuid>,
+) -> Result<BotId, CreateSessionApiError> {
+    match caller {
+        UserOrBotAuthorization::Bot(bot) => match body_bot {
+            Some(named) if named != bot.bot_id.as_uuid() => Err(CreateSessionApiError::NotYourBot),
+            _ => Ok(bot.bot_id),
+        },
+        UserOrBotAuthorization::User(_) => body_bot
+            .map(BotId::new_from_uuid)
+            .ok_or(CreateSessionApiError::BotRequired),
+    }
+}
+
+/// Resolve the user who owns the session.
+///
+/// A user caller always owns their own sessions. A bot caller's verified
+/// acting user wins when present; otherwise the body's claimed owner is
+/// accepted (see [`CreateAgentSessionRequest::owner`] for the trust model).
+fn resolve_owner(
+    caller: &UserOrBotAuthorization,
+    claimed: Option<String>,
+) -> Result<MacroUserIdStr<'static>, CreateSessionApiError> {
+    if let Some(user) = caller.acting_user() {
+        return Ok(user.macro_user_id.clone());
+    }
+    let claimed = claimed.ok_or(CreateSessionApiError::OwnerRequired)?;
+    MacroUserIdStr::try_from(claimed).map_err(|_| CreateSessionApiError::UnparseableOwner)
+}
+
+#[utoipa::path(
+    post,
+    path = "/agent-sessions",
+    tag = "agent-sessions",
+    operation_id = "create_agent_session",
+    request_body = CreateAgentSessionRequest,
+    responses(
+        (status = 201, body = CreateAgentSessionResponse),
+        (status = 401, body = String),
+        (status = 403, body = String),
+        (status = 404, body = String),
+        (status = 422, body = String),
+        (status = 500, body = String),
+    )
+)]
+/// Open an agent session served by an external runtime.
+///
+/// Nothing here tells the runtime where to dial: one connection per bot
+/// carries every session it runs, so a runtime that has already dialed serves
+/// this session too, and one that has not dials the gateway its own
+/// configuration names. The triggering mention reaches the session as its
+/// first prompt through the control endpoint.
+#[tracing::instrument(skip_all, err(Debug))]
+pub async fn create_agent_session_handler<
+    Opener: ExternalSessionOpener,
+    Bots: BotDirectory,
+    Auth: MacroAuthorizationService,
+>(
+    State(state): State<CreateSessionState<Opener, Bots, Auth>>,
+    caller: MacroAuthorizationExtractor<Auth, UserOrBot>,
+    Json(request): Json<CreateAgentSessionRequest>,
+) -> Result<(StatusCode, Json<CreateAgentSessionResponse>), CreateSessionApiError> {
+    let bot_id = resolve_bot(&caller.authorization, request.bot_id)?;
+
+    let BotFacts {
+        has_agent,
+        is_managed,
+        owner_user_id,
+    } = state
+        .bots
+        .bot_facts(bot_id)
+        .await?
+        .ok_or(CreateSessionApiError::UnknownBot)?;
+    if !has_agent {
+        return Err(CreateSessionApiError::NotAnAgentBot);
+    }
+    if is_managed {
+        return Err(CreateSessionApiError::ManagedBot);
+    }
+    // A team-owned bot has no owner_user_id, so no user token passes this
+    // check: its sessions are opened with the bot's own token until team
+    // membership is modeled here.
+    if let UserOrBotAuthorization::User(user) = &caller.authorization
+        && owner_user_id.as_ref() != Some(&user.macro_user_id)
+    {
+        return Err(CreateSessionApiError::NotYourBot);
+    }
+
+    validate_workspace(&request.workspace)?;
+    let owner = resolve_owner(&caller.authorization, request.owner)?;
+
+    let thread = request.thread.map(|thread| SessionThread {
+        channel_id: thread.channel_id,
+        thread_id: thread.thread_id.unwrap_or(thread.message_id),
+        message_id: thread.message_id,
+        content: thread.content,
+    });
+    let session = match state
+        .opener
+        .open_external_session(OpenExternalAgentSession {
+            bot_id,
+            workspace: request.workspace,
+            repo_url: request.repo_url,
+            owner,
+            thread: thread.clone(),
+        })
+        .await
+    {
+        Ok(session) => session,
+        // A conflicted open answers with the session the thread already
+        // routes to, so a redelivered trigger can resume serving it
+        // instead of being dropped.
+        Err(AgentSessionError::ThreadSessionExists) => {
+            let session_id = match thread {
+                Some(thread) => state
+                    .opener
+                    .find_thread_session(thread.thread_id, bot_id)
+                    .await
+                    .unwrap_or_default(),
+                None => None,
+            };
+            return Err(CreateSessionApiError::ThreadSessionExists { session_id });
+        }
+        Err(error) => return Err(error.into()),
+    };
+
+    Ok((
+        StatusCode::CREATED,
+        Json(CreateAgentSessionResponse {
+            session: session.into(),
+        }),
+    ))
 }

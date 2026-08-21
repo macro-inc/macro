@@ -207,9 +207,10 @@ impl BotRepo for PgBotsRepo {
             BotRow,
             r#"
             INSERT INTO bots (
-                id, kind, owner_user_id, team_id, name, handle, description, avatar_url, created_by
+                id, kind, owner_user_id, team_id, name, handle, description, avatar_url,
+                created_by, has_agent
             )
-            VALUES ($1, 'owned', $2, $3, $4, $5, $6, $7, $8)
+            VALUES ($1, 'owned', $2, $3, $4, $5, $6, $7, $8, COALESCE($9, false))
             RETURNING
                 id,
                 kind,
@@ -233,6 +234,7 @@ impl BotRepo for PgBotsRepo {
             req.description,
             req.avatar_url,
             created_by.as_ref(),
+            req.has_agent,
         )
         .fetch_one(&self.pool)
         .await
@@ -262,9 +264,10 @@ impl BotRepo for PgBotsRepo {
             BotRow,
             r#"
             INSERT INTO bots (
-                id, kind, owner_user_id, team_id, name, handle, description, avatar_url, created_by
+                id, kind, owner_user_id, team_id, name, handle, description, avatar_url,
+                created_by, has_agent
             )
-            VALUES ($1, 'owned', $2, $3, $4, $5, $6, $7, $8)
+            VALUES ($1, 'owned', $2, $3, $4, $5, $6, $7, $8, COALESCE($9, false))
             RETURNING
                 id,
                 kind,
@@ -288,6 +291,7 @@ impl BotRepo for PgBotsRepo {
             req.description,
             req.avatar_url,
             created_by.as_ref(),
+            req.has_agent,
         )
         .fetch_one(&mut *tx)
         .await
@@ -487,6 +491,7 @@ impl BotRepo for PgBotsRepo {
                 handle = COALESCE($3, handle),
                 description = COALESCE($4, description),
                 avatar_url = COALESCE($5, avatar_url),
+                has_agent = COALESCE($6, has_agent),
                 updated_at = now()
             WHERE id = $1
               AND deleted_at IS NULL
@@ -510,6 +515,7 @@ impl BotRepo for PgBotsRepo {
             req.handle,
             req.description,
             req.avatar_url,
+            req.has_agent,
         )
         .fetch_optional(&self.pool)
         .await

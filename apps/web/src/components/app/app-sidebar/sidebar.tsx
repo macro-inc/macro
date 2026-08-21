@@ -127,7 +127,7 @@ interface SidebarItem {
   href: string;
   params?: Record<string, unknown>;
   icon?: Component<
-    JSX.SvgSVGAttributes<SVGSVGElement> | { triggerAnimation?: boolean }
+    JSX.SvgSVGAttributes<SVGSVGElement> & { triggerAnimation?: boolean }
   >;
   hotkey: ValidHotkey;
   hotkeyToken: HotkeyToken;

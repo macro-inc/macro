@@ -15,7 +15,6 @@ const mocks = vi.hoisted(() => ({
   executeMarkEntitiesUndone: vi.fn(async () => {}),
   graphqlSoupEnabled: vi.fn(() => false),
   mutateAsync: vi.fn(async (_variables: unknown) => {}),
-  newInboxEnabled: vi.fn(() => false),
   openEntityInSplitFromUnifiedList: vi.fn(async () => {}),
   resolveMarkEntitiesDoneVariables: vi.fn(() => ({
     emailIds: [] as string[],
@@ -30,14 +29,8 @@ vi.mock('@components/app/split-layout/layoutUtils', () => ({
   useSplitPanel: () => ({ handle: mocks.controller }),
 }));
 
-vi.mock('@app/lib/analytics/posthog', () => ({
-  useFeatureFlag: () => () => ({ enabled: mocks.newInboxEnabled() }),
-}));
-
 vi.mock('@core/constant/featureFlags', () => ({
   ENABLE_GRAPHQL_SOUP: mocks.graphqlSoupEnabled,
-  ENABLE_NEW_INBOX_FLAG: 'new-inbox',
-  ENABLE_NEW_INBOX_OVERRIDE: undefined,
 }));
 
 vi.mock(
@@ -130,7 +123,6 @@ describe('makeMarkDoneAction', () => {
     mocks.executeMarkEntitiesUndone.mockClear();
     mocks.graphqlSoupEnabled.mockReturnValue(false);
     mocks.mutateAsync.mockClear();
-    mocks.newInboxEnabled.mockReturnValue(false);
     mocks.openEntityInSplitFromUnifiedList.mockClear();
     mocks.resolveMarkEntitiesDoneVariables.mockReset();
     mocks.resolveMarkEntitiesDoneVariables.mockReturnValue({
@@ -217,7 +209,6 @@ describe('makeMarkDoneAction', () => {
 
   it('keeps whole-channel inbox writes ID-based to exclude thread rows', async () => {
     mocks.graphqlSoupEnabled.mockReturnValue(true);
-    mocks.newInboxEnabled.mockReturnValue(true);
     mocks.controller.content.mockReturnValue({ id: 'inbox' });
     mocks.resolveMarkEntitiesDoneVariables.mockReturnValue({
       emailIds: [],
@@ -244,7 +235,6 @@ describe('makeMarkDoneAction', () => {
 
   it('uses the canonical message entity for inbox channel-thread rows', async () => {
     mocks.graphqlSoupEnabled.mockReturnValue(true);
-    mocks.newInboxEnabled.mockReturnValue(true);
     mocks.controller.content.mockReturnValue({ id: 'inbox' });
     mocks.resolveMarkEntitiesDoneVariables.mockReturnValue({
       emailIds: [],

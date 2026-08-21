@@ -67,6 +67,7 @@ async fn create_test_bot(pool: &PgPool) -> BotId {
                 handle: format!("test-agent-{}", macro_uuid::generate_uuid_v7()),
                 description: None,
                 avatar_url: None,
+                has_agent: None,
             },
         )
         .await
@@ -87,7 +88,8 @@ fn new_session(
         originating_message_id,
         model: "claude-sonnet-5".to_string(),
         harness: "claude-code".to_string(),
-        repo_url: "https://github.com/example/example".to_string(),
+        repo_url: Some("https://github.com/example/example".to_string()),
+        workspace: "/workspace".to_string(),
     }
 }
 
@@ -198,7 +200,10 @@ async fn set_acp_session_id_updates_only_the_resume_identity(pool: PgPool) {
         .expect("persist ACP session id");
 
     let updated = repo.get(id).await.expect("get updated agent session");
-    assert_eq!(updated.acp_session_id.as_deref(), Some("acp-session-1"));
+    assert_eq!(
+        updated.acp_session_id,
+        Some(SessionId::from("acp-session-1"))
+    );
     assert!(matches!(
         updated.status,
         SessionStatus::Event(SystemEvent::AcpReady)

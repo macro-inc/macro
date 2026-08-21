@@ -9,7 +9,90 @@ import type {
   AgentSessionLogResponse,
   AgentSessionResponse,
   ControlRequest,
+  CreateAgentSessionRequest,
+  CreateAgentSessionResponse,
 } from './schemas';
+
+/**
+ * Nothing here tells the runtime where to dial: one connection per bot
+carries every session it runs, so a runtime that has already dialed serves
+this session too, and one that has not dials the gateway its own
+configuration names. The triggering mention reaches the session as its
+first prompt through the control endpoint.
+ * @summary Open an agent session served by an external runtime.
+ */
+export type createAgentSessionResponse201 = {
+  data: CreateAgentSessionResponse;
+  status: 201;
+};
+
+export type createAgentSessionResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type createAgentSessionResponse403 = {
+  data: string;
+  status: 403;
+};
+
+export type createAgentSessionResponse404 = {
+  data: string;
+  status: 404;
+};
+
+export type createAgentSessionResponse422 = {
+  data: string;
+  status: 422;
+};
+
+export type createAgentSessionResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type createAgentSessionResponseSuccess =
+  createAgentSessionResponse201 & {
+    headers: Headers;
+  };
+export type createAgentSessionResponseError = (
+  | createAgentSessionResponse401
+  | createAgentSessionResponse403
+  | createAgentSessionResponse404
+  | createAgentSessionResponse422
+  | createAgentSessionResponse500
+) & {
+  headers: Headers;
+};
+
+export type createAgentSessionResponse =
+  | createAgentSessionResponseSuccess
+  | createAgentSessionResponseError;
+
+export const getCreateAgentSessionUrl = () => {
+  return `/agent-sessions`;
+};
+
+export const createAgentSession = async (
+  createAgentSessionRequest: CreateAgentSessionRequest,
+  options?: RequestInit
+): Promise<createAgentSessionResponse> => {
+  const res = await fetch(getCreateAgentSessionUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(createAgentSessionRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: createAgentSessionResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as createAgentSessionResponse;
+};
 
 /**
  * @summary Get an agent session by id.

@@ -12614,7 +12614,7 @@
       },
       "Bot": {
         "type": "object",
-        "description": "Bot row.",
+        "description": "Bot row.\n\nClients deserialize this, so both derives are used.",
         "required": [
           "id",
           "kind",
@@ -14844,6 +14844,38 @@
           }
         }
       },
+      "CreateBotRequest": {
+        "type": "object",
+        "description": "Request to create a bot.",
+        "required": ["name", "handle"],
+        "properties": {
+          "avatar_url": {
+            "type": ["string", "null"],
+            "description": "Optional avatar URL."
+          },
+          "description": {
+            "type": ["string", "null"],
+            "description": "Optional description."
+          },
+          "handle": {
+            "type": "string",
+            "description": "Stable handle."
+          },
+          "has_agent": {
+            "type": ["boolean", "null"],
+            "description": "Whether mentioning this bot opens a sandboxed coding-agent session. Defaults to false."
+          },
+          "name": {
+            "type": "string",
+            "description": "Display name."
+          },
+          "team_id": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Team owner. The caller must be a team administrator or owner. Omit for a user-owned bot."
+          }
+        }
+      },
       "CreateBulkDocumentResponse": {
         "type": "object",
         "required": ["error", "data"],
@@ -14953,6 +14985,10 @@
           "handle": {
             "type": "string",
             "description": "Stable handle."
+          },
+          "has_agent": {
+            "type": ["boolean", "null"],
+            "description": "Whether mentioning this bot opens a sandboxed coding-agent session. Defaults to false."
           },
           "name": {
             "type": "string",
@@ -15607,7 +15643,7 @@
       },
       "CreateWebhookRequest": {
         "type": "object",
-        "description": "Request to create a webhook.",
+        "description": "Request to create a webhook.\n\nClients serialize this, so both derives are used.",
         "required": ["scope", "namespace", "name", "endpoint_url", "filters"],
         "properties": {
           "endpoint_url": {
@@ -15645,7 +15681,7 @@
       },
       "CreateWebhookResponse": {
         "type": "object",
-        "description": "Webhook returned after creation, including its signing secret.",
+        "description": "Webhook returned after creation, including its signing secret.\n\nClients deserialize this, so both derives are used.",
         "required": [
           "id",
           "workspace_id",
@@ -19725,7 +19761,7 @@
       },
       "ListWebhooksResponse": {
         "type": "object",
-        "description": "Webhooks visible to the caller across their personal and team workspaces.",
+        "description": "Webhooks visible to the caller across their personal and team workspaces.\n\nClients deserialize this, so both derives are used.",
         "required": ["webhooks"],
         "properties": {
           "webhooks": {
@@ -19938,6 +19974,32 @@
         "type": "string",
         "description": "The role a user has within a channel.",
         "enum": ["owner", "admin", "member"]
+      },
+      "PatchBotRequest": {
+        "type": "object",
+        "description": "Request to patch a bot.",
+        "properties": {
+          "avatar_url": {
+            "type": ["string", "null"],
+            "description": "Optional avatar URL."
+          },
+          "description": {
+            "type": ["string", "null"],
+            "description": "Optional description."
+          },
+          "handle": {
+            "type": ["string", "null"],
+            "description": "Stable handle."
+          },
+          "has_agent": {
+            "type": ["boolean", "null"],
+            "description": "Whether mentioning this bot opens a sandboxed coding-agent session. Omit to leave unchanged."
+          },
+          "name": {
+            "type": ["string", "null"],
+            "description": "Display name."
+          }
+        }
       },
       "PatchChannelRequest": {
         "type": "object",
@@ -24282,7 +24344,7 @@
       },
       "Webhook": {
         "type": "object",
-        "description": "Webhook row returned by application APIs.",
+        "description": "Webhook row returned by application APIs.\n\nClients deserialize this, so both derives are used.",
         "required": [
           "id",
           "workspace_id",
@@ -24392,7 +24454,7 @@
       },
       "WebhookScope": {
         "type": "string",
-        "description": "Scope that owns a newly-created webhook.",
+        "description": "Scope that owns a newly-created webhook.\n\nClients serialize this, so both derives are used.",
         "enum": ["user", "team"]
       },
       "WebhookStatus": {

@@ -1,11 +1,5 @@
 import { placeableModeSignal } from '@block-pdf/signal/placeables';
-import {
-  createEffect,
-  createSignal,
-  type JSX,
-  onCleanup,
-  Show,
-} from 'solid-js';
+import { createEffect, createSignal, onCleanup, Show } from 'solid-js';
 import { PayloadMode, type PayloadType } from '../type/placeables';
 
 const modeToCursor: Record<PayloadType, string> = {
@@ -30,8 +24,7 @@ export function CustomCursor(props: { containerRef?: HTMLDivElement }) {
   const [pos, setPos] = createSignal({ x: 0, y: 0 });
   const [mode] = placeableModeSignal;
 
-  const mouseMoveHandler: JSX.EventHandler<Document, MouseEvent> = ({ x, y }) =>
-    setPos({ x, y });
+  const mouseMoveHandler = ({ x, y }: MouseEvent) => setPos({ x, y });
 
   createEffect(() => {
     const container = containerRef();

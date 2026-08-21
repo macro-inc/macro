@@ -1,4 +1,9 @@
-//! wasm-bindgen shell around the cache engine + Turso OPFS storage.
+//! wasm-bindgen shell around the generic cache engine + Turso OPFS storage.
+//!
+//! Soup-specific GraphQL materialization and projection policy live in
+//! `soup-filter-cache-adapter`. This shell links that adapter at the browser
+//! composition edge and passes only generic predicate/projection IR into the
+//! cache engine.
 //!
 //! Exposes a `CacheEngine` class to the JS worker glue
 //! (`apps/web/src/lib/graphql-cache/`). All methods return Promises; the
