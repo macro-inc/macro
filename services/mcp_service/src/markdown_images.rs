@@ -1,9 +1,3 @@
-//! Turn ReadContent markdown image nodes into MCP `image` blocks.
-//!
-//! Tool JSON still carries `{ "type": "staticImage", "url" }` or
-//! `{ "type": "dssImage", "id" }`. That is text. MCP clients only treat
-//! `type: "image"` plus base64 bytes as pixels.
-
 use ai_tools::ToolServiceContext;
 use async_trait::async_trait;
 use attachment::image::ImageData;
@@ -20,14 +14,12 @@ use rmcp::model::{CallToolResult, Content};
 #[cfg(test)]
 mod test;
 
-/// Base64 image bytes ready to put on the MCP wire.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct ResolvedImage {
     pub data: String,
     pub mime_type: String,
 }
 
-/// Fetches markdown image nodes for a given MCP tool context.
 #[async_trait]
 pub(crate) trait MarkdownImageResolver: Send + Sync {
     async fn resolve_static(&self, url: &str) -> Option<ResolvedImage>;
@@ -97,7 +89,6 @@ impl MarkdownImageResolver for ToolServiceContext {
     }
 }
 
-/// Structured tool JSON plus any resolved markdown images as MCP image blocks.
 pub(crate) async fn tool_result_with_images<R: MarkdownImageResolver>(
     resolver: &R,
     user_id: &MacroUserIdStr<'_>,
