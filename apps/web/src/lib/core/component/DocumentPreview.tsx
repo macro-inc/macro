@@ -3,7 +3,6 @@ import { openChatWithAgent } from '@app/features/chat/ChatWithAgentButton';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import {
   type CalendarMentionTarget,
-  calendarEventDeepLink,
   copyCalendarEventMentionTarget,
 } from '@block-calendar/copy-event-mention';
 import { openCalendarEventSplit } from '@block-calendar/open-calendar-event';
@@ -705,11 +704,11 @@ export function DocumentPreviewContent(props: DocumentPreviewContentProps) {
     if (!target) return undefined;
     const i = item();
     const previewed = isCalendarEventPreviewItem(i) ? i.event : undefined;
-    const title = previewed?.title ?? props.documentInfo.name;
-    if (!title) return undefined;
     return {
       eventId: target.eventId,
-      title,
+      // An untitled event still copies as a mention, under the same
+      // '(No title)' label it carries everywhere else.
+      title: previewed?.title || props.documentInfo.name || '(No title)',
       occurrenceKey:
         previewed && !previewed.isRecurring ? undefined : target.occurrenceKey,
     };
@@ -725,13 +724,6 @@ export function DocumentPreviewContent(props: DocumentPreviewContentProps) {
       const mentionTarget = calendarMentionTarget();
       if (mentionTarget) {
         copyCalendarEventMentionTarget(mentionTarget);
-        return;
-      }
-
-      const calendarTarget = calendarOpenTarget();
-      if (calendarTarget) {
-        navigator.clipboard.writeText(calendarEventDeepLink(calendarTarget));
-        toast.success('Copied document link to clipboard');
         return;
       }
 
