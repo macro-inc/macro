@@ -90,7 +90,7 @@ jobs:
           tags+=(--tag "$image:latest")
         fi
         docker buildx build \
-          --platform linux/amd64,linux/arm64 \
+          --platform linux/amd64 \
           "${tags[@]}" \
           --push \
           crates/agent_harness/container

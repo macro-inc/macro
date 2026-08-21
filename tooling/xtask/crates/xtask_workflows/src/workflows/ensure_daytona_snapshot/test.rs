@@ -14,7 +14,7 @@ fn workflow_can_write_packages_and_still_reads_contents() {
 }
 
 #[test]
-fn publish_job_pushes_multiarch_ghcr_tags() {
+fn publish_job_pushes_amd64_ghcr_tags() {
     let yaml = rendered();
     assert!(
         yaml.contains(
@@ -26,9 +26,10 @@ fn publish_job_pushes_multiarch_ghcr_tags() {
         yaml.contains(&format!("image={}", vars::AGENT_HARNESS_GHCR_IMAGE)),
         "{yaml}"
     );
+    assert!(yaml.contains("--platform linux/amd64 \\"), "{yaml}");
     assert!(
-        yaml.contains("--platform linux/amd64,linux/arm64"),
-        "{yaml}"
+        !yaml.contains("linux/arm64"),
+        "sandbox flake has no aarch64-linux shell: {yaml}"
     );
     assert!(yaml.contains(r#"--tag "$image:$GITHUB_SHA""#), "{yaml}");
     assert!(yaml.contains(r#"tags+=(--tag "$image:latest")"#), "{yaml}");
