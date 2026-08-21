@@ -544,10 +544,18 @@ impl SyncServiceCore for SyncServiceImpl {
             return Ok(None);
         }
 
-        let frontiers: Option<ExportMode> = request.version_id.map(|vid| {
-            let id = loro::ID::new(vid.peer.parse::<u64>().unwrap(), vid.counter);
-            ExportMode::StateOnly(Some(Cow::Owned(loro::Frontiers::ID(id))))
-        });
+        let frontiers: Option<ExportMode> = request
+            .version_id
+            .map(|vid| {
+                let peer = vid
+                    .peer
+                    .parse::<u64>()
+                    .with_context(|| format!("Couldn't parse snapshot peer id: '{}'", vid.peer))?;
+                Ok::<_, worker::Error>(ExportMode::StateOnly(Some(Cow::Owned(
+                    loro::Frontiers::ID(loro::ID::new(peer, vid.counter)),
+                ))))
+            })
+            .transpose()?;
 
         let out = self
             .document_state()

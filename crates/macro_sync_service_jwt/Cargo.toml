@@ -10,6 +10,6 @@ version = "0.1.0"
 # one (see docker/sync-service.Dockerfile) — so `workspace = true` still resolves
 # there without duplicating any version pins here.
 [dependencies]
-derive_more = { version = "2", features = ["display", "from"] }
+derive_more = { workspace = true, features = ["display", "from"] }
 jsonwebtoken = { workspace = true }
 serde = { workspace = true }

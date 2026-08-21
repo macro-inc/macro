@@ -4,8 +4,7 @@
     "title": "Sync Service",
     "description": "Document sync service JSON control plane",
     "contact": {
-      "name": "synoet",
-      "email": "teonys@nyu.edu"
+      "name": "Macro"
     },
     "license": {
       "name": ""

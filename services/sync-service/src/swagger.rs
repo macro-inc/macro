@@ -11,7 +11,11 @@ use crate::domain::models::{
 /// (`/schema`); only the JSON control-plane endpoints are described here.
 #[derive(OpenApi)]
 #[openapi(
-    info(title = "Sync Service", description = "Document sync service JSON control plane"),
+    info(
+        title = "Sync Service",
+        description = "Document sync service JSON control plane",
+        contact(name = "Macro"),
+    ),
     paths(
         crate::inbound::worker::copy_route,
         crate::inbound::router::exists_route,

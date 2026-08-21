@@ -23,7 +23,7 @@ pub enum AccessLevel {
 
 impl AccessLevel {
     pub fn can_edit(&self) -> bool {
-        self >= &AccessLevel::Comment
+        self >= &AccessLevel::Edit
     }
 }
 
@@ -77,5 +77,14 @@ mod test {
         assert!(view <= edit);
         assert!(view < owner);
         assert!(!(owner < view));
+    }
+
+    #[test]
+    fn can_edit_requires_edit_or_higher() {
+        assert!(!AccessLevel::View.can_edit());
+        assert!(!AccessLevel::Comment.can_edit());
+        assert!(AccessLevel::Edit.can_edit());
+        assert!(AccessLevel::Owner.can_edit());
+        assert!(AccessLevel::Admin.can_edit());
     }
 }

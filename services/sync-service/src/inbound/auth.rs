@@ -1,4 +1,8 @@
+#[cfg(test)]
+mod test;
+
 use axum::http::HeaderMap;
+use constant_time_eq::constant_time_eq;
 use macro_sync_service_jwt::DocumentPermissionToken;
 use serde::Deserialize;
 
@@ -42,7 +46,7 @@ pub fn internal_request(headers: &HeaderMap, secrets: &Secrets) -> bool {
     headers
         .get(header_names::MACRO_INTERNAL_AUTH_KEY_HEADER_KEY)
         .and_then(|value| value.to_str().ok())
-        .is_some_and(|key| secrets.internal_api_secret == key)
+        .is_some_and(|key| constant_time_eq(secrets.internal_api_secret.as_bytes(), key.as_bytes()))
 }
 
 /// The inbound auth layer. Holds the [`Secrets`] needed to validate requests and
@@ -89,98 +93,5 @@ impl Authenticator {
     /// upgrade, which self-authenticates). `None` if the token is invalid.
     pub fn decode_query(&self, token: &DocumentPermissionToken) -> Option<AuthToken> {
         decode_jwt(token, &self.secrets).ok()
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use axum::http::HeaderValue;
-
-    use super::*;
-
-    const PERM_SECRET: &str = "perm-secret";
-    const INTERNAL_KEY: &str = "internal-key";
-
-    fn authenticator() -> Authenticator {
-        Authenticator::new(Secrets::new(
-            INTERNAL_KEY.to_string(),
-            PERM_SECRET.to_string(),
-        ))
-    }
-
-    fn bearer(token: &str) -> HeaderMap {
-        let mut headers = HeaderMap::new();
-        headers.insert(
-            header_names::AUTHORIZATION,
-            HeaderValue::from_str(&format!("Bearer {token}")).unwrap(),
-        );
-        headers
-    }
-
-    fn jwt(document_id: &str, access_level: &str) -> String {
-        let claims = serde_json::json!({
-            "user_id": null,
-            "document_id": document_id,
-            "access_level": access_level,
-            // decoding validates `exp` by default; set it far in the future.
-            "exp": 4_102_444_800u64,
-        });
-        macro_sync_service_jwt::encode(&claims, PERM_SECRET)
-            .unwrap()
-            .into_inner()
-    }
-
-    #[test]
-    fn internal_key_authenticates_as_admin() {
-        let headers = {
-            let mut h = HeaderMap::new();
-            h.insert(
-                header_names::MACRO_INTERNAL_AUTH_KEY_HEADER_KEY,
-                HeaderValue::from_static(INTERNAL_KEY),
-            );
-            h
-        };
-        assert!(authenticator().authorize(
-            &headers,
-            &DocumentId::from("any-doc"),
-            AccessLevel::Admin,
-        ));
-    }
-
-    #[test]
-    fn valid_token_grants_up_to_its_level() {
-        let headers = bearer(&jwt("doc-1", "edit"));
-        let auth = authenticator();
-        assert!(auth.authorize(&headers, &DocumentId::from("doc-1"), AccessLevel::View));
-        assert!(auth.authorize(&headers, &DocumentId::from("doc-1"), AccessLevel::Edit));
-    }
-
-    #[test]
-    fn view_token_rejected_for_higher_level() {
-        let headers = bearer(&jwt("doc-1", "view"));
-        assert!(!authenticator().authorize(
-            &headers,
-            &DocumentId::from("doc-1"),
-            AccessLevel::Admin,
-        ));
-    }
-
-    #[test]
-    fn token_rejected_for_other_document() {
-        let headers = bearer(&jwt("doc-1", "edit"));
-        assert!(!authenticator().authorize(
-            &headers,
-            &DocumentId::from("doc-2"),
-            AccessLevel::View,
-        ));
-    }
-
-    #[test]
-    fn missing_token_is_unauthorized() {
-        assert!(!authenticator().authorize(
-            &HeaderMap::new(),
-            &DocumentId::from("doc-1"),
-            AccessLevel::View,
-        ));
     }
 }
