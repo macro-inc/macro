@@ -232,6 +232,29 @@ ensure_dockerd() {
   return 1
 }
 
+# A config-scoped Doppler service token (local / lcl_preview) is enough —
+# no `doppler login`. Token-scoped downloads omit --project/--config.
+# Accept DOPPLER_PREVIEW_TOKEN as an alias (same name as the Fly/CI secret).
+ensure_doppler_token() {
+  if [ -z "${DOPPLER_TOKEN:-}" ] && [ -n "${DOPPLER_PREVIEW_TOKEN:-}" ]; then
+    export DOPPLER_TOKEN="${DOPPLER_PREVIEW_TOKEN}"
+  fi
+}
+
+# Populate `doppler_args` for `just stack up`.
+# With a token: empty (xtask pulls the token-scoped config).
+# Without: --no-doppler (code-owned stubs).
+stack_doppler_args() {
+  ensure_doppler_token
+  doppler_args=()
+  if [ -n "${DOPPLER_TOKEN:-}" ]; then
+    echo "cursor-cloud: DOPPLER_TOKEN present — pulling local/lcl_preview secrets"
+  else
+    echo "cursor-cloud: no DOPPLER_TOKEN — using --no-doppler stubs"
+    doppler_args+=(--no-doppler)
+  fi
+}
+
 in_pinned_nix_shell() {
   [ "${MACRO_CLOUD_PINNED_NIX:-}" = "1" ]
 }
