@@ -7,6 +7,7 @@ use super::errors::LocalError;
 use crate::domain::error::{HarnessError, Result};
 use crate::domain::model::SpawnContainer;
 use crate::domain::ports::ContainerManager;
+use crate::domain::sandbox::SandboxResizeKind;
 use crate::outbound::daytona::GithubToken;
 use crate::outbound::provision::{self, SESSION_LABEL};
 use crate::outbound::sidecar::SidecarTransport;
@@ -195,6 +196,7 @@ impl ContainerManager for LocalContainerManager {
         let SpawnContainer {
             session_id,
             repo_url,
+            size: _,
         } = command;
 
         if !self
@@ -236,6 +238,20 @@ impl ContainerManager for LocalContainerManager {
                 self.discard(&container).await;
                 Err(error)
             }
+        }
+    }
+
+    async fn resize(
+        &self,
+        _session: AgentSessionId,
+        _size: agent_session::domain::model::SandboxSize,
+        kind: SandboxResizeKind,
+    ) -> Result<()> {
+        match kind {
+            SandboxResizeKind::NoOp => Ok(()),
+            SandboxResizeKind::Hot | SandboxResizeKind::Cold => Err(HarnessError::Container(
+                "Local Docker containers cannot be resized in place".to_owned(),
+            )),
         }
     }
 
