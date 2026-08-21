@@ -847,6 +847,8 @@ fn document_event_cases() -> Vec<(DocumentTopicEvent, DocumentEventDescription)>
                 document_id: DOCUMENT_ID.to_string(),
                 owner: owner.clone(),
                 actor_user_id: Some(owner.clone()),
+                actor: None,
+                on_behalf_of: None,
                 document_name: Some("Renamed document".to_string()),
                 previous_project_id: Some(PROJECT_ID.to_string()),
                 project_id: None,
@@ -864,6 +866,8 @@ fn document_event_cases() -> Vec<(DocumentTopicEvent, DocumentEventDescription)>
                 document_id: DOCUMENT_ID.to_string(),
                 owner: owner.clone(),
                 actor_user_id: Some(owner.clone()),
+                actor: None,
+                on_behalf_of: None,
                 document_name: None,
                 previous_project_id: None,
                 project_id: Some(PROJECT_ID.to_string()),
@@ -880,6 +884,8 @@ fn document_event_cases() -> Vec<(DocumentTopicEvent, DocumentEventDescription)>
             DocumentTopicEvent::Deleted(DocumentDeletedMetadata {
                 document_id: DOCUMENT_ID.to_string(),
                 actor_user_id: Some(owner.clone()),
+                actor: None,
+                on_behalf_of: None,
                 project_id: Some(PROJECT_ID.to_string()),
             }),
             DocumentEventDescription {

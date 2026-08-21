@@ -58,6 +58,16 @@ pub struct DocumentUpdatedMetadata {
     /// The authenticated user who performed the update; `None` for
     /// unauthenticated or internal callers.
     pub actor_user_id: Option<MacroUserIdStr<'static>>,
+    /// Who mechanically updated the document. Absent on events published
+    /// before attribution, and on user-receipt writes (ingest then uses
+    /// [`Self::actor_user_id`]).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "schema", schema(value_type = Option<String>))]
+    pub actor: Option<Actor<'static>>,
+    /// The user whose feed this update belongs on, when different from
+    /// [`Self::actor`].
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub on_behalf_of: Option<MacroUserIdStr<'static>>,
     /// New (cleaned) document name; `None` when unchanged.
     pub document_name: Option<String>,
     /// Project id before the update.
@@ -80,6 +90,16 @@ pub struct DocumentDeletedMetadata {
     /// The authenticated user who deleted the document; `None` for
     /// unauthenticated or internal callers.
     pub actor_user_id: Option<MacroUserIdStr<'static>>,
+    /// Who mechanically deleted the document. Absent on events published
+    /// before attribution, and on user-receipt writes (ingest then uses
+    /// [`Self::actor_user_id`]).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "schema", schema(value_type = Option<String>))]
+    pub actor: Option<Actor<'static>>,
+    /// The user whose feed this delete belongs on, when different from
+    /// [`Self::actor`].
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub on_behalf_of: Option<MacroUserIdStr<'static>>,
     /// Project the document belonged to, when any.
     pub project_id: Option<String>,
 }

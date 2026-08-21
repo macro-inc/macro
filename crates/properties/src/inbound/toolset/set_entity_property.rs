@@ -225,9 +225,9 @@ where
         // Prove the requesting user can edit the entity before writing anything.
         let entity_access_receipt = service_context
             .entity_access_service
-            .generate_entity_access_receipt::<EditAccessLevel>(
-                &request_context.user_id,
-                None,
+            .generate_bot_entity_access_receipt::<EditAccessLevel>(
+                bot_id::MACRO_AI_BOT_ID,
+                super::ai_tool_user_scope(request_context.user_id.clone()),
                 &self.entity_id,
                 entity_type,
             )
