@@ -1,4 +1,5 @@
 use super::*;
+use crate::domain::ports::UnwiredCalendarSearchIndexer;
 use crate::domain::{
     models::{
         AttendeeResponseStatus, CalendarAttendee, CalendarBackfillClaim,
@@ -527,6 +528,7 @@ async fn partial_progress_reports_changes_when_a_later_calendar_fails() {
         FakeRepo::default(),
         PartialFailureGoogleProvider,
         lifecycle.clone(),
+        UnwiredCalendarSearchIndexer,
         None,
     );
 
@@ -563,6 +565,7 @@ async fn google_coordinator_owns_claim_and_completion_lifecycle() {
         FakeRepo::default(),
         FakeGoogleProvider,
         lifecycle.clone(),
+        UnwiredCalendarSearchIndexer,
         None,
     );
 
@@ -638,6 +641,7 @@ async fn freshly_synced_system_calendars_are_skipped() {
         repo,
         SystemCalendarProvider,
         lifecycle.clone(),
+        UnwiredCalendarSearchIndexer,
         None,
     );
 
@@ -699,6 +703,7 @@ async fn google_coordinator_surfaces_lease_loss_while_work_is_running() {
         FakeRepo::default(),
         HangingGoogleProvider,
         lifecycle.clone(),
+        UnwiredCalendarSearchIndexer,
         None,
     );
 
@@ -728,6 +733,7 @@ async fn google_coordinator_keeps_calendar_permission_health_separate_from_gmail
         FakeRepo::default(),
         ReauthGoogleProvider,
         lifecycle.clone(),
+        UnwiredCalendarSearchIndexer,
         None,
     );
 

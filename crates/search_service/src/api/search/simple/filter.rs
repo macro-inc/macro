@@ -3,14 +3,16 @@
 
 use comms_db_client::model::SimpleMention;
 use opensearch_client::search::unified::{
-    UnifiedCallRecordSearchArgs, UnifiedChannelMessageSearchArgs, UnifiedChatSearchArgs,
-    UnifiedDocumentSearchArgs, UnifiedEmailSearchArgs, UnifiedProjectSearchArgs,
+    UnifiedCalendarEventSearchArgs, UnifiedCallRecordSearchArgs, UnifiedChannelMessageSearchArgs,
+    UnifiedChatSearchArgs, UnifiedDocumentSearchArgs, UnifiedEmailSearchArgs,
+    UnifiedProjectSearchArgs,
 };
 
 use crate::api::{
     context::SearchHandlerState,
     search::simple::{
-        SearchError, simple_call_record::filter_calls, simple_channel::filter_channels,
+        SearchError, simple_calendar_event::filter_calendar_events,
+        simple_call_record::filter_calls, simple_channel::filter_channels,
         simple_chat::filter_chats, simple_document::filter_documents,
         simple_project::filter_projects,
     },
@@ -193,6 +195,34 @@ impl FilterVariantToSearchArgs for item_filters::CallFilters {
             channel_ids: response.channel_ids,
             speaker_ids: self.speaker_ids.clone(),
             ids_only: true,
+            ..Default::default()
+        })
+    }
+}
+
+impl FilterVariantToSearchArgs for item_filters::CalendarEventFilters {
+    type Output = UnifiedCalendarEventSearchArgs;
+
+    async fn filter_to_search_args(
+        &self,
+        ctx: &SearchHandlerState,
+        user_id: &str,
+        _user_organization_id: Option<i32>,
+        should_include: bool,
+    ) -> Result<Self::Output, SearchError> {
+        if !should_include {
+            return Ok(UnifiedCalendarEventSearchArgs::default());
+        }
+
+        let response = filter_calendar_events(ctx, user_id, self).await?;
+
+        Ok(UnifiedCalendarEventSearchArgs {
+            calendar_event_ids: response.calendar_event_ids,
+            link_ids: response.link_ids,
+            ids_only: response.ids_only,
+            statuses: self.statuses.clone(),
+            organizer_emails: self.organizers.clone(),
+            attendee_emails: self.attendees.clone(),
             ..Default::default()
         })
     }

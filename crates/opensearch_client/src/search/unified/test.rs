@@ -492,6 +492,7 @@ fn test_build_unified_search_request_content() -> anyhow::Result<()> {
         },
         call_record_search_args: UnifiedCallRecordSearchArgs::default(),
         project_search_args: UnifiedProjectSearchArgs::default(),
+        calendar_event_search_args: UnifiedCalendarEventSearchArgs::default(),
         cursor: SearchCursorOption::NotDone(Some(SearchMethodCursor::UpdatedAt {
             entity_id,
             updated_at: time,
@@ -794,6 +795,7 @@ fn test_build_unified_search_request_content() -> anyhow::Result<()> {
         },
         call_record_search_args: UnifiedCallRecordSearchArgs::default(),
         project_search_args: UnifiedProjectSearchArgs::default(),
+        calendar_event_search_args: UnifiedCalendarEventSearchArgs::default(),
         cursor: SearchCursorOption::NotDone(Some(SearchMethodCursor::UpdatedAt {
             entity_id,
             updated_at: time,

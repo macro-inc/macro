@@ -792,7 +792,9 @@ function calendarBlockParamsForEntity(
 
   return {
     eventId: content?.eventId ?? entity.id,
-    occurrenceKey: content?.occurrenceKey,
+    // A reminder names a precise instance, so it wins; otherwise fall back to
+    // whatever resolved the row (search supplies one, soup does not).
+    occurrenceKey: content?.occurrenceKey ?? entity.occurrenceKey,
     range: time ? createCalendarBlockRange(time) : undefined,
   };
 }

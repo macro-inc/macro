@@ -15,3 +15,6 @@ pub mod pg;
 /// SQS calendar reminder dispatch queue.
 #[cfg(feature = "dispatch-sqs")]
 pub mod sqs_dispatch_queue;
+/// Search-event queue adapter for the calendar search indexer port.
+#[cfg(feature = "search-sqs")]
+pub mod sqs_search_indexer;

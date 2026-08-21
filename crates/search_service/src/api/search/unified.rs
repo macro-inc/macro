@@ -78,6 +78,7 @@ pub async fn handler(
         project,
         call_record,
         crm_company,
+        calendar_event,
     } = results.into_iter().split_search_response();
 
     let (
@@ -88,6 +89,7 @@ pub async fn handler(
         enriched_email_results,
         enriched_call_record_results,
         enriched_crm_results,
+        enriched_calendar_event_results,
     ) = tokio::try_join!(
         enrich_search_response(
             &ctx,
@@ -132,6 +134,13 @@ pub async fn handler(
             None,
         ),
         enrich_crm_companies(&ctx, crm_access.as_ref(), crm_company),
+        enrich_search_response(
+            &ctx,
+            &user_context.user_id,
+            calendar_event,
+            models_opensearch::SearchEntityType::CalendarEvents,
+            None,
+        ),
     )
     .map_err(|e| SearchError::InternalError(anyhow::anyhow!("tokio error: {:?}", e)))?;
 
@@ -145,6 +154,7 @@ pub async fn handler(
         results.extend(enriched_email_results);
         results.extend(enriched_call_record_results);
         results.extend(enriched_crm_results);
+        results.extend(enriched_calendar_event_results);
 
         sort_unified_search_results(results)
     };

@@ -1,7 +1,10 @@
 use axum::extract::FromRef;
 use calendar_events::{
     domain::{mutations::CalendarMutationServiceImpl, service::CalendarService},
-    outbound::{google::GoogleCalendarClient, pg::PgCalendarRepository},
+    outbound::{
+        google::GoogleCalendarClient, pg::PgCalendarRepository,
+        sqs_search_indexer::SqsCalendarSearchIndexer,
+    },
 };
 use document_storage_service_client::DocumentStorageServiceClient;
 use email::{
@@ -38,6 +41,7 @@ pub(crate) type CalendarMutationSvc = CalendarMutationServiceImpl<
     PgCalendarRepository,
     GoogleCalendarClient<RedisCalendarRequestGate>,
     CalendarTokenProviderAdapter,
+    SqsCalendarSearchIndexer,
 >;
 pub(crate) type EmailEntityAccessService = EntityAccessServiceImpl<PgAccessRepository>;
 pub(crate) type EmailEntityAccessManagementService =

@@ -14,8 +14,9 @@ use super::{
     },
     ports::{
         CalendarBackfillRepository, CalendarEventWrite, CalendarOccurrenceService,
-        CalendarRepository, GoogleCalendarProvider, GoogleCalendarSyncRepository,
-        GoogleEventSyncContext, GoogleProviderError, GoogleProviderErrorKind,
+        CalendarRepository, CalendarSearchIndexer, GoogleCalendarProvider,
+        GoogleCalendarSyncRepository, GoogleEventSyncContext, GoogleProviderError,
+        GoogleProviderErrorKind,
     },
 };
 
@@ -187,9 +188,10 @@ where
 }
 
 /// Orchestrates a Google account backfill while keeping HTTP and SQL behind ports.
-pub struct GoogleCalendarBackfillService<R, G> {
+pub struct GoogleCalendarBackfillService<R, G, S> {
     repository: R,
     provider: G,
+    search: S,
     watch: Option<super::models::GoogleWatchConfig>,
 }
 
@@ -285,18 +287,20 @@ pub enum GoogleCalendarBackfillRunError {
 }
 
 /// Application service that owns Google backfill claim, lease, and terminal policy.
-pub struct GoogleCalendarBackfillCoordinator<R, G, L> {
+pub struct GoogleCalendarBackfillCoordinator<R, G, L, S> {
     repository: R,
     provider: G,
     lifecycle: L,
+    search: S,
     watch: Option<super::models::GoogleWatchConfig>,
 }
 
-impl<R, G, L> GoogleCalendarBackfillCoordinator<R, G, L>
+impl<R, G, L, S> GoogleCalendarBackfillCoordinator<R, G, L, S>
 where
     R: CalendarRepository + Clone,
     G: GoogleCalendarProvider + Clone,
     L: CalendarBackfillRepository,
+    S: CalendarSearchIndexer + Clone,
 {
     /// Construct a coordinator from domain ports; supplying a watch config
     /// makes every backfill maintain push notification channels.
@@ -304,12 +308,14 @@ where
         repository: R,
         provider: G,
         lifecycle: L,
+        search: S,
         watch: Option<super::models::GoogleWatchConfig>,
     ) -> Self {
         Self {
             repository,
             provider,
             lifecycle,
+            search,
             watch,
         }
     }
@@ -367,6 +373,7 @@ where
         let backfill = GoogleCalendarBackfillService::new(
             self.repository.clone(),
             self.provider.clone(),
+            self.search.clone(),
             self.watch.clone(),
         );
         let work = backfill.backfill(
@@ -452,20 +459,23 @@ where
     }
 }
 
-impl<R, G> GoogleCalendarBackfillService<R, G>
+impl<R, G, S> GoogleCalendarBackfillService<R, G, S>
 where
     R: CalendarRepository,
     G: GoogleCalendarProvider,
+    S: CalendarSearchIndexer,
 {
     /// Construct the provider backfill service.
     pub fn new(
         repository: R,
         provider: G,
+        search: S,
         watch: Option<super::models::GoogleWatchConfig>,
     ) -> Self {
         Self {
             repository,
             provider,
+            search,
             watch,
         }
     }
@@ -552,13 +562,24 @@ where
                 }
                 let super::models::CalendarEventSource::Google(source) = &upsert.source;
                 debug_assert_eq!(source.calendar_id, calendar_id);
-                self.repository
+                let event_id = self
+                    .repository
                     .upsert_event(CalendarEventWrite::GoogleBackfill {
                         key,
                         lease_token,
                         upsert,
                     })
                     .await?;
+                // Best-effort: sync progress is already committed, and the
+                // search backfill re-enumerates from Postgres, so a dropped
+                // publish costs index freshness rather than correctness.
+                if let Err(error) = self.search.index_event(event_id).await {
+                    tracing::warn!(
+                        error=?error,
+                        event_id=%event_id,
+                        "failed to enqueue calendar event reindex"
+                    );
+                }
                 calendar_count += 1;
             }
             // The upserts above committed individually, so they count even

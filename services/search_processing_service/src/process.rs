@@ -1,3 +1,4 @@
+pub(crate) mod calendar_event;
 pub(crate) mod call;
 pub(crate) mod channel;
 pub(crate) mod chat;
@@ -134,6 +135,18 @@ pub async fn process_message(
         }
         SearchQueueMessage::UpsertProject(message) => {
             project::upsert_project(&ctx.opensearch_client, &ctx.db, &message).await?;
+        }
+        SearchQueueMessage::UpsertCalendarEvent(message) => {
+            calendar_event::upsert_calendar_event(&ctx.opensearch_client, &ctx.db, &message)
+                .await?;
+        }
+        SearchQueueMessage::RemoveCalendarEvent(message) => {
+            calendar_event::remove_calendar_event(
+                &ctx.opensearch_client,
+                &message.event_id,
+                message.index_override.as_deref(),
+            )
+            .await?;
         }
     }
 

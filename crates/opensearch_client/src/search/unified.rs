@@ -5,6 +5,10 @@ use crate::{
     error::{OpensearchClientError, ResponseExt},
     search::{
         builder::{SearchQueryConfig, updated_at_sort},
+        calendar_events::{
+            CalendarEventIndex, CalendarEventQueryBuilder, CalendarEventSearchArgs,
+            CalendarEventSearchConfig,
+        },
         call_records::{
             CallRecordIndex, CallRecordQueryBuilder, CallRecordSearchArgs, CallRecordSearchConfig,
             CallRecordSearchMode,
@@ -68,6 +72,8 @@ pub struct UnifiedSearchArgs {
     pub call_record_search_args: UnifiedCallRecordSearchArgs,
     /// The project search args. If None, we do not search projects
     pub project_search_args: UnifiedProjectSearchArgs,
+    /// The calendar event search args. If None, we do not search calendar events
+    pub calendar_event_search_args: UnifiedCalendarEventSearchArgs,
 }
 
 impl From<UnifiedSearchArgs> for DocumentSearchArgs {
@@ -190,6 +196,27 @@ impl From<UnifiedSearchArgs> for ProjectSearchArgs {
     }
 }
 
+impl From<UnifiedSearchArgs> for CalendarEventSearchArgs {
+    fn from(args: UnifiedSearchArgs) -> Self {
+        CalendarEventSearchArgs {
+            terms: args.calendar_event_search_args.terms,
+            user_id: args.user_id,
+            page: args.page,
+            page_size: args.page_size,
+            match_type: args.match_type,
+            collapse: args.collapse,
+            ids_only: args.calendar_event_search_args.ids_only,
+            calendar_event_ids: args.calendar_event_search_args.calendar_event_ids,
+            link_ids: args.calendar_event_search_args.link_ids,
+            statuses: args.calendar_event_search_args.statuses,
+            organizer_emails: args.calendar_event_search_args.organizer_emails,
+            attendee_emails: args.calendar_event_search_args.attendee_emails,
+            tag_option_ids: args.calendar_event_search_args.tag_option_ids,
+            match_all_tags: args.calendar_event_search_args.match_all_tags,
+        }
+    }
+}
+
 #[derive(Debug, Default, Clone)]
 pub struct UnifiedChatSearchArgs {
     pub terms: Vec<String>,
@@ -252,6 +279,20 @@ pub struct UnifiedCallRecordSearchArgs {
 }
 
 #[derive(Debug, Default, Clone)]
+pub struct UnifiedCalendarEventSearchArgs {
+    pub terms: Vec<String>,
+    pub calendar_event_ids: Vec<String>,
+    /// Inbox links the caller reads through delegation.
+    pub link_ids: Vec<String>,
+    pub statuses: Vec<String>,
+    pub organizer_emails: Vec<String>,
+    pub attendee_emails: Vec<String>,
+    pub ids_only: bool,
+    pub tag_option_ids: Vec<String>,
+    pub match_all_tags: bool,
+}
+
+#[derive(Debug, Default, Clone)]
 pub struct UnifiedProjectSearchArgs {
     pub terms: Vec<String>,
     pub project_ids: Vec<String>,
@@ -269,12 +310,16 @@ pub(crate) enum UnifiedSearchIndex {
     Chat(ChatIndex),
     Email(Box<EmailIndex>),
     CallRecord(CallRecordIndex),
+    // Requires `source_link_id` + `ical_uid`, which no other index maps, so
+    // this variant cannot swallow another shape's hits.
+    CalendarEvent(CalendarEventIndex),
     // Keep last: with `untagged`, earlier variants win and every other doc
     // shape carries required fields (document_name, title, message_id, …)
     // a project doc lacks.
     Project(ProjectIndex),
 }
 
+#[derive(Default)]
 pub struct SplitUnifiedSearchResponseValues {
     pub channel_message: Vec<SearchHit>,
     pub chat: Vec<SearchHit>,
@@ -283,6 +328,7 @@ pub struct SplitUnifiedSearchResponseValues {
     pub project: Vec<SearchHit>,
     pub call_record: Vec<SearchHit>,
     pub crm_company: Vec<SearchHit>,
+    pub calendar_event: Vec<SearchHit>,
 }
 
 pub trait SplitUnifiedSearchResponse: Iterator<Item = SearchHit> {
@@ -294,63 +340,20 @@ where
     T: Iterator<Item = SearchHit>,
 {
     fn split_search_response(self) -> SplitUnifiedSearchResponseValues {
-        let (channel_message, chat, document, email, project, call_record, crm_company) =
-            self.into_iter().fold(
-                (vec![], vec![], vec![], vec![], vec![], vec![], vec![]),
-                |(
-                    mut channel_message,
-                    mut chat,
-                    mut document,
-                    mut email,
-                    mut project,
-                    mut call_record,
-                    mut crm_company,
-                ),
-                 item| {
-                    match item.entity_type {
-                        SearchEntityType::Channels => {
-                            channel_message.push(item);
-                        }
-                        SearchEntityType::Chats => {
-                            chat.push(item);
-                        }
-                        SearchEntityType::Documents => {
-                            document.push(item);
-                        }
-                        SearchEntityType::Emails => {
-                            email.push(item);
-                        }
-                        SearchEntityType::Projects => {
-                            project.push(item);
-                        }
-                        SearchEntityType::CallRecords => {
-                            call_record.push(item);
-                        }
-                        SearchEntityType::CrmCompanies => {
-                            crm_company.push(item);
-                        }
-                    }
-                    (
-                        channel_message,
-                        chat,
-                        document,
-                        email,
-                        project,
-                        call_record,
-                        crm_company,
-                    )
-                },
-            );
-
-        SplitUnifiedSearchResponseValues {
-            channel_message,
-            chat,
-            document,
-            email,
-            project,
-            call_record,
-            crm_company,
+        let mut split = SplitUnifiedSearchResponseValues::default();
+        for item in self {
+            match item.entity_type {
+                SearchEntityType::Channels => split.channel_message.push(item),
+                SearchEntityType::Chats => split.chat.push(item),
+                SearchEntityType::Documents => split.document.push(item),
+                SearchEntityType::Emails => split.email.push(item),
+                SearchEntityType::Projects => split.project.push(item),
+                SearchEntityType::CallRecords => split.call_record.push(item),
+                SearchEntityType::CrmCompanies => split.crm_company.push(item),
+                SearchEntityType::CalendarEvents => split.calendar_event.push(item),
+            }
         }
+        split
     }
 }
 
@@ -567,6 +570,25 @@ impl From<Hit<UnifiedSearchIndex>> for SearchHit {
                 goto: None,
                 updated_at: millis_to_datetime(a.updated_at_millis),
             },
+            UnifiedSearchIndex::CalendarEvent(a) => SearchHit {
+                entity_id: a.entity_id,
+                entity_type: SearchEntityType::CalendarEvents,
+                score: index.score,
+                highlight: index
+                    .highlight
+                    .map(|h| {
+                        parse_highlight_hit(
+                            h,
+                            Keys {
+                                title_key: CalendarEventSearchConfig::TITLE_KEY,
+                                content_key: CalendarEventSearchConfig::CONTENT_KEY,
+                            },
+                        )
+                    })
+                    .unwrap_or_default(),
+                goto: None,
+                updated_at: millis_to_datetime(a.updated_at_millis),
+            },
             UnifiedSearchIndex::Project(a) => SearchHit {
                 entity_id: a.entity_id,
                 entity_type: SearchEntityType::Projects,
@@ -696,6 +718,18 @@ fn build_unified_search_request(args: &UnifiedSearchArgs) -> Result<SearchReques
         let project_query_builder: ProjectQueryBuilder = project_search_args.into();
         let project_bool_query = project_query_builder.build_bool_query()?;
         let query_type: QueryType = project_bool_query.build().into();
+        bool_query.should(query_type.to_owned());
+    }
+
+    if args
+        .search_indices
+        .contains(&OpenSearchEntityType::CalendarEvents)
+    {
+        let calendar_event_search_args: CalendarEventSearchArgs = args.clone().into();
+        let calendar_event_query_builder: CalendarEventQueryBuilder =
+            calendar_event_search_args.into();
+        let calendar_event_bool_query = calendar_event_query_builder.build_bool_query()?;
+        let query_type: QueryType = calendar_event_bool_query.build().into();
         bool_query.should(query_type.to_owned());
     }
 

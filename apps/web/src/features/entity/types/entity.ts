@@ -361,6 +361,12 @@ export type CalendarEventEntity = EntityBase & {
   status: string;
   /** Master event time. Absent when the wire shape could not be read. */
   time?: CalendarEventEntityTime;
+  /**
+   * The instance this row means, when one was resolved. Search rows carry it
+   * so a click lands on the relevant occurrence of a recurring series rather
+   * than the master's original start; soup rows leave it unset.
+   */
+  occurrenceKey?: string;
   /** Direct join URL when known. */
   conferenceUrl?: string;
   /** Whether the canonical source prohibits mutation. */

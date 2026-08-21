@@ -26,6 +26,8 @@ inbound = [
 # The notification-service reminder notifier.
 notify = ["dep:macro_user_id", "dep:model-entity", "dep:model_notifications", "dep:notification"]
 postgres = ["dep:sqlx", "dep:tokio"]
+# The search-event queue adapter announcing calendar writes to search.
+search-sqs = ["dep:sqs_client"]
 schema = ["dep:utoipa"]
 
 [dependencies]
@@ -46,6 +48,7 @@ models_pagination = { path = "../models_pagination", optional = true }
 notification = { path = "../notification", optional = true }
 reqwest = { workspace = true, optional = true }
 rootcause = { workspace = true }
+sqs_client = { path = "../sqs_client", default-features = false, features = ["search"], optional = true }
 schemars = { workspace = true, optional = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

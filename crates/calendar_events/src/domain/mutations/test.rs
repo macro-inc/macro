@@ -494,12 +494,55 @@ impl CalendarAccessTokenProvider for FakeTokens {
     }
 }
 
+/// Records the event ids a mutation announced to search.
+#[derive(Clone, Default)]
+struct RecordingSearchIndexer {
+    indexed: std::sync::Arc<std::sync::Mutex<Vec<Uuid>>>,
+    fail: bool,
+}
+
+impl RecordingSearchIndexer {
+    fn failing() -> Self {
+        Self {
+            indexed: Default::default(),
+            fail: true,
+        }
+    }
+
+    fn indexed(&self) -> Vec<Uuid> {
+        self.indexed.lock().expect("indexer lock").clone()
+    }
+}
+
+impl CalendarSearchIndexer for RecordingSearchIndexer {
+    async fn index_event(&self, event_id: Uuid) -> Result<(), rootcause::Report> {
+        self.indexed.lock().expect("indexer lock").push(event_id);
+        if self.fail {
+            return Err(rootcause::report!("search queue unavailable").into());
+        }
+        Ok(())
+    }
+
+    async fn remove_event(&self, _event_id: Uuid) -> Result<(), rootcause::Report> {
+        Ok(())
+    }
+}
+
 fn service(
     repo: FakeRepo,
     provider: FakeProvider,
     tokens: FakeTokens,
-) -> CalendarMutationServiceImpl<FakeRepo, FakeProvider, FakeTokens> {
-    CalendarMutationServiceImpl::new(repo, provider, tokens)
+) -> CalendarMutationServiceImpl<FakeRepo, FakeProvider, FakeTokens, RecordingSearchIndexer> {
+    CalendarMutationServiceImpl::new(repo, provider, tokens, RecordingSearchIndexer::default())
+}
+
+fn service_with_search(
+    repo: FakeRepo,
+    provider: FakeProvider,
+    tokens: FakeTokens,
+    search: RecordingSearchIndexer,
+) -> CalendarMutationServiceImpl<FakeRepo, FakeProvider, FakeTokens, RecordingSearchIndexer> {
+    CalendarMutationServiceImpl::new(repo, provider, tokens, search)
 }
 
 #[tokio::test]
@@ -552,6 +595,75 @@ async fn create_persists_the_provider_echo_and_returns_the_applied_id() {
 
     assert_eq!(created.id, applied_id);
     assert_eq!(upserts.lock().unwrap().len(), 1);
+}
+
+#[tokio::test]
+async fn create_announces_the_applied_event_to_search() {
+    let applied_id = Uuid::now_v7();
+    let repo = FakeRepo {
+        creation_target: Some(creation_target(false)),
+        persisted_event_id: Some(applied_id),
+        ..FakeRepo::default()
+    };
+    let search = RecordingSearchIndexer::default();
+    service_with_search(
+        repo,
+        FakeProvider::new(FakeProviderBehavior::Echo),
+        FakeTokens::ok(),
+        search.clone(),
+    )
+    .create_event("macro|user", None, None, draft())
+    .await
+    .unwrap();
+
+    // The applied entity id, not the draft's — search indexes what persisted.
+    assert_eq!(search.indexed(), vec![applied_id]);
+}
+
+#[tokio::test]
+async fn a_failed_search_publish_does_not_fail_the_mutation() {
+    // Google and the local projection are already updated by this point, and
+    // the search backfill re-enumerates from Postgres, so a dropped publish
+    // must cost index freshness rather than the write.
+    let applied_id = Uuid::now_v7();
+    let repo = FakeRepo {
+        creation_target: Some(creation_target(false)),
+        persisted_event_id: Some(applied_id),
+        ..FakeRepo::default()
+    };
+    let search = RecordingSearchIndexer::failing();
+    let created = service_with_search(
+        repo,
+        FakeProvider::new(FakeProviderBehavior::Echo),
+        FakeTokens::ok(),
+        search.clone(),
+    )
+    .create_event("macro|user", None, None, draft())
+    .await
+    .expect("a search publish failure must not fail the mutation");
+
+    assert_eq!(created.id, applied_id);
+    assert_eq!(search.indexed(), vec![applied_id]);
+}
+
+#[tokio::test]
+async fn a_rejected_mutation_announces_nothing_to_search() {
+    let search = RecordingSearchIndexer::default();
+    let svc = service_with_search(
+        FakeRepo::default(),
+        FakeProvider::new(FakeProviderBehavior::Echo),
+        FakeTokens::ok(),
+        search.clone(),
+    );
+    assert!(
+        svc.create_event("macro|user", None, None, draft())
+            .await
+            .is_err()
+    );
+    assert!(
+        search.indexed().is_empty(),
+        "nothing persisted, so nothing to index"
+    );
 }
 
 #[tokio::test]

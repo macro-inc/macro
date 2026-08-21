@@ -3,7 +3,10 @@ use crate::api::context::{ApiContext, AuthorizationService};
 use anyhow::Context;
 use calendar_events::{
     domain::{mutations::CalendarMutationServiceImpl, service::CalendarService},
-    outbound::{google::GoogleCalendarClient, pg::PgCalendarRepository},
+    outbound::{
+        google::GoogleCalendarClient, pg::PgCalendarRepository,
+        sqs_search_indexer::SqsCalendarSearchIndexer,
+    },
 };
 use document_storage_service_client::DocumentStorageServiceClient;
 use email::{
@@ -212,6 +215,7 @@ async fn main() -> anyhow::Result<()> {
             RedisCalendarRequestGate::new((*redis_client).clone()),
         ),
         CalendarTokenProviderAdapter::new(redis_conn.clone(), auth_service_client.clone()),
+        SqsCalendarSearchIndexer::new(sqs_client.clone()),
     ));
     let api_result = api::setup_and_serve(ApiContext {
         db,

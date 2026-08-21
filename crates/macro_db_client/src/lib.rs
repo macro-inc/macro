@@ -3,6 +3,7 @@ pub mod account_merge_request;
 pub mod advisory_lock;
 pub mod annotations;
 pub mod blocked_email;
+pub mod calendar_event;
 pub mod call_record;
 pub mod chat;
 pub mod chat_history;

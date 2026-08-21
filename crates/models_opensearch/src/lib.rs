@@ -23,6 +23,8 @@ pub enum SearchIndex {
     CallRecords,
     /// The projects alias
     Projects,
+    /// The calendar events alias
+    CalendarEvents,
 }
 
 /// All searchable entity types — the tag on a unified `SearchHit`,
@@ -59,6 +61,8 @@ pub enum SearchEntityType {
     CallRecords,
     /// The CRM company entity type (Postgres-only)
     CrmCompanies,
+    /// The calendar event entity type (has OpenSearch index)
+    CalendarEvents,
 }
 
 /// `SearchEntityType` variants that have an OpenSearch index.
@@ -89,6 +93,8 @@ pub enum OpenSearchEntityType {
     CallRecords,
     /// The projects index
     Projects,
+    /// The calendar events index
+    CalendarEvents,
 }
 
 impl OpenSearchEntityType {
@@ -103,6 +109,7 @@ impl OpenSearchEntityType {
             Self::Emails => "emails",
             Self::CallRecords => "call_records",
             Self::Projects => "projects",
+            Self::CalendarEvents => "calendar_events",
         }
     }
 }
@@ -116,6 +123,7 @@ impl From<OpenSearchEntityType> for SearchEntityType {
             OpenSearchEntityType::Emails => SearchEntityType::Emails,
             OpenSearchEntityType::CallRecords => SearchEntityType::CallRecords,
             OpenSearchEntityType::Projects => SearchEntityType::Projects,
+            OpenSearchEntityType::CalendarEvents => SearchEntityType::CalendarEvents,
         }
     }
 }
@@ -129,6 +137,7 @@ impl From<OpenSearchEntityType> for SearchIndex {
             OpenSearchEntityType::Emails => SearchIndex::Emails,
             OpenSearchEntityType::CallRecords => SearchIndex::CallRecords,
             OpenSearchEntityType::Projects => SearchIndex::Projects,
+            OpenSearchEntityType::CalendarEvents => SearchIndex::CalendarEvents,
         }
     }
 }
@@ -146,6 +155,7 @@ mod test {
             OpenSearchEntityType::Emails,
             OpenSearchEntityType::CallRecords,
             OpenSearchEntityType::Projects,
+            OpenSearchEntityType::CalendarEvents,
         ] {
             let from_index: SearchIndex = variant.clone().into();
             assert_eq!(variant.index_name(), from_index.as_ref());

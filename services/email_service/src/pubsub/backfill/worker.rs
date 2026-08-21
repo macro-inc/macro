@@ -78,7 +78,11 @@ pub async fn run_worker_with_cancellation(
     calendar_sync_enabled: bool,
     cancellation_token: CancellationToken,
 ) {
-    let calendar_backfills = CalendarBackfillServices::new(db.clone(), redis_client.clone());
+    let calendar_backfills = CalendarBackfillServices::new(
+        db.clone(),
+        redis_client.clone(),
+        Arc::new(sqs_client.clone()),
+    );
     let ctx = PubSubContext {
         db,
         sqs_worker: worker.clone(),
