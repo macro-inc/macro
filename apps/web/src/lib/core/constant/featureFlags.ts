@@ -4,6 +4,10 @@ import { analytics } from '@app/lib/analytics';
  * This constant reflects whether the app is running locally with hot reload enabled
  *
  * @returns true in bun run dev, false otherwise
+ *
+ * Distinct from `import.meta.env.DEV` (true under vite serve *and* local-backend
+ * static bundles) and `DEV_MODE_ENV` (true whenever MODE=development, including
+ * dev.macro.com).
  */
 export const LOCAL_ONLY = !!import.meta.hot;
 

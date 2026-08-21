@@ -12,7 +12,7 @@ use std::thread::JoinHandle;
 use anyhow::{Context, Result};
 
 use super::instance::{Instance, Port};
-use super::{Mode, proxy, repo_root, stage::Stage};
+use super::{proxy, repo_root, stage::Stage, Mode};
 
 /// The app dir where `bun run dev` runs.
 fn app_dir() -> std::path::PathBuf {
@@ -46,10 +46,12 @@ pub fn static_dir(instance: &Instance) -> std::path::PathBuf {
 /// the `same-origin` sentinel — resolved from `location.origin` at runtime — so
 /// the one bundle works on localhost and through any tunnel/preview hostname.
 ///
-/// `VITE_KEEP_DEV` keeps `import.meta.env.DEV` true in the static bundle.
-/// `vite build` otherwise compiles it to false, which drops local-only paths
-/// such as passwordless auto-login (`just run_local` uses `vite serve`, where
-/// DEV is already true).
+/// Setting `VITE_LOCAL_BACKEND_ORIGIN` also keeps `import.meta.env.DEV` true
+/// in the static bundle (see `keepImportMetaDev` in apps/web/scripts). `vite build`
+/// otherwise compiles DEV from `NODE_ENV=production`, which drops local-only
+/// paths such as passwordless auto-login (`just run_local` uses `vite serve`,
+/// where DEV is already true). Fly preview sets the same origin env, so it
+/// gets the override without a second flag.
 pub fn build_static(
     stage: &Stage,
     instance: &Instance,
@@ -64,7 +66,6 @@ pub fn build_static(
                 .args(["run", "--bun", "build"])
                 .env("MODE", "development")
                 .env("NODE_ENV", "production")
-                .env("VITE_KEEP_DEV", "true")
                 .env("VITE_LOCAL_SERVERS", "ALL")
                 .env("VITE_LOCAL_BACKEND_ORIGIN", "same-origin");
             if mode.spec().runs_local_infra {
