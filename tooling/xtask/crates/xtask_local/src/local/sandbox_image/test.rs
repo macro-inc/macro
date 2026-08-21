@@ -52,3 +52,16 @@ fn docker_build_args_match_the_cli() {
         ["build", "--tag", DEFAULT_LOCAL_TAG, CONTEXT_REL]
     );
 }
+
+#[test]
+fn no_build_still_plans_the_tag() {
+    // `--no-build` is an ensure() argument (Fly VM / CI bake), not an env flag.
+    // The plan is unchanged so stack-up still documents which preloaded tag it
+    // expects; docker is simply not invoked.
+    assert_eq!(
+        EnsurePlan::from_env(&env_with(&[("DEV_DANGEROUS_LOCAL_CONTAINERS", "true")])),
+        Some(EnsurePlan {
+            tag: DEFAULT_LOCAL_TAG.to_owned(),
+        })
+    );
+}

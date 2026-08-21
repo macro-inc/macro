@@ -86,10 +86,12 @@ fn deploy() -> Job {
         // sccache keys, and their volumes never carry a cargo target dir).
         .runs_on(runners::Runner::Mid.with_cache_tag(vars::PREVIEW_CACHE_TAG))
         // Backstop against hangs: worst honest case is ~15 min cold builds +
-        // ~6 min cold mirror push + the 30 min flyctl wait cap. Anything past
-        // an hour is a stuck step, not a slow deploy (a hung log fetch once
-        // burned 2h26m of runner before someone cancelled it by hand).
-        .timeout_minutes(60u32)
+        // a cold `crates/agent_harness/container` bake (two nix shells) +
+        // ~6 min cold mirror push + the 30 min flyctl wait cap. 90m leaves
+        // room for that extra image; anything past that is a stuck step (a
+        // hung log fetch once burned 2h26m of runner before someone cancelled
+        // it by hand).
+        .timeout_minutes(90u32)
         .permissions(
             Permissions::default()
                 .contents(Level::Read)

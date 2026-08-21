@@ -4,6 +4,9 @@
 //! When local sandboxes are on, `run_local` / `stack up` always `docker build`
 //! the tag. BuildKit cache is the freshness check: unchanged `container/` is
 //! a no-op rebuild, a Dockerfile or flake change pays the two nix shells.
+//! `--no-build` (Fly preview VM boot, CI snapshot bake) skips that: the image
+//! is already on the daemon from preload / the images lane, and the Fly VM's
+//! staged repo does not even include `crates/agent_harness/container`.
 
 use std::collections::BTreeMap;
 use std::path::Path;
@@ -61,11 +64,19 @@ pub(crate) fn build_args(tag: &str, context: &Path) -> Vec<String> {
 
 /// `docker build` the sandbox image when local sandboxes are on.
 ///
-/// Dry-run notes the plan and does not invoke Docker.
-pub fn ensure(stage: &Stage, env: &BTreeMap<String, String>) -> Result<()> {
+/// `no_build` skips the invocation so Fly / `--no-build` stack-up can use a
+/// preloaded tag. Dry-run notes the plan and does not invoke Docker.
+pub fn ensure(stage: &Stage, env: &BTreeMap<String, String>, no_build: bool) -> Result<()> {
     let Some(plan) = EnsurePlan::from_env(env) else {
         return Ok(());
     };
+    if no_build {
+        stage.note(&format!(
+            "sandbox image: skipping build (--no-build); using {}",
+            plan.tag
+        ));
+        return Ok(());
+    }
     if stage.is_dry_run() {
         stage.note(&format!("sandbox image: would build {}", plan.tag));
         return Ok(());

@@ -21,7 +21,7 @@ jobs:
       TEMPLATE_APP: macro-preview-template
       MACRO_STACK_SNAPSHOT_DIR: /home/runner/.cache/macro-preview-snapshots
       CARGO_INCREMENTAL: '0'
-    timeout-minutes: 60
+    timeout-minutes: 90
     steps:
     - name: Checkout
       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd

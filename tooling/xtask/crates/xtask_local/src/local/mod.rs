@@ -514,7 +514,7 @@ fn prepare(
         static_frontend,
     )?;
     stage.note(&format!("env: {}", env_layer::summarize(&env.merged)));
-    sandbox_image::ensure(stage, &env.merged)?;
+    sandbox_image::ensure(stage, &env.merged, args.build.no_build)?;
 
     // Build the runtime image (idempotent) and the service binaries.
     let target = arch::detect()?;

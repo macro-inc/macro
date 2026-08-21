@@ -34,6 +34,15 @@ fn both_image_loops_include_the_sandbox_tag() {
 }
 
 #[test]
+fn deploy_timeout_covers_a_cold_sandbox_image_bake() {
+    let yaml = rendered();
+    assert!(
+        yaml.contains("timeout-minutes: 90"),
+        "sandbox image bake can exceed the old 60m backstop: {yaml}"
+    );
+}
+
+#[test]
 fn images_lane_always_builds_the_sandbox_image() {
     let yaml = rendered();
     assert!(
