@@ -1,12 +1,7 @@
-# Shared by install.sh / start.sh / stack.sh. Sourced, not executed.
-# Persistent caches live under $HOME so they survive `git checkout` into /workspace.
-
 WORKSPACE_ROOT='/workspace'
 CACHE_ROOT="${HOME}/.cache/macro-cloud"
 TARGET_CACHE="${CACHE_ROOT}/target"
-FRONTEND_CACHE="${CACHE_ROOT}/frontend"
 export MACRO_STACK_SNAPSHOT_DIR="${CACHE_ROOT}/stack-snapshots"
-STACK_SNAPSHOT_IMAGE='macro-cloud-stack-snapshot:prepared'
 
 LOG_DIR="${HOME}/.cursor-cloud"
 MACRODB_URL='postgres://user:password@localhost:5432/macrodb'
@@ -15,35 +10,93 @@ DOCKER_IPTABLES_BACKEND='/usr/sbin/iptables-legacy'
 DOCKER_IP6TABLES_BACKEND='/usr/sbin/ip6tables-legacy'
 NIX_BIN='/nix/var/nix/profiles/default/bin/nix'
 NIX_SOCK='/nix/var/nix/daemon-socket/socket'
+NIX_CACHE_URL='s3://macro-nix-cache?region=us-east-1&compression=zstd'
+NIX_CACHE_PUBLIC_KEY='nix-cache.macro.com-1:UtlRPa6ac+o4IfY+wV8KUS+X0XPU0YMv18lPWEDYN5k='
+LOCAL_STACK_BINS="${CACHE_ROOT}/local-stack-bins"
 export DATABASE_URL="${MACRODB_URL}"
 
-mkdir -p "${LOG_DIR}" "${TARGET_CACHE}" "${FRONTEND_CACHE}" "${MACRO_STACK_SNAPSHOT_DIR}"
+mkdir -p "${LOG_DIR}" "${TARGET_CACHE}" "${MACRO_STACK_SNAPSHOT_DIR}"
+
+nix_base_conf() {
+  echo 'experimental-features = nix-command flakes'
+  echo "trusted-users = root $(id -un)"
+  echo 'build-users-group = nixbld'
+  echo 'sandbox = false'
+}
 
 ensure_nix_installed() {
   if [ -x "${NIX_BIN}" ]; then
     return 0
   fi
   echo "cursor-cloud: installing Determinate Nix"
+  local conf_args=()
+  local line
+  while IFS= read -r line; do
+    conf_args+=(--extra-conf "${line}")
+  done < <(nix_base_conf)
   curl --retry 5 --retry-delay 2 --retry-all-errors -fsSL \
     https://install.determinate.systems/nix |
     sudo sh -s -- install linux \
       --init none \
       --no-confirm \
-      --extra-conf "trusted-users = root $(id -un)" \
-      --extra-conf "sandbox = false"
+      "${conf_args[@]}"
   test -x "${NIX_BIN}"
 }
 
 ensure_nix_daemon() {
   ensure_nix_installed
+
+  local cache_enabled=false
+  if [ -n "${NIX_CACHE_AWS_ACCESS_KEY_ID:-}" ] \
+    && [ -n "${NIX_CACHE_AWS_SECRET_ACCESS_KEY:-}" ]; then
+    cache_enabled=true
+  fi
+
+  local desired_conf
+  desired_conf="$(mktemp)"
+  {
+    nix_base_conf
+    if "${cache_enabled}"; then
+      echo "extra-substituters = ${NIX_CACHE_URL}"
+      echo "extra-trusted-public-keys = ${NIX_CACHE_PUBLIC_KEY}"
+      echo 'narinfo-cache-negative-ttl = 30'
+    fi
+  } >"${desired_conf}"
+
+  local config_changed=false
+  sudo mkdir -p /etc/nix
+  if ! sudo cmp -s "${desired_conf}" /etc/nix/nix.conf; then
+    sudo install -m 0644 "${desired_conf}" /etc/nix/nix.conf
+    sudo pkill -x nix-daemon >/dev/null 2>&1 || true
+    config_changed=true
+  fi
+  rm -f "${desired_conf}"
+
+  if "${config_changed}"; then
+    local config_wait=0
+    while sudo pgrep -x nix-daemon >/dev/null 2>&1 && [ "${config_wait}" -lt 30 ]; do
+      config_wait=$((config_wait + 1))
+      sleep 1
+    done
+  fi
+
   if "${NIX_BIN}" ping-store >/dev/null 2>&1; then
     return 0
   fi
-  # Disk snapshots preserve socket path entries, not the process listening on
-  # them. Remove the stale entry only after a real store probe has failed.
+
+  # Disk snapshots preserve dead socket entries.
   sudo rm -f "${NIX_SOCK}"
   : >"${LOG_DIR}/nix-daemon.log"
-  sudo setsid "${NIX_BIN}" daemon >>"${LOG_DIR}/nix-daemon.log" 2>&1 </dev/null &
+  local daemon_env=()
+  if "${cache_enabled}"; then
+    # The daemon performs substitution, so it owns the S3 credentials.
+    daemon_env+=(
+      "AWS_ACCESS_KEY_ID=${NIX_CACHE_AWS_ACCESS_KEY_ID}"
+      "AWS_SECRET_ACCESS_KEY=${NIX_CACHE_AWS_SECRET_ACCESS_KEY}"
+    )
+  fi
+  sudo setsid env "${daemon_env[@]}" "${NIX_BIN}" daemon \
+    >>"${LOG_DIR}/nix-daemon.log" 2>&1 </dev/null &
   local n=0
   while [ "${n}" -lt 30 ]; do
     if "${NIX_BIN}" ping-store >/dev/null 2>&1; then
@@ -58,6 +111,12 @@ ensure_nix_daemon() {
 }
 
 ensure_docker_iptables_backend() {
+  if [ ! -x /usr/bin/update-alternatives ] \
+    || [ ! -x "${DOCKER_IPTABLES_BACKEND}" ] \
+    || [ ! -x "${DOCKER_IP6TABLES_BACKEND}" ]; then
+    return 0
+  fi
+
   local desired_backend
   desired_backend="$(readlink -f "${DOCKER_IPTABLES_BACKEND}")"
   local desired_ip6_backend
@@ -65,12 +124,7 @@ ensure_docker_iptables_backend() {
   local current_backend
   current_backend="$(readlink -f /etc/alternatives/iptables 2>/dev/null || true)"
 
-  test -x "${DOCKER_IPTABLES_BACKEND}"
-  test -x "${DOCKER_IP6TABLES_BACKEND}"
-
-  # The cloud image can preserve a legacy FORWARD DROP policy while apt selects
-  # iptables-nft. Make Docker program the enforcing legacy table instead of
-  # opening FORWARD or bypassing Docker's per-network isolation chains.
+  # Reconcile the backend with a preserved legacy FORWARD policy.
   if [ "${current_backend}" != "${desired_backend}" ]; then
     sudo /usr/bin/update-alternatives \
       --set iptables "${DOCKER_IPTABLES_BACKEND}"
@@ -80,19 +134,25 @@ ensure_docker_iptables_backend() {
     sudo /usr/bin/update-alternatives \
       --set ip6tables "${DOCKER_IP6TABLES_BACKEND}"
   fi
-
-  current_backend="$(readlink -f /etc/alternatives/iptables)"
-  local current_ip6_backend
-  current_ip6_backend="$(readlink -f /etc/alternatives/ip6tables)"
-  test "${current_backend}" = "${desired_backend}"
-  test "${current_ip6_backend}" = "${desired_ip6_backend}"
 }
 
 ensure_dockerd() {
   ensure_docker_iptables_backend
+
+  local dockerd_bin
+  if [ -x /usr/bin/dockerd ]; then
+    dockerd_bin='/usr/bin/dockerd'
+  else
+    dockerd_bin="$(command -v dockerd || true)"
+  fi
+  if [ -z "${dockerd_bin}" ] || [ ! -x "${dockerd_bin}" ]; then
+    echo "dockerd not found in /usr/bin or PATH" >&2
+    return 1
+  fi
+
   local storage_driver='vfs'
   local storage_args=()
-  if [ -x /usr/bin/fuse-overlayfs ]; then
+  if command -v fuse-overlayfs >/dev/null 2>&1; then
     storage_driver='fuse-overlayfs'
   fi
   if ! sudo /usr/bin/grep -q '"storage-driver"[[:space:]]*:' /etc/docker/daemon.json 2>/dev/null; then
@@ -104,11 +164,10 @@ ensure_dockerd() {
       return 0
     fi
   fi
-  # As with Nix, a snapshot can contain a dead Unix socket. Docker does not
-  # reliably replace it while starting, so clear it after the API probe fails.
+  # Disk snapshots preserve dead socket entries.
   sudo rm -f "${DOCKER_SOCK}"
   : >"${LOG_DIR}/dockerd.log"
-  sudo setsid /usr/bin/dockerd "${storage_args[@]}" \
+  sudo setsid env "PATH=${PATH}" "${dockerd_bin}" "${storage_args[@]}" \
     >>"${LOG_DIR}/dockerd.log" 2>&1 </dev/null &
   local n=0
   while [ "${n}" -lt 60 ]; do
@@ -162,83 +221,25 @@ remove_workspace_target_mounts() {
   done
 }
 
-# Move /workspace/target into $HOME (same filesystem: rename). Recreate the
-# symlink after every checkout so Cargo's incremental cache survives it.
 ensure_persistent_caches() {
-  mkdir -p "${TARGET_CACHE}" "${FRONTEND_CACHE}" "${MACRO_STACK_SNAPSHOT_DIR}"
+  mkdir -p "${TARGET_CACHE}" "${MACRO_STACK_SNAPSHOT_DIR}"
   remove_workspace_target_mounts
 
   if [ -e "${WORKSPACE_ROOT}/target" ] && [ ! -L "${WORKSPACE_ROOT}/target" ]; then
-    sudo chown -R "$(workspace_owner):$(workspace_group)" "${WORKSPACE_ROOT}/target"
-    if [ -x "${WORKSPACE_ROOT}/target/x86_64-unknown-linux-gnu/debug/document_storage_service" ] \
-      && [ ! -x "${TARGET_CACHE}/x86_64-unknown-linux-gnu/debug/document_storage_service" ]; then
-      echo "cursor-cloud: moving ${WORKSPACE_ROOT}/target -> ${TARGET_CACHE}"
-      rm -rf "${TARGET_CACHE}"
-      mv "${WORKSPACE_ROOT}/target" "${TARGET_CACHE}"
-    else
-      echo "cursor-cloud: replacing ${WORKSPACE_ROOT}/target with cache symlink"
-      rm -rf "${WORKSPACE_ROOT}/target"
-    fi
+    sudo rm -rf "${WORKSPACE_ROOT}/target"
   fi
 
   mkdir -p "${TARGET_CACHE}"
   ln -sfn "${TARGET_CACHE}" "${WORKSPACE_ROOT}/target"
-  sudo chown -R "$(workspace_owner):$(workspace_group)" "${TARGET_CACHE}"
+  if [ "$(stat -c '%U' "${TARGET_CACHE}")" != "$(workspace_owner)" ]; then
+    sudo chown -R "$(workspace_owner):$(workspace_group)" "${TARGET_CACHE}"
+  fi
   echo "cursor-cloud: ${WORKSPACE_ROOT}/target -> ${TARGET_CACHE}"
-
-  if [ ! -f "${WORKSPACE_ROOT}/apps/web/dist/index.html" ] && [ -f "${FRONTEND_CACHE}/index.html" ]; then
-    mkdir -p "${WORKSPACE_ROOT}/apps/web/dist"
-    cp -a "${FRONTEND_CACHE}/." "${WORKSPACE_ROOT}/apps/web/dist/"
-    echo "cursor-cloud: restored frontend bundle from cache"
-  elif [ -f "${WORKSPACE_ROOT}/apps/web/dist/index.html" ]; then
-    cp -a "${WORKSPACE_ROOT}/apps/web/dist/." "${FRONTEND_CACHE}/"
-  fi
-
-  if [ -d "${WORKSPACE_ROOT}/infra/local/generated/.snapshots" ]; then
-    cp -a "${WORKSPACE_ROOT}/infra/local/generated/.snapshots/." "${MACRO_STACK_SNAPSHOT_DIR}/"
-  fi
 }
 
-bake_stack_snapshot_image() {
-  local key="$1"
-  local snapshot_dir="$2"
-
-  test -f "${snapshot_dir}/manifest.json"
-  docker build \
-    --tag "${STACK_SNAPSHOT_IMAGE}" \
-    --file - \
-    "${snapshot_dir}" <<EOF
-FROM alpine:3
-LABEL com.macro.stack-snapshot-key="${key}"
-COPY . /snapshot/
-EOF
-  docker image inspect "${STACK_SNAPSHOT_IMAGE}" >/dev/null
-}
-
-restore_stack_snapshot_image() {
-  if ! docker image inspect "${STACK_SNAPSHOT_IMAGE}" >/dev/null 2>&1; then
-    echo "cursor-cloud: prepared stack snapshot image not found"
-    return 0
-  fi
-
-  local key
-  key="$(docker image inspect \
-    --format '{{ index .Config.Labels "com.macro.stack-snapshot-key" }}' \
-    "${STACK_SNAPSHOT_IMAGE}")"
-  case "${key}" in
-    ''|*[!0-9a-f]*)
-      echo "prepared stack snapshot image has invalid key: ${key}" >&2
-      return 1
-      ;;
-  esac
-
-  local destination="${MACRO_STACK_SNAPSHOT_DIR}/${key}"
-  mkdir -p "${destination}"
-  docker run --rm \
-    --user "$(id -u):$(id -g)" \
-    --volume "${destination}:/restore" \
-    "${STACK_SNAPSHOT_IMAGE}" \
-    sh -ceu 'cp -R /snapshot/. /restore/'
-  test -f "${destination}/manifest.json"
-  echo "cursor-cloud: restored stack snapshot ${key} from image"
+build_local_stack_binaries() {
+  (
+    \cd "${WORKSPACE_ROOT}"
+    nix build "${WORKSPACE_ROOT}#local-stack-binaries" --out-link "${LOCAL_STACK_BINS}"
+  )
 }

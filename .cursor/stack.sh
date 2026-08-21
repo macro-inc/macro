@@ -3,23 +3,23 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# On-demand product stack. start.sh is infra-only so cargo-test agents do not
-# boot FusionAuth. Cargo, Bun, and BuildKit incrementally reconcile the checked
-# out branch against the durable main-build caches before services start.
+# On-demand product stack. Boot (start.sh) starts nothing; infra.sh brings up
+# dockerd and the databases first. After backend edits, rebuild the Nix
+# binaries, run `just stack down`, and rerun this script. `just stack update`
+# cannot write into the read-only Nix directory.
 
 # shellcheck source=cloud-lib.sh
 source "${SCRIPT_DIR}/cloud-lib.sh"
 
 if ! in_pinned_nix_shell; then
   ensure_nix_daemon
-  ensure_dockerd
   reenter_pinned_nix_shell "${SCRIPT_DIR}/stack.sh" "$@"
 fi
 
-/usr/bin/bash "${SCRIPT_DIR}/start.sh"
+/usr/bin/bash "${SCRIPT_DIR}/infra.sh"
 
-cd "${WORKSPACE_ROOT}"
-restore_stack_snapshot_image
-just stack up --no-doppler --build-aux-services
+\cd "${WORKSPACE_ROOT}"
+build_local_stack_binaries
+just stack up --no-doppler --build-aux-services --binaries-dir "${LOCAL_STACK_BINS}/bin"
 
 echo "cursor-cloud stack: app ready"

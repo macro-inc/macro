@@ -37,6 +37,7 @@ mod docs_check;
 mod path_validation;
 mod preview_fly;
 mod pulumi_preview_pr;
+mod push_local_stack_binaries;
 mod reusable_deploy_service;
 mod reusable_preview_service;
 mod runners;
@@ -49,7 +50,7 @@ mod web_artifact_paths;
 use std::fs;
 use std::path::PathBuf;
 
-use anyhow::{Context, Result, bail};
+use anyhow::{bail, Context, Result};
 use gh_workflow::Workflow;
 
 /// A generated workflow. `slug` is the snake_case source module (`<slug>.rs`)
@@ -231,6 +232,11 @@ const WORKFLOWS: &[WorkflowFile] = &[
         slug: "deploy_web_app",
         file_name: "deploy_web_app.yml",
         render_yaml: || render_patched(deploy_web_app::deploy_web_app, deploy_web_app::patch),
+    },
+    WorkflowFile {
+        slug: "push_local_stack_binaries",
+        file_name: "push_local_stack_binaries.yml",
+        render_yaml: || render_gh_workflow(push_local_stack_binaries::push_local_stack_binaries)(),
     },
     WorkflowFile {
         slug: "pulumi_preview_pr",
