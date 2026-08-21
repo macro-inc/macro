@@ -317,7 +317,7 @@ don't inject it directly into the error message.
 
 ## Cursor Cloud specific instructions
 
-`.cursor/install.sh` prepares the durable caches, databases, test dependencies, frontend dependencies, service binaries, and stack init snapshot. `.cursor/start.sh` runs at boot and starts nothing beyond the nix daemon, so sessions and subagents are usable immediately. `.cursor/infra.sh` starts Docker, Postgres, and Redis on demand. `.cursor/stack.sh` starts the on-demand product stack. `.cursor/rebuild.sh` rebuilds the stack after backend edits. These scripts are the only supported entry points; each re-enters the pinned nix shell itself, so run them with plain `bash` from any environment.
+`.cursor/install.sh` prepares the durable caches, databases, test dependencies, frontend dependencies, service binaries, and stack init snapshot, then stops dockerd and nix-daemon so the Cloud bake can exit. `.cursor/start.sh` runs at boot and starts nothing beyond the nix daemon, so sessions and subagents are usable immediately. `.cursor/infra.sh` starts Docker, Postgres, and Redis on demand. `.cursor/stack.sh` starts the on-demand product stack. `.cursor/rebuild.sh` rebuilds the stack after backend edits. These scripts are the only supported entry points; each re-enters the pinned nix shell itself, so run them with plain `bash` from any environment.
 
 Nix is the only host dependency. The pinned dev shell supplies the Docker CLI and daemon, Compose, `fuse-overlayfs`, and OpenSSH. `ssh-keygen` must come from this shell.
 

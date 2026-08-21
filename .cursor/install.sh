@@ -69,4 +69,8 @@ just stack up --infra-only --no-doppler --build-aux-services --binaries-dir "${L
 cleanup_stack
 trap - EXIT
 
+# Cursor waits for the install process tree to drain. Images, volumes, and
+# the Nix store stay on disk; start.sh / infra.sh bring the daemons back.
+stop_cloud_daemons
+
 echo "cursor-cloud install: durable stack ready"

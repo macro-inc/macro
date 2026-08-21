@@ -95,8 +95,8 @@ ensure_nix_daemon() {
       "AWS_SECRET_ACCESS_KEY=${NIX_CACHE_AWS_SECRET_ACCESS_KEY}"
     )
   fi
-  sudo setsid env "${daemon_env[@]}" "${NIX_BIN}" daemon \
-    >>"${LOG_DIR}/nix-daemon.log" 2>&1 </dev/null &
+  sudo setsid --fork env "${daemon_env[@]}" "${NIX_BIN}" daemon \
+    >>"${LOG_DIR}/nix-daemon.log" 2>&1 </dev/null
   local n=0
   while [ "${n}" -lt 30 ]; do
     if "${NIX_BIN}" ping-store >/dev/null 2>&1; then
@@ -167,8 +167,8 @@ ensure_dockerd() {
   # Disk snapshots preserve dead socket entries.
   sudo rm -f "${DOCKER_SOCK}"
   : >"${LOG_DIR}/dockerd.log"
-  sudo setsid env "PATH=${PATH}" "${dockerd_bin}" "${storage_args[@]}" \
-    >>"${LOG_DIR}/dockerd.log" 2>&1 </dev/null &
+  sudo setsid --fork env "PATH=${PATH}" "${dockerd_bin}" "${storage_args[@]}" \
+    >>"${LOG_DIR}/dockerd.log" 2>&1 </dev/null
   local n=0
   while [ "${n}" -lt 60 ]; do
     if [ -S "${DOCKER_SOCK}" ]; then
@@ -242,4 +242,33 @@ build_local_stack_binaries() {
     \cd "${WORKSPACE_ROOT}"
     "${NIX_BIN}" build "${WORKSPACE_ROOT}#local-stack-binaries" --out-link "${LOCAL_STACK_BINS}"
   )
+}
+
+stop_cloud_daemons() {
+  if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
+    local ids
+    ids="$(docker ps -aq 2>/dev/null || true)"
+    if [ -n "${ids}" ]; then
+      # shellcheck disable=SC2086
+      timeout --kill-after=5s 45s docker stop -t 5 ${ids} >/dev/null 2>&1 || true
+    fi
+  fi
+  sudo pkill -x dockerd >/dev/null 2>&1 || true
+  sudo pkill -x containerd >/dev/null 2>&1 || true
+  sudo pkill -x nix-daemon >/dev/null 2>&1 || true
+  sudo pkill -x determinate-nixd >/dev/null 2>&1 || true
+  local n=0
+  while sudo pgrep -x dockerd >/dev/null 2>&1 \
+    || sudo pgrep -x nix-daemon >/dev/null 2>&1 \
+    || sudo pgrep -x determinate-nixd >/dev/null 2>&1; do
+    n=$((n + 1))
+    if [ "${n}" -ge 15 ]; then
+      sudo pkill -9 -x dockerd >/dev/null 2>&1 || true
+      sudo pkill -9 -x containerd >/dev/null 2>&1 || true
+      sudo pkill -9 -x nix-daemon >/dev/null 2>&1 || true
+      sudo pkill -9 -x determinate-nixd >/dev/null 2>&1 || true
+      break
+    fi
+    sleep 1
+  done
 }
