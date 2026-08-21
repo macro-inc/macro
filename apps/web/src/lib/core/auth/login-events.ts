@@ -1,13 +1,14 @@
 import { createCrossTabBus } from '@core/cross-tab/cross-tab-bus';
-import { match, P } from 'ts-pattern';
+import { match } from 'ts-pattern';
 
 type LoginSuccessMessage = {
   type: 'login-success';
   /**
    * Publish time. Makes each payload unique so the bus's storage fallback
-   * fires (see `cross-tab-bus.ts`).
+   * fires (see `cross-tab-bus.ts`). Optional so payloads from tabs still on
+   * a pre-bus bundle, which omit it, parse.
    */
-  sentAt: number;
+  sentAt?: number;
 };
 
 const authBus = createCrossTabBus<LoginSuccessMessage>({
@@ -15,29 +16,15 @@ const authBus = createCrossTabBus<LoginSuccessMessage>({
   storageKey: 'macro.auth-login-success',
   parse: (value) =>
     match(value)
-      .with(
-        { type: 'login-success', sentAt: P.number },
-        ({ type, sentAt }) => ({
-          type,
-          sentAt,
-        })
-      )
+      .with({ type: 'login-success' }, ({ type }) => ({ type }))
       .otherwise(() => null),
 });
 
 /**
  * Announces a completed login to sibling tabs, e.g. from the login popup or
- * an email-link callback page, so an opener waiting on authentication can
- * proceed.
+ * an email-link callback page. Subscribe with `authBus` here if a waiter is
+ * ever needed; today the channel is publish-only.
  */
 export function publishLoginSuccess() {
   authBus.publish({ type: 'login-success', sentAt: Date.now() });
-}
-
-/**
- * Subscribes to login announcements originating in this tab or a sibling
- * (see `publishLoginSuccess`). Returns an unsubscribe function.
- */
-export function subscribeToLoginSuccess(handler: () => void) {
-  return authBus.subscribe(handler);
 }

@@ -9,9 +9,10 @@ type BadgeMessage = {
   hasBadge: boolean;
   /**
    * Publish time. Not read by subscribers; it makes each payload unique so
-   * the bus's storage fallback fires (see `cross-tab-bus.ts`).
+   * the bus's storage fallback fires (see `cross-tab-bus.ts`). Optional so
+   * payloads from tabs still on a pre-bus bundle, which omit it, parse.
    */
-  sentAt: number;
+  sentAt?: number;
 };
 
 const badgeBus = createCrossTabBus<BadgeMessage>({
@@ -19,13 +20,7 @@ const badgeBus = createCrossTabBus<BadgeMessage>({
   storageKey: 'macro.favicon-badge',
   parse: (value) =>
     match(value)
-      .with(
-        { hasBadge: P.boolean, sentAt: P.number },
-        ({ hasBadge, sentAt }) => ({
-          hasBadge,
-          sentAt,
-        })
-      )
+      .with({ hasBadge: P.boolean }, ({ hasBadge }) => ({ hasBadge }))
       .otherwise(() => null),
 });
 

@@ -1,4 +1,5 @@
 import { createCrossTabBus } from '@core/cross-tab/cross-tab-bus';
+import { evictOldest } from '@core/util/evictOldest';
 import { match, P } from 'ts-pattern';
 
 /**
@@ -210,23 +211,6 @@ function getLiveClaim(callId: string, now: number): TrackedClaim | undefined {
   return claim;
 }
 
-function rememberSilenced(callId: string) {
-  silencedCallIds.add(callId);
-  while (silencedCallIds.size > MAX_SILENCED_CALLS) {
-    const oldest = silencedCallIds.values().next().value;
-    if (oldest === undefined) break;
-    silencedCallIds.delete(oldest);
-  }
-}
-
-function boundTrackedClaims() {
-  while (trackedClaims.size > MAX_TRACKED_CALLS) {
-    const oldest = trackedClaims.keys().next().value;
-    if (oldest === undefined) break;
-    trackedClaims.delete(oldest);
-  }
-}
-
 function invokeCallback(callback: (() => void) | undefined, label: string) {
   try {
     callback?.();
@@ -244,7 +228,7 @@ function publishClaim(participation: Participation, now: number) {
     audible: claim.audible,
     lastSeenAt: now,
   });
-  boundTrackedClaims();
+  evictOldest(trackedClaims, MAX_TRACKED_CALLS);
   ringBus.publish({
     type: 'claim',
     callId: participation.callId,
@@ -344,7 +328,7 @@ function handleClaimMessage(message: RingClaimMessage) {
     compareClaims(incoming, existing) < 0
   ) {
     trackedClaims.set(message.callId, incoming);
-    boundTrackedClaims();
+    evictOldest(trackedClaims, MAX_TRACKED_CALLS);
   }
 
   const participation = participations.get(message.callId);
@@ -367,7 +351,8 @@ function handleClaimMessage(message: RingClaimMessage) {
 }
 
 function handleSilenceMessage(message: RingSilenceMessage) {
-  rememberSilenced(message.callId);
+  silencedCallIds.add(message.callId);
+  evictOldest(silencedCallIds, MAX_SILENCED_CALLS);
   const participation = participations.get(message.callId);
   if (participation) endParticipation(participation);
 }

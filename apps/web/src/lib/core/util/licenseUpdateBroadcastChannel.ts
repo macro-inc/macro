@@ -1,13 +1,14 @@
 import { createCrossTabBus } from '@core/cross-tab/cross-tab-bus';
-import { match, P } from 'ts-pattern';
+import { match } from 'ts-pattern';
 
 type LicenseUpdateMessage = {
   type: 'license-updated';
   /**
    * Publish time. Makes each payload unique so the bus's storage fallback
-   * fires (see `cross-tab-bus.ts`).
+   * fires (see `cross-tab-bus.ts`). Optional so payloads without it, from
+   * older bundles, still parse.
    */
-  sentAt: number;
+  sentAt?: number;
 };
 
 const licenseBus = createCrossTabBus<LicenseUpdateMessage>({
@@ -15,10 +16,7 @@ const licenseBus = createCrossTabBus<LicenseUpdateMessage>({
   storageKey: 'macro.license-update',
   parse: (value) =>
     match(value)
-      .with(
-        { type: 'license-updated', sentAt: P.number },
-        ({ type, sentAt }) => ({ type, sentAt })
-      )
+      .with({ type: 'license-updated' }, ({ type }) => ({ type }))
       .otherwise(() => null),
 });
 

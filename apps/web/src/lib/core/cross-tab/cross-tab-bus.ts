@@ -22,6 +22,8 @@
  * as a fresh timestamp, that makes every publish unique.
  */
 
+import { evictOldest } from '@core/util/evictOldest';
+
 const MAX_HANDLED_MESSAGE_KEYS = 100;
 
 export type CrossTabBus<TMessage> = {
@@ -63,10 +65,7 @@ export function createCrossTabBus<TMessage>(options: {
       const key = getMessageKey(message);
       if (handledMessageKeys.has(key)) return;
       handledMessageKeys.add(key);
-      if (handledMessageKeys.size > MAX_HANDLED_MESSAGE_KEYS) {
-        const oldestKey = handledMessageKeys.values().next().value;
-        if (oldestKey) handledMessageKeys.delete(oldestKey);
-      }
+      evictOldest(handledMessageKeys, MAX_HANDLED_MESSAGE_KEYS);
     }
 
     for (const handler of handlers) {
