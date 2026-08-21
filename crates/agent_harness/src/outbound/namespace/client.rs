@@ -9,6 +9,7 @@ use crate::domain::sandbox::SandboxResources;
 
 const COMPUTE_SERVICE: &str = "namespace.cloud.compute.v1beta.ComputeService";
 const COMMAND_SERVICE: &str = "namespace.cloud.compute.v1beta.CommandService";
+const REQUEST_TIMEOUT: Duration = Duration::from_secs(310);
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -179,7 +180,10 @@ impl NamespaceClient {
     #[must_use]
     pub fn new(api_url: String, token: NamespaceToken) -> Self {
         Self {
-            http: reqwest::Client::new(),
+            http: reqwest::Client::builder()
+                .timeout(REQUEST_TIMEOUT)
+                .build()
+                .expect("static Namespace HTTP client configuration should be valid"),
             base: api_url.trim_end_matches('/').to_owned(),
             token,
         }
@@ -316,9 +320,12 @@ impl NamespaceClient {
         B: Serialize + ?Sized,
     {
         let url = format!("{}/{service}/{method}", host.trim_end_matches('/'));
+        let mut trace_headers = reqwest::header::HeaderMap::new();
+        macro_tower_layers::inject_trace_headers(&mut trace_headers);
         let response = self
             .http
             .post(url)
+            .headers(trace_headers)
             .bearer_auth(self.token.expose())
             .json(body)
             .send()

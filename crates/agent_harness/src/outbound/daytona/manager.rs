@@ -8,6 +8,7 @@ use agent_session::domain::model::AgentSessionId;
 use futures::{StreamExt as _, stream};
 use tokio_tungstenite::tungstenite::client::IntoClientRequest;
 use tokio_util::{sync::CancellationToken, task::TaskTracker};
+use tracing::Instrument as _;
 
 use super::client::DaytonaClient;
 use super::errors::DaytonaError;
@@ -110,6 +111,12 @@ impl DaytonaContainerManager {
         }
     }
 
+    #[tracing::instrument(
+        name = "agent.container.boot",
+        err,
+        skip(self, id),
+        fields(agent.container.provider = "daytona", agent.container.id = id.as_str())
+    )]
     async fn bring_up(&self, id: &DaytonaSandboxId) -> Result<DaytonaContainer> {
         self.client
             .wait_for_started(id.as_str(), provision::ENSURE_TIMEOUT)
@@ -122,6 +129,7 @@ impl DaytonaContainerManager {
                 &provision::ensure_ready_command(),
                 provision::ENSURE_TIMEOUT,
             )
+            .instrument(tracing::info_span!("agent.container.ensure_ready"))
             .await
             .map_err(unavailable)?;
         tracing::info!(sandbox_id = %id.as_str(), %output, "readiness recipe finished");
@@ -139,7 +147,14 @@ impl DaytonaContainerManager {
             )
             .await
             .map_err(unavailable)?;
-        let socket = dial_sidecar(&preview).await.map_err(unavailable)?;
+        let socket = tokio::time::timeout(
+            provision::PING_TIMEOUT,
+            dial_sidecar(&preview)
+                .instrument(tracing::info_span!("agent.container.websocket_connect")),
+        )
+        .await
+        .map_err(|_| HarnessError::Container("sidecar WebSocket connection timed out".to_owned()))?
+        .map_err(unavailable)?;
         if !self.managed.containers.activate(id, Instant::now()) {
             return Err(HarnessError::Container(
                 "sandbox is no longer managed".to_owned(),
@@ -336,7 +351,12 @@ impl DaytonaContainerManager {
 impl ContainerManager for DaytonaContainerManager {
     type Transport = DaytonaContainer;
 
-    #[tracing::instrument(err, skip(self))]
+    #[tracing::instrument(
+        name = "agent.container.spawn",
+        err,
+        skip(self),
+        fields(agent.container.provider = "daytona")
+    )]
     async fn spawn(&self, command: SpawnContainer) -> Result<DaytonaContainer> {
         let SpawnContainer {
             session_id,

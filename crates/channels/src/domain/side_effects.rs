@@ -25,6 +25,8 @@ use macro_event_broker::{MacroEventBroker, NoopMacroEventBroker};
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use std::collections::HashSet;
 use tokio::sync::mpsc::UnboundedSender;
+use tokio_util::task::TaskTracker;
+use tracing::Instrument as _;
 use uuid::Uuid;
 
 /// Entity type used by message mentions that target a bot.
@@ -44,6 +46,8 @@ pub struct ChannelBotTrigger {
     /// Bots explicitly mentioned in the message that are active in the
     /// channel. Empty when the message mentions no bot.
     pub mentioned_bot_ids: Vec<BotId>,
+    /// Span that preserves the originating message context across the queue.
+    pub span: tracing::Span,
 }
 
 /// Sender for bot-trigger candidates derived from channel messages.
@@ -423,6 +427,11 @@ impl<C, R, N, K, B> ChannelSideEffectService<C, R, N, K, B> {
                     channel_id,
                     message: message.clone(),
                     mentioned_bot_ids: active_bot_mention_ids(mentions, participants),
+                    span: tracing::info_span!(
+                        "channel.bot_trigger",
+                        channel.id = %channel_id,
+                        channel.message.id = %message.id,
+                    ),
                 })
                 .is_err()
         {
@@ -439,12 +448,21 @@ impl<C, R, N, K, B> ChannelSideEffectService<C, R, N, K, B> {
 #[derive(Clone)]
 pub struct SpawnedChannelEventDispatcher<H> {
     handler: H,
+    tasks: TaskTracker,
 }
 
 impl<H> SpawnedChannelEventDispatcher<H> {
     /// Create a spawned event dispatcher.
     pub fn new(handler: H) -> Self {
-        Self { handler }
+        Self {
+            handler,
+            tasks: TaskTracker::new(),
+        }
+    }
+
+    /// Create a dispatcher whose tasks are owned by `tasks` for graceful shutdown.
+    pub fn with_task_tracker(handler: H, tasks: TaskTracker) -> Self {
+        Self { handler, tasks }
     }
 }
 
@@ -454,9 +472,12 @@ where
 {
     fn dispatch(&self, event: ChannelEvent) {
         let handler = self.handler.clone();
-        tokio::spawn(async move {
-            handler.handle(event).await;
-        });
+        self.tasks.spawn(
+            async move {
+                handler.handle(event).await;
+            }
+            .instrument(tracing::info_span!("channel.side_effects")),
+        );
     }
 }
 

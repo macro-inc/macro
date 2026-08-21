@@ -11,10 +11,10 @@ mod bots_directory;
 mod config;
 mod trigger;
 
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 
 use agent_fold::domain::service::FoldedMessageService;
-use agent_harness::domain::model::SessionDefaults;
+use agent_harness::domain::model::{HarnessCommand, SessionDefaults};
 use agent_harness::domain::service::AgentHarnessService;
 use agent_harness::inbound::kafka::{RoutedTrigger, route_agent_trigger};
 use agent_harness::inbound::runtime_gateway::RuntimeGatewayState;
@@ -47,7 +47,7 @@ use channels::outbound::pg_channels_repo::PgChannelsRepo;
 use channels::outbound::pg_side_effect_context::PgChannelSideEffectContext;
 use config::{Config, Environment};
 use connection_gateway_client::ConnectionGatewayClient;
-use kafka_util::{GroupName, KafkaEventConsumer};
+use kafka_util::{GroupName, KafkaEventConsumer, consumer_span};
 use lexical_client::LexicalClient;
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_authorization::{
@@ -63,6 +63,8 @@ use macro_service_urls::{ConnectionGatewayUrl, LexicalServiceUrl};
 use rdkafka::consumer::CommitMode;
 use rdkafka::message::{BorrowedMessage, Message as _};
 use sqlx::postgres::PgPoolOptions;
+use tokio_util::task::TaskTracker;
+use tracing::Instrument as _;
 
 /// Consumer group owning this harness's agent-session offsets.
 ///
@@ -87,9 +89,20 @@ fn commit_message(consumer: &HarnessConsumer, message: &BorrowedMessage<'_>) -> 
         .map_err(|error| anyhow::anyhow!("failed to commit agent session offset: {error:?}"))
 }
 
+fn record_span_error(span: &tracing::Span, error: &(impl std::fmt::Display + ?Sized)) {
+    span.record("otel.status_code", "ERROR");
+    span.record("otel.status_description", tracing::field::display(error));
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    MacroEntrypoint::default().init();
+    let entrypoint = MacroEntrypoint::default().init();
+    let result = run().await;
+    entrypoint.shutdown();
+    result
+}
+
+async fn run() -> anyhow::Result<()> {
     agent_harness::install_tls_provider();
     let config = Config::from_env()?;
     let bot_id = BotId::new_from_uuid(config.harness_bot_id);
@@ -125,6 +138,7 @@ async fn main() -> anyhow::Result<()> {
     .with_name_generator(HaikuAgentSessionNameGenerator::new(ai_usage::pg_recorder(
         pool.clone(),
     )));
+    let session_runtime = sessions.clone();
 
     // Containers: local Docker when a developer has opted in, Daytona otherwise.
     let containers = if config.dev_dangerous_local_containers {
@@ -178,10 +192,11 @@ async fn main() -> anyhow::Result<()> {
             macro_queues::ContactsQueue::new().to_string(),
         ),
     });
+    let broker_tasks = TaskTracker::new();
     let broker = MacroEventBrokerService::new(
         KafkaEventPublisher::new(config.kafka_brokers.as_ref())
             .context("failed to create kafka event publisher")?,
-        macro_event_broker::GlobalSpawner,
+        broker_tasks.clone(),
     );
     let side_effects = ChannelSideEffectService::new(
         PgChannelSideEffectContext::new(pool.clone()),
@@ -190,9 +205,13 @@ async fn main() -> anyhow::Result<()> {
         ContactsChannelDispatcher::new(contacts_ingress),
     )
     .with_macro_event_broker(broker);
+    let channel_side_effect_tasks = TaskTracker::new();
     let channel_service = Arc::new(ChannelServiceImpl::with_dependencies(
         PgChannelsRepo::new(pool.clone()),
-        SpawnedChannelEventDispatcher::new(side_effects),
+        SpawnedChannelEventDispatcher::with_task_tracker(
+            side_effects,
+            channel_side_effect_tasks.clone(),
+        ),
         channels::domain::service::NoopChannelReferenceSharePermissions,
     ));
     let announcer = ChannelAnnouncer::new(
@@ -334,10 +353,12 @@ async fn main() -> anyhow::Result<()> {
                         continue;
                     }
                 };
+                let span = consumer_span(message.inner(), AgentHarnessConsumerGroup::GROUP_NAME);
                 let kafka_message = message.inner();
                 let event = match message.decode_payload() {
                     Ok(DeclaredMacroEvent::AgentSessionMacroEvent(event)) => event,
                     Err(error) => {
+                        record_span_error(&span, &error);
                         tracing::error!(
                             error = ?error,
                             partition = kafka_message.partition(),
@@ -353,6 +374,7 @@ async fn main() -> anyhow::Result<()> {
                         }
                     }
                 };
+                span.record("macro.event.id", tracing::field::display(event.event().event_id));
 
                 let routed = match route_agent_trigger(event.event().event.clone(), bot_id) {
                     Ok(routed) => routed,
@@ -367,7 +389,6 @@ async fn main() -> anyhow::Result<()> {
                         }
                     }
                 };
-
                 // Intentionally at-most-once: keep ingestion simple and never
                 // let concurrent task completion commit Kafka offsets out of order.
                 if let Err(error) = commit_message(&consumer, kafka_message) {
@@ -376,22 +397,36 @@ async fn main() -> anyhow::Result<()> {
                 }
                 match routed {
                     RoutedTrigger::Command(session_id, command) => {
+                        span.record("agent.session.id", tracing::field::display(session_id));
+                        span.record("macro.event.type", match &command {
+                            HarnessCommand::Open(_) => "agent_trigger.new",
+                            HarnessCommand::Deliver(_) => "agent_trigger.existing",
+                            HarnessCommand::Delete => "agent_trigger.delete",
+                        });
                         let execution = harness.execute(session_id, command);
                         tasks.spawn(async move {
-                            match execution.await {
+                            match execution.instrument(span.clone()).await {
                                 Ok(()) => tracing::info!(%session_id, "executed an agent harness command"),
                                 Err(error) => {
+                                    record_span_error(&span, &error);
                                     tracing::error!(error = ?error, %session_id, "failed to execute an agent harness command");
                                 }
                             }
                         });
                     }
                     RoutedTrigger::Announce(session_id, prompt) => {
+                        span.record("agent.session.id", tracing::field::display(session_id));
+                        span.record("macro.event.type", "agent_trigger.announce");
                         let harness = harness.clone();
                         tasks.spawn(async move {
-                            match harness.announce_external_prompt(session_id, prompt).await {
+                            match harness
+                                .announce_external_prompt(session_id, prompt)
+                                .instrument(span.clone())
+                                .await
+                            {
                                 Ok(()) => tracing::info!(%session_id, "announced an external prompt"),
                                 Err(error) => {
+                                    record_span_error(&span, &error);
                                     tracing::error!(error = ?error, %session_id, "failed to announce an external prompt");
                                 }
                             }
@@ -409,12 +444,56 @@ async fn main() -> anyhow::Result<()> {
 
     http.abort();
     trigger.abort();
+
+    // Sandboxes go first so in-flight commands fail fast rather than block the
+    // drains below on a transport that is never going to answer.
     container_shutdown.shutdown_all().await;
 
-    while let Some(result) = tasks.join_next().await {
-        if let Err(error) = result {
-            tracing::error!(error = ?error, "agent harness task failed during shutdown");
+    let drain_tasks = async {
+        while let Some(result) = tasks.join_next().await {
+            if let Err(error) = result {
+                tracing::error!(error = ?error, "agent harness task failed during shutdown");
+            }
         }
+    };
+    if tokio::time::timeout(TASK_DRAIN_TIMEOUT, drain_tasks)
+        .await
+        .is_err()
+    {
+        tracing::warn!(
+            timeout_seconds = TASK_DRAIN_TIMEOUT.as_secs(),
+            "timed out waiting for agent harness commands to drain"
+        );
+    }
+
+    if tokio::time::timeout(TASK_DRAIN_TIMEOUT, session_runtime.shutdown())
+        .await
+        .is_err()
+    {
+        tracing::warn!(
+            timeout_seconds = TASK_DRAIN_TIMEOUT.as_secs(),
+            "timed out waiting for agent sessions to shut down"
+        );
+    }
+    channel_side_effect_tasks.close();
+    if tokio::time::timeout(TASK_DRAIN_TIMEOUT, channel_side_effect_tasks.wait())
+        .await
+        .is_err()
+    {
+        tracing::warn!(
+            timeout_seconds = TASK_DRAIN_TIMEOUT.as_secs(),
+            "timed out waiting for channel side effects to drain"
+        );
+    }
+    broker_tasks.close();
+    if tokio::time::timeout(TASK_DRAIN_TIMEOUT, broker_tasks.wait())
+        .await
+        .is_err()
+    {
+        tracing::warn!(
+            timeout_seconds = TASK_DRAIN_TIMEOUT.as_secs(),
+            "timed out waiting for event broker publishes to drain"
+        );
     }
 
     let stop_failures = container_shutdown.shutdown_all().await;
@@ -427,3 +506,5 @@ async fn main() -> anyhow::Result<()> {
         None => Ok(()),
     }
 }
+
+const TASK_DRAIN_TIMEOUT: Duration = Duration::from_secs(30);

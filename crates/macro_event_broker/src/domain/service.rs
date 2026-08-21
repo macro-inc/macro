@@ -89,7 +89,6 @@ impl<P: EventPublisher, S: Spawner> MacroEventBrokerService<P, S> {
 }
 
 impl<P: EventPublisher, S: Spawner> MacroEventBroker for MacroEventBrokerService<P, S> {
-    #[tracing::instrument(err, skip(self, event), fields(topic = event.topic(), key = %event.key()))]
     fn send_event<E: MacroEvent + ?Sized>(
         &self,
         event: &E,
@@ -117,7 +116,6 @@ impl<P: EventPublisher, S: Spawner> MacroEventBroker for MacroEventBrokerService
                     tracing::error!(
                         error = ?error,
                         topic,
-                        key = %key,
                         "failed to publish event",
                     );
                 })
