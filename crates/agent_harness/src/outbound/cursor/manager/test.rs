@@ -384,7 +384,6 @@ async fn spawning_and_prompting_records_the_minted_agent() {
         .spawn(SpawnContainer {
             session_id,
             kind: AgentKind::Cursor,
-            repo_url: "https://github.com/macro-inc/macro".to_owned(),
             size: SandboxSize::Default,
             egress: test_egress(),
         })
@@ -620,7 +619,6 @@ async fn an_idle_pipe_is_shut_down() {
         .spawn(SpawnContainer {
             session_id: AgentSessionId::new(),
             kind: AgentKind::Cursor,
-            repo_url: "https://github.com/macro-inc/macro".to_owned(),
             size: SandboxSize::Default,
             egress: test_egress(),
         })
@@ -689,7 +687,6 @@ async fn spawning_without_a_registered_key_says_so() {
         .spawn(SpawnContainer {
             session_id: AgentSessionId::new(),
             kind: AgentKind::Cursor,
-            repo_url: "https://github.com/macro-inc/macro".to_owned(),
             size: SandboxSize::Default,
             egress: test_egress(),
         })

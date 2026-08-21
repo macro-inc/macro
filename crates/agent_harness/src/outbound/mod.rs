@@ -10,7 +10,6 @@ pub mod daytona;
 pub mod egress;
 pub mod local;
 pub(crate) mod managed_containers;
-pub mod namespace;
 pub(crate) mod provision;
 pub mod routing;
 pub mod runtime_registry;

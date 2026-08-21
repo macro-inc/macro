@@ -193,7 +193,6 @@ fn spawn_for(kind: AgentKind) -> SpawnContainer {
     SpawnContainer {
         session_id: AgentSessionId::new(),
         kind,
-        repo_url: "https://github.com/macro-inc/macro".to_owned(),
         size: SandboxSize::Default,
         egress: test_egress(),
     }

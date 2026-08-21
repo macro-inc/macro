@@ -230,11 +230,13 @@ pub struct SpawnContainer {
     /// thing spawn ever consumed the bot for; resume and teardown re-derive
     /// the same kind from the session row's bot.
     pub kind: AgentKind,
-    /// Repository cloned into the container workspace.
-    pub repo_url: String,
     /// Compute tier to request from the provider.
     pub size: SandboxSize,
     /// How the sandbox reaches anything outside itself.
+    ///
+    /// Carries the repository implicitly: the sandbox clones from the proxy,
+    /// which reads the repository off the session's own grant, so no provider
+    /// needs to be told what it is.
     pub egress: SandboxEgress,
 }
 
@@ -259,10 +261,9 @@ pub struct SandboxEgress {
 /// Where the sandbox finds the egress proxy.
 ///
 /// Named here rather than written inline because the name is shared knowledge
-/// with the container: `container/ensure_ready.sh` will read it when the
-/// sandbox's git clone moves onto the proxy. It does not yet - that is a later
-/// step - so unlike `provision::SIDECAR_PORT`, which the script does read and a
-/// test holds to agreement, there is nothing here to assert against.
+/// with the container: `container/ensure_ready.sh` reads it to build the git
+/// remote it clones from. Like `provision::SIDECAR_PORT`, the agreement between
+/// the two is held by a test rather than by comment.
 pub const EGRESS_URL_VARIABLE: &str = "MACRO_EGRESS_URL";
 
 /// The session token the sandbox presents on every proxied call. Shared with

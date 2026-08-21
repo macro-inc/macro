@@ -437,7 +437,6 @@ where
             .spawn(SpawnContainer {
                 session_id: session.id,
                 kind: AgentKind::of(session.bot_id),
-                repo_url: defaults.repo_url.clone(),
                 size: sandbox_size,
                 egress: egress.sandbox,
             })
@@ -680,7 +679,6 @@ where
             .spawn(SpawnContainer {
                 session_id,
                 kind: AgentKind::of(bot_id),
-                repo_url,
                 size: sandbox_size,
                 egress: egress.sandbox,
             })
