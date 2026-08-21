@@ -510,7 +510,7 @@ describe('worker CacheHost coordinator integration', () => {
     host.dispose();
   });
 
-  it('keeps API forwarding at zero when pagehide abandons an admitted enqueue', async () => {
+  it('keeps API forwarding at zero and preserves scope when pagehide abandons an admitted enqueue', async () => {
     const gate = deferred();
     enqueueGates.set('HoldPagehide', gate.promise);
     localStorage.setItem('graphql-cache:scope', 'integration-scope');
@@ -536,10 +536,8 @@ describe('worker CacheHost coordinator integration', () => {
     expect(results[0]?.error?.networkError).toMatchObject({
       errorCode: 'admitted-enqueue-uncertain',
     });
-    await vi.waitFor(() =>
-      expect(localStorage.getItem('graphql-cache:scope')).toBe(
-        'quarantine:integration-scope'
-      )
+    expect(localStorage.getItem('graphql-cache:scope')).toBe(
+      'integration-scope'
     );
   });
 

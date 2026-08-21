@@ -116,6 +116,7 @@ export const CACHE_OWNER_EVENTS = [
   'activated',
   'graceful-drain-started',
   'graceful-drain-completed',
+  'navigation-departure',
   'abrupt-loss',
   'replacement',
   'multiple-owner-detected',

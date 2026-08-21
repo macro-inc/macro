@@ -188,6 +188,13 @@ describe('coordinator runtime protocol', () => {
     },
     {
       ...version,
+      kind: 'navigation-departure',
+      tabId: 'tab',
+      ownerEpoch: 1,
+      reason: 'pagehide',
+    },
+    {
+      ...version,
       kind: 'engine-lost',
       tabId: 'tab',
       ownerEpoch: 1,

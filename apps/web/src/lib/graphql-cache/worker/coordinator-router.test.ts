@@ -408,6 +408,96 @@ describe('CoordinatorRouter', () => {
     expect(tabA.closed).toBe(true);
   });
 
+  it('elects open-existing after an owner navigation departure', async () => {
+    const observations: Array<Record<string, unknown>> = [];
+    const router = new CoordinatorRouter({
+      verifyTabLockHeld: async () => true,
+      watchTabLock: () => () => {},
+      telemetry: {
+        record: (observation) => observations.push(observation),
+        flush: vi.fn(),
+      },
+    });
+    const tabA = new FakePort();
+    const tabB = new FakePort();
+    await register(router, tabA, 'tab-a');
+    await register(router, tabB, 'tab-b');
+    const engine = new FakePort();
+    await attach(router, tabA, 'tab-a', 1, engine);
+    ready(engine, 'tab-a', 1, 'opened-existing');
+
+    await router.handleTabMessage(tabA as CoordinatorMessagePort, {
+      ...version,
+      kind: 'navigation-departure',
+      tabId: 'tab-a',
+      ownerEpoch: 1,
+      reason: 'pagehide',
+    });
+
+    expect(messagesOfKind(tabB, 'become-owner')).toContainEqual(
+      expect.objectContaining({
+        ownerEpoch: 2,
+        databaseAction: 'open-existing',
+      })
+    );
+    expect(messagesOfKind(tabA, 'terminate-engine')).toHaveLength(0);
+    expect(tabA.closed).toBe(true);
+    expect(observations).toContainEqual(
+      expect.objectContaining({
+        name: 'graphql_cache.owner',
+        outcome: 'graceful',
+        ownerEvent: 'navigation-departure',
+      })
+    );
+    expect(observations).not.toContainEqual(
+      expect.objectContaining({
+        name: 'graphql_cache.storage_reset_required',
+      })
+    );
+  });
+
+  it('retains wipe-before-open when a recovery owner navigates during activation', async () => {
+    const router = new CoordinatorRouter({
+      verifyTabLockHeld: async () => true,
+      watchTabLock: () => () => {},
+    });
+    const tabA = new FakePort();
+    const tabB = new FakePort();
+    await register(router, tabA, 'tab-a');
+    await register(router, tabB, 'tab-b');
+    const engine = new FakePort();
+    await attach(router, tabA, 'tab-a', 1, engine);
+    ready(engine, 'tab-a', 1, 'opened-existing');
+    await router.handleTabMessage(tabA as CoordinatorMessagePort, {
+      ...version,
+      kind: 'engine-lost',
+      tabId: 'tab-a',
+      ownerEpoch: 1,
+      reason: 'engine failed',
+    });
+    expect(messagesOfKind(tabB, 'become-owner')).toContainEqual(
+      expect.objectContaining({
+        ownerEpoch: 2,
+        databaseAction: 'wipe-before-open',
+      })
+    );
+
+    await router.handleTabMessage(tabB as CoordinatorMessagePort, {
+      ...version,
+      kind: 'navigation-departure',
+      tabId: 'tab-b',
+      ownerEpoch: 2,
+      reason: 'pagehide during recovery',
+    });
+
+    expect(messagesOfKind(tabA, 'become-owner')).toContainEqual(
+      expect.objectContaining({
+        ownerEpoch: 3,
+        databaseAction: 'wipe-before-open',
+      })
+    );
+  });
+
   it('counts an unknown response with the current direct-route tuple as stale', async () => {
     const router = new CoordinatorRouter({
       verifyTabLockHeld: async () => true,

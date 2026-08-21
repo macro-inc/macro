@@ -570,11 +570,24 @@ describe('CacheCoordinatorPageAdapter', () => {
   });
 
   it.each([
-    { graceful: true, throwKind: 'graceful-departure' },
-    { graceful: false, throwKind: 'disconnect-tab' },
+    {
+      graceful: true,
+      preserveDatabase: false,
+      throwKind: 'graceful-departure',
+    },
+    {
+      graceful: false,
+      preserveDatabase: false,
+      throwKind: 'disconnect-tab',
+    },
+    {
+      graceful: false,
+      preserveDatabase: true,
+      throwKind: 'navigation-departure',
+    },
   ])(
-    'settles $graceful disposal when $throwKind send throws',
-    async ({ graceful, throwKind }) => {
+    'settles disposal when $throwKind send throws',
+    async ({ graceful, preserveDatabase, throwKind }) => {
       const coordinatorPort = new FakeCoordinatorPort();
       const worker = new FakeWorker();
       const terminalErrors: string[] = [];
@@ -599,7 +612,7 @@ describe('CacheCoordinatorPageAdapter', () => {
       coordinatorPort.receive(election(1));
       coordinatorPort.throwKinds.add(throwKind);
 
-      await adapter.dispose({ graceful });
+      await adapter.dispose({ graceful, preserveDatabase });
 
       expect(worker.terminated).toBe(true);
       expect(coordinatorPort.closed).toBe(true);
@@ -746,7 +759,7 @@ describe('CacheCoordinatorPageAdapter', () => {
     ]);
   });
 
-  it('escalates an owner graceful drain to abrupt disposal on pagehide', async () => {
+  it('escalates an owner graceful drain to storage-preserving navigation disposal', async () => {
     const coordinatorPort = new FakeCoordinatorPort();
     const worker = new FakeWorker();
     const adapter = createCacheCoordinatorPageAdapter({
@@ -766,15 +779,23 @@ describe('CacheCoordinatorPageAdapter', () => {
 
     const graceful = adapter.dispose({ graceful: true });
     expect(worker.terminated).toBe(false);
-    const abrupt = adapter.dispose({ graceful: false });
-    expect(abrupt).toBe(graceful);
-    await abrupt;
+    const navigation = adapter.dispose({
+      graceful: false,
+      preserveDatabase: true,
+    });
+    expect(navigation).toBe(graceful);
+    await navigation;
 
     expect(worker.terminated).toBe(true);
     expect(coordinatorPort.closed).toBe(true);
     expect(
-      coordinatorPort.events.filter((event) => event === 'post:disconnect-tab')
+      coordinatorPort.events.filter(
+        (event) => event === 'post:navigation-departure'
+      )
     ).toHaveLength(1);
+    expect(
+      coordinatorPort.events.filter((event) => event === 'post:disconnect-tab')
+    ).toHaveLength(0);
   });
 
   it('terminal-fails when the owned engine crashes during graceful drain', async () => {

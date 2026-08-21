@@ -1148,7 +1148,10 @@ describe('createWorkerCacheHost', () => {
     expect(adapter.dispose).toHaveBeenCalledWith({ graceful: true });
     dispatchEvent(new Event('pagehide'));
 
-    expect(adapter.dispose).toHaveBeenNthCalledWith(2, { graceful: false });
+    expect(adapter.dispose).toHaveBeenNthCalledWith(2, {
+      graceful: false,
+      preserveDatabase: true,
+    });
     finishRetirement();
     await retirement;
     await expect(host.clear()).rejects.toThrow(
@@ -1258,7 +1261,7 @@ describe('createWorkerCacheHost', () => {
     await draining;
   });
 
-  it('treats pagehide as uncertain for an admitted enqueue and quarantines its scope', async () => {
+  it('treats pagehide enqueue as uncertain without quarantining persistent storage', async () => {
     configureAdapter = (fake) => {
       fake.ignoredKinds.add('enqueue-optimistic-mutation');
     };
@@ -1271,7 +1274,7 @@ describe('createWorkerCacheHost', () => {
       { owner: 'runner', nowMs: 1, leaseExpiresAtMs: 101 }
     );
     const rejected = expect(mutation).rejects.toMatchObject({
-      message: expect.stringContaining('abruptly disposed'),
+      message: expect.stringContaining('disposed for page navigation'),
       errorCode: 'admitted-enqueue-uncertain',
     });
     await vi.waitFor(() =>
@@ -1288,11 +1291,10 @@ describe('createWorkerCacheHost', () => {
     await rejected;
 
     expect(adapter.dispose).toHaveBeenCalledOnce();
-    expect(adapter.dispose).toHaveBeenCalledWith({ graceful: false });
-    await vi.waitFor(() =>
-      expect(localStorage.getItem('graphql-cache:scope')).toBe(
-        'quarantine:scope-1'
-      )
-    );
+    expect(adapter.dispose).toHaveBeenCalledWith({
+      graceful: false,
+      preserveDatabase: true,
+    });
+    expect(localStorage.getItem('graphql-cache:scope')).toBe('scope-1');
   });
 });

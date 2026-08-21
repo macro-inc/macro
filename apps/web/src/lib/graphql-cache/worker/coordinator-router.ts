@@ -295,6 +295,9 @@ export class CoordinatorRouter {
           core.beginGracefulDeparture(tabId, message.ownerEpoch)
         );
         break;
+      case 'navigation-departure':
+        this.departForNavigation(tabId, message.ownerEpoch, message.reason);
+        break;
       case 'engine-lost':
         this.failOwner(tabId, message.ownerEpoch, message.reason);
         break;
@@ -869,6 +872,55 @@ export class CoordinatorRouter {
       });
     }
     this.postTerminateEngine(tabId, ownerEpoch, reason);
+    this.clearEngineWatchdogs();
+    this.applyActions(actions);
+  }
+
+  private departForNavigation(
+    tabId: string,
+    ownerEpoch: number,
+    reason: string
+  ): void {
+    const core = this.coreValue;
+    if (!core) return;
+    const state = core.state;
+    const isCurrentOwner =
+      state.kind !== 'waiting-for-tab' &&
+      state.kind !== 'resetting-after-loss' &&
+      state.tabId === tabId &&
+      state.ownerEpoch === ownerEpoch;
+    const actions = core.departForNavigation(tabId, ownerEpoch, reason);
+    if (!isCurrentOwner) {
+      this.applyActions(actions);
+      return;
+    }
+
+    this.activationStarted.delete(ownerEpoch);
+    const interruptedResetReason =
+      state.kind === 'activating' && state.databaseAction === 'wipe-before-open'
+        ? this.pendingRecoveryResetEpochs.get(ownerEpoch)
+        : undefined;
+    if (interruptedResetReason !== undefined) {
+      this.pendingRecoveryResetEpochs.delete(ownerEpoch);
+      this.nextRecoveryResetReason = interruptedResetReason;
+    }
+    this.telemetry.record({
+      name: 'graphql_cache.owner',
+      operationCategory: 'lifecycle',
+      outcome: 'graceful',
+      ownerEvent: 'navigation-departure',
+    });
+    for (const [routeId, timing] of this.routeStarted) {
+      if (timing.ownerEpoch !== ownerEpoch) continue;
+      this.routeStarted.delete(routeId);
+      this.telemetry.record({
+        name: 'graphql_cache.coordinator_request',
+        operationCategory: timing.category,
+        outcome: 'error',
+        errorCode: 'owner-lost',
+        durationMs: this.now() - timing.startedAt,
+      });
+    }
     this.clearEngineWatchdogs();
     this.applyActions(actions);
   }

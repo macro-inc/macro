@@ -66,6 +66,13 @@ export type TabToCoordinatorEnvelope =
     }
   | {
       coordinatorVersion: 2;
+      kind: 'navigation-departure';
+      tabId: string;
+      ownerEpoch: OwnerEpoch;
+      reason: string;
+    }
+  | {
+      coordinatorVersion: 2;
       kind: 'engine-lost';
       tabId: string;
       ownerEpoch: OwnerEpoch;
@@ -655,6 +662,21 @@ export function validateTabToCoordinatorEnvelope(
           'ownerEpoch',
         ]) &&
         isPositiveInteger(value.ownerEpoch)
+      ) {
+        return pass(value as TabToCoordinatorEnvelope);
+      }
+      break;
+    case 'navigation-departure':
+      if (
+        hasOnlyKeys(value, [
+          'coordinatorVersion',
+          'kind',
+          'tabId',
+          'ownerEpoch',
+          'reason',
+        ]) &&
+        isPositiveInteger(value.ownerEpoch) &&
+        isNonEmptyString(value.reason)
       ) {
         return pass(value as TabToCoordinatorEnvelope);
       }

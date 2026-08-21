@@ -55,6 +55,8 @@ export interface CacheCoordinatorPageAdapterOptions {
 
 export interface PageAdapterDisposeOptions {
   graceful?: boolean;
+  /** Preserve OPFS when a normal page navigation cannot await a drain. */
+  preserveDatabase?: boolean;
 }
 
 const DEFAULT_GRACEFUL_TIMEOUT_MS = 10_000;
@@ -113,7 +115,7 @@ export class CacheCoordinatorPageAdapter {
   private disposePromise: Promise<void> | undefined;
   private resolveDispose: (() => void) | undefined;
   private gracefulTimeout: ReturnType<typeof setTimeout> | undefined;
-  private disposeMode: 'graceful' | 'abrupt' | undefined;
+  private disposeMode: 'graceful' | 'navigation' | 'abrupt' | undefined;
   private pagehideRegistered = false;
   private terminalErrorReported = false;
   private readonly terminatedOwnerEpochs = new Set<number>();
@@ -197,13 +199,21 @@ export class CacheCoordinatorPageAdapter {
     );
   }
 
-  /** Gracefully drains an owned engine, or immediately drops a standby tab. */
+  /** Drains gracefully, preserves storage for navigation, or drops abruptly. */
   dispose(options: PageAdapterDisposeOptions = {}): Promise<void> {
     const graceful = options.graceful === true;
+    const preserveDatabase = !graceful && options.preserveDatabase === true;
     if (this.disposePromise) {
       if (!graceful && this.disposeMode === 'graceful' && !this.closed) {
-        this.disposeMode = 'abrupt';
-        this.abortDispose('pagehide interrupted graceful page disposal');
+        if (preserveDatabase) {
+          this.disposeMode = 'navigation';
+          this.departForNavigation(
+            'page navigation interrupted graceful page disposal'
+          );
+        } else {
+          this.disposeMode = 'abrupt';
+          this.abortDispose('pagehide interrupted graceful page disposal');
+        }
       }
       return this.disposePromise;
     }
@@ -225,7 +235,10 @@ export class CacheCoordinatorPageAdapter {
       return this.disposePromise;
     }
 
-    if (graceful && this.ownerEpoch !== undefined) {
+    if (preserveDatabase) {
+      this.disposeMode = 'navigation';
+      this.departForNavigation('page navigation');
+    } else if (graceful && this.ownerEpoch !== undefined) {
       this.disposeMode = 'graceful';
       const ownerEpoch = this.ownerEpoch;
       if (
@@ -260,6 +273,33 @@ export class CacheCoordinatorPageAdapter {
       this.abortDispose('page disposed without graceful drain');
     }
     return this.disposePromise;
+  }
+
+  private departForNavigation(reason: string): void {
+    this.clearGracefulTimeout();
+    const ownerEpoch = this.ownerEpoch;
+    if (ownerEpoch !== undefined) {
+      this.terminateEngine(ownerEpoch, reason, false);
+      if (!this.closed) {
+        this.postCoordinator(
+          withVersion<TabToCoordinatorEnvelope>({
+            kind: 'navigation-departure',
+            tabId: this.tabId,
+            ownerEpoch,
+            reason,
+          })
+        );
+      }
+    } else if (!this.closed) {
+      this.postCoordinator(
+        withVersion<TabToCoordinatorEnvelope>({
+          kind: 'disconnect-tab',
+          tabId: this.tabId,
+          reason,
+        })
+      );
+    }
+    this.finishDispose();
   }
 
   private abortDispose(reason: string): void {
@@ -652,7 +692,7 @@ export class CacheCoordinatorPageAdapter {
     addEventListener(
       'pagehide',
       () => {
-        void this.dispose({ graceful: false });
+        void this.dispose({ graceful: false, preserveDatabase: true });
       },
       { once: true }
     );

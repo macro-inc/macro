@@ -186,8 +186,12 @@ message-loop fibers, typed transport failures, and close framing. The elected
 engine also tracks every admitted request in a scoped `FiberSet`; graceful
 drain waits for that set to empty before closing the core, runner, and worker.
 The cache's validated envelopes, request ids, Web Locks, owner epochs,
-heartbeats, and replay policy remain application-owned. Browsers missing the required
-worker, lock, or OPFS capabilities use a storage-free no-op cache host. Tauri
+heartbeats, and replay policy remain application-owned. A normal `pagehide`
+uses a fenced navigation-departure message: the page terminates its dedicated
+worker, but the next owner opens the existing OPFS database. Only an
+unannounced liveness, heartbeat, transport, or engine failure selects
+`wipe-before-open`. Browsers missing the required worker, lock, or OPFS
+capabilities use a storage-free no-op cache host. Tauri
 detection selects the native transport before browser capability checks. All
 paths remain behind the same `CacheHost` interface.
 
