@@ -8,8 +8,8 @@ export function evictOldest<K>(
   maxSize: number
 ) {
   while (collection.size > maxSize) {
-    const oldest = collection.keys().next().value;
-    if (oldest === undefined) break;
-    collection.delete(oldest);
+    const next = collection.keys().next();
+    if (next.done) break;
+    collection.delete(next.value);
   }
 }

@@ -5,8 +5,10 @@ type LicenseUpdateMessage = {
   type: 'license-updated';
   /**
    * Publish time. Makes each payload unique so the bus's storage fallback
-   * fires (see `cross-tab-bus.ts`). Optional so payloads without it, from
-   * older bundles, still parse.
+   * fires (see `cross-tab-bus.ts`). Optional only for consistency with the
+   * other buses — this channel had no publishers before the bus migration
+   * (the legacy string interface was never called), so unlike the favicon
+   * and login-success buses there is no older payload shape to accept.
    */
   sentAt?: number;
 };
