@@ -2,6 +2,7 @@
 
 use crate::domain::service::PropertiesService;
 use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
+use ai_toolset::{ToolAnnotated, ToolAnnotations};
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use entity_access::domain::models::EditAccessLevel;
@@ -188,6 +189,10 @@ impl SetEntityProperty {
 pub struct SetEntityPropertyResponse {
     pub success: bool,
     pub message: String,
+}
+
+impl ToolAnnotated for SetEntityProperty {
+    const ANNOTATIONS: ToolAnnotations = ToolAnnotations::destructive("Set entity property");
 }
 
 #[async_trait]

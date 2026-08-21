@@ -3,7 +3,7 @@ import { cn } from '../utils/classname';
 import { Layer } from './Layer';
 
 export type SurfaceProps = Omit<JSX.HTMLAttributes<HTMLDivElement>, 'style'> & {
-  depth?: 0 | 1 | 2 | 3 | 4 | 5;
+  depth?: 0 | 1 | 2 | 3 | 4;
   style?: JSX.CSSProperties;
   edgeColor?: string;
   highlightColor?: string;
@@ -29,11 +29,11 @@ export function Surface(props: SurfaceProps) {
     const base: JSX.CSSProperties = {};
 
     if (!local.hideBorder) {
-      base.border = `var(--app-border-width, 0.5px) solid ${local.edgeColor ?? 'var(--b4)'}`;
+      base.border = `var(--app-border-width, 0.5px) solid ${local.edgeColor ?? 'var(--color-edge)'}`;
     }
 
     if (local.active) {
-      const ring = local.highlightColor ?? 'var(--b4)';
+      const ring = local.highlightColor ?? 'var(--color-edge)';
       base['box-shadow'] =
         `0 0 0 2px color-mix(in srgb, ${ring} 60%, transparent)`;
     }
@@ -46,7 +46,7 @@ export function Surface(props: SurfaceProps) {
       <div
         style={style()}
         class={cn(
-          'relative rounded-md overflow-clip min-h-0 size-full bg-(--b0)',
+          'relative rounded-md overflow-clip min-h-0 size-full bg-surface',
           local.class
         )}
         {...rest}
@@ -56,9 +56,3 @@ export function Surface(props: SurfaceProps) {
     </Layer>
   );
 }
-
-/*
-shadow sudo element
-"after:content-[''] after:absolute after:inset-0 after:pointer-events-none after:rounded-[inherit] after:z-10",
-'after:shadow-[inset_0_0_4px_var(--color-shadow)]'"
-*/

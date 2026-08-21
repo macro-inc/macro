@@ -5,6 +5,7 @@ publish = false
 version = "0.1.0"
 
 [dependencies]
+agent_fold = { path = "../agent_fold", default-features = false }
 anyhow = { workspace = true }
 models_search = { path = "../models_search" }
 reqwest = { workspace = true }

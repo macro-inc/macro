@@ -185,6 +185,36 @@ fn search_event_constructors_use_the_document_key_and_schema_v1() {
 }
 
 #[test]
+fn created_events_without_attribution_still_decode() {
+    let payload = json!({
+        "event_id": "00000000-0000-0000-0000-000000000005",
+        "schema_version": 1,
+        "event_type": "document.created",
+        "metadata": {
+            "document_id": DOCUMENT_ID,
+            "owner": "macro|owner@example.com",
+            "document_name": "notes",
+            "file_type": null,
+            "project_id": null,
+            "sub_type": null,
+            "created_at": null,
+        },
+    });
+
+    let decoded: Event<DocumentTopicEvent> =
+        serde_json::from_value(payload).expect("pre-attribution created event decodes");
+
+    match decoded.event {
+        DocumentTopicEvent::Created(metadata) => {
+            assert_eq!(metadata.owner.as_ref(), "macro|owner@example.com");
+            assert_eq!(metadata.actor, None);
+            assert_eq!(metadata.on_behalf_of, None);
+        }
+        other => panic!("expected created, got {other:?}"),
+    }
+}
+
+#[test]
 fn existing_v1_document_events_still_decode() {
     let payload = json!({
         "event_id": "00000000-0000-0000-0000-000000000004",

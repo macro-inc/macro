@@ -21,7 +21,7 @@ jobs:
       TEMPLATE_APP: macro-preview-template
       MACRO_STACK_SNAPSHOT_DIR: /home/runner/.cache/macro-preview-snapshots
       CARGO_INCREMENTAL: '0'
-    timeout-minutes: 60
+    timeout-minutes: 90
     steps:
     - name: Checkout
       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
@@ -93,6 +93,10 @@ jobs:
         cd apps/web
         export MODE=development NODE_ENV=production
         export VITE_LOCAL_SERVERS=ALL VITE_LOCAL_BACKEND_ORIGIN=same-origin
+        # Same ceiling as `just -f apps/web/justfile build-dev`: vite's
+        # chunk-render peaks at node's default ~4GB heap and aborts with
+        # "Ineffective mark-compacts near heap limit".
+        export NODE_OPTIONS=--max-old-space-size=6144
         bun run --bun build
         LANE
 
@@ -152,7 +156,10 @@ jobs:
         cat > "$lanes/images.sh" <<'LANE'
         set -euo pipefail
         docker compose --project-directory . -p macro -f docker/docker-compose.yml build \
-          search sync_service websocket_service lexical_service ai_editing_worker
+          search sync_service websocket_service lexical_service ai_editing_worker analytics_proxy
+        # Not a compose service, so `config --images` never lists it.
+        # BuildKit cache on this runner is the freshness check.
+        docker build --tag "$LOCAL_SANDBOX_IMAGE" crates/agent_harness/container
         # The image BUILD above is fatal; the premirror below is a pure
         # optimization with an authoritative fallback (the deploy step's
         # mirror loop), so its failure only costs a slower push later.
@@ -172,7 +179,7 @@ jobs:
         flyctl auth docker
         registry="registry.fly.io/$APP_NAME"
         for img in $(docker compose --project-directory . -p macro \
-            -f docker/docker-compose.yml config --images | sort -u) alpine:3; do
+            -f docker/docker-compose.yml config --images | sort -u) alpine:3 "$LOCAL_SANDBOX_IMAGE"; do
           if ! docker image inspect "$img" >/dev/null 2>&1 && ! docker pull "$img"; then
             echo "premirror: skipping $img (not local, not pullable)"
             continue
@@ -303,6 +310,7 @@ jobs:
         fi
       env:
         FLY_ORG: ${{ vars.FLY_ORG || secrets.FLY_ORG }}
+        LOCAL_SANDBOX_IMAGE: macro-agent-harness:latest
     - name: Dump stack diagnostics
       if: failure()
       run: |
@@ -529,10 +537,17 @@ jobs:
         docker image inspect alpine:3 >/dev/null 2>&1 || docker pull alpine:3
         mkdir -p preview-ctx/preload
         : > preview-ctx/preload/manifest.txt
-        for img in $images alpine:3; do
+        for img in $images alpine:3 "$LOCAL_SANDBOX_IMAGE"; do
           # Images the bake didn't leave in the daemon (snapshot cache hit,
           # or app-layer-only images like proxy/mailpit) get pulled here.
-          docker image inspect "$img" >/dev/null 2>&1 || docker pull "$img"
+          # Compose `config --images` also lists locally-built tags
+          # (analytics_proxy, sdk-webhook-relay) that are not on Docker Hub;
+          # premirror already skips those — do the same so a missing local
+          # tag cannot fail the deploy.
+          if ! docker image inspect "$img" >/dev/null 2>&1 && ! docker pull "$img"; then
+            echo "mirror: skipping $img (not local, not pullable)"
+            continue
+          fi
           id=$(docker image inspect -f '{{.Id}}' "$img")
           # Content-addressed tag: same image content = same ref, so a
           # redeploy's push is skippable by a manifest existence check and
@@ -653,6 +668,7 @@ jobs:
       env:
         FLY_ORG: ${{ vars.FLY_ORG || secrets.FLY_ORG }}
         DOPPLER_PREVIEW_TOKEN: ${{ secrets.DOPPLER_PREVIEW_TOKEN }}
+        LOCAL_SANDBOX_IMAGE: macro-agent-harness:latest
     - name: Dump Fly diagnostics
       if: failure()
       run: |

@@ -6,8 +6,9 @@ import { type FloatRegionName, FloatRegions } from './float-region-state';
 
 export type FloatRegionProps = ParentProps<{
   region: FloatRegionName;
-  /** Higher wins; ties go to the most recently mounted contributor. Default 0. */
-  priority?: number;
+  /** Higher wins; ties go to the most recently mounted contributor. Default 0.
+   *  Pass an accessor to change priority reactively without remounting. */
+  priority?: number | (() => number);
   /** Extra reactive gate, e.g. `() => !virtualKeyboardVisible()`. */
   active?: () => boolean;
 }>;

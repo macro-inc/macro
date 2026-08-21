@@ -9,12 +9,6 @@ export type ClientOptions = {
  */
 export type AccessLevel = 'view' | 'comment' | 'edit' | 'owner';
 
-export type Activity = {
-    Document: BasicDocument;
-} | {
-    Chat: Chat;
-};
-
 /**
  * The kind of activity a user performs in a channel.
  */
@@ -31,7 +25,7 @@ export type AddFavoriteRequest = {
     /**
      * The type of the entity to favorite.
      */
-    entityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill';
+    entityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill' | 'agent_session';
 };
 
 /**
@@ -1006,6 +1000,8 @@ export type BomPart = {
 
 /**
  * Bot row.
+ *
+ * Clients deserialize this, so both derives are used.
  */
 export type Bot = {
     /**
@@ -1032,6 +1028,10 @@ export type Bot = {
      * Stable handle.
      */
     handle: string;
+    /**
+     * Whether mentioning this bot opens a sandboxed coding-agent session.
+     */
+    has_agent: boolean;
     /**
      * Bot id.
      */
@@ -1318,6 +1318,108 @@ export type CalendarEventFilters = {
      * Event statuses such as `confirmed`, `tentative`, or `cancelled`.
      */
     statuses?: Array<string>;
+};
+
+/**
+ * Meeting-level fields shown in a calendar event mention preview, taken from
+ * the requester's own projection of the meeting.
+ */
+export type CalendarMentionEvent = {
+    /**
+     * Number of attendees on the requester's copy.
+     */
+    attendeeCount: number;
+    /**
+     * Whether the event repeats.
+     */
+    isRecurring: boolean;
+    /**
+     * Location label, when set.
+     */
+    location?: string | null;
+    /**
+     * Key of the previewed instance, absent when no occurrence is
+     * materialized.
+     */
+    occurrenceKey?: string | null;
+    /**
+     * Organizer email.
+     */
+    organizerEmail?: string | null;
+    /**
+     * Organizer display name.
+     */
+    organizerName?: string | null;
+    /**
+     * Time of the previewed instance: the requested occurrence when it
+     * exists, else the next upcoming one, else the latest past one, else the
+     * series start.
+     */
+    time: EventTime;
+    /**
+     * Display title.
+     */
+    title: string;
+    /**
+     * Entity update time of the requester's copy.
+     */
+    updatedAt: string;
+    /**
+     * The requester's own event entity for the mentioned meeting. Differs
+     * from the mentioned id when the mention came from another attendee.
+     */
+    viewerEventId: string;
+};
+
+/**
+ * Resolution of one mentioned event, in request order.
+ */
+export type CalendarMentionPreviewItem = {
+    event?: null | CalendarMentionEvent;
+    /**
+     * The mentioned event id, echoed from the request.
+     */
+    eventId: string;
+    /**
+     * Visibility of the mentioned event to the requester.
+     */
+    type: CalendarMentionPreviewKind;
+};
+
+/**
+ * Requester-relative visibility of one mentioned event.
+ */
+export type CalendarMentionPreviewKind = 'access' | 'no_access' | 'does_not_exist';
+
+/**
+ * Batch calendar mention preview request.
+ */
+export type CalendarMentionPreviewRequest = {
+    /**
+     * Mentioned events to resolve, at most 100.
+     */
+    items: Array<CalendarMentionPreviewRequestItem>;
+};
+
+/**
+ * One mentioned event to resolve for the requester.
+ */
+export type CalendarMentionPreviewRequestItem = {
+    /**
+     * Mentioned calendar event id.
+     */
+    eventId: string;
+    /**
+     * Occurrence the mention points at, when it targets one instance.
+     */
+    occurrenceKey?: string | null;
+};
+
+/**
+ * Batch calendar mention preview response.
+ */
+export type CalendarMentionPreviewResponse = {
+    items: Array<CalendarMentionPreviewItem>;
 };
 
 /**
@@ -2483,6 +2585,36 @@ export type CopyDocumentResponse = {
     error: boolean;
 };
 
+/**
+ * Request to create a bot.
+ */
+export type CreateBotRequest = {
+    /**
+     * Optional avatar URL.
+     */
+    avatar_url?: string | null;
+    /**
+     * Optional description.
+     */
+    description?: string | null;
+    /**
+     * Stable handle.
+     */
+    handle: string;
+    /**
+     * Whether mentioning this bot opens a sandboxed coding-agent session. Defaults to false.
+     */
+    has_agent?: boolean | null;
+    /**
+     * Display name.
+     */
+    name: string;
+    /**
+     * Team owner. The caller must be a team administrator or owner. Omit for a user-owned bot.
+     */
+    team_id?: string | null;
+};
+
 export type CreateBulkDocumentResponse = {
     /**
      * Data to be returned
@@ -2555,6 +2687,10 @@ export type CreateChannelScopedBotRequest = {
      * Stable handle.
      */
     handle: string;
+    /**
+     * Whether mentioning this bot opens a sandboxed coding-agent session. Defaults to false.
+     */
+    has_agent?: boolean | null;
     /**
      * Display name.
      */
@@ -2875,7 +3011,7 @@ export type CreateReminderRequest = {
     /**
      * Type of the entity to attach the reminder to. Requires `entityId`.
      */
-    entityType?: null | 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill';
+    entityType?: null | 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill' | 'agent_session';
     /**
      * When and how often the reminder fires.
      */
@@ -2986,6 +3122,10 @@ export type CreateTaskResponse = {
      */
     documentMetadata: DocumentResponseMetadata;
     /**
+     * Base64-encoded canonical Loro snapshot used to initialize the task.
+     */
+    initialSnapshot: string;
+    /**
      * The team this task number is scoped to.
      */
     teamId?: string | null;
@@ -3018,6 +3158,8 @@ export type CreateViewRequest = {
 
 /**
  * Request to create a webhook.
+ *
+ * Clients serialize this, so both derives are used.
  */
 export type CreateWebhookRequest = {
     /**
@@ -3046,6 +3188,8 @@ export type CreateWebhookRequest = {
 
 /**
  * Webhook returned after creation, including its signing secret.
+ *
+ * Clients deserialize this, so both derives are used.
  */
 export type CreateWebhookResponse = {
     /**
@@ -3599,6 +3743,11 @@ export type DocumentCopiedMetadata = {
  */
 export type DocumentCreatedMetadata = {
     /**
+     * Who mechanically created the document. Absent on events published
+     * before attribution: ingest then treats [`Self::owner`] as the actor.
+     */
+    actor?: string | null;
+    /**
      * Creation timestamp reported by the repository.
      */
     created_at?: string | null;
@@ -3611,6 +3760,7 @@ export type DocumentCreatedMetadata = {
      */
     document_name: string;
     file_type?: null | FileType;
+    on_behalf_of?: null | MacroUserIdStr;
     /**
      * The owner (creator) of the document.
      */
@@ -4580,7 +4730,7 @@ export type Favorite = {
     /**
      * The type of the favorited entity.
      */
-    entityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill';
+    entityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill' | 'agent_session';
     /**
      * File type of the favorited document, when applicable.
      */
@@ -4602,7 +4752,7 @@ export type FavoriteEntityRef = {
     /**
      * The type of the favorited entity.
      */
-    entityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill';
+    entityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill' | 'agent_session';
 };
 
 /**
@@ -4778,17 +4928,6 @@ export type GenericSuccessResponse = {
 };
 
 /**
- * @deprecated
- */
-export type GetActivitiesResponse = {
-    data?: null | UserActivitiesResponse;
-    /**
-     * Indicates if an error occurred
-     */
-    error: boolean;
-};
-
-/**
  * Response from the attachment-references endpoint.
  */
 export type GetAttachmentReferencesResponse = {
@@ -4856,6 +4995,13 @@ export type GetBatchProjectPreviewRequest = {
 
 export type GetBatchProjectPreviewResponse = {
     previews: Array<ProjectPreview>;
+};
+
+/**
+ * Response from looking up a CRM contact by email.
+ */
+export type GetContactByEmailResponse = {
+    contact?: null | CrmContactResponse;
 };
 
 export type GetDocumentKeyResponse = {
@@ -5407,7 +5553,14 @@ export type LeaveCallResponse = {
 };
 
 /**
+ * Defines who can access an item through its share link.
+ */
+export type LinkShare = 'PUBLIC' | 'TEAM';
+
+/**
  * Webhooks visible to the caller across their personal and team workspaces.
+ *
+ * Clients deserialize this, so both derives are used.
  */
 export type ListWebhooksResponse = {
     /**
@@ -5536,6 +5689,32 @@ export type Params = {
  * The role a user has within a channel.
  */
 export type ParticipantRole = 'owner' | 'admin' | 'member';
+
+/**
+ * Request to patch a bot.
+ */
+export type PatchBotRequest = {
+    /**
+     * Optional avatar URL.
+     */
+    avatar_url?: string | null;
+    /**
+     * Optional description.
+     */
+    description?: string | null;
+    /**
+     * Stable handle.
+     */
+    handle?: string | null;
+    /**
+     * Whether mentioning this bot opens a sandboxed coding-agent session. Omit to leave unchanged.
+     */
+    has_agent?: boolean | null;
+    /**
+     * Display name.
+     */
+    name?: string | null;
+};
 
 /**
  * Request to patch a channel.
@@ -6195,7 +6374,7 @@ export type Reminder = {
     /**
      * Type of the associated entity, when the reminder is attached to one.
      */
-    entityType?: null | 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill';
+    entityType?: null | 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill' | 'agent_session';
     /**
      * Reminder id.
      */
@@ -6520,15 +6699,12 @@ export type SharePermissionV2 = {
      * The share permission id
      */
     id: string;
-    /**
-     * If the item is publicly accessible
-     */
-    isPublic: boolean;
+    linkShare?: null | LinkShare;
+    linkShareAccessLevel?: null | AccessLevel;
     /**
      * The owner of the item
      */
     owner: string;
-    publicAccessLevel?: null | AccessLevel;
 };
 
 /**
@@ -6561,7 +6737,7 @@ export type SimpleMention = {
 };
 
 /**
- * API representation of a soup item with its frecency score.
+ * API representation of a soup item with its per-viewer enrichments.
  */
 export type SoupApiItem = SoupItem & {
     frecency_score: number;
@@ -6569,12 +6745,18 @@ export type SoupApiItem = SoupItem & {
      * Whether the requesting user has favorited this entity.
      */
     is_favorited: boolean;
+    /**
+     * The caller's latest own mutation of this entity, present only when the
+     * page was ordered by `touched_by_me`. Clients keep the touched feed
+     * ordered on this value, so it can be bumped optimistically.
+     */
+    touched_at?: string | null;
 };
 
 /**
  * Sort options accepted by non-grouped soup API endpoints.
  */
-export type SoupApiSort = 'viewed_at' | 'created_at' | 'updated_at' | 'viewed_updated' | 'frecency';
+export type SoupApiSort = 'viewed_at' | 'created_at' | 'updated_at' | 'viewed_updated' | 'frecency' | 'touched_by_me';
 
 /**
  * Sort direction accepted by non-grouped soup API endpoints.
@@ -7555,7 +7737,7 @@ export type SoupReminderReference = {
     /**
      * The referenced entity's type.
      */
-    entityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill';
+    entityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill' | 'agent_session';
     /**
      * File type, when the reference is a document — `md`, `pdf`, and so on.
      */
@@ -7960,11 +8142,8 @@ export type UpdateSharePermissionRequestV2 = {
      * Any channel share permissions to be created/updated/removed
      */
     channelSharePermissions?: Array<UpdateChannelSharePermission> | null;
-    /**
-     * If the item is publicly accessible
-     */
-    isPublic?: boolean | null;
-    publicAccessLevel?: null | AccessLevel;
+    linkShare?: null | LinkShare;
+    linkShareAccessLevel?: null | AccessLevel;
 };
 
 /**
@@ -8001,24 +8180,6 @@ export type UploadFolderRequest = {
 
 export type UpsertUserDocumentViewLocationRequest = {
     location: string;
-};
-
-/**
- * @deprecated
- */
-export type UserActivitiesResponse = {
-    /**
-     * The next offset to be used if there is one
-     */
-    next_offset?: number | null;
-    /**
-     * The activities returned from the query
-     */
-    recent: Array<Activity>;
-    /**
-     * The total number of activities the user has
-     */
-    total: number;
 };
 
 /**
@@ -8123,6 +8284,8 @@ export type ViewsResponse = {
 
 /**
  * Webhook row returned by application APIs.
+ *
+ * Clients deserialize this, so both derives are used.
  */
 export type Webhook = {
     /**
@@ -8206,6 +8369,8 @@ export type WebhookFilter = {
 
 /**
  * Scope that owns a newly-created webhook.
+ *
+ * Clients serialize this, so both derives are used.
  */
 export type WebhookScope = 'user' | 'team';
 
@@ -8261,36 +8426,6 @@ export type WithDocumentId = {
 export type WithProjectId = {
     id: string;
 };
-
-export type GetRecentActivityHandlerData = {
-    body?: never;
-    path?: never;
-    query: {
-        /**
-         * The maximum number of items to retreive. Default 10, max 100.
-         */
-        limit: number;
-        /**
-         * The offset to start from. Default 0.
-         */
-        offset: number;
-    };
-    url: '/activity';
-};
-
-export type GetRecentActivityHandlerErrors = {
-    400: GenericErrorResponse;
-    401: GenericErrorResponse;
-    500: GenericErrorResponse;
-};
-
-export type GetRecentActivityHandlerError = GetRecentActivityHandlerErrors[keyof GetRecentActivityHandlerErrors];
-
-export type GetRecentActivityHandlerResponses = {
-    200: GetActivitiesResponse;
-};
-
-export type GetRecentActivityHandlerResponse = GetRecentActivityHandlerResponses[keyof GetRecentActivityHandlerResponses];
 
 export type DeleteAnchorData = {
     body: DeleteUnthreadedAnchorRequest;
@@ -8623,6 +8758,37 @@ export type ListOccurrencesResponses = {
 };
 
 export type ListOccurrencesResponse = ListOccurrencesResponses[keyof ListOccurrencesResponses];
+
+export type MentionPreviewsData = {
+    body: CalendarMentionPreviewRequest;
+    path?: never;
+    query?: never;
+    url: '/calendar-events/preview';
+};
+
+export type MentionPreviewsErrors = {
+    /**
+     * Too many events in one request
+     */
+    400: unknown;
+    /**
+     * Authentication required
+     */
+    401: unknown;
+    /**
+     * Calendar query failed
+     */
+    500: unknown;
+};
+
+export type MentionPreviewsResponses = {
+    /**
+     * Requester-relative previews for the mentioned events
+     */
+    200: CalendarMentionPreviewResponse;
+};
+
+export type MentionPreviewsResponse = MentionPreviewsResponses[keyof MentionPreviewsResponses];
 
 export type GetBatchCallRecordPreviewData = {
     body: GetBatchCallRecordPreviewRequest;
@@ -10211,6 +10377,35 @@ export type SetCrmCompanyNameResponses = {
 
 export type SetCrmCompanyNameResponse = SetCrmCompanyNameResponses[keyof SetCrmCompanyNameResponses];
 
+export type GetContactByEmailData = {
+    body?: never;
+    path?: never;
+    query: {
+        /**
+         * The contact email to resolve within the caller's team.
+         */
+        email: string;
+    };
+    url: '/crm/contacts/by-email';
+};
+
+export type GetContactByEmailErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type GetContactByEmailError = GetContactByEmailErrors[keyof GetContactByEmailErrors];
+
+export type GetContactByEmailResponses = {
+    /**
+     * The matching contact, or a null contact when none is visible.
+     */
+    200: GetContactByEmailResponse;
+};
+
+export type GetContactByEmailResponse2 = GetContactByEmailResponses[keyof GetContactByEmailResponses];
+
 export type GetContactData = {
     body?: never;
     path: {
@@ -10534,6 +10729,10 @@ export type CreateTaskHandlerResponses = {
          * Metadata for the created document
          */
         documentMetadata: DocumentResponseMetadata;
+        /**
+         * Base64-encoded canonical Loro snapshot used to initialize the task.
+         */
+        initialSnapshot: string;
         /**
          * The team this task number is scoped to.
          */
@@ -11422,7 +11621,7 @@ export type RemoveFavoriteByEntityData = {
         /**
          * The type of an entity in Macro
          */
-        entity_type: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill';
+        entity_type: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill' | 'agent_session';
         /**
          * The id of the favorited entity.
          */
@@ -11642,7 +11841,8 @@ export type GetItemsSoupData = {
          */
         limit?: number;
         /**
-         * Sort method. Options are viewed_at, created_at, updated_at, viewed_updated. Defaults to viewed_at.
+         * Sort method. Options are viewed_at, created_at, updated_at,
+         * viewed_updated, frecency, touched_by_me. Defaults to viewed_at.
          */
         sort_method?: SoupApiSort;
         /**
@@ -12248,7 +12448,7 @@ export type ListRemindersData = {
         /**
          * The type of an entity in Macro
          */
-        entityType?: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill';
+        entityType?: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill' | 'agent_session';
         /**
          * Restrict to reminders attached to this entity id. Requires `entityType`.
          */

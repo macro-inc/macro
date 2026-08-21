@@ -15,6 +15,7 @@ package.edition = "2024"
 resolver = "2"
 
 [workspace.dependencies]
+pollster = "0.4"
 reqwest = "0.13"
 rootcause = "0.12"
 semver = "1"

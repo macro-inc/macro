@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { expect, test } from '@playwright/test';
 import { DEFAULT_THEMES } from '@theme/constants';
+import { getOklch } from '@theme/utils/colorUtil';
 import type { ThemeColorParams } from '../transform-email-colors';
 
 // =============================================================================
@@ -51,14 +52,17 @@ function getThemeConfig(themeName: string): ThemeColorParams {
   if (!theme) {
     throw new Error(`Theme "${themeName}" not found in DEFAULT_THEMES`);
   }
+  const ink = getOklch(theme.colorTokens['content-0']);
+  const panel = getOklch(theme.colorTokens['surface-1']);
+  const accent = getOklch(theme.colorTokens.accent);
   return {
-    inkL: theme.tokens.c0.l,
-    inkC: theme.tokens.c0.c,
-    inkH: theme.tokens.c0.h,
-    panelL: theme.tokens.b1.l,
-    accentL: theme.tokens.a0.l,
-    accentC: theme.tokens.a0.c,
-    accentH: theme.tokens.a0.h,
+    inkL: ink.l,
+    inkC: ink.c,
+    inkH: ink.h,
+    panelL: panel.l,
+    accentL: accent.l,
+    accentC: accent.c,
+    accentH: accent.h,
   };
 }
 
@@ -66,11 +70,8 @@ function generateThemeCSS(themeName: string): string {
   const theme = DEFAULT_THEMES.find((t) => t.name === themeName);
   if (!theme) return '';
 
-  const vars = Object.entries(theme.tokens)
-    .map(
-      ([key, value]) =>
-        `--${key}l: ${value.l}; --${key}c: ${value.c}; --${key}h: ${value.h}deg;`
-    )
+  const vars = Object.entries(theme.colorTokens)
+    .map(([key, value]) => `--color-${key}: ${value};`)
     .join('\n    ');
 
   return `:root {\n    ${vars}\n  }`;

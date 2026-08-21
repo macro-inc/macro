@@ -14,6 +14,7 @@ import { UserIcon } from '@core/component/UserIcon';
 import { isMacroAgentId } from '@core/constant/macroAgent';
 import { useUserId } from '@core/context/user';
 import { getDisplayName, tryMacroId } from '@core/user';
+import { formatRelativeDay } from '@core/util/dateParser';
 import { plural } from '@core/util/string';
 import {
   DraftBadge,
@@ -48,10 +49,11 @@ import type { ItemEntity } from '@queries/preview';
 import { useBulkSaveEntityPropertiesMutation } from '@queries/properties/entity';
 import { EntityType } from '@service-storage/generated/schemas';
 import { Avatar, cn, Tooltip } from '@ui';
+import { parseISO } from 'date-fns';
 import { createMemo, For, type JSX, Match, Show, Switch } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { match, P } from 'ts-pattern';
-import { InboxCard, type InboxCardAttachment } from './InboxCard';
+import { InboxCard } from './InboxCard';
 import {
   formatCompactRelativeTimestamp,
   getGithubTitle,
@@ -67,6 +69,10 @@ export interface InboxCardLayoutProps {
   highlighted?: boolean;
   onClick?: (event: MouseEvent) => void;
 }
+
+/** Glyph size inside the card's avatar bubble — grows with the circle on
+ * mobile, matching the narrow rows' icon factor (see InboxCard.Icon). */
+const AVATAR_GLYPH_CLASS = 'size-4 mobile:size-6';
 
 type NotificationTag = ReturnType<typeof getNotificationTag>;
 
@@ -228,38 +234,42 @@ const tagBubbleIcon = (tag: NotificationTag) =>
   match(tag)
     .with('new_email', () => () => (
       <EntityIcon
-        class="size-4"
+        class={AVATAR_GLYPH_CLASS}
         targetType="email"
         theme="monochrome"
         size="fill"
       />
     ))
     .with('task_assigned', () => () => (
-      <EntityIcon class="size-4" targetType="task" size="fill" />
+      <EntityIcon class={AVATAR_GLYPH_CLASS} targetType="task" size="fill" />
     ))
     .with('ai_response', () => () => (
-      <EntityIcon class="size-4" targetType="chat" size="fill" />
+      <EntityIcon class={AVATAR_GLYPH_CLASS} targetType="chat" size="fill" />
     ))
     .with('channel_mention', 'mentioned_in_document_comment', () => () => (
-      <AtIcon class="size-4" />
+      <AtIcon class={AVATAR_GLYPH_CLASS} />
     ))
-    .with('document_mention', () => () => <FilesIcon class="size-4" />)
+    .with('document_mention', () => () => (
+      <FilesIcon class={AVATAR_GLYPH_CLASS} />
+    ))
     .with(
       'channel_message_reply',
       'replied_to_document_comment_thread',
-      () => () => <ArrowBendUpLeftIcon class="size-4" />
+      () => () => <ArrowBendUpLeftIcon class={AVATAR_GLYPH_CLASS} />
     )
     .with('commented_on_document', () => () => (
-      <ChatCircleIcon class="size-4" />
+      <ChatCircleIcon class={AVATAR_GLYPH_CLASS} />
     ))
-    .with('channel_message_send', () => () => <ChatTextIcon class="size-4" />)
+    .with('channel_message_send', () => () => (
+      <ChatTextIcon class={AVATAR_GLYPH_CLASS} />
+    ))
     .with('channel_invite', 'invite_to_team', () => () => (
-      <UserPlusIcon class="size-4" />
+      <UserPlusIcon class={AVATAR_GLYPH_CLASS} />
     ))
-    .with('call_started', () => () => <PhoneIcon class="size-4" />)
-    .with('reminder', () => () => <BellSimpleIcon class="size-4" />)
+    .with('call_started', () => () => <PhoneIcon class={AVATAR_GLYPH_CLASS} />)
+    .with('reminder', () => () => <BellSimpleIcon class={AVATAR_GLYPH_CLASS} />)
     .with('calendar_event_reminder', () => () => (
-      <CalendarBlankIcon class="size-4" />
+      <CalendarBlankIcon class={AVATAR_GLYPH_CLASS} />
     ))
     .with(
       'github_pr_status_changed',
@@ -268,11 +278,11 @@ const tagBubbleIcon = (tag: NotificationTag) =>
       'github_pr_comment',
       'github_pr_mention',
       'github_pr_review',
-      () => () => <GithubIcon class="size-4" />
+      () => () => <GithubIcon class={AVATAR_GLYPH_CLASS} />
     )
     .with(
       P.when((value) => value?.startsWith('github_') ?? false),
-      () => () => <GithubIcon class="size-4" />
+      () => () => <GithubIcon class={AVATAR_GLYPH_CLASS} />
     )
     .otherwise(() => undefined);
 
@@ -296,19 +306,19 @@ function GithubStatusIcon(props: { status?: string }) {
   };
 
   return (
-    <span class="grid size-4 place-items-center">
+    <span class={cn('grid place-items-center', AVATAR_GLYPH_CLASS)}>
       <Show
         when={props.status === 'merged'}
         fallback={
           <Show
             when={props.status === 'open' || props.status === 'closed'}
-            fallback={<GithubIcon class="size-4" />}
+            fallback={<GithubIcon class={AVATAR_GLYPH_CLASS} />}
           >
-            <GitPullRequestIcon class={cn('size-4', statusClass())} />
+            <GitPullRequestIcon class={cn(AVATAR_GLYPH_CLASS, statusClass())} />
           </Show>
         }
       >
-        <GitMergeIcon class="size-4 text-note" />
+        <GitMergeIcon class={cn(AVATAR_GLYPH_CLASS, 'text-note')} />
       </Show>
     </span>
   );
@@ -381,7 +391,7 @@ function InboxTimestamp(props: { timestamp?: string; class?: string }) {
     <Show when={short()}>
       {(value) => (
         <Tooltip class={props.class} label={detailed() ?? value()}>
-          <span class={'whitespace-nowrap text-xs text-ink-extra-muted'}>
+          <span class="whitespace-nowrap text-xs text-ink-extra-muted">
             {value()}
           </span>
         </Tooltip>
@@ -484,71 +494,83 @@ const githubAction = (notification?: Notification): string => {
     .otherwise(() => 'updated');
 };
 
+/**
+ * The shared card scaffold: the avatar bubble (`icon` fills the circle), the
+ * title row with the timestamp at its right, and a body cell where `children`
+ * stack as lines. The grid exists only to position icon | text column |
+ * timestamp — body lines never need grid rows of their own, so every card
+ * shares this one shape and callers never touch row arithmetic. Lines are
+ * composed from `InboxCard.Content` / `CardMarkdownLine` at the call site;
+ * the body cell provides `text-sm` and `min-w-0`.
+ * (`ChannelThreadCardLayout` is the one bespoke card that stays on raw
+ * `InboxCard.Root`: its title sits inside the body row.)
+ */
 function BaseCard(props: {
+  item: InboxCardDisplayItem;
   selected?: boolean;
   highlighted?: boolean;
   onClick?: (event: MouseEvent) => void;
-  unread: boolean;
-  leading: JSX.Element;
-  title: JSX.Element;
-  preview?: string;
+  /** Contents of the avatar bubble (glyph or avatar); the circle is ours. */
+  icon: JSX.Element;
   /**
-   * Inline element rendered at the head of the preview line, before the text,
-   * and on its own when there is no text. Must be inline-level — the line
-   * truncates as one run, the way an inline mention does in a message preview.
+   * The title's text run — a string or a text-producing component. Always
+   * rendered inside the truncating wrapper; anything that isn't text (a
+   * badge, a block icon) belongs in `titleLeading`.
    */
-  previewInline?: JSX.Element;
-  attachments?: InboxCardAttachment[];
-  entityId: string;
-  properties?: PropertyT[];
-  timestamp?: string;
+  title: JSX.Element;
+  /** Adornment before the title text (e.g. draft badge, block-type icon). */
+  titleLeading?: JSX.Element;
+  children?: JSX.Element;
 }) {
   return (
     <InboxCard.Root
-      dimmed={!props.unread}
+      dimmed={!props.item.unread}
       selected={props.selected}
       highlighted={props.highlighted}
       onClick={props.onClick}
     >
-      <div class="col-start-1 row-start-1 row-span-2">{props.leading}</div>
+      <div class="col-start-1 row-start-1 row-span-2">
+        <InboxCard.Icon fallback={props.icon} />
+      </div>
       <InboxCard.Body class="contents">
         <InboxCard.Header class="col-start-2 row-start-1 self-center">
-          <InboxCard.Title class="flex items-center gap-1 truncate">
-            {props.title}
+          <InboxCard.Title class="flex items-center gap-1">
+            {props.titleLeading}
+            {/* A flex row can't ellipsize bare text, so the text run always
+                renders inside this truncating item. */}
+            <span class="truncate">{props.title}</span>
           </InboxCard.Title>
         </InboxCard.Header>
 
-        <div class="col-start-2 row-start-2 flex min-w-0 flex-col">
-          <Show when={props.previewInline || props.preview?.trim()}>
-            <InboxCard.Content class="truncate text-sm">
-              {props.previewInline}
-              <Show when={props.preview?.trim()}>
-                {(value) => (
-                  <StaticMarkdown
-                    markdown={value()}
-                    singleLine
-                    theme={unifiedListMarkdownTheme}
-                  />
-                )}
-              </Show>
-            </InboxCard.Content>
-          </Show>
-
-          <PropertyPills
-            entityId={props.entityId}
-            properties={props.properties}
-          />
-
-          <Show when={props.attachments?.length}>
-            <InboxCard.Attachments items={props.attachments!} />
-          </Show>
+        <div class="col-start-2 row-start-2 flex min-w-0 flex-col text-sm">
+          {props.children}
         </div>
       </InboxCard.Body>
       <InboxTimestamp
-        timestamp={props.timestamp}
+        timestamp={props.item.timestamp}
         class="col-start-3 row-start-1 self-start justify-self-end"
       />
     </InboxCard.Root>
+  );
+}
+
+/**
+ * A single truncating body line of markdown, rendered only when the text has
+ * content — the standard middle/bottom line of a BaseCard.
+ */
+function CardMarkdownLine(props: { text?: string; class?: string }) {
+  return (
+    <Show when={props.text?.trim()}>
+      {(value) => (
+        <InboxCard.Content class={cn('truncate', props.class)}>
+          <StaticMarkdown
+            markdown={value()}
+            singleLine
+            theme={unifiedListMarkdownTheme}
+          />
+        </InboxCard.Content>
+      )}
+    </Show>
   );
 }
 
@@ -559,6 +581,32 @@ const inlineWrappingMarkdownTheme = createTheme(
   },
   twoLineClampMarkdownTheme
 );
+
+/**
+ * The two-line clamped markdown body (the channel-style message preview),
+ * reserving its height so short previews keep the row rhythm.
+ */
+function CardClampedMarkdown(props: {
+  text?: string;
+  /** Inline run rendered ahead of the text (e.g. a sender label or
+   * attachment paperclip); wraps and clamps as part of the same lines. */
+  prefix?: JSX.Element;
+}) {
+  return (
+    <InboxCard.Content class="line-clamp-2 min-h-[2lh]">
+      {props.prefix}
+      <Show when={props.text?.trim()}>
+        {(value) => (
+          <StaticMarkdown
+            markdown={value()}
+            singleLine
+            theme={inlineWrappingMarkdownTheme}
+          />
+        )}
+      </Show>
+    </InboxCard.Content>
+  );
+}
 
 /** Fallback shown in place of message text when a message is just attachments. */
 const attachmentSummary = (count: number): string | undefined =>
@@ -641,68 +689,40 @@ export function ChannelCardLayout(props: InboxCardLayoutProps) {
   });
 
   return (
-    <InboxCard.Root
-      dimmed={!props.item.unread}
+    <BaseCard
+      item={props.item}
       selected={props.selected}
       highlighted={props.highlighted}
       onClick={props.onClick}
-    >
-      <div class="col-start-1 row-start-1 row-span-2">
+      icon={
         <Show
           when={!isDM()}
-          fallback={
-            <InboxCard.Icon
-              fallback={<InboxAvatar senderId={senderAvatarId()} />}
-            />
-          }
+          fallback={<InboxAvatar senderId={senderAvatarId()} />}
         >
-          <InboxCard.Icon
-            fallback={
-              <EntityIcon
-                class="size-4"
-                targetType={getEntityIconType(entity())}
-                size="fill"
-                theme="monochrome"
-              />
-            }
-          ></InboxCard.Icon>
+          <EntityIcon
+            class={AVATAR_GLYPH_CLASS}
+            targetType={getEntityIconType(entity())}
+            size="fill"
+            theme="monochrome"
+          />
         </Show>
-      </div>
-      <InboxCard.Body class="contents">
-        <InboxCard.Header class="col-start-2 row-start-1 self-center">
-          <InboxCard.Title class="flex items-center gap-1">
-            {text().title}
-          </InboxCard.Title>
-        </InboxCard.Header>
-
-        <div class="col-start-2 row-start-2 min-w-0 text-sm">
-          <InboxCard.Content class="line-clamp-2 min-h-[2lh]">
+      }
+      title={text().title}
+    >
+      <CardClampedMarkdown
+        text={text().content}
+        prefix={
+          <>
             <Show when={senderLabel()}>
               <span class="whitespace-nowrap mr-1">{senderLabel()}:</span>
             </Show>
-
-            <Show when={text().content?.trim()}>
-              {(value) => (
-                <>
-                  <Show when={text().contentIsAttachmentSummary}>
-                    <PaperclipIcon class="mr-0.5 inline size-3.5 align-[-0.125em]" />
-                  </Show>
-                  <StaticMarkdown
-                    markdown={value()}
-                    singleLine
-                    theme={inlineWrappingMarkdownTheme}
-                  />
-                </>
-              )}
+            <Show when={text().contentIsAttachmentSummary}>
+              <PaperclipIcon class="mr-0.5 inline size-3.5 align-[-0.125em]" />
             </Show>
-          </InboxCard.Content>
-        </div>
-      </InboxCard.Body>
-      <InboxTimestamp
-        timestamp={props.item.timestamp}
-        class="col-start-3 row-start-1 self-start justify-self-end"
+          </>
+        }
       />
-    </InboxCard.Root>
+    </BaseCard>
   );
 }
 
@@ -727,24 +747,19 @@ export function ChannelMessageCardLayout(props: InboxCardLayoutProps) {
     };
   });
 
+  // Two-line clamped message body (like the channel card) so the row matches
+  // its three-line neighbors.
   return (
     <BaseCard
-      entityId={props.item.entity.id}
+      item={props.item}
       selected={props.selected}
       highlighted={props.highlighted}
       onClick={props.onClick}
-      unread={props.item.unread}
-      timestamp={props.item.timestamp}
-      leading={
-        <InboxCard.Icon
-          fallback={
-            <ActionBubble tag={getNotificationTag(props.item.notification)} />
-          }
-        ></InboxCard.Icon>
-      }
+      icon={<ActionBubble tag={getNotificationTag(props.item.notification)} />}
       title={text().title}
-      preview={text().content}
-    />
+    >
+      <CardClampedMarkdown text={text().content} />
+    </BaseCard>
   );
 }
 
@@ -850,6 +865,9 @@ export function ChannelThreadCardLayout(props: InboxCardLayoutProps) {
     };
   });
 
+  // The one bespoke card kept on raw InboxCard.Root: unlike BaseCard's shape,
+  // its title sits inside the body row (icon and timestamp align to it), with
+  // the quoted-original block stacked beneath.
   return (
     <InboxCard.Root
       dimmed={!props.item.unread}
@@ -868,7 +886,7 @@ export function ChannelThreadCardLayout(props: InboxCardLayoutProps) {
         <div class={cn('col-start-2 row-start-2')}>
           <InboxCard.Header class="self-center">
             <InboxCard.Title class="flex items-center gap-1">
-              {text().title}
+              <span class="truncate">{text().title}</span>
             </InboxCard.Title>
           </InboxCard.Header>
 
@@ -944,78 +962,84 @@ export function DocumentCardLayout(props: InboxCardLayoutProps) {
 
   const senderName = createSenderDisplayName(senderId, senderFallbackName);
 
+  // Three lines tall like the other inbox layouts: the document name (with
+  // its block-type icon) leads, the sender's action announces itself on the
+  // second line ("Peter commented"), and the comment text fills the third.
   const text = createMemo(() => {
     const metadata = props.item.notification?.notification_metadata;
-    const location = entityLocation(props.item.entity);
     const content = itemContent(props.item.entity, props.item.notification);
 
     if (metadata?.tag === 'document_mention') {
       return {
-        title: buildActionLabel({
-          sender: senderName(),
-          action: 'shared',
-          location,
-        }),
+        action: buildActionLabel({ sender: senderName(), action: 'shared' }),
         content: metadata.content.messageContent,
       };
     }
 
-    if (metadata?.tag === 'mentioned_in_document_comment') {
-      let action = 'mentioned you';
-      if (location) action = 'mentioned you in';
-
+    if (metadata?.tag === 'commented_on_document') {
       return {
-        title: buildActionLabel({
+        action: buildActionLabel({ sender: senderName(), action: 'commented' }),
+        content,
+      };
+    }
+
+    if (metadata?.tag === 'mentioned_in_document_comment') {
+      return {
+        action: buildActionLabel({
           sender: senderName(),
-          action,
-          location,
+          action: 'mentioned you',
         }),
         content,
       };
     }
 
     if (metadata?.tag === 'replied_to_document_comment_thread') {
-      let action = 'replied';
-      if (location) action = 'replied in';
-
       return {
-        title: buildActionLabel({
-          sender: senderName(),
-          action,
-          location,
-        }),
+        action: buildActionLabel({ sender: senderName(), action: 'replied' }),
         content,
       };
     }
 
-    return { title: props.item.entity.name, content };
+    return { action: undefined, content };
   });
 
   return (
     <BaseCard
-      entityId={props.item.entity.id}
+      item={props.item}
       selected={props.selected}
       highlighted={props.highlighted}
       onClick={props.onClick}
-      unread={props.item.unread}
-      timestamp={props.item.timestamp}
-      leading={
-        <InboxCard.Icon
+      icon={
+        <Show
+          when={props.item.notification}
           fallback={
-            <Show
-              when={props.item.notification}
-              fallback={
-                <EntityIcon targetType={getEntityIconType(props.item.entity)} />
-              }
-            >
-              <ActionBubble tag={getNotificationTag(props.item.notification)} />
-            </Show>
+            <EntityIcon
+              class={AVATAR_GLYPH_CLASS}
+              targetType={getEntityIconType(props.item.entity)}
+              size="fill"
+            />
           }
-        ></InboxCard.Icon>
+        >
+          <ActionBubble tag={getNotificationTag(props.item.notification)} />
+        </Show>
       }
-      title={text().title}
-      preview={text().content}
-    />
+      titleLeading={
+        <EntityIcon
+          targetType={getEntityIconType(props.item.entity)}
+          size="xs"
+          class="shrink-0"
+        />
+      }
+      title={props.item.entity.name}
+    >
+      <Show when={text().action}>
+        {(value) => (
+          <InboxCard.Content class="truncate">{value()}</InboxCard.Content>
+        )}
+      </Show>
+
+      <CardMarkdownLine text={text().content} />
+    </BaseCard>
   );
 }
 
@@ -1048,34 +1072,32 @@ export function TaskCardLayout(props: InboxCardLayoutProps) {
 
   return (
     <BaseCard
-      entityId={props.item.entity.id}
+      item={props.item}
       selected={props.selected}
       highlighted={props.highlighted}
       onClick={props.onClick}
-      unread={props.item.unread}
-      timestamp={props.item.timestamp}
-      leading={
-        <InboxCard.Icon
+      icon={
+        <Show
+          when={props.item.notification}
           fallback={
-            <Show
-              when={props.item.notification}
-              fallback={
-                <EntityIcon
-                  class="size-4"
-                  size="fill"
-                  targetType={getEntityIconType(props.item.entity)}
-                />
-              }
-            >
-              <ActionBubble tag={getNotificationTag(props.item.notification)} />
-            </Show>
+            <EntityIcon
+              class={AVATAR_GLYPH_CLASS}
+              size="fill"
+              targetType={getEntityIconType(props.item.entity)}
+            />
           }
-        ></InboxCard.Icon>
+        >
+          <ActionBubble tag={getNotificationTag(props.item.notification)} />
+        </Show>
       }
       title={text().title}
-      preview={text().content}
-      properties={getInboxTaskProperties(props.item.entity)}
-    />
+    >
+      <CardMarkdownLine text={text().content} />
+      <PropertyPills
+        entityId={props.item.entity.id}
+        properties={getInboxTaskProperties(props.item.entity)}
+      />
+    </BaseCard>
   );
 }
 
@@ -1094,35 +1116,32 @@ export function AiCardLayout(props: InboxCardLayoutProps) {
     };
   });
 
+  // Three lines tall like the other inbox layouts: the title row plus a
+  // two-line clamp of the response summary with its height reserved.
   return (
     <BaseCard
-      entityId={props.item.entity.id}
+      item={props.item}
       selected={props.selected}
       highlighted={props.highlighted}
       onClick={props.onClick}
-      unread={props.item.unread}
-      timestamp={props.item.timestamp}
-      leading={
-        <InboxCard.Icon
+      icon={
+        <Show
+          when={props.item.notification}
           fallback={
-            <Show
-              when={props.item.notification}
-              fallback={
-                <EntityIcon
-                  class="size-4"
-                  targetType={getEntityIconType(props.item.entity)}
-                  size="fill"
-                />
-              }
-            >
-              <ActionBubble tag={getNotificationTag(props.item.notification)} />
-            </Show>
+            <EntityIcon
+              class={AVATAR_GLYPH_CLASS}
+              targetType={getEntityIconType(props.item.entity)}
+              size="fill"
+            />
           }
-        ></InboxCard.Icon>
+        >
+          <ActionBubble tag={getNotificationTag(props.item.notification)} />
+        </Show>
       }
       title={text().title}
-      preview={text().content}
-    />
+    >
+      <CardClampedMarkdown text={text().content} />
+    </BaseCard>
   );
 }
 
@@ -1158,52 +1177,27 @@ export function EmailCardLayout(props: InboxCardLayoutProps) {
   });
 
   return (
-    <InboxCard.Root
-      dimmed={!props.item.unread}
+    <BaseCard
+      item={props.item}
       selected={props.selected}
       highlighted={props.highlighted}
       onClick={props.onClick}
+      icon={<ActionBubble tag="new_email" />}
+      titleLeading={
+        <Show when={text().isDraft}>
+          <DraftBadge />
+        </Show>
+      }
+      title={text().sender}
     >
-      <div class="col-start-1 row-start-1 row-span-3">
-        <InboxCard.Icon
-          fallback={<ActionBubble tag="new_email" />}
-        ></InboxCard.Icon>
-      </div>
-      <InboxCard.Body class="contents">
-        <InboxCard.Header class="col-start-2 row-start-1 self-center">
-          <InboxCard.Title class="flex items-center gap-1">
-            <Show when={text().isDraft}>
-              <DraftBadge />
-            </Show>
-            {text().sender}
-          </InboxCard.Title>
-        </InboxCard.Header>
+      <Show when={text().subject?.trim()}>
+        {(subject) => (
+          <InboxCard.Content class="truncate">{subject()}</InboxCard.Content>
+        )}
+      </Show>
 
-        <Show when={text().subject?.trim()}>
-          {(subject) => (
-            <InboxCard.Content class="col-start-2 row-start-2 truncate text-sm">
-              {subject()}
-            </InboxCard.Content>
-          )}
-        </Show>
-
-        <Show when={text().content?.trim()}>
-          {(value) => (
-            <InboxCard.Content class="col-start-2 row-start-3 truncate text-sm">
-              <StaticMarkdown
-                markdown={value()}
-                singleLine
-                theme={unifiedListMarkdownTheme}
-              />
-            </InboxCard.Content>
-          )}
-        </Show>
-      </InboxCard.Body>
-      <InboxTimestamp
-        timestamp={props.item.timestamp}
-        class="col-start-3 row-start-1 self-start justify-self-end"
-      />
-    </InboxCard.Root>
+      <CardMarkdownLine text={text().content} />
+    </BaseCard>
   );
 }
 
@@ -1269,67 +1263,42 @@ export function GithubCardLayout(props: InboxCardLayoutProps) {
   });
 
   return (
-    <InboxCard.Root
-      dimmed={!props.item.unread}
+    <BaseCard
+      item={props.item}
       selected={props.selected}
       highlighted={props.highlighted}
       onClick={props.onClick}
-    >
-      <div class="col-start-1 row-start-1 row-span-3">
-        <InboxCard.Icon
-          fallback={
-            <Show
-              when={
-                !props.item.notification ||
-                getNotificationTag(props.item.notification) ===
-                  'github_pr_status_changed'
-              }
-              fallback={
-                <ActionBubble
-                  tag={
-                    getNotificationTag(props.item.notification) ??
-                    'github_pr_status_changed'
-                  }
-                />
-              }
-            >
-              <GithubStatusIcon status={status()} />
-            </Show>
+      icon={
+        <Show
+          when={
+            !props.item.notification ||
+            getNotificationTag(props.item.notification) ===
+              'github_pr_status_changed'
           }
-        ></InboxCard.Icon>
-      </div>
-      <InboxCard.Body class="contents">
-        <InboxCard.Header class="col-start-2 row-start-1 self-center">
-          <InboxCard.Title class="flex items-center gap-1">
-            {text().title}
-          </InboxCard.Title>
-        </InboxCard.Header>
-
-        <Show when={text().content?.trim()}>
-          {(value) => (
-            <InboxCard.Content class="col-start-2 row-start-2 truncate text-sm text-ink/60">
-              <StaticMarkdown
-                markdown={value()}
-                singleLine
-                theme={unifiedListMarkdownTheme}
-              />
-            </InboxCard.Content>
-          )}
+          fallback={
+            <ActionBubble
+              tag={
+                getNotificationTag(props.item.notification) ??
+                'github_pr_status_changed'
+              }
+            />
+          }
+        >
+          <GithubStatusIcon status={status()} />
         </Show>
+      }
+      title={text().title}
+    >
+      <CardMarkdownLine text={text().content} class="text-ink/60" />
 
-        <Show when={text().location}>
-          {(location) => (
-            <InboxCard.Content class="col-start-2 row-start-3 truncate text-sm text-ink/40">
-              {location()}
-            </InboxCard.Content>
-          )}
-        </Show>
-      </InboxCard.Body>
-      <InboxTimestamp
-        timestamp={props.item.timestamp}
-        class="col-start-3 row-start-1 self-start justify-self-end"
-      />
-    </InboxCard.Root>
+      <Show when={text().location}>
+        {(location) => (
+          <InboxCard.Content class="truncate text-ink/40">
+            {location()}
+          </InboxCard.Content>
+        )}
+      </Show>
+    </BaseCard>
   );
 }
 
@@ -1393,94 +1362,98 @@ export function CallCardLayout(props: InboxCardLayoutProps) {
   };
 
   return (
-    <InboxCard.Root
-      dimmed={!props.item.unread}
+    <BaseCard
+      item={props.item}
       selected={props.selected}
       highlighted={props.highlighted}
       onClick={props.onClick}
+      icon={
+        <EntityIcon
+          class={AVATAR_GLYPH_CLASS}
+          targetType="call"
+          size="fill"
+          theme="monochrome"
+        />
+      }
+      title={text().title}
     >
-      <div class="col-start-1 row-start-1 row-span-3">
-        <InboxCard.Icon
-          fallback={
-            <EntityIcon
-              class="size-4"
-              targetType="call"
-              size="fill"
-              theme="monochrome"
-            />
-          }
-        ></InboxCard.Icon>
-      </div>
-      <InboxCard.Body class="contents">
-        <InboxCard.Header class="col-start-2 row-start-1 self-center">
-          <InboxCard.Title class="flex items-center gap-1">
-            {text().title}
-          </InboxCard.Title>
-        </InboxCard.Header>
+      <Show when={participantIds().length}>
+        <InboxCard.Content class="truncate">
+          <For each={participantIds()}>
+            {(participantId, index) => (
+              <>
+                {index() > 0 ? ', ' : ''}
+                <CallParticipantName id={participantId} />
+              </>
+            )}
+          </For>
+        </InboxCard.Content>
+      </Show>
 
-        <Show when={participantIds().length}>
-          <InboxCard.Content class="col-start-2 row-start-2 truncate text-sm">
-            <For each={participantIds()}>
-              {(participantId, index) => (
-                <>
-                  {index() > 0 ? ', ' : ''}
-                  <CallParticipantName id={participantId} />
-                </>
-              )}
-            </For>
-          </InboxCard.Content>
-        </Show>
-
-        <Show when={duration()}>
-          {(value) => (
-            <InboxCard.Content class="col-start-2 row-start-3 truncate text-sm">
-              {value()}
-            </InboxCard.Content>
-          )}
-        </Show>
-      </InboxCard.Body>
-      <InboxTimestamp
-        timestamp={props.item.timestamp}
-        class="col-start-3 row-start-1 self-start justify-self-end"
-      />
-    </InboxCard.Root>
+      <Show when={duration()}>
+        {(value) => (
+          <InboxCard.Content class="truncate">{value()}</InboxCard.Content>
+        )}
+      </Show>
+    </BaseCard>
   );
 }
 
 /**
  * A calendar event row exists because its alarm fired: the event title leads,
- * and the body is the occurrence's local time — the same copy as the
- * notification that surfaced it.
+ * the occurrence's date sits on the second line, and its local time on the
+ * third — three lines tall, matching the other inbox layouts.
  */
 export function CalendarEventCardLayout(props: InboxCardLayoutProps) {
-  const timePreview = () => {
+  const occurrence = () => {
     const meta = props.item.notification?.notification_metadata;
     if (meta?.tag === 'calendar_event_reminder') {
-      return formatCalendarReminderTime(meta.content);
+      return meta.content;
     }
     const entity = props.item.entity;
     if (entity.type !== 'calendar_event' || !entity.time) return undefined;
-    return formatCalendarReminderTime(
-      entity.time.kind === 'timed'
-        ? { startsAt: entity.time.startsAt, endsAt: entity.time.endsAt }
-        : { startDate: entity.time.startDate }
-    );
+    return entity.time.kind === 'timed'
+      ? { startsAt: entity.time.startsAt, endsAt: entity.time.endsAt }
+      : { startDate: entity.time.startDate };
+  };
+
+  const datePreview = () => {
+    const value = occurrence();
+    // parseISO reads a date-only string (all-day events) as local midnight,
+    // where `new Date` would shift it a day for viewers west of UTC.
+    const raw = value?.startsAt ?? value?.startDate;
+    if (!raw) return undefined;
+    const date = parseISO(raw);
+    if (Number.isNaN(date.getTime())) return undefined;
+    return formatRelativeDay(date);
+  };
+
+  const timePreview = () => {
+    const value = occurrence();
+    return value ? formatCalendarReminderTime(value) : undefined;
   };
 
   return (
     <BaseCard
-      entityId={props.item.entity.id}
+      item={props.item}
       selected={props.selected}
       highlighted={props.highlighted}
       onClick={props.onClick}
-      unread={props.item.unread}
-      timestamp={props.item.timestamp}
-      leading={
-        <InboxCard.Icon fallback={<CalendarBlankIcon class="size-4" />} />
-      }
+      icon={<CalendarBlankIcon class={AVATAR_GLYPH_CLASS} />}
       title={props.item.entity.name || '(No title)'}
-      preview={timePreview()}
-    />
+    >
+      <Show when={datePreview()}>
+        {(value) => (
+          <InboxCard.Content class="truncate">{value()}</InboxCard.Content>
+        )}
+      </Show>
+
+      <Show when={timePreview()}>
+        {(value) => (
+          <InboxCard.Content class="truncate">{value()}</InboxCard.Content>
+        )}
+      </Show>
+    </BaseCard>
   );
 }
 
@@ -1505,17 +1478,13 @@ export function ReminderCardLayout(props: InboxCardLayoutProps) {
 
   return (
     <BaseCard
-      entityId={props.item.entity.id}
+      item={props.item}
       selected={props.selected}
       highlighted={props.highlighted}
       onClick={props.onClick}
-      unread={props.item.unread}
-      timestamp={props.item.timestamp}
-      leading={
-        // Always the bell, never the referenced entity's icon: the row is a
-        // reminder first, and the thing it points at is named right below.
-        <InboxCard.Icon fallback={<BellSimpleIcon class="size-4" />} />
-      }
+      // Always the bell, never the referenced entity's icon: the row is a
+      // reminder first, and the thing it points at is named right below.
+      icon={<BellSimpleIcon class={AVATAR_GLYPH_CLASS} />}
       title={
         <Show when={referenced()} fallback="Reminder">
           {(reference) => (
@@ -1527,19 +1496,23 @@ export function ReminderCardLayout(props: InboxCardLayoutProps) {
           )}
         </Show>
       }
-      // Shown as the body only when it isn't already the title.
-      preview={referenced() ? undefined : description()}
-      previewInline={
-        <Show when={referenced()}>
-          {(reference) => (
-            <ReminderReferenceChip
-              id={reference().id}
-              type={reference().type}
-            />
-          )}
-        </Show>
-      }
-    />
+    >
+      {/* A reminder only says one thing, so the body reserves the two lines
+          its three-line neighbors use to keep the list rhythm even. The chip
+          replaces the description when there's something to point at. */}
+      <div class="min-h-[2lh] min-w-0">
+        <InboxCard.Content class="truncate">
+          <Show when={referenced()} fallback={description()}>
+            {(reference) => (
+              <ReminderReferenceChip
+                id={reference().id}
+                type={reference().type}
+              />
+            )}
+          </Show>
+        </InboxCard.Content>
+      </div>
+    </BaseCard>
   );
 }
 
@@ -1579,7 +1552,7 @@ function ReminderReferenceChip(props: ItemEntity) {
   return (
     <ItemPreview
       {...props}
-      class="inline-flex h-auto max-w-full rounded-none px-0 align-[-0.15em] ring-0 hover:bg-transparent"
+      class="inline-flex h-auto max-w-full rounded-none px-0 align-[-0.15em] ring-0 hover:bg-transparent border-none"
       iconClass="mr-1 size-3.5"
       textClass="underline decoration-current/20 decoration-[max(1px,0.1em)] underline-offset-2"
     />
@@ -1596,27 +1569,22 @@ export function GenericCardLayout(props: InboxCardLayoutProps) {
 
   return (
     <BaseCard
-      entityId={props.item.entity.id}
+      item={props.item}
       selected={props.selected}
       highlighted={props.highlighted}
       onClick={props.onClick}
-      unread={props.item.unread}
-      timestamp={props.item.timestamp}
-      leading={
-        <InboxCard.Icon
-          fallback={
-            <EntityIcon
-              class="size-4"
-              targetType={getEntityIconType(props.item.entity)}
-              size="fill"
-              theme="monochrome"
-            />
-          }
+      icon={
+        <EntityIcon
+          class={AVATAR_GLYPH_CLASS}
+          targetType={getEntityIconType(props.item.entity)}
+          size="fill"
+          theme="monochrome"
         />
       }
       title={text().title}
-      preview={text().content}
-    />
+    >
+      <CardMarkdownLine text={text().content} />
+    </BaseCard>
   );
 }
 

@@ -73,7 +73,7 @@ pub struct UpdateArgs {
     /// Apply this complete prebuilt binary set instead of invoking Cargo.
     #[arg(long, conflicts_with = "build_aux_services")]
     pub binaries_dir: Option<PathBuf>,
-    /// Rebuild the Docker-built auxiliary services (sync, websocket, lexical).
+    /// Rebuild every repository-built local Docker service.
     #[arg(long)]
     pub build_aux_services: bool,
     /// Recreate registry-refreshed preview auxiliary services without building.
@@ -180,16 +180,16 @@ pub fn up(mode: Mode, args: &UpArgs) -> Result<Instance> {
     });
 
     let static_frontend = !args.run.no_frontend && !args.infra_only;
-    let (env, target) = super::prepare(&stage, mode, &instance, &args.run, static_frontend)?;
-    let configured_binaries = args
-        .run
-        .build
-        .binaries_dir
-        .clone()
-        .unwrap_or_else(|| super::workspace_root().join(target.debug_dir()));
-    let active_binaries = super::build::BinariesDir::classify(&configured_binaries)?
-        .host_dir()
-        .to_path_buf();
+    let infra_only = args.infra_only;
+    let (env, target) = super::prepare(
+        &stage,
+        mode,
+        &instance,
+        &args.run,
+        static_frontend,
+        infra_only,
+        infra_only,
+    )?;
 
     // Build + stage the frontend bundle in the background: it's pure host-side
     // work, independent of Docker until the proxy container mounts the staged
@@ -266,6 +266,15 @@ pub fn up(mode: Mode, args: &UpArgs) -> Result<Instance> {
         }
         return Ok(instance);
     }
+    let configured_binaries = args
+        .run
+        .build
+        .binaries_dir
+        .clone()
+        .unwrap_or_else(|| super::workspace_root().join(target.debug_dir()));
+    let active_binaries = super::build::BinariesDir::classify(&configured_binaries)?
+        .host_dir()
+        .to_path_buf();
     super::bring_up_app(&stage, mode, &instance, &env)?;
     let _sdk_webhook_tunnel = (mode == Mode::Local && !stage.is_dry_run())
         .then(|| sdk_webhook::start(&instance))

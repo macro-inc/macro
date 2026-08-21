@@ -1,7 +1,8 @@
 import { GO_TO_COMMAND_SCOPE, GO_TO_LEADER_KEY } from '@app/constants/hotkeys';
 import { LIST_VIEW_PATHS, type ListView } from '@app/constants/list-views';
+import { useActivityFeedFlag } from '@app/features/activity/use-activity-feed-flag';
 import { SidebarActiveCallWidget } from '@app/features/block-call/sidebar/active-call-widget';
-import { useCalendarUiFlag } from '@app/features/calendar/use-calendar-ui-flag';
+import { useCalendarUiFlag } from '@app/features/calendar/hooks/use-calendar-ui-flag';
 import { ChannelsRecentWidget } from '@app/features/channel/sidebar/channels-recent-widget';
 import { CommandState } from '@app/features/command';
 import { SidebarCreateMenu } from '@app/features/command/sidebar/sidebar-create-menu';
@@ -16,6 +17,7 @@ import {
   requestInboxFilter,
 } from '@app/features/next-soup/soup-view/inbox-filter-controllers';
 import { requestSearchFocus } from '@app/features/next-soup/soup-view/search-controllers';
+import { useRecentViewFlag } from '@app/features/next-soup/use-recent-view-flag';
 import {
   InviteModal,
   setInviteModalOpen,
@@ -24,6 +26,7 @@ import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useHotkeyInterceptor } from '@app/signal/hotkeyRoot';
 import { globalSplitManager } from '@app/signal/splitLayout';
+import { CALENDAR_BLOCK_ID } from '@block-calendar/types';
 import { useCallContextOptional } from '@channel/Call/CallContext';
 import { InCallPanel } from '@channel/Call/InCallPanel';
 import {
@@ -47,11 +50,9 @@ import { inboxIconProps } from '@core/component/inboxIcon';
 import { toast } from '@core/component/Toast/Toast';
 import { UserIcon } from '@core/component/UserIcon';
 import {
-  ENABLE_ACTIVITY,
   ENABLE_CALLS,
   ENABLE_CRM,
   ENABLE_NEW_PRICING_OVERRIDE,
-  ENABLE_REMINDERS,
 } from '@core/constant/featureFlags';
 import {
   type SettingsTab,
@@ -82,7 +83,6 @@ import { AnimatedSearchIcon } from '@icon/wide-search';
 import { AnimatedStarIcon } from '@icon/wide-star';
 import { AnimatedTaskIcon } from '@icon/wide-task';
 import { ContextMenu } from '@kobalte/core/context-menu';
-import BellSimpleIcon from '@phosphor/bell-simple.svg';
 import CaretRightIcon from '@phosphor/caret-right.svg';
 import CaretUpIcon from '@phosphor/caret-up.svg';
 import CompassIcon from '@phosphor/compass.svg';
@@ -119,6 +119,7 @@ import {
   Suspense,
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
+import { CalendarSidebarPreview } from './calendar-sidebar-preview';
 
 interface SidebarItem {
   id: ListView | (string & {});
@@ -126,7 +127,7 @@ interface SidebarItem {
   href: string;
   params?: Record<string, unknown>;
   icon?: Component<
-    JSX.SvgSVGAttributes<SVGSVGElement> | { triggerAnimation?: boolean }
+    JSX.SvgSVGAttributes<SVGSVGElement> & { triggerAnimation?: boolean }
   >;
   hotkey: ValidHotkey;
   hotkeyToken: HotkeyToken;
@@ -300,6 +301,15 @@ const isMarkdownDocumentsParams = (
   return initialClientFilters?.or?.includes('doc-markdown') ?? false;
 };
 
+function sidebarContent(
+  viewId: SidebarItem['id'],
+  params?: SidebarItem['params']
+): SplitContent {
+  return viewId === 'calendar'
+    ? { type: 'calendar', id: CALENDAR_BLOCK_ID }
+    : { type: 'component', id: viewId, params };
+}
+
 /**
  * Navigate to a sidebar view by pushing a fresh entry into the active split.
  * Holding shift opens it in a new split. Use in-app back/forward to return to
@@ -332,15 +342,12 @@ function navigateToSidebarView(args: {
     }
   }
 
-  return openWithSplit(
-    { type: 'component', id: viewId, params },
-    {
-      preferNewSplit: shiftKey,
-      mergeHistory: false,
-      allowDuplicate: true,
-      referredFrom,
-    }
-  );
+  return openWithSplit(sidebarContent(viewId, params), {
+    preferNewSplit: shiftKey,
+    mergeHistory: false,
+    allowDuplicate: viewId !== 'calendar',
+    referredFrom,
+  });
 }
 
 const registerSidebarHotkeys = ({
@@ -405,8 +412,15 @@ export const GoToHotkeys = () => {
 
   const gettingStartedEnabled = useGettingStartedEnabled();
   const calendarUiEnabled = useCalendarUiFlag();
+  const activityFeedEnabled = useActivityFeedFlag();
+  const recentViewEnabled = useRecentViewFlag();
   const links = createMemo((): SidebarItem[] =>
-    buildSidebarLinks(gettingStartedEnabled(), calendarUiEnabled())
+    buildSidebarLinks(
+      gettingStartedEnabled(),
+      calendarUiEnabled(),
+      activityFeedEnabled(),
+      recentViewEnabled()
+    )
   );
 
   const debounceResetHotkeysState = debounce(resetGoToHotkeysState, 2000);
@@ -656,7 +670,11 @@ const SidebarDropdownLink = (
     if (!activeContent) {
       return location.pathname.split('/').filter(Boolean).includes(props.id);
     }
-    return activeContent.id === props.id;
+    const expectedContent = sidebarContent(props.id, props.params);
+    return (
+      activeContent.type === expectedContent.type &&
+      activeContent.id === expectedContent.id
+    );
   };
 
   const handleContextMenuOpenChange = (open: boolean) => {
@@ -693,7 +711,7 @@ const SidebarDropdownLink = (
   const openFullscreen = () => {
     analytics.track('sidebar_click', { view: props.id });
     const handle = layout.replaceAllSplits(
-      { type: 'component', id: props.id, params: props.params },
+      sidebarContent(props.id, props.params),
       { referredFrom: 'sidebar' }
     );
     if (props.id === 'search' && handle) requestSearchFocus(handle.id);
@@ -1017,15 +1035,15 @@ const ACTIVITY_LINK: SidebarItem = {
   hotkeyToken: TOKENS.sidebar.goTo.activity,
 };
 
-const REMINDERS_LINK: SidebarItem = {
-  id: 'reminders',
-  label: 'Reminders',
-  href: LIST_VIEW_PATHS.reminders,
-  icon: BellSimpleIcon,
-  // `r` is Calendar; `m` is free and the only other letter in "reminders" that
-  // is not already a sidebar destination.
-  hotkey: 'm',
-  hotkeyToken: TOKENS.sidebar.goTo.reminders,
+const RECENT_LINK: SidebarItem = {
+  id: 'recent',
+  label: 'Recent',
+  href: LIST_VIEW_PATHS.recent,
+  icon: AnimatedActivityIcon,
+  // `r` is Calendar and `e`/`c`/`t` are taken; `n` is the only letter of
+  // "recent" that is not already a sidebar destination.
+  hotkey: 'n',
+  hotkeyToken: TOKENS.sidebar.goTo.recent,
 };
 
 /**
@@ -1043,7 +1061,9 @@ const REMINDERS_LINK: SidebarItem = {
  */
 const buildSidebarLinks = (
   showGettingStarted: boolean,
-  showCalendar: boolean
+  showCalendar: boolean,
+  showActivity: boolean,
+  showRecent: boolean
 ): SidebarItem[] => {
   let links: SidebarItem[] = [
     DASHBOARD_LINK,
@@ -1051,22 +1071,18 @@ const buildSidebarLinks = (
     ...SIDEBAR_LINKS.filter((link) => showCalendar || link.id !== 'calendar'),
   ];
 
-  if (ENABLE_ACTIVITY) {
+  if (showRecent) {
+    // Directly below Inbox; Activity anchors after it.
     const idx = links.findIndex((link) => link.id === 'inbox');
+    links = [...links.slice(0, idx + 1), RECENT_LINK, ...links.slice(idx + 1)];
+  }
+
+  if (showActivity) {
+    const anchorId = showRecent ? 'recent' : 'inbox';
+    const idx = links.findIndex((link) => link.id === anchorId);
     links = [
       ...links.slice(0, idx + 1),
       ACTIVITY_LINK,
-      ...links.slice(idx + 1),
-    ];
-  }
-
-  if (ENABLE_REMINDERS()) {
-    // Directly below Activity, or below Inbox when Activity is off.
-    const anchorId = ENABLE_ACTIVITY ? 'activity' : 'inbox';
-    const idx = links.findIndex((l) => l.id === anchorId);
-    links = [
-      ...links.slice(0, idx + 1),
-      REMINDERS_LINK,
       ...links.slice(idx + 1),
     ];
   }
@@ -1147,8 +1163,15 @@ export const AppSidebar = (props: AppSidebarProps) => {
 
   const gettingStartedEnabled = useGettingStartedEnabled();
   const calendarUiEnabled = useCalendarUiFlag();
+  const activityFeedEnabled = useActivityFeedFlag();
+  const recentViewEnabled = useRecentViewFlag();
   const allLinks = createMemo((): SidebarItem[] =>
-    buildSidebarLinks(gettingStartedEnabled(), calendarUiEnabled())
+    buildSidebarLinks(
+      gettingStartedEnabled(),
+      calendarUiEnabled(),
+      activityFeedEnabled(),
+      recentViewEnabled()
+    )
   );
 
   // Hides only the rendered row: the g+s hotkey and command menu entry keep
@@ -1323,7 +1346,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
   // lives in the collapsible Workspace section. `findLink` drops ids that
   // `buildSidebarLinks` gated out, so flag-gated rows need no filter here.
   const topLinks = createMemo(() =>
-    ['home', 'getting-started', 'inbox', 'activity', 'reminders']
+    ['home', 'getting-started', 'inbox', 'recent', 'activity']
       .filter(
         (id) => id !== 'getting-started' || !gettingStartedVisibility.hidden()
       )
@@ -1759,13 +1782,14 @@ const SidebarOpenInSplitMenu = (props: SidebarOpenInSplitMenuProps) => {
   );
 };
 
-const SidebarLink = (props: SidebarLinkProps) => {
+const SidebarLinkRow = (props: SidebarLinkProps) => {
   const [isHovering, setIsHovering] = createSignal(false);
 
   const analytics = useAnalytics();
   const layout = useSplitLayout();
 
   const location = useLocation();
+  const content = () => sidebarContent(props.id, props.params);
 
   // Always read the manager signal live: it is undefined until the split
   // layout mounts, which happens after the sidebar.
@@ -1779,181 +1803,193 @@ const SidebarLink = (props: SidebarLinkProps) => {
       return paths.includes(props.id);
     }
 
-    return activeContent?.id === props.id;
+    const expectedContent = content();
+    return (
+      activeContent.type === expectedContent.type &&
+      activeContent.id === expectedContent.id
+    );
   };
 
-  const content = () =>
-    ({
-      type: 'component',
-      id: props.id,
-      params: props.params,
-    }) as const;
+  return (
+    <NavRow
+      draggable={false}
+      data-sidebar-link={props.id}
+      data-active={isActive() ? '' : undefined}
+      active={isActive() && !props.suppressActiveStyle}
+      class="h-7"
+      fullWidth
+      tooltipPlacement="right"
+      onMouseEnter={() => setIsHovering(true)}
+      label={`Go to ${props.label}`}
+      hotkey={
+        props.standaloneHotkey
+          ? props.hotkeyToken
+          : [TOKENS.sidebar.goToLeader, props.hotkeyToken]
+      }
+      tooltipDisabled={props.sidebarState !== 'slim' || props.id === 'calendar'}
+      onMouseLeave={() => setIsHovering(false)}
+      onMouseDown={(e) => {
+        if (e.button !== 0) return;
+        analytics.track('sidebar_click', {
+          view: props.id,
+        });
+
+        e.preventDefault();
+        let currentContentHandle = globalSplitManager()?.activeSplit();
+
+        const currentContent = currentContentHandle?.content();
+        const expectedContent = content();
+        const isSameContent =
+          currentContent?.type === expectedContent.type &&
+          currentContent.id === expectedContent.id;
+
+        if (!isSameContent || e.shiftKey) {
+          currentContentHandle = navigateToSidebarView({
+            viewId: props.id,
+            params: props.params,
+            shiftKey: e.shiftKey,
+            activeSplit: currentContentHandle,
+            openWithSplit: layout.openWithSplit,
+            referredFrom: 'sidebar',
+          });
+        } else {
+          props.onActiveClick?.();
+        }
+
+        if (props.id === 'search' && currentContentHandle) {
+          requestSearchFocus(currentContentHandle.id);
+        }
+
+        globalSplitManager()?.returnFocus();
+      }}
+    >
+      <Show when={props.icon}>
+        <div class="size-5 shrink-0 flex items-center justify-center [&_svg]:size-3.5">
+          <Show
+            when={
+              isHovering() && props.sidebarState !== 'slim'
+                ? props.removeAction
+                : undefined
+            }
+            fallback={
+              <Dynamic component={props.icon} triggerAnimation={isHovering()} />
+            }
+          >
+            {(removeAction) => (
+              <Tooltip label={removeAction().tooltip} as="span" placement="top">
+                <span
+                  role="button"
+                  tabIndex={0}
+                  aria-label={removeAction().tooltip}
+                  class="flex items-center justify-center text-ink-muted
+                   rounded-md hover:bg-failure hover:text-surface p-1"
+                  onMouseDown={(e) => {
+                    // The row navigates on mousedown; the X must not.
+                    e.stopPropagation();
+                    e.preventDefault();
+                  }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    removeAction().onRemove();
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      removeAction().onRemove();
+                    }
+                  }}
+                >
+                  <XIcon />
+                </span>
+              </Tooltip>
+            )}
+          </Show>
+        </div>
+      </Show>
+
+      <div class="flex items-center gap-1 group-data-[slim=true]/sidebar:hidden">
+        <span class="whitespace-nowrap">{props.label}</span>
+      </div>
+
+      <Show
+        when={
+          isActive() &&
+          props.trailingWhenActive !== undefined &&
+          !props.hotkeyVisible
+        }
+      >
+        <div class="group-data-[slim=true]/sidebar:hidden ml-auto flex items-center text-ink-muted">
+          {props.trailingWhenActive}
+        </div>
+      </Show>
+
+      <Show
+        when={
+          isHovering() &&
+          !props.hotkeyVisible &&
+          !(isActive() && props.trailingWhenActive !== undefined)
+        }
+      >
+        <div class="group-data-[slim=true]/sidebar:hidden ml-auto">
+          <div class="flex gap-1 items-center text-ink-extra-muted font-normal text-xxs">
+            <Show when={!props.standaloneHotkey}>
+              <div class="text-xxs text-ink-extra-muted rounded-sm ml-auto border border-ink/5 px-1.5 py-0.5 -my-1">
+                <Hotkey token={TOKENS.sidebar.goToLeader} />
+              </div>
+              <div class="text-xxs text-ink-extra-muted rounded-sm ml-auto border border-ink/5 px-1.5 py-0.5 -my-1">
+                <Hotkey token={props.hotkeyToken} />
+              </div>
+            </Show>
+            <Show when={props.standaloneHotkey}>
+              <div class="text-xxs text-ink-extra-muted rounded-sm ml-auto border border-ink/5 px-1.5 py-0.5 -my-1">
+                <Hotkey token={props.hotkeyToken} />
+              </div>
+            </Show>
+          </div>
+        </div>
+      </Show>
+      <Show when={props.hotkeyVisible}>
+        <div
+          class={cn(
+            'text-xs size-4 rounded-xs flex items-center justify-center overflow-hidden bg-accent/10 border border-accent/30 text-accent',
+            props.sidebarState === 'slim' && 'absolute -bottom-1 -right-1',
+            props.sidebarState !== 'slim' && 'relative p-1 ml-auto'
+          )}
+        >
+          <Hotkey token={props.hotkeyToken} />
+        </div>
+      </Show>
+    </NavRow>
+  );
+};
+
+const SidebarLink = (props: SidebarLinkProps) => {
+  const [contextMenuOpen, setContextMenuOpen] = createSignal(false);
+  const content = () => sidebarContent(props.id, props.params);
+  const handleContextMenuOpenChange = (open: boolean) => {
+    setContextMenuOpen(open);
+    // Keep the collapsed sidebar overlay mounted while its portaled menu is open.
+    props.onContextMenuOpenChange?.(open);
+  };
 
   return (
     <SidebarOpenInSplitMenu
       content={content}
-      onOpenChange={props.onContextMenuOpenChange}
+      onOpenChange={handleContextMenuOpenChange}
       onOpened={(split, action) => {
         if (action === 'fullscreen' && props.id === 'search')
           requestSearchFocus(split.id);
       }}
     >
-      <NavRow
-        draggable={false}
-        data-sidebar-link={props.id}
-        data-active={isActive() ? '' : undefined}
-        active={isActive() && !props.suppressActiveStyle}
-        class="h-7"
-        fullWidth
-        tooltipPlacement="right"
-        onMouseEnter={() => setIsHovering(true)}
-        label={`Go to ${props.label}`}
-        hotkey={
-          props.standaloneHotkey
-            ? props.hotkeyToken
-            : [TOKENS.sidebar.goToLeader, props.hotkeyToken]
-        }
-        tooltipDisabled={props.sidebarState !== 'slim'}
-        onMouseLeave={() => setIsHovering(false)}
-        onMouseDown={(e) => {
-          if (e.button !== 0) return;
-          analytics.track('sidebar_click', {
-            view: props.id,
-          });
-
-          e.preventDefault();
-          let currentContentHandle = globalSplitManager()?.activeSplit();
-
-          const currentContent = currentContentHandle?.content();
-          const isSameContent =
-            currentContent?.type === 'component' &&
-            currentContent?.id === props.id;
-
-          if (!isSameContent || e.shiftKey) {
-            currentContentHandle = navigateToSidebarView({
-              viewId: props.id,
-              params: props.params,
-              shiftKey: e.shiftKey,
-              activeSplit: currentContentHandle,
-              openWithSplit: layout.openWithSplit,
-              referredFrom: 'sidebar',
-            });
-          } else {
-            props.onActiveClick?.();
-          }
-
-          if (props.id === 'search' && currentContentHandle) {
-            requestSearchFocus(currentContentHandle.id);
-          }
-
-          globalSplitManager()?.returnFocus();
-        }}
+      <Show
+        when={props.id === 'calendar'}
+        fallback={<SidebarLinkRow {...props} />}
       >
-        <Show when={props.icon}>
-          <div class="size-5 shrink-0 flex items-center justify-center [&_svg]:size-3.5">
-            <Show
-              when={
-                isHovering() && props.sidebarState !== 'slim'
-                  ? props.removeAction
-                  : undefined
-              }
-              fallback={
-                <Dynamic
-                  component={props.icon}
-                  triggerAnimation={isHovering()}
-                />
-              }
-            >
-              {(removeAction) => (
-                <Tooltip
-                  label={removeAction().tooltip}
-                  as="span"
-                  placement="top"
-                >
-                  <span
-                    role="button"
-                    tabIndex={0}
-                    aria-label={removeAction().tooltip}
-                    class="flex items-center justify-center text-ink-muted
-                   rounded-md hover:bg-failure hover:text-surface p-1"
-                    onMouseDown={(e) => {
-                      // The row navigates on mousedown; the X must not.
-                      e.stopPropagation();
-                      e.preventDefault();
-                    }}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      removeAction().onRemove();
-                    }}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' || e.key === ' ') {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        removeAction().onRemove();
-                      }
-                    }}
-                  >
-                    <XIcon />
-                  </span>
-                </Tooltip>
-              )}
-            </Show>
-          </div>
-        </Show>
-
-        <div class="flex items-center gap-1 group-data-[slim=true]/sidebar:hidden">
-          <span class="whitespace-nowrap">{props.label}</span>
-        </div>
-
-        <Show
-          when={
-            isActive() &&
-            props.trailingWhenActive !== undefined &&
-            !props.hotkeyVisible
-          }
-        >
-          <div class="group-data-[slim=true]/sidebar:hidden ml-auto flex items-center text-ink-muted">
-            {props.trailingWhenActive}
-          </div>
-        </Show>
-
-        <Show
-          when={
-            isHovering() &&
-            !props.hotkeyVisible &&
-            !(isActive() && props.trailingWhenActive !== undefined)
-          }
-        >
-          <div class="group-data-[slim=true]/sidebar:hidden ml-auto">
-            <div class="flex gap-1 items-center text-ink-extra-muted font-normal text-xxs">
-              <Show when={!props.standaloneHotkey}>
-                <div class="text-xxs text-ink-extra-muted rounded-sm ml-auto border border-ink/5 px-1.5 py-0.5 -my-1">
-                  <Hotkey token={TOKENS.sidebar.goToLeader} />
-                </div>
-                <div class="text-xxs text-ink-extra-muted rounded-sm ml-auto border border-ink/5 px-1.5 py-0.5 -my-1">
-                  <Hotkey token={props.hotkeyToken} />
-                </div>
-              </Show>
-              <Show when={props.standaloneHotkey}>
-                <div class="text-xxs text-ink-extra-muted rounded-sm ml-auto border border-ink/5 px-1.5 py-0.5 -my-1">
-                  <Hotkey token={props.hotkeyToken} />
-                </div>
-              </Show>
-            </div>
-          </div>
-        </Show>
-        <Show when={props.hotkeyVisible}>
-          <div
-            class={cn(
-              'text-xs size-4 rounded-xs flex items-center justify-center overflow-hidden bg-accent/10 border border-accent/30 text-accent',
-              props.sidebarState === 'slim' && 'absolute -bottom-1 -right-1',
-              props.sidebarState !== 'slim' && 'relative p-1 ml-auto'
-            )}
-          >
-            <Hotkey token={props.hotkeyToken} />
-          </div>
-        </Show>
-      </NavRow>
+        <CalendarSidebarPreview disabled={contextMenuOpen()}>
+          <SidebarLinkRow {...props} />
+        </CalendarSidebarPreview>
+      </Show>
     </SidebarOpenInSplitMenu>
   );
 };

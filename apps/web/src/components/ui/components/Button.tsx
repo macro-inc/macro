@@ -13,7 +13,7 @@ import { Tooltip } from './Tooltip';
 
 export type ButtonProps = ButtonRootProps<'button'> &
   ComponentProps<'button'> & {
-    depth?: 0 | 1 | 2 | 3 | 4 | 5;
+    depth?: 0 | 1 | 2 | 3 | 4;
     tooltipPlacement?: Placement;
     /**
      * Stretch the button (and, when a tooltip wraps it, the tooltip's trigger
@@ -55,19 +55,24 @@ export type ButtonVariant =
   | 'contrast'
   | 'cta';
 
+// Hover/press feedback is painted as a translucent scrim *on top of* each
+// variant's base background-color (via the `overlay-*` background-image utility)
+// rather than replacing/thinning the base color, so buttons keep their full
+// color on hover. The `cta`/`contrast` variants use a surface scrim so their
+// solid backgrounds lighten toward the text color instead of washing out.
 const variantStyles: Record<ButtonVariant, string> = {
   danger:
     'bg-failure/10 text-failure dark:bg-failure/15 focus-visible:bg-failure/25 focus-visible:border focus-visible:border-failure/50 not-disabled:hover:bg-failure/25 not-disabled:active:bg-failure/30 disabled:opacity-30 ',
   base: 'bg-transparent text-ink-muted border border-edge-muted not-disabled:hover:bg-hover not-disabled:hover:text-ink active:bg-active disabled:opacity-30 ',
   active:
-    'bg-accent-bg not-disabled:hover:bg-accent/30 text-accent disabled:opacity-30 ',
+    'bg-accent-bg not-disabled:hover:overlay-accent-bg text-accent disabled:opacity-30 ',
   success:
-    'bg-success-bg not-disabled:hover:bg-success/30 text-success disabled:opacity-30 ',
+    'bg-success-bg not-disabled:hover:overlay-success-bg text-success disabled:opacity-30 ',
   ghost:
-    'bg-transparent text-ink-muted not-disabled:hover:bg-hover not-disabled:hover:text-ink active:bg-active disabled:opacity-30 ',
+    'bg-transparent text-ink-muted not-disabled:hover:overlay-hover not-disabled:hover:text-ink active:overlay-active disabled:opacity-30 ',
   contrast:
-    'bg-ink text-surface border border-transparent not-disabled:hover:bg-ink/90 active:bg-ink/80 disabled:opacity-30 focus-visible:bg-ink/90',
-  cta: 'bg-accent text-surface border border-transparent not-disabled:hover:bg-accent/90 active:bg-accent/80 disabled:opacity-30 focus-visible:bg-accent/90',
+    'bg-ink text-surface border border-transparent not-disabled:hover:overlay-[color-mix(in_oklch,var(--color-surface)_12%,transparent)] active:overlay-[color-mix(in_oklch,var(--color-surface)_22%,transparent)] disabled:opacity-30 focus-visible:bg-ink/90',
+  cta: 'bg-accent text-surface border border-transparent not-disabled:hover:overlay-[color-mix(in_oklch,var(--color-surface)_12%,transparent)] active:overlay-[color-mix(in_oklch,var(--color-surface)_22%,transparent)] disabled:opacity-30 focus-visible:bg-accent/90',
 };
 
 const sizeStyles: Record<ButtonSize, string> = {

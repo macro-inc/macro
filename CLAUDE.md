@@ -78,12 +78,14 @@ just check                   # Type check without building
 ### Testing
 
 ```bash
-# Setup test environment
-docker compose --project-directory . -f docker/docker-compose.yml up -d postgres
-just setup_test_envs         # Setup .env files for tests
-just initialize_dbs          # Initialize all databases
-just test                    # Run tests
+just create_networks
+just run_dbs -d
+just setup_test_envs
+just initialize_dbs
+cargo test -p {crate}
 ```
+
+`just test` does not exist. Leave `SQLX_OFFLINE` unset when you run `cargo test`. Run `just prepare_db` only if you changed SQL queries.
 
 ### Pre Commit
 ```bash
@@ -93,12 +95,11 @@ just clippy                 # extra lints / best practices
 
 ### Database Management
 
-```bash
-just setup_macrodb           # Setup main database
-just setup_commsdb           # Setup communications database
-just setup_emaildb           # Setup email database
-just setup_contactsdb        # Setup contacts database
-```
+Use `just setup_macrodb` or `just initialize_dbs` to create and migrate MacroDB. Those recipes are the same.
+
+Schemas live in `crates/macro_db_client/migrations/`.
+
+To reset MacroDB, run `just crates/macro_db_client/drop_db -y -f`, then `just setup_macrodb`.
 
 ### Lambda Building
 
@@ -313,3 +314,23 @@ don't inject it directly into the error message.
 ### DB Crate Changes
 
 - When making changes to a db crate you should always update tests, and run prepare
+
+## Cursor Cloud specific instructions
+
+`.cursor/install.sh` prepares the durable caches, databases, test dependencies, frontend dependencies, service binaries, and stack init snapshot, then stops dockerd and nix-daemon so the Cloud bake can exit. `.cursor/start.sh` runs at boot and starts nothing beyond the nix daemon, so sessions and subagents are usable immediately. `.cursor/infra.sh` starts Docker, Postgres, and Redis on demand. `.cursor/stack.sh` starts the on-demand product stack. `.cursor/rebuild.sh` rebuilds the stack after backend edits. These scripts are the only supported entry points; each re-enters the pinned nix shell itself, so run them with plain `bash` from any environment.
+
+Nix is the only host dependency. The pinned dev shell supplies the Docker CLI and daemon, Compose, `fuse-overlayfs`, and OpenSSH. `ssh-keygen` must come from this shell.
+
+Service binaries come from the private S3 Nix cache. A sibling workflow on push to main (`push_local_stack_binaries.yml`) builds and pushes `.#local-stack-binaries`. It is not part of the deploy pipeline. Cursor Cloud realizes the aggregate with `nix build .#local-stack-binaries`.
+
+Set `NIX_CACHE_AWS_ACCESS_KEY_ID` and `NIX_CACHE_AWS_SECRET_ACCESS_KEY` as Cursor environment secrets. The IAM credentials need read-only access to the cache bucket.
+
+Set `DOPPLER_TOKEN` as a Cursor environment **runtime** secret: a Doppler service token scoped to the `local` project's `lcl_preview` config (the same token CI stores as `DOPPLER_PREVIEW_TOKEN` also works). Do not paste the token into chat. When the token is present, `bash .cursor/stack.sh` pulls those secrets instead of passing `--no-doppler`. Install/bake stays on stubs so the snapshot does not embed secrets. Existing running agents do not pick up newly added secrets — start a new agent after adding the token.
+
+Nothing runs after boot. Before DB-backed `cargo test -p <crate>`, run `bash .cursor/infra.sh` once — it brings up Docker, Postgres, and Redis in seconds because install baked the images and volumes. Pure-logic crate tests need nothing. Run `bash .cursor/stack.sh` for a product-ready environment.
+
+After backend edits, run `bash .cursor/rebuild.sh`. Do not use `just stack update` with the read-only Nix binary directory.
+
+No seeding or OTP is needed to log in: passwordless login auto-creates a user for any email, and the stack's auth service is built with `return_passwordless_code`, so the login API returns the code in its response (codes are also visible at the proxy's `/mailpit/` UI). `just seed-scenario apply --file seed/scenarios/team-perms.json` is optional, for multi-user team/permission fixtures. The `agent_harness_service` restart loop is expected when AI provider keys are missing; with `DOPPLER_TOKEN` those keys come from `local`/`lcl_preview`.
+
+Leave `SQLX_OFFLINE` unset for `cargo test`. If SQLx reports missing cached query data, run `just prepare_db` instead of enabling offline mode. Run crate tests from the repository root with `cargo test -p <crate>`.

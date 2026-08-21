@@ -20,7 +20,22 @@ type Provider = 'anthropic' | 'cerebras' | 'openai';
 const PROVIDERS = {
   anthropic: { key: 'ANTHROPIC_API_KEY', create: createAnthropic },
   cerebras: { key: 'CEREBRAS_API_KEY', create: createCerebras },
-  openai: { key: 'OPENAI_API_KEY', create: createOpenAI },
+  // `.chat()` pins OpenAI to Chat Completions. The default factory uses the
+  // Responses API, which references reasoning items across steps by id — and
+  // this org has Zero Data Retention, so those ids are never persisted. Every
+  // multi-step edit then dies on:
+  //   "Item with id 'rs_...' not found. Items are not persisted for Zero Data
+  //    Retention organizations."
+  // The supervisor chain ends in gpt-5.5, so without this the last-resort
+  // fallback fails outright whenever both Anthropic models are unavailable —
+  // exactly when it is needed.
+  openai: {
+    key: 'OPENAI_API_KEY',
+    create: (opts: { apiKey: string }) => {
+      const provider = createOpenAI(opts);
+      return (modelId: string) => provider.chat(modelId);
+    },
+  },
 } satisfies Record<
   Provider,
   {

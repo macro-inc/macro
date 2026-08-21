@@ -114,6 +114,11 @@ pub struct EntityPropertyUpdatedMetadata {
     pub actor_user_id: Option<MacroUserIdStr<'static>>,
     /// Full value after the update, or `None` when cleared without deleting the row.
     pub value: Option<PropertyValue>,
+    /// Full value before the update: `None` when the property was newly
+    /// attached, when the writer couldn't capture it, or on events published
+    /// before this field existed (hence the serde default).
+    #[serde(default)]
+    pub previous_value: Option<PropertyValue>,
     /// Time the entity-property row was updated.
     pub updated_at: DateTime<Utc>,
 }

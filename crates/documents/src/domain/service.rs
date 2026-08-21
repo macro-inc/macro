@@ -5,6 +5,9 @@ mod tests;
 
 use entity_access_management::domain::ports::EntityAccessManagementService;
 use model_entity::EntityType;
+use models_permissions::share_permission::{
+    LinkShare, SharePermissionV2, UpdateSharePermissionRequestV2,
+};
 use models_properties::EntityReference;
 use models_properties::api::SetPropertyValue;
 use std::borrow::Cow;
@@ -128,6 +131,15 @@ fn pending_content_for_file_type(file_type: Option<FileType>) -> DocumentContent
     match file_type {
         Some(FileType::Docx) => DocumentContent::pending_at(DocumentContentLocation::ConvertedPdf),
         _ => DocumentContent::pending_at(DocumentContentLocation::ObjectStorage),
+    }
+}
+
+fn should_revoke_non_owner_user_access(
+    share_permission: Option<&UpdateSharePermissionRequestV2>,
+) -> bool {
+    match share_permission.and_then(|permission| permission.link_share) {
+        Some(Some(LinkShare::Team)) | Some(None) => true,
+        Some(Some(LinkShare::Public)) | None => false,
     }
 }
 
@@ -1039,16 +1051,31 @@ impl<
         let file_type = args.file_type;
         let project_id = args.project_id;
         let sha = args.sha.clone();
+        let attribution = args.resolved_attribution();
+
+        // The owner's team default link-share preference decides the initial
+        // share permission; without a team the per-file-type default applies.
+        let team_default = self
+            .repo
+            .get_team_default_link_share(args.user_id.as_ref())
+            .await
+            .map_err(|e| DocumentError::Internal(e.into()))?;
+        let share_permission =
+            SharePermissionV2::new_document_share_permission(file_type, team_default);
 
         // Create document metadata in the database (full transaction)
-        let document_metadata = self.repo.create_document(args).await.map_err(|e| {
-            let err: anyhow::Error = e.into();
-            if err.to_string().contains("document with ID already exists") {
-                DocumentError::Conflict("document with ID already exists".to_string())
-            } else {
-                DocumentError::Internal(err)
-            }
-        })?;
+        let document_metadata = self
+            .repo
+            .create_document(args, share_permission)
+            .await
+            .map_err(|e| {
+                let err: anyhow::Error = e.into();
+                if err.to_string().contains("document with ID already exists") {
+                    DocumentError::Conflict("document with ID already exists".to_string())
+                } else {
+                    DocumentError::Internal(err)
+                }
+            })?;
 
         let document_id = document_metadata.document_id.clone();
 
@@ -1151,6 +1178,8 @@ impl<
             DocumentCreatedMetadata {
                 document_id: document_metadata.document_id.clone(),
                 owner: document_metadata.owner.clone(),
+                actor: Some(attribution.actor()),
+                on_behalf_of: attribution.on_behalf_of(),
                 document_name: document_metadata.document_name.clone(),
                 file_type,
                 project_id: project_id.map(|p| p.to_string()),
@@ -1244,6 +1273,8 @@ impl<
             .map(|s| FileType::clean_document_name(&s).unwrap_or(s));
 
         let share_permission_updated = args.share_permission.is_some();
+        let revoke_non_owner_user_access =
+            should_revoke_non_owner_user_access(args.share_permission.as_ref());
 
         self.repo
             .edit_document(EditDocumentRepoArgs {
@@ -1251,6 +1282,7 @@ impl<
                 document_name: document_name.clone(),
                 project_id: args.project_id.clone(),
                 share_permission: args.share_permission,
+                revoke_non_owner_user_access,
                 file_type: args.file_type.clone(),
             })
             .await
@@ -1402,16 +1434,29 @@ impl<
             None
         };
 
+        // The copier becomes the owner, so their team default decides the
+        // copy's initial share permission.
+        let team_default = self
+            .repo
+            .get_team_default_link_share(user_id.as_ref())
+            .await
+            .map_err(|e| DocumentError::Internal(e.into()))?;
+        let share_permission =
+            SharePermissionV2::new_document_share_permission(file_type, team_default);
+
         // Create the copy in the database
         let new_metadata = self
             .repo
-            .copy_document(CopyDocumentRepoArgs {
-                original_document: original_metadata.clone(),
-                user_id: user_id.clone(),
-                document_name,
-                file_type,
-                team_id: copy_team_id,
-            })
+            .copy_document(
+                CopyDocumentRepoArgs {
+                    original_document: original_metadata.clone(),
+                    user_id: user_id.clone(),
+                    document_name,
+                    file_type,
+                    team_id: copy_team_id,
+                },
+                share_permission,
+            )
             .await
             .map_err(|e| DocumentError::Internal(e.into()))?;
 

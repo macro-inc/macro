@@ -12,9 +12,9 @@ query Soup($input: SoupInput!) {
 
 query SoupBackfill($input: SoupInput!) {
 	user {
-		id
+		id @cacheOnly
 		soup(input: $input) {
-			items {
+			items @cacheOnly {
 				...SoupItemFields
 				... on GraphqlSoupEmailThread {
 					viewerPermission {

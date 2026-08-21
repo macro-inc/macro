@@ -32,7 +32,7 @@ use tokio_tungstenite::WebSocketStream;
 use tokio_tungstenite::tungstenite::Message as TungsteniteMessage;
 
 use crate::domain::channel::{Channel, pump};
-use crate::domain::ports::{Transport, TransportError};
+use crate::domain::ports::{Transport, TransportError, TransportSender};
 
 #[cfg(test)]
 mod test;
@@ -138,13 +138,21 @@ async fn run_pump<Rx, Socket, Frame, Error>(
 /// [`crate::testing::fake_wire::FakeTransport`].
 pub(crate) struct WebSocketWire<Rx> {
     outgoing: mpsc::UnboundedSender<String>,
-    incoming: AsyncMutex<mpsc::UnboundedReceiver<Rx>>,
+    incoming: mpsc::UnboundedReceiver<Rx>,
 }
 
-impl<Tx, Rx> Transport<Tx, Rx> for WebSocketWire<Rx>
+/// The sending half: serializes and hands the text to the pump's write half.
+///
+/// Not parameterized by the message type: the wire carries JSON text, so any
+/// serializable message can go out on it, and which one does is the caller's
+/// business rather than this half's.
+pub(crate) struct WebSocketSender {
+    outgoing: mpsc::UnboundedSender<String>,
+}
+
+impl<Tx> TransportSender<Tx> for WebSocketSender
 where
     Tx: Serialize + Send + Sync + 'static,
-    Rx: Send + 'static,
 {
     async fn send(&self, message: Tx) -> Result<(), TransportError> {
         let payload = serde_json::to_string(&message)
@@ -153,9 +161,23 @@ where
             .send(payload)
             .map_err(|_| TransportError::Client("WebSocket connection closed".to_owned()))
     }
+}
 
-    async fn recv(&self) -> Result<Option<Rx>, TransportError> {
-        Ok(self.incoming.lock().await.recv().await)
+impl<Tx, Rx> Transport<Tx, Rx> for WebSocketWire<Rx>
+where
+    Tx: Serialize + Send + Sync + 'static,
+    Rx: Send + 'static,
+{
+    type Sender = WebSocketSender;
+    type Receiver = mpsc::UnboundedReceiver<Rx>;
+
+    fn split(self) -> (Self::Sender, Self::Receiver) {
+        (
+            WebSocketSender {
+                outgoing: self.outgoing,
+            },
+            self.incoming,
+        )
     }
 }
 
@@ -167,10 +189,7 @@ where
     Tx: Serialize + Send + Sync + 'static,
     Rx: Send + 'static,
 {
-    pump(Arc::new(WebSocketWire {
-        outgoing,
-        incoming: AsyncMutex::new(incoming),
-    }))
+    pump(WebSocketWire { outgoing, incoming })
 }
 
 /// An axum WebSocket acceptor and its stream of accepted runtime connections.
@@ -229,13 +248,27 @@ where
     Rx: DeserializeOwned + Send + Sync + 'static,
 {
     ws.on_upgrade(move |socket: WebSocket| async move {
-        let (outgoing_tx, outgoing_rx) = mpsc::unbounded_channel();
-        let (incoming_tx, incoming_rx) = mpsc::unbounded_channel();
-        let _ = transport
-            .incoming_tx
-            .send(wire_channel(outgoing_tx, incoming_rx));
-        run_pump(socket, outgoing_rx, incoming_tx).await;
+        let _ = transport.incoming_tx.send(connect_socket(socket));
     })
+}
+
+/// Bridge an already-upgraded WebSocket into its logical channel, spawning the
+/// frame pump as an independent task and returning the `Channel` immediately.
+///
+/// Unlike [`ServerTransport`], this doesn't own routing or session
+/// identification - it's the building block for a caller that needs to key
+/// connections by something in the upgrade request (e.g. a query parameter):
+/// build a plain axum route with a [`WebSocketUpgrade`] extractor, do
+/// whatever routing the request needs, and hand the resulting socket here.
+pub fn connect_socket<Tx, Rx>(socket: WebSocket) -> Channel<Tx, Rx>
+where
+    Tx: Serialize + Send + Sync + 'static,
+    Rx: DeserializeOwned + Send + Sync + 'static,
+{
+    let (outgoing_tx, outgoing_rx) = mpsc::unbounded_channel();
+    let (incoming_tx, incoming_rx) = mpsc::unbounded_channel();
+    tokio::spawn(run_pump(socket, outgoing_rx, incoming_tx));
+    wire_channel(outgoing_tx, incoming_rx)
 }
 
 /// Build the runtime-side wire over an already-connected WebSocket stream.
@@ -254,7 +287,7 @@ where
 
     WebSocketWire {
         outgoing: outgoing_tx,
-        incoming: AsyncMutex::new(incoming_rx),
+        incoming: incoming_rx,
     }
 }
 
@@ -265,5 +298,5 @@ where
     Rx: DeserializeOwned + Send + Sync + 'static,
     S: AsyncRead + AsyncWrite + Unpin + Send + 'static,
 {
-    pump(Arc::new(client_wire::<Rx, S>(stream)))
+    pump(client_wire::<Rx, S>(stream))
 }

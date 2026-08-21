@@ -10,78 +10,6 @@
     "version": "0.1.0"
   },
   "paths": {
-    "/activity": {
-      "get": {
-        "tags": ["activity::get_recent_activity"],
-        "summary": "Gets the users recent activities",
-        "operationId": "get_recent_activity_handler",
-        "parameters": [
-          {
-            "name": "limit",
-            "in": "query",
-            "description": "The maximum number of items to retreive. Default 10, max 100.",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int64"
-            }
-          },
-          {
-            "name": "offset",
-            "in": "query",
-            "description": "The offset to start from. Default 0.",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int64"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/GetActivitiesResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/GenericErrorResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/GenericErrorResponse"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/GenericErrorResponse"
-                }
-              }
-            }
-          }
-        },
-        "deprecated": true
-      }
-    },
     "/annotations/anchors": {
       "delete": {
         "tags": ["annotations::delete_anchor"],
@@ -860,6 +788,44 @@
           },
           "400": {
             "description": "Invalid or unsupported calendar viewport"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "500": {
+            "description": "Calendar query failed"
+          }
+        }
+      }
+    },
+    "/calendar-events/preview": {
+      "post": {
+        "tags": ["calendar_events"],
+        "summary": "Resolve mentioned calendar events to the requester's own projections.",
+        "operationId": "mention_previews",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CalendarMentionPreviewRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Requester-relative previews for the mentioned events",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarMentionPreviewResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Too many events in one request"
           },
           "401": {
             "description": "Authentication required"
@@ -5003,6 +4969,66 @@
         }
       }
     },
+    "/crm/contacts/by-email": {
+      "get": {
+        "tags": ["crm::inbound::axum_router::get_contact_by_email"],
+        "summary": "Look up a CRM contact by email in the caller's team. Returns a null\n`contact` when no visible contact exists. Any team member may resolve a\nvisible contact; admin/owner callers may also resolve hidden contacts and\ncontacts under hidden companies.",
+        "operationId": "get_contact_by_email",
+        "parameters": [
+          {
+            "name": "email",
+            "in": "query",
+            "description": "The contact email to resolve within the caller's team.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The matching contact, or a null contact when none is visible.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetContactByEmailResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/crm/contacts/{contact_id}": {
       "get": {
         "tags": ["crm::inbound::axum_router::get_contact"],
@@ -5743,7 +5769,12 @@
                 "schema": {
                   "type": "object",
                   "description": "Response for creating a task.",
-                  "required": ["documentId", "documentMetadata", "token"],
+                  "required": [
+                    "documentId",
+                    "documentMetadata",
+                    "token",
+                    "initialSnapshot"
+                  ],
                   "properties": {
                     "documentId": {
                       "type": "string",
@@ -5752,6 +5783,10 @@
                     "documentMetadata": {
                       "$ref": "#/components/schemas/DocumentResponseMetadata",
                       "description": "Metadata for the created document"
+                    },
+                    "initialSnapshot": {
+                      "type": "string",
+                      "description": "Base64-encoded canonical Loro snapshot used to initialize the task."
                     },
                     "teamId": {
                       "type": ["string", "null"],
@@ -7930,7 +7965,8 @@
                 "crm_company",
                 "crm_contact",
                 "reminder",
-                "skill"
+                "skill",
+                "agent_session"
               ]
             }
           },
@@ -8393,7 +8429,7 @@
           {
             "name": "sort_method",
             "in": "query",
-            "description": "Sort method. Options are viewed_at, created_at, updated_at, viewed_updated. Defaults to viewed_at.",
+            "description": "Sort method. Options are viewed_at, created_at, updated_at,\nviewed_updated, frecency, touched_by_me. Defaults to viewed_at.",
             "required": false,
             "schema": {
               "$ref": "#/components/schemas/SoupApiSort"
@@ -9744,7 +9780,8 @@
                 "crm_company",
                 "crm_contact",
                 "reminder",
-                "skill"
+                "skill",
+                "agent_session"
               ]
             }
           },
@@ -11068,28 +11105,6 @@
         "description": "Ordered from least to most access top -> bottom",
         "enum": ["view", "comment", "edit", "owner"]
       },
-      "Activity": {
-        "oneOf": [
-          {
-            "type": "object",
-            "required": ["Document"],
-            "properties": {
-              "Document": {
-                "$ref": "#/components/schemas/BasicDocument"
-              }
-            }
-          },
-          {
-            "type": "object",
-            "required": ["Chat"],
-            "properties": {
-              "Chat": {
-                "$ref": "#/components/schemas/Chat"
-              }
-            }
-          }
-        ]
-      },
       "ActivityType": {
         "type": "string",
         "description": "The kind of activity a user performs in a channel.",
@@ -11125,7 +11140,8 @@
                   "crm_company",
                   "crm_contact",
                   "reminder",
-                  "skill"
+                  "skill",
+                  "agent_session"
                 ]
               }
             ],
@@ -12598,14 +12614,15 @@
       },
       "Bot": {
         "type": "object",
-        "description": "Bot row.",
+        "description": "Bot row.\n\nClients deserialize this, so both derives are used.",
         "required": [
           "id",
           "kind",
           "name",
           "handle",
           "created_at",
-          "updated_at"
+          "updated_at",
+          "has_agent"
         ],
         "properties": {
           "avatar_url": {
@@ -12633,6 +12650,10 @@
           "handle": {
             "type": "string",
             "description": "Stable handle."
+          },
+          "has_agent": {
+            "type": "boolean",
+            "description": "Whether mentioning this bot opens a sandboxed coding-agent session."
           },
           "id": {
             "$ref": "#/components/schemas/BotId",
@@ -13030,6 +13051,138 @@
               "type": "string"
             },
             "description": "Event statuses such as `confirmed`, `tentative`, or `cancelled`."
+          }
+        }
+      },
+      "CalendarMentionEvent": {
+        "type": "object",
+        "description": "Meeting-level fields shown in a calendar event mention preview, taken from\nthe requester's own projection of the meeting.",
+        "required": [
+          "viewerEventId",
+          "title",
+          "time",
+          "isRecurring",
+          "attendeeCount",
+          "updatedAt"
+        ],
+        "properties": {
+          "attendeeCount": {
+            "type": "integer",
+            "description": "Number of attendees on the requester's copy.",
+            "minimum": 0
+          },
+          "isRecurring": {
+            "type": "boolean",
+            "description": "Whether the event repeats."
+          },
+          "location": {
+            "type": ["string", "null"],
+            "description": "Location label, when set."
+          },
+          "occurrenceKey": {
+            "type": ["string", "null"],
+            "description": "Key of the previewed instance, absent when no occurrence is\nmaterialized."
+          },
+          "organizerEmail": {
+            "type": ["string", "null"],
+            "description": "Organizer email."
+          },
+          "organizerName": {
+            "type": ["string", "null"],
+            "description": "Organizer display name."
+          },
+          "time": {
+            "$ref": "#/components/schemas/EventTime",
+            "description": "Time of the previewed instance: the requested occurrence when it\nexists, else the next upcoming one, else the latest past one, else the\nseries start."
+          },
+          "title": {
+            "type": "string",
+            "description": "Display title."
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Entity update time of the requester's copy."
+          },
+          "viewerEventId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The requester's own event entity for the mentioned meeting. Differs\nfrom the mentioned id when the mention came from another attendee."
+          }
+        }
+      },
+      "CalendarMentionPreviewItem": {
+        "type": "object",
+        "description": "Resolution of one mentioned event, in request order.",
+        "required": ["eventId", "type"],
+        "properties": {
+          "event": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/CalendarMentionEvent",
+                "description": "Preview of the requester's own copy, present only with access."
+              }
+            ]
+          },
+          "eventId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The mentioned event id, echoed from the request."
+          },
+          "type": {
+            "$ref": "#/components/schemas/CalendarMentionPreviewKind",
+            "description": "Visibility of the mentioned event to the requester."
+          }
+        }
+      },
+      "CalendarMentionPreviewKind": {
+        "type": "string",
+        "description": "Requester-relative visibility of one mentioned event.",
+        "enum": ["access", "no_access", "does_not_exist"]
+      },
+      "CalendarMentionPreviewRequest": {
+        "type": "object",
+        "description": "Batch calendar mention preview request.",
+        "required": ["items"],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CalendarMentionPreviewRequestItem"
+            },
+            "description": "Mentioned events to resolve, at most 100."
+          }
+        }
+      },
+      "CalendarMentionPreviewRequestItem": {
+        "type": "object",
+        "description": "One mentioned event to resolve for the requester.",
+        "required": ["eventId"],
+        "properties": {
+          "eventId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Mentioned calendar event id."
+          },
+          "occurrenceKey": {
+            "type": ["string", "null"],
+            "description": "Occurrence the mention points at, when it targets one instance."
+          }
+        }
+      },
+      "CalendarMentionPreviewResponse": {
+        "type": "object",
+        "description": "Batch calendar mention preview response.",
+        "required": ["items"],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CalendarMentionPreviewItem"
+            }
           }
         }
       },
@@ -14691,6 +14844,38 @@
           }
         }
       },
+      "CreateBotRequest": {
+        "type": "object",
+        "description": "Request to create a bot.",
+        "required": ["name", "handle"],
+        "properties": {
+          "avatar_url": {
+            "type": ["string", "null"],
+            "description": "Optional avatar URL."
+          },
+          "description": {
+            "type": ["string", "null"],
+            "description": "Optional description."
+          },
+          "handle": {
+            "type": "string",
+            "description": "Stable handle."
+          },
+          "has_agent": {
+            "type": ["boolean", "null"],
+            "description": "Whether mentioning this bot opens a sandboxed coding-agent session. Defaults to false."
+          },
+          "name": {
+            "type": "string",
+            "description": "Display name."
+          },
+          "team_id": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Team owner. The caller must be a team administrator or owner. Omit for a user-owned bot."
+          }
+        }
+      },
       "CreateBulkDocumentResponse": {
         "type": "object",
         "required": ["error", "data"],
@@ -14800,6 +14985,10 @@
           "handle": {
             "type": "string",
             "description": "Stable handle."
+          },
+          "has_agent": {
+            "type": ["boolean", "null"],
+            "description": "Whether mentioning this bot opens a sandboxed coding-agent session. Defaults to false."
           },
           "name": {
             "type": "string",
@@ -15235,7 +15424,8 @@
                   "crm_company",
                   "crm_contact",
                   "reminder",
-                  "skill"
+                  "skill",
+                  "agent_session"
                 ]
               }
             ],
@@ -15348,7 +15538,12 @@
       "CreateTaskResponse": {
         "type": "object",
         "description": "Response for creating a task.",
-        "required": ["documentId", "documentMetadata", "token"],
+        "required": [
+          "documentId",
+          "documentMetadata",
+          "token",
+          "initialSnapshot"
+        ],
         "properties": {
           "documentId": {
             "type": "string",
@@ -15357,6 +15552,10 @@
           "documentMetadata": {
             "$ref": "#/components/schemas/DocumentResponseMetadata",
             "description": "Metadata for the created document"
+          },
+          "initialSnapshot": {
+            "type": "string",
+            "description": "Base64-encoded canonical Loro snapshot used to initialize the task."
           },
           "teamId": {
             "type": ["string", "null"],
@@ -15444,7 +15643,7 @@
       },
       "CreateWebhookRequest": {
         "type": "object",
-        "description": "Request to create a webhook.",
+        "description": "Request to create a webhook.\n\nClients serialize this, so both derives are used.",
         "required": ["scope", "namespace", "name", "endpoint_url", "filters"],
         "properties": {
           "endpoint_url": {
@@ -15482,7 +15681,7 @@
       },
       "CreateWebhookResponse": {
         "type": "object",
-        "description": "Webhook returned after creation, including its signing secret.",
+        "description": "Webhook returned after creation, including its signing secret.\n\nClients deserialize this, so both derives are used.",
         "required": [
           "id",
           "workspace_id",
@@ -16275,6 +16474,10 @@
         "description": "Metadata for [`DocumentTopicEvent::Created`].",
         "required": ["document_id", "owner", "document_name"],
         "properties": {
+          "actor": {
+            "type": ["string", "null"],
+            "description": "Who mechanically created the document. Absent on events published\nbefore attribution: ingest then treats [`Self::owner`] as the actor."
+          },
           "created_at": {
             "type": ["string", "null"],
             "format": "date-time",
@@ -16296,6 +16499,17 @@
               {
                 "$ref": "#/components/schemas/FileType",
                 "description": "File type of the document, when known."
+              }
+            ]
+          },
+          "on_behalf_of": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/MacroUserIdStr",
+                "description": "The user whose feed this creation belongs on, when different from\n[`Self::actor`]. Absent means the actor is also the subject."
               }
             ]
           },
@@ -17847,7 +18061,8 @@
                   "crm_company",
                   "crm_contact",
                   "reminder",
-                  "skill"
+                  "skill",
+                  "agent_session"
                 ]
               }
             ],
@@ -17894,7 +18109,8 @@
                   "crm_company",
                   "crm_contact",
                   "reminder",
-                  "skill"
+                  "skill",
+                  "agent_session"
                 ]
               }
             ],
@@ -18566,28 +18782,6 @@
           }
         }
       },
-      "GetActivitiesResponse": {
-        "type": "object",
-        "required": ["error"],
-        "properties": {
-          "data": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/UserActivitiesResponse",
-                "description": "Data to be returned"
-              }
-            ]
-          },
-          "error": {
-            "type": "boolean",
-            "description": "Indicates if an error occurred"
-          }
-        },
-        "deprecated": true
-      },
       "GetAttachmentReferencesResponse": {
         "type": "object",
         "description": "Response from the attachment-references endpoint.",
@@ -18704,6 +18898,23 @@
             "items": {
               "$ref": "#/components/schemas/ProjectPreview"
             }
+          }
+        }
+      },
+      "GetContactByEmailResponse": {
+        "type": "object",
+        "description": "Response from looking up a CRM contact by email.",
+        "properties": {
+          "contact": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/CrmContactResponse",
+                "description": "The matching contact, or `null` when none is visible."
+              }
+            ]
           }
         }
       },
@@ -19558,9 +19769,14 @@
           }
         }
       },
+      "LinkShare": {
+        "type": "string",
+        "description": "Defines who can access an item through its share link.",
+        "enum": ["PUBLIC", "TEAM"]
+      },
       "ListWebhooksResponse": {
         "type": "object",
-        "description": "Webhooks visible to the caller across their personal and team workspaces.",
+        "description": "Webhooks visible to the caller across their personal and team workspaces.\n\nClients deserialize this, so both derives are used.",
         "required": ["webhooks"],
         "properties": {
           "webhooks": {
@@ -19763,7 +19979,7 @@
               },
               {
                 "$ref": "#/components/schemas/SoupApiSort",
-                "description": "Sort method. Options are viewed_at, created_at, updated_at, viewed_updated. Defaults to viewed_at."
+                "description": "Sort method. Options are viewed_at, created_at, updated_at,\nviewed_updated, frecency, touched_by_me. Defaults to viewed_at."
               }
             ]
           }
@@ -19773,6 +19989,32 @@
         "type": "string",
         "description": "The role a user has within a channel.",
         "enum": ["owner", "admin", "member"]
+      },
+      "PatchBotRequest": {
+        "type": "object",
+        "description": "Request to patch a bot.",
+        "properties": {
+          "avatar_url": {
+            "type": ["string", "null"],
+            "description": "Optional avatar URL."
+          },
+          "description": {
+            "type": ["string", "null"],
+            "description": "Optional description."
+          },
+          "handle": {
+            "type": ["string", "null"],
+            "description": "Stable handle."
+          },
+          "has_agent": {
+            "type": ["boolean", "null"],
+            "description": "Whether mentioning this bot opens a sandboxed coding-agent session. Omit to leave unchanged."
+          },
+          "name": {
+            "type": ["string", "null"],
+            "description": "Display name."
+          }
+        }
       },
       "PatchChannelRequest": {
         "type": "object",
@@ -21213,7 +21455,8 @@
                   "crm_company",
                   "crm_contact",
                   "reminder",
-                  "skill"
+                  "skill",
+                  "agent_session"
                 ]
               }
             ],
@@ -21692,7 +21935,7 @@
       },
       "SharePermissionV2": {
         "type": "object",
-        "required": ["id", "isPublic", "owner"],
+        "required": ["id", "owner"],
         "properties": {
           "channelSharePermissions": {
             "type": ["array", "null"],
@@ -21705,24 +21948,31 @@
             "type": "string",
             "description": "The share permission id"
           },
-          "isPublic": {
-            "type": "boolean",
-            "description": "If the item is publicly accessible"
+          "linkShare": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/LinkShare",
+                "description": "Who can access the item through its share link"
+              }
+            ]
           },
-          "owner": {
-            "type": "string",
-            "description": "The owner of the item"
-          },
-          "publicAccessLevel": {
+          "linkShareAccessLevel": {
             "oneOf": [
               {
                 "type": "null"
               },
               {
                 "$ref": "#/components/schemas/AccessLevel",
-                "description": "The level of public access"
+                "description": "The level of access granted through the share link"
               }
             ]
+          },
+          "owner": {
+            "type": "string",
+            "description": "The owner of the item"
           }
         }
       },
@@ -21773,11 +22023,16 @@
               "is_favorited": {
                 "type": "boolean",
                 "description": "Whether the requesting user has favorited this entity."
+              },
+              "touched_at": {
+                "type": ["string", "null"],
+                "format": "date-time",
+                "description": "The caller's latest own mutation of this entity, present only when the\npage was ordered by `touched_by_me`. Clients keep the touched feed\nordered on this value, so it can be bumped optimistically."
               }
             }
           }
         ],
-        "description": "API representation of a soup item with its frecency score."
+        "description": "API representation of a soup item with its per-viewer enrichments."
       },
       "SoupApiSort": {
         "type": "string",
@@ -21787,7 +22042,8 @@
           "created_at",
           "updated_at",
           "viewed_updated",
-          "frecency"
+          "frecency",
+          "touched_by_me"
         ]
       },
       "SoupApiSortDirection": {
@@ -23230,7 +23486,8 @@
                   "crm_company",
                   "crm_contact",
                   "reminder",
-                  "skill"
+                  "skill",
+                  "agent_session"
                 ]
               }
             ],
@@ -23834,18 +24091,25 @@
             },
             "description": "Any channel share permissions to be created/updated/removed"
           },
-          "isPublic": {
-            "type": ["boolean", "null"],
-            "description": "If the item is publicly accessible"
+          "linkShare": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/LinkShare",
+                "description": "Who can access the item through its share link. Omit to leave unchanged or pass `null` to\ndisable link sharing."
+              }
+            ]
           },
-          "publicAccessLevel": {
+          "linkShareAccessLevel": {
             "oneOf": [
               {
                 "type": "null"
               },
               {
                 "$ref": "#/components/schemas/AccessLevel",
-                "description": "The level of public access"
+                "description": "The link access level. Omit to leave unchanged or pass `null` to reset it to the default\nlevel when a link share exists."
               }
             ]
           }
@@ -23904,30 +24168,6 @@
             "type": "string"
           }
         }
-      },
-      "UserActivitiesResponse": {
-        "type": "object",
-        "required": ["recent", "total"],
-        "properties": {
-          "next_offset": {
-            "type": ["integer", "null"],
-            "format": "int64",
-            "description": "The next offset to be used if there is one"
-          },
-          "recent": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/Activity"
-            },
-            "description": "The activities returned from the query"
-          },
-          "total": {
-            "type": "integer",
-            "format": "int64",
-            "description": "The total number of activities the user has"
-          }
-        },
-        "deprecated": true
       },
       "UserDocumentViewLocation": {
         "type": "object",
@@ -24119,7 +24359,7 @@
       },
       "Webhook": {
         "type": "object",
-        "description": "Webhook row returned by application APIs.",
+        "description": "Webhook row returned by application APIs.\n\nClients deserialize this, so both derives are used.",
         "required": [
           "id",
           "workspace_id",
@@ -24229,7 +24469,7 @@
       },
       "WebhookScope": {
         "type": "string",
-        "description": "Scope that owns a newly-created webhook.",
+        "description": "Scope that owns a newly-created webhook.\n\nClients serialize this, so both derives are used.",
         "enum": ["user", "team"]
       },
       "WebhookStatus": {

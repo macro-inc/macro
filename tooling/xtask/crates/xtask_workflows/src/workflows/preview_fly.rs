@@ -25,6 +25,9 @@ use gh_workflow::{
 
 use crate::workflows::{runners, steps, vars};
 
+#[cfg(test)]
+mod test;
+
 /// The per-PR Fly app name; also the preview hostname (`<app>.fly.dev`).
 const APP_NAME: &str = "macro-pr-${{ github.event.pull_request.number }}";
 
@@ -83,10 +86,12 @@ fn deploy() -> Job {
         // sccache keys, and their volumes never carry a cargo target dir).
         .runs_on(runners::Runner::Mid.with_cache_tag(vars::PREVIEW_CACHE_TAG))
         // Backstop against hangs: worst honest case is ~15 min cold builds +
-        // ~6 min cold mirror push + the 30 min flyctl wait cap. Anything past
-        // an hour is a stuck step, not a slow deploy (a hung log fetch once
-        // burned 2h26m of runner before someone cancelled it by hand).
-        .timeout_minutes(60u32)
+        // a cold `crates/agent_harness/container` bake (two nix shells) +
+        // ~6 min cold mirror push + the 30 min flyctl wait cap. 90m leaves
+        // room for that extra image; anything past that is a stuck step (a
+        // hung log fetch once burned 2h26m of runner before someone cancelled
+        // it by hand).
+        .timeout_minutes(90u32)
         .permissions(
             Permissions::default()
                 .contents(Level::Read)
@@ -121,13 +126,7 @@ fn deploy() -> Job {
         // Namespace remote builder: persistent BuildKit layer cache across
         // runs, same as the deploy workflows use. The aux-image builds and the
         // preview-image build both go through it.
-        .add_step(
-            Step::new("Set up Namespace Docker builder").uses(
-                "namespacelabs",
-                "nscloud-setup-buildx-action",
-                "d059ed7184f0bc7c8b27e8810cea153d02bcc6dd",
-            ), // v0.0.23
-        )
+        .add_step(steps::setup_namespace_buildx())
         .add_step(steps::setup_nix())
         .add_step(steps::setup_reqs_web("Setup dev shell + web deps", false))
         .add_step(steps::configure_namespace_sccache(
@@ -222,6 +221,10 @@ fn build_artifacts() -> Step<Run> {
             cd apps/web
             export MODE=development NODE_ENV=production
             export VITE_LOCAL_SERVERS=ALL VITE_LOCAL_BACKEND_ORIGIN=same-origin
+            # Same ceiling as `just -f apps/web/justfile build-dev`: vite's
+            # chunk-render peaks at node's default ~4GB heap and aborts with
+            # "Ineffective mark-compacts near heap limit".
+            export NODE_OPTIONS=--max-old-space-size=6144
             bun run --bun build
             LANE
 
@@ -281,7 +284,10 @@ fn build_artifacts() -> Step<Run> {
             cat > "$lanes/images.sh" <<'LANE'
             set -euo pipefail
             docker compose --project-directory . -p macro -f docker/docker-compose.yml build \
-              search sync_service websocket_service lexical_service ai_editing_worker
+              search sync_service websocket_service lexical_service ai_editing_worker analytics_proxy
+            # Not a compose service, so `config --images` never lists it.
+            # BuildKit cache on this runner is the freshness check.
+            docker build --tag "$LOCAL_SANDBOX_IMAGE" crates/agent_harness/container
             # The image BUILD above is fatal; the premirror below is a pure
             # optimization with an authoritative fallback (the deploy step's
             # mirror loop), so its failure only costs a slower push later.
@@ -301,7 +307,7 @@ fn build_artifacts() -> Step<Run> {
             flyctl auth docker
             registry="registry.fly.io/$APP_NAME"
             for img in $(docker compose --project-directory . -p macro \
-                -f docker/docker-compose.yml config --images | sort -u) alpine:3; do
+                -f docker/docker-compose.yml config --images | sort -u) alpine:3 "$LOCAL_SANDBOX_IMAGE"; do
               if ! docker image inspect "$img" >/dev/null 2>&1 && ! docker pull "$img"; then
                 echo "premirror: skipping $img (not local, not pullable)"
                 continue
@@ -432,6 +438,7 @@ fn build_artifacts() -> Step<Run> {
             fi
     "#})
         .add_env(("FLY_ORG", "${{ vars.FLY_ORG || secrets.FLY_ORG }}"))
+        .add_env(("LOCAL_SANDBOX_IMAGE", vars::AGENT_HARNESS_LOCAL_IMAGE))
 }
 
 /// When the bake dies (typically the backend health gate), the answer is in
@@ -684,10 +691,17 @@ fn deploy_to_fly() -> Step<Run> {
             docker image inspect alpine:3 >/dev/null 2>&1 || docker pull alpine:3
             mkdir -p preview-ctx/preload
             : > preview-ctx/preload/manifest.txt
-            for img in $images alpine:3; do
+            for img in $images alpine:3 "$LOCAL_SANDBOX_IMAGE"; do
               # Images the bake didn't leave in the daemon (snapshot cache hit,
               # or app-layer-only images like proxy/mailpit) get pulled here.
-              docker image inspect "$img" >/dev/null 2>&1 || docker pull "$img"
+              # Compose `config --images` also lists locally-built tags
+              # (analytics_proxy, sdk-webhook-relay) that are not on Docker Hub;
+              # premirror already skips those — do the same so a missing local
+              # tag cannot fail the deploy.
+              if ! docker image inspect "$img" >/dev/null 2>&1 && ! docker pull "$img"; then
+                echo "mirror: skipping $img (not local, not pullable)"
+                continue
+              fi
               id=$(docker image inspect -f '{{.Id}}' "$img")
               # Content-addressed tag: same image content = same ref, so a
               # redeploy's push is skippable by a manifest existence check and
@@ -810,6 +824,7 @@ fn deploy_to_fly() -> Step<Run> {
         // it's not sensitive, but people reasonably reach for secrets first.
         .add_env(("FLY_ORG", "${{ vars.FLY_ORG || secrets.FLY_ORG }}"))
         .add_env(("DOPPLER_PREVIEW_TOKEN", vars::DOPPLER_PREVIEW_TOKEN))
+        .add_env(("LOCAL_SANDBOX_IMAGE", vars::AGENT_HARNESS_LOCAL_IMAGE))
 }
 
 /// After a healthy deploy this PR's volume is, by construction, a fully

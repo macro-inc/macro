@@ -5,6 +5,7 @@
 //! call sites should choose the lifecycle they need (`create_markdown_text` or
 //! `create_text_file`).
 
+use activity::Attribution;
 use anyhow::Context;
 use base64::Engine;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -30,6 +31,7 @@ pub struct NewDocumentMetadata {
     email_attachment_id: Option<uuid::Uuid>,
     created_at: Option<chrono::DateTime<chrono::Utc>>,
     skip_history: bool,
+    attribution: Option<Attribution>,
 }
 
 impl NewDocumentMetadata {
@@ -48,6 +50,7 @@ impl NewDocumentMetadata {
                 email_attachment_id: None,
                 created_at: None,
                 skip_history: false,
+                attribution: None,
             },
         }
     }
@@ -69,6 +72,7 @@ impl NewDocumentMetadata {
             created_at: self.created_at,
             sub_type: kind.subtype.sub_type(),
             skip_history: self.skip_history,
+            attribution: self.attribution,
         }
     }
 }
@@ -107,6 +111,12 @@ impl NewDocumentMetadataBuilder {
     /// Skip adding this document to user history.
     pub fn skip_history(mut self) -> Self {
         self.metadata.skip_history = true;
+        self
+    }
+
+    /// Attribute the create without changing document ownership.
+    pub fn attribution(mut self, attribution: Attribution) -> Self {
+        self.metadata.attribution = Some(attribution);
         self
     }
 
@@ -413,11 +423,22 @@ impl NewTextFileDocument {
 #[derive(Debug)]
 pub struct CreatedDocument {
     response: CreateDocumentResponseData,
+    initial_snapshot: Option<Vec<u8>>,
 }
 
 impl CreatedDocument {
     fn new(response: CreateDocumentResponseData) -> Self {
-        Self { response }
+        Self {
+            response,
+            initial_snapshot: None,
+        }
+    }
+
+    fn new_markdown(response: CreateDocumentResponseData, initial_snapshot: Vec<u8>) -> Self {
+        Self {
+            response,
+            initial_snapshot: Some(initial_snapshot),
+        }
     }
 
     /// The created document id.
@@ -433,6 +454,11 @@ impl CreatedDocument {
     /// Get the underlying create response.
     pub fn response(&self) -> &CreateDocumentResponseData {
         &self.response
+    }
+
+    /// Get the canonical snapshot used to initialize a markdown document.
+    pub fn initial_snapshot(&self) -> Option<&[u8]> {
+        self.initial_snapshot.as_deref()
     }
 
     /// Consume into the raw create response.
@@ -583,7 +609,8 @@ where
                     .await?;
             }
 
-            self.markdown_initializer
+            let initial_snapshot = self
+                .markdown_initializer
                 .initialize_existing_markdown(&document_id, &markdown)
                 .await?;
 
@@ -594,19 +621,22 @@ where
                 )
                 .await?;
 
-            Ok(())
+            Ok(initial_snapshot)
         }
         .await;
 
-        if let Err(error) = finalize_result {
-            self.cleanup_created_document(&document_id).await;
-            return Err(error);
-        }
+        let initial_snapshot = match finalize_result {
+            Ok(initial_snapshot) => initial_snapshot,
+            Err(error) => {
+                self.cleanup_created_document(&document_id).await;
+                return Err(error);
+            }
+        };
 
         response.document_response.document_metadata.content =
             DocumentContent::ready(DocumentContentLocation::SyncService);
 
-        Ok(CreatedDocument::new(response))
+        Ok(CreatedDocument::new_markdown(response, initial_snapshot))
     }
 
     /// Create a text file and upload it to document storage.
@@ -710,11 +740,66 @@ fn file_shas(file_content: &[u8]) -> FileShas {
 
 #[cfg(test)]
 mod tests {
-    use super::{MarkdownSubtype, NewDocumentMetadata, NewPlainTextDocument, file_shas};
+    use super::{
+        MarkdownSubtype, NewDocumentMetadata, NewPlainTextDocument, RepoDocumentKind,
+        RepoDocumentSubtype, file_shas,
+    };
+    use activity::{Actor, Attribution};
+    use macro_user_id::user_id::MacroUserIdStr;
     use model::document::FileType;
 
     fn metadata() -> NewDocumentMetadata {
         NewDocumentMetadata::new("test")
+    }
+
+    fn owner() -> MacroUserIdStr<'static> {
+        MacroUserIdStr::try_from("macro|owner@example.com".to_string()).unwrap()
+    }
+
+    fn repo_kind() -> RepoDocumentKind {
+        RepoDocumentKind {
+            file_type: Some(FileType::Md),
+            sha: "sha".to_string(),
+            subtype: RepoDocumentSubtype::Regular,
+            team_id: None,
+        }
+    }
+
+    #[test]
+    fn creation_attribution_defaults_to_none() {
+        let args = metadata().into_repo_args(owner(), repo_kind());
+        assert_eq!(args.attribution, None);
+        assert_eq!(
+            args.resolved_attribution(),
+            Attribution::direct(Actor::new_from_user(owner()))
+        );
+    }
+
+    #[test]
+    fn email_attachment_create_resolves_to_the_system_principal() {
+        let args = NewDocumentMetadata::builder("invoice.pdf")
+            .email_attachment_id(uuid::Uuid::from_u128(1))
+            .build()
+            .into_repo_args(owner(), repo_kind());
+
+        assert_eq!(args.user_id.as_ref(), "macro|owner@example.com");
+        assert_eq!(
+            args.resolved_attribution(),
+            Attribution::direct(Actor::new_from_bot(bot_id::MACRO_SYSTEM_BOT_ID))
+        );
+    }
+
+    #[test]
+    fn creation_attribution_can_be_set_without_changing_owner() {
+        let attribution =
+            Attribution::delegated(Actor::new_from_bot(bot_id::MACRO_SYSTEM_BOT_ID), owner());
+        let args = NewDocumentMetadata::builder("welcome")
+            .attribution(attribution.clone())
+            .build()
+            .into_repo_args(owner(), repo_kind());
+
+        assert_eq!(args.user_id.as_ref(), "macro|owner@example.com");
+        assert_eq!(args.resolved_attribution(), attribution);
     }
 
     #[test]

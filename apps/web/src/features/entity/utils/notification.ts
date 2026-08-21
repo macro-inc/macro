@@ -21,6 +21,7 @@ const CHANNEL_NOTIFICATION_TYPES = [
   'channel_mention',
   'channel_message_send',
   'channel_message_reply',
+  'document_mention',
 ] as const;
 
 export function notificationIsRead(notification: UnifiedNotification): boolean {

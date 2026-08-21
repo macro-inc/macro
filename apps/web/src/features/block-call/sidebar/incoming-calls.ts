@@ -9,6 +9,7 @@ import {
   getCallRecordResolution,
   publishCallResolution,
 } from '@channel/Call/call-resolution';
+import { silenceIncomingCallRing } from '@channel/Call/ring-coordination';
 import { DEV_MODE_ENV } from '@core/constant/featureFlags';
 import { useChannelsContext } from '@core/context/channels';
 import { useUserId } from '@core/context/user';
@@ -68,6 +69,18 @@ export function dismissIncomingCall(callId: string) {
     incomingCallTimeouts.delete(callId);
   }
   setIncomingCalls((calls) => calls.filter((call) => call.callId !== callId));
+}
+
+/**
+ * Dismisses an incoming call in this tab and silences its audible ring in
+ * every tab — the tab making noise may be a sibling (see
+ * `ring-coordination.ts`). Use for explicit user dismissals; programmatic
+ * paths (resolutions, auto-dismiss, joining) run in every tab already and
+ * should use `dismissIncomingCall`.
+ */
+export function dismissIncomingCallEverywhere(callId: string) {
+  silenceIncomingCallRing(callId);
+  dismissIncomingCall(callId);
 }
 
 function addIncomingCall(call: IncomingCall) {

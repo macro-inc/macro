@@ -8,6 +8,7 @@ mod test;
 #[cfg(test)]
 mod test_support;
 
+mod agent_session;
 mod bot;
 mod call;
 mod channel;
@@ -23,6 +24,7 @@ mod reminder;
 mod team;
 mod thread;
 
+pub use agent_session::AgentSessionAccessLevelExtractor;
 pub use call::{CallAccessLevelExtractor, CallWithChannelIdAccessLevelExtractor};
 pub use channel::ChannelAccessLevelExtractor;
 pub use chat::ChatAccessLevelExtractor;

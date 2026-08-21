@@ -778,14 +778,18 @@ export async function blockSenderWithToast(
 
 async function upsertSenderFilterWithToast(
   senderEmail: string,
-  isImportant: boolean
+  isImportant: boolean,
+  linkId?: string
 ) {
   const label = isImportant ? 'Signal' : 'Noise';
 
-  const result = await emailClient.upsertEmailFilter({
-    email_address: senderEmail,
-    is_important: isImportant,
-  });
+  const result = await emailClient.upsertEmailFilter(
+    {
+      email_address: senderEmail,
+      is_important: isImportant,
+    },
+    linkId
+  );
 
   if (result.isErr()) {
     toast.failure(`Failed to mark sender as ${label}`, {
@@ -804,9 +808,10 @@ async function upsertSenderFilterWithToast(
         label: 'Undo',
         icon: ArrowCounterClockwise,
         onClick: async () => {
-          const undoResult = await emailClient.deleteEmailFilter({
-            id: filterId,
-          });
+          const undoResult = await emailClient.deleteEmailFilter(
+            { id: filterId },
+            linkId
+          );
           if (undoResult.isErr()) {
             toast.failure('Failed to undo', { subtext: senderEmail });
           } else {
@@ -819,8 +824,20 @@ async function upsertSenderFilterWithToast(
   });
 }
 
-export const markSenderSignalWithToast = (senderEmail: string) =>
-  upsertSenderFilterWithToast(senderEmail, true);
+/**
+ * Marks a sender as Signal for one inbox. `linkId` scopes the filter to the
+ * inbox the thread belongs to — omit it only for the primary inbox.
+ */
+export const markSenderSignalWithToast = (
+  senderEmail: string,
+  linkId?: string
+) => upsertSenderFilterWithToast(senderEmail, true, linkId);
 
-export const markSenderNoiseWithToast = (senderEmail: string) =>
-  upsertSenderFilterWithToast(senderEmail, false);
+/**
+ * Marks a sender as Noise for one inbox. See {@link markSenderSignalWithToast}
+ * for how `linkId` is used.
+ */
+export const markSenderNoiseWithToast = (
+  senderEmail: string,
+  linkId?: string
+) => upsertSenderFilterWithToast(senderEmail, false, linkId);

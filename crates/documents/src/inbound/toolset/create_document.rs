@@ -1,5 +1,6 @@
 //! CreateDocument tool for reading document content.
 
+use ai_toolset::{ToolAnnotated, ToolAnnotations};
 use std::str::FromStr;
 
 use crate::domain::create::{NewDocumentMetadata, NewPlainTextDocument};
@@ -64,6 +65,10 @@ pub struct CreateDocument {
     )]
     #[serde(default)]
     pub project_id: Option<uuid::Uuid>,
+}
+
+impl ToolAnnotated for CreateDocument {
+    const ANNOTATIONS: ToolAnnotations = ToolAnnotations::additive("Create document");
 }
 
 #[async_trait]

@@ -21,6 +21,7 @@ import {
   removeSoupEntitiesFromQueriesReferencing,
 } from '@queries/soup/cache';
 import { soupKeys } from '@queries/soup/keys';
+import { ownTouchStamp } from '@queries/soup/normalized-cache/own-touch';
 import { callServiceClient } from '@service-call/client';
 import { scheduledActionClient } from '@service-scheduled-action/client';
 import type { ItemType } from '@service-storage/client';
@@ -227,6 +228,8 @@ export function createBulkRemoveFromProjectDssEntityMutation() {
           tag,
           data: { id: e.id, projectId: null },
           frecency_score: current?.frecency_score ?? 0,
+          // A move is an Edited activity, i.e. a touch (own-touch.ts).
+          touched_at: ownTouchStamp(e.id),
         });
       });
 
@@ -411,6 +414,8 @@ export function createBulkMoveToProjectDssEntityMutation() {
           tag,
           data: { id: e.id, projectId: project.id },
           frecency_score: current?.frecency_score ?? 0,
+          // A move is an Edited activity, i.e. a touch (own-touch.ts).
+          touched_at: ownTouchStamp(e.id),
         });
       });
     },

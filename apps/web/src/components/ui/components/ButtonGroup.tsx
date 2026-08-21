@@ -6,7 +6,7 @@ import { Layer } from './Layer';
 type ButtonGroupOrientation = 'horizontal' | 'vertical';
 
 type ButtonGroupContextValue = {
-  depth?: 0 | 1 | 2 | 3 | 4 | 5;
+  depth?: 0 | 1 | 2 | 3 | 4;
   variant?: ButtonVariant;
   size?: ButtonSize;
   orientation: ButtonGroupOrientation;
@@ -19,7 +19,7 @@ const ButtonGroupContext = createContext<ButtonGroupContextValue | undefined>(
 export const useButtonGroupContext = () => useContext(ButtonGroupContext);
 
 type ButtonGroupProps = {
-  depth?: 0 | 1 | 2 | 3 | 4 | 5;
+  depth?: 0 | 1 | 2 | 3 | 4;
   variant?: ButtonVariant;
   size?: ButtonSize;
   orientation?: ButtonGroupOrientation;

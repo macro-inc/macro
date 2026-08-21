@@ -1,4 +1,4 @@
-import { type Accessor, type JSX, onCleanup } from 'solid-js';
+import { type Accessor, onCleanup } from 'solid-js';
 
 interface FileSelectorProps {
   onSelect: (files: File[]) => void;
@@ -38,11 +38,8 @@ export function fileSelector(
     return false;
   };
 
-  const handleFileInputChange: JSX.ChangeEventHandlerUnion<
-    HTMLInputElement,
-    Event
-  > = (e) => {
-    const files = Array.from(e.target.files || []);
+  const handleFileInputChange = () => {
+    const files = Array.from(input.files || []);
     const validFiles = files.filter(isFileTypeValid);
 
     if (validFiles.length > 0) {

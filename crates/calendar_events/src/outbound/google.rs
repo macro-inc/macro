@@ -20,8 +20,8 @@ use crate::domain::{
     },
     ports::{
         CalendarRsvpScope, GoogleCalendarMutationProvider, GoogleCalendarProvider,
-        GoogleEventSyncContext, GoogleProviderError, GoogleProviderErrorKind, GoogleRsvpOutcome,
-        GoogleSeriesMutationOutcome,
+        GoogleEventSyncContext, GoogleInstanceUpdateOutcome, GoogleProviderError,
+        GoogleProviderErrorKind, GoogleRsvpOutcome, GoogleSeriesMutationOutcome,
     },
 };
 
@@ -962,6 +962,66 @@ impl<G: GoogleRequestGate> GoogleCalendarMutationProvider for GoogleCalendarClie
     }
 
     #[tracing::instrument(
+        skip(self, access_token, target, patch),
+        fields(provider_calendar_id = %target.provider_calendar_id),
+        err
+    )]
+    async fn update_event_instance(
+        &self,
+        access_token: &str,
+        target: &GoogleCalendarTarget,
+        master_provider_event_id: &str,
+        original_start: &str,
+        patch: &CalendarEventPatch,
+    ) -> Result<GoogleInstanceUpdateOutcome, GoogleProviderError> {
+        let refresh_without_writing = |gone_reason: &'static str| async move {
+            tracing::info!(gone_reason, "occurrence-scoped update found no occurrence");
+            match self
+                .refresh_series(access_token, target, master_provider_event_id, None)
+                .await?
+            {
+                SeriesOutcome::Refreshed(upsert) => {
+                    Ok(GoogleInstanceUpdateOutcome::OccurrenceGone(upsert))
+                }
+                SeriesOutcome::Gone => Ok(GoogleInstanceUpdateOutcome::SeriesGone),
+                SeriesOutcome::Malformed => Err(GoogleProviderError::new(
+                    GoogleProviderErrorKind::Permanent,
+                    "Google Calendar returned a malformed series after the mutation",
+                )),
+            }
+        };
+        let Some(instance_id) = self
+            .instance_id_at(
+                access_token,
+                target,
+                master_provider_event_id,
+                original_start,
+            )
+            .await?
+        else {
+            return refresh_without_writing("no instance matches the occurrence key").await;
+        };
+        if self
+            .patch_event_raw(access_token, target, &instance_id, patch_body(patch))
+            .await?
+            .is_none()
+        {
+            return refresh_without_writing("the instance vanished before the patch").await;
+        }
+        match self
+            .series_outcome(access_token, target, master_provider_event_id)
+            .await?
+        {
+            GoogleSeriesMutationOutcome::Applied(upsert) => {
+                Ok(GoogleInstanceUpdateOutcome::Applied(upsert))
+            }
+            GoogleSeriesMutationOutcome::SeriesDeleted | GoogleSeriesMutationOutcome::Gone => {
+                Ok(GoogleInstanceUpdateOutcome::SeriesGone)
+            }
+        }
+    }
+
+    #[tracing::instrument(
         skip(self, access_token, target),
         fields(provider_calendar_id = %target.provider_calendar_id),
         err
@@ -1135,6 +1195,35 @@ impl<G: GoogleRequestGate> GoogleCalendarMutationProvider for GoogleCalendarClie
                 Ok(GoogleRsvpOutcome::Gone)
             }
         }
+    }
+
+    #[tracing::instrument(skip(self, access_token), err)]
+    async fn stop_watch_channel(
+        &self,
+        access_token: &str,
+        email_link_id: Uuid,
+        channel_id: &str,
+        resource_id: &str,
+    ) -> Result<(), GoogleProviderError> {
+        self.gate.acquire(email_link_id).await?;
+        let response = self
+            .client
+            .post(format!("{GOOGLE_CALENDAR_API}/channels/stop"))
+            .bearer_auth(access_token)
+            .json(&serde_json::json!({
+                "id": channel_id,
+                "resourceId": resource_id,
+            }))
+            .send()
+            .await
+            .map_err(provider_transport_error)?;
+        let status = response.status();
+        // A channel Google has already forgotten is as stopped as it gets.
+        if status.is_success() || status == StatusCode::NOT_FOUND || status == StatusCode::GONE {
+            return Ok(());
+        }
+        let body = response.text().await.map_err(provider_transport_error)?;
+        Err(provider_response_error(status, &body))
     }
 }
 

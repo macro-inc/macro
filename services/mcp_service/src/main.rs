@@ -6,6 +6,7 @@
 
 mod config;
 mod context;
+mod markdown_images;
 mod tool_service;
 use anyhow::Context;
 use config::Config;

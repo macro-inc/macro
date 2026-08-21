@@ -19,8 +19,9 @@ pub use loaders::{
     entity_notifications_loader,
 };
 pub use mutations::{
-    GraphqlNotificationUpdateOperation, NoOpNotificationMutationService, NotificationMutationRoot,
-    NotificationMutationService, UpdateNotificationsInput,
+    GraphqlNotificationUpdateOperation, NoOpNotificationMutationService, NotificationEntityInput,
+    NotificationMutationRoot, NotificationMutationService, UpdateNotificationsForEntityInput,
+    UpdateNotificationsInput,
 };
 pub use notification_event::GraphqlNotifEvent;
 pub use objects::{GraphqlNotification, load_entity_notifications};

@@ -1,5 +1,6 @@
 import { getChannelParams } from '@channel/Channel/link';
 import { buildSimpleEntityUrl } from '@core/util/url';
+import { quoteMarkdown } from '@macro-inc/lexical-core/utils/quote-markdown';
 import type { MessageData } from '../../Message';
 
 export const DEFAULT_REACTION_EMOJI = '👍';
@@ -54,20 +55,10 @@ export function buildQuoteReplyValue(input: {
   quotedContent: string;
   existingValue?: string;
 }): string {
-  const normalizedQuotedContent = input.quotedContent
-    .trim()
-    .split('\n')
-    .map((line) => line.replace(/^\s*>+\s?/, ''))
-    .join('\n')
-    .trim();
+  const quote = quoteMarkdown(input.quotedContent);
   const existingValue = input.existingValue?.trimStart() ?? '';
 
-  if (!normalizedQuotedContent) return existingValue;
-
-  const quote = normalizedQuotedContent
-    .split('\n')
-    .map((line) => `> ${line}`)
-    .join('\n');
+  if (!quote) return existingValue;
 
   return existingValue
     ? `${quote}\n\n${existingValue}`

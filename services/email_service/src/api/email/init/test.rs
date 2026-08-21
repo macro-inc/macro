@@ -143,3 +143,33 @@ fn only_shared_inbox_conflict_keeps_the_in_progress_link() {
         );
     }
 }
+
+/// The grant alone cannot say whether the user wanted calendar: consent
+/// requests carry `include_granted_scopes=true`, so Google re-issues the
+/// calendar scopes of an earlier grant on a plain Gmail reconnect. Only what
+/// the request asked for decides.
+#[test]
+fn calendar_intent_follows_the_consent_request_not_the_grant() {
+    let calendar_scopes = calendar_events::domain::models::GOOGLE_CALENDAR_SCOPES
+        .map(str::to_owned)
+        .to_vec();
+    let gmail_scope = "https://www.googleapis.com/auth/gmail.modify".to_owned();
+    let in_progress = |requested: Vec<String>| InProgressUserLink {
+        macro_user_id: Uuid::now_v7(),
+        linked_email: None,
+        requested_google_scopes: requested,
+        granted_google_scopes: [vec![gmail_scope.clone()], calendar_scopes.clone()].concat(),
+    };
+
+    assert!(matches!(
+        CompletedGoogleGrant::from_in_progress(&in_progress(vec![gmail_scope.clone()])).intent,
+        CalendarGrantIntent::Incidental
+    ));
+    assert!(matches!(
+        CompletedGoogleGrant::from_in_progress(&in_progress(
+            [vec![gmail_scope.clone()], calendar_scopes.clone()].concat()
+        ))
+        .intent,
+        CalendarGrantIntent::CalendarRequested
+    ));
+}

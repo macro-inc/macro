@@ -47,6 +47,7 @@ CodeSignTool/
 **/build
 **/.build
 **/dist
+**/.dist-production
 
 **/*.tsbuildinfo
 

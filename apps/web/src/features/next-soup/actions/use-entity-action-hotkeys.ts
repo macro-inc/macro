@@ -16,10 +16,10 @@ import { TOKENS } from '@core/hotkey/tokens';
 import { type EntityData, isTaskEntity } from '@entity';
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import type { Property, PropertyDefinitionDomain } from '@property/types';
-import { macroEntityToPropertyEntityType } from '@property/utils';
 import { onCleanup } from 'solid-js';
 import type { SoupState } from '../create-soup-state';
 import {
+  makeAddTagAction,
   makeCopyAction,
   makeCopyBranchNameAction,
   makeCopyEntityIdAction,
@@ -36,6 +36,7 @@ import {
   makeRenameAction,
   makeSetCompanyPropertyAction,
   makeShareAction,
+  markReminderTargetDone,
 } from './index';
 
 type UseEntityActionHotkeysOptions = {
@@ -88,7 +89,6 @@ export const useEntityActionHotkeys = (
   const copyBranchNameAction = makeCopyBranchNameAction();
 
   const copyEntityIdAction = makeCopyEntityIdAction();
-  const createReminderAction = makeCreateReminderAction();
   const editReminderAction = makeEditReminderAction();
 
   const shareAction = makeShareAction();
@@ -96,6 +96,7 @@ export const useEntityActionHotkeys = (
   const favoriteAction = makeFavoriteAction();
 
   const setCompanyPropertyAction = makeSetCompanyPropertyAction();
+  const addTagAction = makeAddTagAction();
 
   const getEntitiesForAction = (): EntityData[] => {
     if (
@@ -132,6 +133,26 @@ export const useEntityActionHotkeys = (
     });
   };
 
+  /**
+   * Whether this list is one that marks rows done, and so one that moves on to
+   * the next row when a row is marked. It gates 'e' below, and the mark-done
+   * that follows setting a reminder advances on the same answer.
+   */
+  const marksDoneOnThisView = (): boolean => {
+    const contentId = splitHandle?.content().id;
+    if (!isListViewID(contentId)) return false;
+    const soupViewTab = options.activeSoupViewTab?.();
+    return !soupViewTab || canExecuteMarkDoneOnView(contentId, soupViewTab);
+  };
+
+  // Declared here rather than with the other actions above because its
+  // mark-done follow-up advances the list the same way 'e' does, through
+  // `openNextEntity`. Setting a reminder puts the row down: it marks it done,
+  // so the list drops it and the reminder is what brings it back.
+  const createReminderAction = makeCreateReminderAction({
+    onCreated: markReminderTargetDone(markDone, openNextEntity),
+  });
+
   // Property editor setup
   const allProperties = useAllProperties();
   const propertyById = (propertyId: string) =>
@@ -151,15 +172,6 @@ export const useEntityActionHotkeys = (
       });
     }
   };
-  const canAssignTags = (entity: EntityData) => {
-    try {
-      macroEntityToPropertyEntityType(entity);
-      return true;
-    } catch {
-      return false;
-    }
-  };
-
   // Mark Done - 'e', not included in Hotkey Group so that we can use it from inside of blocks
   registerHotkey({
     hotkey: ['e'],
@@ -176,16 +188,7 @@ export const useEntityActionHotkeys = (
     },
     condition: () => {
       if (condition && !condition()) return false;
-
-      const contentId = splitHandle?.content().id;
-
-      const soupViewTab = options.activeSoupViewTab?.();
-
-      if (
-        !isListViewID(contentId) ||
-        (soupViewTab && !canExecuteMarkDoneOnView(contentId, soupViewTab))
-      )
-        return false;
+      if (!marksDoneOnThisView()) return false;
 
       const entities = getEntitiesForAction();
       return entities.length > 0 && entities.every(markDone.canExecute);
@@ -518,7 +521,9 @@ export const useEntityActionHotkeys = (
       const entities = getEntitiesForAction();
       if (entities.length !== 1) return false;
       if (!createReminderAction.canExecute(entities[0])) return false;
-      createReminderAction.executeWithSoup(entities, soup);
+      createReminderAction.executeWithSoup(entities, soup, {
+        advances: marksDoneOnThisView(),
+      });
       return true;
     },
     condition: () => {
@@ -586,7 +591,7 @@ export const useEntityActionHotkeys = (
     keyDownHandler: () => {
       const entities = getEntitiesForAction();
       if (entities.length === 0) return false;
-      openPropertyEditor(entities, 'tag', undefined, {
+      addTagAction.execute(entities, {
         restoreFocus: () => restoreSoupFocus(entities[0]?.id),
       });
       return true;
@@ -594,7 +599,7 @@ export const useEntityActionHotkeys = (
     condition: () => {
       if (condition && !condition()) return false;
       const entities = getEntitiesForAction();
-      return entities.length > 0 && entities.every(canAssignTags);
+      return entities.length > 0 && entities.every(addTagAction.canExecute);
     },
     scopeId,
   }).withGroup(group);

@@ -3,6 +3,7 @@ import {
   type FilterID,
   SOUP_FILTERS,
 } from '@app/features/next-soup/filters/configs/';
+import type { FilterContext } from '@app/features/next-soup/filters/configs/base';
 import {
   createPredicatesStore,
   type PredicateConfig,
@@ -70,20 +71,18 @@ export type SortConfig<T> = {
   fn: (a: T, b: T) => number;
 };
 
-interface SoupContextOptions<TId extends string = FilterID> {
+interface SoupContextOptions {
   initialData?: SoupEntity[];
   initialPredicates?: {
-    and?: TId[];
-    or?: TId[];
+    and?: string[];
+    or?: string[];
   };
-  predicateConfigs?: PredicateConfig<SoupEntity, string>[];
+  predicateConfigs?: PredicateConfig<SoupEntity, string, FilterContext>[];
   wrapNavigation?: boolean;
   skipGroupHeaders?: boolean;
 }
 
-export const createSoupState = <TId extends string = FilterID>(
-  options: SoupContextOptions<TId> = {}
-) => {
+export const createSoupState = (options: SoupContextOptions = {}) => {
   const {
     wrapNavigation,
     initialData,
@@ -96,7 +95,12 @@ export const createSoupState = <TId extends string = FilterID>(
     getItemId: (i) => i.id,
   });
 
-  const predicates = createPredicatesStore({
+  const predicates = createPredicatesStore<
+    SoupEntity,
+    FilterContext,
+    PredicateConfig<SoupEntity, string, FilterContext>,
+    string
+  >({
     configs: predicateConfigs ?? SOUP_FILTERS,
     initial: initialPredicates,
   });

@@ -1,5 +1,6 @@
 import { createControlledOpenSignal } from '@core/util/createControlledOpenSignal';
 import type { EntityData } from '@entity';
+import type { ReminderSchedule } from '@service-storage/generated/schemas/reminderSchedule';
 import { batch } from 'solid-js';
 import { createStore, reconcile } from 'solid-js/store';
 
@@ -18,8 +19,16 @@ export interface ReminderDraft {
   id: string;
   /** Its current description, prefilled into the first step. */
   description: string;
-  /** Its current firing, offered as "Keep current time". */
+  /** Its next firing, offered as "Keep current time". */
   remindAt: Date;
+  /**
+   * Its current schedule, which the edit is diffed against.
+   *
+   * Distinct from `remindAt` because a recurring reminder is not its next
+   * firing: two reminders can come due at the same instant and still be
+   * different schedules, and only this says which.
+   */
+  schedule: ReminderSchedule;
   /** Whether the owner has marked it done, which a reschedule has to undo. */
   completed: boolean;
   /**
@@ -37,11 +46,43 @@ interface ReminderComposerState {
   entity?: EntityData;
   /** The reminder being edited. Absent when creating. */
   editing?: ReminderDraft;
+  /**
+   * A new reminder about nothing at all.
+   *
+   * Its own flag rather than the absence of the other two: "no entity and no
+   * draft" is how a closed composer looks, so without this the modal cannot
+   * tell a standalone reminder from nothing to compose.
+   */
+  standalone?: boolean;
+}
+
+/** What the surface that opened the composer does once the reminder exists. */
+export type ReminderCreatedHandler = () => void | Promise<void>;
+
+/**
+ * Held outside the store: nothing renders it, and a function in a store is a
+ * footgun — the setters read one as an updater.
+ */
+let createdHandler: ReminderCreatedHandler | undefined;
+
+/**
+ * Hand the pending handler to the caller and forget it.
+ *
+ * Taken rather than read because the composer closes — and so clears its
+ * target — before the create request is awaited.
+ */
+export function takeReminderCreatedHandler():
+  | ReminderCreatedHandler
+  | undefined {
+  const handler = createdHandler;
+  createdHandler = undefined;
+  return handler;
 }
 
 const [state, setState] = createStore<ReminderComposerState>({
   entity: undefined,
   editing: undefined,
+  standalone: undefined,
 });
 
 /**
@@ -51,11 +92,33 @@ const [state, setState] = createStore<ReminderComposerState>({
  * was invoked on and the description is derived from it, so the composer opens
  * straight onto the date list.
  */
-export function openReminderComposer(entity: EntityData) {
+export function openReminderComposer(
+  entity: EntityData,
+  options?: { onCreated?: ReminderCreatedHandler }
+) {
+  createdHandler = options?.onCreated;
   // Batched so the modal's open-keyed effect sees this entity rather than the
   // previous one.
   batch(() => {
-    setState(reconcile({ entity, editing: undefined }));
+    setState(reconcile({ entity, editing: undefined, standalone: undefined }));
+    setReminderComposerOpen(true);
+  });
+}
+
+/**
+ * Open the composer to create a reminder about nothing.
+ *
+ * There is no entity to name it after, so the description step it opens on is
+ * the one thing it cannot skip — see `resolveStandaloneDescription`.
+ */
+export function openStandaloneReminderComposer(options?: {
+  onCreated?: ReminderCreatedHandler;
+}) {
+  createdHandler = options?.onCreated;
+  batch(() => {
+    setState(
+      reconcile({ entity: undefined, editing: undefined, standalone: true })
+    );
     setReminderComposerOpen(true);
   });
 }
@@ -68,16 +131,30 @@ export function openReminderComposer(entity: EntityData) {
  * time so a rename does not force a new date to be picked.
  */
 export function openReminderEditor(reminder: ReminderDraft) {
+  createdHandler = undefined;
   batch(() => {
-    setState(reconcile({ entity: undefined, editing: reminder }));
+    setState(
+      reconcile({
+        entity: undefined,
+        editing: reminder,
+        standalone: undefined,
+      })
+    );
     setReminderComposerOpen(true);
   });
 }
 
 export function closeReminderComposer() {
+  createdHandler = undefined;
   batch(() => {
     setReminderComposerOpen(false);
-    setState(reconcile({ entity: undefined, editing: undefined }));
+    setState(
+      reconcile({
+        entity: undefined,
+        editing: undefined,
+        standalone: undefined,
+      })
+    );
   });
 }
 

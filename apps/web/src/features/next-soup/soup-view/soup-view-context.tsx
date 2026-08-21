@@ -5,6 +5,7 @@ import {
   soupItemMatchesListView,
   soupItemMatchesTagFilter,
 } from '@app/constants/list-views';
+import { SearchState } from '@app/features/command/mobile/mobileSearchState';
 import {
   createSoupState,
   type GroupMeta,
@@ -52,12 +53,12 @@ import { useEntryState } from '@components/app/split-layout/entry-state';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import {
   ENABLE_FEATURED_SEARCH_RESULTS,
-  ENABLE_NEW_INBOX_FLAG,
-  ENABLE_NEW_INBOX_OVERRIDE,
+  ENABLE_REMINDERS,
   ENABLE_SUPPORTED_SOUP_FOREIGN_ENTITIES_FLAG,
   ENABLE_SUPPORTED_SOUP_FOREIGN_ENTITIES_OVERRIDE,
 } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { idToDisplayName } from '@core/user/util';
 import {
   COMPANY_STAGE_OPTIONS,
@@ -249,7 +250,14 @@ const resolveTabId = (
   remembered: string | undefined
 ): string => {
   const config = VIEW_TAB_PRESETS[view];
-  return remembered && remembered in config.tabs ? remembered : config.default;
+  if (!remembered || !(remembered in config.tabs)) return config.default;
+  // A remembered tab can also be flag-gated out of the tab bar (see
+  // `useVisibleViewTabs`): restoring the inbox onto Reminders with the flag
+  // off would leave a hidden tab active, still querying reminders.
+  if (view === 'inbox' && remembered === 'reminders' && !ENABLE_REMINDERS()) {
+    return config.default;
+  }
+  return remembered;
 };
 
 const persistedPredicatesFor = (
@@ -260,7 +268,7 @@ const persistedPredicatesFor = (
 
 type ApiSortMethod = Exclude<
   NonNullable<SoupParams['sort_method']>,
-  'frecency'
+  'frecency' | 'touched_by_me'
 >;
 const VALID_API_SORT_METHODS: ApiSortMethod[] = [
   'viewed_at',
@@ -568,11 +576,12 @@ export const SoupViewContextProvider: FlowComponent<
       if (!view) return;
 
       const entryState = panel.handle.currentEntryState();
-      const tabId =
+      const tabId = resolveTabId(
+        view,
         (entryState?.['soup.tab'] as string | undefined) ??
-        persistedActiveTabs()[view] ??
-        activeTab() ??
-        VIEW_TAB_PRESETS[view].default;
+          persistedActiveTabs()[view] ??
+          activeTab()
+      );
       const query =
         entryState && 'search.filters' in entryState
           ? undefined
@@ -658,21 +667,23 @@ export const SoupViewContextProvider: FlowComponent<
       : 'created_at';
 
     const view = activeListView();
-    // The direction belongs to what the tab means — Reminders' Active list
-    // reads soonest-first — not to the sort method, so the preset owns it.
-    // Omitted when absent so the server default (desc) applies and the query
-    // keys of every existing view stay byte-identical.
-    const sortDirection = view
+    // The direction and any forced sort belong to what the tab means —
+    // Reminders' Active list reads soonest-first, Recent reads by the
+    // user's own touches — not to the sort method state, so the preset owns
+    // them. Omitted when absent so the server default (desc) applies and
+    // the query keys of every existing view stay byte-identical.
+    const preset = view
       ? getViewPreset(view, activeTab(), {
           userId: userId(),
           isTeamAdmin: isTeamAdmin(),
-        })?.sortDirection
+        })
       : undefined;
+    const sortDirection = preset?.sortDirection;
 
     return {
       // Mail views use a smaller page size
       limit: view === 'mail' ? 30 : 100,
-      sort_method: sortMethod,
+      sort_method: preset?.sortMethod ?? sortMethod,
       ...(sortDirection ? { sort_direction: sortDirection } : {}),
     };
   });
@@ -705,15 +716,11 @@ export const SoupViewContextProvider: FlowComponent<
       : groupByField()
   );
 
-  // The new inbox surfaces channel threads the current user participates in —
+  // The inbox surfaces channel threads the current user participates in —
   // the root sender, anyone who replied, or anyone @-mentioned — via the
   // `channelThreadParticipantId` filter, since soup otherwise only surfaces
   // whole channels.
-  const newInboxFlag = useFeatureFlag(ENABLE_NEW_INBOX_FLAG, {
-    enabledOverride: ENABLE_NEW_INBOX_OVERRIDE,
-  });
-  const isNewInbox = () =>
-    activeListView() === 'inbox' && newInboxFlag().enabled;
+  const isInboxView = () => activeListView() === 'inbox';
 
   const applyInboxFilter = (state: QueryState): QueryState => {
     const inboxes = inboxFilter();
@@ -728,7 +735,7 @@ export const SoupViewContextProvider: FlowComponent<
   };
 
   const applyInboxThreadFilter = (state: QueryState): QueryState => {
-    if (!isNewInbox()) {
+    if (!isInboxView()) {
       return {
         ...state,
         include: { ...state.include, channelThreadId: [NIL_UUID] },
@@ -746,10 +753,10 @@ export const SoupViewContextProvider: FlowComponent<
     };
   };
 
-  // Unread/read/all filter for the new inbox: injects the per-entity-type seen
+  // Unread/read/all filter for the inbox: injects the per-entity-type seen
   // filters ('all' leaves them unset). Matches the experimental inbox.
   const applyInboxReadFilter = (state: QueryState): QueryState => {
-    if (!isNewInbox()) return state;
+    if (!isInboxView()) return state;
     const filter = readFilter();
     if (filter === 'all') return state;
     const seen = filter === 'read';
@@ -783,13 +790,26 @@ export const SoupViewContextProvider: FlowComponent<
     default: props.initialSearchText ?? '',
   });
 
+  // The split's effective search text — derived, never synchronized: while
+  // the dock search session is open and this split is foregrounded, it IS the
+  // session's query (the dock input lives in the stable app chrome — see
+  // Layout — so navigation never remounts it, and the query never enters
+  // per-split state: nothing to clear on close, nothing to reapply on pill
+  // navigation). Otherwise it is the split's own persisted text, which only
+  // the desktop search bar writes.
+  const effectiveSearchText = createMemo(() =>
+    isTouchDevice() && SearchState.isOpen() && panel.handle.isActive()
+      ? SearchState.query()
+      : searchText()
+  );
+
   const search = createSearchState({
     soup,
     filters: () => applyViewFilters(queryFilters.state),
     assignees: assigneeFilter,
     disableLocalSearch: () => config().disableLocalSearch ?? false,
     searchPaused: sourceSearchPaused,
-    searchText,
+    searchText: effectiveSearchText,
     setSearchText,
   });
 
@@ -803,11 +823,13 @@ export const SoupViewContextProvider: FlowComponent<
         const entryQuery = entryState?.['search.filters'] as Query | undefined;
         const view = activeListView();
         const tabId = view
-          ? ((entryState?.['soup.tab'] as string | undefined) ??
-            (filterPersistenceEnabled()
-              ? persistedActiveTabs()[view]
-              : undefined) ??
-            VIEW_TAB_PRESETS[view].default)
+          ? resolveTabId(
+              view,
+              (entryState?.['soup.tab'] as string | undefined) ??
+                (filterPersistenceEnabled()
+                  ? persistedActiveTabs()[view]
+                  : undefined)
+            )
           : undefined;
         if (tabId) setActiveTab(tabId);
 
@@ -877,7 +899,7 @@ export const SoupViewContextProvider: FlowComponent<
       return {
         ...entityWithoutRawNotifications,
         notifications: () =>
-          isNewInbox()
+          isInboxView()
             ? scopeChannelNotificationsForEntity(
                 entityWithoutRawNotifications,
                 rawNotifications
@@ -893,7 +915,7 @@ export const SoupViewContextProvider: FlowComponent<
     return {
       ...entity,
       notifications: () =>
-        isNewInbox()
+        isInboxView()
           ? scopeChannelNotificationsForEntity(entity, notifications())
           : notifications(),
     };

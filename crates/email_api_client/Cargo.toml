@@ -9,7 +9,6 @@ default = []
 ports = []
 outbound-gmail = [
   "ports",
-  "dep:ammonia",
   "dep:base64",
   "dep:encoding_rs",
   "dep:gmail_client",
@@ -17,15 +16,13 @@ outbound-gmail = [
   "dep:http",
   "dep:lol_html",
   "dep:mailparse",
-  "dep:regex",
-  "dep:scraper",
   "dep:serde_json",
 ]
 
 [dependencies]
-ammonia = { workspace = true, optional = true }
 base64 = { workspace = true, optional = true }
 chrono = { workspace = true }
+email_utils = { path = "../email_utils" }
 encoding_rs = { workspace = true, optional = true }
 gmail_client = { path = "../gmail_client", optional = true }
 html-escape = { workspace = true, optional = true }
@@ -34,8 +31,6 @@ lol_html = { workspace = true, optional = true }
 mail-builder = "0.4.3"
 mailparse = { version = "0.16.1", optional = true }
 models_email = { path = "../models_email" }
-regex = { workspace = true, optional = true }
-scraper = { workspace = true, optional = true }
 serde = { workspace = true }
 serde_json = { workspace = true, optional = true }
 thiserror = { workspace = true }

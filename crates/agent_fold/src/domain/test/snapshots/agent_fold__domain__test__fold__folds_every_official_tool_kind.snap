@@ -1,0 +1,90 @@
+---
+source: crates/agent_fold/src/domain/test/fold.rs
+expression: agent.parts
+---
+NonEmpty {
+    inner: [
+        ToolUse {
+            id: ToolUseId(
+                "del",
+            ),
+            label: "del",
+            status: Completed,
+            detail: Delete {
+                paths: [
+                    "/repo/dead.rs",
+                ],
+            },
+        },
+        ToolUse {
+            id: ToolUseId(
+                "mv",
+            ),
+            label: "mv",
+            status: Completed,
+            detail: Move {
+                paths: [
+                    "/repo/from.rs",
+                    "/repo/to.rs",
+                ],
+            },
+        },
+        ToolUse {
+            id: ToolUseId(
+                "search",
+            ),
+            label: "search",
+            status: Completed,
+            detail: Search {
+                paths: [
+                    "/repo/a.rs",
+                ],
+                output: Some(
+                    "1 match",
+                ),
+            },
+        },
+        ToolUse {
+            id: ToolUseId(
+                "fetch",
+            ),
+            label: "fetch",
+            status: Completed,
+            detail: Fetch {
+                output: Some(
+                    "page body",
+                ),
+            },
+        },
+        ToolUse {
+            id: ToolUseId(
+                "think",
+            ),
+            label: "think",
+            status: Completed,
+            detail: Think {
+                output: Some(
+                    "reasoning aloud",
+                ),
+            },
+        },
+        ToolUse {
+            id: ToolUseId(
+                "mystery",
+            ),
+            label: "mystery",
+            status: Completed,
+            detail: Other {
+                kind: "other",
+                output: Some(
+                    "how should this work?",
+                ),
+                input: Some(
+                    Object {
+                        "foo": String("bar"),
+                    },
+                ),
+            },
+        },
+    ],
+}

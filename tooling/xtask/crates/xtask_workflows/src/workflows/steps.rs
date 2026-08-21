@@ -48,6 +48,17 @@ pub(crate) fn uses_local(name: &str, path: RepoDir<'_>) -> Step<Use> {
     step
 }
 
+/// Namespace remote BuildKit, pinned. Multi-arch `docker buildx --push` and the
+/// Fly preview image builds both go through it so nix-in-Docker work does not
+/// land on a Small runner's local daemon.
+pub fn setup_namespace_buildx() -> Step<Use> {
+    Step::new("Set up Namespace Docker builder").uses(
+        "namespacelabs",
+        "nscloud-setup-buildx-action",
+        "d059ed7184f0bc7c8b27e8810cea153d02bcc6dd",
+    ) // v0.0.23
+}
+
 /// `actions/checkout`, pinned. `full_history` fetches the full history, which
 /// the path-filter diff in `path-check` needs. `persist_credentials` controls
 /// whether checkout leaves the token in git config for later steps.
@@ -79,6 +90,18 @@ pub fn setup_rust_light() -> Step<Use> {
         xtask_paths::repo_dir!(".github/actions/setup-rust"),
     )
     .add_with(("sccache", "false"))
+    .add_with(("rust-cache", "false"))
+}
+
+/// [`setup_rust_light`] plus sccache, for jobs that actually compile something
+/// but do not need the Nix dev shell. Pair with
+/// [`configure_namespace_sccache`] to point the wrapper at the remote cache.
+pub fn setup_rust_sccache() -> Step<Use> {
+    uses_local(
+        "Setup Rust",
+        xtask_paths::repo_dir!(".github/actions/setup-rust"),
+    )
+    .add_with(("sccache", "true"))
     .add_with(("rust-cache", "false"))
 }
 

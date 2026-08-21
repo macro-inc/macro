@@ -138,8 +138,11 @@ export function ChannelParticipantsTab(props: {
     );
   };
 
+  // The mobile bottom chrome (dock + accessory regions) floats over the
+  // layout, so the panel stack has to end above it for the participants list
+  // to scroll clear of it.
   return (
-    <div class="h-full overflow-hidden flex justify-center p-2">
+    <div class="h-full overflow-hidden flex justify-center p-2 touch:pb-[calc(var(--mobile-content-inset-bottom,0px)+0.5rem)]">
       <div class="max-w-200 size-full flex flex-col gap-2">
         <Panel depth={2} class="min-h-0 flex-1 overflow-hidden text-ink">
           <Panel.Header class="justify-between gap-2 px-6">

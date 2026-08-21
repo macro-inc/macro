@@ -121,6 +121,8 @@ fn document_lifecycle_events_map_to_updated_and_deleted_patches() {
     let created = DocumentTopicEvent::Created(DocumentCreatedMetadata {
         document_id: DOCUMENT_ID.to_string(),
         owner: user(),
+        actor: None,
+        on_behalf_of: None,
         document_name: "Created".to_string(),
         file_type: None,
         project_id: None,
@@ -294,6 +296,7 @@ fn task_property_updates_map_to_document_updates() {
         property_definition_id: Uuid::now_v7(),
         actor_user_id: Some(user()),
         value: None,
+        previous_value: None,
         updated_at: Utc::now(),
     });
 

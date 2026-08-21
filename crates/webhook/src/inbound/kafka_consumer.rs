@@ -25,6 +25,7 @@ use crate::domain::{
     events::WebhookMacroEvent,
     ingestion::{WebhookEventIngestionError, WebhookEventIngestionService},
 };
+use agent_trigger::domain::broker_events::AgentSessionMacroEvent;
 use anyhow::Context as _;
 use channels::domain::broker_events::ChannelMacroEvent;
 use documents::domain::events::DocumentMacroEvent;
@@ -54,6 +55,7 @@ macro_event_broker::declare_topics!(
     DeclaredMacroEvent: DocumentMacroEvent,
     ChannelMacroEvent,
     WebhookMacroEvent,
+    AgentSessionMacroEvent,
 );
 
 /// Maximum in-process ingestion attempts per event before the consumer bails
@@ -117,6 +119,11 @@ async fn ingest_with_retry<S: WebhookEventIngestionService>(
                     }
                     DeclaredMacroEvent::WebhookMacroEvent(event) => {
                         service.ingest_webhook_event(event.event().clone()).await
+                    }
+                    DeclaredMacroEvent::AgentSessionMacroEvent(event) => {
+                        service
+                            .ingest_agent_trigger_event(event.event().clone())
+                            .await
                     }
                 };
 

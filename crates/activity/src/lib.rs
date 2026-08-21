@@ -20,12 +20,19 @@
 //! consumer); both on by default. The models are always available.
 
 pub mod domain;
-#[cfg(feature = "consumer")]
+#[cfg(any(feature = "ai_tools", feature = "consumer"))]
 pub mod inbound;
 #[cfg(feature = "outbound")]
 pub mod outbound;
 
 pub use domain::models::{
-    Action, Activity, ActivitySource, Actor, CallStart, CommonAction, DomainActivity, EntityType,
-    Ingest, ParticipantChange, PropertyChange, activity_id, event_time,
+    Action, ActionDecodeError, Activity, ActivityRecord, ActivitySource, Actor, Attribution,
+    CallStart, CommonAction, DomainActivity, EntityType, Ingest, ParticipantChange, PropertyChange,
+    RecordedAction, VIEW_ACTION_TAGS, activity_id, event_time,
+};
+pub use domain::ports::{ActivityFeedPage, ActivityRange, ActivityReads, EntityActivityMap};
+#[cfg(feature = "ai_tools")]
+pub use domain::{
+    ports::{ActivityMetadataResolver, ActivityPropertyMetadata},
+    service::{ActivityReadService, NoopActivityMetadataResolver, ResolvedActivityRange},
 };

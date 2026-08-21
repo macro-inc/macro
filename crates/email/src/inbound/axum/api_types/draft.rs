@@ -60,7 +60,7 @@ pub struct ApiDraftInput {
     pub bcc: Option<Vec<ApiDraftContactInfo>>,
     /// Plain text body.
     pub body_text: Option<String>,
-    /// HTML body (base64 URL_SAFE_NO_PAD encoded).
+    /// HTML body (base64 URL_SAFE_NO_PAD encoded). Sanitized before storage.
     pub body_html: Option<String>,
     /// Macro body format.
     pub body_macro: Option<String>,
@@ -160,6 +160,9 @@ impl CreateDraftRequest {
             headers_json: draft.headers_json,
             send_time: self.send_time,
             include_signature: draft.include_signature,
+            // Drafts carry no actor; attribution happens when the draft is
+            // actually sent.
+            actor: None,
         }
     }
 }

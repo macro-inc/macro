@@ -67,9 +67,14 @@ use referral::{
     outbound::{pg_referral_repo::PgReferralRepo, stripe_discount_client::StripeDiscountClient},
 };
 
-use crate::api::context::{
-    ApiContext, AuthorizationService, MacroApiTokenContext, MacroApiTokenExpirySeconds,
-    MacroApiTokenIssuer, MacroApiTokenPrivateSecretKey, StripeWebhookSecretKey,
+use crate::{
+    api::context::{
+        ApiContext, AuthorizationService, MacroApiTokenContext, MacroApiTokenExpirySeconds,
+        MacroApiTokenIssuer, MacroApiTokenPrivateSecretKey, StripeWebhookSecretKey,
+    },
+    microsoft_token_cipher::{
+        EnvelopeMicrosoftTokenCipher, KmsDataKeyProvider, MicrosoftTokenCipher,
+    },
 };
 use std::{sync::Arc, time::Duration};
 use tokio_util::task::TaskTracker;
@@ -77,6 +82,7 @@ use tokio_util::task::TaskTracker;
 mod api;
 mod config;
 mod generate_password;
+mod microsoft_token_cipher;
 mod rate_limit_config;
 
 #[tokio::main]
@@ -95,6 +101,12 @@ async fn main() -> anyhow::Result<()> {
     let microsoft_credentials = config
         .microsoft_credentials()
         .context("invalid Microsoft OAuth configuration")?;
+    let microsoft_token_cipher = microsoft_credentials.as_ref().map(|credentials| {
+        Arc::new(EnvelopeMicrosoftTokenCipher::new(KmsDataKeyProvider::new(
+            aws_sdk_kms::Client::new(&aws_config),
+            credentials.token_kms_key_id.clone(),
+        ))) as Arc<dyn MicrosoftTokenCipher>
+    });
 
     let internal_api_key = config.internal_api_key.clone();
 
@@ -412,6 +424,7 @@ async fn main() -> anyhow::Result<()> {
             db,
             github_link_service: Arc::new(github_link_service_impl),
             auth_client: Arc::new(auth_client),
+            microsoft_token_cipher,
             macro_cache_client: Arc::new(macro_cache_client),
             stripe_client: Arc::new(stripe_client),
             document_storage_service_client: Arc::new(document_storage_service_client),

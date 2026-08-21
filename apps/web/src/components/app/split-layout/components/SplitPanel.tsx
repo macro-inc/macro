@@ -75,11 +75,19 @@ export function SplitPanel(props: SplitPanelProps) {
   const splitLayoutHelpers = useSplitLayout();
 
   registerSplitHotkeys({
-    goHome: () =>
+    // Leaving a piece of content should return you to the list you reached it
+    // from, so walk this split's history back to the most recent list view.
+    // Only a split that never passed through one falls back to the inbox.
+    goToList: () => {
+      const wentBack = props.handle.goBackTo(
+        (content) => content.type === 'component' && isListViewID(content.id)
+      );
+      if (wentBack) return;
       props.handle.replace({
         next: { type: 'component', id: LIST_VIEW_ID.inbox },
         referredFrom: 'hotkey',
-      }),
+      });
+    },
     isNotUnifiedList: () => {
       const content = props.handle.content();
       return !isListViewID(content.id);
@@ -150,11 +158,9 @@ export function SplitPanel(props: SplitPanelProps) {
     return Boolean(splits && splits.length > 1);
   }
 
-  const shouldHideSplitHeader = createMemo(
-    () =>
-      (isTouchDevice() && isListViewID(props.handle.content().id)) ||
-      isSoloSettings()
-  );
+  // On mobile the header stays visible for list views too: it hosts the
+  // floating filter-pill strip (see MobileSoupViewTabs).
+  const shouldHideSplitHeader = createMemo(() => isSoloSettings());
 
   const splitFocusStyling = () =>
     !isTouchDevice() &&
@@ -195,10 +201,8 @@ export function SplitPanel(props: SplitPanelProps) {
   });
 
   /**
-   * Both members of a tucked Preview Pair share the active edge color when
-   * either member is active. The active member stays solid; its partner is
-   * dashed so focus ownership remains visible without breaking the Preview
-   * Pair's shared visual treatment.
+   * When either member of a tucked Preview Pair is active, the active member
+   * stays solid and its partner is dashed. Both retain the standard edge color.
    */
   const previewPairFocusStyling = createMemo(() => {
     const manager = globalSplitManager();
@@ -214,7 +218,6 @@ export function SplitPanel(props: SplitPanelProps) {
     const activeId = manager.activeSplitId();
     return activeId === props.split.id || activeId === peerId;
   });
-
   return (
     <SoupContextProvider soup={nextSoup}>
       <SplitPanelContext.Provider
@@ -292,16 +295,11 @@ export function SplitPanel(props: SplitPanelProps) {
             tabindex={-1}
           >
             <Panel
-              edgeColor={
-                splitFocusStyling() || previewPairFocusStyling()
-                  ? 'color-mix(in oklch, var(--color-edge) 80%, var(--color-ink))'
-                  : undefined
-              }
               class={cn(
                 'rounded-xl touch:rounded-none touch:after:hidden touch:border-0! bg-panel',
+                splitUnfocusedStyling() && 'split-panel-inactive',
                 {
-                  'shadow-sm shadow-drop-shadow/50 bg-panel/80 dark-mode:bg-panel/30':
-                    splitUnfocusedStyling(),
+                  'shadow-sm shadow-drop-shadow/50': splitUnfocusedStyling(),
                   'shadow-2xl shadow-drop-shadow': splitFocusStyling(),
                   'border-solid!': previewPairFocusStyling() && props.active,
                   'border-dashed!': previewPairFocusStyling() && !props.active,

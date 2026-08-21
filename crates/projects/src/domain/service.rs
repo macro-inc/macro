@@ -314,6 +314,14 @@ where
     ) -> Result<Project, ProjectError> {
         validate_project_name(&args.name)?;
 
+        // The owner's team default link-share preference decides the initial
+        // share permission; without a team, projects default to link sharing off.
+        let team_default = self
+            .repo
+            .get_team_default_link_share(actor.as_ref())
+            .await
+            .map_err(|error| internal_error(error, "unable to resolve team default link share"))?;
+
         let parent_id = args.project_parent_id.map(|id| id.to_string());
         let project = self
             .repo
@@ -321,7 +329,7 @@ where
                 user_id: actor.to_string(),
                 name: args.name,
                 parent_id: parent_id.clone(),
-                share_permission: SharePermissionV2::new_project_share_permission(),
+                share_permission: SharePermissionV2::new_project_share_permission(team_default),
             })
             .await
             .map_err(|error| internal_error(error, "unable to create project"))?;
@@ -605,11 +613,20 @@ where
         let event_parent_project_id = args.parent_id.clone();
         let root_folder = build_root_folder(&args.root_folder_name, args.content)
             .map_err(|error| internal_error(error, "unable to prepare folder upload"))?;
+
+        // The uploaded projects and documents all share the owner's team-derived
+        // permission; without a team, link sharing defaults to off.
+        let team_default = self
+            .repo
+            .get_team_default_link_share(actor.as_ref())
+            .await
+            .map_err(|error| internal_error(error, "unable to resolve team default link share"))?;
+
         let uploaded = self
             .repo
             .upload_folder(UploadFolderRepoArgs {
                 user_id: actor,
-                share_permission: SharePermissionV2::new_project_share_permission(),
+                share_permission: SharePermissionV2::new_project_share_permission(team_default),
                 root_folder,
                 root_folder_name: args.root_folder_name,
                 upload_request_id: args.upload_request_id,

@@ -83,6 +83,18 @@ async fn fetch_user_memory(
 
 async fn create_chat(db: &PgPool, action: &ScheduledAction) -> Result<String> {
     let chat_repo = PgChatRepo::new(db.clone());
+
+    // Scheduled-agent chats belong to the action's owner, so the owner's team
+    // default link-share preference decides the initial share permission.
+    let team_default =
+        share_permission_db_utils::get_team_default_link_share(db, action.owner.as_ref())
+            .await
+            .context("failed to resolve team default link share")?;
+    let share_permission =
+        models_permissions::share_permission::SharePermissionV2::new_chat_share_permission(
+            team_default,
+        );
+
     chat_repo
         .create(
             action.owner.clone(),
@@ -90,6 +102,7 @@ async fn create_chat(db: &PgPool, action: &ScheduledAction) -> Result<String> {
                 name: action.name.clone(),
                 project_id: None,
             },
+            share_permission,
         )
         .await
         .map_err(|e| anyhow::anyhow!(e))

@@ -2385,6 +2385,83 @@ export const deleteLink = async (
 };
 
 /**
+ * Removes the inbox's calendar data, drops the calendar scopes from its
+recorded Google grant, and closes its push channels, so the inbox reads as
+calendar-less until the user runs the calendar consent flow again. Gmail
+sync is untouched.
+
+Only the inbox's owner may do this: a delegate can see the owner's calendar
+but must not be able to delete the owner's data.
+ * @summary Turns calendar off for a connected inbox.
+ */
+export type disableLinkCalendarResponse204 = {
+  data: EmptyResponse;
+  status: 204;
+};
+
+export type disableLinkCalendarResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type disableLinkCalendarResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type disableLinkCalendarResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type disableLinkCalendarResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type disableLinkCalendarResponseSuccess =
+  disableLinkCalendarResponse204 & {
+    headers: Headers;
+  };
+export type disableLinkCalendarResponseError = (
+  | disableLinkCalendarResponse401
+  | disableLinkCalendarResponse403
+  | disableLinkCalendarResponse404
+  | disableLinkCalendarResponse500
+) & {
+  headers: Headers;
+};
+
+export type disableLinkCalendarResponse =
+  | disableLinkCalendarResponseSuccess
+  | disableLinkCalendarResponseError;
+
+export const getDisableLinkCalendarUrl = (linkId: string) => {
+  return `/email/links/${linkId}/calendar`;
+};
+
+export const disableLinkCalendar = async (
+  linkId: string,
+  options?: RequestInit
+): Promise<disableLinkCalendarResponse> => {
+  const res = await fetch(getDisableLinkCalendarUrl(linkId), {
+    ...options,
+    method: 'DELETE',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: disableLinkCalendarResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as disableLinkCalendarResponse;
+};
+
+/**
  * Idempotent: if a backfill is already `Init`/`InProgress` for the inbox this is
 a no-op and returns that job.
  * @summary Re-syncs a linked inbox by enqueuing a fresh backfill.

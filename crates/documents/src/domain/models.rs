@@ -1,5 +1,6 @@
 //! Domain models for the documents crate.
 
+use activity::{Actor, Attribution};
 use chrono::{DateTime, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
 use model::document::response::DocumentResponseMetadata;
@@ -329,6 +330,24 @@ pub struct CreateDocumentRepoArgs {
     pub sub_type: Option<document_sub_type::DocumentSubType>,
     /// Whether to skip adding to user history.
     pub skip_history: bool,
+    /// Explicit activity attribution. Unset uses [`Self::resolved_attribution`].
+    pub attribution: Option<Attribution>,
+}
+
+impl CreateDocumentRepoArgs {
+    /// Resolves who created this document for activity recording.
+    ///
+    /// Ownership (`user_id`) is unchanged. Email auto-imports default to
+    /// the system principal so they do not appear on the owner's feed.
+    pub fn resolved_attribution(&self) -> Attribution {
+        self.attribution.clone().unwrap_or_else(|| {
+            if self.email_attachment_id.is_some() {
+                Attribution::direct(Actor::new_from_bot(bot_id::MACRO_SYSTEM_BOT_ID))
+            } else {
+                Attribution::direct(Actor::new_from_user(self.user_id.clone()))
+            }
+        })
+    }
 }
 
 /// Configuration for CloudFront presigned URL generation.
@@ -367,6 +386,8 @@ pub struct EditDocumentRepoArgs {
     /// Updated share permissions.
     pub share_permission:
         Option<models_permissions::share_permission::UpdateSharePermissionRequestV2>,
+    /// Whether to revoke direct non-owner user access in the edit transaction.
+    pub revoke_non_owner_user_access: bool,
     /// New file type (None = no change).
     pub file_type: Option<FileTypeUpdate>,
 }
@@ -475,6 +496,8 @@ pub struct CreateTaskResponse {
     pub document_metadata: DocumentResponseMetadata,
     /// A pre-generated permission token that you can use for SS
     pub token: String,
+    /// Base64-encoded canonical Loro snapshot used to initialize the task.
+    pub initial_snapshot: String,
     /// The team this task number is scoped to.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub team_id: Option<uuid::Uuid>,

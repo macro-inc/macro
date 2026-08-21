@@ -11,7 +11,7 @@ use crate::AgentLoop;
 use crate::Session;
 use crate::error::AgentError;
 use crate::stream::{ChatCompletionStream, StreamPart, ToolCall, ToolResponse};
-use ai_toolset::{AsyncTool, AsyncToolCollection, ToolSet as AiToolSet};
+use ai_toolset::{AsyncTool, AsyncToolCollection, ToolAnnotated, ToolSet as AiToolSet};
 use ai_usage::{AiFeature, UsageContext, UsageEvent, UsageRecorder};
 use futures::StreamExt;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -51,7 +51,13 @@ pub(crate) fn usage_ctx() -> UsageContext {
 pub(crate) fn single_tool_set<T, C>() -> Arc<dyn AiToolSet<C> + Send + Sync>
 where
     C: Clone + Send + Sync + 'static,
-    T: JsonSchema + AsyncTool<C> + for<'de> serde::Deserialize<'de> + Send + Sync + 'static,
+    T: JsonSchema
+        + AsyncTool<C>
+        + ToolAnnotated
+        + for<'de> serde::Deserialize<'de>
+        + Send
+        + Sync
+        + 'static,
     T::Output: Serialize + JsonSchema + 'static,
 {
     Arc::new(AsyncToolCollection::<C>::new().add_tool::<T, C>())

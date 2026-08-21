@@ -7,6 +7,7 @@ use crate::domain::{
     ports::SoupService,
 };
 use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
+use ai_toolset::{ToolAnnotated, ToolAnnotations};
 use async_trait::async_trait;
 use email::domain::{models::PreviewView, ports::EmailService};
 use filter_ast::Expr;
@@ -657,6 +658,10 @@ impl ListEntities {
             .clone()
             .or_else(|| self.email_preset.is_some().then_some(vec![ItemType::Email]))
     }
+}
+
+impl ToolAnnotated for ListEntities {
+    const ANNOTATIONS: ToolAnnotations = ToolAnnotations::read_only("Browse workspace");
 }
 
 #[async_trait]

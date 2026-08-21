@@ -21,10 +21,8 @@ if (!channelId || !actAs || !botToken) {
 }
 
 const env = (process.env.MACRO_ENV ?? 'dev') as Env;
-const macro = new Macro({
-  env,
-  auth: { type: 'bot', token: botToken },
-}).requestedAs(actAs);
+const bot = new Macro({ env, auth: { type: 'bot', token: botToken } });
+const macro = bot.requestedAs(bot.users.byId(actAs));
 const channel = macro.channels.byId(channelId);
 
 async function step<T>(name: string, run: () => Promise<T>): Promise<T | null> {

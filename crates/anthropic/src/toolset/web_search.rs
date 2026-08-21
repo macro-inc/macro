@@ -3,6 +3,7 @@ use crate::types::request::WEB_SEARCH_TOOL;
 use crate::types::response::ResponseContentKind;
 use crate::types::response::web_search::WebSearchResponse;
 use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
+use ai_toolset::{ToolAnnotated, ToolAnnotations};
 use async_trait::async_trait;
 use schemars::JsonSchema;
 use serde::Deserialize;
@@ -16,6 +17,12 @@ use serde::Deserialize;
 pub struct WebSearch {
     /// The search query or instruction.
     pub input: String,
+}
+
+impl ToolAnnotated for WebSearch {
+    const ANNOTATIONS: ToolAnnotations = ToolAnnotations::read_only("Search the web")
+        .with_open_world()
+        .without_idempotent();
 }
 
 #[async_trait]

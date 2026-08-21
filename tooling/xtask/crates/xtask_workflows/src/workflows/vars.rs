@@ -14,6 +14,7 @@ macro_rules! secret {
 secret!(AWS_ACCESS_KEY);
 secret!(AWS_SECRET_ACCESS_KEY);
 secret!(CLOUDFLARE_API_TOKEN);
+secret!(DAYTONA_API_KEY);
 secret!(DD_API_KEY);
 secret!(DD_APP_KEY);
 secret!(DOPPLER_PREVIEW_TOKEN);
@@ -103,6 +104,14 @@ pub const BUN_CACHE_VOLUME_DIR: &str = "/home/runner/.bun/install/cache";
 /// backs each content-addressed snapshot up to Namespace artifact storage so a
 /// cache-volume miss does not force another infra bake.
 pub const PREVIEW_SNAPSHOT_VOLUME_DIR: &str = "/home/runner/.cache/macro-preview-snapshots";
+
+/// GHCR repository for the agent-harness sandbox image (the same Dockerfile
+/// Daytona snapshots). Pushed as `:$SHA` on PRs and `:$SHA` + `:latest` on main.
+pub const AGENT_HARNESS_GHCR_IMAGE: &str = "ghcr.io/macro-inc/macro-agent-harness";
+
+/// Local Docker tag `just run_local` / Fly previews load. Keep in sync with
+/// `xtask_local::local::sandbox_image::DEFAULT_LOCAL_TAG`.
+pub const AGENT_HARNESS_LOCAL_IMAGE: &str = "macro-agent-harness:latest";
 
 /// The repo-wide env block (mirrors the original top-level `env:`). Defaults the
 /// linker to `lld`; the heavy jobs override `RUSTFLAGS` to use `mold`.

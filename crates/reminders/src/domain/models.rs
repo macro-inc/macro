@@ -17,6 +17,28 @@ use uuid::Uuid;
 /// stay sane. Mirrored by the `reminder_description_max_length` DB constraint.
 pub const MAX_DESCRIPTION_LEN: usize = 2_000;
 
+/// The outside limit on how late a recurring firing may be delivered.
+///
+/// A backstop for the long-period schedules, where the primary rule — a firing
+/// is stale once the next one has come due — would otherwise permit delivering
+/// a monthly reminder three weeks after the fact. Deliberately generous: an
+/// hour of queue backlog or a short outage must not cost anyone their daily
+/// reminder, so the threshold sits far above any delay healthy dispatch
+/// produces rather than close to it.
+///
+/// Also what marks a reminder revived from months out of service as needing a
+/// recomputed firing rather than the one it went quiet on.
+pub const MAX_RECURRING_LATENESS: chrono::Duration = chrono::Duration::hours(24);
+
+/// The closest together two firings of a recurring reminder may be.
+///
+/// The sweep ticks once a minute, so a schedule finer than that cannot be
+/// honoured; this sits well above the tick because a reminder arriving every
+/// few minutes is a notification storm rather than a reminder. The composer
+/// only builds daily, weekly and monthly schedules, so this guards the API
+/// rather than anything a user can click.
+pub const MIN_RECURRING_INTERVAL: chrono::Duration = chrono::Duration::minutes(5);
+
 /// Default number of reminders returned by a list request.
 pub const DEFAULT_PAGE_SIZE: u32 = 100;
 
@@ -585,6 +607,47 @@ pub struct SweepSummary {
     pub dispatched: usize,
 }
 
+/// Where a series goes once the firing in hand is finished.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Advance {
+    /// The firing to move to.
+    pub next_run_at: DateTime<Utc>,
+    /// Whether to clear the owner's "done" acknowledgement.
+    ///
+    /// True when this delivery notified them: marking a recurring reminder done
+    /// settles the firing in front of you, not the standing arrangement, so a
+    /// fresh notification makes that acknowledgement stale and the reminder
+    /// outstanding again.
+    ///
+    /// False when the firing was rolled forward without notifying. Nothing
+    /// reached the owner, so nothing has superseded what they already dealt
+    /// with, and clearing it would return the reminder to their attention with
+    /// no notification to explain why.
+    pub clear_completion: bool,
+}
+
+/// What finishing a firing did to the reminder behind it.
+///
+/// Reported rather than assumed because the advance is allowed to not happen,
+/// and "the owner rescheduled" and "the advance silently failed" leave exactly
+/// the same row behind. Without this the caller cannot tell them apart.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Completion {
+    /// Nothing to advance: a one-shot, or a series with no firing left.
+    NoAdvance,
+    /// The series moved on to the firing it was given.
+    Advanced,
+    /// An advance was asked for and declined, because the reminder no longer
+    /// sits on the firing that was delivered.
+    ///
+    /// Named for what is known rather than for the likely cause. A reschedule
+    /// mid-flight is the ordinary one and outranks the series, but the row may
+    /// equally have been deleted, completed, or disabled between the read that
+    /// resolved this firing and the write that finished it. All this reports is
+    /// that the guard held. Expected, not an error.
+    NotAdvanced,
+}
+
 /// What became of one `Deliver` message.
 ///
 /// Every variant is a success in the queueing sense — the message is acked.
@@ -600,9 +663,11 @@ pub enum DeliveryOutcome {
     /// Nothing left to deliver: the reminder was deleted, completed, disabled,
     /// or rescheduled out from under this message between sweep and delivery.
     Gone,
-    /// The reminder recurs. Recurring dispatch is not implemented, and firing
-    /// one here would deliver it once and complete it forever.
-    SkippedRecurring,
+    /// A recurring firing too far behind to be worth sending, moved on to its
+    /// next occurrence without notifying. Covers a dispatcher outage, and the
+    /// series whose `next_run_at` was frozen before recurring dispatch existed
+    /// — delivering either would announce a reminder about a moment long past.
+    RolledForward,
 }
 
 /// Errors returned by the reminders service.

@@ -5,6 +5,7 @@ use crate::domain::{
     ports::{DocumentService, create::DocumentCreationService, editing::EditingWorkerService},
 };
 use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
+use ai_toolset::{ToolAnnotated, ToolAnnotations};
 use async_trait::async_trait;
 use entity_access::domain::{models::EntityType, ports::EntityAccessService};
 use models_permissions::share_permission::access_level::EditAccessLevel;
@@ -56,6 +57,10 @@ pub struct RenameDocument {
 
     #[schemars(description = "The new name for the document without the file extension.")]
     pub document_name: String,
+}
+
+impl ToolAnnotated for RenameDocument {
+    const ANNOTATIONS: ToolAnnotations = ToolAnnotations::destructive("Rename document");
 }
 
 #[async_trait]

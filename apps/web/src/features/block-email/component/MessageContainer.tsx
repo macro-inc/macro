@@ -229,7 +229,7 @@ export function MessageContainer(props: MessageContainerProps) {
             style={{ '--user-icon-width': '1rem' }}
             classList={{
               'bg-accent border-transparent': props.isTarget,
-              'bg-active/60 border-edge': !props.isTarget && props.isFocused,
+              'bg-active border-edge': !props.isTarget && props.isFocused,
               'bg-ink-muted/4 border-transparent':
                 !props.isTarget && !props.isFocused,
             }}

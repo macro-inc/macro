@@ -148,11 +148,12 @@ export function TaskListEntity(props: TaskListEntityProps) {
         'soup-list-entity @container/entity w-[calc(100%-0.5rem)] mr-1 relative group/narrow flex flex-col py-0.5 rounded-lg',
         {
           'min-h-10 mx-1': !isMobile(),
-          'bg-accent/8': props.checked,
-          'bg-accent/16':
+          'bg-list-selected': props.checked,
+          'bg-list-selected-highlighted':
             props.checked && props.highlighted && !isTouchDevice(),
-          'bg-hover': props.highlighted && !props.checked && !isTouchDevice(),
-          'hover:bg-hover/65':
+          'bg-list-highlighted':
+            props.highlighted && !props.checked && !isTouchDevice(),
+          'hover:bg-list-hover':
             !props.highlighted && !props.checked && !isTouchDevice(),
         }
       )}
