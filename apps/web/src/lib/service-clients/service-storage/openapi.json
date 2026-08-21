@@ -16474,6 +16474,10 @@
         "description": "Metadata for [`DocumentTopicEvent::Created`].",
         "required": ["document_id", "owner", "document_name"],
         "properties": {
+          "actor": {
+            "type": ["string", "null"],
+            "description": "Who mechanically created the document. Absent on events published\nbefore attribution: ingest then treats [`Self::owner`] as the actor."
+          },
           "created_at": {
             "type": ["string", "null"],
             "format": "date-time",
@@ -16495,6 +16499,17 @@
               {
                 "$ref": "#/components/schemas/FileType",
                 "description": "File type of the document, when known."
+              }
+            ]
+          },
+          "on_behalf_of": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/MacroUserIdStr",
+                "description": "The user whose feed this creation belongs on, when different from\n[`Self::actor`]. Absent means the actor is also the subject."
               }
             ]
           },

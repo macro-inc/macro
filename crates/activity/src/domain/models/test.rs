@@ -136,6 +136,49 @@ fn activity_ids_are_deterministic_per_event_and_ordinal() {
 }
 
 #[test]
+fn attribution_direct_leaves_subject_on_the_actor() {
+    let actor = Actor::new_from_user(user("macro|teo@example.com"));
+    let attribution = Attribution::direct(actor.clone());
+
+    assert_eq!(attribution.actor(), actor);
+    assert_eq!(attribution.on_behalf_of(), None);
+
+    let activity = Activity::attributed(
+        Uuid::from_u128(4),
+        0,
+        attribution,
+        EntityType::Document,
+        "doc-1",
+        CommonAction::Created,
+        Utc::now(),
+    );
+    assert_eq!(activity.actor, actor);
+    assert_eq!(activity.subject_id, "macro|teo@example.com");
+}
+
+#[test]
+fn attribution_delegated_keeps_actor_and_scopes_the_subject() {
+    let actor = Actor::new_from_user(user("macro|agent@example.com"));
+    let subject = user("macro|teo@example.com");
+    let attribution = Attribution::delegated(actor.clone(), subject.clone());
+
+    assert_eq!(attribution.actor(), actor);
+    assert_eq!(attribution.on_behalf_of(), Some(subject));
+
+    let activity = Activity::attributed(
+        Uuid::from_u128(5),
+        0,
+        attribution,
+        EntityType::Document,
+        "doc-1",
+        CommonAction::Edited,
+        Utc::now(),
+    );
+    assert_eq!(activity.actor, actor);
+    assert_eq!(activity.subject_id, "macro|teo@example.com");
+}
+
+#[test]
 fn subject_is_the_actor_unless_delegated() {
     let direct = Activity::common(
         Uuid::from_u128(1),

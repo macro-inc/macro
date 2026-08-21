@@ -447,6 +447,8 @@ fn document_event_cases() -> Vec<EventCase> {
                 DocumentTopicEvent::Created(DocumentCreatedMetadata {
                     document_id: DOCUMENT_ID.to_string(),
                     owner: user_id("macro|owner@example.com"),
+                    actor: None,
+                    on_behalf_of: None,
                     document_name: "notes".to_string(),
                     file_type: None,
                     project_id: None,

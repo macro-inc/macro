@@ -1,5 +1,5 @@
 import { ENABLE_GRAPHQL_BACKFILL } from '@core/constant/featureFlags';
-import { createTabLeaderSignal } from '@notifications/notification-election';
+import { createTabLeaderSignal } from '@core/cross-tab/tab-leader';
 import { SoupBackfillDocument } from '@service-storage/graphql/generated/graphql';
 import {
   type FetchGraphqlSoupOptions,

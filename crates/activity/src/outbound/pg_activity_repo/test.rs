@@ -210,6 +210,86 @@ async fn subject_feed_breaks_timestamp_ties_by_id(pool: PgPool) {
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn subject_activity_range_filters_half_open_interval_and_subject(pool: PgPool) {
+    let repo = PgActivityRepo::new(pool.clone());
+    let from = base_time();
+    let to = from + chrono::Duration::seconds(3);
+    repo.insert_activities(&[
+        seed_at(
+            60,
+            CommonAction::Edited,
+            "before",
+            from - chrono::Duration::seconds(1),
+        ),
+        seed_at(61, CommonAction::Created, "at-from", from),
+        seed_at(
+            62,
+            CommonAction::Opened,
+            "inside",
+            from + chrono::Duration::seconds(2),
+        ),
+        seed_at(63, CommonAction::Deleted, "at-to", to),
+        Activity::common(
+            Uuid::from_u128(64),
+            0,
+            Actor::new_from_user(user("macro|someone-else@example.com")),
+            None,
+            model_entity::EntityType::Document,
+            "other-subject",
+            CommonAction::Edited,
+            from + chrono::Duration::seconds(1),
+        ),
+    ])
+    .await
+    .unwrap();
+
+    let range = repo
+        .subject_activity_range("macro|actor@example.com", from, to, nz(10))
+        .await
+        .unwrap();
+
+    let entity_ids: Vec<&str> = range
+        .records
+        .iter()
+        .map(|record| record.entity_id.as_str())
+        .collect();
+    assert_eq!(entity_ids, vec!["inside", "at-from"]);
+    assert!(!range.truncated);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn subject_activity_range_reports_truncation(pool: PgPool) {
+    let repo = PgActivityRepo::new(pool.clone());
+    let from = base_time();
+    let activities: Vec<Activity> = (0..3u32)
+        .map(|i| {
+            seed_at(
+                u128::from(70 + i),
+                CommonAction::Edited,
+                &format!("doc-{i}"),
+                from + chrono::Duration::seconds(i64::from(i)),
+            )
+        })
+        .collect();
+    repo.insert_activities(&activities).await.unwrap();
+
+    let range = repo
+        .subject_activity_range(
+            "macro|actor@example.com",
+            from,
+            from + chrono::Duration::seconds(10),
+            nz(2),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(range.records.len(), 2);
+    assert_eq!(range.records[0].entity_id, "doc-2");
+    assert_eq!(range.records[1].entity_id, "doc-1");
+    assert!(range.truncated);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn entity_activity_batches_with_a_per_entity_limit(pool: PgPool) {
     let repo = PgActivityRepo::new(pool.clone());
     let t = base_time();

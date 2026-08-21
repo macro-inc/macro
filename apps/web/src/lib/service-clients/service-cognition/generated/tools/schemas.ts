@@ -2570,6 +2570,72 @@ export const NameSearch = z.object({
     .optional(),
 });
 
+export const ReadActivity = z.object({
+  from: z.string().datetime({ offset: true }),
+  to: z.string().datetime({ offset: true }),
+});
+
+export const ReadActivityResponse = z.object({
+  activities: z.array(
+    z.object({
+      actorId: z.string(),
+      entityType: z.string(),
+      entityId: z.string(),
+      action: z.any().superRefine((x, ctx) => {
+        const schemas = [
+          z.object({ type: z.literal('created') }),
+          z.object({ type: z.literal('edited') }),
+          z.object({ type: z.literal('opened') }),
+          z.object({ type: z.literal('deleted') }),
+          z.object({ type: z.literal('messaged') }),
+          z.object({ type: z.literal('sent') }),
+          z.object({
+            property: z.string(),
+            propertyName: z.union([z.string(), z.null()]).optional(),
+            propertyType: z.union([z.string(), z.null()]).optional(),
+            from: z.any().optional(),
+            fromLabels: z.union([z.array(z.string()), z.null()]).optional(),
+            to: z.any().optional(),
+            toLabels: z.union([z.array(z.string()), z.null()]).optional(),
+            type: z.literal('propertyChanged'),
+          }),
+          z.object({
+            participant: z.string(),
+            type: z.literal('participantAdded'),
+          }),
+          z.object({
+            participant: z.string(),
+            type: z.literal('participantRemoved'),
+          }),
+          z.object({ callId: z.string(), type: z.literal('callStarted') }),
+          z.object({
+            tag: z.string(),
+            payload: z.any().optional(),
+            type: z.literal('unknown'),
+          }),
+        ];
+        const errors = schemas.reduce<z.ZodError[]>(
+          (errors, schema) =>
+            ((result) => (result.error ? [...errors, result.error] : errors))(
+              schema.safeParse(x)
+            ),
+          []
+        );
+        if (schemas.length - errors.length !== 1) {
+          ctx.addIssue({
+            path: ctx.path,
+            code: 'invalid_union',
+            unionErrors: errors,
+            message: 'Invalid input: Should pass single schema',
+          });
+        }
+      }),
+      occurredAt: z.string().datetime({ offset: true }),
+    })
+  ),
+  truncated: z.boolean(),
+});
+
 export const ReadCallRecord = z.object({ callId: z.string().uuid() });
 
 export const ReadCallRecordResponse = z.object({

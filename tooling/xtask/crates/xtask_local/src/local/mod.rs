@@ -36,6 +36,7 @@ pub mod opensearch;
 pub mod portmap;
 pub mod proxy;
 pub mod resources;
+pub mod sandbox_image;
 pub mod sdk_webhook;
 pub mod seed_env;
 pub mod snapshot;
@@ -239,7 +240,7 @@ pub fn run_stack(mode: Mode, args: &cli::RunArgs) -> Result<()> {
     // Foreground: resolve env, build binaries + runtime image, generate the
     // compose override / Caddyfile / kickstart. None of this touches the volumes
     // or containers the teardown is removing, so it's safe to overlap.
-    let (env, target) = prepare(&stage, mode, &instance, args, false, false)?;
+    let (env, target) = prepare(&stage, mode, &instance, args, false, false, false)?;
 
     // Join the background teardown before we (re)create volumes + bring infra up,
     // surfaced as a live spinner so it's clear what we're blocked on. It
@@ -496,7 +497,9 @@ fn interact(
 /// Caddyfile / kickstart. Deliberately does NOT create the external
 /// networks/volumes — that's done after the background teardown joins, since
 /// teardown removes them. `static_frontend` wires the proxy to serve the staged
-/// app bundle (headless `stack up`). Returns the resolved env + build target.
+/// app bundle (headless `stack up`). `infra_only` skips zigbuild: bake never
+/// starts Rust services and runs in parallel with the cargo lane. Returns the
+/// resolved env + build target.
 fn prepare(
     stage: &Stage,
     mode: Mode,
@@ -504,6 +507,7 @@ fn prepare(
     args: &cli::RunArgs,
     static_frontend: bool,
     pull_app_images: bool,
+    infra_only: bool,
 ) -> Result<(env_layer::ResolvedEnv, arch::Target)> {
     let env = env_layer::resolve(
         mode,
@@ -513,18 +517,25 @@ fn prepare(
         static_frontend,
     )?;
     stage.note(&format!("env: {}", env_layer::summarize(&env.merged)));
+    sandbox_image::ensure(stage, &env.merged, args.build.no_build)?;
 
     // Build the runtime image (idempotent) and the service binaries.
     let target = arch::detect()?;
     build::ensure_runtime_image(stage, target, false)?;
-    let binaries = build::resolve(
-        stage,
-        target,
-        &build::BuildOptions {
-            no_build: args.build.no_build,
-            binaries_dir: args.build.binaries_dir.clone(),
-        },
-    )?;
+    let binaries = if infra_only {
+        // Compose still emits `/app/out` mounts, but infra-only never starts
+        // those services. Bake runs this in parallel with zigbuild.
+        build::BinariesDir::TargetDir(workspace_root().join(target.debug_dir()))
+    } else {
+        build::resolve(
+            stage,
+            target,
+            &build::BuildOptions {
+                no_build: args.build.no_build,
+                binaries_dir: args.build.binaries_dir.clone(),
+            },
+        )?
+    };
 
     // Generate the override + the Caddyfile (the frontend reaches the services
     // through the proxy in every mode), and — for the self-contained local

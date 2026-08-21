@@ -273,8 +273,10 @@ async fn build_tool_context(args: ToolContextBuildArgs<'_>) -> anyhow::Result<To
         config.document_permission_jwt.to_string(),
     );
 
-    let properties_tool_context =
-        ai_tools::build_properties_tool_context(properties_service, entity_access_service.clone());
+    let properties_tool_context = ai_tools::build_properties_tool_context(
+        properties_service.clone(),
+        entity_access_service.clone(),
+    );
 
     let user_email_service = Arc::new(
         EmailServiceImpl::new(
@@ -372,6 +374,11 @@ async fn build_tool_context(args: ToolContextBuildArgs<'_>) -> anyhow::Result<To
         search_service_client: search_service_client.clone(),
         soup_service,
         email_service: email_service_for_tools,
+        activity_tool_context: ai_tools::build_activity_tool_context(
+            db.clone(),
+            properties_service,
+            entity_access_service.clone(),
+        ),
         document_tool_context,
         properties_tool_context,
         email_tool_context,

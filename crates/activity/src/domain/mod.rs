@@ -2,3 +2,5 @@
 
 pub mod models;
 pub mod ports;
+#[cfg(feature = "ai_tools")]
+pub mod service;

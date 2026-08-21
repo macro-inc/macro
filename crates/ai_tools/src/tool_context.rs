@@ -59,6 +59,9 @@ use system_properties::{
 use teams::{inbound::toolset::TeamToolContext, outbound::team_repo::TeamRepositoryImpl};
 use tokio_util::task::TaskTracker;
 
+mod activity_metadata;
+
+use activity_metadata::ToolActivityMetadataResolver;
 pub use ai_toolset::RequestContext;
 
 /// Type alias for the frecency service implementation
@@ -948,7 +951,12 @@ impl ToolEntityCreator {
     ) -> anyhow::Result<String> {
         use std::str::FromStr as _;
         let document = documents::domain::create::NewPlainTextDocument::builder(
-            documents::domain::create::NewDocumentMetadata::new(name.to_string()),
+            documents::domain::create::NewDocumentMetadata::builder(name.to_string())
+                .attribution(activity::Attribution::delegated(
+                    activity::Actor::new_from_bot(bot_id::MACRO_AI_BOT_ID),
+                    user.clone(),
+                ))
+                .build(),
         )
         .file_type(model::document::FileType::from_str("md").expect("md is a valid file type"))
         .text(markdown.to_string())
@@ -1231,6 +1239,24 @@ pub type ToolImportService = import::domain::service::ImportServiceImpl<
 /// with a wired one after constructing the import service.
 pub type ToolImportToolContext = import::inbound::toolset::ImportToolContext<ToolImportService>;
 
+pub type ToolActivityToolContext = activity::inbound::toolset::ActivityToolContext<
+    activity::outbound::pg_activity_repo::PgActivityRepo,
+>;
+
+pub fn build_activity_tool_context(
+    pool: sqlx::PgPool,
+    properties: Arc<ToolPropertiesService>,
+    entity_access_service: Arc<ToolEntityAccessService>,
+) -> ToolActivityToolContext {
+    activity::inbound::toolset::ActivityToolContext::new(
+        activity::outbound::pg_activity_repo::PgActivityRepo::new(pool),
+    )
+    .with_metadata_resolver(ToolActivityMetadataResolver::new(
+        properties,
+        entity_access_service,
+    ))
+}
+
 #[derive(Clone, Default)]
 pub struct NoOpScheduleContext;
 
@@ -1247,6 +1273,7 @@ pub struct ToolServiceContext {
     pub email_service_client: Arc<email_service_client::EmailServiceClientExternal>,
     pub soup_service: Arc<ToolSoupService>,
     pub email_service: Arc<ToolEmailService>,
+    pub activity_tool_context: ToolActivityToolContext,
     pub document_tool_context: ToolDocumentToolContext,
     pub properties_tool_context: ToolPropertiesToolContext,
     pub email_tool_context: ToolEmailToolContext,

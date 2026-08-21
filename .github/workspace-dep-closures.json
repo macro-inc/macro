@@ -3,6 +3,7 @@
   "closures": {
     "activity": [
       "crates/activity",
+      "crates/ai_toolset",
       "crates/bot_id",
       "crates/channel_sender",
       "crates/cowlike",
@@ -3397,6 +3398,7 @@
     ],
     "graphql_activity": [
       "crates/activity",
+      "crates/ai_toolset",
       "crates/bot_id",
       "crates/channel_sender",
       "crates/cowlike",

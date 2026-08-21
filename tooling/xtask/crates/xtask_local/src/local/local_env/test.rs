@@ -87,6 +87,12 @@ fn emits_required_keys() {
         "CAL_EVENT_TYPE_CONTENT_NAMES_KEY",
         "META_PIXEL_ID",
         "META_ACCESS_TOKEN",
+        "GITHUB_TOKEN",
+        "DEV_DANGEROUS_LOCAL_CONTAINERS",
+        "LOCAL_CONTAINER_IMAGE",
+        "LOCAL_CONTAINER_NETWORK",
+        "DAYTONA_API_KEY",
+        "HARNESS_BOT_ID",
     ] {
         assert!(
             env.contains_key(key),
@@ -254,5 +260,48 @@ fn fusionauth_public_url_uses_the_instance_host_port() {
     assert_eq!(
         named_env.get("FUSIONAUTH_PUBLIC_URL").map(String::as_str),
         Some(named_public_url.as_str())
+    );
+}
+
+/// A local stack runs sandboxes on the developer's own daemon, so it needs no
+/// Daytona account to exercise the sandbox path.
+#[test]
+fn the_agent_harness_uses_local_containers_and_wipes_daytona() {
+    let env = local_env();
+
+    assert_eq!(
+        env.get("DEV_DANGEROUS_LOCAL_CONTAINERS")
+            .map(String::as_str),
+        Some("true")
+    );
+    assert_eq!(env.get("DAYTONA_API_KEY").map(String::as_str), Some(""));
+    // Present so `GITHUB_TOKEN=... just run_local` overlays, but empty in a
+    // no-Doppler stack. Doppler would supply a real token above this stub.
+    assert_eq!(env.get("GITHUB_TOKEN").map(String::as_str), Some(""));
+}
+
+/// Sandboxes and the harness are both containers, so they reach each other on a
+/// shared Compose network and never over the host's loopback. The network name
+/// has to track the instance, or a named stack's sandboxes join the wrong one.
+#[test]
+fn local_sandboxes_join_the_instances_compose_network() {
+    let named = Instance::derive(Some("2508"), None).unwrap();
+    let default_env =
+        LocalEnv::for_instance(Mode::Local, &Instance::derive(None, None).unwrap(), true).to_env();
+    let named_env = LocalEnv::for_instance(Mode::Local, &named, true).to_env();
+
+    assert_eq!(
+        default_env
+            .get("LOCAL_CONTAINER_NETWORK")
+            .map(String::as_str),
+        Some("macro_services")
+    );
+    assert_eq!(
+        named_env.get("LOCAL_CONTAINER_NETWORK").map(String::as_str),
+        Some(format!("{}_services", named.project_name()).as_str())
+    );
+    assert_eq!(
+        default_env.get("LOCAL_CONTAINER_IMAGE").map(String::as_str),
+        Some("macro-agent-harness:latest")
     );
 }

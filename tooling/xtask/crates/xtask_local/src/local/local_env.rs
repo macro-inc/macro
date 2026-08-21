@@ -57,7 +57,7 @@ impl LocalEnv {
             storage: StorageEnv::local(),
             queues: QueueEnv::local(),
             mail: MailEnv::local(),
-            agent_harness: AgentHarnessEnv::local(),
+            agent_harness: AgentHarnessEnv::local(instance.project_name()),
             service_auth: ServiceAuthEnv::for_instance(name),
             fusionauth: FusionAuthEnv::for_instance(instance),
             boot_stubs: BootStubEnv,
@@ -249,23 +249,35 @@ impl MailEnv {
     }
 }
 
-/// The agent harness: which bot it answers for, and the Daytona sandbox
-/// credentials.
+/// The agent harness: which bot it answers for, and where its sandboxes come
+/// from.
 ///
-/// The bot id and snapshot name are deterministic (the bot is seeded by
-/// migration). The two secrets are seeded empty so the process-env overlay can
-/// replace them; the harness refuses to start unless both are supplied.
+/// Local stacks run sandboxes on the developer's own Docker daemon, so no
+/// Daytona account is involved. `DAYTONA_API_KEY` is seeded empty so Doppler
+/// cannot bill Daytona, while still leaving the key in the map for
+/// `DAYTONA_API_KEY=... DEV_DANGEROUS_LOCAL_CONTAINERS=false just run_local`.
+/// `GITHUB_TOKEN` is left to Doppler / process env so a local sandbox can
+/// still clone.
 struct AgentHarnessEnv {
     bot_id: &'static str,
     snapshot: &'static str,
+    /// Image the local provider runs. `run_local` / `stack up` `docker build`
+    /// `crates/agent_harness/container` to this tag (BuildKit cache is the
+    /// freshness check).
+    image: &'static str,
+    /// Network sandboxes join, so this service can dial their sidecars.
+    network: String,
 }
 
 impl AgentHarnessEnv {
-    fn local() -> Self {
+    fn local(project_name: &str) -> Self {
         AgentHarnessEnv {
             // bot_id::MACRO_CODER_BOT_ID, seeded by the bots_has_agent migration.
             bot_id: "00000000-0000-0000-0000-00000000a9e7",
             snapshot: "macro-agent-harness",
+            image: super::sandbox_image::DEFAULT_LOCAL_TAG,
+            // Compose names a network `<project>_<network>`.
+            network: format!("{project_name}_services"),
         }
     }
 
@@ -273,7 +285,9 @@ impl AgentHarnessEnv {
         env.insert("HARNESS_BOT_ID".into(), self.bot_id.into());
         env.insert("DAYTONA_SNAPSHOT".into(), self.snapshot.into());
         env.insert("DAYTONA_API_KEY".into(), String::new());
-        env.insert("GITHUB_TOKEN".into(), String::new());
+        env.insert("DEV_DANGEROUS_LOCAL_CONTAINERS".into(), "true".into());
+        env.insert("LOCAL_CONTAINER_IMAGE".into(), self.image.into());
+        env.insert("LOCAL_CONTAINER_NETWORK".into(), self.network.clone());
     }
 }
 
@@ -464,6 +478,11 @@ impl BootStubEnv {
             "GITHUB_IDP_ID".into(),
             "99999999-9999-4999-8999-999999999999".into(),
         );
+        // Clone token for local sandboxes. Empty here so `--no-doppler` still
+        // has the key for `GITHUB_TOKEN=... just run_local`; Doppler overlays
+        // a real token when present. Not in `to_env`, so a local stack does
+        // not wipe Doppler's value the way it wipes `DAYTONA_API_KEY`.
+        env.insert("GITHUB_TOKEN".into(), String::new());
         env.insert("STRIPE_SECRET_KEY".into(), "local-stripe-secret".into());
         env.insert("STRIPE_PRICE_ID".into(), "local-stripe-price".into());
         env.insert(

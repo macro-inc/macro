@@ -139,6 +139,10 @@ type ToolParserMap = {
     response: types.MoveToProjectResponse;
   };
   NameSearch: { call: types.NameSearch; response: types.SearchToolResponse };
+  ReadActivity: {
+    call: types.ReadActivity;
+    response: types.ReadActivityResponse;
+  };
   ReadCallRecord: {
     call: types.ReadCallRecord;
     response: types.ReadCallRecordResponse;
@@ -355,6 +359,10 @@ const toolParserMap = {
   NameSearch: {
     call: schemas.NameSearch,
     response: schemas.SearchToolResponse,
+  },
+  ReadActivity: {
+    call: schemas.ReadActivity,
+    response: schemas.ReadActivityResponse,
   },
   ReadCallRecord: {
     call: schemas.ReadCallRecord,
@@ -575,6 +583,10 @@ type ToolDataMap = {
     response: types.MoveToProjectResponse;
   };
   NameSearch: { call: types.NameSearch; response: types.SearchToolResponse };
+  ReadActivity: {
+    call: types.ReadActivity;
+    response: types.ReadActivityResponse;
+  };
   ReadCallRecord: {
     call: types.ReadCallRecord;
     response: types.ReadCallRecordResponse;

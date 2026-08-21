@@ -102,6 +102,7 @@ pub async fn create_document_handler<
             .is_task
             .then_some(document_sub_type::DocumentSubType::Task),
         skip_history: req.skip_history,
+        attribution: None,
     };
 
     let response_data = state
