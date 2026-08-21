@@ -67,3 +67,21 @@ fn web_lane_raises_the_node_heap() {
         "vite OOM is the documented CI flap without this: {yaml}"
     );
 }
+
+#[test]
+fn images_lane_builds_analytics_proxy() {
+    let yaml = rendered();
+    assert!(
+        yaml.contains("ai_editing_worker analytics_proxy"),
+        "analytics_proxy is a default compose service; omitting it makes deploy pull docker.io/library/macro-analytics_proxy: {yaml}"
+    );
+}
+
+#[test]
+fn deploy_mirror_skips_unpullable_local_tags() {
+    let yaml = rendered();
+    assert!(
+        yaml.contains("mirror: skipping $img (not local, not pullable)"),
+        "deploy must skip compose-built tags the way premirror already does: {yaml}"
+    );
+}

@@ -284,7 +284,7 @@ fn build_artifacts() -> Step<Run> {
             cat > "$lanes/images.sh" <<'LANE'
             set -euo pipefail
             docker compose --project-directory . -p macro -f docker/docker-compose.yml build \
-              search sync_service websocket_service lexical_service ai_editing_worker
+              search sync_service websocket_service lexical_service ai_editing_worker analytics_proxy
             # Not a compose service, so `config --images` never lists it.
             # BuildKit cache on this runner is the freshness check.
             docker build --tag "$LOCAL_SANDBOX_IMAGE" crates/agent_harness/container
@@ -694,7 +694,14 @@ fn deploy_to_fly() -> Step<Run> {
             for img in $images alpine:3 "$LOCAL_SANDBOX_IMAGE"; do
               # Images the bake didn't leave in the daemon (snapshot cache hit,
               # or app-layer-only images like proxy/mailpit) get pulled here.
-              docker image inspect "$img" >/dev/null 2>&1 || docker pull "$img"
+              # Compose `config --images` also lists locally-built tags
+              # (analytics_proxy, sdk-webhook-relay) that are not on Docker Hub;
+              # premirror already skips those — do the same so a missing local
+              # tag cannot fail the deploy.
+              if ! docker image inspect "$img" >/dev/null 2>&1 && ! docker pull "$img"; then
+                echo "mirror: skipping $img (not local, not pullable)"
+                continue
+              fi
               id=$(docker image inspect -f '{{.Id}}' "$img")
               # Content-addressed tag: same image content = same ref, so a
               # redeploy's push is skippable by a manifest existence check and
