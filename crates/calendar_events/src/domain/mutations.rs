@@ -17,14 +17,15 @@ use super::{
         REMINDER_MINUTES_MAX, REMINDER_OVERRIDES_MAX,
     },
     ports::{
-        CalendarAccessTokenProvider, CalendarDeletionScope, CalendarEventWrite,
-        CalendarMutationError, CalendarMutationService, CalendarRepository, CalendarRsvpScope,
-        CalendarTokenError, CalendarUpdateScope, GoogleCalendarMutationProvider,
-        GoogleInstanceUpdateOutcome, GoogleProviderError, GoogleProviderErrorKind,
-        GoogleRsvpOutcome, GoogleSeriesMutationOutcome,
+        CalendarAccessTokenProvider, CalendarDeletionScope, CalendarEventChange,
+        CalendarEventWrite, CalendarEventWriteOutcome, CalendarMutationError,
+        CalendarMutationService, CalendarRepository, CalendarRsvpScope, CalendarTokenError,
+        CalendarUpdateScope, GoogleCalendarMutationProvider, GoogleInstanceUpdateOutcome,
+        GoogleProviderError, GoogleProviderErrorKind, GoogleRsvpOutcome,
+        GoogleSeriesMutationOutcome,
     },
 };
-use crate::domain::events::{CalendarEventChangedMetadata, CalendarMacroEvent};
+use crate::domain::events::{CalendarEventMetadata, CalendarMacroEvent, CalendarTopicEvent};
 use macro_event_broker::MacroEventBroker;
 
 /// Calendar mutation use cases with provider, token, and persistence
@@ -53,24 +54,35 @@ where
         }
     }
 
-    /// Publish a calendar change event; failures are logged and dropped.
+    /// Publish one calendar topic event; failures are logged and dropped.
     ///
     /// The provider and the local projection are already updated by this
     /// point, so a publish failure must not fail the mutation.
-    ///
-    /// Always a change, never a deletion, even on the delete paths: retiring
-    /// one source leaves the event alive when another still backs it, so the
-    /// consumer re-reads the row and treats its absence as removal.
-    fn publish_calendar_change(&self, event_id: Uuid, owner_id: String) {
+    fn publish_calendar_event(&self, event: CalendarTopicEvent) {
         let _ = self
             .macro_event_broker
-            .send_event(&CalendarMacroEvent::changed(CalendarEventChangedMetadata {
-                event_id,
-                owner_id,
-            }))
+            .send_event(&CalendarMacroEvent::for_change(event))
             .inspect_err(|error| {
                 tracing::error!(error=?error, "failed to publish calendar event");
             });
+    }
+
+    /// Announce what a write did to the canonical row. A write that changed
+    /// nothing publishes nothing, so an idempotent replay stays quiet.
+    fn publish_write_outcome(&self, outcome: &CalendarEventWriteOutcome) {
+        let metadata = CalendarEventMetadata {
+            event_id: outcome.event_id,
+            owner_id: outcome.owner_id.clone(),
+        };
+        match outcome.change {
+            CalendarEventChange::Created => {
+                self.publish_calendar_event(CalendarTopicEvent::Created(metadata));
+            }
+            CalendarEventChange::Updated => {
+                self.publish_calendar_event(CalendarTopicEvent::Updated(metadata));
+            }
+            CalendarEventChange::Unchanged => {}
+        }
     }
 
     async fn resolve_mutation_target(
@@ -107,13 +119,13 @@ where
         upsert: CalendarEventUpsert,
     ) -> Result<CalendarEvent, CalendarMutationError> {
         let mut event = upsert.event.clone();
-        let event_id = self
+        let outcome = self
             .repository
             .upsert_event(CalendarEventWrite::UserMutation(upsert))
             .await
             .map_err(|error| CalendarMutationError::PersistFailed(format!("{error:?}")))?;
-        event.id = event_id;
-        self.publish_calendar_change(event_id, event.owner_id.clone());
+        event.id = outcome.event_id;
+        self.publish_write_outcome(&outcome);
         Ok(event)
     }
 }
@@ -311,7 +323,11 @@ where
             // Either the deletion removed the series or it was already
             // gone; retiring the local source converges both.
             GoogleSeriesMutationOutcome::SeriesDeleted | GoogleSeriesMutationOutcome::Gone => {
-                self.repository
+                // Retiring a recurring master's source also retires its
+                // expanded instances, so this reports several events; each
+                // announces its own fate.
+                let retired = self
+                    .repository
                     .remove_google_source(
                         target.account_id,
                         target.calendar_id,
@@ -319,7 +335,19 @@ where
                     )
                     .await
                     .map_err(|error| CalendarMutationError::PersistFailed(format!("{error:?}")))?;
-                self.publish_calendar_change(event_id, target.owner_id.clone());
+                for event in retired {
+                    let metadata = CalendarEventMetadata {
+                        event_id: event.event_id,
+                        owner_id: event.owner_id,
+                    };
+                    self.publish_calendar_event(if event.deleted {
+                        CalendarTopicEvent::Deleted(metadata)
+                    } else {
+                        // The row survives, rewritten from its next-best
+                        // remaining source.
+                        CalendarTopicEvent::Updated(metadata)
+                    });
+                }
                 Ok(())
             }
         }

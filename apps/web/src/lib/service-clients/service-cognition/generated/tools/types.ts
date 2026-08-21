@@ -71,7 +71,8 @@ export type UnifiedSearchIndex =
   | 'emails'
   | 'channels'
   | 'projects'
-  | 'call_records';
+  | 'call_records'
+  | 'calendar_events';
 /**
  * Which tag set a tag belongs to, relative to the caller.
  */
@@ -113,6 +114,9 @@ export type TaggedSearchResult1 =
     })
   | (CrmCompanySearchResponseItem & {
       type: 'company';
+    })
+  | (CalendarEventSearchResponseItemWithMetadata & {
+      type: 'calendarEvent';
     });
 /**
  * The document sub type enum represents all values of document sub types.
@@ -124,6 +128,45 @@ export type DocumentSubType = 'task' | 'snippet' | 'skill';
  * Serializes as `ATTENDED`, `MISSED`, or `UNATTENDED`.
  */
 export type CallStatus = 'ATTENDED' | 'MISSED' | 'UNATTENDED';
+/**
+ * Timed or all-day span of a calendar event.
+ *
+ * Deliberately a local mirror of `models_soup::calendar_event::SoupCalendarEventTime`
+ * rather than a reuse of it: this module needs both `ToSchema` (OpenAPI) and
+ * `JsonSchema` (AI tool schemas), and `models_soup` carries no schemars
+ * dependency. The wire shape is identical and must stay that way, so a
+ * client can decode a search row and a soup row with one mapping.
+ *
+ * Fields are camelCased per variant rather than via `rename_all_fields`,
+ * which utoipa ignores.
+ */
+export type CalendarEventSearchTime =
+  | {
+      /**
+       * Inclusive start.
+       */
+      startsAt: string;
+      /**
+       * Exclusive end.
+       */
+      endsAt: string;
+      /**
+       * Original IANA time zone.
+       */
+      timeZone?: string | null;
+      kind: 'timed';
+    }
+  | {
+      /**
+       * Inclusive start date.
+       */
+      startDate: string;
+      /**
+       * Exclusive end date.
+       */
+      endDate: string;
+      kind: 'allDay';
+    };
 /**
  * The mutually exclusive time shape supplied to calendar tools.
  */
@@ -1538,6 +1581,82 @@ export interface CrmCompanySearchDomain {
    * When the domain record was created.
    */
   createdAt: string;
+}
+/**
+ * CalendarEventSearchResponseItem with metadata fetched from macrodb.
+ */
+export interface CalendarEventSearchResponseItemWithMetadata {
+  /**
+   * Metadata from the database. None if the event no longer exists.
+   */
+  metadata?: CalendarEventMetadata | null;
+  /**
+   * Standardized fields that all item types will share.
+   */
+  id: string;
+  name: string;
+  owner_id: string;
+  updated_at: string;
+  created_at: string;
+  calendar_event_search_results: CalendarEventSearchResult[];
+}
+/**
+ * Metadata for a calendar event fetched from the database.
+ *
+ * The index carries the master span for ranking, but the occurrence a row
+ * should display depends on when the query ran, so it is resolved here
+ * rather than indexed.
+ */
+export interface CalendarEventMetadata {
+  createdAt: string;
+  updatedAt: string;
+  /**
+   * Canonical status (`confirmed`, `tentative`, `cancelled`).
+   */
+  status: string;
+  time: CalendarEventSearchTime;
+  /**
+   * Whether the series carries a recurrence rule. Lets a row render a
+   * recurring badge without parsing the rules.
+   */
+  isRecurring: boolean;
+  /**
+   * The instance this row points at. `None` when the series has no
+   * materialized occurrence — occurrences exist only inside a rolling
+   * window, so a row can legitimately fall back to `time`.
+   */
+  occurrence?: CalendarEventSearchOccurrence | null;
+  /**
+   * Direct conference join URL when known.
+   */
+  conferenceUrl?: string | null;
+  /**
+   * Whether the canonical source prohibits mutation.
+   */
+  isReadOnly: boolean;
+}
+/**
+ * The instance a search row points at.
+ *
+ * A recurring series is indexed once, as its master. Which instance the row
+ * should show is decided per request rather than baked into the index: the
+ * next occurrence at or after now, else the most recent past one. This is
+ * the same resolution a calendar mention performs, so a search row and a
+ * mention of the same event agree on where they land.
+ */
+export interface CalendarEventSearchOccurrence {
+  /**
+   * Stable key of the resolved instance within its series.
+   */
+  occurrenceKey: string;
+  time: CalendarEventSearchTime;
+}
+export interface CalendarEventSearchResult {
+  highlight: SearchHighlight;
+  /**
+   * The score of the result
+   */
+  score?: number | null;
 }
 /**
  * Create a bot with a name, stable handle, and optional profile. Omit teamId for a bot owned by the current user; provide teamId to create a team-owned bot, which requires team administrator or owner permission. Pass channelId when the bot should post to a channel immediately: the current user must be a member of that channel. The response then includes that channel's webhook URL and a credential proposal. The user mints the bearer token from the chat card or bot settings; the secret is never returned in this tool result. Omit channelId to create the bot only, then use ManageBotChannelAccess and IssueBotCredential for later setup.

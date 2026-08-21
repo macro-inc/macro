@@ -5,31 +5,57 @@ use macro_event_topics::MacroCalendarTopic;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-/// Metadata for [`CalendarTopicEvent::Changed`].
+/// Metadata carried by every calendar topic event.
+///
+/// The same shape for all three variants: the variant says what happened, and
+/// the owner lets a consumer route or filter without a database read.
+/// Everything else about the event is re-read from the row — except on
+/// [`CalendarTopicEvent::Deleted`], where there is no row left to read.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct CalendarEventChangedMetadata {
-    /// The event entity whose canonical state changed.
+pub struct CalendarEventMetadata {
+    /// The event entity this change concerns.
     pub event_id: Uuid,
-    /// Owner of this per-user event projection. Carried so a consumer can
-    /// route or filter without a database read; everything else about the
-    /// event is re-read from the row.
+    /// Owner of this per-user event projection.
     pub owner_id: String,
 }
 
 /// Calendar events published to [`MacroCalendarTopic`].
 ///
-/// One variant, deliberately. Every calendar write funnels through
-/// `CalendarRepository::upsert_event` or a source retirement, and neither
-/// tells the caller whether the row was created, updated, or removed —
-/// retiring one source leaves the event alive when another still backs it.
-/// So the topic reports that an event's canonical state moved and leaves
-/// consumers to re-read it, which is what they would have to do anyway.
+/// The variants report what happened to the canonical `calendar_events` row,
+/// not what a caller asked for: an idempotent re-create that lands on the
+/// upsert's conflict path is an [`Updated`](CalendarTopicEvent::Updated), and
+/// deleting one source of a multi-source event is too, because the row
+/// survives on its next-best source.
+///
+/// A write that changes nothing publishes no event at all, so a full provider
+/// snapshot re-observing thousands of unchanged events stays quiet.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum CalendarTopicEvent {
-    /// An event's canonical state changed: created, updated, or removed.
-    /// Consumers re-read the row; its absence means it is gone.
-    #[serde(rename = "calendar_event.changed")]
-    Changed(CalendarEventChangedMetadata),
+    /// The event row was inserted.
+    #[serde(rename = "calendar_event.created")]
+    Created(CalendarEventMetadata),
+    /// The event row was rewritten in place.
+    #[serde(rename = "calendar_event.updated")]
+    Updated(CalendarEventMetadata),
+    /// The event row is gone: its last remaining source was retired.
+    /// Consumers cannot re-read it, so this is the only signal that the
+    /// entity existed and no longer does.
+    #[serde(rename = "calendar_event.deleted")]
+    Deleted(CalendarEventMetadata),
+}
+
+impl CalendarTopicEvent {
+    /// The event entity this change concerns.
+    pub fn event_id(&self) -> Uuid {
+        self.metadata().event_id
+    }
+
+    /// The metadata common to every variant.
+    pub fn metadata(&self) -> &CalendarEventMetadata {
+        match self {
+            Self::Created(metadata) | Self::Updated(metadata) | Self::Deleted(metadata) => metadata,
+        }
+    }
 }
 
 impl TopicEvent for CalendarTopicEvent {
@@ -48,10 +74,10 @@ pub struct CalendarMacroEvent {
 }
 
 impl CalendarMacroEvent {
-    /// Builds a changed event keyed by the event entity id.
-    pub fn changed(metadata: CalendarEventChangedMetadata) -> Self {
-        let key = metadata.event_id.to_string();
-        Self::new(key, CalendarTopicEvent::Changed(metadata))
+    /// Builds an event for one change, keyed by the event entity id.
+    pub fn for_change(event: CalendarTopicEvent) -> Self {
+        let key = event.event_id().to_string();
+        Self::new(key, event)
     }
 
     /// Builds an event from a topic-specific calendar event.

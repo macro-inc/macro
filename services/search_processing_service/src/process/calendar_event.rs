@@ -97,3 +97,20 @@ pub async fn upsert_calendar_event(
 
     Ok(())
 }
+
+/// Removes a calendar event from the opensearch index.
+///
+/// Used when the topic reports a deletion: the row is already gone, so there
+/// is nothing to re-read and reindexing would only spend a query learning that.
+#[tracing::instrument(skip(opensearch_client), err)]
+pub async fn remove_calendar_event(
+    opensearch_client: &OpensearchClient,
+    event_id: &str,
+    index_override: Option<&str>,
+) -> anyhow::Result<()> {
+    opensearch_client
+        .delete_calendar_event(event_id, index_override)
+        .await
+        .context("failed to delete calendar event from search")?;
+    Ok(())
+}

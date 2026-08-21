@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        SELECT source_link_id, ical_uid\n        FROM calendar_events\n        WHERE id = $1\n        ",
+  "query": "\n        SELECT source_link_id, ical_uid, owner_id\n        FROM calendar_events\n        WHERE id = $1\n        ",
   "describe": {
     "columns": [
       {
@@ -12,6 +12,11 @@
         "ordinal": 1,
         "name": "ical_uid",
         "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "owner_id",
+        "type_info": "Text"
       }
     ],
     "parameters": {
@@ -21,8 +26,9 @@
     },
     "nullable": [
       false,
+      false,
       false
     ]
   },
-  "hash": "cbd7fc8fc7f1e6115f065b2a52c656b81d0afbcba06b24ce33da49e66b45657d"
+  "hash": "6329f4a2b1d8826a50d3fe0fbeac9728d77cd67f43d69357a2a04c76ad9b5923"
 }

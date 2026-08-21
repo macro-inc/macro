@@ -1,49 +1,71 @@
 //! Maps calendar event changes to search-index reconciliations and processes them.
 
-use calendar_events::domain::events::CalendarMacroEvent;
+use calendar_events::domain::events::{CalendarMacroEvent, CalendarTopicEvent};
 use macro_event_broker::MacroEvent as _;
-use opensearch_client::OpensearchClient;
-use sqlx::PgPool;
 use sqs_client::search::calendar_event::UpsertCalendarEvent;
 
-use super::{EventOutcome, MAX_PROCESSING_ATTEMPTS, PROCESSING_RETRY_BASE_DELAY, retry_processing};
-use crate::process::calendar_event::upsert_calendar_event;
+use super::{
+    EventOutcome, KafkaProcessingContext, MAX_PROCESSING_ATTEMPTS, PROCESSING_RETRY_BASE_DELAY,
+    retry_processing,
+};
+use crate::process::calendar_event::{remove_calendar_event, upsert_calendar_event};
+
+/// What one topic event asks the index to do.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum CalendarIndexAction {
+    /// Re-read the row and write the resulting document.
+    Reindex,
+    /// Drop the document. The row is already gone, so there is nothing to
+    /// read — reindexing would spend a query to learn that.
+    Remove,
+}
+
+pub(super) fn index_action(event: &CalendarTopicEvent) -> (CalendarIndexAction, &'static str) {
+    match event {
+        CalendarTopicEvent::Created(_) => (CalendarIndexAction::Reindex, "calendar_event.created"),
+        CalendarTopicEvent::Updated(_) => (CalendarIndexAction::Reindex, "calendar_event.updated"),
+        CalendarTopicEvent::Deleted(_) => (CalendarIndexAction::Remove, "calendar_event.deleted"),
+    }
+}
 
 /// Reconcile one event's search document.
-///
-/// The topic carries a single `Changed` variant: it reports that an event's
-/// canonical state moved without saying how, because no calendar write path
-/// can tell created from updated from removed. So there is nothing to
-/// describe or branch on — reconciliation always re-reads the row, and
-/// `upsert_calendar_event` turns a row that is gone into a delete.
 pub(super) async fn process_calendar_event(
-    db: &PgPool,
-    opensearch_client: &OpensearchClient,
+    context: &KafkaProcessingContext,
     event: &CalendarMacroEvent,
     partition: i32,
     offset: i64,
 ) -> EventOutcome {
+    let opensearch_client = context.opensearch_client.as_ref();
     // The producer keys every calendar event by its entity id.
     let event_id = event.key().to_string();
+    let (action, event_type) = index_action(&event.event().event);
     let result = retry_processing(|attempt| {
         let event_id = event_id.clone();
         async move {
             tracing::trace!(
                 event_id = event_id,
+                event_type,
                 partition,
                 offset,
                 attempt,
                 "processing calendar search-index event"
             );
-            upsert_calendar_event(
-                opensearch_client,
-                db,
-                &UpsertCalendarEvent {
-                    event_id: event_id.clone(),
-                    index_override: None,
-                },
-            )
-            .await
+            match action {
+                CalendarIndexAction::Reindex => {
+                    upsert_calendar_event(
+                        opensearch_client,
+                        &context.db,
+                        &UpsertCalendarEvent {
+                            event_id: event_id.clone(),
+                            index_override: None,
+                        },
+                    )
+                    .await
+                }
+                CalendarIndexAction::Remove => {
+                    remove_calendar_event(opensearch_client, &event_id, None).await
+                }
+            }
             .inspect_err(|error| {
                 if attempt < MAX_PROCESSING_ATTEMPTS {
                     let retry_delay =
@@ -51,6 +73,7 @@ pub(super) async fn process_calendar_event(
                     tracing::warn!(
                         error = ?error,
                         event_id = event_id,
+                        event_type,
                         partition,
                         offset,
                         attempt,
@@ -69,6 +92,7 @@ pub(super) async fn process_calendar_event(
             tracing::error!(
                 error = ?error,
                 event_id = event_id,
+                event_type,
                 partition,
                 offset,
                 attempts = MAX_PROCESSING_ATTEMPTS,

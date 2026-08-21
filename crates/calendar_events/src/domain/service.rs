@@ -5,7 +5,7 @@ use futures::future::{Either, select};
 use rootcause::Report;
 use uuid::Uuid;
 
-use crate::domain::events::{CalendarEventChangedMetadata, CalendarMacroEvent};
+use crate::domain::events::{CalendarEventMetadata, CalendarMacroEvent, CalendarTopicEvent};
 use macro_event_broker::MacroEventBroker;
 
 use super::{
@@ -16,9 +16,10 @@ use super::{
         GoogleCalendarSyncSnapshot, GoogleScopeSet, OccurrenceRange,
     },
     ports::{
-        CalendarBackfillRepository, CalendarEventWrite, CalendarOccurrenceService,
-        CalendarRepository, GoogleCalendarProvider, GoogleCalendarSyncRepository,
-        GoogleEventSyncContext, GoogleProviderError, GoogleProviderErrorKind,
+        CalendarBackfillRepository, CalendarEventChange, CalendarEventWrite,
+        CalendarOccurrenceService, CalendarRepository, GoogleCalendarProvider,
+        GoogleCalendarSyncRepository, GoogleEventSyncContext, GoogleProviderError,
+        GoogleProviderErrorKind,
     },
 };
 
@@ -564,7 +565,7 @@ where
                 }
                 let super::models::CalendarEventSource::Google(source) = &upsert.source;
                 debug_assert_eq!(source.calendar_id, calendar_id);
-                let event_id = self
+                let outcome = self
                     .repository
                     .upsert_event(CalendarEventWrite::GoogleBackfill {
                         key,
@@ -572,17 +573,34 @@ where
                         upsert,
                     })
                     .await?;
-                // Sync progress is already committed, so a publish failure is
-                // logged and dropped rather than failing the run.
-                let _ = self
-                    .macro_event_broker
-                    .send_event(&CalendarMacroEvent::changed(CalendarEventChangedMetadata {
-                        event_id,
-                        owner_id: owner_id.to_string(),
-                    }))
-                    .inspect_err(|error| {
-                        tracing::error!(error=?error, "failed to publish calendar event");
-                    });
+                // A full snapshot re-observes every event, most of them
+                // unchanged; publishing only real changes keeps a sync-token
+                // reset from flooding the topic. Sync progress is already
+                // committed, so a publish failure is logged and dropped
+                // rather than failing the run.
+                let topic_event = match outcome.change {
+                    CalendarEventChange::Created => {
+                        Some(CalendarTopicEvent::Created(CalendarEventMetadata {
+                            event_id: outcome.event_id,
+                            owner_id: outcome.owner_id.clone(),
+                        }))
+                    }
+                    CalendarEventChange::Updated => {
+                        Some(CalendarTopicEvent::Updated(CalendarEventMetadata {
+                            event_id: outcome.event_id,
+                            owner_id: outcome.owner_id.clone(),
+                        }))
+                    }
+                    CalendarEventChange::Unchanged => None,
+                };
+                if let Some(topic_event) = topic_event {
+                    let _ = self
+                        .macro_event_broker
+                        .send_event(&CalendarMacroEvent::for_change(topic_event))
+                        .inspect_err(|error| {
+                            tracing::error!(error=?error, "failed to publish calendar event");
+                        });
+                }
                 calendar_count += 1;
             }
             // The upserts above committed individually, so they count even

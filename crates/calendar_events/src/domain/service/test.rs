@@ -1,4 +1,5 @@
 use super::*;
+use crate::domain::ports::{CalendarEventChange, CalendarEventWriteOutcome, RetiredCalendarEvent};
 use crate::domain::{
     models::{
         AttendeeResponseStatus, CalendarAttendee, CalendarBackfillClaim,
@@ -43,15 +44,23 @@ impl CalendarRepository for FakeRepo {
         unreachable!()
     }
 
-    async fn upsert_event(&self, write: CalendarEventWrite) -> Result<Uuid, Report> {
+    async fn upsert_event(
+        &self,
+        write: CalendarEventWrite,
+    ) -> Result<CalendarEventWriteOutcome, Report> {
         let upsert = match write {
             CalendarEventWrite::GoogleBackfill { upsert, .. }
             | CalendarEventWrite::UserMutation(upsert)
             | CalendarEventWrite::Fixture(upsert) => upsert,
         };
         let id = upsert.event.id;
+        let owner_id = upsert.event.owner_id.clone();
         self.upserts.lock().unwrap().push(upsert);
-        Ok(id)
+        Ok(CalendarEventWriteOutcome {
+            event_id: id,
+            owner_id,
+            change: CalendarEventChange::Created,
+        })
     }
 
     async fn list_occurrences(
@@ -109,7 +118,7 @@ impl CalendarRepository for FakeRepo {
         _account_id: Uuid,
         _calendar_id: Uuid,
         _provider_event_id: &str,
-    ) -> Result<(), Report> {
+    ) -> Result<Vec<RetiredCalendarEvent>, Report> {
         unreachable!("mutation cleanup is not exercised by sync tests")
     }
 

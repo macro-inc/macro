@@ -272,7 +272,7 @@ async fn process_event(
             process_call_event(db, opensearch_client, event, partition, offset).await
         }
         DeclaredMacroEvent::CalendarMacroEvent(event) => {
-            process_calendar_event(db, opensearch_client, event, partition, offset).await
+            process_calendar_event(context, event, partition, offset).await
         }
         DeclaredMacroEvent::ChannelMacroEvent(event) => {
             process_channel_event(db, opensearch_client, event, partition, offset).await

@@ -60,15 +60,28 @@ describe('task view presets', () => {
 });
 
 describe('calendar event scoping', () => {
-  it('excludes calendar events from views that do not render them', () => {
-    const nilId = '00000000-0000-0000-0000-000000000000';
+  const nilId = '00000000-0000-0000-0000-000000000000';
 
+  it('excludes calendar events from feeds that do not render them', () => {
     expect(
       getViewPreset('mail', 'important')?.filters.include?.calendarEventId
     ).toEqual([nilId]);
     expect(
       getViewPreset('inbox', 'all')?.filters.include?.calendarEventId
     ).toEqual([nilId]);
+  });
+
+  it('searches calendar events, which carry a title index of their own', () => {
+    expect(
+      getViewPreset('search', 'all')?.filters.include?.calendarEventId
+    ).toBeUndefined();
+  });
+
+  it('excludes them from search when the calendar UI is off', () => {
+    // Opening a hit needs the calendar block, which the flag gates, so
+    // without it a result would render an inert row.
+    mocks.calendarUiEnabled = false;
+
     expect(
       getViewPreset('search', 'all')?.filters.include?.calendarEventId
     ).toEqual([nilId]);
