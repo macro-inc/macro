@@ -12,6 +12,10 @@
  * `send` only enqueues. Whether the prompt goes out now or waits for the
  * running turn to settle is entirely the drain's call — the same code path
  * either way, so queueing is not a special case.
+ *
+ * `stop` is one in-flight cancel: a second click is a no-op. After the
+ * cancel is accepted, a queued prompt posts immediately (Claude Code's
+ * stop-then-send) instead of waiting for the fold to drop `working`.
  */
 
 import { toast } from '@core/component/Toast/Toast';
@@ -19,6 +23,7 @@ import { agentHarnessServiceClient } from '@service-agent-harness/client';
 import { type Accessor, batch, createEffect, on, onCleanup } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import {
+  canStop,
   isBusy,
   nextAction,
   type PostPhase,
@@ -28,6 +33,7 @@ import {
 /** Late-bound composer surface so transcript replies can insert a quote. */
 export type ComposerInputHandle = {
   insertQuote: (quotedContent: string) => void;
+  focus?: () => void;
 };
 
 export type ComposerController = {
@@ -67,43 +73,74 @@ export function createComposerController(options: {
   const [state, setState] = createStore<{
     queue: QueuedPrompt[];
     post: PostPhase;
+    replacing: boolean;
   }>({
     queue: [],
     post: { type: 'idle' },
+    replacing: false,
   });
 
   // Late-bound: the input publishes this on mount. Quote-replies fire from
   // click handlers, so a plain binding is enough — nothing renders from it.
   let input: ComposerInputHandle | undefined;
+  // Bumped when a stop starts so an in-flight prompt POST cannot overwrite
+  // the stopping phase (or re-queue itself) when it later resolves.
+  let epoch = 0;
 
   const postHead = async (prompt: QueuedPrompt) => {
-    setState('post', { type: 'posting', promptId: prompt.id });
+    const gen = epoch;
+    batch(() => {
+      setState('post', { type: 'posting', promptId: prompt.id });
+      setState('replacing', false);
+    });
     const result = await agentHarnessServiceClient
       .control(options.sessionId(), { type: 'prompt', prompt: prompt.markdown })
       .catch(() => undefined);
 
     if (result === undefined || result.isErr()) {
+      if (gen !== epoch) return;
       // The prompt stays at the head of the queue — visible and retryable,
       // never dropped. The latch stops the drain until the user acts.
       setState('post', { type: 'failed', promptId: prompt.id });
       toast.failure('Message could not be sent');
       return;
     }
-    batch(() => {
-      setState('queue', (queue) => queue.filter((p) => p.id !== prompt.id));
-      setState('post', { type: 'awaiting_turn', promptId: prompt.id });
-    });
+    // The server accepted it: drop from the queue even if a stop superseded
+    // this completion, so we never re-send a prompt we just cancelled.
+    setState('queue', (queue) => queue.filter((p) => p.id !== prompt.id));
+    if (gen !== epoch) return;
+    setState('post', { type: 'awaiting_turn', promptId: prompt.id });
   };
 
   const postStop = async () => {
+    const postingId =
+      state.post.type === 'posting' ? state.post.promptId : undefined;
+    epoch += 1;
+    const gen = epoch;
+    batch(() => {
+      setState('post', { type: 'stopping' });
+      setState('replacing', false);
+    });
     const result = await agentHarnessServiceClient
       .control(options.sessionId(), { type: 'stop' })
       .catch(() => undefined);
+    if (gen !== epoch) return;
     if (result === undefined || result.isErr()) {
+      setState('post', { type: 'idle' });
       toast.failure('The agent could not be stopped');
+      return;
     }
-    // Success is observed through the fold: the turn settles and `working`
-    // flips false, which re-runs the drain.
+    // Success: free the post slot and let a queued prompt replace this turn
+    // immediately. Drop a prompt whose POST was still in flight so stop
+    // cannot resend the very message it cancelled. The fold dropping
+    // `working` is observed, not awaited.
+    batch(() => {
+      if (postingId) {
+        setState('queue', (queue) => queue.filter((p) => p.id !== postingId));
+      }
+      setState('post', { type: 'idle' });
+      setState('replacing', true);
+    });
   };
 
   // The drain: whenever any fact changes, ask the model what to do and do
@@ -114,6 +151,7 @@ export function createComposerController(options: {
       post: state.post,
       head: state.queue[0],
       agentWorking: options.working(),
+      replacing: state.replacing,
     });
     if (action.type === 'post_head') void postHead(action.prompt);
   });
@@ -134,12 +172,22 @@ export function createComposerController(options: {
     onCleanup(() => clearTimeout(timer));
   });
 
+  // The cancelled turn settled: `replacing` has done its job (either the
+  // queued prompt already posted, or there was nothing to send).
+  createEffect(() => {
+    if (!state.replacing) return;
+    if (!options.working()) setState('replacing', false);
+  });
+
   // A session switch resets the composer: queued prompts belong to the
   // session they were typed in, never the next one.
   createEffect(
     on(
       options.sessionId,
-      () => setState({ queue: [], post: { type: 'idle' } }),
+      () => {
+        epoch += 1;
+        setState({ queue: [], post: { type: 'idle' }, replacing: false });
+      },
       { defer: true }
     )
   );
@@ -176,7 +224,7 @@ export function createComposerController(options: {
       });
     },
     stop: () => {
-      if (!isBusy(state.post, options.working())) return;
+      if (!canStop(state.post, options.working(), state.replacing)) return;
       void postStop();
     },
     attachInput: (handle) => {

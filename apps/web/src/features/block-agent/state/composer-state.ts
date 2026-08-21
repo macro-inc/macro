@@ -46,7 +46,9 @@ export type PostPhase =
    * latch stops the drain until the user retries, removes it, or sends a
    * new message (which also retries).
    */
-  | { type: 'failed'; promptId: string };
+  | { type: 'failed'; promptId: string }
+  /** A stop is on the wire. The drain must not send into a turn we are cancelling. */
+  | { type: 'stopping' };
 
 /** Everything `nextAction` is allowed to look at. */
 export type ComposerFacts = {
@@ -55,6 +57,11 @@ export type ComposerFacts = {
   head: QueuedPrompt | undefined;
   /** The block's one working signal (fold ∧ not disconnected). */
   agentWorking: boolean;
+  /**
+   * The in-flight turn was cancelled. A queued prompt may replace it without
+   * waiting for the fold to drop `agentWorking` — Claude Code's stop-then-send.
+   */
+  replacing?: boolean;
 };
 
 export type ComposerAction =
@@ -73,9 +80,14 @@ export function nextAction(facts: ComposerFacts): ComposerAction {
     .with({ post: { type: 'awaiting_turn' } }, () =>
       hold('posted; the fold has not shown the turn yet')
     )
+    .with({ post: { type: 'stopping' } }, () => hold('a stop is on the wire'))
     .with({ post: { type: 'failed' } }, () =>
       hold('the head prompt failed; waiting for retry, edit, or a new send')
     )
+    .with({ replacing: true, head: P.select(P.nonNullable) }, (head) => ({
+      type: 'post_head' as const,
+      prompt: head,
+    }))
     .with({ agentWorking: true }, () => hold('the agent is mid-turn'))
     .with({ head: P.select(P.nonNullable) }, (head) => ({
       type: 'post_head' as const,
@@ -85,12 +97,25 @@ export function nextAction(facts: ComposerFacts): ComposerAction {
 }
 
 /**
- * Whether the stop affordance shows: a turn is running, or a post is in the
- * middle of starting one. A failed post is *not* busy — the user needs the
- * send button back to retry.
+ * Whether the stop affordance shows: a turn is running, a post is starting
+ * one, or a stop is in flight. A failed post is *not* busy — the user needs
+ * the send button back to retry.
  */
 export function isBusy(post: PostPhase, agentWorking: boolean): boolean {
   return (
-    agentWorking || post.type === 'posting' || post.type === 'awaiting_turn'
+    agentWorking ||
+    post.type === 'posting' ||
+    post.type === 'awaiting_turn' ||
+    post.type === 'stopping'
   );
+}
+
+/** Stop is a no-op once one is in flight, or after a cancel awaiting replace. */
+export function canStop(
+  post: PostPhase,
+  agentWorking: boolean,
+  replacing: boolean
+): boolean {
+  if (post.type === 'stopping' || replacing) return false;
+  return isBusy(post, agentWorking);
 }
