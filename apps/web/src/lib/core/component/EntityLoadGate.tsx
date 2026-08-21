@@ -5,9 +5,17 @@ import NotFound from './AccessErrorViews/NotFound';
 import Unauthorized from './AccessErrorViews/Unauthorized';
 import { LoadingBlock } from './LoadingBlock';
 
+export type EntityLoadErrorCode =
+  | 'UNAUTHORIZED'
+  | 'FORBIDDEN'
+  | 'NOT_FOUND'
+  | 'GONE';
+
+export type EntityLoadError = EntityLoadErrorCode | 'UNEXPECTED';
+
 export type EntityLoadResult<Data> = {
   data: Accessor<Data | undefined>;
-  error: Accessor<unknown>;
+  error: Accessor<EntityLoadError | undefined>;
   isPending: Accessor<boolean>;
 };
 
@@ -16,16 +24,33 @@ type EntityLoadGateProps<Data> = {
   children: JSX.Element;
 };
 
-function getErrorCode(error: unknown): string | null {
+const ENTITY_LOAD_ERROR_CODES: ReadonlySet<string> = new Set([
+  'UNAUTHORIZED',
+  'FORBIDDEN',
+  'NOT_FOUND',
+  'GONE',
+]);
+
+function isEntityLoadErrorCode(code: string): code is EntityLoadErrorCode {
+  return ENTITY_LOAD_ERROR_CODES.has(code);
+}
+
+/** Normalizes a query error into the error states supported by the gate. */
+export function toEntityLoadError(error: unknown): EntityLoadError | undefined {
+  if (error === undefined || error === null) return undefined;
+  if (typeof error === 'string' && isEntityLoadErrorCode(error)) return error;
   if (error instanceof ThrownResultError) {
-    return error.errors[0]?.code ?? null;
+    return (
+      error.errors.map(({ code }) => code).find(isEntityLoadErrorCode) ??
+      'UNEXPECTED'
+    );
   }
-  return null;
+  return 'UNEXPECTED';
 }
 
 /** Renders entity content or the appropriate loading and access-error view. */
 export function EntityLoadGate<Data>(props: EntityLoadGateProps<Data>) {
-  const errorCode = () => getErrorCode(props.result.error());
+  const error = props.result.error;
 
   return (
     <Suspense fallback={<LoadingBlock />}>
@@ -36,18 +61,16 @@ export function EntityLoadGate<Data>(props: EntityLoadGateProps<Data>) {
           </div>
         }
       >
-        <Match
-          when={errorCode() === 'UNAUTHORIZED' || errorCode() === 'FORBIDDEN'}
-        >
+        <Match when={error() === 'UNAUTHORIZED' || error() === 'FORBIDDEN'}>
           <Unauthorized />
         </Match>
-        <Match when={errorCode() === 'NOT_FOUND'}>
+        <Match when={error() === 'NOT_FOUND'}>
           <NotFound />
         </Match>
-        <Match when={errorCode() === 'GONE'}>
+        <Match when={error() === 'GONE'}>
           <Gone />
         </Match>
-        <Match when={props.result.error()}>
+        <Match when={error() === 'UNEXPECTED'}>
           <div class="flex flex-col items-center justify-center h-full text-lg">
             Sorry, an unexpected error has occurred.
           </div>

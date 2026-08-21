@@ -24,7 +24,10 @@ import { FloatRegions } from '@components/app/mobile/float-regions/float-region-
 import { SwipableRowProvider } from '@components/app/mobile/SwipableRow';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
-import { EntityLoadGate } from '@core/component/EntityLoadGate';
+import {
+  EntityLoadGate,
+  toEntityLoadError,
+} from '@core/component/EntityLoadGate';
 import { FindBar } from '@core/component/FindBar';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { toast } from '@core/component/Toast/Toast';
@@ -218,7 +221,7 @@ export function Channel(props: ChannelProps) {
     // has already loaded. Only initial-loading errors belong to the gate.
     error: () =>
       messagesQuery.isLoadingError && !isTargetMessageMissing()
-        ? messagesQuery.error
+        ? toEntityLoadError(messagesQuery.error)
         : undefined,
     // Keep the loading view mounted while the missing-target handler switches
     // the query back to the latest page.

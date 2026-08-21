@@ -19,7 +19,12 @@ vi.mock('./LoadingBlock', () => ({
   LoadingBlock: () => <div>Loading</div>,
 }));
 
-import { EntityLoadGate, type EntityLoadResult } from './EntityLoadGate';
+import {
+  type EntityLoadErrorCode,
+  EntityLoadGate,
+  type EntityLoadResult,
+  toEntityLoadError,
+} from './EntityLoadGate';
 
 let dispose: (() => void) | undefined;
 
@@ -50,7 +55,7 @@ describe('EntityLoadGate', () => {
   it('renders its child after data loads', () => {
     const container = renderGate({
       data: () => 'channel data',
-      error: () => null,
+      error: () => undefined,
       isPending: () => false,
     });
 
@@ -70,7 +75,7 @@ describe('EntityLoadGate', () => {
         <EntityLoadGate
           result={{
             data: () => undefined,
-            error: () => null,
+            error: () => undefined,
             isPending: () => true,
           }}
         >
@@ -91,14 +96,14 @@ describe('EntityLoadGate', () => {
   it('renders loading while data is pending', () => {
     const container = renderGate({
       data: () => undefined,
-      error: () => null,
+      error: () => undefined,
       isPending: () => true,
     });
 
     expect(container.textContent).toBe('Loading');
   });
 
-  it.each([
+  it.each<readonly [EntityLoadErrorCode, string]>([
     ['UNAUTHORIZED', 'Unauthorized'],
     ['FORBIDDEN', 'Unauthorized'],
     ['NOT_FOUND', 'Not found'],
@@ -106,8 +111,7 @@ describe('EntityLoadGate', () => {
   ])('renders the gated view for %s', (code, expected) => {
     const container = renderGate({
       data: () => undefined,
-      error: () =>
-        new ThrownResultError([{ code, message: 'entity load failed' }]),
+      error: () => code,
       isPending: () => false,
     });
 
@@ -117,12 +121,25 @@ describe('EntityLoadGate', () => {
   it('renders an unexpected-error fallback for other failures', () => {
     const container = renderGate({
       data: () => undefined,
-      error: () => new Error('network unavailable'),
+      error: () => 'UNEXPECTED',
       isPending: () => false,
     });
 
     expect(container.textContent).toContain(
       'Sorry, an unexpected error has occurred.'
+    );
+  });
+
+  it('normalizes query errors into gate errors', () => {
+    expect(
+      toEntityLoadError(
+        new ThrownResultError([
+          { code: 'NOT_FOUND', message: 'entity load failed' },
+        ])
+      )
+    ).toBe('NOT_FOUND');
+    expect(toEntityLoadError(new Error('network unavailable'))).toBe(
+      'UNEXPECTED'
     );
   });
 });
