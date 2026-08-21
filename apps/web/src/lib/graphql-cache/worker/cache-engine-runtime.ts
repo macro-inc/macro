@@ -1,5 +1,10 @@
 /// <reference lib="webworker" />
 
+import * as Cause from 'effect/Cause';
+import * as Effect from 'effect/Effect';
+import * as Exit from 'effect/Exit';
+import * as FiberSet from 'effect/FiberSet';
+import * as Scope from 'effect/Scope';
 import type { CacheRequest, CacheResponse } from '../protocol';
 import {
   type CacheTelemetryRecorderLike,
@@ -179,7 +184,25 @@ async function activate(
       ? 'reset-storage-uncertain'
       : 'opened-existing';
   let draining = false;
-  const pendingAdmissions = new Set<Promise<void>>();
+  // Keep every admitted handler and graceful drain in one explicit scope.
+  // Abrupt owner loss still relies on DedicatedWorker termination; graceful
+  // retirement closes this scope only after all admission fibers are empty.
+  const lifecycleScope = Effect.runSync(Scope.make());
+  const admissions = Effect.runSync(
+    Scope.provide(lifecycleScope)(FiberSet.make<void, never>())
+  );
+  const lifecycleFibers = Effect.runSync(
+    Scope.provide(lifecycleScope)(FiberSet.make<void, never>())
+  );
+  const runAdmission = Effect.runSync(FiberSet.runtime(admissions)());
+  const runLifecycle = Effect.runSync(FiberSet.runtime(lifecycleFibers)());
+  let closeLifecyclePromise: Promise<void> | undefined;
+  const closeLifecycle = (): Promise<void> => {
+    closeLifecyclePromise ??= Effect.runPromise(
+      Scope.close(lifecycleScope, Exit.void)
+    );
+    return closeLifecyclePromise;
+  };
   let runnerFailed = false;
   let runner!: EffectWorkerRunnerTransport<EngineToCoordinatorEnvelope>;
   const post = (message: EngineToCoordinatorEnvelope): void => {
@@ -250,19 +273,20 @@ async function activate(
 
   const admitRequest = (request: CacheRequest): void => {
     emitEvent({ kind: 'request-admitted', activation, request });
-    if (!hooks?.beforeRequest) {
-      void core.handleRequest(enginePort, request);
-      return;
-    }
-    const admission = Promise.resolve(hooks.beforeRequest(request, activation))
-      .then(async () => {
+    runAdmission(
+      Effect.promise(async () => {
+        await hooks?.beforeRequest?.(request, activation);
         if (!failed) await core.handleRequest(enginePort, request);
-      })
-      .catch((error: unknown) => {
-        fatal(`engine request hook failed: ${errorMessage(error)}`);
-      });
-    pendingAdmissions.add(admission);
-    void admission.finally(() => pendingAdmissions.delete(admission));
+      }).pipe(
+        Effect.catchCause((cause) =>
+          Effect.sync(() => {
+            fatal(
+              `engine request admission failed: ${errorMessage(Cause.squash(cause))}`
+            );
+          })
+        )
+      )
+    );
   };
 
   runner = createEffectWorkerRunnerTransport<
@@ -290,28 +314,40 @@ async function activate(
           }
           admitRequest(message.request);
           break;
-        case 'drain-engine':
+        case 'drain-engine': {
           if (draining) return;
           draining = true;
-          void (async () => {
-            await Promise.all(pendingAdmissions);
-            await core.drain();
-            recordLinearMemory(true);
-            emitEvent({ kind: 'drained', activation });
-            telemetry.flush();
-            post(
-              withVersion<EngineToCoordinatorEnvelope>({
-                kind: 'engine-drained',
-                tabId: activation.tabId,
-                ownerEpoch: activation.ownerEpoch,
-              })
-            );
-            await runner.close();
-            workerScope.close();
-          })().catch((error: unknown) =>
-            fatal(`engine drain failed: ${errorMessage(error)}`)
+          const drainFiber = runLifecycle(
+            Effect.gen(function* () {
+              yield* FiberSet.awaitEmpty(admissions);
+              yield* Effect.promise(() => Promise.resolve(core.drain()));
+              recordLinearMemory(true);
+              emitEvent({ kind: 'drained', activation });
+              telemetry.flush();
+              post(
+                withVersion<EngineToCoordinatorEnvelope>({
+                  kind: 'engine-drained',
+                  tabId: activation.tabId,
+                  ownerEpoch: activation.ownerEpoch,
+                })
+              );
+              yield* Effect.promise(() => runner.close());
+              workerScope.close();
+            }).pipe(
+              Effect.catchCause((cause) =>
+                Effect.sync(() => {
+                  fatal(
+                    `engine drain failed: ${errorMessage(Cause.squash(cause))}`
+                  );
+                })
+              )
+            )
           );
+          drainFiber.addObserver(() => {
+            void closeLifecycle().catch(() => undefined);
+          });
           break;
+        }
         case 'heartbeat':
           recordLinearMemory(false);
           core.recordCachedQueueDiagnostics?.();
@@ -330,6 +366,14 @@ async function activate(
       fatal(`coordinator Effect runner failed: ${error.message}`);
     },
   });
+  Effect.runSync(
+    Scope.addFinalizer(
+      lifecycleScope,
+      Effect.promise(() => runner.close()).pipe(
+        Effect.catchCause(() => Effect.void)
+      )
+    )
+  );
 
   try {
     await initializeCore(core, activation);
@@ -382,6 +426,7 @@ async function activate(
             : 'initialization-failed',
       })
     );
+    await closeLifecycle();
   }
 }
 

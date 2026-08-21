@@ -182,9 +182,11 @@ owner across tabs.** The coordinator routes every request to the current
 engine worker and replaces that owner after abrupt loss. Browser worker links
 use Effect's scoped worker transport (`Worker` plus the
 `@effect/platform-browser` parent/runner adapters): Effect owns readiness,
-message-loop fibers, typed transport failures, and close framing, while the
-cache's validated envelopes, request ids, Web Locks, owner epochs, heartbeats,
-and replay policy remain application-owned. Browsers missing the required
+message-loop fibers, typed transport failures, and close framing. The elected
+engine also tracks every admitted request in a scoped `FiberSet`; graceful
+drain waits for that set to empty before closing the core, runner, and worker.
+The cache's validated envelopes, request ids, Web Locks, owner epochs,
+heartbeats, and replay policy remain application-owned. Browsers missing the required
 worker, lock, or OPFS capabilities use a storage-free no-op cache host. Tauri
 detection selects the native transport before browser capability checks. All
 paths remain behind the same `CacheHost` interface.

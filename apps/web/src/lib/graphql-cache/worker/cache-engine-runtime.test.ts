@@ -399,6 +399,111 @@ describe('cache engine worker runtime', () => {
     expect(scope.closed).toBe(true);
   });
 
+  it('joins every admitted request fiber before draining the core', async () => {
+    const scope = new FakeWorkerScope();
+    const direct = new FakePort();
+    const order: string[] = [];
+    let markRequestStarted!: () => void;
+    const requestStarted = new Promise<void>((resolve) => {
+      markRequestStarted = resolve;
+    });
+    let releaseRequest!: () => void;
+    const requestBlocked = new Promise<void>((resolve) => {
+      releaseRequest = resolve;
+    });
+    installCacheEngineWorker({
+      scope,
+      ownerLockIsHeld: async () => true,
+      createCore: () => ({
+        addPort: vi.fn(),
+        handleRequest: async (port, request) => {
+          if (request.kind === 'init') {
+            port.postMessage({ id: request.id, ok: true, result: null });
+            return;
+          }
+          order.push('request-started');
+          markRequestStarted();
+          await requestBlocked;
+          order.push('request-finished');
+          port.postMessage({ id: request.id, ok: true, result: null });
+        },
+        drain: async () => {
+          order.push('drain');
+        },
+      }),
+    });
+    scope.activate(activation(), direct);
+    await vi.waitFor(() =>
+      expect(messagesOfKind(direct, 'engine-ready')).toHaveLength(1)
+    );
+
+    direct.receive({
+      ...version,
+      kind: 'engine-request',
+      ownerEpoch: 7,
+      routeId: 24,
+      request: { id: 24, kind: 'clear' },
+    });
+    await requestStarted;
+    direct.receive({
+      ...version,
+      kind: 'drain-engine',
+      ownerEpoch: 7,
+    });
+    await Promise.resolve();
+    expect(order).toEqual(['request-started']);
+
+    releaseRequest();
+    await vi.waitFor(() =>
+      expect(messagesOfKind(direct, 'engine-drained')).toHaveLength(1)
+    );
+
+    expect(order).toEqual(['request-started', 'request-finished', 'drain']);
+    expect(scope.closed).toBe(true);
+  });
+
+  it('turns an admission fiber failure into one engine fatal', async () => {
+    const scope = new FakeWorkerScope();
+    const direct = new FakePort();
+    const handleRequest = vi.fn(async (port, request: CacheRequest) => {
+      if (request.kind === 'init') {
+        port.postMessage({ id: request.id, ok: true, result: null });
+        return;
+      }
+      throw new Error('injected admission failure');
+    });
+    installCacheEngineWorker({
+      scope,
+      ownerLockIsHeld: async () => true,
+      createCore: () => ({
+        addPort: vi.fn(),
+        handleRequest,
+        drain: vi.fn(),
+      }),
+    });
+    scope.activate(activation(), direct);
+    await vi.waitFor(() =>
+      expect(messagesOfKind(direct, 'engine-ready')).toHaveLength(1)
+    );
+
+    direct.receive({
+      ...version,
+      kind: 'engine-request',
+      ownerEpoch: 7,
+      routeId: 25,
+      request: { id: 25, kind: 'clear' },
+    });
+    await vi.waitFor(() =>
+      expect(messagesOfKind(direct, 'engine-fatal')).toHaveLength(1)
+    );
+
+    expect(messagesOfKind(direct, 'engine-fatal')[0]).toMatchObject({
+      reason: expect.stringContaining('injected admission failure'),
+      fatalCode: 'runtime-failure',
+    });
+    expect(messagesOfKind(direct, 'engine-response')).toHaveLength(0);
+  });
+
   it('does not replay a completed mutation or leak its stale response and push after owner loss', async () => {
     const router = new CoordinatorRouter({
       verifyTabLockHeld: async () => true,
