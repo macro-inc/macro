@@ -8,8 +8,6 @@ use models_properties::service::property_option::PropertyOptionValue;
 
 use super::{ToolEntityAccessService, ToolPropertiesService};
 
-/// Viewer-scoped bridge from the activity domain's metadata port to the
-/// existing Properties and entity-access services.
 #[derive(Clone)]
 pub struct ToolActivityMetadataResolver {
     properties: Arc<ToolPropertiesService>,

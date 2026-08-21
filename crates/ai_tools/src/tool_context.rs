@@ -1182,13 +1182,10 @@ pub type ToolImportService = import::domain::service::ImportServiceImpl<
 /// with a wired one after constructing the import service.
 pub type ToolImportToolContext = import::inbound::toolset::ImportToolContext<ToolImportService>;
 
-/// Type alias for the activity AI tool context.
 pub type ToolActivityToolContext = activity::inbound::toolset::ActivityToolContext<
     activity::outbound::pg_activity_repo::PgActivityRepo,
 >;
 
-/// Build the activity AI tool context from shared storage, Properties, and
-/// entity-access services.
 pub fn build_activity_tool_context(
     pool: sqlx::PgPool,
     properties: Arc<ToolPropertiesService>,

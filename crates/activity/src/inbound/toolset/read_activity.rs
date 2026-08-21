@@ -1,5 +1,3 @@
-//! ReadActivity tool for querying the caller's activity in a time range.
-
 use std::{collections::HashMap, num::NonZeroU32};
 
 use ai_toolset::{
@@ -18,7 +16,6 @@ use crate::domain::{
     ports::{ActivityPropertyMetadata, ActivityReads},
 };
 
-/// Maximum events returned by one activity tool call.
 const MAX_ACTIVITY_RESULTS: u32 = 100;
 
 /// Tool: read the authenticated user's own activity in a time range.

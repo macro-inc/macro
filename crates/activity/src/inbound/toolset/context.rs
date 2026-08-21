@@ -1,5 +1,3 @@
-//! Context and collection factory for activity AI tools.
-
 use std::sync::Arc;
 
 use ai_toolset::AsyncToolCollection;
