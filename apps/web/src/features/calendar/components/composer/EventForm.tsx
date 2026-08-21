@@ -22,6 +22,8 @@ export interface EventFormProps {
   isEdit?: boolean;
   disabledFields?: EventEditorDisabledFields;
   showRecurringEditNotice?: boolean;
+  /** Disable interaction without presenting the form as an in-flight save. */
+  disabled?: boolean;
   pending: boolean;
   class?: string;
   onCalendarChange?: (calendarId: string, color: string) => void;
@@ -39,11 +41,12 @@ export function EventForm(props: EventFormProps) {
   const controller = props.controller;
   const state = controller.state;
   const isEdit = () => props.isEdit ?? false;
+  const formIsDisabled = () => props.pending || props.disabled === true;
 
   const fieldIsReadOnly = (field: keyof EventEditorDisabledFields) =>
     props.disabledFields?.[field] === true;
   const fieldIsDisabled = (field: keyof EventEditorDisabledFields) =>
-    props.pending || fieldIsReadOnly(field);
+    formIsDisabled() || fieldIsReadOnly(field);
 
   createEffect(() => {
     const option = controller.selectedCalendarOption();
@@ -53,7 +56,7 @@ export function EventForm(props: EventFormProps) {
 
   const submit = () => {
     const values = controller.submitValues();
-    if (!values || props.pending) return;
+    if (!values || formIsDisabled()) return;
     props.onSubmit(values);
   };
 
@@ -142,21 +145,21 @@ export function EventForm(props: EventFormProps) {
               onChange={(calendarId) =>
                 controller.setField('calendarId', calendarId)
               }
-              disabled={props.pending}
+              disabled={formIsDisabled()}
               readOnly={fieldIsReadOnly('calendar')}
             />
             <EventComposerRecurrencePill
               options={controller.recurrenceOptions()}
               value={controller.selectedRecurrenceOption()}
               onChange={controller.changeRecurrenceChoice}
-              disabled={props.pending}
+              disabled={formIsDisabled()}
               readOnly={fieldIsReadOnly('recurrence')}
             />
             <EventComposerGuestsPill
               options={controller.guestOptions}
               selected={controller.selectedGuests()}
               onChange={controller.setSelectedGuests}
-              disabled={props.pending}
+              disabled={formIsDisabled()}
               readOnly={fieldIsReadOnly('guests')}
             />
             <EventComposerConferencePill
@@ -212,7 +215,7 @@ export function EventForm(props: EventFormProps) {
           type="button"
           variant="ghost"
           class="rounded-lg"
-          disabled={props.pending}
+          disabled={formIsDisabled()}
           onClick={props.onCancel}
         >
           Cancel
@@ -222,7 +225,7 @@ export function EventForm(props: EventFormProps) {
           variant={controller.canSave() ? 'active' : 'ghost'}
           depth={3}
           class="rounded-lg border-0"
-          disabled={!controller.canSave() || props.pending}
+          disabled={!controller.canSave() || formIsDisabled()}
           aria-label={isEdit() ? 'Save' : 'Create event'}
         >
           <Show

@@ -3,13 +3,16 @@ import type { ParentProps } from 'solid-js';
 
 /**
  * The floating pill surface for dock controls. Controls (MobileDockButton,
- * MobileTouchMenu) render flat and always sit inside one of these — alone for
- * a single round button, or grouped so several share the pill:
+ * MobileTouchMenu.Trigger) render flat and always sit inside one of these —
+ * alone for a single round button, or grouped so several share the pill:
  *
  * ```tsx
- * <MobileDockIsland class="h-11 justify-between gap-3">
+ * <MobileDockIsland class="h-(--mobile-chrome-button-size) justify-between gap-(--mobile-chrome-gap)">
  *   <MobileDockButton icon={BellIcon} … />
- *   <MobileTouchMenu triggerIcon={CaretUpIcon} … />
+ *   <MobileTouchMenu>
+ *     <MobileTouchMenu.Trigger icon={CaretUpIcon} … />
+ *     …
+ *   </MobileTouchMenu>
  * </MobileDockIsland>
  * ```
  *

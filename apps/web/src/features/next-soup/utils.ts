@@ -758,6 +758,17 @@ export function markReminderSeenOnOpen(
 }
 
 /** Build the singleton block params for an event row's target occurrence. */
+/**
+ * The event and instance a calendar row points at, resolved exactly as the
+ * open path resolves it so a copied link lands where a click would.
+ */
+export function calendarEventLinkTarget(
+  entity: Extract<EntityData, { type: 'calendar_event' }>
+): { eventId: string; occurrenceKey?: string } {
+  const { eventId, occurrenceKey } = calendarBlockParamsForEntity(entity);
+  return { eventId: eventId ?? entity.id, occurrenceKey };
+}
+
 function calendarBlockParamsForEntity(
   entity: Extract<EntityData, { type: 'calendar_event' }>
 ): CalendarBlockProps {

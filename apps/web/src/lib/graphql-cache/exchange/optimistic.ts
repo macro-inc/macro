@@ -16,6 +16,7 @@ import {
   type OperationResultSource,
   stringifyDocument,
 } from '@urql/core';
+import type { DocumentNode } from 'graphql';
 import type {
   EmbeddedLinkPathSegment,
   OptimisticLinkPatchWire,
@@ -102,7 +103,7 @@ export type OptimisticUpdate = OptimisticLinkPatchWire & {
 };
 
 export type QueryRevalidation = {
-  document: TypedDocumentNode<unknown, AnyVariables>;
+  document: DocumentNode;
   variables: AnyVariables;
 };
 

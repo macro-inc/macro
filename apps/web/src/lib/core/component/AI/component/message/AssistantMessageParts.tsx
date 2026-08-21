@@ -65,10 +65,11 @@ type RenderItem =
 /**
  * Tools rendered outside the standard grouped activity chrome own their full
  * presentation. The dashboard renders as a full-bleed view, not a tool row.
- * SendEmail suspends the chat on a user-interactive compose UI (send/cancel),
- * so it must stay visible rather than being collapsed inside a tool group.
+ * Deferred user tools suspend the chat on an interactive compose UI, so they
+ * must stay visible rather than being collapsed inside a tool group.
  */
 const STANDALONE_TOOLS: ReadonlySet<string> = new Set([
+  'CreateCalendarEvent',
   'DisplayResults',
   'SendEmail',
 ]);

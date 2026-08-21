@@ -46,6 +46,7 @@ fn create_document_args(
         created_at: None,
         sub_type: is_task.then_some(document_sub_type::DocumentSubType::Task),
         skip_history: false,
+        attribution: None,
     }
 }
 

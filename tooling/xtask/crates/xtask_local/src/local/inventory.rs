@@ -245,25 +245,14 @@ pub const RUST_SERVICES: &[RustService] = &[
         no_default_features: true,
     },
     RustService {
-        compose_name: "agent_trigger_service",
-        cargo_bin: "agent_trigger_service",
-        package: "agent_trigger_service",
-        host_port: None,
-        path_prefix: None,
-        is_websocket: false,
-        modes: &[Mode::Local],
-        opt_in: false,
-        no_default_features: false,
-    },
-    RustService {
         compose_name: "agent_harness_service",
         cargo_bin: "agent_harness_service",
         package: "agent_harness_service",
         host_port: Some(Port::AgentHarness),
         path_prefix: Some("/agent-harness"),
         is_websocket: false,
-        // Runs by default. LocalEnv reserves the credential keys so the
-        // process-env overlay can supply them; startup requires both.
+        // Runs without sandbox credentials so channel triggers and external
+        // sessions remain available; managed spawns fail loudly when unarmed.
         modes: &[Mode::Local],
         opt_in: false,
         no_default_features: false,

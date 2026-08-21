@@ -73,7 +73,7 @@ pub struct UpdateArgs {
     /// Apply this complete prebuilt binary set instead of invoking Cargo.
     #[arg(long, conflicts_with = "build_aux_services")]
     pub binaries_dir: Option<PathBuf>,
-    /// Rebuild the Docker-built auxiliary services (sync, websocket, lexical).
+    /// Rebuild every repository-built local Docker service.
     #[arg(long)]
     pub build_aux_services: bool,
     /// Recreate registry-refreshed preview auxiliary services without building.
@@ -180,7 +180,14 @@ pub fn up(mode: Mode, args: &UpArgs) -> Result<Instance> {
     });
 
     let static_frontend = !args.run.no_frontend && !args.infra_only;
-    let (env, target) = super::prepare(&stage, mode, &instance, &args.run, static_frontend)?;
+    let (env, target) = super::prepare(
+        &stage,
+        mode,
+        &instance,
+        &args.run,
+        static_frontend,
+        args.infra_only,
+    )?;
     let configured_binaries = args
         .run
         .build

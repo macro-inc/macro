@@ -66,7 +66,9 @@ const withAuth = <P extends object>(Comp: Component<P>): Component<P> => {
   };
 };
 
-type ComponentFactory = (params?: Record<string, any>) => JSXElement;
+type ComponentParams = Record<string, unknown>;
+
+type ComponentFactory = (params: ComponentParams) => JSXElement;
 
 type DocumentsComponentParams = {
   initialFilters?: Query;
@@ -131,12 +133,12 @@ function RedirectSplit(props: { to: SplitContent }) {
 
 export function resolveComponent(
   name: string,
-  params?: Record<string, any>
+  params?: ComponentParams
 ): ResolvedComponent {
   const registration = REGISTRY.get(name);
   if (!registration) throw new Error(`Component '${name}' not registered`);
   return {
-    element: () => registration.factory(params),
+    element: () => registration.factory(params ?? {}),
     initialMeta: registration.initialMeta,
   };
 }
@@ -549,13 +551,20 @@ registerComponent('email-compose', (params) => {
   usePageViewTracking('email-compose');
   // mailto: links land here as `component/email-compose?to=a@x.com,b@y.com`.
   const toParam = new URLSearchParams(window.location.search).get('to');
+  const paramsInitialTo = Array.isArray(params.initialTo)
+    ? params.initialTo.filter(
+        (value): value is string => typeof value === 'string'
+      )
+    : undefined;
   const initialTo =
-    params?.initialTo ??
+    paramsInitialTo ??
     toParam
       ?.split(',')
       .map((e) => e.trim())
       .filter(Boolean);
-  return <EmailCompose draftID={params?.draftID} initialTo={initialTo} />;
+  const draftID =
+    typeof params.draftID === 'string' ? params.draftID : undefined;
+  return <EmailCompose draftID={draftID} initialTo={initialTo} />;
 });
 registerComponent('task-compose', (params) => {
   usePageViewTracking('task-compose');

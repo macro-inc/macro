@@ -193,7 +193,7 @@ function EventDetailsDrawer(props: EventDetailsOverlayProps) {
               </Show>
             </div>
           </div>
-          <div class="flex min-h-0 flex-auto flex-col overflow-y-auto">
+          <MobileDrawer.ScrollBody>
             <div class="px-3">
               <EventDetails
                 event={props.event}
@@ -203,7 +203,7 @@ function EventDetailsDrawer(props: EventDetailsOverlayProps) {
             </div>
             <EventAttendeesSection attendees={props.event.attendees} />
             <EventRsvpSection event={props.event} buttonSize="md" />
-          </div>
+          </MobileDrawer.ScrollBody>
         </MobileDrawer.Content>
       </MobileDrawer.Portal>
     </MobileDrawer>

@@ -1,3 +1,4 @@
+use crate::markdown_images::{MarkdownImageResolver, tool_result_with_images};
 use ai_toolset::{AsyncToolCollection, RequestContext, ToolSet};
 use macro_user_id::user_id::MacroUserIdStr;
 use rmcp::{
@@ -84,7 +85,7 @@ mod test;
 
 impl<Context> ServerHandler for AuthenticatedToolService<Context>
 where
-    Context: Clone + Send + Sync + 'static,
+    Context: Clone + Send + Sync + MarkdownImageResolver + 'static,
 {
     fn get_info(&self) -> ServerInfo {
         let mut info = ServerInfo::new(ServerCapabilities::builder().enable_tools().build());
@@ -136,7 +137,7 @@ where
     ) -> Result<rmcp::model::CallToolResult, rmcp::ErrorData> {
         let user_id = Self::authenticated_user_id(&context.extensions)?;
 
-        let request_context = RequestContext::new(user_id);
+        let request_context = RequestContext::new(user_id.clone());
 
         let arguments = request
             .arguments
@@ -162,7 +163,7 @@ where
             })?;
 
         match result {
-            Ok(value) => Ok(rmcp::model::CallToolResult::structured(value)),
+            Ok(value) => Ok(tool_result_with_images(&self.context, &user_id, value).await),
             Err(error) => Ok(rmcp::model::CallToolResult::error(vec![Content::text(
                 error.description,
             )])),

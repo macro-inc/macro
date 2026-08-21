@@ -4,6 +4,7 @@ import {
   endCallKitCall,
   isNativeIosCallKitEnabled,
   startNativeCallKitOutgoingCall,
+  syncNativeCallStateAfterLeave,
 } from './use-callkit';
 
 type CallSessionControllerOptions = {
@@ -106,6 +107,12 @@ function createNativeCallKitSessionController(options: {
       options.clearOptimisticJoin();
     },
     disconnect: async (disconnectOptions) => {
+      // Captured before any teardown: the post-leave sync may clear exactly
+      // this state — a newer call's state appearing mid-leave must survive.
+      const stateBeforeLeave = {
+        snapshot: options.nativeCall.snapshot(),
+        bootstrapChannelId: options.nativeCall.bootstrapChannelId(),
+      };
       if (disconnectOptions?.endNativeCall !== false) {
         try {
           await endCallKitCall();
@@ -113,8 +120,23 @@ function createNativeCallKitSessionController(options: {
           console.error('callkit: failed to dismiss call sheet', e);
         }
       }
-      await options.jsDisconnect();
-      options.clearOptimisticJoin();
+      try {
+        await options.jsDisconnect();
+      } finally {
+        options.clearOptimisticJoin();
+        // If the native call was already gone (orphaned in-call state), no
+        // disconnect event will arrive to clear the snapshot — reconcile with
+        // the plugin so leave always lands in a consistent state, even when
+        // the JS disconnect throws.
+        try {
+          await syncNativeCallStateAfterLeave(
+            options.nativeCall,
+            stateBeforeLeave
+          );
+        } catch (e) {
+          console.error('callkit: post-leave state sync failed', e);
+        }
+      }
     },
   };
 }

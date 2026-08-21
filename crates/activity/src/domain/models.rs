@@ -31,6 +31,53 @@ use uuid::Uuid;
 /// prefix-parseable string. An agent is a bot acting with `on_behalf_of`
 /// set — agent-ness is relational, not an identity kind.
 pub use channel_sender::ChannelSender as Actor;
+
+/// Who performed an action, and whose feed it belongs on.
+///
+/// Stored as `actor_id` plus `subject_id` (`on_behalf_of ?? actor`).
+#[derive(Debug, Clone, PartialEq)]
+pub enum Attribution {
+    /// The principal acted for themselves. Subject equals actor.
+    Direct {
+        /// Who mechanically acted.
+        actor: Actor<'static>,
+    },
+    /// A bot or the platform acted for a user. Subject is that user.
+    Delegated {
+        /// Who mechanically acted.
+        actor: Actor<'static>,
+        /// Whose activity feed this belongs on.
+        subject: MacroUserIdStr<'static>,
+    },
+}
+
+impl Attribution {
+    /// The principal acted for themselves.
+    pub fn direct(actor: Actor<'static>) -> Self {
+        Self::Direct { actor }
+    }
+
+    /// A bot or the platform acted for `subject`.
+    pub fn delegated(actor: Actor<'static>, subject: MacroUserIdStr<'static>) -> Self {
+        Self::Delegated { actor, subject }
+    }
+
+    /// Who mechanically acted.
+    pub fn actor(&self) -> Actor<'static> {
+        match self {
+            Self::Direct { actor } | Self::Delegated { actor, .. } => actor.clone(),
+        }
+    }
+
+    /// The initiating user when this action is delegated; `None` when direct.
+    pub fn on_behalf_of(&self) -> Option<MacroUserIdStr<'static>> {
+        match self {
+            Self::Direct { .. } => None,
+            Self::Delegated { subject, .. } => Some(subject.clone()),
+        }
+    }
+}
+
 /// The entity-kind vocabulary activities are recorded against (re-exported
 /// for domain mappings).
 pub use model_entity::EntityType;
@@ -380,6 +427,29 @@ pub struct Activity {
 }
 
 impl Activity {
+    /// Builds an activity for a [`CommonAction`] from a resolved
+    /// [`Attribution`].
+    pub fn attributed(
+        source_event_id: Uuid,
+        ordinal: u32,
+        attribution: Attribution,
+        entity_type: EntityType,
+        entity_id: impl Into<String>,
+        action: CommonAction,
+        occurred_at: DateTime<Utc>,
+    ) -> Self {
+        Self::common(
+            source_event_id,
+            ordinal,
+            attribution.actor(),
+            attribution.on_behalf_of(),
+            entity_type,
+            entity_id,
+            action,
+            occurred_at,
+        )
+    }
+
     /// Builds an activity for a [`CommonAction`] — valid on every entity
     /// kind by definition, so any (kind, id) pairing is accepted.
     #[allow(clippy::too_many_arguments)]

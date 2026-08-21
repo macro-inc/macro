@@ -8,14 +8,9 @@ import {
   resolveMarkEntitiesDoneVariables,
   restoreSoupFocus,
 } from '@app/features/next-soup/utils';
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
 import { toast } from '@core/component/Toast/Toast';
-import {
-  ENABLE_GRAPHQL_SOUP,
-  ENABLE_NEW_INBOX_FLAG,
-  ENABLE_NEW_INBOX_OVERRIDE,
-} from '@core/constant/featureFlags';
+import { ENABLE_GRAPHQL_SOUP } from '@core/constant/featureFlags';
 import type { HotkeyGroup } from '@core/hotkey/types';
 import type { EntityData } from '@entity';
 import type { NotificationSource } from '@notifications';
@@ -99,21 +94,16 @@ type MarkDoneExecuteWithSoupOpts = MarkDoneExecuteOpts & {
 export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
   const splitPanel = useSplitPanel();
 
-  const newInboxFlag = useFeatureFlag(ENABLE_NEW_INBOX_FLAG, {
-    enabledOverride: ENABLE_NEW_INBOX_OVERRIDE,
-  });
-
   // Channel and channel_thread entities share the same notification bucket.
-  // The new inbox renders them as separate rows, so marking a channel as done
+  // The inbox renders them as separate rows, so marking a channel as done
   // should not clear thread notifications.
   //
-  // TODO: This should probably be the default case after the new inbox is released
-  // or we should rework how notifications are sent to not be under just the 'channel'
+  // TODO: This should probably be the default case everywhere, or we should
+  // rework how notifications are sent to not be under just the 'channel'
   // entity
   const scopeChannelNotificationsToEntity = () =>
-    newInboxFlag().enabled &&
-    (splitPanel?.handle.content().id === 'inbox' ||
-      splitPanel?.handle.referredFrom() === 'inbox');
+    splitPanel?.handle.content().id === 'inbox' ||
+    splitPanel?.handle.referredFrom() === 'inbox';
 
   const { notificationSource, hotkeyGroup } = options;
   const mutation = useUndoableMutation<

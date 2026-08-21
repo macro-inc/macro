@@ -430,36 +430,34 @@ export function Document() {
     }
   };
 
-  const zoomHandler: JSX.EventHandler<Document, KeyboardEvent> = createCallback(
-    (e) => {
-      if (IS_MAC ? !e.metaKey : !e.ctrlKey) return;
-      const viewer = getRootViewer();
-      if (!viewer) return;
+  const zoomHandler = createCallback((e: KeyboardEvent) => {
+    if (IS_MAC ? !e.metaKey : !e.ctrlKey) return;
+    const viewer = getRootViewer();
+    if (!viewer) return;
 
-      switch (e.key) {
-        case '+':
-        case '=':
-          e.preventDefault();
-          if (canZoomIn()) viewer.zoomIn();
-          break;
-        case '_':
-        case '-':
-          e.preventDefault();
-          if (canZoomOut()) viewer.zoomOut();
-          break;
-        case 'PageUp':
-        case 'ArrowLeft':
-          e.preventDefault();
-          viewer.previousPage();
-          break;
-        case 'PageDown':
-        case 'ArrowRight':
-          e.preventDefault();
-          viewer.nextPage();
-          break;
-      }
+    switch (e.key) {
+      case '+':
+      case '=':
+        e.preventDefault();
+        if (canZoomIn()) viewer.zoomIn();
+        break;
+      case '_':
+      case '-':
+        e.preventDefault();
+        if (canZoomOut()) viewer.zoomOut();
+        break;
+      case 'PageUp':
+      case 'ArrowLeft':
+        e.preventDefault();
+        viewer.previousPage();
+        break;
+      case 'PageDown':
+      case 'ArrowRight':
+        e.preventDefault();
+        viewer.nextPage();
+        break;
     }
-  );
+  });
 
   onMount(() => {
     if (isNestedBlock) return;

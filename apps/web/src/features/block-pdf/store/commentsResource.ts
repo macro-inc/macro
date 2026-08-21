@@ -347,9 +347,13 @@ export function useCreateFreeCommentResource() {
   ) => {
     let anchor: CreateCommentRequestAnchor | undefined;
     if (placeable) {
+      const [page] = placeable.pageRange;
+      if (page === undefined) {
+        throw new Error('Cannot create a PDF comment without a page');
+      }
       anchor = {
         uuid: placeable.internalId,
-        page: placeable.pageRange.values().next().value,
+        page,
         fileType: 'pdf',
         anchorType: 'free-comment',
         // position info

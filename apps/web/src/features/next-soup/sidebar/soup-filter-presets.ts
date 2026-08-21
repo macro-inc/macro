@@ -8,7 +8,6 @@ import {
 } from '@app/features/next-soup/filters/filter-store';
 import {
   ENABLE_CALENDAR_UI,
-  ENABLE_NEW_INBOX,
   ENABLE_REMINDERS,
   ENABLE_SNIPPETS,
   ENABLE_SUPPORTED_SOUP_FOREIGN_ENTITIES_OVERRIDE,
@@ -186,12 +185,12 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
       signal: () => ({
         filters: getInboxSignalFilters(),
         clientFilters: { and: ['inbox'] },
-        groupBy: ENABLE_NEW_INBOX() ? 'date' : undefined,
+        groupBy: 'date',
       }),
       noise: () => ({
         filters: getInboxNoiseFilters(),
         clientFilters: { and: ['noise'] },
-        groupBy: ENABLE_NEW_INBOX() ? 'date' : undefined,
+        groupBy: 'date',
       }),
       all: () => ({
         filters: {
@@ -218,7 +217,7 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
           emailView: 'all',
         },
         clientFilters: { and: ['explicit-noise'] },
-        groupBy: ENABLE_NEW_INBOX() ? 'date' : undefined,
+        groupBy: 'date',
       }),
       // Pending reminders only: scheduled but not yet fired. A fired reminder
       // has already hit the inbox — Signal surfaces it through its not-done

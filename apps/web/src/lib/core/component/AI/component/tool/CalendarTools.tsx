@@ -1,11 +1,19 @@
+import type { CalendarBlockEventTime } from '@block-calendar/calendar-range';
 import CalendarBlank from '@phosphor-icons/core/regular/calendar-blank.svg';
 import CalendarDots from '@phosphor-icons/core/regular/calendar-dots.svg';
 import CalendarPlus from '@phosphor-icons/core/regular/calendar-plus.svg';
 import CalendarX from '@phosphor-icons/core/regular/calendar-x.svg';
+import VideoCamera from '@phosphor-icons/core/regular/video-camera.svg';
 import type { NamedTool } from '@service-cognition/generated/tools/tool';
 import { format, isSameDay, subDays } from 'date-fns';
-import { createSignal, For, Show } from 'solid-js';
+import { createSignal, For, Match, Show, Switch } from 'solid-js';
 import { BaseTool } from './BaseTool';
+import { CalendarChatCompose } from './calendar/ChatCompose';
+import {
+  openToolCalendarEvent,
+  type ToolCalendarEvent,
+  toolInputOpenTime,
+} from './calendar/open-tool-event';
 import { Tool } from './Tool';
 import { createToolRenderer } from './ToolRenderer';
 
@@ -14,7 +22,10 @@ type CalendarEventListItem = NamedTool<
   'response'
 >['data']['events'][number];
 
-type ToolCalendarEvent = NamedTool<'CreateCalendarEvent', 'response'>['data'];
+type CreateCalendarEventResponse = NamedTool<
+  'CreateCalendarEvent',
+  'response'
+>['data'];
 
 type ToolCalendar = NamedTool<
   'ListCalendars',
@@ -40,116 +51,210 @@ const formatEventTime = (
   return `${format(startsAt, 'EEE MMM d, h:mm a')} – ${format(endsAt, 'EEE MMM d, h:mm a')}`;
 };
 
-const EventDetails = (props: { event: ToolCalendarEvent }) => (
+const EventDetails = (props: {
+  event: ToolCalendarEvent;
+  onOpen: () => void;
+}) => (
   <Tool.List>
-    <Tool.ListItem icon={<CalendarBlank class="size-4" />}>
-      <div class="flex min-w-0 flex-col gap-0.5">
-        <span class="truncate text-xs text-ink">{props.event.title}</span>
-        <span class="text-xs text-ink-extra-muted">
-          {formatEventTime(
-            props.event.start,
-            props.event.end,
-            props.event.isAllDay
-          )}
-        </span>
-        <Show when={props.event.location}>
-          <span class="truncate text-xs text-ink-extra-muted">
-            {props.event.location}
+    <button
+      type="button"
+      class="block w-full text-left hover:bg-hover"
+      onClick={props.onOpen}
+    >
+      <Tool.ListItem icon={<CalendarBlank class="size-4" />}>
+        <div class="flex min-w-0 flex-col gap-0.5">
+          <span class="truncate text-xs text-ink">{props.event.title}</span>
+          <span class="text-xs text-ink-extra-muted">
+            {formatEventTime(
+              props.event.start,
+              props.event.end,
+              props.event.isAllDay
+            )}
           </span>
-        </Show>
-        <Show when={props.event.attendeeCount > 0}>
-          <span class="truncate text-xs text-ink-extra-muted">
-            {props.event.attendeeCount === 1
-              ? '1 attendee'
-              : `${props.event.attendeeCount} attendees`}
-            {': '}
-            {props.event.attendees.map((attendee) => attendee.email).join(', ')}
-          </span>
-        </Show>
-        <Show when={props.event.conferenceUrl}>
-          {(url) => (
-            <a
-              class="truncate text-xs text-accent hover:underline"
-              href={url()}
-              rel="noreferrer"
-              target="_blank"
-            >
-              {url()}
-            </a>
-          )}
-        </Show>
-      </div>
-    </Tool.ListItem>
+          <Show when={props.event.location}>
+            <span class="truncate text-xs text-ink-extra-muted">
+              {props.event.location}
+            </span>
+          </Show>
+          <Show when={props.event.attendeeCount > 0}>
+            <span class="truncate text-xs text-ink-extra-muted">
+              {props.event.attendeeCount === 1
+                ? '1 attendee'
+                : `${props.event.attendeeCount} attendees`}
+              {': '}
+              {props.event.attendees
+                .map((attendee) => attendee.email)
+                .join(', ')}
+            </span>
+          </Show>
+        </div>
+      </Tool.ListItem>
+    </button>
+    <Show when={props.event.conferenceUrl}>
+      {(url) => (
+        <Tool.ListItem icon={<VideoCamera class="size-4" />}>
+          <a
+            class="block truncate text-xs text-accent hover:underline"
+            href={url()}
+            rel="noreferrer"
+            target="_blank"
+          >
+            {url()}
+          </a>
+        </Tool.ListItem>
+      )}
+    </Show>
   </Tool.List>
 );
 
-const mutationRenderer = (
-  name: 'CreateCalendarEvent' | 'UpdateCalendarEvent',
-  icon: typeof CalendarPlus,
-  label: string
-) =>
-  createToolRenderer({
-    name,
-    render: (ctx) => {
-      const [isExpanded, setIsExpanded] = createSignal(false);
-      const event = () => ctx.response?.data as ToolCalendarEvent | undefined;
-      const callLabel = () => {
-        const scope = (ctx.tool.data as { scope?: string }).scope;
-        return scope === 'this_event' ? `${label} occurrence` : label;
-      };
-      const title = () => {
-        const responseTitle = event()?.title;
-        if (responseTitle) return responseTitle;
-        const callTitle = (ctx.tool.data as { title?: string | null }).title;
-        return callTitle ?? undefined;
-      };
+function createdEvent(
+  response: CreateCalendarEventResponse | undefined
+): ToolCalendarEvent | undefined {
+  return typeof response === 'object' &&
+    response !== null &&
+    'UserAction' in response
+    ? response.UserAction
+    : undefined;
+}
 
-      return (
-        <BaseTool
-          icon={icon}
-          renderContext={ctx.renderContext}
-          type="call"
-          response={
-            event() && isExpanded() ? (
-              <EventDetails event={event() as ToolCalendarEvent} />
-            ) : undefined
-          }
-        >
-          <div class="flex min-w-0 flex-1 items-center justify-between gap-3 overflow-hidden">
-            <span class="min-w-0 truncate">
-              {callLabel()}
-              <Show when={title()}>
-                {(eventTitle) => (
-                  <>
-                    {' '}
-                    <span class="text-ink">{eventTitle()}</span>
-                  </>
-                )}
-              </Show>
-            </span>
-            <Tool.ResultToggle
-              expanded={isExpanded()}
-              onToggle={() => setIsExpanded((expanded) => !expanded)}
-              showToggle={Boolean(event())}
-              status={event() ? 'Done' : undefined}
+function CalendarMutationCard(props: {
+  event?: ToolCalendarEvent;
+  icon: typeof CalendarPlus;
+  label: string;
+  /** Instance the call targeted, for occurrence-scoped mutations. */
+  occurrenceKey?: string;
+  /** Locator timing to use instead of the returned event's own. */
+  openTime?: CalendarBlockEventTime;
+  renderContext: Parameters<typeof BaseTool>[0]['renderContext'];
+  status?: string;
+  title?: string;
+}) {
+  const [isExpanded, setIsExpanded] = createSignal(false);
+  const title = () => props.event?.title ?? props.title;
+
+  const openEvent = () => {
+    const event = props.event;
+    if (!event) return;
+    openToolCalendarEvent(event, {
+      occurrenceKey: props.occurrenceKey,
+      time: props.openTime,
+    });
+  };
+
+  return (
+    <BaseTool
+      icon={props.icon}
+      renderContext={props.renderContext}
+      type="call"
+      response={
+        props.event && isExpanded() ? (
+          <EventDetails event={props.event} onOpen={openEvent} />
+        ) : undefined
+      }
+    >
+      <div class="flex min-w-0 flex-1 items-center justify-between gap-3 overflow-hidden">
+        <span class="min-w-0 truncate">
+          {props.label}
+          <Show when={title()}>
+            {(eventTitle) => (
+              <>
+                {' '}
+                <span class="text-ink">{eventTitle()}</span>
+              </>
+            )}
+          </Show>
+        </span>
+        <Tool.ResultToggle
+          expanded={isExpanded()}
+          onToggle={() => setIsExpanded((expanded) => !expanded)}
+          showToggle={props.event !== undefined}
+          status={props.event ? 'Done' : props.status}
+        />
+      </div>
+    </BaseTool>
+  );
+}
+
+export const createCalendarEventHandler = createToolRenderer({
+  name: 'CreateCalendarEvent',
+  render: (ctx) => {
+    const response = () => ctx.response?.data;
+    const event = () => createdEvent(response());
+
+    return (
+      <Switch
+        fallback={
+          <CalendarMutationCard
+            icon={CalendarPlus}
+            label="Create calendar event"
+            renderContext={ctx.renderContext}
+            title={ctx.tool.data.title}
+          />
+        }
+      >
+        <Match when={response() === 'PendingUserExecution'}>
+          <CalendarChatCompose
+            chatId={ctx.chat_id}
+            initialData={ctx.tool.data}
+            messageId={ctx.message_id}
+            streamLocked={ctx.renderContext.isStreaming}
+            toolCallId={ctx.tool.id}
+          />
+        </Match>
+        <Match when={response() === 'Rejected'}>
+          <CalendarMutationCard
+            icon={CalendarPlus}
+            label="Create calendar event"
+            renderContext={ctx.renderContext}
+            status="Canceled"
+            title={ctx.tool.data.title}
+          />
+        </Match>
+        <Match when={event()}>
+          {(created) => (
+            <CalendarMutationCard
+              event={created()}
+              icon={CalendarPlus}
+              label="Create calendar event"
+              renderContext={ctx.renderContext}
             />
-          </div>
-        </BaseTool>
-      );
-    },
-  });
+          )}
+        </Match>
+      </Switch>
+    );
+  },
+});
 
-export const createCalendarEventHandler = mutationRenderer(
-  'CreateCalendarEvent',
-  CalendarPlus,
-  'Create calendar event'
-);
-
-export const updateCalendarEventHandler = mutationRenderer(
-  'UpdateCalendarEvent',
-  CalendarDots,
-  'Update calendar event'
-);
+export const updateCalendarEventHandler = createToolRenderer({
+  name: 'UpdateCalendarEvent',
+  render: (ctx) => {
+    const scope = () => ctx.tool.data.scope;
+    const isOccurrence = () => scope() === 'this_event';
+    // An occurrence-scoped update answers with the refreshed series, so the
+    // instance has to be located from the call's own occurrence and timing.
+    const movedTime = () => {
+      const time = ctx.tool.data.time;
+      return time ? toolInputOpenTime(time) : undefined;
+    };
+    return (
+      <CalendarMutationCard
+        event={ctx.response?.data}
+        icon={CalendarDots}
+        label={
+          isOccurrence()
+            ? 'Update calendar event occurrence'
+            : 'Update calendar event'
+        }
+        occurrenceKey={
+          isOccurrence() ? (ctx.tool.data.recurrenceId ?? undefined) : undefined
+        }
+        openTime={isOccurrence() ? movedTime() : undefined}
+        renderContext={ctx.renderContext}
+        title={ctx.tool.data.title ?? undefined}
+      />
+    );
+  },
+});
 
 export const deleteCalendarEventHandler = createToolRenderer({
   name: 'DeleteCalendarEvent',

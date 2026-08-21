@@ -896,7 +896,12 @@ impl ToolEntityCreator {
     ) -> anyhow::Result<String> {
         use std::str::FromStr as _;
         let document = documents::domain::create::NewPlainTextDocument::builder(
-            documents::domain::create::NewDocumentMetadata::new(name.to_string()),
+            documents::domain::create::NewDocumentMetadata::builder(name.to_string())
+                .attribution(activity::Attribution::delegated(
+                    activity::Actor::new_from_bot(bot_id::MACRO_AI_BOT_ID),
+                    user.clone(),
+                ))
+                .build(),
         )
         .file_type(model::document::FileType::from_str("md").expect("md is a valid file type"))
         .text(markdown.to_string())

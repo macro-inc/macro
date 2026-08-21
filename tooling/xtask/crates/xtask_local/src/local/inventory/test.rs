@@ -3,15 +3,14 @@ use super::*;
 #[test]
 fn local_binaries_are_unique_and_complete() {
     let bins = local_binaries();
-    // 16 distinct binaries (the bundled set, including the local-only
-    // search_processing_service, agent services, and the seed_cli
+    // 15 distinct binaries (the bundled set, including the local-only
+    // search_processing_service, agent harness, and the seed_cli
     // shipped for the gmail_forwarder sidecar).
-    assert_eq!(bins.len(), 16, "{bins:?}");
+    assert_eq!(bins.len(), 15, "{bins:?}");
     assert!(bins.contains(&"pubsub_workers"));
     assert!(bins.contains(&"seed_cli"));
     assert!(bins.contains(&"document_upload_finalizer_local_worker"));
     assert!(bins.contains(&"search_processing_service"));
-    assert!(bins.contains(&"agent_trigger_service"));
     assert!(bins.contains(&"agent_harness_service"));
     let mut sorted = bins.clone();
     sorted.dedup();
@@ -30,11 +29,7 @@ fn nonobvious_crate_mappings() {
 
 #[test]
 fn workers_are_portless() {
-    for name in [
-        "agent_trigger_service",
-        "document_upload_finalizer",
-        "email_pubsub_workers",
-    ] {
+    for name in ["document_upload_finalizer", "email_pubsub_workers"] {
         let svc = RUST_SERVICES
             .iter()
             .find(|s| s.compose_name == name)

@@ -139,6 +139,15 @@ export type EventTimeInput =
       kind: 'allDay';
     };
 /**
+ * User tools are pending until a user executes them
+ */
+export type UserToolResponseForToolCalendarEvent =
+  | 'PendingUserExecution'
+  | 'Rejected'
+  | {
+      UserAction: ToolCalendarEvent;
+    };
+/**
  * External systems items can be imported from.
  */
 export type ImportSource = 'linear' | 'notion' | 'slack';
@@ -540,7 +549,7 @@ export type SearchSkillsMatchType = 'partial' | 'exact';
 /**
  * User tools are pending until a user executes them
  */
-export type UserToolResponse =
+export type UserToolResponseForSendEmailResponse =
   | 'PendingUserExecution'
   | 'Rejected'
   | {
@@ -602,6 +611,10 @@ export type UpdateScopeInput = 'all' | 'this_event';
  * A requested change to an event's video conference.
  */
 export type ConferenceChangeInput = 'google_meet' | 'remove';
+/**
+ * The requester's own RSVP on an event they were invited to.
+ */
+export type RsvpResponseInput = 'accepted' | 'declined' | 'tentative';
 /**
  * Content of a web fetch response - either a successful result or an error
  */
@@ -1344,7 +1357,7 @@ export interface CrmCompanySearchDomain {
   createdAt: string;
 }
 /**
- * Create an event on the user's calendar, inviting any listed attendees through Google Calendar. The event is written to Google immediately, so attendees receive invitations the moment it is created — confirm details with the user before creating events with attendees.
+ * Prepare an event on the user's calendar, inviting any listed attendees through Google Calendar. In Macro chat this tool opens an inline composer so the user can review, edit, and confirm the event; use the tool to present the proposal instead of asking for a redundant confirmation in prose. When the pending call is executed, the event is written to Google immediately and attendees receive invitations. Other clients should confirm attendee events before executing the call.
  *
  * The event lands on the user's primary calendar unless `calendarId` (from ListCalendars) targets another one. For recurring events pass RFC 5545 lines in `recurrenceLines`, e.g. ["RRULE:FREQ=WEEKLY;BYDAY=MO"]. Returns the created event with its `eventId` for later updates or deletion. Fails if the user has no writable calendar connected.
  */
@@ -1375,6 +1388,10 @@ export interface CreateCalendarEvent {
    */
   calendarId?: string | null;
   /**
+   * Reminder configuration for the event. Omit to use the selected calendar's defaults.
+   */
+  reminders?: EventRemindersInput | null;
+  /**
    * Attach a freshly generated Google Meet video conference to the event.
    */
   addGoogleMeet?: boolean;
@@ -1391,6 +1408,32 @@ export interface AttendeeInput {
    * Whether attendance is optional for this attendee. Defaults to required.
    */
   isOptional?: boolean;
+}
+/**
+ * Reminder configuration supplied when creating a calendar event.
+ */
+export interface EventRemindersInput {
+  /**
+   * Whether the selected calendar's default reminders should apply.
+   */
+  useDefault: boolean;
+  /**
+   * Overrides used when calendar defaults are disabled.
+   */
+  overrides?: EventReminderOverrideInput[];
+}
+/**
+ * One reminder override supplied to a calendar tool.
+ */
+export interface EventReminderOverrideInput {
+  /**
+   * Provider reminder method. `popup` creates a Macro notification.
+   */
+  method: string;
+  /**
+   * Minutes before the event start.
+   */
+  minutes: number;
 }
 /**
  * A calendar event as returned by the create and update tools.
@@ -4364,6 +4407,8 @@ export interface TextEditorCodeExecutionToolError {
  * `scope` picks how much of a recurring series changes and is always required: "this_event" edits one occurrence (pass the occurrence's `recurrenceId` from ListCalendarEvents) and leaves the rest of the series alone; "all" edits the series itself — with `time` that MOVES EVERY OCCURRENCE, so never use "all" to reschedule a single occurrence. Non-recurring events use "all". There is no this-and-following update: end the series with DeleteCalendarEvent's "this_and_following" and create a new event instead.
  *
  * Passing `attendees` replaces the full attendee list — include everyone who should remain, not just additions. An empty string for `description` or `location` clears it. Fails on events from calendars the user cannot edit.
+ *
+ * `rsvp` sets the user's own response to an invitation and is independent of the field edits — it can be the only thing this call changes. It applies at the same `scope` as the rest of the call, and only works on events the user is actually an attendee of.
  */
 export interface UpdateCalendarEvent {
   /**
@@ -4403,6 +4448,14 @@ export interface UpdateCalendarEvent {
    * Change the event's video conference: "google_meet" attaches a fresh Google Meet, "remove" detaches the current conference. Omit to leave it untouched.
    */
   conference?: ConferenceChangeInput | null;
+  /**
+   * Replacement notification reminders. `useDefault: true` follows the calendar's own defaults; otherwise `overrides` replaces the whole list with entries of `method` "popup" (a Macro notification) or "email" and `minutes` before the start — an empty list silences the event. Omit to keep the current reminders.
+   */
+  reminders?: EventRemindersInput | null;
+  /**
+   * Set the user's own response to the invitation: "accepted", "declined", or "tentative". Omit to leave their response alone.
+   */
+  rsvp?: RsvpResponseInput | null;
 }
 /**
  * Change one of the current user's reminders: reword it, move when it fires, or mark it done. Get the `reminderId` from ListReminders or CreateReminder.

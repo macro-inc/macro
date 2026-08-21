@@ -63,9 +63,8 @@ export function SoupEntityActionDrawer() {
             )}
           </Show>
 
-          {/* Action groups. Scrolls when the groups outgrow the drawer's max
-              height; the handle and entity preview stay pinned. */}
-          <div class="flex flex-col min-h-0 flex-auto overflow-y-auto">
+          {/* Action groups */}
+          <MobileDrawer.ScrollBody>
             <For each={groups()}>
               {(group, groupIndex) => (
                 <>
@@ -104,7 +103,7 @@ export function SoupEntityActionDrawer() {
                 </>
               )}
             </For>
-          </div>
+          </MobileDrawer.ScrollBody>
         </MobileDrawer.Content>
       </MobileDrawer.Portal>
     </MobileDrawer>

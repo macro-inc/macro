@@ -18,7 +18,7 @@ mod tool_context;
 
 pub use anthropic::toolset::AnthropicToolContext;
 use anthropic::toolset::anthropic_toolset;
-use calendar_events::inbound::toolset::calendar_toolset;
+use calendar_events::inbound::toolset::{calendar_toolset, mcp_toolset as calendar_mcp_toolset};
 use call::inbound::toolset::call_toolset;
 use channels::inbound::toolset::channel_toolset;
 use chat::inbound::toolset::chat_toolset;
@@ -132,13 +132,13 @@ pub fn all_tool_frontend_schemas() -> FrontendSchemas {
         .build()
 }
 
-/// Toolset for the MCP server — excludes SendEmail.
+/// Toolset for the MCP server — excludes chat-deferred user tools.
 pub fn mcp_tools() -> ToolSetWithPrompt {
     let toolset = subagent_toolset()
         .add_subtoolset::<ToolNotificationToolContext>(notification_toolset())
         .add_subtoolset::<ToolRemindersToolContext>(reminders_toolset())
         .add_subtoolset::<ToolEmailToolContext>(email_mcp_toolset())
-        .add_subtoolset::<ToolCalendarToolContext>(calendar_toolset())
+        .add_subtoolset::<ToolCalendarToolContext>(calendar_mcp_toolset())
         .add_subtoolset::<ToolImportToolContext>(import_toolset())
         .add_tool::<Subagent, ToolServiceContext>();
     let toolset = Arc::new(toolset);

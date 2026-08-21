@@ -89,7 +89,6 @@ installCacheEngineWorker({
     },
   },
 });
-const runtimeOnMessage = globalThis.onmessage;
 for (const event of bufferedActivationEvents) {
-  runtimeOnMessage?.call(globalThis, event);
+  globalThis.dispatchEvent(event);
 }

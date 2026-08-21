@@ -240,6 +240,36 @@ async fn open_creates_announces_and_delivers_the_mention() {
 }
 
 #[tokio::test]
+async fn a_provisioning_failure_marks_the_session_disconnected() {
+    let (service, repo, containers, _announcer, _runtimes) = harness();
+    let id = AgentSessionId::new();
+    containers.fail_next_spawn("capacity exhausted");
+
+    let error = service
+        .execute(id, HarnessCommand::Open(open_command()))
+        .await
+        .expect_err("open should fail");
+
+    assert!(matches!(error, HarnessError::Container(_)));
+    let log = repo
+        .list_by_session(id)
+        .await
+        .expect("session log can be read");
+    assert!(matches!(
+        &log[..],
+        [agent_session::domain::model::StoredAgentSessionLog {
+            entry: agent_session::domain::model::AgentSessionLog {
+                content: Message::ToServer(ToServerMessage::Event {
+                    event: SystemEvent::Disconnected,
+                }),
+                ..
+            },
+            ..
+        }]
+    ));
+}
+
+#[tokio::test]
 async fn open_announces_while_the_container_is_still_booting() {
     let (service, _repo, containers, announcer, _runtimes) = harness();
     let id = AgentSessionId::new();

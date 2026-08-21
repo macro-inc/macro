@@ -75,11 +75,19 @@ export function SplitPanel(props: SplitPanelProps) {
   const splitLayoutHelpers = useSplitLayout();
 
   registerSplitHotkeys({
-    goHome: () =>
+    // Leaving a piece of content should return you to the list you reached it
+    // from, so walk this split's history back to the most recent list view.
+    // Only a split that never passed through one falls back to the inbox.
+    goToList: () => {
+      const wentBack = props.handle.goBackTo(
+        (content) => content.type === 'component' && isListViewID(content.id)
+      );
+      if (wentBack) return;
       props.handle.replace({
         next: { type: 'component', id: LIST_VIEW_ID.inbox },
         referredFrom: 'hotkey',
-      }),
+      });
+    },
     isNotUnifiedList: () => {
       const content = props.handle.content();
       return !isListViewID(content.id);

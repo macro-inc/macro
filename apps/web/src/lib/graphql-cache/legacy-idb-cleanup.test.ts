@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, type MockInstance, vi } from 'vitest';
 import { deleteLegacyNormalizedCacheIdb } from './legacy-idb-cleanup';
 
 type MutableDeleteRequest = Pick<
@@ -17,15 +17,20 @@ function deleteRequest(): MutableDeleteRequest {
 function dispatch(
   request: MutableDeleteRequest,
   kind: 'blocked' | 'error' | 'success'
-): ReturnType<typeof vi.fn> {
-  const preventDefault = vi.fn();
-  const event = { type: kind, preventDefault } as unknown as Event;
-  const handler =
-    kind === 'blocked'
-      ? request.onblocked
-      : kind === 'error'
-        ? request.onerror
-        : request.onsuccess;
+): MockInstance<Event['preventDefault']> {
+  if (kind === 'blocked') {
+    const event: IDBVersionChangeEvent = Object.assign(new Event(kind), {
+      newVersion: null,
+      oldVersion: 0,
+    });
+    const preventDefault = vi.spyOn(event, 'preventDefault');
+    request.onblocked?.call(request as IDBOpenDBRequest, event);
+    return preventDefault;
+  }
+
+  const event = new Event(kind);
+  const preventDefault = vi.spyOn(event, 'preventDefault');
+  const handler = kind === 'error' ? request.onerror : request.onsuccess;
   handler?.call(request as IDBOpenDBRequest, event);
   return preventDefault;
 }

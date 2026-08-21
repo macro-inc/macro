@@ -70,10 +70,21 @@
   --safe-left: max(env(safe-area-inset-left, 0px), var(--tauri-inset-left, 0px));
   --safe-top: max(env(safe-area-inset-top, 0px), var(--tauri-inset-top, 0px));
 
-  /* Horizontal gutter shared by the full-frame mobile chrome: the dock row,
-     header island strip, and accessory-region contributions all pad with
-     this so their edges line up. Use `px-(--mobile-chrome-gutter)`. */
-  --mobile-chrome-gutter: 0.75rem;
+  /* Mobile chrome sizing knobs. Literal px, not --spacing-derived rem:
+     chrome must not track the OS text-size setting. */
+  /* Gutter shared by the full-frame mobile chrome: the dock row, header
+     island strip, and accessory-region contributions all pad with this so
+     their edges line up, and the bottom-chrome stack reuses it for its gap
+     and bottom inset. Use `px-(--mobile-chrome-gutter)`. */
+  --mobile-chrome-gutter: 12px;
+  /* Gap within the dock row: between its islands and between the buttons
+     inside the compact dock island. */
+  --mobile-chrome-gap: 12px;
+  /* Dock buttons and touch-menu triggers; the compact dock island matches
+     its height to this. */
+  --mobile-chrome-button-size: 46px;
+  /* Icon inside a dock button / touch-menu trigger. */
+  --mobile-chrome-icon-size: 27px;
 
   /* chat vars */
   --left-of-connector: calc(var(--message-padding-x) + var(--user-icon-width) * 0.5);
@@ -475,7 +486,7 @@ body.tauri-ios {
    utility so it composes with variants — `mobile:island` — instead of
    hand-prefixing each part. */
 @utility island {
-  @apply bg-chrome text-ink ring dark-mode:ring-edge light-mode:ring-panel light-mode:shadow-[0_4px_20px_8px_oklch(0.15_0_0/0.07)];
+  @apply min-h-[40px] min-w-[40px] bg-chrome text-ink ring dark-mode:ring-edge light-mode:ring-panel light-mode:shadow-[0_4px_20px_8px_oklch(0.15_0_0/0.07)];
 }
 
 [data-press-pulse] {
@@ -930,7 +941,7 @@ a {
 @keyframes float-region-in {
   from {
     opacity: 0;
-    transform: translateY(0.5rem);
+    transform: translateY(8px);
   }
 }
 

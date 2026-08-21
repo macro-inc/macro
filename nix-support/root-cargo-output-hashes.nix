@@ -7,4 +7,6 @@
     "sha256-EcmlwqAVXGtbuvozzCOrygoSVipU99mBZK/MrQAIoYg=";
   "git+https://github.com/macro-inc/rs-libreoffice-bindings?rev=056a40ddfac1d9650be30b9f0b4b934e9266c7dc#056a40ddfac1d9650be30b9f0b4b934e9266c7dc" =
     "sha256-lx/AuxPpCarxdDzogkGudCbE4B2OEt5un4s4gIFt1ek=";
+  "git+https://github.com/agentclientprotocol/rust-sdk?rev=8769d16d10e0c9fa7e662ee18424a4313b06ea88#8769d16d10e0c9fa7e662ee18424a4313b06ea88" =
+    "sha256-QI/EyiWoZtIDdbMcMXVcFji/LK0Za4k4aP/4Ho1cx1g=";
 }

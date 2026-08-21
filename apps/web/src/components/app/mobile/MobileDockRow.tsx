@@ -27,7 +27,6 @@ import { MobileBottomEdgeFade } from './MobileEdgeFade';
 import {
   type MobileTouchIconComponent,
   MobileTouchMenu,
-  type MobileTouchMenuItem,
 } from './MobileTouchMenu';
 import { useMobileDockViews } from './mobile-dock-views';
 import { pressPulse } from './pressPulse';
@@ -49,41 +48,51 @@ function CreateMenu() {
   // desktop order's first entries nearest it.
   const blocks = () => [...createBlocks()].reverse();
 
-  const uploadItem: MobileTouchMenuItem = {
-    id: 'upload-file',
-    label: 'Upload file',
-    icon: UploadIcon,
-    animateIcon: false,
-    onSelect: () => {
-      openFilePicker({ multiple: true }, async (files) => {
-        await handleFileUpload(files, false);
-      });
-    },
-  };
-
   return (
-    <MobileDockIsland class="shrink-0">
-      <MobileTouchMenu
-        triggerIcon={CreateIcon}
-        footerLabel="Create"
-        items={[
-          uploadItem,
-          ...blocks().map((block) => {
-            const useAnimatedIcon = ENABLE_ANIMATED_ICONS && block.animatedIcon;
-            return {
-              // Labels key the rows: 'Message' and 'Channel' share a
-              // blockName.
-              id: block.label,
-              label: block.label,
-              icon: useAnimatedIcon ? block.animatedIcon : block.icon,
-              animateIcon: !!useAnimatedIcon,
-              // The block's own action, exactly as the desktop menus invoke
-              // it (e.g. Channel opens the new-channel modal).
-              onSelect: () => block.keyDownHandler?.(),
-            };
-          }),
-        ]}
-      />
+    <MobileDockIsland class="shrink-0 flex justify-center items-center">
+      <MobileTouchMenu>
+        <MobileTouchMenu.Trigger
+          icon={CreateIcon}
+          class="size-(--mobile-chrome-button-size)"
+          iconClass="size-(--mobile-chrome-icon-size) [&_svg]:size-(--mobile-chrome-icon-size)"
+        />
+        <MobileTouchMenu.Content>
+          <MobileTouchMenu.Item
+            id="upload-file"
+            icon={UploadIcon}
+            animateIcon={false}
+            onSelect={() => {
+              openFilePicker({ multiple: true }, async (files) => {
+                await handleFileUpload(files, false);
+              });
+            }}
+          >
+            Upload file
+          </MobileTouchMenu.Item>
+          {/* Labels key the rows: 'Message' and 'Channel' share a
+              blockName. */}
+          <For each={blocks()}>
+            {(block) => {
+              const useAnimatedIcon =
+                ENABLE_ANIMATED_ICONS && block.animatedIcon;
+              return (
+                <MobileTouchMenu.Item
+                  id={block.label}
+                  icon={useAnimatedIcon ? block.animatedIcon : block.icon}
+                  animateIcon={!!useAnimatedIcon}
+                  // The block's own action, exactly as the desktop menus
+                  // invoke it (e.g. Channel opens the new-channel modal).
+                  onSelect={() => block.keyDownHandler?.()}
+                >
+                  {block.label}
+                </MobileTouchMenu.Item>
+              );
+            }}
+          </For>
+          <MobileTouchMenu.Separator />
+          <MobileTouchMenu.Footer>Create</MobileTouchMenu.Footer>
+        </MobileTouchMenu.Content>
+      </MobileTouchMenu>
     </MobileDockIsland>
   );
 }
@@ -123,12 +132,12 @@ function MobileDockButton(props: MobileDockButtonProps) {
         props.onClick();
       }}
       class={cn(
-        'relative flex size-10 shrink-0 items-center justify-center rounded-full',
+        'relative flex size-(--mobile-chrome-button-size) shrink-0 items-center justify-center rounded-full',
         props.active && 'text-accent',
         props.class
       )}
     >
-      <div class="size-6 shrink-0 [&_svg]:size-6">
+      <div class="size-(--mobile-chrome-icon-size) shrink-0 [&_svg]:size-(--mobile-chrome-icon-size)">
         {props.animateIcon === false ? (
           <Dynamic component={props.icon} />
         ) : (
@@ -147,31 +156,42 @@ function MoreViewsMenu(props: {
   const dockViews = useMobileDockViews();
 
   return (
-    <MobileTouchMenu
-      triggerIcon={CaretUpIcon}
-      footerLabel="Views"
-      items={[
-        {
-          id: 'settings',
-          label: 'Settings',
-          icon: IconGear,
-          active: settingsOpen,
-          animateIcon: false,
-          dividerAfter: true,
-          onSelect: toggleSettings,
-        },
-        // Rows render top → bottom ending at the thumb: reverse the shared
-        // canonical order so Inbox lands nearest it.
-        ...[...dockViews()].reverse().map((view) => ({
-          id: view.id,
-          label: view.label,
-          icon: view.icon,
-          animateIcon: view.animateIcon,
-          active: () => props.isActive(view.id),
-          onSelect: () => props.onNavigate(view.id),
-        })),
-      ]}
-    />
+    <MobileTouchMenu>
+      <MobileTouchMenu.Trigger
+        icon={CaretUpIcon}
+        class="size-(--mobile-chrome-button-size)"
+        iconClass="size-(--mobile-chrome-icon-size) [&_svg]:size-(--mobile-chrome-icon-size)"
+      />
+      <MobileTouchMenu.Content>
+        <MobileTouchMenu.Item
+          id="settings"
+          icon={IconGear}
+          active={settingsOpen()}
+          animateIcon={false}
+          onSelect={toggleSettings}
+        >
+          Settings
+        </MobileTouchMenu.Item>
+        <MobileTouchMenu.Separator />
+        {/* Rows render top → bottom ending at the thumb: reverse the shared
+            canonical order so Inbox lands nearest it. */}
+        <For each={[...dockViews()].reverse()}>
+          {(view) => (
+            <MobileTouchMenu.Item
+              id={view.id}
+              icon={view.icon}
+              animateIcon={view.animateIcon}
+              active={props.isActive(view.id)}
+              onSelect={() => props.onNavigate(view.id)}
+            >
+              {view.label}
+            </MobileTouchMenu.Item>
+          )}
+        </For>
+        <MobileTouchMenu.Separator />
+        <MobileTouchMenu.Footer>Views</MobileTouchMenu.Footer>
+      </MobileTouchMenu.Content>
+    </MobileTouchMenu>
   );
 }
 
@@ -203,7 +223,7 @@ function MobileCompactDockRow() {
 
   return (
     <div class="flex w-full justify-between">
-      <MobileDockIsland class="h-11 min-w-0 justify-between gap-3">
+      <MobileDockIsland class="h-(--mobile-chrome-button-size) min-w-0 justify-between gap-(--mobile-chrome-gap)">
         <For each={navButtons()}>
           {(button) => (
             <MobileDockButton
@@ -255,7 +275,7 @@ export function MobileDockRow(props: MobileDockRowProps) {
   return (
     <div
       class={cn(
-        'flex items-center gap-3 px-(--mobile-chrome-gutter)',
+        'flex items-center gap-(--mobile-chrome-gap) px-(--mobile-chrome-gutter)',
         props.class
       )}
     >

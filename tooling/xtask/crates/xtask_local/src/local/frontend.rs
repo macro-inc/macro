@@ -45,6 +45,13 @@ pub fn static_dir(instance: &Instance) -> std::path::PathBuf {
 /// (dev-mode bundle, production optimizations), except the backend origin is
 /// the `same-origin` sentinel — resolved from `location.origin` at runtime — so
 /// the one bundle works on localhost and through any tunnel/preview hostname.
+///
+/// Setting `VITE_LOCAL_BACKEND_ORIGIN` also keeps `import.meta.env.DEV` true
+/// in the static bundle (see `keepImportMetaDev` in apps/web/scripts). `vite build`
+/// otherwise compiles DEV from `NODE_ENV=production`, which drops local-only
+/// paths such as passwordless auto-login (`just run_local` uses `vite serve`,
+/// where DEV is already true). Fly preview sets the same origin env, so it
+/// gets the override without a second flag.
 pub fn build_static(
     stage: &Stage,
     instance: &Instance,

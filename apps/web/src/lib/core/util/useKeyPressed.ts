@@ -1,7 +1,7 @@
 import { debounce } from '@solid-primitives/scheduled';
 import { createSignal, onCleanup, onMount } from 'solid-js';
 
-let listeners = new Set<(e?: KeyboardEvent) => void>();
+let listeners = new Set<(e: KeyboardEvent) => void>();
 let isListening = false;
 
 const startGlobalListener = () => {

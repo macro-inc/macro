@@ -1,13 +1,5 @@
 import { cn } from '@ui';
-import {
-  type ComponentProps,
-  type JSX,
-  splitProps,
-  type ValidComponent,
-} from 'solid-js';
-import { Dynamic } from 'solid-js/web';
-
-type SlotElement = 'div' | 'span' | 'button';
+import { type ComponentProps, type JSX, splitProps } from 'solid-js';
 
 const placeGrid = (
   area: string | [string, string] | undefined
@@ -29,12 +21,10 @@ type CommonProps = {
   style?: JSX.CSSProperties | string;
 };
 
-type SlotProps<T extends ValidComponent = 'div'> = { as?: T } & CommonProps &
-  Omit<ComponentProps<T>, keyof CommonProps | 'component'>;
+type SlotProps = CommonProps & Omit<ComponentProps<'div'>, keyof CommonProps>;
 
-export function Slot<T extends SlotElement = 'div'>(props: SlotProps<T>) {
+export function Slot(props: SlotProps) {
   const [local, rest] = splitProps(props, [
-    'as',
     'class',
     'children',
     'placement',
@@ -44,9 +34,8 @@ export function Slot<T extends SlotElement = 'div'>(props: SlotProps<T>) {
   const gridArea = () => placeGrid(local.placement);
 
   return (
-    <Dynamic
+    <div
       class={cn('entity-slot', local.class)}
-      component={local.as ?? ('div' as SlotElement)}
       style={{
         ...gridArea(),
         ...(typeof local.style === 'object' ? local.style : {}),
@@ -54,6 +43,6 @@ export function Slot<T extends SlotElement = 'div'>(props: SlotProps<T>) {
       {...rest}
     >
       {local.children}
-    </Dynamic>
+    </div>
   );
 }

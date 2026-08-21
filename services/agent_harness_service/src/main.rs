@@ -3,11 +3,13 @@
 //! The hexagon lives in `crates/agent_harness`; this binary is the shell
 //! around it: it builds the Postgres repositories, the Daytona container
 //! manager, and a channel service with the full side-effect stack for
-//! announcements, then drives the orchestrator from `macro.agent_sessions`.
+//! announcements, derives agent triggers from `macro.channels`, then drives
+//! the orchestrator from the resulting `macro.agent_sessions` events.
 
 mod api;
 mod bots_directory;
 mod config;
+mod trigger;
 
 use std::sync::Arc;
 
@@ -254,6 +256,13 @@ async fn main() -> anyhow::Result<()> {
         }
     });
 
+    // Keep trigger generation in this deployment while retaining Kafka as the
+    // boundary between channel events and harness commands.
+    let mut trigger = tokio::spawn(trigger::supervise(
+        pool.clone(),
+        config.kafka_brokers.as_ref().to_owned(),
+    ));
+
     // The consumer: every agent-session event, filtered to our bot.
     let consumer =
         KafkaEventConsumer::<AgentHarnessConsumerGroup>::from_env(config.kafka_brokers.as_ref())?;
@@ -279,6 +288,13 @@ async fn main() -> anyhow::Result<()> {
         tokio::select! {
             () = &mut shutdown => {
                 tracing::info!("agent harness service shutting down");
+                break;
+            }
+            result = &mut trigger => {
+                run_error = Some(match result {
+                    Ok(()) => anyhow::anyhow!("agent trigger stopped unexpectedly"),
+                    Err(error) => anyhow::anyhow!("agent trigger task failed: {error}"),
+                });
                 break;
             }
             result = consumer.recv() => {
@@ -363,6 +379,7 @@ async fn main() -> anyhow::Result<()> {
     }
 
     http.abort();
+    trigger.abort();
     container_shutdown.shutdown_all().await;
 
     while let Some(result) = tasks.join_next().await {

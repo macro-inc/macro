@@ -46,7 +46,6 @@ import {
 } from '@components/app/split-layout/layoutUtils';
 import { useNavigatedFromJK } from '@components/app/useNavigatedFromJK';
 import { useBlockId } from '@core/block';
-import { EntityPermissionsGate } from '@core/component/EntityPermissionsGate';
 import { ENABLE_CALLS } from '@core/constant/featureFlags';
 import {
   useChannel,
@@ -280,6 +279,28 @@ export function NewChannelBlockAdapter(props: BlockChannelProps) {
   const blockHandle = blockHandleSignal.get;
   const [searchParams, setSearchParams] = useSearchParams();
 
+  const initialTargetMessageParams = (): ChannelTargetMessageParams => {
+    const hasPropsTarget =
+      props[URL_PARAMS.message] !== undefined ||
+      props[URL_PARAMS.thread] !== undefined;
+    if (hasPropsTarget) {
+      return {
+        [URL_PARAMS.message]: props[URL_PARAMS.message],
+        [URL_PARAMS.thread]: props[URL_PARAMS.thread],
+      };
+    }
+    const isSingleSplit = globalSplitManager()?.splits().length === 1;
+    if (!isSingleSplit) return {};
+    return {
+      [URL_PARAMS.message]: searchParams[URL_PARAMS.message] as
+        | string
+        | undefined,
+      [URL_PARAMS.thread]: searchParams[URL_PARAMS.thread] as
+        | string
+        | undefined,
+    };
+  };
+
   // Decide whether the user asked to auto-join the call (via ?join_call=true
   // deep link or programmatic open props) before creating signals so we
   // can land directly on the Call tab without flashing Messages first.
@@ -457,28 +478,6 @@ export function NewChannelBlockAdapter(props: BlockChannelProps) {
     },
   });
 
-  const initialTargetMessageParams = (): ChannelTargetMessageParams => {
-    const hasPropsTarget =
-      props[URL_PARAMS.message] !== undefined ||
-      props[URL_PARAMS.thread] !== undefined;
-    if (hasPropsTarget) {
-      return {
-        [URL_PARAMS.message]: props[URL_PARAMS.message],
-        [URL_PARAMS.thread]: props[URL_PARAMS.thread],
-      };
-    }
-    const isSingleSplit = globalSplitManager()?.splits().length === 1;
-    if (!isSingleSplit) return {};
-    return {
-      [URL_PARAMS.message]: searchParams[URL_PARAMS.message] as
-        | string
-        | undefined,
-      [URL_PARAMS.thread]: searchParams[URL_PARAMS.thread] as
-        | string
-        | undefined,
-    };
-  };
-
   const onChannelReady = (handle: ChannelHandle) => {
     setMessagesHandle(() => handle);
   };
@@ -505,7 +504,7 @@ export function NewChannelBlockAdapter(props: BlockChannelProps) {
       : undefined;
 
   return (
-    <EntityPermissionsGate entityType="channel" entityId={channelId}>
+    <>
       <CallEventSync />
       <ChannelTabProvider activeTab={activeTab} setActiveTab={setActiveTab}>
         <ChannelCallAutoJoin
@@ -556,6 +555,6 @@ export function NewChannelBlockAdapter(props: BlockChannelProps) {
           <NewTop channelId={channelId} />
         </div>
       </ChannelTabProvider>
-    </EntityPermissionsGate>
+    </>
   );
 }
