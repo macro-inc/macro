@@ -175,8 +175,10 @@ export function getGraphqlSoupClient(): Client {
     const subscriptionsLifecycle = createGraphqlSoupSubscriptionsLifecycle();
     const cleanup = () => {
       unregisterHost();
-      host?.dispose();
+      // Unsubscribing emits urql teardown operations; keep the cache host
+      // available until those best-effort registration removals are issued.
       subscriptionsLifecycle.dispose();
+      host?.dispose();
       if (websocketClient) void websocketClient.dispose();
     };
     const onInitializationError = (error: Error) => {

@@ -256,6 +256,23 @@ describe('createWorkerCacheHost', () => {
     expect(onInitializationError).toHaveBeenCalledOnce();
   });
 
+  it('treats teardown as local cleanup after initialization failure and disposal', async () => {
+    configureAdapter = (fake) => {
+      fake.errors.set('init', 'injected initialization failure');
+    };
+    const host = createWorkerCacheHost({ scope: 'scope-1' });
+
+    await expect(host.clear()).rejects.toThrow(
+      'injected initialization failure'
+    );
+    host.dispose();
+    await expect(host.teardown(7)).resolves.toBeUndefined();
+
+    expect(
+      requireAdapter().requests.filter((request) => request.kind === 'teardown')
+    ).toEqual([]);
+  });
+
   it('samples origin storage pressure periodically and clears the timer on dispose', async () => {
     vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
     const estimate = vi.fn(async () => ({ usage: 25, quota: 100 }));

@@ -984,7 +984,19 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
       registeredOpKeys.delete(opKey);
       lostRegisteredOpKeys.delete(opKey);
       replacementReadOpKeys.delete(opKey);
-      await ensureInitialized();
+      // urql emits teardown while initialization-failure fallback is
+      // unsubscribing operations. Local registration cleanup is sufficient
+      // when no usable engine generation remains.
+      if (state !== 'ready' && state !== 'initializing') return;
+      if (state === 'initializing') {
+        try {
+          await ensureInitialized();
+        } catch {
+          return;
+        }
+      }
+      // Disposal or owner loss can win while an initialization await yields.
+      if (state !== 'ready') return;
       await request({ kind: 'teardown', opId: opId(opKey) });
     },
 
