@@ -6,7 +6,7 @@
 # plus `lib/ld-linux-*.so.2`). Do not symlink over the glibc *store* path:
 # that is the interpreter Nix-linked tools (`/bin/sh`, `curl`) use, and
 # overlaying it with a self-link makes every exec fail with ELOOP.
-{ pkgs }:
+{ ... }:
 {
   extraCommands = ''
     mkdir -p ./app
