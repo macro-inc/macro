@@ -897,7 +897,6 @@
         ++ pkgs.lib.optionals isLinux [
           mold
           docker
-          docker-buildx
           fuse-overlayfs
         ];
 

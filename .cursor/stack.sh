@@ -4,9 +4,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # On-demand product stack. Boot (start.sh) starts nothing; infra.sh brings up
-# dockerd and the databases first. After backend edits, rebuild the Nix
-# binaries, run `just stack down`, and rerun this script. `just stack update`
-# cannot write into the read-only Nix directory.
+# dockerd and the databases first. After backend edits, run rebuild.sh.
 
 # shellcheck source=cloud-lib.sh
 source "${SCRIPT_DIR}/cloud-lib.sh"

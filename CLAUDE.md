@@ -317,7 +317,7 @@ don't inject it directly into the error message.
 
 ## Cursor Cloud specific instructions
 
-`.cursor/install.sh` prepares the durable caches, databases, test dependencies, frontend dependencies, service binaries, and stack init snapshot. `.cursor/start.sh` runs at boot and starts nothing beyond the nix daemon, so sessions and subagents are usable immediately. `.cursor/infra.sh` starts Docker, Postgres, and Redis on demand. `.cursor/stack.sh` starts the on-demand product stack.
+`.cursor/install.sh` prepares the durable caches, databases, test dependencies, frontend dependencies, service binaries, and stack init snapshot. `.cursor/start.sh` runs at boot and starts nothing beyond the nix daemon, so sessions and subagents are usable immediately. `.cursor/infra.sh` starts Docker, Postgres, and Redis on demand. `.cursor/stack.sh` starts the on-demand product stack. `.cursor/rebuild.sh` rebuilds the stack after backend edits. These scripts are the only supported entry points; each re-enters the pinned nix shell itself, so run them with plain `bash` from any environment.
 
 Nix is the only host dependency. The pinned dev shell supplies the Docker CLI and daemon, Compose, `fuse-overlayfs`, and OpenSSH. `ssh-keygen` must come from this shell.
 
@@ -327,8 +327,8 @@ Set `NIX_CACHE_AWS_ACCESS_KEY_ID` and `NIX_CACHE_AWS_SECRET_ACCESS_KEY` as Curso
 
 Nothing runs after boot. Before DB-backed `cargo test -p <crate>`, run `bash .cursor/infra.sh` once — it brings up Docker, Postgres, and Redis in seconds because install baked the images and volumes. Pure-logic crate tests need nothing. Run `bash .cursor/stack.sh` for a product-ready environment.
 
-After backend edits, run `nix build .#local-stack-binaries --out-link "$HOME/.cache/macro-cloud/local-stack-bins"`, then `just stack down`, then `bash .cursor/stack.sh`. Do not use `just stack update` with the read-only Nix binary directory.
+After backend edits, run `bash .cursor/rebuild.sh`. Do not use `just stack update` with the read-only Nix binary directory.
 
-Seed sample data with `just seed-scenario apply --file seed/scenarios/team-perms.json`. The `agent_harness_service` restart loop is expected without AI provider keys.
+No seeding or OTP is needed to log in: passwordless login auto-creates a user for any email, and the stack's auth service is built with `return_passwordless_code`, so the login API returns the code in its response (codes are also visible at the proxy's `/mailpit/` UI). `just seed-scenario apply --file seed/scenarios/team-perms.json` is optional, for multi-user team/permission fixtures. The `agent_harness_service` restart loop is expected without AI provider keys.
 
 Leave `SQLX_OFFLINE` unset for `cargo test`. If SQLx reports missing cached query data, run `just prepare_db` instead of enabling offline mode. Run crate tests from the repository root with `cargo test -p <crate>`.
