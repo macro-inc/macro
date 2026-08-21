@@ -25,6 +25,7 @@ export function installCacheCoordinatorWorker(
 ): EffectWorkerRunnerTransport<CoordinatorToTabEnvelope> {
   const router = options.router ?? new CoordinatorRouter();
   const ports = new Map<number, CoordinatorMessagePort>();
+  const closedPortIds = new Set<number>();
   let runner!: EffectWorkerRunnerTransport<CoordinatorToTabEnvelope>;
 
   const portFor = (portId: number): CoordinatorMessagePort => {
@@ -34,15 +35,24 @@ export function installCacheCoordinatorWorker(
       onmessage: null,
       onmessageerror: null,
       postMessage(message: unknown, transfers?: Transferable[]): void {
-        Effect.runSync(
-          runner.send(portId, message as CoordinatorToTabEnvelope, transfers)
-        );
+        try {
+          Effect.runSync(
+            runner.send(portId, message as CoordinatorToTabEnvelope, transfers)
+          );
+        } catch (error) {
+          if (ports.get(portId) !== port) return;
+          ports.delete(portId);
+          closedPortIds.add(portId);
+          port.onmessageerror?.({ data: error } as MessageEvent);
+        }
       },
       start(): void {},
       close(): void {
-        ports.delete(portId);
+        if (ports.get(portId) === port) ports.delete(portId);
+        closedPortIds.add(portId);
       },
     };
+    closedPortIds.delete(portId);
     ports.set(portId, port);
     router.connect(port);
     return port;
@@ -54,6 +64,7 @@ export function installCacheCoordinatorWorker(
   >({
     endpoint: options.endpoint ?? (self as unknown as Window),
     onMessage(portId, message) {
+      if (closedPortIds.has(portId)) return;
       portFor(portId).onmessage?.({
         data: message,
         ports: [],
@@ -62,13 +73,15 @@ export function installCacheCoordinatorWorker(
     onDisconnect(portId) {
       const port = ports.get(portId);
       ports.delete(portId);
+      closedPortIds.add(portId);
       port?.onmessageerror?.({} as MessageEvent);
     },
     onError(error) {
-      for (const port of ports.values()) {
+      for (const [portId, port] of ports) {
+        ports.delete(portId);
+        closedPortIds.add(portId);
         port.onmessageerror?.({ data: error } as MessageEvent);
       }
-      ports.clear();
     },
   });
 

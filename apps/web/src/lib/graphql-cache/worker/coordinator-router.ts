@@ -1,4 +1,5 @@
 import * as Effect from 'effect/Effect';
+import { match } from 'ts-pattern';
 import type { CacheResponse } from '../protocol';
 import {
   type CacheResetReason,
@@ -74,6 +75,9 @@ type EngineRoute = {
 const DEFAULT_ACTIVATION_TIMEOUT_MS = 20_000;
 const DEFAULT_HEARTBEAT_INTERVAL_MS = 2_000;
 const DEFAULT_HEARTBEAT_TIMEOUT_MS = 5_000;
+
+const errorMessage = (error: unknown): string =>
+  error instanceof Error ? error.message : String(error);
 
 const resetReasonForOpenOutcome = (
   outcome: EngineOpenOutcome
@@ -284,28 +288,26 @@ export class CoordinatorRouter {
       return;
     }
 
-    switch (message.kind) {
-      case 'cache-request':
-        this.applyActions(core.request(tabId, message.request));
-        break;
-      case 'attach-engine-port':
-        this.attachEnginePort(tabId, message.ownerEpoch, message.enginePort);
-        break;
-      case 'graceful-departure':
-        this.applyActions(
-          core.beginGracefulDeparture(tabId, message.ownerEpoch)
-        );
-        break;
-      case 'navigation-departure':
-        this.departForNavigation(tabId, message.ownerEpoch, message.reason);
-        break;
-      case 'engine-lost':
-        this.failOwner(tabId, message.ownerEpoch, message.reason);
-        break;
-      case 'disconnect-tab':
-        this.loseTab(tabId, message.reason);
-        break;
-    }
+    match(message)
+      .with({ kind: 'cache-request' }, ({ request }) => {
+        this.applyActions(core.request(tabId, request));
+      })
+      .with({ kind: 'attach-engine-port' }, ({ ownerEpoch, enginePort }) => {
+        this.attachEnginePort(tabId, ownerEpoch, enginePort);
+      })
+      .with({ kind: 'graceful-departure' }, ({ ownerEpoch }) => {
+        this.applyActions(core.beginGracefulDeparture(tabId, ownerEpoch));
+      })
+      .with({ kind: 'navigation-departure' }, ({ ownerEpoch, reason }) => {
+        this.departForNavigation(tabId, ownerEpoch, reason);
+      })
+      .with({ kind: 'engine-lost' }, ({ ownerEpoch, reason }) => {
+        this.failOwner(tabId, ownerEpoch, reason);
+      })
+      .with({ kind: 'disconnect-tab' }, ({ reason }) => {
+        this.loseTab(tabId, reason);
+      })
+      .exhaustive();
   }
 
   private async register(
@@ -440,27 +442,39 @@ export class CoordinatorRouter {
       return;
     }
 
-    let route!: EngineRoute;
-    const transport = createEffectWorkerTransport<
-      EngineToCoordinatorEnvelope,
-      CoordinatorToEngineEnvelope
-    >({
-      endpoint: transferredPort,
-      onMessage: (message) => {
-        if (this.engineRoute === route)
-          this.handleEngineMessage(route, message);
-      },
-      onError: (error) => {
-        if (this.engineRoute === route) {
-          this.failOwner(
-            tabId,
-            ownerEpoch,
-            `engine Effect transport failed: ${error.message}`
-          );
-        }
-      },
-      closeEndpoint: () => transferredPort.close(),
-    });
+    let route: EngineRoute | undefined;
+    let transport: EffectWorkerTransport<CoordinatorToEngineEnvelope>;
+    try {
+      transport = createEffectWorkerTransport<
+        EngineToCoordinatorEnvelope,
+        CoordinatorToEngineEnvelope
+      >({
+        endpoint: transferredPort,
+        onMessage: (message) => {
+          if (route && this.engineRoute === route) {
+            this.handleEngineMessage(route, message);
+          }
+        },
+        onError: (error) => {
+          if (route && this.engineRoute === route) {
+            this.failOwner(
+              tabId,
+              ownerEpoch,
+              `engine Effect transport failed: ${error.message}`
+            );
+          }
+        },
+        closeEndpoint: () => transferredPort.close(),
+      });
+    } catch (error) {
+      transferredPort.close();
+      this.failOwner(
+        tabId,
+        ownerEpoch,
+        `engine Effect transport failed: ${errorMessage(error)}`
+      );
+      return;
+    }
     route = { tabId, ownerEpoch, transport };
     this.engineRoute = route;
     void transport.ready.catch(() => undefined);
@@ -687,15 +701,14 @@ export class CoordinatorRouter {
             );
             break;
           }
-          Effect.runSync(
-            route.transport.send(
-              envelope<CoordinatorToEngineEnvelope>({
-                kind: 'engine-request',
-                ownerEpoch: action.ownerEpoch,
-                routeId: action.routeId,
-                request: action.request,
-              })
-            )
+          this.sendToEngine(
+            route,
+            envelope<CoordinatorToEngineEnvelope>({
+              kind: 'engine-request',
+              ownerEpoch: action.ownerEpoch,
+              routeId: action.routeId,
+              request: action.request,
+            })
           );
           break;
         }
@@ -741,13 +754,12 @@ export class CoordinatorRouter {
             );
             break;
           }
-          Effect.runSync(
-            route.transport.send(
-              envelope<CoordinatorToEngineEnvelope>({
-                kind: 'drain-engine',
-                ownerEpoch: action.ownerEpoch,
-              })
-            )
+          this.sendToEngine(
+            route,
+            envelope<CoordinatorToEngineEnvelope>({
+              kind: 'drain-engine',
+              ownerEpoch: action.ownerEpoch,
+            })
           );
           break;
         }
@@ -1110,6 +1122,23 @@ export class CoordinatorRouter {
     connection.port.close();
   }
 
+  private sendToEngine(
+    route: EngineRoute,
+    message: CoordinatorToEngineEnvelope
+  ): boolean {
+    try {
+      Effect.runSync(route.transport.send(message));
+      return true;
+    } catch (error) {
+      this.failOwner(
+        route.tabId,
+        route.ownerEpoch,
+        `engine Effect transport send failed: ${errorMessage(error)}`
+      );
+      return false;
+    }
+  }
+
   private scheduleHeartbeat(ownerEpoch: number): void {
     this.clearHeartbeatTimers();
     this.heartbeatIntervalTimer = this.setTimeoutFn(() => {
@@ -1124,15 +1153,18 @@ export class CoordinatorRouter {
       }
       const heartbeatId = this.nextHeartbeatId++;
       this.pendingHeartbeat = { ownerEpoch, heartbeatId };
-      Effect.runSync(
-        route.transport.send(
+      if (
+        !this.sendToEngine(
+          route,
           envelope<CoordinatorToEngineEnvelope>({
             kind: 'heartbeat',
             ownerEpoch,
             heartbeatId,
           })
         )
-      );
+      ) {
+        return;
+      }
       this.heartbeatTimeoutTimer = this.setTimeoutFn(() => {
         if (
           this.pendingHeartbeat?.ownerEpoch === ownerEpoch &&

@@ -16,13 +16,14 @@ class FakePort extends EventTarget {
   onmessage: ((event: MessageEvent<unknown>) => void) | null = null;
   onmessageerror: (() => void) | null = null;
   effectProtocol = false;
+  readonly throwKinds = new Set<string>();
 
   postMessage(message: unknown): void {
-    this.messages.push(message);
     const payload = effectPayload(message);
-    this.events.push(
-      `post:${String((payload as { kind?: unknown })?.kind ?? 'unknown')}`
-    );
+    const kind = String((payload as { kind?: unknown })?.kind ?? 'unknown');
+    if (this.throwKinds.has(kind)) throw new Error(`${kind} send failed`);
+    this.messages.push(message);
+    this.events.push(`post:${kind}`);
   }
 
   close(): void {
@@ -525,6 +526,68 @@ describe('CoordinatorRouter', () => {
     expect(messagesOfKind(tabA, 'terminate-engine')).toHaveLength(0);
   });
 
+  it('closes the engine port and fails its owner when transport construction throws', async () => {
+    const router = new CoordinatorRouter({
+      verifyTabLockHeld: async () => true,
+      watchTabLock: () => () => {},
+    });
+    const tabA = new FakePort();
+    await register(router, tabA, 'tab-a');
+    const engine = new FakePort();
+    const addEventListener = engine.addEventListener.bind(engine);
+    vi.spyOn(engine, 'addEventListener').mockImplementation(
+      (type, listener, options) => {
+        if (type === 'messageerror') {
+          throw new Error('listener setup failed');
+        }
+        addEventListener(type, listener, options);
+      }
+    );
+
+    await expect(attach(router, tabA, 'tab-a', 1, engine)).resolves.toBe(
+      undefined
+    );
+
+    expect(engine.closed).toBe(true);
+    expect(messagesOfKind(tabA, 'terminate-engine')).toContainEqual(
+      expect.objectContaining({
+        ownerEpoch: 1,
+        reason: expect.stringContaining('listener setup failed'),
+      })
+    );
+  });
+
+  it('fails its owner instead of propagating an engine request send failure', async () => {
+    const router = new CoordinatorRouter({
+      verifyTabLockHeld: async () => true,
+      watchTabLock: () => () => {},
+    });
+    const tabA = new FakePort();
+    const tabB = new FakePort();
+    await register(router, tabA, 'tab-a');
+    await register(router, tabB, 'tab-b');
+    const engine = new FakePort();
+    await attach(router, tabA, 'tab-a', 1, engine);
+    ready(engine, 'tab-a', 1, 'opened-existing');
+    engine.throwKinds.add('engine-request');
+
+    await expect(
+      router.handleTabMessage(tabB as CoordinatorMessagePort, {
+        ...version,
+        kind: 'cache-request',
+        tabId: 'tab-b',
+        request: { id: 20, kind: 'clear' },
+      })
+    ).resolves.toBeUndefined();
+
+    expect(messagesOfKind(tabA, 'terminate-engine')).toContainEqual(
+      expect.objectContaining({
+        ownerEpoch: 1,
+        reason: expect.stringContaining('engine-request send failed'),
+      })
+    );
+  });
+
   it('uses activation and heartbeat watchdogs to terminate and wipe', async () => {
     vi.useFakeTimers();
     const router = new CoordinatorRouter({
@@ -567,6 +630,35 @@ describe('CoordinatorRouter', () => {
     );
     expect(router.snapshot()?.state.kind).toBe('activating');
     expect(router.snapshot()?.ownerEpoch).toBe(3);
+  });
+
+  it('fails its owner without arming a watchdog when heartbeat send fails', async () => {
+    vi.useFakeTimers();
+    const router = new CoordinatorRouter({
+      heartbeatIntervalMs: 5,
+      heartbeatTimeoutMs: 7,
+      verifyTabLockHeld: async () => true,
+      watchTabLock: () => () => {},
+    });
+    const tabA = new FakePort();
+    const tabB = new FakePort();
+    await register(router, tabA, 'tab-a');
+    await register(router, tabB, 'tab-b');
+    const engine = new FakePort();
+    await attach(router, tabA, 'tab-a', 1, engine);
+    ready(engine, 'tab-a', 1, 'opened-existing');
+    engine.throwKinds.add('heartbeat');
+
+    await vi.advanceTimersByTimeAsync(5);
+
+    expect(messagesOfKind(tabA, 'terminate-engine')).toContainEqual(
+      expect.objectContaining({
+        ownerEpoch: 1,
+        reason: expect.stringContaining('heartbeat send failed'),
+      })
+    );
+    expect(messagesOfKind(engine, 'heartbeat')).toHaveLength(0);
+    expect(vi.getTimerCount()).toBe(1);
   });
 
   it('accepts heartbeat acknowledgements and rearms the watchdog', async () => {

@@ -5,6 +5,7 @@ import * as Effect from 'effect/Effect';
 import * as Exit from 'effect/Exit';
 import * as FiberSet from 'effect/FiberSet';
 import * as Scope from 'effect/Scope';
+import { match } from 'ts-pattern';
 import type { CacheRequest, CacheResponse } from '../protocol';
 import {
   type CacheTelemetryRecorderLike,
@@ -206,7 +207,12 @@ async function activate(
   let runnerFailed = false;
   let runner!: EffectWorkerRunnerTransport<EngineToCoordinatorEnvelope>;
   const post = (message: EngineToCoordinatorEnvelope): void => {
-    Effect.runSync(runner.send(0, message));
+    try {
+      Effect.runSync(runner.send(0, message));
+    } catch (error) {
+      if (runnerFailed || runner.isClosed()) return;
+      throw error;
+    }
   };
   const fatal = (
     reason: string,
@@ -306,15 +312,15 @@ async function activate(
         fatal('coordinator envelope owner epoch does not match activation');
         return;
       }
-      switch (message.kind) {
-        case 'engine-request':
+      match(message)
+        .with({ kind: 'engine-request' }, ({ request }) => {
           if (draining) {
             fatal('coordinator routed a request after drain began');
             return;
           }
-          admitRequest(message.request);
-          break;
-        case 'drain-engine': {
+          admitRequest(request);
+        })
+        .with({ kind: 'drain-engine' }, () => {
           if (draining) return;
           draining = true;
           const drainFiber = runLifecycle(
@@ -346,20 +352,19 @@ async function activate(
           drainFiber.addObserver(() => {
             void closeLifecycle().catch(() => undefined);
           });
-          break;
-        }
-        case 'heartbeat':
+        })
+        .with({ kind: 'heartbeat' }, ({ heartbeatId }) => {
           recordLinearMemory(false);
           core.recordCachedQueueDiagnostics?.();
           post(
             withVersion<EngineToCoordinatorEnvelope>({
               kind: 'heartbeat-ack',
               ownerEpoch: activation.ownerEpoch,
-              heartbeatId: message.heartbeatId,
+              heartbeatId,
             })
           );
-          break;
-      }
+        })
+        .exhaustive();
     },
     onError: (error) => {
       runnerFailed = true;

@@ -13,6 +13,10 @@ import {
   type CoordinatorMessagePort,
   CoordinatorRouter,
 } from './coordinator-router';
+import {
+  EFFECT_WORKER_REQUEST_TAG,
+  EFFECT_WORKER_RESPONSE_TAG,
+} from './effect-worker-transport';
 import type { CacheWorkerCoreOptions } from './worker-core';
 
 class FakePort extends EventTarget {
@@ -35,7 +39,9 @@ class FakePort extends EventTarget {
   }
 
   receive(message: unknown): void {
-    const event = new MessageEvent('message', { data: [0, message] });
+    const event = new MessageEvent('message', {
+      data: [EFFECT_WORKER_REQUEST_TAG, message],
+    });
     this.dispatchEvent(event);
   }
 }
@@ -77,7 +83,9 @@ const activation = (
 });
 
 const effectPayload = (message: unknown): unknown =>
-  Array.isArray(message) && message[0] === 1 ? message[1] : message;
+  Array.isArray(message) && message[0] === EFFECT_WORKER_RESPONSE_TAG
+    ? message[1]
+    : message;
 
 const messagesOfKind = <T extends string>(port: FakePort, kind: T) =>
   port.messages
@@ -397,6 +405,39 @@ describe('cache engine worker runtime', () => {
     ).toEqual(['engine-response', 'engine-drained']);
     expect(direct.closed).toBe(true);
     expect(scope.closed).toBe(true);
+  });
+
+  it('drops core messages after the runner closes during drain', async () => {
+    const scope = new FakeWorkerScope();
+    const direct = new FakePort();
+    let corePort: { postMessage(message: unknown): void } | undefined;
+    installCacheEngineWorker({
+      scope,
+      ownerLockIsHeld: async () => true,
+      createCore: () => ({
+        addPort: (port) => {
+          corePort = port;
+        },
+        handleRequest: async (port, request) => {
+          port.postMessage({ id: request.id, ok: true, result: null });
+        },
+        drain: vi.fn(),
+      }),
+    });
+    scope.activate(activation(), direct);
+    await vi.waitFor(() => expect(corePort).toBeDefined());
+
+    direct.receive({
+      ...version,
+      kind: 'drain-engine',
+      ownerEpoch: 7,
+    });
+    await vi.waitFor(() => expect(scope.closed).toBe(true));
+
+    expect(() =>
+      corePort?.postMessage({ id: 99, ok: true, result: null })
+    ).not.toThrow();
+    expect(messagesOfKind(direct, 'engine-response')).toHaveLength(0);
   });
 
   it('joins every admitted request fiber before draining the core', async () => {

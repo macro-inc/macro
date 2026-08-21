@@ -3,6 +3,10 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   createEffectWorkerRunnerTransport,
   createEffectWorkerTransport,
+  EFFECT_WORKER_CLOSE_FRAME,
+  EFFECT_WORKER_READY_FRAME,
+  EFFECT_WORKER_REQUEST_TAG,
+  EFFECT_WORKER_RESPONSE_TAG,
 } from './effect-worker-transport';
 
 class FakeMessagePort extends EventTarget {
@@ -32,11 +36,17 @@ class FakeMessagePort extends EventTarget {
   }
 
   ready(): void {
-    this.dispatchEvent(new MessageEvent('message', { data: [0] }));
+    this.dispatchEvent(
+      new MessageEvent('message', { data: EFFECT_WORKER_READY_FRAME })
+    );
   }
 
   emit(message: unknown): void {
-    this.dispatchEvent(new MessageEvent('message', { data: [1, message] }));
+    this.dispatchEvent(
+      new MessageEvent('message', {
+        data: [EFFECT_WORKER_RESPONSE_TAG, message],
+      })
+    );
   }
 }
 
@@ -59,8 +69,8 @@ describe('Effect worker transport', () => {
     endpoint.ready();
     await transport.ready;
     expect(endpoint.sent.map(({ message }) => message)).toEqual([
-      [0, 'first'],
-      [0, 'second'],
+      [EFFECT_WORKER_REQUEST_TAG, 'first'],
+      [EFFECT_WORKER_REQUEST_TAG, 'second'],
     ]);
 
     endpoint.emit({ kind: 'response' });
@@ -116,7 +126,7 @@ describe('Effect worker transport', () => {
     const framed = endpoint.sent[0]?.message as
       | [number, { port: MessagePort }]
       | undefined;
-    expect(framed?.[0]).toBe(0);
+    expect(framed?.[0]).toBe(EFFECT_WORKER_REQUEST_TAG);
     expect(framed?.[1].port).toBe(channel.port1);
     expect(endpoint.sent[0]?.transfers).toHaveLength(1);
     expect(endpoint.sent[0]?.transfers?.[0]).toBe(channel.port1);
@@ -124,10 +134,12 @@ describe('Effect worker transport', () => {
     await Effect.runPromise(
       Effect.all([transport.close(), transport.close()], { discard: true })
     );
-    expect(endpoint.sent.at(-1)?.message).toEqual([1]);
+    expect(endpoint.sent.at(-1)?.message).toEqual(EFFECT_WORKER_CLOSE_FRAME);
     expect(
       endpoint.sent.filter(({ message }) =>
-        Array.isArray(message) ? message[0] === 1 : false
+        Array.isArray(message)
+          ? message[0] === EFFECT_WORKER_RESPONSE_TAG
+          : false
       )
     ).toHaveLength(1);
     expect(closeEndpoint).toHaveBeenCalledOnce();

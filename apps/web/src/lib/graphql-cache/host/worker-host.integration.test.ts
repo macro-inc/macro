@@ -79,16 +79,16 @@ class LinkedMessagePort extends EventTarget {
   ): void {
     const peer = this.peer;
     if (this.closed || !peer || peer.closed) return;
-    const ports = Array.isArray(transfer)
-      ? transfer
-      : (transfer.transfer ?? []);
+    const ports = (
+      Array.isArray(transfer) ? transfer : (transfer.transfer ?? [])
+    ) as MessagePort[];
     queueMicrotask(() => {
       if (peer.closed) return;
       peer.onmessage?.({
         data: message,
         ports,
       } as unknown as MessageEvent);
-      peer.dispatchEvent(new MessageEvent('message', { data: message }));
+      peer.dispatchEvent(new MessageEvent('message', { data: message, ports }));
     });
   }
 

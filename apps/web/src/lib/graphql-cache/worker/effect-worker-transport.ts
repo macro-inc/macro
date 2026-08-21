@@ -9,6 +9,15 @@ import type { WorkerError } from 'effect/unstable/workers/WorkerError';
 
 export type BrowserWorkerEndpoint = Worker | SharedWorker | MessagePort;
 
+/** Effect's parent-to-runner request frame tag. */
+export const EFFECT_WORKER_REQUEST_TAG = 0 as const;
+/** Effect's runner-to-parent ready frame. */
+export const EFFECT_WORKER_READY_FRAME = [EFFECT_WORKER_REQUEST_TAG] as const;
+/** Effect's runner-to-parent response frame tag. */
+export const EFFECT_WORKER_RESPONSE_TAG = 1 as const;
+/** Effect's parent-to-runner close frame. */
+export const EFFECT_WORKER_CLOSE_FRAME = [EFFECT_WORKER_RESPONSE_TAG] as const;
+
 export interface EffectWorkerTransportOptions<Inbound> {
   /** Existing browser endpoint. Its lifetime remains owned by the caller. */
   endpoint: BrowserWorkerEndpoint;
@@ -77,9 +86,9 @@ export function createEffectWorkerTransport<Inbound, Outbound>(
       {
         onSpawn: Effect.sync(() => {
           if (readySettled) return;
-          // `Worker.run` opens its internal ready latch after `onSpawn`
-          // completes, then flushes buffered sends. Resolve in the next task
-          // so callers observe the fully-ready transport.
+          // Effect invokes `onSpawn` before opening its private ready latch.
+          // Resolving synchronously here lets awaiters run before buffered sends
+          // flush (covered by the transport ordering test), so defer one task.
           setTimeout(() => {
             if (readySettled) return;
             readySettled = true;
@@ -135,7 +144,7 @@ export function createEffectWorkerTransport<Inbound, Outbound>(
           // Preserve the browser adapter's synchronous endpoint teardown while
           // still speaking Effect's explicit close protocol to the runner.
           try {
-            messageTarget.postMessage([1]);
+            messageTarget.postMessage(EFFECT_WORKER_CLOSE_FRAME);
           } catch {
             // Endpoint teardown remains authoritative if close framing fails.
           } finally {
@@ -161,6 +170,7 @@ export interface EffectWorkerRunnerTransport<Outbound> {
     message: Outbound,
     transfers?: readonly Transferable[]
   ): Effect.Effect<void, Error>;
+  isClosed(): boolean;
   close(): Effect.Effect<void>;
 }
 
@@ -207,6 +217,10 @@ export function createEffectWorkerRunnerTransport<Inbound, Outbound>(
         }
         return runner.send(portId, message, transfers);
       });
+    },
+
+    isClosed(): boolean {
+      return closed;
     },
 
     close(): Effect.Effect<void> {
