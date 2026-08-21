@@ -21,6 +21,7 @@
         "@corvu/drawer": "^0.2.4",
         "@date-fns/tz": "^1.4.1",
         "@dinero.js/currencies": "2.0.0-alpha.8",
+        "@effect/platform-browser": "4.0.0-rc.111",
         "@floating-ui/dom": "^1.7.4",
         "@fontsource-variable/inter": "^5.2.8",
         "@fontsource-variable/playfair-display": "^5.2.8",
@@ -711,6 +712,8 @@
     "@dinero.js/core": ["@dinero.js/core@2.0.0-alpha.8", "", { "dependencies": { "@dinero.js/currencies": "2.0.0-alpha.8" } }, "sha512-3jaw2j6J/SshlCZz5KhHkh8zP47HRmt9RpnjR0BJs2awpweVuZIyyX9qzGVUEVpml9IwzQ1U+YdXevhOxtcDgg=="],
 
     "@dinero.js/currencies": ["@dinero.js/currencies@2.0.0-alpha.8", "", {}, "sha512-zApiqtuuPwjiM9LJA5/kNcT48VSHRiz2/mktkXjIpfxrJKzthXybUAgEenExIH6dYhLDgVmsLQZtZFOsdYl0Ag=="],
+
+    "@effect/platform-browser": ["@effect/platform-browser@4.0.0-rc.111", "", { "peerDependencies": { "effect": "^4.0.0-rc.111" } }, "sha512-4SmaYB4zWsmuM82V8Dgida2yupzEWlv6/QoDL2Ogj1jOPq65KUx3VjQKcNn2NenOR6SFRWaWsUWrnxwA2IPFzg=="],
 
     "@emnapi/core": ["@emnapi/core@1.11.2", "", { "dependencies": { "@emnapi/wasi-threads": "1.2.2", "tslib": "^2.4.0" } }, "sha512-TC8MkTuZUtcTSiFeuC0ksCh9QIJ5+F21MvZ4Wn4ORfYaFJ/0dsiudv5tVkejgwZlwQ39jL9WWDe2lz8x0WglOA=="],
 

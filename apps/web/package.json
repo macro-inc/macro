@@ -46,6 +46,7 @@
     "@corvu/drawer": "^0.2.4",
     "@date-fns/tz": "^1.4.1",
     "@dinero.js/currencies": "2.0.0-alpha.8",
+    "@effect/platform-browser": "4.0.0-rc.111",
     "@floating-ui/dom": "^1.7.4",
     "@fontsource-variable/inter": "^5.2.8",
     "@fontsource-variable/playfair-display": "^5.2.8",
