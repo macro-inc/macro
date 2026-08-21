@@ -147,14 +147,10 @@ impl DaytonaContainerManager {
             )
             .await
             .map_err(unavailable)?;
-        let socket = tokio::time::timeout(
-            provision::PING_TIMEOUT,
-            dial_sidecar(&preview)
-                .instrument(tracing::info_span!("agent.container.websocket_connect")),
-        )
-        .await
-        .map_err(|_| HarnessError::Container("sidecar WebSocket connection timed out".to_owned()))?
-        .map_err(unavailable)?;
+        let socket = dial_sidecar(&preview)
+            .instrument(tracing::info_span!("agent.container.websocket_connect"))
+            .await
+            .map_err(unavailable)?;
         if !self.managed.containers.activate(id, Instant::now()) {
             return Err(HarnessError::Container(
                 "sandbox is no longer managed".to_owned(),

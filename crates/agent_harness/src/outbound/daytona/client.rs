@@ -10,7 +10,6 @@ use super::types::{DaytonaApiKey, Env, Labels, PortPreview, Snapshot};
 mod test;
 
 const POLL_INTERVAL: Duration = Duration::from_millis(250);
-const REQUEST_TIMEOUT: Duration = Duration::from_secs(310);
 
 #[derive(Debug, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
@@ -114,10 +113,7 @@ impl DaytonaClient {
     #[must_use]
     pub fn new(api_url: String, api_key: DaytonaApiKey) -> Self {
         Self {
-            http: reqwest::Client::builder()
-                .timeout(REQUEST_TIMEOUT)
-                .build()
-                .expect("static Daytona HTTP client configuration should be valid"),
+            http: reqwest::Client::new(),
             base: api_url.trim_end_matches('/').to_owned(),
             api_key,
         }
@@ -219,18 +215,9 @@ impl DaytonaClient {
     pub async fn wait_for_started(&self, sandbox_id: &str, timeout: Duration) -> Result<()> {
         let deadline = Instant::now() + timeout;
         loop {
-            let remaining = deadline.saturating_duration_since(Instant::now());
-            if remaining.is_zero() {
-                return Err(DaytonaError::SandboxStartTimeout {
-                    sandbox_id: sandbox_id.to_owned(),
-                    timeout,
-                });
-            }
             let sandbox: SandboxDto = self
                 .json(
-                    self.http
-                        .get(format!("{}/sandbox/{sandbox_id}", self.base))
-                        .timeout(remaining),
+                    self.http.get(format!("{}/sandbox/{sandbox_id}", self.base)),
                     "get sandbox",
                 )
                 .await?;
@@ -473,14 +460,7 @@ impl DaytonaClient {
     ) -> Result<()> {
         let deadline = Instant::now() + timeout;
         loop {
-            let remaining = deadline.saturating_duration_since(Instant::now());
-            if remaining.is_zero() {
-                return Err(DaytonaError::PingTimeout {
-                    ping_url: ping_url.to_owned(),
-                    timeout,
-                });
-            }
-            let mut request = self.http.get(ping_url).timeout(remaining);
+            let mut request = self.http.get(ping_url);
             let mut trace_headers = reqwest::header::HeaderMap::new();
             macro_tower_layers::inject_trace_headers(&mut trace_headers);
             request = request.headers(trace_headers);
