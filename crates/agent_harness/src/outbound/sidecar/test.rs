@@ -4,8 +4,6 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use tokio::net::{TcpListener, TcpStream};
-use tokio_tungstenite::tungstenite::protocol::Role;
-
 use super::*;
 
 /// One ACP frame built from the protocol's typed request.
