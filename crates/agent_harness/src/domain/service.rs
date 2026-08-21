@@ -1,11 +1,7 @@
 #[cfg(test)]
 mod test;
 
-use std::{
-    collections::VecDeque,
-    pin::Pin,
-    sync::{Arc, Mutex},
-};
+use std::sync::Arc;
 
 use agent_runtime_protocol::domain::action::{AgentAction, AgentActionId};
 use agent_session::domain::connection::RuntimeAttachment;
@@ -20,8 +16,6 @@ use dashmap::DashMap;
 use dashmap::mapref::entry::Entry;
 use macro_user_id::user_id::MacroUserIdStr;
 use tokio::sync::{mpsc, oneshot};
-use tokio_util::sync::CancellationToken;
-use tokio_util::task::TaskTracker;
 use tracing::Instrument as _;
 use tracing::instrument::WithSubscriber as _;
 
@@ -43,39 +37,6 @@ struct QueuedCommand {
     span: tracing::Span,
 }
 
-impl QueuedCommand {
-    fn is_prompt(&self) -> bool {
-        matches!(
-            &self.command,
-            HarnessCommand::Deliver(DeliverAction {
-                action: AgentAction::Prompt(_),
-                ..
-            })
-        )
-    }
-
-    fn is_urgent(&self) -> bool {
-        match &self.command {
-            HarnessCommand::Delete => true,
-            HarnessCommand::Deliver(command) => command.action.supersedes_queued(),
-            HarnessCommand::Open(_) => false,
-        }
-    }
-}
-
-type CommandFuture = Pin<Box<dyn Future<Output = Result<()>> + Send + 'static>>;
-
-struct ActiveCommand {
-    future: CommandFuture,
-    completed: oneshot::Sender<Result<()>>,
-    is_prompt: bool,
-}
-
-enum WorkerEvent {
-    Received(Option<QueuedCommand>),
-    Completed(Result<()>),
-}
-
 struct AgentHarnessInner<Sessions, Containers, Announcer, Runtimes> {
     sessions: Sessions,
     containers: Containers,
@@ -88,9 +49,6 @@ struct AgentHarnessInner<Sessions, Containers, Announcer, Runtimes> {
 pub struct AgentHarnessService<Sessions, Containers, Announcer, Runtimes> {
     inner: Arc<AgentHarnessInner<Sessions, Containers, Announcer, Runtimes>>,
     workers: Arc<SessionWorkers>,
-    worker_tasks: TaskTracker,
-    shutdown: CancellationToken,
-    accepting_commands: Mutex<bool>,
 }
 
 impl<Sessions, Containers, Announcer, Runtimes>
@@ -118,9 +76,6 @@ where
                 defaults,
             }),
             workers: Arc::new(DashMap::new()),
-            worker_tasks: TaskTracker::new(),
-            shutdown: CancellationToken::new(),
-            accepting_commands: Mutex::new(true),
         }
     }
 
@@ -135,41 +90,27 @@ where
         session_id: AgentSessionId,
         mut command: HarnessCommand,
     ) -> impl Future<Output = Result<()>> + Send + 'static {
-        let result = {
-            let accepting = self
-                .accepting_commands
-                .lock()
-                .expect("harness admission state should not be poisoned");
-            if !*accepting {
-                None
-            } else {
-                let caller = tracing::Span::current();
-                Some(loop {
-                    let commands = self.commands(session_id);
-                    let (completed, result) = oneshot::channel();
-                    let queued = QueuedCommand {
-                        command,
-                        completed,
-                        span: caller.clone(),
-                    };
+        let caller = tracing::Span::current();
+        let result = loop {
+            let commands = self.commands(session_id);
+            let (completed, result) = oneshot::channel();
+            let queued = QueuedCommand {
+                command,
+                completed,
+                span: caller.clone(),
+            };
 
-                    match commands.send(queued) {
-                        Ok(()) => break result,
-                        Err(error) => {
-                            command = error.0.command;
-                            self.workers.remove_if(&session_id, |_, current| {
-                                current.same_channel(&commands)
-                            });
-                        }
-                    }
-                })
+            match commands.send(queued) {
+                Ok(()) => break result,
+                Err(error) => {
+                    command = error.0.command;
+                    self.workers
+                        .remove_if(&session_id, |_, current| current.same_channel(&commands));
+                }
             }
         };
 
         async move {
-            let Some(result) = result else {
-                return Err(HarnessError::ShuttingDown);
-            };
             result
                 .await
                 .map_err(|_| HarnessError::CommandWorkerStopped(session_id))?
@@ -195,40 +136,8 @@ where
     ) {
         // The worker outlives the call that created it, so it has to carry the
         // subscriber forward itself or every command it runs traces nowhere.
-        let shutdown = self.shutdown.clone();
         let inner = self.inner.clone();
-        self.worker_tasks.spawn(
-            async move {
-                tokio::select! {
-                    _ = shutdown.cancelled() => {}
-                    () = run_session_worker(session_id, inner, receiver) => {}
-                }
-            }
-            .with_current_subscriber(),
-        );
-    }
-
-    /// Stop queue admission and close every per-session command sender.
-    pub fn stop_accepting(&self) {
-        let mut accepting = self
-            .accepting_commands
-            .lock()
-            .expect("harness admission state should not be poisoned");
-        *accepting = false;
-        self.workers.clear();
-    }
-
-    /// Wait for admitted commands and their workers to finish naturally.
-    pub async fn drain(&self) {
-        self.worker_tasks.close();
-        self.worker_tasks.wait().await;
-    }
-
-    /// Stop accepting commands, cancel active work, and wait for every worker.
-    pub async fn shutdown(&self) {
-        self.stop_accepting();
-        self.shutdown.cancel();
-        self.drain().await;
+        tokio::spawn(run_session_worker(session_id, inner, receiver).with_current_subscriber());
     }
 
     /// Post the announcement for a prompt an external runtime delivers.
@@ -751,135 +660,13 @@ async fn run_session_worker<Sessions, Containers, Announcer, Runtimes>(
     Announcer: SessionAnnouncer,
     Runtimes: RuntimeConnections,
 {
-    let mut pending = VecDeque::new();
-    let mut active: Option<ActiveCommand> = None;
-
-    // Keep polling admission while an ordinary command waits on the session
-    // actor. Only superseding commands overtake; all other work stays FIFO.
-    loop {
-        if active.is_none() {
-            let queued = match next_pending(&mut pending) {
-                Some(queued) => queued,
-                None => match receiver.recv().await {
-                    Some(queued) => queued,
-                    None => break,
-                },
-            };
-            if queued.is_urgent() {
-                execute_queued(session_id, inner.clone(), queued).await;
-            } else {
-                active = Some(start_queued(session_id, inner.clone(), queued));
-            }
-            continue;
-        }
-
-        let event = {
-            let current = active.as_mut().expect("active command checked above");
-            tokio::select! {
-                biased;
-                queued = receiver.recv() => WorkerEvent::Received(queued),
-                result = &mut current.future => WorkerEvent::Completed(result),
-            }
-        };
-        match event {
-            WorkerEvent::Received(queued) => match queued {
-                Some(queued) if queued.is_urgent() => {
-                    if active.as_ref().is_some_and(|command| command.is_prompt) {
-                        complete_superseded(
-                            active
-                                .take()
-                                .expect("active prompt checked above")
-                                .completed,
-                        );
-                        let can_run_now = pending.iter().all(QueuedCommand::is_prompt);
-                        pending.push_back(queued);
-                        if can_run_now {
-                            let urgent = next_pending(&mut pending)
-                                .expect("the just-enqueued urgent command is pending");
-                            execute_queued(session_id, inner.clone(), urgent).await;
-                        }
-                    } else {
-                        pending.push_back(queued);
-                    }
-                }
-                Some(queued) => pending.push_back(queued),
-                None => {
-                    let active = active.take().expect("active command checked above");
-                    let result = active.future.await;
-                    let _ = active.completed.send(result);
-                    while let Some(queued) = pending.pop_front() {
-                        execute_queued(session_id, inner.clone(), queued).await;
-                    }
-                    break;
-                }
-            },
-            WorkerEvent::Completed(result) => {
-                let completed = active
-                    .take()
-                    .expect("completed command is active")
-                    .completed;
-                let _ = completed.send(result);
-            }
-        }
+    while let Some(queued) = receiver.recv().await {
+        let QueuedCommand {
+            command,
+            completed,
+            span,
+        } = queued;
+        let result = inner.execute(session_id, command).instrument(span).await;
+        let _ = completed.send(result);
     }
-}
-
-fn start_queued<Sessions, Containers, Announcer, Runtimes>(
-    session_id: AgentSessionId,
-    inner: Arc<AgentHarnessInner<Sessions, Containers, Announcer, Runtimes>>,
-    queued: QueuedCommand,
-) -> ActiveCommand
-where
-    Sessions: AgentSessionService,
-    Containers: ContainerManager,
-    Announcer: SessionAnnouncer,
-    Runtimes: RuntimeConnections,
-{
-    let is_prompt = queued.is_prompt();
-    let QueuedCommand {
-        command,
-        completed,
-        span,
-    } = queued;
-    ActiveCommand {
-        future: Box::pin(async move { inner.execute(session_id, command).instrument(span).await }),
-        completed,
-        is_prompt,
-    }
-}
-
-async fn execute_queued<Sessions, Containers, Announcer, Runtimes>(
-    session_id: AgentSessionId,
-    inner: Arc<AgentHarnessInner<Sessions, Containers, Announcer, Runtimes>>,
-    queued: QueuedCommand,
-) where
-    Sessions: AgentSessionService,
-    Containers: ContainerManager,
-    Announcer: SessionAnnouncer,
-    Runtimes: RuntimeConnections,
-{
-    let active = start_queued(session_id, inner, queued);
-    let result = active.future.await;
-    let _ = active.completed.send(result);
-}
-
-fn next_pending(pending: &mut VecDeque<QueuedCommand>) -> Option<QueuedCommand> {
-    let Some(urgent) = pending.iter().position(QueuedCommand::is_urgent) else {
-        return pending.pop_front();
-    };
-    if pending.iter().take(urgent).all(QueuedCommand::is_prompt) {
-        for _ in 0..urgent {
-            complete_superseded(
-                pending
-                    .pop_front()
-                    .expect("urgent position guarantees a preceding prompt")
-                    .completed,
-            );
-        }
-    }
-    pending.pop_front()
-}
-
-fn complete_superseded(completed: oneshot::Sender<Result<()>>) {
-    let _ = completed.send(Ok(()));
 }

@@ -88,7 +88,6 @@ async fn open_a_session_under(caller: &tracing::Span) {
     };
     let (opened, ()) = tokio::join!(open, drive);
     opened.expect("open should succeed");
-    service.shutdown().await;
     sessions.shutdown().await;
 }
 
