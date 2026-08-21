@@ -1,4 +1,5 @@
 use crate::api::context::{ApiContext, AuthorizationService};
+use activity::Actor;
 use axum::{
     extract::{self, State},
     http::StatusCode,
@@ -7,6 +8,7 @@ use axum::{
 use documents::domain::events::{DocumentMacroEvent, DocumentSyncContentUpdatedMetadata};
 use macro_authorization::{InternalOnly, MacroAuthorizationExtractor};
 use macro_event_broker::MacroEventBroker as _;
+use macro_user_id::user_id::MacroUserIdStr;
 use model::document::FileType;
 
 #[cfg(test)]
@@ -18,6 +20,10 @@ pub struct SyncDocument {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub document_version_id: Option<String>,
     pub file_type: FileType,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub actor: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub on_behalf_of: Option<String>,
 }
 
 #[derive(serde::Deserialize)]
@@ -37,6 +43,10 @@ fn documents_to_events(documents: Vec<SyncDocument>) -> Vec<DocumentMacroEvent> 
                     document_id,
                     file_type: document.file_type,
                     document_version_id: document.document_version_id,
+                    actor: document.actor.and_then(|id| Actor::try_from(id).ok()),
+                    on_behalf_of: document
+                        .on_behalf_of
+                        .and_then(|id| MacroUserIdStr::try_from(id).ok()),
                 },
             )
         })

@@ -99,6 +99,8 @@ macro_rules! or_unauth {
 pub struct WebSocketMetadata {
     pub user_id: Option<String>,
     pub access_level: AccessLevel,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub actor: Option<String>,
     #[serde(with = "u64_serde_strings")]
     pub peer_ids: BTreeSet<u64>,
 }
@@ -274,7 +276,13 @@ pub fn get_ws_id(state: &State, ws: &WebSocket) -> Result<String> {
 /// - every few seconds
 /// - on creation
 /// - on everyone being disconnected
-async fn report_new_doc_state(document_id: &str, snapshot: &[u8], env: &Env) {
+async fn report_new_doc_state(
+    document_id: &str,
+    snapshot: &[u8],
+    env: &Env,
+    actor: Option<String>,
+    on_behalf_of: Option<String>,
+) {
     if let Err(err) = DssInternalClient::new(env)
         .publish_shallow_snapshot(document_id, snapshot)
         .await
@@ -282,7 +290,7 @@ async fn report_new_doc_state(document_id: &str, snapshot: &[u8], env: &Env) {
         warn!(error=?err, "failed to push snapshot to DSS");
     }
     #[cfg(feature = "search-service")]
-    if let Err(err) = crate::sps::update(document_id, env).await {
+    if let Err(err) = crate::sps::update(document_id, env, actor, on_behalf_of).await {
         warn!(error=?err, "failed to update search index");
     }
 }
@@ -315,6 +323,18 @@ async fn bump_alarm(state: &State) -> Result<()> {
 impl DocumentSyncSession {
     pub fn get_websockets(&self) -> Vec<WebSocket> {
         self.state.get_websockets()
+    }
+
+    fn actor_attribution(&self) -> (Option<String>, Option<String>) {
+        self.ws_meta_map
+            .lock("actor_attribution")
+            .values()
+            .find_map(|meta| {
+                meta.actor
+                    .clone()
+                    .map(|actor| (Some(actor), meta.user_id.clone()))
+            })
+            .unwrap_or((None, None))
     }
 
     pub fn push_blame_events(&self, events: Vec<crate::d1::BlameEvent>) {
@@ -477,8 +497,10 @@ impl DocumentSyncSession {
             }
             let document_id_owned = document_id.to_string();
             let env = self.env.clone();
+            let (actor, on_behalf_of) = self.actor_attribution();
             self.state.wait_until(async move {
-                report_new_doc_state(&document_id_owned, &snapshot, &env).await;
+                report_new_doc_state(&document_id_owned, &snapshot, &env, actor, on_behalf_of)
+                    .await;
             });
         }
 
@@ -666,6 +688,7 @@ impl DocumentSyncSession {
             let ws_meta = WebSocketMetadata {
                 user_id: claims.user_id,
                 access_level: claims.access_level,
+                actor: claims.actor,
                 peer_ids: Default::default(),
             };
 
@@ -1081,11 +1104,13 @@ impl DurableObject for DocumentSyncSession {
 
             let document_id = self.document_id().await.ok();
             let env = self.env.clone();
+            let (actor, on_behalf_of) = self.actor_attribution();
             self.state.wait_until(async move {
                 if let Some(document_id) = document_id
                     && let Ok(snapshot) = doc_state.export_shallow_snapshot()
                 {
-                    report_new_doc_state(&document_id, &snapshot, &env).await;
+                    report_new_doc_state(&document_id, &snapshot, &env, actor, on_behalf_of)
+                        .await;
                     report_interaction(&document_id, &env, InteractionReason::Edited).await;
                 }
             });
@@ -1141,8 +1166,9 @@ impl DurableObject for DocumentSyncSession {
                 && let Ok(snapshot) = state.export_shallow_snapshot()
             {
                 let env = self.env.clone();
+                let (actor, on_behalf_of) = self.actor_attribution();
                 self.state.wait_until(async move {
-                    report_new_doc_state(&document_id, &snapshot, &env).await;
+                    report_new_doc_state(&document_id, &snapshot, &env, actor, on_behalf_of).await;
                     report_interaction(&document_id, &env, InteractionReason::LastLeave).await;
                 });
             }

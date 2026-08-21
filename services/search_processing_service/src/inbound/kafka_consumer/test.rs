@@ -910,6 +910,8 @@ fn document_event_cases() -> Vec<(DocumentTopicEvent, DocumentEventDescription)>
                 document_id: DOCUMENT_ID.to_string(),
                 file_type: FileType::Md,
                 document_version_id: None,
+                actor: None,
+                on_behalf_of: None,
             }),
             DocumentEventDescription {
                 action: DocumentIndexAction::ExtractSync {
@@ -1410,6 +1412,8 @@ fn document_extraction_actions_preserve_optional_versions() {
             document_id: DOCUMENT_ID.to_string(),
             file_type: FileType::Md,
             document_version_id: Some("snapshot-7".to_string()),
+            actor: None,
+            on_behalf_of: None,
         });
     assert_eq!(
         describe_document_event(&sync_content_updated).action,
@@ -1629,6 +1633,8 @@ fn exact_macro_documents_envelopes_decode_into_document_events() {
                     document_id: DOCUMENT_ID.to_string(),
                     file_type: FileType::Md,
                     document_version_id: None,
+                    actor: None,
+                    on_behalf_of: None,
                 }),
             ),
         ),
