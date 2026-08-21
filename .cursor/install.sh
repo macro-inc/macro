@@ -65,7 +65,7 @@ echo "cursor-cloud install: bun cache ready"
 build_local_stack_binaries
 echo "cursor-cloud install: local stack binaries ready"
 
-just stack up --infra-only --no-doppler --build-aux-services --json
+just stack up --infra-only --no-doppler --build-aux-services --binaries-dir "${LOCAL_STACK_BINS}/bin" --json
 cleanup_stack
 trap - EXIT
 
