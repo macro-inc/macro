@@ -35,14 +35,19 @@ function documentMentionNotification(
 
 describe('MarkMessageNotifications', () => {
   const bulkMarkAsRead = vi.fn<NotificationSource['bulkMarkAsRead']>();
-  const matchingNotifications = [
-    documentMentionNotification('notification-1'),
-    documentMentionNotification('notification-2'),
-  ];
+  let matchingNotifications: UnifiedNotification[];
 
   beforeEach(() => {
     vi.clearAllMocks();
-    bulkMarkAsRead.mockResolvedValue(undefined);
+    matchingNotifications = [
+      documentMentionNotification('notification-1'),
+      documentMentionNotification('notification-2'),
+    ];
+    bulkMarkAsRead.mockImplementation(async (notifications) => {
+      for (const notification of notifications) {
+        notification.viewed_at = '2026-08-17T00:01:00.000Z';
+      }
+    });
     mocks.notificationSource = {
       notificationsByEntity: () => ({
         'channel@channel-1': [
@@ -62,8 +67,34 @@ describe('MarkMessageNotifications', () => {
     ));
 
     await waitFor(() => {
-      expect(bulkMarkAsRead).toHaveBeenCalledOnce();
-      expect(bulkMarkAsRead).toHaveBeenCalledWith(matchingNotifications);
+      expect(matchingNotifications.every((n) => n.viewed_at)).toBe(true);
     });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(bulkMarkAsRead).toHaveBeenCalledOnce();
+    expect(bulkMarkAsRead).toHaveBeenCalledWith(matchingNotifications);
+  });
+
+  it('handles mark failures while preserving bounded retries', async () => {
+    const error = new Error('mark failed');
+    bulkMarkAsRead.mockRejectedValue(error);
+    const consoleError = vi
+      .spyOn(console, 'error')
+      .mockImplementation(() => {});
+
+    try {
+      render(() => (
+        <MarkMessageNotifications messageId="message-1" channelId="channel-1">
+          <span>Message</span>
+        </MarkMessageNotifications>
+      ));
+
+      await waitFor(() => {
+        expect(bulkMarkAsRead).toHaveBeenCalledTimes(3);
+        expect(consoleError).toHaveBeenCalledTimes(3);
+      });
+    } finally {
+      consoleError.mockRestore();
+    }
   });
 });

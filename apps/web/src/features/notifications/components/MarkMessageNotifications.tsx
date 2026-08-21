@@ -49,9 +49,14 @@ export function MarkMessageNotifications(props: {
     }
     attempts += 1;
     setInFlight(true);
-    notificationSource.bulkMarkAsRead(unread).finally(() => {
-      setInFlight(false);
-    });
+    void notificationSource
+      .bulkMarkAsRead(unread)
+      .catch((error) => {
+        console.error('Failed to mark message notifications as read', error);
+      })
+      .finally(() => {
+        setInFlight(false);
+      });
   });
 
   return <>{props.children}</>;
