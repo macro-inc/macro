@@ -152,6 +152,19 @@ export default defineConfig({
         },
       },
       {
+        plugins: [tsconfigPaths(), solidPlugin()],
+        ssr: {
+          resolve: {
+            conditions: ['browser', 'development'],
+          },
+        },
+        test: {
+          environment: 'jsdom',
+          include: ['src/features/block-agent/**/*.{test,spec}.{ts,tsx}'],
+          name: 'block-agent',
+        },
+      },
+      {
         extends: './src/lib/core/vitest.config.ts',
         test: {
           include: ['src/lib/service-clients/**/*.{test,spec}.{ts,tsx}'],
@@ -172,7 +185,7 @@ export default defineConfig({
           environment: 'jsdom',
           exclude: [
             ...configDefaults.exclude,
-            'src/features/{theme,block-channel,block-call,block-pr,block-md,channel,notifications,block-email}/**/*',
+            'src/features/{theme,block-channel,block-call,block-pr,block-md,channel,notifications,block-email,block-agent}/**/*',
           ],
           include: [
             'src/components/**/*.{test,spec}.{ts,tsx}',
