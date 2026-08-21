@@ -10,6 +10,11 @@ import type {
 
 const agentHarnessHost = SERVER_HOSTS['agent-harness'];
 
+/** Named compute tier for a managed coding-agent sandbox. */
+export type SandboxSize = 'small' | 'default' | 'large';
+
+export type SandboxSizeBody = { size: SandboxSize };
+
 /** Authenticated client for controlling live agent sessions. */
 export const agentHarnessServiceClient = {
   create(request: CreateAgentSessionRequest) {
@@ -53,5 +58,30 @@ export const agentHarnessServiceClient = {
       `${agentHarnessHost}/agent-sessions/${sessionId}`,
       { method: 'DELETE' }
     ).then((result) => result.map(() => undefined));
+  },
+
+  getSandboxSize() {
+    return fetchWithToken<SandboxSizeBody>(`${agentHarnessHost}/agent-sandbox-size`, {
+      method: 'GET',
+    });
+  },
+
+  setSandboxSize(size: SandboxSize) {
+    return fetchWithToken<SandboxSizeBody>(`${agentHarnessHost}/agent-sandbox-size`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ size }),
+    });
+  },
+
+  setSessionSandboxSize(sessionId: string, size: SandboxSize) {
+    return fetchWithToken<SandboxSizeBody>(
+      `${agentHarnessHost}/agent-sessions/${sessionId}/sandbox-size`,
+      {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ size }),
+      }
+    );
   },
 };

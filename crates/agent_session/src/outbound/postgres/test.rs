@@ -90,6 +90,7 @@ fn new_session(
         harness: "claude-code".to_string(),
         repo_url: Some("https://github.com/example/example".to_string()),
         workspace: "/workspace".to_string(),
+        sandbox_size: SandboxSize::Default,
     }
 }
 
@@ -183,6 +184,7 @@ async fn create_and_get_round_trips(pool: PgPool) {
         "macro|agent-session-owner@example.com"
     );
     assert_eq!(session.thread_id, None);
+    assert_eq!(session.sandbox_size, SandboxSize::Default);
     assert!(matches!(session.status, SessionStatus::NoMessages));
 }
 
@@ -227,6 +229,49 @@ async fn set_model_updates_only_the_model(pool: PgPool) {
     assert_eq!(
         repo.get(id).await.expect("get session").modified_at,
         modified_at
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn sandbox_size_round_trips_and_user_default_falls_back(pool: PgPool) {
+    let repo = PgAgentSessionRepo::new(pool.clone());
+    let bot_id = create_test_bot(&pool).await;
+    let owner = user_id(OWNER);
+    let id = create_session(&repo, new_session(bot_id, None, None))
+        .await
+        .id;
+
+    assert_eq!(
+        repo.user_sandbox_size(&owner)
+            .await
+            .expect("missing default"),
+        SandboxSize::Default
+    );
+
+    repo.set_sandbox_size(id, SandboxSize::Large)
+        .await
+        .expect("persist session size");
+    assert_eq!(
+        repo.get(id).await.expect("get session").sandbox_size,
+        SandboxSize::Large
+    );
+
+    repo.set_user_sandbox_size(&owner, SandboxSize::Small)
+        .await
+        .expect("persist user default");
+    assert_eq!(
+        repo.user_sandbox_size(&owner).await.expect("user default"),
+        SandboxSize::Small
+    );
+
+    repo.set_user_sandbox_size(&owner, SandboxSize::Large)
+        .await
+        .expect("upsert user default");
+    assert_eq!(
+        repo.user_sandbox_size(&owner)
+            .await
+            .expect("upserted default"),
+        SandboxSize::Large
     );
 }
 

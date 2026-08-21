@@ -24,7 +24,7 @@ use axum::{
     extract::{FromRef, Path, State},
     http::StatusCode,
     response::{IntoResponse, Response},
-    routing::{delete, get, post},
+    routing::{delete, get, post, put},
 };
 use chrono::DateTime;
 use chrono::Utc;
@@ -32,8 +32,8 @@ use entity_access::domain::models::{OwnerAccessLevel, ViewAccessLevel};
 use entity_access::domain::ports::EntityAccessService;
 use entity_access::inbound::axum_extractors::AgentSessionAccessLevelExtractor;
 use macro_authorization::{
-    MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState, UserOrBot,
-    UserOrBotAuthorization,
+    ActingUser, MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState,
+    UserOrBot, UserOrBotAuthorization,
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
@@ -42,7 +42,8 @@ use utoipa::ToSchema;
 
 use crate::domain::error::AgentSessionError;
 use crate::domain::model::{
-    AgentSession, AgentSessionId, Message, SessionBot, SessionStatus, StoredAgentSessionLog,
+    AgentSession, AgentSessionId, Message, SandboxSize, SessionBot, SessionStatus,
+    StoredAgentSessionLog,
 };
 use crate::domain::ports::{
     AgentSessionNotificationRecipient, BotDirectory, BotFacts, ControlEvent,
@@ -201,6 +202,29 @@ where
             "/{session_id}/control",
             post(control_agent_session_handler::<R, Access, Auth>),
         )
+        .route(
+            "/{session_id}/sandbox-size",
+            put(put_agent_session_sandbox_size_handler::<R, Access, Auth>),
+        )
+        .with_state(state)
+}
+
+/// Build the caller-default sandbox size router. Mount at `/agent-sandbox-size`.
+pub fn agent_sandbox_size_router<T, Access, Auth, S>(
+    state: AgentSessionRouterState<T, Access, Auth>,
+) -> Router<S>
+where
+    T: AgentSessionService,
+    Access: EntityAccessService,
+    Auth: MacroAuthorizationService,
+    S: Clone + Send + Sync + 'static,
+{
+    Router::new()
+        .route(
+            "/agent-sandbox-size",
+            get(get_agent_sandbox_size_handler::<T, Access, Auth>)
+                .put(put_agent_sandbox_size_handler::<T, Access, Auth>),
+        )
         .with_state(state)
 }
 
@@ -309,6 +333,8 @@ pub struct AgentSessionResponse {
     pub repo_url: Option<String>,
     /// The directory the session's harness runs in on its runtime.
     pub workspace: String,
+    /// Compute tier of the managed sandbox.
+    pub sandbox_size: SandboxSize,
     /// The ACP session id, if one exists.
     pub acp_session_id: Option<String>,
     /// The session's status.
@@ -332,6 +358,7 @@ impl From<AgentSession> for AgentSessionResponse {
             harness: session.harness,
             repo_url: session.repo_url,
             workspace: session.workspace,
+            sandbox_size: session.sandbox_size,
             acp_session_id: session.acp_session_id.map(|id| id.to_string()),
             status: session.status.into(),
             created_at: session.created_at,
@@ -456,6 +483,109 @@ pub async fn delete_agent_session_handler<
         .await?;
 
     Ok(StatusCode::OK)
+}
+
+/// Request or response body for a named sandbox size.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct SandboxSizeBody {
+    /// Named compute tier.
+    pub size: SandboxSize,
+}
+
+#[utoipa::path(
+    put,
+    path = "/agent-sessions/{session_id}/sandbox-size",
+    tag = "agent-sessions",
+    operation_id = "put_agent_session_sandbox_size",
+    params(("session_id" = Uuid, Path, description = "ID of the agent session")),
+    request_body = SandboxSizeBody,
+    responses(
+        (status = 200, body = SandboxSizeBody),
+        (status = 401, body = String),
+        (status = 403, body = String),
+        (status = 500, body = String),
+    )
+)]
+/// Resize this session's sandbox and remember the size as the owner's default.
+#[tracing::instrument(skip_all, fields(session_id = %session_id, size = %req.size), err(Debug))]
+pub async fn put_agent_session_sandbox_size_handler<
+    R: AgentSessionNotificationRecipient,
+    Access: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
+    _access: AgentSessionAccessLevelExtractor<OwnerAccessLevel, Access, Auth>,
+    State(state): State<AgentSessionControlState<R, Access, Auth>>,
+    Path(session_id): Path<Uuid>,
+    Json(req): Json<SandboxSizeBody>,
+) -> Result<Json<SandboxSizeBody>, AgentSessionApiError> {
+    state
+        .recipient
+        .set_sandbox_size(AgentSessionId::new_from_uuid(session_id), req.size)
+        .await?;
+    Ok(Json(req))
+}
+
+#[utoipa::path(
+    get,
+    path = "/agent-sandbox-size",
+    tag = "agent-sessions",
+    operation_id = "get_agent_sandbox_size",
+    responses(
+        (status = 200, body = SandboxSizeBody),
+        (status = 401, body = String),
+        (status = 500, body = String),
+    )
+)]
+/// Read the caller's default sandbox size for new `@coder` sessions.
+#[tracing::instrument(skip_all, fields(actor = %caller.acting_entity()), err(Debug))]
+pub async fn get_agent_sandbox_size_handler<
+    T: AgentSessionService,
+    Access: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
+    State(state): State<AgentSessionRouterState<T, Access, Auth>>,
+    caller: MacroAuthorizationExtractor<Auth, ActingUser>,
+) -> Result<Json<SandboxSizeBody>, AgentSessionApiError> {
+    let size = state
+        .service
+        .user_sandbox_size(&caller.authorization.user.macro_user_id)
+        .await?;
+    Ok(Json(SandboxSizeBody { size }))
+}
+
+#[utoipa::path(
+    put,
+    path = "/agent-sandbox-size",
+    tag = "agent-sessions",
+    operation_id = "put_agent_sandbox_size",
+    request_body = SandboxSizeBody,
+    responses(
+        (status = 200, body = SandboxSizeBody),
+        (status = 401, body = String),
+        (status = 500, body = String),
+    )
+)]
+/// Set the caller's default sandbox size for the next `@coder` mention.
+#[tracing::instrument(
+    skip_all,
+    fields(actor = %caller.acting_entity(), size = %req.size),
+    err(Debug)
+)]
+pub async fn put_agent_sandbox_size_handler<
+    T: AgentSessionService,
+    Access: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
+    State(state): State<AgentSessionRouterState<T, Access, Auth>>,
+    caller: MacroAuthorizationExtractor<Auth, ActingUser>,
+    Json(req): Json<SandboxSizeBody>,
+) -> Result<Json<SandboxSizeBody>, AgentSessionApiError> {
+    state
+        .service
+        .set_user_sandbox_size(&caller.authorization.user.macro_user_id, req.size)
+        .await?;
+    Ok(Json(req))
 }
 
 /// One entry of a session's protocol log.

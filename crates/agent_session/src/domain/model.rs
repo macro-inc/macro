@@ -9,6 +9,7 @@ use macro_uuid::Uuid;
 // carries - is owned by `agent_fold`, the bottom of the agent session stack,
 // so that this crate can depend on the fold (see `agent_fold::domain::log`).
 // Re-exported here because this is where callers expect session types.
+pub use super::sandbox_size::SandboxSize;
 pub use agent_fold::domain::log::{AgentSessionId, AgentSessionLog, Message};
 pub use agent_fold::domain::model::{
     Author, AuthorKind, FoldEvent, MessageId, OwnedFoldEvent, TurnId,
@@ -47,6 +48,8 @@ pub struct CreateAgentSessionParams {
     pub repo_url: Option<String>,
     /// Absolute directory the harness runs in on its runtime.
     pub workspace: String,
+    /// Compute tier the managed sandbox was spawned with.
+    pub sandbox_size: SandboxSize,
 }
 
 /// A running or historical agent coding session.
@@ -77,6 +80,8 @@ pub struct AgentSession {
     /// and load re-enter it - the directory the session actually ran in,
     /// not whatever the runtime is configured with today.
     pub workspace: String,
+    /// Compute tier of the managed sandbox, snapshotted at spawn.
+    pub sandbox_size: SandboxSize,
     /// ACP session if we have one
     pub acp_session_id: Option<SessionId>,
     pub status: SessionStatus,

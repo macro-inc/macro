@@ -44,7 +44,8 @@ use super::connection::RuntimeAttachment;
 use super::error::{AgentSessionError, Result};
 use super::model::{
     AgentSession, AgentSessionId, AgentSessionLog, AuthorKind, ChannelSession,
-    CreateAgentSessionParams, LogAppended, Message, MessageId, SessionLog, StoredAgentSessionLog,
+    CreateAgentSessionParams, LogAppended, Message, MessageId, SandboxSize, SessionLog,
+    StoredAgentSessionLog,
 };
 use super::ports::{
     AgentConnector, AgentSessionLogRepo, AgentSessionLogWriter, AgentSessionRealtime,
@@ -127,6 +128,28 @@ pub trait AgentSessionService: Send + Sync + 'static {
     /// and a reloaded one are rendered by one implementation rather than two
     /// that have to be kept agreeing. See [`SessionLog`].
     fn session_log(&self, id: AgentSessionId) -> impl Future<Output = Result<SessionLog>> + Send;
+
+    /// Persist the sandbox size this session is running at.
+    fn set_sandbox_size(
+        &self,
+        id: AgentSessionId,
+        size: SandboxSize,
+    ) -> impl Future<Output = Result<()>> + Send;
+
+    /// The user's default sandbox size for new `@coder` sessions.
+    ///
+    /// A missing preference is [`SandboxSize::Default`].
+    fn user_sandbox_size(
+        &self,
+        user_id: &MacroUserIdStr<'static>,
+    ) -> impl Future<Output = Result<SandboxSize>> + Send;
+
+    /// Upsert the user's default sandbox size for the next `@coder` mention.
+    fn set_user_sandbox_size(
+        &self,
+        user_id: &MacroUserIdStr<'static>,
+        size: SandboxSize,
+    ) -> impl Future<Output = Result<()>> + Send;
 }
 
 /// Agent session service backed by one durable repository and local actors.
@@ -327,6 +350,22 @@ where
             entries,
         })
     }
+
+    async fn set_sandbox_size(&self, id: AgentSessionId, size: SandboxSize) -> Result<()> {
+        self.repo.set_sandbox_size(id, size).await
+    }
+
+    async fn user_sandbox_size(&self, user_id: &MacroUserIdStr<'static>) -> Result<SandboxSize> {
+        self.repo.user_sandbox_size(user_id).await
+    }
+
+    async fn set_user_sandbox_size(
+        &self,
+        user_id: &MacroUserIdStr<'static>,
+        size: SandboxSize,
+    ) -> Result<()> {
+        self.repo.set_user_sandbox_size(user_id, size).await
+    }
 }
 
 /// The [`AgentSessionLogRepo`] a session's actor writes through: the durable
@@ -477,6 +516,22 @@ where
 
     async fn set_model(&self, id: AgentSessionId, model: &str) -> Result<()> {
         self.repo.set_model(id, model).await
+    }
+
+    async fn set_sandbox_size(&self, id: AgentSessionId, size: SandboxSize) -> Result<()> {
+        self.repo.set_sandbox_size(id, size).await
+    }
+
+    async fn user_sandbox_size(&self, user_id: &MacroUserIdStr<'static>) -> Result<SandboxSize> {
+        self.repo.user_sandbox_size(user_id).await
+    }
+
+    async fn set_user_sandbox_size(
+        &self,
+        user_id: &MacroUserIdStr<'static>,
+        size: SandboxSize,
+    ) -> Result<()> {
+        self.repo.set_user_sandbox_size(user_id, size).await
     }
 
     async fn delete(&self, id: AgentSessionId) -> Result<()> {

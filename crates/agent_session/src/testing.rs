@@ -7,12 +7,13 @@
 use crate::domain::error::{AgentSessionError, Result};
 use crate::domain::model::{
     AgentSession, AgentSessionId, AgentSessionLog, ChannelSession, CreateAgentSessionParams,
-    LogAppended, SessionBot, SessionStatus, StoredAgentSessionLog,
+    LogAppended, SandboxSize, SessionBot, SessionStatus, StoredAgentSessionLog,
 };
 use crate::domain::ports::{AgentSessionLogRepo, AgentSessionRealtime, AgentSessionRepo};
 use agent_client_protocol::schema::v1::SessionId;
 use agent_runtime_protocol::domain::schema::v0::ToServerMessage;
 use bots::domain::models::BotId;
+use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -28,6 +29,7 @@ use std::sync::{Arc, Mutex};
 pub struct InMemoryAgentSessionRepo {
     sessions: Arc<Mutex<HashMap<AgentSessionId, AgentSession>>>,
     logs: Arc<Mutex<HashMap<AgentSessionId, Vec<StoredAgentSessionLog>>>>,
+    user_sizes: Arc<Mutex<HashMap<String, SandboxSize>>>,
     log_reads: Arc<AtomicUsize>,
     session_reads: Arc<AtomicUsize>,
 }
@@ -110,6 +112,7 @@ impl AgentSessionRepo for InMemoryAgentSessionRepo {
             harness: params.harness,
             repo_url: params.repo_url,
             workspace: params.workspace,
+            sandbox_size: params.sandbox_size,
             acp_session_id: None,
             status: SessionStatus::default(),
             created_at: now,
@@ -187,6 +190,41 @@ impl AgentSessionRepo for InMemoryAgentSessionRepo {
         })?;
         session.model = model.to_owned();
         session.modified_at = chrono::Utc::now();
+        Ok(())
+    }
+
+    async fn set_sandbox_size(&self, id: AgentSessionId, size: SandboxSize) -> Result<()> {
+        let mut sessions = self
+            .sessions
+            .lock()
+            .expect("in-memory session store is not poisoned");
+        let session = sessions.get_mut(&id).ok_or_else(|| {
+            AgentSessionError::Unknown(anyhow::anyhow!("no agent session {}", id.as_uuid()))
+        })?;
+        session.sandbox_size = size;
+        session.modified_at = chrono::Utc::now();
+        Ok(())
+    }
+
+    async fn user_sandbox_size(&self, user_id: &MacroUserIdStr<'static>) -> Result<SandboxSize> {
+        Ok(self
+            .user_sizes
+            .lock()
+            .expect("in-memory session store is not poisoned")
+            .get(user_id.as_ref())
+            .copied()
+            .unwrap_or_default())
+    }
+
+    async fn set_user_sandbox_size(
+        &self,
+        user_id: &MacroUserIdStr<'static>,
+        size: SandboxSize,
+    ) -> Result<()> {
+        self.user_sizes
+            .lock()
+            .expect("in-memory session store is not poisoned")
+            .insert(user_id.as_ref().to_owned(), size);
         Ok(())
     }
 
@@ -300,6 +338,7 @@ pub fn test_agent_session(id: AgentSessionId) -> AgentSession {
         harness: "claude-code".to_string(),
         repo_url: Some("https://github.com/example/example".to_string()),
         workspace: "/workspace".to_string(),
+        sandbox_size: SandboxSize::Default,
         acp_session_id: None,
         status: SessionStatus::NoMessages,
         created_at: now,

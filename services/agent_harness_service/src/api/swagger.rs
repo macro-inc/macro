@@ -1,11 +1,11 @@
 //! OpenAPI document for the agent harness service's session routes.
 
 use agent_runtime_protocol::domain::action::{AgentAction, AgentActionId};
-use agent_session::domain::model::SessionBot;
+use agent_session::domain::model::{SandboxSize, SessionBot};
 use agent_session::inbound::axum_router::{
     self, AgentSessionLogEntryDto, AgentSessionLogResponse, AgentSessionResponse, ControlRequest,
     CreateAgentSessionRequest, CreateAgentSessionResponse, CreateSessionThread, LogDirectionDto,
-    LogFrameDto, SessionStatusDto,
+    LogFrameDto, SandboxSizeBody, SessionStatusDto,
 };
 use utoipa::OpenApi;
 
@@ -18,6 +18,9 @@ use utoipa::OpenApi;
         axum_router::get_agent_session_log_handler,
         axum_router::control_agent_session_handler,
         axum_router::delete_agent_session_handler,
+        axum_router::put_agent_session_sandbox_size_handler,
+        axum_router::get_agent_sandbox_size_handler,
+        axum_router::put_agent_sandbox_size_handler,
     ),
     components(schemas(
         CreateAgentSessionRequest,
@@ -33,6 +36,8 @@ use utoipa::OpenApi;
         SessionBot,
         LogFrameDto,
         LogDirectionDto,
+        SandboxSize,
+        SandboxSizeBody,
     )),
     tags((name = "agent-sessions", description = "Agent sessions"))
 )]

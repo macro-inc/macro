@@ -9,6 +9,11 @@
 export { ActionLine, type ActionLineProps } from './ActionLine';
 export { AgentInput, type AgentInputProps } from './AgentInput';
 export { AgentModelSelector } from './AgentModelSelector';
+export {
+  SandboxSizeSelector,
+  type SandboxSize,
+  type SandboxSizeSelectorProps,
+} from './SandboxSizeSelector';
 export { AnimatedNumber } from './AnimatedNumber';
 export {
   ComposerNotice,

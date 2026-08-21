@@ -15,6 +15,7 @@ use super::types::{DaytonaSettings, Env, GithubToken, Labels, PortPreview, Snaps
 use crate::domain::error::{HarnessError, Result};
 use crate::domain::model::SpawnContainer;
 use crate::domain::ports::ContainerManager;
+use crate::domain::sandbox::{SandboxResizeKind, resources};
 use crate::outbound::managed_containers::ManagedContainers;
 use crate::outbound::provision::{self, SESSION_LABEL};
 use crate::outbound::sidecar::SidecarTransport;
@@ -241,6 +242,7 @@ impl ContainerManager for DaytonaContainerManager {
         let SpawnContainer {
             session_id,
             repo_url,
+            size,
         } = command;
         // `GITHUB_TOKEN` is here for `gh auth setup-git` and the github MCP
         // server. It is also the env var opencode's `github-copilot` provider
@@ -262,7 +264,7 @@ impl ContainerManager for DaytonaContainerManager {
         )]));
         let id = DaytonaSandboxId::new(
             self.client
-                .create(&self.snapshot, env, labels)
+                .create(&self.snapshot, env, labels, resources(size))
                 .await
                 .map_err(unavailable)?,
         );
@@ -288,6 +290,62 @@ impl ContainerManager for DaytonaContainerManager {
                         .restore_failed_stop(id, Instant::now(), IDLE_TIMEOUT);
                 }
                 Err(error)
+            }
+        }
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn resize(
+        &self,
+        session: AgentSessionId,
+        size: agent_session::domain::model::SandboxSize,
+        kind: SandboxResizeKind,
+    ) -> Result<()> {
+        let Some(id) = self
+            .client
+            .find_by_label(SESSION_LABEL, &session.to_string())
+            .await
+            .map_err(unavailable)?
+            .map(DaytonaSandboxId::new)
+        else {
+            return Err(HarnessError::Container(format!(
+                "session {session} has no sandbox to resize"
+            )));
+        };
+        let next = resources(size);
+        match kind {
+            SandboxResizeKind::NoOp => Ok(()),
+            SandboxResizeKind::Hot => {
+                self.client
+                    .resize(id.as_str(), Some(next.cpu), Some(next.memory_gib), None)
+                    .await
+                    .map_err(unavailable)?;
+                self.client
+                    .wait_for_resize(id.as_str(), provision::ENSURE_TIMEOUT)
+                    .await
+                    .map_err(unavailable)?;
+                Ok(())
+            }
+            SandboxResizeKind::Cold => {
+                self.client.stop(id.as_str()).await.map_err(unavailable)?;
+                self.client
+                    .wait_for_stopped(id.as_str(), STOP_TIMEOUT)
+                    .await
+                    .map_err(unavailable)?;
+                self.client
+                    .resize(id.as_str(), Some(next.cpu), Some(next.memory_gib), None)
+                    .await
+                    .map_err(unavailable)?;
+                self.client
+                    .wait_for_resize(id.as_str(), provision::ENSURE_TIMEOUT)
+                    .await
+                    .map_err(unavailable)?;
+                self.client.start(id.as_str()).await.map_err(unavailable)?;
+                self.client
+                    .wait_for_started(id.as_str(), provision::ENSURE_TIMEOUT)
+                    .await
+                    .map_err(unavailable)?;
+                Ok(())
             }
         }
     }

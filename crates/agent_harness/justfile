@@ -41,7 +41,6 @@ ensure-daytona:
       echo "snapshot {{image_name}} already exists, skipping build"
     else
       echo "building snapshot {{image_name}} (slow: the image bakes two nix dev shells)"
-      # 10GB disk is the account's per-sandbox ceiling; raising it needs Daytona support.
       # `--context .` matters twice over. Without any `--context` the CLI
       # auto-detects from COPY lines and misses
       # `COPY sidecar/Cargo.toml sidecar/Cargo.lock ./`; with per-entry contexts
@@ -52,7 +51,7 @@ ensure-daytona:
       ( cd container && daytona snapshot create {{image_name}} \
           --dockerfile Dockerfile \
           --context . \
-          --cpu 4 --memory 8 --disk 10 )
+          --cpu 8 --memory 16 --disk 96 )
     fi
 
 # Build the Daytona snapshot if missing, then boot an agent in a sandbox

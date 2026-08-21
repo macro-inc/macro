@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 
 use super::errors::{NamespaceError, Result};
 use super::types::{CommandOutput, ContainerSpec, Instance, InstanceId, NamespaceToken};
+use crate::domain::sandbox::SandboxResources;
 
 const COMPUTE_SERVICE: &str = "namespace.cloud.compute.v1beta.ComputeService";
 const COMMAND_SERVICE: &str = "namespace.cloud.compute.v1beta.CommandService";
@@ -127,10 +128,11 @@ struct ExportedPortBackendRequest {
     port: u16,
 }
 
-fn configuration_parameters(
-    container: &ContainerSpec,
+fn configuration_parameters<'a>(
+    container: &'a ContainerSpec,
     deadline: String,
-) -> CreateInstanceRequest<'_> {
+    resources: SandboxResources,
+) -> CreateInstanceRequest<'a> {
     let env = container
         .env
         .iter()
@@ -148,8 +150,8 @@ fn configuration_parameters(
 
     CreateInstanceRequest {
         shape: ShapeRequest {
-            virtual_cpu: 2,
-            memory_megabytes: 4096,
+            virtual_cpu: resources.cpu,
+            memory_megabytes: resources.memory_gib * 1024,
             machine_arch: "amd64",
         },
         documented_purpose: "agent_harness agent session",
@@ -189,10 +191,11 @@ impl NamespaceClient {
         &self,
         container: &ContainerSpec,
         lifetime: Duration,
+        resources: SandboxResources,
     ) -> Result<Instance> {
         let deadline = chrono::Utc::now()
             + chrono::TimeDelta::from_std(lifetime).map_err(NamespaceError::LifetimeOutOfRange)?;
-        let request = configuration_parameters(container, deadline.to_rfc3339());
+        let request = configuration_parameters(container, deadline.to_rfc3339(), resources);
         let response: CreateInstanceResponse = self
             .call(&self.base, COMPUTE_SERVICE, "CreateInstance", &request)
             .await?;

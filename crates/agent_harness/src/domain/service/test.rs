@@ -4,6 +4,7 @@
 
 use std::sync::Arc;
 
+use crate::domain::sandbox::SandboxResizeKind;
 use agent_client_protocol::RawJsonRpcMessage;
 use agent_client_protocol::schema::v1::{
     AgentCapabilities, ClientRequest, ContentBlock, InitializeResponse, NewSessionResponse,
@@ -16,7 +17,9 @@ use agent_runtime_protocol::domain::{
     schema::v0::{AcpMessage, SystemEvent, ToRuntimeMessage, ToServerMessage},
 };
 use agent_session::PROTOCOL_VERSION;
-use agent_session::domain::model::{AgentSessionId, CreateAgentSessionParams, Message};
+use agent_session::domain::model::{
+    AgentSessionId, CreateAgentSessionParams, Message, SandboxSize,
+};
 use agent_session::domain::ports::{
     AgentSessionLogRepo as _, AgentSessionNotificationRecipient as _, AgentSessionRepo as _,
     ControlEvent, NoOpRealtime,
@@ -175,6 +178,7 @@ async fn disconnected_session(
             harness: "opencode".to_owned(),
             repo_url: Some("https://github.com/macro-inc/macro".to_owned()),
             workspace: "/workspace".to_owned(),
+            sandbox_size: agent_session::domain::model::SandboxSize::Default,
         },
     )
     .await
@@ -186,6 +190,7 @@ async fn disconnected_session(
         .spawn(SpawnContainer {
             session_id: id,
             repo_url: "https://github.com/macro-inc/macro".to_owned(),
+            size: agent_session::domain::model::SandboxSize::Default,
         })
         .await
         .expect("the original sandbox should exist");
@@ -1136,4 +1141,87 @@ async fn an_announce_whose_bot_does_not_own_the_session_is_dropped() {
         .expect("a foreign announce is dropped, not an error");
 
     assert_eq!(announcer.announced().len(), 0);
+}
+
+#[tokio::test]
+async fn open_spawns_at_the_users_default_size() {
+    let (service, repo, containers, _announcer, _runtimes) = harness();
+    repo.set_user_sandbox_size(&sender(), SandboxSize::Small)
+        .await
+        .expect("the user default should persist");
+    let command = open_command();
+    let id = AgentSessionId::new();
+
+    let open = service.execute(id, HarnessCommand::Open(command));
+    let drive = async {
+        loop {
+            if containers.spawned() == 1 {
+                break;
+            }
+            tokio::task::yield_now().await;
+        }
+        let container = containers
+            .container(session_of(&containers))
+            .expect("the spawned container is findable");
+        complete_handshake(&container).await;
+    };
+    let (opened, _) = tokio::join!(open, drive);
+    opened.expect("open should succeed");
+
+    assert_eq!(containers.spawn_sizes(), [SandboxSize::Small]);
+    assert_eq!(
+        repo.get(id)
+            .await
+            .expect("the session row exists")
+            .sandbox_size,
+        SandboxSize::Small
+    );
+}
+
+#[tokio::test]
+async fn set_sandbox_size_hot_resizes_and_updates_the_user_default() {
+    let (service, repo, containers, _announcer, _runtimes) = harness();
+    let id = disconnected_session(&repo, &containers).await;
+
+    service
+        .set_sandbox_size(id, SandboxSize::Large)
+        .await
+        .expect("hot resize should succeed");
+
+    assert_eq!(
+        containers.resizes(),
+        [(id, SandboxSize::Large, SandboxResizeKind::Hot)]
+    );
+    assert_eq!(
+        repo.get(id).await.expect("session").sandbox_size,
+        SandboxSize::Large
+    );
+    assert_eq!(
+        repo.user_sandbox_size(&sender())
+            .await
+            .expect("user default"),
+        SandboxSize::Large
+    );
+    assert_eq!(containers.resumed(), 0);
+}
+
+#[tokio::test]
+async fn set_sandbox_size_cold_closes_resizes_and_resumes() {
+    let (service, repo, containers, _announcer, _runtimes) = harness();
+    let id = disconnected_session(&repo, &containers).await;
+
+    service
+        .set_sandbox_size(id, SandboxSize::Small)
+        .await
+        .expect("cold resize should succeed");
+
+    assert_eq!(
+        containers.resizes(),
+        [(id, SandboxSize::Small, SandboxResizeKind::Cold)]
+    );
+    assert_eq!(containers.resumed(), 1);
+    assert_eq!(
+        repo.get(id).await.expect("session").sandbox_size,
+        SandboxSize::Small
+    );
 }

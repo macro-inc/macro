@@ -10,7 +10,8 @@ use agent_session::domain::ports::{
 use agent_session::domain::service::AgentSessionService;
 use agent_session::inbound::axum_router::{
     AgentSessionControlState, AgentSessionRouterState, CreateSessionState,
-    agent_session_control_router, agent_session_create_router, agent_session_read_router,
+    agent_sandbox_size_router, agent_session_control_router, agent_session_create_router,
+    agent_session_read_router,
 };
 use anyhow::Context;
 use axum::Router;
@@ -69,12 +70,13 @@ where
     Access: EntityAccessService,
     Auth: MacroAuthorizationService,
 {
-    let agent_sessions = agent_session_read_router(read_state)
+    let agent_sessions = agent_session_read_router(read_state.clone())
         .merge(agent_session_control_router(control_state))
         .merge(agent_session_create_router(create_state));
     Router::new()
         .route("/health", get(health))
         .nest("/agent-sessions", agent_sessions)
+        .merge(agent_sandbox_size_router(read_state))
         .nest("/runtime", runtime_gateway_router(gateway_state))
 }
 

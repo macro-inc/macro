@@ -2,13 +2,15 @@
 
 ## Status
 
-Implementation plan. No code or schema changes have been made as part of this document.
+Implemented. Named tiers, user default, in-place Daytona resize (hot up / cold down), and a size picker on the agent composer.
+
+Disk is 96 GiB on every tier so a live session can hot-resize CPU/RAM without a disk migrate. Changing the picker resizes **this** sandbox and updates the user default for the next `@coder`.
 
 ## Problem
 
 Macro Coder sessions always get one Daytona size, and that size is not chosen in product code. It is baked into the snapshot:
 
-- `crates/agent_harness/justfile` `ensure-daytona` creates `macro-agent-harness` with `--cpu 4 --memory 8 --disk 10`.
+- `crates/agent_harness/justfile` `ensure-daytona` used to create `macro-agent-harness` with `--cpu 4 --memory 8 --disk 10`.
 - The justfile still comments that 10GB disk was the account ceiling. That quota is now raised.
 - `POST /sandbox` in `crates/agent_harness/src/outbound/daytona/client.rs` sends only `snapshot`, `env`, `labels`, and `autoStopInterval`. It does not send CPU, RAM, or disk.
 - The Namespace provider hardcodes 2 vCPU / 4GB RAM and has no disk field.
@@ -23,7 +25,7 @@ The wanted product is three named tiers (`small`, `default`, `large`), with `def
 1. **Named tiers, not raw integers.** The domain type is `SandboxSize::{Small, Default, Large}`. UI and API never send `cpu` / `memory` / `disk`. Those numbers are a provider mapping owned by the harness domain.
 2. **`default` is 8 / 16 / 96.** That is the new Macro Coder size. `small` and `large` are scaled off it (numbers below; confirm `large` against the live Daytona quota before shipping it).
 3. **One snapshot, size at sandbox create.** Do not build three snapshots. Rebuild `macro-agent-harness` at the default (or largest) resource profile, and pass `cpu` / `memory` / `disk` on every `POST /sandbox`. Namespace maps the same tier onto `virtual_cpu` / `memory_megabytes`.
-4. **Size is snapshotted onto the session at spawn and is immutable for that session.** Changing size does not resize a live sandbox in v1. Resume reattaches to the existing box. A new `@coder` thread gets a new session and can use a new size.
+4. **Size is snapshotted onto the session at spawn and can be changed in place.** CPU/RAM upgrades hot-resize a running Daytona sandbox. Downgrades stop, resize, and start it again. Disk never changes. Namespace cannot resize in place.
 5. **User default drives mention spawn.** `@coder` has no settings chrome. The harness reads the mentioning user's default size (falling back to `default`) and writes it onto the new session before `spawn`.
 6. **Sandbox size is not an `AgentAction`.** `AgentAction` is ACP (`prompt`, `set_model`, `compact`, `stop`). Size is harness/container policy. Do not send it to the agent. Use a dedicated settings endpoint for the user default, and a field on the session response for the size this session was spawned with.
 7. **Every authenticated user may pick any tier.** No plan gating, no locks, no team-admin override, no extra receipts. `GET`/`PUT` the caller's own default; mention spawn already knows the sender. Handlers do not branch on who may use `large`.
@@ -40,7 +42,7 @@ The wanted product is three named tiers (`small`, `default`, `large`), with `def
 
 ## Non-goals (v1)
 
-- Mid-session Daytona `resize`.
+- Recreating a sandbox to change size (Daytona CPU/RAM resize in place instead).
 - Per-team or per-org size caps, plan gating, or paywalled `large`.
 - Extra authorization beyond "the caller sets their own default."
 - Billing, metering, or showing remaining Daytona quota in the UI.
@@ -55,9 +57,9 @@ Units match Daytona: CPU cores, memory GiB, disk GiB.
 
 | Tier      | vCPU | RAM | Disk | Notes                                      |
 | --------- | ---- | --- | ---- | ------------------------------------------ |
-| `small`   | 2    | 4   | 20   | Cheap / short tasks                        |
+| `small`   | 2    | 4   | 96   | Cheap / short tasks                        |
 | `default` | 8    | 16  | 96   | The new Macro Coder size                   |
-| `large`   | 16   | 32  | 200  | Confirm against Daytona quota before ship  |
+| `large`   | 16   | 32  | 96   | Same disk so live sessions can hot-resize  |
 
 Namespace create gets the same tier, mapped onto its shape (`virtual_cpu`, `memory_megabytes` = RAM GiB × 1024). It has no disk field today, so disk is Daytona-only until Namespace exposes one.
 

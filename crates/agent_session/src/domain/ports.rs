@@ -173,6 +173,28 @@ pub trait AgentSessionRepo: Send + Sync + 'static {
     fn set_model(&self, id: AgentSessionId, model: &str)
     -> impl Future<Output = Result<()>> + Send;
 
+    /// Persist the sandbox size this session was spawned with, or resized to.
+    fn set_sandbox_size(
+        &self,
+        id: AgentSessionId,
+        size: SandboxSize,
+    ) -> impl Future<Output = Result<()>> + Send;
+
+    /// The user's default sandbox size for new `@coder` sessions.
+    ///
+    /// A missing row is [`SandboxSize::Default`], not an error.
+    fn user_sandbox_size(
+        &self,
+        user_id: &MacroUserIdStr<'static>,
+    ) -> impl Future<Output = Result<SandboxSize>> + Send;
+
+    /// Upsert the user's default sandbox size for the next `@coder` mention.
+    fn set_user_sandbox_size(
+        &self,
+        user_id: &MacroUserIdStr<'static>,
+        size: SandboxSize,
+    ) -> impl Future<Output = Result<()>> + Send;
+
     /// Delete an agent session by id.
     fn delete(&self, id: AgentSessionId) -> impl Future<Output = Result<()>> + Send;
 }
@@ -265,4 +287,11 @@ pub trait AgentSessionNotificationRecipient: Send + Sync + 'static {
         id: AgentSessionId,
         event: ControlEvent,
     ) -> impl Future<Output = Result<AgentActionId>> + Send;
+
+    /// Resize this session's sandbox and remember `size` as the owner's default.
+    fn set_sandbox_size(
+        &self,
+        id: AgentSessionId,
+        size: SandboxSize,
+    ) -> impl Future<Output = Result<()>> + Send;
 }

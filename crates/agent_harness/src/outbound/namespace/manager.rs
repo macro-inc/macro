@@ -10,6 +10,7 @@ use super::types::{ContainerSpec, Instance, NamespaceSettings};
 use crate::domain::error::{HarnessError, Result};
 use crate::domain::model::SpawnContainer;
 use crate::domain::ports::ContainerManager;
+use crate::domain::sandbox::{SandboxResizeKind, resources};
 use crate::outbound::daytona::GithubToken;
 use crate::outbound::provision;
 use crate::outbound::sidecar::SidecarTransport;
@@ -96,7 +97,7 @@ impl ContainerManager for NamespaceContainerManager {
         };
         let instance = self
             .client
-            .create_instance(&container, self.lifetime)
+            .create_instance(&container, self.lifetime, resources(command.size))
             .await
             .map_err(unavailable)?;
         tracing::info!(instance_id = %instance.id, url = %instance.url, "instance created");
@@ -114,6 +115,20 @@ impl ContainerManager for NamespaceContainerManager {
                 }
                 Err(error)
             }
+        }
+    }
+
+    async fn resize(
+        &self,
+        _session: AgentSessionId,
+        _size: agent_session::domain::model::SandboxSize,
+        kind: SandboxResizeKind,
+    ) -> Result<()> {
+        match kind {
+            SandboxResizeKind::NoOp => Ok(()),
+            SandboxResizeKind::Hot | SandboxResizeKind::Cold => Err(HarnessError::Container(
+                "Namespace instances cannot be resized in place".to_owned(),
+            )),
         }
     }
 

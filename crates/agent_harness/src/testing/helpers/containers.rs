@@ -11,12 +11,13 @@ use agent_runtime_protocol::domain::ports::{
 use agent_runtime_protocol::domain::schema::v0::{
     AcpMessage, SystemEvent, ToRuntimeMessage, ToServerMessage,
 };
-use agent_session::domain::model::AgentSessionId;
+use agent_session::domain::model::{AgentSessionId, SandboxSize};
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender, unbounded_channel};
 
 use crate::domain::error::{HarnessError, Result};
 use crate::domain::model::SpawnContainer;
 use crate::domain::ports::ContainerManager;
+use crate::domain::sandbox::SandboxResizeKind;
 use crate::testing::helpers::agent::FakeAgent;
 
 /// A container connection driven by hand.
@@ -196,6 +197,8 @@ impl TransportReceiver<ToServerMessage> for ContainerReceiver {
 pub struct MockContainerManager {
     containers: Arc<Mutex<HashMap<AgentSessionId, ContainerMock>>>,
     spawn_error: Arc<Mutex<Option<String>>>,
+    spawn_sizes: Arc<Mutex<Vec<SandboxSize>>>,
+    resizes: Arc<Mutex<Vec<(AgentSessionId, SandboxSize, SandboxResizeKind)>>>,
     resumes: Arc<AtomicUsize>,
     teardowns: Arc<AtomicUsize>,
 }
@@ -245,6 +248,24 @@ impl MockContainerManager {
         self.teardowns.load(Ordering::Relaxed)
     }
 
+    /// Sizes requested at spawn, in order.
+    #[must_use]
+    pub fn spawn_sizes(&self) -> Vec<SandboxSize> {
+        self.spawn_sizes
+            .lock()
+            .expect("spawn sizes lock should not be poisoned")
+            .clone()
+    }
+
+    /// Resize requests, in order.
+    #[must_use]
+    pub fn resizes(&self) -> Vec<(AgentSessionId, SandboxSize, SandboxResizeKind)> {
+        self.resizes
+            .lock()
+            .expect("resizes lock should not be poisoned")
+            .clone()
+    }
+
     fn lock(&self) -> std::sync::MutexGuard<'_, HashMap<AgentSessionId, ContainerMock>> {
         self.containers
             .lock()
@@ -264,9 +285,31 @@ impl ContainerManager for MockContainerManager {
         {
             return Err(HarnessError::Container(message));
         }
+        self.spawn_sizes
+            .lock()
+            .expect("spawn sizes lock should not be poisoned")
+            .push(command.size);
         let container = ContainerMock::default();
         self.lock().insert(command.session_id, container.clone());
         Ok(container)
+    }
+
+    async fn resize(
+        &self,
+        session: AgentSessionId,
+        size: SandboxSize,
+        kind: SandboxResizeKind,
+    ) -> Result<(), HarnessError> {
+        if kind != SandboxResizeKind::NoOp && !self.lock().contains_key(&session) {
+            return Err(HarnessError::Container(format!(
+                "no sandbox was ever spawned for {session}"
+            )));
+        }
+        self.resizes
+            .lock()
+            .expect("resizes lock should not be poisoned")
+            .push((session, size, kind));
+        Ok(())
     }
 
     async fn resume(&self, session: AgentSessionId) -> Result<ContainerMock, HarnessError> {

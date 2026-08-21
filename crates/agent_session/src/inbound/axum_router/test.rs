@@ -77,6 +77,7 @@ impl SessionOpener for RecordingOpener {
             harness: "opencode".to_owned(),
             repo_url: request.repo_url.clone(),
             workspace: request.workspace.clone(),
+            sandbox_size: crate::domain::model::SandboxSize::Default,
             acp_session_id: None,
             status: SessionStatus::NoMessages,
             created_at: Utc::now(),

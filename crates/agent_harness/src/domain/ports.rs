@@ -1,12 +1,13 @@
 //! Outbound capabilities required by the harness domain.
 
 use agent_session::domain::connection::RuntimeAttachment;
-use agent_session::domain::model::AgentSessionId;
+use agent_session::domain::model::{AgentSessionId, SandboxSize};
 use agent_session::domain::ports::AgentConnector;
 use bot_id::BotId;
 
 use super::error::Result;
 use super::model::{SessionAnnouncement, SpawnContainer};
+use super::sandbox::SandboxResizeKind;
 
 #[cfg(test)]
 mod test;
@@ -55,6 +56,17 @@ pub trait ContainerManager: Send + Sync + 'static {
         &self,
         command: SpawnContainer,
     ) -> impl Future<Output = Result<Self::Transport>> + Send;
+
+    /// Change a live sandbox's compute to `size`.
+    ///
+    /// [`SandboxResizeKind::Hot`] must not stop the sandbox. [`SandboxResizeKind::Cold`]
+    /// may stop, resize, and start it again. Disk is never changed.
+    fn resize(
+        &self,
+        session: AgentSessionId,
+        size: SandboxSize,
+        kind: SandboxResizeKind,
+    ) -> impl Future<Output = Result<()>> + Send;
 
     /// Reattach to a session's existing container, starting it if stopped.
     fn resume(
