@@ -360,7 +360,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         email_service: email_service_for_tools.clone(),
         activity_tool_context: ai_tools::build_activity_tool_context(
             pool.clone(),
-            properties_service,
+            properties_service.clone(),
             entity_access_service.clone(),
         ),
         document_tool_context: document_tool_context.clone(),
