@@ -18,6 +18,7 @@ const REQUIRED_NON_RUST: &[&str] = &[
     "postgres",
     "redis",
     "kafka",
+    "search",
     "fusionauth",
     "localstack",
     "mailpit",
