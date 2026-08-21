@@ -158,12 +158,20 @@ pub fn push_nix_cache(targets: &str) -> Step<Run> {
 /// and `RUSTC_WRAPPER=sccache`) without selecting an sccache provider or
 /// configuring an external Nix binary cache. Jobs that compile Rust can follow
 /// this with [`configure_namespace_sccache`] to use Namespace's official remote
-/// cache. Requires [`setup_nix`] first.
+/// cache. Requires [`setup_nix`] first. The composite action defaults to the
+/// `default` flake shell when no `shell` input is passed.
 pub fn setup_dev_shell() -> Step<Use> {
     uses_local(
         "Setup Nix dev shell",
         xtask_paths::repo_dir!(".github/actions/setup-nix-dev-shell"),
     )
+}
+
+/// [`setup_dev_shell`] for a named `devShells.<name>` flake output. The
+/// `macrod` Linux jobs use `agent-daemon` so they do not realize the default
+/// shell's hermes-agent input.
+pub fn setup_dev_shell_named(name: &str) -> Step<Use> {
+    setup_dev_shell().add_with(("shell", name))
 }
 
 /// Mount the Namespace profile's persisted cache volume: `cache: rust` persists

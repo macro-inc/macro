@@ -1073,6 +1073,29 @@
               BINDGEN_EXTRA_CLANG_ARGS = "-I${pkgs.glibc.dev}/include -I${pkgs.gcc.cc}/lib/gcc/${pkgs.stdenv.hostPlatform.config}/${pkgs.gcc.version}/include";
             }
           );
+
+        # Tools for the self-hosted `macrod` musl builds (see
+        # `build_agent_daemon_on_tag`). The default shell also carries
+        # hermes-agent, whose GitHub tarball + npm/python tree has taken
+        # down every Linux daemon job so far — either a 429 fetching the
+        # flake input, or the nix-daemon dying while realizing it. This
+        # shell is only the rust toolchain, zig, and cmake, so
+        # `nix print-dev-env .#agent-daemon` does not force that input.
+        agent-daemon = pkgs.mkShell {
+          packages = [
+            rustToolchain
+            pkgs.cargo-zigbuild
+            pkgs.zig
+            pkgs.cmake
+            # openssl-src's Configure is perl; aws-lc-sys uses cmake.
+            pkgs.perl
+            pkgs.pkg-config
+            pkgs.sccache
+          ];
+          RUSTC_WRAPPER = "${pkgs.sccache}/bin/sccache";
+          CARGO_INCREMENTAL = "0";
+          AWS_LC_SYS_CMAKE_BUILDER = "1";
+        };
       };
     };
 }
