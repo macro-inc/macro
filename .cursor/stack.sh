@@ -18,7 +18,8 @@ fi
 
 \cd "${WORKSPACE_ROOT}"
 build_local_stack_binaries
-just stack up --no-doppler --build-aux-services --binaries-dir "${LOCAL_STACK_BINS}/bin"
+stack_doppler_args
+just stack up "${doppler_args[@]}" --build-aux-services --binaries-dir "${LOCAL_STACK_BINS}/bin"
 ensure_docker_bridge_forwarding
 
 echo "cursor-cloud stack: app ready"

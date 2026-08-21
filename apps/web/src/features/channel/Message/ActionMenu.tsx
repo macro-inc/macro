@@ -1,4 +1,5 @@
 import { recordEmojiUsage } from '@core/component/Emoji/emojiUsage';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import StarIcon from '@icon/wide-star.svg';
 import TaskIcon from '@icon/wide-task.svg';
 import ReplyIcon from '@phosphor/arrow-bend-up-left.svg';
@@ -8,8 +9,19 @@ import EditIcon from '@phosphor/pencil-simple.svg';
 import AddEmojiIcon from '@phosphor/smiley.svg';
 import TrashIcon from '@phosphor/trash.svg';
 import { Button, cn, Layer } from '@ui';
-import { type Component, createSignal, For, type JSX, Show } from 'solid-js';
-import { useMessage, useMessageActions } from './context';
+import {
+  type Component,
+  createSignal,
+  For,
+  type JSX,
+  onCleanup,
+  Show,
+} from 'solid-js';
+import {
+  useMessage,
+  useMessageActionMenuVisibility,
+  useMessageActions,
+} from './context';
 import { EmojiReactionPopover } from './EmojiReactionPopover';
 import { HoverActions } from './HoverActions';
 import { renderIcon } from './render-icon';
@@ -62,10 +74,18 @@ function ActionButton(props: {
   );
 }
 
-export function ActionMenu(props: ActionMenuProps) {
+function ActionMenuContent(props: ActionMenuProps) {
   const message = useMessage();
   const actions = useMessageActions();
+  const actionMenuVisibility = useMessageActionMenuVisibility();
   const [emojiMenuOpen, setEmojiMenuOpen] = createSignal(false);
+
+  const handleEmojiMenuOpenChange = (isOpen: boolean) => {
+    setEmojiMenuOpen(isOpen);
+    actionMenuVisibility.setPersistent(isOpen);
+  };
+
+  onCleanup(() => actionMenuVisibility.setPersistent(false));
 
   const handleReaction = (emoji: string, event?: MessageActionEvent) => {
     void actions?.onReact?.({
@@ -166,7 +186,7 @@ export function ActionMenu(props: ActionMenuProps) {
               <EmojiReactionPopover
                 placement="left"
                 open={emojiMenuOpen()}
-                onOpenChange={setEmojiMenuOpen}
+                onOpenChange={handleEmojiMenuOpenChange}
                 onEmojiSelect={(emoji) => {
                   handleReaction(emoji);
                 }}
@@ -210,6 +230,16 @@ export function ActionMenu(props: ActionMenuProps) {
           </div>
         </Layer>
       </HoverActions>
+    </Show>
+  );
+}
+
+export function ActionMenu(props: ActionMenuProps) {
+  const actionMenuVisibility = useMessageActionMenuVisibility();
+
+  return (
+    <Show when={actionMenuVisibility.visible() && !isTouchDevice()}>
+      <ActionMenuContent {...props} />
     </Show>
   );
 }

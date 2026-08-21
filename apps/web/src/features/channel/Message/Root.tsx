@@ -1,7 +1,11 @@
 import { stickyGate } from '@core/util/debounce';
 import { cn } from '@ui';
-import { type JSX, splitProps } from 'solid-js';
-import { MessageActionsProvider, MessageProvider } from './context';
+import { createSignal, type JSX, splitProps } from 'solid-js';
+import {
+  MessageActionMenuVisibilityProvider,
+  MessageActionsProvider,
+  MessageProvider,
+} from './context';
 import type { MessageActions, MessageData } from './types';
 
 /**
@@ -10,6 +14,9 @@ import type { MessageActions, MessageData } from './types';
  * duration in index.css.
  */
 const TARGETED_FADE_OUT_MS = 500;
+const ACTION_MENU_POINTER_VISIBLE = 1;
+const ACTION_MENU_FOCUS_VISIBLE = 2;
+const ACTION_MENU_PERSISTENT = 4;
 
 type RootProps = JSX.HTMLAttributes<HTMLDivElement> & {
   message: MessageData;
@@ -23,6 +30,17 @@ type RootProps = JSX.HTMLAttributes<HTMLDivElement> & {
   targeted?: boolean;
 };
 
+function callEventHandler<E extends Event>(
+  event: E & { currentTarget: HTMLDivElement; target: Element },
+  handler: JSX.EventHandlerUnion<HTMLDivElement, E> | undefined
+) {
+  if (typeof handler === 'function') {
+    handler(event);
+  } else if (handler) {
+    handler[0](handler[1], event);
+  }
+}
+
 export function Root(props: RootProps) {
   const [local, rest] = splitProps(props, [
     'children',
@@ -31,7 +49,24 @@ export function Root(props: RootProps) {
     'actions',
     'selected',
     'targeted',
+    'onPointerEnter',
+    'onPointerLeave',
+    'onFocusIn',
+    'onFocusOut',
   ]);
+
+  const [actionMenuVisibilityFlags, setActionMenuVisibilityFlags] =
+    createSignal(0);
+  const setActionMenuVisibilityFlag = (flag: number, visible: boolean) => {
+    setActionMenuVisibilityFlags((current) =>
+      visible ? current | flag : current & ~flag
+    );
+  };
+  const actionMenuVisibility = {
+    visible: () => actionMenuVisibilityFlags() !== 0,
+    setPersistent: (persistent: boolean) =>
+      setActionMenuVisibilityFlag(ACTION_MENU_PERSISTENT, persistent),
+  };
 
   // When the message stops being targeted, the accent fades out instead of
   // cutting off: the sticky gate holds for the fade window after `targeted`
@@ -51,12 +86,38 @@ export function Root(props: RootProps) {
       data-selected={local.selected ? '' : undefined}
       data-targeted={local.targeted ? '' : undefined}
       data-targeted-fading={targetFading() ? '' : undefined}
+      onPointerEnter={(event) => {
+        setActionMenuVisibilityFlag(ACTION_MENU_POINTER_VISIBLE, true);
+        callEventHandler(event, local.onPointerEnter);
+      }}
+      onPointerLeave={(event) => {
+        setActionMenuVisibilityFlag(ACTION_MENU_POINTER_VISIBLE, false);
+        callEventHandler(event, local.onPointerLeave);
+      }}
+      onFocusIn={(event) => {
+        setActionMenuVisibilityFlag(ACTION_MENU_FOCUS_VISIBLE, true);
+        callEventHandler(event, local.onFocusIn);
+      }}
+      onFocusOut={(event) => {
+        const nextTarget = event.relatedTarget;
+        if (
+          !(
+            nextTarget instanceof Node &&
+            event.currentTarget.contains(nextTarget)
+          )
+        ) {
+          setActionMenuVisibilityFlag(ACTION_MENU_FOCUS_VISIBLE, false);
+        }
+        callEventHandler(event, local.onFocusOut);
+      }}
       {...rest}
     >
       <div class="absolute h-full w-1 left-0 top-0 bg-accent opacity-0 message-accent-bar" />
       <MessageProvider value={() => local.message}>
         <MessageActionsProvider value={local.actions}>
-          {props.children}
+          <MessageActionMenuVisibilityProvider value={actionMenuVisibility}>
+            {props.children}
+          </MessageActionMenuVisibilityProvider>
         </MessageActionsProvider>
       </MessageProvider>
     </div>

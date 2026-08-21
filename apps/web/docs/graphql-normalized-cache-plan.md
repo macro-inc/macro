@@ -179,10 +179,21 @@ One Rust core engine, two hosts:
 
 **Decision: Turso-backed persistence over OPFS, with one coordinated engine
 owner across tabs.** The coordinator routes every request to the current
-engine worker and replaces that owner after abrupt loss. Browsers missing the
-required worker, lock, or OPFS capabilities use a storage-free no-op cache
-host. Tauri detection selects the native transport before browser capability
-checks. All paths remain behind the same `CacheHost` interface.
+engine worker and replaces that owner after abrupt loss. Browser worker links
+use Effect's scoped worker transport (`Worker` plus the
+`@effect/platform-browser` parent/runner adapters): Effect owns readiness,
+message-loop fibers, typed transport failures, and close framing. The elected
+engine also tracks every admitted request in a scoped `FiberSet`; graceful
+drain waits for that set to empty before closing the core, runner, and worker.
+The cache's validated envelopes, request ids, Web Locks, owner epochs,
+heartbeats, and replay policy remain application-owned. A normal `pagehide`
+uses a fenced navigation-departure message: the page terminates its dedicated
+worker, but the next owner opens the existing OPFS database. Only an
+unannounced liveness, heartbeat, transport, or engine failure selects
+`wipe-before-open`. Browsers missing the required worker, lock, or OPFS
+capabilities use a storage-free no-op cache host. Tauri
+detection selects the native transport before browser capability checks. All
+paths remain behind the same `CacheHost` interface.
 
 ### 4.3 Storage backends
 
@@ -294,8 +305,11 @@ apps/web/src/lib/graphql-cache/ # JS glue
 - ~~JS glue~~ (`apps/web/src/lib/graphql-cache/`, alias `@graphql-cache/*`):
   wire protocol (`protocol.ts`), `CacheWorkerCore` + SharedWorker entry,
   and `createWorkerCacheHost` implementing `CacheHost` (with a storage-free
-  no-op host when SharedWorker is unavailable). Type-checked; end-to-end browser exercise
-  happens with the Phase 4 exchange integration.
+  no-op host when SharedWorker is unavailable). The page↔coordinator and
+  coordinator↔engine links run through Effect's browser Worker/WorkerRunner
+  protocol; cache-specific routing, fencing, and validation stay above that
+  transport. Type-checked; end-to-end browser exercise happens with the Phase
+  4 exchange integration.
 - ~~Tauri host~~ (`apps/web/tauri/graphql_cache_plugin`, in the *tauri*
   workspace — it needs the patched tauri fork pinned there; path-deps on
   `crates/client/{cache-core,cache-turso}`): engine behind an async mutex

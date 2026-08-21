@@ -13,7 +13,9 @@ export function HoverActions(props: HoverActionsProps) {
     <div
       class={cn(
         'absolute right-4 top-0 -translate-y-1/2 z-10',
-        props.persistentVisible ? '' : 'hidden group-hover/message:block',
+        props.persistentVisible
+          ? ''
+          : 'hidden group-hover/message:block group-focus-within/message:block',
         isTouchDevice() && 'hidden',
         props.class
       )}
