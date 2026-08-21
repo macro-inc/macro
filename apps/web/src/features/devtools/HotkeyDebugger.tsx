@@ -2,7 +2,11 @@ import { SplitHeaderLeft } from '@components/app/split-layout/components/SplitHe
 import { StaticSplitLabel } from '@components/app/split-layout/components/SplitLabel';
 import { activeScope, hotkeyScopeTree, pressedKeys } from '@core/hotkey/state';
 import type { HotkeyCommand, ValidHotkey } from '@core/hotkey/types';
-import { getKeyString, prettyPrintHotkeyString } from '@core/hotkey/utils';
+import {
+  getCommandsForHotkey,
+  getKeyString,
+  prettyPrintHotkeyString,
+} from '@core/hotkey/utils';
 import { cn } from '@ui';
 import { createMemo, For, Show } from 'solid-js';
 
@@ -30,11 +34,23 @@ export default function HotkeyDebugger() {
     let current = hotkeyScopeTree.get(active);
     let scopeLevel = 0;
     while (current) {
-      const scopeCommands = [...current.commands];
-      for (const command of scopeCommands) {
+      const scopeNode = current;
+      for (const command of scopeNode.commands) {
         const hotkeys = command.hotkeys ?? [];
-        const hotkeyIsShadowed = hotkeys.some((hk) => hotkeySet.has(hk));
-        for (const hk of hotkeys) hotkeySet.add(hk);
+        // A command eclipsed within its own scope (a later 'override' on all
+        // of its keys) can't fire: mark it shadowed and don't let it claim
+        // keys for the cross-scope shadow check — otherwise the override
+        // that actually runs would be the one shown struck through.
+        const isEclipsed =
+          hotkeys.length > 0 &&
+          !hotkeys.some((hk) =>
+            getCommandsForHotkey(scopeNode, hk).includes(command)
+          );
+        const hotkeyIsShadowed =
+          isEclipsed || hotkeys.some((hk) => hotkeySet.has(hk));
+        if (!isEclipsed) {
+          for (const hk of hotkeys) hotkeySet.add(hk);
+        }
         out.push({
           ...command,
           scopeLevel,
