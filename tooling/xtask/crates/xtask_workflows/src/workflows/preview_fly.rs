@@ -93,8 +93,7 @@ fn deploy() -> Job {
         .permissions(
             Permissions::default()
                 .contents(Level::Read)
-                .pull_requests(Level::Write)
-                .packages(Level::Read),
+                .pull_requests(Level::Write),
         )
         .add_env(("FLY_API_TOKEN", vars::FLY_API_TOKEN))
         .add_env(("APP_NAME", APP_NAME))
@@ -280,36 +279,9 @@ fn build_artifacts() -> Step<Run> {
             set -euo pipefail
             docker compose --project-directory . -p macro -f docker/docker-compose.yml build \
               search sync_service websocket_service lexical_service ai_editing_worker
-            # Sandboxes are not a compose service, so they never appear in
-            # `config --images`. Pull GHCR :latest unless this PR touched
-            # container/; otherwise (or if the pull fails) build here so the
-            # premirror and deploy loops can load the local tag.
-            tag="$LOCAL_SANDBOX_IMAGE"
-            ghcr="$SANDBOX_GHCR_IMAGE:latest"
-            if docker image inspect "$tag" >/dev/null 2>&1; then
-              echo "sandbox image $tag already present"
-            else
-              dockerfile_changed=
-              if [ -n "${PREVIEW_BASE_SHA:-}" ] \
-                  && git fetch --depth=1 origin "$PREVIEW_BASE_SHA" >/dev/null 2>&1 \
-                  && ! git diff --quiet "$PREVIEW_BASE_SHA" HEAD -- crates/agent_harness/container; then
-                dockerfile_changed=1
-              fi
-              pulled=
-              if [ -z "$dockerfile_changed" ] && [ -n "${GITHUB_TOKEN:-}" ]; then
-                if echo "$GITHUB_TOKEN" | docker login ghcr.io -u "${GITHUB_ACTOR:-}" --password-stdin \
-                    && docker pull "$ghcr" \
-                    && docker tag "$ghcr" "$tag"; then
-                  pulled=1
-                  echo "pulled $ghcr"
-                else
-                  echo "GHCR pull of $ghcr failed; building $tag" >&2
-                fi
-              fi
-              if [ -z "$pulled" ]; then
-                docker build --tag "$tag" crates/agent_harness/container
-              fi
-            fi
+            # Not a compose service, so `config --images` never lists it.
+            # BuildKit cache on this runner is the freshness check.
+            docker build --tag "$LOCAL_SANDBOX_IMAGE" crates/agent_harness/container
             # The image BUILD above is fatal; the premirror below is a pure
             # optimization with an authoritative fallback (the deploy step's
             # mirror loop), so its failure only costs a slower push later.
@@ -460,16 +432,7 @@ fn build_artifacts() -> Step<Run> {
             fi
     "#})
         .add_env(("FLY_ORG", "${{ vars.FLY_ORG || secrets.FLY_ORG }}"))
-        // Quoted heredocs (`<<'LANE'`) must read these from the process env;
-        // interpolating `${{ secrets.GITHUB_TOKEN }}` inside the lane file
-        // would bake the token into the runner's script on disk.
-        .add_env(("GITHUB_TOKEN", "${{ secrets.GITHUB_TOKEN }}"))
-        .add_env((
-            "PREVIEW_BASE_SHA",
-            "${{ github.event.pull_request.base.sha }}",
-        ))
         .add_env(("LOCAL_SANDBOX_IMAGE", vars::AGENT_HARNESS_LOCAL_IMAGE))
-        .add_env(("SANDBOX_GHCR_IMAGE", vars::AGENT_HARNESS_GHCR_IMAGE))
 }
 
 /// When the bake dies (typically the backend health gate), the answer is in

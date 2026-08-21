@@ -27,18 +27,13 @@ fn skips_truthy_non_true_values() {
 }
 
 #[test]
-fn default_tag_pulls_ghcr_before_building() {
+fn builds_the_configured_tag_when_local_containers_are_on() {
     assert_eq!(
         EnsurePlan::from_env(&env_with(&[("DEV_DANGEROUS_LOCAL_CONTAINERS", "true")])),
         Some(EnsurePlan {
             tag: DEFAULT_LOCAL_TAG.to_owned(),
-            pull_ghcr: true,
         })
     );
-}
-
-#[test]
-fn custom_tag_does_not_pull_or_retag_ghcr() {
     assert_eq!(
         EnsurePlan::from_env(&env_with(&[
             ("DEV_DANGEROUS_LOCAL_CONTAINERS", "true"),
@@ -46,30 +41,14 @@ fn custom_tag_does_not_pull_or_retag_ghcr() {
         ])),
         Some(EnsurePlan {
             tag: "my-sandbox:dev".to_owned(),
-            pull_ghcr: false,
         })
     );
 }
 
 #[test]
-fn docker_arg_builders_match_the_cli() {
-    assert_eq!(
-        image_inspect_args(DEFAULT_LOCAL_TAG),
-        ["image", "inspect", DEFAULT_LOCAL_TAG]
-    );
-    assert_eq!(pull_args(GHCR_LATEST), ["pull", GHCR_LATEST]);
-    assert_eq!(
-        tag_args(GHCR_LATEST, DEFAULT_LOCAL_TAG),
-        ["tag", GHCR_LATEST, DEFAULT_LOCAL_TAG]
-    );
+fn docker_build_args_match_the_cli() {
     assert_eq!(
         build_args(DEFAULT_LOCAL_TAG, Path::new(CONTEXT_REL)),
         ["build", "--tag", DEFAULT_LOCAL_TAG, CONTEXT_REL]
     );
-}
-
-#[test]
-fn ghcr_latest_is_the_image_plus_latest() {
-    assert_eq!(GHCR_LATEST, format!("{GHCR_IMAGE}:latest"));
-    assert_eq!(DEFAULT_LOCAL_TAG, "macro-agent-harness:latest");
 }

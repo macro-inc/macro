@@ -2,6 +2,19 @@
 # Source: tooling/xtask/crates/xtask_workflows/src/workflows/ensure_daytona_snapshot.rs
 name: Ensure Daytona Snapshot
 'on':
+  pull_request:
+    types:
+    - opened
+    - synchronize
+    - reopened
+    branches:
+    - main
+    paths:
+    - crates/agent_harness/container/**
+    - crates/agent_harness/justfile
+    - nix/cloud-storage.nix
+    - tooling/xtask/crates/xtask_workflows/src/workflows/ensure_daytona_snapshot.rs
+    - '.github/workflows/ensure_daytona_snapshot.yml'
   push:
     branches:
     - main
@@ -17,6 +30,7 @@ permissions:
   packages: write
 jobs:
   ensure-snapshot:
+    if: github.event_name != 'pull_request'
     name: Ensure macro-agent-harness snapshot
     runs-on: namespace-profile-linux-small
     steps:
@@ -47,6 +61,7 @@ jobs:
       env:
         DAYTONA_API_KEY: ${{ secrets.DAYTONA_API_KEY }}
   publish-image:
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     name: Publish sandbox image to GHCR
     runs-on: namespace-profile-linux-mid
     timeout-minutes: 90
@@ -70,13 +85,16 @@ jobs:
       run: |
         set -euo pipefail
         image=ghcr.io/macro-inc/macro-agent-harness
+        tags=(--tag "$image:$GITHUB_SHA")
+        if [ "${GITHUB_REF:-}" = "refs/heads/main" ]; then
+          tags+=(--tag "$image:latest")
+        fi
         docker buildx build \
           --platform linux/amd64,linux/arm64 \
-          --tag "$image:$GITHUB_SHA" \
-          --tag "$image:latest" \
+          "${tags[@]}" \
           --push \
           crates/agent_harness/container
       shell: bash
 concurrency:
-  group: ${{ github.workflow }}
+  group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: false

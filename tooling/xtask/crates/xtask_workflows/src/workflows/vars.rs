@@ -106,8 +106,7 @@ pub const BUN_CACHE_VOLUME_DIR: &str = "/home/runner/.bun/install/cache";
 pub const PREVIEW_SNAPSHOT_VOLUME_DIR: &str = "/home/runner/.cache/macro-preview-snapshots";
 
 /// GHCR repository for the agent-harness sandbox image (the same Dockerfile
-/// Daytona snapshots). Keep in sync with
-/// `xtask_local::local::sandbox_image::GHCR_IMAGE`.
+/// Daytona snapshots). Pushed as `:$SHA` on PRs and `:$SHA` + `:latest` on main.
 pub const AGENT_HARNESS_GHCR_IMAGE: &str = "ghcr.io/macro-inc/macro-agent-harness";
 
 /// Local Docker tag `just run_local` / Fly previews load. Keep in sync with

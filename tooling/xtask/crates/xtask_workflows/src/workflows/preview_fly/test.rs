@@ -7,9 +7,12 @@ fn rendered() -> String {
 }
 
 #[test]
-fn deploy_can_read_ghcr_packages() {
+fn deploy_does_not_need_ghcr_packages() {
     let yaml = rendered();
-    assert!(yaml.contains("packages: read"), "{yaml}");
+    assert!(
+        !yaml.contains("packages: read"),
+        "preview builds the sandbox image locally: {yaml}"
+    );
 }
 
 #[test]
@@ -31,45 +34,18 @@ fn both_image_loops_include_the_sandbox_tag() {
 }
 
 #[test]
-fn images_lane_reads_token_from_env() {
-    let yaml = rendered();
-    assert!(yaml.contains("PREVIEW_BASE_SHA"), "{yaml}");
-    assert!(
-        yaml.contains("echo \"$GITHUB_TOKEN\" | docker login ghcr.io"),
-        "{yaml}"
-    );
-    assert!(
-        !yaml.contains("${{ github.token }}"),
-        "token must not be interpolated into a quoted lane: {yaml}"
-    );
-    assert!(
-        yaml.contains("github.event.pull_request.base.sha"),
-        "{yaml}"
-    );
-}
-
-#[test]
-fn images_lane_builds_when_container_differs_from_base() {
+fn images_lane_always_builds_the_sandbox_image() {
     let yaml = rendered();
     assert!(
-        yaml.contains(
-            "git diff --quiet \"$PREVIEW_BASE_SHA\" HEAD -- crates/agent_harness/container"
-        ),
+        yaml.contains("docker build --tag \"$LOCAL_SANDBOX_IMAGE\" crates/agent_harness/container"),
         "{yaml}"
     );
     assert!(
-        yaml.contains("docker build --tag \"$tag\" crates/agent_harness/container"),
-        "{yaml}"
+        !yaml.contains("PREVIEW_BASE_SHA"),
+        "git-diff vs base is unnecessary when we always build: {yaml}"
     );
     assert!(
-        yaml.contains(&format!(
-            "SANDBOX_GHCR_IMAGE: {}",
-            vars::AGENT_HARNESS_GHCR_IMAGE
-        )),
-        "{yaml}"
-    );
-    assert!(
-        yaml.contains("ghcr=\"$SANDBOX_GHCR_IMAGE:latest\""),
-        "{yaml}"
+        !yaml.contains("SANDBOX_GHCR_IMAGE"),
+        "preview should not pull GHCR: {yaml}"
     );
 }

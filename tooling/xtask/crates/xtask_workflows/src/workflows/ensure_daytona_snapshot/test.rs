@@ -31,7 +31,11 @@ fn publish_job_pushes_multiarch_ghcr_tags() {
         "{yaml}"
     );
     assert!(yaml.contains(r#"--tag "$image:$GITHUB_SHA""#), "{yaml}");
-    assert!(yaml.contains(r#"--tag "$image:latest""#), "{yaml}");
+    assert!(yaml.contains(r#"tags+=(--tag "$image:latest")"#), "{yaml}");
+    assert!(
+        yaml.contains("refs/heads/main"),
+        "latest must only be tagged on main: {yaml}"
+    );
     assert!(yaml.contains("crates/agent_harness/container"), "{yaml}");
 }
 
@@ -49,9 +53,23 @@ fn login_reads_token_from_env_not_the_script_body() {
 }
 
 #[test]
-fn daytona_job_stays_on_the_small_runner() {
+fn daytona_job_stays_on_the_small_runner_and_skips_prs() {
     let yaml = rendered();
     assert!(yaml.contains("namespace-profile-linux-small"), "{yaml}");
     assert!(yaml.contains("namespace-profile-linux-mid"), "{yaml}");
     assert!(yaml.contains("ensure-daytona"), "{yaml}");
+    assert!(
+        yaml.contains("github.event_name != 'pull_request'"),
+        "{yaml}"
+    );
+}
+
+#[test]
+fn publish_runs_on_same_repo_pull_requests() {
+    let yaml = rendered();
+    assert!(yaml.contains("pull_request:"), "{yaml}");
+    assert!(
+        yaml.contains("github.event.pull_request.head.repo.full_name == github.repository"),
+        "{yaml}"
+    );
 }

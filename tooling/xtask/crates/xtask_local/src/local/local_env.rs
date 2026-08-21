@@ -261,8 +261,9 @@ impl MailEnv {
 struct AgentHarnessEnv {
     bot_id: &'static str,
     snapshot: &'static str,
-    /// Image the local provider runs. `run_local` / `stack up` pull it from
-    /// GHCR or build `crates/agent_harness/container` when it is missing.
+    /// Image the local provider runs. `run_local` / `stack up` `docker build`
+    /// `crates/agent_harness/container` to this tag (BuildKit cache is the
+    /// freshness check).
     image: &'static str,
     /// Network sandboxes join, so this service can dial their sidecars.
     network: String,
