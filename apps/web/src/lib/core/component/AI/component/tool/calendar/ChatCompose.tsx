@@ -23,6 +23,7 @@ import {
   createCalendarEventToEditorInitialValues,
   editorSubmitValuesToCreateCalendarEvent,
 } from './event-form-adapter';
+import { openToolCalendarEvent } from './open-tool-event';
 
 type CreateCalendarEventResponse = NamedTool<
   'CreateCalendarEvent',
@@ -279,7 +280,9 @@ function CalendarChatComposeContent(props: CalendarChatComposeProps) {
     setOperation(undefined);
     updateLocalResponse(result.value as CreateCalendarEventResponse, args);
     void invalidateCalendarOccurrences();
-    toast.success('Calendar event created');
+    toast.success('Calendar event created', {
+      actions: [{ label: 'Open', onClick: () => openToolCalendarEvent(event) }],
+    });
   }
 
   async function handleCancel() {

@@ -141,6 +141,7 @@ struct MockMutations {
     create_error: Mutex<Option<CalendarMutationError>>,
     updated: Mutex<Vec<(Uuid, CalendarEventPatch, CalendarUpdateScope)>>,
     deleted: Mutex<Vec<(Uuid, CalendarDeletionScope)>>,
+    answered: Mutex<Vec<(Uuid, AttendeeResponseStatus, CalendarRsvpScope)>>,
     calendars: Mutex<Vec<VisibleCalendar>>,
 }
 
@@ -193,11 +194,15 @@ impl CalendarMutationService for MockMutations {
     async fn respond_to_event(
         &self,
         _requester_id: &str,
-        _event_id: Uuid,
-        _response: AttendeeResponseStatus,
-        _scope: CalendarRsvpScope,
+        event_id: Uuid,
+        response: AttendeeResponseStatus,
+        scope: CalendarRsvpScope,
     ) -> Result<crate::domain::models::CalendarEvent, CalendarMutationError> {
-        unreachable!("no calendar tool responds to events")
+        self.answered
+            .lock()
+            .unwrap()
+            .push((event_id, response, scope));
+        Ok(sample_event(Vec::new()))
     }
 
     async fn disconnect_calendar(
@@ -426,6 +431,8 @@ async fn update_converts_input_into_a_domain_patch() {
         }]),
         recurrence_lines: None,
         conference: Some(ConferenceChangeInput::Remove),
+        reminders: None,
+        rsvp: None,
     };
     tool.call(context, request_context()).await.unwrap();
 
@@ -463,6 +470,8 @@ async fn update_passes_the_selected_occurrence_scope() {
         attendees: None,
         recurrence_lines: None,
         conference: None,
+        reminders: None,
+        rsvp: None,
     };
     tool.call(context, request_context()).await.unwrap();
 
@@ -491,6 +500,8 @@ async fn scoped_update_requires_a_recurrence_id() {
         attendees: None,
         recurrence_lines: None,
         conference: None,
+        reminders: None,
+        rsvp: None,
     };
     let error = tool.call(context, request_context()).await.unwrap_err();
     assert!(error.description.contains("recurrenceId"));
@@ -515,10 +526,171 @@ async fn series_update_rejects_a_stray_recurrence_id() {
         attendees: None,
         recurrence_lines: None,
         conference: None,
+        reminders: None,
+        rsvp: None,
     };
     let error = tool.call(context, request_context()).await.unwrap_err();
     assert!(error.description.contains("this_event"));
     assert!(mutations.updated.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn update_carries_reminders_into_the_patch() {
+    let (mutations, context) = context(MockMutations::default(), empty_occurrences());
+
+    let tool = UpdateCalendarEvent {
+        event_id: Uuid::from_u128(11),
+        scope: UpdateScopeInput::All,
+        recurrence_id: None,
+        title: None,
+        description: None,
+        location: None,
+        time: None,
+        attendees: None,
+        recurrence_lines: None,
+        conference: None,
+        reminders: Some(EventRemindersInput {
+            use_default: false,
+            overrides: vec![EventReminderOverrideInput {
+                method: "popup".to_string(),
+                minutes: 30,
+            }],
+        }),
+        rsvp: None,
+    };
+    tool.call(context, request_context()).await.unwrap();
+
+    let updated = mutations.updated.lock().unwrap();
+    let (_, patch, _) = updated.first().expect("one update call");
+    assert_eq!(
+        patch.reminders,
+        Some(EventReminders {
+            use_default: false,
+            overrides: vec![EventReminderOverride {
+                method: "popup".to_string(),
+                minutes: 30,
+            }],
+        })
+    );
+}
+
+/// An RSVP is a separate provider call, so a call carrying only one must not
+/// also send an empty patch — the domain rejects a patch that changes nothing.
+#[tokio::test]
+async fn rsvp_alone_answers_without_patching() {
+    let (mutations, context) = context(MockMutations::default(), empty_occurrences());
+    let event_id = Uuid::from_u128(11);
+
+    let tool = UpdateCalendarEvent {
+        event_id,
+        scope: UpdateScopeInput::All,
+        recurrence_id: None,
+        title: None,
+        description: None,
+        location: None,
+        time: None,
+        attendees: None,
+        recurrence_lines: None,
+        conference: None,
+        reminders: None,
+        rsvp: Some(RsvpResponseInput::Declined),
+    };
+    tool.call(context, request_context()).await.unwrap();
+
+    assert!(mutations.updated.lock().unwrap().is_empty());
+    let answered = mutations.answered.lock().unwrap();
+    assert_eq!(
+        *answered.first().expect("one rsvp call"),
+        (
+            event_id,
+            AttendeeResponseStatus::Declined,
+            CalendarRsvpScope::All
+        )
+    );
+}
+
+#[tokio::test]
+async fn rsvp_follows_the_occurrence_scope_of_the_call() {
+    let (mutations, context) = context(MockMutations::default(), empty_occurrences());
+
+    let tool = UpdateCalendarEvent {
+        event_id: Uuid::from_u128(11),
+        scope: UpdateScopeInput::ThisEvent,
+        recurrence_id: Some("2026-08-18T20:00:00+00:00".to_string()),
+        title: None,
+        description: None,
+        location: None,
+        time: None,
+        attendees: None,
+        recurrence_lines: None,
+        conference: None,
+        reminders: None,
+        rsvp: Some(RsvpResponseInput::Tentative),
+    };
+    tool.call(context, request_context()).await.unwrap();
+
+    let answered = mutations.answered.lock().unwrap();
+    let (_, response, scope) = answered.first().expect("one rsvp call");
+    assert_eq!(*response, AttendeeResponseStatus::Tentative);
+    assert_eq!(
+        *scope,
+        CalendarRsvpScope::ThisEvent {
+            recurrence_id: "2026-08-18T20:00:00+00:00".to_string(),
+        }
+    );
+}
+
+/// Replacing the attendee list rewrites every response on the event, so the
+/// RSVP has to be recorded after the patch rather than before it.
+#[tokio::test]
+async fn update_answers_after_applying_the_patch() {
+    let (mutations, context) = context(MockMutations::default(), empty_occurrences());
+
+    let tool = UpdateCalendarEvent {
+        event_id: Uuid::from_u128(11),
+        scope: UpdateScopeInput::All,
+        recurrence_id: None,
+        title: None,
+        description: None,
+        location: None,
+        time: None,
+        attendees: Some(vec![AttendeeInput {
+            email: "guest@example.com".to_string(),
+            is_optional: false,
+        }]),
+        recurrence_lines: None,
+        conference: None,
+        reminders: None,
+        rsvp: Some(RsvpResponseInput::Accepted),
+    };
+    tool.call(context, request_context()).await.unwrap();
+
+    assert_eq!(mutations.updated.lock().unwrap().len(), 1);
+    assert_eq!(mutations.answered.lock().unwrap().len(), 1);
+}
+
+#[tokio::test]
+async fn update_without_a_change_or_an_rsvp_is_rejected() {
+    let (mutations, context) = context(MockMutations::default(), empty_occurrences());
+
+    let tool = UpdateCalendarEvent {
+        event_id: Uuid::from_u128(11),
+        scope: UpdateScopeInput::All,
+        recurrence_id: None,
+        title: None,
+        description: None,
+        location: None,
+        time: None,
+        attendees: None,
+        recurrence_lines: None,
+        conference: None,
+        reminders: None,
+        rsvp: None,
+    };
+    let error = tool.call(context, request_context()).await.unwrap_err();
+    assert!(error.description.contains("changes nothing"));
+    assert!(mutations.updated.lock().unwrap().is_empty());
+    assert!(mutations.answered.lock().unwrap().is_empty());
 }
 
 #[tokio::test]
