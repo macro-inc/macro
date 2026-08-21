@@ -28,13 +28,13 @@ pub enum DaytonaError {
         status: reqwest::StatusCode,
         body: String,
     },
-    /// `POST /sandbox/{id}/resize` is not registered on this API.
+    /// `POST /sandbox/{id}/resize` is not registered for a real sandbox on this API.
     ///
-    /// Daytona documents resize as generally available (`POST /sandbox/{id}/resize`).
-    /// When the handler is missing, a real sandbox id 404s with NestJS
-    /// `Cannot POST .../resize`. A missing sandbox 404s with "not found".
+    /// Daytona documents resize as generally available. A missing sandbox 404s
+    /// with "not found" (the route exists). A real sandbox 404s with NestJS
+    /// `Cannot POST .../resize` — the official Python SDK hits the same error.
     #[error(
-        "daytona POST /sandbox/{{id}}/resize is not available on this API (404 Cannot POST); documented as generally available"
+        "daytona POST /sandbox/{{id}}/resize is not available for this organization (404 Cannot POST); documented as generally available"
     )]
     ResizeNotEnabled,
     /// A successful response did not match Daytona's response schema.
