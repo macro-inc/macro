@@ -371,6 +371,12 @@ fn apply_tags(value: &mut Value, mode: Mode, instance: &Instance) {
             override_in_place(s, "ports");
         }
     }
+    if let Some(relay) = services
+        .get_mut("sdk-webhook-relay")
+        .and_then(Value::as_mapping_mut)
+    {
+        relay.insert("build".into(), reset_null());
+    }
     if runs_local_infra {
         if let Some(fa) = services
             .get_mut("fusionauth")

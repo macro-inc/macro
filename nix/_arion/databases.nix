@@ -1,7 +1,4 @@
 { lib }:
-let
-  inherit (lib) paths;
-in
 {
   postgres = lib.pulled "pgvector/pgvector:pg18" {
     command = "postgres -c max_connections=500";
@@ -85,7 +82,7 @@ in
       ];
       volumes = [
         "opensearch_data:/usr/share/opensearch/data"
-        "${paths.opensearchEntrypoint}:/opensearch-entrypoint.sh:ro"
+        "${lib.analysisIcuPlugin}:/usr/share/opensearch/plugins/analysis-icu:ro"
       ];
       networks = [ "databases" ];
       healthcheck = {
@@ -99,7 +96,6 @@ in
     }
     // {
       out.service = {
-        entrypoint = [ "/bin/bash" "/opensearch-entrypoint.sh" ];
         ulimits = {
           memlock = {
             soft = -1;

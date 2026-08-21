@@ -10,5 +10,4 @@
   staticFileCdnConf = "./infra/local/nginx/static-file-cdn.conf";
   fusionauthKickstart = "./infra/stacks/fusionauth-instance/kickstart";
   datadogYaml = "./docker/datadog-agent/datadog.yaml";
-  opensearchEntrypoint = "./nix/_containers/opensearch-entrypoint.sh";
 }

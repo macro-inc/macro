@@ -52,7 +52,23 @@ pub fn ensure_aux_images(stage: &Stage, force: bool) -> Result<()> {
         "stream-docker-image-sdk-webhook-relay",
         SDK_WEBHOOK_IMAGE_TAG,
         force,
-    )
+    )?;
+    ensure_sync_worker(stage)
+}
+
+/// `wrangler.docker.toml` serves a prebuilt wasm worker. Docker no longer
+/// compiles it; the host (or a previous image extract) must provide
+/// `services/sync-service/build/worker/shim.mjs`.
+fn ensure_sync_worker(_stage: &Stage) -> Result<()> {
+    let shim = super::super::repo_root().join("services/sync-service/build/worker/shim.mjs");
+    if shim.exists() {
+        return Ok(());
+    }
+    anyhow::bail!(
+        "sync worker missing at {} — run `worker-build --profile sync-service-release` \
+         in services/sync-service (the Nix stack bind-mounts this build; Docker no longer compiles wasm)",
+        shim.display()
+    );
 }
 
 fn nix_load_stream(

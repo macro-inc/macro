@@ -44,6 +44,9 @@ in
   rustRuntimeImage = "macro-local-runtime:dev";
   nodeBunImage = "macro-local-node-bun:dev";
 
+  # Unpacked analysis-icu plugin bind-mounted into the official OpenSearch image.
+  analysisIcuPlugin = (pkgs.callPackage ../_containers/opensearch.nix { }).plugin;
+
   rustService =
     {
       command,
