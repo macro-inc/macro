@@ -313,7 +313,11 @@ body.tauri-ios {
   --color-alert-ink: var(--color-warning-ink);
 
   /* Utility outputs. */
-  --color-activity-0: var(--color-inset);
+  --color-activity-0: color-mix(
+    in oklch,
+    var(--color-ink) 12%,
+    var(--color-inset)
+  );
   --color-activity-1: color-mix(
     in oklch,
     var(--color-success) 25%,

@@ -15,7 +15,7 @@ import { type Component, createMemo, For, Show } from 'solid-js';
 import { ActionGlyph } from './action-glyph';
 import { ActionPhrase } from './action-phrase';
 import { ActorName } from './actor-name';
-import { ContributionGraph } from './contribution-graph';
+import { ActionGraph } from './action-graph';
 import {
   actionAsPropertyChange,
   describeActionForEntity,
@@ -51,7 +51,7 @@ export function MyActivityView() {
         <span class="font-semibold text-sm">Activity</span>
       </SplitHeaderLeft>
       <StaticMarkdownContext>
-        <div class="shrink-0 border-edge-muted border-b px-6 py-4">
+        <div class="shrink-0 border-edge-muted border-b px-8 py-5">
           <div class="mx-auto w-full max-w-5xl">
             <Show
               when={overview.data}
@@ -64,8 +64,8 @@ export function MyActivityView() {
               }
             >
               {(data) => (
-                <div class="grid min-w-0 gap-6 @min-[900px]/u-list:grid-cols-[minmax(0,2fr)_minmax(14rem,1fr)]">
-                  <ContributionGraph overview={data()} />
+                <div class="flex min-w-0 flex-col gap-5">
+                  <ActionGraph overview={data()} />
                   <TopEntities entities={data().topEntities} />
                 </div>
               )}
@@ -73,7 +73,7 @@ export function MyActivityView() {
           </div>
         </div>
         <div class="min-h-0 flex-1 overflow-y-auto py-1">
-          <div class="mx-auto w-full max-w-5xl px-6">
+          <div class="mx-auto w-full max-w-5xl px-8">
             <Show
               when={groups().length > 0}
               fallback={

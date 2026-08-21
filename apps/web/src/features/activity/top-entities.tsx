@@ -10,13 +10,11 @@ type EntityRank = ActivityOverview['topEntities'][number];
 export function TopEntities(props: {
   entities: ActivityOverview['topEntities'];
 }) {
-  const maxCount = () => props.entities[0]?.count ?? 0;
-
   return (
     <section class="min-w-0" aria-labelledby="activity-top-entities-heading">
       <h2
         id="activity-top-entities-heading"
-        class="mb-3 font-medium text-ink text-sm"
+        class="mb-3 text-[11px] text-ink-extra-muted"
       >
         Most active
       </h2>
@@ -24,9 +22,9 @@ export function TopEntities(props: {
         when={props.entities.length > 0}
         fallback={<p class="text-ink-extra-muted text-xs">No entities yet.</p>}
       >
-        <div class="flex flex-col gap-1.5">
+        <div class="flex gap-2 overflow-x-auto scrollbar-hidden">
           <For each={props.entities}>
-            {(entity) => <TopEntityRow entity={entity} maxCount={maxCount()} />}
+            {(entity) => <TopEntityCard entity={entity} />}
           </For>
         </div>
       </Show>
@@ -34,40 +32,30 @@ export function TopEntities(props: {
   );
 }
 
-function TopEntityRow(props: { entity: EntityRank; maxCount: number }) {
+function TopEntityCard(props: { entity: EntityRank }) {
   const displayType = () => displayEntityType(props.entity.entityType);
-  const width = () =>
-    props.maxCount > 0
-      ? `${(props.entity.count / props.maxCount) * 100}%`
-      : '0%';
 
   return (
-    <div class="relative min-w-0 overflow-hidden rounded-md ring ring-edge-muted">
-      <div
-        class="absolute inset-y-0 left-0 bg-activity-1"
-        style={{ width: width() }}
-      />
-      <div class="relative flex min-h-7 min-w-0 items-center gap-2 px-2 py-1 text-xs">
-        <span class="min-w-0 flex-1 truncate">
-          <Show
-            when={displayType()}
-            fallback={
-              <span class="text-ink-muted">{props.entity.entityType}</span>
-            }
-          >
-            {(type) => (
-              <MappedEntityName
-                entityId={props.entity.entityId}
-                entityType={type()}
-              />
-            )}
-          </Show>
-        </span>
-        <span class="shrink-0 tabular-nums text-ink-muted">
-          {props.entity.count.toLocaleString()}
-        </span>
+    <article class="w-44 shrink-0 rounded-xl bg-inset px-3.5 py-3 ring ring-edge-muted">
+      <div class="min-w-0 truncate text-xs text-ink-muted [&>*]:min-w-0">
+        <Show
+          when={displayType()}
+          fallback={
+            <span class="text-ink-extra-muted">{props.entity.entityType}</span>
+          }
+        >
+          {(type) => (
+            <MappedEntityName
+              entityId={props.entity.entityId}
+              entityType={type()}
+            />
+          )}
+        </Show>
       </div>
-    </div>
+      <p class="mt-2 font-medium text-ink text-xl tabular-nums tracking-tight">
+        {props.entity.count.toLocaleString()}
+      </p>
+    </article>
   );
 }
 
