@@ -78,6 +78,7 @@ sync_service_client = { path = "../../crates/sync_service_client" }
 tokio = { workspace = true, features = ["signal"] }
 tokio-util = { workspace = true, features = ["rt"] }
 tracing = { workspace = true }
+url = { workspace = true }
 
 macro_service_urls = { path = "../../crates/macro_service_urls" }
 workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }

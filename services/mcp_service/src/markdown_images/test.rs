@@ -2,6 +2,7 @@ use super::*;
 use macro_user_id::user_id::MacroUserIdStr;
 use serde_json::json;
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 const TINY_PNG: &[u8] = &[
     0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52,
@@ -36,6 +37,25 @@ impl MarkdownImageResolver for FakeResolver {
 
     async fn resolve_dss(&self, _user_id: &MacroUserIdStr<'_>, id: &str) -> Option<ResolvedImage> {
         self.dss_images.get(id).cloned()
+    }
+}
+
+struct CountingResolver {
+    hits: AtomicUsize,
+}
+
+#[async_trait]
+impl MarkdownImageResolver for CountingResolver {
+    async fn resolve_static(&self, _url: &str) -> Option<ResolvedImage> {
+        self.hits.fetch_add(1, Ordering::SeqCst);
+        Some(ResolvedImage {
+            data: "x".into(),
+            mime_type: "image/webp".into(),
+        })
+    }
+
+    async fn resolve_dss(&self, _user_id: &MacroUserIdStr<'_>, _id: &str) -> Option<ResolvedImage> {
+        None
     }
 }
 
@@ -166,4 +186,93 @@ async fn fetch_and_encode_returns_webp_bytes() {
         .expect("png should encode as a webp image block");
     assert_eq!(image.mime_type, "image/webp");
     assert!(!image.data.is_empty());
+}
+
+#[tokio::test]
+async fn resolve_markdown_images_caps_count() {
+    let resolver = CountingResolver {
+        hits: AtomicUsize::new(0),
+    };
+    let markdown: Vec<serde_json::Value> = (0..12)
+        .map(
+            |i| json!({ "type": "staticImage", "url": format!("https://cdn.example.com/{i}.png") }),
+        )
+        .collect();
+
+    let images = resolve_markdown_images(
+        &resolver,
+        &user_id(),
+        &read_content_markdown(serde_json::Value::Array(markdown)),
+    )
+    .await;
+
+    assert_eq!(images.len(), MAX_MARKDOWN_IMAGES);
+    assert_eq!(resolver.hits.load(Ordering::SeqCst), MAX_MARKDOWN_IMAGES);
+}
+
+#[tokio::test]
+async fn assert_public_http_url_rejects_non_http_and_private_hosts() {
+    assert!(assert_public_http_url("http://1.1.1.1/a.png").await.is_ok());
+    assert!(assert_public_http_url("file:///etc/passwd").await.is_err());
+    assert!(
+        assert_public_http_url("https://127.0.0.1/a.png")
+            .await
+            .is_err()
+    );
+    assert!(
+        assert_public_http_url("http://169.254.169.254/latest/meta-data")
+            .await
+            .is_err()
+    );
+    assert!(
+        assert_public_http_url("http://localhost/a.png")
+            .await
+            .is_err()
+    );
+    assert!(assert_public_http_url("https://[::1]/a.png").await.is_err());
+    assert!(
+        assert_public_http_url("https://10.0.0.1/a.png")
+            .await
+            .is_err()
+    );
+}
+
+#[tokio::test]
+async fn fetch_public_and_encode_does_not_fetch_private_urls() {
+    assert!(
+        fetch_public_and_encode("http://127.0.0.1/should-not-fetch.png")
+            .await
+            .is_none()
+    );
+    assert!(
+        fetch_public_and_encode("file:///etc/passwd")
+            .await
+            .is_none()
+    );
+}
+
+#[tokio::test]
+async fn fetch_and_encode_rejects_oversized_content_length() {
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+        .await
+        .expect("bind");
+    let port = listener.local_addr().expect("addr").port();
+    tokio::spawn(async move {
+        let (mut stream, _) = listener.accept().await.expect("accept");
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        let mut buf = vec![0u8; 1024];
+        let _ = stream.read(&mut buf).await;
+        let header = format!(
+            "HTTP/1.1 200 OK\r\nContent-Type: image/png\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+            MAX_IMAGE_BYTES + 1
+        );
+        let _ = stream.write_all(header.as_bytes()).await;
+    });
+
+    assert!(
+        fetch_and_encode(&format!("http://127.0.0.1:{port}/big.png"))
+            .await
+            .is_none(),
+        "oversized Content-Length must not be downloaded"
+    );
 }
