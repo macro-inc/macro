@@ -29,7 +29,7 @@ fn publish_job_pushes_amd64_ghcr_tags() {
     assert!(yaml.contains("--platform linux/amd64 \\"), "{yaml}");
     assert!(
         !yaml.contains("linux/arm64"),
-        "sandbox flake has no aarch64-linux shell: {yaml}"
+        "GHCR stays amd64; local stacks bake native: {yaml}"
     );
     assert!(yaml.contains(r#"--tag "$image:$GITHUB_SHA""#), "{yaml}");
     assert!(yaml.contains(r#"tags+=(--tag "$image:latest")"#), "{yaml}");

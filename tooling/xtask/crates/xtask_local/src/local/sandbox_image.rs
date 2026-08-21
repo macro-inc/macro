@@ -2,11 +2,14 @@
 //! the harness.
 //!
 //! When local sandboxes are on, `run_local` / `stack up` always `docker build`
-//! the tag. BuildKit cache is the freshness check: unchanged `container/` is
-//! a no-op rebuild, a Dockerfile or flake change pays the two nix shells.
-//! `--no-build` (Fly preview VM boot, CI snapshot bake) skips that: the image
-//! is already on the daemon from preload / the images lane, and the Fly VM's
-//! staged repo does not even include `crates/agent_harness/container`.
+//! the tag with no `--platform`, so the daemon's native arch wins. The sandbox
+//! flake exposes `x86_64-linux` and `aarch64-linux`; Apple Silicon and ARM
+//! Linux therefore bake natively instead of qemu. BuildKit cache is the
+//! freshness check: unchanged `container/` is a no-op rebuild, a Dockerfile or
+//! flake change pays the two nix shells. `--no-build` (Fly preview VM boot, CI
+//! snapshot bake) skips that: the image is already on the daemon from preload /
+//! the images lane, and the Fly VM's staged repo does not even include
+//! `crates/agent_harness/container`.
 
 use std::collections::BTreeMap;
 use std::path::Path;
@@ -53,6 +56,7 @@ impl EnsurePlan {
     }
 }
 
+/// Unpinned on purpose: `--platform` would force qemu on Apple Silicon.
 pub(crate) fn build_args(tag: &str, context: &Path) -> Vec<String> {
     vec![
         "build".to_owned(),

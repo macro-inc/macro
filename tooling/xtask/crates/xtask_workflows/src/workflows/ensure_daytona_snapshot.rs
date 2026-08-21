@@ -96,8 +96,9 @@ fn ensure_snapshot() -> Job {
 
 /// GHCR publish. Runs on Mid with Namespace remote buildx: the Dockerfile
 /// bakes two nix shells, which is too large for the Small Daytona job's local
-/// daemon. linux/amd64 only — `container/flake.nix` has no aarch64-linux
-/// shell, and Fly preview machines are amd64. PRs push `:$SHA` only so they
+/// daemon. linux/amd64 only — Daytona snapshots and Fly preview machines are
+/// amd64. Local `docker build` is unpinned so Apple Silicon / ARM Linux bake
+/// native `aarch64-linux` from the same flake. PRs push `:$SHA` only so they
 /// cannot clobber `:latest`.
 fn publish_image() -> Job {
     let image = vars::AGENT_HARNESS_GHCR_IMAGE;
