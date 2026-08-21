@@ -3421,6 +3421,7 @@ dependencies = [
  "macro_uuid",
  "reqwest 0.13.4",
  "rootcause",
+ "rustls 0.23.40",
  "serde",
  "serde_json",
  "strum 0.27.2",

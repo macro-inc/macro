@@ -4,10 +4,13 @@ This guide explains how to run Macro on your machine. The local stack runs witho
 
 ## What You Need
 
-Install these tools before you start:
+Install Nix before you start:
 
 1. [Nix](https://nix.dev/install-nix) package manager
-2. [Docker](https://docs.docker.com/get-docker/) with the Compose v2 plugin (Docker Desktop, OrbStack, or Colima work)
+
+On Linux, the Nix dev shell supplies the Docker CLI, daemon, Compose, and `fuse-overlayfs`. Nix is the only host dependency.
+
+On macOS, install a Docker runtime such as Docker Desktop, OrbStack, or Colima. The Nix dev shell supplies the Docker CLI, but macOS still needs the runtime to provide the daemon.
 
 Clone the repository:
 
@@ -18,7 +21,7 @@ cd macro
 
 ## Enter the Nix Shell
 
-The Nix shell provides `just`, Cargo, the Rust toolchain, Bun, sqlx, zig, and cargo-zigbuild. You do not need to install `just` or Cargo separately.
+The Nix shell provides `just`, Cargo, the Rust toolchain, Bun, sqlx, zig, cargo-zigbuild, and Docker tooling. You do not need to install these tools separately.
 
 ```bash
 nix develop

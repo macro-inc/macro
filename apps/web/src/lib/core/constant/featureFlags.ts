@@ -4,6 +4,10 @@ import { analytics } from '@app/lib/analytics';
  * This constant reflects whether the app is running locally with hot reload enabled
  *
  * @returns true in bun run dev, false otherwise
+ *
+ * Distinct from `import.meta.env.DEV` (true under vite serve *and* local-backend
+ * static bundles) and `DEV_MODE_ENV` (true whenever MODE=development, including
+ * dev.macro.com).
  */
 export const LOCAL_ONLY = !!import.meta.hot;
 
@@ -424,7 +428,7 @@ export const USE_MACRO_PR_SUMMARY_BLOCK = resolveFeatureFlag(
 );
 
 // skips over posthog and sets the ENABLE_CALLS feature to true if we are in dev mode
-const ENABLE_CALLS_OVERRIDE = DEV_MODE_ENV ? true : undefined;
+const ENABLE_CALLS_OVERRIDE = DEV_MODE_ENV ? true : true;
 
 export function ENABLE_CALLS(): boolean {
   if (ENABLE_CALLS_OVERRIDE !== undefined) {

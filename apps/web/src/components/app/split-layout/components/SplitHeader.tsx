@@ -15,7 +15,7 @@ import { TOKENS } from '@core/hotkey/tokens';
 import { isMobile } from '@core/mobile/isMobile';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import type { EntityDragEvent } from '@entity';
+import { type EntityDragEvent, isEntityDragEvent } from '@entity';
 import { AnimatedSquareSidebarIcon } from '@icon/square-sidebar';
 import SplitIcon from '@icon/wide-newSplit.svg';
 import { ContextMenu } from '@kobalte/core/context-menu';
@@ -487,11 +487,12 @@ export function SplitHeader(props: {
     );
   });
 
-  onDragEnd((event: EntityDragEvent) => {
-    if (event.droppable?.id !== droppableId) return;
+  onDragEnd((event) => {
+    if (!isEntityDragEvent(event) || event.droppable?.id !== droppableId) {
+      return;
+    }
 
-    const data = event.draggable?.data;
-    if (!data || data.dragType !== 'entity') return;
+    const data = event.draggable.data;
 
     const current = panel.handle.content();
     const next = getEntitySplitContent(data);
@@ -510,7 +511,8 @@ export function SplitHeader(props: {
         class={cn(
           '@container/split-header isolate relative w-full h-full overflow-clip text-ink',
           // On mobile the header overlays the panel body as a transparent strip
-          // of floating islands
+          // of floating islands; the island utility's px min-size keeps them
+          // tappable regardless of the OS text-size setting (inert on desktop).
           'touch:absolute touch:inset-x-0 touch:top-(--safe-top) touch:z-mobile-nav-bar touch:h-11.25 touch:overflow-visible touch:pointer-events-none',
           isMobile() &&
             !isNativeMobilePlatform() &&

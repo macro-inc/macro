@@ -195,6 +195,7 @@ impl TransportReceiver<ToServerMessage> for ContainerReceiver {
 #[derive(Clone, Default)]
 pub struct MockContainerManager {
     containers: Arc<Mutex<HashMap<AgentSessionId, ContainerMock>>>,
+    spawn_error: Arc<Mutex<Option<String>>>,
     resumes: Arc<AtomicUsize>,
     teardowns: Arc<AtomicUsize>,
 }
@@ -224,6 +225,14 @@ impl MockContainerManager {
         self.lock().len()
     }
 
+    /// Make the next sandbox spawn fail with `message`.
+    pub fn fail_next_spawn(&self, message: impl Into<String>) {
+        *self
+            .spawn_error
+            .lock()
+            .expect("spawn error lock should not be poisoned") = Some(message.into());
+    }
+
     /// How many times an existing sandbox was requested.
     #[must_use]
     pub fn resumed(&self) -> usize {
@@ -247,6 +256,14 @@ impl ContainerManager for MockContainerManager {
     type Transport = ContainerMock;
 
     async fn spawn(&self, command: SpawnContainer) -> Result<ContainerMock, HarnessError> {
+        if let Some(message) = self
+            .spawn_error
+            .lock()
+            .expect("spawn error lock should not be poisoned")
+            .take()
+        {
+            return Err(HarnessError::Container(message));
+        }
         let container = ContainerMock::default();
         self.lock().insert(command.session_id, container.clone());
         Ok(container)

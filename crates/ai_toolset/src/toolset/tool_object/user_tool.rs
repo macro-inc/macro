@@ -33,6 +33,7 @@ impl<T: ToolAnnotated> ToolAnnotated for UserTool<T> {
 
 /// User tools are pending until a user executes them
 #[derive(Serialize, Deserialize, JsonSchema, ToSchema, Debug, Clone, PartialEq)]
+#[schemars(rename = "UserToolResponseFor{T}")]
 pub enum UserToolResponse<T> {
     /// Tool has not yet been executed
     PendingUserExecution,

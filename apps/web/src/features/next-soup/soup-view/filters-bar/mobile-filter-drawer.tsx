@@ -337,7 +337,7 @@ export const MobileFilterDrawer = (props: {
           size="sm"
           depth={3}
           class={cn(
-            'island bg-chrome pointer-events-auto relative size-10 shrink-0 rounded-full [&_svg]:size-5',
+            'island bg-chrome pointer-events-auto relative size-10 shrink-0 rounded-full [&_svg]:size-6',
             props.class
           )}
           ref={pressPulse}

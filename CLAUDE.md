@@ -317,12 +317,18 @@ don't inject it directly into the error message.
 
 ## Cursor Cloud specific instructions
 
-Environment scripts are `.cursor/install.sh` (durable files), `.cursor/start.sh` (dockerd, then Postgres and Redis), and `.cursor/stack.sh` (on-demand product stack).
+`.cursor/install.sh` prepares the durable caches, databases, test dependencies, frontend dependencies, service binaries, and stack init snapshot, then stops dockerd and nix-daemon so the Cloud bake can exit. `.cursor/start.sh` runs at boot and starts nothing beyond the nix daemon, so sessions and subagents are usable immediately. `.cursor/infra.sh` starts Docker, Postgres, and Redis on demand. `.cursor/stack.sh` starts the on-demand product stack. `.cursor/rebuild.sh` rebuilds the stack after backend edits. These scripts are the only supported entry points; each re-enters the pinned nix shell itself, so run them with plain `bash` from any environment.
 
-After boot, Postgres should already be up. If `:5432` is closed, run `bash .cursor/start.sh`.
+Nix is the only host dependency. The pinned dev shell supplies the Docker CLI and daemon, Compose, `fuse-overlayfs`, and OpenSSH. `ssh-keygen` must come from this shell.
 
-Cargo `target/`, the frontend bundle, and the stack init snapshot live under `$HOME/.cache/macro-cloud` and are symlinked or copied back into `/workspace`. A git checkout wipes `/workspace/target`. Cargo and BuildKit decide whether the next bake is incremental.
+Service binaries come from the private S3 Nix cache. A sibling workflow on push to main (`push_local_stack_binaries.yml`) builds and pushes `.#local-stack-binaries`. It is not part of the deploy pipeline. Cursor Cloud realizes the aggregate with `nix build .#local-stack-binaries`.
 
-Infra-ready is enough for `cargo test -p`. Product-ready is `bash .cursor/stack.sh`, which runs `just stack up --no-doppler --build-aux-services`. Install always bakes with `--infra-only --build-aux-services`. The pinned nix shell puts OpenSSH on PATH so `ssh-keygen` is not `/exec-daemon/ssh-keygen`.
+Set `NIX_CACHE_AWS_ACCESS_KEY_ID` and `NIX_CACHE_AWS_SECRET_ACCESS_KEY` as Cursor environment secrets. The IAM credentials need read-only access to the cache bucket.
 
-Do not follow the old `docker compose -f docker/docker-compose.yml up -d postgres` line. It skips `create_networks` and Redis.
+Nothing runs after boot. Before DB-backed `cargo test -p <crate>`, run `bash .cursor/infra.sh` once — it brings up Docker, Postgres, and Redis in seconds because install baked the images and volumes. Pure-logic crate tests need nothing. Run `bash .cursor/stack.sh` for a product-ready environment.
+
+After backend edits, run `bash .cursor/rebuild.sh`. Do not use `just stack update` with the read-only Nix binary directory.
+
+No seeding or OTP is needed to log in: passwordless login auto-creates a user for any email, and the stack's auth service is built with `return_passwordless_code`, so the login API returns the code in its response (codes are also visible at the proxy's `/mailpit/` UI). `just seed-scenario apply --file seed/scenarios/team-perms.json` is optional, for multi-user team/permission fixtures. The `agent_harness_service` restart loop is expected without AI provider keys.
+
+Leave `SQLX_OFFLINE` unset for `cargo test`. If SQLx reports missing cached query data, run `just prepare_db` instead of enabling offline mode. Run crate tests from the repository root with `cargo test -p <crate>`.

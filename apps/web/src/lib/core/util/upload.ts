@@ -369,7 +369,11 @@ async function uploadToDSS(
   try {
     return dssUpload(file.file, options);
   } catch (error) {
-    throw new UploadError(file, 'dss', error);
+    throw new UploadError(
+      file,
+      'dss',
+      error instanceof Error ? error : new Error(String(error))
+    );
   }
 }
 
@@ -387,7 +391,11 @@ async function uploadToStatic(
       id,
     };
   } catch (error) {
-    throw new UploadError(file, 'static', error);
+    throw new UploadError(
+      file,
+      'static',
+      error instanceof Error ? error : new Error(String(error))
+    );
   }
 }
 
@@ -437,7 +445,7 @@ export async function uploadFile(
       error:
         error instanceof Error
           ? error
-          : new UploadError(uploadSource, 'dss', error),
+          : new UploadError(uploadSource, 'dss', new Error(String(error))),
       name,
     };
   }

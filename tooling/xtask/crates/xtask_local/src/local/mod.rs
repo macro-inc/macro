@@ -11,7 +11,6 @@
 //! Design invariant: Docker never compiles Rust. Binaries are built on the host
 //! and bind-mounted read-only into the runtime image at `/app/out`.
 
-use std::collections::BTreeMap;
 use std::path::PathBuf;
 
 pub mod arch;
@@ -557,17 +556,7 @@ fn prepare(
 /// generated env. Shared by bring-up and the binary-reload restart.
 fn compose_cmd(instance: &Instance, env: &env_layer::ResolvedEnv) -> Command {
     let files = gen_compose::compose_files(instance);
-    let mut command = gen_compose::docker_compose(instance, &files, &env.generated_path);
-    if agent_harness_enabled(&env.merged) {
-        command.args(["--profile", "agent-harness"]);
-    }
-    command
-}
-
-fn agent_harness_enabled(env: &BTreeMap<String, String>) -> bool {
-    ["DAYTONA_API_KEY", "GITHUB_TOKEN"]
-        .iter()
-        .all(|key| env.get(*key).is_some_and(|value| !value.trim().is_empty()))
+    gen_compose::docker_compose(instance, &files, &env.generated_path)
 }
 
 fn build_aux_service_images(

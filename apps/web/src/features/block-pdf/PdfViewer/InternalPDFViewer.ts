@@ -1125,10 +1125,19 @@ export class InternalPDFViewer {
     this._boundEvents.scriptingready = this._handleScriptingReady;
 
     for (const key in this._boundEvents) {
-      const event = key as keyof TEvents;
-      if (!this._boundEvents[event]) continue;
-      this._eventBus.on(event, this._boundEvents[event]);
+      this.#bindEvent(key as keyof TEvents);
     }
+  }
+
+  #bindEvent<TEvent extends keyof TEvents>(event: TEvent) {
+    const listener = this._boundEvents[event];
+    if (listener) this._eventBus.on(event, listener);
+  }
+
+  #unbindEvent<TEvent extends keyof TEvents>(event: TEvent) {
+    const listener = this._boundEvents[event];
+    if (listener) this._eventBus.off(event, listener);
+    this._boundEvents[event] = undefined;
   }
 
   #unbindEvents() {
@@ -1145,10 +1154,7 @@ export class InternalPDFViewer {
     this._container.removeEventListener('click', this._handleContainerClick);
 
     for (const key in this._boundEvents) {
-      const event = key as keyof TEvents;
-      if (!this._boundEvents[event]) continue;
-      this._eventBus.off(event, this._boundEvents[event]);
-      this._boundEvents[event] = undefined;
+      this.#unbindEvent(key as keyof TEvents);
     }
     this._eventBus._listeners = [];
     this._boundEvents = Object.create(null);

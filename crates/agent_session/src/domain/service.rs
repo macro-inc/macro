@@ -31,6 +31,7 @@ use agent_client_protocol::schema::v1::SessionId;
 use agent_fold::domain::fold::FoldMachineImpl;
 use agent_fold::domain::ports::{FoldMachine, FoldedMessageRepo};
 use agent_runtime_protocol::domain::action::{AgentAction, AgentActionId};
+use agent_runtime_protocol::domain::schema::v0::{SystemEvent, ToServerMessage};
 use dashmap::DashMap;
 use dashmap::mapref::entry::Entry;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -78,6 +79,9 @@ pub trait AgentSessionService: Send + Sync + 'static {
     /// it does not touch anything durable. A session with no active transport
     /// is already in the state this asks for, so it succeeds.
     fn close_session(&self, id: AgentSessionId) -> impl Future<Output = Result<()>> + Send;
+
+    /// Persist that a session disconnected before a live actor could report it.
+    fn mark_disconnected(&self, id: AgentSessionId) -> impl Future<Output = Result<()>> + Send;
 
     /// Attach a new transport to an existing persisted session.
     ///
@@ -266,6 +270,18 @@ where
         // tears the transport down on its way out.
         self.active.remove(&id);
         Ok(())
+    }
+
+    async fn mark_disconnected(&self, id: AgentSessionId) -> Result<()> {
+        let mut logs = LiveSessionLogWriter::new(self.repo.clone(), self.realtime.clone());
+        logs.append(AgentSessionLog {
+            agent_session_id: id,
+            user_id: None,
+            content: Message::ToServer(ToServerMessage::Event {
+                event: SystemEvent::Disconnected,
+            }),
+        })
+        .await
     }
 
     async fn attach_session<Connector>(

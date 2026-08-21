@@ -1,5 +1,5 @@
 use super::*;
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeSet;
 
 /// Every mode whose spec we assert invariants over.
 const MODES: &[Mode] = &[Mode::Local, Mode::Dev];
@@ -67,19 +67,4 @@ fn durable_bake_covers_every_repository_built_local_image() {
         LOCAL_PULL_SERVICE_IMAGES,
         ["proxy", "mailpit", "static_file_cdn"]
     );
-}
-
-#[test]
-fn agent_harness_requires_both_credentials() {
-    let mut env = BTreeMap::new();
-    assert!(!agent_harness_enabled(&env));
-
-    env.insert("DAYTONA_API_KEY".into(), "daytona".into());
-    assert!(!agent_harness_enabled(&env));
-
-    env.insert("GITHUB_TOKEN".into(), "github".into());
-    assert!(agent_harness_enabled(&env));
-
-    env.insert("DAYTONA_API_KEY".into(), "  ".into());
-    assert!(!agent_harness_enabled(&env));
 }
