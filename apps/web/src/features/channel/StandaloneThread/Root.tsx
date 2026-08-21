@@ -13,6 +13,8 @@ type RootProps = ParentProps<{
   channelId: string;
   messageId: string;
   data?: ApiChannelMessage;
+  /** Open the native reply composer (and expand the thread) on mount. */
+  defaultReplying?: boolean;
 }>;
 
 export function Root(props: RootProps) {
@@ -24,8 +26,12 @@ export function Root(props: RootProps) {
 }
 
 function RootInner(props: RootProps) {
-  const [isExpanded, setIsExpanded] = createSignal(false);
-  const [isReplying, setIsReplying] = createSignal(false);
+  const [isExpanded, setIsExpanded] = createSignal(
+    props.defaultReplying ?? false
+  );
+  const [isReplying, setIsReplying] = createSignal(
+    props.defaultReplying ?? false
+  );
   const replyInputFocusRequest = createFocusRequest();
 
   const parentQuery = useChannelMessagesByIdsQuery(

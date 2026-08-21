@@ -1,12 +1,11 @@
 import { navigateToChannelMessage } from '@block-channel/utils/link';
+import { EditableThread } from '@channel/StandaloneThread';
 import { useGlobalBlockOrchestrator } from '@components/app/GlobalAppState';
 import { SplitDrawer } from '@components/app/split-layout/components/SplitDrawer';
 import { useDrawerControl } from '@components/app/split-layout/components/SplitDrawerContext';
+import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import ArrowSquareOut from '@phosphor/arrow-square-out.svg';
 import { Button } from '@ui';
-import { Show } from 'solid-js';
-import { createChannelThreadSource } from './channel-thread-source';
-import { LinkedConversation } from './LinkedConversation';
 
 type LinkedConversationDrawerProps = {
   /**
@@ -26,9 +25,11 @@ type LinkedConversationDrawerProps = {
  * A right-hand [`SplitDrawer`] rendering a linked conversation (a channel
  * thread) inside the current split — the "show the thread this came from"
  * affordance. Fully decoupled from any block: it only needs the thread's
- * channel + root message ids. Clicking a message (or the open button in the
- * drawer header) navigates to the referenced thread in its channel and
- * closes the drawer.
+ * channel + root message ids.
+ *
+ * The thread itself is the native standalone `EditableThread`: send, quote-
+ * reply, react, and the rest of the channel message actions work in place.
+ * The header button still jumps to the thread in its channel.
  */
 export function LinkedConversationDrawer(props: LinkedConversationDrawerProps) {
   const orchestrator = useGlobalBlockOrchestrator();
@@ -65,7 +66,6 @@ export function LinkedConversationDrawer(props: LinkedConversationDrawerProps) {
       <DrawerConversation
         channelId={props.channelId}
         messageId={props.messageId}
-        onOpenMessage={openInChannel}
       />
     </SplitDrawer>
   );
@@ -75,28 +75,14 @@ export function LinkedConversationDrawer(props: LinkedConversationDrawerProps) {
  * Separate component so the thread queries mount only while the drawer is
  * open — `SplitDrawer` only creates its children then.
  */
-function DrawerConversation(props: {
-  channelId: string;
-  messageId: string;
-  onOpenMessage: (messageId: string) => void;
-}) {
-  const source = createChannelThreadSource({
-    channelId: () => props.channelId,
-    messageId: () => props.messageId,
-  });
-
+function DrawerConversation(props: { channelId: string; messageId: string }) {
   return (
-    <Show
-      when={source.root()}
-      fallback={<p class="px-2 text-sm text-ink-muted">Loading thread…</p>}
-    >
-      <LinkedConversation
-        source={source}
-        onClickMessage={(messageId, e) => {
-          e.stopPropagation();
-          props.onOpenMessage(messageId);
-        }}
+    <StaticMarkdownContext>
+      <EditableThread
+        channelId={props.channelId}
+        messageId={props.messageId}
+        defaultReplying
       />
-    </Show>
+    </StaticMarkdownContext>
   );
 }
