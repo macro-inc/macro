@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use entity_access::domain::ports::EntityAccessService as _;
+use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use models_properties::DataType;
 use models_properties::service::property_option::PropertyOptionValue;
@@ -45,13 +46,7 @@ impl activity::ActivityMetadataResolver for ToolActivityMetadataResolver {
 
         let team = match self.entity_access_service.get_user_team(viewer).await {
             Ok(Some(team_info)) => {
-                let viewer = match MacroUserIdStr::try_from(viewer.as_ref().to_string()) {
-                    Ok(viewer) => viewer,
-                    Err(error) => {
-                        tracing::warn!(error=?error, "failed to own activity metadata viewer id");
-                        return std::collections::HashMap::new();
-                    }
-                };
+                let viewer = viewer.copied().into_owned();
                 match EntityAccessReceipt::try_new_authenticated_user(
                     viewer,
                     Entity {

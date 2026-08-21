@@ -3,7 +3,11 @@
 #[cfg(test)]
 mod test;
 
-use std::{collections::HashSet, num::NonZeroU32, sync::Arc};
+use std::{
+    collections::{HashMap, HashSet},
+    num::NonZeroU32,
+    sync::Arc,
+};
 
 use chrono::{DateTime, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
@@ -19,7 +23,7 @@ pub struct ResolvedActivityRange {
     /// The underlying activity result.
     pub activity: ActivityRange,
     /// Visible property metadata keyed by property definition id.
-    pub properties: std::collections::HashMap<String, ActivityPropertyMetadata>,
+    pub properties: HashMap<String, ActivityPropertyMetadata>,
 }
 
 /// No-op resolver used by activity consumers that do not provide presentation
@@ -33,8 +37,8 @@ impl ActivityMetadataResolver for NoopActivityMetadataResolver {
         &self,
         _viewer: &MacroUserIdStr<'_>,
         _property_ids: &[String],
-    ) -> std::collections::HashMap<String, ActivityPropertyMetadata> {
-        std::collections::HashMap::new()
+    ) -> HashMap<String, ActivityPropertyMetadata> {
+        HashMap::new()
     }
 }
 
