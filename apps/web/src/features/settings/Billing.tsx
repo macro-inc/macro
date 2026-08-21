@@ -13,7 +13,7 @@ import { createMemo, For, Match, Show, Switch } from 'solid-js';
 import { SettingsCard, SettingsPage, SettingsSection } from './primitives';
 
 const BILLING_PLAN_FEATURES: Record<PlanTier, string[]> = {
-  free: ['Access to Haiku', 'MCP access', '5 GB storage'],
+  free: ['Access to Haiku', 'MCP access', '5 GB storage', 'Teams up to 5 people'],
   premium: [
     'All agents',
     'All models',
@@ -21,7 +21,7 @@ const BILLING_PLAN_FEATURES: Record<PlanTier, string[]> = {
     'AI projections',
     'Multiple email inboxes',
     'Calls',
-    'Teams',
+    'Teams beyond 5 people',
     '1 TB storage',
   ],
 };
