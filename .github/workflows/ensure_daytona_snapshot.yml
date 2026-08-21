@@ -36,19 +36,15 @@ jobs:
     - name: Ensure Daytona snapshot
       run: |
         set -euo pipefail
-        if [[ -z "${DOPPLER_TOKEN:-}" ]]; then
-          echo "::error::DOPPLER_TOKEN repository secret is not configured"
+        if [[ -z "${DAYTONA_API_KEY:-}" ]]; then
+          echo "::error::DAYTONA_API_KEY repository secret is not configured"
           exit 1
         fi
-        doppler run --project agent-harness-service --config dev \
-          --only-secrets DAYTONA_API_KEY -- bash -c '
-          set -euo pipefail
-          daytona login --api-key "$DAYTONA_API_KEY"
-          just --justfile crates/agent_harness/justfile ensure-daytona
-        '
+        daytona login --api-key "$DAYTONA_API_KEY"
+        just --justfile crates/agent_harness/justfile ensure-daytona
       shell: bash
       env:
-        DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
+        DAYTONA_API_KEY: ${{ secrets.DAYTONA_API_KEY }}
 concurrency:
   group: ${{ github.workflow }}
   cancel-in-progress: false

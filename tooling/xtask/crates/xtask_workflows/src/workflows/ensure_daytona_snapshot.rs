@@ -51,18 +51,14 @@ fn ensure_snapshot() -> Job {
             Step::new("Ensure Daytona snapshot")
                 .run(indoc::indoc! {r#"
                     set -euo pipefail
-                    if [[ -z "${DOPPLER_TOKEN:-}" ]]; then
-                      echo "::error::DOPPLER_TOKEN repository secret is not configured"
+                    if [[ -z "${DAYTONA_API_KEY:-}" ]]; then
+                      echo "::error::DAYTONA_API_KEY repository secret is not configured"
                       exit 1
                     fi
-                    doppler run --project agent-harness-service --config dev \
-                      --only-secrets DAYTONA_API_KEY -- bash -c '
-                      set -euo pipefail
-                      daytona login --api-key "$DAYTONA_API_KEY"
-                      just --justfile crates/agent_harness/justfile ensure-daytona
-                    '
+                    daytona login --api-key "$DAYTONA_API_KEY"
+                    just --justfile crates/agent_harness/justfile ensure-daytona
                 "#})
                 .shell("bash")
-                .add_env(("DOPPLER_TOKEN", vars::DOPPLER_TOKEN)),
+                .add_env(("DAYTONA_API_KEY", vars::DAYTONA_API_KEY)),
         )
 }
