@@ -1,7 +1,7 @@
+import { createCrossTabBus } from '@core/cross-tab/cross-tab-bus';
 import type { CallRecord } from '@service-call/client';
 import { onCleanup } from 'solid-js';
 import { match, P } from 'ts-pattern';
-import { createCrossTabBus } from './cross-tab-bus';
 
 /**
  * Cross-tab fan-out of terminal incoming-call states ("answered"/"ended"), so

@@ -1,7 +1,13 @@
 /**
- * Minimal cross-tab message bus used by the call features: BroadcastChannel
- * is the primary transport, with a localStorage `storage` event as fallback
- * for embedded browsers where BroadcastChannel is missing or unreliable.
+ * Minimal cross-tab message bus: BroadcastChannel is the primary transport,
+ * with a localStorage `storage` event as fallback for embedded browsers
+ * where BroadcastChannel is missing or unreliable.
+ *
+ * This is fan-out only — every subscribing tab sees every message. For a
+ * long-lived "exactly one tab owns this job" responsibility use the
+ * lock-based election in `tab-leader.ts` instead; an election that needs
+ * custom ranking or mid-flight takeover builds its own protocol on this bus
+ * (see `features/channel/Call/ring-coordination.ts`).
  *
  * Hand-rolled rather than `@solid-primitives/broadcast-channel`: the
  * primitive constructs `BroadcastChannel` unguarded (it would throw in

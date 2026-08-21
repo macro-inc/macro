@@ -3,6 +3,7 @@ import { useOnboardingV4Flag } from '@app/features/setup/flow/useOnboardingV4Fla
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { updateUserAuth } from '@core/auth';
 import { redirectToEmailAuth } from '@core/auth/email';
+import { publishLoginSuccess } from '@core/auth/login-events';
 import { LoadingBlock } from '@core/component/LoadingBlock';
 import { toast } from '@core/component/Toast/Toast';
 import { useSettingsState } from '@core/constant/SettingsState';
@@ -61,8 +62,7 @@ function EmailSignupCallback(props: Pick<EmailAuthParams, 'successPath'>) {
   const onSuccessfulAuth = async () => {
     await updateUserAuth();
     await invalidateAllAfterLogin();
-    const channel = new BroadcastChannel('auth');
-    channel.postMessage({ type: 'login-success' });
+    publishLoginSuccess();
   };
 
   const navigateToSuccess = () => {

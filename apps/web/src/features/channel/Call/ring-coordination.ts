@@ -1,5 +1,5 @@
+import { createCrossTabBus } from '@core/cross-tab/cross-tab-bus';
 import { match, P } from 'ts-pattern';
-import { createCrossTabBus } from './cross-tab-bus';
 
 /**
  * Cross-tab election of a single audible ringer per incoming call, so a call
