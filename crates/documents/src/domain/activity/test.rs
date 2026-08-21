@@ -191,6 +191,8 @@ fn pipeline_and_session_events_are_ignored() {
             document_id: DOCUMENT_ID.to_string(),
             file_type: FileType::Md,
             document_version_id: None,
+            actor: None,
+            on_behalf_of: None,
         },
     ));
     assert_eq!(sync.event.ingest(sync.event_id), Ingest::Ignore);
@@ -205,6 +207,26 @@ fn pipeline_and_session_events_are_ignored() {
         interaction.event.ingest(interaction.event_id),
         Ingest::Ignore
     );
+}
+
+#[test]
+fn attributed_sync_content_is_an_edited_activity() {
+    let event = envelope(DocumentTopicEvent::SyncContentUpdated(
+        DocumentSyncContentUpdatedMetadata {
+            document_id: DOCUMENT_ID.to_string(),
+            file_type: FileType::Md,
+            document_version_id: None,
+            actor: Some(Actor::new_from_bot(bot_id::MACRO_AI_BOT_ID)),
+            on_behalf_of: Some(user("macro|owner@example.com")),
+        },
+    ));
+    let activity = single_activity(event.event.ingest(event.event_id));
+    assert_eq!(activity.action, Action::Edited);
+    assert_eq!(
+        activity.actor.as_ref(),
+        bot_id::MACRO_AI_BOT_ID.into_storage_id().as_ref()
+    );
+    assert_eq!(activity.subject_id, "macro|owner@example.com");
 }
 
 #[test]

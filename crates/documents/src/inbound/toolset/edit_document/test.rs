@@ -9,6 +9,7 @@ use crate::domain::models::{
     DocumentTeamShareResponse, EditDocumentServiceArgs, GithubPullRequestsResponse,
     ImportEmailAttachmentRepoArgs, LocationQueryParams, TaskBranchName,
 };
+use crate::domain::permission_token::decode_permission_token;
 use crate::domain::ports::editing::{EditResult, EditingWorkerService};
 use crate::domain::response::{
     CreateDocumentResponseData, DocumentResponse, GetDocumentResponseData, LocationResponseV3,
@@ -391,19 +392,24 @@ impl EntityAccessService for FakeEntityAccessService {
 #[derive(Clone, Default)]
 struct FakeEditingWorker {
     edit_calls: Arc<Mutex<Vec<String>>>,
+    tokens: Arc<Mutex<Vec<DocumentPermissionToken>>>,
 }
 
 impl EditingWorkerService for FakeEditingWorker {
     async fn edit(
         &self,
         document_id: &str,
-        _document_token: &DocumentPermissionToken,
+        document_token: &DocumentPermissionToken,
         _instructions: &str,
     ) -> anyhow::Result<EditResult> {
         self.edit_calls
             .lock()
             .expect("edit calls lock poisoned")
             .push(document_id.to_string());
+        self.tokens
+            .lock()
+            .expect("edit tokens lock poisoned")
+            .push(document_token.clone());
 
         Ok(EditResult {
             edits_applied: 1,
@@ -504,6 +510,24 @@ async fn allows_markdown_document() {
     assert_eq!(
         *editing.edit_calls.lock().expect("edit calls lock poisoned"),
         vec![TEST_DOCUMENT_ID.to_string()]
+    );
+
+    let token = editing
+        .tokens
+        .lock()
+        .expect("edit tokens lock poisoned")
+        .first()
+        .expect("edit minted a document token")
+        .clone();
+    let claims =
+        decode_permission_token(&token, "unused-jwt-secret").expect("edit token should decode");
+    assert_eq!(
+        claims.user_id.as_ref().map(|user| user.as_ref()),
+        Some(TEST_USER_ID)
+    );
+    assert_eq!(
+        claims.actor.as_deref(),
+        Some(bot_id::MACRO_AI_BOT_ID.into_storage_id().as_ref())
     );
 }
 

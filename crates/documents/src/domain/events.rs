@@ -110,6 +110,15 @@ pub struct DocumentSyncContentUpdatedMetadata {
     pub file_type: FileType,
     /// Version marker for the sync snapshot, when the caller supplies one.
     pub document_version_id: Option<String>,
+    /// Who mechanically changed the content. Absent on events published
+    /// before attribution, and on human-only collab sessions.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "schema", schema(value_type = Option<String>))]
+    pub actor: Option<Actor<'static>>,
+    /// The user whose feed this edit belongs on, when different from
+    /// [`Self::actor`].
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub on_behalf_of: Option<MacroUserIdStr<'static>>,
 }
 
 /// Metadata for [`DocumentTopicEvent::Purged`].

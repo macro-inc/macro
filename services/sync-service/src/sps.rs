@@ -3,7 +3,12 @@ use serde_json::json;
 use tracing::{debug, error};
 use worker::{Fetch, Method, Request, RequestInit};
 
-pub async fn update(document_id: &str, env: &worker::Env) -> worker::Result<()> {
+pub async fn update(
+    document_id: &str,
+    env: &worker::Env,
+    actor: Option<String>,
+    on_behalf_of: Option<String>,
+) -> worker::Result<()> {
     let internal_auth_key = env
         .secret("SPS_API_SECRET_KEY")
         .inspect_err(|e| error!(error=%e, "Could not find API SPS key binding"))?
@@ -14,11 +19,18 @@ pub async fn update(document_id: &str, env: &worker::Env) -> worker::Result<()> 
         .to_string();
 
     let url = format!("{url}/internal/extract_sync");
+    let mut document = json!({
+        "document_id": document_id,
+        "file_type": "md",
+    });
+    if let Some(actor) = actor {
+        document["actor"] = json!(actor);
+    }
+    if let Some(on_behalf_of) = on_behalf_of {
+        document["on_behalf_of"] = json!(on_behalf_of);
+    }
     let json_body = json!({
-        "documents": [{
-            "document_id": document_id,
-            "file_type": "md",
-        }]
+        "documents": [document]
     });
 
     let mut request = Request::new_with_init(
