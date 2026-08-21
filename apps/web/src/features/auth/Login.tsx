@@ -3,6 +3,7 @@ import { NoiseBackground } from '@app/features/setup/flow/shared';
 import { useOnboardingV4Flag } from '@app/features/setup/flow/useOnboardingV4Flag';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { GOOGLE_GMAIL_IDP } from '@core/auth/email';
+import { DEV_MODE_ENV } from '@core/constant/featureFlags';
 import { LoadingBlock } from '@core/component/LoadingBlock';
 import { toast } from '@core/component/Toast/Toast';
 import { useEmailLinks } from '@core/email-link';
@@ -212,12 +213,14 @@ function EmailFormNew(props: {
     if (typeof email === 'string') return email;
   });
 
-  // Dev builds auto-start the flow for `?email=` links (the seeder prints
-  // them per persona); combined with the local backend returning the code,
-  // opening the link logs straight in.
+  // Development-mode bundles (vite serve and the stack static build) auto-
+  // start the flow for `?email=` links (the seeder prints them per persona);
+  // combined with the local backend returning the code, opening the link
+  // logs straight in. Use MODE, not import.meta.env.DEV: `vite build`
+  // compiles DEV to false even when MODE=development.
   createEffect(() => {
     if (
-      import.meta.env.DEV &&
+      DEV_MODE_ENV &&
       searchParamsEmail &&
       !submission.pending &&
       !submission.result &&
