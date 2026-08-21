@@ -290,7 +290,9 @@ impl<R, Folds, Rt, Namer> AgentSessionServiceImpl<R, Folds, Rt, Namer> {
         let (completed, result) = oneshot::channel();
         let action_name = match &action {
             AgentAction::Prompt(_) => "prompt",
-            _ => "unknown",
+            AgentAction::SetModel(_) => "set_model",
+            AgentAction::Compact => "compact",
+            AgentAction::Stop => "stop",
         };
         if commands
             .send(SessionCommand {

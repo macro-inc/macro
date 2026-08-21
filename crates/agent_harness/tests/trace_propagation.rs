@@ -15,7 +15,7 @@ use agent_session::testing::InMemoryAgentSessionRepo;
 use bot_id::BotId;
 use macro_user_id::user_id::MacroUserIdStr;
 use opentelemetry::trace::TracerProvider as _;
-use opentelemetry_sdk::trace::{InMemorySpanExporter, SdkTracerProvider};
+use opentelemetry_sdk::trace::{InMemorySpanExporter, SdkTracerProvider, SpanData};
 use tracing::instrument::WithSubscriber as _;
 use tracing_subscriber::layer::SubscriberExt as _;
 
@@ -41,8 +41,56 @@ fn session_of(containers: &MockContainerManager) -> AgentSessionId {
         .expect("exactly one session has a container")
 }
 
-#[tokio::test]
-async fn queued_prompt_keeps_the_open_trace_when_handshake_finishes_later() {
+/// Open a managed session and drive its handshake to completion.
+///
+/// The `execute` call happens inside `caller` so the exported spans show
+/// whether the per-session worker stayed inside the caller's trace.
+async fn open_a_session_under(caller: &tracing::Span) {
+    let containers = MockContainerManager::new();
+    let repo = InMemoryAgentSessionRepo::new();
+    let runtimes: Arc<RuntimeRegistry<ContainerSender>> = RuntimeRegistry::new();
+    let service = AgentHarnessService::new(
+        AgentSessionServiceImpl::new(
+            repo.clone(),
+            FoldedMessageService::new(repo.clone()),
+            NoOpRealtime,
+        ),
+        containers.clone(),
+        AnnouncerMock::new(),
+        Arc::clone(&runtimes),
+        SessionDefaults {
+            model: "claude".to_owned(),
+            harness: "opencode".to_owned(),
+            repo_url: "https://github.com/macro-inc/macro".to_owned(),
+        },
+    );
+    let open = caller
+        .in_scope(|| service.execute(AgentSessionId::new(), HarnessCommand::Open(open_command())));
+    let drive = async {
+        loop {
+            if containers.spawned() == 1 {
+                break;
+            }
+            tokio::task::yield_now().await;
+        }
+        let container = containers
+            .container(session_of(&containers))
+            .expect("the spawned container is findable");
+        let agent = container.agent();
+        container.sends_ready();
+        agent.wait_for_requests(1).await;
+        agent.completes_initialize(InitializeResponse::new(PROTOCOL_VERSION));
+        agent.wait_for_requests(2).await;
+        agent.opens_session(NewSessionResponse::new("acp-test"));
+    };
+    let (opened, ()) = tokio::join!(open, drive);
+    opened.expect("open should succeed");
+}
+
+/// Record every span one harness open produces, plus the `harness.caller` span
+/// it was queued under - the stand-in for whatever really queues a command, be
+/// that a Kafka consumer or a control route.
+async fn spans_for_one_open() -> Vec<SpanData> {
     let exporter = InMemorySpanExporter::default();
     let provider = SdkTracerProvider::builder()
         .with_simple_exporter(exporter.clone())
@@ -51,58 +99,49 @@ async fn queued_prompt_keeps_the_open_trace_when_handshake_finishes_later() {
         .with(tracing_opentelemetry::layer().with_tracer(provider.tracer("test")));
 
     async {
-        let containers = MockContainerManager::new();
-        let repo = InMemoryAgentSessionRepo::new();
-        let runtimes: Arc<RuntimeRegistry<ContainerSender>> = RuntimeRegistry::new();
-        let service = AgentHarnessService::new(
-            AgentSessionServiceImpl::new(
-                repo.clone(),
-                FoldedMessageService::new(repo.clone()),
-                NoOpRealtime,
-            ),
-            containers.clone(),
-            AnnouncerMock::new(),
-            Arc::clone(&runtimes),
-            SessionDefaults {
-                model: "claude".to_owned(),
-                harness: "opencode".to_owned(),
-                repo_url: "https://github.com/macro-inc/macro".to_owned(),
-            },
-        );
-        let open = service.execute(AgentSessionId::new(), HarnessCommand::Open(open_command()));
-        let drive = async {
-            loop {
-                if containers.spawned() == 1 {
-                    break;
-                }
-                tokio::task::yield_now().await;
-            }
-            let container = containers
-                .container(session_of(&containers))
-                .expect("the spawned container is findable");
-            let agent = container.agent();
-            container.sends_ready();
-            agent.wait_for_requests(1).await;
-            agent.completes_initialize(InitializeResponse::new(PROTOCOL_VERSION));
-            agent.wait_for_requests(2).await;
-            agent.opens_session(NewSessionResponse::new("acp-test"));
-        };
-        let (opened, ()) = tokio::join!(open, drive);
-        opened.expect("open should succeed");
+        let caller = tracing::info_span!("harness.caller");
+        open_a_session_under(&caller).await;
     }
     .with_subscriber(subscriber)
     .await;
 
     provider.force_flush().expect("flush spans");
-    let spans = exporter.get_finished_spans().expect("read spans");
-    let open = spans
+    exporter.get_finished_spans().expect("read spans")
+}
+
+fn span_named<'a>(spans: &'a [SpanData], name: &str) -> &'a SpanData {
+    spans
         .iter()
-        .find(|span| span.name == "open")
-        .expect("open span");
-    let command = spans
-        .iter()
-        .find(|span| span.name == "agent.session.command")
-        .expect("command span");
+        .find(|span| span.name == name)
+        .unwrap_or_else(|| panic!("a {name} span was exported"))
+}
+
+#[tokio::test]
+async fn queued_prompt_keeps_the_open_trace_when_handshake_finishes_later() {
+    let spans = spans_for_one_open().await;
+    let open = span_named(&spans, "open");
+    let command = span_named(&spans, "agent.session.command");
 
     assert_eq!(command.parent_span_id, open.span_context.span_id());
+}
+
+/// The per-session worker runs on its own task, so nothing but an explicitly
+/// carried span keeps its work attached to whoever queued the command. Without
+/// that, `open` is a disconnected root and the whole trigger trace is severed
+/// at the harness boundary.
+#[tokio::test]
+async fn worker_spans_descend_from_the_span_the_caller_held() {
+    let spans = spans_for_one_open().await;
+    let caller = span_named(&spans, "harness.caller");
+    let open = span_named(&spans, "open");
+
+    assert_eq!(open.parent_span_id, caller.span_context.span_id());
+    for span in &spans {
+        assert_eq!(
+            span.span_context.trace_id(),
+            caller.span_context.trace_id(),
+            "{} escaped the caller's trace",
+            span.name
+        );
+    }
 }
