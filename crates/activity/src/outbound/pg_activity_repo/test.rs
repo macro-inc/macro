@@ -4,7 +4,7 @@ use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;
 
 use super::*;
-use crate::domain::models::{Action, Actor, CommonAction};
+use crate::domain::models::{Action, Activity, Actor, Attribution, CommonAction};
 
 fn user(id: &str) -> MacroUserIdStr<'static> {
     MacroUserIdStr::try_from(id.to_string()).expect("valid user id")
@@ -372,4 +372,40 @@ async fn a_corrupt_row_shrinks_the_page_but_never_ends_pagination(pool: PgPool) 
     assert_eq!(second.records.len(), 1);
     assert_eq!(second.records[0].entity_id, "doc-old");
     assert_eq!(second.next, None);
+}
+
+fn system_bot() -> Actor<'static> {
+    Actor::try_from("bot|00000000-0000-0000-0000-000000005759".to_string()).expect("system bot")
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn actor_feed_lists_delegated_actions_the_bot_subject_feed_does_not(pool: PgPool) {
+    let repo = PgActivityRepo::new(pool.clone());
+    let owner = user("macro|owner@example.com");
+    let delegated = Activity::attributed(
+        Uuid::from_u128(60),
+        0,
+        Attribution::delegated(system_bot(), owner.clone()),
+        model_entity::EntityType::Document,
+        "doc-system",
+        CommonAction::Created,
+        Utc::now(),
+    );
+    repo.insert_activities(&[delegated, seed(61, CommonAction::Edited, "doc-user")])
+        .await
+        .unwrap();
+
+    let actor_page = repo
+        .actor_feed(system_bot().as_ref(), None, nz(10))
+        .await
+        .unwrap();
+    assert_eq!(actor_page.records.len(), 1);
+    assert_eq!(actor_page.records[0].entity_id, "doc-system");
+    assert_eq!(actor_page.records[0].subject_id, owner.as_ref());
+
+    let bot_as_subject = repo
+        .subject_feed(system_bot().as_ref(), None, nz(10))
+        .await
+        .unwrap();
+    assert!(bot_as_subject.records.is_empty());
 }

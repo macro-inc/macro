@@ -560,6 +560,34 @@ impl graphql_activity::ActivityFeedReader for RecordingActivityReader {
             next,
         })
     }
+
+    async fn actor_feed(
+        &self,
+        actor_id: &str,
+        cursor: Option<(chrono::DateTime<chrono::Utc>, Uuid)>,
+        limit: std::num::NonZeroU32,
+    ) -> Result<activity::ActivityFeedPage, graphql_activity::ActivityReadFailed> {
+        let limit = limit.get();
+        let records = self.records.lock().expect("activity records lock").clone();
+        let mut page: Vec<activity::ActivityRecord> = records
+            .into_iter()
+            .filter(|record| record.actor.as_ref() == actor_id)
+            .filter(|record| {
+                cursor.is_none_or(|(occurred_at, id)| {
+                    (record.occurred_at, record.id) < (occurred_at, id)
+                })
+            })
+            .collect();
+        let has_more = page.len() > limit as usize;
+        page.truncate(limit as usize);
+        let next = has_more
+            .then(|| page.last().map(|record| (record.occurred_at, record.id)))
+            .flatten();
+        Ok(activity::ActivityFeedPage {
+            records: page,
+            next,
+        })
+    }
 }
 
 fn parsed_message(thread_id: Uuid) -> ParsedMessage {
@@ -1627,6 +1655,49 @@ async fn activity_feed_pages_by_cursor_and_carries_unknown_actions() {
     let (cursor_at, cursor_id) = feed_calls[1].1.expect("second page carries the cursor");
     assert_eq!(cursor_at, chrono::DateTime::from_timestamp(200, 0).unwrap());
     assert_eq!(cursor_id, Uuid::from_u128(2));
+}
+
+#[tokio::test]
+async fn actor_activity_returns_bot_actions_and_rejects_other_users() {
+    let harness = harness();
+    let doc = Uuid::from_u128(72).to_string();
+    let mut record = activity_record(
+        8,
+        ModelEntityType::Document,
+        &doc,
+        activity::RecordedAction::Known(activity::Action::Created),
+        400,
+    );
+    record.actor =
+        activity::Actor::try_from("bot|00000000-0000-0000-0000-000000005759".to_string()).unwrap();
+    harness.activity_reader.set_records(vec![record]);
+
+    let ok = harness
+        .execute(
+            r#"{ user { actorActivity(actorId: "bot|00000000-0000-0000-0000-000000005759", input: {limit: 10}) { items { entityId actorId subjectId } nextCursor } } }"#,
+        )
+        .await;
+    assert!(ok.errors.is_empty(), "{:?}", ok.errors);
+    let items = &ok.data.into_json().unwrap()["user"]["actorActivity"]["items"];
+    assert_eq!(items.as_array().map(Vec::len), Some(1));
+    assert_eq!(items[0]["entityId"], doc);
+    assert_eq!(
+        items[0]["actorId"],
+        "bot|00000000-0000-0000-0000-000000005759"
+    );
+    assert_eq!(items[0]["subjectId"], VALID_USER_ID);
+
+    let denied = harness
+        .execute(
+            r#"{ user { actorActivity(actorId: "macro|other@example.com", input: {limit: 10}) { items { entityId } } } }"#,
+        )
+        .await;
+    assert!(!denied.errors.is_empty());
+    assert!(
+        denied.errors[0]
+            .message
+            .contains("actor activity is only available")
+    );
 }
 
 #[tokio::test]

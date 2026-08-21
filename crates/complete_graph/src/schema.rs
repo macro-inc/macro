@@ -13,7 +13,7 @@ use entity_access::domain::ports::{EntityAccessService, NoOpEntityAccessService}
 use entity_mutation::{EntityMutationService, UnavailableEntityMutationService};
 use graphql_activity::{
     ActivityFeedInput, ActivityReader, GraphqlActivityPage, NoOpActivityReader,
-    resolve_activity_feed,
+    resolve_activity_feed, resolve_actor_activity,
 };
 use graphql_channel::{
     ChannelActivityAuthorizer, ChannelActivityMutationService, ChannelMutationRoot,
@@ -534,6 +534,21 @@ where
         input: ActivityFeedInput,
     ) -> async_graphql::Result<GraphqlActivityPage> {
         resolve_activity_feed::<AcR>(ctx, &self.user_id, input).await
+    }
+
+    /// A page of activity performed by `actor_id`, newest first.
+    ///
+    /// `actor_id` must be the viewer or a first-party Macro bot
+    /// (`bot|<uuid>`). Use this for a bot's mechanical actions, which
+    /// do not appear on that bot's subject feed when they were
+    /// delegated to a user.
+    async fn actor_activity(
+        &self,
+        ctx: &Context<'_>,
+        actor_id: String,
+        input: ActivityFeedInput,
+    ) -> async_graphql::Result<GraphqlActivityPage> {
+        resolve_actor_activity::<AcR>(ctx, &self.user_id, actor_id, input).await
     }
 
     /// Authenticated user email catalog fields supplied by `graphql_email`.

@@ -121,6 +121,18 @@ struct StoredRow {
 }
 
 impl StoredRow {
+    fn into_page(mut rows: Vec<Self>, limit: u32) -> ActivityFeedPage {
+        let has_more = rows.len() > limit as usize;
+        rows.truncate(limit as usize);
+        let next = has_more
+            .then(|| rows.last().map(|row| (row.occurred_at, row.id)))
+            .flatten();
+        ActivityFeedPage {
+            records: rows.into_iter().filter_map(Self::decode).collect(),
+            next,
+        }
+    }
+
     /// Decodes the raw row, forward-tolerantly for the action and
     /// skip-with-warn for corruption the model can't represent: one bad row
     /// must not fail a whole page.
@@ -184,7 +196,7 @@ impl ActivityReads for PgActivityRepo {
         let fetch = i64::from(limit) + 1;
         // Two static queries instead of one `$x IS NULL OR …` merge, which
         // would defeat the (subject_id, occurred_at DESC, id DESC) index.
-        let mut rows = match cursor {
+        let rows = match cursor {
             None => {
                 sqlx::query_as!(
                     StoredRow,
@@ -223,15 +235,57 @@ impl ActivityReads for PgActivityRepo {
             }
         };
 
-        let has_more = rows.len() > limit as usize;
-        rows.truncate(limit as usize);
-        let next = has_more
-            .then(|| rows.last().map(|row| (row.occurred_at, row.id)))
-            .flatten();
-        Ok(ActivityFeedPage {
-            records: rows.into_iter().filter_map(StoredRow::decode).collect(),
-            next,
-        })
+        Ok(StoredRow::into_page(rows, limit))
+    }
+
+    async fn actor_feed(
+        &self,
+        actor_id: &str,
+        cursor: Option<(DateTime<Utc>, Uuid)>,
+        limit: NonZeroU32,
+    ) -> Result<ActivityFeedPage, Self::Err> {
+        let limit = limit.get();
+        let fetch = i64::from(limit) + 1;
+        let rows = match cursor {
+            None => {
+                sqlx::query_as!(
+                    StoredRow,
+                    r#"
+                    SELECT id, actor_id, action, action_payload,
+                           subject_id, entity_type, entity_id, occurred_at
+                    FROM activity_events
+                    WHERE actor_id = $1
+                    ORDER BY occurred_at DESC, id DESC
+                    LIMIT $2
+                    "#,
+                    actor_id,
+                    fetch,
+                )
+                .fetch_all(&self.pool)
+                .await?
+            }
+            Some((cursor_at, cursor_id)) => {
+                sqlx::query_as!(
+                    StoredRow,
+                    r#"
+                    SELECT id, actor_id, action, action_payload,
+                           subject_id, entity_type, entity_id, occurred_at
+                    FROM activity_events
+                    WHERE actor_id = $1 AND (occurred_at, id) < ($2, $3)
+                    ORDER BY occurred_at DESC, id DESC
+                    LIMIT $4
+                    "#,
+                    actor_id,
+                    cursor_at,
+                    cursor_id,
+                    fetch,
+                )
+                .fetch_all(&self.pool)
+                .await?
+            }
+        };
+
+        Ok(StoredRow::into_page(rows, limit))
     }
 
     async fn entity_activity(

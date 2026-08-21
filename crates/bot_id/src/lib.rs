@@ -112,6 +112,14 @@ impl BotId {
             .map_err(|_| BotIdParseError::invalid(value))
     }
 
+    /// First-party Macro platform bots (AI, system, coder).
+    pub const fn is_first_party(self) -> bool {
+        matches!(
+            self,
+            MACRO_AI_BOT_ID | MACRO_SYSTEM_BOT_ID | MACRO_CODER_BOT_ID
+        )
+    }
+
     /// Canonical storage representation as a parsed [`BotIdStr`].
     pub fn into_storage_id(self) -> BotIdStr<'static> {
         let storage_id = format!("{BOT_STORAGE_PREFIX}|{}", self.0);

@@ -75,6 +75,15 @@ pub trait ActivityFeedReader: Send + Sync + 'static {
         cursor: Option<(DateTime<Utc>, Uuid)>,
         limit: NonZeroU32,
     ) -> impl Future<Output = Result<ActivityFeedPage, ActivityReadFailed>> + Send + 'a;
+
+    /// One page of a mechanical actor's activity. Same keyset rules as
+    /// [`Self::subject_feed`].
+    fn actor_feed<'a>(
+        &'a self,
+        actor_id: &'a str,
+        cursor: Option<(DateTime<Utc>, Uuid)>,
+        limit: NonZeroU32,
+    ) -> impl Future<Output = Result<ActivityFeedPage, ActivityReadFailed>> + Send + 'a;
 }
 
 /// Combined reader capability required by the complete activity surface —
@@ -102,6 +111,18 @@ impl ActivityFeedReader for NoOpActivityReader {
     async fn subject_feed(
         &self,
         _subject_id: &str,
+        _cursor: Option<(DateTime<Utc>, Uuid)>,
+        _limit: NonZeroU32,
+    ) -> Result<ActivityFeedPage, ActivityReadFailed> {
+        Ok(ActivityFeedPage {
+            records: Vec::new(),
+            next: None,
+        })
+    }
+
+    async fn actor_feed(
+        &self,
+        _actor_id: &str,
         _cursor: Option<(DateTime<Utc>, Uuid)>,
         _limit: NonZeroU32,
     ) -> Result<ActivityFeedPage, ActivityReadFailed> {
@@ -198,6 +219,21 @@ where
             .await
             .map_err(|error| {
                 tracing::error!(?error, "activity feed load failed");
+                ActivityReadFailed
+            })
+    }
+
+    async fn actor_feed(
+        &self,
+        actor_id: &str,
+        cursor: Option<(DateTime<Utc>, Uuid)>,
+        limit: NonZeroU32,
+    ) -> Result<ActivityFeedPage, ActivityReadFailed> {
+        self.reads
+            .actor_feed(actor_id, cursor, limit)
+            .await
+            .map_err(|error| {
+                tracing::error!(?error, "actor activity feed load failed");
                 ActivityReadFailed
             })
     }

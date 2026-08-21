@@ -66,6 +66,17 @@ pub trait ActivityReads {
         limit: NonZeroU32,
     ) -> impl Future<Output = Result<ActivityFeedPage, Self::Err>> + Send;
 
+    /// One page of a mechanical actor's activity, newest first. Same
+    /// keyset and limit rules as [`Self::subject_feed`]. Use this for a
+    /// bot's own actions, which never appear as `subject_id` when they
+    /// were delegated to a user.
+    fn actor_feed(
+        &self,
+        actor_id: &str,
+        cursor: Option<(DateTime<Utc>, Uuid)>,
+        limit: NonZeroU32,
+    ) -> impl Future<Output = Result<ActivityFeedPage, Self::Err>> + Send;
+
     /// The newest `per_entity_limit` activities for each requested entity,
     /// in one round trip. Entities with no activity are absent from the map.
     fn entity_activity(

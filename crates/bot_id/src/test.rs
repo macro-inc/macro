@@ -44,6 +44,10 @@ fn system_bot_id_is_stable_and_distinct_from_ai_personas() {
     );
     assert_ne!(MACRO_SYSTEM_BOT_ID, MACRO_AI_BOT_ID);
     assert_ne!(MACRO_SYSTEM_BOT_ID, MACRO_CODER_BOT_ID);
+    assert!(MACRO_SYSTEM_BOT_ID.is_first_party());
+    assert!(MACRO_AI_BOT_ID.is_first_party());
+    assert!(MACRO_CODER_BOT_ID.is_first_party());
+    assert!(!BotId::TEST_A.is_first_party());
 }
 
 #[test]

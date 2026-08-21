@@ -5172,6 +5172,15 @@ type GraphqlUser {
 	"""
 	activity(input: ActivityFeedInput!): GraphqlActivityPage!
 	"""
+	A page of activity performed by `actor_id`, newest first.
+	
+	`actor_id` must be the viewer or a first-party Macro bot
+	(`bot|<uuid>`). Use this for a bot's mechanical actions, which
+	do not appear on that bot's subject feed when they were
+	delegated to a user.
+	"""
+	actorActivity(actorId: String!, input: ActivityFeedInput!): GraphqlActivityPage!
+	"""
 	Labels across every owned or delegated inbox accessible to the authenticated user.
 	"""
 	emailLabels: [GraphqlSoupEmailLabel!]!

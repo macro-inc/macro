@@ -19,6 +19,21 @@ fn garbage_cursors_are_rejected() {
 }
 
 #[test]
+fn actor_feed_is_visible_for_the_viewer_and_first_party_bots() {
+    let viewer = MacroUserIdStr::try_from("macro|teo@example.com".to_string()).unwrap();
+    assert!(actor_feed_is_visible(&viewer, "macro|teo@example.com"));
+    assert!(actor_feed_is_visible(
+        &viewer,
+        "bot|00000000-0000-0000-0000-000000005759"
+    ));
+    assert!(!actor_feed_is_visible(&viewer, "macro|other@example.com"));
+    assert!(!actor_feed_is_visible(
+        &viewer,
+        "bot|00000000-0000-0000-0000-0000000000b07a"
+    ));
+}
+
+#[test]
 fn feed_limits_are_defaulted_and_clamped() {
     assert_eq!(parse_feed_limit(None).unwrap().get(), 25);
     assert_eq!(parse_feed_limit(Some(100)).unwrap().get(), 100);

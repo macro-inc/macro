@@ -6,6 +6,8 @@
 //!
 //! - the authenticated user's own feed ([`resolve_activity_feed`]), a
 //!   keyset-paginated field on `GraphqlUser`;
+//! - a mechanical-actor feed ([`resolve_actor_activity`]) for the viewer
+//!   or a first-party Macro bot;
 //! - a lazily-loaded `activity` edge on every Soup entity, batched across
 //!   entities through [`EntityActivityLoader`] so it costs nothing when not
 //!   selected and one query when it is.
@@ -23,7 +25,7 @@ mod objects;
 
 pub use feed::{
     ActivityFeedInput, DEFAULT_ACTIVITY_FEED_LIMIT, GraphqlActivityPage, MAX_ACTIVITY_FEED_LIMIT,
-    resolve_activity_feed,
+    actor_feed_is_visible, resolve_activity_feed, resolve_actor_activity,
 };
 pub use loaders::{
     ActivityEdgeKey, ActivityEdgeLoad, ActivityFeedReader, ActivityPortReader, ActivityReadFailed,

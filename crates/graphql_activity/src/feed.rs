@@ -1,6 +1,7 @@
 use std::num::NonZeroU32;
 
 use async_graphql::{Context, InputObject, SimpleObject};
+use bot_id::BotIdStr;
 use chrono::{DateTime, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
 use models_pagination::{Base64Str, CursorVal, CursorWithVal, Sortable};
@@ -97,6 +98,51 @@ where
 
     let page = reader
         .subject_feed(user_id.as_ref(), cursor, limit)
+        .await
+        .map_err(|_| async_graphql::Error::new("activity feed is unavailable"))?;
+
+    Ok(GraphqlActivityPage {
+        items: page.records.into_iter().map(Into::into).collect(),
+        next_cursor: page
+            .next
+            .map(|(occurred_at, id)| encode_cursor(occurred_at, id, limit.get())),
+    })
+}
+
+/// Whether the viewer may read `actor_id`'s mechanical activity.
+///
+/// Allowed for the viewer's own principal, or a first-party Macro bot.
+pub fn actor_feed_is_visible(viewer: &MacroUserIdStr<'_>, actor_id: &str) -> bool {
+    if actor_id == viewer.as_ref() {
+        return true;
+    }
+    BotIdStr::parse_from_str(actor_id).is_ok_and(|bot| bot.bot_id().is_first_party())
+}
+
+/// Resolve one page of a mechanical actor's activity.
+///
+/// Rejects actor ids the viewer is not allowed to inspect.
+pub async fn resolve_actor_activity<R>(
+    ctx: &Context<'_>,
+    viewer: &MacroUserIdStr<'static>,
+    actor_id: String,
+    input: ActivityFeedInput,
+) -> async_graphql::Result<GraphqlActivityPage>
+where
+    R: ActivityFeedReader,
+{
+    if !actor_feed_is_visible(viewer, &actor_id) {
+        return Err(async_graphql::Error::new(
+            "actor activity is only available for the viewer or a Macro system bot",
+        ));
+    }
+
+    let reader = ctx.data::<R>()?;
+    let limit = parse_feed_limit(input.limit)?;
+    let cursor = input.cursor.map(decode_cursor).transpose()?;
+
+    let page = reader
+        .actor_feed(&actor_id, cursor, limit)
         .await
         .map_err(|_| async_graphql::Error::new("activity feed is unavailable"))?;
 
