@@ -139,6 +139,15 @@ export type EventTimeInput =
       kind: 'allDay';
     };
 /**
+ * User tools are pending until a user executes them
+ */
+export type UserToolResponseForToolCalendarEvent =
+  | 'PendingUserExecution'
+  | 'Rejected'
+  | {
+      UserAction: ToolCalendarEvent;
+    };
+/**
  * External systems items can be imported from.
  */
 export type ImportSource = 'linear' | 'notion' | 'slack';
@@ -540,7 +549,7 @@ export type SearchSkillsMatchType = 'partial' | 'exact';
 /**
  * User tools are pending until a user executes them
  */
-export type UserToolResponse =
+export type UserToolResponseForSendEmailResponse =
   | 'PendingUserExecution'
   | 'Rejected'
   | {
@@ -1344,7 +1353,7 @@ export interface CrmCompanySearchDomain {
   createdAt: string;
 }
 /**
- * Create an event on the user's calendar, inviting any listed attendees through Google Calendar. The event is written to Google immediately, so attendees receive invitations the moment it is created — confirm details with the user before creating events with attendees.
+ * Prepare an event on the user's calendar, inviting any listed attendees through Google Calendar. In Macro chat this tool opens an inline composer so the user can review, edit, and confirm the event; use the tool to present the proposal instead of asking for a redundant confirmation in prose. When the pending call is executed, the event is written to Google immediately and attendees receive invitations. Other clients should confirm attendee events before executing the call.
  *
  * The event lands on the user's primary calendar unless `calendarId` (from ListCalendars) targets another one. For recurring events pass RFC 5545 lines in `recurrenceLines`, e.g. ["RRULE:FREQ=WEEKLY;BYDAY=MO"]. Returns the created event with its `eventId` for later updates or deletion. Fails if the user has no writable calendar connected.
  */
@@ -1375,6 +1384,10 @@ export interface CreateCalendarEvent {
    */
   calendarId?: string | null;
   /**
+   * Reminder configuration for the event. Omit to use the selected calendar's defaults.
+   */
+  reminders?: EventRemindersInput | null;
+  /**
    * Attach a freshly generated Google Meet video conference to the event.
    */
   addGoogleMeet?: boolean;
@@ -1391,6 +1404,32 @@ export interface AttendeeInput {
    * Whether attendance is optional for this attendee. Defaults to required.
    */
   isOptional?: boolean;
+}
+/**
+ * Reminder configuration supplied when creating a calendar event.
+ */
+export interface EventRemindersInput {
+  /**
+   * Whether the selected calendar's default reminders should apply.
+   */
+  useDefault: boolean;
+  /**
+   * Overrides used when calendar defaults are disabled.
+   */
+  overrides?: EventReminderOverrideInput[];
+}
+/**
+ * One reminder override supplied to a calendar tool.
+ */
+export interface EventReminderOverrideInput {
+  /**
+   * Provider reminder method. `popup` creates a Macro notification.
+   */
+  method: string;
+  /**
+   * Minutes before the event start.
+   */
+  minutes: number;
 }
 /**
  * A calendar event as returned by the create and update tools.

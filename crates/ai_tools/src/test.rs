@@ -43,3 +43,28 @@ fn search_toolset_passes_schema_validation() {
 fn frontend_schemas_build() {
     let _ = all_tool_frontend_schemas();
 }
+
+#[test]
+fn frontend_schemas_distinguish_user_tool_response_types() {
+    let json = all_tool_frontend_schemas()
+        .to_json_pretty()
+        .expect("frontend schemas serialize");
+    let schemas: serde_json::Value = serde_json::from_str(&json).expect("valid schema json");
+    let tools = schemas["tools"].as_array().expect("tools array");
+    let output_for = |name: &str| {
+        tools
+            .iter()
+            .find(|tool| tool["name"] == name)
+            .and_then(|tool| tool["output"].as_str())
+            .expect("tool output schema")
+    };
+
+    assert_eq!(
+        output_for("CreateCalendarEvent"),
+        "UserToolResponseForToolCalendarEvent"
+    );
+    assert_eq!(
+        output_for("SendEmail"),
+        "UserToolResponseForSendEmailResponse"
+    );
+}

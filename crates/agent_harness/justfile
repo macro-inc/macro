@@ -22,8 +22,8 @@ default_prompt := "list the files in the repo root, then stop"
 default:
     @just --list
 
-# Build the Daytona snapshot if missing, then boot an agent in a sandbox
-boot-daytona prompt=default_prompt:
+# Build the Daytona snapshot if missing.
+ensure-daytona:
     #!/usr/bin/env bash
     set -euo pipefail
     # Daytona has no "build from a local Dockerfile at create time" mode, so
@@ -46,6 +46,11 @@ boot-daytona prompt=default_prompt:
           --context . \
           --cpu 4 --memory 8 --disk 10 )
     fi
+
+# Build the Daytona snapshot if missing, then boot an agent in a sandbox
+boot-daytona prompt=default_prompt: ensure-daytona
+    #!/usr/bin/env bash
+    set -euo pipefail
     DAYTONA_SNAPSHOT={{image_name}} cargo run -p agent_harness --bin boot_agent -- daytona {{ quote(prompt) }}
 
 # Delete the Daytona snapshot so the next boot rebuilds it

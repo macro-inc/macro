@@ -1,8 +1,16 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  type MockInstance,
+  vi,
+} from 'vitest';
 import { openExternalUrl, registerExternalUrlInterceptor } from './url';
 
 describe('openExternalUrl', () => {
-  let openSpy: ReturnType<typeof vi.spyOn>;
+  let openSpy: MockInstance<typeof window.open>;
   const disposers: Array<() => void> = [];
 
   // Register + track the disposer so afterEach can tear it down; interceptors

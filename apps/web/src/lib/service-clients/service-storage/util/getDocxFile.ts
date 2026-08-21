@@ -18,6 +18,10 @@ export type DocxExpandedPart = DocxBaseExpandedPart<ArrayBuffer>;
 
 export type DocxExpandedPartList = Omit<DocxExpandedPart, 'content'>[];
 
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
 export type GetDocxFileResponse = FlattenObject<{
   parts: Array<{ sha: string; url: string }>;
   metadata: WithRequired<DocumentMetadata, 'documentBom'>;
@@ -36,7 +40,7 @@ export async function getDocxExpandedParts(
     return err([
       {
         code: 'OPFS_ERROR',
-        message: `Failed to get OPFS document store: ${error.message}`,
+        message: `Failed to get OPFS document store: ${errorMessage(error)}`,
       },
     ]);
   }
@@ -49,7 +53,7 @@ export async function getDocxExpandedParts(
     return err([
       {
         code: 'OPFS_ERROR',
-        message: `Failed to get OPFS document handle for ${documentId}: ${error.message}`,
+        message: `Failed to get OPFS document handle for ${documentId}: ${errorMessage(error)}`,
       },
     ]);
   }
@@ -70,7 +74,7 @@ export async function getDocxExpandedParts(
     return err([
       {
         code: 'OPFS_ERROR',
-        message: `Failed to list OPFS parts for ${documentId}: ${error.message}`,
+        message: `Failed to list OPFS parts for ${documentId}: ${errorMessage(error)}`,
       },
     ]);
   }
@@ -96,7 +100,9 @@ export async function getDocxExpandedParts(
             }
             return { sha: p.sha, path: p.path, content: buffer };
           } catch (error) {
-            console.warn(`Failed to get part ${p.path}: ${error.message}`);
+            console.warn(
+              `Failed to get part ${p.path}: ${errorMessage(error)}`
+            );
             return null;
           }
         })

@@ -166,8 +166,8 @@ function makeCreateBlock({
       try {
         const id = await createFn();
         return id;
-      } catch (e) {
-        toast.failure(e.message);
+      } catch (cause) {
+        toast.failure(cause instanceof Error ? cause.message : String(cause));
         return null;
       }
     };

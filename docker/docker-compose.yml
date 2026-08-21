@@ -296,33 +296,17 @@ services:
       start_period: 10s
 
   # ============================================================================
-  # agent_trigger_service (portless local worker)
-  # Channel messages -> agent session trigger events
-  # ============================================================================
-  agent_trigger_service:
-    <<: [*common-env, *rust-services-image]
-    command: ["/app/out/agent_trigger_service"]
-    restart: on-failure
-    depends_on:
-      - postgres
-      - kafka
-    networks:
-      - databases
-      - services
-
-  # ============================================================================
   # agent_harness_service (Port 8101)
-  # Agent session trigger events -> sandboxed coding agent sessions, plus the
-  # session control routes, which have to be served from the process that owns
-  # the live transports they act on.
-  # Starts when both credentials are supplied:
-  # `DAYTONA_API_KEY=... GITHUB_TOKEN=... just run_local`.
+  # Channel messages -> agent session trigger events -> sandboxed coding agent
+  # sessions, plus the session control routes, which have to be served from the
+  # process that owns the live transports they act on.
+  # Managed sandboxes require DAYTONA_API_KEY and GITHUB_TOKEN; trigger
+  # processing and external sessions run without them.
   # ============================================================================
   agent_harness_service:
     <<: [*common-env, *rust-services-image]
     command: ["/app/out/agent_harness_service"]
     restart: on-failure
-    profiles: ["agent-harness"]
     # No host port: everything reaches this through the proxy, and a second
     # local instance would collide on a fixed publish.
     environment:
