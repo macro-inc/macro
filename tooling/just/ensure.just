@@ -1,6 +1,15 @@
 ensure_redis container_name="my-redis":
     #!/usr/bin/env bash
     set -e
+
+    desired="macro-local-redis:dev"
+    if docker inspect {{ container_name }} >/dev/null 2>&1; then
+        current=$(docker inspect -f '{{ "{{.Config.Image}}" }}' {{ container_name }})
+        if [ "$current" != "$desired" ]; then
+            echo "Replacing $current with $desired"
+            docker rm -f {{ container_name }}
+        fi
+    fi
     
     # Check if container exists (running or stopped)
     if docker ps -a | grep -q {{ container_name }}; then
@@ -70,8 +79,10 @@ ensure_redis container_name="my-redis":
                 exit 1
             fi
         else
-            # Create and run new container
-            docker run -d --name {{ container_name }} -p 6379:6379 redis
+            # Create and run new container from the Nix dockerTools image.
+            root="$(git rev-parse --show-toplevel)"
+            bash "$root/tooling/scripts/load-nix-docker-streams.sh" stream-docker-image-local-redis
+            docker run -d --name {{ container_name }} -p 6379:6379 macro-local-redis:dev
             echo "Created new Redis container"
         fi
     fi
@@ -91,6 +102,15 @@ ensure_redis container_name="my-redis":
 ensure_postgres container_name="my-postgres" db_user="user" db_password="password":
     #!/usr/bin/env bash
     set -e
+
+    desired="macro-local-postgres:dev"
+    if docker inspect {{ container_name }} >/dev/null 2>&1; then
+        current=$(docker inspect -f '{{ "{{.Config.Image}}" }}' {{ container_name }})
+        if [ "$current" != "$desired" ]; then
+            echo "Replacing $current with $desired"
+            docker rm -f {{ container_name }}
+        fi
+    fi
     
     # Check if container exists (running or stopped)
     if docker ps -a | grep -q {{ container_name }}; then
@@ -102,11 +122,13 @@ ensure_postgres container_name="my-postgres" db_user="user" db_password="passwor
             echo "PostgreSQL container already running"
         fi
     else
-        # Create and run new container
+        # Create and run new container from the Nix dockerTools image.
+        root="$(git rev-parse --show-toplevel)"
+        bash "$root/tooling/scripts/load-nix-docker-streams.sh" stream-docker-image-local-postgres
         docker run -d --name {{ container_name }} \
             -e POSTGRES_USER={{ db_user }} \
             -e POSTGRES_PASSWORD={{ db_password }} \
-            -p 5432:5432 postgres
+            -p 5432:5432 macro-local-postgres:dev
         echo "Created new PostgreSQL container"
     fi
     # Wait for DB to be ready
@@ -119,6 +141,15 @@ ensure_postgres container_name="my-postgres" db_user="user" db_password="passwor
 ensure_dynamodb container_name="my-dynamodb" port="8000":
     #!/usr/bin/env bash
     set -e
+
+    desired="macro-local-localstack:dev"
+    if docker inspect {{ container_name }} >/dev/null 2>&1; then
+        current=$(docker inspect -f '{{ "{{.Config.Image}}" }}' {{ container_name }})
+        if [ "$current" != "$desired" ]; then
+            echo "Replacing $current with $desired"
+            docker rm -f {{ container_name }}
+        fi
+    fi
     
     # Check if container exists (running or stopped)
     if docker ps -a | grep -q {{ container_name }}; then
@@ -130,16 +161,19 @@ ensure_dynamodb container_name="my-dynamodb" port="8000":
             echo "DynamoDB container already running"
         fi
     else
-        # Create and run new container
+        # LocalStack's DynamoDB (not amazon/dynamodb-local). The gateway
+        # listens on 4566 inside the image; map that to the caller's port.
+        root="$(git rev-parse --show-toplevel)"
+        bash "$root/tooling/scripts/load-nix-docker-streams.sh" stream-docker-image-local-localstack
         docker run -d --name {{ container_name }} \
-            -p {{ port }}:8000 \
-            amazon/dynamodb-local \
-            -jar DynamoDBLocal.jar -inMemory -sharedDb
+            -p {{ port }}:4566 \
+            -e SERVICES=dynamodb \
+            macro-local-localstack:dev
         echo "Created new DynamoDB container"
     fi
     # Wait for DynamoDB to be ready
     echo "Waiting for DynamoDB to be ready..."
-    until curl -s http://localhost:{{ port }} > /dev/null 2>&1; do
+    until curl -fsS http://localhost:{{ port }}/_localstack/health > /dev/null 2>&1; do
         sleep 1
     done
     echo "DynamoDB is ready on port {{ port }}"
