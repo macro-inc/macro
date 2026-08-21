@@ -1,8 +1,8 @@
-# Reverse-proxy, mail, LocalStack, snapshot helper, and CDN nginx.
+# Reverse-proxy, mail, snapshot helper, and CDN nginx.
 #
 # All of these previously pulled Docker Hub / Alpine images. Each is now a
 # dockerTools image of the corresponding Nixpkgs package (or a tiny tar/gzip
-# helper for volume snapshots).
+# helper for volume snapshots). LocalStack lives in `localstack.nix`.
 { pkgs }:
 let
   imageLib = pkgs.callPackage ./image-lib.nix { };
@@ -76,42 +76,6 @@ let
     };
   };
 
-  localstackEntrypoint = pkgs.writeShellScriptBin "localstack-entrypoint" ''
-    set -euo pipefail
-    export GATEWAY_LISTEN="''${GATEWAY_LISTEN:-0.0.0.0:4566}"
-    export SERVICES="''${SERVICES:-sqs,dynamodb,s3}"
-    mkdir -p /var/lib/localstack
-    exec ${pkgs.localstack}/bin/localstack start --host
-  '';
-
-  localstack = imageLib.mk {
-    name = "macro-local-localstack";
-    extraContents = [
-      pkgs.localstack
-      localstackEntrypoint
-      pkgs.python3
-    ];
-    extraPath = [
-      pkgs.localstack
-      pkgs.python3
-      pkgs.iproute2
-      pkgs.procps
-    ];
-    extraEnv = [
-      "GATEWAY_LISTEN=0.0.0.0:4566"
-      "SERVICES=sqs,dynamodb,s3"
-    ];
-    extraCommands = ''
-      mkdir -p ./var/lib/localstack ./tmp/localstack
-    '';
-    config = {
-      Cmd = [ "${localstackEntrypoint}/bin/localstack-entrypoint" ];
-      ExposedPorts = {
-        "4566/tcp" = { };
-      };
-    };
-  };
-
   snapshotHelper = imageLib.mk {
     name = "macro-local-snapshot-helper";
     extraContents = [
@@ -132,7 +96,6 @@ in
     nginx
     caddy
     mailpit
-    localstack
     snapshotHelper
     ;
 }

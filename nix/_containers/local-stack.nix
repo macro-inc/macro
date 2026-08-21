@@ -10,6 +10,7 @@ let
   opensearch = pkgs.callPackage ./opensearch.nix { };
   fusionauth = pkgs.callPackage ./fusionauth.nix { };
   edge = pkgs.callPackage ./edge.nix { };
+  localstack = pkgs.callPackage ./localstack.nix { };
   tracing = pkgs.callPackage ./tracing.nix { };
 in
 {
@@ -22,7 +23,7 @@ in
   nginx = edge.nginx;
   caddy = edge.caddy;
   mailpit = edge.mailpit;
-  localstack = edge.localstack;
+  localstack = localstack;
   snapshot-helper = edge.snapshotHelper;
   jaeger = tracing.jaeger;
   datadog-agent = tracing.datadogAgent;
