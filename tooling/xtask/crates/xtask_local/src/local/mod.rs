@@ -516,6 +516,7 @@ fn prepare(
 
     // Build the runtime image (idempotent) and the service binaries.
     let target = arch::detect()?;
+    gen_compose::ensure_arion_compose(stage)?;
     build::ensure_runtime_image(stage, target, false)?;
     let binaries = build::resolve(
         stage,
@@ -951,9 +952,11 @@ pub fn runtime_image_only(force: bool) -> Result<()> {
 
 /// `cargo x gen-compose`.
 pub fn gen_compose_only(args: &cli::InstanceArgs) -> Result<()> {
+    let stage = Stage::from_env();
     let instance = Instance::derive(args.instance.as_deref(), args.port_base)?;
     let target = arch::detect()?;
     let binaries = build::BinariesDir::TargetDir(workspace_root().join(target.debug_dir()));
+    gen_compose::ensure_arion_compose(&stage)?;
     let path = gen_compose::generate(Mode::Local, &instance, &binaries, false, false)?;
     println!("{}", path.display());
     Ok(())

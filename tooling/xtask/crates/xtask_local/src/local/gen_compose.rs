@@ -24,7 +24,11 @@ use serde_yaml::value::{Tag, TaggedValue};
 use super::build::{BinariesDir, RUNTIME_IMAGE_TAG};
 use super::instance::{Instance, Port};
 use super::inventory::services_for_mode;
+use super::stage::Stage;
 use super::{Mode, repo_root};
+
+/// Flake attr that renders the Arion composition to a Compose YAML file.
+const ARION_COMPOSE_ATTR: &str = ".#arion-compose-yaml";
 
 pub const LOCALSTACK_IMAGE: &str = "localstack/localstack:4";
 pub const MAILPIT_IMAGE: &str = "axllent/mailpit:v1.20";
@@ -505,11 +509,36 @@ fn ports_only(ports: Vec<String>) -> dct::Service {
     }
 }
 
-/// The ordered compose file list run-local/run-dev/validate all use: the base
-/// compose then the per-instance generated override.
+/// Path of the rendered Arion composition (`nix build .#arion-compose-yaml`).
+pub fn arion_compose_yaml() -> PathBuf {
+    repo_root().join("target/nix/arion-compose.yaml")
+}
+
+/// Evaluate the Arion composition into a Compose YAML file.
+///
+/// `just run_local` / `just stack` use this as the base file instead of
+/// `docker/docker-compose.yml`. The hand-written YAML remains for tracing
+/// collectors, snapshot hashing, and ad-hoc `docker compose` helpers.
+pub fn ensure_arion_compose(stage: &Stage) -> Result<PathBuf> {
+    let path = arion_compose_yaml();
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)
+            .with_context(|| format!("creating {}", parent.display()))?;
+    }
+    let mut cmd = Command::new("nix");
+    cmd.current_dir(repo_root())
+        .args(["build", "--print-build-logs", ARION_COMPOSE_ATTR])
+        .args(["--out-link"])
+        .arg(&path);
+    stage.run("Rendering Arion compose", &mut cmd)?;
+    Ok(path)
+}
+
+/// The ordered compose file list run-local/run-dev/validate all use: the Arion
+/// base then the per-instance generated override.
 pub fn compose_files(instance: &Instance) -> Vec<PathBuf> {
     vec![
-        repo_root().join("docker/docker-compose.yml"),
+        arion_compose_yaml(),
         instance.artifact_dir().join("docker-compose.override.yml"),
     ]
 }

@@ -2,6 +2,11 @@
 # Freeze the Docker Compose project name so every checkout/worktree uses the
 # same local containers, networks, and anonymous Compose-managed resources.
 # Local setup is single-instance by design.
+#
+# `just run_local` / `just stack` use the Arion composition in `nix/_arion/`
+# (rendered to `target/nix/arion-compose.yaml`) plus a generated override.
+# This file remains for tracing collectors, snapshot hashing, and ad-hoc
+# `docker compose` helpers such as `just docker_up`.
 name: macro
 
 include:

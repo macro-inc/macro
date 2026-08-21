@@ -107,7 +107,12 @@ impl Plan {
         // same-arch Fly machines, so this is insurance, not a behavior change.
         h.update(super::arch::detect()?.docker_platform.as_bytes());
 
-        // Infra image pins + topology.
+        // Infra image pins + topology. `just run_local` uses the Arion
+        // composition; the hand-written Compose files still pin the same
+        // images for snapshot hashing and ad-hoc `docker compose` helpers.
+        hash_dir(&mut h, &repo_root().join("nix/_arion"), &[])?;
+        hash_file(&mut h, &repo_root().join("nix/_containers/runtime.nix"))?;
+        hash_file(&mut h, &repo_root().join("nix/_containers/fhs.nix"))?;
         for rel in [
             "docker/docker-compose.yml",
             "docker/docker-compose-databases.yml",

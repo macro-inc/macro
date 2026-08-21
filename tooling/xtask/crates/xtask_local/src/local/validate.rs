@@ -49,6 +49,7 @@ fn local_compose_flavor(instance: &Instance, mode: Mode, static_frontend: bool) 
         .get("GMAIL_FORWARDER_SA_KEY")
         .is_some_and(|key| !key.trim().is_empty());
     gen_compose::generate(mode, instance, &binaries, static_frontend, gmail_forwarder)?;
+    gen_compose::ensure_arion_compose(&super::stage::Stage::from_env())?;
 
     let files = gen_compose::compose_files(instance);
     let mut cmd = gen_compose::docker_compose(instance, &files, &resolved.generated_path);

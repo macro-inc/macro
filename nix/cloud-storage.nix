@@ -830,6 +830,11 @@
           nsc
           parallel
           docker-compose
+        ]
+        ++ pkgs.lib.optionals isLinux [
+          inputs.arion.packages.${system}.default
+        ]
+        ++ [
           curl
           openssh
           wget

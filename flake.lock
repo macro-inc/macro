@@ -1,5 +1,27 @@
 {
   "nodes": {
+    "arion": {
+      "inputs": {
+        "flake-parts": "flake-parts",
+        "haskell-flake": "haskell-flake",
+        "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1770259557,
+        "narHash": "sha256-EvZ09k9+mzXAngPzU2K7oLLUDlKoT1numb4bDb3Gtl4=",
+        "owner": "hercules-ci",
+        "repo": "arion",
+        "rev": "9b24cf65c72cb0e9616e437d55e1ac8e5c6bc715",
+        "type": "github"
+      },
+      "original": {
+        "owner": "hercules-ci",
+        "repo": "arion",
+        "type": "github"
+      }
+    },
     "crane": {
       "locked": {
         "lastModified": 1784564969,
@@ -53,6 +75,27 @@
     },
     "flake-parts": {
       "inputs": {
+        "nixpkgs-lib": [
+          "arion",
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1769996383,
+        "narHash": "sha256-AnYjnFWgS49RlqX7LrC4uA+sCCDBj0Ry/WOJ5XWAsa0=",
+        "owner": "hercules-ci",
+        "repo": "flake-parts",
+        "rev": "57928607ea566b5db3ad13af0e57e921e6b12381",
+        "type": "github"
+      },
+      "original": {
+        "owner": "hercules-ci",
+        "repo": "flake-parts",
+        "type": "github"
+      }
+    },
+    "flake-parts_2": {
+      "inputs": {
         "nixpkgs-lib": "nixpkgs-lib"
       },
       "locked": {
@@ -69,7 +112,7 @@
         "type": "github"
       }
     },
-    "flake-parts_2": {
+    "flake-parts_3": {
       "inputs": {
         "nixpkgs-lib": [
           "hermes-agent",
@@ -108,9 +151,25 @@
         "type": "github"
       }
     },
+    "haskell-flake": {
+      "locked": {
+        "lastModified": 1675296942,
+        "narHash": "sha256-u1X1sblozi5qYEcLp1hxcyo8FfDHnRUVX3dJ/tW19jY=",
+        "owner": "srid",
+        "repo": "haskell-flake",
+        "rev": "c2cafce9d57bfca41794dc3b99c593155006c71e",
+        "type": "github"
+      },
+      "original": {
+        "owner": "srid",
+        "ref": "0.1.0",
+        "repo": "haskell-flake",
+        "type": "github"
+      }
+    },
     "hermes-agent": {
       "inputs": {
-        "flake-parts": "flake-parts_2",
+        "flake-parts": "flake-parts_3",
         "nixpkgs": [
           "nixpkgs"
         ],
@@ -252,10 +311,11 @@
     },
     "root": {
       "inputs": {
+        "arion": "arion",
         "crane": "crane",
         "crane-tauri": "crane-tauri",
         "fenix": "fenix",
-        "flake-parts": "flake-parts",
+        "flake-parts": "flake-parts_2",
         "flake-utils": "flake-utils",
         "hermes-agent": "hermes-agent",
         "import-tree": "import-tree",

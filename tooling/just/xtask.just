@@ -5,7 +5,7 @@
 # run-local needs.
 xtask := "cargo run --quiet --manifest-path Cargo.toml -p xtask_local --features local-stack --"
 
-# Start a fully local stack (xtask: zigbuild + runtime image + infra + proxy + frontend).
+# Start a fully local stack (xtask: host binaries + Nix dockerTools runtime + Arion compose).
 #   just run_local                      # default instance
 #   just run_local --instance agent-a   # isolated, concurrent instance
 #   just run_local --no-doppler --env-file ./local.env --no-frontend --no-build

@@ -16,7 +16,7 @@ use super::instance::Port;
 /// the inventory and back validation/diagnostics rather than the hot path.
 #[derive(Clone, Copy, Debug)]
 pub struct RustService {
-    /// The service key in `docker/docker-compose.yml` (e.g. `authentication-service`).
+    /// The service key in the Arion composition / Compose file (e.g. `authentication-service`).
     pub compose_name: &'static str,
     /// The cargo binary name (e.g. `authentication_service`). Run as
     /// `/app/out/<cargo_bin>`. Bin names are unique workspace-wide, so

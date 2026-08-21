@@ -68,3 +68,19 @@ fn durable_bake_covers_every_repository_built_local_image() {
         ["proxy", "mailpit", "static_file_cdn"]
     );
 }
+
+#[test]
+fn local_compose_uses_arion_base() {
+    let instance = instance::Instance::derive(None, None).unwrap();
+    let files = gen_compose::compose_files(&instance);
+    assert_eq!(files[0], gen_compose::arion_compose_yaml());
+    assert!(
+        files[0].ends_with("target/nix/arion-compose.yaml"),
+        "{}",
+        files[0].display()
+    );
+    assert_eq!(
+        files[1],
+        instance.artifact_dir().join("docker-compose.override.yml")
+    );
+}

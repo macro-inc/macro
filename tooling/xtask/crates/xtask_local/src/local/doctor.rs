@@ -38,6 +38,13 @@ pub fn run(args: &InstanceArgs) -> Result<()> {
         ),
         ("bun", check_bin("bun", "install bun")),
         (
+            "nix",
+            check_bin(
+                "nix",
+                "install Nix (flakes) — used for Arion compose and the Linux runtime image",
+            ),
+        ),
+        (
             "sqlx-cli",
             check_bin("sqlx", "cargo install sqlx-cli (in the nix dev shell)"),
         ),

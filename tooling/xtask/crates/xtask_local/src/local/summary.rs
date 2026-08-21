@@ -60,7 +60,7 @@ pub fn endpoint_rows(instance: &Instance) -> Vec<(&'static str, String, u16)> {
 /// The `docker compose logs -f` invocation for the instance.
 pub fn logs_command(instance: &Instance, generated_env: &Path) -> String {
     let repo_root = super::repo_root();
-    let base_compose = repo_root.join("docker/docker-compose.yml");
+    let base_compose = super::gen_compose::arion_compose_yaml();
     let override_compose = instance.artifact_dir().join("docker-compose.override.yml");
     format!(
         "MACRO_ENV_FILE={:?} docker compose --project-directory {:?} -p {} -f {:?} -f {:?} --env-file {:?} logs -f",
