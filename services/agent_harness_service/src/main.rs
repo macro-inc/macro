@@ -11,7 +11,7 @@ mod bots_directory;
 mod config;
 mod trigger;
 
-use std::{future::Future, pin::Pin, sync::Arc, time::Duration};
+use std::{future::Future, pin::Pin, sync::Arc};
 
 use agent_fold::domain::service::FoldedMessageService;
 use agent_harness::domain::model::{HarnessCommand, SessionDefaults};
@@ -64,7 +64,6 @@ use macro_service_urls::{ConnectionGatewayUrl, LexicalServiceUrl};
 use rdkafka::consumer::CommitMode;
 use rdkafka::message::{BorrowedMessage, Message as _};
 use sqlx::postgres::PgPoolOptions;
-use tokio_util::task::TaskTracker;
 use tracing::Instrument as _;
 
 /// Consumer group owning this harness's agent-session offsets.
@@ -141,8 +140,6 @@ async fn run() -> anyhow::Result<()> {
             session_repo.clone(),
         ),
     );
-    let session_runtime = sessions.clone();
-
     // Containers: local Docker when a developer has opted in, Daytona otherwise.
     let containers = if config.dev_dangerous_local_containers {
         if !matches!(config.environment, Environment::Local) {
@@ -195,11 +192,10 @@ async fn run() -> anyhow::Result<()> {
             macro_queues::ContactsQueue::new().to_string(),
         ),
     });
-    let broker_tasks = TaskTracker::new();
     let broker = MacroEventBrokerService::new(
         KafkaEventPublisher::new(config.kafka_brokers.as_ref())
             .context("failed to create kafka event publisher")?,
-        broker_tasks.clone(),
+        macro_event_broker::GlobalSpawner,
     );
     let side_effects = ChannelSideEffectService::new(
         PgChannelSideEffectContext::new(pool.clone()),
@@ -208,13 +204,9 @@ async fn run() -> anyhow::Result<()> {
         ContactsChannelDispatcher::new(contacts_ingress),
     )
     .with_macro_event_broker(broker);
-    let channel_side_effect_tasks = TaskTracker::new();
     let channel_service = Arc::new(ChannelServiceImpl::with_dependencies(
         PgChannelsRepo::new(pool.clone()),
-        SpawnedChannelEventDispatcher::with_task_tracker(
-            side_effects,
-            channel_side_effect_tasks.clone(),
-        ),
+        SpawnedChannelEventDispatcher::new(side_effects),
         channels::domain::service::NoopChannelReferenceSharePermissions,
     ));
     let announcer = ChannelAnnouncer::new(
@@ -335,7 +327,6 @@ async fn run() -> anyhow::Result<()> {
     let mut shutdown = std::pin::pin!(shutdown_signal());
     let mut tasks = tokio::task::JoinSet::new();
     let mut run_error = None;
-    let mut trigger_finished = false;
     loop {
         tokio::select! {
             () = &mut shutdown => {
@@ -343,7 +334,6 @@ async fn run() -> anyhow::Result<()> {
                 break;
             }
             result = &mut trigger => {
-                trigger_finished = true;
                 run_error = Some(match result {
                     Ok(()) => anyhow::anyhow!("agent trigger stopped unexpectedly"),
                     Err(error) => anyhow::anyhow!("agent trigger task failed: {error}"),
@@ -475,77 +465,16 @@ async fn run() -> anyhow::Result<()> {
     }
 
     http.abort();
-    let _ = http.await;
-    if !trigger_finished {
-        trigger.abort();
-        let _ = trigger.await;
-    }
-    harness.stop_accepting();
-
-    // Intake is stopped above. Give committed Kafka work and admitted HTTP
-    // commands a chance to finish before cancelling their workers.
-    let drain_tasks = async {
-        while let Some(result) = tasks.join_next().await {
-            if let Err(error) = result {
-                tracing::error!(error = ?error, "agent harness task failed during shutdown");
-            }
-        }
-        harness.drain().await;
-    };
-    if tokio::time::timeout(TASK_DRAIN_TIMEOUT, drain_tasks)
-        .await
-        .is_err()
-    {
-        tracing::warn!(
-            timeout_seconds = TASK_DRAIN_TIMEOUT.as_secs(),
-            "timed out waiting for agent harness commands to drain"
-        );
-        harness.shutdown().await;
-        tasks.abort_all();
-        while let Some(result) = tasks.join_next().await {
-            if let Err(error) = result
-                && !error.is_cancelled()
-            {
-                tracing::error!(error = ?error, "agent harness task failed during cancellation");
-            }
-        }
-    }
-
-    if tokio::time::timeout(TASK_DRAIN_TIMEOUT, session_runtime.shutdown())
-        .await
-        .is_err()
-    {
-        tracing::warn!(
-            timeout_seconds = TASK_DRAIN_TIMEOUT.as_secs(),
-            "timed out waiting for agent sessions to shut down"
-        );
-    }
-    channel_side_effect_tasks.close();
-    if tokio::time::timeout(TASK_DRAIN_TIMEOUT, channel_side_effect_tasks.wait())
-        .await
-        .is_err()
-    {
-        tracing::warn!(
-            timeout_seconds = TASK_DRAIN_TIMEOUT.as_secs(),
-            "timed out waiting for channel side effects to drain"
-        );
-    }
-    broker_tasks.close();
-    if tokio::time::timeout(TASK_DRAIN_TIMEOUT, broker_tasks.wait())
-        .await
-        .is_err()
-    {
-        tracing::warn!(
-            timeout_seconds = TASK_DRAIN_TIMEOUT.as_secs(),
-            "timed out waiting for event broker publishes to drain"
-        );
-    }
-
-    // Container cleanup is final and has a single owner: all work that could
-    // still use a sandbox has now drained or been cancelled.
+    trigger.abort();
     let stop_failures = container_shutdown.shutdown_all().await;
     if stop_failures > 0 {
         tracing::error!(stop_failures, "some sandboxes failed to stop");
+    }
+
+    while let Some(result) = tasks.join_next().await {
+        if let Err(error) = result {
+            tracing::error!(error = ?error, "agent harness task failed during shutdown");
+        }
     }
 
     match run_error {
@@ -553,5 +482,3 @@ async fn run() -> anyhow::Result<()> {
         None => Ok(()),
     }
 }
-
-const TASK_DRAIN_TIMEOUT: Duration = Duration::from_secs(30);

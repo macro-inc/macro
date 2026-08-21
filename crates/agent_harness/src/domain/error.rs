@@ -36,9 +36,6 @@ pub enum HarnessError {
     /// A session command worker stopped before reporting its result.
     #[error("agent session {0} command worker stopped")]
     CommandWorkerStopped(AgentSessionId),
-    /// The service is no longer accepting commands because shutdown started.
-    #[error("agent harness is shutting down")]
-    ShuttingDown,
     /// The session link could not be posted back to the mention's thread.
     #[error("failed to announce the agent session: {0}")]
     Announce(rootcause::Report),

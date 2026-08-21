@@ -57,6 +57,5 @@ macro_uuid = { path = "../../crates/macro_uuid" }
 serde = { workspace = true }
 sqlx = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "time"] }
-tokio-util = { workspace = true, features = ["rt"] }
 tracing = { workspace = true }
 workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
