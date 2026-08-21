@@ -622,6 +622,7 @@ export function CanvasController(props: ParentProps) {
       scopeId: scopeId(),
       description: 'Nudge right more',
       keyDownHandler: () => {
+        if (!selection.active()) return false;
         nudge('right', true, true);
         return true;
       },
@@ -668,6 +669,7 @@ export function CanvasController(props: ParentProps) {
       scopeId: scopeId(),
       description: 'Nudge left more',
       keyDownHandler: () => {
+        if (!selection.active()) return false;
         nudge('left', true, true);
         return true;
       },

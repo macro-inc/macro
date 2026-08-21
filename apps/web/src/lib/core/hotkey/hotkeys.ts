@@ -264,6 +264,11 @@ export function registerHotkey(
         }
       }
     });
+    for (const existingCommand of scopeNode.unkeyedCommands) {
+      if (existingCommand.hotkeyToken === hotkeyToken) {
+        replaced.add(existingCommand);
+      }
+    }
     if (replaced.size > 0) {
       scopeNode.hotkeyCommands.forEach((existing, h) => {
         const remaining = existing.filter((c) => !replaced.has(c));
@@ -274,6 +279,12 @@ export function registerHotkey(
           scopeNode.hotkeyCommands.delete(h);
         }
       });
+      for (let i = scopeNode.unkeyedCommands.length - 1; i >= 0; i--) {
+        const existingCommand = scopeNode.unkeyedCommands[i];
+        if (existingCommand && replaced.has(existingCommand)) {
+          scopeNode.unkeyedCommands.splice(i, 1);
+        }
+      }
       setHotkeyTokenMap((prev) =>
         removeCommandsFromTokenMap(prev, Array.from(replaced))
       );

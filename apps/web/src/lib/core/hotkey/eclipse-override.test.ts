@@ -104,6 +104,17 @@ describe('eclipse override', () => {
     expect(effectiveDescriptions(scopeId, 'x')).toEqual(['second']);
     expect(hotkeyTokenMap().get(token)).toHaveLength(1);
   });
+
+  test('a same-token override replaces a previous unkeyed registration', () => {
+    const scopeId = makeScope();
+    const token = 'eclipse-test:unkeyed-token' as HotkeyToken;
+    register(scopeId, 'first', { hotkey: undefined, hotkeyToken: token });
+    register(scopeId, 'second', { hotkey: undefined, hotkeyToken: token });
+
+    const unkeyed = hotkeyScopeTree.get(scopeId)?.unkeyedCommands ?? [];
+    expect(unkeyed.map((c) => c.description)).toEqual(['second']);
+    expect(hotkeyTokenMap().get(token)).toHaveLength(1);
+  });
 });
 
 describe('owner-bound disposal', () => {
