@@ -1,4 +1,5 @@
 import { IS_MAC } from '@core/constant/isMac';
+import { hotkeyScopeNeutralSelector } from '@core/dom-selectors';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { isEditableInput } from '@core/util/isEditableInput';
 import { Telemetry } from '@macro-inc/observability';
@@ -14,6 +15,7 @@ import {
 } from './constants';
 import {
   activeScope,
+  findLastLiveActiveDOMScope,
   hotkeyScopeTree,
   hotkeysAwaitingKeyUp,
   hotkeyTokenMap,
@@ -566,7 +568,7 @@ export function useHotkeyDOMScope(
 }
 
 export function attachGlobalDOMScope(el: Element) {
-  const handleFocusIn = () => {
+  const handleFocusIn = (e: Event) => {
     window.clearTimeout(focusoutTimoutId);
 
     // just in case focusin fires before focusout
@@ -574,8 +576,35 @@ export function attachGlobalDOMScope(el: Element) {
       window.clearTimeout(focusoutTimoutId);
     });
 
+    // Focus landing in a neutral region (e.g. the sidebar) must not flip the
+    // scope to 'global': that would mute every split/block command just
+    // because the user clicked chrome that lives outside the splits. Overlays
+    // without a scope of their own (dialogs, menus) are not neutral on
+    // purpose — activating 'global' is what mutes app hotkeys beneath them.
+    const isNeutralTarget =
+      e.target instanceof Element &&
+      e.target.closest(hotkeyScopeNeutralSelector) !== null;
+
     if (!scopeActivatedByFocusIn) {
-      setActiveScope('global');
+      if (isNeutralTarget) {
+        // A neutral region preserves a live scope but must not preserve a
+        // decayed one. Opening an overlay from the sidebar moves focus into
+        // a body portal (activating 'global'), and closing it returns focus
+        // to the trigger; overlays that own a scope (the launcher) also
+        // remove it on close. When the current scope is 'global' or gone,
+        // restore the most recent live DOM scope instead.
+        const currentScopeId = activeScope();
+        const currentIsLive =
+          currentScopeId !== 'global' && hotkeyScopeTree.has(currentScopeId);
+        if (!currentIsLive) {
+          const lastLiveScope = findLastLiveActiveDOMScope();
+          if (lastLiveScope) {
+            setActiveScope(lastLiveScope);
+          }
+        }
+      } else {
+        setActiveScope('global');
+      }
     }
     scopeActivatedByFocusIn = false;
   };

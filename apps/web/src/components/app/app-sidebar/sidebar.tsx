@@ -63,6 +63,7 @@ import {
   useSettingsTabAvailable,
 } from '@core/constant/settingsTabsConfig';
 import { useEmail, useUserId } from '@core/context/user';
+import { hotkeyScopeNeutralAttribute } from '@core/dom-selectors';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { clearPressedKeys } from '@core/hotkey/state';
 import { type HotkeyToken, TOKENS } from '@core/hotkey/tokens';
@@ -1467,8 +1468,14 @@ export const AppSidebar = (props: AppSidebarProps) => {
     onOpenChange: props.onOpenChange,
   });
 
+  // hotkeyScopeNeutralAttribute: focusing anything in the sidebar (rows, the
+  // workspace toggle, ...) must not flip the active hotkey scope to 'global',
+  // which would mute the active split's hotkeys until the user clicks back
+  // into a split. The sidebar's own hotkeys register on the 'global' scope,
+  // which every scope chain reaches, so they don't need the flip either.
   return (
     <div
+      {...hotkeyScopeNeutralAttribute}
       class={cn(
         'group/sidebar flex flex-col gap-0 overflow-hidden bg-surface px-3 pb-3 pt-4 text-[13px]',
         isExpanded() && 'relative h-full shrink-0 max-w-55 w-55 opacity-100',
