@@ -13,9 +13,9 @@ import type { EntityType } from '@service-properties/generated/schemas/entityTyp
 import { Button } from '@ui';
 import { type Component, createMemo, For, Show } from 'solid-js';
 import { ActionGlyph } from './action-glyph';
+import { ActionGraph } from './action-graph';
 import { ActionPhrase } from './action-phrase';
 import { ActorName } from './actor-name';
-import { ActionGraph } from './action-graph';
 import {
   actionAsPropertyChange,
   describeActionForEntity,
