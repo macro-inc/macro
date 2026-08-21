@@ -29,6 +29,8 @@ pub struct LocalEnv {
     /// `http://localhost:{FRONTEND_PORT}`, so this must track the serving
     /// mode or every OAuth signup dead-ends on an unused port.
     frontend_port: u16,
+    /// Browser-facing route to document cognition's MCP OAuth callback.
+    mcp_public_url: String,
     infra: InfraEnv,
     storage: StorageEnv,
     queues: QueueEnv,
@@ -53,6 +55,7 @@ impl LocalEnv {
             } else {
                 instance.port(Port::Frontend)
             },
+            mcp_public_url: format!("http://localhost:{}/cognition", instance.port(Port::Proxy)),
             infra: InfraEnv::local(),
             storage: StorageEnv::local(),
             queues: QueueEnv::local(),
@@ -71,6 +74,7 @@ impl LocalEnv {
         env.insert("COMPOSE_PROJECT_NAME".into(), self.project_name.clone());
         env.insert("PORT".into(), "8080".into());
         env.insert("FRONTEND_PORT".into(), self.frontend_port.to_string());
+        env.insert("MCP_PUBLIC_URL".into(), self.mcp_public_url.clone());
         // Calendar ingestion/sync ships dark (both flags default off in
         // deployed envs); local stacks keep it on for development.
         env.insert("CALENDAR_SYNC_ENABLED".into(), "true".into());
@@ -270,8 +274,8 @@ impl MailEnv {
 /// Daytona account is involved. `DAYTONA_API_KEY` is seeded empty so Doppler
 /// cannot bill Daytona, while still leaving the key in the map for
 /// `DAYTONA_API_KEY=... DEV_DANGEROUS_LOCAL_CONTAINERS=false just run_local`.
-/// `GITHUB_TOKEN` is left to Doppler / process env so a local sandbox can
-/// still clone.
+/// The sandbox holds no GitHub credential at all: it clones through the
+/// egress proxy.
 ///
 /// Two managed bots: `@coder` (`HARNESS_BOT_ID`) gets a sandbox from the
 /// local Docker provider, and `@macro` runs in-process on the in-memory ACP
@@ -495,11 +499,6 @@ impl BootStubEnv {
             "GITHUB_IDP_ID".into(),
             "99999999-9999-4999-8999-999999999999".into(),
         );
-        // Clone token for local sandboxes. Empty here so `--no-doppler` still
-        // has the key for `GITHUB_TOKEN=... just run_local`; Doppler overlays
-        // a real token when present. Not in `to_env`, so a local stack does
-        // not wipe Doppler's value the way it wipes `DAYTONA_API_KEY`.
-        env.insert("GITHUB_TOKEN".into(), String::new());
         env.insert("STRIPE_SECRET_KEY".into(), "local-stripe-secret".into());
         env.insert("STRIPE_PRICE_ID".into(), "local-stripe-price".into());
         env.insert(

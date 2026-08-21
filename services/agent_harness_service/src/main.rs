@@ -32,7 +32,7 @@ use agent_harness::outbound::containers::HarnessContainers;
 use agent_harness::outbound::cursor::{CursorContainerManager, PgCursorApiKeys};
 use agent_harness::outbound::daytona::{
     AnthropicApiKey as AnthropicApiKeySecret, DaytonaApiKey as DaytonaApiKeySecret,
-    DaytonaContainerManager, DaytonaSettings, GithubToken as GithubTokenSecret, Snapshot,
+    DaytonaContainerManager, DaytonaSettings, Snapshot,
 };
 use agent_harness::outbound::egress::EgressProvisioner;
 use agent_harness::outbound::local::{LocalContainerManager, LocalSettings};
@@ -202,11 +202,6 @@ async fn run() -> anyhow::Result<()> {
         if !matches!(config.environment, Environment::Local) {
             anyhow::bail!("DEV_DANGEROUS_LOCAL_CONTAINERS is only allowed when ENVIRONMENT=local");
         }
-        if config.github_token.trim().is_empty() {
-            tracing::warn!(
-                "GITHUB_TOKEN is unset: local sandboxes cannot clone private repositories; external agent sessions are unaffected"
-            );
-        }
         let network = config.local_container_network.trim();
         if network.is_empty() {
             anyhow::bail!(
@@ -217,22 +212,21 @@ async fn run() -> anyhow::Result<()> {
             docker_binary: config.local_container_docker_binary.clone(),
             image: config.local_container_image.clone(),
             network: network.to_owned(),
-            github_token: GithubTokenSecret::new(config.github_token.clone()),
             anthropic_api_key: anthropic_api_key.clone(),
         }))
     } else {
-        // Credential-less boot is deliberate: external sessions need neither.
-        // A managed spawn without them fails at spawn time instead, loudly.
-        if config.daytona_api_key.trim().is_empty() || config.github_token.trim().is_empty() {
+        // Credential-less boot is deliberate: external sessions need no
+        // sandbox at all. A Daytona spawn without a key fails at spawn time
+        // instead, loudly.
+        if config.daytona_api_key.trim().is_empty() {
             tracing::warn!(
-                "DAYTONA_API_KEY and/or GITHUB_TOKEN are unset: managed sandboxes are unarmed; external agent sessions are unaffected"
+                "DAYTONA_API_KEY is unset: Daytona-backed sandboxes are unarmed; external agent sessions are unaffected"
             );
         }
         HarnessContainers::Daytona(DaytonaContainerManager::new(DaytonaSettings {
             api_url: config.daytona_api_url.clone(),
             api_key: DaytonaApiKeySecret::new(config.daytona_api_key.clone()),
             snapshot: Snapshot::new(config.daytona_snapshot.clone()),
-            github_token: GithubTokenSecret::new(config.github_token.clone()),
             anthropic_api_key,
         }))
     };

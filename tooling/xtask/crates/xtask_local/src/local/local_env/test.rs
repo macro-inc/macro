@@ -35,6 +35,7 @@ fn emits_required_keys() {
         "FUSIONAUTH_API_KEY_SECRET_KEY",
         "FUSIONAUTH_PUBLIC_URL",
         "FUSIONAUTH_OAUTH_REDIRECT_URI",
+        "MCP_PUBLIC_URL",
         "JWT_SECRET_KEY",
         // Boot-blocking stubs — service config loaders require these even in a
         // no-doppler stack (see `BootStubEnv`).
@@ -87,7 +88,6 @@ fn emits_required_keys() {
         "CAL_EVENT_TYPE_CONTENT_NAMES_KEY",
         "META_PIXEL_ID",
         "META_ACCESS_TOKEN",
-        "GITHUB_TOKEN",
         "DEV_DANGEROUS_LOCAL_CONTAINERS",
         "LOCAL_CONTAINER_IMAGE",
         "LOCAL_CONTAINER_NETWORK",
@@ -286,9 +286,9 @@ fn the_agent_harness_uses_local_containers_and_wipes_daytona() {
         Some("true")
     );
     assert_eq!(env.get("DAYTONA_API_KEY").map(String::as_str), Some(""));
-    // Present so `GITHUB_TOKEN=... just run_local` overlays, but empty in a
-    // no-Doppler stack. Doppler would supply a real token above this stub.
-    assert_eq!(env.get("GITHUB_TOKEN").map(String::as_str), Some(""));
+    // No `GITHUB_TOKEN`: the sandbox clones through the egress proxy, which
+    // holds the credential on its behalf.
+    assert!(!env.contains_key("GITHUB_TOKEN"));
     // No `CURSOR_API_KEY`: `@cursor` sessions run on the key each user
     // registers in settings, so there is no deployment-wide one to stub.
     assert!(!env.contains_key("CURSOR_API_KEY"));
@@ -317,5 +317,23 @@ fn local_sandboxes_join_the_instances_compose_network() {
     assert_eq!(
         default_env.get("LOCAL_CONTAINER_IMAGE").map(String::as_str),
         Some("macro-agent-harness:latest")
+    );
+}
+
+#[test]
+fn mcp_public_url_uses_the_proxy_cognition_route() {
+    let default = Instance::derive(None, None).unwrap();
+    let named = Instance::derive(Some("2508"), None).unwrap();
+    let default_env = LocalEnv::for_instance(Mode::Local, &default, true).to_env();
+    let named_env = LocalEnv::for_instance(Mode::Local, &named, true).to_env();
+    let named_public_url = format!("http://localhost:{}/cognition", named.port(Port::Proxy));
+
+    assert_eq!(
+        default_env.get("MCP_PUBLIC_URL").map(String::as_str),
+        Some("http://localhost:8090/cognition")
+    );
+    assert_eq!(
+        named_env.get("MCP_PUBLIC_URL").map(String::as_str),
+        Some(named_public_url.as_str())
     );
 }

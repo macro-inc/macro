@@ -42,11 +42,6 @@ pub struct Config {
     /// keeping image builds off the first-prompt critical path.
     #[macro_config_default(String::from("macro-agent-harness"))]
     pub daytona_snapshot: String,
-    /// Token with read access to the repo cloned into sandboxes. Empty
-    /// means managed sandboxes cannot clone; external sessions are
-    /// unaffected.
-    #[macro_config_default(String::new())]
-    pub github_token: String,
     /// API key sandboxes run Anthropic models with. Injected into the
     /// sandbox environment at creation, where it activates opencode's
     /// `anthropic` provider — the only provider

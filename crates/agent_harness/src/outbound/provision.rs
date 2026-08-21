@@ -27,6 +27,9 @@ const ENSURE_READY_SCRIPT: &str = include_str!(concat!(
     "/container/ensure_ready.sh"
 ));
 
+#[cfg(test)]
+mod test;
+
 /// Wrap the readiness recipe as one command for provider exec APIs.
 #[must_use]
 pub fn ensure_ready_command() -> String {

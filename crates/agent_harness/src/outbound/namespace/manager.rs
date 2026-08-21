@@ -12,7 +12,6 @@ use crate::domain::error::{HarnessError, Result};
 use crate::domain::model::SpawnContainer;
 use crate::domain::ports::ContainerManager;
 use crate::domain::sandbox::{SandboxResizeEffect, create_only_resize_effect, resources};
-use crate::outbound::daytona::{AnthropicApiKey, GithubToken};
 use crate::outbound::provision;
 use crate::outbound::sidecar::SidecarTransport;
 
@@ -21,8 +20,6 @@ pub struct NamespaceContainerManager {
     client: NamespaceClient,
     image_ref: super::types::ImageRef,
     lifetime: std::time::Duration,
-    github_token: GithubToken,
-    anthropic_api_key: AnthropicApiKey,
 }
 
 impl NamespaceContainerManager {
@@ -34,15 +31,11 @@ impl NamespaceContainerManager {
             token,
             image_ref,
             lifetime,
-            github_token,
-            anthropic_api_key,
         } = settings;
         Self {
             client: NamespaceClient::new(api_url, token),
             image_ref,
             lifetime,
-            github_token,
-            anthropic_api_key,
         }
     }
 
@@ -103,17 +96,7 @@ impl ContainerManager for NamespaceContainerManager {
         fields(agent.container.provider = "namespace")
     )]
     async fn spawn(&self, command: SpawnContainer) -> Result<Self::Transport> {
-        let mut env = vec![
-            ("REPO_URL".to_owned(), command.repo_url),
-            (
-                "GITHUB_TOKEN".to_owned(),
-                self.github_token.expose().to_owned(),
-            ),
-            (
-                "ANTHROPIC_API_KEY".to_owned(),
-                self.anthropic_api_key.expose().to_owned(),
-            ),
-        ];
+        let mut env = Vec::new();
         env.extend(command.egress.environment());
         let container = ContainerSpec {
             image_ref: self.image_ref.clone(),
