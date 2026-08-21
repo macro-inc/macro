@@ -240,6 +240,6 @@ ensure_persistent_caches() {
 build_local_stack_binaries() {
   (
     \cd "${WORKSPACE_ROOT}"
-    nix build "${WORKSPACE_ROOT}#local-stack-binaries" --out-link "${LOCAL_STACK_BINS}"
+    "${NIX_BIN}" build "${WORKSPACE_ROOT}#local-stack-binaries" --out-link "${LOCAL_STACK_BINS}"
   )
 }
