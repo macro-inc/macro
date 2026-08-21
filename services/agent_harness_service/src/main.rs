@@ -133,11 +133,16 @@ async fn main() -> anyhow::Result<()> {
                 "GITHUB_TOKEN is unset: local sandboxes cannot clone private repositories; external agent sessions are unaffected"
             );
         }
+        let network = config.local_container_network.trim();
+        if network.is_empty() {
+            anyhow::bail!(
+                "LOCAL_CONTAINER_NETWORK is required when DEV_DANGEROUS_LOCAL_CONTAINERS is set"
+            );
+        }
         HarnessContainers::Local(LocalContainerManager::new(LocalSettings {
             docker_binary: config.local_container_docker_binary.clone(),
             image: config.local_container_image.clone(),
-            network: Some(config.local_container_network.clone())
-                .filter(|network| !network.trim().is_empty()),
+            network: network.to_owned(),
             github_token: GithubTokenSecret::new(config.github_token.clone()),
         }))
     } else {

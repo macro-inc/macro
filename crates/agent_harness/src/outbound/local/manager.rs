@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use agent_session::domain::model::AgentSessionId;
 
-use super::docker::{ContainerRef, Docker, Reachability, RunSpec};
+use super::docker::{ContainerRef, Docker, RunSpec};
 use super::errors::LocalError;
 use crate::domain::error::{HarnessError, Result};
 use crate::domain::model::SpawnContainer;
@@ -23,12 +23,8 @@ pub struct LocalSettings {
     pub docker_binary: String,
     /// Image sandboxes are created from.
     pub image: String,
-    /// Docker network to join, when the harness cannot use the host's loopback.
-    ///
-    /// `None` publishes an ephemeral host port instead. See
-    /// [`Reachability`][super::docker::Reachability] for why the two cases
-    /// cannot be collapsed.
-    pub network: Option<String>,
+    /// Compose network the sandbox joins so this service can dial it by name.
+    pub network: String,
     /// Token with read access to the repository cloned into sandboxes.
     pub github_token: GithubToken,
 }
@@ -47,7 +43,7 @@ pub struct LocalSettings {
 pub struct LocalContainerManager {
     docker: Docker,
     image: String,
-    network: Option<String>,
+    network: String,
     github_token: GithubToken,
 }
 
@@ -66,13 +62,6 @@ impl LocalContainerManager {
             image,
             network,
             github_token,
-        }
-    }
-
-    fn reachability(&self) -> Reachability {
-        match &self.network {
-            Some(network) => Reachability::Network(network.clone()),
-            None => Reachability::PublishedPort,
         }
     }
 
@@ -124,7 +113,7 @@ impl LocalContainerManager {
         }
         tracing::info!(container = %container.name, %output, "readiness recipe finished");
 
-        let address = self.sidecar_address(container).await?;
+        let address = sidecar_address(container);
         self.wait_for_ping(container, &address).await?;
 
         let url = format!("ws://{address}");
@@ -137,23 +126,6 @@ impl LocalContainerManager {
                 })
             })?;
         Ok(SidecarTransport::connect(socket))
-    }
-
-    /// `host:port` for this container's sidecar, however it is reachable.
-    async fn sidecar_address(&self, container: &ContainerRef) -> Result<String> {
-        match &self.network {
-            // On a shared network the container's own name is its DNS name, and
-            // the sidecar's port is not remapped.
-            Some(_) => Ok(format!("{}:{}", container.name, provision::SIDECAR_PORT)),
-            None => {
-                let port = self
-                    .docker
-                    .published_port(container, provision::SIDECAR_PORT)
-                    .await
-                    .map_err(unavailable)?;
-                Ok(format!("127.0.0.1:{port}"))
-            }
-        }
     }
 
     /// Poll the sidecar's `/ping` until it answers or we give up.
@@ -253,8 +225,7 @@ impl ContainerManager for LocalContainerManager {
             name: container_name(session_id),
             labels: vec![(SESSION_LABEL.to_owned(), session_id.to_string())],
             env: sandbox_env(repo_url, &self.github_token),
-            sidecar_port: provision::SIDECAR_PORT,
-            reachability: self.reachability(),
+            network: self.network.clone(),
         };
         let container = self.docker.run(&spec).await.map_err(unavailable)?;
         tracing::info!(container = %container.name, session = %session_id, "container created");
@@ -299,6 +270,12 @@ impl ContainerManager for LocalContainerManager {
 /// the rest of their daemon.
 fn container_name(session: AgentSessionId) -> String {
     format!("macro-agent-{session}")
+}
+
+/// The sidecar keeps its own port; on a shared network the container name is
+/// its DNS name.
+fn sidecar_address(container: &ContainerRef) -> String {
+    format!("{}:{}", container.name, provision::SIDECAR_PORT)
 }
 
 fn sandbox_env(repo_url: String, github_token: &GithubToken) -> Vec<(String, String)> {

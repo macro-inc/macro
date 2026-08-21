@@ -55,22 +55,6 @@ pub enum LocalError {
         image: String,
     },
 
-    /// Docker reported no published host port for the sidecar.
-    #[error("container {container} publishes no host port for port {port}")]
-    NoPublishedPort {
-        /// Container that was asked.
-        container: String,
-        /// Port that should have been published.
-        port: u16,
-    },
-
-    /// Docker's `port` output was not in the `host:port` shape.
-    #[error("could not read a host port out of `{output}`")]
-    UnreadablePort {
-        /// What docker actually printed.
-        output: String,
-    },
-
     /// The sidecar never answered its readiness probe.
     #[error("sidecar in {container} was not ready within {seconds}s")]
     NotReady {

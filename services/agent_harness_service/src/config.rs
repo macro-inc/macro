@@ -55,12 +55,11 @@ pub struct Config {
     /// Image the local provider creates sandboxes from.
     #[macro_config_default(String::from("macro-agent-harness:latest"))]
     pub local_container_image: String,
-    /// Docker network local sandboxes join, empty for none.
+    /// Compose network local sandboxes join so this service can dial them.
     ///
-    /// Required when this service is itself a container: a sandbox's published
-    /// host port is on the host's loopback, not this container's, so the only
-    /// address that resolves for both is one on a network they share. Empty is
-    /// right when the service runs natively.
+    /// Required when `dev_dangerous_local_containers` is on: the harness is
+    /// itself a container, so the address that works is one on a network both
+    /// share. `just run_local` sets `{project}_services`.
     #[macro_config_default(String::new())]
     pub local_container_network: String,
     /// The bot this deployment answers for.

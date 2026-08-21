@@ -1,6 +1,6 @@
 use super::*;
 
-fn spec(reachability: Reachability) -> RunSpec {
+fn spec() -> RunSpec {
     RunSpec {
         image: "macro-agent-harness:latest".to_owned(),
         name: "macro-agent-abc".to_owned(),
@@ -9,8 +9,7 @@ fn spec(reachability: Reachability) -> RunSpec {
             "REPO_URL".to_owned(),
             "https://github.com/macro-inc/macro".to_owned(),
         )],
-        sidecar_port: 8700,
-        reachability,
+        network: "macro_services".to_owned(),
     }
 }
 
@@ -18,7 +17,7 @@ fn spec(reachability: Reachability) -> RunSpec {
 /// left for `docker exec` to enter.
 #[test]
 fn run_detaches_and_keeps_the_container_alive() {
-    let args = run_args(&spec(Reachability::PublishedPort));
+    let args = run_args(&spec());
 
     assert_eq!(args[0], "run");
     assert!(args.contains(&"--detach".to_owned()));
@@ -30,7 +29,7 @@ fn run_detaches_and_keeps_the_container_alive() {
 
 #[test]
 fn run_passes_labels_and_environment_as_key_equals_value() {
-    let args = run_args(&spec(Reachability::PublishedPort));
+    let args = run_args(&spec());
 
     let label = args.iter().position(|arg| arg == "--label").unwrap();
     assert_eq!(args[label + 1], "macro.agent_session_id=abc");
@@ -38,23 +37,12 @@ fn run_passes_labels_and_environment_as_key_equals_value() {
     assert_eq!(args[env + 1], "REPO_URL=https://github.com/macro-inc/macro");
 }
 
-/// Loopback-only and host port 0: nothing off this machine may reach a
-/// sandbox, and concurrent sessions must not collide on a fixed port.
+/// The harness is itself a container, so a published host port would be on the
+/// host's loopback, which is not this process. Sandboxes join the Compose
+/// network and are dialed by name instead.
 #[test]
-fn a_published_sandbox_binds_an_ephemeral_loopback_port() {
-    let args = run_args(&spec(Reachability::PublishedPort));
-
-    let publish = args.iter().position(|arg| arg == "--publish").unwrap();
-    assert_eq!(args[publish + 1], "127.0.0.1::8700");
-    assert!(!args.contains(&"--network".to_owned()));
-}
-
-/// The Compose case: a published host port would be on the host's loopback,
-/// which is not the harness container's, so the sandbox joins a network and is
-/// dialed by name instead.
-#[test]
-fn a_networked_sandbox_publishes_nothing() {
-    let args = run_args(&spec(Reachability::Network("macro_services".to_owned())));
+fn a_sandbox_joins_the_compose_network_and_publishes_nothing() {
+    let args = run_args(&spec());
 
     let network = args.iter().position(|arg| arg == "--network").unwrap();
     assert_eq!(args[network + 1], "macro_services");
@@ -96,23 +84,4 @@ fn image_inspect_names_the_image() {
         image_inspect_args("macro-agent-harness:latest"),
         ["image", "inspect", "macro-agent-harness:latest"]
     );
-}
-
-#[test]
-fn a_published_port_is_read_off_an_ipv4_mapping() {
-    assert_eq!(parse_published_port("0.0.0.0:32768").unwrap(), 32768);
-}
-
-/// Splitting on the first colon would take an IPv6 address apart.
-#[test]
-fn a_published_port_is_read_off_an_ipv6_mapping() {
-    assert_eq!(parse_published_port("[::1]:32769").unwrap(), 32769);
-}
-
-#[test]
-fn a_mapping_with_no_port_is_an_error() {
-    assert!(matches!(
-        parse_published_port("nonsense"),
-        Err(LocalError::UnreadablePort { .. })
-    ));
 }

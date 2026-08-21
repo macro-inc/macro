@@ -17,22 +17,6 @@ use super::errors::LocalError;
 #[cfg(test)]
 mod test;
 
-/// How a container's ports are named to whoever has to dial them.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Reachability {
-    /// The container joins a Docker network and is dialed by container name.
-    ///
-    /// The case when the harness itself runs in Compose: a published host port
-    /// would be on the host's loopback, which is not this container's, so the
-    /// only address that works is one on a network both share.
-    Network(String),
-    /// The container publishes the sidecar on an ephemeral host port.
-    ///
-    /// The case when the harness runs natively: there is no shared network, and
-    /// the host's loopback is the harness's own.
-    PublishedPort,
-}
-
 /// One container's identity, as both docker and a dialer need it.
 #[derive(Debug, Clone)]
 pub struct ContainerRef {
@@ -51,10 +35,8 @@ pub struct RunSpec {
     pub labels: Vec<(String, String)>,
     /// Environment handed to the sandbox.
     pub env: Vec<(String, String)>,
-    /// Port the sidecar listens on inside the container.
-    pub sidecar_port: u16,
-    /// How the sidecar will be reached.
-    pub reachability: Reachability,
+    /// Docker network the sandbox joins so the harness can dial it by name.
+    pub network: String,
 }
 
 /// Drives the local Docker daemon.
@@ -109,27 +91,6 @@ impl Docker {
         let mut combined = String::from_utf8_lossy(&output.stdout).into_owned();
         combined.push_str(&String::from_utf8_lossy(&output.stderr));
         Ok((output.status.code().unwrap_or(-1), combined))
-    }
-
-    /// The host port a container publishes `port` on.
-    pub async fn published_port(
-        &self,
-        container: &ContainerRef,
-        port: u16,
-    ) -> Result<u16, LocalError> {
-        let args = port_args(&container.name, port);
-        let output = self.run_checked("port", &args).await?;
-        let line = output
-            .lines()
-            .next()
-            .map(str::trim)
-            .filter(|line| !line.is_empty())
-            .ok_or_else(|| LocalError::NoPublishedPort {
-                container: container.name.clone(),
-                port,
-            })?;
-
-        parse_published_port(line)
     }
 
     /// The container carrying `value` for `label`, if one exists.
@@ -231,19 +192,8 @@ fn run_args(spec: &RunSpec) -> Vec<String> {
         args.push(format!("{key}={value}"));
     }
 
-    match &spec.reachability {
-        Reachability::Network(network) => {
-            args.push("--network".to_owned());
-            args.push(network.clone());
-        }
-        Reachability::PublishedPort => {
-            args.push("--publish".to_owned());
-            // Host port 0 asks the daemon for an unused one, so parallel
-            // sessions never collide; loopback-only, because nothing outside
-            // this machine has any business reaching a sandbox.
-            args.push(format!("127.0.0.1::{}", spec.sidecar_port));
-        }
-    }
+    args.push("--network".to_owned());
+    args.push(spec.network.clone());
 
     args.push(spec.image.clone());
     args.push("sleep".to_owned());
@@ -263,10 +213,6 @@ fn exec_args(name: &str, command: &str) -> Vec<String> {
         "-lc".to_owned(),
         command.to_owned(),
     ]
-}
-
-fn port_args(name: &str, port: u16) -> Vec<String> {
-    vec!["port".to_owned(), name.to_owned(), format!("{port}/tcp")]
 }
 
 fn find_by_label_args(label: &str, value: &str) -> Vec<String> {
@@ -295,16 +241,4 @@ fn find_all_by_label_key_args(label: &str) -> Vec<String> {
 
 fn image_inspect_args(image: &str) -> Vec<String> {
     vec!["image".to_owned(), "inspect".to_owned(), image.to_owned()]
-}
-
-/// Read the host port out of one `docker port` line.
-///
-/// Docker prints `0.0.0.0:32768` or `[::1]:32768`, so the port is what follows
-/// the *last* colon — splitting on the first would take an IPv6 address apart.
-fn parse_published_port(line: &str) -> Result<u16, LocalError> {
-    line.rsplit_once(':')
-        .and_then(|(_host, port)| port.trim().parse().ok())
-        .ok_or_else(|| LocalError::UnreadablePort {
-            output: line.to_owned(),
-        })
 }
