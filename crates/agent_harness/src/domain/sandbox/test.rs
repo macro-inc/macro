@@ -46,3 +46,24 @@ fn upgrades_are_hot_and_downgrades_are_cold() {
         SandboxResizeKind::NoOp
     );
 }
+
+#[test]
+fn live_quotas_that_are_not_named_tiers_still_pick_hot_or_cold() {
+    let snapshot = SandboxResources {
+        cpu: 4,
+        memory_gib: 8,
+        disk_gib: 10,
+    };
+    assert_eq!(
+        resize_kind_from_resources(snapshot, resources(SandboxSize::Default)),
+        SandboxResizeKind::Hot
+    );
+    assert_eq!(
+        resize_kind_from_resources(resources(SandboxSize::Default), snapshot),
+        SandboxResizeKind::Cold
+    );
+    assert_eq!(
+        resize_kind_from_resources(snapshot, snapshot),
+        SandboxResizeKind::NoOp
+    );
+}

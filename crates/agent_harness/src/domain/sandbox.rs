@@ -56,12 +56,22 @@ pub fn resources(size: SandboxSize) -> SandboxResources {
 /// How to move a sandbox from `from` to `to`.
 #[must_use]
 pub fn resize_kind(from: SandboxSize, to: SandboxSize) -> SandboxResizeKind {
-    if from == to {
-        return SandboxResizeKind::NoOp;
-    }
-    let current = resources(from);
-    let next = resources(to);
-    if next.cpu >= current.cpu && next.memory_gib >= current.memory_gib {
+    resize_kind_from_resources(resources(from), resources(to))
+}
+
+/// How to move a sandbox between two resource quotas.
+///
+/// Disk is ignored: named tiers never change disk, and Daytona cannot shrink
+/// it. Spawn uses this against the snapshot's live CPU/RAM because
+/// `POST /sandbox` with a snapshot cannot set resources.
+#[must_use]
+pub fn resize_kind_from_resources(
+    current: SandboxResources,
+    next: SandboxResources,
+) -> SandboxResizeKind {
+    if current.cpu == next.cpu && current.memory_gib == next.memory_gib {
+        SandboxResizeKind::NoOp
+    } else if next.cpu >= current.cpu && next.memory_gib >= current.memory_gib {
         SandboxResizeKind::Hot
     } else {
         SandboxResizeKind::Cold

@@ -15,7 +15,9 @@ use super::types::{DaytonaSettings, Env, GithubToken, Labels, PortPreview, Snaps
 use crate::domain::error::{HarnessError, Result};
 use crate::domain::model::SpawnContainer;
 use crate::domain::ports::ContainerManager;
-use crate::domain::sandbox::{SandboxResizeKind, resources};
+use crate::domain::sandbox::{
+    SandboxResizeKind, SandboxResources, resize_kind_from_resources, resources,
+};
 use crate::outbound::managed_containers::ManagedContainers;
 use crate::outbound::provision::{self, SESSION_LABEL};
 use crate::outbound::sidecar::SidecarTransport;
@@ -232,87 +234,64 @@ impl DaytonaContainerManager {
             }
         }
     }
-}
 
-impl ContainerManager for DaytonaContainerManager {
-    type Transport = DaytonaContainer;
-
-    #[tracing::instrument(err, skip(self))]
-    async fn spawn(&self, command: SpawnContainer) -> Result<DaytonaContainer> {
-        let SpawnContainer {
-            session_id,
-            repo_url,
-            size,
-        } = command;
-        // `GITHUB_TOKEN` is here for `gh auth setup-git` and the github MCP
-        // server. It is also the env var opencode's `github-copilot` provider
-        // activates on, so its mere presence makes opencode advertise every
-        // Copilot model - and a plain PAT is not a Copilot credential, so each
-        // one fails at prompt time with "Authorization header is badly
-        // formatted". `container/opencode.json` pins `enabled_providers` to
-        // keep that list honest; do not drop that pin while this var is set.
-        let env = Env::from(HashMap::from([
-            ("REPO_URL".to_owned(), repo_url),
-            (
-                "GITHUB_TOKEN".to_owned(),
-                self.github_token.expose().to_owned(),
-            ),
-        ]));
-        let labels = Labels::from(HashMap::from([(
-            SESSION_LABEL.to_owned(),
-            session_id.to_string(),
-        )]));
-        let id = DaytonaSandboxId::new(
-            self.client
-                .create(&self.snapshot, env, labels, resources(size))
-                .await
-                .map_err(unavailable)?,
-        );
-        tracing::info!(sandbox_id = %id.as_str(), session = %session_id, "sandbox created");
-        if !self.managed.register(id.clone()) {
-            if !stop_sandbox(&self.client, &id, "shutdown during sandbox creation").await {
-                self.managed
-                    .containers
-                    .restore_failed_stop(id, Instant::now(), IDLE_TIMEOUT);
-            }
-            return Err(HarnessError::Container(
-                "the container manager is shutting down".to_owned(),
-            ));
-        }
-
-        match self.bring_up(&id).await {
-            Ok(container) => Ok(container),
-            Err(error) => {
-                self.managed.containers.remove(&id);
-                if !self.discard(&id).await {
-                    self.managed
-                        .containers
-                        .restore_failed_stop(id, Instant::now(), IDLE_TIMEOUT);
-                }
-                Err(error)
-            }
-        }
+    /// Snapshot creates inherit snapshot quotas. Align CPU/RAM to `size`, then
+    /// run the readiness recipe.
+    async fn align_size_then_bring_up(
+        &self,
+        id: &DaytonaSandboxId,
+        size: agent_session::domain::model::SandboxSize,
+    ) -> Result<DaytonaContainer> {
+        self.client
+            .wait_for_started(id.as_str(), provision::ENSURE_TIMEOUT)
+            .await
+            .map_err(unavailable)?;
+        self.align_size(id, size).await?;
+        self.bring_up(id).await
     }
 
-    #[tracing::instrument(err, skip(self))]
-    async fn resize(
+    async fn align_size(
         &self,
-        session: AgentSessionId,
+        id: &DaytonaSandboxId,
         size: agent_session::domain::model::SandboxSize,
-        kind: SandboxResizeKind,
     ) -> Result<()> {
-        let Some(id) = self
+        let (cpu, memory, _) = self
             .client
-            .find_by_label(SESSION_LABEL, &session.to_string())
+            .resources(id.as_str())
             .await
-            .map_err(unavailable)?
-            .map(DaytonaSandboxId::new)
-        else {
-            return Err(HarnessError::Container(format!(
-                "session {session} has no sandbox to resize"
-            )));
+            .map_err(unavailable)?;
+        let cpu = cpu.ok_or_else(|| {
+            HarnessError::Container("daytona did not report cpu for the new sandbox".to_owned())
+        })?;
+        let memory = memory.ok_or_else(|| {
+            HarnessError::Container("daytona did not report memory for the new sandbox".to_owned())
+        })?;
+        let current = SandboxResources {
+            cpu,
+            memory_gib: memory,
+            disk_gib: 96,
         };
         let next = resources(size);
+        let kind = resize_kind_from_resources(current, next);
+        tracing::info!(
+            sandbox_id = %id.as_str(),
+            %size,
+            current_cpu = cpu,
+            current_memory_gib = memory,
+            next_cpu = next.cpu,
+            next_memory_gib = next.memory_gib,
+            ?kind,
+            "aligning sandbox size after snapshot create"
+        );
+        self.apply_resize(id, next, kind).await
+    }
+
+    async fn apply_resize(
+        &self,
+        id: &DaytonaSandboxId,
+        next: SandboxResources,
+        kind: SandboxResizeKind,
+    ) -> Result<()> {
         match kind {
             SandboxResizeKind::NoOp => Ok(()),
             SandboxResizeKind::Hot => {
@@ -348,6 +327,88 @@ impl ContainerManager for DaytonaContainerManager {
                 Ok(())
             }
         }
+    }
+}
+
+impl ContainerManager for DaytonaContainerManager {
+    type Transport = DaytonaContainer;
+
+    #[tracing::instrument(err, skip(self))]
+    async fn spawn(&self, command: SpawnContainer) -> Result<DaytonaContainer> {
+        let SpawnContainer {
+            session_id,
+            repo_url,
+            size,
+        } = command;
+        // `GITHUB_TOKEN` is here for `gh auth setup-git` and the github MCP
+        // server. It is also the env var opencode's `github-copilot` provider
+        // activates on, so its mere presence makes opencode advertise every
+        // Copilot model - and a plain PAT is not a Copilot credential, so each
+        // one fails at prompt time with "Authorization header is badly
+        // formatted". `container/opencode.json` pins `enabled_providers` to
+        // keep that list honest; do not drop that pin while this var is set.
+        let env = Env::from(HashMap::from([
+            ("REPO_URL".to_owned(), repo_url),
+            (
+                "GITHUB_TOKEN".to_owned(),
+                self.github_token.expose().to_owned(),
+            ),
+        ]));
+        let labels = Labels::from(HashMap::from([(
+            SESSION_LABEL.to_owned(),
+            session_id.to_string(),
+        )]));
+        let id = DaytonaSandboxId::new(
+            self.client
+                .create(&self.snapshot, env, labels)
+                .await
+                .map_err(unavailable)?,
+        );
+        tracing::info!(sandbox_id = %id.as_str(), session = %session_id, "sandbox created");
+        if !self.managed.register(id.clone()) {
+            if !stop_sandbox(&self.client, &id, "shutdown during sandbox creation").await {
+                self.managed
+                    .containers
+                    .restore_failed_stop(id, Instant::now(), IDLE_TIMEOUT);
+            }
+            return Err(HarnessError::Container(
+                "the container manager is shutting down".to_owned(),
+            ));
+        }
+
+        match self.align_size_then_bring_up(&id, size).await {
+            Ok(container) => Ok(container),
+            Err(error) => {
+                self.managed.containers.remove(&id);
+                if !self.discard(&id).await {
+                    self.managed
+                        .containers
+                        .restore_failed_stop(id, Instant::now(), IDLE_TIMEOUT);
+                }
+                Err(error)
+            }
+        }
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn resize(
+        &self,
+        session: AgentSessionId,
+        size: agent_session::domain::model::SandboxSize,
+        kind: SandboxResizeKind,
+    ) -> Result<()> {
+        let Some(id) = self
+            .client
+            .find_by_label(SESSION_LABEL, &session.to_string())
+            .await
+            .map_err(unavailable)?
+            .map(DaytonaSandboxId::new)
+        else {
+            return Err(HarnessError::Container(format!(
+                "session {session} has no sandbox to resize"
+            )));
+        };
+        self.apply_resize(&id, resources(size), kind).await
     }
 
     #[tracing::instrument(err, skip(self))]

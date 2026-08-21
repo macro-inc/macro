@@ -5,7 +5,6 @@ use serde::{Deserialize, Serialize};
 
 use super::errors::{DaytonaError, Result};
 use super::types::{DaytonaApiKey, Env, Labels, PortPreview, Snapshot};
-use crate::domain::sandbox::SandboxResources;
 
 #[cfg(test)]
 mod test;
@@ -65,9 +64,6 @@ struct CreateSandboxRequest<'a> {
     env: Env,
     labels: Labels,
     auto_stop_interval: u8,
-    cpu: u32,
-    memory: u32,
-    disk: u32,
 }
 
 #[derive(Serialize)]
@@ -91,18 +87,12 @@ fn configuration_parameters<'a>(
     snapshot: &'a Snapshot,
     env: Env,
     labels: Labels,
-    cpu: u32,
-    memory: u32,
-    disk: u32,
 ) -> CreateSandboxRequest<'a> {
     CreateSandboxRequest {
         snapshot,
         env,
         labels,
         auto_stop_interval: 0,
-        cpu,
-        memory,
-        disk,
     }
 }
 
@@ -125,23 +115,14 @@ impl DaytonaClient {
         }
     }
 
-    /// Create a sandbox and return its Daytona id.
+    /// Create a sandbox from a snapshot and return its Daytona id.
+    ///
+    /// Resource fields must be omitted: Daytona returns 400 ("Cannot specify
+    /// Sandbox resources when using a snapshot") if `cpu` / `memory` / `disk`
+    /// are sent with `snapshot`. Size is applied after start via [`Self::resize`].
     #[tracing::instrument(err, skip(self, env))]
-    pub async fn create(
-        &self,
-        snapshot: &Snapshot,
-        env: Env,
-        labels: Labels,
-        resources: SandboxResources,
-    ) -> Result<String> {
-        let request = configuration_parameters(
-            snapshot,
-            env,
-            labels,
-            resources.cpu,
-            resources.memory_gib,
-            resources.disk_gib,
-        );
+    pub async fn create(&self, snapshot: &Snapshot, env: Env, labels: Labels) -> Result<String> {
+        let request = configuration_parameters(snapshot, env, labels);
         let sandbox: SandboxDto = self
             .json(
                 self.http

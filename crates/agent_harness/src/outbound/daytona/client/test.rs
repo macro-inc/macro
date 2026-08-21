@@ -37,22 +37,19 @@ fn sandbox_list_deserializes_the_paginated_daytona_response() {
 }
 
 #[test]
-fn create_request_sends_cpu_memory_and_disk() {
+fn create_request_omits_cpu_memory_and_disk() {
     let snapshot = Snapshot::new("macro-agent-harness".into());
     let request = configuration_parameters(
         &snapshot,
         Env::from(HashMap::new()),
         Labels::from(HashMap::new()),
-        8,
-        16,
-        96,
     );
     let json = serde_json::to_value(&request).expect("create request should serialize");
     assert_eq!(json["snapshot"], "macro-agent-harness");
-    assert_eq!(json["cpu"], 8);
-    assert_eq!(json["memory"], 16);
-    assert_eq!(json["disk"], 96);
     assert_eq!(json["autoStopInterval"], 0);
+    assert!(json.get("cpu").is_none());
+    assert!(json.get("memory").is_none());
+    assert!(json.get("disk").is_none());
 }
 
 #[test]
@@ -87,34 +84,70 @@ async fn live_hot_resize_increases_cpu_and_memory_without_touching_disk() {
         format!("sandbox-size-{}", macro_uuid::generate_uuid_v7()),
     )]));
     let id = client
-        .create(
-            &Snapshot::new(snapshot),
-            Env::from(HashMap::new()),
-            labels,
-            crate::domain::sandbox::SandboxResources {
-                cpu: 2,
-                memory_gib: 4,
-                disk_gib: 96,
-            },
-        )
+        .create(&Snapshot::new(snapshot), Env::from(HashMap::new()), labels)
         .await
         .expect("create a throwaway sandbox");
 
     let outcome = async {
         client
-            .wait_for_started(&id, Duration::from_secs(180))
-            .await?;
-        client.resize(&id, Some(8), Some(16), None).await?;
-        client
-            .wait_for_resize(&id, Duration::from_secs(180))
+            .wait_for_started(&id, Duration::from_secs(300))
             .await?;
         let (cpu, memory, disk) = client.resources(&id).await?;
-        assert_eq!(cpu, Some(8), "cpu should hot-resize to 8");
-        assert_eq!(memory, Some(16), "memory should hot-resize to 16 GiB");
-        assert_eq!(disk, Some(96), "disk should stay 96 GiB");
+        let cpu = cpu.expect("daytona should report cpu after start");
+        let memory = memory.expect("daytona should report memory after start");
+        eprintln!("snapshot sandbox started at cpu={cpu} memory_gib={memory} disk={disk:?}");
+
+        let (from_cpu, from_memory) = if cpu >= 16 && memory >= 32 {
+            eprintln!("already at large; cold-down to 8/16 so hot-up can run");
+            client.stop(&id).await?;
+            client.wait_for_stopped(&id, Duration::from_secs(60)).await?;
+            client.resize(&id, Some(8), Some(16), None).await?;
+            client
+                .wait_for_resize(&id, Duration::from_secs(300))
+                .await?;
+            client.start(&id).await?;
+            client
+                .wait_for_started(&id, Duration::from_secs(300))
+                .await?;
+            (8, 16)
+        } else {
+            (cpu, memory)
+        };
+
+        let (target_cpu, target_memory) = if from_cpu < 8 || from_memory < 16 {
+            (from_cpu.max(8), from_memory.max(16))
+        } else {
+            (from_cpu.max(16), from_memory.max(32))
+        };
+        assert!(
+            target_cpu >= from_cpu && target_memory >= from_memory,
+            "hot-up must not decrease cpu/memory"
+        );
+        assert!(
+            target_cpu > from_cpu || target_memory > from_memory,
+            "hot-up must increase cpu or memory"
+        );
+        eprintln!("hot-resizing cpu {from_cpu}->{target_cpu} memory_gib {from_memory}->{target_memory} without disk");
+
+        client
+            .resize(&id, Some(target_cpu), Some(target_memory), None)
+            .await?;
+        client
+            .wait_for_resize(&id, Duration::from_secs(300))
+            .await?;
+        let (after_cpu, after_memory, after_disk) = client.resources(&id).await?;
+        assert_eq!(after_cpu, Some(target_cpu), "cpu should hot-resize");
+        assert_eq!(
+            after_memory,
+            Some(target_memory),
+            "memory should hot-resize"
+        );
+        assert_eq!(after_disk, disk, "disk should be unchanged");
         Ok::<(), DaytonaError>(())
     }
     .await;
-    let _ = client.delete(&id).await;
+    if let Err(error) = client.delete(&id).await {
+        eprintln!("failed to delete throwaway sandbox {id}: {error}");
+    }
     outcome.expect("hot resize should succeed");
 }
