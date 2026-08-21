@@ -20,11 +20,11 @@ pub struct ListBotsResponse {
     pub summary: String,
 }
 
-/// List bots owned by the user or by teams they administer.
+/// List bots owned by the user or by teams they belong to.
 #[derive(Debug, Clone, Default, Deserialize, JsonSchema)]
 #[schemars(
     title = "ListBots",
-    description = "List every active bot the current user can manage, including user-owned bots and bots owned by teams where they are an administrator or owner. Use this to discover a botId before issuing credentials, reading webhook URLs, changing channel access, configuring, or deleting a bot."
+    description = "List every active bot the current user can manage, including user-owned bots and bots owned by teams they belong to. Use this to discover a botId before issuing credentials, reading webhook URLs, changing channel access, configuring, or deleting a bot."
 )]
 pub struct ListBots {}
 
@@ -52,8 +52,8 @@ where
             .await
             .map_err(|error| bot_tool_error("list bots", error))?
             .into_iter()
-            .map(Into::into)
-            .collect();
+            .map(BotSummary::try_from)
+            .collect::<Result<Vec<_>, _>>()?;
         let summary = match bots.len() {
             0 => "No manageable bots found.".to_string(),
             1 => "Found 1 manageable bot.".to_string(),

@@ -57,6 +57,12 @@ pub struct ConfigureBot {
     )]
     #[serde(default)]
     pub avatar_url: Option<String>,
+    /// Optional coding-agent session flag.
+    #[schemars(
+        description = "Set true if mentioning this bot should open a sandboxed coding-agent session. Omit to leave unchanged."
+    )]
+    #[serde(default)]
+    pub has_agent: Option<bool>,
 }
 
 impl ToolAnnotated for ConfigureBot {
@@ -81,21 +87,23 @@ where
         service_context: ServiceContext<BotToolContext<Svc, AccessSvc>>,
         request_context: RequestContext,
     ) -> ToolResult<Self::Output> {
-        let bot: BotSummary = service_context
-            .service
-            .patch_bot(
-                request_context.user_id,
-                BotId::new_from_uuid(self.bot_id),
-                PatchBotRequest {
-                    name: self.name.clone(),
-                    handle: self.handle.clone(),
-                    description: self.description.clone(),
-                    avatar_url: self.avatar_url.clone(),
-                },
-            )
-            .await
-            .map_err(|error| bot_tool_error("configure bot", error))?
-            .into();
+        let bot = BotSummary::try_from(
+            service_context
+                .service
+                .patch_bot(
+                    request_context.user_id,
+                    BotId::new_from_uuid(self.bot_id),
+                    PatchBotRequest {
+                        name: self.name.clone(),
+                        handle: self.handle.clone(),
+                        description: self.description.clone(),
+                        avatar_url: self.avatar_url.clone(),
+                        has_agent: self.has_agent,
+                    },
+                )
+                .await
+                .map_err(|error| bot_tool_error("configure bot", error))?,
+        )?;
         let summary = format!("Updated bot @{}.", bot.handle);
 
         Ok(ConfigureBotResponse { bot, summary })

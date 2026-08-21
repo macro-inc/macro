@@ -61,6 +61,7 @@ function botDetails(bot: BotSummary): Detail[] {
     { label: 'Owner', value: ownerLabel(bot.owner) },
     { label: 'Description', value: bot.description },
     { label: 'Profile picture', value: bot.avatarUrl },
+    { label: 'Coding agent', value: bot.hasAgent ? 'Yes' : 'No' },
   ];
 }
 
@@ -132,6 +133,7 @@ const createBotHandler = createToolRenderer({
   render: (ctx) => {
     const [expanded, setExpanded] = createSignal(false);
     const bot = () => ctx.response?.data.bot;
+    const setup = () => ctx.response?.data.channelSetup;
 
     return (
       <BaseTool
@@ -140,10 +142,38 @@ const createBotHandler = createToolRenderer({
         type="call"
         response={
           expanded() && bot() ? (
-            <DetailPanel
-              details={botDetails(bot()!)}
-              summary={ctx.response?.data.summary}
-            />
+            <div class="flex flex-col gap-2">
+              <DetailPanel
+                details={botDetails(bot()!)}
+                summary={ctx.response?.data.summary}
+              />
+              <Show when={setup()}>
+                {(channelSetup) => (
+                  <DetailPanel
+                    details={[
+                      {
+                        label: 'Bearer token',
+                        value: channelSetup().bearerToken,
+                        secret: true,
+                      },
+                      {
+                        label: 'Webhook',
+                        value: channelSetup().webhook.webhookUrl,
+                        secret: true,
+                      },
+                      {
+                        label: 'Channel ID',
+                        value: channelSetup().channelId,
+                      },
+                      {
+                        label: 'Token header',
+                        value: channelSetup().credentialHeader,
+                      },
+                    ]}
+                  />
+                )}
+              </Show>
+            </div>
           ) : undefined
         }
       >
@@ -156,7 +186,13 @@ const createBotHandler = createToolRenderer({
             expanded={expanded()}
             onToggle={() => setExpanded((value) => !value)}
             showToggle={!!bot()}
-            status={ctx.response ? 'Created' : undefined}
+            status={
+              ctx.response
+                ? setup()
+                  ? 'Created · credential'
+                  : 'Created'
+                : undefined
+            }
           />
         </div>
       </BaseTool>

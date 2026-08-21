@@ -110,6 +110,7 @@ export const ConfigureBot = z.object({
   handle: z.union([z.string(), z.null()]).optional(),
   description: z.union([z.string(), z.null()]).optional(),
   avatarUrl: z.union([z.string(), z.null()]).optional(),
+  hasAgent: z.union([z.boolean(), z.null()]).optional(),
 });
 
 export const ConfigureBotResponse = z.object({
@@ -140,6 +141,7 @@ export const ConfigureBotResponse = z.object({
     handle: z.string(),
     description: z.union([z.string(), z.null()]).optional(),
     avatarUrl: z.union([z.string(), z.null()]).optional(),
+    hasAgent: z.boolean(),
   }),
   summary: z.string(),
 });
@@ -692,6 +694,12 @@ export const CreateBot = z.object({
   handle: z.string(),
   description: z.union([z.string(), z.null()]).optional(),
   avatarUrl: z.union([z.string(), z.null()]).optional(),
+  channelId: z.union([z.string().uuid(), z.null()]).optional(),
+  credentialLabel: z.union([z.string(), z.null()]).optional(),
+  credentialExpiresAt: z
+    .union([z.string().datetime({ offset: true }), z.null()])
+    .optional(),
+  hasAgent: z.union([z.boolean(), z.null()]).optional(),
 });
 
 export const CreateBotResponse = z.object({
@@ -722,7 +730,26 @@ export const CreateBotResponse = z.object({
     handle: z.string(),
     description: z.union([z.string(), z.null()]).optional(),
     avatarUrl: z.union([z.string(), z.null()]).optional(),
+    hasAgent: z.boolean(),
   }),
+  channelSetup: z
+    .union([
+      z.object({
+        channelId: z.string().uuid(),
+        tokenId: z.string().uuid(),
+        bearerToken: z.string(),
+        webhook: z.object({
+          channelId: z.string().uuid(),
+          channelName: z.union([z.string(), z.null()]).optional(),
+          webhookUrl: z.string(),
+        }),
+        credentialHeader: z.string(),
+        credentialScopeHeader: z.string(),
+        credentialScope: z.string(),
+      }),
+      z.null(),
+    ])
+    .optional(),
   summary: z.string(),
 });
 
@@ -1529,6 +1556,7 @@ export const ListBotsResponse = z.object({
       handle: z.string(),
       description: z.union([z.string(), z.null()]).optional(),
       avatarUrl: z.union([z.string(), z.null()]).optional(),
+      hasAgent: z.boolean(),
     })
   ),
   summary: z.string(),

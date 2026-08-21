@@ -40,7 +40,7 @@ pub struct ManageBotChannelAccessResponse {
 #[serde(rename_all = "camelCase")]
 #[schemars(
     title = "ManageBotChannelAccess",
-    description = "Grant or revoke a manageable bot's access to one channel. Granting requires the current user to be a channel member. Both actions require the user to own the bot or administer its owning team; revoking still works after the manager leaves the channel. Granting access creates that channel's webhook URL; revoking access disables posting to that channel. Use only after the user asks to change bot access."
+    description = "Grant or revoke a manageable bot's access to one channel. Granting requires the current user to be a channel member. Both actions require the user to own the bot or belong to its owning team; revoking still works after the manager leaves the channel. Granting access creates that channel's webhook URL; revoking access disables posting to that channel. Use only after the user asks to change bot access."
 )]
 pub struct ManageBotChannelAccess {
     /// Bot to add or remove.

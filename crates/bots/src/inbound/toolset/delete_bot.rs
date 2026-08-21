@@ -28,7 +28,7 @@ pub struct DeleteBotResponse {
 #[serde(rename_all = "camelCase")]
 #[schemars(
     title = "DeleteBot",
-    description = "Delete a bot the current user owns or a bot owned by a team they administer. This removes the bot from every channel and disables its credentials and webhooks. The operation cannot be undone, so only use it after the user explicitly confirms deletion."
+    description = "Delete a bot the current user owns or a bot owned by a team they belong to. This removes the bot from every channel and disables its credentials and webhooks. The operation cannot be undone, so only use it after the user explicitly confirms deletion."
 )]
 pub struct DeleteBot {
     /// Bot to delete.

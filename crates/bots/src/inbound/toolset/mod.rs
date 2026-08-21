@@ -28,7 +28,10 @@ use manage_bot_channel_access::ManageBotChannelAccess;
 use std::sync::Arc;
 use uuid::Uuid;
 
-pub use types::{BotOwnerSummary, BotSummary};
+pub use types::{
+    BOT_WEBHOOK_SCOPE, BOT_WEBHOOK_SCOPE_HEADER, BOT_WEBHOOK_TOKEN_HEADER, BotOwnerSummary,
+    BotSummary, BotWebhook, CreatedBotChannelSetup,
+};
 
 /// Dependencies shared by bot-management AI tools.
 pub struct BotToolContext<Svc, AccessSvc>

@@ -852,6 +852,10 @@ export interface ConfigureBot {
    * New profile-picture URL. Use a Macro static-file URL or another reachable image URL. Omit to keep the current picture; pass an empty string to clear it.
    */
   avatarUrl?: string | null;
+  /**
+   * Set true if mentioning this bot should open a sandboxed coding-agent session. Omit to leave unchanged.
+   */
+  hasAgent?: boolean | null;
 }
 /**
  * Response from [`ConfigureBot`].
@@ -888,6 +892,10 @@ export interface BotSummary {
    * Optional profile-picture URL.
    */
   avatarUrl?: string | null;
+  /**
+   * Whether mentioning this bot opens a sandboxed coding-agent session.
+   */
+  hasAgent: boolean;
 }
 /**
  * Search items by their content: document body text; email subject/body/sender/recipient/cc/bcc and the display names on those addresses; chat messages; call transcripts. This is keyword search, not semantic search: queries only match literal words/tokens, prefixes, or exact quoted terms that appear in the indexed content. Use this for targeted keyword/content lookup, not for activity-summary questions like "what happened today", "what's going on", "catch me up", or "what happened in standup today"; those should start with ListEntities using time/type/channel filters. Whitespace-separated terms are ANDed. For documents and emails, every term must match somewhere in the document — different terms can appear in different chunks/pages or different fields. For documents and emails specifically, each single-word term is matched as a prefix (so `scri` matches `script`); for emails the prefix expansion also runs against the local-part of address fields. For chats, channels, and call transcripts the whole query is matched as a single adjacent phrase prefix — so pass 1-3 targeted keywords drawn from words that would literally appear in the content, not the user's natural-language description; long phrases will not match. Matching defaults to prefix; set matchType to 'exact' to match whole tokens/phrases with no prefix expansion (e.g. an exact word, identifier, or full email address). Wrap a multi-word phrase in double quotes to keep it together as one adjacent phrase. If the user's request combines a person with a topic, run separate searches rather than one combined query. Leave entityTypes empty by default; only filter when the user explicitly scopes to a type. Results for documents, emails, AI chats, projects, and call records include the tags visible to the user as {label, scope} pairs; to restrict a search to tagged items, pass the tag labels in the tags argument (ListTags shows which tags exist).
@@ -1436,7 +1444,7 @@ export interface CrmCompanySearchDomain {
   createdAt: string;
 }
 /**
- * Create a bot with a name, stable handle, and optional profile. Omit teamId to create a bot owned by the current user; provide teamId to create a team-owned bot, which requires team administrator or owner permission. This creates the bot only. Use ManageBotChannelAccess to add it to channels and IssueBotCredential to mint a secret token.
+ * Create a bot with a name, stable handle, and optional profile. Omit teamId for a bot owned by the current user; provide teamId to create a team-owned bot, which requires team administrator or owner permission. Pass channelId when the bot should post to a channel immediately: the current user must be a member of that channel. The response then includes a one-time bearerToken and that channel's webhook URL. Omit channelId to create the bot only, then use ManageBotChannelAccess and IssueBotCredential for later setup.
  */
 export interface CreateBot {
   /**
@@ -1459,6 +1467,22 @@ export interface CreateBot {
    * Optional URL for the bot profile picture. Pass the URL of an image already uploaded to Macro static files or another reachable image URL.
    */
   avatarUrl?: string | null;
+  /**
+   * Channel id to grant the new bot access to. Requires current-user channel membership. When set, the tool also mints a credential and returns the channel webhook URL.
+   */
+  channelId?: string | null;
+  /**
+   * Optional label for the credential minted when channelId is set, such as `github-webhook`. Requires channelId.
+   */
+  credentialLabel?: string | null;
+  /**
+   * Optional RFC 3339 expiration for the credential minted when channelId is set. Requires channelId.
+   */
+  credentialExpiresAt?: string | null;
+  /**
+   * Set true if mentioning this bot should open a sandboxed coding-agent session. Defaults to false.
+   */
+  hasAgent?: boolean | null;
 }
 /**
  * Response from [`CreateBot`].
@@ -1466,9 +1490,60 @@ export interface CreateBot {
 export interface CreateBotResponse {
   bot: BotSummary;
   /**
+   * Credential and webhook returned when [`CreateBot::channel_id`] was set.
+   */
+  channelSetup?: CreatedBotChannelSetup | null;
+  /**
    * Human-readable result summary.
    */
   summary: string;
+}
+/**
+ * One-time credential and webhook created with a channel-scoped bot.
+ */
+export interface CreatedBotChannelSetup {
+  /**
+   * Channel the bot can now post to.
+   */
+  channelId: string;
+  /**
+   * Token metadata id, used to revoke this credential through the bot API.
+   */
+  tokenId: string;
+  /**
+   * Raw bearer token. It is returned only when minted and must be stored securely.
+   */
+  bearerToken: string;
+  webhook: BotWebhook;
+  /**
+   * Header where callers send [`Self::bearer_token`].
+   */
+  credentialHeader: string;
+  /**
+   * Header where callers send [`Self::credential_scope`].
+   */
+  credentialScopeHeader: string;
+  /**
+   * Required scope value for the bot credential.
+   */
+  credentialScope: string;
+}
+/**
+ * One channel-specific webhook URL for a bot.
+ */
+export interface BotWebhook {
+  /**
+   * Channel id the webhook posts into.
+   */
+  channelId: string;
+  /**
+   * Channel display name, when present.
+   */
+  channelName?: string | null;
+  /**
+   * Public URL to POST webhook content to.
+   */
+  webhookUrl: string;
 }
 /**
  * Prepare an event on the user's calendar, inviting any listed attendees through Google Calendar. In Macro chat this tool opens an inline composer so the user can review, edit, and confirm the event; use the tool to present the proposal instead of asking for a redundant confirmation in prose. When the pending call is executed, the event is written to Google immediately and attendees receive invitations. Other clients should confirm attendee events before executing the call.
@@ -1911,7 +1986,7 @@ export interface CreateTagResponse {
   summary: string;
 }
 /**
- * Delete a bot the current user owns or a bot owned by a team they administer. This removes the bot from every channel and disables its credentials and webhooks. The operation cannot be undone, so only use it after the user explicitly confirms deletion.
+ * Delete a bot the current user owns or a bot owned by a team they belong to. This removes the bot from every channel and disables its credentials and webhooks. The operation cannot be undone, so only use it after the user explicitly confirms deletion.
  */
 export interface DeleteBot {
   /**
@@ -2122,7 +2197,7 @@ export interface EditTagResponse {
   summary: string;
 }
 /**
- * Get the channel-specific webhook URLs for a bot the current user can manage. A bot has one URL per channel it can access. POST message content to a returned webhookUrl and authenticate with a token from IssueBotCredential in the returned credentialHeader; also send credentialScope in credentialScopeHeader. If no URLs are returned, add the bot to a channel with ManageBotChannelAccess.
+ * Get the channel-specific webhook URLs for a bot the current user can manage. A bot has one URL per channel it can access. POST message content to a returned webhookUrl and authenticate with a token from IssueBotCredential or CreateBot in the returned credentialHeader; also send credentialScope in credentialScopeHeader. If no URLs are returned, add the bot to a channel with ManageBotChannelAccess or recreate it with CreateBot and channelId.
  */
 export interface GetBotWebhooks {
   /**
@@ -2158,23 +2233,6 @@ export interface GetBotWebhooksResponse {
    * Human-readable result summary.
    */
   summary: string;
-}
-/**
- * One channel-specific webhook URL for a bot.
- */
-export interface BotWebhook {
-  /**
-   * Channel id the webhook posts into.
-   */
-  channelId: string;
-  /**
-   * Channel display name, when present.
-   */
-  channelName?: string | null;
-  /**
-   * Public URL to POST webhook content to.
-   */
-  webhookUrl: string;
 }
 /**
  * Fetch one of the team's CRM companies by id, with its domains, contacts, pipeline Stage / Owner / Revenue, and all attached property values (including custom properties and the valid stage options). Use ListCompanies to find company ids. To change a property (move stage, set owner/revenue, or edit a custom property) call SetEntityProperty with entity_type=company, the company id, and a property_definition_id / option id from this response.
@@ -2575,7 +2633,7 @@ export interface IssueBotCredentialResponse {
   summary: string;
 }
 /**
- * List every active bot the current user can manage, including user-owned bots and bots owned by teams where they are an administrator or owner. Use this to discover a botId before issuing credentials, reading webhook URLs, changing channel access, configuring, or deleting a bot.
+ * List every active bot the current user can manage, including user-owned bots and bots owned by teams they belong to. Use this to discover a botId before issuing credentials, reading webhook URLs, changing channel access, configuring, or deleting a bot.
  */
 export type ListBots = {};
 /**
@@ -3361,7 +3419,7 @@ export interface ToolMatch {
   description: string;
 }
 /**
- * Grant or revoke a manageable bot's access to one channel. Granting requires the current user to be a channel member. Both actions require the user to own the bot or administer its owning team; revoking still works after the manager leaves the channel. Granting access creates that channel's webhook URL; revoking access disables posting to that channel. Use only after the user asks to change bot access.
+ * Grant or revoke a manageable bot's access to one channel. Granting requires the current user to be a channel member. Both actions require the user to own the bot or belong to its owning team; revoking still works after the manager leaves the channel. Granting access creates that channel's webhook URL; revoking access disables posting to that channel. Use only after the user asks to change bot access.
  */
 export interface ManageBotChannelAccess {
   /**

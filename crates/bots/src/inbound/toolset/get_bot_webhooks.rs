@@ -1,6 +1,9 @@
 //! GetBotWebhooks tool.
 
-use super::{BotToolContext, bot_tool_error};
+use super::{
+    BOT_WEBHOOK_SCOPE, BOT_WEBHOOK_SCOPE_HEADER, BOT_WEBHOOK_TOKEN_HEADER, BotToolContext,
+    BotWebhook, bot_tool_error,
+};
 use crate::domain::{
     models::{BotChannelListCaller, BotId},
     ports::BotService,
@@ -13,25 +16,6 @@ use entity_access::domain::ports::EntityAccessService;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
-
-/// Preferred header used to authenticate bot webhook requests.
-const BOT_WEBHOOK_TOKEN_HEADER: &str = "x-macro-bot-token";
-/// Header selecting the authorization scope for bot webhook requests.
-const BOT_WEBHOOK_SCOPE_HEADER: &str = "x-macro-bot-scope";
-/// User scope works for both user- and team-owned bots on channel webhooks.
-const BOT_WEBHOOK_SCOPE: &str = "user";
-
-/// One channel-specific webhook URL for a bot.
-#[derive(Debug, Serialize, JsonSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct BotWebhook {
-    /// Channel id the webhook posts into.
-    pub channel_id: Uuid,
-    /// Channel display name, when present.
-    pub channel_name: Option<String>,
-    /// Public URL to POST webhook content to.
-    pub webhook_url: String,
-}
 
 /// Response from [`GetBotWebhooks`].
 #[derive(Debug, Serialize, JsonSchema)]
@@ -56,7 +40,7 @@ pub struct GetBotWebhooksResponse {
 #[serde(rename_all = "camelCase")]
 #[schemars(
     title = "GetBotWebhooks",
-    description = "Get the channel-specific webhook URLs for a bot the current user can manage. A bot has one URL per channel it can access. POST message content to a returned webhookUrl and authenticate with a token from IssueBotCredential in the returned credentialHeader; also send credentialScope in credentialScopeHeader. If no URLs are returned, add the bot to a channel with ManageBotChannelAccess."
+    description = "Get the channel-specific webhook URLs for a bot the current user can manage. A bot has one URL per channel it can access. POST message content to a returned webhookUrl and authenticate with a token from IssueBotCredential or CreateBot in the returned credentialHeader; also send credentialScope in credentialScopeHeader. If no URLs are returned, add the bot to a channel with ManageBotChannelAccess or recreate it with CreateBot and channelId."
 )]
 pub struct GetBotWebhooks {
     /// Bot to inspect.
@@ -99,10 +83,11 @@ where
             .map(|channel| BotWebhook {
                 channel_id: channel.channel_id,
                 channel_name: channel.name,
-                webhook_url: format!(
-                    "{}/channels/{}/webhook",
-                    service_context.document_storage_service_url, channel.channel_id
-                ),
+                webhook_url: BotWebhook::for_channel(
+                    &service_context.document_storage_service_url,
+                    channel.channel_id,
+                )
+                .webhook_url,
             })
             .collect();
         let summary = match webhooks.len() {
