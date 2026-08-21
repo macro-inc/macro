@@ -16,6 +16,7 @@ use dashmap::DashMap;
 use dashmap::mapref::entry::Entry;
 use macro_user_id::user_id::MacroUserIdStr;
 use tokio::sync::{mpsc, oneshot};
+use tracing::Instrument as _;
 use tracing::instrument::WithSubscriber as _;
 
 use crate::domain::error::{HarnessError, Result};
@@ -30,6 +31,9 @@ type SessionWorkers = DashMap<AgentSessionId, mpsc::UnboundedSender<QueuedComman
 struct QueuedCommand {
     command: HarnessCommand,
     completed: oneshot::Sender<Result<()>>,
+    /// The caller's span, carried across the queue so the work the worker does
+    /// on its own task still hangs off whatever triggered it.
+    span: tracing::Span,
 }
 
 struct AgentHarnessInner<Sessions, Containers, Announcer, Runtimes> {
@@ -77,16 +81,23 @@ where
     /// Queue one command behind any work already running for its session.
     ///
     /// Queue admission happens synchronously so callers can spawn the returned
-    /// completion future without reordering commands.
+    /// completion future without reordering commands. It is also where the
+    /// caller's span is captured: the returned future only awaits a oneshot, so
+    /// the span has to travel with the command to reach the work itself.
     pub fn execute(
         &self,
         session_id: AgentSessionId,
         mut command: HarnessCommand,
     ) -> impl Future<Output = Result<()>> + Send + 'static {
+        let caller = tracing::Span::current();
         let result = loop {
             let commands = self.commands(session_id);
             let (completed, result) = oneshot::channel();
-            let queued = QueuedCommand { command, completed };
+            let queued = QueuedCommand {
+                command,
+                completed,
+                span: caller.clone(),
+            };
 
             match commands.send(queued) {
                 Ok(()) => break result,
@@ -597,8 +608,12 @@ async fn run_session_worker<Sessions, Containers, Announcer, Runtimes>(
     Runtimes: RuntimeConnections,
 {
     while let Some(queued) = receiver.recv().await {
-        let QueuedCommand { command, completed } = queued;
-        let result = inner.execute(session_id, command).await;
+        let QueuedCommand {
+            command,
+            completed,
+            span,
+        } = queued;
+        let result = inner.execute(session_id, command).instrument(span).await;
         let _ = completed.send(result);
     }
 }

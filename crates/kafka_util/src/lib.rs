@@ -105,6 +105,7 @@ pub fn consumer_span<M: Message>(message: &M, consumer_group: &'static str) -> t
         messaging.kafka.offset = message.offset(),
         macro.event.id = tracing::field::Empty,
         macro.event.type = tracing::field::Empty,
+        agent.session.id = tracing::field::Empty,
         otel.status_code = tracing::field::Empty,
         otel.status_description = tracing::field::Empty,
     );

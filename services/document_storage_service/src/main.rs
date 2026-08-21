@@ -1385,18 +1385,19 @@ async fn run() -> anyhow::Result<()> {
 
     tracing::info!("waiting for channel side effects to drain");
     channel_side_effect_tracker.close();
-    channel_side_effect_tracker.wait().await;
-    tracing::info!("channel side effects drained");
+    drain_or_warn(channel_side_effect_tracker.wait(), "channel side effects").await;
 
     tracing::info!("waiting for bot triggers to drain");
     bot_trigger_cancellation.cancel();
     bot_trigger_tracker.close();
-    bot_trigger_tracker.wait().await;
-    tracing::info!("bot triggers drained");
+    drain_or_warn(bot_trigger_tracker.wait(), "bot triggers").await;
 
     // Bot handlers can post final replies through the same side-effect tracker.
-    channel_side_effect_tracker.wait().await;
-    tracing::info!("bot channel side effects drained");
+    drain_or_warn(
+        channel_side_effect_tracker.wait(),
+        "bot channel side effects",
+    )
+    .await;
 
     tracing::info!("waiting for event broker publishes to drain");
     event_broker_tracker.close();
@@ -1415,3 +1416,18 @@ async fn run() -> anyhow::Result<()> {
 }
 
 const EVENT_BROKER_DRAIN_TIMEOUT: Duration = Duration::from_secs(10);
+
+const TASK_DRAIN_TIMEOUT: Duration = Duration::from_secs(30);
+
+/// Wait for one shutdown drain, warning rather than hanging forever when a
+/// wedged task never finishes. Shutdown must reach the later drains regardless.
+async fn drain_or_warn(drain: impl Future<Output = ()>, what: &'static str) {
+    match tokio::time::timeout(TASK_DRAIN_TIMEOUT, drain).await {
+        Ok(()) => tracing::info!(drain = what, "drained"),
+        Err(_) => tracing::warn!(
+            drain = what,
+            timeout_seconds = TASK_DRAIN_TIMEOUT.as_secs(),
+            "timed out waiting for a shutdown drain"
+        ),
+    }
+}
