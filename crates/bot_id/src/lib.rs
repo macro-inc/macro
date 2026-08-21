@@ -81,6 +81,21 @@ pub const MACRO_CODER_HANDLE: &str = "coder";
 /// Display name for the "Macro Coder" system bot.
 pub const MACRO_CODER_NAME: &str = "Macro Coder";
 
+/// Stable [`BotId`] for the "Macro Agent" system bot, the in-memory agent
+/// harness.
+///
+/// Distinct from [`MACRO_CODER_BOT_ID`]: the coder bot's sessions run in a
+/// provisioned sandbox, while this bot's sessions run in-process inside the
+/// harness service and answer with the Macro product toolset.
+pub const MACRO_AGENT_BOT_ID: BotId =
+    BotId::new_from_uuid(Uuid::from_u128(0x0000_0000_0000_0000_0000_0000_0000_a6e0));
+
+/// Stable handle for the "Macro Agent" system bot (used for `@` mentions).
+pub const MACRO_AGENT_HANDLE: &str = "agent";
+
+/// Display name for the "Macro Agent" system bot.
+pub const MACRO_AGENT_NAME: &str = "Macro Agent";
+
 /// A bot id UUID.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(transparent)]

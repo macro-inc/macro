@@ -2130,7 +2130,8 @@
           "channel_bot",
           "ai_projection",
           "ai_editing",
-          "import"
+          "import",
+          "agent_session"
         ]
       },
       "AssistantMessagePart": {

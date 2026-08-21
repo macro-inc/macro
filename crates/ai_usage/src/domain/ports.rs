@@ -60,6 +60,8 @@ pub enum AiFeature {
     AiEditing,
     /// Import pipeline agent sessions (connector gathers + Notion imports).
     Import,
+    /// In-process ACP agent sessions (the in-memory harness).
+    AgentSession,
 }
 
 /// Resolved price for one completion.

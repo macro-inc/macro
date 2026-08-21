@@ -50,14 +50,14 @@ pub enum Skipped {
 /// Route one trigger event: work for this deployment, or a reason it was
 /// skipped.
 ///
-/// Opens are only ours when the mentioned bot is `our_bot` - external bots'
-/// runtimes open their own sessions over the API. Events for sessions that
-/// already exist always carry work: a prompt to deliver when the session is
-/// managed here, or just its announcement when the bot's own runtime
+/// Opens are only ours when the mentioned bot is one of `our_bots` - external
+/// bots' runtimes open their own sessions over the API. Events for sessions
+/// that already exist always carry work: a prompt to deliver when the session
+/// is managed here, or just its announcement when the bot's own runtime
 /// delivers the prompt.
 pub fn route_agent_trigger(
     event: AgentTriggerTopicEvent,
-    our_bot: BotId,
+    our_bots: &[BotId],
 ) -> Result<RoutedTrigger, Skipped> {
     match event {
         AgentTriggerTopicEvent::New(NewAgentSessionEvent::TopLevelMentioned(mentioned)) => {
@@ -72,7 +72,7 @@ pub fn route_agent_trigger(
                 return Err(Skipped::NotMacroStaff);
             }
 
-            if mentioned.bot_id != our_bot {
+            if !our_bots.contains(&mentioned.bot_id) {
                 return Err(Skipped::ForeignBot);
             }
             let message = mentioned.message;
@@ -112,7 +112,7 @@ pub fn route_agent_trigger(
                 // A managed session's prompt is delivered (and announced)
                 // by the deployment that manages it; anyone else stays out
                 // of the way entirely.
-                if bot_id != our_bot {
+                if !our_bots.contains(&bot_id) {
                     return Err(Skipped::ForeignBot);
                 }
                 return Ok(RoutedTrigger::Command(
