@@ -12,6 +12,7 @@ name: Push local stack binaries
     - crates/**
     - services/**
     - nix/**
+    - nix-support/**
     - flake.nix
     - flake.lock
     - '.github/actions/setup-nix/**'

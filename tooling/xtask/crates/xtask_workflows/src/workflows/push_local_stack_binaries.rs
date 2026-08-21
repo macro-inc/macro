@@ -23,6 +23,7 @@ pub fn push_local_stack_binaries() -> Workflow {
         xtask_paths::repo_glob!("crates/**"),
         xtask_paths::repo_glob!("services/**"),
         xtask_paths::repo_glob!("nix/**"),
+        xtask_paths::repo_glob!("nix-support/**"),
         xtask_paths::repo_glob!("flake.nix"),
         xtask_paths::repo_glob!("flake.lock"),
         xtask_paths::repo_glob!(".github/actions/setup-nix/**"),
