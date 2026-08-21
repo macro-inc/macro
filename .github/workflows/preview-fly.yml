@@ -15,6 +15,7 @@ jobs:
     permissions:
       contents: read
       pull-requests: write
+      packages: read
     env:
       FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
       APP_NAME: macro-pr-${{ github.event.pull_request.number }}
@@ -153,6 +154,36 @@ jobs:
         set -euo pipefail
         docker compose --project-directory . -p macro -f docker/docker-compose.yml build \
           search sync_service websocket_service lexical_service ai_editing_worker
+        # Sandboxes are not a compose service, so they never appear in
+        # `config --images`. Pull GHCR :latest unless this PR touched
+        # container/; otherwise (or if the pull fails) build here so the
+        # premirror and deploy loops can load the local tag.
+        tag="$LOCAL_SANDBOX_IMAGE"
+        ghcr="$SANDBOX_GHCR_IMAGE:latest"
+        if docker image inspect "$tag" >/dev/null 2>&1; then
+          echo "sandbox image $tag already present"
+        else
+          dockerfile_changed=
+          if [ -n "${PREVIEW_BASE_SHA:-}" ] \
+              && git fetch --depth=1 origin "$PREVIEW_BASE_SHA" >/dev/null 2>&1 \
+              && ! git diff --quiet "$PREVIEW_BASE_SHA" HEAD -- crates/agent_harness/container; then
+            dockerfile_changed=1
+          fi
+          pulled=
+          if [ -z "$dockerfile_changed" ] && [ -n "${GITHUB_TOKEN:-}" ]; then
+            if echo "$GITHUB_TOKEN" | docker login ghcr.io -u "${GITHUB_ACTOR:-}" --password-stdin \
+                && docker pull "$ghcr" \
+                && docker tag "$ghcr" "$tag"; then
+              pulled=1
+              echo "pulled $ghcr"
+            else
+              echo "GHCR pull of $ghcr failed; building $tag" >&2
+            fi
+          fi
+          if [ -z "$pulled" ]; then
+            docker build --tag "$tag" crates/agent_harness/container
+          fi
+        fi
         # The image BUILD above is fatal; the premirror below is a pure
         # optimization with an authoritative fallback (the deploy step's
         # mirror loop), so its failure only costs a slower push later.
@@ -172,7 +203,7 @@ jobs:
         flyctl auth docker
         registry="registry.fly.io/$APP_NAME"
         for img in $(docker compose --project-directory . -p macro \
-            -f docker/docker-compose.yml config --images | sort -u) alpine:3; do
+            -f docker/docker-compose.yml config --images | sort -u) alpine:3 "$LOCAL_SANDBOX_IMAGE"; do
           if ! docker image inspect "$img" >/dev/null 2>&1 && ! docker pull "$img"; then
             echo "premirror: skipping $img (not local, not pullable)"
             continue
@@ -303,6 +334,10 @@ jobs:
         fi
       env:
         FLY_ORG: ${{ vars.FLY_ORG || secrets.FLY_ORG }}
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        PREVIEW_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        LOCAL_SANDBOX_IMAGE: macro-agent-harness:latest
+        SANDBOX_GHCR_IMAGE: ghcr.io/macro-inc/macro-agent-harness
     - name: Dump stack diagnostics
       if: failure()
       run: |
@@ -529,7 +564,7 @@ jobs:
         docker image inspect alpine:3 >/dev/null 2>&1 || docker pull alpine:3
         mkdir -p preview-ctx/preload
         : > preview-ctx/preload/manifest.txt
-        for img in $images alpine:3; do
+        for img in $images alpine:3 "$LOCAL_SANDBOX_IMAGE"; do
           # Images the bake didn't leave in the daemon (snapshot cache hit,
           # or app-layer-only images like proxy/mailpit) get pulled here.
           docker image inspect "$img" >/dev/null 2>&1 || docker pull "$img"
@@ -653,6 +688,7 @@ jobs:
       env:
         FLY_ORG: ${{ vars.FLY_ORG || secrets.FLY_ORG }}
         DOPPLER_PREVIEW_TOKEN: ${{ secrets.DOPPLER_PREVIEW_TOKEN }}
+        LOCAL_SANDBOX_IMAGE: macro-agent-harness:latest
     - name: Dump Fly diagnostics
       if: failure()
       run: |

@@ -261,7 +261,8 @@ impl MailEnv {
 struct AgentHarnessEnv {
     bot_id: &'static str,
     snapshot: &'static str,
-    /// Image the local provider runs, built by `crates/agent_harness/justfile`.
+    /// Image the local provider runs. `run_local` / `stack up` pull it from
+    /// GHCR or build `crates/agent_harness/container` when it is missing.
     image: &'static str,
     /// Network sandboxes join, so this service can dial their sidecars.
     network: String,
@@ -273,7 +274,7 @@ impl AgentHarnessEnv {
             // bot_id::MACRO_CODER_BOT_ID, seeded by the bots_has_agent migration.
             bot_id: "00000000-0000-0000-0000-00000000a9e7",
             snapshot: "macro-agent-harness",
-            image: "macro-agent-harness:latest",
+            image: super::sandbox_image::DEFAULT_LOCAL_TAG,
             // Compose names a network `<project>_<network>`.
             network: format!("{project_name}_services"),
         }

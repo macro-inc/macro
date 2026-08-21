@@ -48,6 +48,17 @@ pub(crate) fn uses_local(name: &str, path: RepoDir<'_>) -> Step<Use> {
     step
 }
 
+/// Namespace remote BuildKit, pinned. Multi-arch `docker buildx --push` and the
+/// Fly preview image builds both go through it so nix-in-Docker work does not
+/// land on a Small runner's local daemon.
+pub fn setup_namespace_buildx() -> Step<Use> {
+    Step::new("Set up Namespace Docker builder").uses(
+        "namespacelabs",
+        "nscloud-setup-buildx-action",
+        "d059ed7184f0bc7c8b27e8810cea153d02bcc6dd",
+    ) // v0.0.23
+}
+
 /// `actions/checkout`, pinned. `full_history` fetches the full history, which
 /// the path-filter diff in `path-check` needs. `persist_credentials` controls
 /// whether checkout leaves the token in git config for later steps.

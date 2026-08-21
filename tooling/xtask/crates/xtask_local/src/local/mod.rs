@@ -36,6 +36,7 @@ pub mod opensearch;
 pub mod portmap;
 pub mod proxy;
 pub mod resources;
+pub mod sandbox_image;
 pub mod sdk_webhook;
 pub mod seed_env;
 pub mod snapshot;
@@ -513,6 +514,7 @@ fn prepare(
         static_frontend,
     )?;
     stage.note(&format!("env: {}", env_layer::summarize(&env.merged)));
+    sandbox_image::ensure(stage, &env.merged)?;
 
     // Build the runtime image (idempotent) and the service binaries.
     let target = arch::detect()?;

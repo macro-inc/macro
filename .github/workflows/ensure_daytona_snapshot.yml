@@ -14,6 +14,7 @@ name: Ensure Daytona Snapshot
   workflow_dispatch: {}
 permissions:
   contents: read
+  packages: write
 jobs:
   ensure-snapshot:
     name: Ensure macro-agent-harness snapshot
@@ -45,6 +46,37 @@ jobs:
       shell: bash
       env:
         DAYTONA_API_KEY: ${{ secrets.DAYTONA_API_KEY }}
+  publish-image:
+    name: Publish sandbox image to GHCR
+    runs-on: namespace-profile-linux-mid
+    timeout-minutes: 90
+    steps:
+    - name: Checkout
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      with:
+        clean: 'false'
+        persist-credentials: 'false'
+    - name: Set up Namespace Docker builder
+      uses: namespacelabs/nscloud-setup-buildx-action@d059ed7184f0bc7c8b27e8810cea153d02bcc6dd
+    - name: Log in to GHCR
+      run: |
+        set -euo pipefail
+        echo "$GITHUB_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        GITHUB_ACTOR: ${{ github.actor }}
+    - name: Build and push sandbox image
+      run: |
+        set -euo pipefail
+        image=ghcr.io/macro-inc/macro-agent-harness
+        docker buildx build \
+          --platform linux/amd64,linux/arm64 \
+          --tag "$image:$GITHUB_SHA" \
+          --tag "$image:latest" \
+          --push \
+          crates/agent_harness/container
+      shell: bash
 concurrency:
   group: ${{ github.workflow }}
   cancel-in-progress: false
