@@ -4,7 +4,7 @@
 mod test;
 
 use std::collections::HashMap;
-use std::num::NonZeroU32;
+use std::num::{NonZeroU32, NonZeroU64};
 use std::str::FromStr;
 
 use chrono::{DateTime, Utc};
@@ -14,6 +14,7 @@ use uuid::Uuid;
 
 use crate::domain::{
     models::{ActionDecodeError, Activity, ActivityRecord, Actor, RecordedAction},
+    overview::{ActivityOverview, ActivityWindow, DayCount, EntityRank, TOP_ENTITY_LIMIT},
     ports::{ActivityFeedPage, ActivityReads, ActivityRepo, EntityActivityMap},
 };
 
@@ -290,4 +291,100 @@ impl ActivityReads for PgActivityRepo {
         }
         Ok(by_entity)
     }
+
+    async fn subject_overview(
+        &self,
+        subject_id: &str,
+        window: ActivityWindow,
+    ) -> Result<ActivityOverview, Self::Err> {
+        let zone = window.zone.name();
+        let day_rows = sqlx::query!(
+            r#"
+            SELECT (occurred_at AT TIME ZONE $1)::date AS "day!",
+                   count(*)::bigint AS "n!"
+            FROM activity_events
+            WHERE subject_id = $2
+              AND occurred_at >= ($3::date::timestamp AT TIME ZONE $1)
+              AND occurred_at <  ($4::date::timestamp AT TIME ZONE $1)
+            GROUP BY 1
+            ORDER BY 1
+            "#,
+            zone,
+            subject_id,
+            window.start,
+            window.end,
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        let rank_rows = sqlx::query!(
+            r#"
+            SELECT entity_type, entity_id, count(*)::bigint AS "n!"
+            FROM activity_events
+            WHERE subject_id = $2
+              AND occurred_at >= ($3::date::timestamp AT TIME ZONE $1)
+              AND occurred_at <  ($4::date::timestamp AT TIME ZONE $1)
+            GROUP BY 1, 2
+            ORDER BY count(*) DESC, entity_type ASC, entity_id ASC
+            LIMIT $5
+            "#,
+            zone,
+            subject_id,
+            window.start,
+            window.end,
+            TOP_ENTITY_LIMIT,
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        let days = day_rows
+            .into_iter()
+            .map(|row| {
+                Ok(DayCount {
+                    day: row.day,
+                    count: positive_count(row.n)?,
+                })
+            })
+            .collect::<Result<Vec<_>, sqlx::Error>>()?;
+
+        let mut top_entities = Vec::with_capacity(rank_rows.len());
+        for row in rank_rows {
+            let Some(entity_type) = EntityType::from_str(&row.entity_type)
+                .inspect_err(|error| {
+                    tracing::warn!(
+                        entity_type = %row.entity_type,
+                        entity_id = %row.entity_id,
+                        ?error,
+                        "skipping activity rank with unknown entity type"
+                    );
+                })
+                .ok()
+            else {
+                continue;
+            };
+            top_entities.push(EntityRank {
+                entity_type,
+                entity_id: row.entity_id,
+                count: positive_count(row.n)?,
+            });
+        }
+
+        ActivityOverview::new(window, days, top_entities)
+            .map_err(|error| sqlx::Error::Decode(Box::new(error)))
+    }
+}
+
+fn positive_count(value: i64) -> Result<NonZeroU64, sqlx::Error> {
+    u64::try_from(value)
+        .ok()
+        .and_then(NonZeroU64::new)
+        .ok_or_else(|| {
+            sqlx::Error::Decode(
+                std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    format!("activity aggregate count must be positive, got {value}"),
+                )
+                .into(),
+            )
+        })
 }

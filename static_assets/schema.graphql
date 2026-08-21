@@ -14,6 +14,16 @@ input ActivityFeedInput {
 }
 
 """
+Request for the authenticated user's trailing-year activity overview.
+"""
+input ActivityOverviewInput {
+	"""
+	IANA time zone used for local dates. Omitted or empty means UTC.
+	"""
+	timeZone: String
+}
+
+"""
 Channel activity operation exposed by GraphQL.
 """
 enum ChannelActivityType {
@@ -227,6 +237,20 @@ type GraphqlActivityCreated {
 }
 
 """
+One local date with activity.
+"""
+type GraphqlActivityDay {
+	"""
+	Local date in `YYYY-MM-DD` form.
+	"""
+	date: String!
+	"""
+	Number of activities on that date.
+	"""
+	count: Int!
+}
+
+"""
 The entity was soft-deleted.
 """
 type GraphqlActivityDeleted {
@@ -244,6 +268,24 @@ type GraphqlActivityEdited {
 	this object has nothing as a field but we need at least 1 field
 	"""
 	nothing: Boolean!
+}
+
+"""
+One entity ranked by its activity count.
+"""
+type GraphqlActivityEntityRank {
+	"""
+	Kind of entity.
+	"""
+	entityType: GraphqlEntityType!
+	"""
+	Entity identifier.
+	"""
+	entityId: ID!
+	"""
+	Number of activities that touched the entity.
+	"""
+	count: Int!
 }
 
 """
@@ -303,6 +345,39 @@ type GraphqlActivityOpened {
 	this object has nothing as a field but we need at least 1 field
 	"""
 	nothing: Boolean!
+}
+
+"""
+Activity aggregated over the authenticated user's trailing year.
+
+This value has no `id`, so the normalized client cache embeds it under
+the authenticated user instead of treating it as a global entity.
+"""
+type GraphqlActivityOverview {
+	"""
+	First local date, inclusive, in `YYYY-MM-DD` form.
+	"""
+	from: String!
+	"""
+	One past the final local date, exclusive, in `YYYY-MM-DD` form.
+	"""
+	to: String!
+	"""
+	IANA time zone used for the window and day buckets.
+	"""
+	timeZone: String!
+	"""
+	Total activity in the window.
+	"""
+	total: Int!
+	"""
+	Sparse positive day counts in ascending order.
+	"""
+	days: [GraphqlActivityDay!]!
+	"""
+	Most active entities in stable rank order.
+	"""
+	topEntities: [GraphqlActivityEntityRank!]!
 }
 
 """
@@ -5171,6 +5246,11 @@ type GraphqlUser {
 	Delegated actions performed on the user's behalf are included.
 	"""
 	activity(input: ActivityFeedInput!): GraphqlActivityPage!
+	"""
+	The authenticated user's activity over the trailing year, bucketed
+	into local dates in the requested time zone.
+	"""
+	activityOverview(input: ActivityOverviewInput!): GraphqlActivityOverview!
 	"""
 	Labels across every owned or delegated inbox accessible to the authenticated user.
 	"""

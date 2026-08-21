@@ -7,7 +7,10 @@ use chrono::{DateTime, Utc};
 use model_entity::EntityType;
 use uuid::Uuid;
 
-use super::models::{Activity, ActivityRecord};
+use super::{
+    models::{Activity, ActivityRecord},
+    overview::{ActivityOverview, ActivityWindow},
+};
 
 /// Activity rows grouped per requested entity, newest first within each.
 pub type EntityActivityMap = HashMap<(EntityType, String), Vec<ActivityRecord>>;
@@ -73,4 +76,12 @@ pub trait ActivityReads {
         keys: &[(EntityType, String)],
         per_entity_limit: u32,
     ) -> impl Future<Output = Result<EntityActivityMap, Self::Err>> + Send;
+
+    /// Sparse day counts and the top entities for `subject_id` inside one
+    /// local-date window. Counts every stored action, including views.
+    fn subject_overview(
+        &self,
+        subject_id: &str,
+        window: ActivityWindow,
+    ) -> impl Future<Output = Result<ActivityOverview, Self::Err>> + Send;
 }

@@ -489,6 +489,7 @@ impl graphql_email::SoupEmailContentEdgeReader for RecordingEmailContentReader {
 struct RecordingActivityReader {
     edge_calls: Arc<Mutex<Vec<Vec<graphql_activity::ActivityEdgeKey>>>>,
     feed_calls: Arc<Mutex<Vec<(String, Option<(chrono::DateTime<chrono::Utc>, Uuid)>, u32)>>>,
+    overview_calls: Arc<Mutex<Vec<(String, activity::ActivityWindow)>>>,
     records: Arc<Mutex<Vec<activity::ActivityRecord>>>,
 }
 
@@ -559,6 +560,30 @@ impl graphql_activity::ActivityFeedReader for RecordingActivityReader {
             records: page,
             next,
         })
+    }
+
+    async fn subject_overview(
+        &self,
+        subject_id: &str,
+        window: activity::ActivityWindow,
+    ) -> Result<activity::ActivityOverview, graphql_activity::ActivityReadFailed> {
+        self.overview_calls
+            .lock()
+            .expect("activity overview calls lock")
+            .push((subject_id.to_owned(), window.clone()));
+        Ok(activity::ActivityOverview::new(
+            window.clone(),
+            vec![activity::DayCount {
+                day: window.start,
+                count: std::num::NonZeroU64::new(2).unwrap(),
+            }],
+            vec![activity::EntityRank {
+                entity_type: ModelEntityType::Document,
+                entity_id: "overview-doc".to_owned(),
+                count: std::num::NonZeroU64::new(2).unwrap(),
+            }],
+        )
+        .unwrap())
     }
 }
 
@@ -1627,6 +1652,40 @@ async fn activity_feed_pages_by_cursor_and_carries_unknown_actions() {
     let (cursor_at, cursor_id) = feed_calls[1].1.expect("second page carries the cursor");
     assert_eq!(cursor_at, chrono::DateTime::from_timestamp(200, 0).unwrap());
     assert_eq!(cursor_id, Uuid::from_u128(2));
+}
+
+#[tokio::test]
+async fn activity_overview_uses_the_authenticated_subject_and_requested_zone() {
+    let harness = harness();
+
+    let response = harness
+        .execute(
+            r#"{ user { activityOverview(input: {timeZone: "America/Havana"}) { from to timeZone total days { date count } topEntities { entityType entityId count } } } }"#,
+        )
+        .await;
+
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    let calls = harness
+        .activity_reader
+        .overview_calls
+        .lock()
+        .expect("activity overview calls lock")
+        .clone();
+    assert_eq!(calls.len(), 1);
+    assert_eq!(calls[0].0, VALID_USER_ID);
+    assert_eq!(calls[0].1.zone.name(), "America/Havana");
+
+    let data = response.data.into_json().unwrap();
+    let overview = &data["user"]["activityOverview"];
+    assert_eq!(overview["from"], calls[0].1.start.to_string());
+    assert_eq!(overview["to"], calls[0].1.end.to_string());
+    assert_eq!(overview["timeZone"], "America/Havana");
+    assert_eq!(overview["total"], 2);
+    assert_eq!(overview["days"][0]["date"], calls[0].1.start.to_string());
+    assert_eq!(overview["days"][0]["count"], 2);
+    assert_eq!(overview["topEntities"][0]["entityType"], "DOCUMENT");
+    assert_eq!(overview["topEntities"][0]["entityId"], "overview-doc");
+    assert_eq!(overview["topEntities"][0]["count"], 2);
 }
 
 #[tokio::test]

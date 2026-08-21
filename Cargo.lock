@@ -14,6 +14,7 @@ version = "0.1.0"
 dependencies = [
  "channel_sender",
  "chrono",
+ "chrono-tz",
  "kafka_util",
  "macro_db_migrator",
  "macro_event_broker",
@@ -6755,6 +6756,7 @@ dependencies = [
  "activity",
  "async-graphql",
  "chrono",
+ "chrono-tz",
  "futures",
  "graphql_common",
  "macro_user_id",

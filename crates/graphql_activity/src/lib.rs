@@ -2,10 +2,12 @@
 #![deny(clippy::missing_docs_in_private_items)]
 //! GraphQL adapter for the activity system.
 //!
-//! Two read surfaces over the `activity_events` log:
+//! Three read surfaces over the `activity_events` log:
 //!
 //! - the authenticated user's own feed ([`resolve_activity_feed`]), a
 //!   keyset-paginated field on `GraphqlUser`;
+//! - the authenticated user's trailing-year aggregate
+//!   ([`resolve_activity_overview`]);
 //! - a lazily-loaded `activity` edge on every Soup entity, batched across
 //!   entities through [`EntityActivityLoader`] so it costs nothing when not
 //!   selected and one query when it is.
@@ -20,6 +22,8 @@ mod feed;
 mod loaders;
 /// GraphQL objects for activity events and the typed action union.
 mod objects;
+/// Trailing-year activity overview input, output, and resolver.
+mod overview;
 
 pub use feed::{
     ActivityFeedInput, DEFAULT_ACTIVITY_FEED_LIMIT, GraphqlActivityPage, MAX_ACTIVITY_FEED_LIMIT,
@@ -32,3 +36,7 @@ pub use loaders::{
     parse_activity_edge_limit,
 };
 pub use objects::{GraphqlActivityAction, GraphqlActivityEvent};
+pub use overview::{
+    ActivityOverviewInput, GraphqlActivityDay, GraphqlActivityEntityRank, GraphqlActivityOverview,
+    resolve_activity_overview,
+};
