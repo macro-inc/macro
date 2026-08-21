@@ -1,18 +1,14 @@
 # FHS dynamic linker for zigbuild binaries.
 #
-# Host `cargo zigbuild` links against `/lib64/ld-linux-*.so.2` (or `/lib` on
-# aarch64). A pure Nix store layout does not provide that path, so the runtime
-# image plants a symlink next to the real glibc `ld.so` already copied in via
-# `copyToRoot`.
+# Host `cargo zigbuild` links against `/lib64/ld-linux-x86-64.so.2` (x86_64)
+# or `/lib/ld-linux-aarch64.so.2` (aarch64). Putting `glibc` in `contents`
+# already materialises those paths in the customisation layer (`lib64` → `lib`
+# plus `lib/ld-linux-*.so.2`). Do not symlink over the glibc *store* path:
+# that is the interpreter Nix-linked tools (`/bin/sh`, `curl`) use, and
+# overlaying it with a self-link makes every exec fail with ELOOP.
 { pkgs }:
-let
-  fhsLinker = pkgs.stdenv.cc.bintools.dynamicLinker;
-  storeLinker = "${pkgs.glibc}/lib/${baseNameOf fhsLinker}";
-in
 {
-  inherit fhsLinker storeLinker;
   extraCommands = ''
-    mkdir -p .${dirOf fhsLinker} ./app ./lib ./lib64
-    ln -s ${storeLinker} .${fhsLinker}
+    mkdir -p ./app
   '';
 }
