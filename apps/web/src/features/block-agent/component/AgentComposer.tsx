@@ -26,6 +26,7 @@ export function AgentComposer() {
         disabled={loadFailed()}
         onSend={composer.send}
         onStop={composer.stop}
+        onReady={composer.attachInput}
       />
     </>
   );

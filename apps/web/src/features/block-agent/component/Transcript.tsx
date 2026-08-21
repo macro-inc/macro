@@ -23,6 +23,8 @@ import { Scroll } from '@ui';
 import { createSignal, onCleanup, Show } from 'solid-js';
 import { Virtualizer, type VirtualizerHandle } from 'virtua/solid';
 import { useAgentSession } from '../context/AgentSessionContext';
+import { shouldShowPendingThinking } from '../state/pending-thinking';
+import { ThinkingIndicator } from '../ui';
 import { Message } from './AgentMessage';
 
 /** The channel's `NEAR_BOTTOM_THRESHOLD`: within this, the view follows. */
@@ -33,7 +35,7 @@ const SETTLE_MS = 1000;
 const ITEM_SIZE = 96;
 
 export function Transcript() {
-  const { messages, loadFailed } = useAgentSession();
+  const { messages, loadFailed, composer } = useAgentSession();
 
   let scrollRef: HTMLDivElement | undefined;
   let handle: VirtualizerHandle | undefined;
@@ -194,10 +196,20 @@ export function Transcript() {
             >
               {(message) => (
                 <div class="w-full max-w-3xl mx-auto px-4 pb-4 min-w-0">
-                  <Message message={message} />
+                  <Message message={message} onQuote={composer.quoteReply} />
                 </div>
               )}
             </Virtualizer>
+            <Show
+              when={shouldShowPendingThinking({
+                busy: composer.busy(),
+                messages: messages(),
+              })}
+            >
+              <div class="w-full max-w-3xl mx-auto px-4 pb-4 min-w-0">
+                <ThinkingIndicator />
+              </div>
+            </Show>
           </div>
         </div>
       </Scroll>

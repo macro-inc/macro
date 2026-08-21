@@ -25,6 +25,11 @@ import {
   type QueuedPrompt,
 } from '../state/composer-state';
 
+/** Late-bound composer surface so transcript replies can insert a quote. */
+export type ComposerInputHandle = {
+  insertQuote: (quotedContent: string) => void;
+};
+
 export type ComposerController = {
   /** Prompts waiting to be sent, oldest first. The head sends next. */
   queue: Accessor<QueuedPrompt[]>;
@@ -40,6 +45,10 @@ export type ComposerController = {
   /** Drop a queued prompt. Dropping the failed head clears the failure. */
   remove: (promptId: string) => void;
   stop: () => void;
+  /** Wire the mounted input so quote-replies can reach it. */
+  attachInput: (handle: ComposerInputHandle | undefined) => void;
+  /** Insert a channel-style quote of `quotedContent` into the draft. */
+  quoteReply: (quotedContent: string) => void;
 };
 
 /**
@@ -62,6 +71,10 @@ export function createComposerController(options: {
     queue: [],
     post: { type: 'idle' },
   });
+
+  // Late-bound: the input publishes this on mount. Quote-replies fire from
+  // click handlers, so a plain binding is enough — nothing renders from it.
+  let input: ComposerInputHandle | undefined;
 
   const postHead = async (prompt: QueuedPrompt) => {
     setState('post', { type: 'posting', promptId: prompt.id });
@@ -165,6 +178,12 @@ export function createComposerController(options: {
     stop: () => {
       if (!isBusy(state.post, options.working())) return;
       void postStop();
+    },
+    attachInput: (handle) => {
+      input = handle;
+    },
+    quoteReply: (quotedContent) => {
+      input?.insertQuote(quotedContent);
     },
   };
 }

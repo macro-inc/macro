@@ -6,7 +6,11 @@
  * opencode); see individual file headers.
  */
 
-export { AgentInput, type AgentInputProps } from './AgentInput';
+export {
+  AgentInput,
+  type AgentInputHandle,
+  type AgentInputProps,
+} from './AgentInput';
 export { AnimatedNumber } from './AnimatedNumber';
 export { type CountItem, CountSummary } from './CountSummary';
 export { DiffChanges, type DiffChangesProps } from './DiffChanges';
@@ -25,7 +29,7 @@ export {
   SessionStatusPill,
 } from './SessionStatusPill';
 export { TextShimmer, type TextShimmerProps } from './TextShimmer';
-export { Thought, type ThoughtProps } from './Thought';
+export { ThinkingIndicator, Thought, type ThoughtProps } from './Thought';
 export { TodoList } from './TodoList';
 export { ToolCard, type ToolCardProps } from './ToolCard';
 export { ToolErrorCard, type ToolErrorCardProps } from './ToolErrorCard';

@@ -251,3 +251,25 @@ describe('session switch', () => {
     dispose();
   });
 });
+
+describe('quote reply', () => {
+  it('inserts into the attached input', () => {
+    const { controller, dispose } = setup();
+    const insertQuote = vi.fn();
+    controller.attachInput({ insertQuote });
+    controller.quoteReply('hello\nworld');
+    expect(insertQuote).toHaveBeenCalledWith('hello\nworld');
+    dispose();
+  });
+
+  it('is a no-op before an input is attached, and after it detaches', () => {
+    const { controller, dispose } = setup();
+    expect(() => controller.quoteReply('hello')).not.toThrow();
+    const insertQuote = vi.fn();
+    controller.attachInput({ insertQuote });
+    controller.attachInput(undefined);
+    controller.quoteReply('hello');
+    expect(insertQuote).not.toHaveBeenCalled();
+    dispose();
+  });
+});
