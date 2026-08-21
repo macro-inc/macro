@@ -118,4 +118,27 @@ describe('ReadActivity renderer', () => {
     expect(container.textContent).not.toContain(COMPLETED_OPTION_ID);
     expect(container.textContent).not.toContain('document-raw-id');
   });
+
+  it('renders an unsupported entity type without leaking the raw id', () => {
+    const { container } = renderTool([
+      {
+        actorId: 'macro|user@example.com',
+        entityType: 'agent_session',
+        entityId: 'agent-session-raw-id',
+        action: { type: 'created' },
+        occurredAt: '2026-08-19T17:30:00Z',
+      },
+    ]);
+
+    expect(screen.getByRole('button', { name: /1 activity/i })).toBeTruthy();
+    expect(container.textContent).toContain('Created');
+    expect(container.textContent).not.toContain('agent-session-raw-id');
+  });
+
+  it('reports an empty range without an expand control', () => {
+    renderTool([]);
+
+    expect(screen.getByText('No Results')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /activity/i })).toBeNull();
+  });
 });

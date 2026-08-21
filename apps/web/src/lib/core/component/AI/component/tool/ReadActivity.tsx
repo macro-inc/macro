@@ -32,6 +32,7 @@ const ENTITY_TYPES: Readonly<Record<string, GraphqlEntityType>> = {
   crm_contact: 'CRM_CONTACT',
   reminder: 'REMINDER',
   skill: 'SKILL',
+  agent_session: 'AGENT_SESSION',
 };
 
 function activityAction(action: Activity['action']): ActivityEvent['action'] {
