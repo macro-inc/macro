@@ -7,6 +7,10 @@ use crate::domain::{
     ports::{BotError, BotService},
     service::BotServiceImpl,
 };
+use entity_access::domain::models::{
+    Entity, EntityAccessReceipt, EntityPermission, EntityType, MemberParticipantRole,
+    ParticipantRole,
+};
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_event_broker::{EventBrokerError, MacroEvent, MacroEventBroker, NoopMacroEventBroker};
 use serde_json::{Value, json};
@@ -21,6 +25,23 @@ const TEAM_OWNER: &str = "macro|bot-team-owner@example.com";
 const TEAM_OTHER: &str = "macro|bot-team-other@example.com";
 fn user_id(value: &str) -> MacroUserIdStr<'static> {
     MacroUserIdStr::try_from(value.to_string()).expect("valid macro user id")
+}
+
+fn channel_member_receipt(
+    caller: &str,
+    channel_id: Uuid,
+) -> EntityAccessReceipt<MemberParticipantRole> {
+    EntityAccessReceipt::try_new_authenticated_user(
+        user_id(caller),
+        Entity {
+            entity_id: channel_id.to_string(),
+            entity_type: EntityType::Channel,
+        },
+        EntityPermission::ChannelRole {
+            role: ParticipantRole::Member,
+        },
+    )
+    .expect("member role satisfies channel membership")
 }
 
 fn create_req(handle: &str) -> CreateBotRequest {
@@ -486,13 +507,13 @@ async fn add_remove_channel_bot_requires_bot_usability_and_soft_removes(
         .await?;
 
     let err = service
-        .add_bot_to_channel(user_id(USER_OTHER), channel_id, bot.id)
+        .add_bot_to_channel(channel_member_receipt(USER_OTHER, channel_id), bot.id)
         .await
         .expect_err("non-owner must not add someone else's bot");
     assert!(matches!(err, BotError::Unauthorized));
 
     service
-        .add_bot_to_channel(user_id(USER_OWNER), channel_id, bot.id)
+        .add_bot_to_channel(channel_member_receipt(USER_OWNER, channel_id), bot.id)
         .await?;
 
     let active_count: i64 = sqlx::query_scalar(
@@ -570,13 +591,19 @@ async fn list_bot_channels_requires_manageable_bot_and_returns_only_active_chann
     assert!(empty_channels.is_empty());
 
     service
-        .add_bot_to_channel(user_id(USER_OWNER), removed_channel_id, bot.id)
+        .add_bot_to_channel(
+            channel_member_receipt(USER_OWNER, removed_channel_id),
+            bot.id,
+        )
         .await?;
     service
         .remove_bot_from_channel(user_id(USER_OWNER), removed_channel_id, bot.id)
         .await?;
     service
-        .add_bot_to_channel(user_id(USER_OWNER), active_channel_id, bot.id)
+        .add_bot_to_channel(
+            channel_member_receipt(USER_OWNER, active_channel_id),
+            bot.id,
+        )
         .await?;
 
     let channels = service
@@ -800,7 +827,7 @@ async fn authenticate_channel_token_accepts_migrated_uuid_token(
         .create_bot(user_id(USER_OWNER), create_req("migrated-uuid-token"))
         .await?;
     service
-        .add_bot_to_channel(user_id(USER_OWNER), channel_id, bot.id)
+        .add_bot_to_channel(channel_member_receipt(USER_OWNER, channel_id), bot.id)
         .await?;
 
     let token_id = Uuid::new_v4();
@@ -994,7 +1021,7 @@ async fn non_lifecycle_and_failed_operations_do_not_publish(pool: PgPool) -> any
     service.get_bot(user_id(USER_OWNER), bot.id).await?;
     service.list_channel_bots(channel_id).await?;
     service
-        .add_bot_to_channel(user_id(USER_OWNER), channel_id, bot.id)
+        .add_bot_to_channel(channel_member_receipt(USER_OWNER, channel_id), bot.id)
         .await?;
     service
         .list_bot_channels(BotChannelListCaller::User(user_id(USER_OWNER)), bot.id)

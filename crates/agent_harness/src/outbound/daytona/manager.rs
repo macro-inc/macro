@@ -16,7 +16,7 @@ use crate::domain::error::{HarnessError, Result};
 use crate::domain::model::SpawnContainer;
 use crate::domain::ports::ContainerManager;
 use crate::outbound::managed_containers::ManagedContainers;
-use crate::outbound::provision;
+use crate::outbound::provision::{self, SESSION_LABEL};
 use crate::outbound::sidecar::SidecarTransport;
 
 const LOG_FETCH_TIMEOUT: Duration = Duration::from_secs(15);
@@ -24,7 +24,6 @@ const IDLE_TIMEOUT: Duration = Duration::from_secs(5 * 60);
 const REAP_INTERVAL: Duration = Duration::from_secs(1);
 const STOP_TIMEOUT: Duration = Duration::from_secs(30);
 const STOP_CONCURRENCY: usize = 10;
-const SESSION_LABEL: &str = "macro.agent_session_id";
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 struct DaytonaSandboxId(String);

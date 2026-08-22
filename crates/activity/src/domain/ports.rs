@@ -12,6 +12,35 @@ use super::{
     overview::{ActivityOverview, ActivityWindow},
 };
 
+/// Human-readable metadata for a property referenced by an activity event.
+#[cfg(feature = "ai_tools")]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ActivityPropertyMetadata {
+    /// The property definition's display name.
+    pub display_name: String,
+    /// The canonical property data type (for example `tag` or `select_string`).
+    pub data_type: String,
+    /// Select-option ids mapped to their human-readable labels.
+    pub option_labels: HashMap<String, String>,
+}
+
+/// Resolves user-visible metadata referenced by stored activity payloads.
+///
+/// Implementations enforce the viewer's property-definition visibility and
+/// return only metadata the viewer may read. Resolution is best-effort: an
+/// unavailable secondary service returns an empty map so the primary activity
+/// read can still succeed.
+#[cfg(feature = "ai_tools")]
+#[async_trait::async_trait]
+pub trait ActivityMetadataResolver: Send + Sync + 'static {
+    /// Resolve the requested property definition ids for `viewer`.
+    async fn resolve_properties(
+        &self,
+        viewer: &macro_user_id::user_id::MacroUserIdStr<'_>,
+        property_ids: &[String],
+    ) -> HashMap<String, ActivityPropertyMetadata>;
+}
+
 /// Activity rows grouped per requested entity, newest first within each.
 pub type EntityActivityMap = HashMap<(EntityType, String), Vec<ActivityRecord>>;
 
@@ -25,6 +54,15 @@ pub struct ActivityFeedPage {
     /// Derived from the raw fetched rows *before* decode-skipping, so one
     /// bad row can never end pagination early.
     pub next: Option<(DateTime<Utc>, Uuid)>,
+}
+
+/// A bounded time-range read of one subject's activity.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ActivityRange {
+    /// Decoded rows in the requested range, newest first.
+    pub records: Vec<ActivityRecord>,
+    /// Whether more matching raw rows existed beyond the requested limit.
+    pub truncated: bool,
 }
 
 /// Persists activities.
@@ -84,4 +122,15 @@ pub trait ActivityReads {
         subject_id: &str,
         window: ActivityWindow,
     ) -> impl Future<Output = Result<ActivityOverview, Self::Err>> + Send;
+
+    /// The subject's activity in the half-open interval `[from, to)`, newest
+    /// first, capped at `limit`. `truncated` reports whether more matching raw
+    /// rows exist, so callers can disclose that the bounded result is partial.
+    fn subject_activity_range(
+        &self,
+        subject_id: &str,
+        from: DateTime<Utc>,
+        to: DateTime<Utc>,
+        limit: NonZeroU32,
+    ) -> impl Future<Output = Result<ActivityRange, Self::Err>> + Send;
 }

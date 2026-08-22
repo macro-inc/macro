@@ -182,7 +182,12 @@ const WORKFLOWS: &[WorkflowFile] = &[
     WorkflowFile {
         slug: "deploy_ai_editing_worker",
         file_name: "deploy_ai_editing_worker.yml",
-        render_yaml: || render_gh_workflow(deploy_ai_editing_worker::deploy_ai_editing_worker)(),
+        render_yaml: || {
+            render_patched(
+                deploy_ai_editing_worker::deploy_ai_editing_worker,
+                deploy_ai_editing_worker::patch,
+            )
+        },
     },
     WorkflowFile {
         slug: "deploy_all_services",

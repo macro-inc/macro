@@ -33,6 +33,8 @@ RUN printf '%s\n' \
 WORKDIR /env
 COPY flake.nix flake.lock* ./
 
+# The flake exposes x86_64-linux and aarch64-linux. `nix develop` uses the
+# container's arch, so an unpinned `docker build` on Apple Silicon is native.
 RUN nix develop --profile /env/.base-root path:/env --command true && \
     nix print-dev-env path:/env > /env/dev-env.sh
 

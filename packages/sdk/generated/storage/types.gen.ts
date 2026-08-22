@@ -3743,6 +3743,11 @@ export type DocumentCopiedMetadata = {
  */
 export type DocumentCreatedMetadata = {
     /**
+     * Who mechanically created the document. Absent on events published
+     * before attribution: ingest then treats [`Self::owner`] as the actor.
+     */
+    actor?: string | null;
+    /**
      * Creation timestamp reported by the repository.
      */
     created_at?: string | null;
@@ -3755,6 +3760,7 @@ export type DocumentCreatedMetadata = {
      */
     document_name: string;
     file_type?: null | FileType;
+    on_behalf_of?: null | MacroUserIdStr;
     /**
      * The owner (creator) of the document.
      */

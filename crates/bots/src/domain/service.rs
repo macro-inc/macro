@@ -11,6 +11,7 @@ use super::{
     tokens,
 };
 use chrono::{DateTime, Utc};
+use entity_access::domain::models::{EntityAccessReceipt, EntityType, MemberParticipantRole};
 use macro_event_broker::MacroEventBroker;
 use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;
@@ -308,10 +309,20 @@ where
 
     async fn add_bot_to_channel(
         &self,
-        caller: MacroUserIdStr<'static>,
-        channel_id: Uuid,
+        access: EntityAccessReceipt<MemberParticipantRole>,
         bot_id: BotId,
     ) -> Result<(), BotError> {
+        if access.entity().entity_type != EntityType::Channel {
+            return Err(BotError::BadRequest(
+                "channel access receipt required".to_string(),
+            ));
+        }
+        let channel_id = Uuid::parse_str(&access.entity().entity_id)
+            .map_err(|error| BotError::BadRequest(error.to_string()))?;
+        let caller = access
+            .get_authenticated_user()
+            .cloned()
+            .map_err(|_| BotError::Unauthorized)?;
         self.ensure_manageable(caller, bot_id).await?;
         self.repo
             .add_bot_to_channel(channel_id, bot_id)

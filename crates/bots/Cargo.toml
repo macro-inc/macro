@@ -5,6 +5,14 @@ publish = false
 version = "0.1.0"
 
 [features]
+ai_tools = [
+  "dep:ai_toolset",
+  "dep:async-trait",
+  "dep:entity_access",
+  "dep:schemars",
+  "entity_access/ports",
+  "ports",
+]
 default = ["inbound", "outbound", "ports"]
 inbound = [
   "dep:axum",
@@ -20,11 +28,13 @@ inbound = [
   "ports",
 ]
 outbound = ["dep:sqlx", "dep:macro_uuid", "ports"]
-ports = ["dep:tokio"]
+ports = ["dep:entity_access", "entity_access/ports", "dep:tokio"]
 test-utils = ["dep:mockall", "ports"]
 
 [dependencies]
+ai_toolset = { path = "../ai_toolset", optional = true }
 anyhow = { workspace = true }
+async-trait = { workspace = true, optional = true }
 axum = { workspace = true, optional = true }
 bot_id = { path = "../bot_id", features = ["schema"] }
 channels = { path = "../channels", optional = true, default-features = false, features = ["ports"] }
@@ -39,6 +49,7 @@ macro_user_id = { path = "../macro_user_id" }
 macro_uuid = { path = "../macro_uuid", optional = true }
 model-error-response = { path = "../model-error-response", optional = true }
 rand = { workspace = true }
+schemars = { workspace = true, optional = true }
 serde = { workspace = true }
 serde_json = { workspace = true, optional = true }
 sqlx = { workspace = true, optional = true }

@@ -1,0 +1,22 @@
+---
+title: CreateBot
+description: "Create a bot with a name, stable handle, and optional profile. Omit teamId for a bot owned by the current user; provide teamId to create a team-owned bot, which requires team administrator or owner permission. Pass channelId when the bot should post to a channel immediately: the current user must be a member of that channel. The response then includes a one-time bearerToken and that channel's webhook URL. Omit channelId to create the bot only, then use ManageBotChannelAccess and IssueBotCredential for later setup."
+---
+
+# CreateBot
+
+Create a bot with a name, stable handle, and optional profile. Omit teamId for a bot owned by the current user; provide teamId to create a team-owned bot, which requires team administrator or owner permission. Pass channelId when the bot should post to a channel immediately: the current user must be a member of that channel. The response then includes a one-time bearerToken and that channel's webhook URL. Omit channelId to create the bot only, then use ManageBotChannelAccess and IssueBotCredential for later setup.
+
+## Parameters
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `teamId` | string | No | Team id that should own the bot. Omit for a bot owned by the current user. |
+| `name` | string | Yes | Human-readable display name for the bot. |
+| `handle` | string | Yes | Stable mention handle using only lowercase ASCII letters, digits, hyphens, and underscores; maximum 64 characters. |
+| `description` | string | No | Optional short description of what the bot does. |
+| `avatarUrl` | string | No | Optional URL for the bot profile picture. Pass the URL of an image already uploaded to Macro static files or another reachable image URL. |
+| `channelId` | string | No | Channel id to grant the new bot access to. Requires current-user channel membership. When set, the tool also mints a credential and returns the channel webhook URL. |
+| `credentialLabel` | string | No | Optional label for the credential minted when channelId is set, such as `github-webhook`. Requires channelId. |
+| `credentialExpiresAt` | string | No | Optional RFC 3339 expiration for the credential minted when channelId is set. Requires channelId. |
+| `hasAgent` | boolean | No | Set true if mentioning this bot should open a sandboxed coding-agent session. Defaults to false. |

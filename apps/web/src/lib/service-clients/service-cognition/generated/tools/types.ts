@@ -42,6 +42,24 @@ export type ToolPropertyTargetEntityType =
   | 'user'
   | 'company';
 /**
+ * Ownership scope of a manageable bot.
+ */
+export type BotOwnerSummary =
+  | {
+      /**
+       * Macro user id of the owner.
+       */
+      user_id: string;
+      type: 'user';
+    }
+  | {
+      /**
+       * Team id of the owner.
+       */
+      team_id: string;
+      type: 'team';
+    };
+/**
  * How search tools match query terms. Restricted to partial/exact — the
  * backend also supports regexp and an internal query mode, but those are not
  * offered to the model.
@@ -446,9 +464,105 @@ export type NotificationEntityType =
   | 'reminder'
   | 'skill';
 /**
+ * Channel-access change to apply to a bot.
+ */
+export type BotChannelAccessAction = 'grant' | 'revoke';
+/**
  * The kind of entity to move.
  */
 export type MoveableEntityType = 'document' | 'chat' | 'email' | 'project';
+/**
+ * One activity action returned to the AI.
+ */
+export type ToolActivityAction =
+  | {
+      type: 'created';
+    }
+  | {
+      type: 'edited';
+    }
+  | {
+      type: 'opened';
+    }
+  | {
+      type: 'deleted';
+    }
+  | {
+      type: 'messaged';
+    }
+  | {
+      type: 'sent';
+    }
+  | {
+      /**
+       * The property definition id.
+       */
+      property: string;
+      /**
+       * The property definition's human-readable display name, when it is
+       * still visible to the caller.
+       */
+      propertyName?: string | null;
+      /**
+       * The property's canonical data type, including `tag` for tag sets.
+       */
+      propertyType?: string | null;
+      /**
+       * The previous value, when known.
+       */
+      from?: {
+        [k: string]: unknown;
+      };
+      /**
+       * Previous select/tag option ids resolved to display labels.
+       */
+      fromLabels?: string[] | null;
+      /**
+       * The new value, or `None` when cleared.
+       */
+      to?: {
+        [k: string]: unknown;
+      };
+      /**
+       * New select/tag option ids resolved to display labels.
+       */
+      toLabels?: string[] | null;
+      type: 'propertyChanged';
+    }
+  | {
+      /**
+       * The added principal.
+       */
+      participant: string;
+      type: 'participantAdded';
+    }
+  | {
+      /**
+       * The removed principal.
+       */
+      participant: string;
+      type: 'participantRemoved';
+    }
+  | {
+      /**
+       * The started call's id.
+       */
+      callId: string;
+      type: 'callStarted';
+    }
+  | {
+      /**
+       * The stored action tag.
+       */
+      tag: string;
+      /**
+       * The stored payload, verbatim.
+       */
+      payload?: {
+        [k: string]: unknown;
+      };
+      type: 'unknown';
+    };
 /**
  * Position of a channel message.
  */
@@ -809,6 +923,75 @@ export interface BulkSetEntityPropertyOptionsResult {
    * A human-readable reason, present only when the status is failed.
    */
   error?: string | null;
+}
+/**
+ * Configure a manageable bot's profile. Provide only fields that should change. Use avatarUrl to set a profile picture from an image already uploaded to Macro static files or another reachable image URL; pass an empty string to clear the current picture. Passing an empty string for description clears it. Confirm handle changes because integrations and mentions may rely on the stable handle.
+ */
+export interface ConfigureBot {
+  /**
+   * Bot id from CreateBot or ListBots.
+   */
+  botId: string;
+  /**
+   * New display name. Omit to keep the current name.
+   */
+  name?: string | null;
+  /**
+   * New stable handle using lowercase ASCII letters, digits, hyphens, and underscores. Omit to keep the current handle.
+   */
+  handle?: string | null;
+  /**
+   * New bot description. Omit to keep the current value; pass an empty string to clear it.
+   */
+  description?: string | null;
+  /**
+   * New profile-picture URL. Use a Macro static-file URL or another reachable image URL. Omit to keep the current picture; pass an empty string to clear it.
+   */
+  avatarUrl?: string | null;
+  /**
+   * Set true if mentioning this bot should open a sandboxed coding-agent session. Omit to leave unchanged.
+   */
+  hasAgent?: boolean | null;
+}
+/**
+ * Response from [`ConfigureBot`].
+ */
+export interface ConfigureBotResponse {
+  bot: BotSummary;
+  /**
+   * Human-readable result summary.
+   */
+  summary: string;
+}
+/**
+ * High-signal bot details returned to AI agents.
+ */
+export interface BotSummary {
+  /**
+   * Bot id used by the other bot-management tools.
+   */
+  botId: string;
+  owner: BotOwnerSummary;
+  /**
+   * Display name.
+   */
+  name: string;
+  /**
+   * Stable mention handle.
+   */
+  handle: string;
+  /**
+   * Optional description.
+   */
+  description?: string | null;
+  /**
+   * Optional profile-picture URL.
+   */
+  avatarUrl?: string | null;
+  /**
+   * Whether mentioning this bot opens a sandboxed coding-agent session.
+   */
+  hasAgent: boolean;
 }
 /**
  * Search items by their content: document body text; email subject/body/sender/recipient/cc/bcc and the display names on those addresses; chat messages; call transcripts. This is keyword search, not semantic search: queries only match literal words/tokens, prefixes, or exact quoted terms that appear in the indexed content. Use this for targeted keyword/content lookup, not for activity-summary questions like "what happened today", "what's going on", "catch me up", or "what happened in standup today"; those should start with ListEntities using time/type/channel filters. Whitespace-separated terms are ANDed. For documents and emails, every term must match somewhere in the document — different terms can appear in different chunks/pages or different fields. For documents and emails specifically, each single-word term is matched as a prefix (so `scri` matches `script`); for emails the prefix expansion also runs against the local-part of address fields. For chats, channels, and call transcripts the whole query is matched as a single adjacent phrase prefix — so pass 1-3 targeted keywords drawn from words that would literally appear in the content, not the user's natural-language description; long phrases will not match. Matching defaults to prefix; set matchType to 'exact' to match whole tokens/phrases with no prefix expansion (e.g. an exact word, identifier, or full email address). Wrap a multi-word phrase in double quotes to keep it together as one adjacent phrase. If the user's request combines a person with a topic, run separate searches rather than one combined query. Leave entityTypes empty by default; only filter when the user explicitly scopes to a type. Results for documents, emails, AI chats, projects, and call records include the tags visible to the user as {label, scope} pairs; to restrict a search to tagged items, pass the tag labels in the tags argument (ListTags shows which tags exist).
@@ -1357,6 +1540,108 @@ export interface CrmCompanySearchDomain {
   createdAt: string;
 }
 /**
+ * Create a bot with a name, stable handle, and optional profile. Omit teamId for a bot owned by the current user; provide teamId to create a team-owned bot, which requires team administrator or owner permission. Pass channelId when the bot should post to a channel immediately: the current user must be a member of that channel. The response then includes a one-time bearerToken and that channel's webhook URL. Omit channelId to create the bot only, then use ManageBotChannelAccess and IssueBotCredential for later setup.
+ */
+export interface CreateBot {
+  /**
+   * Team id that should own the bot. Omit for a bot owned by the current user.
+   */
+  teamId?: string | null;
+  /**
+   * Human-readable display name for the bot.
+   */
+  name: string;
+  /**
+   * Stable mention handle using only lowercase ASCII letters, digits, hyphens, and underscores; maximum 64 characters.
+   */
+  handle: string;
+  /**
+   * Optional short description of what the bot does.
+   */
+  description?: string | null;
+  /**
+   * Optional URL for the bot profile picture. Pass the URL of an image already uploaded to Macro static files or another reachable image URL.
+   */
+  avatarUrl?: string | null;
+  /**
+   * Channel id to grant the new bot access to. Requires current-user channel membership. When set, the tool also mints a credential and returns the channel webhook URL.
+   */
+  channelId?: string | null;
+  /**
+   * Optional label for the credential minted when channelId is set, such as `github-webhook`. Requires channelId.
+   */
+  credentialLabel?: string | null;
+  /**
+   * Optional RFC 3339 expiration for the credential minted when channelId is set. Requires channelId.
+   */
+  credentialExpiresAt?: string | null;
+  /**
+   * Set true if mentioning this bot should open a sandboxed coding-agent session. Defaults to false.
+   */
+  hasAgent?: boolean | null;
+}
+/**
+ * Response from [`CreateBot`].
+ */
+export interface CreateBotResponse {
+  bot: BotSummary;
+  /**
+   * Credential and webhook returned when [`CreateBot::channel_id`] was set.
+   */
+  channelSetup?: CreatedBotChannelSetup | null;
+  /**
+   * Human-readable result summary.
+   */
+  summary: string;
+}
+/**
+ * One-time credential and webhook created with a channel-scoped bot.
+ */
+export interface CreatedBotChannelSetup {
+  /**
+   * Channel the bot can now post to.
+   */
+  channelId: string;
+  /**
+   * Token metadata id, used to revoke this credential through the bot API.
+   */
+  tokenId: string;
+  /**
+   * Raw bearer token. It is returned only when minted and must be stored securely.
+   */
+  bearerToken: string;
+  webhook: BotWebhook;
+  /**
+   * Header where callers send [`Self::bearer_token`].
+   */
+  credentialHeader: string;
+  /**
+   * Header where callers send [`Self::credential_scope`].
+   */
+  credentialScopeHeader: string;
+  /**
+   * Required scope value for the bot credential.
+   */
+  credentialScope: string;
+}
+/**
+ * One channel-specific webhook URL for a bot.
+ */
+export interface BotWebhook {
+  /**
+   * Channel id the webhook posts into.
+   */
+  channelId: string;
+  /**
+   * Channel display name, when present.
+   */
+  channelName?: string | null;
+  /**
+   * Public URL to POST webhook content to.
+   */
+  webhookUrl: string;
+}
+/**
  * Prepare an event on the user's calendar, inviting any listed attendees through Google Calendar. In Macro chat this tool opens an inline composer so the user can review, edit, and confirm the event; use the tool to present the proposal instead of asking for a redundant confirmation in prose. When the pending call is executed, the event is written to Google immediately and attendees receive invitations. Other clients should confirm attendee events before executing the call.
  *
  * The event lands on the user's primary calendar unless `calendarId` (from ListCalendars) targets another one. For recurring events pass RFC 5545 lines in `recurrenceLines`, e.g. ["RRULE:FREQ=WEEKLY;BYDAY=MO"]. Returns the created event with its `eventId` for later updates or deletion. Fails if the user has no writable calendar connected.
@@ -1797,6 +2082,32 @@ export interface CreateTagResponse {
   summary: string;
 }
 /**
+ * Delete a bot the current user owns or a bot owned by a team they belong to. This removes the bot from every channel and disables its credentials and webhooks. The operation cannot be undone, so only use it after the user explicitly confirms deletion.
+ */
+export interface DeleteBot {
+  /**
+   * Bot id from ListBots.
+   */
+  botId: string;
+}
+/**
+ * Response from [`DeleteBot`].
+ */
+export interface DeleteBotResponse {
+  /**
+   * Deleted bot id.
+   */
+  botId: string;
+  /**
+   * Whether the bot was deleted.
+   */
+  deleted: boolean;
+  /**
+   * Human-readable result summary.
+   */
+  summary: string;
+}
+/**
  * Delete an event from the user's calendar. The deletion is written to Google immediately and attendees are notified, so confirm with the user before deleting — it cannot be undone. Get the `eventId` from ListCalendarEvents.
  *
  * For recurring events, `scope` controls how much is removed: "all" (default) removes the whole series, "this_event" removes one occurrence, and "this_and_following" ends the series from an occurrence onward. The scoped variants require `recurrenceId` from the targeted occurrence's ListCalendarEvents entry.
@@ -1978,6 +2289,44 @@ export interface EditTagResponse {
   propertyDefinitionId: string;
   /**
    * Human-readable summary.
+   */
+  summary: string;
+}
+/**
+ * Get the channel-specific webhook URLs for a bot the current user can manage. A bot has one URL per channel it can access. POST message content to a returned webhookUrl and authenticate with a token from IssueBotCredential or CreateBot in the returned credentialHeader; also send credentialScope in credentialScopeHeader. If no URLs are returned, add the bot to a channel with ManageBotChannelAccess or recreate it with CreateBot and channelId.
+ */
+export interface GetBotWebhooks {
+  /**
+   * Bot id from CreateBot or ListBots.
+   */
+  botId: string;
+}
+/**
+ * Response from [`GetBotWebhooks`].
+ */
+export interface GetBotWebhooksResponse {
+  /**
+   * Bot whose webhook URLs were requested.
+   */
+  botId: string;
+  /**
+   * Header where callers send a bearer token from [`super::IssueBotCredential`].
+   */
+  credentialHeader: string;
+  /**
+   * Header where callers send [`Self::credential_scope`].
+   */
+  credentialScopeHeader: string;
+  /**
+   * Required scope value for the bot credential.
+   */
+  credentialScope: string;
+  /**
+   * One webhook per channel where the bot currently has access.
+   */
+  webhooks: BotWebhook[];
+  /**
+   * Human-readable result summary.
    */
   summary: string;
 }
@@ -2332,6 +2681,69 @@ export interface ImportNotionPageResponse {
    * Human-readable result and next action.
    */
   message: string;
+}
+/**
+ * Mint a new secret bearer token for a bot the current user can manage. Use this when the user asks for bot credentials or a webhook token; existing raw secrets cannot be recovered safely. The response contains a newly issued bearerToken and tokenId. Treat bearerToken as sensitive and tell the user to store it securely because it is shown only once.
+ */
+export interface IssueBotCredential {
+  /**
+   * Bot id from CreateBot or ListBots.
+   */
+  botId: string;
+  /**
+   * Optional label describing where the credential will be used, such as `github-webhook`.
+   */
+  label?: string | null;
+  /**
+   * Optional RFC 3339 expiration timestamp. Omit for a credential without a scheduled expiration.
+   */
+  expiresAt?: string | null;
+}
+/**
+ * Response containing a newly issued bot credential.
+ */
+export interface IssueBotCredentialResponse {
+  /**
+   * Bot receiving the credential.
+   */
+  botId: string;
+  /**
+   * Token metadata id, used to revoke this credential through the bot API.
+   */
+  tokenId: string;
+  /**
+   * Raw bearer token. It is returned only when minted and must be stored securely.
+   */
+  bearerToken: string;
+  /**
+   * Optional credential label.
+   */
+  label?: string | null;
+  /**
+   * Optional expiration time.
+   */
+  expiresAt?: string | null;
+  /**
+   * Human-readable result summary.
+   */
+  summary: string;
+}
+/**
+ * List every active bot the current user can manage, including user-owned bots and bots owned by teams they belong to. Use this to discover a botId before issuing credentials, reading webhook URLs, changing channel access, configuring, or deleting a bot.
+ */
+export type ListBots = {};
+/**
+ * Response from [`ListBots`].
+ */
+export interface ListBotsResponse {
+  /**
+   * Active bots the caller can manage.
+   */
+  bots: BotSummary[];
+  /**
+   * Human-readable result summary.
+   */
+  summary: string;
 }
 /**
  * List the user's calendar events between two instants, across every calendar they have connected. Returns one entry per occurrence (a recurring event appears once per instance in the window), soonest first, with the `eventId` needed by UpdateCalendarEvent and DeleteCalendarEvent.
@@ -3103,6 +3515,38 @@ export interface ToolMatch {
   description: string;
 }
 /**
+ * Grant or revoke a manageable bot's access to one channel. Granting requires the current user to be a channel member. Both actions require the user to own the bot or belong to its owning team; revoking still works after the manager leaves the channel. Granting access creates that channel's webhook URL; revoking access disables posting to that channel. Use only after the user asks to change bot access.
+ */
+export interface ManageBotChannelAccess {
+  /**
+   * Bot id from CreateBot or ListBots.
+   */
+  botId: string;
+  /**
+   * Channel id to grant or revoke access to.
+   */
+  channelId: string;
+  action: BotChannelAccessAction;
+}
+/**
+ * Response from [`ManageBotChannelAccess`].
+ */
+export interface ManageBotChannelAccessResponse {
+  /**
+   * Bot whose channel access changed.
+   */
+  botId: string;
+  /**
+   * Affected channel.
+   */
+  channelId: string;
+  action: BotChannelAccessAction;
+  /**
+   * Human-readable result summary.
+   */
+  summary: string;
+}
+/**
  * Mark one or more notifications as done or not done for the current user. Use this when the user has completed the action associated with a notification.
  */
 export interface MarkNotificationsDone {
@@ -3186,6 +3630,54 @@ export interface NameSearch {
    */
   tags?: TagFilter[] | null;
   tagsMatch?: TagMatch;
+}
+/**
+ * Read actions attributed to the authenticated user within a time range, newest first. Use this for questions about what the user did, including actions an agent performed on their behalf. Property changes include propertyName/propertyType plus fromLabels/toLabels for resolved select and tag values; use those human-readable fields in the answer and never expose property or option ids. Do not use this for organization-wide updates or everything that happened to entities the user can access; use ListEntities for those. Returns at most 100 activities and reports when the result was truncated.
+ */
+export interface ReadActivity {
+  /**
+   * Inclusive start of the range as an RFC 3339 timestamp.
+   */
+  from: string;
+  /**
+   * Exclusive end of the range as an RFC 3339 timestamp. Must be after from.
+   */
+  to: string;
+}
+/**
+ * Response from [`ReadActivity`].
+ */
+export interface ReadActivityResponse {
+  /**
+   * Matching activity events, newest first.
+   */
+  activities: ToolActivityEvent[];
+  /**
+   * Whether more than 100 events matched the requested range.
+   */
+  truncated: boolean;
+}
+/**
+ * One activity event returned by [`ReadActivity`].
+ */
+export interface ToolActivityEvent {
+  /**
+   * The principal that mechanically performed the action.
+   */
+  actorId: string;
+  /**
+   * The kind of entity acted on.
+   */
+  entityType: string;
+  /**
+   * The entity acted on.
+   */
+  entityId: string;
+  action: ToolActivityAction;
+  /**
+   * When the action occurred.
+   */
+  occurredAt: string;
 }
 /**
  * Retrieve the transcript for a specific call record. Use ListEntities with includeTypes: ["call"] first to find the callId. Only the transcript is returned — other metadata (participants, duration, etc.) is already available from ListEntities. In transcript segments, speakerId is the associated user/track, not guaranteed speaker identity; use diarizedSpeakerId to distinguish actual voices, and treat different diarizedSpeakerIds as potentially different speakers even if speakerId is the caller/"you".

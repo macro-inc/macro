@@ -71,8 +71,47 @@ type RenderItem =
 const STANDALONE_TOOLS: ReadonlySet<string> = new Set([
   'CreateCalendarEvent',
   'DisplayResults',
+  'ReadActivity',
   'SendEmail',
 ]);
+
+function asObject(value: unknown): Record<string, unknown> | undefined {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    return undefined;
+  }
+  return value as Record<string, unknown>;
+}
+
+function hasTimelineWidget(value: unknown): boolean {
+  const widget = asObject(value);
+  if (!widget) return false;
+  if (widget.type === 'timeline') return true;
+  if (widget.type !== 'container' || !Array.isArray(widget.children)) {
+    return false;
+  }
+  return widget.children.some(hasTimelineWidget);
+}
+
+function isActivityPresentationWidget(value: unknown): boolean {
+  const widget = asObject(value);
+  if (!widget) return false;
+  if (widget.type === 'timeline' || widget.type === 'md') return true;
+  if (widget.type !== 'container' || !Array.isArray(widget.children)) {
+    return false;
+  }
+  return widget.children.every(isActivityPresentationWidget);
+}
+
+function isRedundantActivityDashboard(part: AssistantMessagePart): boolean {
+  if (part.type !== 'toolCall' || part.name !== 'DisplayResults') return false;
+  const view = asObject(asObject(part.json)?.view);
+  const widgets = view?.widgets;
+  return (
+    Array.isArray(widgets) &&
+    widgets.some(hasTimelineWidget) &&
+    widgets.every(isActivityPresentationWidget)
+  );
+}
 
 export function AssistantMessageParts(props: {
   parts: AssistantMessagePart[];
@@ -95,6 +134,12 @@ export function AssistantMessageParts(props: {
     completedToolIds,
     (id: string, completed) => completed.has(id)
   );
+  const hasNativeActivityResult = createMemo(() =>
+    props.parts.some(
+      (part) =>
+        part.type === 'toolCallResponseJson' && part.name === 'ReadActivity'
+    )
+  );
 
   const responseById = createMemo(() => {
     const responseMap = new Map<
@@ -116,6 +161,7 @@ export function AssistantMessageParts(props: {
       (part) =>
         part.type !== 'toolCallResponseJson' &&
         part.type !== 'toolCallErr' &&
+        !(hasNativeActivityResult() && isRedundantActivityDashboard(part)) &&
         (part.type !== 'thinking' || part.thinking.trim().length > 0)
     );
   });

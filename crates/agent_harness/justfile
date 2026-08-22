@@ -5,10 +5,18 @@
 #
 # Override the prompt with `just boot-daytona "your prompt"`.
 #
-# Both recipes skip the image build when the image already exists, which is
+# `build-local` builds the same `container/` as a local Docker tag so
+# `just run_local` (which sets DEV_DANGEROUS_LOCAL_CONTAINERS) can spawn
+# sandboxes without a Daytona account. `run_local` / `stack up` already
+# `docker build` the tag with no `--platform` (BuildKit cache no-ops when
+# `container/` is unchanged); this recipe is the same unpinned build, so
+# Apple Silicon / ARM Linux bake native `aarch64-linux`.
+#
+# All recipes skip the image build when the image already exists, which is
 # wrong whenever `container/` has changed - a stale image is reused silently and
 # the failure shows up much later, inside the sandbox. Use `just rebuild-daytona`
-# / `rebuild-namespace` after touching the Dockerfile or the sidecar.
+# / `rebuild-namespace` / `build-local --force` after touching the Dockerfile
+# or the sidecar.
 set dotenv-load := true
 
 # What the image is called on both providers: a Daytona snapshot, and a
@@ -109,3 +117,18 @@ boot-namespace prompt=default_prompt:
     fi
     echo "booting $NAMESPACE_IMAGE_REF"
     cargo run -p agent_harness --bin boot_agent -- namespace {{ quote(prompt) }}
+
+# Build the image for the local Docker provider if missing
+build-local force="":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    # The same `container/` the Daytona snapshot is built from, so a local
+    # stack exercises the deployed image rather than an approximation of it.
+    # Slow on a cold build: the image bakes two nix dev shells.
+    tag={{image_name}}:latest
+    if [ -z "{{force}}" ] && docker image inspect "$tag" >/dev/null 2>&1; then
+      echo "image $tag already exists, skipping build (pass --force to rebuild)"
+      exit 0
+    fi
+    echo "building $tag (native platform; flake has x86_64-linux and aarch64-linux)"
+    docker build --tag "$tag" container

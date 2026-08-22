@@ -251,8 +251,9 @@ pub const RUST_SERVICES: &[RustService] = &[
         host_port: Some(Port::AgentHarness),
         path_prefix: Some("/agent-harness"),
         is_websocket: false,
-        // Runs without sandbox credentials so channel triggers and external
-        // sessions remain available; managed spawns fail loudly when unarmed.
+        // Local stacks default to DEV_DANGEROUS_LOCAL_CONTAINERS, so managed
+        // sandboxes run on the host Docker daemon. Daytona is opt-in via
+        // DEV_DANGEROUS_LOCAL_CONTAINERS=false DAYTONA_API_KEY=... just run_local.
         modes: &[Mode::Local],
         opt_in: false,
         no_default_features: false,
