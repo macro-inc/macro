@@ -210,6 +210,7 @@ dependencies = [
  "channel_sender",
  "channels",
  "chrono",
+ "cursor_cloud_agents",
  "dashmap",
  "futures",
  "kafka_util",
@@ -257,6 +258,7 @@ dependencies = [
  "channels",
  "connection_gateway_client",
  "contacts",
+ "cursor_cloud_agents",
  "database_env_vars",
  "entity_access",
  "kafka_util",
@@ -4329,7 +4331,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "cursor_acp"
+name = "cursor_cloud_agents"
 version = "0.1.0"
 dependencies = [
  "agent-client-protocol",
