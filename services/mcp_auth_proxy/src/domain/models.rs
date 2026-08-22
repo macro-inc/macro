@@ -173,7 +173,7 @@ pub struct TokenRequest {
 }
 
 /// OAuth token response returned to the MCP client.
-#[derive(Serialize)]
+#[derive(Debug, Serialize)]
 pub struct TokenResponse {
     /// Bearer access token.
     pub access_token: AccessToken,
