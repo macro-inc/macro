@@ -144,28 +144,36 @@ fn should_revoke_non_owner_user_access(
     }
 }
 
-/// Actors to publish on a document lifecycle event.
-///
-/// User receipts keep the old `actor_user_id` JSON. A user-scoped bot
-/// receipt publishes Delegated `actor` / `on_behalf_of`.
-fn published_document_actors(
-    auth: &EntityAccessAuth,
-) -> (
-    Option<Actor<'static>>,
-    Option<MacroUserIdStr<'static>>,
-    Option<MacroUserIdStr<'static>>,
-) {
+struct PublishedDocumentActors {
+    actor: Option<Actor<'static>>,
+    on_behalf_of: Option<MacroUserIdStr<'static>>,
+    actor_user_id: Option<MacroUserIdStr<'static>>,
+}
+
+fn published_document_actors(auth: &EntityAccessAuth) -> PublishedDocumentActors {
     match auth {
-        EntityAccessAuth::Authenticated(user_id) => (None, None, Some(user_id.clone())),
-        EntityAccessAuth::Bot(bot) => match bot.scope() {
-            BotReceiptScope::User { acting_user } => (
-                Some(Actor::new_from_bot(bot.bot_id())),
-                Some(acting_user.clone()),
-                None,
-            ),
-            BotReceiptScope::Team { .. } => (None, None, None),
+        EntityAccessAuth::Authenticated(user_id) => PublishedDocumentActors {
+            actor: None,
+            on_behalf_of: None,
+            actor_user_id: Some(user_id.clone()),
         },
-        EntityAccessAuth::Unauthenticated | EntityAccessAuth::Internal => (None, None, None),
+        EntityAccessAuth::Bot(bot) => match bot.scope() {
+            BotReceiptScope::User { acting_user } => PublishedDocumentActors {
+                actor: Some(Actor::new_from_bot(bot.bot_id())),
+                on_behalf_of: Some(acting_user.clone()),
+                actor_user_id: None,
+            },
+            BotReceiptScope::Team { .. } => PublishedDocumentActors {
+                actor: None,
+                on_behalf_of: None,
+                actor_user_id: None,
+            },
+        },
+        EntityAccessAuth::Unauthenticated | EntityAccessAuth::Internal => PublishedDocumentActors {
+            actor: None,
+            on_behalf_of: None,
+            actor_user_id: None,
+        },
     }
 }
 
@@ -868,8 +876,11 @@ impl<
                 tracing::error!(error=?e, "failed to send invalidation event");
             });
 
-        let (actor, on_behalf_of, actor_user_id) =
-            published_document_actors(entity_access_receipt.auth());
+        let PublishedDocumentActors {
+            actor,
+            on_behalf_of,
+            actor_user_id,
+        } = published_document_actors(entity_access_receipt.auth());
         self.publish_document_event(&DocumentMacroEvent::deleted(
             entity_access_receipt.entity().entity_id.clone(),
             DocumentDeletedMetadata {
@@ -1354,8 +1365,11 @@ impl<
                 tracing::error!(error=?e, "failed to send invalidation event");
             });
 
-        let (actor, on_behalf_of, actor_user_id) =
-            published_document_actors(entity_access_receipt.auth());
+        let PublishedDocumentActors {
+            actor,
+            on_behalf_of,
+            actor_user_id,
+        } = published_document_actors(entity_access_receipt.auth());
         self.publish_document_event(&DocumentMacroEvent::updated(
             entity_access_receipt.entity().entity_id.clone(),
             DocumentUpdatedMetadata {
