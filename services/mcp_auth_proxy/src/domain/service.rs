@@ -196,7 +196,7 @@ where
         access_token: super::models::AccessToken,
         refresh_token: super::models::RefreshToken,
     ) -> Result<RedirectTo, IssueRedirectError> {
-        let issued_code = uuid::Uuid::new_v4().to_string();
+        let issued_code = uuid::Uuid::now_v7().to_string();
         self.inflight_auth
             .insert_issued(
                 &issued_code,
@@ -536,6 +536,10 @@ where
             .ok_or(CompleteCallbackError::UnknownOrExpiredSession)?;
 
         if !matches!(session.phase, LoginPhase::AwaitingUpstream { .. }) {
+            self.inflight_auth
+                .replace_session(&session)
+                .await
+                .map_err(CompleteCallbackError::InflightStore)?;
             return Err(CompleteCallbackError::WrongPhase);
         }
 

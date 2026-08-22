@@ -545,6 +545,13 @@ async fn complete_callback_during_awaiting_otp_is_wrong_phase() {
         .await
         .expect_err("FusionAuth cannot complete an OTP session");
     assert!(matches!(error, CompleteCallbackError::WrongPhase));
+    let session = fixture
+        .store
+        .load_session(&session_id)
+        .await
+        .unwrap()
+        .expect("wrong-phase callback must restore the OTP session");
+    assert_eq!(session.phase, LoginPhase::AwaitingOtp { email: email() });
 }
 
 #[tokio::test]

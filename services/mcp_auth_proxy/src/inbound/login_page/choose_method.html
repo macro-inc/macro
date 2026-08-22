@@ -3,7 +3,7 @@
 <p class="error" role="alert" {{error_hidden}}>{{error}}</p>
 <form action="/login/{{session_id}}" method="post">
   <input type="hidden" name="action" value="google">
-  <button class="secondary" type="submit">Continue with Google</button>
+  <button type="submit">Continue with Google</button>
 </form>
 <div class="divider" aria-hidden="true">or</div>
 <form action="/login/{{session_id}}" method="post">
@@ -19,5 +19,5 @@
     spellcheck="false"
     required
   >
-  <button class="field-action" type="submit">Continue with email</button>
+  <button class="secondary field-action" type="submit">Continue with email</button>
 </form>

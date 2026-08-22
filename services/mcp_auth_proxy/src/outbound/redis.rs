@@ -246,6 +246,10 @@ impl InflightAuthStore for RedisInflightAuth {
     }
 
     fn cleanup_expired(&self) -> impl Future<Output = anyhow::Result<()>> + Send {
-        async { Ok(()) }
+        async {
+            // Redis expires sessions and issued codes via SETEX. There is no
+            // in-process map to sweep.
+            Ok(())
+        }
     }
 }
