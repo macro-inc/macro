@@ -8,10 +8,7 @@ use redis::AsyncCommands;
 use std::future::Future;
 
 use crate::domain::{
-    models::{
-        AuthorizationSession, ClientCallback, IdentityProvider, IssuedAuthorizationCode,
-        LoginPhase, SessionId,
-    },
+    models::{AuthorizationSession, ClientCallback, IssuedAuthorizationCode, SessionId},
     ports::InflightAuthStore,
     service::{AUTHORIZATION_CODE_TTL, AUTHORIZATION_SESSION_TTL},
 };
@@ -92,9 +89,6 @@ fn deserialize_session(session_id: &SessionId, json: &str) -> anyhow::Result<Aut
                 code_challenge: legacy.code_challenge,
                 client_state: legacy.client_state,
                 client_redirect_uri: legacy.client_redirect_uri,
-            },
-            phase: LoginPhase::AwaitingUpstream {
-                identity_provider: IdentityProvider::GoogleGmail,
             },
         }),
     }

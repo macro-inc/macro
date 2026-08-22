@@ -9,16 +9,11 @@ use std::{future::Future, sync::Arc, time::Duration};
 
 use super::{
     models::{
-        AuthorizationSession, AuthorizationStart, AuthorizeRequest, CallbackRequest,
-        ClientCallback, CompletePasswordless, IdentityProvider, IssuedAuthorizationCode,
-        LoginAction, LoginAdvance, LoginPageError, LoginPhase, LoginSurface,
-        PasswordlessStartResult, RedirectTo, SessionId, StartPasswordless, TokenRequest,
-        TokenResponse, UpstreamAuthorize,
+        AuthorizationSession, AuthorizationStart, AuthorizeRequest, ClientCallback,
+        CompleteLoginResponse, IssuedAuthorizationCode, ProductTokens, RedirectTo, SessionId,
+        TokenRequest, TokenResponse, is_browser_safe_origin,
     },
-    ports::{
-        InflightAuthStore, OAuthProvider, PasswordlessCompleteError, PasswordlessStartError,
-        ProductPasswordless,
-    },
+    ports::{InflightAuthStore, OAuthProvider},
 };
 
 pub(crate) const AUTHORIZATION_SESSION_TTL: Duration = Duration::from_secs(10 * 60);
@@ -32,27 +27,17 @@ pub trait McpAuthProxyService: Clone + Send + Sync + 'static {
     fn protected_resource_metadata(&self) -> serde_json::Value;
     /// Registers a public MCP client dynamically.
     fn register_client(&self, body: serde_json::Value) -> serde_json::Value;
-    /// Starts an OAuth authorization flow on the broker login page.
+    /// Starts an OAuth authorization flow on the product login page.
     fn start_authorization(
         &self,
         params: AuthorizeRequest,
     ) -> impl Future<Output = Result<AuthorizationStart, StartAuthorizationError>> + Send;
-    /// Returns the current broker login page state.
-    fn login_surface(
+    /// Completes a product login and returns the MCP client loopback redirect.
+    fn complete_login(
         &self,
         session_id: &SessionId,
-    ) -> impl Future<Output = Result<LoginSurface, LoginSurfaceError>> + Send;
-    /// Applies one user action to the broker login state machine.
-    fn advance_login(
-        &self,
-        session_id: &SessionId,
-        action: LoginAction,
-    ) -> impl Future<Output = Result<LoginAdvance, AdvanceLoginError>> + Send;
-    /// Completes the upstream callback and returns the loopback redirect URL.
-    fn complete_callback(
-        &self,
-        params: CallbackRequest,
-    ) -> impl Future<Output = Result<String, CompleteCallbackError>> + Send;
+        tokens: ProductTokens,
+    ) -> impl Future<Output = Result<CompleteLoginResponse, CompleteLoginError>> + Send;
     /// Exchanges a broker-issued code or refresh token for bearer credentials.
     fn exchange_token(
         &self,
@@ -66,8 +51,8 @@ pub trait McpAuthProxyService: Clone + Send + Sync + 'static {
 pub struct McpAuthProxyServiceImpl<I> {
     inflight_auth: Arc<I>,
     oauth_provider: Arc<dyn OAuthProvider>,
-    passwordless: Arc<dyn ProductPasswordless>,
     public_url: String,
+    product_app_url: String,
 }
 
 impl<I> Clone for McpAuthProxyServiceImpl<I> {
@@ -75,8 +60,8 @@ impl<I> Clone for McpAuthProxyServiceImpl<I> {
         Self {
             inflight_auth: Arc::clone(&self.inflight_auth),
             oauth_provider: Arc::clone(&self.oauth_provider),
-            passwordless: Arc::clone(&self.passwordless),
             public_url: self.public_url.clone(),
+            product_app_url: self.product_app_url.clone(),
         }
     }
 }
@@ -88,20 +73,17 @@ where
     /// Creates a new auth proxy service.
     pub fn new(
         public_url: String,
+        product_app_url: String,
         inflight_auth: Arc<I>,
         oauth_provider: Arc<dyn OAuthProvider>,
-        passwordless: Arc<dyn ProductPasswordless>,
-    ) -> Self {
-        Self {
+    ) -> Result<Self, InvalidProductAppUrl> {
+        validate_product_app_url(&product_app_url)?;
+        Ok(Self {
             inflight_auth,
             oauth_provider,
-            passwordless,
             public_url,
-        }
-    }
-
-    pub(crate) fn public_url(&self) -> &str {
-        &self.public_url
+            product_app_url: product_app_url.trim_end_matches('/').to_owned(),
+        })
     }
 
     async fn refresh_token_exchange(
@@ -167,42 +149,18 @@ where
         })
     }
 
-    fn surface_for(session: &AuthorizationSession, error: Option<LoginPageError>) -> LoginSurface {
-        match &session.phase {
-            LoginPhase::ChoosingMethod => match error {
-                Some(error) => LoginSurface::EnterEmail {
-                    session_id: session.id.clone(),
-                    error: Some(error),
-                },
-                None => LoginSurface::ChooseMethod {
-                    session_id: session.id.clone(),
-                },
-            },
-            LoginPhase::AwaitingUpstream { .. } => LoginSurface::ChooseMethod {
-                session_id: session.id.clone(),
-            },
-            LoginPhase::AwaitingOtp { email } => LoginSurface::EnterOtp {
-                session_id: session.id.clone(),
-                email: email.clone(),
-                local_otp: None,
-                error,
-            },
-        }
-    }
-
     async fn issue_client_redirect(
         &self,
         session: AuthorizationSession,
-        access_token: super::models::AccessToken,
-        refresh_token: super::models::RefreshToken,
+        tokens: ProductTokens,
     ) -> Result<RedirectTo, IssueRedirectError> {
         let issued_code = uuid::Uuid::now_v7().to_string();
         self.inflight_auth
             .insert_issued(
                 &issued_code,
                 IssuedAuthorizationCode {
-                    access_token,
-                    refresh_token,
+                    access_token: tokens.access_token,
+                    refresh_token: tokens.refresh_token,
                     code_challenge: session.client.code_challenge,
                     redirect_uri: session.client.client_redirect_uri.clone(),
                 },
@@ -268,7 +226,7 @@ where
         })
     }
 
-    /// Starts an OAuth authorization flow on the broker login page.
+    /// Starts an OAuth authorization flow on the product login page.
     fn start_authorization(
         &self,
         params: AuthorizeRequest,
@@ -295,7 +253,6 @@ where
                     client_state: params.state,
                     client_redirect_uri: params.redirect_uri,
                 },
-                phase: LoginPhase::ChoosingMethod,
             };
             service
                 .inflight_auth
@@ -303,284 +260,43 @@ where
                 .await
                 .map_err(StartAuthorizationError::InflightStore)?;
 
-            Ok(AuthorizationStart::Login { session_id })
+            Ok(AuthorizationStart::ProductLogin {
+                redirect: RedirectTo::new(format!(
+                    "{}/login?mcp_session={session_id}",
+                    service.product_app_url
+                )),
+            })
         }
     }
 
-    /// Returns the current broker login page state.
-    fn login_surface(
+    /// Completes a product login and returns the MCP client loopback redirect.
+    fn complete_login(
         &self,
         session_id: &SessionId,
-    ) -> impl Future<Output = Result<LoginSurface, LoginSurfaceError>> + Send {
+        tokens: ProductTokens,
+    ) -> impl Future<Output = Result<CompleteLoginResponse, CompleteLoginError>> + Send {
         let service = self.clone();
         let session_id = session_id.clone();
         async move {
             let session = service
                 .inflight_auth
-                .load_session(&session_id)
+                .take_session(&session_id)
                 .await
-                .map_err(LoginSurfaceError::InflightStore)?;
-            Ok(session
-                .as_ref()
-                .map(|session| Self::surface_for(session, None))
-                .unwrap_or(LoginSurface::Expired))
-        }
-    }
+                .map_err(CompleteLoginError::InflightStore)?
+                .ok_or(CompleteLoginError::UnknownOrExpiredSession)?;
 
-    /// Applies one user action to the broker login state machine.
-    fn advance_login(
-        &self,
-        session_id: &SessionId,
-        action: LoginAction,
-    ) -> impl Future<Output = Result<LoginAdvance, AdvanceLoginError>> + Send {
-        let service = self.clone();
-        let session_id = session_id.clone();
-        async move {
-            let Some(mut session) = service
-                .inflight_auth
-                .load_session(&session_id)
+            service
+                .issue_client_redirect(session, tokens)
                 .await
-                .map_err(AdvanceLoginError::InflightStore)?
-            else {
-                return Ok(LoginAdvance::Show(LoginSurface::Expired));
-            };
-
-            match (session.phase.clone(), action) {
-                (_, LoginAction::Back) => {
-                    session.phase = LoginPhase::ChoosingMethod;
-                    service
-                        .inflight_auth
-                        .replace_session(&session)
-                        .await
-                        .map_err(AdvanceLoginError::InflightStore)?;
-                    Ok(LoginAdvance::Show(LoginSurface::ChooseMethod {
-                        session_id: session.id,
-                    }))
-                }
-                (
-                    LoginPhase::ChoosingMethod | LoginPhase::AwaitingOtp { .. },
-                    LoginAction::ChooseGoogle,
-                ) => {
-                    let destination = UpstreamAuthorize {
-                        state: session.id.clone(),
-                        identity_provider: IdentityProvider::GoogleGmail,
-                        login_hint: None,
-                    };
-                    let redirect = service
-                        .oauth_provider
-                        .construct_authorize_url(&destination)
-                        .map_err(AdvanceLoginError::ConstructAuthorizeUrl)?;
-                    session.phase = LoginPhase::AwaitingUpstream {
-                        identity_provider: IdentityProvider::GoogleGmail,
-                    };
-                    service
-                        .inflight_auth
-                        .replace_session(&session)
-                        .await
-                        .map_err(AdvanceLoginError::InflightStore)?;
-                    Ok(LoginAdvance::Redirect(RedirectTo::new(redirect)))
-                }
-                (
-                    LoginPhase::ChoosingMethod | LoginPhase::AwaitingOtp { .. },
-                    LoginAction::SubmitEmail { email, resume_uri },
-                ) => {
-                    match service
-                        .passwordless
-                        .start(StartPasswordless {
-                            email: email.clone(),
-                            resume_uri,
-                        })
-                        .await
-                    {
-                        Ok(PasswordlessStartResult::Sent { local_otp }) => {
-                            session.phase = LoginPhase::AwaitingOtp {
-                                email: email.clone(),
-                            };
-                            service
-                                .inflight_auth
-                                .replace_session(&session)
-                                .await
-                                .map_err(AdvanceLoginError::InflightStore)?;
-                            Ok(LoginAdvance::Show(LoginSurface::EnterOtp {
-                                session_id: session.id,
-                                email,
-                                local_otp,
-                                error: None,
-                            }))
-                        }
-                        Ok(PasswordlessStartResult::SsoRequired { idp_id }) => {
-                            let identity_provider = IdentityProvider::DomainSso { idp_id };
-                            let destination = UpstreamAuthorize {
-                                state: session.id.clone(),
-                                identity_provider: identity_provider.clone(),
-                                login_hint: Some(email),
-                            };
-                            let redirect = service
-                                .oauth_provider
-                                .construct_authorize_url(&destination)
-                                .map_err(AdvanceLoginError::ConstructAuthorizeUrl)?;
-                            session.phase = LoginPhase::AwaitingUpstream { identity_provider };
-                            service
-                                .inflight_auth
-                                .replace_session(&session)
-                                .await
-                                .map_err(AdvanceLoginError::InflightStore)?;
-                            Ok(LoginAdvance::Redirect(RedirectTo::new(redirect)))
-                        }
-                        Err(error) => {
-                            let error = match error {
-                                PasswordlessStartError::InvalidEmail => {
-                                    LoginPageError::InvalidEmail
-                                }
-                                PasswordlessStartError::RateLimited => LoginPageError::RateLimited,
-                                PasswordlessStartError::Unavailable => LoginPageError::Unavailable,
-                            };
-                            Ok(LoginAdvance::Show(LoginSurface::EnterEmail {
-                                session_id: session.id,
-                                error: Some(error),
-                            }))
-                        }
+                .map(|redirect| CompleteLoginResponse {
+                    redirect: redirect.as_str().to_owned(),
+                })
+                .map_err(|error| match error {
+                    IssueRedirectError::InflightStore(error) => {
+                        CompleteLoginError::InflightStore(error)
                     }
-                }
-                (LoginPhase::AwaitingOtp { .. }, LoginAction::SubmitOtp(otp)) => {
-                    let Some(taken) = service
-                        .inflight_auth
-                        .take_session(&session_id)
-                        .await
-                        .map_err(AdvanceLoginError::InflightStore)?
-                    else {
-                        return Ok(LoginAdvance::Show(LoginSurface::Expired));
-                    };
-                    let email = match &taken.phase {
-                        LoginPhase::AwaitingOtp { email } => email.clone(),
-                        _ => {
-                            service
-                                .inflight_auth
-                                .replace_session(&taken)
-                                .await
-                                .map_err(AdvanceLoginError::InflightStore)?;
-                            return Ok(LoginAdvance::Show(Self::surface_for(
-                                &taken,
-                                Some(LoginPageError::WrongPhase),
-                            )));
-                        }
-                    };
-
-                    match service
-                        .passwordless
-                        .complete(CompletePasswordless {
-                            email: email.clone(),
-                            otp,
-                        })
-                        .await
-                    {
-                        Ok((access_token, refresh_token)) => service
-                            .issue_client_redirect(taken, access_token, refresh_token)
-                            .await
-                            .map(LoginAdvance::Redirect)
-                            .map_err(AdvanceLoginError::Issue),
-                        Err(error) => {
-                            service
-                                .inflight_auth
-                                .replace_session(&taken)
-                                .await
-                                .map_err(AdvanceLoginError::InflightStore)?;
-                            let error = match error {
-                                PasswordlessCompleteError::InvalidOtp => LoginPageError::InvalidOtp,
-                                PasswordlessCompleteError::RateLimited => {
-                                    LoginPageError::RateLimited
-                                }
-                                PasswordlessCompleteError::Unavailable => {
-                                    LoginPageError::Unavailable
-                                }
-                            };
-                            Ok(LoginAdvance::Show(LoginSurface::EnterOtp {
-                                session_id: taken.id,
-                                email,
-                                local_otp: None,
-                                error: Some(error),
-                            }))
-                        }
-                    }
-                }
-                _ => Ok(LoginAdvance::Show(Self::surface_for(
-                    &session,
-                    Some(LoginPageError::WrongPhase),
-                ))),
-            }
+                })
         }
-    }
-
-    /// Completes the upstream OAuth callback and returns the redirect URL for
-    /// the MCP client loopback callback.
-    async fn complete_callback(
-        &self,
-        params: CallbackRequest,
-    ) -> Result<String, CompleteCallbackError> {
-        let session_id = params
-            .state
-            .as_deref()
-            .ok_or(CompleteCallbackError::MissingState)
-            .and_then(|state| {
-                SessionId::parse_compatible(state.trim_matches('"'))
-                    .map_err(|_| CompleteCallbackError::UnknownOrExpiredSession)
-            })?;
-
-        tracing::info!(%session_id, "oauth callback received");
-
-        let session = self
-            .inflight_auth
-            .take_session(&session_id)
-            .await
-            .map_err(CompleteCallbackError::InflightStore)?
-            .ok_or(CompleteCallbackError::UnknownOrExpiredSession)?;
-
-        if !matches!(session.phase, LoginPhase::AwaitingUpstream { .. }) {
-            self.inflight_auth
-                .replace_session(&session)
-                .await
-                .map_err(CompleteCallbackError::InflightStore)?;
-            return Err(CompleteCallbackError::WrongPhase);
-        }
-
-        if let Some(error) = params.error {
-            tracing::warn!(
-                %session_id,
-                %error,
-                description = ?params.error_description,
-                "upstream oauth returned error"
-            );
-            let mut redirect = format!(
-                "{}?error={}&state={}",
-                session.client.client_redirect_uri,
-                urlencoding::encode(&error),
-                urlencoding::encode(&session.client.client_state),
-            );
-            if let Some(desc) = params.error_description {
-                redirect.push_str(&format!(
-                    "&error_description={}",
-                    urlencoding::encode(&desc)
-                ));
-            }
-            return Ok(redirect);
-        }
-
-        let code = params.code.ok_or(CompleteCallbackError::MissingCode)?;
-
-        let (access_token, refresh_token) = self
-            .oauth_provider
-            .exchange_authorization_code(&code)
-            .await
-            .map_err(CompleteCallbackError::AuthorizationCodeExchangeFailed)?;
-
-        self.issue_client_redirect(session, access_token, refresh_token)
-            .await
-            .map(RedirectTo::into_string)
-            .map_err(|error| match error {
-                IssueRedirectError::InflightStore(error) => {
-                    CompleteCallbackError::InflightStore(error)
-                }
-            })
     }
 
     /// Exchanges a broker-issued authorization code for an upstream bearer
@@ -602,21 +318,26 @@ where
     }
 }
 
+fn validate_product_app_url(url: &str) -> Result<(), InvalidProductAppUrl> {
+    let parsed = url::Url::parse(url).map_err(|_| InvalidProductAppUrl)?;
+    if !is_browser_safe_origin(&parsed) {
+        return Err(InvalidProductAppUrl);
+    }
+    Ok(())
+}
+
 fn is_allowed_redirect_uri(uri: &str) -> bool {
     let Ok(parsed) = url::Url::parse(uri) else {
         return false;
     };
 
-    if parsed.scheme() == "https" {
-        return true;
-    }
-
-    if parsed.scheme() == "http" {
-        return matches!(parsed.host_str(), Some("localhost" | "127.0.0.1" | "[::1]"));
-    }
-
-    false
+    is_browser_safe_origin(&parsed)
 }
+
+/// Error returned when the product app URL is not a browser-safe origin.
+#[derive(Debug, thiserror::Error)]
+#[error("product app URL must be https or a loopback address")]
+pub struct InvalidProductAppUrl;
 
 /// Errors returned when starting authorization.
 #[derive(Debug, thiserror::Error)]
@@ -635,28 +356,6 @@ pub enum StartAuthorizationError {
     InflightStore(anyhow::Error),
 }
 
-/// Errors returned when loading the broker login page.
-#[derive(Debug, thiserror::Error)]
-pub enum LoginSurfaceError {
-    /// Inflight auth state could not be loaded.
-    #[error("failed to access inflight auth state")]
-    InflightStore(anyhow::Error),
-}
-
-/// Errors returned when applying a broker login action.
-#[derive(Debug, thiserror::Error)]
-pub enum AdvanceLoginError {
-    /// Inflight auth state could not be loaded or updated.
-    #[error("failed to access inflight auth state")]
-    InflightStore(anyhow::Error),
-    /// FusionAuth authorize URL construction failed.
-    #[error("failed to construct authorize URL")]
-    ConstructAuthorizeUrl(anyhow::Error),
-    /// Broker authorization code issuance failed.
-    #[error("failed to issue broker authorization code")]
-    Issue(IssueRedirectError),
-}
-
 /// Error returned when issuing a redirect backed by a broker authorization code.
 #[derive(Debug, thiserror::Error)]
 pub enum IssueRedirectError {
@@ -665,27 +364,15 @@ pub enum IssueRedirectError {
     InflightStore(anyhow::Error),
 }
 
-/// Errors returned when handling the upstream callback.
+/// Errors returned when completing product login for an MCP session.
 #[derive(Debug, thiserror::Error)]
-pub enum CompleteCallbackError {
-    /// Upstream callback omitted state.
-    #[error("missing state parameter")]
-    MissingState,
-    /// Upstream callback omitted both the authorization code and an error code.
-    #[error("missing code parameter")]
-    MissingCode,
+pub enum CompleteLoginError {
     /// Pending broker session was missing or expired.
     #[error("unknown or expired session")]
     UnknownOrExpiredSession,
-    /// The broker session is not awaiting an upstream callback.
-    #[error("session is not awaiting an upstream callback")]
-    WrongPhase,
     /// Inflight auth state could not be loaded or updated.
     #[error("failed to access inflight auth state")]
     InflightStore(anyhow::Error),
-    /// Upstream code exchange failed.
-    #[error("authorization code exchange failed")]
-    AuthorizationCodeExchangeFailed(anyhow::Error),
 }
 
 /// Errors returned when exchanging a broker-issued code for a bearer token.

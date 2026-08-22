@@ -188,6 +188,42 @@ export const authServiceClient = {
       await authApiFetch<EmptyResponse>(`/logout`, { method: 'POST' })
     ).map((result) => result);
   },
+  /**
+   * Tokens the MCP broker needs after product login. Cookie sessions do not
+   * store these in localStorage, so fall back to `/jwt/refresh`.
+   */
+  async readProductTokens(): Promise<{
+    accessToken: string;
+    refreshToken: string;
+  } | null> {
+    const existing = accessTokenData();
+    if (existing?.accessToken && existing.refreshToken) {
+      return {
+        accessToken: existing.accessToken,
+        refreshToken: existing.refreshToken,
+      };
+    }
+
+    const result = await authApiFetch<UserTokensResponse>('/jwt/refresh', {
+      method: 'POST',
+      headers: {
+        Accept: 'application/json',
+      },
+    });
+    if (result.isErr()) {
+      return null;
+    }
+
+    setAccessTokenData({
+      accessToken: result.value.access_token,
+      refreshToken: result.value.refresh_token,
+      expiresAt: getExpiresAt(result.value.access_token),
+    });
+    return {
+      accessToken: result.value.access_token,
+      refreshToken: result.value.refresh_token,
+    };
+  },
   async getUserInfo() {
     return (
       await fetchWithAuth<Partial<GetUserInfo>>(`${authHost}/user/me`, {

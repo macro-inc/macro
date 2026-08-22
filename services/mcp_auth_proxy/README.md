@@ -1,5 +1,5 @@
 # MCP auth proxy
 
-`mcp_auth_proxy` gives public MCP clients an OAuth broker in front of FusionAuth. `/authorize` creates a short-lived session and opens a broker-hosted login page where the user can continue with Google or email OTP.
+`mcp_auth_proxy` gives public MCP clients an OAuth broker in front of product login. `/authorize` creates a short-lived PKCE session and redirects the browser to the Macro app `/login?mcp_session=…`.
 
-Both methods produce the same FusionAuth access and refresh tokens. The broker returns those tokens through its existing authorization-code and PKCE exchange at `/token`.
+The frontend owns choosing Google or email OTP. After those tokens exist, it posts them to `/login/{session}/complete`. The broker returns the same tokens through its authorization-code and PKCE exchange at `/token`.

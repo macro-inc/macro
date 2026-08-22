@@ -50,6 +50,11 @@ import {
   sentEmailCode,
   useResetEmailCode,
 } from './EmailForm';
+import {
+  completeMcpLoginIfPresent,
+  persistMcpSessionFromSearch,
+  readMcpSessionId,
+} from './mcpLogin';
 import { OtpInput } from './OtpInput';
 import { Stage } from './Shared';
 import { useSsoLogin } from './useSsoLogin';
@@ -73,8 +78,16 @@ function PostLoginRedirect() {
  * /login a single surface that decides what the user needs next.
  */
 function PostAuthGate() {
+  const [handingOffToMcp, setHandingOffToMcp] = createSignal(!!readMcpSessionId());
   const userInfoQuery = useUserInfoQuery();
   const onboardingV4 = useOnboardingV4Flag();
+
+  onMount(() => {
+    if (!handingOffToMcp()) return;
+    void completeMcpLoginIfPresent().then((completed) => {
+      if (!completed) setHandingOffToMcp(false);
+    });
+  });
 
   const isFirstTimeDesktopUser = () =>
     !isMobile() &&
@@ -91,15 +104,17 @@ function PostAuthGate() {
     onboardingV4().loading && isFirstTimeDesktopUser();
 
   return (
-    <Suspense fallback={<LoadingBlock />}>
-      <Show when={userInfoQuery.data} fallback={<LoadingBlock />}>
-        <Show when={!waitingOnFlag()} fallback={<LoadingBlock />}>
-          <Show when={needsOnboarding()} fallback={<PostLoginRedirect />}>
-            <OnboardingFlow />
+    <Show when={!handingOffToMcp()} fallback={<LoadingBlock />}>
+      <Suspense fallback={<LoadingBlock />}>
+        <Show when={userInfoQuery.data} fallback={<LoadingBlock />}>
+          <Show when={!waitingOnFlag()} fallback={<LoadingBlock />}>
+            <Show when={needsOnboarding()} fallback={<PostLoginRedirect />}>
+              <OnboardingFlow />
+            </Show>
           </Show>
         </Show>
-      </Show>
-    </Suspense>
+      </Suspense>
+    </Show>
   );
 }
 
@@ -453,6 +468,11 @@ function VerifyFormNew(props: {
 
 export function Login(props: { signupMode?: boolean }) {
   const [searchParams] = useSearchParams();
+  persistMcpSessionFromSearch(
+    typeof searchParams.mcp_session === 'string'
+      ? `?mcp_session=${searchParams.mcp_session}`
+      : window.location.search
+  );
   const [stage, setStage] = createSignal(
     searchParams.email ? Stage.Email : Stage.None
   );

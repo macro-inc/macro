@@ -5,27 +5,32 @@ use std::time::Duration;
 use axum::{
     Router,
     extract::{Path, Query, State},
-    http::{HeaderName, Method, StatusCode, header},
+    http::{HeaderMap, HeaderName, Method, StatusCode, header},
     middleware as axum_mw,
-    response::{Html, IntoResponse, Json, Redirect, Response},
+    response::{IntoResponse, Json, Response},
     routing,
 };
-use macro_auth::middleware::decode_jwt::JwtValidationArgs;
+use macro_auth::middleware::decode_jwt::{JwtValidationArgs, validate_macro_access_token};
 use tower_http::cors::{AllowOrigin, CorsLayer};
 
 use crate::domain::{
     models::{
-        AuthorizationStart, AuthorizeRequest, CallbackRequest, Email, LoginAction, LoginAdvance,
-        LoginPageError, LoginSurface, OneTimeCode, ResumeUri, SessionId, TokenRequest,
+        AccessToken, AuthorizationStart, AuthorizeRequest, CompleteLoginResponse, ProductTokens,
+        RefreshToken, SessionId, TokenRequest,
     },
     ports::InflightAuthStore,
     service::{
-        AdvanceLoginError, CompleteCallbackError, LoginSurfaceError, McpAuthProxyService,
-        McpAuthProxyServiceImpl, StartAuthorizationError, TokenExchangeError,
+        CompleteLoginError, McpAuthProxyService, McpAuthProxyServiceImpl, StartAuthorizationError,
+        TokenExchangeError,
     },
 };
 
-use super::login_page::render_login_page;
+/// Shared state for unauthenticated OAuth broker routes.
+#[derive(Clone)]
+struct OAuthState<I> {
+    auth_proxy: McpAuthProxyServiceImpl<I>,
+    jwt_args: JwtValidationArgs,
+}
 
 /// Health check handler for ALB.
 async fn health() -> &'static str {
@@ -33,32 +38,30 @@ async fn health() -> &'static str {
 }
 
 async fn authorization_server_metadata<I: InflightAuthStore + 'static>(
-    State(auth_proxy): State<McpAuthProxyServiceImpl<I>>,
+    State(state): State<OAuthState<I>>,
 ) -> Json<serde_json::Value> {
-    Json(auth_proxy.authorization_server_metadata())
+    Json(state.auth_proxy.authorization_server_metadata())
 }
 
 async fn protected_resource_metadata<I: InflightAuthStore + 'static>(
-    State(auth_proxy): State<McpAuthProxyServiceImpl<I>>,
+    State(state): State<OAuthState<I>>,
 ) -> Json<serde_json::Value> {
-    Json(auth_proxy.protected_resource_metadata())
+    Json(state.auth_proxy.protected_resource_metadata())
 }
 
 async fn register<I: InflightAuthStore + 'static>(
-    State(auth_proxy): State<McpAuthProxyServiceImpl<I>>,
+    State(state): State<OAuthState<I>>,
     axum::Json(body): axum::Json<serde_json::Value>,
 ) -> Json<serde_json::Value> {
-    Json(auth_proxy.register_client(body))
+    Json(state.auth_proxy.register_client(body))
 }
 
 async fn authorize<I: InflightAuthStore + 'static>(
-    State(auth_proxy): State<McpAuthProxyServiceImpl<I>>,
+    State(state): State<OAuthState<I>>,
     Query(params): Query<AuthorizeRequest>,
 ) -> Response {
-    match auth_proxy.start_authorization(params).await {
-        Ok(AuthorizationStart::Login { session_id }) => {
-            found_redirect(&format!("/login/{session_id}"))
-        }
+    match state.auth_proxy.start_authorization(params).await {
+        Ok(AuthorizationStart::ProductLogin { redirect }) => found_redirect(redirect.as_str()),
         Err(StartAuthorizationError::UnsupportedResponseType) => {
             (StatusCode::BAD_REQUEST, "unsupported response_type").into_response()
         }
@@ -82,70 +85,48 @@ async fn authorize<I: InflightAuthStore + 'static>(
 }
 
 #[derive(serde::Deserialize)]
-struct LoginForm {
-    action: String,
-    email: Option<String>,
-    code: Option<String>,
+struct CompleteLoginBody {
+    refresh_token: String,
 }
 
-async fn login<I: InflightAuthStore + 'static>(
-    State(auth_proxy): State<McpAuthProxyServiceImpl<I>>,
+async fn complete_login<I: InflightAuthStore + 'static>(
+    State(state): State<OAuthState<I>>,
     Path(raw_session_id): Path<String>,
+    headers: HeaderMap,
+    axum::Json(body): axum::Json<CompleteLoginBody>,
 ) -> Response {
     let Ok(session_id) = SessionId::parse(&raw_session_id) else {
-        return login_page_response(&LoginSurface::Expired);
+        return (StatusCode::BAD_REQUEST, "unknown or expired session").into_response();
     };
-    match auth_proxy.login_surface(&session_id).await {
-        Ok(surface) => login_page_response(&surface),
-        Err(LoginSurfaceError::InflightStore(error)) => {
-            tracing::error!(error=?error, "failed to load broker login session");
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "failed to load sign-in session",
-            )
-                .into_response()
-        }
+    let Some(access_token) = bearer_token(&headers) else {
+        return (StatusCode::UNAUTHORIZED, "missing bearer token").into_response();
+    };
+    if validate_macro_access_token(access_token, &state.jwt_args).is_err() {
+        return (StatusCode::UNAUTHORIZED, "invalid bearer token").into_response();
     }
-}
+    if body.refresh_token.is_empty() {
+        return (StatusCode::BAD_REQUEST, "refresh_token required").into_response();
+    }
 
-async fn login_post<I: InflightAuthStore + 'static>(
-    State(auth_proxy): State<McpAuthProxyServiceImpl<I>>,
-    Path(raw_session_id): Path<String>,
-    axum::Form(form): axum::Form<LoginForm>,
-) -> Response {
-    let Ok(session_id) = SessionId::parse(&raw_session_id) else {
-        return login_page_response(&LoginSurface::Expired);
-    };
-    let action = match parse_login_action(form, &session_id, auth_proxy.public_url()) {
-        Ok(action) => action,
-        Err(error) => {
-            return login_surface_with_error(&auth_proxy, &session_id, error).await;
+    match state
+        .auth_proxy
+        .complete_login(
+            &session_id,
+            ProductTokens {
+                access_token: AccessToken::from(access_token),
+                refresh_token: RefreshToken::from(body.refresh_token),
+            },
+        )
+        .await
+    {
+        Ok(CompleteLoginResponse { redirect }) => {
+            Json(CompleteLoginResponse { redirect }).into_response()
         }
-    };
-
-    match auth_proxy.advance_login(&session_id, action).await {
-        Ok(LoginAdvance::Show(surface)) => login_page_response(&surface),
-        Ok(LoginAdvance::Redirect(destination)) => {
-            Redirect::to(destination.as_str()).into_response()
+        Err(CompleteLoginError::UnknownOrExpiredSession) => {
+            (StatusCode::BAD_REQUEST, "unknown or expired session").into_response()
         }
-        Err(AdvanceLoginError::InflightStore(error)) => {
-            tracing::error!(error=?error, "failed to update broker login session");
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "failed to update sign-in session",
-            )
-                .into_response()
-        }
-        Err(AdvanceLoginError::ConstructAuthorizeUrl(error)) => {
-            tracing::error!(error=?error, "failed to construct upstream authorize URL");
-            (
-                StatusCode::BAD_GATEWAY,
-                "failed to continue with the identity provider",
-            )
-                .into_response()
-        }
-        Err(AdvanceLoginError::Issue(error)) => {
-            tracing::error!(error=?error, "failed to issue broker authorization code");
+        Err(CompleteLoginError::InflightStore(error)) => {
+            tracing::error!(error=?error, "failed to complete MCP login");
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "failed to complete sign-in",
@@ -155,133 +136,23 @@ async fn login_post<I: InflightAuthStore + 'static>(
     }
 }
 
-fn parse_login_action(
-    form: LoginForm,
-    session_id: &SessionId,
-    public_url: &str,
-) -> Result<LoginAction, LoginPageError> {
-    match form.action.as_str() {
-        "google" => Ok(LoginAction::ChooseGoogle),
-        "email" => {
-            let email = form
-                .email
-                .as_deref()
-                .ok_or(LoginPageError::InvalidEmail)
-                .and_then(|email| Email::parse(email).map_err(|_| LoginPageError::InvalidEmail))?;
-            Ok(LoginAction::SubmitEmail {
-                email,
-                resume_uri: ResumeUri::broker_login(public_url, session_id),
-            })
-        }
-        "otp" => {
-            let code = form
-                .code
-                .as_deref()
-                .ok_or(LoginPageError::InvalidOtp)
-                .and_then(|code| {
-                    OneTimeCode::parse(code).map_err(|_| LoginPageError::InvalidOtp)
-                })?;
-            Ok(LoginAction::SubmitOtp(code))
-        }
-        "back" => Ok(LoginAction::Back),
-        _ => Err(LoginPageError::WrongPhase),
-    }
-}
-
-async fn login_surface_with_error<I: InflightAuthStore + 'static>(
-    auth_proxy: &McpAuthProxyServiceImpl<I>,
-    session_id: &SessionId,
-    error: LoginPageError,
-) -> Response {
-    match auth_proxy.login_surface(session_id).await {
-        Ok(surface) => {
-            let surface = match surface {
-                LoginSurface::ChooseMethod { session_id }
-                | LoginSurface::EnterEmail { session_id, .. } => LoginSurface::EnterEmail {
-                    session_id,
-                    error: Some(error),
-                },
-                LoginSurface::EnterOtp {
-                    session_id, email, ..
-                } => LoginSurface::EnterOtp {
-                    session_id,
-                    email,
-                    local_otp: None,
-                    error: Some(error),
-                },
-                LoginSurface::Expired => LoginSurface::Expired,
-            };
-            login_page_response(&surface)
-        }
-        Err(LoginSurfaceError::InflightStore(store_error)) => {
-            tracing::error!(error=?store_error, "failed to load broker login session");
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "failed to load sign-in session",
-            )
-                .into_response()
-        }
-    }
-}
-
-fn login_page_response(surface: &LoginSurface) -> Response {
-    (
-        [(header::CACHE_CONTROL, "no-store")],
-        Html(render_login_page(surface)),
-    )
-        .into_response()
+fn bearer_token(headers: &HeaderMap) -> Option<&str> {
+    headers
+        .get(header::AUTHORIZATION)
+        .and_then(|value| value.to_str().ok())
+        .and_then(|value| value.strip_prefix("Bearer "))
+        .filter(|token| !token.is_empty())
 }
 
 fn found_redirect(location: &str) -> Response {
     (StatusCode::FOUND, [(header::LOCATION, location)]).into_response()
 }
 
-async fn oauth_callback<I: InflightAuthStore + 'static>(
-    State(auth_proxy): State<McpAuthProxyServiceImpl<I>>,
-    Query(params): Query<CallbackRequest>,
-) -> Response {
-    match auth_proxy.complete_callback(params).await {
-        Ok(url) => found_redirect(&url),
-        Err(CompleteCallbackError::MissingState) => {
-            tracing::warn!("no state parameter in upstream OAuth callback");
-            (StatusCode::BAD_REQUEST, "missing state parameter").into_response()
-        }
-        Err(CompleteCallbackError::MissingCode) => {
-            tracing::warn!("upstream OAuth callback missing both code and error");
-            (StatusCode::BAD_REQUEST, "missing code parameter").into_response()
-        }
-        Err(CompleteCallbackError::UnknownOrExpiredSession) => {
-            (StatusCode::BAD_REQUEST, "unknown or expired session").into_response()
-        }
-        Err(CompleteCallbackError::WrongPhase) => (
-            StatusCode::BAD_REQUEST,
-            "session is not awaiting an upstream callback",
-        )
-            .into_response(),
-        Err(CompleteCallbackError::InflightStore(error)) => {
-            tracing::error!(error=?error, "failed to access inflight auth state");
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "failed to access inflight auth state",
-            )
-                .into_response()
-        }
-        Err(CompleteCallbackError::AuthorizationCodeExchangeFailed(error)) => {
-            tracing::error!(error=?error, "upstream authorization code grant failed");
-            (
-                StatusCode::BAD_GATEWAY,
-                "authorization code exchange failed",
-            )
-                .into_response()
-        }
-    }
-}
-
 async fn token<I: InflightAuthStore + 'static>(
-    State(auth_proxy): State<McpAuthProxyServiceImpl<I>>,
+    State(state): State<OAuthState<I>>,
     axum::Form(params): axum::Form<TokenRequest>,
 ) -> Response {
-    match auth_proxy.exchange_token(params).await {
+    match state.auth_proxy.exchange_token(params).await {
         Ok(response) => Json(response).into_response(),
         Err(TokenExchangeError::UnsupportedGrantType) => {
             (StatusCode::BAD_REQUEST, "unsupported grant_type").into_response()
@@ -366,11 +237,16 @@ where
             routing::get(authorization_server_metadata),
         )
         .route("/authorize", routing::get(authorize))
-        .route("/login/{session_id}", routing::get(login).post(login_post))
+        .route(
+            "/login/{session_id}/complete",
+            routing::post(complete_login),
+        )
         .route("/register", routing::post(register))
-        .route("/oauth/callback", routing::get(oauth_callback))
         .route("/token", routing::post(token))
-        .with_state(auth_proxy);
+        .with_state(OAuthState {
+            auth_proxy,
+            jwt_args: jwt_args.clone(),
+        });
 
     let mcp_route =
         Router::new()

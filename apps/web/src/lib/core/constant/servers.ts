@@ -14,6 +14,7 @@ const serverHostLocal: Servers = {
   'image-proxy-service': 'http://localhost:8097',
   'scheduled-action': 'http://localhost:8098',
   'agent-harness': 'http://localhost:8101',
+  'mcp-service': 'http://localhost:8080',
 } as const;
 
 const devServerSuffix = import.meta.env.MODE === 'development' ? '-dev' : '';
@@ -39,6 +40,7 @@ const serverHostRemote = {
   'image-proxy-service': `https://image-proxy${devServerSuffix}.macro.com`,
   'scheduled-action': `https://agent-schedule${devServerSuffix}.macro.com`,
   'agent-harness': `https://agent-harness${devServerSuffix}.macro.com`,
+  'mcp-service': `https://mcp-server${devServerSuffix}.macro.com`,
 } as const;
 
 type Servers = Record<keyof typeof serverHostRemote, string>;
@@ -101,6 +103,7 @@ function proxyServers(): Servers | undefined {
     'email-service': `${proxyOrigin}/email`,
     'image-proxy-service': `${proxyOrigin}/image-proxy`,
     'scheduled-action': serverHostLocal['scheduled-action'], // no local container
+    'mcp-service': serverHostRemote['mcp-service'],
   };
 }
 

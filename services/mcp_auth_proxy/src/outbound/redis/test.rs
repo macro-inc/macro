@@ -1,6 +1,6 @@
 use super::*;
 
-fn session(phase: LoginPhase) -> AuthorizationSession {
+fn session() -> AuthorizationSession {
     AuthorizationSession {
         id: SessionId::new(),
         client: ClientCallback {
@@ -8,24 +8,35 @@ fn session(phase: LoginPhase) -> AuthorizationSession {
             client_state: "client-state".into(),
             client_redirect_uri: "http://127.0.0.1:54321/callback".into(),
         },
-        phase,
     }
 }
 
 #[test]
-fn current_session_json_has_a_phase_tag() {
-    let session = session(LoginPhase::AwaitingOtp {
-        email: crate::domain::models::Email::parse("person@example.com").unwrap(),
-    });
+fn current_session_json_round_trips() {
+    let session = session();
     let json = serialize_session(&session).unwrap();
-    let value: serde_json::Value = serde_json::from_str(&json).unwrap();
-
-    assert_eq!(value["phase"]["kind"], "awaiting_otp");
     assert_eq!(deserialize_session(&session.id, &json).unwrap(), session);
 }
 
 #[test]
-fn legacy_pending_json_defaults_to_google_upstream() {
+fn session_json_with_a_legacy_phase_still_loads() {
+    let session = session();
+    let json = serde_json::json!({
+        "id": session.id.as_str(),
+        "client": {
+            "code_challenge": "challenge",
+            "client_state": "client-state",
+            "client_redirect_uri": "http://127.0.0.1:54321/callback"
+        },
+        "phase": { "kind": "choosing_method" }
+    })
+    .to_string();
+
+    assert_eq!(deserialize_session(&session.id, &json).unwrap(), session);
+}
+
+#[test]
+fn legacy_pending_json_loads_as_a_client_callback() {
     let session_id = SessionId::parse_compatible("9b458c32-0d2c-4a9b-89e6-164241642dbc").unwrap();
     let json = r#"{
         "code_challenge": "challenge",
@@ -36,10 +47,10 @@ fn legacy_pending_json_defaults_to_google_upstream() {
     let session = deserialize_session(&session_id, json).unwrap();
 
     assert_eq!(session.id, session_id);
+    assert_eq!(session.client.code_challenge, "challenge");
+    assert_eq!(session.client.client_state, "client-state");
     assert_eq!(
-        session.phase,
-        LoginPhase::AwaitingUpstream {
-            identity_provider: IdentityProvider::GoogleGmail,
-        }
+        session.client.client_redirect_uri,
+        "http://127.0.0.1:54321/callback"
     );
 }
