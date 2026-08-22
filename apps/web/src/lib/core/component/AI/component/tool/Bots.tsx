@@ -1,5 +1,4 @@
-import { CredentialField } from '@channel/Bots/CredentialField';
-import { toast } from '@core/component/Toast/Toast';
+import { MintCredential } from '@channel/Bots/MintCredential';
 import Key from '@phosphor-icons/core/regular/key.svg';
 import Link from '@phosphor-icons/core/regular/link.svg';
 import List from '@phosphor-icons/core/regular/list.svg';
@@ -7,13 +6,11 @@ import PlugsConnected from '@phosphor-icons/core/regular/plugs-connected.svg';
 import Robot from '@phosphor-icons/core/regular/robot.svg';
 import SlidersHorizontal from '@phosphor-icons/core/regular/sliders-horizontal.svg';
 import Trash from '@phosphor-icons/core/regular/trash.svg';
-import { useCreateBotTokenMutation } from '@queries/bots/bots';
 import type { NamedTool } from '@service-cognition/generated/tools/tool';
 import type {
   BotOwnerSummary,
   BotSummary,
 } from '@service-cognition/generated/tools/types';
-import { Button } from '@ui';
 import { createSignal, For, Show } from 'solid-js';
 import { BaseTool } from './BaseTool';
 import { Tool } from './Tool';
@@ -56,62 +53,6 @@ function ownerLabel(owner: BotOwnerSummary): string {
   return owner.type === 'team'
     ? `Team · ${owner.team_id}`
     : `User · ${owner.user_id}`;
-}
-
-function MintCredential(props: {
-  botId: string;
-  label?: string | null;
-  expiresAt?: string | null;
-}) {
-  const createToken = useCreateBotTokenMutation();
-  const [token, setToken] = createSignal<string>();
-
-  const mint = () => {
-    createToken.mutate(
-      {
-        botId: props.botId,
-        label: props.label ?? undefined,
-        expiresAt: props.expiresAt ?? undefined,
-      },
-      {
-        onSuccess: ({ bearer_token }) => setToken(bearer_token),
-        onError: () => toast.failure('Failed to create token'),
-      }
-    );
-  };
-
-  return (
-    <Show
-      when={token()}
-      fallback={
-        <div class="flex flex-col gap-2">
-          <p class="text-xs text-ink-muted">
-            Create a token to authenticate this bot. It is shown only while this
-            card is open. You can mint a new one anytime from bot settings.
-          </p>
-          <div>
-            <Button
-              type="button"
-              variant="cta"
-              size="sm"
-              disabled={createToken.isPending}
-              onClick={mint}
-            >
-              {createToken.isPending ? 'Creating…' : 'Create token'}
-            </Button>
-          </div>
-        </div>
-      }
-    >
-      {(rawToken) => (
-        <CredentialField
-          label="Bearer token"
-          value={rawToken()}
-          help="Shown only while this card is open. You can mint a new one anytime."
-        />
-      )}
-    </Show>
-  );
 }
 
 function botDetails(bot: BotSummary): Detail[] {
