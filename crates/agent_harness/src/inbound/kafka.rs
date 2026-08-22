@@ -85,15 +85,15 @@ pub fn route_agent_trigger(
                 AgentSessionId::new(),
                 HarnessCommand::Open(OpenSession {
                     bot_id: mentioned.bot_id,
-                    origin: MentionOrigin {
+                    owner: sender,
+                    origin: Some(MentionOrigin {
                         channel_id: message.channel_id,
                         // A top-level mention roots its own thread; a mention
                         // inside a thread answers into that thread.
                         thread_id: message.thread_id.unwrap_or(message.message_id),
                         message_id: message.message_id,
-                        sender,
                         content: message.content,
-                    },
+                    }),
                 }),
             ))
         }

@@ -58,9 +58,10 @@ impl BotAuthorizer for SelfBotAuthorizer {
 #[derive(Default)]
 struct RecordingOpener {
     opened: Mutex<Vec<OpenExternalAgentSession>>,
+    opened_managed: Mutex<Vec<OpenManagedAgentSession>>,
 }
 
-impl ExternalSessionOpener for RecordingOpener {
+impl SessionOpener for RecordingOpener {
     async fn open_external_session(
         &self,
         request: OpenExternalAgentSession,
@@ -82,6 +83,30 @@ impl ExternalSessionOpener for RecordingOpener {
             modified_at: Utc::now(),
         };
         self.opened.lock().unwrap().push(request);
+        Ok(session)
+    }
+
+    async fn open_managed_session(
+        &self,
+        request: OpenManagedAgentSession,
+    ) -> crate::domain::error::Result<AgentSession> {
+        let session = AgentSession {
+            id: AgentSessionId::TEST_A,
+            owner_id: request.owner.clone(),
+            thread_id: None,
+            thread_channel_id: None,
+            originating_message_id: None,
+            bot_id: request.bot_id,
+            model: "claude".to_owned(),
+            harness: "opencode".to_owned(),
+            repo_url: Some("https://example.com/repo.git".to_owned()),
+            workspace: "/workspace".to_owned(),
+            acp_session_id: None,
+            status: SessionStatus::NoMessages,
+            created_at: Utc::now(),
+            modified_at: Utc::now(),
+        };
+        self.opened_managed.lock().unwrap().push(request);
         Ok(session)
     }
 
@@ -304,14 +329,48 @@ async fn a_relative_workspace_is_rejected() {
 }
 
 #[tokio::test]
-async fn a_managed_bots_sessions_are_not_openable_here() {
+async fn a_managed_bots_thread_sessions_are_not_openable_here() {
     let opener = Arc::new(RecordingOpener::default());
+    // `body` claims a thread, which only the trigger pipeline may vouch for.
     let request = as_bot(body(None, "/srv/agent", Some(OWNER)));
 
     let response = router_for(opener.clone(), OneBotDirectory::managed_agent())
         .oneshot(request)
         .await
         .unwrap();
+
+    assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
+    assert!(opener.opened.lock().unwrap().is_empty());
+    assert!(opener.opened_managed.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn any_user_opens_a_managed_session_without_a_thread() {
+    let opener = Arc::new(RecordingOpener::default());
+    let request = as_user(
+        STRANGER,
+        serde_json::json!({ "botId": BotId::TEST_A.as_uuid() }).to_string(),
+    );
+
+    let response = router_for(opener.clone(), OneBotDirectory::managed_agent())
+        .oneshot(request)
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::CREATED);
+    assert!(opener.opened.lock().unwrap().is_empty());
+    let opened = opener.opened_managed.lock().unwrap();
+    assert_eq!(opened.len(), 1);
+    assert_eq!(opened[0].bot_id, BotId::TEST_A);
+    assert_eq!(opened[0].owner.as_ref(), STRANGER);
+}
+
+#[tokio::test]
+async fn an_external_bot_must_state_a_workspace() {
+    let opener = Arc::new(RecordingOpener::default());
+    let request = as_bot(serde_json::json!({ "owner": OWNER }).to_string());
+
+    let response = router(opener.clone()).oneshot(request).await.unwrap();
 
     assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
     assert!(opener.opened.lock().unwrap().is_empty());

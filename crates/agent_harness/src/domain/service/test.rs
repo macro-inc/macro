@@ -39,7 +39,9 @@ use crate::testing::helpers::agent::FakeAgent;
 use crate::testing::helpers::announcer::AnnouncerMock;
 use crate::testing::helpers::containers::{ContainerMock, ContainerSender, MockContainerManager};
 use agent_session::domain::error::AgentSessionError;
-use agent_session::domain::ports::{ExternalSessionOpener as _, OpenExternalAgentSession};
+use agent_session::domain::ports::{
+    OpenExternalAgentSession, OpenManagedAgentSession, SessionOpener as _,
+};
 
 fn sender() -> MacroUserIdStr<'static> {
     MacroUserIdStr::try_from_email("asker@example.com").expect("a valid user id")
@@ -49,13 +51,13 @@ fn open_command() -> OpenSession {
     let thread_id = macro_uuid::generate_uuid_v7();
     OpenSession {
         bot_id: BotId::new_from_uuid(macro_uuid::generate_uuid_v7()),
-        origin: MentionOrigin {
+        owner: sender(),
+        origin: Some(MentionOrigin {
             channel_id: macro_uuid::generate_uuid_v7(),
             thread_id,
             message_id: thread_id,
-            sender: sender(),
             content: "@claude fix the failing test".to_owned(),
-        },
+        }),
     }
 }
 
@@ -158,7 +160,8 @@ async fn disconnected_session(
     repo: &InMemoryAgentSessionRepo,
     containers: &MockContainerManager,
 ) -> AgentSessionId {
-    let OpenSession { origin, .. } = open_command();
+    let OpenSession { owner, origin, .. } = open_command();
+    let origin = origin.expect("open_command carries a mention origin");
     // The coder bot: resume-on-disconnect only exists for managed sessions.
     let bot_id = bot_id::MACRO_CODER_BOT_ID;
     let id = AgentSessionId::new();
@@ -166,7 +169,7 @@ async fn disconnected_session(
         repo,
         CreateAgentSessionParams {
             id,
-            owner_id: origin.sender,
+            owner_id: owner,
             bot_id,
             thread_id: Some(origin.thread_id),
             originating_message_id: Some(origin.message_id),
@@ -196,7 +199,11 @@ async fn open_creates_announces_and_delivers_the_mention() {
     let (service, repo, containers, announcer, _runtimes) = harness();
     let command = open_command();
     let id = AgentSessionId::new();
-    let origin = command.origin.clone();
+    let owner = command.owner.clone();
+    let origin = command
+        .origin
+        .clone()
+        .expect("open_command carries a mention origin");
 
     let open = service.execute(id, HarnessCommand::Open(command));
     let drive = async {
@@ -226,7 +233,7 @@ async fn open_creates_announces_and_delivers_the_mention() {
     assert_eq!(announced.len(), 1);
     assert_eq!(announced[0].origin_channel_id, origin.channel_id);
     assert_eq!(announced[0].origin_thread_id, origin.thread_id);
-    assert_eq!(announced[0].triggered_by, origin.sender);
+    assert_eq!(announced[0].triggered_by, owner);
     assert_eq!(
         announced[0].prompted_message_id,
         MessageId::first(AuthorKind::User)
@@ -809,6 +816,46 @@ async fn prompt(
             HarnessCommand::Deliver(DeliverAction::prompt(content, Some(sender()), None)),
         )
         .await
+}
+
+#[tokio::test]
+async fn a_managed_open_provisions_a_sandbox_but_announces_and_prompts_nobody() {
+    let (service, repo, containers, announcer, _runtimes) = harness();
+
+    let open = service.open_managed_session(OpenManagedAgentSession {
+        bot_id: bot_id::MACRO_CODER_BOT_ID,
+        owner: sender(),
+    });
+    let drive = async {
+        // The sandbox exists as soon as the open spawns it; drive its agent
+        // through the handshake so the open can attach and finish.
+        loop {
+            if containers.spawned() == 1 {
+                break;
+            }
+            tokio::task::yield_now().await;
+        }
+        let container = containers
+            .container(session_of(&containers))
+            .expect("the spawned container is findable");
+        container.sends_ready();
+        container
+    };
+    let (opened, container) = tokio::join!(open, drive);
+    let session = opened.expect("a managed open should succeed");
+
+    // The row exists with the managed workspace and no thread linkage; the
+    // sandbox was provisioned, but nothing was announced and no prompt has
+    // gone anywhere: the owner drives the session through the control
+    // endpoint.
+    let row = repo.get(session.id).await.expect("the session row exists");
+    assert_eq!(row.owner_id, sender());
+    assert_eq!(row.workspace, agent_session::MANAGED_CONTAINER_WORKSPACE);
+    assert_eq!(row.thread_id, None);
+    assert_eq!(row.originating_message_id, None);
+    assert_eq!(containers.spawned(), 1);
+    assert!(announcer.announced().is_empty());
+    assert!(prompts(&container.agent()).is_empty());
 }
 
 #[tokio::test]

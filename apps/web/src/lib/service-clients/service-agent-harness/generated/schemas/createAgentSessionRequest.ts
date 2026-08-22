@@ -8,6 +8,7 @@ import type { CreateAgentSessionRequestBotId } from './createAgentSessionRequest
 import type { CreateAgentSessionRequestOwner } from './createAgentSessionRequestOwner';
 import type { CreateAgentSessionRequestRepoUrl } from './createAgentSessionRequestRepoUrl';
 import type { CreateAgentSessionRequestThread } from './createAgentSessionRequestThread';
+import type { CreateAgentSessionRequestWorkspace } from './createAgentSessionRequestWorkspace';
 
 /**
  * Request body for `POST /agent-sessions`.
@@ -17,7 +18,8 @@ Clients serialize this, so both derives are used.
 export interface CreateAgentSessionRequest {
   /** Bot the session runs for. Bot callers may omit it (their own identity
 is used) and must not name another bot; user callers must supply a
-bot they own. */
+bot they own, or a managed bot (whose sandbox this deployment
+provisions). */
   botId?: CreateAgentSessionRequestBotId;
   /** The user who owns the session. Ignored for user callers, who always
 own their own sessions; required for bot callers without verified
@@ -31,6 +33,8 @@ bot's say-so. */
 optional: having it cloned there is the runtime operator's job. */
   repoUrl?: CreateAgentSessionRequestRepoUrl;
   thread?: CreateAgentSessionRequestThread;
-  /** Absolute directory the bot's harness runs in on its runtime. */
-  workspace: string;
+  /** Absolute directory the bot's harness runs in on its runtime.
+Required for externally-served bots; ignored for managed bots, whose
+containers run in the path baked into their image. */
+  workspace?: CreateAgentSessionRequestWorkspace;
 }

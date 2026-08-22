@@ -1,5 +1,6 @@
 import {
   agentFilter as agentPredicate,
+  agentSessionFilter as agentSessionPredicate,
   automationFilter as automationPredicate,
   documentFilter as documentPredicate,
   emailFilter as emailPredicate,
@@ -33,6 +34,13 @@ const automationFilter = config({
   group: 'entity-type',
   predicate: automationPredicate,
   query: {}, // No server query - automations are merged client-side via additionalEntities
+});
+
+const agentSessionFilter = config({
+  id: 'agent-session',
+  group: 'entity-type',
+  predicate: agentSessionPredicate,
+  query: {}, // No server query - agent sessions are merged client-side via additionalEntities
 });
 
 const peopleFilter = config({
@@ -87,6 +95,7 @@ const githubPrFilter = config({
 export const ENTITY_TYPE_FILTERS = [
   documentFilter,
   agentFilter,
+  agentSessionFilter,
   automationFilter,
   peopleFilter,
   teamsFilter,

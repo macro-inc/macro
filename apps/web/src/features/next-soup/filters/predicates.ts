@@ -111,6 +111,10 @@ export function automationFilter(entity: EntityData): boolean {
   return entity.type === 'automation';
 }
 
+export function agentSessionFilter(entity: EntityData): boolean {
+  return entity.type === 'agent';
+}
+
 export function projectFilter(entity: EntityData): boolean {
   return entity.type === 'project';
 }

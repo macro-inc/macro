@@ -53,6 +53,10 @@ export function toNotificationEntity(entity: EntityData): Entity {
     return { type: 'channel', id: entity.channelId };
   }
 
+  if (entity.type === 'agent') {
+    return { type: 'agent_session', id: entity.id };
+  }
+
   return entity;
 }
 

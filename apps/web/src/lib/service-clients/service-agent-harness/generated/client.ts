@@ -6,6 +6,7 @@
  */
 import type {
   AgentActionId,
+  AgentSessionListResponse,
   AgentSessionLogResponse,
   AgentSessionResponse,
   ControlRequest,
@@ -14,12 +15,69 @@ import type {
 } from './schemas';
 
 /**
- * Nothing here tells the runtime where to dial: one connection per bot
-carries every session it runs, so a runtime that has already dialed serves
-this session too, and one that has not dials the gateway its own
-configuration names. The triggering mention reaches the session as its
-first prompt through the control endpoint.
- * @summary Open an agent session served by an external runtime.
+ * No entity-access resolution: "the sessions I own" is scoped by the
+caller's own identity, which is the whole authorization.
+ * @summary List the sessions the calling user owns, most recently modified first.
+ */
+export type listAgentSessionsResponse200 = {
+  data: AgentSessionListResponse;
+  status: 200;
+};
+
+export type listAgentSessionsResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type listAgentSessionsResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type listAgentSessionsResponseSuccess = listAgentSessionsResponse200 & {
+  headers: Headers;
+};
+export type listAgentSessionsResponseError = (
+  | listAgentSessionsResponse401
+  | listAgentSessionsResponse500
+) & {
+  headers: Headers;
+};
+
+export type listAgentSessionsResponse =
+  | listAgentSessionsResponseSuccess
+  | listAgentSessionsResponseError;
+
+export const getListAgentSessionsUrl = () => {
+  return `/agent-sessions`;
+};
+
+export const listAgentSessions = async (
+  options?: RequestInit
+): Promise<listAgentSessionsResponse> => {
+  const res = await fetch(getListAgentSessionsUrl(), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: listAgentSessionsResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as listAgentSessionsResponse;
+};
+
+/**
+ * For an externally-served bot, nothing here tells the runtime where to
+dial: one connection per bot carries every session it runs, so a runtime
+that has already dialed serves this session too, and one that has not
+dials the gateway its own configuration names. For a managed bot, this
+deployment provisions the sandbox itself; the session starts with no
+prompt, and the owner drives it through the control endpoint.
+ * @summary Open an agent session.
  */
 export type createAgentSessionResponse201 = {
   data: CreateAgentSessionResponse;

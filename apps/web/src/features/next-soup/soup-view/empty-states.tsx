@@ -305,11 +305,11 @@ export function EmptyState(props: {
         <EmptyStatePanel
           graphic={EmptyStateAiGraphic}
           title="Get started with agents"
-          description="Create an agent, or use Macro with your favorite AI chat client or code editor via MCP."
+          description="Create an agent session, or use Macro with your favorite AI chat client or code editor via MCP."
           primaryAction={{
             label: 'New agent',
             icon: PlusIcon,
-            onClick: () => runCreateAction('chat'),
+            onClick: () => runCreateAction('agent'),
           }}
           documentationUrl={`${DOCS_BASE}/product/agents`}
         />

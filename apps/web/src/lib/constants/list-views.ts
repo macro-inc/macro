@@ -91,11 +91,12 @@ export const soupItemMatchesListView = (
   view: ListView | undefined
 ): boolean =>
   match(view)
+    // Agent sessions and automations don't arrive through the soup - they're
+    // merged client-side via `additionalEntities` - so only the Skills tab's
+    // documents can match a soup insert here.
     .with(
       'agents',
-      () =>
-        item.tag === 'chat' ||
-        (item.tag === 'document' && item.data.subType?.type === 'skill')
+      () => item.tag === 'document' && item.data.subType?.type === 'skill'
     )
     .with('mail', () => item.tag === 'emailThread')
     .with(

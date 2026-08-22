@@ -16,25 +16,27 @@ pub struct MentionOrigin {
     pub thread_id: Uuid,
     /// The mentioning message itself.
     pub message_id: Uuid,
-    /// Who asked. Owns the session and is credited for its messages.
-    pub sender: MacroUserIdStr<'static>,
     /// The message text, verbatim; becomes the session's first prompt.
     pub content: String,
 }
 
-/// Open a new session for a mention.
+/// Open a new session.
 ///
 /// Only for managed sessions - the ones whose sandbox this deployment
 /// provisions. External sessions are opened through
-/// [`agent_session::domain::ports::ExternalSessionOpener`] instead: they
-/// need no provisioning, no announcement, and no first prompt, so they are
-/// a plain create rather than a harness command.
+/// [`agent_session::domain::ports::SessionOpener`] instead: they need no
+/// provisioning, no announcement, and no first prompt, so they are a plain
+/// create rather than a harness command.
 #[derive(Debug, Clone)]
 pub struct OpenSession {
-    /// The bot that was mentioned.
+    /// The bot the session runs for.
     pub bot_id: BotId,
-    /// The mention itself.
-    pub origin: MentionOrigin,
+    /// Who asked. Owns the session and is credited for its messages.
+    pub owner: MacroUserIdStr<'static>,
+    /// The mention that opened the session, when one did. A session opened
+    /// directly - through the create route rather than a channel mention -
+    /// has no origin: nothing is announced, and no first prompt is sent.
+    pub origin: Option<MentionOrigin>,
 }
 
 /// Whether this deployment provisions a sandbox for `bot`'s sessions.

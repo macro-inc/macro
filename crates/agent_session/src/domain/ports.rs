@@ -25,8 +25,8 @@ pub struct BotFacts {
     /// Whether mentioning the bot runs a coding agent.
     pub has_agent: bool,
     /// Whether this deployment provisions the bot's runtime itself. Managed
-    /// bots' sessions are opened by the trigger pipeline, never over HTTP,
-    /// and nothing may dial in for them.
+    /// bots' sessions are provisioned here - opened by the trigger pipeline
+    /// or the create route - and nothing may dial in for them.
     pub is_managed: bool,
     /// The user who owns the bot, when it is user-owned.
     pub owner_user_id: Option<MacroUserIdStr<'static>>,
@@ -75,14 +75,34 @@ pub struct OpenExternalAgentSession {
     pub thread: Option<SessionThread>,
 }
 
-/// Opens externally-served sessions: rows whose runtime is hosted by the
-/// bot's operator and dials in on its own schedule. Implemented by the
-/// harness, which owns the session-opening semantics.
-pub trait ExternalSessionOpener: Send + Sync + 'static {
-    /// Open a session and return the persisted row.
+/// Everything needed to open a session whose sandbox this deployment
+/// provisions. No workspace or repository: managed containers run in the
+/// path and against the repository the deployment is configured with.
+#[derive(Debug, Clone)]
+pub struct OpenManagedAgentSession {
+    /// The managed bot the session runs for.
+    pub bot_id: BotId,
+    /// The user who owns the session.
+    pub owner: MacroUserIdStr<'static>,
+}
+
+/// Opens sessions on behalf of callers: externally-served rows whose runtime
+/// is hosted by the bot's operator and dials in on its own schedule, and
+/// managed rows whose sandbox this deployment provisions itself. Implemented
+/// by the harness, which owns the session-opening semantics.
+pub trait SessionOpener: Send + Sync + 'static {
+    /// Open an externally-served session and return the persisted row.
     fn open_external_session(
         &self,
         request: OpenExternalAgentSession,
+    ) -> impl Future<Output = Result<AgentSession>> + Send;
+
+    /// Open a managed session - provisioning its sandbox - and return the
+    /// persisted row. The session starts with no prompt: the owner drives it
+    /// through the control endpoint.
+    fn open_managed_session(
+        &self,
+        request: OpenManagedAgentSession,
     ) -> impl Future<Output = Result<AgentSession>> + Send;
 
     /// The session a thread's mentions already route to, if one exists.
@@ -115,6 +135,12 @@ pub trait AgentSessionRepo: Send + Sync + 'static {
 
     /// Get an agent session by id.
     fn get(&self, id: AgentSessionId) -> impl Future<Output = Result<AgentSession>> + Send;
+
+    /// List the sessions a user owns, most recently modified first.
+    fn list_for_owner(
+        &self,
+        owner: MacroUserIdStr<'static>,
+    ) -> impl Future<Output = Result<Vec<AgentSession>>> + Send;
 
     /// Find the session associated with an incoming channel context.
     ///

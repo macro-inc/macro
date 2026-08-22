@@ -63,11 +63,12 @@ fn a_mention_for_our_bot_opens_a_session() {
         panic!("a new-session event should open");
     };
     assert_eq!(open.bot_id, BotId::TEST_A);
-    assert_eq!(open.origin.message_id, Uuid::from_u128(2));
+    assert_eq!(open.owner, user());
+    let origin = open.origin.expect("a mention open carries its origin");
+    assert_eq!(origin.message_id, Uuid::from_u128(2));
     // A top-level mention roots its own thread.
-    assert_eq!(open.origin.thread_id, Uuid::from_u128(2));
-    assert_eq!(open.origin.sender, user());
-    assert_eq!(open.origin.content, "@claude fix the tests");
+    assert_eq!(origin.thread_id, Uuid::from_u128(2));
+    assert_eq!(origin.content, "@claude fix the tests");
 }
 
 #[test]
@@ -87,7 +88,12 @@ fn a_threaded_mention_answers_into_its_thread() {
     else {
         panic!("a new-session event should open");
     };
-    assert_eq!(open.origin.thread_id, thread);
+    assert_eq!(
+        open.origin
+            .expect("a mention open carries its origin")
+            .thread_id,
+        thread
+    );
 }
 
 #[test]

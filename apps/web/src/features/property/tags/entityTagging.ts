@@ -39,6 +39,7 @@ export function tagEntityType(
         'crm_company',
         'crm_contact',
         'automation',
+        'agent',
         'reminder',
         'calendar_event',
         'foreign'

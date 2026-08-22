@@ -8,6 +8,7 @@
 /**
  * Bot the session runs for. Bot callers may omit it (their own identity
 is used) and must not name another bot; user callers must supply a
-bot they own.
+bot they own, or a managed bot (whose sandbox this deployment
+provisions).
  */
 export type CreateAgentSessionRequestBotId = string | null;

@@ -214,6 +214,8 @@ const renameDssSetData = (
       itemType !== 'channel_message' &&
       itemType !== 'channel_thread' &&
       itemType !== 'automation' &&
+      // Agent sessions aren't soup rows and have no rename path.
+      itemType !== 'agent' &&
       itemType !== 'calendar_event' &&
       itemType !== 'foreign' &&
       // CRM companies/contacts aren't renamed via the FileList path (their

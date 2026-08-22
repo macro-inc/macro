@@ -11,10 +11,48 @@
   },
   "paths": {
     "/agent-sessions": {
+      "get": {
+        "tags": ["agent-sessions"],
+        "summary": "List the sessions the calling user owns, most recently modified first.",
+        "description": "No entity-access resolution: \"the sessions I own\" is scoped by the\ncaller's own identity, which is the whole authorization.",
+        "operationId": "list_agent_sessions",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentSessionListResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      },
       "post": {
         "tags": ["agent-sessions"],
-        "summary": "Open an agent session served by an external runtime.",
-        "description": "Nothing here tells the runtime where to dial: one connection per bot\ncarries every session it runs, so a runtime that has already dialed serves\nthis session too, and one that has not dials the gateway its own\nconfiguration names. The triggering mention reaches the session as its\nfirst prompt through the control endpoint.",
+        "summary": "Open an agent session.",
+        "description": "For an externally-served bot, nothing here tells the runtime where to\ndial: one connection per bot carries every session it runs, so a runtime\nthat has already dialed serves this session too, and one that has not\ndials the gateway its own configuration names. For a managed bot, this\ndeployment provisions the sandbox itself; the session starts with no\nprompt, and the owner drives it through the control endpoint.",
         "operationId": "create_agent_session",
         "requestBody": {
           "content": {
@@ -419,6 +457,20 @@
           }
         }
       },
+      "AgentSessionListResponse": {
+        "type": "object",
+        "description": "Response body listing the caller's agent sessions.\n\nClients deserialize this, so both derives are used.",
+        "required": ["sessions"],
+        "properties": {
+          "sessions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AgentSessionResponse"
+            },
+            "description": "The caller's sessions, most recently modified first."
+          }
+        }
+      },
       "AgentSessionLogEntryDto": {
         "allOf": [
           {
@@ -567,12 +619,11 @@
       "CreateAgentSessionRequest": {
         "type": "object",
         "description": "Request body for `POST /agent-sessions`.\n\nClients serialize this, so both derives are used.",
-        "required": ["workspace"],
         "properties": {
           "botId": {
             "type": ["string", "null"],
             "format": "uuid",
-            "description": "Bot the session runs for. Bot callers may omit it (their own identity\nis used) and must not name another bot; user callers must supply a\nbot they own."
+            "description": "Bot the session runs for. Bot callers may omit it (their own identity\nis used) and must not name another bot; user callers must supply a\nbot they own, or a managed bot (whose sandbox this deployment\nprovisions)."
           },
           "owner": {
             "type": ["string", "null"],
@@ -594,8 +645,8 @@
             ]
           },
           "workspace": {
-            "type": "string",
-            "description": "Absolute directory the bot's harness runs in on its runtime."
+            "type": ["string", "null"],
+            "description": "Absolute directory the bot's harness runs in on its runtime.\nRequired for externally-served bots; ignored for managed bots, whose\ncontainers run in the path baked into their image."
           }
         }
       },

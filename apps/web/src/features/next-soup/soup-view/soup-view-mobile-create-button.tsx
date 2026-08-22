@@ -54,7 +54,7 @@ export function SoupViewMobileCreateButton(props: {
   // etc.) once the entity actually exists; the dock only attributes `source`.
   const VIEW_CREATE_ACTIONS: Partial<Record<ListView, () => void>> = {
     agents: () => {
-      runCreateAction('chat', { source: 'mobile_dock' });
+      runCreateAction('agent', { source: 'mobile_dock' });
     },
     mail: () => {
       runCreateAction('email', { source: 'mobile_dock' });

@@ -131,6 +131,22 @@ impl AgentSessionRepo for InMemoryAgentSessionRepo {
             })
     }
 
+    async fn list_for_owner(
+        &self,
+        owner: macro_user_id::user_id::MacroUserIdStr<'static>,
+    ) -> Result<Vec<AgentSession>> {
+        let mut sessions: Vec<AgentSession> = self
+            .sessions
+            .lock()
+            .expect("in-memory session store is not poisoned")
+            .values()
+            .filter(|session| session.owner_id == owner)
+            .cloned()
+            .collect();
+        sessions.sort_by(|a, b| b.modified_at.cmp(&a.modified_at));
+        Ok(sessions)
+    }
+
     async fn find_for_channel(
         &self,
         thread_id: Option<Uuid>,

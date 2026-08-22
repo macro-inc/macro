@@ -1,15 +1,36 @@
 import { SERVER_HOSTS } from '@core/constant/servers';
 import { fetchWithToken } from '@core/util/fetchWithToken';
 import type {
+  AgentSessionListResponse,
   AgentSessionLogResponse,
   AgentSessionResponse,
   ControlRequest,
+  CreateAgentSessionRequest,
+  CreateAgentSessionResponse,
 } from './generated/schemas';
 
 const agentHarnessHost = SERVER_HOSTS['agent-harness'];
 
 /** Authenticated client for controlling live agent sessions. */
 export const agentHarnessServiceClient = {
+  create(request: CreateAgentSessionRequest) {
+    return fetchWithToken<CreateAgentSessionResponse>(
+      `${agentHarnessHost}/agent-sessions`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(request),
+      }
+    );
+  },
+
+  list() {
+    return fetchWithToken<AgentSessionListResponse>(
+      `${agentHarnessHost}/agent-sessions`,
+      { method: 'GET' }
+    );
+  },
+
   get(sessionId: string) {
     return fetchWithToken<AgentSessionResponse>(
       `${agentHarnessHost}/agent-sessions/${sessionId}`,

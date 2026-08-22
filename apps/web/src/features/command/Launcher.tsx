@@ -39,6 +39,7 @@ import {
 } from '@core/util/create';
 import { createControlledOpenSignal } from '@core/util/createControlledOpenSignal';
 import SkillIcon from '@icon/skill.svg';
+import { createAgentSession } from '@queries/agent-session/entities';
 import WideAutomation from '@icon/wide-automation.svg';
 import { AnimatedChannelIcon } from '@icon/wide-channel';
 import WideChannel from '@icon/wide-channel.svg';
@@ -369,6 +370,20 @@ export function runCreateAction(
         shouldInsert,
       });
       return;
+    case 'agent':
+      createBlock({
+        blockName: 'agent',
+        loading: true,
+        createFn: async () => {
+          const result = await createAgentSession({ source });
+          if ('error' in result) {
+            return;
+          }
+          return result.sessionId;
+        },
+        shouldInsert,
+      });
+      return;
     case 'project':
       createBlock({
         blockName: 'project',
@@ -435,15 +450,15 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
     label: 'Agent',
     icon: WideStar,
     animatedIcon: AnimatedStarIcon,
-    description: 'Create agent chat',
+    description: 'Create agent session',
     launcherHint: 'New agent session',
     keywords: ['new', 'make', 'add', 'agent'],
-    blockName: 'chat',
+    blockName: 'agent',
     hotkeyToken: TOKENS.create.chat,
     altHotkeyToken: TOKENS.create.chatNewSplit,
     hotkey: 'a',
     keyDownHandler: () => {
-      runCreateAction('chat', { shouldInsert: pressedKeys().has('shift') });
+      runCreateAction('agent', { shouldInsert: pressedKeys().has('shift') });
       return true;
     },
   },

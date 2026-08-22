@@ -51,7 +51,7 @@ impl WorkExecutor for Dispatcher {
                     // The bot is the one whose credentials this daemon holds,
                     // and naming another one is refused anyway.
                     bot_id: None,
-                    workspace: self.workspace.path.to_string_lossy().into_owned(),
+                    workspace: Some(self.workspace.path.to_string_lossy().into_owned()),
                     repo_url: self.workspace.repo_url.clone(),
                     owner: Some(sender.as_ref().to_owned()),
                     thread: Some(CreateSessionThread {

@@ -266,6 +266,31 @@ impl AgentSessionRepo for PgAgentSessionRepo {
         Ok(row.try_into()?)
     }
 
+    async fn list_for_owner(&self, owner: MacroUserIdStr<'static>) -> Result<Vec<AgentSession>> {
+        let rows = sqlx::query_as!(
+            AgentSessionRow,
+            r#"
+            SELECT
+                id, owner_id, thread_id, originating_message_id, bot_id,
+                model, harness, repo_url, workspace, acp_session_id, status,
+                status_event_name, created_at, modified_at,
+                (SELECT channel_id FROM comms_messages WHERE id = agent_session.thread_id)
+                    AS "thread_channel_id?"
+            FROM agent_session
+            WHERE owner_id = $1
+            ORDER BY modified_at DESC
+            "#,
+            owner.as_ref(),
+        )
+        .fetch_all(&self.pool)
+        .await
+        .context("failed to list agent sessions for owner")?;
+
+        rows.into_iter()
+            .map(|row| Ok(row.try_into()?))
+            .collect::<Result<Vec<_>>>()
+    }
+
     async fn find_for_channel(
         &self,
         thread_id: Option<Uuid>,

@@ -37,8 +37,16 @@ import { useUserContext } from '@core/context/user';
 import type { ViewId } from '@core/types/view';
 import EmptyStatePreviewIcon from '@design/empty-state-doc.svg';
 import { useAutomationEntities } from '@queries/agent-schedule/entities';
+import { useAgentSessionEntities } from '@queries/agent-session/entities';
 import { EmptyStatePanel } from '@ui';
-import { type Component, type JSXElement, lazy, onMount, Show } from 'solid-js';
+import {
+  type Component,
+  createMemo,
+  type JSXElement,
+  lazy,
+  onMount,
+  Show,
+} from 'solid-js';
 import type { SplitContent } from './layoutManager';
 import { useSplitPanelOrThrow } from './layoutUtils';
 import { previewEmptyStateForContent } from './previewController';
@@ -299,13 +307,18 @@ registerComponent(
       isTeamAdmin: false,
     });
     const automationEntities = useAutomationEntities();
+    const agentSessionEntities = useAgentSessionEntities();
+    const additionalEntities = createMemo(() => [
+      ...agentSessionEntities(),
+      ...automationEntities(),
+    ]);
     return (
       <SoupView
         viewName="Agents"
         initialFilters={preset?.filters}
         initialClientFilters={preset?.clientFilters}
         initialGroupBy={preset?.groupBy}
-        additionalEntities={automationEntities}
+        additionalEntities={additionalEntities}
       />
     );
   })

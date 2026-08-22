@@ -867,6 +867,8 @@ export function CanvasController(props: ParentProps) {
     }
     // Automation and foreign entities aren't yet renderable as canvas mentions.
     if (entityType === 'automation' || entityType === 'foreign') return;
+    // Nor are agent sessions.
+    if (entityType === 'agent') return;
     // CRM companies/contacts aren't renderable as canvas mentions.
     if (entityType === 'crm_company') return;
     if (entityType === 'crm_contact') return;

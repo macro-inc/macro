@@ -32,8 +32,8 @@ use entity_access::domain::models::{OwnerAccessLevel, ViewAccessLevel};
 use entity_access::domain::ports::EntityAccessService;
 use entity_access::inbound::axum_extractors::AgentSessionAccessLevelExtractor;
 use macro_authorization::{
-    MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState, UserOrBot,
-    UserOrBotAuthorization,
+    MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState, UserOnly,
+    UserOrBot, UserOrBotAuthorization,
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
@@ -45,8 +45,8 @@ use crate::domain::model::{
     AgentSession, AgentSessionId, Message, SessionBot, SessionStatus, StoredAgentSessionLog,
 };
 use crate::domain::ports::{
-    AgentSessionNotificationRecipient, BotDirectory, BotFacts, ControlEvent, ExternalSessionOpener,
-    OpenExternalAgentSession, SessionThread,
+    AgentSessionNotificationRecipient, BotDirectory, BotFacts, ControlEvent,
+    OpenExternalAgentSession, OpenManagedAgentSession, SessionOpener, SessionThread,
 };
 use crate::domain::service::AgentSessionService;
 use bots::domain::models::BotId;
@@ -167,6 +167,7 @@ where
     S: Clone + Send + Sync + 'static,
 {
     Router::new()
+        .route("/", get(list_agent_sessions_handler::<T, Access, Auth>))
         .route(
             "/{session_id}",
             get(get_agent_session_handler::<T, Access, Auth>),
@@ -370,6 +371,50 @@ pub async fn get_agent_session_handler<
         .await?;
 
     Ok(Json(session.into()))
+}
+
+/// Response body listing the caller's agent sessions.
+///
+/// Clients deserialize this, so both derives are used.
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentSessionListResponse {
+    /// The caller's sessions, most recently modified first.
+    pub sessions: Vec<AgentSessionResponse>,
+}
+
+#[utoipa::path(
+    get,
+    path = "/agent-sessions",
+    tag = "agent-sessions",
+    operation_id = "list_agent_sessions",
+    responses(
+        (status = 200, body = AgentSessionListResponse),
+        (status = 401, body = String),
+        (status = 500, body = String),
+    )
+)]
+/// List the sessions the calling user owns, most recently modified first.
+///
+/// No entity-access resolution: "the sessions I own" is scoped by the
+/// caller's own identity, which is the whole authorization.
+#[tracing::instrument(skip_all, err(Debug))]
+pub async fn list_agent_sessions_handler<
+    T: AgentSessionService,
+    Access: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
+    caller: MacroAuthorizationExtractor<Auth, UserOnly>,
+    State(state): State<AgentSessionRouterState<T, Access, Auth>>,
+) -> Result<Json<AgentSessionListResponse>, AgentSessionApiError> {
+    let sessions = state
+        .service
+        .list_sessions_for_owner(caller.authorization.macro_user_id.clone())
+        .await?;
+
+    Ok(Json(AgentSessionListResponse {
+        sessions: sessions.into_iter().map(Into::into).collect(),
+    }))
 }
 
 #[utoipa::path(
@@ -648,7 +693,7 @@ pub fn agent_session_create_router<Opener, Bots, Auth, S>(
     state: CreateSessionState<Opener, Bots, Auth>,
 ) -> Router<S>
 where
-    Opener: ExternalSessionOpener,
+    Opener: SessionOpener,
     Bots: BotDirectory,
     Auth: MacroAuthorizationService,
     S: Clone + Send + Sync + 'static,
@@ -669,10 +714,13 @@ where
 pub struct CreateAgentSessionRequest {
     /// Bot the session runs for. Bot callers may omit it (their own identity
     /// is used) and must not name another bot; user callers must supply a
-    /// bot they own.
+    /// bot they own, or a managed bot (whose sandbox this deployment
+    /// provisions).
     pub bot_id: Option<Uuid>,
     /// Absolute directory the bot's harness runs in on its runtime.
-    pub workspace: String,
+    /// Required for externally-served bots; ignored for managed bots, whose
+    /// containers run in the path baked into their image.
+    pub workspace: Option<String>,
     /// Repository nominally checked out at `workspace`. Informational and
     /// optional: having it cloned there is the runtime operator's job.
     pub repo_url: Option<String>,
@@ -748,10 +796,13 @@ pub enum CreateSessionApiError {
     NotYourBot,
     /// The bot is not an agent bot.
     NotAnAgentBot,
-    /// The bot's sessions are opened by the trigger pipeline, not this route.
-    ManagedBot,
+    /// A thread was claimed for a managed bot, whose thread linkage only the
+    /// trigger pipeline can vouch for.
+    ManagedBotThread,
     /// The caller identified no user to own the session.
     OwnerRequired,
+    /// An externally-served bot's request stated no workspace.
+    WorkspaceRequired,
     /// The owner is not a parseable user id.
     UnparseableOwner,
     /// The workspace is not an acceptable path.
@@ -787,13 +838,17 @@ impl IntoResponse for CreateSessionApiError {
                 StatusCode::UNPROCESSABLE_ENTITY,
                 "this bot does not run an agent".to_owned(),
             ),
-            Self::ManagedBot => (
+            Self::ManagedBotThread => (
                 StatusCode::UNPROCESSABLE_ENTITY,
-                "this bot's sessions are opened by the trigger pipeline".to_owned(),
+                "a managed bot's thread sessions are opened by the trigger pipeline".to_owned(),
             ),
             Self::OwnerRequired => (
                 StatusCode::UNPROCESSABLE_ENTITY,
                 "owner is required for bot callers".to_owned(),
+            ),
+            Self::WorkspaceRequired => (
+                StatusCode::UNPROCESSABLE_ENTITY,
+                "workspace is required for externally-served bots".to_owned(),
             ),
             Self::UnparseableOwner => (
                 StatusCode::UNPROCESSABLE_ENTITY,
@@ -901,16 +956,17 @@ fn resolve_owner(
         (status = 500, body = String),
     )
 )]
-/// Open an agent session served by an external runtime.
+/// Open an agent session.
 ///
-/// Nothing here tells the runtime where to dial: one connection per bot
-/// carries every session it runs, so a runtime that has already dialed serves
-/// this session too, and one that has not dials the gateway its own
-/// configuration names. The triggering mention reaches the session as its
-/// first prompt through the control endpoint.
+/// For an externally-served bot, nothing here tells the runtime where to
+/// dial: one connection per bot carries every session it runs, so a runtime
+/// that has already dialed serves this session too, and one that has not
+/// dials the gateway its own configuration names. For a managed bot, this
+/// deployment provisions the sandbox itself; the session starts with no
+/// prompt, and the owner drives it through the control endpoint.
 #[tracing::instrument(skip_all, err(Debug))]
 pub async fn create_agent_session_handler<
-    Opener: ExternalSessionOpener,
+    Opener: SessionOpener,
     Bots: BotDirectory,
     Auth: MacroAuthorizationService,
 >(
@@ -932,9 +988,28 @@ pub async fn create_agent_session_handler<
     if !has_agent {
         return Err(CreateSessionApiError::NotAnAgentBot);
     }
+    let owner = resolve_owner(&caller.authorization, request.owner)?;
+
     if is_managed {
-        return Err(CreateSessionApiError::ManagedBot);
+        // A managed bot is nobody's in particular - anyone who could mention
+        // it in a channel may open a session for it here. Its thread linkage
+        // is the trigger pipeline's alone to claim: it observed the mention,
+        // while this route would be taking the caller's word for it.
+        if request.thread.is_some() {
+            return Err(CreateSessionApiError::ManagedBotThread);
+        }
+        let session = state
+            .opener
+            .open_managed_session(OpenManagedAgentSession { bot_id, owner })
+            .await?;
+        return Ok((
+            StatusCode::CREATED,
+            Json(CreateAgentSessionResponse {
+                session: session.into(),
+            }),
+        ));
     }
+
     // A team-owned bot has no owner_user_id, so no user token passes this
     // check: its sessions are opened with the bot's own token until team
     // membership is modeled here.
@@ -944,8 +1019,10 @@ pub async fn create_agent_session_handler<
         return Err(CreateSessionApiError::NotYourBot);
     }
 
-    validate_workspace(&request.workspace)?;
-    let owner = resolve_owner(&caller.authorization, request.owner)?;
+    let workspace = request
+        .workspace
+        .ok_or(CreateSessionApiError::WorkspaceRequired)?;
+    validate_workspace(&workspace)?;
 
     let thread = request.thread.map(|thread| SessionThread {
         channel_id: thread.channel_id,
@@ -957,7 +1034,7 @@ pub async fn create_agent_session_handler<
         .opener
         .open_external_session(OpenExternalAgentSession {
             bot_id,
-            workspace: request.workspace,
+            workspace,
             repo_url: request.repo_url,
             owner,
             thread: thread.clone(),

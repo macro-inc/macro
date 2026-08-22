@@ -5,6 +5,7 @@ import { lazy } from 'solid-js';
 export const definition = defineBlock({
   name: 'agent',
   description: 'View an agent session',
+  defaultFilename: 'Agent Session',
   component: lazy(() => import('./component/Block')),
   liveTrackingEnabled: false,
   async load(source, _intent) {

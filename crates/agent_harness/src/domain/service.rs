@@ -213,7 +213,11 @@ where
 /// The announcement is best-effort: a session a runtime is about to serve
 /// must not die because the courtesy post failed, most plainly when the bot
 /// cannot post in the claimed channel.
-impl<Sessions, Containers, Announcer, Runtimes> agent_session::domain::ports::ExternalSessionOpener
+///
+/// Managed sessions go through the per-session command queue instead: they
+/// provision a sandbox, and the open must serialize with anything else that
+/// targets the session once its id is out.
+impl<Sessions, Containers, Announcer, Runtimes> agent_session::domain::ports::SessionOpener
     for AgentHarnessService<Sessions, Containers, Announcer, Runtimes>
 where
     Sessions: AgentSessionService,
@@ -263,6 +267,24 @@ where
         }
 
         Ok(session)
+    }
+
+    async fn open_managed_session(
+        &self,
+        request: agent_session::domain::ports::OpenManagedAgentSession,
+    ) -> agent_session::domain::error::Result<AgentSession> {
+        let session_id = AgentSessionId::new();
+        self.execute(
+            session_id,
+            HarnessCommand::Open(OpenSession {
+                bot_id: request.bot_id,
+                owner: request.owner,
+                origin: None,
+            }),
+        )
+        .await
+        .map_err(into_session_error)?;
+        self.inner.sessions.get_session(session_id).await
     }
 
     async fn find_thread_session(
@@ -328,39 +350,43 @@ where
     #[tracing::instrument(err, skip(self, command), fields(
         %session_id,
         bot_id = %command.bot_id,
-        message_id = %command.origin.message_id,
     ))]
     async fn open(&self, session_id: AgentSessionId, command: OpenSession) -> Result<()> {
-        let OpenSession { bot_id, origin } = command;
+        let OpenSession {
+            bot_id,
+            owner,
+            origin,
+        } = command;
         let repo_url = self.defaults.repo_url.clone();
 
         self.sessions
             .create_session(CreateAgentSessionParams {
                 id: session_id,
-                owner_id: origin.sender.clone(),
+                owner_id: owner.clone(),
                 bot_id,
-                thread_id: Some(origin.thread_id),
-                originating_message_id: Some(origin.message_id),
+                thread_id: origin.as_ref().map(|origin| origin.thread_id),
+                originating_message_id: origin.as_ref().map(|origin| origin.message_id),
                 model: self.defaults.model.clone(),
                 harness: self.defaults.harness.clone(),
                 repo_url: Some(repo_url.clone()),
                 // Managed sandboxes run in the path baked into their image.
                 workspace: agent_session::MANAGED_CONTAINER_WORKSPACE.to_owned(),
-                // This open came from the trigger pipeline seeing the mention.
             })
             .await?;
 
-        self.announcer
-            .announce(SessionAnnouncement {
-                session_id,
-                bot_id,
-                origin_channel_id: origin.channel_id,
-                origin_thread_id: origin.thread_id,
-                prompted_message_id: MessageId::first(AuthorKind::User),
-                prompted_content: origin.content.clone(),
-                triggered_by: origin.sender.clone(),
-            })
-            .await?;
+        if let Some(origin) = &origin {
+            self.announcer
+                .announce(SessionAnnouncement {
+                    session_id,
+                    bot_id,
+                    origin_channel_id: origin.channel_id,
+                    origin_thread_id: origin.thread_id,
+                    prompted_message_id: MessageId::first(AuthorKind::User),
+                    prompted_content: origin.content.clone(),
+                    triggered_by: owner.clone(),
+                })
+                .await?;
+        }
 
         let container = self
             .containers
@@ -372,14 +398,19 @@ where
         self.sessions
             .attach_session(session_id, RuntimeAttachment::solo(container))
             .await?;
-        self.sessions
-            .send_action(
-                session_id,
-                Some(origin.sender),
-                AgentAction::prompt(origin.content),
-                AgentActionId::mint(),
-            )
-            .await?;
+        // A mention's text is the session's first prompt; a session opened
+        // directly waits for its owner to prompt it through the control
+        // endpoint.
+        if let Some(origin) = origin {
+            self.sessions
+                .send_action(
+                    session_id,
+                    Some(owner),
+                    AgentAction::prompt(origin.content),
+                    AgentActionId::mint(),
+                )
+                .await?;
+        }
         Ok(())
     }
 

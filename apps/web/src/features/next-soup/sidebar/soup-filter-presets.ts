@@ -238,35 +238,14 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
     },
   },
   agents: {
-    default: 'owned',
+    default: 'sessions',
     tabs: {
-      owned: (ctx) => {
-        if (!ctx.userId) return undefined;
-        return {
-          filters: defineQueryFilters({
-            include: { chatOwnerId: [ctx.userId] },
-          }),
-          clientFilters: { and: ['agent'] },
-        };
-      },
-      running: (ctx) => {
-        if (!ctx.userId) return undefined;
-        return {
-          filters: defineQueryFilters({
-            include: { chatOwnerId: [ctx.userId] },
-          }),
-          clientFilters: { and: ['agent', 'owned-entity'] },
-        };
-      },
-      shared: (ctx) => {
-        if (!ctx.userId) return undefined;
-        return {
-          filters: defineQueryFilters({
-            exclude: { chatOwnerId: [ctx.userId] },
-          }),
-          clientFilters: { and: ['agent', 'shared-entity'] },
-        };
-      },
+      sessions: () => ({
+        // Server returns nothing useful here — agent sessions are merged
+        // into the soup client-side via `additionalEntities`.
+        filters: defineQueryFilters({}),
+        clientFilters: { and: ['agent-session'] },
+      }),
       automations: () => ({
         // Server returns nothing useful here — automations are merged
         // into the soup client-side via `additionalEntities`.

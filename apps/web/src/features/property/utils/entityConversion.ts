@@ -85,6 +85,9 @@ export function macroEntityToPropertyEntityType(
     .with({ type: 'automation' }, () => {
       throw new Error('automation entities do not support properties');
     })
+    .with({ type: 'agent' }, () => {
+      throw new Error('agent sessions do not support properties');
+    })
     .with({ type: 'foreign' }, () => {
       throw new Error('foreign entities do not support properties');
     })

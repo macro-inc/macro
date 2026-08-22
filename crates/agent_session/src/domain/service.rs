@@ -68,6 +68,12 @@ pub trait AgentSessionService: Send + Sync + 'static {
     /// Get a persisted agent session by id.
     fn get_session(&self, id: AgentSessionId) -> impl Future<Output = Result<AgentSession>> + Send;
 
+    /// List the sessions a user owns, most recently modified first.
+    fn list_sessions_for_owner(
+        &self,
+        owner: MacroUserIdStr<'static>,
+    ) -> impl Future<Output = Result<Vec<AgentSession>>> + Send;
+
     /// Delete an agent session by id.
     fn delete_session(&self, id: AgentSessionId) -> impl Future<Output = Result<()>> + Send;
 
@@ -246,6 +252,13 @@ where
 
     async fn get_session(&self, id: AgentSessionId) -> Result<AgentSession> {
         self.repo.get(id).await
+    }
+
+    async fn list_sessions_for_owner(
+        &self,
+        owner: MacroUserIdStr<'static>,
+    ) -> Result<Vec<AgentSession>> {
+        self.repo.list_for_owner(owner).await
     }
 
     async fn find_for_channel(
@@ -434,6 +447,10 @@ where
 
     async fn get(&self, id: AgentSessionId) -> Result<AgentSession> {
         self.repo.get(id).await
+    }
+
+    async fn list_for_owner(&self, owner: MacroUserIdStr<'static>) -> Result<Vec<AgentSession>> {
+        self.repo.list_for_owner(owner).await
     }
 
     async fn session_bot(

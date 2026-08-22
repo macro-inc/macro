@@ -274,6 +274,21 @@ export type AutomationEntity = EntityBase & {
   isRunning?: boolean;
 };
 
+/** The lifecycle of an agent session, mirroring the harness's status kinds. */
+type AgentSessionStatus = 'no_messages' | 'event' | 'disconnected';
+
+export type AgentSessionEntity = EntityBase & {
+  type: 'agent';
+  /** The bot running the agent. */
+  botId: string;
+  /** Model slug the session runs. */
+  model: string;
+  /** Repository the session works with, when one was stated. */
+  repoUrl?: string | null;
+  /** The session's last reported status. */
+  status: AgentSessionStatus;
+};
+
 export type CrmCompanyDomain = {
   id: string;
   companyId: string;
@@ -382,6 +397,7 @@ export type EntityData =
   | CrmCompanyEntity
   | CrmContactEntity
   | AutomationEntity
+  | AgentSessionEntity
   | ReminderEntity
   | CalendarEventEntity
   | ForeignEntity;
@@ -398,6 +414,7 @@ const ENTITY_TYPE_VALUES = new Set<EntityData['type']>([
   'crm_company',
   'crm_contact',
   'automation',
+  'agent',
   'reminder',
   'calendar_event',
   'foreign',
@@ -513,6 +530,7 @@ export const isAutomationEntity = (
 ): entity is AutomationEntity => {
   return entity.type === 'automation';
 };
+
 
 export const isCrmCompanyEntity = (
   entity: EntityData

@@ -125,6 +125,7 @@ export function EntityIcon(props: EntityIconProps) {
         )
         .when(isCallEntity, () => 'call')
         .with({ type: 'automation' }, () => 'automation')
+        .with({ type: 'agent' }, () => 'agent')
         .with(
           { type: 'foreign', foreignSource: 'github_pull_request' },
           () => 'githubPullRequest'

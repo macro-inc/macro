@@ -24,6 +24,7 @@ function isSoupEntityTag(
       'channel_message',
       'channel_thread',
       'automation',
+      'agent',
       'calendar_event',
       'foreign',
       'crm_company',

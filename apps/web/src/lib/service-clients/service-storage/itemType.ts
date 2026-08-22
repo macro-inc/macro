@@ -9,6 +9,7 @@ export type ItemType =
   | 'channel_thread'
   | 'call'
   | 'automation'
+  | 'agent'
   | 'calendar_event'
   | 'foreign'
   | 'crm_company'
@@ -25,6 +26,7 @@ export const ITEM_TYPES = [
   'channel_thread',
   'call',
   'automation',
+  'agent',
   'calendar_event',
   'foreign',
   'crm_company',
