@@ -8,6 +8,8 @@
 //! logged and skipped rather than wedging the partition.
 
 #[cfg(test)]
+mod live;
+#[cfg(test)]
 mod test;
 
 use crate::domain::{
