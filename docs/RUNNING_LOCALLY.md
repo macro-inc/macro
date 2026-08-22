@@ -1,16 +1,21 @@
-# Running Locally
+# Running locally
 
-This guide explains how to run Macro on your machine. The local stack runs without Doppler. It runs Postgres, Redis, LocalStack, OpenSearch, Kafka, and FusionAuth in Docker, with dummy AWS credentials and fixed test secrets.
+This guide covers two ways to run Macro on your machine.
 
-## What You Need
+If you only change the frontend, run the frontend against hosted services. You do not need Docker or the local stack.
+
+If you change a backend service, the database, or behavior that must stay on your machine, run the local stack.
+
+## Choose a path
+
+- **Frontend against hosted services.** Vite on your machine. APIs on hosted `*-dev` services. See [Run the frontend against hosted services](#run-the-frontend-against-hosted-services).
+- **Local stack.** Docker, local infrastructure, and local Rust services. See [Run the local stack](#run-the-local-stack).
+
+## Shared prerequisites
 
 Install Nix before you start:
 
 1. [Nix](https://nix.dev/install-nix) package manager
-
-On Linux, the Nix dev shell supplies the Docker CLI, daemon, Compose, and `fuse-overlayfs`. Nix is the only host dependency.
-
-On macOS, install a Docker runtime such as Docker Desktop, OrbStack, or Colima. The Nix dev shell supplies the Docker CLI, but macOS still needs the runtime to provide the daemon.
 
 Clone the repository:
 
@@ -19,9 +24,7 @@ git clone https://github.com/macro-inc/macro.git
 cd macro
 ```
 
-## Enter the Nix Shell
-
-The Nix shell provides `just`, Cargo, the Rust toolchain, Bun, sqlx, zig, cargo-zigbuild, and Docker tooling. You do not need to install these tools separately.
+The Nix shell provides `just`, Cargo, the Rust toolchain, Bun, `wasm-pack`, sqlx, zig, and cargo-zigbuild. You do not need to install these tools separately.
 
 ```bash
 nix develop
@@ -41,7 +44,41 @@ experimental-features = nix-command flakes
 
 The default shell does not include the Tauri platform dependencies. They are large, so they live in their own shells. For Linux desktop development, use `nix develop .#tauri-linux`. For Android development on x86_64 Linux, use `nix develop .#tauri-android`.
 
-## Start the Stack
+## Run the frontend against hosted services
+
+The web app talks to hosted `*-dev` services when you run `bun run dev` from the web app.
+
+Limits:
+
+- You still need Nix. The first `bun run dev` may compile wasm. Later runs skip that compile when versions match.
+- The UI calls hosted `*-dev` services and shared data.
+- Sign-in is not the local Mailpit flow. If you need a private database or to change a backend service, use the [local stack](#run-the-local-stack).
+
+From the repository root, inside the Nix shell:
+
+```bash
+bun install
+cd apps/web
+bun run dev
+```
+
+The first run, or a run after a wasm version change, may build wasm packages. Vite prints a local URL when it is ready.
+
+## Run the local stack
+
+The local stack runs without Doppler. It runs Postgres, Redis, LocalStack, OpenSearch, Kafka, and FusionAuth in Docker, with dummy AWS credentials and fixed test secrets.
+
+On Linux, the Nix dev shell supplies the Docker CLI, daemon, Compose, and `fuse-overlayfs`. Nix is the only host dependency.
+
+On macOS, install a Docker runtime such as Docker Desktop, OrbStack, or Colima. The Nix dev shell supplies the Docker CLI, but macOS still needs the runtime to provide the daemon.
+
+Run the preflight check before the first start:
+
+```bash
+just doctor-local
+```
+
+The check tests the Docker daemon, the toolchain, and the required ports. It reports any problem and suggests a fix. If a start fails, run the check again.
 
 Run this command from the repository root if you do not have Doppler access:
 
@@ -126,16 +163,6 @@ just run_local --no-doppler --env-file ./local.env
 ```
 
 Keys in the file override the code-defined defaults, so you only need to list the integrations you care about. With Doppler access, `just run_local` (without `--no-doppler`) supplies everything automatically.
-
-## Check the Setup
-
-Run the preflight check before the first start:
-
-```bash
-just doctor-local
-```
-
-The check tests the Docker daemon, the toolchain, and the required ports. It reports any problem and suggests a fix. If a start fails, run the check again.
 
 ## Control the Running Stack
 
