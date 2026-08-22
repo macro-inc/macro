@@ -173,6 +173,21 @@ pub struct TeamWithMembers {
     pub members: Vec<TeamMember<'static>>,
 }
 
+/// One page of progress from the teammate direct-message backfill.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct BackfillTeammateDmsPage {
+    /// Direct-message channels created in this page.
+    pub created: usize,
+    /// Direct-message pairs that already had channels.
+    pub existing: usize,
+    /// Direct-message pairs or teams that could not be processed.
+    pub failed: usize,
+    /// Teams attempted in this page.
+    pub teams_processed: usize,
+    /// Last team id in the page when another page may exist.
+    pub next_team_id: Option<uuid::Uuid>,
+}
+
 /// Current and invited members for a team.
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct TeamMembers {

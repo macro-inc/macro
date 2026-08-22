@@ -6,6 +6,7 @@ mod test;
 use std::{collections::HashSet, sync::Arc};
 
 use channels::domain::{
+    dm::EnsureDms,
     models::{ChannelType, CreateChannelRequest, Sender},
     ports::{ChannelMutationErr, ChannelService},
 };
@@ -39,12 +40,13 @@ use crate::domain::{
         TeamMemberRoleChangedMetadata, TeamUpdatedMetadata,
     },
     model::{
-        CreateTeamError, CustomerError, DeleteTeamError, FREE_TEAM_MAX_MEMBERS,
-        InviteUsersToTeamError, JoinTeamError, PatchTeamCrmSettingsResponse, PatchTeamRequest,
-        RemoveTeamInviteError, RemoveUserFromTeamError, RestorePermissionsForTeamMembersError,
-        RevokePermissionsForTeamMembersError, Team, TeamError, TeamInvite, TeamInviteDetails,
-        TeamMember, TeamMembers, TeamRole, TeamWithMembers, ToggleAutoJoinDomainError,
-        TryJoinTeamByDomainError, is_generic_email_domain, team_slug_from_name,
+        BackfillTeammateDmsPage, CreateTeamError, CustomerError, DeleteTeamError,
+        FREE_TEAM_MAX_MEMBERS, InviteUsersToTeamError, JoinTeamError, PatchTeamCrmSettingsResponse,
+        PatchTeamRequest, RemoveTeamInviteError, RemoveUserFromTeamError,
+        RestorePermissionsForTeamMembersError, RevokePermissionsForTeamMembersError, Team,
+        TeamError, TeamInvite, TeamInviteDetails, TeamMember, TeamMembers, TeamRole,
+        TeamWithMembers, ToggleAutoJoinDomainError, TryJoinTeamByDomainError,
+        is_generic_email_domain, team_slug_from_name,
     },
     team_analytics::{NoOpTeamAnalytics, TeamAnalytics, TeamAnalyticsEvent},
     team_crm_settings_repo::TeamCrmSettingsRepository,
@@ -353,6 +355,49 @@ where
                     team_id = %team_id,
                     user_id = %user_id,
                     "failed to enqueue team contact connections"
+                );
+            })
+            .ok();
+    }
+
+    async fn ensure_joining_user_dms(&self, team_id: &uuid::Uuid, user_id: &MacroUserIdStr<'_>) {
+        let Some(team_with_members) = self
+            .team_repository
+            .get_team_by_id(team_id)
+            .await
+            .inspect_err(|error| {
+                tracing::error!(
+                    error=?error,
+                    team_id=%team_id,
+                    user_id=%user_id,
+                    "failed to load team roster for teammate direct messages"
+                );
+            })
+            .ok()
+        else {
+            return;
+        };
+
+        let joining_user = user_id.clone().into_owned();
+        let roster = std::iter::once(team_with_members.team.owner_id)
+            .chain(
+                team_with_members
+                    .members
+                    .into_iter()
+                    .map(|member| member.user_id),
+            )
+            .filter(|teammate| teammate != &joining_user)
+            .collect::<HashSet<_>>();
+
+        self.channel_service
+            .ensure_dms(EnsureDms::for_joining_member(joining_user, roster))
+            .await
+            .inspect_err(|error| {
+                tracing::error!(
+                    error=?error,
+                    team_id=%team_id,
+                    user_id=%user_id,
+                    "failed to ensure teammate direct messages"
                 );
             })
             .ok();
@@ -1419,6 +1464,8 @@ where
 
         self.enqueue_joining_user_contacts(&team_member.team_id, user_id)
             .await;
+        self.ensure_joining_user_dms(&team_member.team_id, user_id)
+            .await;
 
         self.track_team_analytics_event(TeamAnalyticsEvent::TeamJoined {
             team_id: team_member.team_id,
@@ -1753,6 +1800,72 @@ where
     }
 
     #[tracing::instrument(skip(self), err)]
+    async fn backfill_teammate_dms(
+        &self,
+        after_team_id: Option<uuid::Uuid>,
+        limit: u32,
+    ) -> Result<BackfillTeammateDmsPage, TeamError> {
+        let team_ids = self
+            .team_repository
+            .list_team_ids_after(after_team_id, limit)
+            .await?;
+        let next_team_id = if !team_ids.is_empty() && team_ids.len() == limit as usize {
+            team_ids.last().copied()
+        } else {
+            None
+        };
+        let mut page = BackfillTeammateDmsPage {
+            next_team_id,
+            ..Default::default()
+        };
+
+        for team_id in team_ids {
+            page.teams_processed += 1;
+            let team_with_members = match self.team_repository.get_team_by_id(&team_id).await {
+                Ok(team_with_members) => team_with_members,
+                Err(error) => {
+                    page.failed += 1;
+                    tracing::error!(
+                        error=?error,
+                        %team_id,
+                        "failed to load team roster for teammate direct-message backfill"
+                    );
+                    continue;
+                }
+            };
+            let roster = std::iter::once(team_with_members.team.owner_id)
+                .chain(
+                    team_with_members
+                        .members
+                        .into_iter()
+                        .map(|member| member.user_id),
+                )
+                .collect::<HashSet<_>>();
+            match self
+                .channel_service
+                .ensure_dms(EnsureDms::for_roster(roster))
+                .await
+            {
+                Ok(summary) => {
+                    page.created += summary.created;
+                    page.existing += summary.existing;
+                    page.failed += summary.failed;
+                }
+                Err(error) => {
+                    page.failed += 1;
+                    tracing::error!(
+                        error=?error,
+                        %team_id,
+                        "failed to ensure teammate direct messages during backfill"
+                    );
+                }
+            }
+        }
+
+        Ok(page)
+    }
+
+    #[tracing::instrument(skip(self), err)]
     async fn try_join_team_by_domain(
         &self,
         user_id: &MacroUserIdStr<'_>,
@@ -1993,6 +2106,7 @@ where
         }
 
         self.enqueue_joining_user_contacts(&team_id, user_id).await;
+        self.ensure_joining_user_dms(&team_id, user_id).await;
 
         // NOTE: no TeamJoined analytics event here - that event is tied to
         // the team invite that was accepted, and a domain auto-join has none.
