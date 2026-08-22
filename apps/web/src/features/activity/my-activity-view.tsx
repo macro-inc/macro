@@ -27,6 +27,9 @@ import { TopEntities } from './top-entities';
 
 type FeedGroup = { key: string; label: string; events: ActivityEvent[] };
 
+/** The soup list inset shared by section headers, feed rows, and the overview. */
+const INSET_CLASS = 'mx-1 w-[calc(100%-0.5rem)]';
+
 /** The user's own activity, newest first, behind the activity-feed flag. */
 export function MyActivityView() {
   const overview = createMyActivityOverviewQuery({ enabled: () => true });
@@ -51,12 +54,15 @@ export function MyActivityView() {
         <span class="font-semibold text-sm">Activity</span>
       </SplitHeaderLeft>
       <StaticMarkdownContext>
-        <div class="shrink-0 border-edge-muted border-b px-8 py-5">
-          <div class="mx-auto w-full max-w-5xl">
+        {/* One full-bleed column: the overview cards and the feed rows share
+            the soup list's `mx-1` inset, so the graph, the most-active row,
+            and the timeline all line up on the same content width. */}
+        <div class="min-h-0 flex-1 overflow-y-auto py-1">
+          <div class={`${INSET_CLASS} flex min-w-0 flex-col gap-2 pb-2`}>
             <Show
               when={overview.data}
               fallback={
-                <p class="text-ink-extra-muted text-sm">
+                <p class="px-2 py-1 text-ink-extra-muted text-xs">
                   {overview.isError
                     ? 'Activity overview is unavailable right now.'
                     : 'Loading activity overview…'}
@@ -64,42 +70,38 @@ export function MyActivityView() {
               }
             >
               {(data) => (
-                <div class="flex min-w-0 flex-col gap-5">
+                <>
                   <ActionGraph overview={data()} />
                   <TopEntities entities={data().topEntities} />
-                </div>
+                </>
               )}
             </Show>
           </div>
-        </div>
-        <div class="min-h-0 flex-1 overflow-y-auto py-1">
-          <div class="mx-auto w-full max-w-5xl px-8">
-            <Show
-              when={groups().length > 0}
-              fallback={
-                <p class="py-2 text-ink-muted text-sm">
-                  {feed.isLoading
-                    ? 'Loading…'
-                    : feed.isError
-                      ? 'Activity is unavailable right now. Try again in a moment.'
-                      : 'No activity yet.'}
-                </p>
-              }
-            >
-              <FeedGroups groups={groups()} row={SentenceTimelineRow} />
-              <Show when={feed.hasNextPage}>
-                <div class="flex justify-center py-2">
-                  <Button
-                    variant="ghost"
-                    onClick={() => void feed.fetchNextPage()}
-                    disabled={feed.isFetchingNextPage}
-                  >
-                    {feed.isFetchingNextPage ? 'Loading…' : 'Show more'}
-                  </Button>
-                </div>
-              </Show>
+          <Show
+            when={groups().length > 0}
+            fallback={
+              <p class={`${INSET_CLASS} px-2 py-2 text-ink-muted text-sm`}>
+                {feed.isLoading
+                  ? 'Loading…'
+                  : feed.isError
+                    ? 'Activity is unavailable right now. Try again in a moment.'
+                    : 'No activity yet.'}
+              </p>
+            }
+          >
+            <FeedGroups groups={groups()} row={SentenceTimelineRow} />
+            <Show when={feed.hasNextPage}>
+              <div class="flex justify-center py-2">
+                <Button
+                  variant="ghost"
+                  onClick={() => void feed.fetchNextPage()}
+                  disabled={feed.isFetchingNextPage}
+                >
+                  {feed.isFetchingNextPage ? 'Loading…' : 'Show more'}
+                </Button>
+              </div>
             </Show>
-          </div>
+          </Show>
         </div>
       </StaticMarkdownContext>
     </div>
@@ -143,7 +145,7 @@ function SentenceTimelineRow(props: { event: ActivityEvent }) {
   const entityType = () => displayEntityType(props.event.entityType);
 
   return (
-    <div class="mx-1 flex w-[calc(100%-0.5rem)] items-stretch gap-1 px-2 text-sm">
+    <div class={`${INSET_CLASS} flex items-stretch gap-1 px-2 text-sm`}>
       <div class="relative flex w-6 shrink-0 items-center justify-center">
         <div class="absolute inset-y-0 w-px bg-edge-muted" />
         <span class="relative flex size-5 items-center justify-center rounded-full bg-surface ring ring-edge-muted">
@@ -174,7 +176,7 @@ function SentenceTimelineRow(props: { event: ActivityEvent }) {
 }
 
 const ROW_BODY_CLASS =
-  'flex min-h-10 min-w-0 flex-1 items-center gap-1.5 rounded-lg px-2 py-0.5 hover:bg-hover/30';
+  'flex min-h-10 min-w-0 flex-1 items-center gap-1.5 rounded-lg px-2 py-0.5 hover:bg-list-hover';
 
 /**
  * A feed row that names its entity. Resolves the entity's display once and
