@@ -1317,7 +1317,6 @@ fn bot_receipt_has_no_authenticated_user_identity() {
     let access = receipt;
 
     assert!(access.authenticated_user().is_none());
-    assert!(access.attribution().is_none());
     assert!(matches!(access.auth(), EntityAccessAuth::Bot(id) if id.bot_id() == bot_id));
 }
 
