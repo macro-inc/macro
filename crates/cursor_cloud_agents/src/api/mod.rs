@@ -23,11 +23,13 @@ pub mod wire;
 use crate::api::record::SseRecording;
 use crate::api::wire::{
     AgentSummary, ArchiveAgentResponse, CreateAgentRequest, CreateAgentResponse, CreateRunRequest,
-    CreateRunResponse, ListAgentsResponse, McpServerSelection, MeResponse, ModelSelection,
-    PromptBody, RepoSelection, RunDetail,
+    CreateRunResponse, ListAgentsResponse, ListRunsResponse, McpServerSelection, MeResponse,
+    ModelSelection, PromptBody, RepoSelection, RunDetail,
 };
 use crate::domain::event::CursorEvent;
-use crate::domain::model::{CursorAgentId, CursorRunId, McpServer, RepoUrl, RunOutcome};
+use crate::domain::model::{
+    CursorAgentId, CursorRunId, McpServer, RepoUrl, RunListing, RunOutcome,
+};
 use crate::domain::ports::{CursorAgents, RunStream};
 use futures::{Stream, StreamExt as _};
 use sse_core::SseEvent;
@@ -343,6 +345,23 @@ impl CursorAgents for CursorClient {
             status: detail.status,
             text: detail.result,
         })
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn list_runs(&self, agent: &CursorAgentId) -> Result<Vec<RunListing>, rootcause::Report> {
+        // One page is plenty: the caller walks back only to the last run it
+        // drove itself, which is at most one cursor.com visit ago.
+        let page: ListRunsResponse = self
+            .get_json(&format!("/v1/agents/{agent}/runs?limit=20"))
+            .await?;
+        Ok(page
+            .items
+            .into_iter()
+            .map(|item| RunListing {
+                id: CursorRunId::new(item.id),
+                status: item.status,
+            })
+            .collect())
     }
 }
 

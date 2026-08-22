@@ -2,7 +2,7 @@
 
 use crate::domain::event::CursorEvent;
 use crate::domain::model::{
-    AcpSessionId, CursorAgentId, CursorRunId, McpServer, RepoUrl, RunOutcome,
+    AcpSessionId, CursorAgentId, CursorRunId, McpServer, RepoUrl, RunListing, RunOutcome,
 };
 use crate::domain::ports::{CursorAgents, RepoResolver, RunStream, SessionNotifier};
 use agent_client_protocol::schema::v1::SessionUpdate;
@@ -66,6 +66,10 @@ struct FakeCursorState {
     streams: Vec<mpsc::UnboundedReceiver<CursorEvent>>,
     /// Answers for `run_result`, consumed in order.
     run_results: Vec<RunOutcome>,
+    /// The answer every `list_runs` call gets.
+    run_listings: Vec<RunListing>,
+    /// Errors the next `create_run` calls answer with, consumed in order.
+    create_run_errors: Vec<String>,
 }
 
 impl FakeCursor {
@@ -99,6 +103,22 @@ impl FakeCursor {
             .expect("fake cursor poisoned")
             .run_results
             .push(outcome);
+    }
+
+    /// Make the next `count` `create_run` calls fail with `message`.
+    pub fn script_create_run_errors(&self, count: usize, message: &str) {
+        let mut state = self.inner.lock().expect("fake cursor poisoned");
+        for _ in 0..count {
+            state.create_run_errors.push(message.to_owned());
+        }
+    }
+
+    /// Set the agent's run history, newest first, for `list_runs`.
+    pub fn script_run_listings(&self, listings: Vec<RunListing>) {
+        self.inner
+            .lock()
+            .expect("fake cursor poisoned")
+            .run_listings = listings;
     }
 
     /// Everything the service asked of the API, in order.
@@ -141,6 +161,10 @@ impl CursorAgents for FakeCursor {
         state
             .calls
             .push(CursorCall::CreateRun(agent.clone(), prompt.to_owned()));
+        if !state.create_run_errors.is_empty() {
+            let message = state.create_run_errors.remove(0);
+            return Err(rootcause::report!("{message}"));
+        }
         state.next_run += 1;
         Ok(CursorRunId::new(format!("run-fake-{}", state.next_run)))
     }
@@ -171,6 +195,18 @@ impl CursorAgents for FakeCursor {
             return Err(rootcause::report!("no scripted run result queued"));
         }
         Ok(state.run_results.remove(0))
+    }
+
+    async fn list_runs(
+        &self,
+        _agent: &CursorAgentId,
+    ) -> Result<Vec<RunListing>, rootcause::Report> {
+        Ok(self
+            .inner
+            .lock()
+            .expect("fake cursor poisoned")
+            .run_listings
+            .clone())
     }
 }
 

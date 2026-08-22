@@ -232,6 +232,14 @@ where
     {
         self.client.run_result(agent, run).await
     }
+
+    async fn list_runs(
+        &self,
+        agent: &CursorAgentId,
+    ) -> std::result::Result<Vec<cursor_cloud_agents::domain::model::RunListing>, rootcause::Report>
+    {
+        self.client.list_runs(agent).await
+    }
 }
 
 impl<Sessions> RunStream for RecordingCursor<Sessions>

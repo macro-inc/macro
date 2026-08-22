@@ -126,6 +126,22 @@ pub struct RunDetail {
     pub result: Option<String>,
 }
 
+/// `GET /v1/agents/{id}/runs` response.
+#[derive(Debug, Deserialize)]
+pub struct ListRunsResponse {
+    /// The agent's runs, newest first.
+    pub items: Vec<RunListItem>,
+}
+
+/// One run in a `GET /v1/agents/{id}/runs` page.
+#[derive(Debug, Deserialize)]
+pub struct RunListItem {
+    /// Run id (`run-…`).
+    pub id: String,
+    /// Where the run is in its lifecycle.
+    pub status: crate::domain::model::RunStatus,
+}
+
 /// `GET /v1/agents` response.
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]

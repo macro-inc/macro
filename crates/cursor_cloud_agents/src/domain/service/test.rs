@@ -1,7 +1,9 @@
 use super::*;
 use crate::domain::error::SessionError;
 use crate::domain::event::CursorEvent;
-use crate::domain::model::{McpHeader, McpServer, McpTransport, RepoUrl, RunOutcome, RunStatus};
+use crate::domain::model::{
+    McpHeader, McpServer, McpTransport, RepoUrl, RunListing, RunOutcome, RunStatus,
+};
 use crate::testing::{CursorCall, FakeCursor, FixedRepos, RecordingNotifier};
 use agent_client_protocol::schema::v1::{SessionUpdate, StopReason};
 use std::path::Path;
@@ -502,4 +504,101 @@ async fn a_session_restored_without_an_agent_mints_one_on_the_next_prompt() {
         cursor.calls().first(),
         Some(CursorCall::CreateAgent(..))
     ));
+}
+
+/// A prompt that lands while another run is active (cursor.com drives the
+/// same agent) waits it out instead of failing — the session is a queue.
+#[tokio::test(start_paused = true)]
+async fn a_prompt_waits_out_a_busy_agent() {
+    let (service, cursor, _notifier) = service(None);
+    let session = service.new_session(Path::new(""), Vec::new());
+    // First turn establishes the agent.
+    let events = cursor.script_stream();
+    events.send(finished("run-fake-1")).expect("stream open");
+    events.send(CursorEvent::Done).expect("stream open");
+    service.prompt(&session, "first").await.expect("first turn");
+
+    // The follow-up gets agent_busy twice before the agent frees up.
+    cursor.script_create_run_errors(2, "409 Conflict: {\"error\":{\"code\":\"agent_busy\"}}");
+    let events = cursor.script_stream();
+    events.send(finished("run-fake-2")).expect("stream open");
+    events.send(CursorEvent::Done).expect("stream open");
+
+    let stop = service
+        .prompt(&session, "second")
+        .await
+        .expect("the prompt queues behind the busy agent");
+    assert_eq!(stop, StopReason::EndTurn);
+}
+
+/// Runs driven from cursor.com since the session's own last turn are
+/// delivered before the next prompt's output, oldest first, so the client's
+/// view keeps up with the conversation the prompt continues.
+#[tokio::test]
+async fn foreign_runs_are_backfilled_before_the_next_prompt() {
+    let (service, cursor, notifier) = service(None);
+    let session = service.new_session(Path::new(""), Vec::new());
+    let events = cursor.script_stream();
+    events.send(finished("run-fake-1")).expect("stream open");
+    events.send(CursorEvent::Done).expect("stream open");
+    service.prompt(&session, "first").await.expect("first turn");
+
+    // Two cursor.com runs happened since run-fake-1, newest first.
+    cursor.script_run_listings(vec![
+        RunListing {
+            id: CursorRunId::new("run-foreign-2"),
+            status: RunStatus::Finished,
+        },
+        RunListing {
+            id: CursorRunId::new("run-foreign-1"),
+            status: RunStatus::Finished,
+        },
+        RunListing {
+            id: CursorRunId::new("run-fake-1"),
+            status: RunStatus::Finished,
+        },
+    ]);
+    cursor.script_run_result(RunOutcome {
+        status: RunStatus::Finished,
+        text: Some("first foreign answer".to_owned()),
+    });
+    cursor.script_run_result(RunOutcome {
+        status: RunStatus::Finished,
+        text: Some("second foreign answer".to_owned()),
+    });
+    let events = cursor.script_stream();
+    events.send(finished("run-fake-2")).expect("stream open");
+    events.send(CursorEvent::Done).expect("stream open");
+
+    service
+        .prompt(&session, "second")
+        .await
+        .expect("second turn");
+    let texts: Vec<String> = notifier
+        .updates()
+        .iter()
+        .filter_map(|(_, update)| match update {
+            SessionUpdate::AgentMessageChunk(chunk) => match &chunk.content {
+                agent_client_protocol::schema::v1::ContentBlock::Text(text) => {
+                    Some(text.text.clone())
+                }
+                _ => None,
+            },
+            _ => None,
+        })
+        .collect();
+    // Oldest foreign run first; both marked as answered elsewhere.
+    assert!(texts[0].contains("first foreign answer"), "got {texts:?}");
+    assert!(texts[0].contains("cursor.com"), "got {texts:?}");
+    assert!(texts[1].contains("second foreign answer"), "got {texts:?}");
+    // The backfill asked for exactly the two unseen runs, oldest first.
+    let polled: Vec<_> = cursor
+        .calls()
+        .iter()
+        .filter_map(|call| match call {
+            CursorCall::RunResult(_, run) => Some(run.to_string()),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(polled, ["run-foreign-1", "run-foreign-2"]);
 }

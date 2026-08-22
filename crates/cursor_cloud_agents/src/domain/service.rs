@@ -40,6 +40,10 @@ const POLL_ATTEMPTS: usize = 450;
 /// Consecutive poll failures tolerated before the turn takes the error.
 const POLL_ERROR_TOLERANCE: usize = 5;
 
+/// How long a prompt waits behind a run something else started (the same
+/// agent is drivable from cursor.com) before giving up, in poll intervals.
+const BUSY_ATTEMPTS: usize = 450;
+
 /// One session's mutable state. Guarded by a std mutex: every critical
 /// section is a handful of field reads/writes, never an await.
 #[derive(Debug, Default)]
@@ -48,6 +52,12 @@ struct SessionState {
     agent: Option<CursorAgentId>,
     /// The run currently streaming, so cancel knows what to cancel.
     active_run: Option<CursorRunId>,
+    /// The last run this session itself drove to an end. The backfill
+    /// watermark: runs newer than this were driven from cursor.com and are
+    /// delivered before the next prompt. `None` means no watermark — a fresh
+    /// or restored session, whose history is already rendered or unknowable —
+    /// so nothing is backfilled rather than everything replayed.
+    last_run: Option<CursorRunId>,
     /// Set by cancel; read by the turn when its stream ends.
     cancelled: bool,
     /// Carried across turns so tool-call ids stay deduplicated for the whole
@@ -155,7 +165,16 @@ where
 
         let (agent, run) = match existing_agent {
             Some(agent) => {
-                let run = self.cursor.create_run(&agent, prompt).await?;
+                // The same agent advances from cursor.com too. Catch the
+                // session's view up on whatever it missed, then queue behind
+                // any run still going instead of failing the prompt.
+                if let Err(error) = self
+                    .backfill_foreign_runs(session_id, &session, &agent)
+                    .await
+                {
+                    tracing::warn!(%agent, %error, "could not backfill cursor.com runs");
+                }
+                let run = self.create_run_when_free(&session, &agent, prompt).await?;
                 (agent, run)
             }
             None => {
@@ -176,6 +195,7 @@ where
         let cancelled = {
             let mut state = session.state.lock().expect("session state poisoned");
             state.active_run = None;
+            state.last_run = Some(run.clone());
             state.cancelled
         };
         // A cancel that raced the stream's own ending still reports
@@ -365,6 +385,122 @@ where
                 "cursor stream for run {run} ended without reporting a result"
             ))),
         }
+    }
+
+    /// Create a follow-up run, waiting out whatever run is already going.
+    ///
+    /// Cursor allows one active run per agent and answers `agent_busy`
+    /// otherwise — and the other run is not necessarily ours, because the
+    /// agent's page on cursor.com drives the same agent. The session's
+    /// contract with its callers is a queue, so a busy agent is something to
+    /// wait behind, not an error. A client cancel abandons the wait.
+    async fn create_run_when_free(
+        &self,
+        session: &Session,
+        agent: &CursorAgentId,
+        prompt: &str,
+    ) -> Result<CursorRunId, SessionError> {
+        for _ in 0..BUSY_ATTEMPTS {
+            if session
+                .state
+                .lock()
+                .expect("session state poisoned")
+                .cancelled
+            {
+                return Err(SessionError::Cursor(rootcause::report!(
+                    "the prompt was cancelled while waiting for the agent to be free"
+                )));
+            }
+            match self.cursor.create_run(agent, prompt).await {
+                Ok(run) => return Ok(run),
+                Err(error) if error.to_string().contains("agent_busy") => {
+                    tracing::info!(%agent, "agent busy (a run is active, possibly from cursor.com); waiting");
+                    tokio::time::sleep(POLL_INTERVAL).await;
+                }
+                Err(error) => return Err(SessionError::Cursor(error)),
+            }
+        }
+        Err(SessionError::Cursor(rootcause::report!(
+            "the agent stayed busy for {} seconds",
+            BUSY_ATTEMPTS as u64 * POLL_INTERVAL.as_secs()
+        )))
+    }
+
+    /// Deliver the results of runs something else drove since this session's
+    /// last own turn — the cursor.com half of the conversation.
+    ///
+    /// Only the agent's final text per run is recoverable (the run record
+    /// carries no prompt and no tool detail), and only back to the session's
+    /// own watermark: with no watermark nothing is backfilled, because a
+    /// restored session cannot tell missed runs from already-rendered
+    /// history. Best-effort by design — the caller logs and proceeds, since
+    /// a failed backfill must not block the prompt that triggered it.
+    async fn backfill_foreign_runs(
+        &self,
+        session_id: &AcpSessionId,
+        session: &Session,
+        agent: &CursorAgentId,
+    ) -> Result<(), SessionError> {
+        let Some(last_run) = session
+            .state
+            .lock()
+            .expect("session state poisoned")
+            .last_run
+            .clone()
+        else {
+            return Ok(());
+        };
+
+        let listings = self
+            .cursor
+            .list_runs(agent)
+            .await
+            .map_err(SessionError::Cursor)?;
+        // Newest first; keep what is newer than the watermark. A watermark
+        // past the page's horizon means over a page of foreign runs — deliver
+        // the page rather than nothing.
+        let unseen: Vec<_> = listings
+            .into_iter()
+            .take_while(|listing| listing.id != last_run)
+            .filter(|listing| !matches!(listing.status, RunStatus::Creating | RunStatus::Running))
+            .collect();
+
+        // Oldest first, the order the conversation actually happened.
+        for listing in unseen.into_iter().rev() {
+            let outcome = self
+                .cursor
+                .run_result(agent, &listing.id)
+                .await
+                .map_err(SessionError::Cursor)?;
+            let Some(text) = outcome.text else { continue };
+            tracing::info!(%agent, run = %listing.id, "backfilling a cursor.com run");
+            let events = [
+                CursorEvent::Assistant {
+                    text: format!("*(answered on cursor.com)*\n\n{text}"),
+                },
+                CursorEvent::Result {
+                    run_id: listing.id.clone(),
+                    status: outcome.status,
+                    text: None,
+                    duration_ms: None,
+                },
+            ];
+            for event in events {
+                let updates = {
+                    let mut state = session.state.lock().expect("session state poisoned");
+                    state.translator.push(event)
+                };
+                for update in updates {
+                    self.notifier.notify(session_id, update).await?;
+                }
+            }
+            session
+                .state
+                .lock()
+                .expect("session state poisoned")
+                .last_run = Some(listing.id);
+        }
+        Ok(())
     }
 
     /// Finish a turn without a stream: poll the run until it is terminal,

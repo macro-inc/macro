@@ -9,7 +9,7 @@
 
 use crate::domain::event::CursorEvent;
 use crate::domain::model::{
-    AcpSessionId, CursorAgentId, CursorRunId, McpServer, RepoUrl, RunOutcome,
+    AcpSessionId, CursorAgentId, CursorRunId, McpServer, RepoUrl, RunListing, RunOutcome,
 };
 use agent_client_protocol::schema::v1::SessionUpdate;
 use futures::Stream;
@@ -59,6 +59,19 @@ pub trait CursorAgents {
         agent: &CursorAgentId,
         run: &CursorRunId,
     ) -> impl Future<Output = Result<RunOutcome, rootcause::Report>> + Send;
+
+    /// The agent's runs, newest first.
+    ///
+    /// How a session finds out what happened to its agent while it was not
+    /// looking: the conversation also advances from cursor.com (the agent's
+    /// page there drives the same agent), and those runs never pass through
+    /// this session. Before a new prompt, the runs since the last one this
+    /// session drove are backfilled so the client's view does not silently
+    /// fork from the conversation the new prompt continues.
+    fn list_runs(
+        &self,
+        agent: &CursorAgentId,
+    ) -> impl Future<Output = Result<Vec<RunListing>, rootcause::Report>> + Send;
 }
 
 /// Observe a run as a stream of decoded events.

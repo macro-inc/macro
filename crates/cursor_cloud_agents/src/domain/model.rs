@@ -176,6 +176,15 @@ impl RunOutcome {
     }
 }
 
+/// One run in an agent's history, as `GET /v1/agents/{id}/runs` lists it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RunListing {
+    /// The run's id.
+    pub id: CursorRunId,
+    /// Where the run is in its lifecycle.
+    pub status: RunStatus,
+}
+
 /// An MCP server a session should make available to its Cursor agent.
 ///
 /// Only the transports a *cloud* agent can honour. ACP's third transport,
