@@ -8,7 +8,7 @@ use std::{
 };
 
 use channels::domain::{
-    dm::{EnsureDms, EnsureDmsSummary, ensure_dms_for_joining_member},
+    dm::{EnsureDms, EnsureDmsSummary},
     models::{
         AttachmentEntityReference, ChannelAttachmentType, ChannelMessageFilters,
         ChannelParticipant, ChannelType, CreateChannelRequest, CreateChannelResponse,
@@ -5503,7 +5503,7 @@ async fn team_contacts_invite_join_swallows_roster_failure() {
     let member = service.join_team(&invite_id, &user_id).await.unwrap();
 
     assert_eq!(member.user_id, user_id);
-    assert_eq!(*team_repository.get_team_by_id_calls.lock().unwrap(), 2);
+    assert_eq!(*team_repository.get_team_by_id_calls.lock().unwrap(), 1);
     assert_eq!(*team_repository.rollback_accept_calls.lock().unwrap(), 0);
     assert!(contacts_enqueuer.batches.lock().unwrap().is_empty());
 }
@@ -6092,7 +6092,7 @@ async fn try_join_team_by_domain_free_team_at_cap_skips() {
 }
 
 #[tokio::test]
-async fn invite_join_ensures_dms_with_every_distinct_teammate() {
+async fn invite_join_does_not_create_teammate_dms_inline() {
     let team_id = uuid::Uuid::from_u128(7100);
     let invite_id = uuid::Uuid::from_u128(7101);
     let owner = MacroUserIdStr::parse_from_str("macro|owner@example.com").unwrap();
@@ -6127,17 +6127,11 @@ async fn invite_join_ensures_dms_with_every_distinct_teammate() {
 
     service.join_team(&invite_id, &joiner).await.unwrap();
 
-    assert_eq!(
-        wait_for_ensure_dms(&channels).await,
-        vec![ensure_dms_for_joining_member(
-            joiner.into_owned(),
-            vec![owner.into_owned(), teammate.into_owned()],
-        )]
-    );
+    assert!(channels.ensure_dms_calls.lock().unwrap().is_empty());
 }
 
 #[tokio::test]
-async fn domain_join_ensures_dms_with_every_distinct_teammate() {
+async fn domain_join_does_not_create_teammate_dms_inline() {
     let team_id = uuid::Uuid::from_u128(7110);
     let owner = MacroUserIdStr::parse_from_str("macro|owner@example.com").unwrap();
     let joiner = MacroUserIdStr::parse_from_str("macro|joiner@example.com").unwrap();
@@ -6174,75 +6168,5 @@ async fn domain_join_ensures_dms_with_every_distinct_teammate() {
         .unwrap()
         .unwrap();
 
-    assert_eq!(
-        wait_for_ensure_dms(&channels).await,
-        vec![ensure_dms_for_joining_member(
-            joiner.into_owned(),
-            vec![owner.into_owned(), teammate.into_owned()],
-        )]
-    );
-}
-
-#[tokio::test]
-async fn invite_join_does_not_roll_back_when_ensuring_dms_is_partial_or_unavailable() {
-    for (index, channels) in [
-        RecordingChannelService {
-            fail_ensure_dms: true,
-            ..Default::default()
-        },
-        RecordingChannelService {
-            ensure_dms_summary: EnsureDmsSummary {
-                created: 0,
-                existing: 0,
-                failed: 1,
-            },
-            ..Default::default()
-        },
-    ]
-    .into_iter()
-    .enumerate()
-    {
-        let team_id = uuid::Uuid::from_u128(7120 + index as u128);
-        let invite_id = uuid::Uuid::from_u128(7130 + index as u128);
-        let owner = MacroUserIdStr::parse_from_str("macro|owner@example.com").unwrap();
-        let joiner = MacroUserIdStr::parse_from_str("macro|joiner@example.com").unwrap();
-        let team = Team::new(
-            team_id,
-            "DM Team".to_string(),
-            "DM_TEAM".to_string(),
-            owner.into_owned(),
-            false,
-            true,
-        );
-        let team_repository =
-            make_enterprise_join_team_repository(team_id, invite_id, &joiner).with_team(team);
-        let service = TeamServiceImpl::new(
-            team_repository.clone(),
-            MockCustomerRepository::default(),
-            channels.clone(),
-            MockUserRolesAndPermissionsService::default(),
-            Arc::new(MockNotificationIngress::new(HashSet::new())),
-            NoOpCrmEnqueuer,
-            NoOpTeamCrmSettingsRepository,
-        );
-
-        let member = service.join_team(&invite_id, &joiner).await.unwrap();
-
-        assert_eq!(member.user_id, joiner);
-        assert_eq!(*team_repository.rollback_accept_calls.lock().unwrap(), 0);
-        assert_eq!(wait_for_ensure_dms(&channels).await.len(), 1);
-    }
-}
-
-async fn wait_for_ensure_dms(channels: &RecordingChannelService) -> Vec<EnsureDms> {
-    for _ in 0..100 {
-        {
-            let calls = channels.ensure_dms_calls.lock().unwrap();
-            if !calls.is_empty() {
-                return calls.clone();
-            }
-        }
-        tokio::task::yield_now().await;
-    }
-    panic!("joining-member direct messages were not scheduled");
+    assert!(channels.ensure_dms_calls.lock().unwrap().is_empty());
 }

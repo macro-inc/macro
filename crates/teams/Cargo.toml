@@ -22,8 +22,16 @@ axum = [
   "entity_access/inbound",
   "entity_access/ports",
 ]
-default = ["ai_tools", "axum", "inbound", "outbound", "ports"]
+default = ["ai_tools", "axum", "inbound", "kafka_consumer", "outbound", "ports"]
 inbound = ["axum", "ports"]
+kafka_consumer = [
+  "dep:kafka_util",
+  "dep:rdkafka",
+  "dep:tokio-retry",
+  "inbound",
+  "ports",
+  "macro_event_broker/outbound",
+]
 outbound = [
   "dep:analytics_client",
   "dep:contacts",
@@ -56,8 +64,10 @@ contacts = { path = "../contacts", default-features = false, optional = true }
 macro_authorization = { path = "../macro_authorization", optional = true, default-features = false, features = [
   "axum",
 ] }
+kafka_util = { path = "../kafka_util", optional = true }
 macro_event_broker = { path = "../macro_event_broker", default-features = false }
 macro_event_topics = { path = "../macro_event_topics" }
+rdkafka = { workspace = true, optional = true }
 macro_user_id = { path = "../macro_user_id" }
 macro_uuid = { path = "../macro_uuid" }
 models_permissions = { path = "../models_permissions" }
@@ -76,6 +86,7 @@ generic_email_domains = { path = "../generic_email_domains" }
 
 # Async runtime (for ports)
 tokio = { workspace = true, optional = true }
+tokio-retry = { workspace = true, optional = true }
 
 # Axum dependencies (for inbound)
 axum = { workspace = true, optional = true }

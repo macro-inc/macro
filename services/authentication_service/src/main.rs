@@ -55,7 +55,8 @@ use roles_and_permissions::{
 use secretsmanager_client::SecretManager;
 use sqlx::postgres::PgPoolOptions;
 use teams::{
-    domain::team_service::TeamServiceImpl,
+    domain::{team_service::TeamServiceImpl, teammate_dms::TeammateDmServiceImpl},
+    inbound::teammate_dms_consumer::run_teammate_dms_consumer,
     outbound::{
         contacts_enqueuer::ContactsIngressEnqueuer, customer_repo::CustomerRepositoryImpl,
         team_analytics::AnalyticsClientTeamAnalytics, team_repo::TeamRepositoryImpl,
@@ -77,7 +78,7 @@ use crate::{
     },
 };
 use std::{sync::Arc, time::Duration};
-use tokio_util::task::TaskTracker;
+use tokio_util::{sync::CancellationToken, task::TaskTracker};
 
 mod api;
 mod config;
@@ -378,7 +379,7 @@ async fn main() -> anyhow::Result<()> {
     );
 
     let teams_service_impl = TeamServiceImpl::new_with_analytics(
-        teams_repo_impl,
+        teams_repo_impl.clone(),
         customer_repo_impl,
         channel_service.clone(),
         user_roles_and_permissions_service.clone(),
@@ -389,6 +390,48 @@ async fn main() -> anyhow::Result<()> {
     )
     .with_contacts_enqueuer(contacts_enqueuer)
     .with_event_broker(macro_event_broker);
+    let teammate_dms = TeammateDmServiceImpl::new(teams_repo_impl, channel_service.clone());
+    let consumer_cancellation_token = CancellationToken::new();
+    let consumer_tracker = TaskTracker::new();
+    let teammate_dms_brokers = config.kafka_brokers.as_ref().to_string();
+    consumer_tracker.spawn({
+        let cancellation_token = consumer_cancellation_token.clone();
+        async move {
+            loop {
+                if cancellation_token.is_cancelled() {
+                    break;
+                }
+
+                tracing::info!("starting teammate DM consumer");
+                let result = run_teammate_dms_consumer(
+                    &teammate_dms_brokers,
+                    teammate_dms.clone(),
+                    cancellation_token.cancelled(),
+                )
+                .await;
+
+                if cancellation_token.is_cancelled() {
+                    break;
+                }
+
+                match result {
+                    Ok(()) => tracing::error!("teammate DM consumer exited unexpectedly"),
+                    Err(error) => {
+                        tracing::error!(
+                            error = ?error,
+                            "teammate DM consumer exited unexpectedly"
+                        );
+                    }
+                }
+
+                tokio::select! {
+                    biased;
+                    _ = cancellation_token.cancelled() => break,
+                    _ = tokio::time::sleep(Duration::from_secs(5)) => {}
+                }
+            }
+        }
+    });
 
     let foreign_entity_service =
         ForeignEntityServiceImpl::new(PgForeignEntityRepo::new(db.clone()));
@@ -476,6 +519,12 @@ async fn main() -> anyhow::Result<()> {
         config.port,
     )
     .await;
+
+    tracing::info!("stopping event consumers");
+    consumer_cancellation_token.cancel();
+    consumer_tracker.close();
+    consumer_tracker.wait().await;
+    tracing::info!("event consumers stopped");
 
     tracing::info!("waiting for event broker publishes to drain");
     event_broker_tracker.close();

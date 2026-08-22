@@ -142,7 +142,7 @@ sqs_client = { path = "../../crates/sqs_client", default-features = false, featu
   "search",
 ] }
 strum = { workspace = true }
-teams = { path = "../../crates/teams" }
+teams = { path = "../../crates/teams", features = ["kafka_consumer"] }
 thiserror = { workspace = true }
 time = { workspace = true }
 tokio = { workspace = true, features = ["signal"] }

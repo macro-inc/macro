@@ -6,7 +6,6 @@ mod test;
 use std::{collections::HashSet, sync::Arc};
 
 use channels::domain::{
-    dm::ensure_dms_for_joining_member,
     models::{ChannelType, CreateChannelRequest, Sender},
     ports::{ChannelMutationErr, ChannelService},
 };
@@ -357,46 +356,6 @@ where
                 );
             })
             .ok();
-    }
-
-    async fn ensure_joining_user_dms(&self, team_id: &uuid::Uuid, user_id: &MacroUserIdStr<'_>) {
-        let Some(team_with_members) = self
-            .team_repository
-            .get_team_by_id(team_id)
-            .await
-            .inspect_err(|error| {
-                tracing::error!(
-                    error=?error,
-                    team_id=%team_id,
-                    user_id=%user_id,
-                    "failed to load team roster for teammate direct messages"
-                );
-            })
-            .ok()
-        else {
-            return;
-        };
-
-        let joining_user = user_id.clone().into_owned();
-        let roster = std::iter::once(team_with_members.team.owner_id).chain(
-            team_with_members
-                .members
-                .into_iter()
-                .map(|member| member.user_id),
-        );
-        let channel_service = self.channel_service.clone();
-        let team_id = *team_id;
-        let command = ensure_dms_for_joining_member(joining_user.clone(), roster);
-        tokio::spawn(async move {
-            if let Err(error) = channel_service.ensure_dms(command).await {
-                tracing::error!(
-                    error=?error,
-                    team_id=%team_id,
-                    user_id=%joining_user,
-                    "failed to ensure teammate direct messages"
-                );
-            }
-        });
     }
 
     /// Backfills legacy teams that were created without a team subscription id.
@@ -1460,8 +1419,6 @@ where
 
         self.enqueue_joining_user_contacts(&team_member.team_id, user_id)
             .await;
-        self.ensure_joining_user_dms(&team_member.team_id, user_id)
-            .await;
 
         self.track_team_analytics_event(TeamAnalyticsEvent::TeamJoined {
             team_id: team_member.team_id,
@@ -2036,7 +1993,6 @@ where
         }
 
         self.enqueue_joining_user_contacts(&team_id, user_id).await;
-        self.ensure_joining_user_dms(&team_id, user_id).await;
 
         // NOTE: no TeamJoined analytics event here - that event is tied to
         // the team invite that was accepted, and a domain auto-join has none.

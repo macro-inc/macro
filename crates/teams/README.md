@@ -79,9 +79,10 @@ notification outcomes also do not publish team events. Best-effort CRM,
 contact, and notification work after a committed mutation does not suppress the
 corresponding event.
 
-This change provides production only. It adds no team-event consumer, and the
-webhook Kafka consumer and webhook delivery pipeline do not consume or deliver
-these events.
+The authentication service consumes `team.member_joined` from `macro.teams`
+under the `teammate-dms` consumer group and ensures a direct message between
+the new member and every other current teammate. The webhook Kafka consumer
+and webhook delivery pipeline do not consume or deliver these events.
 
 ## Delivery semantics and compatibility
 
@@ -91,6 +92,10 @@ publication failure is logged without rolling back or failing an otherwise
 successful request. There is no transaction, outbox, or retry coupling database
 persistence to publication. Delivery is therefore at-most-once relative to team
 mutations: a committed mutation can have no corresponding event.
+
+Teammate-DM consumption is at-least-once. The consumer commits an offset only
+after a successful or permanent result and retries transient failures. A missed
+publish can leave a team without DMs until `backfill_teammate_dms` runs.
 
 Consumers must tolerate unknown `event_type` values and unknown metadata fields
 so new event variants and additive fields remain forward compatible. Consumers
