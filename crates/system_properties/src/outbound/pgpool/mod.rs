@@ -226,3 +226,12 @@ impl SystemPropertiesRepository for PgSystemPropertiesRepository {
         Ok(())
     }
 }
+
+// The domain error stays sqlx-free; this adapter owns the mapping so `?`
+// works on sqlx results throughout the crate's outbound code. The raw sqlx
+// error travels inside the report.
+impl From<sqlx::Error> for crate::SystemPropertyError {
+    fn from(e: sqlx::Error) -> Self {
+        Self::Database(rootcause::report!(e).into_dynamic())
+    }
+}

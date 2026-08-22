@@ -90,7 +90,7 @@ fn channel_access_error(err: AccessError) -> ToolCallError {
         }
         AccessError::NotFound(_) => "channel not found",
         AccessError::BadRequest(_) => "invalid channel id",
-        AccessError::DatabaseError(_) | AccessError::Internal => {
+        AccessError::Unavailable(_) | AccessError::Internal(_) => {
             "failed to verify channel membership"
         }
     };

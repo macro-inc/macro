@@ -70,7 +70,7 @@ impl AccessRepository for PgAccessRepository {
             .map_err(|_| AccessError::BadRequest("Invalid document ID format"))?;
         let source_ids = queries::get_user_source_ids(&self.pool, user_id)
             .await
-            .map_err(|_| AccessError::Internal)?;
+            .map_err(anyhow_access_error)?;
         Ok(
             queries::document_access::get_document_access(&self.pool, &document_uuid, &source_ids)
                 .await?,
@@ -88,7 +88,7 @@ impl AccessRepository for PgAccessRepository {
             .map_err(|_| AccessError::BadRequest("Invalid chat ID format"))?;
         let source_ids = queries::get_user_source_ids(&self.pool, user_id)
             .await
-            .map_err(|_| AccessError::Internal)?;
+            .map_err(anyhow_access_error)?;
         Ok(queries::chat_access::get_chat_access(&self.pool, &chat_uuid, &source_ids).await?)
     }
 
@@ -103,7 +103,7 @@ impl AccessRepository for PgAccessRepository {
             .map_err(|_| AccessError::BadRequest("Invalid project ID format"))?;
         let source_ids = queries::get_user_source_ids(&self.pool, user_id)
             .await
-            .map_err(|_| AccessError::Internal)?;
+            .map_err(anyhow_access_error)?;
         Ok(
             queries::project_access::get_project_access(&self.pool, &project_uuid, &source_ids)
                 .await?,
@@ -121,7 +121,7 @@ impl AccessRepository for PgAccessRepository {
             .map_err(|_| AccessError::BadRequest("Invalid thread ID format"))?;
         let source_ids = queries::get_user_source_ids(&self.pool, user_id)
             .await
-            .map_err(|_| AccessError::Internal)?;
+            .map_err(anyhow_access_error)?;
         Ok(queries::thread_access::get_thread_access(
             &self.pool,
             &thread_uuid,
@@ -198,7 +198,7 @@ impl AccessRepository for PgAccessRepository {
             .map_err(|_| AccessError::BadRequest("Invalid call ID format"))?;
         let source_ids = queries::get_user_source_ids(&self.pool, user_id)
             .await
-            .map_err(|_| AccessError::Internal)?;
+            .map_err(anyhow_access_error)?;
         Ok(queries::call_access::get_call_access(&self.pool, &call_uuid, &source_ids).await?)
     }
 
@@ -212,7 +212,7 @@ impl AccessRepository for PgAccessRepository {
             .map_err(|_| AccessError::BadRequest("Invalid agent session ID format"))?;
         let source_ids = queries::get_user_source_ids(&self.pool, user_id)
             .await
-            .map_err(|_| AccessError::Internal)?;
+            .map_err(anyhow_access_error)?;
         Ok(queries::agent_session_access::get_agent_session_access(
             &self.pool,
             &agent_session_uuid,
@@ -246,7 +246,7 @@ impl AccessRepository for PgAccessRepository {
         )
         .fetch_one(&self.pool)
         .await
-        .map_err(|_| AccessError::Internal)?;
+        .map_err(AccessError::from)?;
 
         // Owner or nothing: a reminder has no sharing model to grade.
         Ok(owns.then_some(AccessLevel::Owner))
@@ -266,7 +266,7 @@ impl AccessRepository for PgAccessRepository {
         let bot_principal = bot_id.into_storage_id();
         let source_ids = queries::get_team_scope_source_ids(&self.pool, &bot_principal, &team_id)
             .await
-            .map_err(|_| AccessError::Internal)?;
+            .map_err(anyhow_access_error)?;
 
         let access = match entity_type {
             EntityType::Document => {
@@ -352,7 +352,7 @@ impl AccessRepository for PgAccessRepository {
         let scope_sources =
             queries::get_team_scope_source_ids(&self.pool, &bot_principal, &team_id)
                 .await
-                .map_err(|_| AccessError::Internal)?;
+                .map_err(anyhow_access_error)?;
 
         if !scope_sources.0.contains(&team_id.to_string())
             || !scope_sources.0.contains(&bot_principal.to_string())
@@ -505,7 +505,7 @@ impl AccessRepository for PgAccessRepository {
     ) -> Result<Vec<MacroUserIdStr<'static>>, AccessError> {
         queries::get_entity_users(&self.pool, entity_id, entity_type)
             .await
-            .map_err(|_| AccessError::Internal)
+            .map_err(anyhow_access_error)
     }
 
     #[tracing::instrument(err, skip(self))]
@@ -515,7 +515,7 @@ impl AccessRepository for PgAccessRepository {
     ) -> Result<Vec<MacroUserIdStr<'static>>, AccessError> {
         queries::channel_users::get_channel_users(&self.pool, channel_id)
             .await
-            .map_err(|_| AccessError::Internal)
+            .map_err(AccessError::from)
     }
 
     #[tracing::instrument(err, skip(self))]
@@ -549,5 +549,43 @@ impl AccessRepository for PgAccessRepository {
         user_id: &MacroUserId<Lowercase<'_>>,
     ) -> Result<Option<UserTeamInfo>, AccessError> {
         Ok(queries::team_access::get_user_team(&self.pool, user_id).await?)
+    }
+}
+
+/// Classify an anyhow-wrapped query failure by downcasting to the sqlx error
+/// when there is one, so genuine database outages surface as `Unavailable`
+/// instead of hiding in `Internal`.
+fn anyhow_access_error(e: anyhow::Error) -> AccessError {
+    match e.downcast::<sqlx::Error>() {
+        Ok(sqlx_error) => AccessError::from(sqlx_error),
+        Err(other) => AccessError::Internal(rootcause::report!(other).into_dynamic()),
+    }
+}
+
+// The domain error stays sqlx-free; this adapter owns the classification,
+// where the error is still concrete: connection-level failures (and Postgres
+// serialization/deadlock aborts, which are safe to retry) are `Unavailable`;
+// everything else is a bug or bad data, so retrying won't help. The raw sqlx
+// error travels inside the report, so nothing is lost from the logs.
+impl From<sqlx::Error> for AccessError {
+    fn from(e: sqlx::Error) -> Self {
+        let transient = matches!(
+            &e,
+            sqlx::Error::PoolTimedOut
+                | sqlx::Error::PoolClosed
+                | sqlx::Error::WorkerCrashed
+                | sqlx::Error::Io(_)
+                | sqlx::Error::Tls(_)
+        ) || matches!(
+            &e,
+            sqlx::Error::Database(db)
+                if matches!(db.code().as_deref(), Some("40001") | Some("40P01"))
+        );
+        let report = rootcause::report!(e).into_dynamic();
+        if transient {
+            Self::Unavailable(report)
+        } else {
+            Self::Internal(report)
+        }
     }
 }

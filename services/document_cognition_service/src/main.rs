@@ -618,7 +618,6 @@ async fn main() -> anyhow::Result<()> {
     // Build memory service
     let memory_repo = memory::outbound::pg_memory_repo::PgMemoryRepo::new(db.clone());
     let memory_service = Arc::new(memory::domain::service::MemoryServiceImpl::new(
-        db.clone(),
         memory_repo,
         tool_service_context.clone(),
         all_tools,

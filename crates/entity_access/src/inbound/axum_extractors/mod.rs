@@ -98,8 +98,8 @@ impl From<AccessError> for ExtractorError {
             }
             AccessError::BadRequest(msg) => ExtractorError::BadRequest(msg),
             AccessError::NotFound(msg) => ExtractorError::NotFound(msg),
-            AccessError::DatabaseError(_) => ExtractorError::Database,
-            AccessError::Internal => ExtractorError::Internal,
+            AccessError::Unavailable(_) => ExtractorError::Database,
+            AccessError::Internal(_) => ExtractorError::Internal,
         }
     }
 }

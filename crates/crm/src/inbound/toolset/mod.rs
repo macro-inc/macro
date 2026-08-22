@@ -365,7 +365,9 @@ pub(crate) fn team_access_error(err: AccessError) -> ToolCallError {
         }
         AccessError::NotFound(_) => "team not found",
         AccessError::BadRequest(_) => "invalid team membership",
-        AccessError::DatabaseError(_) | AccessError::Internal => "failed to verify team membership",
+        AccessError::Unavailable(_) | AccessError::Internal(_) => {
+            "failed to verify team membership"
+        }
     };
 
     ToolCallError {

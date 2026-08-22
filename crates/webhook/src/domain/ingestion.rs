@@ -62,14 +62,15 @@ pub enum WebhookEventIngestionError {
 impl WebhookEventIngestionError {
     /// Whether retrying the same event could plausibly succeed.
     ///
-    /// Access resolution currently maps some PostgreSQL failures to
-    /// [`AccessError::Internal`], so that variant remains retryable alongside
-    /// explicit database, repository, workspace-resolution, and queue errors.
-    /// Invalid broker contracts are permanent and can be safely skipped.
+    /// Access resolution classifies failures at the database boundary:
+    /// [`AccessError::Unavailable`] is a connection-level or retryable
+    /// Postgres failure, while [`AccessError::Internal`] is a bug or bad
+    /// data that retrying cannot fix. Invalid broker contracts are
+    /// permanent and can be safely skipped.
     pub fn is_transient(&self) -> bool {
         matches!(
             self,
-            Self::EntityAccess(AccessError::DatabaseError(_) | AccessError::Internal)
+            Self::EntityAccess(AccessError::Unavailable(_))
                 | Self::WorkspaceResolution(_)
                 | Self::Repository(_)
                 | Self::Enqueue(_)
