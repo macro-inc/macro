@@ -45,6 +45,7 @@ impl DmPair {
         &self.hi
     }
 
+    #[cfg(any(test, feature = "outbound"))]
     pub(crate) fn other(&self, owner: &MacroUserIdStr<'_>) -> Option<MacroUserIdStr<'static>> {
         if owner == &self.lo {
             Some(self.hi.clone())
