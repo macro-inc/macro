@@ -519,6 +519,7 @@ where
             .containers
             .spawn(SpawnContainer {
                 session_id,
+                bot_id,
                 repo_url,
                 size: sandbox_size,
             })

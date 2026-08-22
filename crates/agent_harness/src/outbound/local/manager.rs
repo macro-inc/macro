@@ -200,6 +200,9 @@ impl ContainerManager for LocalContainerManager {
     async fn spawn(&self, command: SpawnContainer) -> Result<Self::Transport> {
         let SpawnContainer {
             session_id,
+            // Routing happened upstream; every spawn that reaches the local
+            // provider is a sandbox spawn regardless of which bot asked.
+            bot_id: _,
             repo_url,
             size: _,
         } = command;

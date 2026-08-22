@@ -3,10 +3,12 @@
 
 pub mod channel_announcer;
 pub mod containers;
+pub mod cursor;
 pub mod daytona;
 pub mod local;
 pub(crate) mod managed_containers;
 pub mod namespace;
 pub(crate) mod provision;
+pub mod routing;
 pub mod runtime_registry;
 pub mod sidecar;

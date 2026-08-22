@@ -334,7 +334,15 @@ impl ServiceAuthEnv {
             identity::INTERNAL_AUTH_KEY.into(),
         );
         env.insert(
+            "INTERNAL_API_KEY".into(),
+            identity::INTERNAL_AUTH_KEY.into(),
+        );
+        env.insert(
             "INTERNAL_AUTH_KEY".into(),
+            identity::INTERNAL_AUTH_KEY.into(),
+        );
+        env.insert(
+            "AUTHENTICATION_SERVICE_SECRET_KEY".into(),
             identity::INTERNAL_AUTH_KEY.into(),
         );
         env.insert(
@@ -439,16 +447,6 @@ impl BootStubEnv {
             "MACRO_DB_URL".into(),
             "postgres://user:password@postgres:5432/macrodb".into(),
         );
-        // services validating the shared internal auth header.
-        env.insert(
-            "INTERNAL_API_KEY".into(),
-            identity::INTERNAL_AUTH_KEY.into(),
-        );
-        // document_cognition_service's soup client (internal HMAC).
-        env.insert(
-            "AUTHENTICATION_SERVICE_SECRET_KEY".into(),
-            identity::INTERNAL_AUTH_KEY.into(),
-        );
         // search_processing_service; the local cluster has the security plugin
         // disabled so these are accepted but ignored (same as opensearch.rs).
         env.insert("OPENSEARCH_USERNAME".into(), "macrouser".into());
@@ -496,6 +494,12 @@ impl BootStubEnv {
         // a real token when present. Not in `to_env`, so a local stack does
         // not wipe Doppler's value the way it wipes `DAYTONA_API_KEY`.
         env.insert("GITHUB_TOKEN".into(), String::new());
+        // Key for `@cursor` sessions (Cursor cloud agents). Empty means the
+        // harness boots with the @cursor bot unserved; seeded here because
+        // the process-env layer only overlays keys already in the map, so
+        // without this stub `CURSOR_API_KEY=... just run_local` would be
+        // silently ignored. Doppler overlays a real key when present.
+        env.insert("CURSOR_API_KEY".into(), String::new());
         env.insert("STRIPE_SECRET_KEY".into(), "local-stripe-secret".into());
         env.insert("STRIPE_PRICE_ID".into(), "local-stripe-price".into());
         env.insert(

@@ -63,6 +63,7 @@ async fn container_session_runs_and_logs_end_to_end() {
     let container = containers
         .spawn(SpawnContainer {
             session_id: id,
+            bot_id: bot_id::MACRO_CODER_BOT_ID,
             repo_url: "https://github.com/macro/macro".to_owned(),
             size: agent_session::domain::model::SandboxSize::Default,
         })

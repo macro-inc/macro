@@ -197,6 +197,7 @@ async fn disconnected_session(
     containers
         .spawn(SpawnContainer {
             session_id: id,
+            bot_id: bot_id::MACRO_CODER_BOT_ID,
             repo_url: "https://github.com/macro-inc/macro".to_owned(),
             size: agent_session::domain::model::SandboxSize::Default,
         })

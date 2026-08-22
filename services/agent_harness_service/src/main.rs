@@ -22,11 +22,13 @@ use agent_harness::inbound::kafka::{RoutedTrigger, route_agent_trigger};
 use agent_harness::inbound::runtime_gateway::RuntimeGatewayState;
 use agent_harness::outbound::channel_announcer::ChannelAnnouncer;
 use agent_harness::outbound::containers::HarnessContainers;
+use agent_harness::outbound::cursor::CursorContainerManager;
 use agent_harness::outbound::daytona::{
     AnthropicApiKey as AnthropicApiKeySecret, DaytonaApiKey as DaytonaApiKeySecret,
     DaytonaContainerManager, DaytonaSettings, GithubToken as GithubTokenSecret, Snapshot,
 };
 use agent_harness::outbound::local::{LocalContainerManager, LocalSettings};
+use agent_harness::outbound::routing::RoutedContainerManager;
 use agent_harness::outbound::runtime_registry::RuntimeRegistry;
 use agent_inmem::outbound::log_frames::LogFrameSource;
 use agent_inmem::outbound::manager::InMemAgentManager;
@@ -54,6 +56,8 @@ use channels::outbound::pg_side_effect_context::PgChannelSideEffectContext;
 use config::{Config, Environment};
 use connection_gateway_client::ConnectionGatewayClient;
 use containers::{InMemRuntime, RoutedContainers};
+use cursor_cloud_agents::api::{ApiKey as CursorApiKey, CursorClient, CursorConfig};
+use cursor_cloud_agents::domain::model::RepoUrl as CursorRepoUrl;
 use kafka_util::{GroupName, KafkaEventConsumer, consumer_span, record_span_error};
 use lexical_client::LexicalClient;
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
@@ -118,7 +122,6 @@ async fn run() -> anyhow::Result<()> {
     let config = Config::from_env()?;
     let bot_id = BotId::new_from_uuid(config.harness_bot_id);
     let inmem_bot = config.inmem_bot_id.map(BotId::new_from_uuid);
-    let our_bots: Vec<BotId> = std::iter::once(bot_id).chain(inmem_bot).collect();
 
     let pool = PgPoolOptions::new()
         .min_connections(1)
@@ -152,7 +155,9 @@ async fn run() -> anyhow::Result<()> {
         pool.clone(),
     )));
 
-    // Containers: local Docker when a developer has opted in, Daytona otherwise.
+    // Containers: the sandbox provider (local Docker when a developer has
+    // opted in, Daytona otherwise) plus Cursor cloud agents for the `@cursor`
+    // bot when a key is configured, routed per session.
     // The key rides into every sandbox's environment; without it the runtime
     // has no model provider at all (`container/opencode.json` enables only
     // `anthropic`), so managed sessions would advertise no models and fail
@@ -227,7 +232,7 @@ async fn run() -> anyhow::Result<()> {
     };
     // The sandbox provider serves every bot but the in-memory one, which the
     // router pulls out by bot id before the provider ever sees it.
-    let containers = RoutedContainers::new(
+    let sandbox_and_inmem = RoutedContainers::new(
         sandbox,
         inmem,
         AgentSessionServiceImpl::new(
@@ -236,6 +241,37 @@ async fn run() -> anyhow::Result<()> {
             NoOpRealtime,
         ),
     );
+    let cursor_manager = if config.cursor_api_key.is_empty() {
+        // Loud on purpose: an unarmed deployment skips every @cursor mention
+        // as ForeignBot, which reads as "the bot ignored me" with nothing in
+        // the logs to say why.
+        tracing::warn!("CURSOR_API_KEY is unset: the @cursor bot is not served by this deployment");
+        None
+    } else {
+        let client = CursorClient::new(CursorConfig {
+            api_key: CursorApiKey::new(&config.cursor_api_key),
+            base_url: "https://api.cursor.com".to_owned(),
+            model: None,
+            starting_ref: "main".to_owned(),
+            record_dir: None,
+        })
+        .context("the configured CURSOR_API_KEY is not usable")?;
+        let repo = CursorRepoUrl::parse(&config.cursor_repo_url)
+            .context("CURSOR_REPO_URL is not a valid repository url")?;
+        Some(CursorContainerManager::new(
+            client,
+            repo,
+            session_repo.clone(),
+        ))
+    };
+    // Which managed bots this deployment answers for: always its own, plus
+    // the in-memory and Cursor bots when configured.
+    let our_bots: Vec<BotId> = std::iter::once(bot_id)
+        .chain(inmem_bot)
+        .chain(cursor_manager.as_ref().map(|_| bot_id::CURSOR_BOT_ID))
+        .collect();
+    let containers =
+        RoutedContainerManager::new(sandbox_and_inmem, cursor_manager, session_repo.clone());
 
     let aws_config = macro_aws_config::get_macro_aws_config().await;
     let notifications = Arc::new(notification::domain::service::SqsNotificationIngress {
@@ -447,7 +483,10 @@ async fn run() -> anyhow::Result<()> {
                     let routed = match route_agent_trigger(event.event().event.clone(), &our_bots) {
                         Ok(routed) => routed,
                         Err(skipped) => {
-                            tracing::debug!(?skipped, "skipped an agent session event");
+                            // Info, not debug: a skip is the last visible trace
+                            // of a mention this deployment chose not to serve,
+                            // and debugging "the bot did not answer" starts here.
+                            tracing::info!(?skipped, "skipped an agent session event");
                             commit_message(&consumer, kafka_message)?;
                             return Ok(None);
                         }

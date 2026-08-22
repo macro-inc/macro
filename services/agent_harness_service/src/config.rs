@@ -85,6 +85,17 @@ pub struct Config {
     /// Repository sessions run against, until it becomes per-request data.
     #[macro_config_default(String::from("https://github.com/macro-inc/macro"))]
     pub harness_repo_url: String,
+    /// Cursor API key (`crsr_…`) the `@cursor` bot's sessions run on. Empty
+    /// means this deployment does not serve `@cursor`: mentions of it are
+    /// skipped and a resume of an existing Cursor session fails loudly.
+    /// One org-level key for every user, until per-user keys exist.
+    #[macro_config_default(String::new())]
+    pub cursor_api_key: String,
+    /// Repository `@cursor` sessions work on. Temporary hardcoding, same as
+    /// `harness_repo_url`: it must be a repository the key's Cursor account
+    /// can reach through its GitHub App installation.
+    #[macro_config_default(String::from("https://github.com/macro-inc/macro"))]
+    pub cursor_repo_url: String,
     /// The bot whose sessions run in-process (the in-memory agent). Dev sets
     /// this to `bot_id::MACRO_AI_BOT_ID`; unset deployments serve only the
     /// sandboxed bot. It must be a real `bots` row because

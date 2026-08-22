@@ -37,15 +37,20 @@ pub struct OpenSession {
     pub origin: MentionOrigin,
 }
 
-/// Whether this deployment provisions a runtime for `bot`'s sessions.
+/// Whether a deployment provisions `bot`'s session runtimes itself.
 ///
-/// The Macro coder bot's sessions run in a provisioned sandbox and the Macro
-/// bot's run in-process; every other agent bot hosts its own runtime and
-/// dials the gateway. This becomes a bot attribute the day managed bots stop
-/// being a closed set.
+/// The managed set is the Macro coder bot (Daytona sandboxes), the Macro bot
+/// (in-process), and the Cursor bot (Cursor cloud agents); every other agent
+/// bot hosts its own runtime and dials the gateway. Membership here is about
+/// who provisions, not whether *this* deployment is armed to — an unarmed
+/// deployment refuses a managed bot's sessions rather than waiting for a
+/// dial-in that can never come. This becomes a bot attribute the day the set
+/// stops being closed.
 #[must_use]
 pub fn is_managed_bot(bot: BotId) -> bool {
-    bot == bot_id::MACRO_CODER_BOT_ID || bot == bot_id::MACRO_AI_BOT_ID
+    bot == bot_id::MACRO_CODER_BOT_ID
+        || bot == bot_id::MACRO_AI_BOT_ID
+        || bot == bot_id::CURSOR_BOT_ID
 }
 
 /// Where a prompt came from, when it came from somewhere the session should
@@ -170,6 +175,10 @@ pub struct SessionAnnouncement {
 pub struct SpawnContainer {
     /// Session that will own the container transport.
     pub session_id: AgentSessionId,
+    /// The bot the session runs for. Providers coexist per-deployment, and
+    /// which one serves this session is the bot's fact — the routing manager
+    /// reads it here at spawn and from the session row ever after.
+    pub bot_id: BotId,
     /// Repository cloned into the container workspace.
     pub repo_url: String,
     /// Compute tier to request from the provider.

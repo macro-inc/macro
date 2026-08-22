@@ -47,28 +47,40 @@ pub enum Skipped {
     NotMacroStaff,
 }
 
+/// Whether a sender may drive the managed harnesses at all.
+///
+/// Exact domain match, not a suffix test: `domain_part` is the parsed
+/// domain, so nothing an attacker appends can satisfy it.
+fn is_macro_staff(sender: &macro_user_id::user_id::MacroUserIdStr<'_>) -> bool {
+    sender.email_part().lowercase().domain_part() == "macro.com"
+}
+
 /// Route one trigger event: work for this deployment, or a reason it was
 /// skipped.
 ///
 /// Opens are only ours when the mentioned bot is one of `our_bots` - external
-/// bots' runtimes open their own sessions over the API. Events for sessions
-/// that already exist always carry work: a prompt to deliver when the session
-/// is managed here, or just its announcement when the bot's own runtime
-/// delivers the prompt.
+/// bots' runtimes open their own sessions over the API. A deployment serves
+/// the sandboxed coder bot, the in-memory Macro bot when configured, and,
+/// when it holds a Cursor API key, the Cursor bot too, which is why this is a
+/// set rather than one id. Events for sessions that already exist always
+/// carry work: a prompt to deliver when the session is managed here, or just
+/// its announcement when the bot's own runtime delivers the prompt.
 pub fn route_agent_trigger(
     event: AgentTriggerTopicEvent,
     our_bots: &[BotId],
 ) -> Result<RoutedTrigger, Skipped> {
     match event {
         AgentTriggerTopicEvent::New(NewAgentSessionEvent::TopLevelMentioned(mentioned)) => {
-            // TODO: remove
-            if mentioned.message.sender.as_user().is_some_and(|user| {
-                !user
-                    .email_part()
-                    .lowercase()
-                    .email_str()
-                    .ends_with("@macro.com")
-            }) {
+            // TODO: lift for the coder bot once the beta gate opens. For the
+            // Cursor bot the restriction is permanent until per-user Cursor
+            // keys exist: its sessions run on Macro's own Cursor account, so
+            // only Macro staff may open them.
+            if mentioned
+                .message
+                .sender
+                .as_user()
+                .is_some_and(|user| !is_macro_staff(user))
+            {
                 return Err(Skipped::NotMacroStaff);
             }
 
@@ -114,6 +126,20 @@ pub fn route_agent_trigger(
                 // of the way entirely.
                 if !our_bots.contains(&bot_id) {
                     return Err(Skipped::ForeignBot);
+                }
+                // The open gate alone is not enough: the mentioning channel
+                // holds editor access to the session, so anyone in the
+                // thread can prompt it. A Cursor session runs on Macro's
+                // Cursor account, and a prompt is spend on it - staff only,
+                // and a sender that is not a user at all is refused rather
+                // than waved through.
+                if bot_id == bot_id::CURSOR_BOT_ID
+                    && !message
+                        .sender
+                        .as_user()
+                        .is_some_and(|user| is_macro_staff(user))
+                {
+                    return Err(Skipped::NotMacroStaff);
                 }
                 return Ok(RoutedTrigger::Command(
                     session_id,
