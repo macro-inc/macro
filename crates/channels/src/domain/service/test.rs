@@ -2369,6 +2369,37 @@ async fn get_or_create_dm_rejects_self_pair() {
 }
 
 #[tokio::test]
+async fn get_or_create_dm_returns_get_for_existing_pair() {
+    let channel_id = Uuid::new_v4();
+    let actor = macro_id("macro|actor@test.com");
+    let recipient = macro_id("macro|recipient@test.com");
+    let mut repo = MockChannelRepo::new();
+    repo.expect_ensure_dm()
+        .once()
+        .returning(move |_, _| Box::pin(async move { Ok(EnsuredDm::Existing { channel_id }) }));
+    let events = FakeEvents::default();
+    let service = ChannelServiceImpl::with_dependencies(
+        repo,
+        events.clone(),
+        FakeReferenceSharing::default(),
+    );
+
+    let response = service
+        .get_or_create_dm(
+            Sender::new_from_user(actor),
+            GetOrCreateDmRequest {
+                recipient_id: recipient,
+            },
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.channel_id, channel_id.to_string());
+    assert_eq!(response.action, GetOrCreateAction::Get);
+    assert!(events.events.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
 async fn create_private_channel_allows_no_invited_participants() {
     let channel_id = Uuid::new_v4();
     let repo = FakeMutationRepo::new(channel_id, "macro|sender@test.com");

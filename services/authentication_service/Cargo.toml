@@ -14,6 +14,10 @@ name = "generate_keys"
 path = "src/bin/generate_keys.rs"
 
 [[bin]]
+name = "backfill_teammate_dms"
+path = "src/bin/backfill_teammate_dms.rs"
+
+[[bin]]
 name = "authentication_service_openapi"
 path = "src/openapi.rs"
 
