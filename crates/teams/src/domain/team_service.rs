@@ -378,33 +378,24 @@ where
         };
 
         let joining_user = user_id.clone().into_owned();
-        let roster = std::iter::once(team_with_members.team.owner_id)
-            .chain(
-                team_with_members
-                    .members
-                    .into_iter()
-                    .map(|member| member.user_id),
-            )
-            .filter(|teammate| teammate != &joining_user)
-            .collect::<HashSet<_>>();
-
+        let roster = std::iter::once(team_with_members.team.owner_id).chain(
+            team_with_members
+                .members
+                .into_iter()
+                .map(|member| member.user_id),
+        );
         let channel_service = self.channel_service.clone();
         let team_id = *team_id;
-        let user_id = user_id.clone().into_owned();
-        let command = ensure_dms_for_joining_member(joining_user, roster);
+        let command = ensure_dms_for_joining_member(joining_user.clone(), roster);
         tokio::spawn(async move {
-            channel_service
-                .ensure_dms(command)
-                .await
-                .inspect_err(|error| {
-                    tracing::error!(
-                        error=?error,
-                        team_id=%team_id,
-                        user_id=%user_id,
-                        "failed to ensure teammate direct messages"
-                    );
-                })
-                .ok();
+            if let Err(error) = channel_service.ensure_dms(command).await {
+                tracing::error!(
+                    error=?error,
+                    team_id=%team_id,
+                    user_id=%joining_user,
+                    "failed to ensure teammate direct messages"
+                );
+            }
         });
     }
 

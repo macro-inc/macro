@@ -306,10 +306,7 @@ pub trait TeamRepository: Clone + Send + Sync + 'static {
         user_id: &MacroUserIdStr<'_>,
     ) -> impl Future<Output = Result<Option<TeamMember<'static>>, TeamError>> + Send;
 
-    /// Page team primary keys after an optional exclusive cursor.
-    ///
-    /// Used by the one-shot teammate-DM backfill so it can walk every team
-    /// without loading the full table.
+    /// Return team ids after `after_team_id`, ordered by id, limited to `limit`.
     fn list_team_ids_after(
         &self,
         after_team_id: Option<uuid::Uuid>,

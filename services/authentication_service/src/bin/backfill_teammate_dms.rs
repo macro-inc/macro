@@ -40,9 +40,11 @@ async fn main() -> anyhow::Result<()> {
     let mut total = Progress::default();
     loop {
         let team_ids = team_repo.list_team_ids_after(cursor, PAGE_SIZE).await?;
-        let next_team_id = (team_ids.len() == PAGE_SIZE as usize)
-            .then(|| team_ids.last().copied())
-            .flatten();
+        let next_team_id = if team_ids.len() == PAGE_SIZE as usize {
+            team_ids.last().copied()
+        } else {
+            None
+        };
 
         for team_id in team_ids {
             total.teams_processed += 1;

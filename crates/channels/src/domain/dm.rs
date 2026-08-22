@@ -11,10 +11,7 @@ mod test;
 #[error("a direct message requires two distinct users")]
 pub struct SelfDm;
 
-/// An unordered pair of distinct users that identifies one direct message.
-///
-/// The two ids are stored in a fixed order so `(a, b)` and `(b, a)` compare
-/// equal. That order is an implementation detail, not a product rule.
+/// Two distinct users that identify one direct message. `(a, b)` equals `(b, a)`.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct DmPair {
     lo: MacroUserIdStr<'static>,
