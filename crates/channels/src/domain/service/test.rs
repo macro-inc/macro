@@ -1,6 +1,6 @@
 use super::*;
 use crate::domain::{
-    dm::EnsureDms,
+    dm::ensure_dms_for_joining_member,
     events::ChannelEvent,
     models::{
         Activity, ActivityType, BotId, BotSenderProfile, ChannelAttachment, ChannelAttachmentType,
@@ -2272,7 +2272,7 @@ async fn ensure_dms_dispatches_created_channel_once() {
     let service = mutation_service(repo, events.clone(), FakeReferenceSharing::default());
 
     let summary = service
-        .ensure_dms(EnsureDms::for_joining_member(
+        .ensure_dms(ensure_dms_for_joining_member(
             joiner.clone(),
             vec![joiner.clone(), teammate.clone()],
         ))
@@ -2320,7 +2320,7 @@ async fn ensure_dms_does_not_dispatch_for_existing_channel() {
     );
 
     let summary = service
-        .ensure_dms(EnsureDms::for_joining_member(joiner, vec![teammate]))
+        .ensure_dms(ensure_dms_for_joining_member(joiner, vec![teammate]))
         .await
         .unwrap();
 

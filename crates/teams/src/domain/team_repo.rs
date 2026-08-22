@@ -8,12 +8,11 @@ use entity_access::domain::models::{
 use macro_user_id::{email::Email, lowercased::Lowercase, user_id::MacroUserIdStr};
 
 use crate::domain::model::{
-    AcceptedTeamInvite, BackfillTeammateDmsPage, CreateTeamError, DeleteTeamError,
-    InviteUsersToTeamError, JoinTeamError, PatchTeamCrmSettingsResponse, PatchTeamRequest,
-    RemoveTeamInviteError, RemoveUserFromTeamError, RestorePermissionsForTeamMembersError,
-    RevokePermissionsForTeamMembersError, Team, TeamError, TeamInvite, TeamInviteDetails,
-    TeamMember, TeamMembers, TeamPlan, TeamRole, TeamWithMembers, ToggleAutoJoinDomainError,
-    TryJoinTeamByDomainError,
+    AcceptedTeamInvite, CreateTeamError, DeleteTeamError, InviteUsersToTeamError, JoinTeamError,
+    PatchTeamCrmSettingsResponse, PatchTeamRequest, RemoveTeamInviteError, RemoveUserFromTeamError,
+    RestorePermissionsForTeamMembersError, RevokePermissionsForTeamMembersError, Team, TeamError,
+    TeamInvite, TeamInviteDetails, TeamMember, TeamMembers, TeamPlan, TeamRole, TeamWithMembers,
+    ToggleAutoJoinDomainError, TryJoinTeamByDomainError,
 };
 
 /// The TeamRepository defines a set of actions to perform on teams data
@@ -307,7 +306,10 @@ pub trait TeamRepository: Clone + Send + Sync + 'static {
         user_id: &MacroUserIdStr<'_>,
     ) -> impl Future<Output = Result<Option<TeamMember<'static>>, TeamError>> + Send;
 
-    /// List a stable page of team ids after an optional cursor.
+    /// Page team primary keys after an optional exclusive cursor.
+    ///
+    /// Used by the one-shot teammate-DM backfill so it can walk every team
+    /// without loading the full table.
     fn list_team_ids_after(
         &self,
         after_team_id: Option<uuid::Uuid>,
@@ -509,11 +511,4 @@ pub trait TeamService: Clone + Send + Sync + 'static {
         &self,
         user_id: &MacroUserIdStr<'_>,
     ) -> impl Future<Output = Result<Option<TeamMember<'static>>, TryJoinTeamByDomainError>> + Send;
-
-    /// Backfill one page of teammate direct-message pairs.
-    fn backfill_teammate_dms(
-        &self,
-        after_team_id: Option<uuid::Uuid>,
-        limit: u32,
-    ) -> impl Future<Output = Result<BackfillTeammateDmsPage, TeamError>> + Send;
 }

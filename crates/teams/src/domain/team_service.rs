@@ -6,7 +6,7 @@ mod test;
 use std::{collections::HashSet, sync::Arc};
 
 use channels::domain::{
-    dm::EnsureDms,
+    dm::ensure_dms_for_joining_member,
     models::{ChannelType, CreateChannelRequest, Sender},
     ports::{ChannelMutationErr, ChannelService},
 };
@@ -40,13 +40,12 @@ use crate::domain::{
         TeamMemberRoleChangedMetadata, TeamUpdatedMetadata,
     },
     model::{
-        BackfillTeammateDmsPage, CreateTeamError, CustomerError, DeleteTeamError,
-        FREE_TEAM_MAX_MEMBERS, InviteUsersToTeamError, JoinTeamError, PatchTeamCrmSettingsResponse,
-        PatchTeamRequest, RemoveTeamInviteError, RemoveUserFromTeamError,
-        RestorePermissionsForTeamMembersError, RevokePermissionsForTeamMembersError, Team,
-        TeamError, TeamInvite, TeamInviteDetails, TeamMember, TeamMembers, TeamRole,
-        TeamWithMembers, ToggleAutoJoinDomainError, TryJoinTeamByDomainError,
-        is_generic_email_domain, team_slug_from_name,
+        CreateTeamError, CustomerError, DeleteTeamError, FREE_TEAM_MAX_MEMBERS,
+        InviteUsersToTeamError, JoinTeamError, PatchTeamCrmSettingsResponse, PatchTeamRequest,
+        RemoveTeamInviteError, RemoveUserFromTeamError, RestorePermissionsForTeamMembersError,
+        RevokePermissionsForTeamMembersError, Team, TeamError, TeamInvite, TeamInviteDetails,
+        TeamMember, TeamMembers, TeamRole, TeamWithMembers, ToggleAutoJoinDomainError,
+        TryJoinTeamByDomainError, is_generic_email_domain, team_slug_from_name,
     },
     team_analytics::{NoOpTeamAnalytics, TeamAnalytics, TeamAnalyticsEvent},
     team_crm_settings_repo::TeamCrmSettingsRepository,
@@ -389,18 +388,24 @@ where
             .filter(|teammate| teammate != &joining_user)
             .collect::<HashSet<_>>();
 
-        self.channel_service
-            .ensure_dms(EnsureDms::for_joining_member(joining_user, roster))
-            .await
-            .inspect_err(|error| {
-                tracing::error!(
-                    error=?error,
-                    team_id=%team_id,
-                    user_id=%user_id,
-                    "failed to ensure teammate direct messages"
-                );
-            })
-            .ok();
+        let channel_service = self.channel_service.clone();
+        let team_id = *team_id;
+        let user_id = user_id.clone().into_owned();
+        let command = ensure_dms_for_joining_member(joining_user, roster);
+        tokio::spawn(async move {
+            channel_service
+                .ensure_dms(command)
+                .await
+                .inspect_err(|error| {
+                    tracing::error!(
+                        error=?error,
+                        team_id=%team_id,
+                        user_id=%user_id,
+                        "failed to ensure teammate direct messages"
+                    );
+                })
+                .ok();
+        });
     }
 
     /// Backfills legacy teams that were created without a team subscription id.
@@ -1797,72 +1802,6 @@ where
         self.team_repository
             .toggle_allow_non_admin_invites(&team_id)
             .await
-    }
-
-    #[tracing::instrument(skip(self), err)]
-    async fn backfill_teammate_dms(
-        &self,
-        after_team_id: Option<uuid::Uuid>,
-        limit: u32,
-    ) -> Result<BackfillTeammateDmsPage, TeamError> {
-        let team_ids = self
-            .team_repository
-            .list_team_ids_after(after_team_id, limit)
-            .await?;
-        let next_team_id = if !team_ids.is_empty() && team_ids.len() == limit as usize {
-            team_ids.last().copied()
-        } else {
-            None
-        };
-        let mut page = BackfillTeammateDmsPage {
-            next_team_id,
-            ..Default::default()
-        };
-
-        for team_id in team_ids {
-            page.teams_processed += 1;
-            let team_with_members = match self.team_repository.get_team_by_id(&team_id).await {
-                Ok(team_with_members) => team_with_members,
-                Err(error) => {
-                    page.failed += 1;
-                    tracing::error!(
-                        error=?error,
-                        %team_id,
-                        "failed to load team roster for teammate direct-message backfill"
-                    );
-                    continue;
-                }
-            };
-            let roster = std::iter::once(team_with_members.team.owner_id)
-                .chain(
-                    team_with_members
-                        .members
-                        .into_iter()
-                        .map(|member| member.user_id),
-                )
-                .collect::<HashSet<_>>();
-            match self
-                .channel_service
-                .ensure_dms(EnsureDms::for_roster(roster))
-                .await
-            {
-                Ok(summary) => {
-                    page.created += summary.created;
-                    page.existing += summary.existing;
-                    page.failed += summary.failed;
-                }
-                Err(error) => {
-                    page.failed += 1;
-                    tracing::error!(
-                        error=?error,
-                        %team_id,
-                        "failed to ensure teammate direct messages during backfill"
-                    );
-                }
-            }
-        }
-
-        Ok(page)
     }
 
     #[tracing::instrument(skip(self), err)]

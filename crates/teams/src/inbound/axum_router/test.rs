@@ -35,9 +35,9 @@ use tower::ServiceExt;
 
 use crate::domain::{
     model::{
-        BackfillTeammateDmsPage, CreateTeamError, CustomerError, DeleteTeamError,
-        InviteUsersToTeamError, JoinTeamError, PatchTeamCrmSettingsResponse, PatchTeamRequest,
-        RemoveTeamInviteError, RemoveUserFromTeamError, RestorePermissionsForTeamMembersError,
+        CreateTeamError, CustomerError, DeleteTeamError, InviteUsersToTeamError, JoinTeamError,
+        PatchTeamCrmSettingsResponse, PatchTeamRequest, RemoveTeamInviteError,
+        RemoveUserFromTeamError, RestorePermissionsForTeamMembersError,
         RevokePermissionsForTeamMembersError, Team, TeamError, TeamInvite, TeamInviteDetails,
         TeamMember, TeamWithMembers, ToggleAutoJoinDomainError, TryJoinTeamByDomainError,
     },
@@ -402,14 +402,6 @@ impl TeamService for FakeTeamService {
         _user_id: &MacroUserIdStr<'_>,
     ) -> Result<Option<TeamMember<'static>>, TryJoinTeamByDomainError> {
         panic!("unexpected try_join_team_by_domain call")
-    }
-
-    async fn backfill_teammate_dms(
-        &self,
-        _after_team_id: Option<uuid::Uuid>,
-        _limit: u32,
-    ) -> Result<BackfillTeammateDmsPage, TeamError> {
-        panic!("unexpected backfill_teammate_dms call")
     }
 }
 

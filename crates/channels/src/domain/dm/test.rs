@@ -12,17 +12,6 @@ fn self_pair_is_rejected() {
 }
 
 #[test]
-fn pair_uses_utf8_byte_order() {
-    let lower = user("alpha");
-    let higher = user("zulu");
-
-    let pair = DmPair::new(higher.clone(), lower.clone()).unwrap();
-
-    assert_eq!(pair.lo(), &lower);
-    assert_eq!(pair.hi(), &higher);
-}
-
-#[test]
 fn pair_identity_is_independent_of_argument_order() {
     let a = user("a");
     let b = user("b");
@@ -39,7 +28,7 @@ fn joining_member_batch_is_a_deduplicated_star() {
     let a = user("a");
     let b = user("b");
 
-    let command = EnsureDms::for_joining_member(
+    let command = ensure_dms_for_joining_member(
         joiner.clone(),
         vec![
             joiner.clone(),
@@ -69,7 +58,7 @@ fn joining_member_batch_is_a_deduplicated_star() {
 fn roster_batch_is_a_complete_clique() {
     let roster = vec![user("a"), user("b"), user("c"), user("d")];
 
-    let command = EnsureDms::for_roster(roster.clone());
+    let command = ensure_dms_for_roster(roster.clone());
     let pairs = command
         .requests
         .iter()
@@ -85,9 +74,9 @@ fn roster_batch_is_a_complete_clique() {
 
 #[test]
 fn empty_and_singleton_rosters_have_no_pairs() {
-    assert!(EnsureDms::for_roster(Vec::new()).requests.is_empty());
+    assert!(ensure_dms_for_roster(Vec::new()).requests.is_empty());
     assert!(
-        EnsureDms::for_roster(vec![user("only")])
+        ensure_dms_for_roster(vec![user("only")])
             .requests
             .is_empty()
     );

@@ -11,7 +11,10 @@ mod test;
 #[error("a direct message requires two distinct users")]
 pub struct SelfDm;
 
-/// The canonical identity of a direct message between two users.
+/// An unordered pair of distinct users that identifies one direct message.
+///
+/// The two ids are stored in a fixed order so `(a, b)` and `(b, a)` compare
+/// equal. That order is an implementation detail, not a product rule.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct DmPair {
     lo: MacroUserIdStr<'static>,
@@ -19,7 +22,7 @@ pub struct DmPair {
 }
 
 impl DmPair {
-    /// Construct a canonical pair ordered by UTF-8 byte order.
+    /// Construct a pair of distinct users. Argument order does not matter.
     pub fn new(a: MacroUserIdStr<'_>, b: MacroUserIdStr<'_>) -> Result<Self, SelfDm> {
         match a.as_ref().cmp(b.as_ref()) {
             std::cmp::Ordering::Less => Ok(Self {
@@ -34,12 +37,12 @@ impl DmPair {
         }
     }
 
-    /// Return the lower canonical user id.
+    /// Return one side of the pair.
     pub fn lo(&self) -> &MacroUserIdStr<'static> {
         &self.lo
     }
 
-    /// Return the higher canonical user id.
+    /// Return the other side of the pair.
     pub fn hi(&self) -> &MacroUserIdStr<'static> {
         &self.hi
     }
@@ -58,52 +61,54 @@ pub struct EnsureDms {
 }
 
 impl EnsureDms {
-    /// Build the direct-message star for one joining member and a team roster.
-    pub fn for_joining_member(
-        joiner: MacroUserIdStr<'static>,
-        roster: impl IntoIterator<Item = MacroUserIdStr<'static>>,
-    ) -> Self {
-        let teammates = roster
-            .into_iter()
-            .filter(|user_id| user_id != &joiner)
-            .collect::<HashSet<_>>();
-        let mut requests = teammates
-            .into_iter()
-            .map(|teammate| EnsureDm {
-                pair: DmPair::new(joiner.clone(), teammate)
-                    .expect("joining member was removed from the roster"),
-                owner: joiner.clone(),
-            })
-            .collect::<Vec<_>>();
-        sort_requests(&mut requests);
-        Self { requests }
-    }
-
-    /// Build the complete direct-message clique for a team roster.
-    pub fn for_roster(roster: impl IntoIterator<Item = MacroUserIdStr<'static>>) -> Self {
-        let mut roster = roster
-            .into_iter()
-            .collect::<HashSet<_>>()
-            .into_iter()
-            .collect::<Vec<_>>();
-        roster.sort_by(|a, b| a.as_ref().cmp(b.as_ref()));
-
-        let mut requests =
-            Vec::with_capacity(roster.len().saturating_mul(roster.len().saturating_sub(1)) / 2);
-        for (index, lo) in roster.iter().enumerate() {
-            for hi in &roster[index + 1..] {
-                requests.push(EnsureDm {
-                    pair: DmPair::new(lo.clone(), hi.clone()).expect("roster users are distinct"),
-                    owner: lo.clone(),
-                });
-            }
-        }
-        Self { requests }
-    }
-
     pub(crate) fn into_requests(self) -> Vec<EnsureDm> {
         self.requests
     }
+}
+
+/// Build the direct-message star for one joining member and a team roster.
+pub fn ensure_dms_for_joining_member(
+    joiner: MacroUserIdStr<'static>,
+    roster: impl IntoIterator<Item = MacroUserIdStr<'static>>,
+) -> EnsureDms {
+    let teammates = roster
+        .into_iter()
+        .filter(|user_id| user_id != &joiner)
+        .collect::<HashSet<_>>();
+    let mut requests = teammates
+        .into_iter()
+        .map(|teammate| EnsureDm {
+            pair: DmPair::new(joiner.clone(), teammate)
+                .expect("joining member was removed from the roster"),
+            owner: joiner.clone(),
+        })
+        .collect::<Vec<_>>();
+    sort_requests(&mut requests);
+    EnsureDms { requests }
+}
+
+/// Build the complete direct-message clique for a team roster.
+pub fn ensure_dms_for_roster(
+    roster: impl IntoIterator<Item = MacroUserIdStr<'static>>,
+) -> EnsureDms {
+    let mut roster = roster
+        .into_iter()
+        .collect::<HashSet<_>>()
+        .into_iter()
+        .collect::<Vec<_>>();
+    roster.sort_by(|a, b| a.as_ref().cmp(b.as_ref()));
+
+    let mut requests =
+        Vec::with_capacity(roster.len().saturating_mul(roster.len().saturating_sub(1)) / 2);
+    for (index, lo) in roster.iter().enumerate() {
+        for hi in &roster[index + 1..] {
+            requests.push(EnsureDm {
+                pair: DmPair::new(lo.clone(), hi.clone()).expect("roster users are distinct"),
+                owner: lo.clone(),
+            });
+        }
+    }
+    EnsureDms { requests }
 }
 
 fn sort_requests(requests: &mut [EnsureDm]) {
