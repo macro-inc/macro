@@ -1,6 +1,6 @@
 use super::*;
 use crate::domain::{
-    dm::{EnsureDms, EnsuredDm},
+    dm::EnsureDms,
     events::ChannelEvent,
     models::{
         Activity, ActivityType, BotId, BotSenderProfile, ChannelAttachment, ChannelAttachmentType,
@@ -592,18 +592,6 @@ impl ChannelRepo for FakeMutationRepo {
         _channel_ids: &[Uuid],
     ) -> Result<(), Self::Err> {
         Ok(())
-    }
-
-    async fn ensure_dm(
-        &self,
-        pair: crate::domain::dm::DmPair,
-        owner: MacroUserIdStr<'static>,
-    ) -> Result<crate::domain::dm::EnsuredDm, Self::Err> {
-        let other = pair.other(&owner).unwrap();
-        Ok(crate::domain::dm::EnsuredDm::Created {
-            channel_id: self.state.lock().unwrap().channel_id,
-            participant_user_ids: vec![owner, other],
-        })
     }
 
     async fn maybe_get_dm(
@@ -2321,9 +2309,9 @@ async fn ensure_dms_does_not_dispatch_for_existing_channel() {
     let joiner = macro_id("macro|joiner@test.com");
     let teammate = macro_id("macro|teammate@test.com");
     let mut repo = MockChannelRepo::new();
-    repo.expect_ensure_dm()
+    repo.expect_maybe_get_dm()
         .once()
-        .returning(move |_, _| Box::pin(async move { Ok(EnsuredDm::Existing { channel_id }) }));
+        .returning(move |_, _| Box::pin(async move { Ok(Some(channel_id)) }));
     let events = FakeEvents::default();
     let service = ChannelServiceImpl::with_dependencies(
         repo,
@@ -2374,9 +2362,9 @@ async fn get_or_create_dm_returns_get_for_existing_pair() {
     let actor = macro_id("macro|actor@test.com");
     let recipient = macro_id("macro|recipient@test.com");
     let mut repo = MockChannelRepo::new();
-    repo.expect_ensure_dm()
+    repo.expect_maybe_get_dm()
         .once()
-        .returning(move |_, _| Box::pin(async move { Ok(EnsuredDm::Existing { channel_id }) }));
+        .returning(move |_, _| Box::pin(async move { Ok(Some(channel_id)) }));
     let events = FakeEvents::default();
     let service = ChannelServiceImpl::with_dependencies(
         repo,

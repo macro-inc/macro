@@ -2,7 +2,6 @@
 
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use std::collections::HashSet;
-use uuid::Uuid;
 
 #[cfg(test)]
 mod test;
@@ -43,17 +42,6 @@ impl DmPair {
     /// Return the higher canonical user id.
     pub fn hi(&self) -> &MacroUserIdStr<'static> {
         &self.hi
-    }
-
-    #[cfg(any(test, feature = "outbound"))]
-    pub(crate) fn other(&self, owner: &MacroUserIdStr<'_>) -> Option<MacroUserIdStr<'static>> {
-        if owner == &self.lo {
-            Some(self.hi.clone())
-        } else if owner == &self.hi {
-            Some(self.lo.clone())
-        } else {
-            None
-        }
     }
 }
 
@@ -137,29 +125,4 @@ pub struct EnsureDmsSummary {
     pub existing: usize,
     /// Direct-message pairs that could not be ensured.
     pub failed: usize,
-}
-
-/// Repository result for ensuring one direct-message pair.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum EnsuredDm {
-    /// The pair already had a direct-message channel.
-    Existing {
-        /// Existing channel id.
-        channel_id: Uuid,
-    },
-    /// A direct-message channel was created for the pair.
-    Created {
-        /// Created channel id.
-        channel_id: Uuid,
-        /// Active participants added to the channel.
-        participant_user_ids: Vec<MacroUserIdStr<'static>>,
-    },
-}
-
-impl EnsuredDm {
-    pub(crate) fn channel_id(&self) -> Uuid {
-        match self {
-            Self::Existing { channel_id } | Self::Created { channel_id, .. } => *channel_id,
-        }
-    }
 }

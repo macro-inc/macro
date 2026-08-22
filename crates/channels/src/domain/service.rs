@@ -1,5 +1,5 @@
 use crate::domain::{
-    dm::{DmPair, EnsureDms, EnsureDmsSummary, EnsuredDm},
+    dm::{DmPair, EnsureDms, EnsureDmsSummary},
     events::ChannelEvent,
     models::{
         Activity, ActivityType, AddParticipantsRequest, AttachmentEntityReference, BotId,
@@ -394,8 +394,14 @@ where
             let user_lo = request.pair.lo().as_ref().to_string();
             let user_hi = request.pair.hi().as_ref().to_string();
             match self.ensure_one_dm(request.pair, request.owner).await {
-                Ok(EnsuredDm::Created { .. }) => summary.created += 1,
-                Ok(EnsuredDm::Existing { .. }) => summary.existing += 1,
+                Ok(GetOrCreateChannelResponse {
+                    action: GetOrCreateAction::Create,
+                    ..
+                }) => summary.created += 1,
+                Ok(GetOrCreateChannelResponse {
+                    action: GetOrCreateAction::Get,
+                    ..
+                }) => summary.existing += 1,
                 Err(error) => {
                     summary.failed += 1;
                     tracing::error!(
@@ -422,16 +428,7 @@ where
                 "recipient_id cannot be the same as the user_id".to_string(),
             )
         })?;
-        let ensured = self.ensure_one_dm(pair, actor).await?;
-        let action = match &ensured {
-            EnsuredDm::Existing { .. } => GetOrCreateAction::Get,
-            EnsuredDm::Created { .. } => GetOrCreateAction::Create,
-        };
-
-        Ok(GetOrCreateChannelResponse {
-            channel_id: ensured.channel_id().to_string(),
-            action,
-        })
+        self.ensure_one_dm(pair, actor).await
     }
 
     #[tracing::instrument(err, skip(self, req))]
@@ -1265,26 +1262,26 @@ where
         &self,
         pair: DmPair,
         owner: MacroUserIdStr<'static>,
-    ) -> Result<EnsuredDm, ChannelMutationErr> {
-        let ensured = self
+    ) -> Result<GetOrCreateChannelResponse, ChannelMutationErr> {
+        let existing_channel_id = self
             .repo
-            .ensure_dm(pair, owner.clone())
+            .maybe_get_dm(pair.lo().clone(), pair.hi().clone())
             .await
-            .map_err(|error| ChannelMutationErr::Repo(error.into()))?;
-        if let EnsuredDm::Created {
-            channel_id,
-            participant_user_ids,
-        } = &ensured
-        {
-            self.events.dispatch(ChannelEvent::ChannelCreated {
-                channel_id: *channel_id,
-                actor: ChannelSender::new_from_user(owner),
+            .map_err(|e| ChannelMutationErr::Repo(e.into()))?;
+
+        self.get_or_create_channel(
+            existing_channel_id,
+            owner,
+            None,
+            crate::domain::models::CreateChannelRequest {
+                name: None,
                 channel_type: ChannelType::DirectMessage,
-                channel_name: None,
-                participant_user_ids: participant_user_ids.clone(),
-            });
-        }
-        Ok(ensured)
+                team_id: None,
+                auto_join_team: false,
+                participants: HashSet::from([pair.lo().clone(), pair.hi().clone()]),
+            },
+        )
+        .await
     }
 
     async fn create_channel_record<'a>(

@@ -1,13 +1,10 @@
-use crate::domain::ports::{ChannelListRepo, ChannelRepo};
-use crate::domain::{
-    dm::{DmPair, EnsuredDm},
-    models::{
-        AttachmentEntityReference, BotId, BotSenderProfile, ChannelMessageFilters, ChannelType,
-        ChannelWithParticipants, CreateChannelRequest, CreateEntityMentionOptions,
-        GetChannelsParams, GetChannelsRequest, GetThreadReplyRowsRequest, MessagePageDirection,
-        NotificationFilters, ParticipantRole, PatchChannelRequest,
-    },
+use crate::domain::models::{
+    AttachmentEntityReference, BotId, BotSenderProfile, ChannelMessageFilters, ChannelType,
+    ChannelWithParticipants, CreateChannelRequest, CreateEntityMentionOptions, GetChannelsParams,
+    GetChannelsRequest, GetThreadReplyRowsRequest, MessagePageDirection, NotificationFilters,
+    ParticipantRole, PatchChannelRequest,
 };
+use crate::domain::ports::{ChannelListRepo, ChannelRepo};
 use crate::outbound::pg_channels_repo::PgChannelsRepo;
 use filter_ast::Expr;
 use item_filters::ast::{
@@ -455,56 +452,34 @@ async fn create_channel_persists_auto_join_team_and_adds_current_members(pool: P
     fixtures(path = "../../../fixtures", scripts("channels_repo")),
     migrator = "MACRO_DB_MIGRATIONS"
 )]
-async fn ensure_dm_is_idempotent_for_reversed_pair(pool: Pool<Postgres>) {
+async fn maybe_get_dm_finds_channel_regardless_of_argument_order(pool: Pool<Postgres>) {
     let repo = repo(pool.clone());
     let user_a = macro_user_id(USER_A);
     let user_b = macro_user_id(USER_B);
 
-    let first = repo
-        .ensure_dm(DmPair::new(user_a.clone(), user_b.clone()).unwrap(), user_a)
-        .await
-        .unwrap();
-    let second = repo
-        .ensure_dm(
-            DmPair::new(user_b.clone(), macro_user_id(USER_A)).unwrap(),
-            user_b,
+    let created = repo
+        .create_channel(
+            user_a.clone(),
+            None,
+            CreateChannelRequest {
+                name: None,
+                channel_type: ChannelType::DirectMessage,
+                team_id: None,
+                auto_join_team: false,
+                participants: HashSet::from([user_b.clone()]),
+            },
         )
         .await
         .unwrap();
 
-    let EnsuredDm::Created {
-        channel_id: created_channel_id,
-        ..
-    } = first
-    else {
-        panic!("first ensure should create the direct message");
-    };
-    assert_eq!(
-        second,
-        EnsuredDm::Existing {
-            channel_id: created_channel_id,
-        }
-    );
-    let channel_count = sqlx::query_scalar!(
-        r#"
-        SELECT COUNT(*)
-        FROM comms_channels
-        WHERE channel_type = 'direct_message'::comms_channel_type
-          AND id IN (
-              SELECT channel_id
-              FROM comms_channel_participants
-              WHERE user_id = ANY($1)
-              GROUP BY channel_id
-              HAVING COUNT(*) = 2
-          )
-        "#,
-        &vec![USER_A.to_string(), USER_B.to_string()],
-    )
-    .fetch_one(&pool)
-    .await
-    .unwrap()
-    .unwrap();
-    assert_eq!(channel_count, 1);
+    let forward = repo
+        .maybe_get_dm(user_a.clone(), user_b.clone())
+        .await
+        .unwrap();
+    let reverse = repo.maybe_get_dm(user_b, user_a).await.unwrap();
+
+    assert_eq!(forward, Some(created.id));
+    assert_eq!(reverse, Some(created.id));
 }
 
 #[sqlx::test(

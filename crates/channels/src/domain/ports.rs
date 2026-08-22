@@ -24,7 +24,7 @@ use crate::domain::side_effects::{
     ThreadNotificationContext,
 };
 use crate::domain::{
-    dm::{DmPair, EnsureDms, EnsureDmsSummary, EnsuredDm},
+    dm::{EnsureDms, EnsureDmsSummary},
     events::ChannelEvent,
 };
 use channel_sender::ChannelSender;
@@ -306,13 +306,6 @@ pub trait ChannelRepo: Send + Sync + 'static {
         user_id: &MacroUserIdStr<'a>,
         channel_ids: &[Uuid],
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
-
-    /// Ensure that one canonical user pair has a direct-message channel.
-    fn ensure_dm(
-        &self,
-        pair: DmPair,
-        owner: MacroUserIdStr<'static>,
-    ) -> impl Future<Output = Result<EnsuredDm, Self::Err>> + Send;
 
     /// Fetch an existing direct message channel.
     fn maybe_get_dm<'a>(
