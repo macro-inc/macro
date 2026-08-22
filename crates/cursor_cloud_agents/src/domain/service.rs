@@ -17,13 +17,15 @@
 mod test;
 
 use crate::domain::error::SessionError;
-use crate::domain::event::CursorEvent;
+use crate::domain::event::{CursorEvent, InteractionUpdate};
 use crate::domain::model::{
     AcpSessionId, CursorAgentId, CursorRunId, McpServer, RepoUrl, RunStatus,
 };
 use crate::domain::ports::{CursorAgents, RepoResolver, RunStream, SessionNotifier};
 use crate::domain::translate::TranslateMachine;
-use agent_client_protocol::schema::v1::StopReason;
+use agent_client_protocol::schema::v1::{
+    ContentBlock, ContentChunk, SessionUpdate, StopReason, TextContent,
+};
 use futures::StreamExt as _;
 use futures::pin_mut;
 use std::collections::HashMap;
@@ -74,6 +76,11 @@ struct Session {
     /// MCP servers the client named at `session/new`. Applied when the first
     /// prompt creates the agent, since Cursor fixes MCP configuration then.
     mcp_servers: Vec<McpServer>,
+    /// Serializes turns against background foreign-run syncs, so a mirror of
+    /// cursor.com activity never interleaves its frames with a live turn's.
+    /// A prompt waits on it; a sync skips its tick instead. Never held by
+    /// `cancel`, which must land while a turn is streaming.
+    turn_gate: tokio::sync::Mutex<()>,
     state: Mutex<SessionState>,
 }
 
@@ -121,6 +128,7 @@ where
         let session = Arc::new(Session {
             repo,
             mcp_servers,
+            turn_gate: tokio::sync::Mutex::new(()),
             state: Mutex::new(SessionState::default()),
         });
         let mut sessions = self.sessions.lock().expect("session map poisoned");
@@ -151,6 +159,25 @@ where
         prompt: &str,
     ) -> Result<StopReason, SessionError> {
         let session = self.session(session_id)?;
+        // Wait behind an in-flight foreign-run mirror, so its frames and
+        // this turn's never interleave — but never behind another turn: ACP
+        // makes a concurrent prompt the client's error, not a queue. The
+        // holder is told apart by active_run, which only turns set.
+        let _turn = match session.turn_gate.try_lock() {
+            Ok(guard) => guard,
+            Err(_) => {
+                if session
+                    .state
+                    .lock()
+                    .expect("session state poisoned")
+                    .active_run
+                    .is_some()
+                {
+                    return Err(SessionError::TurnAlreadyActive(session_id.clone()));
+                }
+                session.turn_gate.lock().await
+            }
+        };
 
         // Claim the turn before any network call so a racing second prompt
         // fails fast instead of creating a second agent.
@@ -175,7 +202,7 @@ where
                 // cursor.com run is invisible to the backfill and the
                 // watermark then walks straight past it.
                 if let Err(error) = self
-                    .backfill_foreign_runs(session_id, &session, &agent, &run)
+                    .backfill_foreign_runs(session_id, &session, &agent, Some(&run))
                     .await
                 {
                     tracing::warn!(%agent, %error, "could not backfill cursor.com runs");
@@ -265,6 +292,7 @@ where
         let session = Arc::new(Session {
             repo,
             mcp_servers,
+            turn_gate: tokio::sync::Mutex::new(()),
             state: Mutex::new(SessionState {
                 agent,
                 ..SessionState::default()
@@ -431,22 +459,28 @@ where
         )))
     }
 
-    /// Deliver the results of runs something else drove since this session's
-    /// last own turn — the cursor.com half of the conversation.
+    /// Mirror runs something else drove since this session's last own turn —
+    /// the cursor.com half of the conversation.
     ///
-    /// Only the agent's final text per run is recoverable (the run record
-    /// carries no prompt and no tool detail), and only back to the session's
-    /// own watermark: with no watermark nothing is backfilled, because a
-    /// restored session cannot tell missed runs from already-rendered
-    /// history. Best-effort by design — the caller logs and proceeds, since
-    /// a failed backfill must not block the prompt that triggered it.
+    /// Each unseen run is replayed through its own stream, so the mirror has
+    /// the same fidelity as a live turn: the user's prompt (streams carry
+    /// `user-message-appended`; run records do not), thoughts, tool calls,
+    /// and the answer. A run still going is simply followed to its end. Only
+    /// when the stream is gone (retention expired, connection refused past
+    /// retries) does a run degrade to its recorded final text. Bounded by
+    /// the session's own watermark: with none, nothing is mirrored, because
+    /// a restored session cannot tell missed runs from already-rendered
+    /// history. Best-effort by design — callers log and proceed, since a
+    /// failed mirror must not block the prompt or the next tick.
+    ///
+    /// Callers hold the session's turn gate.
     async fn backfill_foreign_runs(
         &self,
         session_id: &AcpSessionId,
         session: &Session,
         agent: &CursorAgentId,
-        current_run: &CursorRunId,
-    ) -> Result<(), SessionError> {
+        current_run: Option<&CursorRunId>,
+    ) -> Result<bool, SessionError> {
         let Some(last_run) = session
             .state
             .lock()
@@ -454,7 +488,7 @@ where
             .last_run
             .clone()
         else {
-            return Ok(());
+            return Ok(false);
         };
 
         let listings = self
@@ -470,44 +504,125 @@ where
             .take_while(|listing| listing.id != last_run)
             // The run this prompt just created is newer than everything
             // foreign; its own turn delivers it.
-            .filter(|listing| listing.id != *current_run)
-            .filter(|listing| !matches!(listing.status, RunStatus::Creating | RunStatus::Running))
+            .filter(|listing| current_run != Some(&listing.id))
             .collect();
+        let mirrored = !unseen.is_empty();
 
         // Oldest first, the order the conversation actually happened.
         for listing in unseen.into_iter().rev() {
-            let outcome = self
-                .cursor
-                .run_result(agent, &listing.id)
-                .await
-                .map_err(SessionError::Cursor)?;
-            let Some(text) = outcome.text else { continue };
-            tracing::info!(%agent, run = %listing.id, "backfilling a cursor.com run");
-            let events = [
-                CursorEvent::Assistant {
-                    text: format!("*(answered on cursor.com)*\n\n{text}"),
-                },
-                CursorEvent::Result {
-                    run_id: listing.id.clone(),
-                    status: outcome.status,
-                    text: None,
-                    duration_ms: None,
-                },
-            ];
-            for event in events {
-                let updates = {
-                    let mut state = session.state.lock().expect("session state poisoned");
-                    state.translator.push(event)
-                };
-                for update in updates {
-                    self.notifier.notify(session_id, update).await?;
-                }
-            }
+            tracing::info!(%agent, run = %listing.id, "mirroring a cursor.com run");
+            self.mirror_foreign_run(session_id, session, agent, &listing.id)
+                .await?;
             session
                 .state
                 .lock()
                 .expect("session state poisoned")
                 .last_run = Some(listing.id);
+        }
+        Ok(mirrored)
+    }
+
+    /// Replay one cursor.com run into the session, falling back to its
+    /// recorded final text when the stream cannot be had.
+    async fn mirror_foreign_run(
+        &self,
+        session_id: &AcpSessionId,
+        session: &Session,
+        agent: &CursorAgentId,
+        run: &CursorRunId,
+    ) -> Result<(), SessionError> {
+        let replayed = match self.cursor.stream(agent, run).await {
+            Ok(stream) => {
+                pin_mut!(stream);
+                let mut saw_result = false;
+                loop {
+                    let event = match stream.next().await {
+                        Some(Ok(event)) => event,
+                        Some(Err(error)) => {
+                            tracing::warn!(%agent, %run, %error, "foreign run stream broke; falling back to its record");
+                            break false;
+                        }
+                        None => break saw_result,
+                    };
+                    match event {
+                        // The prompt typed on cursor.com. The translator
+                        // drops these (a live turn's prompt is already on
+                        // screen), but in a mirror it is the missing half of
+                        // the conversation — delivered quoted, since the log
+                        // renders everything here as the agent's.
+                        CursorEvent::Interaction(InteractionUpdate::UserMessage { text }) => {
+                            let quoted = text.replace('\n', "\n> ");
+                            self.notifier
+                                .notify(
+                                    session_id,
+                                    SessionUpdate::AgentMessageChunk(ContentChunk::new(
+                                        ContentBlock::Text(TextContent::new(format!(
+                                            "*(asked on cursor.com)*\n\n> {quoted}\n\n"
+                                        ))),
+                                    )),
+                                )
+                                .await?;
+                        }
+                        CursorEvent::Error { code, message } => {
+                            tracing::warn!(%agent, %run, ?code, %message, "foreign run stream errored; falling back to its record");
+                            break false;
+                        }
+                        event => {
+                            if matches!(event, CursorEvent::Result { .. }) {
+                                saw_result = true;
+                            }
+                            let done = matches!(event, CursorEvent::Done);
+                            let updates = {
+                                let mut state =
+                                    session.state.lock().expect("session state poisoned");
+                                state.translator.push(event)
+                            };
+                            for update in updates {
+                                self.notifier.notify(session_id, update).await?;
+                            }
+                            if done {
+                                break saw_result;
+                            }
+                        }
+                    }
+                }
+            }
+            Err(error) => {
+                tracing::warn!(%agent, %run, %error, "foreign run stream unavailable; falling back to its record");
+                false
+            }
+        };
+        if replayed {
+            return Ok(());
+        }
+
+        // The stream is gone (retention expired, or refused past the connect
+        // retries). The run record still has the final answer.
+        let outcome = self
+            .cursor
+            .run_result(agent, run)
+            .await
+            .map_err(SessionError::Cursor)?;
+        let mut events = Vec::new();
+        if let Some(text) = outcome.text.clone() {
+            events.push(CursorEvent::Assistant {
+                text: format!("*(answered on cursor.com)*\n\n{text}"),
+            });
+        }
+        events.push(CursorEvent::Result {
+            run_id: run.clone(),
+            status: outcome.status,
+            text: None,
+            duration_ms: None,
+        });
+        for event in events {
+            let updates = {
+                let mut state = session.state.lock().expect("session state poisoned");
+                state.translator.push(event)
+            };
+            for update in updates {
+                self.notifier.notify(session_id, update).await?;
+            }
         }
         Ok(())
     }
@@ -593,6 +708,44 @@ where
             "cursor run {run} still not terminal after polling for {} seconds",
             POLL_ATTEMPTS as u64 * POLL_INTERVAL.as_secs()
         )))
+    }
+
+    /// Mirror cursor.com activity into every live session, once.
+    ///
+    /// The host calls this on a timer while a session's transport is up, so
+    /// the cursor.com half of a conversation appears here within a tick of
+    /// happening rather than waiting for the next Macro prompt. A session
+    /// mid-turn is skipped (the turn gate is held), as is one that never
+    /// drove a run (no watermark to mirror from). Failures are logged per
+    /// session and never stop the sweep.
+    pub async fn sync_foreign_runs(&self) {
+        let sessions: Vec<(AcpSessionId, Arc<Session>)> = self
+            .sessions
+            .lock()
+            .expect("session map poisoned")
+            .iter()
+            .map(|(id, session)| (id.clone(), Arc::clone(session)))
+            .collect();
+        for (session_id, session) in sessions {
+            let Ok(_turn) = session.turn_gate.try_lock() else {
+                continue;
+            };
+            let Some(agent) = session
+                .state
+                .lock()
+                .expect("session state poisoned")
+                .agent
+                .clone()
+            else {
+                continue;
+            };
+            if let Err(error) = self
+                .backfill_foreign_runs(&session_id, &session, &agent, None)
+                .await
+            {
+                tracing::warn!(%session_id, %agent, %error, "could not mirror cursor.com runs");
+            }
+        }
     }
 
     fn session(&self, id: &AcpSessionId) -> Result<Arc<Session>, SessionError> {

@@ -16,6 +16,7 @@ use agent_runtime_protocol::domain::schema::v0::{
 };
 use tokio::io::{AsyncBufReadExt as _, AsyncRead, AsyncWrite, AsyncWriteExt as _, BufReader};
 use tokio::sync::{mpsc, oneshot};
+use tokio_util::sync::CancellationToken;
 
 #[cfg(test)]
 mod test;
@@ -51,6 +52,27 @@ impl PipeTransport {
     where
         Pipe: AsyncRead + AsyncWrite + Unpin + Send + 'static,
     {
+        Self::connect_observed(pipe, || {}, CancellationToken::new())
+    }
+
+    /// [`Self::connect`], with each relayed frame observed and a shutdown
+    /// handle.
+    ///
+    /// `on_frame` fires for every frame in either direction — the idle
+    /// reaper's activity signal. Cancelling `shutdown` ends the pump, which
+    /// closes the pipe and lets the served agent see EOF: the Cursor
+    /// counterpart of stopping an idle sandbox, except nothing here costs
+    /// anything to keep except its 1s cursor.com poll — which dies with it.
+    #[must_use]
+    pub fn connect_observed<Pipe, Observer>(
+        pipe: Pipe,
+        on_frame: Observer,
+        shutdown: CancellationToken,
+    ) -> Self
+    where
+        Pipe: AsyncRead + AsyncWrite + Unpin + Send + 'static,
+        Observer: Fn() + Send + 'static,
+    {
         let (outbound_tx, outbound_rx) = mpsc::unbounded_channel();
         let (inbound_tx, inbound_rx) = mpsc::unbounded_channel();
 
@@ -61,7 +83,7 @@ impl PipeTransport {
         };
         let _ = inbound_tx.send(ready);
 
-        tokio::spawn(pump(pipe, outbound_rx, inbound_tx));
+        tokio::spawn(pump(pipe, outbound_rx, inbound_tx, on_frame, shutdown));
 
         Self {
             outbound: outbound_tx,
@@ -104,19 +126,23 @@ impl TransportSender<ToRuntimeMessage> for PipeSender {
     }
 }
 
-/// Relay frames until either side closes.
-async fn pump<Pipe>(
+/// Relay frames until either side closes or `shutdown` is cancelled.
+async fn pump<Pipe, Observer>(
     pipe: Pipe,
     mut outbound: mpsc::UnboundedReceiver<Outbound>,
     inbound: mpsc::UnboundedSender<ToServerMessage>,
+    on_frame: Observer,
+    shutdown: CancellationToken,
 ) where
     Pipe: AsyncRead + AsyncWrite + Unpin + Send + 'static,
+    Observer: Fn() + Send + 'static,
 {
     let (reader, mut writer) = tokio::io::split(pipe);
     let mut lines = BufReader::new(reader).lines();
 
     loop {
         tokio::select! {
+            () = shutdown.cancelled() => break,
             outgoing = outbound.recv() => {
                 let Some(Outbound { frame, completed }) = outgoing else { break };
                 let mut json = match serde_json::to_string(&frame) {
@@ -138,6 +164,7 @@ async fn pump<Pipe>(
                     let _ = completed.send(Err(TransportError::Client(error.to_string())));
                     break;
                 }
+                on_frame();
                 let _ = completed.send(Ok(()));
             }
             incoming = lines.next_line() => {
@@ -155,6 +182,7 @@ async fn pump<Pipe>(
                 }
                 match serde_json::from_str::<RawJsonRpcMessage>(&line) {
                     Ok(frame) => {
+                        on_frame();
                         let message = ToServerMessage::Acp(AcpMessage(frame));
                         if inbound.send(message).is_err() {
                             break; // receiver dropped: the session is gone

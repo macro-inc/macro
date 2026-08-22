@@ -515,12 +515,21 @@ reported as bugs:
   up is liveness and per-tool-call detail, never the outcome. `Last-Event-ID`
   resumption (picking a broken stream back up mid-run without losing detail)
   remains a follow-up.
-- **Turns driven from cursor.com do not sync back.** The dashboard link opens
-  the same agent, and anything typed there continues the same conversation on
-  Cursor's side — but those runs never pass through the harness's pipe, so
-  they are invisible to the Macro session log. Macro shows the turns Macro
-  drove; the dashboard shows everything. One-way by construction until a
-  reconciliation job reads foreign runs back.
+- **Turns driven from cursor.com mirror into Macro within about a second.**
+  While a session's pipe is up, the manager polls the agent's runs once a
+  second (Cursor's v1 API has no webhooks yet) and replays anything it did
+  not drive itself through the run's own stream — the cursor.com prompt
+  (quoted, attributed), thoughts, tool calls, and answer, at the same
+  fidelity as a Macro-driven turn. Degradations, in order: a run whose
+  stream has left the retention window mirrors as its recorded final text
+  only; a restored session has no watermark and does not replay history it
+  cannot tell from missed runs; and a mirror that lands after newer Macro
+  messages appends late, because the log is append-only — with the 1s poll
+  that inversion effectively requires the session's pipe to have been down.
+- **Idle pipes retire themselves, Daytona-reaper style.** Five minutes
+  without a frame in either direction closes the pipe, reclaiming its tasks
+  and its poll; the session parks on a clean disconnect and the next prompt
+  resumes it. A parked session mirrors nothing until then.
 - **One run at a time per agent.** Cursor returns `409 agent_busy`. Already
   matched by the service's sequential-turn rule, so this surfaces as a clean
   error rather than a race.

@@ -1,6 +1,6 @@
 use super::*;
 use crate::domain::error::SessionError;
-use crate::domain::event::CursorEvent;
+use crate::domain::event::{CursorEvent, InteractionUpdate};
 use crate::domain::model::{
     McpHeader, McpServer, McpTransport, RepoUrl, RunListing, RunOutcome, RunStatus,
 };
@@ -532,10 +532,12 @@ async fn a_prompt_waits_out_a_busy_agent() {
 }
 
 /// Runs driven from cursor.com since the session's own last turn are
-/// delivered before the next prompt's output, oldest first, so the client's
-/// view keeps up with the conversation the prompt continues.
+/// mirrored before the next prompt's output — full fidelity, oldest first:
+/// the stream replay carries the cursor.com user's prompt (quoted) and the
+/// agent's answer, so the client's view keeps up with the conversation its
+/// prompt is about to continue.
 #[tokio::test]
-async fn foreign_runs_are_backfilled_before_the_next_prompt() {
+async fn foreign_runs_are_mirrored_before_the_next_prompt() {
     let (service, cursor, notifier) = service(None);
     let session = service.new_session(Path::new(""), Vec::new());
     let events = cursor.script_stream();
@@ -543,17 +545,13 @@ async fn foreign_runs_are_backfilled_before_the_next_prompt() {
     events.send(CursorEvent::Done).expect("stream open");
     service.prompt(&session, "first").await.expect("first turn");
 
-    // Two cursor.com runs happened since run-fake-1. Newest first, and the
-    // page also contains the run this prompt itself is about to create —
-    // which must not be backfilled, its own turn delivers it.
+    // One cursor.com run happened since run-fake-1. The page also contains
+    // the run this prompt itself is about to create — which must not be
+    // mirrored, its own turn delivers it.
     cursor.script_run_listings(vec![
         RunListing {
             id: CursorRunId::new("run-fake-2"),
             status: RunStatus::Running,
-        },
-        RunListing {
-            id: CursorRunId::new("run-foreign-2"),
-            status: RunStatus::Finished,
         },
         RunListing {
             id: CursorRunId::new("run-foreign-1"),
@@ -564,17 +562,30 @@ async fn foreign_runs_are_backfilled_before_the_next_prompt() {
             status: RunStatus::Finished,
         },
     ]);
-    cursor.script_run_result(RunOutcome {
-        status: RunStatus::Finished,
-        text: Some("first foreign answer".to_owned()),
-    });
-    cursor.script_run_result(RunOutcome {
-        status: RunStatus::Finished,
-        text: Some("second foreign answer".to_owned()),
-    });
-    let events = cursor.script_stream();
-    events.send(finished("run-fake-2")).expect("stream open");
-    events.send(CursorEvent::Done).expect("stream open");
+    // The streams `prompt("second")` consumes, in order: the mirror of the
+    // foreign run, then the turn's own.
+    let foreign = cursor.script_stream();
+    foreign
+        .send(CursorEvent::Interaction(InteractionUpdate::UserMessage {
+            text: "but like what is macro".to_owned(),
+        }))
+        .expect("stream open");
+    foreign
+        .send(CursorEvent::Assistant {
+            text: "a team workspace".to_owned(),
+        })
+        .expect("stream open");
+    foreign
+        .send(finished("run-foreign-1"))
+        .expect("stream open");
+    foreign.send(CursorEvent::Done).expect("stream open");
+    let own = cursor.script_stream();
+    own.send(CursorEvent::Assistant {
+        text: "own answer".to_owned(),
+    })
+    .expect("stream open");
+    own.send(finished("run-fake-2")).expect("stream open");
+    own.send(CursorEvent::Done).expect("stream open");
 
     service
         .prompt(&session, "second")
@@ -593,18 +604,103 @@ async fn foreign_runs_are_backfilled_before_the_next_prompt() {
             _ => None,
         })
         .collect();
-    // Oldest foreign run first; both marked as answered elsewhere.
-    assert!(texts[0].contains("first foreign answer"), "got {texts:?}");
-    assert!(texts[0].contains("cursor.com"), "got {texts:?}");
-    assert!(texts[1].contains("second foreign answer"), "got {texts:?}");
-    // The backfill asked for exactly the two unseen runs, oldest first.
-    let polled: Vec<_> = cursor
-        .calls()
+    // The mirrored prompt (quoted, attributed), its answer, then the turn's.
+    assert!(
+        texts[0].contains("asked on cursor.com") && texts[0].contains("> but like what is macro"),
+        "got {texts:?}"
+    );
+    assert_eq!(texts[1], "a team workspace", "got {texts:?}");
+    assert_eq!(texts[2], "own answer", "got {texts:?}");
+}
+
+/// The host's poll: cursor.com activity mirrors into a session within a
+/// tick, without any Macro prompt — and mirrors exactly once.
+#[tokio::test]
+async fn sync_mirrors_foreign_runs_once() {
+    let (service, cursor, notifier) = service(None);
+    let session = service.new_session(Path::new(""), Vec::new());
+    let events = cursor.script_stream();
+    events.send(finished("run-fake-1")).expect("stream open");
+    events.send(CursorEvent::Done).expect("stream open");
+    service.prompt(&session, "first").await.expect("first turn");
+    let before = notifier.updates().len();
+
+    cursor.script_run_listings(vec![
+        RunListing {
+            id: CursorRunId::new("run-foreign-1"),
+            status: RunStatus::Finished,
+        },
+        RunListing {
+            id: CursorRunId::new("run-fake-1"),
+            status: RunStatus::Finished,
+        },
+    ]);
+    let foreign = cursor.script_stream();
+    foreign
+        .send(CursorEvent::Assistant {
+            text: "from over there".to_owned(),
+        })
+        .expect("stream open");
+    foreign
+        .send(finished("run-foreign-1"))
+        .expect("stream open");
+    foreign.send(CursorEvent::Done).expect("stream open");
+
+    service.sync_foreign_runs().await;
+    let after_first = notifier.updates().len();
+    assert!(after_first > before, "the foreign run must be delivered");
+
+    // The watermark moved: the same listing mirrors nothing more.
+    service.sync_foreign_runs().await;
+    assert_eq!(notifier.updates().len(), after_first);
+}
+
+/// A foreign run whose stream is gone (retention expired) still delivers its
+/// recorded final text rather than vanishing.
+#[tokio::test(start_paused = true)]
+async fn an_expired_foreign_stream_falls_back_to_the_run_record() {
+    let (service, cursor, notifier) = service(None);
+    let session = service.new_session(Path::new(""), Vec::new());
+    let events = cursor.script_stream();
+    events.send(finished("run-fake-1")).expect("stream open");
+    events.send(CursorEvent::Done).expect("stream open");
+    service.prompt(&session, "first").await.expect("first turn");
+
+    cursor.script_run_listings(vec![
+        RunListing {
+            id: CursorRunId::new("run-foreign-1"),
+            status: RunStatus::Finished,
+        },
+        RunListing {
+            id: CursorRunId::new("run-fake-1"),
+            status: RunStatus::Finished,
+        },
+    ]);
+    // No scripted stream: the mirror's stream attempt fails, and the run
+    // record answers instead.
+    cursor.script_run_result(RunOutcome {
+        status: RunStatus::Finished,
+        text: Some("the old answer".to_owned()),
+    });
+
+    service.sync_foreign_runs().await;
+    let texts: Vec<String> = notifier
+        .updates()
         .iter()
-        .filter_map(|call| match call {
-            CursorCall::RunResult(_, run) => Some(run.to_string()),
+        .filter_map(|(_, update)| match update {
+            SessionUpdate::AgentMessageChunk(chunk) => match &chunk.content {
+                agent_client_protocol::schema::v1::ContentBlock::Text(text) => {
+                    Some(text.text.clone())
+                }
+                _ => None,
+            },
             _ => None,
         })
         .collect();
-    assert_eq!(polled, ["run-foreign-1", "run-foreign-2"]);
+    assert!(
+        texts
+            .iter()
+            .any(|text| text.contains("answered on cursor.com") && text.contains("the old answer")),
+        "got {texts:?}"
+    );
 }

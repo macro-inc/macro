@@ -412,6 +412,36 @@ async fn resume_answers_session_load_even_before_an_agent_was_minted() {
     );
 }
 
+/// A pipe nothing has moved through for the idle timeout is shut down —
+/// Daytona's reaper made local. The harness side observes a clean end of
+/// stream, which is what parks the session until its next prompt resumes it.
+#[tokio::test(start_paused = true)]
+async fn an_idle_pipe_is_shut_down() {
+    // No fake API: nothing is called before the first prompt, and a live
+    // TCP listener's pending io would hold tokio's paused clock back to
+    // real time — five real minutes for one idle timeout.
+    let manager = manager("http://127.0.0.1:1".to_owned(), StubSessions::default());
+
+    let transport = manager
+        .spawn(SpawnContainer {
+            session_id: AgentSessionId::new(),
+            bot_id: bot_id::CURSOR_BOT_ID,
+            repo_url: "https://github.com/macro-inc/macro".to_owned(),
+        })
+        .await
+        .expect("spawn");
+    let (_sender, mut receiver) = transport.split();
+
+    // The ready marker arrives; then nothing ever does, and after the idle
+    // timeout (paused clock, so instantly) the stream ends instead of
+    // holding its tasks and its cursor.com poll forever.
+    assert!(receiver.recv().await.is_some(), "acp ready arrives");
+    assert!(
+        receiver.recv().await.is_none(),
+        "an idle pipe must close, not hang"
+    );
+}
+
 /// Teardown archives the agent on cursor.com and forgets the mapping; a
 /// session that never minted an agent tears down without any API call.
 #[tokio::test]

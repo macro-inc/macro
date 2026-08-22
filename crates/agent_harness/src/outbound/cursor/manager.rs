@@ -42,6 +42,22 @@ pub const CURSOR_PROVIDER: &str = "cursor";
 /// JSON lines; this only bounds how far one side can run ahead of the other.
 const PIPE_CAPACITY: usize = 64 * 1024;
 
+/// How often a live session checks for cursor.com activity on its agent.
+///
+/// The agent's page on cursor.com drives the same conversation, and Cursor's
+/// v1 API has no webhooks yet — so while a session's transport is up, its
+/// service polls, and a turn driven over there mirrors into Macro within
+/// about a second instead of waiting for the next Macro prompt. One
+/// `list_runs` per second per live session; a session mid-turn skips its
+/// tick, and the poll dies with the pipe.
+const FOREIGN_SYNC_INTERVAL: std::time::Duration = std::time::Duration::from_secs(1);
+
+/// A pipe idle this long is shut down, Daytona's reaper made local: the
+/// session actor sees a clean disconnect and the next prompt resumes through
+/// [`ContainerManager::resume`]. What this reclaims is not a sandbox — there
+/// is none — but the pipe's tasks and its per-second cursor.com poll.
+const CURSOR_IDLE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5 * 60);
+
 /// Every session this deployment opens works on the one configured
 /// repository, resolved without looking at the workspace path — the path
 /// names a directory inside a sandbox that does not exist here.
@@ -103,8 +119,49 @@ where
             service.restore_session(acp_session, agent, Some(self.repo.clone()), Vec::new());
         }
         tokio::spawn(run_writer);
-        tokio::spawn(serve(service, agent_reader, writer));
-        PipeTransport::connect(ours)
+        let pipe_closed = tokio_util::sync::CancellationToken::new();
+        let shutdown = tokio_util::sync::CancellationToken::new();
+        let sync_service = Arc::clone(&service);
+        let on_pipe_close = pipe_closed.clone();
+        tokio::spawn(async move {
+            serve(service, agent_reader, writer).await;
+            on_pipe_close.cancel();
+        });
+        // One task is the session's background pulse: it mirrors cursor.com
+        // activity every tick and retires the pipe once nothing has moved
+        // through it for the idle timeout.
+        // tokio's clock, not std's: identical on a running service, and it
+        // honours `tokio::time::pause` so the idle path is testable without
+        // five real minutes.
+        let last_activity = Arc::new(std::sync::Mutex::new(tokio::time::Instant::now()));
+        let observed = Arc::clone(&last_activity);
+        let reaper_shutdown = shutdown.clone();
+        tokio::spawn(async move {
+            loop {
+                tokio::select! {
+                    () = pipe_closed.cancelled() => break,
+                    () = tokio::time::sleep(FOREIGN_SYNC_INTERVAL) => {
+                        let idle = last_activity
+                            .lock()
+                            .expect("activity clock poisoned")
+                            .elapsed();
+                        if idle >= CURSOR_IDLE_TIMEOUT {
+                            tracing::info!(%session_id, "idle cursor session; closing its pipe");
+                            reaper_shutdown.cancel();
+                            break;
+                        }
+                        sync_service.sync_foreign_runs().await;
+                    }
+                }
+            }
+        });
+        PipeTransport::connect_observed(
+            ours,
+            move || {
+                *observed.lock().expect("activity clock poisoned") = tokio::time::Instant::now();
+            },
+            shutdown,
+        )
     }
 }
 
