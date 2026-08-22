@@ -440,7 +440,7 @@ async fn a_restored_session_prompts_its_existing_agent() {
     let (service, cursor, _notifier) = service(None);
     service.restore_session(
         AcpSessionId::new("cursor-acp-7"),
-        CursorAgentId::new("bc-restored"),
+        Some(CursorAgentId::new("bc-restored")),
         None,
         Vec::new(),
     );
@@ -469,7 +469,7 @@ async fn new_sessions_never_collide_with_restored_ids() {
     let (service, _cursor, _notifier) = service(None);
     service.restore_session(
         AcpSessionId::new("cursor-acp-1"),
-        CursorAgentId::new("bc-restored"),
+        Some(CursorAgentId::new("bc-restored")),
         None,
         Vec::new(),
     );
@@ -478,4 +478,28 @@ async fn new_sessions_never_collide_with_restored_ids() {
     assert_ne!(fresh, AcpSessionId::new("cursor-acp-1"));
     assert!(service.has_session(&AcpSessionId::new("cursor-acp-1")));
     assert!(service.has_session(&fresh));
+}
+
+/// A session that died after `session/new` but before its first prompt is
+/// restored with no agent — and the next prompt mints one, exactly like a
+/// fresh session's first prompt. Seen live: a restart in that window left a
+/// session every follow-up crashed against.
+#[tokio::test]
+async fn a_session_restored_without_an_agent_mints_one_on_the_next_prompt() {
+    let (service, cursor, _notifier) = service(None);
+    service.restore_session(AcpSessionId::new("cursor-acp-9"), None, None, Vec::new());
+    assert!(service.has_session(&AcpSessionId::new("cursor-acp-9")));
+
+    let events = cursor.script_stream();
+    events.send(finished("run-fake-1")).expect("stream open");
+    events.send(CursorEvent::Done).expect("stream open");
+
+    service
+        .prompt(&AcpSessionId::new("cursor-acp-9"), "hello again")
+        .await
+        .expect("prompt runs");
+    assert!(matches!(
+        cursor.calls().first(),
+        Some(CursorCall::CreateAgent(..))
+    ));
 }

@@ -78,12 +78,13 @@ where
 
     /// Wire up one session's in-process agent and return our end of its pipe.
     ///
-    /// `restore` carries the identity a resumed session gets back; a fresh
-    /// spawn passes `None` and the first prompt mints a new Cursor agent.
+    /// `restore` carries the identity a resumed session gets back: the ACP
+    /// session id the harness will name in `session/load`, and the Cursor
+    /// agent when one was ever minted. A fresh spawn passes `None`.
     fn serve_session(
         &self,
         session_id: AgentSessionId,
-        restore: Option<(AcpSessionId, CursorAgentId)>,
+        restore: Option<(AcpSessionId, Option<CursorAgentId>)>,
     ) -> PipeTransport {
         let (ours, theirs) = tokio::io::duplex(PIPE_CAPACITY);
         let (agent_reader, agent_writer) = tokio::io::split(theirs);
@@ -118,21 +119,26 @@ where
     }
 
     async fn resume(&self, session: AgentSessionId) -> Result<PipeTransport> {
-        // Both halves of the identity live in Postgres: the ACP session id
-        // the harness will name in `session/load`, and the Cursor agent the
-        // conversation accumulated on. Missing either means the session never
-        // got far enough to matter — serve it fresh and let the next prompt
-        // mint a new agent, which is also what `spawn` would do.
-        let external = ExternalSessionRepo::get(&self.sessions, session).await?;
+        // The identity lives in Postgres in two halves that appear at
+        // different moments: the ACP session id lands when `session/new`
+        // answers, the Cursor agent only when the first prompt mints it. A
+        // session can die between the two, so each half is restored on its
+        // own — the harness re-enters with `session/load` whenever it has an
+        // acp id, and a load must find its session even when there is no
+        // agent yet (the next prompt mints one). No acp id at all means the
+        // session never opened; serve it fresh, exactly like `spawn`.
         let acp_session_id = AgentSessionRepo::get(&self.sessions, session)
             .await?
             .acp_session_id;
-        let restore = external.zip(acp_session_id).map(|(external, acp)| {
-            (
-                AcpSessionId::new(acp.0.as_ref()),
-                CursorAgentId::new(external.external_id),
-            )
-        });
+        let restore = match acp_session_id {
+            Some(acp) => {
+                let agent = ExternalSessionRepo::get(&self.sessions, session)
+                    .await?
+                    .map(|external| CursorAgentId::new(external.external_id));
+                Some((AcpSessionId::new(acp.0.as_ref()), agent))
+            }
+            None => None,
+        };
         Ok(self.serve_session(session, restore))
     }
 

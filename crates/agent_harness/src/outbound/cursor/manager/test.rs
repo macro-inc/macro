@@ -358,6 +358,60 @@ async fn resume_restores_the_persisted_identity() {
     assert!(loaded.get("error").is_none(), "got {loaded}");
 }
 
+/// A session that died between `session/new` and its first prompt has an
+/// acp id but no external row. Resume must still answer its `session/load` —
+/// refusing left a session every follow-up crashed against (seen live).
+#[tokio::test]
+async fn resume_answers_session_load_even_before_an_agent_was_minted() {
+    let (base_url, _) = fake_cursor_api().await;
+    let sessions = StubSessions::default();
+    let session_id = AgentSessionId::new();
+    *sessions.acp_session_id.lock().expect("stub poisoned") = Some("cursor-acp-1".to_owned());
+    let manager = manager(base_url, sessions.clone());
+
+    let transport = manager.resume(session_id).await.expect("resume");
+    let (sender, mut receiver) = transport.split();
+
+    send_acp(
+        &sender,
+        serde_json::json!({"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":1}}),
+    )
+    .await;
+    next_acp(&mut receiver).await;
+    send_acp(
+        &sender,
+        serde_json::json!({"jsonrpc":"2.0","id":2,"method":"session/load","params":{
+            "sessionId":"cursor-acp-1","cwd":"/workspace","mcpServers":[]}}),
+    )
+    .await;
+    let loaded = next_acp(&mut receiver).await;
+    assert!(loaded.get("error").is_none(), "got {loaded}");
+
+    // The next prompt mints the agent and records it, like any first prompt.
+    send_acp(
+        &sender,
+        serde_json::json!({"jsonrpc":"2.0","id":3,"method":"session/prompt","params":{
+            "sessionId": "cursor-acp-1",
+            "prompt": [{"type":"text","text":"still there?"}],
+        }}),
+    )
+    .await;
+    loop {
+        let frame = next_acp(&mut receiver).await;
+        if frame["id"] == 3 {
+            assert_eq!(frame["result"]["stopReason"], "end_turn", "got {frame}");
+            break;
+        }
+    }
+    assert!(
+        ExternalSessionRepo::get(&sessions, session_id)
+            .await
+            .expect("get")
+            .is_some(),
+        "the newly minted agent must be recorded"
+    );
+}
+
 /// Teardown archives the agent on cursor.com and forgets the mapping; a
 /// session that never minted an agent tears down without any API call.
 #[tokio::test]

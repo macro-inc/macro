@@ -218,19 +218,22 @@ where
             .is_some()
     }
 
-    /// Seed a session a previous process created, pointing at its existing
-    /// Cursor agent, so a `session/load` naming it finds it live.
+    /// Seed a session a previous process created, so a `session/load` naming
+    /// it finds it live.
     ///
     /// The service is deliberately storage-free; whatever survives a restart
-    /// is the host's business, and this is how the host hands it back. The
-    /// next prompt opens a follow-up run on `agent` instead of minting a new
-    /// one. Replaces any session already under `id`: the restored fact wins,
-    /// and the id space cannot collide with fresh ids because
-    /// [`Self::new_session`] skips occupied ids.
+    /// is the host's business, and this is how the host hands it back. With
+    /// `Some(agent)` the next prompt opens a follow-up run on that agent;
+    /// with `None` it mints a fresh one — the state of a session that died
+    /// after `session/new` but before its first prompt, which must still
+    /// load rather than refuse (seen live: a restart in that window left a
+    /// session no follow-up could ever reach). Replaces any session already
+    /// under `id`: the restored fact wins, and the id space cannot collide
+    /// with fresh ids because [`Self::new_session`] skips occupied ids.
     pub fn restore_session(
         &self,
         id: AcpSessionId,
-        agent: CursorAgentId,
+        agent: Option<CursorAgentId>,
         repo: Option<RepoUrl>,
         mcp_servers: Vec<McpServer>,
     ) {
@@ -238,7 +241,7 @@ where
             repo,
             mcp_servers,
             state: Mutex::new(SessionState {
-                agent: Some(agent),
+                agent,
                 ..SessionState::default()
             }),
         });

@@ -601,7 +601,7 @@ async fn session_load_answers_for_restored_sessions_only() {
     ));
     service.restore_session(
         AcpSessionId::new("cursor-acp-3"),
-        crate::domain::model::CursorAgentId::new("bc-restored"),
+        Some(crate::domain::model::CursorAgentId::new("bc-restored")),
         None,
         Vec::new(),
     );
