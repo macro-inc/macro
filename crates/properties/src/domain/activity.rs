@@ -52,18 +52,13 @@ fn event_attribution(
 
 fn attributed(
     event_id: uuid::Uuid,
-    actor: &Option<Actor<'static>>,
-    on_behalf_of: &Option<MacroUserIdStr<'static>>,
-    actor_user_id: &Option<MacroUserIdStr<'static>>,
+    attribution: Option<Attribution>,
     property_entity: &PropertyEntityType,
     entity_id: &str,
     action: CommonAction,
     occurred_at: chrono::DateTime<chrono::Utc>,
 ) -> Ingest {
-    let (Some(attribution), Some(entity_type)) = (
-        event_attribution(actor, on_behalf_of, actor_user_id),
-        entity_type(property_entity),
-    ) else {
+    let (Some(attribution), Some(entity_type)) = (attribution, entity_type(property_entity)) else {
         return Ingest::Ignore;
     };
     Ingest::Insert(vec![Activity::attributed(
@@ -86,9 +81,7 @@ impl ActivitySource for PropertyTopicEvent {
         match self {
             PropertyTopicEvent::EntityPropertyUpdated(m) => attributed(
                 event_id,
-                &m.actor,
-                &m.on_behalf_of,
-                &m.actor_user_id,
+                event_attribution(&m.actor, &m.on_behalf_of, &m.actor_user_id),
                 &m.entity_type,
                 &m.entity_id,
                 CommonAction::PropertyChanged(PropertyChange {
@@ -114,9 +107,7 @@ impl ActivitySource for PropertyTopicEvent {
             ),
             PropertyTopicEvent::EntityPropertyDeleted(m) => attributed(
                 event_id,
-                &m.actor,
-                &m.on_behalf_of,
-                &m.actor_user_id,
+                event_attribution(&m.actor, &m.on_behalf_of, &m.actor_user_id),
                 &m.entity_type,
                 &m.entity_id,
                 CommonAction::PropertyChanged(PropertyChange {
@@ -130,9 +121,7 @@ impl ActivitySource for PropertyTopicEvent {
             // mutation of the entity.
             PropertyTopicEvent::EntityPropertiesCleared(m) => attributed(
                 event_id,
-                &m.actor,
-                &m.on_behalf_of,
-                &m.actor_user_id,
+                event_attribution(&m.actor, &m.on_behalf_of, &m.actor_user_id),
                 &m.entity_type,
                 &m.entity_id,
                 CommonAction::Edited,
