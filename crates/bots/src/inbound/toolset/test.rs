@@ -2,6 +2,7 @@ use super::{
     BotOwnerSummary, BotSummary, BotToolContext, bot_tool_error,
     create_bot::CreateBot,
     get_bot_webhooks::GetBotWebhooks,
+    issue_bot_credential::IssueBotCredential,
     manage_bot_channel_access::{BotChannelAccessAction, ManageBotChannelAccess},
 };
 use crate::domain::models::{
@@ -61,7 +62,7 @@ fn sample_token(bot_id: BotId, label: Option<String>) -> BotToken {
     BotToken {
         id: Uuid::new_v4(),
         bot_id,
-        token: "secret-token".to_string(),
+        token_prefix: "mbot_secret".to_string(),
         label,
         last_used_at: None,
         expires_at: None,
@@ -76,6 +77,7 @@ struct ToolTestBotService {
     remove_calls: Arc<AtomicUsize>,
     created: Arc<Mutex<Option<CreateBotRequest>>>,
     scoped: Arc<Mutex<Option<(Uuid, CreateChannelScopedBotRequest)>>>,
+    added: Arc<Mutex<Option<BotId>>>,
 }
 
 impl BotService for ToolTestBotService {
@@ -111,9 +113,11 @@ impl BotService for ToolTestBotService {
     async fn get_bot(
         &self,
         _caller: MacroUserIdStr<'static>,
-        _bot_id: BotId,
+        bot_id: BotId,
     ) -> Result<Bot, BotError> {
-        unimplemented!()
+        let mut bot = sample_bot("build-bot");
+        bot.id = bot_id;
+        Ok(bot)
     }
 
     async fn get_self(&self, _bot_id: BotId) -> Result<Bot, BotError> {
@@ -140,9 +144,10 @@ impl BotService for ToolTestBotService {
     async fn add_bot_to_channel(
         &self,
         _access: EntityAccessReceipt<MemberParticipantRole>,
-        _bot_id: BotId,
+        bot_id: BotId,
     ) -> Result<(), BotError> {
-        unimplemented!()
+        *self.added.lock().expect("add lock") = Some(bot_id);
+        Ok(())
     }
 
     async fn remove_bot_from_channel(
@@ -454,10 +459,12 @@ async fn create_bot_rejects_credential_fields_without_channel() {
 }
 
 #[tokio::test]
-async fn create_bot_for_channel_returns_credential_and_webhook() {
+async fn create_bot_for_channel_returns_webhook_and_credential_proposal() {
     let channel_id = Uuid::new_v4();
     let service = ToolTestBotService::default();
+    let created = service.created.clone();
     let scoped = service.scoped.clone();
+    let added = service.added.clone();
     let access = AllowingEntityAccessService::default();
     let access_calls = access.calls.clone();
     let context = BotToolContext::new(service, access, "https://storage.example.com/".to_string());
@@ -479,16 +486,40 @@ async fn create_bot_for_channel_returns_credential_and_webhook() {
 
     let setup = response.channel_setup.expect("channel setup");
     assert_eq!(setup.channel_id, channel_id);
-    assert_eq!(setup.bearer_token, "secret-token");
+    assert_eq!(setup.credential_label.as_deref(), Some("github-webhook"));
     assert_eq!(
         setup.webhook.webhook_url,
         format!("https://storage.example.com/channels/{channel_id}/webhook")
     );
     assert_eq!(setup.credential_header, "x-macro-bot-token");
     assert_eq!(access_calls.load(Ordering::SeqCst), 1);
-    let (scoped_channel, scoped_req) = scoped.lock().expect("scoped lock").clone().expect("scoped");
-    assert_eq!(scoped_channel, channel_id);
-    assert_eq!(scoped_req.token_label.as_deref(), Some("github-webhook"));
+    assert!(created.lock().expect("create lock").is_some());
+    assert!(added.lock().expect("add lock").is_some());
+    assert!(scoped.lock().expect("scoped lock").is_none());
+}
+
+#[tokio::test]
+async fn issue_bot_credential_returns_proposal_without_minting() {
+    let bot_id = Uuid::new_v4();
+    let service = ToolTestBotService::default();
+    let context = BotToolContext::new(
+        service,
+        NoOpEntityAccessService,
+        "https://storage.example.com".to_string(),
+    );
+
+    let response = IssueBotCredential {
+        bot_id,
+        label: Some("github-webhook".to_string()),
+        expires_at: None,
+    }
+    .call(ServiceContext(context), RequestContext::new(user_id()))
+    .await
+    .expect("manageable bot can receive a credential proposal");
+
+    assert_eq!(response.bot_id, bot_id);
+    assert_eq!(response.label.as_deref(), Some("github-webhook"));
+    assert!(response.summary.contains("ready to mint"));
 }
 
 #[tokio::test]

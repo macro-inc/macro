@@ -736,8 +736,6 @@ export const CreateBotResponse = z.object({
     .union([
       z.object({
         channelId: z.string().uuid(),
-        tokenId: z.string().uuid(),
-        bearerToken: z.string(),
         webhook: z.object({
           channelId: z.string().uuid(),
           channelName: z.union([z.string(), z.null()]).optional(),
@@ -746,6 +744,10 @@ export const CreateBotResponse = z.object({
         credentialHeader: z.string(),
         credentialScopeHeader: z.string(),
         credentialScope: z.string(),
+        credentialLabel: z.union([z.string(), z.null()]).optional(),
+        credentialExpiresAt: z
+          .union([z.string().datetime({ offset: true }), z.null()])
+          .optional(),
       }),
       z.null(),
     ])
@@ -1516,8 +1518,6 @@ export const IssueBotCredential = z.object({
 
 export const IssueBotCredentialResponse = z.object({
   botId: z.string().uuid(),
-  tokenId: z.string().uuid(),
-  bearerToken: z.string(),
   label: z.union([z.string(), z.null()]).optional(),
   expiresAt: z
     .union([z.string().datetime({ offset: true }), z.null()])

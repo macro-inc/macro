@@ -1540,7 +1540,7 @@ export interface CrmCompanySearchDomain {
   createdAt: string;
 }
 /**
- * Create a bot with a name, stable handle, and optional profile. Omit teamId for a bot owned by the current user; provide teamId to create a team-owned bot, which requires team administrator or owner permission. Pass channelId when the bot should post to a channel immediately: the current user must be a member of that channel. The response then includes a one-time bearerToken and that channel's webhook URL. Omit channelId to create the bot only, then use ManageBotChannelAccess and IssueBotCredential for later setup.
+ * Create a bot with a name, stable handle, and optional profile. Omit teamId for a bot owned by the current user; provide teamId to create a team-owned bot, which requires team administrator or owner permission. Pass channelId when the bot should post to a channel immediately: the current user must be a member of that channel. The response then includes that channel's webhook URL and a credential proposal. The user mints the bearer token from the chat card or bot settings; the secret is never returned in this tool result. Omit channelId to create the bot only, then use ManageBotChannelAccess and IssueBotCredential for later setup.
  */
 export interface CreateBot {
   /**
@@ -1564,15 +1564,15 @@ export interface CreateBot {
    */
   avatarUrl?: string | null;
   /**
-   * Channel id to grant the new bot access to. Requires current-user channel membership. When set, the tool also mints a credential and returns the channel webhook URL.
+   * Channel id to grant the new bot access to. Requires current-user channel membership. When set, the tool also returns the channel webhook URL and a credential proposal the user can mint from the chat card.
    */
   channelId?: string | null;
   /**
-   * Optional label for the credential minted when channelId is set, such as `github-webhook`. Requires channelId.
+   * Optional label for the credential the user will mint when channelId is set, such as `github-webhook`. Requires channelId.
    */
   credentialLabel?: string | null;
   /**
-   * Optional RFC 3339 expiration for the credential minted when channelId is set. Requires channelId.
+   * Optional RFC 3339 expiration for the credential the user will mint when channelId is set. Requires channelId.
    */
   credentialExpiresAt?: string | null;
   /**
@@ -1586,7 +1586,7 @@ export interface CreateBot {
 export interface CreateBotResponse {
   bot: BotSummary;
   /**
-   * Credential and webhook returned when [`CreateBot::channel_id`] was set.
+   * Channel webhook and credential proposal returned when [`CreateBot::channel_id`] was set.
    */
   channelSetup?: CreatedBotChannelSetup | null;
   /**
@@ -1595,24 +1595,16 @@ export interface CreateBotResponse {
   summary: string;
 }
 /**
- * One-time credential and webhook created with a channel-scoped bot.
+ * Channel webhook and credential proposal created with a channel-scoped bot.
  */
 export interface CreatedBotChannelSetup {
   /**
    * Channel the bot can now post to.
    */
   channelId: string;
-  /**
-   * Token metadata id, used to revoke this credential through the bot API.
-   */
-  tokenId: string;
-  /**
-   * Raw bearer token. It is returned only when minted and must be stored securely.
-   */
-  bearerToken: string;
   webhook: BotWebhook;
   /**
-   * Header where callers send [`Self::bearer_token`].
+   * Header where callers send the minted bearer token.
    */
   credentialHeader: string;
   /**
@@ -1623,6 +1615,14 @@ export interface CreatedBotChannelSetup {
    * Required scope value for the bot credential.
    */
   credentialScope: string;
+  /**
+   * Optional label for the credential the user will mint from the chat card.
+   */
+  credentialLabel?: string | null;
+  /**
+   * Optional expiration for the credential the user will mint from the chat card.
+   */
+  credentialExpiresAt?: string | null;
 }
 /**
  * One channel-specific webhook URL for a bot.
@@ -2293,7 +2293,7 @@ export interface EditTagResponse {
   summary: string;
 }
 /**
- * Get the channel-specific webhook URLs for a bot the current user can manage. A bot has one URL per channel it can access. POST message content to a returned webhookUrl and authenticate with a token from IssueBotCredential or CreateBot in the returned credentialHeader; also send credentialScope in credentialScopeHeader. If no URLs are returned, add the bot to a channel with ManageBotChannelAccess or recreate it with CreateBot and channelId.
+ * Get the channel-specific webhook URLs for a bot the current user can manage. A bot has one URL per channel it can access. POST message content to a returned webhookUrl and authenticate with a token minted from the chat card or bot settings after IssueBotCredential or CreateBot; send it in the returned credentialHeader and send credentialScope in credentialScopeHeader. If no URLs are returned, add the bot to a channel with ManageBotChannelAccess or recreate it with CreateBot and channelId.
  */
 export interface GetBotWebhooks {
   /**
@@ -2310,7 +2310,7 @@ export interface GetBotWebhooksResponse {
    */
   botId: string;
   /**
-   * Header where callers send a bearer token from [`super::IssueBotCredential`].
+   * Header where callers send a bearer token minted from the chat card or bot settings.
    */
   credentialHeader: string;
   /**
@@ -2683,7 +2683,7 @@ export interface ImportNotionPageResponse {
   message: string;
 }
 /**
- * Mint a new secret bearer token for a bot the current user can manage. Use this when the user asks for bot credentials or a webhook token; existing raw secrets cannot be recovered safely. The response contains a newly issued bearerToken and tokenId. Treat bearerToken as sensitive and tell the user to store it securely because it is shown only once.
+ * Prepare a new bot credential for a bot the current user can manage. This does not mint the secret. Tell the user to click the chat card or open bot settings to create the token. The secret is shown only while that card is open. Use this when the user asks for bot credentials or a webhook token; existing raw secrets cannot be recovered safely.
  */
 export interface IssueBotCredential {
   /**
@@ -2700,21 +2700,13 @@ export interface IssueBotCredential {
   expiresAt?: string | null;
 }
 /**
- * Response containing a newly issued bot credential.
+ * Response describing a credential the user can mint from the chat card.
  */
 export interface IssueBotCredentialResponse {
   /**
    * Bot receiving the credential.
    */
   botId: string;
-  /**
-   * Token metadata id, used to revoke this credential through the bot API.
-   */
-  tokenId: string;
-  /**
-   * Raw bearer token. It is returned only when minted and must be stored securely.
-   */
-  bearerToken: string;
   /**
    * Optional credential label.
    */

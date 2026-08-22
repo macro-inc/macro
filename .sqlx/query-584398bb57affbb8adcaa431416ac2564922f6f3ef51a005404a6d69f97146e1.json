@@ -1,11 +1,11 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT id, bot_id, token, label, last_used_at, expires_at, revoked_at, created_at\n            FROM bot_tokens\n            WHERE bot_id = $1\n              AND revoked_at IS NULL\n            ORDER BY created_at DESC, id DESC\n            ",
+  "query": "\n            SELECT\n                bt.id AS token_id,\n                bt.bot_id,\n                bt.token_prefix,\n                bt.label,\n                bt.last_used_at,\n                bt.expires_at,\n                bt.revoked_at,\n                bt.created_at,\n                b.kind\n            FROM bot_tokens bt\n            JOIN bots b ON b.id = bt.bot_id\n            WHERE bt.token_hash = $1\n              AND b.deleted_at IS NULL\n            ",
   "describe": {
     "columns": [
       {
         "ordinal": 0,
-        "name": "id",
+        "name": "token_id",
         "type_info": "Uuid"
       },
       {
@@ -15,7 +15,7 @@
       },
       {
         "ordinal": 2,
-        "name": "token",
+        "name": "token_prefix",
         "type_info": "Text"
       },
       {
@@ -42,11 +42,16 @@
         "ordinal": 7,
         "name": "created_at",
         "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 8,
+        "name": "kind",
+        "type_info": "Text"
       }
     ],
     "parameters": {
       "Left": [
-        "Uuid"
+        "Bytea"
       ]
     },
     "nullable": [
@@ -57,8 +62,9 @@
       true,
       true,
       true,
+      false,
       false
     ]
   },
-  "hash": "e6fcaa97f031c1da3526c816ee88e1abb3cf466142b51d7ed3838b5ea8a5b46e"
+  "hash": "584398bb57affbb8adcaa431416ac2564922f6f3ef51a005404a6d69f97146e1"
 }

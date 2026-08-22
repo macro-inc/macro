@@ -2,6 +2,7 @@
 
 use crate::domain::models::{Bot, BotOwner};
 use ai_toolset::ToolCallError;
+use chrono::{DateTime, Utc};
 use schemars::JsonSchema;
 use serde::Serialize;
 use uuid::Uuid;
@@ -104,22 +105,22 @@ impl BotWebhook {
     }
 }
 
-/// One-time credential and webhook created with a channel-scoped bot.
+/// Channel webhook and credential proposal created with a channel-scoped bot.
 #[derive(Debug, Clone, Serialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct CreatedBotChannelSetup {
     /// Channel the bot can now post to.
     pub channel_id: Uuid,
-    /// Token metadata id, used to revoke this credential through the bot API.
-    pub token_id: Uuid,
-    /// Raw bearer token. It is returned only when minted and must be stored securely.
-    pub bearer_token: String,
     /// Channel webhook the credential authenticates against.
     pub webhook: BotWebhook,
-    /// Header where callers send [`Self::bearer_token`].
+    /// Header where callers send the minted bearer token.
     pub credential_header: String,
     /// Header where callers send [`Self::credential_scope`].
     pub credential_scope_header: String,
     /// Required scope value for the bot credential.
     pub credential_scope: String,
+    /// Optional label for the credential the user will mint from the chat card.
+    pub credential_label: Option<String>,
+    /// Optional expiration for the credential the user will mint from the chat card.
+    pub credential_expires_at: Option<DateTime<Utc>>,
 }

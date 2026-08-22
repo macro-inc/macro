@@ -1135,9 +1135,9 @@ export type BotToken = {
      */
     revoked_at?: string | null;
     /**
-     * Raw bearer token.
+     * Display prefix of the bearer token. The raw secret is never stored here.
      */
-    token: string;
+    token_prefix: string;
 };
 
 /**

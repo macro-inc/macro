@@ -81,3 +81,35 @@ fn equality_and_hash_ignore_uuid_case() {
         [lower.clone(), upper.clone()].into_iter().collect();
     assert_eq!(set.len(), 1);
 }
+
+#[test]
+fn hashes_utf8_bytes_with_sha256() {
+    use sha2::{Digest, Sha256};
+
+    let hash = hash_token("mbot_abc_secret");
+    let expected: [u8; 32] = Sha256::digest(b"mbot_abc_secret").into();
+    assert_eq!(hash, expected);
+    assert_ne!(hash, hash_token("mbot_abc_other"));
+}
+
+#[test]
+fn token_prefix_uses_mbot_segment_or_first_twelve_chars() {
+    assert_eq!(
+        token_prefix("mbot_aabbccddeeff_aabbccddeeffrest"),
+        "mbot_aabbccddeeff"
+    );
+    assert_eq!(
+        token_prefix("550e8400-e29b-41d4-a716-446655440000"),
+        "550e8400-e29"
+    );
+    assert_eq!(token_prefix("short"), "short");
+}
+
+#[test]
+fn hashed_bot_token_does_not_retain_the_raw_secret() {
+    let raw = "mbot_aabbccddeeff_aabbccddeeffsecret";
+    let hashed = HashedBotToken::from_raw(raw);
+    assert_eq!(hashed.hash, hash_token(raw));
+    assert_eq!(hashed.prefix, "mbot_aabbccddeeff");
+    assert_ne!(hashed.prefix, raw);
+}

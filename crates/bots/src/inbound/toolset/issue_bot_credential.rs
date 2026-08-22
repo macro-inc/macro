@@ -1,10 +1,7 @@
 //! IssueBotCredential tool.
 
 use super::{BotToolContext, bot_tool_error};
-use crate::domain::{
-    models::{BotId, CreateBotTokenRequest},
-    ports::BotService,
-};
+use crate::domain::{models::BotId, ports::BotService};
 use ai_toolset::{
     AsyncTool, RequestContext, ServiceContext, ToolAnnotated, ToolAnnotations, ToolResult,
 };
@@ -15,16 +12,12 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-/// Response containing a newly issued bot credential.
+/// Response describing a credential the user can mint from the chat card.
 #[derive(Debug, Serialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct IssueBotCredentialResponse {
     /// Bot receiving the credential.
     pub bot_id: Uuid,
-    /// Token metadata id, used to revoke this credential through the bot API.
-    pub token_id: Uuid,
-    /// Raw bearer token. It is returned only when minted and must be stored securely.
-    pub bearer_token: String,
     /// Optional credential label.
     pub label: Option<String>,
     /// Optional expiration time.
@@ -33,12 +26,12 @@ pub struct IssueBotCredentialResponse {
     pub summary: String,
 }
 
-/// Mint a new secret credential for a manageable bot.
+/// Propose a new secret credential for a manageable bot without minting it.
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 #[schemars(
     title = "IssueBotCredential",
-    description = "Mint a new secret bearer token for a bot the current user can manage. Use this when the user asks for bot credentials or a webhook token; existing raw secrets cannot be recovered safely. The response contains a newly issued bearerToken and tokenId. Treat bearerToken as sensitive and tell the user to store it securely because it is shown only once."
+    description = "Prepare a new bot credential for a bot the current user can manage. This does not mint the secret. Tell the user to click the chat card or open bot settings to create the token. The secret is shown only while that card is open. Use this when the user asks for bot credentials or a webhook token; existing raw secrets cannot be recovered safely."
 )]
 pub struct IssueBotCredential {
     /// Bot to issue a credential for.
@@ -80,27 +73,17 @@ where
         service_context: ServiceContext<BotToolContext<Svc, AccessSvc>>,
         request_context: RequestContext,
     ) -> ToolResult<Self::Output> {
-        let response = service_context
+        service_context
             .service
-            .create_token(
-                request_context.user_id,
-                BotId::new_from_uuid(self.bot_id),
-                CreateBotTokenRequest {
-                    label: self.label.clone(),
-                    expires_at: self.expires_at,
-                },
-            )
+            .get_bot(request_context.user_id, BotId::new_from_uuid(self.bot_id))
             .await
             .map_err(|error| bot_tool_error("issue bot credential", error))?;
 
         Ok(IssueBotCredentialResponse {
             bot_id: self.bot_id,
-            token_id: response.token.id,
-            bearer_token: response.bearer_token,
-            label: response.token.label,
-            expires_at: response.token.expires_at,
-            summary: "Issued a new bot credential. Store the bearer token securely; it will not be shown again."
-                .to_string(),
+            label: self.label.clone(),
+            expires_at: self.expires_at,
+            summary: "Credential is ready to mint. Click the card or open bot settings to create a token. The secret is shown only while that card is open.".to_string(),
         })
     }
 }

@@ -2637,6 +2637,7 @@ dependencies = [
  "cowlike",
  "nom 8.0.0",
  "serde",
+ "sha2 0.10.9",
  "sqlx",
  "thiserror 2.0.18",
  "utoipa",
@@ -8890,6 +8891,7 @@ name = "local_e2e_integration_tests"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "bot_id",
  "futures",
  "local_e2e_test_support",
  "reqwest 0.13.4",

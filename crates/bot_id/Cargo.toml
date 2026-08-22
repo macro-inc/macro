@@ -13,6 +13,7 @@ test-utils = []
 cowlike = { path = "../cowlike" }
 nom = { workspace = true }
 serde = { workspace = true }
+sha2 = { workspace = true }
 sqlx = { workspace = true, optional = true }
 thiserror = { workspace = true }
 utoipa = { workspace = true, optional = true }

@@ -695,7 +695,7 @@ fn scoped_bot_response(bot_id: BotId) -> CreateChannelScopedBotResponse {
         token: BotToken {
             id: Uuid::new_v4(),
             bot_id,
-            token: bot_token.clone(),
+            token_prefix: "mbot_test".to_string(),
             label: Some("webhook".to_string()),
             last_used_at: None,
             expires_at: None,
