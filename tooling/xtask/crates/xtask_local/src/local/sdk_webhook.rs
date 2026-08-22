@@ -1,5 +1,6 @@
 //! Instance-local relay for SDK webhook receivers running on the host.
 
+use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::time::Duration;
@@ -18,6 +19,12 @@ fn ssh_client_flags(private_key: &Path, ssh_port: u16, host_receiver_port: u16) 
     vec![
         "-N".into(),
         "-T".into(),
+        "-F".into(),
+        "/dev/null".into(),
+        "-o".into(),
+        "BatchMode=yes".into(),
+        "-o".into(),
+        "IdentitiesOnly=yes".into(),
         "-o".into(),
         "ExitOnForwardFailure=yes".into(),
         "-o".into(),
@@ -97,13 +104,21 @@ pub fn start(instance: &Instance) -> Result<Child> {
             host_receiver_port(instance),
         ))
         .stdout(Stdio::null())
-        .stderr(Stdio::null())
+        .stderr(Stdio::piped())
         .spawn()
         .context("starting the SDK webhook SSH reverse tunnel")?;
 
     std::thread::sleep(Duration::from_millis(300));
     if let Some(status) = child.try_wait()? {
-        bail!("SDK webhook SSH reverse tunnel exited with {status}");
+        let mut err = String::new();
+        if let Some(mut stderr) = child.stderr.take() {
+            let _ = stderr.read_to_string(&mut err);
+        }
+        let err = err.trim();
+        if err.is_empty() {
+            bail!("SDK webhook SSH reverse tunnel exited with {status}");
+        }
+        bail!("SDK webhook SSH reverse tunnel exited with {status}: {err}");
     }
     std::fs::write(pid_path(instance), child.id().to_string())?;
     Ok(child)
