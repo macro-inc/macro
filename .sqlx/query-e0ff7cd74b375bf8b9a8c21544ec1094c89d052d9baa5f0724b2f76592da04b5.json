@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT channel_id\n            FROM comms_dm_pairs\n            WHERE user_lo = $1 AND user_hi = $2\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "channel_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "e0ff7cd74b375bf8b9a8c21544ec1094c89d052d9baa5f0724b2f76592da04b5"
+}

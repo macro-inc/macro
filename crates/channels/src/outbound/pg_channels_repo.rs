@@ -6,6 +6,7 @@ use crate::domain::ports::ChannelAttachmentRepo;
 #[cfg(feature = "list")]
 use crate::domain::ports::{ChannelListRepo, ChannelListUserRepo};
 use crate::domain::{
+    dm::{DmPair, EnsuredDm},
     models::{
         Activity, ActivityType, AttachmentChannelReference, AttachmentEntityReference,
         AttachmentGenericReference, BotId, BotSenderProfile, ChannelAttachment,
@@ -357,6 +358,13 @@ where
     .execute(executor)
     .await?;
     Ok(())
+}
+
+fn is_dm_pair_unique_violation(error: &sqlx::Error) -> bool {
+    let sqlx::Error::Database(error) = error else {
+        return false;
+    };
+    error.code().as_deref() == Some("23505") && error.constraint() == Some("comms_dm_pairs_pkey")
 }
 
 async fn insert_message_mentions<'e, E>(
@@ -3005,6 +3013,176 @@ impl ChannelRepo for PgChannelsRepo {
         .await
         .context("unable to restore channel memberships")?;
         Ok(())
+    }
+
+    async fn ensure_dm(
+        &self,
+        pair: DmPair,
+        owner: MacroUserIdStr<'static>,
+    ) -> Result<EnsuredDm, Self::Err> {
+        let other = pair
+            .other(&owner)
+            .context("direct-message owner is not in the pair")?;
+        let mut transaction = self.pool.begin().await?;
+
+        if let Some(channel_id) = sqlx::query_scalar!(
+            r#"
+            SELECT channel_id
+            FROM comms_dm_pairs
+            WHERE user_lo = $1 AND user_hi = $2
+            "#,
+            pair.lo().as_ref(),
+            pair.hi().as_ref(),
+        )
+        .fetch_optional(&mut *transaction)
+        .await
+        .context("unable to look up direct-message pair")?
+        {
+            transaction.commit().await?;
+            return Ok(EnsuredDm::Existing { channel_id });
+        }
+
+        let legacy_channel_id = sqlx::query_scalar!(
+            r#"
+            SELECT c.id
+            FROM comms_channels c
+            WHERE c.channel_type = 'direct_message'::comms_channel_type
+              AND EXISTS (
+                  SELECT 1
+                  FROM comms_channel_participants p
+                  WHERE p.channel_id = c.id AND p.user_id = $1
+              )
+              AND EXISTS (
+                  SELECT 1
+                  FROM comms_channel_participants p
+                  WHERE p.channel_id = c.id AND p.user_id = $2
+              )
+              AND (
+                  SELECT COUNT(*)
+                  FROM comms_channel_participants p
+                  WHERE p.channel_id = c.id
+              ) = 2
+            ORDER BY c.created_at ASC, c.id ASC
+            LIMIT 1
+            "#,
+            pair.lo().as_ref(),
+            pair.hi().as_ref(),
+        )
+        .fetch_optional(&mut *transaction)
+        .await
+        .context("unable to look up legacy direct-message channel")?;
+
+        if let Some(legacy_channel_id) = legacy_channel_id {
+            let claimed_channel_id = sqlx::query_scalar!(
+                r#"
+                INSERT INTO comms_dm_pairs (user_lo, user_hi, channel_id)
+                VALUES ($1, $2, $3)
+                ON CONFLICT (user_lo, user_hi) DO NOTHING
+                RETURNING channel_id
+                "#,
+                pair.lo().as_ref(),
+                pair.hi().as_ref(),
+                legacy_channel_id,
+            )
+            .fetch_optional(&mut *transaction)
+            .await
+            .context("unable to claim legacy direct-message channel")?;
+            let channel_id = match claimed_channel_id {
+                Some(channel_id) => channel_id,
+                None => sqlx::query_scalar!(
+                    r#"
+                    SELECT channel_id
+                    FROM comms_dm_pairs
+                    WHERE user_lo = $1 AND user_hi = $2
+                    "#,
+                    pair.lo().as_ref(),
+                    pair.hi().as_ref(),
+                )
+                .fetch_one(&mut *transaction)
+                .await
+                .context("unable to look up claimed direct-message channel")?,
+            };
+            transaction.commit().await?;
+            return Ok(EnsuredDm::Existing { channel_id });
+        }
+
+        let channel_id = macro_uuid::generate_uuid_v7();
+        sqlx::query!(
+            r#"
+            INSERT INTO comms_channels (
+                id, name, owner_id, org_id, team_id, channel_type, auto_join_team
+            )
+            VALUES ($1, $2, $3, $4, $5, $6, $7)
+            "#,
+            channel_id,
+            None::<&str>,
+            owner.as_ref(),
+            None::<i64>,
+            None::<Uuid>,
+            ChannelType::DirectMessage as ChannelType,
+            false,
+        )
+        .execute(&mut *transaction)
+        .await
+        .context("unable to create direct-message channel")?;
+
+        sqlx::query!(
+            r#"
+            INSERT INTO comms_channel_participants (channel_id, role, user_id)
+            VALUES ($1, $2, $3), ($1, $4, $5)
+            "#,
+            channel_id,
+            ParticipantRole::Owner as ParticipantRole,
+            owner.as_ref(),
+            ParticipantRole::Member as ParticipantRole,
+            other.as_ref(),
+        )
+        .execute(&mut *transaction)
+        .await
+        .context("unable to create direct-message participants")?;
+
+        create_activity(&mut *transaction, channel_id, owner.as_ref())
+            .await
+            .context("unable to create activity for direct-message channel")?;
+
+        let pair_insert = sqlx::query!(
+            r#"
+            INSERT INTO comms_dm_pairs (user_lo, user_hi, channel_id)
+            VALUES ($1, $2, $3)
+            "#,
+            pair.lo().as_ref(),
+            pair.hi().as_ref(),
+            channel_id,
+        )
+        .execute(&mut *transaction)
+        .await;
+
+        match pair_insert {
+            Ok(_) => {
+                transaction.commit().await?;
+                Ok(EnsuredDm::Created {
+                    channel_id,
+                    participant_user_ids: vec![owner, other],
+                })
+            }
+            Err(error) if is_dm_pair_unique_violation(&error) => {
+                transaction.rollback().await?;
+                let channel_id = sqlx::query_scalar!(
+                    r#"
+                    SELECT channel_id
+                    FROM comms_dm_pairs
+                    WHERE user_lo = $1 AND user_hi = $2
+                    "#,
+                    pair.lo().as_ref(),
+                    pair.hi().as_ref(),
+                )
+                .fetch_one(&self.pool)
+                .await
+                .context("unable to look up winning direct-message channel")?;
+                Ok(EnsuredDm::Existing { channel_id })
+            }
+            Err(error) => Err(error).context("unable to record direct-message pair"),
+        }
     }
 
     async fn maybe_get_dm(

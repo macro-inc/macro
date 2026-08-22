@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT c.id\n            FROM comms_channels c\n            WHERE c.channel_type = 'direct_message'::comms_channel_type\n              AND EXISTS (\n                  SELECT 1\n                  FROM comms_channel_participants p\n                  WHERE p.channel_id = c.id AND p.user_id = $1\n              )\n              AND EXISTS (\n                  SELECT 1\n                  FROM comms_channel_participants p\n                  WHERE p.channel_id = c.id AND p.user_id = $2\n              )\n              AND (\n                  SELECT COUNT(*)\n                  FROM comms_channel_participants p\n                  WHERE p.channel_id = c.id\n              ) = 2\n            ORDER BY c.created_at ASC, c.id ASC\n            LIMIT 1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "1920e77a8cca8bcf3eb60af4bfd663e354eb84f41b06d2cb5d0fb535983ec5c6"
+}

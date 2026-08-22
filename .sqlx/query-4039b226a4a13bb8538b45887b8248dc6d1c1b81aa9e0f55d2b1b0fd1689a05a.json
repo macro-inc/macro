@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO comms_dm_pairs (user_lo, user_hi, channel_id)\n            VALUES ($1, $2, $3)\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "4039b226a4a13bb8538b45887b8248dc6d1c1b81aa9e0f55d2b1b0fd1689a05a"
+}

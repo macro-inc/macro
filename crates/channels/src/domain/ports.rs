@@ -1,4 +1,3 @@
-use crate::domain::events::ChannelEvent;
 #[cfg(feature = "attachment")]
 use crate::domain::models::RecentChannelMessage;
 use crate::domain::models::{
@@ -23,6 +22,10 @@ use crate::domain::models::{
 use crate::domain::side_effects::{
     ChannelDocumentMention, ChannelNotificationEffect, ChannelRealtimeEffect,
     ThreadNotificationContext,
+};
+use crate::domain::{
+    dm::{DmPair, EnsureDms, EnsureDmsSummary, EnsuredDm},
+    events::ChannelEvent,
 };
 use channel_sender::ChannelSender;
 use chrono::{DateTime, Utc};
@@ -303,6 +306,13 @@ pub trait ChannelRepo: Send + Sync + 'static {
         user_id: &MacroUserIdStr<'a>,
         channel_ids: &[Uuid],
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
+    /// Ensure that one canonical user pair has a direct-message channel.
+    fn ensure_dm(
+        &self,
+        pair: DmPair,
+        owner: MacroUserIdStr<'static>,
+    ) -> impl Future<Output = Result<EnsuredDm, Self::Err>> + Send;
 
     /// Fetch an existing direct message channel.
     fn maybe_get_dm<'a>(
@@ -701,6 +711,18 @@ pub trait ChannelService: Send + Sync + 'static {
         async move {
             Err(ChannelMutationErr::NotFound(
                 "team channel mutations are not configured".to_string(),
+            ))
+        }
+    }
+
+    /// Ensure all direct-message pairs in a batch.
+    fn ensure_dms(
+        &self,
+        _command: EnsureDms,
+    ) -> impl Future<Output = Result<EnsureDmsSummary, ChannelMutationErr>> + Send {
+        async move {
+            Err(ChannelMutationErr::NotFound(
+                "channel mutations are not configured".to_string(),
             ))
         }
     }
