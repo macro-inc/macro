@@ -6,9 +6,9 @@ export function intensityLevel(count: number, max: number): ActivityIntensity {
 }
 
 export const INTENSITY_CLASS: Record<ActivityIntensity, string> = {
-  0: 'bg-activity-0',
-  1: 'bg-activity-1',
-  2: 'bg-activity-2',
-  3: 'bg-activity-3',
-  4: 'bg-activity-4',
+  0: 'bg-ink/10',
+  1: 'bg-accent/25',
+  2: 'bg-accent/45',
+  3: 'bg-accent/70',
+  4: 'bg-accent',
 };

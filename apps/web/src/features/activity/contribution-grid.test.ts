@@ -2,7 +2,29 @@ import { describe, expect, it } from 'vitest';
 import { buildContributionGrid } from './contribution-grid';
 
 describe('buildContributionGrid', () => {
-  it('expands sparse counts into Sunday-first full weeks', () => {
+  it('omits leading and trailing weeks that are not a full Sunday–Saturday', () => {
+    const grid = buildContributionGrid({
+      from: '2026-08-19',
+      to: '2026-08-31',
+      days: [
+        { date: '2026-08-19', count: 2 },
+        { date: '2026-08-23', count: 8 },
+      ],
+    });
+
+    expect(grid.weeks).toHaveLength(1);
+    expect(grid.weeks[0].map((day) => day?.date)).toEqual([
+      '2026-08-23',
+      '2026-08-24',
+      '2026-08-25',
+      '2026-08-26',
+      '2026-08-27',
+      '2026-08-28',
+      '2026-08-29',
+    ]);
+  });
+
+  it('returns no columns when the window contains no full week', () => {
     const grid = buildContributionGrid({
       from: '2026-08-19',
       to: '2026-08-24',
@@ -12,26 +34,8 @@ describe('buildContributionGrid', () => {
       ],
     });
 
-    expect(grid.weeks).toHaveLength(2);
-    expect(grid.weeks.every((week) => week.length === 7)).toBe(true);
-    expect(grid.weeks[0].map((day) => day?.date ?? null)).toEqual([
-      null,
-      null,
-      null,
-      '2026-08-19',
-      '2026-08-20',
-      '2026-08-21',
-      '2026-08-22',
-    ]);
-    expect(grid.weeks[1].map((day) => day?.date ?? null)).toEqual([
-      '2026-08-23',
-      null,
-      null,
-      null,
-      null,
-      null,
-      null,
-    ]);
+    expect(grid.weeks).toEqual([]);
+    expect(grid.monthLabels).toEqual([]);
   });
 
   it('fills missing API dates with zero and derives relative intensity', () => {
@@ -61,11 +65,7 @@ describe('buildContributionGrid', () => {
 
     expect(
       grid.monthLabels.map(({ label, weekIndex }) => [label, weekIndex])
-    ).toEqual([
-      ['Jan', 0],
-      ['Feb', 1],
-      ['Mar', 5],
-    ]);
+    ).toEqual([['Feb', 0]]);
   });
 
   it('returns no columns for an invalid or empty window', () => {

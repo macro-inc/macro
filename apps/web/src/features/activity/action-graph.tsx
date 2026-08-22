@@ -1,5 +1,5 @@
 import type { ActivityOverview } from '@queries/activity/graphql/overview';
-import { Tooltip } from '@ui';
+import { Layer, Tooltip } from '@ui';
 import { createMemo, For } from 'solid-js';
 import {
   formatDayLabel,
@@ -77,12 +77,13 @@ export function ActionGraph(props: { overview: ActivityOverview }) {
   const stats = createMemo(() => summarizeActivity(props.overview));
 
   return (
+    <Layer depth={2}>
     <section
-      class="overflow-hidden rounded-lg border border-edge-muted bg-inset"
+      class="overflow-hidden rounded-lg border border-edge-muted bg-surface"
       aria-labelledby="activity-actions-heading"
     >
       <div class="divide-y divide-edge-muted text-xs">
-        <header class="flex min-h-7 items-center gap-2 px-2 py-1">
+        <header class="flex min-h-7 items-center gap-2 px-4 py-2">
           <h2
             id="activity-actions-heading"
             class="font-semibold text-ink-muted text-xs"
@@ -104,7 +105,7 @@ export function ActionGraph(props: { overview: ActivityOverview }) {
             <span>More</span>
           </div>
         </header>
-        <div class="overflow-x-auto scrollbar-hidden px-2 py-2">
+        <div class="overflow-x-auto scrollbar-hidden px-4 py-3">
           <div class="w-max min-w-full">
             <div class={`${WEEK_ROW_CLASS} mb-1 pl-5`}>
               <For each={grid().weeks}>
@@ -157,7 +158,7 @@ export function ActionGraph(props: { overview: ActivityOverview }) {
             </div>
           </div>
         </div>
-        <dl class="flex flex-wrap items-center gap-x-4 gap-y-1 px-2 py-1.5">
+        <dl class="flex flex-wrap items-center gap-x-4 gap-y-1 px-4 py-2">
           <Stat
             label="Most active month"
             value={monthStat(stats().mostActiveMonth)}
@@ -177,6 +178,7 @@ export function ActionGraph(props: { overview: ActivityOverview }) {
         </dl>
       </div>
     </section>
+    </Layer>
   );
 }
 

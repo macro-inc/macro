@@ -37,8 +37,10 @@ function labelMonth(day: ContributionDay): string {
 }
 
 /**
- * UTC date arithmetic preserves the date strings without applying a second
- * viewer-time-zone conversion.
+ * Sunday-first weeks that sit entirely inside the window. Leading and
+ * trailing stub columns (days outside `[from, to)`) are omitted, matching
+ * Cursor's heatmap. UTC date arithmetic keeps the date strings from picking
+ * up a second viewer-time-zone conversion.
  */
 export function buildContributionGrid(overview: {
   from: string;
@@ -74,7 +76,9 @@ export function buildContributionGrid(overview: {
       const count = counts.get(date) ?? 0;
       week.push({ date, count, intensity: intensityLevel(count, max) });
     }
-    weeks.push(week);
+    if (week.every((day) => day !== null)) {
+      weeks.push(week);
+    }
   }
 
   const monthLabels: ContributionMonthLabel[] = [];

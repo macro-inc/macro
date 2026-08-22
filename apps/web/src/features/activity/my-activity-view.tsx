@@ -40,54 +40,51 @@ export function MyActivityView() {
         <span class="font-semibold text-sm">Activity</span>
       </SplitHeaderLeft>
       <StaticMarkdownContext>
-        {/* One full-bleed column: the overview cards and the feed rows share
-            the soup list's `mx-1` inset, so the graph, the most-active row,
-            and the timeline all line up on the same content width. */}
         <div class="min-h-0 flex-1 overflow-y-auto py-1">
-          <div class={`${INSET_CLASS} flex min-w-0 flex-col gap-2 pb-2`}>
+          <div class="mx-auto w-full max-w-[1000px]">
+            <div class={`${INSET_CLASS} flex min-w-0 flex-col gap-2 pb-2`}>
+              <Show
+                when={overview.data}
+                fallback={
+                  <p class="px-2 py-1 text-ink-extra-muted text-xs">
+                    {overview.isError
+                      ? 'Activity overview is unavailable right now.'
+                      : 'Loading activity overview…'}
+                  </p>
+                }
+              >
+                {(data) => <ActionGraph overview={data()} />}
+              </Show>
+            </div>
+            <Show when={overview.data}>
+              {(data) => <TopEntities entities={data().topEntities} />}
+            </Show>
             <Show
-              when={overview.data}
+              when={groups().length > 0}
               fallback={
-                <p class="px-2 py-1 text-ink-extra-muted text-xs">
-                  {overview.isError
-                    ? 'Activity overview is unavailable right now.'
-                    : 'Loading activity overview…'}
+                <p class={`${INSET_CLASS} px-2 py-2 text-ink-muted text-sm`}>
+                  {feed.isLoading
+                    ? 'Loading…'
+                    : feed.isError
+                      ? 'Activity is unavailable right now. Try again in a moment.'
+                      : 'No activity yet.'}
                 </p>
               }
             >
-              {(data) => (
-                <>
-                  <ActionGraph overview={data()} />
-                  <TopEntities entities={data().topEntities} />
-                </>
-              )}
+              <FeedGroups groups={groups()} row={ActivityTimelineRow} />
+              <Show when={feed.hasNextPage}>
+                <div class="flex justify-center py-2">
+                  <Button
+                    variant="ghost"
+                    onClick={() => void feed.fetchNextPage()}
+                    disabled={feed.isFetchingNextPage}
+                  >
+                    {feed.isFetchingNextPage ? 'Loading…' : 'Show more'}
+                  </Button>
+                </div>
+              </Show>
             </Show>
           </div>
-          <Show
-            when={groups().length > 0}
-            fallback={
-              <p class={`${INSET_CLASS} px-2 py-2 text-ink-muted text-sm`}>
-                {feed.isLoading
-                  ? 'Loading…'
-                  : feed.isError
-                    ? 'Activity is unavailable right now. Try again in a moment.'
-                    : 'No activity yet.'}
-              </p>
-            }
-          >
-            <FeedGroups groups={groups()} row={ActivityTimelineRow} />
-            <Show when={feed.hasNextPage}>
-              <div class="flex justify-center py-2">
-                <Button
-                  variant="ghost"
-                  onClick={() => void feed.fetchNextPage()}
-                  disabled={feed.isFetchingNextPage}
-                >
-                  {feed.isFetchingNextPage ? 'Loading…' : 'Show more'}
-                </Button>
-              </div>
-            </Show>
-          </Show>
         </div>
       </StaticMarkdownContext>
     </div>
