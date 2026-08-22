@@ -11,7 +11,11 @@ import {
   insertDocumentMentionAtDragCoordinates,
   updateDragInsertPreviewFromCoordinates,
 } from '@core/component/LexicalMarkdown/utils/dragInsertUtils';
-import { ENABLE_CHAT_V3_AGENTS } from '@core/constant/featureFlags';
+import { isCursorBotId } from '@core/constant/cursorAgent';
+import {
+  ENABLE_CHAT_V3_AGENTS,
+  ENABLE_CURSOR_AGENTS,
+} from '@core/constant/featureFlags';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import type { IUser } from '@core/user/types';
@@ -35,6 +39,7 @@ import {
   Switch,
 } from 'solid-js';
 import {
+  cursorMentionUser,
   isMacroAiId,
   isMacroCoderId,
   macroAiMentionUser,
@@ -263,6 +268,12 @@ export function ChannelInput(props: ChannelInputProps) {
       !base.some((user) => isMacroCoderId(user.id))
     ) {
       base.unshift(macroCoderMentionUser());
+    }
+    if (
+      ENABLE_CURSOR_AGENTS() &&
+      !base.some((user) => isCursorBotId(user.id))
+    ) {
+      base.unshift(cursorMentionUser());
     }
     if (!base.some((user) => isMacroAiId(user.id))) {
       base.unshift(macroAiMentionUser());

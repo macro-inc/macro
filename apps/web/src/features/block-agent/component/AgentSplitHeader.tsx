@@ -14,6 +14,7 @@ import { toast } from '@core/component/Toast/Toast';
 import { useUserId } from '@core/context/user';
 import { isMobile } from '@core/mobile/isMobile';
 import { buildSimpleEntityUrl, openExternalUrl } from '@core/util/url';
+import ArrowSquareOut from '@phosphor/arrow-square-out.svg';
 import GitBranch from '@phosphor/git-branch.svg';
 import LinkIcon from '@phosphor/link.svg';
 import TreeStructure from '@phosphor/tree-structure.svg';
@@ -88,6 +89,21 @@ export function AgentSplitHeader(props: {
       action: originThreadDrawer.toggle,
       isActive: originThreadDrawer.isOpen,
       condition: () => sessionOriginThread(props.session) !== undefined,
+    },
+    // Externally-served sessions link out to the provider's own page for the
+    // agent. Rendered from the stored url, not a live provider check: a
+    // stale link opening an archived agent is fine, a per-render API call to
+    // validate it is not.
+    {
+      label: 'Open in Cursor',
+      icon: ArrowSquareOut,
+      action: () => {
+        const url = props.session?.external?.url;
+        if (url) openExternalUrl(url);
+      },
+      condition: () =>
+        props.session?.external?.provider === 'cursor' &&
+        Boolean(props.session?.external?.url),
     },
     {
       label: 'Copy link',
