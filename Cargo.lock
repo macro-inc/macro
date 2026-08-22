@@ -4347,6 +4347,7 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-subscriber",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -18105,6 +18106,7 @@ dependencies = [
  "axum-extra",
  "base64 0.22.1",
  "bitflags 2.11.1",
+ "bstr",
  "byteorder",
  "bytes",
  "bzip2",
@@ -18214,6 +18216,7 @@ dependencies = [
  "subtle",
  "syn 1.0.109",
  "syn 2.0.117",
+ "syn 3.0.3",
  "sync_wrapper",
  "thiserror 2.0.18",
  "time",
