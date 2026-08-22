@@ -2,5 +2,6 @@
 
 /// Axum router for the MCP OAuth broker.
 pub mod axum_router;
+mod login_page;
 /// Bearer token middleware for the protected MCP endpoint.
 pub mod middleware;

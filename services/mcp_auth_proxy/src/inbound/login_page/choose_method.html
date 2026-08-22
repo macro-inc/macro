@@ -1,0 +1,23 @@
+<h1 id="login-heading">Sign in to Macro</h1>
+<p class="subtitle">Connect your MCP client to your Macro workspace.</p>
+<p class="error" role="alert" {{error_hidden}}>{{error}}</p>
+<form action="/login/{{session_id}}" method="post">
+  <input type="hidden" name="action" value="google">
+  <button class="secondary" type="submit">Continue with Google</button>
+</form>
+<div class="divider" aria-hidden="true">or</div>
+<form action="/login/{{session_id}}" method="post">
+  <input type="hidden" name="action" value="email">
+  <label for="email">Email address</label>
+  <input
+    id="email"
+    name="email"
+    type="email"
+    inputmode="email"
+    autocomplete="email"
+    autocapitalize="none"
+    spellcheck="false"
+    required
+  >
+  <button class="field-action" type="submit">Continue with email</button>
+</form>

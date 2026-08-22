@@ -1,6 +1,5 @@
-The `mcp_service` acts as proxy to the auth server.
+# MCP auth proxy
 
-I believe this is needed because FusionAuth doesn't support DCR 
+`mcp_auth_proxy` gives public MCP clients an OAuth broker in front of FusionAuth. `/authorize` creates a short-lived session and opens a broker-hosted login page where the user can continue with Google or email OTP.
 
-(Official Docs)[https://modelcontextprotocol.io/docs/tutorials/security/authorization]
-(Useful fusionauth article)[https://fusionauth.io/articles/ai/mcp-connecting-software-ai]
+Both methods produce the same FusionAuth access and refresh tokens. The broker returns those tokens through its existing authorization-code and PKCE exchange at `/token`.

@@ -1,15 +1,22 @@
 //! Redis-backed storage for short-lived OAuth handshake state.
 
+#[cfg(test)]
+mod test;
+
 use anyhow::Context;
 use redis::AsyncCommands;
 use std::future::Future;
 
 use crate::domain::{
-    models::{IssuedAuthorizationCode, PendingAuthorization},
-    service::{AUTHORIZATION_CODE_TTL, InflightAuthStore, PENDING_AUTH_TTL},
+    models::{
+        AuthorizationSession, ClientCallback, IdentityProvider, IssuedAuthorizationCode,
+        LoginPhase, SessionId,
+    },
+    ports::InflightAuthStore,
+    service::{AUTHORIZATION_CODE_TTL, AUTHORIZATION_SESSION_TTL},
 };
 
-const PENDING_KEY_PREFIX: &str = "mcp_auth_proxy:pending:";
+const SESSION_KEY_PREFIX: &str = "mcp_auth_proxy:pending:";
 const ISSUED_KEY_PREFIX: &str = "mcp_auth_proxy:issued:";
 
 /// Redis-backed implementation of the in-flight OAuth state store.
@@ -24,39 +31,72 @@ impl RedisInflightAuth {
         Self { client }
     }
 
-    fn pending_key(session_id: &str) -> String {
-        format!("{PENDING_KEY_PREFIX}{session_id}")
+    fn session_key(session_id: &SessionId) -> String {
+        format!("{SESSION_KEY_PREFIX}{session_id}")
     }
 
     fn issued_key(code: &str) -> String {
         format!("{ISSUED_KEY_PREFIX}{code}")
     }
+    fn set_session(
+        &self,
+        session: &AuthorizationSession,
+    ) -> impl Future<Output = anyhow::Result<()>> + Send {
+        let client = self.client.clone();
+        let key = Self::session_key(&session.id);
+        let value = serialize_session(session);
+        async move {
+            let value = value?;
+            let mut conn = client
+                .get_multiplexed_async_connection()
+                .await
+                .context("unable to connect to redis")?;
+            conn.set_ex::<String, String, ()>(
+                key.clone(),
+                value,
+                AUTHORIZATION_SESSION_TTL.as_secs(),
+            )
+            .await
+            .with_context(|| format!("failed to persist authorization session for key {key}"))?;
+            Ok(())
+        }
+    }
 }
 
-#[derive(serde::Serialize, serde::Deserialize)]
-struct StoredPendingAuthorization {
+#[derive(serde::Deserialize)]
+struct LegacyPendingAuthorization {
     code_challenge: String,
     client_state: String,
     client_redirect_uri: String,
 }
 
-impl From<PendingAuthorization> for StoredPendingAuthorization {
-    fn from(value: PendingAuthorization) -> Self {
-        Self {
-            code_challenge: value.code_challenge,
-            client_state: value.client_state,
-            client_redirect_uri: value.client_redirect_uri,
-        }
-    }
+#[derive(serde::Deserialize)]
+#[serde(untagged)]
+enum StoredAuthorizationSession {
+    Current(AuthorizationSession),
+    Legacy(LegacyPendingAuthorization),
 }
 
-impl From<StoredPendingAuthorization> for PendingAuthorization {
-    fn from(value: StoredPendingAuthorization) -> Self {
-        Self {
-            code_challenge: value.code_challenge,
-            client_state: value.client_state,
-            client_redirect_uri: value.client_redirect_uri,
-        }
+fn serialize_session(session: &AuthorizationSession) -> anyhow::Result<String> {
+    serde_json::to_string(session).context("failed to serialize authorization session")
+}
+
+fn deserialize_session(session_id: &SessionId, json: &str) -> anyhow::Result<AuthorizationSession> {
+    match serde_json::from_str::<StoredAuthorizationSession>(json)
+        .context("failed to deserialize authorization session")?
+    {
+        StoredAuthorizationSession::Current(session) => Ok(session),
+        StoredAuthorizationSession::Legacy(legacy) => Ok(AuthorizationSession {
+            id: session_id.clone(),
+            client: ClientCallback {
+                code_challenge: legacy.code_challenge,
+                client_state: legacy.client_state,
+                client_redirect_uri: legacy.client_redirect_uri,
+            },
+            phase: LoginPhase::AwaitingUpstream {
+                identity_provider: IdentityProvider::GoogleGmail,
+            },
+        }),
     }
 }
 
@@ -90,37 +130,54 @@ impl From<StoredIssuedAuthorizationCode> for IssuedAuthorizationCode {
     }
 }
 
-#[allow(clippy::manual_async_fn)]
+#[expect(
+    clippy::manual_async_fn,
+    reason = "the port requires methods that return opaque futures"
+)]
 impl InflightAuthStore for RedisInflightAuth {
-    fn insert_pending(
+    fn insert_session(
         &self,
-        session_id: &str,
-        pending: PendingAuthorization,
+        session: &AuthorizationSession,
     ) -> impl Future<Output = anyhow::Result<()>> + Send {
+        self.set_session(session)
+    }
+
+    fn load_session(
+        &self,
+        session_id: &SessionId,
+    ) -> impl Future<Output = anyhow::Result<Option<AuthorizationSession>>> + Send {
         let client = self.client.clone();
-        let key = Self::pending_key(session_id);
+        let key = Self::session_key(session_id);
+        let session_id = session_id.clone();
         async move {
-            let value = serde_json::to_string(&StoredPendingAuthorization::from(pending))
-                .context("failed to serialize pending authorization")?;
             let mut conn = client
                 .get_multiplexed_async_connection()
                 .await
                 .context("unable to connect to redis")?;
-            conn.set_ex::<String, String, ()>(key.clone(), value, PENDING_AUTH_TTL.as_secs())
+            let value: Option<String> = conn
+                .get(&key)
                 .await
-                .with_context(|| {
-                    format!("failed to persist pending authorization for key {key}")
-                })?;
-            Ok(())
+                .with_context(|| format!("failed to load authorization session for key {key}"))?;
+            value
+                .map(|json| deserialize_session(&session_id, &json))
+                .transpose()
         }
     }
 
-    fn take_pending(
+    fn replace_session(
         &self,
-        session_id: &str,
-    ) -> impl Future<Output = anyhow::Result<Option<PendingAuthorization>>> + Send {
+        session: &AuthorizationSession,
+    ) -> impl Future<Output = anyhow::Result<()>> + Send {
+        self.set_session(session)
+    }
+
+    fn take_session(
+        &self,
+        session_id: &SessionId,
+    ) -> impl Future<Output = anyhow::Result<Option<AuthorizationSession>>> + Send {
         let client = self.client.clone();
-        let key = Self::pending_key(session_id);
+        let key = Self::session_key(session_id);
+        let session_id = session_id.clone();
         async move {
             let mut conn = client
                 .get_multiplexed_async_connection()
@@ -130,13 +187,9 @@ impl InflightAuthStore for RedisInflightAuth {
                 .arg(&key)
                 .query_async(&mut conn)
                 .await
-                .with_context(|| format!("failed to fetch pending authorization for key {key}"))?;
+                .with_context(|| format!("failed to take authorization session for key {key}"))?;
             value
-                .map(|json| {
-                    serde_json::from_str::<StoredPendingAuthorization>(&json)
-                        .map(PendingAuthorization::from)
-                        .context("failed to deserialize pending authorization")
-                })
+                .map(|json| deserialize_session(&session_id, &json))
                 .transpose()
         }
     }
@@ -193,11 +246,6 @@ impl InflightAuthStore for RedisInflightAuth {
     }
 
     fn cleanup_expired(&self) -> impl Future<Output = anyhow::Result<()>> + Send {
-        async {
-            // Redis enforces expiry via the TTL set with `SETEX` on every pending
-            // session and issued code. There is no separate in-process map to
-            // sweep, so cleanup is intentionally a no-op for this backend.
-            Ok(())
-        }
+        async { Ok(()) }
     }
 }

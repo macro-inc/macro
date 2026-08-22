@@ -5,7 +5,7 @@ use std::sync::Arc;
 use tracing::Instrument;
 
 use crate::domain::{
-    models::RefreshToken,
+    models::{IdentityProvider, RefreshToken, UpstreamAuthorize},
     ports::{OAuthProvider, TokenPairFuture},
 };
 
@@ -35,11 +35,15 @@ impl FusionAuthOAuthProvider {
 
 impl OAuthProvider for FusionAuthOAuthProvider {
     #[tracing::instrument(skip(self), err)]
-    fn construct_authorize_url(&self, state: &str) -> anyhow::Result<String> {
+    fn construct_authorize_url(&self, destination: &UpstreamAuthorize) -> anyhow::Result<String> {
+        let identity_provider = match &destination.identity_provider {
+            IdentityProvider::GoogleGmail => &self.google_idp_id,
+            IdentityProvider::DomainSso { idp_id } => idp_id,
+        };
         self.client.construct_oauth2_authorize_url(
-            &self.google_idp_id,
-            None,
-            Some(state.to_owned()),
+            identity_provider,
+            destination.login_hint.as_ref().map(|email| email.as_str()),
+            Some(destination.state.as_str().to_owned()),
         )
     }
 

@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{title}}</title>
+  <style>
+    :root {
+      color-scheme: light;
+      font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #f6f6f3;
+      color: #171714;
+    }
+    * {
+      box-sizing: border-box;
+    }
+    body {
+      min-height: 100vh;
+      margin: 0;
+      display: grid;
+      place-items: center;
+      padding: 24px;
+    }
+    main {
+      width: min(100%, 420px);
+    }
+    .brand {
+      margin: 0 0 24px;
+      text-align: center;
+      font-size: 21px;
+      font-weight: 700;
+      letter-spacing: -0.04em;
+    }
+    .card {
+      padding: 32px;
+      border: 1px solid #dfdfd8;
+      border-radius: 16px;
+      background: #fff;
+      box-shadow: 0 12px 40px rgb(23 23 20 / 8%);
+    }
+    h1 {
+      margin: 0;
+      font-size: 24px;
+      line-height: 1.25;
+      letter-spacing: -0.03em;
+    }
+    .subtitle {
+      margin: 8px 0 24px;
+      color: #686862;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+    form {
+      margin: 0;
+    }
+    label {
+      display: block;
+      margin: 0 0 8px;
+      font-size: 13px;
+      font-weight: 600;
+    }
+    input {
+      width: 100%;
+      height: 46px;
+      border: 1px solid #cfcfc7;
+      border-radius: 9px;
+      padding: 0 13px;
+      background: #fff;
+      color: #171714;
+      font: inherit;
+      outline: none;
+    }
+    input:focus {
+      border-color: #171714;
+      box-shadow: 0 0 0 3px rgb(23 23 20 / 10%);
+    }
+    button {
+      width: 100%;
+      min-height: 46px;
+      border: 1px solid #171714;
+      border-radius: 9px;
+      padding: 11px 16px;
+      background: #171714;
+      color: #fff;
+      font: inherit;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    button:hover {
+      background: #353530;
+    }
+    button:focus-visible {
+      outline: 3px solid rgb(23 23 20 / 24%);
+      outline-offset: 2px;
+    }
+    .secondary {
+      border-color: #cfcfc7;
+      background: #fff;
+      color: #171714;
+    }
+    .secondary:hover {
+      background: #f6f6f3;
+    }
+    .field-action {
+      margin-top: 12px;
+    }
+    .divider {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin: 20px 0;
+      color: #85857d;
+      font-size: 12px;
+    }
+    .divider::before,
+    .divider::after {
+      height: 1px;
+      flex: 1;
+      background: #e4e4dd;
+      content: "";
+    }
+    .error {
+      margin: 0 0 16px;
+      border-radius: 8px;
+      padding: 10px 12px;
+      background: #fff1f0;
+      color: #8f2018;
+      font-size: 13px;
+      line-height: 1.4;
+    }
+    .local-code {
+      margin: 0 0 16px;
+      border-radius: 8px;
+      padding: 10px 12px;
+      background: #f0f0eb;
+      color: #4c4c47;
+      font-size: 13px;
+    }
+    .local-code code {
+      color: #171714;
+      font-size: 15px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+    }
+    .link-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-top: 12px;
+    }
+    .link-row button {
+      min-height: 40px;
+      border: 0;
+      padding: 8px;
+      background: transparent;
+      color: #5a5a54;
+      font-size: 13px;
+    }
+    .link-row button:hover {
+      background: #f6f6f3;
+      color: #171714;
+    }
+    [hidden] {
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <p class="brand">Macro</p>
+    <section class="card" aria-labelledby="login-heading">
+      {{content}}
+    </section>
+  </main>
+</body>
+</html>

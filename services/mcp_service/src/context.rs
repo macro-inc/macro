@@ -29,12 +29,15 @@ use frecency::domain::services::FrecencyQueryServiceImpl;
 use frecency::outbound::postgres::FrecencyPgStorage;
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_service_urls::{
-    AiEditingWorkerUrl, ConnectionGatewayUrl, DocumentStorageServiceUrl, EmailServiceUrl,
-    LexicalServiceUrl, SyncServiceUrl,
+    AiEditingWorkerUrl, AuthServiceUrl, ConnectionGatewayUrl, DocumentStorageServiceUrl,
+    EmailServiceUrl, LexicalServiceUrl, SyncServiceUrl,
 };
 use mcp_auth_proxy::{
     domain::service::McpAuthProxyServiceImpl,
-    outbound::{fusionauth::FusionAuthOAuthProvider, redis::RedisInflightAuth},
+    outbound::{
+        fusionauth::FusionAuthOAuthProvider, passwordless::AuthServicePasswordless,
+        redis::RedisInflightAuth,
+    },
 };
 use notification::domain::service::{NotificationReaderService, PlatformArnConfig};
 use notification::outbound::repository::DbNotificationRepository;
@@ -464,6 +467,8 @@ async fn build_auth_proxy(
     let auth_provider = FusionAuthOAuthProvider::new(fusionauth_client)
         .await
         .context("failed to initialize MCP auth provider")?;
+    let passwordless = AuthServicePasswordless::new(AuthServiceUrl::new()?.to_string())
+        .context("failed to initialize authentication service passwordless client")?;
     let redis_client = redis::Client::open(config.redis_url.as_ref().to_owned())
         .context("failed to initialize redis client for MCP auth proxy")?;
 
@@ -471,5 +476,6 @@ async fn build_auth_proxy(
         mcp_public_url,
         Arc::new(RedisInflightAuth::new(redis_client)),
         Arc::new(auth_provider),
+        Arc::new(passwordless),
     ))
 }
