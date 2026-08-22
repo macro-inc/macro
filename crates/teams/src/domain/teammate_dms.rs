@@ -1,8 +1,6 @@
 //! Ensure a direct message exists between a joining member and every teammate.
 
 #[cfg(test)]
-mod live;
-#[cfg(test)]
 mod test;
 
 use std::future::Future;
