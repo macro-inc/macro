@@ -165,16 +165,21 @@ where
 
         let (agent, run) = match existing_agent {
             Some(agent) => {
-                // The same agent advances from cursor.com too. Catch the
-                // session's view up on whatever it missed, then queue behind
-                // any run still going instead of failing the prompt.
+                // Queue behind any run still going (the same agent advances
+                // from cursor.com too) instead of failing the prompt.
+                let run = self.create_run_when_free(&session, &agent, prompt).await?;
+                // Catch the session's view up on whatever it missed while it
+                // was not looking. After the create on purpose: creating
+                // proved the agent free, so every missed run is terminal and
+                // its text is readable — before it, a still-running
+                // cursor.com run is invisible to the backfill and the
+                // watermark then walks straight past it.
                 if let Err(error) = self
-                    .backfill_foreign_runs(session_id, &session, &agent)
+                    .backfill_foreign_runs(session_id, &session, &agent, &run)
                     .await
                 {
                     tracing::warn!(%agent, %error, "could not backfill cursor.com runs");
                 }
-                let run = self.create_run_when_free(&session, &agent, prompt).await?;
                 (agent, run)
             }
             None => {
@@ -440,6 +445,7 @@ where
         session_id: &AcpSessionId,
         session: &Session,
         agent: &CursorAgentId,
+        current_run: &CursorRunId,
     ) -> Result<(), SessionError> {
         let Some(last_run) = session
             .state
@@ -462,6 +468,9 @@ where
         let unseen: Vec<_> = listings
             .into_iter()
             .take_while(|listing| listing.id != last_run)
+            // The run this prompt just created is newer than everything
+            // foreign; its own turn delivers it.
+            .filter(|listing| listing.id != *current_run)
             .filter(|listing| !matches!(listing.status, RunStatus::Creating | RunStatus::Running))
             .collect();
 

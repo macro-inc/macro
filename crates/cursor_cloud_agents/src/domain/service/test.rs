@@ -543,8 +543,14 @@ async fn foreign_runs_are_backfilled_before_the_next_prompt() {
     events.send(CursorEvent::Done).expect("stream open");
     service.prompt(&session, "first").await.expect("first turn");
 
-    // Two cursor.com runs happened since run-fake-1, newest first.
+    // Two cursor.com runs happened since run-fake-1. Newest first, and the
+    // page also contains the run this prompt itself is about to create —
+    // which must not be backfilled, its own turn delivers it.
     cursor.script_run_listings(vec![
+        RunListing {
+            id: CursorRunId::new("run-fake-2"),
+            status: RunStatus::Running,
+        },
         RunListing {
             id: CursorRunId::new("run-foreign-2"),
             status: RunStatus::Finished,
