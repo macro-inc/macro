@@ -97,6 +97,15 @@ Teammate-DM consumption is at-least-once. The consumer commits an offset only
 after a successful or permanent result and retries transient failures. A missed
 publish can leave a team without DMs until `backfill_teammate_dms` runs.
 
+```bash
+just services/authentication_service/backfill_teammate_dms_local
+just services/authentication_service/backfill_teammate_dms_dev
+just services/authentication_service/backfill_teammate_dms_prod
+```
+
+The CLI pages every team and ensures the full teammate DM clique. It is
+idempotent. Prod asks you to type `prod backfill` before it writes.
+
 Consumers must tolerate unknown `event_type` values and unknown metadata fields
 so new event variants and additive fields remain forward compatible. Consumers
 should use `schema_version` when interpreting a known event; every event in this
