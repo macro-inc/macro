@@ -321,7 +321,7 @@ don't inject it directly into the error message.
 
 Nix is the only host dependency. The pinned dev shell supplies the Docker CLI and daemon, Compose, `fuse-overlayfs`, and OpenSSH. `ssh-keygen` must come from this shell.
 
-Service binaries come from the private S3 Nix cache. A sibling workflow on push to main (`push_local_stack_binaries.yml`) builds and pushes `.#local-stack-binaries`. It is not part of the deploy pipeline. Cursor Cloud realizes the aggregate with `nix build .#local-stack-binaries`.
+Service binaries come from the private S3 Nix cache. A sibling workflow on push to main (`push_local_stack_binaries.yml`) builds and pushes `.#local-stack-binaries`. It is not part of the deploy pipeline. Cursor Cloud realizes the aggregate with `nix build .#local-stack-binaries`. rustc on Cloud goes through sccache at `~/.cache/macro-cloud/sccache` (dev-shell `cargo` and a Nix derivation miss). S3 still wins on an exact hash match.
 
 Set `NIX_CACHE_AWS_ACCESS_KEY_ID` and `NIX_CACHE_AWS_SECRET_ACCESS_KEY` as Cursor environment secrets. The IAM credentials need read-only access to the cache bucket.
 
