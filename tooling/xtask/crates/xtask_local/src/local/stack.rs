@@ -8,7 +8,7 @@
 //! without touching volumes. If nothing is recorded yet, `update` bootstraps
 //! through `up`. `status` is machine-readable state. `down` reclaims everything.
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::process::Command;
 
 use anyhow::{Context, Result, bail};
@@ -25,9 +25,6 @@ use super::{Mode, arch, env_layer, frontend, mailpit, proxy, sdk_webhook, snapsh
 pub struct UpArgs {
     #[command(flatten)]
     pub run: RunArgs,
-    /// Stage this prebuilt frontend dist instead of building (CI artifact reuse).
-    #[arg(long)]
-    pub frontend_dist: Option<PathBuf>,
     /// Neither restore from nor save an init snapshot — always run the full
     /// migrate/kickstart/index init.
     #[arg(long)]
@@ -53,9 +50,6 @@ pub struct UpdateArgs {
     /// Also rebuild + restage the static frontend and recreate the proxy.
     #[arg(long)]
     pub frontend: bool,
-    /// Stage this prebuilt frontend dist instead of building (implies --frontend).
-    #[arg(long)]
-    pub frontend_dist: Option<PathBuf>,
     /// Adopt this complete prebuilt binary set instead of invoking Cargo.
     #[arg(long)]
     pub binaries_dir: Option<PathBuf>,
@@ -179,18 +173,12 @@ pub fn up(mode: Mode, args: &UpArgs) -> Result<Instance> {
     // joined just before `bring_up_app` creates that container. (Dry run:
     // synchronously, so the command preview prints in order.)
     if static_frontend && stage.is_dry_run() {
-        frontend::build_static(&stage, &instance, mode, args.frontend_dist.as_deref())?;
+        frontend::build_static(&stage, &instance, mode)?;
     }
     let fe_build = (static_frontend && !stage.is_dry_run()).then(|| {
         let instance = instance.clone();
-        let prebuilt = args.frontend_dist.clone();
         std::thread::spawn(move || {
-            frontend::build_static(
-                &Stage::from_env().quiet(),
-                &instance,
-                mode,
-                prebuilt.as_deref(),
-            )
+            frontend::build_static(&Stage::from_env().quiet(), &instance, mode)
         })
     });
 
@@ -328,7 +316,6 @@ fn bootstrap_from_update(args: &UpdateArgs) -> Result<()> {
             verbose: args.verbose,
             traces: None,
         },
-        frontend_dist: args.frontend_dist.clone(),
         no_snapshot: false,
         infra_only: false,
         json: args.json,
@@ -386,15 +373,8 @@ fn update_running(args: &UpdateArgs) -> Result<()> {
         super::recreate_aux_service_containers(&stage, &instance, &env)?;
     }
 
-    if args.frontend || args.frontend_dist.is_some() {
-        reload_static_frontend(
-            &stage,
-            &instance,
-            mode,
-            &env,
-            &state,
-            args.frontend_dist.as_deref(),
-        )?;
+    if args.frontend {
+        reload_static_frontend(&stage, &instance, mode, &env, &state)?;
     }
     if mode.spec().wait_backend_before_frontend {
         frontend::wait_backend_ready(&stage, &instance)?;
@@ -404,7 +384,7 @@ fn update_running(args: &UpdateArgs) -> Result<()> {
             "{}",
             serde_json::to_string(&json!({
                 "remounted": remounted,
-                "frontend_updated": args.frontend || args.frontend_dist.is_some(),
+                "frontend_updated": args.frontend,
                 "aux_services_rebuilt": args.build_aux_services,
             }))?
         );
@@ -458,7 +438,6 @@ fn reload_static_frontend(
     mode: Mode,
     env: &env_layer::ResolvedEnv,
     state: &StackState,
-    frontend_dist: Option<&Path>,
 ) -> Result<()> {
     if state.frontend != "static" {
         bail!(
@@ -466,7 +445,7 @@ fn reload_static_frontend(
              re-run `just stack up` to serve one"
         );
     }
-    frontend::build_static(stage, instance, mode, frontend_dist)?;
+    frontend::build_static(stage, instance, mode)?;
     // build_static replaces the staged directory, so the container must be
     // recreated to establish a bind mount to the new inode.
     let mut up = super::compose_cmd(instance, env);

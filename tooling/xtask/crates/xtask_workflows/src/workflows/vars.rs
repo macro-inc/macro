@@ -17,7 +17,6 @@ secret!(CLOUDFLARE_API_TOKEN);
 secret!(DAYTONA_API_KEY);
 secret!(DD_API_KEY);
 secret!(DD_APP_KEY);
-secret!(DOPPLER_PREVIEW_TOKEN);
 secret!(DOPPLER_TOKEN);
 secret!(MACOS_DEVELOPER_ID_CERTIFICATE_BASE64);
 secret!(MACOS_DEVELOPER_ID_CERTIFICATE_PASSWORD);
@@ -84,10 +83,6 @@ pub const BUN_CACHE_VOLUME_DIR: &str = "/home/runner/.bun/install/cache";
 /// GHCR repository for the agent-harness sandbox image (the same Dockerfile
 /// Daytona snapshots). Pushed as `:$SHA` on PRs and `:$SHA` + `:latest` on main.
 pub const AGENT_HARNESS_GHCR_IMAGE: &str = "ghcr.io/macro-inc/macro-agent-harness";
-
-/// Local Docker tag `just run_local` loads. Keep in sync with
-/// `xtask_local::local::sandbox_image::DEFAULT_LOCAL_TAG`.
-pub const AGENT_HARNESS_LOCAL_IMAGE: &str = "macro-agent-harness:latest";
 
 /// The repo-wide env block (mirrors the original top-level `env:`). Defaults the
 /// linker to `lld`; the heavy jobs override `RUSTFLAGS` to use `mold`.

@@ -20,8 +20,7 @@ use super::stage::Stage;
 #[cfg(test)]
 mod test;
 
-/// Local Docker tag `just run_local` loads. Keep in sync with
-/// `xtask_workflows::workflows::vars::AGENT_HARNESS_LOCAL_IMAGE`.
+/// Local Docker tag `just run_local` loads.
 pub const DEFAULT_LOCAL_TAG: &str = "macro-agent-harness:latest";
 
 /// Build context matching `just -f crates/agent_harness/justfile build-local`.
