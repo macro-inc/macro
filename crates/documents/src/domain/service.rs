@@ -1083,6 +1083,10 @@ impl<
         let document_id = document_metadata.document_id.clone();
 
         if !created {
+            // Reuse must return whatever content already exists. A pending
+            // placeholder here would tell the client to wait for an upload
+            // that this path never issues.
+            let content = self.content_for_document(&document_id, file_type).await?;
             let content_type = match file_type {
                 Some(FileType::Docx) => ContentType::Docx,
                 _ => file_type.into(),
@@ -1099,7 +1103,7 @@ impl<
                 document_response: DocumentResponse {
                     document_metadata: DocumentResponseMetadataWithContent::new(
                         document_response_metadata,
-                        pending_content_for_file_type(file_type),
+                        content,
                     )
                     .with_team_task_metadata(team_task_metadata),
                     presigned_url: None,

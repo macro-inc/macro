@@ -318,11 +318,13 @@ pub async fn reuse_email_document(
     sha: &str,
     email_attachment_id: uuid::Uuid,
 ) -> Result<Option<String>, sqlx::Error> {
-    sqlx::query("SELECT pg_advisory_xact_lock(hashtext($1), hashtext($2))")
-        .bind(owner)
-        .bind(sha)
-        .execute(transaction.as_mut())
-        .await?;
+    sqlx::query!(
+        r#"SELECT pg_advisory_xact_lock(hashtext($1), hashtext($2))"#,
+        owner,
+        sha,
+    )
+    .execute(transaction.as_mut())
+    .await?;
 
     if let Some(document_id) =
         find_document_id_for_email_attachment(&mut **transaction, email_attachment_id).await?

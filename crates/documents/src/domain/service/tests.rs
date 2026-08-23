@@ -2060,6 +2060,12 @@ async fn create_document_reuse_skips_content_url_and_created_event() {
         })))
     });
     repo.expect_set_document_content().times(0);
+    repo.expect_get_persisted_document_content()
+        .return_once(|_| {
+            Box::pin(std::future::ready(Ok(Some(DocumentContent::ready(
+                DocumentContentLocation::ObjectStorage,
+            )))))
+        });
     repo.expect_get_team_task_metadata()
         .returning(|_| Box::pin(std::future::ready(Ok(None))));
 
@@ -2086,6 +2092,10 @@ async fn create_document_reuse_skips_content_url_and_created_event() {
             .metadata
             .document_id,
         "doc-1"
+    );
+    assert_eq!(
+        response.document_response.document_metadata.content,
+        DocumentContent::ready(DocumentContentLocation::ObjectStorage),
     );
     assert!(event_broker.published().lock().unwrap().is_empty());
 }
