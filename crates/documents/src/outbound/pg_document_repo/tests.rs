@@ -1888,8 +1888,12 @@ async fn test_create_document_reuses_email_document_by_sha(pool: Pool<Postgres>)
     assert!(first.created);
     assert!(!second.created);
     assert_eq!(first.document_id, second.document_id);
-    let linked = document_email_rows(&pool, &first.document_id).await;
-    assert_eq!(linked, attachments);
+    let mut expected = attachments.clone();
+    expected.sort();
+    assert_eq!(
+        document_email_rows(&pool, &first.document_id).await,
+        expected
+    );
 }
 
 #[sqlx::test(
