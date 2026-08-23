@@ -457,18 +457,6 @@
           + pkgs.lib.concatMapStringsSep " " (binary: "--bin ${binary}") def.binaries
         ) deployServiceBinaryDefinitions;
 
-      # Cursor Cloud runs Nix with sandbox = false and exports these so a
-      # derivation miss (feature-branch lock / .sqlx) can reuse rustc
-      # artifacts from the environment bake. CI sandboxes do not pass them
-      # through. Listing the names changes the drv hash once — the next
-      # deploy_all_services / push_local_stack_binaries republishes.
-      cloudSccacheImpureEnvVars = [
-        "RUSTC_WRAPPER"
-        "SCCACHE_DIR"
-        "SCCACHE_CACHE_SIZE"
-        "SCCACHE_BASEDIR"
-      ];
-
       deployCargoArtifacts = craneLib.buildDepsOnly (
         commonArgs
         // {
@@ -479,7 +467,6 @@
           cargoCheckCommand = "true";
           cargoExtraArgs = deployBinaryCargoExtraArgs;
           CARGO_PROFILE = "release";
-          impureEnvVars = cloudSccacheImpureEnvVars;
         }
       );
 
@@ -504,7 +491,6 @@
               + pkgs.lib.concatMapStringsSep " " (binary: "--bin ${binary}") binaries
               + pkgs.lib.optionalString (featureArgs != "") " ${featureArgs}";
             CARGO_PROFILE = "release";
-            impureEnvVars = cloudSccacheImpureEnvVars;
             installPhaseCommand = ''
               mkdir -p $out/bin
               for binary in ${pkgs.lib.concatStringsSep " " binaries}; do
@@ -1004,27 +990,6 @@
             pkgConfigPath = pkgs.lib.makeSearchPath "lib/pkgconfig" [
               pkgs.openssl.dev
             ];
-            sccacheDirFromEnv = builtins.getEnv "SCCACHE_DIR";
-            home = builtins.getEnv "HOME";
-            cloudSccacheDir = "${home}/.cache/macro-cloud/sccache";
-            sccacheDir =
-              if sccacheDirFromEnv != "" then
-                sccacheDirFromEnv
-              else if home != "" && builtins.pathExists (home + "/.cache/macro-cloud") then
-                cloudSccacheDir
-              else
-                "";
-            # Checkout path, never `toString ../.` (that is the flake store copy).
-            sccacheBasedir =
-              let
-                fromEnv = builtins.getEnv "SCCACHE_BASEDIR";
-              in
-              if fromEnv != "" then
-                fromEnv
-              else if sccacheDir != "" then
-                "/workspace"
-              else
-                "";
           in
           pkgs.mkShell (
             {
@@ -1041,21 +1006,13 @@
               # workspaces. CI derivations do not inherit devShell attributes.
               CARGO_INCREMENTAL = "0";
               SCCACHE_CACHE_SIZE = "30G";
-              # Do not set SCCACHE_BASEDIR here: `toString ../.` is the flake
-              # store path, which would poison rustc keys. Cloud scripts and
-              # .github/actions/setup-sccache export the checkout path instead.
               # Namespace CI runners preserve Cargo's ignored target directory.
               # A flake update can change the Nix C compiler while leaving CMake
               # configure state behind; CMake then drops its command-line cache
               # entries while switching compilers, breaking aws-lc and librdkafka.
               # Remove only caches configured by another compiler so ordinary
               # shell entry keeps reusable native build state.
-              shellHook = ''
-                if [ -n "''${SCCACHE_DIR:-}" ]; then
-                  mkdir -p "$SCCACHE_DIR"
-                fi
-              ''
-              + pkgs.lib.optionalString isLinux ''
+              shellHook = pkgs.lib.optionalString isLinux ''
                 target_dir="''${CARGO_TARGET_DIR:-target}"
                 current_cc="$(type -P "''${CC:-cc}" || true)"
                 if [ -n "$current_cc" ] && [ -d "$target_dir" ]; then
@@ -1099,10 +1056,6 @@
               # resolver ignores this localhost default: run-dev needs
               # Doppler's dev DATABASE_URL, run-local its container-side URL.
               DATABASE_URL = "postgres://user:password@localhost:5432/macrodb";
-            }
-            // pkgs.lib.optionalAttrs (sccacheDir != "") { SCCACHE_DIR = sccacheDir; }
-            // pkgs.lib.optionalAttrs (sccacheBasedir != "") {
-              SCCACHE_BASEDIR = sccacheBasedir;
             }
             // pkgs.lib.optionalAttrs isDarwin {
               # The bundled librdkafka C++ build is a native macOS build.

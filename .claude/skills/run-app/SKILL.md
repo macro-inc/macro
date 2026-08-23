@@ -26,7 +26,7 @@ Do not run `just run_local`. That is the laptop TUI.
 bash .cursor/stack.sh
 ```
 
-Let the first run finish. It compiles whatever changed since the environment bake. rustc goes through sccache (`~/.cache/macro-cloud/sccache`); a lockfile or `.sqlx` miss still compiles, but unchanged crates should hit after the first bake. Do not kill the Nix build, copy binaries out of `/nix/store`, or replace this with hand-rolled `docker compose`.
+Let the first run finish. It compiles whatever changed since the environment bake. Do not kill the Nix build, copy binaries out of `/nix/store`, or replace this with hand-rolled `docker compose`.
 
 Log in with any email. The login API returns the code. Codes also land in Mailpit at http://localhost:8025.
 

@@ -1,13 +1,6 @@
 WORKSPACE_ROOT='/workspace'
 CACHE_ROOT="${HOME}/.cache/macro-cloud"
 TARGET_CACHE="${CACHE_ROOT}/target"
-# Durable rustc cache. The flake already sets RUSTC_WRAPPER=sccache in
-# `nix develop`; this path is what Cloud actually persists across sessions.
-# Default SCCACHE_DIR (~/.cache/sccache) is not in the bake snapshot.
-SCCACHE_DIR="${SCCACHE_DIR:-${CACHE_ROOT}/sccache}"
-export SCCACHE_DIR
-export SCCACHE_CACHE_SIZE="${SCCACHE_CACHE_SIZE:-30G}"
-export SCCACHE_BASEDIR="${SCCACHE_BASEDIR:-${WORKSPACE_ROOT}}"
 export MACRO_STACK_SNAPSHOT_DIR="${CACHE_ROOT}/stack-snapshots"
 
 LOG_DIR="${HOME}/.cursor-cloud"
@@ -20,10 +13,9 @@ NIX_SOCK='/nix/var/nix/daemon-socket/socket'
 NIX_CACHE_URL='s3://macro-nix-cache?region=us-east-1&compression=zstd'
 NIX_CACHE_PUBLIC_KEY='nix-cache.macro.com-1:UtlRPa6ac+o4IfY+wV8KUS+X0XPU0YMv18lPWEDYN5k='
 LOCAL_STACK_BINS="${CACHE_ROOT}/local-stack-bins"
-NIX_DAEMON_SCCACHE_STAMP="${LOG_DIR}/nix-daemon-sccache.stamp"
 export DATABASE_URL="${MACRODB_URL}"
 
-mkdir -p "${LOG_DIR}" "${TARGET_CACHE}" "${MACRO_STACK_SNAPSHOT_DIR}" "${SCCACHE_DIR}"
+mkdir -p "${LOG_DIR}" "${TARGET_CACHE}" "${MACRO_STACK_SNAPSHOT_DIR}"
 
 nix_base_conf() {
   echo 'experimental-features = nix-command flakes'
@@ -51,44 +43,6 @@ ensure_nix_installed() {
   test -x "${NIX_BIN}"
 }
 
-nix_daemon_sccache_stamp() {
-  # Values only — no AWS secrets. The daemon reads impureEnvVars from *its*
-  # environment, not the `nix build` client's, so a wrapper set in the
-  # pinned shell is invisible until the daemon is restarted with it.
-  printf '%s\n' \
-    "${RUSTC_WRAPPER:-}" \
-    "${SCCACHE_DIR:-}" \
-    "${SCCACHE_CACHE_SIZE:-}" \
-    "${SCCACHE_BASEDIR:-}"
-}
-
-ensure_sccache_dir() {
-  mkdir -p "${SCCACHE_DIR}"
-  local owner group
-  owner="$(workspace_owner)"
-  group="$(workspace_group)"
-  # Nix builds run as nixbld* even with sandbox=false. They must be able
-  # to write the same cache cargo-in-the-dev-shell uses as the workspace owner.
-  if getent group nixbld >/dev/null 2>&1; then
-    group='nixbld'
-  fi
-  if [ "$(stat -c '%U:%G' "${SCCACHE_DIR}")" != "${owner}:${group}" ]; then
-    sudo chown -R "${owner}:${group}" "${SCCACHE_DIR}"
-  fi
-  sudo chmod 2775 "${SCCACHE_DIR}"
-}
-
-prepare_rustc_wrapper_for_nix() {
-  if [ -z "${RUSTC_WRAPPER:-}" ] && command -v sccache >/dev/null 2>&1; then
-    RUSTC_WRAPPER="$(command -v sccache)"
-    export RUSTC_WRAPPER
-  fi
-  export SCCACHE_DIR="${SCCACHE_DIR:-${CACHE_ROOT}/sccache}"
-  export SCCACHE_CACHE_SIZE="${SCCACHE_CACHE_SIZE:-30G}"
-  export SCCACHE_BASEDIR="${SCCACHE_BASEDIR:-${WORKSPACE_ROOT}}"
-  ensure_sccache_dir
-}
-
 ensure_nix_daemon() {
   ensure_nix_installed
 
@@ -113,19 +67,12 @@ ensure_nix_daemon() {
   sudo mkdir -p /etc/nix
   if ! sudo cmp -s "${desired_conf}" /etc/nix/nix.conf; then
     sudo install -m 0644 "${desired_conf}" /etc/nix/nix.conf
+    sudo pkill -x nix-daemon >/dev/null 2>&1 || true
     config_changed=true
   fi
   rm -f "${desired_conf}"
 
-  local desired_stamp stamp_changed=false
-  desired_stamp="$(nix_daemon_sccache_stamp)"
-  if [ ! -f "${NIX_DAEMON_SCCACHE_STAMP}" ] \
-    || [ "$(cat "${NIX_DAEMON_SCCACHE_STAMP}")" != "${desired_stamp}" ]; then
-    stamp_changed=true
-  fi
-
-  if "${config_changed}" || "${stamp_changed}"; then
-    sudo pkill -x nix-daemon >/dev/null 2>&1 || true
+  if "${config_changed}"; then
     local config_wait=0
     while sudo pgrep -x nix-daemon >/dev/null 2>&1 && [ "${config_wait}" -lt 30 ]; do
       config_wait=$((config_wait + 1))
@@ -134,7 +81,6 @@ ensure_nix_daemon() {
   fi
 
   if "${NIX_BIN}" ping-store >/dev/null 2>&1; then
-    printf '%s\n' "${desired_stamp}" >"${NIX_DAEMON_SCCACHE_STAMP}"
     return 0
   fi
 
@@ -149,21 +95,11 @@ ensure_nix_daemon() {
       "AWS_SECRET_ACCESS_KEY=${NIX_CACHE_AWS_SECRET_ACCESS_KEY}"
     )
   fi
-  if [ -n "${RUSTC_WRAPPER:-}" ]; then
-    # Passed into builders via impureEnvVars on the deploy derivations.
-    daemon_env+=(
-      "RUSTC_WRAPPER=${RUSTC_WRAPPER}"
-      "SCCACHE_DIR=${SCCACHE_DIR}"
-      "SCCACHE_CACHE_SIZE=${SCCACHE_CACHE_SIZE}"
-      "SCCACHE_BASEDIR=${SCCACHE_BASEDIR}"
-    )
-  fi
   sudo setsid --fork env "${daemon_env[@]}" "${NIX_BIN}" daemon \
     >>"${LOG_DIR}/nix-daemon.log" 2>&1 </dev/null
   local n=0
   while [ "${n}" -lt 30 ]; do
     if "${NIX_BIN}" ping-store >/dev/null 2>&1; then
-      printf '%s\n' "${desired_stamp}" >"${NIX_DAEMON_SCCACHE_STAMP}"
       return 0
     fi
     n=$((n + 1))
@@ -364,8 +300,7 @@ remove_workspace_target_mounts() {
 }
 
 ensure_persistent_caches() {
-  mkdir -p "${TARGET_CACHE}" "${MACRO_STACK_SNAPSHOT_DIR}" "${SCCACHE_DIR}"
-  ensure_sccache_dir
+  mkdir -p "${TARGET_CACHE}" "${MACRO_STACK_SNAPSHOT_DIR}"
   remove_workspace_target_mounts
 
   if [ -e "${WORKSPACE_ROOT}/target" ] && [ ! -L "${WORKSPACE_ROOT}/target" ]; then
@@ -378,14 +313,9 @@ ensure_persistent_caches() {
     sudo chown -R "$(workspace_owner):$(workspace_group)" "${TARGET_CACHE}"
   fi
   echo "cursor-cloud: ${WORKSPACE_ROOT}/target -> ${TARGET_CACHE}"
-  echo "cursor-cloud: sccache -> ${SCCACHE_DIR}"
 }
 
 build_local_stack_binaries() {
-  # RUSTC_WRAPPER is a dev-shell env var. The daemon must see it too, or
-  # `nix build` of local-stack-binaries compiles without sccache on a miss.
-  prepare_rustc_wrapper_for_nix
-  ensure_nix_daemon
   (
     \cd "${WORKSPACE_ROOT}"
     "${NIX_BIN}" build "${WORKSPACE_ROOT}#local-stack-binaries" --out-link "${LOCAL_STACK_BINS}"

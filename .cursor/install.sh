@@ -71,12 +71,6 @@ just stack up --infra-only --no-doppler --build-aux-services --binaries-dir "${L
 cleanup_stack
 trap - EXIT
 
-# Flush sccache's in-memory index into the durable dir before the bake
-# snapshot. The server is started on demand by rustc via RUSTC_WRAPPER.
-if command -v sccache >/dev/null 2>&1; then
-  sccache --stop-server >/dev/null 2>&1 || true
-fi
-
 # Cursor waits for the install process tree to drain. Images, volumes, and
 # the Nix store stay on disk; start.sh / infra.sh bring the daemons back.
 stop_cloud_daemons
