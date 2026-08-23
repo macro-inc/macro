@@ -1014,6 +1014,17 @@
                 cloudSccacheDir
               else
                 "";
+            # Checkout path, never `toString ../.` (that is the flake store copy).
+            sccacheBasedir =
+              let
+                fromEnv = builtins.getEnv "SCCACHE_BASEDIR";
+              in
+              if fromEnv != "" then
+                fromEnv
+              else if sccacheDir != "" then
+                "/workspace"
+              else
+                "";
           in
           pkgs.mkShell (
             {
@@ -1030,9 +1041,9 @@
               # workspaces. CI derivations do not inherit devShell attributes.
               CARGO_INCREMENTAL = "0";
               SCCACHE_CACHE_SIZE = "30G";
-              # Rewrite workspace paths so JJ worktrees and Cloud checkouts
-              # share keys. Matches .github/actions/setup-sccache.
-              SCCACHE_BASEDIR = toString ../.;
+              # Do not set SCCACHE_BASEDIR here: `toString ../.` is the flake
+              # store path, which would poison rustc keys. Cloud scripts and
+              # .github/actions/setup-sccache export the checkout path instead.
               # Namespace CI runners preserve Cargo's ignored target directory.
               # A flake update can change the Nix C compiler while leaving CMake
               # configure state behind; CMake then drops its command-line cache
@@ -1090,6 +1101,9 @@
               DATABASE_URL = "postgres://user:password@localhost:5432/macrodb";
             }
             // pkgs.lib.optionalAttrs (sccacheDir != "") { SCCACHE_DIR = sccacheDir; }
+            // pkgs.lib.optionalAttrs (sccacheBasedir != "") {
+              SCCACHE_BASEDIR = sccacheBasedir;
+            }
             // pkgs.lib.optionalAttrs isDarwin {
               # The bundled librdkafka C++ build is a native macOS build.
               # cmake-rs supplies an `arm64-apple-macosx` target flag, while
