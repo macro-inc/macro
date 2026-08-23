@@ -112,8 +112,9 @@ impl BinariesDir {
     /// Keep a Nix store path alive while containers still mount it.
     ///
     /// `nix build --out-link` on Cloud flips the caller's link to the new
-    /// path. Pin the mounted generation under `roots_dir` so it stays rooted
-    /// until [`release_previous_gc_root`] runs after a successful remount.
+    /// path. Pin each generation under `roots_dir` with its own `--out-link`.
+    /// Never rename those links: Nix registers the path, not the inode, so a
+    /// rename drops the root. A plain symlink fallback is not a GC root.
     pub fn pin_gc_root(&self, roots_dir: &Path) -> Result<()> {
         let Self::NixStore(dir) = self else {
             return Ok(());
@@ -128,43 +129,39 @@ impl BinariesDir {
             return Ok(());
         }
         if current.exists() {
-            let prev = roots_dir.join("nix-binaries.prev");
-            let _ = std::fs::remove_file(&prev);
-            std::fs::rename(&current, &prev).with_context(|| {
-                format!(
-                    "keeping previous nix pin {} as {}",
-                    current.display(),
-                    prev.display()
-                )
-            })?;
+            publish_gc_root(
+                &roots_dir.join("nix-binaries.prev"),
+                &canonicalize_or_clone(&current),
+            )?;
         }
-        let tmp = roots_dir.join("nix-binaries.new");
-        let _ = std::fs::remove_file(&tmp);
-        let pinned = Command::new("nix")
-            .args(["build", "--out-link"])
-            .arg(&tmp)
-            .arg(store_output)
-            .status();
-        if pinned.as_ref().is_ok_and(std::process::ExitStatus::success) {
-            std::fs::rename(&tmp, &current)
-                .with_context(|| format!("publishing nix pin to {}", current.display()))?;
-            return Ok(());
-        }
-        let _ = std::fs::remove_file(&tmp);
-        std::os::unix::fs::symlink(store_output, &current).with_context(|| {
-            format!(
-                "pinning {} at {} (nix build --out-link unavailable)",
-                store_output.display(),
-                current.display()
-            )
-        })?;
-        Ok(())
+        publish_gc_root(&current, store_output)
     }
 
     /// Drop the previous generation's pin after the new mount is recorded.
     pub fn release_previous_gc_root(roots_dir: &Path) {
         let _ = std::fs::remove_file(roots_dir.join("nix-binaries.prev"));
     }
+}
+
+/// Register `link` as a Nix GC root for `store_output`. Writes `--out-link`
+/// at `link` itself so the auto-root path stays stable.
+fn publish_gc_root(link: &Path, store_output: &Path) -> Result<()> {
+    let pinned = Command::new("nix")
+        .args(["build", "--out-link"])
+        .arg(link)
+        .arg(store_output)
+        .status();
+    if pinned.as_ref().is_ok_and(std::process::ExitStatus::success) {
+        return Ok(());
+    }
+    let _ = std::fs::remove_file(link);
+    std::os::unix::fs::symlink(store_output, link).with_context(|| {
+        format!(
+            "pinning {} at {} (nix build --out-link unavailable; not a GC root)",
+            store_output.display(),
+            link.display()
+        )
+    })
 }
 
 fn canonicalize_or_clone(path: &Path) -> PathBuf {
