@@ -6,10 +6,8 @@
 //! flake exposes `x86_64-linux` and `aarch64-linux`; Apple Silicon and ARM
 //! Linux therefore bake natively instead of qemu. BuildKit cache is the
 //! freshness check: unchanged `container/` is a no-op rebuild, a Dockerfile or
-//! flake change pays the two nix shells. `--no-build` (Fly preview VM boot, CI
-//! snapshot bake) skips that: the image is already on the daemon from preload /
-//! the images lane, and the Fly VM's staged repo does not even include
-//! `crates/agent_harness/container`.
+//! flake change pays the two nix shells. `--no-build` (CI snapshot bake)
+//! skips that: the image is already on the daemon from preload.
 
 use std::collections::BTreeMap;
 use std::path::Path;
@@ -22,8 +20,7 @@ use super::stage::Stage;
 #[cfg(test)]
 mod test;
 
-/// Local Docker tag `just run_local` / Fly previews load. Keep in sync with
-/// `xtask_workflows::workflows::vars::AGENT_HARNESS_LOCAL_IMAGE`.
+/// Local Docker tag `just run_local` loads.
 pub const DEFAULT_LOCAL_TAG: &str = "macro-agent-harness:latest";
 
 /// Build context matching `just -f crates/agent_harness/justfile build-local`.
@@ -68,7 +65,7 @@ pub(crate) fn build_args(tag: &str, context: &Path) -> Vec<String> {
 
 /// `docker build` the sandbox image when local sandboxes are on.
 ///
-/// `no_build` skips the invocation so Fly / `--no-build` stack-up can use a
+/// `no_build` skips the invocation so `--no-build` stack-up can use a
 /// preloaded tag. Dry-run notes the plan and does not invoke Docker.
 pub fn ensure(stage: &Stage, env: &BTreeMap<String, String>, no_build: bool) -> Result<()> {
     let Some(plan) = EnsurePlan::from_env(env) else {

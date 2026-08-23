@@ -10,7 +10,7 @@ use documents_hex::domain::{
     models::DocumentError,
 };
 use entity_access::domain::{
-    models::{EditAccessLevel, ViewAccessLevel},
+    models::{BotAccessScope, EditAccessLevel, ViewAccessLevel},
     ports::EntityAccessService,
 };
 use favorites::domain::ports::FavoritesService;
@@ -326,9 +326,12 @@ pub async fn handler(
         // properties service takes its authorization as this typed receipt.
         let receipt = match state
             .entity_access_service
-            .generate_entity_access_receipt::<EditAccessLevel>(
-                &user_context.authorization.user.macro_user_id,
-                organization_id,
+            .generate_bot_entity_access_receipt::<EditAccessLevel>(
+                bot_id::MACRO_SYSTEM_BOT_ID,
+                BotAccessScope::User {
+                    user_id: user_context.authorization.user.macro_user_id.clone(),
+                    user_org_id: organization_id,
+                },
                 &document_id,
                 EntityType::Document,
             )

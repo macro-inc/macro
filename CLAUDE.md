@@ -317,7 +317,7 @@ don't inject it directly into the error message.
 
 ## Cursor Cloud specific instructions
 
-`.cursor/install.sh` prepares the durable caches, databases, test dependencies, frontend dependencies, service binaries, and stack init snapshot, then stops dockerd and nix-daemon so the Cloud bake can exit. `.cursor/start.sh` runs at boot and starts nothing beyond the nix daemon, so sessions and subagents are usable immediately. `.cursor/infra.sh` starts Docker, Postgres, and Redis on demand. `.cursor/stack.sh` starts the on-demand product stack. `.cursor/rebuild.sh` rebuilds the stack after backend edits. These scripts are the only supported entry points; each re-enters the pinned nix shell itself, so run them with plain `bash` from any environment.
+`.cursor/install.sh` prepares the durable caches, databases, test dependencies, frontend dependencies, service binaries, and stack init snapshot, then stops dockerd and nix-daemon so the Cloud bake can exit. `.cursor/start.sh` runs at boot and starts nothing beyond the nix daemon, so sessions and subagents are usable immediately. `.cursor/infra.sh` starts Docker, Postgres, and Redis on demand. `.cursor/stack.sh` starts the on-demand product: backend containers behind the proxy (8090) plus the hot-reloading frontend dev server — the app is at http://localhost:3000/app and frontend edits apply on save (idempotent; a healthy stack is left alone). `.cursor/rebuild.sh` remounts new backend binaries after Rust edits. These scripts are the only supported entry points; each re-enters the pinned nix shell itself, so run them with plain `bash` from any environment. To run the app and see your edits, follow the `run-app` skill (`.claude/skills/run-app/SKILL.md`).
 
 Nix is the only host dependency. The pinned dev shell supplies the Docker CLI and daemon, Compose, `fuse-overlayfs`, and OpenSSH. `ssh-keygen` must come from this shell.
 
@@ -329,8 +329,8 @@ Set `DOPPLER_TOKEN` as a Cursor environment **runtime** secret: a Doppler servic
 
 Nothing runs after boot. Before DB-backed `cargo test -p <crate>`, run `bash .cursor/infra.sh` once — it brings up Docker, Postgres, and Redis in seconds because install baked the images and volumes. Pure-logic crate tests need nothing. Run `bash .cursor/stack.sh` for a product-ready environment.
 
-After backend edits, run `bash .cursor/rebuild.sh`. Do not use `just stack update` with the read-only Nix binary directory.
+After backend edits, run `bash .cursor/rebuild.sh`. That nix-builds the stack binaries and runs `just stack update --binaries-dir`, which remounts them without wiping volumes.
 
-No seeding or OTP is needed to log in: passwordless login auto-creates a user for any email, and the stack's auth service is built with `return_passwordless_code`, so the login API returns the code in its response (codes are also visible at the proxy's `/mailpit/` UI). `just seed-scenario apply --file seed/scenarios/team-perms.json` is optional, for multi-user team/permission fixtures. The `agent_harness_service` restart loop is expected when AI provider keys are missing; with `DOPPLER_TOKEN` those keys come from `local`/`lcl_preview`.
+No seeding or OTP is needed to log in: passwordless login auto-creates a user for any email, and the stack's auth service is built with `return_passwordless_code`, so the login API returns the code in its response (codes are also visible in Mailpit at http://localhost:8025). `just seed-scenario apply --file seed/scenarios/team-perms.json` is optional, for multi-user team/permission fixtures. The `agent_harness_service` restart loop is expected when AI provider keys are missing; with `DOPPLER_TOKEN` those keys come from `local`/`lcl_preview`.
 
 Leave `SQLX_OFFLINE` unset for `cargo test`. If SQLx reports missing cached query data, run `just prepare_db` instead of enabling offline mode. Run crate tests from the repository root with `cargo test -p <crate>`.

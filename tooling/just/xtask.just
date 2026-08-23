@@ -36,9 +36,9 @@ destroy_local *ARGS:
 stop_local *ARGS:
   {{ xtask }} stop-local "$@"
 
-# Headless stack orchestration for previews, agents, and CI.
+# Headless stack orchestration for agents and CI.
 #   just stack up                      # full stack; static frontend served by the proxy
-#   just stack update                  # rebuild + reload only what changed (the `r` hotkey)
+#   just stack update                  # adopt a new build; volumes stay
 #   just stack status --json           # machine-readable state
 #   just stack down                    # reclaim everything
 stack *ARGS:

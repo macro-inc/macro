@@ -526,6 +526,20 @@ pub trait NotificationIngressQueue: Send + Sync + 'static {
     ) -> impl Future<Output = Result<(), Report>> + Send;
 }
 
+/// Outbound port for delivering one VoIP push to an already-resolved
+/// endpoint. Implemented by the SNS mobile adapter; the domain's
+/// [`VoipPushSender`] service depends on this instead of the concrete
+/// adapter type.
+pub trait VoipPushDelivery: Send + Sync + 'static {
+    /// Deliver one VoIP push to the endpoint, returning the provider
+    /// message id.
+    fn send_voip_push(
+        &self,
+        endpoint_arn: &str,
+        payload: &VoipPushPayload,
+    ) -> impl Future<Output = Result<String, Report>> + Send;
+}
+
 /// Port for sending VoIP push notifications (PushKit / CallKit) to iOS devices.
 ///
 /// VoIP pushes bypass the regular notification pipeline — they are delivered

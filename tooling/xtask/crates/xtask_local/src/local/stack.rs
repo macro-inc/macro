@@ -1,19 +1,14 @@
 //! Headless stack orchestration: `cargo x stack up|update|status|down`.
 //!
-//! The preview/agent/CI surface. Same bring-up as `run_local`, but no TTY
-//! hotkey loop and no attached dev server: the frontend is a static bundle
-//! served by the instance's Caddy, so a finished `up` leaves only Docker
-//! containers running — nothing to babysit, and the whole product lives behind
-//! the ONE proxy origin that an agent drives with a browser and a preview
-//! deploy fronts with a real hostname.
+//! Same bring-up as `run_local`, but no TTY hotkey loop and no attached dev
+//! server. The frontend is a static bundle served by Caddy. A finished `up`
+//! leaves only Docker containers running behind one proxy origin.
 //!
-//! `up` is full-delete/full-create like `run_local` (unconditionally
-//! idempotent); `update` is the `r`-hotkey as a one-shot verb (rebuild, restart
-//! only what changed); `status` is machine-readable state; `down` reclaims
-//! everything.
+//! `up` is full-delete/full-create. `update` adopts a new binary directory
+//! without touching volumes. If nothing is recorded yet, `update` bootstraps
+//! through `up`. `status` is machine-readable state. `down` reclaims everything.
 
-use std::io::{BufReader, Read};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::process::Command;
 
 use anyhow::{Context, Result, bail};
@@ -30,9 +25,6 @@ use super::{Mode, arch, env_layer, frontend, mailpit, proxy, sdk_webhook, snapsh
 pub struct UpArgs {
     #[command(flatten)]
     pub run: RunArgs,
-    /// Stage this prebuilt frontend dist instead of building (CI artifact reuse).
-    #[arg(long)]
-    pub frontend_dist: Option<PathBuf>,
     /// Neither restore from nor save an init snapshot — always run the full
     /// migrate/kickstart/index init.
     #[arg(long)]
@@ -50,15 +42,6 @@ pub struct UpArgs {
 }
 
 #[derive(Args, Clone, Default)]
-pub struct SnapshotArgs {
-    #[command(flatten)]
-    pub instance: InstanceArgs,
-    /// Print machine-readable JSON (key, dir, present).
-    #[arg(long)]
-    pub json: bool,
-}
-
-#[derive(Args, Clone, Default)]
 pub struct UpdateArgs {
     #[command(flatten)]
     pub instance: InstanceArgs,
@@ -67,23 +50,17 @@ pub struct UpdateArgs {
     /// Also rebuild + restage the static frontend and recreate the proxy.
     #[arg(long)]
     pub frontend: bool,
-    /// Stage this prebuilt frontend dist instead of building (implies --frontend).
+    /// Adopt this complete prebuilt binary set instead of invoking Cargo.
     #[arg(long)]
-    pub frontend_dist: Option<PathBuf>,
-    /// Apply this complete prebuilt binary set instead of invoking Cargo.
-    #[arg(long, conflicts_with = "build_aux_services")]
     pub binaries_dir: Option<PathBuf>,
-    /// Rebuild every repository-built local Docker service.
+    /// Rebuild every repository-built local Docker service and recreate it.
     #[arg(long)]
     pub build_aux_services: bool,
-    /// Recreate registry-refreshed preview auxiliary services without building.
-    #[arg(long, hide = true, requires = "binaries_dir")]
-    pub recreate_aux_services: bool,
     /// Stream subprocess output and show per-step timings.
     #[arg(long, short)]
     pub verbose: bool,
     /// Print a machine-readable summary as the final line.
-    #[arg(long, hide = true, requires = "binaries_dir")]
+    #[arg(long)]
     pub json: bool,
 }
 
@@ -114,8 +91,7 @@ struct StackState {
     mode: String,
     /// `static` (Caddy serves the bundle) or `none` (`--no-frontend`).
     frontend: String,
-    /// Stable directory bind-mounted into every Rust service. Prebuilt updates
-    /// replace files here atomically so existing container mounts see them.
+    /// Host directory currently bind-mounted at `/app/out`.
     #[serde(default)]
     binaries_dir: Option<PathBuf>,
 }
@@ -197,18 +173,12 @@ pub fn up(mode: Mode, args: &UpArgs) -> Result<Instance> {
     // joined just before `bring_up_app` creates that container. (Dry run:
     // synchronously, so the command preview prints in order.)
     if static_frontend && stage.is_dry_run() {
-        frontend::build_static(&stage, &instance, mode, args.frontend_dist.as_deref())?;
+        frontend::build_static(&stage, &instance, mode)?;
     }
     let fe_build = (static_frontend && !stage.is_dry_run()).then(|| {
         let instance = instance.clone();
-        let prebuilt = args.frontend_dist.clone();
         std::thread::spawn(move || {
-            frontend::build_static(
-                &Stage::from_env().quiet(),
-                &instance,
-                mode,
-                prebuilt.as_deref(),
-            )
+            frontend::build_static(&Stage::from_env().quiet(), &instance, mode)
         })
     });
 
@@ -272,9 +242,9 @@ pub fn up(mode: Mode, args: &UpArgs) -> Result<Instance> {
         .binaries_dir
         .clone()
         .unwrap_or_else(|| super::workspace_root().join(target.debug_dir()));
-    let active_binaries = super::build::BinariesDir::classify(&configured_binaries)?
-        .host_dir()
-        .to_path_buf();
+    let binaries = super::build::BinariesDir::classify(&configured_binaries)?;
+    binaries.pin_gc_root(&instance.artifact_dir())?;
+    let active_binaries = binaries.host_dir().to_path_buf();
     super::bring_up_app(&stage, mode, &instance, &env)?;
     let _sdk_webhook_tunnel = (mode == Mode::Local && !stage.is_dry_run())
         .then(|| sdk_webhook::start(&instance))
@@ -295,6 +265,7 @@ pub fn up(mode: Mode, args: &UpArgs) -> Result<Instance> {
                 binaries_dir: Some(active_binaries),
             },
         )?;
+        super::build::BinariesDir::release_previous_gc_root(&instance.artifact_dir());
     }
 
     let frontend_url = if static_frontend {
@@ -321,18 +292,41 @@ pub fn up(mode: Mode, args: &UpArgs) -> Result<Instance> {
     Ok(instance)
 }
 
-/// `cargo x stack update` — the `r` hotkey as a one-shot verb: rebuild the
-/// binaries (and optionally the frontend bundle) and restart only what changed.
+/// `cargo x stack update` — adopt a new build into the running stack.
+/// Volumes stay. With no recorded stack, this bootstraps through [`up`].
 pub fn update(args: &UpdateArgs) -> Result<()> {
+    let instance = Instance::derive(args.instance.instance.as_deref(), args.instance.port_base)?;
+    if read_state(&instance).is_none() {
+        return bootstrap_from_update(args);
+    }
+    update_running(args)
+}
+
+fn bootstrap_from_update(args: &UpdateArgs) -> Result<()> {
+    let up_args = UpArgs {
+        run: super::cli::RunArgs {
+            instance: args.instance.clone(),
+            env: args.env.clone(),
+            build: super::cli::BuildArgs {
+                no_build: args.binaries_dir.is_some(),
+                build_aux_services: args.build_aux_services,
+                binaries_dir: args.binaries_dir.clone(),
+            },
+            no_frontend: false,
+            verbose: args.verbose,
+            traces: None,
+        },
+        no_snapshot: false,
+        infra_only: false,
+        json: args.json,
+    };
+    up(Mode::Local, &up_args).map(|_| ())
+}
+
+fn update_running(args: &UpdateArgs) -> Result<()> {
     let stage = Stage::from_env_cli(args.verbose);
     let instance = Instance::derive(args.instance.instance.as_deref(), args.instance.port_base)?;
-    let Some(state) = read_state(&instance) else {
-        bail!(
-            "no stack state at {} — bring the stack up first (`just stack up{}`)",
-            state_path(&instance).display(),
-            instance_suffix(&instance)
-        );
-    };
+    let state = read_state(&instance).expect("update_running requires stack state");
     let mode = mode_from_label(&state.mode)?;
     stage.section(&format!(
         "macro {} stack update — instance {}",
@@ -347,15 +341,20 @@ pub fn update(args: &UpdateArgs) -> Result<()> {
         args.env.env_file.as_deref(),
         state.frontend == "static",
     )?;
-    let changed = if let Some(source) = args.binaries_dir.as_deref() {
-        let changed = apply_prebuilt_binaries(mode, &state, source)?;
-        if args.recreate_aux_services {
-            super::recreate_preview_aux_service_containers(&stage, &instance, &env)?;
+    let remounted = if let Some(source) = args.binaries_dir.as_deref() {
+        let new = super::build::BinariesDir::classify(source)?;
+        new.validate(&super::inventory::local_binaries())?;
+        new.pin_gc_root(&instance.artifact_dir())?;
+        match new.adoption_from_recorded(state.binaries_dir.as_deref()) {
+            super::build::Adoption::Unchanged => {
+                stage.note("binaries unchanged — mounts left as-is");
+                false
+            }
+            super::build::Adoption::Remount => {
+                remount(&stage, mode, &instance, &env, &new, &state)?;
+                true
+            }
         }
-        if !changed.is_empty() {
-            super::reload_services(&stage, &instance, &changed)?;
-        }
-        changed
     } else {
         let target = arch::detect()?;
         super::rebuild_and_reload(
@@ -366,18 +365,16 @@ pub fn update(args: &UpdateArgs) -> Result<()> {
             target,
             args.build_aux_services,
         )?;
-        Vec::new()
+        false
     };
 
-    if args.frontend || args.frontend_dist.is_some() {
-        reload_static_frontend(
-            &stage,
-            &instance,
-            mode,
-            &env,
-            &state,
-            args.frontend_dist.as_deref(),
-        )?;
+    if args.binaries_dir.is_some() && args.build_aux_services {
+        super::build_aux_service_images(&stage, &instance, &env)?;
+        super::recreate_aux_service_containers(&stage, &instance, &env)?;
+    }
+
+    if args.frontend {
+        reload_static_frontend(&stage, &instance, mode, &env, &state)?;
     }
     if mode.spec().wait_backend_before_frontend {
         frontend::wait_backend_ready(&stage, &instance)?;
@@ -386,35 +383,59 @@ pub fn update(args: &UpdateArgs) -> Result<()> {
         println!(
             "{}",
             serde_json::to_string(&json!({
-                "changed_services": changed.iter().map(|s| s.compose_name).collect::<Vec<_>>(),
-                "frontend_updated": args.frontend || args.frontend_dist.is_some(),
-                "aux_services_recreated": args.recreate_aux_services,
+                "remounted": remounted,
+                "frontend_updated": args.frontend,
+                "aux_services_rebuilt": args.build_aux_services,
             }))?
         );
     }
     Ok(())
 }
 
-fn apply_prebuilt_binaries(
+fn remount(
+    stage: &Stage,
     mode: Mode,
+    instance: &Instance,
+    env: &env_layer::ResolvedEnv,
+    new: &super::build::BinariesDir,
     state: &StackState,
-    binaries_dir: &Path,
-) -> Result<Vec<&'static super::inventory::RustService>> {
-    let destination = state.binaries_dir.as_ref().ok_or_else(|| {
-        anyhow::anyhow!(
-            "stack state predates prebuilt updates — perform a full stack up before updating"
-        )
-    })?;
-    let source = super::build::BinariesDir::classify(binaries_dir)?;
-    source.validate(&super::inventory::local_binaries())?;
-    let mut changed = Vec::new();
-    for service in super::inventory::services_for_mode(mode) {
-        if replace_binary_if_changed(source.host_dir(), destination, service.cargo_bin)? {
-            changed.push(service);
-        }
+) -> Result<()> {
+    let gmail_forwarder = env
+        .merged
+        .get("GMAIL_FORWARDER_SA_KEY")
+        .is_some_and(|key| !key.trim().is_empty());
+    super::gen_compose::generate(
+        mode,
+        instance,
+        new,
+        state.frontend == "static",
+        gmail_forwarder,
+    )?;
+    let mut up = super::compose_cmd(instance, env);
+    up.args([
+        "up",
+        "-d",
+        "--force-recreate",
+        "--no-deps",
+        "--remove-orphans",
+    ]);
+    for svc in super::inventory::services_for_mode(mode) {
+        up.arg(svc.compose_name);
     }
-
-    Ok(changed)
+    if gmail_forwarder {
+        up.arg("gmail_forwarder");
+    }
+    stage.run("Remounting Rust services", &mut up)?;
+    write_state(
+        instance,
+        &StackState {
+            mode: state.mode.clone(),
+            frontend: state.frontend.clone(),
+            binaries_dir: Some(new.host_dir().to_path_buf()),
+        },
+    )?;
+    super::build::BinariesDir::release_previous_gc_root(&instance.artifact_dir());
+    Ok(())
 }
 
 fn reload_static_frontend(
@@ -423,7 +444,6 @@ fn reload_static_frontend(
     mode: Mode,
     env: &env_layer::ResolvedEnv,
     state: &StackState,
-    frontend_dist: Option<&Path>,
 ) -> Result<()> {
     if state.frontend != "static" {
         bail!(
@@ -431,72 +451,12 @@ fn reload_static_frontend(
              re-run `just stack up` to serve one"
         );
     }
-    frontend::build_static(stage, instance, mode, frontend_dist)?;
+    frontend::build_static(stage, instance, mode)?;
     // build_static replaces the staged directory, so the container must be
     // recreated to establish a bind mount to the new inode.
     let mut up = super::compose_cmd(instance, env);
     up.args(["up", "-d", "--force-recreate", "--no-deps", "proxy"]);
     stage.run("Recreating proxy (frontend bundle)", &mut up)
-}
-
-fn replace_binary_if_changed(
-    source_dir: &Path,
-    destination_dir: &Path,
-    name: &str,
-) -> Result<bool> {
-    let source = source_dir.join(name);
-    let destination = destination_dir.join(name);
-    if files_equal(&source, &destination)? {
-        return Ok(false);
-    }
-    std::fs::create_dir_all(destination_dir)
-        .with_context(|| format!("creating {}", destination_dir.display()))?;
-    let temporary = destination_dir.join(format!(".{name}.hot-update-{}", std::process::id()));
-    let _ = std::fs::remove_file(&temporary);
-    std::fs::copy(&source, &temporary).with_context(|| {
-        format!(
-            "copying prebuilt binary {} to {}",
-            source.display(),
-            temporary.display()
-        )
-    })?;
-    std::fs::rename(&temporary, &destination).with_context(|| {
-        format!(
-            "atomically replacing {} with {}",
-            destination.display(),
-            source.display()
-        )
-    })?;
-    Ok(true)
-}
-
-fn files_equal(left: &Path, right: &Path) -> Result<bool> {
-    let left_meta = std::fs::metadata(left)
-        .with_context(|| format!("reading binary metadata for {}", left.display()))?;
-    let Ok(right_meta) = std::fs::metadata(right) else {
-        return Ok(false);
-    };
-    if left_meta.len() != right_meta.len() {
-        return Ok(false);
-    }
-    let mut left = BufReader::new(
-        std::fs::File::open(left).with_context(|| format!("opening {}", left.display()))?,
-    );
-    let mut right = BufReader::new(
-        std::fs::File::open(right).with_context(|| format!("opening {}", right.display()))?,
-    );
-    let mut left_buf = [0_u8; 64 * 1024];
-    let mut right_buf = [0_u8; 64 * 1024];
-    loop {
-        let left_read = left.read(&mut left_buf)?;
-        let right_read = right.read(&mut right_buf)?;
-        if left_read != right_read || left_buf[..left_read] != right_buf[..right_read] {
-            return Ok(false);
-        }
-        if left_read == 0 {
-            return Ok(true);
-        }
-    }
 }
 
 /// `cargo x stack status` — container states + health through the proxy, as a
@@ -568,44 +528,6 @@ pub fn down(args: &DownArgs) -> Result<()> {
     }
     super::destroy(&args.instance)?;
     clear_state(&instance)?;
-    Ok(())
-}
-
-/// `cargo x stack snapshot` — report the instance's init-snapshot key and
-/// whether a snapshot exists for it. CI uses `--json` to find the directory to
-/// bake into preview images.
-pub fn snapshot_status(args: &SnapshotArgs) -> Result<()> {
-    let instance = Instance::derive(args.instance.instance.as_deref(), args.instance.port_base)?;
-    // The key hashes the generated kickstart; (re)write it so the verb works
-    // before any `up` has run. The kickstart depends on the resolved env (the
-    // optional Google IdP client), so resolve it the same way `up` does —
-    // otherwise the key reported here could differ from the key `up` computes.
-    let env = env_layer::resolve(Mode::Local, &instance, false, None, true)?;
-    let google = super::kickstart::GoogleIdp::from_env(&env.merged);
-    super::fusionauth::write_kickstart(&instance, google.as_ref())?;
-    let plan = snapshot::Plan::compute(&instance)?;
-    if args.json {
-        println!(
-            "{}",
-            serde_json::to_string(&json!({
-                "key": plan.key,
-                "dir": plan.dir,
-                "present": plan.exists(),
-                "root": snapshot::root_dir(),
-            }))?
-        );
-        return Ok(());
-    }
-    println!("key      {}", plan.key);
-    println!("dir      {}", plan.dir.display());
-    println!(
-        "present  {}",
-        if plan.exists() {
-            "yes"
-        } else {
-            "no (next cold `stack up` will save it)"
-        }
-    );
     Ok(())
 }
 

@@ -256,12 +256,13 @@ just stack up                  # bring everything up, print URLs, return
 just stack status --json      # machine-readable state (containers, health, URLs)
 just stack update             # rebuild and reload only the changed services (the `r` hotkey)
 just stack update --frontend  # also rebuild the frontend bundle
+just stack update --binaries-dir <dir>  # remount a prebuilt set; volumes stay
 just stack down               # remove containers, volumes, and state
 ```
 
-All the `run_local` flags apply to `stack` too. This includes `--instance`, `--no-doppler`, `--no-build`, and `--binaries-dir`. CI can pass a prebuilt bundle with `--frontend-dist`.
+All the `run_local` flags apply to `stack` too. This includes `--instance`, `--no-doppler`, `--no-build`, and `--binaries-dir`.
 
-The app is served at `<proxy>/app/`. The bundle resolves its backend from the origin it is served on. The same stack works on localhost or behind a preview hostname without a rebuild.
+The app is served at `<proxy>/app/`. The bundle resolves its backend from the origin it is served on. The same stack works on localhost or behind any hostname without a rebuild.
 
 ### Init Snapshots
 
@@ -276,11 +277,10 @@ It saves these volumes as an init snapshot. The snapshot is content-addressed an
 Useful commands:
 
 ```bash
-just stack snapshot           # show the current snapshot key
 just stack up --no-snapshot   # skip the snapshot cache
 ```
 
-CI bakes the snapshot into the preview image. This is what makes Fly previews boot fast. See `infra/preview/README.md`.
+Cursor Cloud bakes the snapshot during environment install. Later `stack up` restores it.
 
 ## Common Commands
 

@@ -23,6 +23,7 @@ ai_toolset = { path = "../ai_toolset", optional = true }
 async-trait = { workspace = true, optional = true }
 channel_sender = { path = "../channel_sender" }
 chrono = { workspace = true }
+chrono-tz = { workspace = true }
 kafka_util = { path = "../kafka_util", optional = true }
 macro_event_broker = { path = "../macro_event_broker", default-features = false, optional = true }
 macro_user_id = { path = "../macro_user_id" }

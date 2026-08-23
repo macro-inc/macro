@@ -6,6 +6,7 @@ use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
 use sqlx::PgPool;
 
+#[derive(Clone)]
 pub struct PgMemoryRepo {
     inner: PgPool,
 }
@@ -73,5 +74,14 @@ impl MemoryRepo for PgMemoryRepo {
         .ok_or(crate::domain::MemoryError::NoGeneration)?;
 
         Ok(row.memory)
+    }
+}
+
+// The domain error stays sqlx-free; this adapter owns the mapping so `?`
+// works on sqlx results throughout the crate's outbound code. The raw sqlx
+// error travels inside the report.
+impl From<sqlx::Error> for crate::domain::MemoryError {
+    fn from(e: sqlx::Error) -> Self {
+        Self::Db(rootcause::report!(e).into_dynamic())
     }
 }

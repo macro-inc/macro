@@ -6,6 +6,7 @@
 #[cfg(test)]
 mod test;
 
+use activity::Actor;
 use chrono::{DateTime, Utc};
 use macro_event_broker::{Event, MacroEvent, TopicEvent};
 use macro_event_topics::MacroPropertiesTopic;
@@ -112,6 +113,15 @@ pub struct EntityPropertyUpdatedMetadata {
     pub property_definition_id: Uuid,
     /// Authenticated user who changed the value, or `None` for a system operation.
     pub actor_user_id: Option<MacroUserIdStr<'static>>,
+    /// Who mechanically changed the value. Absent on events published
+    /// before attribution: ingest then treats [`Self::actor_user_id`] as
+    /// the actor.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub actor: Option<Actor<'static>>,
+    /// The user whose feed this change belongs on, when different from
+    /// [`Self::actor`]. Absent means the actor is also the subject.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub on_behalf_of: Option<MacroUserIdStr<'static>>,
     /// Full value after the update, or `None` when cleared without deleting the row.
     pub value: Option<PropertyValue>,
     /// Full value before the update: `None` when the property was newly
@@ -136,6 +146,15 @@ pub struct EntityPropertyDeletedMetadata {
     pub property_definition_id: Uuid,
     /// Authenticated user who deleted the value, or `None` for a system operation.
     pub actor_user_id: Option<MacroUserIdStr<'static>>,
+    /// Who mechanically deleted the value. Absent on events published
+    /// before attribution: ingest then treats [`Self::actor_user_id`] as
+    /// the actor.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub actor: Option<Actor<'static>>,
+    /// The user whose feed this deletion belongs on, when different from
+    /// [`Self::actor`]. Absent means the actor is also the subject.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub on_behalf_of: Option<MacroUserIdStr<'static>>,
 }
 
 /// Metadata for [`PropertyTopicEvent::EntityPropertiesCleared`].
@@ -147,6 +166,15 @@ pub struct EntityPropertiesClearedMetadata {
     pub entity_type: EntityType,
     /// Authenticated user who cleared the values, or `None` for a system operation.
     pub actor_user_id: Option<MacroUserIdStr<'static>>,
+    /// Who mechanically cleared the values. Absent on events published
+    /// before attribution: ingest then treats [`Self::actor_user_id`] as
+    /// the actor.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub actor: Option<Actor<'static>>,
+    /// The user whose feed this clear belongs on, when different from
+    /// [`Self::actor`]. Absent means the actor is also the subject.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub on_behalf_of: Option<MacroUserIdStr<'static>>,
 }
 
 /// Property mutation events published to [`MacroPropertiesTopic`].

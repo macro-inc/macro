@@ -376,7 +376,7 @@ pub(crate) type CallConnectionService =
 pub(crate) type DssVoipPushSender = Option<
     notification::domain::service::VoipPushServiceImpl<
         notification::outbound::repository::DbNotificationRepository<sqlx::PgPool>,
-        aws_sdk_sns::Client,
+        notification::outbound::mobile::MobilePushAdapter<aws_sdk_sns::Client>,
     >,
 >;
 

@@ -248,7 +248,7 @@ reqwest = { version = "0.13", default-features = false, features = [
   "rustls",
 ] }
 rmcp = "1.6.0"
-rootcause = { version = "0.12" }
+rootcause = { version = "0.12", features = ["compat-anyhow1"] }
 rustls = { version = "0.23", default-features = false, features = ["aws_lc_rs"] }
 rootcause-tracing = "0.12.1"
 schemars = { version = "1.0.4", features = ["chrono04", "uuid1"] }

@@ -78,6 +78,14 @@ impl ActivityReads for FakeReads {
         Ok(HashMap::new())
     }
 
+    async fn subject_overview(
+        &self,
+        _subject_id: &str,
+        window: crate::domain::overview::ActivityWindow,
+    ) -> Result<crate::domain::overview::ActivityOverview, Self::Err> {
+        Ok(crate::domain::overview::ActivityOverview::empty(window))
+    }
+
     async fn subject_activity_range(
         &self,
         subject_id: &str,
