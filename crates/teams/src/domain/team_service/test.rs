@@ -4174,6 +4174,7 @@ async fn team_event_invite_join_uses_accepted_invite_snapshot() {
     let metadata = &events[0].envelope["metadata"];
     assert_eq!(metadata["team_id"], team_id.to_string());
     assert_eq!(metadata["member_id"], user_id.as_ref());
+    assert_eq!(metadata["teammate_ids"], serde_json::json!([]));
     assert_eq!(metadata["role"], "member");
     assert_eq!(metadata["join_method"]["type"], "invite_accepted");
     assert_eq!(metadata["join_method"]["invite_id"], invite_id.to_string());
@@ -4977,6 +4978,7 @@ async fn try_join_team_by_domain_enterprise_bypasses_billing_and_preserves_side_
     let metadata = &published_events[0].envelope["metadata"];
     assert_eq!(metadata["team_id"], team_id.to_string());
     assert_eq!(metadata["member_id"], user_id.as_ref());
+    assert_eq!(metadata["teammate_ids"], serde_json::json!([]));
     assert_eq!(metadata["role"], "member");
     assert_eq!(metadata["join_method"]["type"], "domain_auto_join");
 }
@@ -6115,6 +6117,7 @@ async fn invite_join_does_not_create_teammate_dms_inline() {
             make_team_member(team_id, joiner.as_ref(), TeamRole::Member),
         ]);
     let channels = RecordingChannelService::default();
+    let event_broker = RecordingEventBroker::default();
     let service = TeamServiceImpl::new(
         team_repository,
         MockCustomerRepository::default(),
@@ -6123,11 +6126,18 @@ async fn invite_join_does_not_create_teammate_dms_inline() {
         Arc::new(MockNotificationIngress::new(HashSet::new())),
         NoOpCrmEnqueuer,
         NoOpTeamCrmSettingsRepository,
-    );
+    )
+    .with_event_broker(event_broker.clone());
 
     service.join_team(&invite_id, &joiner).await.unwrap();
 
     assert!(channels.ensure_dms_calls.lock().unwrap().is_empty());
+    let events = event_broker.events();
+    assert_eq!(events.len(), 1);
+    assert_eq!(
+        events[0].envelope["metadata"]["teammate_ids"],
+        serde_json::json!([owner.as_ref(), teammate.as_ref()])
+    );
 }
 
 #[tokio::test]
@@ -6152,6 +6162,7 @@ async fn domain_join_does_not_create_teammate_dms_inline() {
             make_team_member(team_id, joiner.as_ref(), TeamRole::Member),
         ]);
     let channels = RecordingChannelService::default();
+    let event_broker = RecordingEventBroker::default();
     let service = TeamServiceImpl::new(
         team_repository,
         MockCustomerRepository::default(),
@@ -6160,7 +6171,8 @@ async fn domain_join_does_not_create_teammate_dms_inline() {
         Arc::new(MockNotificationIngress::new(HashSet::new())),
         NoOpCrmEnqueuer,
         NoOpTeamCrmSettingsRepository,
-    );
+    )
+    .with_event_broker(event_broker.clone());
 
     service
         .try_join_team_by_domain(&joiner)
@@ -6169,4 +6181,10 @@ async fn domain_join_does_not_create_teammate_dms_inline() {
         .unwrap();
 
     assert!(channels.ensure_dms_calls.lock().unwrap().is_empty());
+    let events = event_broker.events();
+    assert_eq!(events.len(), 1);
+    assert_eq!(
+        events[0].envelope["metadata"]["teammate_ids"],
+        serde_json::json!([owner.as_ref(), teammate.as_ref()])
+    );
 }

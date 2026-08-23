@@ -60,6 +60,7 @@ channel_bots = { path = "../../crates/channel_bots" }
 channels = { path = "../../crates/channels", features = [
   "entity_mutation",
   "inbound",
+  "kafka_consumer",
   "list",
   "outbound",
 ] }

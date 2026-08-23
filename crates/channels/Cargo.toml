@@ -33,6 +33,13 @@ inbound = [
   "ports",
   "schema",
 ]
+kafka_consumer = [
+  "dep:kafka_util",
+  "dep:rdkafka",
+  "dep:tokio-retry",
+  "macro_event_broker/outbound",
+  "ports",
+]
 list = [
   "dep:filter_ast",
   "dep:frecency",
@@ -94,6 +101,7 @@ frecency = { path = "../frecency", optional = true }
 futures = { workspace = true, optional = true }
 indexmap = { workspace = true, optional = true }
 item_filters = { path = "../item_filters", optional = true }
+kafka_util = { path = "../kafka_util", optional = true }
 macro_authorization = { path = "../macro_authorization", optional = true, default-features = false, features = [
   "axum",
 ] }
@@ -108,6 +116,7 @@ models_pagination = { path = "../models_pagination" }
 models_permissions = { path = "../models_permissions", optional = true }
 non_empty = { path = "../non_empty", optional = true }
 notification_hex = { path = "../notification", package = "notification", optional = true }
+rdkafka = { workspace = true, optional = true }
 recursion = { workspace = true, optional = true }
 rootcause = { workspace = true, optional = true }
 serde = { workspace = true }
@@ -116,6 +125,7 @@ share_permission_db_utils = { path = "../share_permission_db_utils", optional = 
 sqlx = { workspace = true, optional = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["macros", "sync"], optional = true }
+tokio-retry = { workspace = true, optional = true }
 tracing = { workspace = true }
 utoipa = { workspace = true, optional = true }
 uuid = { workspace = true }

@@ -7,7 +7,7 @@
 //!
 //! - **domain**: Contains domain models, ports (traits), and the service implementation
 //! - **outbound**: Contains adapters for external dependencies (PostgreSQL, Stripe)
-//! - **inbound**: Contains adapters for incoming requests (Axum handlers, Kafka)
+//! - **inbound**: Contains adapters for incoming requests (Axum handlers)
 
 /// The domain module contains the domain logic for teams
 pub mod domain;

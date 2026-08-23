@@ -1,26 +1,32 @@
 //! Kafka consumer that ensures teammate DMs after `team.member_joined`.
 //!
-//! Subscribes to [`TeamMacroEvent`] on `macro.teams`. Other team events are
-//! ignored and committed. Delivery is at-least-once: an event's offset is
-//! committed only after the handler accepted it or permanently rejected it.
-//! Transient failures retry in-process; if they persist the consumer exits
-//! without committing so a supervisor redelivers. Undecodable messages are
-//! logged and skipped rather than wedging the partition.
+//! Subscribes to `macro.teams` under the `teammate-dms` consumer group. The
+//! crate does not depend on `teams`: this adapter decodes a channels-owned
+//! view of the join payload (`member_id` + `teammate_ids`) and ignores every
+//! other team event. Delivery is at-least-once: an event's offset is committed
+//! only after the handler accepted it or permanently rejected it. Transient
+//! failures retry in-process; if they persist the consumer exits without
+//! committing so a supervisor redelivers. Undecodable messages are logged and
+//! skipped rather than wedging the partition.
 
 #[cfg(test)]
 mod test;
 
 use crate::domain::{
-    events::{TeamMacroEvent, TeamTopicEvent},
-    teammate_dms::{TeammateDmError, TeammateDmService},
+    ports::ChannelService,
+    teammate_dms::{TeammateDirectMessages, TeammateDmError, ensure_joined_member_dms},
 };
 use anyhow::Context as _;
 use kafka_util::{GroupName, KafkaEventConsumer};
 use macro_event_broker::{
-    KafkaConsumerAdapter, MacroEvent as _, MacroEventCollection as _, MacroEventConsumerService,
+    Event, KafkaConsumerAdapter, MacroEvent, MacroEventCollection as _, MacroEventConsumerService,
+    TopicEvent,
 };
+use macro_event_topics::MacroTeamsTopic;
+use macro_user_id::user_id::MacroUserIdStr;
 use rdkafka::consumer::CommitMode;
 use rdkafka::message::{BorrowedMessage, Message};
+use serde::{Deserialize, Serialize};
 use std::future::Future;
 use std::time::Duration;
 use tokio_retry::{RetryIf, strategy::ExponentialBackoff};
@@ -36,7 +42,7 @@ type TeammateDmsKafkaAdapter = KafkaConsumerAdapter<TeammateDmsConsumerGroup, De
 type TeammateDmsKafkaConsumer =
     MacroEventConsumerService<DeclaredMacroEvent, TeammateDmsKafkaAdapter>;
 
-macro_event_broker::declare_topics!(DeclaredMacroEvent: TeamMacroEvent);
+macro_event_broker::declare_topics!(DeclaredMacroEvent: TeamsMacroEventForDms);
 
 /// Maximum in-process attempts per event before the consumer bails out.
 const MAX_ATTEMPTS: u32 = 5;
@@ -48,6 +54,66 @@ fn retry_strategy() -> impl Iterator<Item = Duration> {
     ExponentialBackoff::from_millis(2)
         .factor(500)
         .take((MAX_ATTEMPTS - 1) as usize)
+}
+
+/// Channels-owned view of `team.member_joined` for ensuring teammate DMs.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TeammateDmsJoinedMetadata {
+    /// User who joined the team.
+    pub member_id: MacroUserIdStr<'static>,
+    /// Other current teammates the joining member should have a DM with.
+    #[serde(default)]
+    pub teammate_ids: Vec<MacroUserIdStr<'static>>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "event_type", content = "metadata")]
+enum MemberJoinedEnvelope {
+    #[serde(rename = "team.member_joined")]
+    Payload(TeammateDmsJoinedMetadata),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+struct IgnoredTeamEvent {
+    event_type: String,
+}
+
+/// Wire view of `macro.teams` records this consumer acts on.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum TeamsTopicForDms {
+    /// A member joined; create teammate DMs from the payload roster.
+    MemberJoined(MemberJoinedEnvelope),
+    /// Any other team event; ignored and committed.
+    Other(IgnoredTeamEvent),
+}
+
+impl TopicEvent for TeamsTopicForDms {
+    type Topic = MacroTeamsTopic;
+
+    const SCHEMA_VERSION: u8 = 1;
+}
+
+/// `macro.teams` record decoded for teammate-DM ensure.
+pub struct TeamsMacroEventForDms {
+    key: String,
+    event: Event<TeamsTopicForDms>,
+}
+
+impl MacroEvent for TeamsMacroEventForDms {
+    type EventPayload = TeamsTopicForDms;
+
+    fn key(&self) -> &str {
+        &self.key
+    }
+
+    fn event(&self) -> &Event<Self::EventPayload> {
+        &self.event
+    }
+
+    fn from_event(key: String, event: Event<Self::EventPayload>) -> Self {
+        Self { key, event }
+    }
 }
 
 fn commit_logged(consumer: &TeammateDmsKafkaConsumer, message: &BorrowedMessage<'_>) {
@@ -67,22 +133,27 @@ fn commit_logged(consumer: &TeammateDmsKafkaConsumer, message: &BorrowedMessage<
 }
 
 /// Apply one team event. Non-join events succeed immediately.
-pub async fn handle_team_event<S: TeammateDmService>(
-    service: &S,
-    event: &TeamTopicEvent,
+pub async fn handle_team_event<S: TeammateDirectMessages>(
+    channels: &S,
+    event: &TeamsTopicForDms,
 ) -> Result<(), TeammateDmError> {
     match event {
-        TeamTopicEvent::MemberJoined(metadata) => service
-            .ensure_for_joined_member(&metadata.team_id, &metadata.member_id)
+        TeamsTopicForDms::MemberJoined(MemberJoinedEnvelope::Payload(metadata)) => {
+            ensure_joined_member_dms(
+                channels,
+                metadata.member_id.clone(),
+                metadata.teammate_ids.clone(),
+            )
             .await
-            .map(|_| ()),
-        _ => Ok(()),
+            .map(|_| ())
+        }
+        TeamsTopicForDms::Other(_) => Ok(()),
     }
 }
 
-async fn handle_with_retry<S: TeammateDmService>(
-    service: &S,
-    event: &TeamTopicEvent,
+async fn handle_with_retry<S: TeammateDirectMessages>(
+    channels: &S,
+    event: &TeamsTopicForDms,
     partition: i32,
     offset: i64,
 ) -> anyhow::Result<()> {
@@ -93,7 +164,7 @@ async fn handle_with_retry<S: TeammateDmService>(
             attempt += 1;
             async move {
                 tracing::trace!(partition, offset, attempt, "handling team event");
-                let result = handle_team_event(service, event).await;
+                let result = handle_team_event(channels, event).await;
                 match &result {
                     Ok(()) => {
                         tracing::trace!(partition, offset, attempt, "team event handled")
@@ -147,11 +218,11 @@ async fn handle_with_retry<S: TeammateDmService>(
 /// `shutdown` to run until the process exits.
 pub async fn run_teammate_dms_consumer<S>(
     brokers: &str,
-    service: S,
+    channels: S,
     shutdown: impl Future<Output = ()> + Send,
 ) -> anyhow::Result<()>
 where
-    S: TeammateDmService,
+    S: ChannelService + Clone,
 {
     let consumer = KafkaEventConsumer::<TeammateDmsConsumerGroup>::from_env(brokers)?;
     let consumer = KafkaConsumerAdapter::<TeammateDmsConsumerGroup, ()>::new(consumer)
@@ -181,9 +252,9 @@ where
                 };
                 let kafka_message = message.inner();
                 match message.decode_payload() {
-                    Ok(DeclaredMacroEvent::TeamMacroEvent(event)) => {
+                    Ok(DeclaredMacroEvent::TeamsMacroEventForDms(event)) => {
                         handle_with_retry(
-                            &service,
+                            &channels,
                             &event.event().event,
                             kafka_message.partition(),
                             kafka_message.offset(),

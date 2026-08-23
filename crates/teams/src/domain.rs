@@ -7,4 +7,3 @@ pub mod team_analytics;
 pub mod team_crm_settings_repo;
 pub mod team_repo;
 pub mod team_service;
-pub mod teammate_dms;
