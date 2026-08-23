@@ -37,6 +37,9 @@ export function useUpdateChannelsActivityMutation(
       UpdateChannelActivityMutationVars
     >(
       {
+        onSuccess(activity) {
+          applyChannelActivity(activity);
+        },
         onError(error) {
           console.error('failed to update activity for channel', error);
         },
@@ -46,6 +49,30 @@ export function useUpdateChannelsActivityMutation(
   }));
 }
 
-export function invalidateChannelsActivity() {
-  queryClient.invalidateQueries({ queryKey: channelKeys.activity.queryKey });
+/**
+ * Fold a recorded activity into the cached list in place.
+ *
+ * The mutation returns exactly the row shape the list is built from, so
+ * refetching the whole list to learn what was just written is wasted work —
+ * and a channel is marked viewed both on open and on close, so a switch between
+ * two channels used to fire three of these refetches within a few milliseconds.
+ */
+export function applyChannelActivity(activity: ChannelsActivity) {
+  queryClient.setQueryData<ChannelsActivity[]>(
+    channelKeys.activity.queryKey,
+    (current) => {
+      // Nothing cached yet: the query fetches the full list when it mounts, so
+      // seeding it with a single row here would look like a complete answer.
+      if (!current) return current;
+
+      const index = current.findIndex(
+        (entry) => entry.channel_id === activity.channel_id
+      );
+      if (index === -1) return [...current, activity];
+
+      const next = [...current];
+      next[index] = activity;
+      return next;
+    }
+  );
 }

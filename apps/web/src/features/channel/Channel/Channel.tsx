@@ -43,10 +43,7 @@ import {
   buildMentionMarkdownString,
   markdownToPlainText,
 } from '@macro-inc/lexical-core';
-import {
-  invalidateChannelsActivity,
-  useUpdateChannelsActivityMutation,
-} from '@queries/channel/activity';
+import { useUpdateChannelsActivityMutation } from '@queries/channel/activity';
 import {
   type ChannelMessagesData,
   createMessageIndex,
@@ -249,11 +246,7 @@ export function Channel(props: ChannelProps) {
 
   const activity = useChannelActivity(props.channelId);
 
-  const updateActivityMutation = useUpdateChannelsActivityMutation({
-    onSuccess: () => {
-      invalidateChannelsActivity();
-    },
-  });
+  const updateActivityMutation = useUpdateChannelsActivityMutation();
 
   const markAsViewed = () => {
     updateActivityMutation.mutate({
@@ -262,6 +255,15 @@ export function Channel(props: ChannelProps) {
     });
   };
 
+  // Opening stamps the channel read immediately; closing re-stamps it so
+  // messages that arrived while it was on screen count as read. `onCleanup`
+  // covers unmounts a route change never sees (a split closing, a channel
+  // swapped in place); `useBeforeLeave` covers leaves disposal cannot be
+  // relied on for — a navigation that ends up blocked, content kept alive
+  // across a route change — and runs while this component is still fully
+  // alive rather than during teardown. A switch can fire both; the mutation
+  // is an idempotent upsert and no longer triggers a refetch, so the overlap
+  // costs one duplicate POST.
   onMount(() => {
     markAsViewed();
   });
