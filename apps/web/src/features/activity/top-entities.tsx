@@ -10,8 +10,7 @@ import { EntityMention } from './entity-mention';
 
 type EntityRank = ActivityOverview['topEntities'][number];
 
-const ROW_CLASS =
-  'mx-1 flex w-[calc(100%-0.5rem)] items-stretch px-2 text-sm';
+const ROW_CLASS = 'mx-1 flex w-[calc(100%-0.5rem)] items-stretch px-2 text-sm';
 const ROW_BODY_CLASS =
   'flex min-h-10 min-w-0 flex-1 items-center gap-1.5 rounded-lg px-2 py-0.5 hover:bg-hover/30';
 

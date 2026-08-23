@@ -109,11 +109,13 @@ impl TryFrom<EntityRank> for GraphqlActivityEntityRank {
     }
 }
 
+/// Narrow a domain count to GraphQL `Int`, rejecting overflow.
 fn graphql_count(count: u64) -> async_graphql::Result<i32> {
     i32::try_from(count)
         .map_err(|_| async_graphql::Error::new("activity count exceeds GraphQL Int"))
 }
 
+/// Parse an optional IANA zone name; omitted or empty means UTC.
 fn parse_time_zone(time_zone: Option<String>) -> async_graphql::Result<Tz> {
     let Some(time_zone) = time_zone.filter(|zone| !zone.is_empty()) else {
         return Ok(chrono_tz::UTC);

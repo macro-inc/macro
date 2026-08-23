@@ -1,7 +1,7 @@
 import type { ActivityOverview } from '@queries/activity/graphql/overview';
 import { cn, Layer, Tooltip } from '@ui';
 import { format } from 'date-fns';
-import { type JSX, createMemo, For } from 'solid-js';
+import { createMemo, For, type JSX } from 'solid-js';
 import { OVERVIEW_TZ, parseOverviewDate } from './activity-dates';
 import {
   type ActivityStats,
@@ -119,7 +119,9 @@ function ContributionHeatmap(props: {
       <div class="w-max min-w-full">
         <WeekRow class="mb-1 pl-5">
           <For each={props.weeks}>
-            {(_, index) => <MonthLetter label={props.monthLabels.get(index())} />}
+            {(_, index) => (
+              <MonthLetter label={props.monthLabels.get(index())} />
+            )}
           </For>
         </WeekRow>
         <div class="flex items-stretch">
