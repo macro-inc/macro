@@ -151,11 +151,15 @@ async fn test_bulk_insert_properties_if_absent_keeps_first_write(
     )])
     .await?;
 
-    let stored: Option<serde_json::Value> = sqlx::query_scalar(
-        "SELECT values FROM entity_properties WHERE entity_id = $1 AND property_definition_id = $2",
+    let stored = sqlx::query_scalar!(
+        r#"
+        SELECT values
+        FROM entity_properties
+        WHERE entity_id = $1 AND property_definition_id = $2
+        "#,
+        entity_id,
+        subject_id,
     )
-    .bind(entity_id)
-    .bind(subject_id)
     .fetch_one(&pool)
     .await?;
 
