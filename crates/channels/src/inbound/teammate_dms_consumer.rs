@@ -58,7 +58,7 @@ fn retry_strategy() -> impl Iterator<Item = Duration> {
 
 /// Channels-owned view of `team.member_joined` for ensuring teammate DMs.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct TeammateDmsJoinedMetadata {
+pub(crate) struct TeammateDmsJoinedMetadata {
     /// User who joined the team.
     pub member_id: MacroUserIdStr<'static>,
     /// Other current teammates the joining member should have a DM with.
@@ -81,7 +81,7 @@ struct IgnoredTeamEvent {
 /// Wire view of `macro.teams` records this consumer acts on.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(untagged)]
-pub enum TeamsTopicForDms {
+pub(crate) enum TeamsTopicForDms {
     /// A member joined; create teammate DMs from the payload roster.
     MemberJoined(MemberJoinedEnvelope),
     /// Any other team event; ignored and committed.
@@ -95,7 +95,7 @@ impl TopicEvent for TeamsTopicForDms {
 }
 
 /// `macro.teams` record decoded for teammate-DM ensure.
-pub struct TeamsMacroEventForDms {
+pub(crate) struct TeamsMacroEventForDms {
     key: String,
     event: Event<TeamsTopicForDms>,
 }
@@ -133,7 +133,7 @@ fn commit_logged(consumer: &TeammateDmsKafkaConsumer, message: &BorrowedMessage<
 }
 
 /// Apply one team event. Non-join events succeed immediately.
-pub async fn handle_team_event<S: TeammateDirectMessages>(
+pub(crate) async fn handle_team_event<S: TeammateDirectMessages>(
     channels: &S,
     event: &TeamsTopicForDms,
 ) -> Result<(), TeammateDmError> {
