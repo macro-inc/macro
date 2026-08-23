@@ -15,13 +15,18 @@ Three commands. Pick by what changed. Never mix them up: the wrong one wastes 20
 
 All three are idempotent. Re-running any of them on a healthy system is safe and fast.
 
+Two ground rules:
+
+- `docker`, `just`, `bun`, and `doppler` exist only inside the pinned nix shell. The three scripts re-enter it themselves. For any other command, prefix it: `nix develop /workspace --command docker ps`. A bare `docker ps` or `bunx vitest` on the host fails or hangs.
+- Every URL here is VM-local. The user's laptop cannot open them; verify with the in-VM browser and screenshots.
+
 ## First start
 
 ```bash
 bash .cursor/stack.sh
 ```
 
-Brings up Docker, databases, every service, and a static frontend bundle behind one proxy origin. The first run is slow: services changed since the environment bake compile under Nix. Re-running later is safe; a healthy stack prints its URLs and exits.
+Brings up Docker, databases, every service, and a static frontend bundle behind one proxy origin. The first run is slow: services changed since the environment bake compile under Nix. Let it finish. Do not kill the Nix build, copy binaries out of `/nix/store`, or bypass it with hand-rolled `docker compose` commands; every past attempt ended in unexecutable binaries or a half-broken stack. Re-running later is safe; a healthy stack prints its URLs and exits.
 
 Login is passwordless. Enter any email; the login API returns the code in its response, and codes also appear at http://localhost:8090/mailpit/.
 
@@ -46,7 +51,7 @@ Starts a Vite dev server against the running stack. Edits under `apps/web` apply
 - Use **http://localhost:3000/app** to view frontend work. The proxy URL (8090/app/) serves the static bundle, which does NOT pick up frontend edits.
 - Logs: `~/.cursor-cloud/frontend-dev.log` (look for `hmr update` lines).
 - Restart after changing frontend deps or Vite config: `bash .cursor/frontend.sh stop && bash .cursor/frontend.sh`.
-- To refresh the static bundle instead (rarely needed, e.g. testing the built artifact): `just stack update --frontend`. Slow; prefer the dev server.
+- Never use `just stack update --frontend` to iterate. It runs a multi-minute production `vite build`; the dev server shows the same edit in about a second. Its only use is testing the built artifact itself.
 
 ## What NOT to do
 
@@ -55,6 +60,7 @@ Starts a Vite dev server against the running stack. Edits under `apps/web` apply
 - Do not `cargo build` / `just build` and expect containers to change. Containers mount Nix-built binaries; `rebuild.sh` is the only path.
 - Do not run `just run_local`. It is the laptop TUI flow; on Cloud use the three scripts.
 - Do not diagnose `agent_harness_service` restart loops when AI provider keys are absent. That loop is expected without `DOPPLER_TOKEN`.
+- Do not skip the app when asked to show a change works. Unit tests and SQL probes are not a product walkthrough; bring the stack up, log in, and demonstrate it in the UI.
 
 ## Troubleshooting
 
