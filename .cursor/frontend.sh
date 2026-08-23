@@ -3,9 +3,9 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# Frontend dev server with hot reload against the running stack. Frontend
-# edits apply on save; no build, no stack restart. Requires a running stack
-# (bash .cursor/stack.sh). Serves http://localhost:3000/app.
+# THE frontend on Cloud: a hot-reloading Vite dev server against the running
+# backend. stack.sh starts it; edits under apps/web apply on save. There is
+# no static bundle — http://localhost:3000/app is the only app URL.
 #
 #   bash .cursor/frontend.sh        # start (no-op if already serving)
 #   bash .cursor/frontend.sh stop   # stop the dev server
