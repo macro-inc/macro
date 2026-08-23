@@ -350,6 +350,26 @@ impl CreateDocumentRepoArgs {
     }
 }
 
+/// Result of persisting a document create.
+///
+/// `created` is false when the repository linked a new email attachment onto
+/// an existing live document owned by the same user instead of inserting a row.
+#[derive(Clone, Debug)]
+pub struct CreateDocumentRepoResult {
+    /// Persisted document metadata.
+    pub metadata: DocumentMetadata,
+    /// Whether this call inserted a new `Document` row.
+    pub created: bool,
+}
+
+impl std::ops::Deref for CreateDocumentRepoResult {
+    type Target = DocumentMetadata;
+
+    fn deref(&self) -> &Self::Target {
+        &self.metadata
+    }
+}
+
 /// Configuration for CloudFront presigned URL generation.
 pub struct CloudFrontConfig {
     /// The CloudFront distribution URL.

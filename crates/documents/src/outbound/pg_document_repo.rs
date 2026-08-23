@@ -23,7 +23,7 @@ use sqlx::Row;
 use crate::domain::content::{DocumentContent, DocumentContentState};
 use crate::domain::models::{
     BranchNameContext, Comment, CommentThread, CopyDocumentRepoArgs, CreateDocumentRepoArgs,
-    DocumentTeamShare, EditDocumentRepoArgs, TeamTaskMetadata, Thread,
+    CreateDocumentRepoResult, DocumentTeamShare, EditDocumentRepoArgs, TeamTaskMetadata, Thread,
 };
 use crate::domain::ports::DocumentRepo;
 
@@ -417,7 +417,7 @@ impl DocumentRepo for PgDocumentRepo {
         &self,
         args: CreateDocumentRepoArgs,
         share_permission: SharePermissionV2,
-    ) -> Result<DocumentMetadata, Self::Err> {
+    ) -> Result<CreateDocumentRepoResult, Self::Err> {
         let CreateDocumentRepoArgs {
             id,
             sha,
@@ -437,6 +437,23 @@ impl DocumentRepo for PgDocumentRepo {
         let created_at = provided_created_at.as_ref().unwrap_or(&now);
 
         let mut transaction = self.pool.begin().await?;
+
+        if let Some(attachment_id) = email_attachment_id
+            && let Some(existing_id) = create::reuse_email_document(
+                &mut transaction,
+                user_id.as_ref(),
+                &sha,
+                attachment_id,
+            )
+            .await?
+        {
+            transaction.commit().await?;
+            let metadata = self.get_document_metadata(&existing_id).await?;
+            return Ok(CreateDocumentRepoResult {
+                metadata,
+                created: false,
+            });
+        }
 
         // Fetch project name if project_id provided
         let project_name: Option<String> = if let Some(ref proj_id) = project_id {
@@ -501,38 +518,57 @@ impl DocumentRepo for PgDocumentRepo {
         )
         .await?;
 
-        // Link to email attachment if provided
         if let Some(attachment_id) = email_attachment_id {
-            sqlx::query!(
-                r#"
-                INSERT INTO "document_email" (document_id, email_attachment_id)
-                VALUES ($1, $2)
-                "#,
+            match create::link_document_email(
+                &mut transaction,
                 &document_id.to_string(),
                 attachment_id,
             )
-            .execute(&mut *transaction)
-            .await?;
+            .await
+            {
+                Ok(()) => {}
+                Err(sqlx::Error::Database(ref db_err)) if db_err.is_unique_violation() => {
+                    transaction.rollback().await?;
+                    let existing_id =
+                        create::find_document_id_for_email_attachment(&self.pool, attachment_id)
+                            .await?
+                            .ok_or_else(|| {
+                                sqlx::Error::Protocol(
+                                    "email attachment already linked but document is missing"
+                                        .into(),
+                                )
+                            })?;
+                    let metadata = self.get_document_metadata(&existing_id).await?;
+                    return Ok(CreateDocumentRepoResult {
+                        metadata,
+                        created: false,
+                    });
+                }
+                Err(e) => return Err(e),
+            }
         }
 
         transaction.commit().await?;
 
-        Ok(DocumentMetadata::new_document(
-            &document_id.to_string(),
-            document_version.id,
-            user_id,
-            &document_name,
-            file_type,
-            &document_version.sha,
-            None,
-            None,
-            None,
-            project_id.map(|s| s.to_string()).as_deref(),
-            project_name.as_deref(),
-            document_version.created_at,
-            document_version.updated_at,
-            sub_type,
-        ))
+        Ok(CreateDocumentRepoResult {
+            metadata: DocumentMetadata::new_document(
+                &document_id.to_string(),
+                document_version.id,
+                user_id,
+                &document_name,
+                file_type,
+                &document_version.sha,
+                None,
+                None,
+                None,
+                project_id.map(|s| s.to_string()).as_deref(),
+                project_name.as_deref(),
+                document_version.created_at,
+                document_version.updated_at,
+                sub_type,
+            ),
+            created: true,
+        })
     }
 
     #[tracing::instrument(err, skip(self, args))]

@@ -10,7 +10,8 @@ pub async fn create_document_email_record(
     sqlx::query!(
         r#"
             INSERT INTO "document_email" (document_id, email_attachment_id)
-            VALUES ($1, $2) 
+            VALUES ($1, $2)
+            ON CONFLICT (email_attachment_id) DO NOTHING
         "#,
         document_id,
         email_attachment_id,

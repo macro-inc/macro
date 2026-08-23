@@ -50,9 +50,9 @@ use super::events::{
 };
 use super::models::{
     CloudFrontConfig, CommentThread, CopyDocumentRepoArgs, CreateDocumentRepoArgs,
-    CreateTaskRequest, DocumentError, DocumentTeamShareResponse, EditDocumentRepoArgs,
-    EditDocumentServiceArgs, FileTypeUpdate, GithubPullRequest, GithubPullRequestsResponse,
-    LocationQueryParams, TaskBranchName, TeamTaskMetadata,
+    CreateDocumentRepoResult, CreateTaskRequest, DocumentError, DocumentTeamShareResponse,
+    EditDocumentRepoArgs, EditDocumentServiceArgs, FileTypeUpdate, GithubPullRequest,
+    GithubPullRequestsResponse, LocationQueryParams, TaskBranchName, TeamTaskMetadata,
 };
 #[cfg(feature = "document_create")]
 use super::ports::create::DocumentCreationService;
@@ -1064,7 +1064,10 @@ impl<
             SharePermissionV2::new_document_share_permission(file_type, team_default);
 
         // Create document metadata in the database (full transaction)
-        let document_metadata = self
+        let CreateDocumentRepoResult {
+            metadata: document_metadata,
+            created,
+        } = self
             .repo
             .create_document(args, share_permission)
             .await
@@ -1078,6 +1081,33 @@ impl<
             })?;
 
         let document_id = document_metadata.document_id.clone();
+
+        if !created {
+            let content_type = match file_type {
+                Some(FileType::Docx) => ContentType::Docx,
+                _ => file_type.into(),
+            };
+            let document_response_metadata =
+                DocumentResponseMetadata::from_document_metadata(&document_metadata).map_err(
+                    |e| {
+                        tracing::error!(error=?e, document_id=?document_id, "unable to convert document metadata");
+                        DocumentError::Internal(anyhow!("unable to convert document metadata"))
+                    },
+                )?;
+            let team_task_metadata = self.team_task_metadata_for_document(&document_id).await?;
+            return Ok(CreateDocumentResponseData {
+                document_response: DocumentResponse {
+                    document_metadata: DocumentResponseMetadataWithContent::new(
+                        document_response_metadata,
+                        pending_content_for_file_type(file_type),
+                    )
+                    .with_team_task_metadata(team_task_metadata),
+                    presigned_url: None,
+                },
+                content_type: content_type.mime_type().to_string(),
+                file_type: file_type.map(|f| f.to_string()),
+            });
+        }
 
         let initial_content = pending_content_for_file_type(file_type);
         if let Err(e) = self

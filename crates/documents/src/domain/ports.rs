@@ -28,9 +28,9 @@ use model_entity::Entity;
 
 use super::models::{
     BranchNameContext, CommentThread, CopyDocumentRepoArgs, CreateDocumentRepoArgs,
-    CreateTaskRequest, DocumentError, DocumentTeamShare, DocumentTeamShareResponse,
-    EditDocumentRepoArgs, EditDocumentServiceArgs, GithubPullRequestsResponse, LocationQueryParams,
-    TaskBranchName, TeamTaskMetadata,
+    CreateDocumentRepoResult, CreateTaskRequest, DocumentError, DocumentTeamShare,
+    DocumentTeamShareResponse, EditDocumentRepoArgs, EditDocumentServiceArgs,
+    GithubPullRequestsResponse, LocationQueryParams, TaskBranchName, TeamTaskMetadata,
 };
 
 /// Repository for accessing document data from the database.
@@ -133,13 +133,18 @@ pub trait DocumentRepo: Send + Sync + 'static {
     /// document_sub_type, SharePermission, DocumentPermission, UserHistory,
     /// ItemLastAccessed, UserItemAccess, and document_email.
     ///
+    /// When `email_attachment_id` is set, the repository may reuse a live
+    /// email-imported document owned by the same user whose latest
+    /// `DocumentInstance` SHA matches, or the document already linked to that
+    /// attachment. `created` is false in those cases.
+    ///
     /// `share_permission` is the pre-resolved initial share permission — the
     /// repository persists it verbatim and carries no share-policy of its own.
     fn create_document(
         &self,
         args: CreateDocumentRepoArgs,
         share_permission: SharePermissionV2,
-    ) -> impl Future<Output = Result<DocumentMetadata, Self::Err>> + Send;
+    ) -> impl Future<Output = Result<CreateDocumentRepoResult, Self::Err>> + Send;
 
     /// Get the link-share preference of the user's team, or `None` when the
     /// user is not on a team.

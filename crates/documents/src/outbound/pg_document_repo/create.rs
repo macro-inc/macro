@@ -234,3 +234,108 @@ pub async fn insert_history<'a>(
 
     Ok(())
 }
+
+pub async fn find_document_id_for_email_attachment<'e, E>(
+    executor: E,
+    email_attachment_id: uuid::Uuid,
+) -> Result<Option<String>, sqlx::Error>
+where
+    E: sqlx::Executor<'e, Database = sqlx::Postgres>,
+{
+    sqlx::query_scalar!(
+        r#"
+        SELECT de.document_id
+        FROM document_email de
+        JOIN "Document" d ON d.id = de.document_id
+        WHERE de.email_attachment_id = $1
+        ORDER BY (d."deletedAt" IS NULL) DESC, de.document_id
+        LIMIT 1
+        "#,
+        email_attachment_id,
+    )
+    .fetch_optional(executor)
+    .await
+}
+
+pub async fn find_live_email_document_id_by_sha<'e, E>(
+    executor: E,
+    owner: &str,
+    sha: &str,
+) -> Result<Option<String>, sqlx::Error>
+where
+    E: sqlx::Executor<'e, Database = sqlx::Postgres>,
+{
+    sqlx::query_scalar!(
+        r#"
+        SELECT d.id
+        FROM "Document" d
+        INNER JOIN LATERAL (
+            SELECT i.sha
+            FROM "DocumentInstance" i
+            WHERE i."documentId" = d.id
+            ORDER BY i."createdAt" DESC
+            LIMIT 1
+        ) latest ON latest.sha = $2
+        WHERE d.owner = $1
+          AND d."deletedAt" IS NULL
+          AND EXISTS (
+              SELECT 1
+              FROM document_email de
+              WHERE de.document_id = d.id
+          )
+        ORDER BY d."createdAt" ASC, d.id ASC
+        LIMIT 1
+        "#,
+        owner,
+        sha,
+    )
+    .fetch_optional(executor)
+    .await
+}
+
+pub async fn link_document_email(
+    transaction: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    document_id: &str,
+    email_attachment_id: uuid::Uuid,
+) -> Result<(), sqlx::Error> {
+    sqlx::query!(
+        r#"
+        INSERT INTO "document_email" (document_id, email_attachment_id)
+        VALUES ($1, $2)
+        "#,
+        document_id,
+        email_attachment_id,
+    )
+    .execute(transaction.as_mut())
+    .await?;
+
+    Ok(())
+}
+
+pub async fn reuse_email_document(
+    transaction: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    owner: &str,
+    sha: &str,
+    email_attachment_id: uuid::Uuid,
+) -> Result<Option<String>, sqlx::Error> {
+    sqlx::query("SELECT pg_advisory_xact_lock(hashtext($1), hashtext($2))")
+        .bind(owner)
+        .bind(sha)
+        .execute(transaction.as_mut())
+        .await?;
+
+    if let Some(document_id) =
+        find_document_id_for_email_attachment(&mut **transaction, email_attachment_id).await?
+    {
+        return Ok(Some(document_id));
+    }
+
+    if let Some(document_id) =
+        find_live_email_document_id_by_sha(&mut **transaction, owner, sha).await?
+    {
+        link_document_email(transaction, &document_id, email_attachment_id).await?;
+        return Ok(Some(document_id));
+    }
+
+    Ok(None)
+}

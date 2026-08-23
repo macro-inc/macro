@@ -67,6 +67,7 @@ async fn create_task_for_team(
     )
     .await
     .unwrap()
+    .metadata
 }
 
 async fn team_task_numbers(pool: &Pool<Postgres>, team_id: uuid::Uuid) -> Vec<i32> {
@@ -1850,10 +1851,7 @@ async fn insert_email_attachments(pool: &Pool<Postgres>, count: usize) -> Vec<uu
     ids
 }
 
-async fn document_email_rows(
-    pool: &Pool<Postgres>,
-    document_id: &str,
-) -> Vec<uuid::Uuid> {
+async fn document_email_rows(pool: &Pool<Postgres>, document_id: &str) -> Vec<uuid::Uuid> {
     sqlx::query_scalar::<_, uuid::Uuid>(
         r#"SELECT email_attachment_id FROM document_email WHERE document_id = $1 ORDER BY email_attachment_id"#,
     )
@@ -1887,6 +1885,8 @@ async fn test_create_document_reuses_email_document_by_sha(pool: Pool<Postgres>)
         .await
         .unwrap();
 
+    assert!(first.created);
+    assert!(!second.created);
     assert_eq!(first.document_id, second.document_id);
     let linked = document_email_rows(&pool, &first.document_id).await;
     assert_eq!(linked, attachments);
@@ -1916,6 +1916,8 @@ async fn test_create_document_same_attachment_id_reuses_document(pool: Pool<Post
         .await
         .unwrap();
 
+    assert!(first.created);
+    assert!(!second.created);
     assert_eq!(first.document_id, second.document_id);
     assert_eq!(
         document_email_rows(&pool, &first.document_id).await,
@@ -1949,6 +1951,8 @@ async fn test_create_document_does_not_reuse_non_email_document_by_sha(pool: Poo
         .await
         .unwrap();
 
+    assert!(uploaded_doc.created);
+    assert!(imported.created);
     assert_ne!(uploaded_doc.document_id, imported.document_id);
 }
 
@@ -1976,5 +1980,7 @@ async fn test_create_document_does_not_reuse_other_owner_sha(pool: Pool<Postgres
         .await
         .unwrap();
 
+    assert!(owner_doc.created);
+    assert!(teammate_doc.created);
     assert_ne!(owner_doc.document_id, teammate_doc.document_id);
 }
