@@ -20,7 +20,9 @@ fi
 \cd "${WORKSPACE_ROOT}"
 build_local_stack_binaries
 stack_doppler_args
-just stack update "${doppler_args[@]}" --binaries-dir "${LOCAL_STACK_BINS}/bin"
+# The watcher matters on the bootstrap path (update -> up creates networks).
+run_with_bridge_forwarding \
+  just stack update "${doppler_args[@]}" --binaries-dir "${LOCAL_STACK_BINS}/bin"
 ensure_docker_bridge_forwarding
 
 echo "cursor-cloud stack: binaries remounted"

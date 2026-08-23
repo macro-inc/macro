@@ -249,6 +249,20 @@ stack_doppler_args() {
   fi
 }
 
+# Run a command while re-applying bridge forwarding every few seconds.
+# Compose creates networks mid-`stack up`; a service booting on a bridge
+# before its FORWARD rules exist times out reaching its database (FusionAuth
+# wedged in maintenance mode this way). The watcher closes that window.
+run_with_bridge_forwarding() {
+  "$@" &
+  local cmd_pid=$!
+  while kill -0 "${cmd_pid}" 2>/dev/null; do
+    ensure_docker_bridge_forwarding
+    sleep 3
+  done
+  wait "${cmd_pid}"
+}
+
 in_pinned_nix_shell() {
   [ "${MACRO_CLOUD_PINNED_NIX:-}" = "1" ]
 }
