@@ -142,6 +142,20 @@ TypeScript · `[ui]` UI / UX conventions
   in the implementation file. (#4647 · also: CLAUDE.md)
 - **CS-50** `[test]` Update tests and run `just prepare_db` with any db-crate change.
   (also: CLAUDE.md)
+- **CS-51** `[arch]` Domain modules reference no infrastructure or transport: no AWS
+  SDKs, redis, reqwest, opensearch, kafka, axum, or http types under `src/domain/**` —
+  wrap clients in outbound adapters behind ports; response mapping lives in inbound.
+  (enforced: ast-grep `rust-no-infra-in-domain` warning,
+  `rust-no-transport-in-domain` error · also: cloud-storage-hexagonal-architecture
+  skill)
+- **CS-52** `[arch]` Dependencies point inward: `src/domain/**` never imports
+  `crate::inbound`/`crate::outbound`, and `src/outbound/**` never imports
+  `crate::inbound` — define a port in domain and implement it in the adapter.
+  (enforced: ast-grep `rust-domain-no-adapter-imports` warning,
+  `rust-outbound-no-inbound-imports` error)
+- **CS-53** `[arch]` Inbound adapters run no database queries — handlers, tools, and
+  listeners call a domain service backed by an outbound repository, never sqlx
+  directly. (enforced: ast-grep `rust-no-sqlx-in-inbound`, warning)
 
 ## Frontend and shared TypeScript (`apps/web`, `packages/`)
 

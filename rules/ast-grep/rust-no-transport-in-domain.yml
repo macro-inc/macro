@@ -1,0 +1,28 @@
+id: rust-no-transport-in-domain
+language: rust
+severity: error
+message: Domain modules must not reference transport types (axum, http) — response mapping belongs in inbound adapters.
+note: |-
+  Hexagonal architecture (cloud-storage-hexagonal-architecture skill): the
+  domain layer must not know HTTP. Move IntoResponse impls and status-code
+  mapping into the crate's inbound module (see chat's
+  inbound/error_response.rs). Tests in domain test.rs files are exempt.
+files:
+  - crates/**/src/domain/**
+  - services/**/src/domain/**
+ignores:
+  - '**/test.rs'
+  - '**/tests.rs'
+  - '**/test/**'
+  - '**/tests/**'
+rule:
+  any:
+    - kind: scoped_identifier
+      regex: ^(axum|http)\b
+      not:
+        inside:
+          kind: scoped_identifier
+    - kind: scoped_type_identifier
+      regex: ^(axum|http)\b
+    - kind: use_declaration
+      regex: ^use (axum|http)\b
