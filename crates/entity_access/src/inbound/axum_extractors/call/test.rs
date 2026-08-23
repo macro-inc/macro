@@ -255,7 +255,7 @@ impl EntityAccessService for FakeEntityAccessService {
         _call_id: &Uuid,
     ) -> Result<Option<CallChannelInfo>, AccessError> {
         if self.call_lookup_fails {
-            return Err(AccessError::Internal);
+            return Err(AccessError::internal("test access failure"));
         }
         Ok(self.call_info.clone())
     }
@@ -265,7 +265,7 @@ impl EntityAccessService for FakeEntityAccessService {
         _channel_id: &Uuid,
     ) -> Result<Option<CallChannelInfo>, AccessError> {
         if self.call_lookup_fails {
-            return Err(AccessError::Internal);
+            return Err(AccessError::internal("test access failure"));
         }
         Ok(self.call_info.clone())
     }

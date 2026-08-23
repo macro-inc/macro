@@ -1,0 +1,29 @@
+id: tsx-no-class-string-consts
+language: tsx
+severity: warning
+message: Don't hoist Tailwind class strings into named constants — shared markup+styling is a component, not a string.
+note: |-
+  Rule FE-30 in docs/STYLE_GUIDE.md. A named class-string constant
+  (`const DAY_CELL_CLASS = 'aspect-square w-full shrink-0'`) is a
+  component's render detail leaking into module scope: it can't carry
+  structure, props, or behavior, and every consumer re-implements the
+  element around it. Extract a component (or keep the literal inline at
+  its single use). For genuine styling variants, use the component's
+  props, not exported strings. When a class string must feed an imperative
+  DOM/editor API and no component boundary exists, inline it at the call
+  site. ~46 legacy uses exist — don't add new ones.
+files:
+  - apps/web/**
+  - packages/**
+rule:
+  kind: variable_declarator
+  all:
+    - has:
+        field: name
+        kind: identifier
+        regex: (?i)class(es|_?names?)?$
+    - has:
+        field: value
+        any:
+          - kind: string
+          - kind: template_string

@@ -295,6 +295,8 @@ fn task_property_updates_map_to_document_updates() {
         entity_type: PropertyEntityType::Task,
         property_definition_id: Uuid::now_v7(),
         actor_user_id: Some(user()),
+        actor: None,
+        on_behalf_of: None,
         value: None,
         previous_value: None,
         updated_at: Utc::now(),
@@ -316,12 +318,16 @@ fn deleting_or_clearing_properties_updates_the_soup_entity() {
         entity_type: PropertyEntityType::Thread,
         property_definition_id: Uuid::now_v7(),
         actor_user_id: Some(user()),
+        actor: None,
+        on_behalf_of: None,
     });
     let company_id = Uuid::now_v7().to_string();
     let cleared = PropertyTopicEvent::EntityPropertiesCleared(EntityPropertiesClearedMetadata {
         entity_id: company_id.clone(),
         entity_type: PropertyEntityType::Company,
         actor_user_id: Some(user()),
+        actor: None,
+        on_behalf_of: None,
     });
 
     let deleted = patches_from_property_event(&deleted);
@@ -348,6 +354,8 @@ fn property_events_for_non_property_soup_items_are_ignored() {
             entity_id: DOCUMENT_ID.to_string(),
             entity_type,
             actor_user_id: Some(user()),
+            actor: None,
+            on_behalf_of: None,
         });
         assert!(patches_from_property_event(&event).is_empty());
     }

@@ -40,6 +40,14 @@ impl ActivityReads for FakeReads {
         unreachable!()
     }
 
+    async fn subject_overview(
+        &self,
+        _subject_id: &str,
+        _window: crate::domain::overview::ActivityWindow,
+    ) -> Result<crate::domain::overview::ActivityOverview, Self::Err> {
+        unreachable!()
+    }
+
     async fn subject_activity_range(
         &self,
         _subject_id: &str,

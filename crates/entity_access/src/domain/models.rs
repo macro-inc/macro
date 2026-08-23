@@ -631,6 +631,11 @@ pub struct CallChannelInfo {
 }
 
 /// Errors that can occur during access checking.
+///
+/// The variants are the domain's failure vocabulary; causes never appear as
+/// typed payloads. Where a cause exists (a database error, a failed lookup)
+/// it travels inside a [`rootcause::Report`] attached to the variant, so it
+/// is visible in logs but structurally opaque to domain logic.
 #[derive(Debug, thiserror::Error)]
 pub enum AccessError {
     /// User does not have access to the requested resource.
@@ -641,9 +646,10 @@ pub enum AccessError {
     #[error("{0}")]
     UnauthorizedWithMessage(&'static str),
 
-    /// Database error during access check.
-    #[error("Database error: {0}")]
-    DatabaseError(#[from] sqlx::Error),
+    /// Access could not be checked because a backing service failed
+    /// transiently; retrying may succeed. The cause is attached.
+    #[error("access check temporarily unavailable: {0}")]
+    Unavailable(rootcause::Report),
 
     /// Bad request parameters.
     #[error("Bad request: {0}")]
@@ -653,7 +659,15 @@ pub enum AccessError {
     #[error("Not found: {0}")]
     NotFound(&'static str),
 
-    /// Internal server error.
-    #[error("Internal error")]
-    Internal,
+    /// Internal server error; retrying will not help. The cause is attached.
+    #[error("Internal error: {0}")]
+    Internal(rootcause::Report),
+}
+
+impl AccessError {
+    /// Non-retryable internal failure with a short reason attached to the
+    /// report, for sites that have no underlying cause to carry.
+    pub fn internal(reason: &'static str) -> Self {
+        Self::Internal(rootcause::report!(reason).into_dynamic())
+    }
 }

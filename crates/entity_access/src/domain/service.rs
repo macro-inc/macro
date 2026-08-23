@@ -316,7 +316,12 @@ where
             Err(error) => {
                 tracing::error!(?error, "bulk email thread ownership check failed");
                 for (thread_id, _) in valid_ids {
-                    receipts.insert(thread_id, Err(AccessError::Internal));
+                    receipts.insert(
+                        thread_id,
+                        Err(AccessError::internal(
+                            "bulk email thread ownership check failed",
+                        )),
+                    );
                 }
                 return receipts;
             }

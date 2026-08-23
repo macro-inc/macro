@@ -14,29 +14,27 @@ use std::collections::HashSet;
 use crate::domain::models::VoipPushTarget;
 use crate::domain::models::apple::VoipPushPayload;
 use crate::domain::models::mobile::DeviceEndpoint;
-use crate::domain::ports::{NotificationRepository, VoipPushSender};
-use crate::outbound::mobile::MobilePushAdapter;
-use crate::outbound::mobile::MobilePushOps;
+use crate::domain::ports::{NotificationRepository, VoipPushDelivery, VoipPushSender};
 
 const VOIP_PUSH_DELIVERY_CONCURRENCY: usize = 32;
 
 /// Direct APNS_VOIP sender for CallKit pushes.
-pub struct VoipPushServiceImpl<R, P> {
+pub struct VoipPushServiceImpl<R, M> {
     repository: R,
-    mobile: MobilePushAdapter<P>,
+    mobile: M,
 }
 
-impl<R, P> VoipPushServiceImpl<R, P> {
+impl<R, M> VoipPushServiceImpl<R, M> {
     /// Builds a sender that resolves endpoints through the repository and delivers through SNS.
-    pub fn new(repository: R, mobile: MobilePushAdapter<P>) -> Self {
+    pub fn new(repository: R, mobile: M) -> Self {
         Self { repository, mobile }
     }
 }
 
-impl<R, P> VoipPushSender for VoipPushServiceImpl<R, P>
+impl<R, M> VoipPushSender for VoipPushServiceImpl<R, M>
 where
     R: NotificationRepository,
-    P: MobilePushOps + Send + Sync + 'static,
+    M: VoipPushDelivery,
 {
     async fn get_voip_push_targets(
         &self,
