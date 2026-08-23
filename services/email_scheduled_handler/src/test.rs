@@ -6,7 +6,7 @@ use sqlx::{Pool, Postgres};
 
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
-    fixtures(path = "fixtures", scripts("fetch_pending_scheduled_messages"))
+    fixtures(path = "test/fixtures", scripts("fetch_pending_scheduled_messages"))
 )]
 async fn fetch_pending_returns_only_eligible_messages(pool: Pool<Postgres>) -> Result<()> {
     const _: &sqlx::migrate::Migrator = &MACRO_DB_MIGRATIONS;
@@ -28,7 +28,7 @@ async fn fetch_pending_returns_only_eligible_messages(pool: Pool<Postgres>) -> R
 
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
-    fixtures(path = "fixtures", scripts("fetch_pending_scheduled_messages"))
+    fixtures(path = "test/fixtures", scripts("fetch_pending_scheduled_messages"))
 )]
 async fn fetch_pending_excludes_future_send_time(pool: Pool<Postgres>) -> Result<()> {
     let results = fetch_pending_scheduled_messages(&pool).await?;
@@ -43,7 +43,7 @@ async fn fetch_pending_excludes_future_send_time(pool: Pool<Postgres>) -> Result
 
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
-    fixtures(path = "fixtures", scripts("fetch_pending_scheduled_messages"))
+    fixtures(path = "test/fixtures", scripts("fetch_pending_scheduled_messages"))
 )]
 async fn fetch_pending_excludes_already_sent(pool: Pool<Postgres>) -> Result<()> {
     let results = fetch_pending_scheduled_messages(&pool).await?;
@@ -58,7 +58,7 @@ async fn fetch_pending_excludes_already_sent(pool: Pool<Postgres>) -> Result<()>
 
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
-    fixtures(path = "fixtures", scripts("fetch_pending_scheduled_messages"))
+    fixtures(path = "test/fixtures", scripts("fetch_pending_scheduled_messages"))
 )]
 async fn fetch_pending_excludes_non_drafts(pool: Pool<Postgres>) -> Result<()> {
     let results = fetch_pending_scheduled_messages(&pool).await?;
@@ -73,7 +73,7 @@ async fn fetch_pending_excludes_non_drafts(pool: Pool<Postgres>) -> Result<()> {
 
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
-    fixtures(path = "fixtures", scripts("fetch_pending_scheduled_messages"))
+    fixtures(path = "test/fixtures", scripts("fetch_pending_scheduled_messages"))
 )]
 async fn fetch_pending_returns_correct_link_ids(pool: Pool<Postgres>) -> Result<()> {
     let results = fetch_pending_scheduled_messages(&pool).await?;

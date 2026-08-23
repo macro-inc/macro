@@ -195,7 +195,7 @@ mod tests {
     use super::*;
     use sqlx::{Pool, Postgres};
 
-    #[sqlx::test(fixtures(path = "../../fixtures", scripts("simple_history")))]
+    #[sqlx::test(fixtures(path = "../fixtures", scripts("simple_history")))]
     async fn test_get_user_history_simple(pool: Pool<Postgres>) -> anyhow::Result<()> {
         let recent = get_user_history(&pool, "macro|user@user.com").await?;
         assert_eq!(recent.len(), 3);

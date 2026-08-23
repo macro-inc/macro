@@ -84,9 +84,9 @@ TypeScript · `[ui]` UI / UX conventions
   the catch-all crates must shrink, not accumulate. (#4380)
 - **CS-24** `[arch]` Keep source files under ~1000 lines — split before a reviewer has
   to ask. (#4364)
-- **CS-25** `[arch]` `mod.rs` declares submodules; it doesn't host logic — move real
-  code into its own module file. (#4175 · enforced: ast-grep
-  `rust-mod-rs-declarations-only`, hint)
+- **CS-25** `[arch]` `mod.rs` declares submodules; it doesn't host logic — prefer the
+  `foo.rs` + `foo/` file-and-directory style for modules with logic. (#4175 · enforced:
+  ast-grep `rust-mod-rs-declarations-only`, error)
 - **CS-26** `[arch]` Reuse before reimplementing — if the logic plausibly exists
   (service clients, permission checks, oauth utils, the `agent` crate), find it and
   reuse/extract it instead of writing a second copy. (#3692, #4020, #4380, #4485)

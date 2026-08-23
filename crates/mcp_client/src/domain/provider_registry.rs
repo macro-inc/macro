@@ -24,7 +24,8 @@ macro_env_var::env_var! {
 
 fn slack_scopes() -> Vec<String> {
     let manifest: serde_json::Value =
-        serde_json::from_str(include_str!("slack/manifest.json")).expect("valid slack manifest");
+        serde_json::from_str(include_str!("provider_registry/slack/manifest.json"))
+            .expect("valid slack manifest");
     manifest["oauth_config"]["scopes"]["user"]
         .as_array()
         .expect("manifest missing oauth_config.scopes.user")
