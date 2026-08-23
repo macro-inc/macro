@@ -569,6 +569,7 @@ where
                 team_id,
             },
         );
+        let attribution = args.resolved_attribution();
 
         let mut response = self
             .document_service
@@ -596,6 +597,7 @@ where
                             property_values,
                             share_with_team,
                         },
+                        &attribution,
                     )
                     .await?;
             }
@@ -830,5 +832,129 @@ mod tests {
             hashes.base64,
             "LPJNul+wow4m6DsqxbninhsWHlwfp0JecwQzYpOLmCQ="
         );
+    }
+
+    #[derive(Default)]
+    struct RecordingCreationService {
+        handled: std::sync::Mutex<Option<Attribution>>,
+    }
+
+    impl super::DocumentCreationService for RecordingCreationService {
+        async fn create_document(
+            &self,
+            user_id: MacroUserIdStr<'static>,
+            _args: super::CreateDocumentRepoArgs,
+            _job_id: Option<String>,
+        ) -> Result<super::CreateDocumentResponseData, super::DocumentError> {
+            use crate::domain::content::DocumentContent;
+            use crate::domain::response::{DocumentResponse, DocumentResponseMetadataWithContent};
+            use model::document::response::DocumentResponseMetadata;
+
+            Ok(super::CreateDocumentResponseData {
+                document_response: DocumentResponse {
+                    document_metadata: DocumentResponseMetadataWithContent::new(
+                        DocumentResponseMetadata {
+                            document_id: "task-1".to_string(),
+                            document_version_id: 1,
+                            owner: user_id,
+                            document_name: "Intro to tasks".to_string(),
+                            file_type: Some("md".to_string()),
+                            sha: Some("sha".to_string()),
+                            branched_from_id: None,
+                            branched_from_version_id: None,
+                            document_family_id: None,
+                            document_bom: None,
+                            modification_data: None,
+                            created_at: None,
+                            updated_at: None,
+                            sub_type: None,
+                        },
+                        DocumentContent::pending(),
+                    ),
+                    presigned_url: None,
+                },
+                content_type: "text/markdown".to_string(),
+                file_type: Some("md".to_string()),
+            })
+        }
+
+        async fn handle_task_properties(
+            &self,
+            _user_id: MacroUserIdStr<'static>,
+            _document_id: &str,
+            _request: &super::CreateTaskRequest,
+            attribution: &Attribution,
+        ) -> Result<(), super::DocumentError> {
+            *self.handled.lock().unwrap() = Some(attribution.clone());
+            Ok(())
+        }
+
+        async fn mark_document_uploaded(
+            &self,
+            _document_id: &str,
+        ) -> Result<(), super::DocumentError> {
+            Ok(())
+        }
+
+        async fn set_document_content(
+            &self,
+            _document_id: &str,
+            _content: crate::domain::content::DocumentContent,
+        ) -> Result<(), super::DocumentError> {
+            Ok(())
+        }
+
+        async fn cleanup_created_document(&self, _document_id: &str) {}
+    }
+
+    struct NoopMarkdown;
+
+    impl crate::domain::ports::markdown::MarkdownInitializationPort for NoopMarkdown {
+        async fn initialize_existing_markdown(
+            &self,
+            _document_id: &str,
+            _markdown: &str,
+        ) -> Result<Vec<u8>, super::DocumentError> {
+            Ok(vec![1, 2, 3])
+        }
+    }
+
+    struct NoopBytes;
+
+    impl super::DocumentBytesUploadPort for NoopBytes {
+        async fn upload_document_bytes(
+            &self,
+            _upload: super::DocumentBytesUpload,
+        ) -> Result<(), super::DocumentError> {
+            Ok(())
+        }
+    }
+
+    #[tokio::test]
+    async fn create_markdown_task_forwards_resolved_attribution() {
+        let service = RecordingCreationService::default();
+        let creator = super::DocumentCreator::new(&service, NoopMarkdown, NoopBytes);
+        let attribution =
+            Attribution::delegated(Actor::new_from_bot(bot_id::MACRO_SYSTEM_BOT_ID), owner());
+
+        creator
+            .create_markdown_text(
+                owner(),
+                super::NewMarkdownTextDocument {
+                    metadata: NewDocumentMetadata::builder("Intro to tasks")
+                        .attribution(attribution.clone())
+                        .build(),
+                    markdown: "# intro".to_string(),
+                    subtype: MarkdownSubtype::Task {
+                        property_values: None,
+                        share_with_team: false,
+                        team_id: None,
+                    },
+                },
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(service.handled.lock().unwrap().as_ref(), Some(&attribution));
     }
 }

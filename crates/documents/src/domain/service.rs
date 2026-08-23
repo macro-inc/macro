@@ -771,8 +771,16 @@ impl<
         user_id: MacroUserIdStr<'static>,
         document_id: &str,
         request: &CreateTaskRequest,
+        attribution: &Attribution,
     ) -> Result<(), DocumentError> {
-        <Self as DocumentService>::handle_task_properties(self, user_id, document_id, request).await
+        <Self as DocumentService>::handle_task_properties(
+            self,
+            user_id,
+            document_id,
+            request,
+            attribution,
+        )
+        .await
     }
 
     #[tracing::instrument(err, skip(self))]
@@ -1831,12 +1839,13 @@ impl<
     }
 
     /// Assigns the task properties to a document
-    #[tracing::instrument(skip(self, request), err)]
+    #[tracing::instrument(skip(self, request, attribution), err)]
     async fn handle_task_properties(
         &self,
         user_id: MacroUserIdStr<'static>,
         document_id: &str,
         request: &CreateTaskRequest,
+        attribution: &Attribution,
     ) -> Result<(), DocumentError> {
         if request.share_with_team
             && let Some(team_id) = request.team_id
@@ -1887,6 +1896,7 @@ impl<
                     document_id,
                     property_uuid,
                     Some(property_input.value.clone()),
+                    attribution,
                 )
                 .await
                 .inspect_err(|e| {

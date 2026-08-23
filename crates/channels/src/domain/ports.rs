@@ -667,6 +667,20 @@ pub trait ChannelService: Send + Sync + 'static {
         }
     }
 
+    /// Create a channel owned by `owner` and attributed to the system principal.
+    fn create_system_channel(
+        &self,
+        _owner: MacroUserIdStr<'static>,
+        _actor_org_id: Option<i64>,
+        _req: CreateChannelRequest,
+    ) -> impl Future<Output = Result<CreateChannelResponse, ChannelMutationErr>> + Send {
+        async move {
+            Err(ChannelMutationErr::NotFound(
+                "channel mutations are not configured".to_string(),
+            ))
+        }
+    }
+
     /// Add or reactivate a user in every auto-join channel for a team.
     fn auto_join_by_team_id(
         &self,
