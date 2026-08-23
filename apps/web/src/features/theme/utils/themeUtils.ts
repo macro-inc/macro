@@ -1,6 +1,16 @@
 import { toast } from '@core/component/Toast/Toast';
-import { batch, createEffect, on } from 'solid-js';
-import { DEFAULT_DARK_THEME, DEFAULT_LIGHT_THEME } from '../constants';
+import { batch, createEffect, createMemo, on } from 'solid-js';
+import {
+  type AppearancePreference,
+  paintChrome,
+  type ResolvedTheme,
+  resolveAppearance,
+} from '../appearance';
+import {
+  DEFAULT_DARK_THEME,
+  DEFAULT_LIGHT_THEME,
+  DEFAULT_THEME_ID,
+} from '../constants';
 import { themeReactive } from '../signals/themeReactive';
 import {
   currentThemeId,
@@ -9,13 +19,14 @@ import {
   liveThemeMode,
   setCurrentThemeId,
   setDarkModeTheme,
-  setHtmlColor,
   setIsThemeSaved,
   setLightModeTheme,
   setLiveThemeMode,
+  setSurfaceCache,
   setThemeColorTokens,
   setThemeMode,
   setUserThemes,
+  surfaceCache,
   systemMode,
   themeColorTokens,
   themeMode,
@@ -185,6 +196,7 @@ export function setLiveThemeColorTokens(tokens: ThemeColorTokens): void {
   renderedColorTokenKeys = new Set(Object.keys(normalizedTokens));
   setThemeColorTokens(normalizedTokens);
   syncLegacyCompatibilityTokens();
+  paintLiveChrome();
 }
 
 /** Updates one authored token immediately; persistence still happens on save. */
@@ -194,6 +206,7 @@ export function updateLiveThemeColorToken(token: string, value: string): void {
   renderedColorTokenKeys.add(token);
   setThemeColorTokens(next);
   syncLegacyCompatibilityTokens();
+  paintLiveChrome();
   setIsThemeSaved(false);
 }
 
@@ -208,19 +221,18 @@ export function applyTheme(id: string): void {
   let theme = themes().find((t) => t.id === id);
   if (!theme) {
     console.error(`theme not found: ${id}`);
-    theme = themes().find((t) => t.id === DEFAULT_DARK_THEME)!;
+    theme = themes().find((t) => t.id === DEFAULT_THEME_ID[liveThemeMode()])!;
   }
   setCurrentThemeId(theme.id);
-  // Committing a theme supersedes any in-flight preview; drop the snapshot so
-  // clearThemePreview doesn't revert the commit.
+  // Drop the snapshot so a later clearThemePreview cannot restore the
+  // pre-commit tokens over the theme we just applied.
   previewSnapshot = null;
 
   setLiveThemeMode(theme.mode);
   setLiveThemeColorTokens(theme.colorTokens);
   queueMicrotask(() => {
-    /* scuffed af */
     setIsThemeSaved(true);
-    syncHtmlColor();
+    refreshSurfaceCache();
   });
 }
 
@@ -257,32 +269,63 @@ export function clearThemePreview(): void {
   previewSnapshot = null;
 }
 
-/** Resolves the theme id that should be live for the current "Active theme"
- *  mode: the pinned light/dark theme, or — in system mode — whichever matches
- *  the OS color scheme. Read inside a reactive scope, it subscribes to the mode,
- *  the OS scheme (system mode only), and the relevant per-mode theme. */
-export function resolveActiveThemeId(): string {
-  const resolved = themeMode() === 'system' ? systemMode() : themeMode();
-  return resolved === 'dark' ? darkModeTheme() : lightModeTheme();
+function livePreference(): AppearancePreference {
+  return {
+    mode: themeMode(),
+    themeId: {
+      light: lightModeTheme(),
+      dark: darkModeTheme(),
+    },
+  };
 }
 
-/** Keeps the active theme in sync with the "Active theme" mode: applies the
- *  pinned light/dark theme, or follows the OS color scheme in system mode.
- *  Re-applies whenever the mode, the OS scheme, or the *active* mode's theme
- *  changes — but not when the inactive mode's theme changes (that id isn't read
- *  by resolveActiveThemeId, so it isn't tracked). Call once from a reactive root
- *  (see Root.tsx). */
-export function systemThemeEffect(): void {
-  createEffect(
-    on(resolveActiveThemeId, (id) => applyTheme(id), { defer: true })
+export function activeAppearance(): ResolvedTheme {
+  return resolveAppearance(livePreference(), systemMode());
+}
+
+export function systemAppearance(): ResolvedTheme {
+  return resolveAppearance(
+    { ...livePreference(), mode: 'system' },
+    systemMode()
   );
 }
 
-/** Persists the live background color, used for the pre-hydration first paint. */
-function syncHtmlColor(): void {
+export function resolveActiveThemeId(): string {
+  return activeAppearance().themeId;
+}
+
+export function applyResolvedAppearance(): void {
+  applyTheme(activeAppearance().themeId);
+}
+
+export function systemThemeEffect(): void {
+  // Memo the resolved id so a write to the inactive scheme's stored id does
+  // not re-apply. The effect is deferred. First apply is module init plus
+  // Root onMount.
+  const themeId = createMemo(() => activeAppearance().themeId);
+  createEffect(on(themeId, (id) => applyTheme(id), { defer: true }));
+}
+
+function formatOklch(color: { l: number; c: number; h: number }): string {
+  return `oklch(${color.l} ${color.c} ${color.h}deg)`;
+}
+
+function paintLiveChrome(): void {
   const color = resolvedTokenOklch('surface-0');
   if (!color) return;
-  setHtmlColor({ color: `oklch(${color.l} ${color.c} ${color.h}deg)` });
+  paintChrome({
+    scheme: liveThemeMode(),
+    surface: formatOklch(color),
+  });
+}
+
+function refreshSurfaceCache(): void {
+  const color = resolvedTokenOklch('surface-0');
+  if (!color) return;
+  setSurfaceCache({
+    ...surfaceCache(),
+    [liveThemeMode()]: formatOklch(color),
+  });
 }
 
 export function saveTheme(name: string): void {
@@ -350,11 +393,6 @@ export function getLiveTheme(): ThemeV3 {
   };
 }
 
-/** Pins a theme as the "Active theme": makes it the stored theme for its
- *  intrinsic light/dark mode and switches the mode to match, so
- *  resolveActiveThemeId / systemThemeEffect apply it live. Shared by the settings
- *  Active-theme picker and the command-palette "Change theme" action so choosing
- *  a theme in either place is reflected in the other. */
 export function pinTheme(theme: ThemeV3): void {
   if (theme.mode === 'dark') {
     setDarkModeTheme(theme.id);
@@ -365,15 +403,11 @@ export function pinTheme(theme: ThemeV3): void {
   }
 }
 
-/** Follows the OS color scheme (the "System preference" option): switches the
- *  mode to 'system' and applies whichever per-mode theme the OS currently
- *  resolves to. Shared by the settings picker and the command palette. */
 export function applySystemTheme(): void {
   setThemeMode('system');
-  applyTheme(resolveActiveThemeId());
+  applyResolvedAppearance();
 }
 
-/** Checks if the theme contrast is too low, and if so, applies a readable theme. This is to prevent malicious actors sending "Theme Viruses" which make a user's theme unusable. */
 export function ensureMinimalThemeContrast() {
   const surface = resolvedTokenOklch('surface-0');
   const content = resolvedTokenOklch('content-0');

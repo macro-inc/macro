@@ -1,11 +1,17 @@
 import { makePersisted } from '@solid-primitives/storage';
 import { createMemo, createSignal } from 'solid-js';
 import {
-  DEFAULT_DARK_THEME,
-  DEFAULT_LIGHT_THEME,
-  DEFAULT_THEMES,
-} from '../constants';
+  APPEARANCE_KEYS,
+  DEFAULT_SURFACE,
+  parseSurfaceCache,
+  parseThemeId,
+  parseThemeMode,
+  readOsScheme,
+  type ThemeMode,
+} from '../appearance';
+import { DEFAULT_THEME_ID, DEFAULT_THEMES } from '../constants';
 import type {
+  ThemeColorMode,
   ThemeColorTokens,
   ThemeV0,
   ThemeV1,
@@ -19,16 +25,13 @@ import {
 import { isThemeV2, isThemeV3 } from '../utils/themeValidation';
 import { normalizeThemeColorTokens } from '../utils/themeVNext';
 
+export type { ThemeMode } from '../appearance';
+
 export const [isThemeSaved, setIsThemeSaved] = createSignal<boolean>(true);
 
 export const [themeUpdate, setThemeUpdate] = createSignal<undefined>(
   undefined,
   { equals: () => false }
-);
-
-export const [htmlColor, setHtmlColor] = makePersisted(
-  createSignal({ color: '' }),
-  { name: 'html-color-theme' }
 );
 
 export const [userThemes, setUserThemes] = makePersisted(
@@ -62,7 +65,7 @@ setUserThemes(
 );
 
 export const [currentThemeId, setCurrentThemeId] = makePersisted(
-  createSignal<string>(DEFAULT_DARK_THEME),
+  createSignal<string>(DEFAULT_THEME_ID.dark),
   { name: 'macro-selected-theme' }
 );
 
@@ -80,41 +83,40 @@ export const [liveThemeMode, setLiveThemeMode] = createSignal<'light' | 'dark'>(
   'dark'
 );
 
-// Per-mode theme preferences, persisted to localStorage. The active one is
-// applied by systemThemeEffect / resolveActiveThemeId (themeUtils.ts): the light
-// theme when themeMode is 'light' (or 'system' + OS light), the dark theme when
-// 'dark' (or 'system' + OS dark).
 export const [lightModeTheme, setLightModeTheme] = makePersisted(
-  createSignal<string>(DEFAULT_LIGHT_THEME),
-  { name: 'macro-light-mode-theme' }
+  createSignal<string>(DEFAULT_THEME_ID.light),
+  {
+    name: APPEARANCE_KEYS.themeId.light,
+    deserialize: (raw) => parseThemeId(raw, DEFAULT_THEME_ID.light),
+  }
 );
 
 export const [darkModeTheme, setDarkModeTheme] = makePersisted(
-  createSignal<string>(DEFAULT_DARK_THEME),
-  { name: 'macro-dark-mode-theme' }
+  createSignal<string>(DEFAULT_THEME_ID.dark),
+  {
+    name: APPEARANCE_KEYS.themeId.dark,
+    deserialize: (raw) => parseThemeId(raw, DEFAULT_THEME_ID.dark),
+  }
 );
 
-/** The "Active theme" mode: pin a fixed light or dark theme, or follow the OS
- *  ('system'). Drives which per-mode theme (lightModeTheme/darkModeTheme) is
- *  live — see resolveActiveThemeId / systemThemeEffect in themeUtils. */
-export type ThemeMode = 'light' | 'dark' | 'system';
+export const [surfaceCache, setSurfaceCache] = makePersisted(
+  createSignal<Record<ThemeColorMode, string>>({ ...DEFAULT_SURFACE }),
+  {
+    name: APPEARANCE_KEYS.surface,
+    deserialize: parseSurfaceCache,
+  }
+);
 
-/** Fallback for the initial themeMode, migrating the pre-"Active theme" setting
- *  (`macro-theme-should-match-system`) so returning users keep their appearance:
- *  auto-detect on → 'system'; auto-detect off (a pinned theme) → the fixed
- *  light/dark mode matching the previously-selected theme. Only used until the
- *  new `macro-theme-mode` key is written. */
 function initialThemeMode(): ThemeMode {
   if (typeof localStorage === 'undefined') {
     return 'system';
   }
+  // The old boolean key opted out of OS follow only when it was the string
+  // `'false'`. Missing, `'true'`, or any other value still means system.
   const legacy = localStorage.getItem('macro-theme-should-match-system');
-  // New/already-migrated users, and anyone who had auto-detect on: follow the OS.
   if (legacy !== 'false') {
     return 'system';
   }
-  // Auto-detect was off: pin to the mode matching the previously-selected theme
-  // based on the explicit mode stored by V3.
   const pinned = themes().find((theme) => theme.id === currentThemeId());
   if (!pinned) {
     return 'system';
@@ -124,29 +126,38 @@ function initialThemeMode(): ThemeMode {
 
 export const [themeMode, setThemeMode] = makePersisted(
   createSignal<ThemeMode>(initialThemeMode()),
-  { name: 'macro-theme-mode' }
+  {
+    name: APPEARANCE_KEYS.mode,
+    deserialize: parseThemeMode,
+  }
 );
+
+// First-paint cannot rerun initialThemeMode(). Persist the resolved default
+// so the next cold load matches Solid. setThemeMode(same) does not write.
+if (
+  typeof localStorage !== 'undefined' &&
+  localStorage.getItem(APPEARANCE_KEYS.mode) === null
+) {
+  localStorage.setItem(APPEARANCE_KEYS.mode, JSON.stringify(themeMode()));
+}
 
 const supportsMatchMedia =
   typeof window !== 'undefined' && typeof window.matchMedia === 'function';
 
-// Tracks the OS color scheme so the active theme can follow it when themeMode is
-// 'system'.
-export const [systemMode, setSystemMode] = createSignal<'dark' | 'light'>(
-  supportsMatchMedia &&
-    window.matchMedia('(prefers-color-scheme: dark)').matches
-    ? 'dark'
+export const [systemMode, setSystemMode] = createSignal<ThemeColorMode>(
+  supportsMatchMedia
+    ? readOsScheme(window.matchMedia('(prefers-color-scheme: dark)'))
     : 'light'
 );
 
 if (supportsMatchMedia) {
-  const darkModeQuery = window.matchMedia('(prefers-color-scheme: dark)');
-  darkModeQuery.addEventListener('change', (e: MediaQueryListEvent) => {
-    setSystemMode(e.matches ? 'dark' : 'light');
-  });
+  window
+    .matchMedia('(prefers-color-scheme: dark)')
+    .addEventListener('change', (event) => {
+      setSystemMode(readOsScheme(event));
+    });
 }
 
-// Theme-list filters: whether light and/or dark themes are shown in the list.
 export const [showLightThemes, setShowLightThemes] = makePersisted(
   createSignal<boolean>(true),
   { name: 'macro-show-light-themes' }

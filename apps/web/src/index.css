@@ -499,6 +499,7 @@ body.tauri-ios {
 
 @layer base {
   html {
+    color-scheme: light dark;
     overflow: hidden;
   }
 

@@ -10,6 +10,7 @@ import { initializeLexical } from '@core/component/LexicalMarkdown/init';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { getPlatform, isTauri } from '@core/util/platform';
 import { platformFetch } from '@core/util/platformFetch';
+import { applyResolvedAppearance } from '@theme/utils/themeUtils';
 import { initMonochromeIcons } from '@ui/utils/monochromeIcons';
 import { ErrorBoundary, render } from 'solid-js/web';
 import { FatalError } from './components/app/FatalError';
@@ -33,6 +34,7 @@ if (isTauri()) {
 
 initializeLexical();
 initMonochromeIcons();
+applyResolvedAppearance();
 
 const renderApp = () => {
   const root = document.getElementById('root');

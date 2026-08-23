@@ -50,8 +50,6 @@ import { useMutationUndoContext } from '@queries/undo';
 import { debounce } from '@solid-primitives/scheduled';
 import { ThemeChips } from '@theme/components/ThemeChips';
 import {
-  darkModeTheme,
-  lightModeTheme,
   setDarkModeTheme,
   setLightModeTheme,
   setThemeMode,
@@ -61,11 +59,12 @@ import {
 } from '@theme/signals/themeSignals';
 import type { ThemeV3 } from '@theme/types/themeTypes';
 import {
+  activeAppearance,
   applySystemTheme,
   applyTheme,
   clearThemePreview,
   previewTheme,
-  resolveActiveThemeId,
+  systemAppearance,
 } from '@theme/utils/themeUtils';
 import { type Component, onCleanup, Show } from 'solid-js';
 import { useSplitLayout } from './split-layout/layout';
@@ -389,18 +388,13 @@ export default function GlobalShortcuts() {
     </div>
   );
 
-  // The per-mode theme the OS scheme currently resolves to — shown as the
-  // "System preference" option's swatch and previewed on highlight.
   const systemResolvedTheme = (): ThemeV3 | undefined =>
-    themes().find(
-      (theme) =>
-        theme.id ===
-        (systemMode() === 'dark' ? darkModeTheme() : lightModeTheme())
-    );
+    themes().find((theme) => theme.id === systemAppearance().themeId);
 
+  // Stay in the current mode. Update only the active scheme's stored id.
+  // Settings pins and leaves system via pinTheme.
   const setVisibleTheme = (themeId: string) => {
-    const resolvedMode = themeMode() === 'system' ? systemMode() : themeMode();
-    if (resolvedMode === 'dark') {
+    if (activeAppearance().scheme === 'dark') {
       setDarkModeTheme(themeId);
     } else {
       setLightModeTheme(themeId);
@@ -438,10 +432,8 @@ export default function GlobalShortcuts() {
       scopeId: setThemeScope.commandScopeId,
       description: `${theme.name}`,
       keyDownHandler: () => {
-        // Change the theme currently being viewed without switching between
-        // static and system-driven theme modes.
         setVisibleTheme(theme.id);
-        applyTheme(resolveActiveThemeId());
+        applyTheme(activeAppearance().themeId);
         analytics.track('theme_changed', { themeId: theme.id });
         return true;
       },

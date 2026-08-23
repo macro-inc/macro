@@ -24,6 +24,7 @@ import {
 } from '@theme/signals/themeSignals';
 import type { ThemeV3 } from '@theme/types/themeTypes';
 import {
+  activeAppearance,
   applyTheme,
   clearThemePreview,
   deleteTheme,
@@ -31,8 +32,8 @@ import {
   getLiveTheme,
   pinTheme,
   previewTheme,
-  resolveActiveThemeId,
   saveTheme,
+  systemAppearance,
   updateTheme,
 } from '@theme/utils/themeUtils';
 import { Dropdown, Layer, ToggleSwitch, Tooltip } from '@ui';
@@ -140,12 +141,8 @@ function createThemeEditorController(onSelect: (id: string) => void) {
     setEditingThemeId(undefined);
   };
 
-  // Abandon any in-progress edits: resync the live tokens with the active theme
-  // (via resolveActiveThemeId) so a draft/preview doesn't linger, then close.
-  // Shared by every edit-abandoning exit — the pill's edit toggle, the editor's
-  // close button, and picking a different theme.
   const discardAndCloseEditor = () => {
-    applyTheme(resolveActiveThemeId());
+    applyTheme(activeAppearance().themeId);
     closeEditor();
   };
 
@@ -482,23 +479,16 @@ function ActiveThemeSelect(props: {
 }) {
   const [open, setOpen] = createSignal(false);
 
-  // The theme the OS scheme currently resolves to (for the System preference
-  // swatch). Falls back to the live tokens so a swatch always renders.
-  const systemTheme = (): ThemeV3 => {
-    const id = systemMode() === 'dark' ? darkModeTheme() : lightModeTheme();
-    return themes().find((theme) => theme.id === id) ?? getLiveTheme();
-  };
-
-  // The active theme shown on the chip: the OS-resolved theme in system mode,
-  // otherwise the pinned theme (via resolveActiveThemeId).
-  const activeTheme = (): ThemeV3 =>
-    themes().find((theme) => theme.id === resolveActiveThemeId()) ??
+  const systemTheme = (): ThemeV3 =>
+    themes().find((theme) => theme.id === systemAppearance().themeId) ??
     getLiveTheme();
 
-  // The checked radio value: the sentinel in system mode, else the active
-  // theme's id.
+  const activeTheme = (): ThemeV3 =>
+    themes().find((theme) => theme.id === activeAppearance().themeId) ??
+    getLiveTheme();
+
   const selectedValue = () =>
-    themeMode() === 'system' ? SYSTEM_VALUE : resolveActiveThemeId();
+    themeMode() === 'system' ? SYSTEM_VALUE : activeAppearance().themeId;
 
   const onChange = (value: string) => {
     if (value === SYSTEM_VALUE) {
@@ -588,22 +578,16 @@ function ActiveThemeSelect(props: {
   );
 }
 
-/**
- * The full "Active theme" row: the picker chip plus copy/edit affordances for
- * the active theme and its own inline theme editor (opened by the edit button),
- * mirroring the per-mode ThemeSelectorRow. Picking a theme pins it — the mode
- * follows the theme's intrinsic light/dark and it becomes that mode's stored
- * theme, so resolveActiveThemeId / systemThemeEffect apply it live.
- */
 function ActiveThemeRow() {
-  // Saving a new theme from the editor pins it as the active theme.
+  // Settings pins and leaves system. The command palette stays in system
+  // via setVisibleTheme.
   const editor = createThemeEditorController((id) => {
     const theme = themes().find((t) => t.id === id);
     if (theme) pinTheme(theme);
   });
 
   const activeName = () =>
-    themes().find((theme) => theme.id === resolveActiveThemeId())?.name ??
+    themes().find((theme) => theme.id === activeAppearance().themeId)?.name ??
     'Unsaved Theme';
 
   return (
@@ -623,12 +607,12 @@ function ActiveThemeRow() {
             }}
           />
           <ThemePillActions
-            themeId={resolveActiveThemeId()}
+            themeId={activeAppearance().themeId}
             name={activeName()}
             onEdit={() =>
               editor.editorOpen()
                 ? editor.discardAndCloseEditor()
-                : editor.editTheme(resolveActiveThemeId())
+                : editor.editTheme(activeAppearance().themeId)
             }
           />
         </div>

@@ -8,6 +8,57 @@
     />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="theme-color" content="#FFFFFF" />
+    <script id="first-paint-appearance">
+      (function () {
+        var FALLBACK = {
+          light: "oklch(0.964 0 59deg)",
+          dark: "oklch(0.14 0 59deg)",
+        };
+        function read(key) {
+          try {
+            var raw = localStorage.getItem(key);
+            if (raw === null) return null;
+            try {
+              return JSON.parse(raw);
+            } catch {
+              return raw;
+            }
+          } catch {
+            return null;
+          }
+        }
+
+        var storedMode = read("macro-theme-mode");
+        var mode =
+          storedMode === "light" ||
+          storedMode === "dark" ||
+          storedMode === "system"
+            ? storedMode
+            : "system";
+        var scheme =
+          mode === "light" || mode === "dark"
+            ? mode
+            : window.matchMedia("(prefers-color-scheme: dark)").matches
+              ? "dark"
+              : "light";
+        var cached = read("html-color-theme");
+        var cachedSurface =
+          cached &&
+          typeof cached === "object" &&
+          !Array.isArray(cached) &&
+          typeof cached[scheme] === "string" &&
+          cached[scheme].trim()
+            ? cached[scheme]
+            : null;
+        var surface = cachedSurface || FALLBACK[scheme];
+
+        document.documentElement.style.colorScheme = scheme;
+        document.documentElement.style.backgroundColor = surface;
+        if (document.body) document.body.style.backgroundColor = surface;
+        var meta = document.querySelector('meta[name="theme-color"]');
+        if (meta) meta.setAttribute("content", surface);
+      })();
+    </script>
     <meta name="description" content="Macro AI Workspace" />
     <meta name="macro-bundle-build" content="__MACRO_BUNDLE_BUILD__" />
     <link
@@ -38,18 +89,6 @@
     <script type="module" src="/src/index.tsx"></script>
     <script>
       window.__START_TIME__ = performance.now();
-    </script>
-    <!-- Sets blank page to theme surface color to prevent background color flash -->
-    <script>
-      try {
-        let htmlColorString = localStorage.getItem("html-color-theme");
-        if (htmlColorString) {
-          let htmlColor = JSON.parse(htmlColorString);
-          document.body.style.backgroundColor = htmlColor.color;
-        }
-      } catch (err) {
-        console.error("Failed parse macro-selected-theme: ", err);
-      }
     </script>
   </body>
 </html>
