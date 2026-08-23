@@ -11,7 +11,7 @@
 use std::path::PathBuf;
 use std::process::Command;
 
-use anyhow::{Context, Result, bail};
+use anyhow::{bail, Context, Result};
 use clap::Args;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -19,7 +19,7 @@ use serde_json::json;
 use super::cli::{EnvArgs, InstanceArgs, RunArgs};
 use super::instance::{Instance, Port};
 use super::stage::Stage;
-use super::{Mode, arch, env_layer, frontend, mailpit, proxy, sdk_webhook, snapshot, summary};
+use super::{arch, env_layer, frontend, mailpit, proxy, sdk_webhook, snapshot, summary, Mode};
 
 #[derive(Args, Clone, Default)]
 pub struct UpArgs {
@@ -412,7 +412,13 @@ fn remount(
         gmail_forwarder,
     )?;
     let mut up = super::compose_cmd(instance, env);
-    up.args(["up", "-d", "--force-recreate", "--no-deps"]);
+    up.args([
+        "up",
+        "-d",
+        "--force-recreate",
+        "--no-deps",
+        "--remove-orphans",
+    ]);
     for svc in super::inventory::services_for_mode(mode) {
         up.arg(svc.compose_name);
     }

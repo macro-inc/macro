@@ -57,33 +57,27 @@ fn target_dir_pin_is_a_noop() {
 }
 
 #[test]
-fn nix_pin_falls_back_to_a_symlink_and_releases_the_previous() {
-    let root = scratch("nix-pin");
-    let first = root.join("out-a");
-    let second = root.join("out-b");
-    std::fs::create_dir_all(first.join("bin")).unwrap();
-    std::fs::create_dir_all(second.join("bin")).unwrap();
-    let roots = root.join("roots");
-
-    let a = BinariesDir::NixStore(first.join("bin"));
-    a.pin_gc_root(&roots).unwrap();
-    let pin = roots.join("nix-binaries");
-    assert!(pin.exists());
-    assert_eq!(canonicalize_or_clone(&pin), canonicalize_or_clone(&first));
-    assert!(!roots.join("nix-binaries.prev").exists());
-
-    a.pin_gc_root(&roots).unwrap();
-    assert!(!roots.join("nix-binaries.prev").exists());
-
-    let b = BinariesDir::NixStore(second.join("bin"));
-    b.pin_gc_root(&roots).unwrap();
-    assert!(roots.join("nix-binaries.prev").exists());
-    assert_eq!(
-        canonicalize_or_clone(&roots.join("nix-binaries")),
-        canonicalize_or_clone(&second)
+fn nix_pin_fails_when_out_link_cannot_register() {
+    let root = scratch("nix-pin-fail");
+    let out = root.join("out-a");
+    std::fs::create_dir_all(out.join("bin")).unwrap();
+    let err = BinariesDir::NixStore(out.join("bin"))
+        .pin_gc_root(&root.join("roots"))
+        .expect_err("nix build --out-link must register a real GC root");
+    let msg = format!("{err:#}");
+    assert!(
+        msg.contains("nix build --out-link"),
+        "unexpected pin error: {msg}"
     );
+    let _ = std::fs::remove_dir_all(&root);
+}
 
-    BinariesDir::release_previous_gc_root(&roots);
-    assert!(!roots.join("nix-binaries.prev").exists());
+#[test]
+fn release_previous_gc_root_deletes_the_prev_link() {
+    let root = scratch("release-prev");
+    let prev = root.join("nix-binaries.prev");
+    std::fs::write(&prev, "").unwrap();
+    BinariesDir::release_previous_gc_root(&root);
+    assert!(!prev.exists());
     let _ = std::fs::remove_dir_all(&root);
 }

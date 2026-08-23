@@ -5,7 +5,7 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use anyhow::{Context, Result, bail};
+use anyhow::{bail, Context, Result};
 
 /// Where the service binaries live on the host.
 #[derive(Clone, Debug)]
@@ -114,7 +114,7 @@ impl BinariesDir {
     /// `nix build --out-link` on Cloud flips the caller's link to the new
     /// path. Pin each generation under `roots_dir` with its own `--out-link`.
     /// Never rename those links: Nix registers the path, not the inode, so a
-    /// rename drops the root. A plain symlink fallback is not a GC root.
+    /// rename drops the root.
     pub fn pin_gc_root(&self, roots_dir: &Path) -> Result<()> {
         let Self::NixStore(dir) = self else {
             return Ok(());
@@ -146,22 +146,26 @@ impl BinariesDir {
 /// Register `link` as a Nix GC root for `store_output`. Writes `--out-link`
 /// at `link` itself so the auto-root path stays stable.
 fn publish_gc_root(link: &Path, store_output: &Path) -> Result<()> {
-    let pinned = Command::new("nix")
+    let status = Command::new("nix")
         .args(["build", "--out-link"])
         .arg(link)
         .arg(store_output)
-        .status();
-    if pinned.as_ref().is_ok_and(std::process::ExitStatus::success) {
+        .status()
+        .with_context(|| {
+            format!(
+                "running nix build --out-link {} {}",
+                link.display(),
+                store_output.display()
+            )
+        })?;
+    if status.success() {
         return Ok(());
     }
-    let _ = std::fs::remove_file(link);
-    std::os::unix::fs::symlink(store_output, link).with_context(|| {
-        format!(
-            "pinning {} at {} (nix build --out-link unavailable; not a GC root)",
-            store_output.display(),
-            link.display()
-        )
-    })
+    bail!(
+        "nix build --out-link {} {} failed with {status}",
+        link.display(),
+        store_output.display()
+    );
 }
 
 fn canonicalize_or_clone(path: &Path) -> PathBuf {
