@@ -26,6 +26,8 @@ use model::sync_service::SyncServiceVersionID;
 
 use model_entity::Entity;
 
+use activity::Attribution;
+
 use super::models::{
     BranchNameContext, CommentThread, CopyDocumentRepoArgs, CreateDocumentRepoArgs,
     CreateTaskRequest, DocumentError, DocumentTeamShare, DocumentTeamShareResponse,
@@ -340,6 +342,7 @@ pub trait TaskPropertiesPort: Send + Sync + 'static {
         entity_id: &str,
         property_definition_id: uuid::Uuid,
         value: Option<models_properties::api::requests::SetPropertyValue>,
+        attribution: &Attribution,
     ) -> impl Future<Output = anyhow::Result<()>> + Send;
 
     /// Copy all task property values from one task to another.
@@ -493,6 +496,7 @@ pub trait DocumentService: Send + Sync + 'static {
         user_id: MacroUserIdStr<'static>,
         document_id: &str,
         request: &CreateTaskRequest,
+        attribution: &Attribution,
     ) -> impl Future<Output = Result<(), DocumentError>> + Send;
 
     /// Returns the raw bytes of the cached Loro snapshot, or `None` if no snapshot exists.

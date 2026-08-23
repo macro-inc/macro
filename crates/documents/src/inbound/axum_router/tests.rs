@@ -366,6 +366,7 @@ impl DocumentService for FakeDocumentService {
         _user_id: MacroUserIdStr<'static>,
         _document_id: &str,
         _request: &CreateTaskRequest,
+        _attribution: &activity::Attribution,
     ) -> Result<(), DocumentError> {
         panic!("unexpected handle_task_properties call")
     }
@@ -443,6 +444,7 @@ impl DocumentCreationService for FakeDocumentService {
         _user_id: MacroUserIdStr<'static>,
         _document_id: &str,
         _request: &CreateTaskRequest,
+        _attribution: &activity::Attribution,
     ) -> Result<(), DocumentError> {
         panic!("unexpected creation handle_task_properties call")
     }
