@@ -46,7 +46,7 @@ function expectCaretInBlock(editor: LexicalEditor, blockIndex: number) {
   });
 }
 
-describe('$selectContentEnd', () => {
+describe('$selectTrailingParagraph', () => {
   test('appends an empty paragraph below a trailing quote and selects it', () => {
     const editor = createTestEditor();
 
