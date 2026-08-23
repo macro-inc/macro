@@ -364,6 +364,3 @@ fn workflows_dir() -> Result<PathBuf> {
     }
     Ok(dir)
 }
-
-#[cfg(test)]
-mod fly_preview_gone;
