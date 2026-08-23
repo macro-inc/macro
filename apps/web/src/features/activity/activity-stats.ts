@@ -1,16 +1,9 @@
-const DAY_MS = 24 * 60 * 60 * 1000;
-
-const monthNameFormatter = new Intl.DateTimeFormat(undefined, {
-  month: 'long',
-  timeZone: 'UTC',
-});
-
-const dayLabelFormatter = new Intl.DateTimeFormat(undefined, {
-  day: 'numeric',
-  month: 'short',
-  timeZone: 'UTC',
-  year: 'numeric',
-});
+import { addDays, eachDayOfInterval, format, isBefore, isValid } from 'date-fns';
+import {
+  formatOverviewDate,
+  OVERVIEW_TZ,
+  parseOverviewDate,
+} from './activity-dates';
 
 export type ActivityDayCount = {
   date: string;
@@ -24,26 +17,17 @@ export type ActivityStats = {
   mostActiveMonth: string | null;
 };
 
-function dateTimestamp(date: string): number {
-  return Date.parse(`${date}T00:00:00Z`);
-}
-
-function dateString(timestamp: number): string {
-  return new Date(timestamp).toISOString().slice(0, 10);
-}
-
 function eachDate(from: string, toExclusive: string): string[] {
-  const start = dateTimestamp(from);
-  const end = dateTimestamp(toExclusive);
-  if (!Number.isFinite(start) || !Number.isFinite(end) || start >= end) {
+  const start = parseOverviewDate(from);
+  const end = parseOverviewDate(toExclusive);
+  if (!isValid(start) || !isValid(end) || !isBefore(start, end)) {
     return [];
   }
 
-  const dates: string[] = [];
-  for (let timestamp = start; timestamp < end; timestamp += DAY_MS) {
-    dates.push(dateString(timestamp));
-  }
-  return dates;
+  return eachDayOfInterval(
+    { start, end: addDays(end, -1) },
+    { in: OVERVIEW_TZ }
+  ).map(formatOverviewDate);
 }
 
 /**
@@ -77,7 +61,9 @@ export function summarizeActivity(overview: {
         mostActiveDay = date;
         mostActiveDayCount = count;
       }
-      const month = date.slice(0, 7);
+      const month = format(parseOverviewDate(date), 'yyyy-MM', {
+        in: OVERVIEW_TZ,
+      });
       months.set(month, (months.get(month) ?? 0) + count);
       currentRun += 1;
       longestStreak = Math.max(longestStreak, currentRun);
@@ -112,11 +98,13 @@ export function summarizeActivity(overview: {
 }
 
 export function formatMonthName(yearMonth: string): string {
-  return monthNameFormatter.format(dateTimestamp(`${yearMonth}-01`));
+  return format(parseOverviewDate(`${yearMonth}-01`), 'MMMM', {
+    in: OVERVIEW_TZ,
+  });
 }
 
 export function formatDayLabel(date: string): string {
-  return dayLabelFormatter.format(dateTimestamp(date));
+  return format(parseOverviewDate(date), 'MMM d, yyyy', { in: OVERVIEW_TZ });
 }
 
 export function formatStreak(days: number): string {

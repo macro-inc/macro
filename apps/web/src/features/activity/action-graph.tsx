@@ -1,6 +1,8 @@
 import type { ActivityOverview } from '@queries/activity/graphql/overview';
 import { Layer, Tooltip } from '@ui';
+import { format } from 'date-fns';
 import { createMemo, For } from 'solid-js';
+import { OVERVIEW_TZ, parseOverviewDate } from './activity-dates';
 import {
   formatDayLabel,
   formatMonthName,
@@ -12,14 +14,6 @@ import {
   type ContributionDay,
 } from './contribution-grid';
 import { INTENSITY_CLASS } from './intensity';
-
-const dateFormatter = new Intl.DateTimeFormat(undefined, {
-  day: 'numeric',
-  month: 'short',
-  timeZone: 'UTC',
-  weekday: 'short',
-  year: 'numeric',
-});
 
 const WEEKDAY_LABELS = ['', 'M', '', 'W', '', 'F', ''];
 
@@ -38,7 +32,9 @@ const WEEK_ROW_CLASS = 'flex flex-1 justify-between gap-[3px]';
 const DAY_CELL_CLASS = 'aspect-square w-full shrink-0';
 
 function dateLabel(date: string): string {
-  return dateFormatter.format(Date.parse(`${date}T00:00:00Z`));
+  return format(parseOverviewDate(date), 'EEE, MMM d, yyyy', {
+    in: OVERVIEW_TZ,
+  });
 }
 
 function actionLabel(day: ContributionDay): string {
