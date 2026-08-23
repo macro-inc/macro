@@ -932,8 +932,8 @@ mod tests {
 
     #[tokio::test]
     async fn create_markdown_task_forwards_resolved_attribution() {
-        let service = RecordingCreationService::default();
-        let creator = super::DocumentCreator::new(&service, NoopMarkdown, NoopBytes);
+        let service = std::sync::Arc::new(RecordingCreationService::default());
+        let creator = super::DocumentCreator::new(service.clone(), NoopMarkdown, NoopBytes);
         let attribution =
             Attribution::delegated(Actor::new_from_bot(bot_id::MACRO_SYSTEM_BOT_ID), owner());
 

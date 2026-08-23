@@ -1054,6 +1054,9 @@ impl ToolEntityCreator {
         use models_properties::api::requests::SetPropertyValue;
         use system_properties::SystemPropertyKey;
 
+        let attribution =
+            activity::Attribution::direct(activity::Actor::new_from_user(user.clone()));
+
         if let Some(status) = properties.status.as_deref()
             && let Err(e) = self
                 .task_properties
@@ -1082,6 +1085,7 @@ impl ToolEntityCreator {
                             Some(SetPropertyValue::SelectOption {
                                 option_id: option.uuid(),
                             }),
+                            &attribution,
                         )
                         .await
                     {
@@ -1103,6 +1107,7 @@ impl ToolEntityCreator {
                             task_id,
                             SystemPropertyKey::DueDate.uuid(),
                             Some(SetPropertyValue::Date { value }),
+                            &attribution,
                         )
                         .await
                     {
@@ -1137,6 +1142,7 @@ impl ToolEntityCreator {
                     Some(SetPropertyValue::MultiEntityReference {
                         references: vec![reference],
                     }),
+                    &attribution,
                 )
                 .await
             {
