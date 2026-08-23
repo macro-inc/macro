@@ -21,11 +21,11 @@ ignores:
 rule:
   any:
     - kind: scoped_identifier
-      regex: ^(aws_sdk_\w+|redis|reqwest|opensearch|rdkafka)\b
+      regex: ^(aws_sdk_\w+|aws_config|redis|reqwest|opensearch|rdkafka)\b
       not:
         inside:
           kind: scoped_identifier
     - kind: scoped_type_identifier
-      regex: ^(aws_sdk_\w+|redis|reqwest|opensearch|rdkafka)\b
+      regex: ^(aws_sdk_\w+|aws_config|redis|reqwest|opensearch|rdkafka)\b
     - kind: use_declaration
-      regex: ^use (aws_sdk_\w+|redis|reqwest|opensearch|rdkafka)\b
+      regex: ^use (aws_sdk_\w+|aws_config|redis|reqwest|opensearch|rdkafka)\b
