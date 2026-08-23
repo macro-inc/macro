@@ -321,7 +321,7 @@ don't inject it directly into the error message.
 
 Nix is the only host dependency. The pinned dev shell supplies the Docker CLI and daemon, Compose, `fuse-overlayfs`, and OpenSSH. `ssh-keygen` must come from this shell.
 
-Service binaries come from the private S3 Nix cache. A sibling workflow on push to main (`push_local_stack_binaries.yml`) builds and pushes `.#local-stack-binaries`. It is not part of the deploy pipeline. Cursor Cloud realizes the aggregate with `nix build .#local-stack-binaries`. On a hash miss (feature-branch `Cargo.lock` or `.sqlx` changes) this compiles from source and can take an hour — that is progress, not a hang. sccache cannot shortcut it: `impureEnvVars` and nix.conf `impure-env` only reach fixed-output derivations (probed on Nix 2.35 with `sandbox = false`), so do not try to wire `RUSTC_WRAPPER` into the stack derivations. Dev-shell `cargo` already goes through sccache via the flake's `RUSTC_WRAPPER`, with its cache under `$HOME` in the bake snapshot.
+Service binaries come from the private S3 Nix cache. A sibling workflow on push to main (`push_local_stack_binaries.yml`) builds and pushes `.#local-stack-binaries`. It is not part of the deploy pipeline. Cursor Cloud realizes the aggregate with `nix build .#local-stack-binaries`.
 
 Set `NIX_CACHE_AWS_ACCESS_KEY_ID` and `NIX_CACHE_AWS_SECRET_ACCESS_KEY` as Cursor environment secrets. The IAM credentials need read-only access to the cache bucket.
 
