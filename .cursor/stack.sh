@@ -5,6 +5,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # On-demand product stack. Boot (start.sh) starts nothing; infra.sh brings up
 # dockerd and the databases first. After backend edits, run rebuild.sh.
+# rebuild.sh remounts new Nix binaries and does not call stack down.
 
 # shellcheck source=cloud-lib.sh
 source "${SCRIPT_DIR}/cloud-lib.sh"

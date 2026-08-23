@@ -3,6 +3,7 @@
 //! mount, not how the binaries were produced.
 
 use std::path::{Path, PathBuf};
+use std::process::Command;
 
 use anyhow::{Context, Result, bail};
 
@@ -15,6 +16,15 @@ pub enum BinariesDir {
     /// A Nix/crane `…/bin` dir. The binaries link the nix dynamic linker, so
     /// the host `/nix/store` must also be mounted read-only.
     NixStore(PathBuf),
+}
+
+/// How a running stack adopts a newly located [`BinariesDir`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Adoption {
+    /// Same canonical host dir. Content-addressed Nix paths are byte-identical.
+    Unchanged,
+    /// Different host dir. Rewrite compose mounts and recreate Rust containers.
+    Remount,
 }
 
 impl BinariesDir {
@@ -78,4 +88,96 @@ impl BinariesDir {
         }
         Ok(())
     }
+
+    /// Compare this set to the dir currently bind-mounted at `/app/out`.
+    pub fn adoption_from(&self, mounted_dir: &Path) -> Adoption {
+        let next = canonicalize_or_clone(self.host_dir());
+        let mounted = canonicalize_or_clone(mounted_dir);
+        if next == mounted {
+            Adoption::Unchanged
+        } else {
+            Adoption::Remount
+        }
+    }
+
+    /// Same as [`Self::adoption_from`], except a missing record means remount.
+    /// Legacy `stack.json` rows have no `binaries_dir`.
+    pub fn adoption_from_recorded(&self, recorded: Option<&Path>) -> Adoption {
+        match recorded {
+            Some(mounted) => self.adoption_from(mounted),
+            None => Adoption::Remount,
+        }
+    }
+
+    /// Keep a Nix store path alive while containers still mount it.
+    ///
+    /// `nix build --out-link` on Cloud flips the caller's link to the new
+    /// path. Pin the mounted generation under `roots_dir` so it stays rooted
+    /// until [`release_previous_gc_root`] runs after a successful remount.
+    pub fn pin_gc_root(&self, roots_dir: &Path) -> Result<()> {
+        let Self::NixStore(dir) = self else {
+            return Ok(());
+        };
+        std::fs::create_dir_all(roots_dir)
+            .with_context(|| format!("creating {}", roots_dir.display()))?;
+        let store_output = store_output_dir(dir);
+        let current = roots_dir.join("nix-binaries");
+        if current.exists()
+            && canonicalize_or_clone(&current) == canonicalize_or_clone(store_output)
+        {
+            return Ok(());
+        }
+        if current.exists() {
+            let prev = roots_dir.join("nix-binaries.prev");
+            let _ = std::fs::remove_file(&prev);
+            std::fs::rename(&current, &prev).with_context(|| {
+                format!(
+                    "keeping previous nix pin {} as {}",
+                    current.display(),
+                    prev.display()
+                )
+            })?;
+        }
+        let tmp = roots_dir.join("nix-binaries.new");
+        let _ = std::fs::remove_file(&tmp);
+        let pinned = Command::new("nix")
+            .args(["build", "--out-link"])
+            .arg(&tmp)
+            .arg(store_output)
+            .status();
+        if pinned.as_ref().is_ok_and(std::process::ExitStatus::success) {
+            std::fs::rename(&tmp, &current)
+                .with_context(|| format!("publishing nix pin to {}", current.display()))?;
+            return Ok(());
+        }
+        let _ = std::fs::remove_file(&tmp);
+        std::os::unix::fs::symlink(store_output, &current).with_context(|| {
+            format!(
+                "pinning {} at {} (nix build --out-link unavailable)",
+                store_output.display(),
+                current.display()
+            )
+        })?;
+        Ok(())
+    }
+
+    /// Drop the previous generation's pin after the new mount is recorded.
+    pub fn release_previous_gc_root(roots_dir: &Path) {
+        let _ = std::fs::remove_file(roots_dir.join("nix-binaries.prev"));
+    }
 }
+
+fn canonicalize_or_clone(path: &Path) -> PathBuf {
+    path.canonicalize().unwrap_or_else(|_| path.to_path_buf())
+}
+
+fn store_output_dir(bin_dir: &Path) -> &Path {
+    if bin_dir.file_name().and_then(|n| n.to_str()) == Some("bin") {
+        bin_dir.parent().unwrap_or(bin_dir)
+    } else {
+        bin_dir
+    }
+}
+
+#[cfg(test)]
+mod test;

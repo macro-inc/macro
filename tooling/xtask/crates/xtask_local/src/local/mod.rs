@@ -189,16 +189,6 @@ const LOCAL_RECREATE_SERVICE_IMAGES: &[&str] = &[
 /// separately by [`build::ensure_runtime_image`].
 const LOCAL_PULL_SERVICE_IMAGES: &[&str] = &["proxy", "mailpit", "static_file_cdn"];
 
-/// The artifact-driven preview updater can refresh every Docker-built app
-/// service. Keep this separate so enabling local aux rebuilds does not make the
-/// existing `run_local` edit loop rebuild the AI worker too.
-const PREVIEW_AUX_SERVICE_IMAGES: &[&str] = &[
-    "websocket_service",
-    "sync_service",
-    "lexical_service",
-    "ai_editing_worker",
-];
-
 /// Bring up a Local or Dev stack and (unless `--no-frontend`) the frontend.
 pub fn run_stack(mode: Mode, args: &cli::RunArgs) -> Result<()> {
     if mode.spec().runs_local_infra {
@@ -601,17 +591,6 @@ fn recreate_aux_service_containers(
     stage.run("Recreating auxiliary service containers", &mut up)
 }
 
-fn recreate_preview_aux_service_containers(
-    stage: &Stage,
-    instance: &Instance,
-    env: &env_layer::ResolvedEnv,
-) -> Result<()> {
-    let mut up = compose_cmd(instance, env);
-    up.args(["up", "-d", "--force-recreate", "--no-deps"])
-        .args(PREVIEW_AUX_SERVICE_IMAGES);
-    stage.run("Recreating preview auxiliary services", &mut up)
-}
-
 /// How the local infra reaches its initialized state on bring-up.
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum InfraInit {
@@ -680,8 +659,8 @@ fn bring_up_infra(
         // equivalent of the MSK topic provisioning driven by the generated
         // `.github/kafka-cluster-topics.json`. Restored volumes already carry
         // the topics (they live in the broker's data dir), so only a full init
-        // provisions — which also means a snapshot-restoring `stack up` (e.g.
-        // the preview VM) never needs the rdkafka-backed `local-stack` feature.
+        // provisions — which also means a snapshot-restoring `stack up`
+        // never needs the rdkafka-backed `local-stack` feature.
         if init == InfraInit::Full {
             stage.run_step("Creating Kafka topics", || kafka::provision(instance))?;
         }
