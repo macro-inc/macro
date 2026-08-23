@@ -1,9 +1,10 @@
 import type { ActivityOverview } from '@queries/activity/graphql/overview';
-import { Layer, Tooltip } from '@ui';
+import { cn, Layer, Tooltip } from '@ui';
 import { format } from 'date-fns';
-import { createMemo, For } from 'solid-js';
+import { type JSX, createMemo, For } from 'solid-js';
 import { OVERVIEW_TZ, parseOverviewDate } from './activity-dates';
 import {
+  type ActivityStats,
   formatDayLabel,
   formatMonthName,
   formatStreak,
@@ -12,24 +13,11 @@ import {
 import {
   buildContributionGrid,
   type ContributionDay,
+  type ContributionWeek,
 } from './contribution-grid';
 import { INTENSITY_CLASS } from './intensity';
 
 const WEEKDAY_LABELS = ['', 'M', '', 'W', '', 'F', ''];
-
-/**
- * One week column. Grows to fill the card width, floored at the day-cell size
- * (a very narrow panel scrolls horizontally rather than squashing the cells)
- * and capped so a wide panel spends leftover width on the gaps — via the row's
- * `justify-between` — instead of growing a wall of blocks.
- */
-const WEEK_COLUMN_CLASS = 'shrink-0 grow basis-2.5 max-w-3.5';
-
-/** The weeks row and the month-letter row above it, kept column-aligned. */
-const WEEK_ROW_CLASS = 'flex flex-1 justify-between gap-[3px]';
-
-/** A day cell, kept square at whatever width its week column settles on. */
-const DAY_CELL_CLASS = 'aspect-square w-full shrink-0';
 
 function dateLabel(date: string): string {
   return format(parseOverviewDate(date), 'EEE, MMM d, yyyy', {
@@ -74,107 +62,172 @@ export function ActionGraph(props: { overview: ActivityOverview }) {
 
   return (
     <Layer depth={2}>
-    <section
-      class="overflow-hidden rounded-lg border border-edge-muted bg-surface"
-      aria-labelledby="activity-actions-heading"
-    >
-      <div class="divide-y divide-edge-muted text-xs">
-        <header class="flex min-h-7 items-center gap-2 px-4 py-2">
-          <h2
-            id="activity-actions-heading"
-            class="font-semibold text-ink-muted text-xs"
-          >
-            Actions{' '}
-            <span class="text-ink-extra-muted tabular-nums">
-              ({props.overview.total.toLocaleString()})
-            </span>
-          </h2>
-          <div class="ml-auto flex shrink-0 items-center gap-1 text-ink-extra-muted">
-            <span>Fewer</span>
-            <For each={[0, 1, 2, 3, 4] as const}>
-              {(level) => (
-                <span
-                  class={`size-2.5 rounded-[3px] ${INTENSITY_CLASS[level]}`}
-                />
-              )}
-            </For>
-            <span>More</span>
-          </div>
-        </header>
-        <div class="overflow-x-auto scrollbar-hidden px-4 py-3">
-          <div class="w-max min-w-full">
-            <div class={`${WEEK_ROW_CLASS} mb-1 pl-5`}>
-              <For each={grid().weeks}>
-                {(_, index) => (
-                  <span
-                    class={`${WEEK_COLUMN_CLASS} text-center text-ink-extra-muted text-xs leading-none`}
-                  >
-                    {monthLabels().get(index())}
-                  </span>
-                )}
-              </For>
-            </div>
-            <div class="flex items-stretch">
-              <div class="mr-1.5 flex w-3.5 shrink-0 flex-col gap-[3px] text-ink-extra-muted text-xs">
-                <For each={WEEKDAY_LABELS}>
-                  {(label) => (
-                    <span class="flex min-h-0 flex-1 items-center leading-none">
-                      {label}
-                    </span>
-                  )}
-                </For>
-              </div>
-              <div class={WEEK_ROW_CLASS}>
-                <For each={grid().weeks}>
-                  {(week) => (
-                    <div class={`${WEEK_COLUMN_CLASS} flex flex-col gap-[3px]`}>
-                      <For each={week}>
-                        {(day) =>
-                          day ? (
-                            <Tooltip
-                              as="span"
-                              placement="top"
-                              class={DAY_CELL_CLASS}
-                              label={actionLabel(day)}
-                            >
-                              <span
-                                aria-label={actionLabel(day)}
-                                class={`block size-full rounded-[3px] ${INTENSITY_CLASS[day.intensity]}`}
-                              />
-                            </Tooltip>
-                          ) : (
-                            <span class={DAY_CELL_CLASS} />
-                          )
-                        }
-                      </For>
-                    </div>
-                  )}
-                </For>
-              </div>
-            </div>
-          </div>
+      <section
+        class="overflow-hidden rounded-lg border border-edge-muted bg-surface"
+        aria-labelledby="activity-actions-heading"
+      >
+        <div class="divide-y divide-edge-muted text-xs">
+          <ActionGraphHeader total={props.overview.total} />
+          <ContributionHeatmap
+            weeks={grid().weeks}
+            monthLabels={monthLabels()}
+          />
+          <ActionGraphStats stats={stats()} />
         </div>
-        <dl class="flex flex-wrap items-center gap-x-4 gap-y-1 px-4 py-2">
-          <Stat
-            label="Most active month"
-            value={monthStat(stats().mostActiveMonth)}
-          />
-          <Stat
-            label="Most active day"
-            value={dayStat(stats().mostActiveDay)}
-          />
-          <Stat
-            label="Longest streak"
-            value={formatStreak(stats().longestStreak)}
-          />
-          <Stat
-            label="Current streak"
-            value={formatStreak(stats().currentStreak)}
-          />
-        </dl>
-      </div>
-    </section>
+      </section>
     </Layer>
+  );
+}
+
+function ActionGraphHeader(props: { total: number }) {
+  return (
+    <header class="flex min-h-7 items-center gap-2 px-4 py-2">
+      <h2
+        id="activity-actions-heading"
+        class="font-semibold text-ink-muted text-xs"
+      >
+        Actions{' '}
+        <span class="text-ink-extra-muted tabular-nums">
+          ({props.total.toLocaleString()})
+        </span>
+      </h2>
+      <IntensityLegend />
+    </header>
+  );
+}
+
+function IntensityLegend() {
+  return (
+    <div class="ml-auto flex shrink-0 items-center gap-1 text-ink-extra-muted">
+      <span>Fewer</span>
+      <For each={[0, 1, 2, 3, 4] as const}>
+        {(level) => (
+          <span class={`size-2.5 rounded-[3px] ${INTENSITY_CLASS[level]}`} />
+        )}
+      </For>
+      <span>More</span>
+    </div>
+  );
+}
+
+function ContributionHeatmap(props: {
+  weeks: ContributionWeek[];
+  monthLabels: Map<number, string>;
+}) {
+  return (
+    <div class="overflow-x-auto px-4 py-3 scrollbar-hidden">
+      <div class="w-max min-w-full">
+        <WeekRow class="mb-1 pl-5">
+          <For each={props.weeks}>
+            {(_, index) => <MonthLetter label={props.monthLabels.get(index())} />}
+          </For>
+        </WeekRow>
+        <div class="flex items-stretch">
+          <WeekdayGutter />
+          <WeekRow>
+            <For each={props.weeks}>
+              {(week) => <HeatmapWeek week={week} />}
+            </For>
+          </WeekRow>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function WeekdayGutter() {
+  return (
+    <div class="mr-1.5 flex w-3.5 shrink-0 flex-col gap-[3px] text-ink-extra-muted text-xs">
+      <For each={WEEKDAY_LABELS}>
+        {(label) => (
+          <span class="flex min-h-0 flex-1 items-center leading-none">
+            {label}
+          </span>
+        )}
+      </For>
+    </div>
+  );
+}
+
+function HeatmapWeek(props: { week: ContributionWeek }) {
+  return (
+    <WeekColumn class="flex flex-col gap-[3px]">
+      <For each={props.week}>{(day) => <DaySquare day={day} />}</For>
+    </WeekColumn>
+  );
+}
+
+function MonthLetter(props: { label?: string }) {
+  return (
+    <WeekColumn class="text-center text-ink-extra-muted text-xs leading-none">
+      {props.label}
+    </WeekColumn>
+  );
+}
+
+function DaySquare(props: { day: ContributionDay | null }) {
+  const day = props.day;
+  if (!day) {
+    return <span class="aspect-square w-full shrink-0" />;
+  }
+
+  const label = actionLabel(day);
+  return (
+    <Tooltip
+      as="span"
+      placement="top"
+      class="aspect-square w-full shrink-0"
+      label={label}
+    >
+      <span
+        aria-label={label}
+        class={`block size-full rounded-[3px] ${INTENSITY_CLASS[day.intensity]}`}
+      />
+    </Tooltip>
+  );
+}
+
+/**
+ * One week column. Grows to fill the card width, floored at the day-cell
+ * size (a very narrow panel scrolls horizontally rather than squashing the
+ * cells) and capped so leftover width goes to the row gaps.
+ */
+function WeekColumn(props: { class?: string; children?: JSX.Element }) {
+  return (
+    <div class={cn('max-w-3.5 shrink-0 grow basis-2.5', props.class)}>
+      {props.children}
+    </div>
+  );
+}
+
+function WeekRow(props: { class?: string; children?: JSX.Element }) {
+  return (
+    <div class={cn('flex flex-1 justify-between gap-[3px]', props.class)}>
+      {props.children}
+    </div>
+  );
+}
+
+function ActionGraphStats(props: { stats: ActivityStats }) {
+  return (
+    <dl class="flex flex-wrap items-center gap-x-4 gap-y-1 px-4 py-2">
+      <Stat
+        label="Most active month"
+        value={monthStat(props.stats.mostActiveMonth)}
+      />
+      <Stat
+        label="Most active day"
+        value={dayStat(props.stats.mostActiveDay)}
+      />
+      <Stat
+        label="Longest streak"
+        value={formatStreak(props.stats.longestStreak)}
+      />
+      <Stat
+        label="Current streak"
+        value={formatStreak(props.stats.currentStreak)}
+      />
+    </dl>
   );
 }
 
