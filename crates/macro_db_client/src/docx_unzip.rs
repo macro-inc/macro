@@ -91,7 +91,7 @@ mod tests {
     use super::*;
     use sqlx::{Pool, Postgres};
 
-    #[sqlx::test(fixtures(path = "../../fixtures", scripts("basic_user_with_document.sql")))]
+    #[sqlx::test(fixtures(path = "../fixtures", scripts("basic_user_with_document.sql")))]
     async fn test_save_bom_parts_to_db(pool: Pool<Postgres>) {
         let result = save_bom_parts_to_db(
             &pool,
@@ -136,7 +136,7 @@ mod tests {
         assert_eq!(result.len(), 3);
     }
 
-    #[sqlx::test(fixtures(path = "../../fixtures", scripts("basic_user_with_document.sql")))]
+    #[sqlx::test(fixtures(path = "../fixtures", scripts("basic_user_with_document.sql")))]
     async fn test_update_uploaded_status(pool: Pool<Postgres>) -> anyhow::Result<()> {
         update_uploaded_status(&pool, "document-one").await?;
 
@@ -158,7 +158,7 @@ mod tests {
         Ok(())
     }
 
-    #[sqlx::test(fixtures(path = "../../fixtures", scripts("basic_user_with_document.sql")))]
+    #[sqlx::test(fixtures(path = "../fixtures", scripts("basic_user_with_document.sql")))]
     async fn test_get_job_id_for_docx_upload(pool: Pool<Postgres>) {
         let result = get_job_for_docx_upload(&pool, "document-one").await;
 

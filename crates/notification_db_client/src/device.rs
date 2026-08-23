@@ -190,7 +190,7 @@ mod tests {
 
     #[sqlx::test(
         migrator = "MACRO_DB_MIGRATIONS",
-        fixtures(path = "../../fixtures", scripts("user_devices"))
+        fixtures(path = "../fixtures", scripts("user_devices"))
     )]
     async fn test_upsert_existing_user_device(pool: Pool<Postgres>) -> anyhow::Result<()> {
         let new_token = "new_token_123";
@@ -236,7 +236,7 @@ mod tests {
 
     #[sqlx::test(
         migrator = "MACRO_DB_MIGRATIONS",
-        fixtures(path = "../../fixtures", scripts("user_devices"))
+        fixtures(path = "../fixtures", scripts("user_devices"))
     )]
     async fn test_delete_user_device(pool: Pool<Postgres>) -> anyhow::Result<()> {
         let result = sqlx::query!(

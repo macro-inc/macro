@@ -23,14 +23,14 @@ pub async fn get_document_text(
 mod tests {
     use super::*;
 
-    #[sqlx::test(fixtures(path = "../../fixtures", scripts("document_text")))]
+    #[sqlx::test(fixtures(path = "../fixtures", scripts("document_text")))]
     async fn test_get_document_text(pool: Pool<Postgres>) -> anyhow::Result<()> {
         let document_text = get_document_text(&pool, "document-one").await?;
         assert_eq!(document_text, "test document text");
         Ok(())
     }
 
-    #[sqlx::test(fixtures(path = "../../fixtures", scripts("document_text")))]
+    #[sqlx::test(fixtures(path = "../fixtures", scripts("document_text")))]
     async fn test_get_document_text_no_exist(pool: Pool<Postgres>) -> anyhow::Result<()> {
         let error = get_document_text(&pool, "document-two").await.unwrap_err();
         assert_eq!(error.to_string(), sqlx::Error::RowNotFound.to_string());

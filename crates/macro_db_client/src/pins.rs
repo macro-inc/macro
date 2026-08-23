@@ -343,7 +343,7 @@ mod tests {
     use super::*;
     use sqlx::{Pool, Postgres};
 
-    #[sqlx::test(fixtures(path = "../../fixtures", scripts("basic_pinned_document")))]
+    #[sqlx::test(fixtures(path = "../fixtures", scripts("basic_pinned_document")))]
     async fn test_upsert_pin(pool: Pool<Postgres>) {
         upsert_pin(
             pool.clone(),
@@ -391,7 +391,7 @@ mod tests {
         assert_eq!(time.createdAt, time.updatedAt);
     }
 
-    #[sqlx::test(fixtures(path = "../../fixtures", scripts("basic_user_with_lots_of_documents")))]
+    #[sqlx::test(fixtures(path = "../fixtures", scripts("basic_user_with_lots_of_documents")))]
     async fn test_get_pins(pool: Pool<Postgres>) {
         let pins = get_pins(pool.clone(), "macro|user@user.com").await.unwrap();
 
@@ -419,7 +419,7 @@ mod tests {
         );
     }
 
-    #[sqlx::test(fixtures(path = "../../fixtures", scripts("basic_user_with_lots_of_documents")))]
+    #[sqlx::test(fixtures(path = "../fixtures", scripts("basic_user_with_lots_of_documents")))]
     async fn test_get_pins_no_pins(pool: Pool<Postgres>) {
         // document doesn't exist
         let documents = get_pins(pool.clone(), "bad_user").await.unwrap();
@@ -428,7 +428,7 @@ mod tests {
         assert_eq!(documents, vec![]);
     }
 
-    #[sqlx::test(fixtures(path = "../../fixtures", scripts("basic_pinned_document")))]
+    #[sqlx::test(fixtures(path = "../fixtures", scripts("basic_pinned_document")))]
     async fn test_remove_pin(pool: Pool<Postgres>) {
         // document doesn't exist
         remove_pin(
@@ -467,7 +467,7 @@ mod tests {
         .unwrap();
     }
 
-    #[sqlx::test(fixtures(path = "../../fixtures", scripts("basic_user_with_lots_of_documents")))]
+    #[sqlx::test(fixtures(path = "../fixtures", scripts("basic_user_with_lots_of_documents")))]
     async fn test_reorder_pins(pool: Pool<Postgres>) {
         reorder_pins(
             pool.clone(),
