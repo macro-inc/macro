@@ -11,7 +11,7 @@
 use std::path::PathBuf;
 use std::process::Command;
 
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 use clap::Args;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -19,7 +19,7 @@ use serde_json::json;
 use super::cli::{EnvArgs, InstanceArgs, RunArgs};
 use super::instance::{Instance, Port};
 use super::stage::Stage;
-use super::{arch, env_layer, frontend, mailpit, proxy, sdk_webhook, snapshot, summary, Mode};
+use super::{Mode, arch, env_layer, frontend, mailpit, proxy, sdk_webhook, snapshot, summary};
 
 #[derive(Args, Clone, Default)]
 pub struct UpArgs {
