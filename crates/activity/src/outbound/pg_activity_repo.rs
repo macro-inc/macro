@@ -297,6 +297,11 @@ impl ActivityReads for PgActivityRepo {
         window: ActivityWindow,
     ) -> Result<ActivityOverview, Self::Err> {
         let zone = window.zone.name();
+        let rankable_entity_types = rankable_entity_types();
+        // `timestamp AT TIME ZONE` picks the later UTC instant when local
+        // midnight is repeated (Havana 2026-11-01 is 04:00Z and 05:00Z).
+        // Widen the sargable envelope, then keep rows by local date so the
+        // first midnight is included and the exclusive end stays exclusive.
         let day_rows = sqlx::query!(
             r#"
             SELECT (occurred_at AT TIME ZONE $1)::date AS "day!",
@@ -304,7 +309,10 @@ impl ActivityReads for PgActivityRepo {
             FROM activity_events
             WHERE subject_id = $2
               AND occurred_at >= ($3::date::timestamp AT TIME ZONE $1)
+                               - INTERVAL '26 hours'
               AND occurred_at <  ($4::date::timestamp AT TIME ZONE $1)
+              AND (occurred_at AT TIME ZONE $1)::date >= $3::date
+              AND (occurred_at AT TIME ZONE $1)::date <  $4::date
             GROUP BY 1
             ORDER BY 1
             "#,
@@ -322,15 +330,20 @@ impl ActivityReads for PgActivityRepo {
             FROM activity_events
             WHERE subject_id = $2
               AND occurred_at >= ($3::date::timestamp AT TIME ZONE $1)
+                               - INTERVAL '26 hours'
               AND occurred_at <  ($4::date::timestamp AT TIME ZONE $1)
+              AND (occurred_at AT TIME ZONE $1)::date >= $3::date
+              AND (occurred_at AT TIME ZONE $1)::date <  $4::date
+              AND entity_type = ANY($5::text[])
             GROUP BY 1, 2
             ORDER BY count(*) DESC, entity_type ASC, entity_id ASC
-            LIMIT $5
+            LIMIT $6
             "#,
             zone,
             subject_id,
             window.start,
             window.end,
+            &rankable_entity_types,
             TOP_ENTITY_LIMIT,
         )
         .fetch_all(&self.pool)
@@ -408,6 +421,57 @@ impl ActivityReads for PgActivityRepo {
             truncated,
         })
     }
+}
+
+/// Compile-fails when [`EntityType`] grows a variant that is missing from
+/// [`rankable_entity_types`].
+#[allow(dead_code)]
+const fn _rankable_entity_types_are_exhaustive(entity_type: EntityType) {
+    match entity_type {
+        EntityType::User
+        | EntityType::Chat
+        | EntityType::Channel
+        | EntityType::ChannelMessage
+        | EntityType::Document
+        | EntityType::Project
+        | EntityType::EmailThread
+        | EntityType::CalendarEvent
+        | EntityType::Team
+        | EntityType::Call
+        | EntityType::ForeignEntity
+        | EntityType::StaticFile
+        | EntityType::CrmCompany
+        | EntityType::CrmContact
+        | EntityType::Reminder
+        | EntityType::Skill
+        | EntityType::AgentSession => {}
+    }
+}
+
+/// Snake-case names [`EntityType::from_str`] accepts.
+fn rankable_entity_types() -> Vec<String> {
+    [
+        EntityType::User,
+        EntityType::Chat,
+        EntityType::Channel,
+        EntityType::ChannelMessage,
+        EntityType::Document,
+        EntityType::Project,
+        EntityType::EmailThread,
+        EntityType::CalendarEvent,
+        EntityType::Team,
+        EntityType::Call,
+        EntityType::ForeignEntity,
+        EntityType::StaticFile,
+        EntityType::CrmCompany,
+        EntityType::CrmContact,
+        EntityType::Reminder,
+        EntityType::Skill,
+        EntityType::AgentSession,
+    ]
+    .into_iter()
+    .map(|entity_type| entity_type.as_ref().to_owned())
+    .collect()
 }
 
 fn positive_count(value: i64) -> Result<NonZeroU64, sqlx::Error> {

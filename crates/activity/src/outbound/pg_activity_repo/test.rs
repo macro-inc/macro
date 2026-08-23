@@ -622,3 +622,129 @@ async fn subject_overview_buckets_fifteen_minute_rows_across_havana_midnights(po
     );
     assert_eq!(overview.total(), 18);
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn subject_overview_ranks_known_entities_when_unknown_type_outcounts_them(pool: PgPool) {
+    let repo = PgActivityRepo::new(pool.clone());
+    let subject = "macro|rank-unknown@example.com";
+    let start = base_time();
+    let mut activities = Vec::new();
+    let mut source = 300_u128;
+    for index in 0..TOP_ENTITY_LIMIT {
+        let copies = (TOP_ENTITY_LIMIT - index) as u32;
+        for minute in 0..copies {
+            activities.push(seed_for_subject_at(
+                source,
+                subject,
+                &format!("doc-{index}"),
+                start + chrono::Duration::minutes(i64::from(minute)),
+            ));
+            source += 1;
+        }
+    }
+    repo.insert_activities(&activities).await.unwrap();
+    for copy in 0..(TOP_ENTITY_LIMIT + 1) {
+        sqlx::query!(
+            r#"
+            INSERT INTO activity_events
+                (id, actor_id, subject_id, action, action_payload,
+                 entity_type, entity_id, occurred_at)
+            VALUES ($1, 'macro|actor@example.com', $2, 'edited', NULL,
+                    'future_entity', 'future-top', $3)
+            "#,
+            Uuid::from_u128(source),
+            subject,
+            start + chrono::Duration::hours(i64::from(copy)),
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        source += 1;
+    }
+
+    let overview = repo
+        .subject_overview(
+            subject,
+            overview_window(chrono_tz::UTC, "2026-08-01", "2026-08-02"),
+        )
+        .await
+        .unwrap();
+
+    let ranked: Vec<(String, u64)> = overview
+        .top_entities
+        .iter()
+        .map(|rank| (rank.entity_id.clone(), rank.count.get()))
+        .collect();
+    let expected: Vec<(String, u64)> = (0..TOP_ENTITY_LIMIT)
+        .map(|index| (format!("doc-{index}"), (TOP_ENTITY_LIMIT - index) as u64))
+        .collect();
+    assert_eq!(ranked, expected);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn subject_overview_includes_first_havana_midnight_when_window_starts_on_fallback(
+    pool: PgPool,
+) {
+    let repo = PgActivityRepo::new(pool);
+    let subject = "macro|havana-start@example.com";
+    let first_midnight = chrono::DateTime::parse_from_rfc3339("2026-11-01T04:00:00Z")
+        .unwrap()
+        .with_timezone(&Utc);
+    let mut activities = Vec::new();
+    let mut source = 400_u128;
+    for (offset_minutes, entity_id) in [
+        (0_i64, "before-later-midnight"),
+        (15, "still-before-later-midnight"),
+        (60, "at-later-midnight"),
+        (75, "after-later-midnight"),
+    ] {
+        activities.push(seed_for_subject_at(
+            source,
+            subject,
+            entity_id,
+            first_midnight + chrono::Duration::minutes(offset_minutes),
+        ));
+        source += 1;
+    }
+    activities.push(seed_for_subject_at(
+        source,
+        subject,
+        "previous-day",
+        first_midnight - chrono::Duration::minutes(15),
+    ));
+    repo.insert_activities(&activities).await.unwrap();
+
+    let starting_on_fallback = repo
+        .subject_overview(
+            subject,
+            overview_window(chrono_tz::America::Havana, "2026-11-01", "2026-11-02"),
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        starting_on_fallback
+            .days
+            .iter()
+            .map(|day| (day.day.to_string(), day.count.get()))
+            .collect::<Vec<_>>(),
+        vec![("2026-11-01".to_owned(), 4)]
+    );
+    assert_eq!(starting_on_fallback.total(), 4);
+
+    let ending_on_fallback = repo
+        .subject_overview(
+            subject,
+            overview_window(chrono_tz::America::Havana, "2026-10-31", "2026-11-01"),
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        ending_on_fallback
+            .days
+            .iter()
+            .map(|day| (day.day.to_string(), day.count.get()))
+            .collect::<Vec<_>>(),
+        vec![("2026-10-31".to_owned(), 1)]
+    );
+    assert_eq!(ending_on_fallback.total(), 1);
+}
