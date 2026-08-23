@@ -1,23 +1,16 @@
 import { GO_TO_COMMAND_SCOPE, GO_TO_LEADER_KEY } from '@app/constants/hotkeys';
-import { LIST_VIEW_PATHS, type ListView } from '@app/constants/list-views';
-import { useActivityFeedFlag } from '@app/features/activity/use-activity-feed-flag';
 import { SidebarActiveCallWidget } from '@app/features/block-call/sidebar/active-call-widget';
-import { useCalendarUiFlag } from '@app/features/calendar/hooks/use-calendar-ui-flag';
 import { ChannelsRecentWidget } from '@app/features/channel/sidebar/channels-recent-widget';
 import { CommandState } from '@app/features/command';
 import { SidebarCreateMenu } from '@app/features/command/sidebar/sidebar-create-menu';
 import { FavoritesSection } from '@app/features/favorites/sidebar/favorites-section';
-import { useGettingStartedEnabled } from '@app/features/getting-started/account-gate';
 import { createGettingStartedSidebarVisibility } from '@app/features/getting-started/sidebar-visibility';
-import { buildDocumentTypeQuery } from '@app/features/next-soup/filters/configs/document-type-query';
-import { getDocumentsFilterSplit } from '@app/features/next-soup/soup-view/documents-filter-controllers';
 import {
   getInboxFilterSplit,
   INBOX_FILTER_ENTRY_KEY,
   requestInboxFilter,
 } from '@app/features/next-soup/soup-view/inbox-filter-controllers';
 import { requestSearchFocus } from '@app/features/next-soup/soup-view/search-controllers';
-import { useRecentViewFlag } from '@app/features/next-soup/use-recent-view-flag';
 import {
   InviteModal,
   setInviteModalOpen,
@@ -26,7 +19,6 @@ import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useHotkeyInterceptor } from '@app/signal/hotkeyRoot';
 import { globalSplitManager } from '@app/signal/splitLayout';
-import { CALENDAR_BLOCK_ID } from '@block-calendar/types';
 import { useCallContextOptional } from '@channel/Call/CallContext';
 import { InCallPanel } from '@channel/Call/InCallPanel';
 import {
@@ -39,7 +31,6 @@ import {
 } from '@components/app/app-sidebar/sidebar-promo';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import type {
-  ReferredFrom,
   SplitContent,
   SplitHandle,
 } from '@components/app/split-layout/layoutManager';
@@ -49,11 +40,7 @@ import { ContextMenuContent, MenuItem } from '@core/component/ContextMenu';
 import { inboxIconProps } from '@core/component/inboxIcon';
 import { toast } from '@core/component/Toast/Toast';
 import { UserIcon } from '@core/component/UserIcon';
-import {
-  ENABLE_CALLS,
-  ENABLE_CRM,
-  ENABLE_NEW_PRICING_OVERRIDE,
-} from '@core/constant/featureFlags';
+import { ENABLE_NEW_PRICING_OVERRIDE } from '@core/constant/featureFlags';
 import {
   type SettingsTab,
   useSettingsState,
@@ -65,27 +52,14 @@ import {
 import { useEmail, useUserId } from '@core/context/user';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { clearPressedKeys } from '@core/hotkey/state';
-import { type HotkeyToken, TOKENS } from '@core/hotkey/tokens';
+import { TOKENS } from '@core/hotkey/tokens';
 import type { ValidHotkey } from '@core/hotkey/types';
 import { activateClosestDOMScope } from '@core/hotkey/utils';
 import { getDisplayName, tryMacroId } from '@core/user';
 import LogoIcon from '@icon/macro-logo.svg';
-import { AnimatedActivityIcon } from '@icon/wide-activity';
-import WideCalendarIcon from '@icon/wide-calendar.svg';
-import { AnimatedCallIcon } from '@icon/wide-call';
-import { AnimatedChannelIcon } from '@icon/wide-channel';
-import { AnimatedCompanyIcon } from '@icon/wide-company';
-import { AnimatedEmailIcon } from '@icon/wide-email';
-import { AnimatedFileMdIcon } from '@icon/wide-fileMd';
-import { AnimatedHomeIcon } from '@icon/wide-home';
-import { AnimatedInboxIcon } from '@icon/wide-inbox';
-import { AnimatedSearchIcon } from '@icon/wide-search';
-import { AnimatedStarIcon } from '@icon/wide-star';
-import { AnimatedTaskIcon } from '@icon/wide-task';
 import { ContextMenu } from '@kobalte/core/context-menu';
 import CaretRightIcon from '@phosphor/caret-right.svg';
 import CaretUpIcon from '@phosphor/caret-up.svg';
-import CompassIcon from '@phosphor/compass.svg';
 import DotsThreeIcon from '@phosphor/dots-three.svg';
 import GearIcon from '@phosphor/gear.svg';
 import MagnifyingGlassIcon from '@phosphor/magnifying-glass.svg';
@@ -120,20 +94,12 @@ import {
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { CalendarSidebarPreview } from './calendar-sidebar-preview';
-
-interface SidebarItem {
-  id: ListView | (string & {});
-  label: string;
-  href: string;
-  params?: Record<string, unknown>;
-  icon?: Component<
-    JSX.SvgSVGAttributes<SVGSVGElement> & { triggerAnimation?: boolean }
-  >;
-  hotkey: ValidHotkey;
-  hotkeyToken: HotkeyToken;
-  standaloneHotkey?: boolean;
-  hiddenFromSidebar?: boolean;
-}
+import { type SidebarItem, useSidebarLinks } from './links';
+import {
+  isSidebarViewActive,
+  navigateToSidebarView,
+  sidebarContent,
+} from './navigation';
 
 type SidebarSectionLinkId =
   | 'mail'
@@ -179,93 +145,6 @@ const DEFAULT_TRY_VISIBILITY: TryItemVisibility = {
   mobile: true,
 };
 
-const markdownDocumentsQuery = buildDocumentTypeQuery(['doc-markdown']);
-
-const SIDEBAR_LINKS = [
-  {
-    id: 'inbox',
-    label: 'Inbox',
-    href: LIST_VIEW_PATHS.inbox,
-    icon: AnimatedInboxIcon,
-    hotkey: 'i',
-    hotkeyToken: TOKENS.sidebar.goTo.inbox,
-  },
-  {
-    id: 'search',
-    label: 'Search',
-    href: LIST_VIEW_PATHS.search,
-    icon: AnimatedSearchIcon,
-    hotkey: '/',
-    hotkeyToken: TOKENS.sidebar.goTo.search,
-    standaloneHotkey: true,
-    hiddenFromSidebar: true,
-  },
-  {
-    id: 'agents',
-    label: 'Agents',
-    href: LIST_VIEW_PATHS.agents,
-    icon: AnimatedStarIcon,
-    hotkey: 'a',
-    hotkeyToken: TOKENS.sidebar.goTo.agents,
-  },
-  {
-    id: 'mail',
-    label: 'Email',
-    href: LIST_VIEW_PATHS.mail,
-    icon: AnimatedEmailIcon,
-    hotkey: 'e',
-    hotkeyToken: TOKENS.sidebar.goTo.mail,
-  },
-  {
-    id: 'documents',
-    label: 'Files',
-    href: LIST_VIEW_PATHS.documents,
-    icon: AnimatedFileMdIcon,
-    hotkey: 'f',
-    hotkeyToken: TOKENS.sidebar.goTo.documents,
-  },
-  {
-    id: 'documents',
-    label: 'Documents',
-    href: LIST_VIEW_PATHS.documents,
-    params: {
-      initialFilters: markdownDocumentsQuery ?? {},
-      initialClientFilters: {
-        and: ['document-or-file'],
-        or: ['doc-markdown'],
-      },
-    },
-    icon: AnimatedFileMdIcon,
-    hotkey: 'd',
-    hotkeyToken: TOKENS.sidebar.goTo.markdownDocuments,
-    hiddenFromSidebar: true,
-  },
-  {
-    id: 'tasks',
-    label: 'Tasks',
-    href: LIST_VIEW_PATHS.tasks,
-    icon: AnimatedTaskIcon,
-    hotkey: 't',
-    hotkeyToken: TOKENS.sidebar.goTo.tasks,
-  },
-  {
-    id: 'calendar',
-    label: 'Calendar',
-    href: '/calendar',
-    icon: WideCalendarIcon,
-    hotkey: 'r',
-    hotkeyToken: TOKENS.sidebar.goTo.calendar,
-  },
-  {
-    id: 'channels',
-    label: 'Channels',
-    href: LIST_VIEW_PATHS.channels,
-    icon: AnimatedChannelIcon,
-    hotkey: 'c',
-    hotkeyToken: TOKENS.sidebar.goTo.channels,
-  },
-] satisfies SidebarItem[];
-
 export type SidebarState = 'hidden' | 'expanded' | 'slim';
 
 /** Root sidebar `max-width` transition (see `SIDEBAR_MAX_WIDTH_TRANSITION_STYLE`). */
@@ -288,67 +167,6 @@ type SidebarHotkeyDeps = {
   isSlim: () => boolean;
   onOpenChange: (open: boolean) => void;
 };
-
-type OpenWithSplitFn = ReturnType<typeof useSplitLayout>['openWithSplit'];
-
-const isMarkdownDocumentsParams = (
-  params: SidebarItem['params'] | undefined
-): boolean => {
-  const initialClientFilters = params?.initialClientFilters as
-    | { or?: readonly unknown[] }
-    | undefined;
-
-  return initialClientFilters?.or?.includes('doc-markdown') ?? false;
-};
-
-function sidebarContent(
-  viewId: SidebarItem['id'],
-  params?: SidebarItem['params']
-): SplitContent {
-  return viewId === 'calendar'
-    ? { type: 'calendar', id: CALENDAR_BLOCK_ID }
-    : { type: 'component', id: viewId, params };
-}
-
-/**
- * Navigate to a sidebar view by pushing a fresh entry into the active split.
- * Holding shift opens it in a new split. Use in-app back/forward to return to
- * prior entries.
- */
-function navigateToSidebarView(args: {
-  viewId: SidebarItem['id'];
-  params?: SidebarItem['params'];
-  shiftKey: boolean;
-  activeSplit: SplitHandle | undefined;
-  openWithSplit: OpenWithSplitFn;
-  referredFrom?: ReferredFrom;
-}): SplitHandle | undefined {
-  const { viewId, params, shiftKey, activeSplit, openWithSplit, referredFrom } =
-    args;
-
-  const activeContent = activeSplit?.content();
-  if (
-    !shiftKey &&
-    isMarkdownDocumentsParams(params) &&
-    activeContent?.type === 'component' &&
-    activeContent.id === 'documents'
-  ) {
-    const controller = activeSplit
-      ? getDocumentsFilterSplit(activeSplit.id)
-      : undefined;
-    if (controller) {
-      controller.toggleMarkdownFilter();
-      return activeSplit;
-    }
-  }
-
-  return openWithSplit(sidebarContent(viewId, params), {
-    preferNewSplit: shiftKey,
-    mergeHistory: false,
-    allowDuplicate: viewId !== 'calendar',
-    referredFrom,
-  });
-}
 
 const registerSidebarHotkeys = ({
   isSlim,
@@ -410,18 +228,7 @@ export const GoToHotkeys = () => {
     },
   });
 
-  const gettingStartedEnabled = useGettingStartedEnabled();
-  const calendarUiEnabled = useCalendarUiFlag();
-  const activityFeedEnabled = useActivityFeedFlag();
-  const recentViewEnabled = useRecentViewFlag();
-  const links = createMemo((): SidebarItem[] =>
-    buildSidebarLinks(
-      gettingStartedEnabled(),
-      calendarUiEnabled(),
-      activityFeedEnabled(),
-      recentViewEnabled()
-    )
-  );
+  const links = useSidebarLinks();
 
   const debounceResetHotkeysState = debounce(resetGoToHotkeysState, 2000);
   const debounceSetHotkeyVisible = debounce(
@@ -990,122 +797,6 @@ const SidebarSettingsWidget = (props: SidebarSettingsWidgetProps) => {
   );
 };
 
-const CALLS_LINK: SidebarItem = {
-  id: 'calls',
-  label: 'Calls',
-  href: LIST_VIEW_PATHS.calls,
-  icon: AnimatedCallIcon,
-  hotkey: 'l',
-  hotkeyToken: TOKENS.sidebar.goTo.calls,
-};
-
-const COMPANIES_LINK: SidebarItem = {
-  id: 'companies',
-  label: 'Customers',
-  href: LIST_VIEW_PATHS.companies,
-  icon: AnimatedCompanyIcon,
-  hotkey: 'o',
-  hotkeyToken: TOKENS.sidebar.goTo.companies,
-};
-
-const DASHBOARD_LINK: SidebarItem = {
-  id: 'home',
-  label: 'Home',
-  href: '/home',
-  icon: AnimatedHomeIcon,
-  hotkey: 'h',
-  hotkeyToken: TOKENS.sidebar.goTo.home,
-};
-
-const GETTING_STARTED_LINK: SidebarItem = {
-  id: 'getting-started',
-  label: 'Getting Started',
-  href: '/getting-started',
-  icon: CompassIcon,
-  hotkey: 's',
-  hotkeyToken: TOKENS.sidebar.goTo.gettingStarted,
-};
-
-const ACTIVITY_LINK: SidebarItem = {
-  id: 'activity',
-  label: 'Activity',
-  href: '/activity',
-  icon: AnimatedActivityIcon,
-  hotkey: 'y',
-  hotkeyToken: TOKENS.sidebar.goTo.activity,
-};
-
-const RECENT_LINK: SidebarItem = {
-  id: 'recent',
-  label: 'Recent',
-  href: LIST_VIEW_PATHS.recent,
-  icon: AnimatedActivityIcon,
-  // `r` is Calendar and `e`/`c`/`t` are taken; `n` is the only letter of
-  // "recent" that is not already a sidebar destination.
-  hotkey: 'n',
-  hotkeyToken: TOKENS.sidebar.goTo.recent,
-};
-
-/**
- * Assemble the ordered sidebar link list: the static links plus Home, Getting
- * started, and the flag-gated Activity, Calendar, Calls, and CRM entries in
- * their correct positions.
- * Shared by the rendered sidebar (`AppSidebar.visibleLinks`) and the
- * always-mounted `GoToHotkeys` registrar so their link sets can't drift. Call
- * from a reactive context — it reads `ENABLE_CALLS()` / `ENABLE_CRM()`.
- * `showGettingStarted` is the account-age gate (`useGettingStartedEnabled`),
- * passed in because this runs outside a component; when false the link is
- * fully absent — row, `g s` hotkey, and command menu entry.
- * Rendered sections additionally drop `hiddenFromSidebar` entries, which have
- * hotkeys but no sidebar row.
- */
-const buildSidebarLinks = (
-  showGettingStarted: boolean,
-  showCalendar: boolean,
-  showActivity: boolean,
-  showRecent: boolean
-): SidebarItem[] => {
-  let links: SidebarItem[] = [
-    DASHBOARD_LINK,
-    ...(showGettingStarted ? [GETTING_STARTED_LINK] : []),
-    ...SIDEBAR_LINKS.filter((link) => showCalendar || link.id !== 'calendar'),
-  ];
-
-  if (showRecent) {
-    // Directly below Inbox; Activity anchors after it.
-    const idx = links.findIndex((link) => link.id === 'inbox');
-    links = [...links.slice(0, idx + 1), RECENT_LINK, ...links.slice(idx + 1)];
-  }
-
-  if (showActivity) {
-    const anchorId = showRecent ? 'recent' : 'inbox';
-    const idx = links.findIndex((link) => link.id === anchorId);
-    links = [
-      ...links.slice(0, idx + 1),
-      ACTIVITY_LINK,
-      ...links.slice(idx + 1),
-    ];
-  }
-
-  if (ENABLE_CALLS()) {
-    const idx = links.findIndex((l) => l.id === 'channels');
-    links = [...links.slice(0, idx + 1), CALLS_LINK, ...links.slice(idx + 1)];
-  }
-
-  if (ENABLE_CRM()) {
-    // Customers sits just after Channels (and Calls when present).
-    const anchorId = ENABLE_CALLS() ? 'calls' : 'channels';
-    const idx = links.findIndex((l) => l.id === anchorId);
-    links = [
-      ...links.slice(0, idx + 1),
-      COMPANIES_LINK,
-      ...links.slice(idx + 1),
-    ];
-  }
-
-  return links;
-};
-
 const TeamInviteSidebarPromo = (props: { invite: TeamInviteDetails }) => {
   const inviterName = () => getDisplayName(tryMacroId(props.invite.invited_by));
   const joinTeamMutation = useJoinTeamMutation();
@@ -1161,18 +852,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
     enabledOverride: ENABLE_NEW_PRICING_OVERRIDE,
   });
 
-  const gettingStartedEnabled = useGettingStartedEnabled();
-  const calendarUiEnabled = useCalendarUiFlag();
-  const activityFeedEnabled = useActivityFeedFlag();
-  const recentViewEnabled = useRecentViewFlag();
-  const allLinks = createMemo((): SidebarItem[] =>
-    buildSidebarLinks(
-      gettingStartedEnabled(),
-      calendarUiEnabled(),
-      activityFeedEnabled(),
-      recentViewEnabled()
-    )
-  );
+  const allLinks = useSidebarLinks();
 
   // Hides only the rendered row: the g+s hotkey and command menu entry keep
   // working (like `hiddenFromSidebar` links), so the page stays reachable.
@@ -1790,25 +1470,8 @@ const SidebarLinkRow = (props: SidebarLinkProps) => {
 
   const location = useLocation();
   const content = () => sidebarContent(props.id, props.params);
-
-  // Always read the manager signal live: it is undefined until the split
-  // layout mounts, which happens after the sidebar.
-  const isActive = () => {
-    const activeContent = globalSplitManager()?.activeSplit()?.content();
-
-    // In case we can't match on the active split, use the url path to determine
-    // if this link is active
-    if (!activeContent) {
-      const paths = location.pathname.split('/').filter(Boolean);
-      return paths.includes(props.id);
-    }
-
-    const expectedContent = content();
-    return (
-      activeContent.type === expectedContent.type &&
-      activeContent.id === expectedContent.id
-    );
-  };
+  const isActive = () =>
+    isSidebarViewActive(props.id, props.params, location.pathname);
 
   return (
     <NavRow

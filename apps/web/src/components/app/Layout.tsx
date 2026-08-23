@@ -40,6 +40,7 @@ import {
   GoToHotkeys,
   type SidebarState,
 } from '@components/app/app-sidebar/sidebar';
+import { SkinnySidebarRail } from '@components/app/app-sidebar/skinny-rail';
 import { registerMailtoComposerHandler } from '@components/app/mailtoComposerHandler';
 import {
   isSidebarVisible,
@@ -101,8 +102,11 @@ const AUTH_URLS = [
   `${ROUTER_BASE_CONCAT}team-invite`,
 ];
 
+// Desktop starts on the skinny rail: it is the nav users meet first, and one
+// click on its logo pins the wide sidebar open for good. Anyone who already has
+// a stored preference keeps it.
 const [sidebarState, setSidebarState] = makePersisted(
-  createSignal<SidebarState>(!isTouchDevice() ? 'expanded' : 'hidden'),
+  createSignal<SidebarState>(!isTouchDevice() ? 'slim' : 'hidden'),
   {
     name: 'sidebar-state',
   }
@@ -505,16 +509,16 @@ function LayoutInner(props: RouteSectionProps) {
               }}
             />
           </Show>
+          {/* The collapsed sidebar is a visible 30px rail, not an empty edge:
+              its logo is the peek/expand trigger the old invisible hover strip
+              used to be, so hovering an icon can't yank the overlay open over
+              the icon being aimed at. */}
           <Show when={sidebarCollapsed()}>
-            <div
-              class="fixed left-0 inset-y-0 z-modal-content w-[8px]"
-              onPointerEnter={() => {
-                setSidebarOverlayTriggerHovered(true);
-                setSidebarOverlayOpenGuarded(true);
-              }}
-              onPointerLeave={() => {
-                setSidebarOverlayTriggerHovered(false);
-                setSidebarOverlayOpenGuarded(false);
+            <SkinnySidebarRail
+              onExpand={() => setSidebarState('expanded')}
+              onPeekChange={(open) => {
+                setSidebarOverlayTriggerHovered(open);
+                setSidebarOverlayOpenGuarded(open);
               }}
             />
           </Show>
