@@ -2,7 +2,7 @@
 //! it is missing, and publishes the same image to GHCR. Generated into
 //! `ensure_daytona_snapshot.yml`.
 //!
-//! Local stacks and Fly previews `docker build` this image themselves (BuildKit
+//! Local stacks `docker build` this image themselves (BuildKit
 //! cache is the freshness check). GHCR is the published copy for `main`
 //! (`:latest`) and for verifying the image on PRs (`:$SHA` only).
 
@@ -96,7 +96,7 @@ fn ensure_snapshot() -> Job {
 
 /// GHCR publish. Runs on Mid with Namespace remote buildx: the Dockerfile
 /// bakes two nix shells, which is too large for the Small Daytona job's local
-/// daemon. linux/amd64 only — Daytona snapshots and Fly preview machines are
+/// daemon. linux/amd64 only — Daytona snapshots are
 /// amd64. Local `docker build` is unpinned so Apple Silicon / ARM Linux bake
 /// native `aarch64-linux` from the same flake. PRs push `:$SHA` only so they
 /// cannot clobber `:latest`.

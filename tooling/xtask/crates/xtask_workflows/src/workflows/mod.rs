@@ -36,7 +36,6 @@ mod deploy_web_app;
 mod docs_check;
 mod ensure_daytona_snapshot;
 mod path_validation;
-mod preview_fly;
 mod pulumi_preview_pr;
 mod push_local_stack_binaries;
 mod reusable_deploy_service;
@@ -280,16 +279,6 @@ const WORKFLOWS: &[WorkflowFile] = &[
         },
     },
     WorkflowFile {
-        slug: "preview_fly",
-        file_name: "preview-fly.yml",
-        render_yaml: || render_gh_workflow(preview_fly::preview_fly)(),
-    },
-    WorkflowFile {
-        slug: "preview_fly",
-        file_name: "preview-fly-cleanup.yml",
-        render_yaml: || render_gh_workflow(preview_fly::preview_fly_cleanup)(),
-    },
-    WorkflowFile {
         slug: "check_node_modules_nix",
         file_name: "check_node_modules_nix.yml",
         render_yaml: || render_gh_workflow(check_node_modules_nix::check_node_modules_nix)(),
@@ -375,3 +364,6 @@ fn workflows_dir() -> Result<PathBuf> {
     }
     Ok(dir)
 }
+
+#[cfg(test)]
+mod fly_preview_gone;
