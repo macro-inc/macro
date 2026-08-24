@@ -109,9 +109,9 @@ after a successful or permanent result and retries transient failures. A missed
 publish can leave a team without DMs until `backfill_teammate_dms` runs.
 
 ```bash
-just services/authentication_service/backfill_teammate_dms_local
-just services/authentication_service/backfill_teammate_dms_dev
-just services/authentication_service/backfill_teammate_dms_prod
+just crates/teams/backfill_teammate_dms_local
+just crates/teams/backfill_teammate_dms_dev
+just crates/teams/backfill_teammate_dms_prod
 ```
 
 The CLI pages every team and ensures the full teammate DM clique. It is
