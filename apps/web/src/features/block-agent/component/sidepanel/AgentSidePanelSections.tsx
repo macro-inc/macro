@@ -12,12 +12,14 @@
 
 import { SidePanel, useSidePanel } from '@components/app/side-panel';
 import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
+import { toast } from '@core/component/Toast/Toast';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
 import { formatDate } from '@core/util/date';
 import { openExternalUrl } from '@core/util/url';
 import GitBranch from '@phosphor/git-branch.svg';
-import { createMemo, For, onCleanup, Show } from 'solid-js';
+import { agentHarnessServiceClient } from '@service-agent-harness/client';
+import { createMemo, createSignal, For, onCleanup, Show } from 'solid-js';
 import { useAgentSession } from '../../context/AgentSessionContext';
 import {
   activityCounts,
@@ -27,13 +29,46 @@ import {
 import {
   CountSummary,
   DiffChanges,
+  type SandboxSize,
+  SandboxSizeSelector,
   SessionStatusPill,
   TodoList,
 } from '../../ui';
 import { harnessTitle } from '../AgentSplitHeader';
 
+const SIZES = new Set<string>(['small', 'default', 'large']);
+
+function sessionSandboxSize(session: unknown): SandboxSize {
+  const value =
+    typeof session === 'object' && session !== null && 'sandboxSize' in session
+      ? session.sandboxSize
+      : undefined;
+  return typeof value === 'string' && SIZES.has(value)
+    ? (value as SandboxSize)
+    : 'default';
+}
+
 export function AgentSidePanelSections() {
-  const { session, bot, metadata, messages, status } = useAgentSession();
+  const { session, sessionId, bot, metadata, messages, status, loadFailed } =
+    useAgentSession();
+  const [pendingSize, setPendingSize] = createSignal<SandboxSize>();
+  const [resizing, setResizing] = createSignal(false);
+  const size = () => pendingSize() ?? sessionSandboxSize(session());
+
+  const setSandboxSize = async (next: SandboxSize) => {
+    if (next === size() || resizing()) return;
+    const previous = size();
+    setPendingSize(next);
+    setResizing(true);
+    const result = await agentHarnessServiceClient
+      .setSessionSandboxSize(sessionId(), next)
+      .catch(() => undefined);
+    setResizing(false);
+    if (result === undefined || result.isErr()) {
+      setPendingSize(previous);
+      toast.failure('Could not resize the sandbox');
+    }
+  };
 
   const plan = createMemo(() => latestPlan(messages()));
   const files = createMemo(() => changedFiles(messages()));
@@ -83,6 +118,13 @@ export function AgentSidePanelSections() {
             <SidePanel.Pill>
               <span class="truncate">{harnessTitle(session()?.harness)}</span>
             </SidePanel.Pill>
+          </SidePanel.Row>
+          <SidePanel.Row label="Sandbox size">
+            <SandboxSizeSelector
+              size={size()}
+              disabled={loadFailed() || resizing()}
+              onSelect={setSandboxSize}
+            />
           </SidePanel.Row>
           <Show when={metadata()?.model ?? session()?.model}>
             {(model) => (

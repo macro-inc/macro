@@ -22,10 +22,11 @@ export interface SandboxSizeSelectorProps {
 }
 
 export function SandboxSizeSelector(props: SandboxSizeSelectorProps) {
-  const selected = () => TIERS.find((tier) => tier.id === props.size) ?? TIERS[1]!;
+  const selected = () =>
+    TIERS.find((tier) => tier.id === props.size) ?? TIERS[1]!;
 
   return (
-    <Dropdown placement="top-end">
+    <Dropdown placement="bottom-end">
       <Dropdown.Trigger
         variant="ghost"
         size="sm"
@@ -40,10 +41,15 @@ export function SandboxSizeSelector(props: SandboxSizeSelectorProps) {
         <Dropdown.Group>
           <For each={TIERS}>
             {(tier) => (
-              <Dropdown.Item class="gap-2" onSelect={() => props.onSelect(tier.id)}>
+              <Dropdown.Item
+                class="gap-2"
+                onSelect={() => props.onSelect(tier.id)}
+              >
                 <span class="flex min-w-0 flex-col">
                   <span class="text-xs">{tier.label}</span>
-                  <span class="text-[11px] text-ink-extra-muted">{tier.detail}</span>
+                  <span class="text-[11px] text-ink-extra-muted">
+                    {tier.detail}
+                  </span>
                 </span>
               </Dropdown.Item>
             )}
