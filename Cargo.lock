@@ -1459,6 +1459,7 @@ dependencies = [
  "contacts",
  "cookie",
  "cool_asserts",
+ "cursor_api_key",
  "database_env_vars",
  "decode_jwt",
  "document_storage_service_client",
@@ -4328,6 +4329,22 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7d5515a3834141de9eafb9717ad39eea8247b5674e6066c404e8c4b365d2a29e"
 dependencies = [
  "cmov",
+]
+
+[[package]]
+name = "cursor_api_key"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "aws-sdk-kms",
+ "chrono",
+ "macro_db_migrator",
+ "sqlx",
+ "thiserror 2.0.18",
+ "tokio",
+ "workspace-hack",
+ "zeroize",
 ]
 
 [[package]]

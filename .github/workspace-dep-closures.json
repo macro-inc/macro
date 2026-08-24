@@ -2190,6 +2190,10 @@
       "crates/unfurl",
       "crates/workspace-hack"
     ],
+    "cursor_api_key": [
+      "crates/cursor_api_key",
+      "crates/workspace-hack"
+    ],
     "cursor_cloud_agents": [
       "crates/cursor_cloud_agents",
       "crates/macro_env_var",

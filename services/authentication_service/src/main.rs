@@ -108,6 +108,23 @@ async fn main() -> anyhow::Result<()> {
         ))) as Arc<dyn MicrosoftTokenCipher>
     });
 
+    // A separate KMS key from the Microsoft one by design: sharing it would
+    // grant whatever decrypts Cursor keys access to the key protecting
+    // everyone's mailbox credentials.
+    let cursor_api_key_cipher = config.cursor_api_key_kms_key_id().map(|kms_key_id| {
+        Arc::new(cursor_api_key::cipher::KmsCursorApiKeyCipher::new(
+            cursor_api_key::cipher::AwsKmsCiphertexts::new(
+                aws_sdk_kms::Client::new(&aws_config),
+                kms_key_id,
+            ),
+        )) as Arc<dyn cursor_api_key::cipher::CursorApiKeyCipher>
+    });
+    if cursor_api_key_cipher.is_none() {
+        tracing::info!(
+            "CURSOR_API_KEY_KMS_KEY_ID is unset; this deployment will not accept Cursor API keys"
+        );
+    }
+
     let internal_api_key = config.internal_api_key.clone();
 
     let stripe_webhook_secret = secretsmanager_client
@@ -425,6 +442,7 @@ async fn main() -> anyhow::Result<()> {
             github_link_service: Arc::new(github_link_service_impl),
             auth_client: Arc::new(auth_client),
             microsoft_token_cipher,
+            cursor_api_key_cipher,
             macro_cache_client: Arc::new(macro_cache_client),
             stripe_client: Arc::new(stripe_client),
             document_storage_service_client: Arc::new(document_storage_service_client),

@@ -35,6 +35,17 @@ const AUTHENTICATION_SERVICE_INTERNAL_API_KEY = config.require(
 const MICROSOFT_TOKEN_KMS_DELETION_WINDOW_IN_DAYS = config.requireNumber(
   'microsoft_token_kms_deletion_window_days'
 );
+const CURSOR_API_KEY_KMS_DELETION_WINDOW_IN_DAYS = config.requireNumber(
+  'cursor_api_key_kms_deletion_window_days'
+);
+// Role ARNs allowed to decrypt Cursor API keys. Empty until the agent harness
+// stack publishes its task role; the key is still created, so registering a key
+// works before any session can read one.
+const CURSOR_API_KEY_READER_ROLE_ARNS = config
+  .get('cursor_api_key_reader_role_arns')
+  ?.split(',')
+  .map((arn: string) => arn.trim())
+  .filter((arn: string) => arn.length > 0) ?? [];
 
 const FUSIONAUTH_CLIENT_SECRET_KEY = config.require(
   `fusionauth_client_secret_key`
@@ -153,6 +164,9 @@ const service = new AuthenticationService('authentication-service', {
   ],
   microsoftTokenKmsDeletionWindowInDays:
     MICROSOFT_TOKEN_KMS_DELETION_WINDOW_IN_DAYS,
+  cursorApiKeyKmsDeletionWindowInDays:
+    CURSOR_API_KEY_KMS_DELETION_WINDOW_IN_DAYS,
+  cursorApiKeyReaderRoleArns: CURSOR_API_KEY_READER_ROLE_ARNS,
   containerEnvVars: [
     // Configure MICROSOFT_CLIENT_ID, MICROSOFT_CLIENT_SECRET, and
     // MICROSOFT_TENANT_ID together in the authentication_service Doppler

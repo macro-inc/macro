@@ -15,6 +15,7 @@ import { err, ok } from 'neverthrow';
 import { createSignal } from 'solid-js';
 import { fetchWithAuth as _fetchWithAuth } from './fetch';
 import type {
+  CursorApiKeyStatus,
   EnrichGithubPullRequestsProxyRequest,
   EnrichGithubPullRequestsResponse,
   GithubLinkStatusResponse,
@@ -516,6 +517,50 @@ export const authServiceClient = {
         }),
       })
     ).map((result) => result.url);
+  },
+
+  /**
+   * Whether the signed-in user has a Cursor API key stored, and whether this
+   * deployment accepts one at all.
+   *
+   * Never returns the key or any part of it — not even masked. There is no
+   * screen that needs it, and a masked key still leaks its length.
+   */
+  async getCursorApiKeyStatus() {
+    return (
+      await fetchWithAuth<CursorApiKeyStatus>(`${authHost}/cursor-api-key`, {
+        method: 'GET',
+      })
+    ).map((result) => result);
+  },
+
+  /**
+   * Stores a Cursor API key for the signed-in user, replacing any existing one.
+   *
+   * The key is validated on shape alone, so a typo that still starts with
+   * `crsr_` is accepted here and only fails when a session tries to use it.
+   */
+  async putCursorApiKey(apiKey: string) {
+    return (
+      await fetchWithAuth<CursorApiKeyStatus>(`${authHost}/cursor-api-key`, {
+        method: 'PUT',
+        body: JSON.stringify({ apiKey }),
+      })
+    ).map((result) => result);
+  },
+
+  /**
+   * Forgets the signed-in user's Cursor API key.
+   *
+   * Does not revoke it at Cursor — the key keeps working everywhere else, and
+   * only Cursor can revoke it. The UI has to say so.
+   */
+  async deleteCursorApiKey() {
+    return (
+      await fetchWithAuth<CursorApiKeyStatus>(`${authHost}/cursor-api-key`, {
+        method: 'DELETE',
+      })
+    ).map((result) => result);
   },
 
   async checkGithubLinkStatus() {

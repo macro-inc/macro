@@ -1,6 +1,7 @@
 import { ENABLE_EMAIL } from '@core/constant/featureFlags';
 import { usePipedreamMcpFlag } from '@core/pipedream/flag';
 import { Show, Suspense } from 'solid-js';
+import { CursorCard } from './Cursor';
 import { EmailCard } from './Email';
 import { GitHubCard } from './GitHub';
 import { IntegrationsSection } from './Integrations';
@@ -28,6 +29,9 @@ export function ConnectedAccounts() {
           </Show>
           <Suspense>
             <GitHubCard />
+          </Suspense>
+          <Suspense>
+            <CursorCard />
           </Suspense>
         </div>
       </SettingsSection>

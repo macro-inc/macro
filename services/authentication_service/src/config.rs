@@ -40,6 +40,10 @@ maybe_env_vars! {
     pub struct MicrosoftClientSecret;
     pub struct MicrosoftTenantId;
     pub struct MicrosoftTokenKmsKeyId;
+    /// KMS key that encrypts users' Cursor API keys. Deliberately not the
+    /// Microsoft one: sharing it would grant whatever decrypts Cursor keys
+    /// access to the key protecting everyone's mailbox credentials.
+    pub struct CursorApiKeyKmsKeyId;
     pub struct GaMeasurementId;
     pub struct GaApiSecret;
     pub struct MetaPixelId;
@@ -91,6 +95,10 @@ pub struct Config {
     pub microsoft_tenant_id: MicrosoftTenantId,
     /// KMS key used to encrypt Microsoft refresh-token data keys.
     pub microsoft_token_kms_key_id: MicrosoftTokenKmsKeyId,
+    /// KMS key used to encrypt users' Cursor API keys. Unset means this
+    /// deployment does not accept Cursor keys, and the settings endpoints
+    /// report that rather than failing obscurely.
+    pub cursor_api_key_kms_key_id: CursorApiKeyKmsKeyId,
     /// Stripe secret key
     pub stripe_secret_key: StripeSecretKey,
     /// The port to listen for HTTP requests on.
@@ -149,6 +157,15 @@ impl Config {
     pub fn from_env() -> anyhow::Result<Self> {
         macro_config::ConfigLoader::load::<Config>()
             .context("failed to load authentication service config")
+    }
+
+    /// The KMS key that encrypts Cursor API keys, when this deployment has one.
+    ///
+    /// `None` disables the feature rather than failing at startup: a
+    /// deployment that does not serve `@cursor` has no reason to configure a
+    /// key, and the settings endpoints answer "not available" instead.
+    pub(crate) fn cursor_api_key_kms_key_id(&self) -> Option<String> {
+        nonblank_value(self.cursor_api_key_kms_key_id.value()).map(str::to_owned)
     }
 
     /// Resolves Microsoft credentials, enforcing that all values are configured together.
