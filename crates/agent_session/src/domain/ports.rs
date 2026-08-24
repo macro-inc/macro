@@ -179,10 +179,10 @@ pub trait AgentSessionRepo: Send + Sync + 'static {
 
     /// Persist the session title the runtime reported. Idempotent; `None`
     /// clears a previously reported title. Returns whether the row changed.
-    fn set_title(
+    fn set_title<'a>(
         &self,
         id: AgentSessionId,
-        title: Option<&str>,
+        title: Option<&'a str>,
     ) -> impl Future<Output = Result<bool>> + Send;
 
     /// Persist how many permission requests are awaiting an answer.
@@ -195,10 +195,10 @@ pub trait AgentSessionRepo: Send + Sync + 'static {
 
     /// Persist the pull request a session produced. Idempotent; `None` clears
     /// a previously detected PR. Returns whether the row changed.
-    fn set_pr_url(
+    fn set_pr_url<'a>(
         &self,
         id: AgentSessionId,
-        pr_url: Option<&str>,
+        pr_url: Option<&'a str>,
     ) -> impl Future<Output = Result<bool>> + Send;
 
     /// Delete an agent session by id.

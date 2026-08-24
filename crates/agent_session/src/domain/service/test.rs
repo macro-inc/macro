@@ -351,3 +351,62 @@ async fn appending_a_config_response_projects_the_model() {
         .expect("get session");
     assert_eq!(session.model, "sonnet", "the rejected change moved nothing");
 }
+
+/// A `session_info_update` moves the fold's title, and the writer projects it
+/// onto the session row the way it projects the model.
+#[tokio::test]
+async fn appending_a_session_info_update_projects_the_title() {
+    let fx = fixture();
+    let mut logs = connection(fx.repo.clone());
+
+    let frames = parse_log_as(
+        fx.session,
+        r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s1","update":{"sessionUpdate":"session_info_update","title":"Fix the flaky test"}}}}"#,
+    );
+    for frame in frames {
+        AgentSessionLogWriter::append(&mut logs, frame)
+            .await
+            .expect("append succeeds");
+    }
+
+    let session = AgentSessionRepo::get(&fx.repo, fx.session)
+        .await
+        .expect("get session");
+    assert_eq!(session.title.as_deref(), Some("Fix the flaky test"));
+}
+
+/// A permission request raises the projected pending count; the answer that
+/// correlates with it lowers the count back to zero.
+#[tokio::test]
+async fn permission_traffic_projects_the_pending_count() {
+    let fx = fixture();
+    let mut logs = connection(fx.repo.clone());
+
+    let request = parse_log_as(
+        fx.session,
+        r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","id":"p1","method":"session/request_permission","params":{"sessionId":"s1","toolCall":{"toolCallId":"t1"},"options":[{"optionId":"allow","name":"Allow","kind":"allow_once"}]}}}"#,
+    );
+    for frame in request {
+        AgentSessionLogWriter::append(&mut logs, frame)
+            .await
+            .expect("append succeeds");
+    }
+    let session = AgentSessionRepo::get(&fx.repo, fx.session)
+        .await
+        .expect("get session");
+    assert_eq!(session.pending_permission_count, 1, "the ask is outstanding");
+
+    let response = parse_log_as(
+        fx.session,
+        r#"{"direction":"to_runtime","content":{"type":"acp","jsonrpc":"2.0","id":"p1","result":{"outcome":{"outcome":"selected","optionId":"allow"}}}}"#,
+    );
+    for frame in response {
+        AgentSessionLogWriter::append(&mut logs, frame)
+            .await
+            .expect("append succeeds");
+    }
+    let session = AgentSessionRepo::get(&fx.repo, fx.session)
+        .await
+        .expect("get session");
+    assert_eq!(session.pending_permission_count, 0, "the answer settled it");
+}

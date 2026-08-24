@@ -18,6 +18,7 @@ import type {
   GithubPullRequestEntity,
 } from '../types/entity';
 import {
+  isAgentSessionEntity,
   isCallEntity,
   isChannelEntity,
   isChannelMessageEntity,
@@ -25,6 +26,7 @@ import {
   isSnippetEntity,
   isTaskEntity,
 } from '../types/entity';
+import { agentAttentionState } from '../utils/agent-attention';
 
 interface EntityIconProps {
   entity: EntityData;
@@ -135,6 +137,7 @@ export function EntityIcon(props: EntityIconProps) {
         // reminder first, and what it points at is iconed beside its name
         // instead — see `reminderReferenceIconType`.
         .with({ type: 'reminder' }, () => 'reminder')
+        .with({ type: 'agent_session' }, () => 'agent')
         .otherwise(() => 'default')
     );
   };
@@ -179,6 +182,15 @@ export function EntityIcon(props: EntityIconProps) {
           animate={props.streamState?.type === 'created'}
           class={props.class}
         />
+      </Match>
+      <Match when={isAgentSessionEntity(props.entity) && props.entity}>
+        {(entity) => (
+          <PulsingStar
+            kind="listIcon"
+            animate={agentAttentionState(entity()) === 'running'}
+            class={props.class}
+          />
+        )}
       </Match>
     </Switch>
   );

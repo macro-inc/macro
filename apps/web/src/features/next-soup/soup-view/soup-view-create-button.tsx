@@ -29,7 +29,9 @@ import { NewCallButton } from './NewCallButton';
 const VIEW_CREATE_BLOCKNAMES: Partial<Record<ListView, CreatableName[]>> = {
   documents: ['md', 'snippet', 'canvas', 'code', 'project'],
   tasks: ['task'],
-  agents: ['agent', 'chat', 'automation', 'skill'],
+  // No create entry for sessions — they start from a bot mention in a
+  // channel, not from the list.
+  agents: ['automation', 'skill'],
   mail: ['email'],
   channels: ['channel'],
   folders: ['project'],

@@ -238,33 +238,24 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
     },
   },
   agents: {
-    default: 'owned',
+    default: 'sessions',
     tabs: {
-      owned: (ctx) => {
+      // Agent sessions are opt-in server-side (like reminders), so naming
+      // `includeAgentSessions` both surfaces them and — via
+      // defineQueryFilters, which NIL-excludes every unreferenced target —
+      // makes the tab sessions-only. Grouping is client-side by derived
+      // attention state, so blocked/running sessions sit on top.
+      sessions: (ctx) => {
         if (!ctx.userId) return undefined;
         return {
           filters: defineQueryFilters({
-            include: { chatOwnerId: [ctx.userId] },
+            include: {
+              includeAgentSessions: true,
+              agentSessionOwnerId: [ctx.userId],
+            },
           }),
-          clientFilters: { and: ['agent'] },
-        };
-      },
-      running: (ctx) => {
-        if (!ctx.userId) return undefined;
-        return {
-          filters: defineQueryFilters({
-            include: { chatOwnerId: [ctx.userId] },
-          }),
-          clientFilters: { and: ['agent', 'owned-entity'] },
-        };
-      },
-      shared: (ctx) => {
-        if (!ctx.userId) return undefined;
-        return {
-          filters: defineQueryFilters({
-            exclude: { chatOwnerId: [ctx.userId] },
-          }),
-          clientFilters: { and: ['agent', 'shared-entity'] },
+          clientFilters: { and: ['agent-session'] },
+          groupBy: 'agent-attention',
         };
       },
       automations: () => ({
@@ -645,8 +636,11 @@ export function getViewPreset(
   const config = VIEW_TAB_PRESETS[view];
   if (!config) return undefined;
 
+  // A persisted tab that no longer exists (e.g. the agents view's old
+  // Owned/Running/Shared tabs) falls back to the view's default preset
+  // rather than resolving nothing.
   const tabId = tab ?? config.default;
-  const resolver = config.tabs[tabId];
+  const resolver = config.tabs[tabId] ?? config.tabs[config.default];
   if (!resolver) return undefined;
 
   const presetCtx: PresetContext = ctx ?? {

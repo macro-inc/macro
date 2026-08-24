@@ -93,8 +93,10 @@ export const soupItemMatchesListView = (
   match(view)
     .with(
       'agents',
+      // Sessions fill the default tab; skill documents keep the Skills tab
+      // working. Old chat-based agents no longer belong to this view.
       () =>
-        item.tag === 'chat' ||
+        item.tag === 'agentSession' ||
         (item.tag === 'document' && item.data.subType?.type === 'skill')
     )
     .with('mail', () => item.tag === 'emailThread')

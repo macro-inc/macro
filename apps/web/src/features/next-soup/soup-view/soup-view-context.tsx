@@ -37,6 +37,12 @@ import {
 } from '@app/features/next-soup/soup-view/filters-bar/tag-filter-state';
 import { dateBucket } from '@app/features/next-soup/soup-view/group-by-date';
 import {
+  AGENT_ATTENTION_GROUP_ID,
+  AGENT_ATTENTION_LABELS,
+  AGENT_ATTENTION_ORDER,
+  agentAttentionState,
+} from '@entity/utils/agent-attention';
+import {
   INBOX_FILTER_ENTRY_KEY,
   registerInboxFilterSplit,
 } from '@app/features/next-soup/soup-view/inbox-filter-controllers';
@@ -617,6 +623,13 @@ export const SoupViewContextProvider: FlowComponent<
   // single flat list and regenerate buckets from whatever's loaded.
   const isClientDateGroup = createMemo(
     () => soup.grouping.activeGroupId() === 'date'
+  );
+
+  // Agent-session attention grouping is derived client-side over the flat
+  // list (companies precedent): the buckets come from row state the server
+  // doesn't group by, and their order is fixed by urgency.
+  const isClientAgentGroup = createMemo(
+    () => soup.grouping.activeGroupId() === AGENT_ATTENTION_GROUP_ID
   );
 
   const groupByField = createMemo((): GroupByField | undefined => {
@@ -1205,6 +1218,60 @@ export const SoupViewContextProvider: FlowComponent<
   const builtRows = createMemo((): SoupRow[] => {
     const field = groupByField();
     const groups = itemsSource.data()?.groups;
+
+    // Client-side attention grouping (agents view): bucket the flat list by
+    // each session's derived attention state, in fixed urgency order. Empty
+    // buckets are omitted rather than rendered as empty sections.
+    if (enabled() && isClientAgentGroup() && !search.isSearching()) {
+      const buckets = new Map<string, SoupEntity[]>();
+      for (const entity of entities()) {
+        const key =
+          entity.type === 'agent_session'
+            ? agentAttentionState(entity)
+            : 'past';
+        const bucket = buckets.get(key);
+        if (bucket) {
+          bucket.push(entity);
+        } else {
+          buckets.set(key, [entity]);
+        }
+      }
+
+      const groupedRows: SoupRow[] = [];
+      let index = 0;
+      for (const key of AGENT_ATTENTION_ORDER) {
+        const groupEntities = buckets.get(key);
+        if (!groupEntities?.length) continue;
+        const groupMeta: GroupMeta = {
+          key,
+          value: key,
+          label: AGENT_ATTENTION_LABELS[key],
+          count: groupEntities.length,
+          isExpanded: () => soup.grouping.isExpanded(key),
+          toggle: () => soup.grouping.toggle(key),
+        };
+        groupedRows.push(
+          soup.buildRow({
+            id: `header:${key}`,
+            index: index++,
+            original: groupEntities[0],
+            group: groupMeta,
+            isGrouped: true,
+          })
+        );
+        for (const entity of groupEntities) {
+          groupedRows.push(
+            soup.buildRow({
+              id: entity.id,
+              index: index++,
+              original: entity,
+              group: groupMeta,
+            })
+          );
+        }
+      }
+      return groupedRows;
+    }
 
     // Client-side property grouping (Customers view): bucket the flat
     // (paginated) list by property value; option order comes from the

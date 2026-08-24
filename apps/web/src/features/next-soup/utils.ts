@@ -884,6 +884,10 @@ function getEntitySplitContent(entity: EntityData) {
       .with({ type: 'calendar_event' }, () => {
         return { type: 'calendar' as const, id: CALENDAR_BLOCK_ID };
       })
+      // Agent sessions open the agent block against the session id.
+      .with({ type: 'agent_session' }, (entity) => {
+        return { type: 'agent' as const, id: entity.id };
+      })
       .otherwise((entity) => {
         return { type: entity.type, id: entity.id };
       })

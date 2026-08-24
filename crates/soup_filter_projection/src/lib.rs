@@ -206,7 +206,8 @@ pub fn project_soup_item<T>(
         | SoupItem::CalendarEvent(_)
         | SoupItem::CrmCompany(_)
         | SoupItem::ForeignEntity(_)
-        | SoupItem::Reminder(_) => Ok(None),
+        | SoupItem::Reminder(_)
+        | SoupItem::AgentSession(_) => Ok(None),
     }
 }
 

@@ -27,9 +27,7 @@ export const VIEW_TAB_LISTS: Record<TabbedListView, TabItem[]> = {
     { value: 'reminders', label: 'Reminders' },
   ],
   agents: [
-    { value: 'owned', label: 'Owned' },
-    { value: 'running', label: 'Running' },
-    { value: 'shared', label: 'Shared' },
+    { value: 'sessions', label: 'Sessions' },
     { value: 'automations', label: 'Automations' },
     { value: 'skills', label: 'Skills' },
   ],

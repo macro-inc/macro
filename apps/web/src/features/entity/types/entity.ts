@@ -350,6 +350,27 @@ export type ReminderEntity = EntityBase & {
   completedAt?: DateValue | null;
 };
 
+/** Coarse status of an agent session, mirroring the soup row. */
+export type AgentSessionStatusKind = 'no_messages' | 'event' | 'disconnected';
+
+export type AgentSessionEntity = EntityBase & {
+  type: 'agent_session';
+  /** Model slug the session runs on. */
+  model: string;
+  /** Harness slug serving the session. */
+  harness: string;
+  /** Repository the session works against, when one was stated. */
+  repoUrl?: string;
+  /** Coarse session status. */
+  statusKind: AgentSessionStatusKind;
+  /** The latest runtime event's wire name, present when statusKind is 'event'. */
+  statusEventName?: string;
+  /** How many permission requests are awaiting an answer. */
+  pendingPermissionCount: number;
+  /** The pull request the session produced, when one was detected. */
+  prUrl?: string;
+};
+
 /** Normalized time shape of a calendar event soup row. */
 export type CalendarEventEntityTime =
   | { kind: 'timed'; startsAt: string; endsAt: string }
@@ -384,6 +405,7 @@ export type EntityData =
   | AutomationEntity
   | ReminderEntity
   | CalendarEventEntity
+  | AgentSessionEntity
   | ForeignEntity;
 
 const ENTITY_TYPE_VALUES = new Set<EntityData['type']>([
@@ -400,6 +422,7 @@ const ENTITY_TYPE_VALUES = new Set<EntityData['type']>([
   'automation',
   'reminder',
   'calendar_event',
+  'agent_session',
   'foreign',
 ]);
 
@@ -512,6 +535,12 @@ export const isAutomationEntity = (
   entity: EntityData
 ): entity is AutomationEntity => {
   return entity.type === 'automation';
+};
+
+export const isAgentSessionEntity = (
+  entity: EntityData
+): entity is AgentSessionEntity => {
+  return entity.type === 'agent_session';
 };
 
 export const isCrmCompanyEntity = (

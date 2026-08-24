@@ -186,6 +186,38 @@ describe('compileToAst', () => {
     expect(ast.remf).toBeUndefined();
   });
 
+  it('compiles the agent session opt-in to a bare Include literal', () => {
+    const ast = compileToAst(
+      queryStateFrom({ include: { includeAgentSessions: true } })
+    );
+
+    // Agent sessions are off in Soup unless a view asks; this literal is the ask.
+    expect(ast.asf).toEqual({ l: 'inc' });
+  });
+
+  it('compiles agent session owner and id filters onto asf', () => {
+    const ast = compileToAst(
+      queryStateFrom({
+        include: {
+          includeAgentSessions: true,
+          agentSessionOwnerId: ['macro|owner@example.com'],
+        },
+      })
+    );
+
+    expect(ast.asf).toEqual({
+      '&': [{ '|': [{ l: { o: 'macro|owner@example.com' } }] }, { l: 'inc' }],
+    });
+  });
+
+  it('leaves agent sessions unrequested when a view does not opt in', () => {
+    const ast = compileToAst(
+      queryStateFrom({ include: { documentDone: false } })
+    );
+
+    expect(ast.asf).toBeUndefined();
+  });
+
   it('compiles channel message thread ids onto regular channel filters', () => {
     const ast = compileToAst(
       queryStateFrom({

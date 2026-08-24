@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE agent_session\n            SET pending_permission_count = $2,\n                modified_at = NOW()\n            WHERE id = $1\n              AND pending_permission_count IS DISTINCT FROM $2\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "c3b7732207d1be672ce47bb7580e7e030233f03170132dd6a7f1f6d71a942695"
+}

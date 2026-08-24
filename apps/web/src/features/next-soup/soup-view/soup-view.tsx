@@ -45,6 +45,10 @@ import { ResponsiveCompanyListHeader } from '@app/features/next-soup/soup-view/v
 import { CrmDefaultViewLoader } from '@app/features/next-soup/soup-view/views/companies/CrmDefaultView';
 import { DateGroupHeader } from '@app/features/next-soup/soup-view/views/inbox/date-group-header';
 import { InboxListEntity } from '@app/features/next-soup/soup-view/views/inbox/InboxListEntity';
+import { AGENT_ATTENTION_GROUP_ID } from '@entity/utils/agent-attention';
+import { AgentGroupHeader } from '@app/features/next-soup/soup-view/views/agents/agent-group-header';
+import { AgentListEntity } from '@app/features/next-soup/soup-view/views/agents/AgentListEntity';
+import { ResponsiveAgentListHeader } from '@app/features/next-soup/soup-view/views/agents/AgentListHeader';
 import { TaskListEntity } from '@app/features/next-soup/soup-view/views/tasks/TaskListEntity';
 import { ResponsiveTaskListHeader } from '@app/features/next-soup/soup-view/views/tasks/TaskListHeader';
 import { TaskGroupHeader } from '@app/features/next-soup/soup-view/views/tasks/task-group-header';
@@ -896,16 +900,26 @@ const SoupViewListContent = (props: SoupViewListProps) => {
 
   const isInboxView = useIsInboxView();
 
+  // Whether the agents view is on its Sessions tab: the custom session row,
+  // header, and attention grouping only apply there — the Automations and
+  // Skills tabs keep the default row.
+  const isAgentSessionsTab = () =>
+    currentView() === 'agents' && (activeTab() ?? 'sessions') === 'sessions';
+
   // The per-row component depends on the active view.
   const listEntityComponent = () => {
     if (currentView() === 'tasks') return TaskListEntity;
     if (currentView() === 'companies') return CompanyListEntity;
+    if (isAgentSessionsTab()) return AgentListEntity;
     if (isInboxView()) return InboxListEntity;
     return ListEntity;
   };
 
   const groupHeaderComponent = () => {
     if (currentView() === 'tasks') return TaskGroupHeader;
+    if (soup.grouping.activeGroupId() === AGENT_ATTENTION_GROUP_ID) {
+      return AgentGroupHeader;
+    }
     if (soup.grouping.activeGroupId() === 'date') return DateGroupHeader;
     return DefaultGroupHeader;
   };
@@ -1296,6 +1310,9 @@ const SoupViewListContent = (props: SoupViewListProps) => {
                   >
                     <Show when={currentView() === 'tasks' && !isTouchDevice()}>
                       <ResponsiveTaskListHeader class="shrink-0" />
+                    </Show>
+                    <Show when={isAgentSessionsTab() && !isTouchDevice()}>
+                      <ResponsiveAgentListHeader class="shrink-0" />
                     </Show>
                     <Show
                       when={currentView() === 'companies' && !isTouchDevice()}

@@ -231,6 +231,41 @@ async fn set_model_updates_only_the_model(pool: PgPool) {
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn display_state_setters_report_changes(pool: PgPool) {
+    let repo = PgAgentSessionRepo::new(pool.clone());
+    let bot_id = create_test_bot(&pool).await;
+    let id = create_session(&repo, new_session(bot_id, None, None))
+        .await
+        .id;
+
+    // Each setter reports a change once, then idempotently reports none.
+    assert!(repo.set_title(id, Some("Fix the bug")).await.expect("set title"));
+    assert!(!repo.set_title(id, Some("Fix the bug")).await.expect("restate title"));
+    assert!(repo.set_title(id, None).await.expect("clear title"));
+
+    assert!(
+        repo.set_pending_permission_count(id, 2)
+            .await
+            .expect("set pending count")
+    );
+    assert!(
+        !repo
+            .set_pending_permission_count(id, 2)
+            .await
+            .expect("restate pending count")
+    );
+
+    let pr = "https://github.com/macro-inc/macro/pull/1";
+    assert!(repo.set_pr_url(id, Some(pr)).await.expect("set pr url"));
+    assert!(!repo.set_pr_url(id, Some(pr)).await.expect("restate pr url"));
+
+    let session = repo.get(id).await.expect("get session");
+    assert_eq!(session.title, None);
+    assert_eq!(session.pending_permission_count, 2);
+    assert_eq!(session.pr_url.as_deref(), Some(pr));
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn get_missing_session_errors(pool: PgPool) {
     let repo = PgAgentSessionRepo::new(pool);
     let missing = AgentSessionId::new();

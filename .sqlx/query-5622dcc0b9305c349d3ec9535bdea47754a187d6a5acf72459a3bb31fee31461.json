@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT\n                id, owner_id, thread_id, originating_message_id, bot_id,\n                model, harness, repo_url, workspace, acp_session_id, status,\n                status_event_name, created_at, modified_at,\n                (SELECT channel_id FROM comms_messages WHERE id = agent_session.thread_id)\n                    AS \"thread_channel_id?\"\n            FROM agent_session\n            WHERE id = $1\n            ",
+  "query": "\n            SELECT\n                id, owner_id, thread_id, originating_message_id, bot_id,\n                model, harness, repo_url, workspace, acp_session_id, title,\n                pending_permission_count, pr_url, status,\n                status_event_name, created_at, modified_at,\n                (SELECT channel_id FROM comms_messages WHERE id = agent_session.thread_id)\n                    AS \"thread_channel_id?\"\n            FROM agent_session\n            WHERE id = $1\n            ",
   "describe": {
     "columns": [
       {
@@ -55,26 +55,41 @@
       },
       {
         "ordinal": 10,
-        "name": "status",
+        "name": "title",
         "type_info": "Text"
       },
       {
         "ordinal": 11,
+        "name": "pending_permission_count",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 12,
+        "name": "pr_url",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 13,
+        "name": "status",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 14,
         "name": "status_event_name",
         "type_info": "Text"
       },
       {
-        "ordinal": 12,
+        "ordinal": 15,
         "name": "created_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 13,
+        "ordinal": 16,
         "name": "modified_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 14,
+        "ordinal": 17,
         "name": "thread_channel_id?",
         "type_info": "Uuid"
       }
@@ -95,6 +110,9 @@
       true,
       false,
       true,
+      true,
+      false,
+      true,
       false,
       true,
       false,
@@ -102,5 +120,5 @@
       null
     ]
   },
-  "hash": "1b6a994bc0efcc170efa1e9e9115289830b5bc89bfd64dfdb870a503c34ff07e"
+  "hash": "5622dcc0b9305c349d3ec9535bdea47754a187d6a5acf72459a3bb31fee31461"
 }

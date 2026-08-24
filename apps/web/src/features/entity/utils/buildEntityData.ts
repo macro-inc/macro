@@ -178,7 +178,8 @@ export function buildEntityData(
       .with('company', 'contact', (): undefined => undefined)
       // PRs are virtual blocks backed by GitHub, not Macro entities.
       .with('pr', (): undefined => undefined)
-      // Agent sessions aren't constructed from block args; not soup-listed yet.
+      // Agent sessions aren't constructed from block args: their rows need
+      // status/model/harness state that only the soup row carries.
       .with('agent', (): undefined => undefined)
       .exhaustive()
   );

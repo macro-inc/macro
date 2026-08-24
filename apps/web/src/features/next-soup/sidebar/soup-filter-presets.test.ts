@@ -228,6 +228,50 @@ describe('tab lists and filter presets agree', () => {
   });
 });
 
+describe('agents view presets', () => {
+  const context = { userId: 'macro|agent@example.com', isTeamAdmin: false };
+
+  it('defaults to the sessions tab', () => {
+    expect(VIEW_TAB_PRESETS.agents.default).toBe('sessions');
+    expect(Object.keys(VIEW_TAB_PRESETS.agents.tabs)).toEqual([
+      'sessions',
+      'automations',
+      'skills',
+    ]);
+  });
+
+  it('opts the sessions tab into owner-scoped agent sessions', () => {
+    const preset = getViewPreset('agents', 'sessions', context);
+    const ast = compileToAst(queryStateFrom(preset?.filters ?? {}));
+
+    // Agent sessions are off server-side unless a query names them; this is
+    // the ask, scoped to the caller's own sessions.
+    expect(ast.asf).toEqual({
+      '&': [{ '|': [{ l: { o: context.userId } }] }, { l: 'inc' }],
+    });
+    expect(preset?.clientFilters).toEqual({ and: ['agent-session'] });
+    expect(preset?.groupBy).toBe('agent-attention');
+  });
+
+  it('excludes every other entity type on the sessions tab', () => {
+    const preset = getViewPreset('agents', 'sessions', context);
+    const ast = compileToAst(queryStateFrom(preset?.filters ?? {}));
+
+    expect(ast.df, 'documents').toBeDefined();
+    expect(ast.ef, 'emails').toBeDefined();
+    expect(ast.chanf, 'channels').toBeDefined();
+    expect(ast.cf, 'chats').toBeDefined();
+  });
+
+  it('never asks for sessions on the automations and skills tabs', () => {
+    for (const tab of ['automations', 'skills']) {
+      const preset = getViewPreset('agents', tab, context);
+      const ast = compileToAst(queryStateFrom(preset?.filters ?? {}));
+      expect(ast.asf, `${tab} should not request sessions`).toBeUndefined();
+    }
+  });
+});
+
 describe('recent view preset', () => {
   it('forces the touched-by-me server sort', () => {
     expect(getViewPreset('recent')?.sortMethod).toBe('touched_by_me');

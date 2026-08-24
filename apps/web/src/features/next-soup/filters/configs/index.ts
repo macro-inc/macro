@@ -1,4 +1,5 @@
 export type { FilterContext } from './base';
+export * from './agent-session';
 export * from './base';
 export * from './company';
 export * from './document';
@@ -9,6 +10,7 @@ export * from './entity-type';
 export * from './general';
 export * from './task';
 
+import { agentSessionEntityFilter } from './agent-session';
 import type { FilterGroupConfig } from './base';
 import { companyOwnerFilter, companyStageFilter } from './company';
 import {
@@ -104,6 +106,7 @@ export const SOUP_FILTERS = [
   scheduledRemindersFilter,
   doneRemindersFilter,
   searchSupportedFilter,
+  agentSessionEntityFilter,
   ...ENTITY_TYPE_FILTERS,
   ...TASK_STATUS_FILTERS,
   ...TASK_PRIORITY_FILTERS,

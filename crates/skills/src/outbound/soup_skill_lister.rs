@@ -67,8 +67,10 @@ fn skill_only_filter() -> EntityFilterAst {
         crm_company_filter: Some(Arc::new(Expr::val(CrmCompanyLiteral::Id(Uuid::nil())))),
         foreign_entity_filter: Some(Arc::new(Expr::val(ForeignEntityLiteral::Id(Uuid::nil())))),
         calendar_event_filter: Some(Arc::new(Expr::val(CalendarEventLiteral::Id(Uuid::nil())))),
-        // Reminders are opt-in: leaving the filter empty excludes them.
+        // Reminders and agent sessions are opt-in: leaving their filters
+        // empty excludes them.
         reminder_filter: None,
+        agent_session_filter: None,
         properties_filter: None,
     }
 }

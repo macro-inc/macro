@@ -30,6 +30,7 @@ type QueryTarget =
   | 'fef'
   | 'ccf'
   | 'remf'
+  | 'asf'
   | 'propf';
 
 export type TargetAstMap = {
@@ -145,6 +146,9 @@ const FIELD_CONFIG: Record<
   reminderCompleted: { target: 'remf', field: 'comp' },
   reminderFired: { target: 'remf', field: 'fired' },
   includeReminders: { target: 'remf', field: 'inc', unit: true },
+  agentSessionId: { target: 'asf', field: 'id' },
+  agentSessionOwnerId: { target: 'asf', field: 'o' },
+  includeAgentSessions: { target: 'asf', field: 'inc', unit: true },
 };
 
 const DATE_RANGE_FIELDS: Record<
@@ -206,6 +210,7 @@ const emptyTargetAstLists = (): Record<QueryTarget, BackendAst[]> => ({
   fef: [],
   ccf: [],
   remf: [],
+  asf: [],
   propf: [],
 });
 
@@ -442,6 +447,9 @@ export function compileToAst(state: QueryState): TargetAstMap {
   return result;
 }
 
+// `remf` and `asf` are deliberately absent: reminders and agent sessions are
+// opt-in server-side (a query that says nothing about them gets none), and an
+// injected NIL id would itself count as opting in.
 const ID_FIELD_NAMES: Partial<Record<QueryTarget, FieldName>> = {
   df: 'documentId',
   calf: 'calendarEventId',

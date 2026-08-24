@@ -674,6 +674,11 @@ export function buildSingleEntityFilter(
       ...base,
       reminder_filters: { ids: [entityId] },
     }))
+    .with('agentSession', () => ({
+      ...base,
+      // Asking for an id opts the query into agent sessions.
+      agent_session_filters: { ids: [entityId] },
+    }))
     .exhaustive();
 }
 

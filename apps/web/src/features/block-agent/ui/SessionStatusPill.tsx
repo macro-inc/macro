@@ -10,7 +10,7 @@ export type SessionStatusLike =
   | { kind: 'event'; event: string }
   | { kind: 'disconnected' };
 
-type Presentation = {
+export type SessionStatusPresentation = {
   label: string;
   tone: 'positive' | 'neutral' | 'negative';
 };
@@ -21,15 +21,23 @@ function prettyEventName(event: string): string {
   return words.charAt(0).toUpperCase() + words.slice(1);
 }
 
-function presentation(status: SessionStatusLike): Presentation {
+/** The status dot + label a session status renders as, shared by the session
+ * block's pill and the unified list's status column. */
+export function sessionStatusPresentation(
+  status: SessionStatusLike
+): SessionStatusPresentation {
+  return presentation(status);
+}
+
+function presentation(status: SessionStatusLike): SessionStatusPresentation {
   return match(status)
-    .with({ kind: 'no_messages' }, (): Presentation => {
+    .with({ kind: 'no_messages' }, (): SessionStatusPresentation => {
       return { label: 'Starting', tone: 'neutral' };
     })
-    .with({ kind: 'disconnected' }, (): Presentation => {
+    .with({ kind: 'disconnected' }, (): SessionStatusPresentation => {
       return { label: 'Disconnected', tone: 'negative' };
     })
-    .with({ kind: 'event' }, (status): Presentation => {
+    .with({ kind: 'event' }, (status): SessionStatusPresentation => {
       if (status.event === 'acp_ready') {
         return { label: 'Ready', tone: 'positive' };
       }

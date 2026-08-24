@@ -107,6 +107,10 @@ export function agentFilter(entity: EntityData): boolean {
   return entity.type === 'chat';
 }
 
+export function agentSessionFilter(entity: EntityData): boolean {
+  return entity.type === 'agent_session';
+}
+
 export function automationFilter(entity: EntityData): boolean {
   return entity.type === 'automation';
 }

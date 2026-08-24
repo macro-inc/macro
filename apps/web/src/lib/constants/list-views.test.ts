@@ -38,4 +38,29 @@ describe('soupItemMatchesListView', () => {
   it('inbox admits rows regardless of touch', () => {
     expect(soupItemMatchesListView(documentItem(), 'inbox')).toBe(true);
   });
+
+  it('agents admits agent sessions and skill documents, not chats', () => {
+    const sessionItem = {
+      tag: 'agentSession',
+      data: { id: 's-1' },
+      frecency_score: 0,
+    } as unknown as SoupApiItem;
+    const skillItem = {
+      tag: 'document',
+      data: { id: 'd-2', subType: { type: 'skill' } },
+      frecency_score: 0,
+    } as unknown as SoupApiItem;
+    const chatItem = {
+      tag: 'chat',
+      data: { id: 'c-1' },
+      frecency_score: 0,
+    } as unknown as SoupApiItem;
+
+    expect(soupItemMatchesListView(sessionItem, 'agents')).toBe(true);
+    expect(soupItemMatchesListView(skillItem, 'agents')).toBe(true);
+    // Old chat-based agents no longer belong to this view.
+    expect(soupItemMatchesListView(chatItem, 'agents')).toBe(false);
+    // Sessions belong to the agents view only.
+    expect(soupItemMatchesListView(sessionItem, 'documents')).toBe(false);
+  });
 });
