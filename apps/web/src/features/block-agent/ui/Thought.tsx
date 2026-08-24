@@ -16,6 +16,21 @@ export interface ThoughtProps {
   defaultOpen?: boolean;
 }
 
+/** The in-flight label, used before a thought part exists. */
+export function ThinkingIndicator() {
+  return (
+    <div
+      class="relative text-xs leading-5 text-ink-extra-muted"
+      aria-live="polite"
+    >
+      <div class="flex min-h-7 items-center gap-1 py-1">
+        <CaretRight class="size-4 shrink-0" />
+        <TextShimmer text="Thinking" active />
+      </div>
+    </div>
+  );
+}
+
 export function Thought(props: ThoughtProps) {
   const [expanded, setExpanded] = createSignal(props.defaultOpen ?? false);
 
@@ -23,7 +38,7 @@ export function Thought(props: ThoughtProps) {
     <div class="relative text-xs leading-5 text-ink-extra-muted">
       <button
         type="button"
-        class="flex min-h-7 cursor-pointer items-center gap-1 py-1 text-left text-ink-extra-muted hover:text-ink-muted"
+        class="flex min-h-7 items-center gap-1 py-1 text-left text-ink-extra-muted hover:text-ink-muted"
         onClick={() => setExpanded((prev) => !prev)}
       >
         <CaretRight
@@ -36,7 +51,7 @@ export function Thought(props: ThoughtProps) {
         />
       </button>
       <Show when={expanded()}>
-        <div class="pl-5 text-ink-muted whitespace-pre-wrap wrap-break-word">
+        <div class="pt-1.5 pl-5 text-ink-muted whitespace-pre-wrap wrap-break-word">
           {props.text}
         </div>
       </Show>

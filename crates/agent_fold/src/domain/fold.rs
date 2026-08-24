@@ -315,8 +315,9 @@ struct Turn {
 impl FoldState {
     /// Advance by one log entry, returning what it changed in emission order.
     ///
-    /// One entry changes at most one message today - see [`FoldEvent`]
-    /// for why the prompt-interrupts-a-turn case is not an exception.
+    /// Most entries change at most one message. A stop is the exception: it
+    /// closes the open agent turn and records a control, so a live consumer
+    /// sees the shimmer drop in the same push as the stop row.
     fn step(&mut self, entry: AgentSessionLog) -> Vec<StepChange> {
         self.session = Some(entry.agent_session_id);
 
@@ -328,33 +329,35 @@ impl FoldState {
                 // set-model request whose response this correlates.
                 self.note_config_request(&acp.0);
                 if let Some(action) = AgentAction::control_from_runtime(message) {
-                    return StepChange::message(match action {
+                    return match action {
                         AgentAction::SetModel(action) => {
                             let request_id = match &acp.0 {
                                 RawJsonRpcMessage::Request(request) => Some(&request.id),
                                 _ => None,
                             };
-                            self.record_control(
+                            StepChange::message(self.record_control(
                                 Control::SetModel {
                                     model: action.model,
                                 },
                                 request_id,
                                 entry.user_id.clone(),
-                            )
+                            ))
                         }
-                        AgentAction::Compact => match &acp.0 {
+                        AgentAction::Compact => StepChange::message(match &acp.0 {
                             RawJsonRpcMessage::Request(request) => {
                                 self.begin_compact(&request.id, entry.user_id.clone())
                             }
                             _ => None,
-                        },
+                        }),
                         // A stop is a notification: nothing can answer it, so
-                        // it is accepted the moment it is sent.
-                        AgentAction::Stop => {
-                            self.record_control(Control::Stop, None, entry.user_id.clone())
-                        }
-                        AgentAction::Prompt(_) => None,
-                    });
+                        // it is accepted the moment it is sent. Close the
+                        // open turn now — waiting for the prompt's later
+                        // `cancelled` result left the agent message (and the
+                        // composer's `working` signal) in flight forever if
+                        // that result never arrived.
+                        AgentAction::Stop => self.record_stop(entry.user_id.clone()),
+                        AgentAction::Prompt(_) => Vec::new(),
+                    };
                 }
                 StepChange::message(match &acp.0 {
                     // A user's prompt opens a turn.
@@ -540,6 +543,21 @@ impl FoldState {
         Some(Changed::new(message))
     }
 
+    /// Close the open turn as cancelled and record the stop control.
+    ///
+    /// Two changes when an agent message exists: that message's stop reason,
+    /// then the new user control row. A stop with no agent message yet only
+    /// records the control — there is nothing to close.
+    fn record_stop(&mut self, user_id: Option<MacroUserIdStr<'static>>) -> Vec<StepChange> {
+        let closed = self.close_turn(Some(StopReason::Cancelled));
+        let control = self.record_control(Control::Stop, None, user_id);
+        closed
+            .into_iter()
+            .chain(control)
+            .map(StepChange::Message)
+            .collect()
+    }
+
     /// Emit a standalone control message. A request-backed control starts
     /// pending and is resolved by its response; one with no request to answer
     /// (a stop notification) is accepted outright.
@@ -615,7 +633,9 @@ impl FoldState {
         if !closes_the_open_turn {
             // Responses to `initialize`, `session/new` and `session/load`
             // land here. Only flag one that looks like a turn ending.
-            if stop.is_some() {
+            // A `cancelled` result after `session/cancel` already closed the
+            // turn is expected, not uncorrelated.
+            if stop.is_some_and(|reason| reason != StopReason::Cancelled) {
                 self.warn(FoldError::UncorrelatedResponse);
             }
             return None;

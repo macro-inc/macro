@@ -11,10 +11,10 @@ export type LinkedConversationMessage = MessageData;
 
 /**
  * Backing data for a linked conversation, supplied per backend. The
- * presentational component is agnostic to which source backs it — this is the
- * seam that lets the same UI render channel threads today and other
- * conversation stores later. Read-only for now: contribution actions (reply,
- * react) will be added here when users can participate from the linked view.
+ * presentational `LinkedConversation` is agnostic to which source backs it —
+ * this is the seam that lets the same UI render channel threads today and
+ * other conversation stores later. The linked-conversation *drawer*
+ * participates via the native `EditableThread` instead of this source.
  */
 export interface LinkedConversationSource {
   /** Root message of the conversation, once loaded. */

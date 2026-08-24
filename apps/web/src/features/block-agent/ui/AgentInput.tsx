@@ -1,15 +1,24 @@
 /**
  * The agent block's composer: the chat input's look and its markdown editing
  * surface (`MarkdownShell` over a lean `EditorConfigBuilder`), without the
- * rest of `ChatInput`'s machinery — no mentions, attachments, upload queue,
- * model plumbing, or contexts. Visual chrome mirrors
- * `@core/component/AI/component/input/ChatInput.tsx`.
+ * rest of `ChatInput`'s machinery — no attachments, upload queue, model
+ * plumbing, or contexts. Mentions and quote-replies are in; visual chrome
+ * mirrors `@core/component/AI/component/input/ChatInput.tsx`.
  */
 
+import { $selectTrailingParagraph } from '@channel/Input/utils/select-trailing-paragraph';
+import { buildQuoteReplyValue } from '@channel/Thread/utils/message-actions';
 import { buildConfig } from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
 import { Button, SendButton, Surface } from '@ui';
-import { createSignal, Show } from 'solid-js';
+import { createSignal, onCleanup, onMount, Show } from 'solid-js';
+
+export type AgentInputHandle = {
+  /** Insert a channel-style quote-reply of `quotedContent` into the draft. */
+  insertQuote: (quotedContent: string) => void;
+  /** Focus the markdown editor. */
+  focus: () => void;
+};
 
 export interface AgentInputProps {
   placeholder?: string;
@@ -20,6 +29,8 @@ export interface AgentInputProps {
   /** Receives the composed markdown. */
   onSend: (markdown: string) => void;
   onStop?: () => void;
+  /** The composer attaches this so transcript replies can insert a quote. */
+  onReady?: (handle: AgentInputHandle | undefined) => void;
 }
 
 /** Past this height the controls drop below the text instead of overlaying it. */
@@ -50,16 +61,35 @@ export function AgentInput(props: AgentInputProps) {
 
   const editor = buildConfig('chat')
     .namespace('agent-input')
+    .withMentions({ showOpenTabs: true })
     .withEmojis()
     .withLinks({ floatingMenu: true, autoLinkMatchMode: 'common-tlds' })
     .withHistory({ timeGap: 400 })
     .withCode()
     .withRestoreFocus()
     .onEnter(() => {
+      if (editor.controls.isInlineMenuOpen()) return false;
       send();
       return true;
     })
     .onChange(setMarkdown);
+
+  const insertQuote = (quotedContent: string) => {
+    const next = buildQuoteReplyValue({
+      quotedContent,
+      existingValue: editor.controls.getMarkdown(),
+    });
+    editor.controls.setMarkdown(next);
+    editor.controls.getLexical().update(() => {
+      $selectTrailingParagraph();
+    });
+    editor.controls.focus();
+  };
+
+  onMount(() =>
+    props.onReady?.({ insertQuote, focus: () => editor.controls.focus() })
+  );
+  onCleanup(() => props.onReady?.(undefined));
 
   return (
     <Surface class="rounded-xl" depth={2} solid>

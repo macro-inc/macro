@@ -9,7 +9,8 @@ use super::util::{TURN, parse_log};
 use crate::domain::fold::{FoldMachineImpl, fold};
 use crate::domain::log::AgentSessionLog;
 use crate::domain::model::{
-    Author, AuthorKind, FoldEvent, FoldedMessage, MessageId, MessagePart, StopReason, TurnId,
+    Author, AuthorKind, Control, FoldEvent, FoldedMessage, MessageId, MessagePart, StopReason,
+    TurnId,
 };
 use crate::domain::ports::FoldMachine;
 
@@ -241,6 +242,46 @@ fn an_interrupting_prompt_reports_only_its_own_message() {
         }]
     );
     assert_eq!(abandoned.stop, None, "no response ever closed it");
+}
+
+/// A stop is the one frame that reports two message changes: the open agent
+/// turn closes as cancelled, then the stop control is a new user row.
+#[test]
+fn a_stop_reports_the_closed_turn_then_the_control() {
+    let log = parse_log(concat!(
+        r#"{"direction":"to_runtime","content":{"type":"acp","jsonrpc":"2.0","id":"p","method":"session/prompt","params":{"sessionId":"s","prompt":[{"type":"text","text":"hi"}]}}}"#,
+        "\n",
+        r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"halfway"}}}}}"#,
+        "\n",
+        r#"{"direction":"to_runtime","content":{"type":"acp","jsonrpc":"2.0","method":"session/cancel","params":{"sessionId":"s"}}}"#,
+    ));
+
+    let mut machine = FoldMachineImpl::new();
+    let mut last_push = Vec::new();
+    for entry in log {
+        last_push = machine.push(entry);
+    }
+
+    assert_eq!(last_push.len(), 2, "close + control");
+    match &last_push[0] {
+        FoldEvent::MessageUpdate(message) => {
+            assert_eq!(message.author, Author::Agent);
+            assert_eq!(message.stop, Some(StopReason::Cancelled));
+        }
+        other => panic!("first report is the closed agent turn: {other:?}"),
+    }
+    match &last_push[1] {
+        FoldEvent::NewMessage(message) => {
+            assert!(matches!(
+                message.parts.first(),
+                Some(MessagePart::Control {
+                    control: Control::Stop,
+                    ..
+                })
+            ));
+        }
+        other => panic!("second report is the stop control: {other:?}"),
+    }
 }
 
 /// A machine driven to the end of a log holds what the batch fold returns, so

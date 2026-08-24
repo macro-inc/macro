@@ -5,7 +5,7 @@ import {
   useRemoveReactionMutation,
 } from '@queries/channel/reaction';
 import type { ApiChannelMessage } from '@service-storage/generated/schemas/apiChannelMessage';
-import { createSignal, Show } from 'solid-js';
+import { createSignal, onMount, Show } from 'solid-js';
 import { createChannelMessageActions } from '../Channel/create-channel-message-actions';
 import { createDeleteMessageConfirmation } from '../Channel/create-delete-message-confirmation';
 import type { InputHandle, InputSnapshot } from '../Input';
@@ -18,10 +18,15 @@ type EditableThreadProps = {
   channelId: string;
   messageId: string;
   data?: ApiChannelMessage;
+  /** Open the native reply composer on mount. */
+  defaultReplying?: boolean;
 };
 
-function EditableThreadInner() {
+function EditableThreadInner(props: { defaultReplying?: boolean }) {
   const ctx = useStandaloneThread();
+  onMount(() => {
+    if (props.defaultReplying) ctx.replyInputFocusRequest.request();
+  });
   const userId = useUserId();
   const [replyInputState, setReplyInputState] = createSignal<
     InputSnapshot | undefined
@@ -103,8 +108,9 @@ export function EditableThread(props: EditableThreadProps) {
       channelId={props.channelId}
       messageId={props.messageId}
       data={props.data}
+      defaultReplying={props.defaultReplying}
     >
-      <EditableThreadInner />
+      <EditableThreadInner defaultReplying={props.defaultReplying} />
     </StandaloneThread.Root>
   );
 }

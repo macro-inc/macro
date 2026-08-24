@@ -18,12 +18,25 @@ const control = vi.hoisted(() => ({
   calls: [] as { sessionId: string; action: unknown }[],
   /** What the next `control` calls resolve to. */
   outcome: 'ok' as 'ok' | 'err' | 'reject',
+  /** When true, each call waits until `release()` before resolving. */
+  defer: false,
+  waiters: [] as Array<(run: () => void) => void>,
+  release() {
+    const waiters = this.waiters;
+    this.waiters = [];
+    for (const finish of waiters) finish();
+  },
 }));
 
 vi.mock('@service-agent-harness/client', () => ({
   agentHarnessServiceClient: {
     control: vi.fn(async (sessionId: string, action: unknown) => {
       control.calls.push({ sessionId, action });
+      if (control.defer) {
+        await new Promise<void>((resolve) => {
+          control.waiters.push(resolve);
+        });
+      }
       if (control.outcome === 'reject') throw new Error('network');
       return { isErr: () => control.outcome === 'err' };
     }),
@@ -55,6 +68,8 @@ function setup(options?: { working?: boolean }) {
 beforeEach(() => {
   control.calls = [];
   control.outcome = 'ok';
+  control.defer = false;
+  control.waiters = [];
   vi.useRealTimers();
 });
 
@@ -235,6 +250,86 @@ describe('stop', () => {
     expect(control.calls.at(-1)?.action).toEqual({ type: 'stop' });
     dispose();
   });
+
+  it('a second stop while one is in flight does not emit another stop', async () => {
+    const { controller, dispose } = setup({ working: true });
+    control.defer = true;
+    controller.stop();
+    controller.stop();
+    controller.stop();
+    expect(
+      control.calls.filter(
+        (c) => (c.action as { type: string }).type === 'stop'
+      )
+    ).toHaveLength(1);
+
+    control.release();
+    await flush();
+    expect(
+      control.calls.filter(
+        (c) => (c.action as { type: string }).type === 'stop'
+      )
+    ).toHaveLength(1);
+    dispose();
+  });
+
+  it('after a stop with nothing queued, another stop is allowed if the turn is still running', async () => {
+    const { controller, dispose } = setup({ working: true });
+    controller.stop();
+    await flush();
+    controller.stop();
+    await flush();
+    expect(
+      control.calls.filter(
+        (c) => (c.action as { type: string }).type === 'stop'
+      )
+    ).toHaveLength(2);
+    dispose();
+  });
+
+  it('after stop, a queued prompt posts immediately even while the turn is still working', async () => {
+    const { controller, dispose } = setup({ working: true });
+    controller.send('queued');
+    await flush();
+    expect(prompts()).toEqual([]);
+
+    controller.stop();
+    await flush();
+
+    expect(
+      control.calls.map((c) => (c.action as { type: string }).type)
+    ).toEqual(['stop', 'prompt']);
+    expect(prompts()).toEqual(['queued']);
+    dispose();
+  });
+
+  it('stop during an in-flight prompt POST does not resend that prompt', async () => {
+    const { controller, dispose } = setup();
+    control.defer = true;
+    controller.send('hello');
+    controller.send('next');
+    await flush();
+    expect(prompts()).toEqual(['hello']);
+
+    controller.stop();
+    controller.stop();
+    expect(
+      control.calls.map((c) => (c.action as { type: string }).type)
+    ).toEqual(['prompt', 'stop']);
+
+    control.defer = false;
+    control.release();
+    await flush();
+    await flush();
+
+    // The in-flight 'hello' is not resent; 'next' replaces the cancelled turn.
+    expect(
+      control.calls.map((c) => (c.action as { type: string }).type)
+    ).toEqual(['prompt', 'stop', 'prompt']);
+    expect(prompts()).toEqual(['hello', 'next']);
+    expect(controller.queue()).toEqual([]);
+    dispose();
+  });
 });
 
 describe('session switch', () => {
@@ -248,6 +343,28 @@ describe('session switch', () => {
 
     expect(controller.queue()).toEqual([]);
     expect(prompts()).toEqual([]);
+    dispose();
+  });
+});
+
+describe('quote reply', () => {
+  it('inserts into the attached input', () => {
+    const { controller, dispose } = setup();
+    const insertQuote = vi.fn();
+    controller.attachInput({ insertQuote });
+    controller.quoteReply('hello\nworld');
+    expect(insertQuote).toHaveBeenCalledWith('hello\nworld');
+    dispose();
+  });
+
+  it('is a no-op before an input is attached, and after it detaches', () => {
+    const { controller, dispose } = setup();
+    expect(() => controller.quoteReply('hello')).not.toThrow();
+    const insertQuote = vi.fn();
+    controller.attachInput({ insertQuote });
+    controller.attachInput(undefined);
+    controller.quoteReply('hello');
+    expect(insertQuote).not.toHaveBeenCalled();
     dispose();
   });
 });

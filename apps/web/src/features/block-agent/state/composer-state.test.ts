@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   type ComposerFacts,
+  canStop,
   isBusy,
   nextAction,
   type QueuedPrompt,
@@ -47,6 +48,20 @@ describe('nextAction: every hold, by priority', () => {
     expect(action.type).toBe('hold');
   });
 
+  it('a stop on the wire holds, even with a queued prompt', () => {
+    const action = nextAction(
+      facts({
+        post: { type: 'stopping' },
+        head: prompt('a'),
+        agentWorking: true,
+      })
+    );
+    expect(action).toMatchObject({
+      type: 'hold',
+      reason: 'a stop is on the wire',
+    });
+  });
+
   it('a failed head holds everything behind it — order is preserved', () => {
     const action = nextAction(
       facts({ post: { type: 'failed', promptId: 'a' }, head: prompt('a') })
@@ -60,6 +75,17 @@ describe('nextAction: every hold, by priority', () => {
       type: 'hold',
       reason: 'the agent is mid-turn',
     });
+  });
+
+  it('after a cancel, a queued prompt posts without waiting for the turn to drop', () => {
+    const action = nextAction(
+      facts({
+        head: prompt('next'),
+        agentWorking: true,
+        replacing: true,
+      })
+    );
+    expect(action).toEqual({ type: 'post_head', prompt: prompt('next') });
   });
 });
 
@@ -78,14 +104,29 @@ describe('nextAction: the wedges the old machine allowed', () => {
 });
 
 describe('isBusy', () => {
-  it('working, posting, and awaiting_turn are busy', () => {
+  it('working, posting, awaiting_turn, and stopping are busy', () => {
     expect(isBusy({ type: 'idle' }, true)).toBe(true);
     expect(isBusy({ type: 'posting', promptId: 'a' }, false)).toBe(true);
     expect(isBusy({ type: 'awaiting_turn', promptId: 'a' }, false)).toBe(true);
+    expect(isBusy({ type: 'stopping' }, false)).toBe(true);
   });
 
   it('idle and failed are not — a failure hands the send button back', () => {
     expect(isBusy({ type: 'idle' }, false)).toBe(false);
     expect(isBusy({ type: 'failed', promptId: 'a' }, false)).toBe(false);
+  });
+});
+
+describe('canStop', () => {
+  it('allows a stop while a turn is running', () => {
+    expect(canStop({ type: 'idle' }, true)).toBe(true);
+  });
+
+  it('rejects a second stop while one is in flight', () => {
+    expect(canStop({ type: 'stopping' }, true)).toBe(false);
+  });
+
+  it('rejects a stop while idle', () => {
+    expect(canStop({ type: 'idle' }, false)).toBe(false);
   });
 });

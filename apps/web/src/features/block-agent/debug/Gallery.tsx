@@ -19,6 +19,7 @@ import {
   PierreDiff,
   QuestionAnswers,
   TextShimmer,
+  ThinkingIndicator,
   Thought,
   TodoList,
   ToolCard,
@@ -168,6 +169,7 @@ export default function AgentUiGallery() {
               text="The incremental machine is the right default."
               defaultOpen
             />
+            <ThinkingIndicator />
           </Item>
 
           <Item label="ToolStatusTitle / TextShimmer">
@@ -255,7 +257,12 @@ export default function AgentUiGallery() {
           </Item>
 
           <Item label="AgentMessage (end-to-end)">
-            <Message message={FIXTURE_MESSAGE} />
+            <Message
+              message={FIXTURE_MESSAGE}
+              onQuote={(content) =>
+                console.info('[gallery] quote reply', content)
+              }
+            />
           </Item>
         </div>
       </div>

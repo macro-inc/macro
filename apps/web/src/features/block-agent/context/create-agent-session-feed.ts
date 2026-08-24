@@ -28,6 +28,7 @@ import {
   onCleanup,
 } from 'solid-js';
 import { createStore, produce, reconcile } from 'solid-js/store';
+import { sessionIsWorking } from '../state/session-working';
 
 export type AgentSessionFeed = {
   /** Session metadata, absent until the load resolves. */
@@ -39,7 +40,7 @@ export type AgentSessionFeed = {
   /** The folded transcript, ordered by turn (prompt before reply). */
   messages: Accessor<FoldedMessage[]>;
   loadFailed: Accessor<boolean>;
-  /** The newest turn has no stop reason yet — the agent is working. */
+  /** True while a turn is in flight — not after a stop control. */
   working: Accessor<boolean>;
 };
 
@@ -138,11 +139,7 @@ export function createAgentSessionFeed(
   });
 
   const messages = () => list;
-  const working = () => {
-    const last = list.at(-1);
-    if (!last) return false;
-    return last.author.kind === 'user' || last.stop == null;
-  };
+  const working = () => sessionIsWorking(list);
 
   return {
     session: () => resource.latest,

@@ -79,9 +79,9 @@ export default function LinkedConversationDemo() {
       <div>
         <h1 class="text-xl font-bold text-ink mb-2">LinkedConversation</h1>
         <p class="text-sm text-ink-muted">
-          Read-only rendering of a conversation (root message + reply chain)
-          from a <code>LinkedConversationSource</code>, here backed by a channel
-          thread via <code>createChannelThreadSource</code>.
+          Inline viewer is the read-only <code>LinkedConversation</code>. The
+          drawer uses the native <code>EditableThread</code> so you can send and
+          quote-reply in place.
         </p>
       </div>
 
