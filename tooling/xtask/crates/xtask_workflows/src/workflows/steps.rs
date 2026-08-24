@@ -118,8 +118,8 @@ pub fn setup_nix() -> Step<Use> {
 
 /// [`setup_nix`] with the private S3 binary cache configured as a substituter,
 /// so a /nix cache-volume miss degrades to a download instead of a rebuild.
-/// Only for jobs with access to the AWS secrets (deploy pipeline — never
-/// PR-triggered jobs). No-ops back to plain [`setup_nix`] behavior while the
+/// Only for trusted jobs with access to the AWS secrets (never PR-triggered
+/// jobs). No-ops back to plain [`setup_nix`] behavior while the
 /// `NIX_CACHE_*` repo variables are unset.
 pub fn setup_nix_with_cache() -> Step<Use> {
     setup_nix()
@@ -169,12 +169,18 @@ pub fn push_nix_cache(targets: &str) -> Step<Run> {
 /// and `RUSTC_WRAPPER=sccache`) without selecting an sccache provider or
 /// configuring an external Nix binary cache. Jobs that compile Rust can follow
 /// this with [`configure_namespace_sccache`] to use Namespace's official remote
-/// cache. Requires [`setup_nix`] first.
+/// cache. Requires [`setup_nix`] first. The composite action defaults to the
+/// `default` flake shell when no `shell` input is passed.
 pub fn setup_dev_shell() -> Step<Use> {
     uses_local(
         "Setup Nix dev shell",
         xtask_paths::repo_dir!(".github/actions/setup-nix-dev-shell"),
     )
+}
+
+/// [`setup_dev_shell`] for a named `devShells.<name>` flake output.
+pub fn setup_dev_shell_named(name: &str) -> Step<Use> {
+    setup_dev_shell().add_with(("shell", name))
 }
 
 /// Mount the Namespace profile's persisted cache volume: `cache: rust` persists

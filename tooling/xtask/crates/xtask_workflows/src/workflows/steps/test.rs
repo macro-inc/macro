@@ -48,3 +48,22 @@ fn namespace_sccache_combines_job_specific_and_trust_conditions() {
     );
     assert!(condition.0.contains("steps.filter.outputs.hit == 'true'"));
 }
+
+#[test]
+fn named_dev_shell_passes_the_flake_attribute() {
+    let step = setup_dev_shell_named("agent-daemon");
+    let with = step.value.with.expect("named shell should set with.shell");
+    assert_eq!(
+        with.0.get("shell").and_then(|value| value.as_str()),
+        Some("agent-daemon")
+    );
+}
+
+#[test]
+fn default_dev_shell_does_not_pass_a_shell_input() {
+    let step = setup_dev_shell();
+    assert!(
+        step.value.with.is_none(),
+        "unspecified shell must keep the action default so other workflows stay unchanged"
+    );
+}

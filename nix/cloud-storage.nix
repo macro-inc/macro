@@ -1073,6 +1073,25 @@
               BINDGEN_EXTRA_CLANG_ARGS = "-I${pkgs.glibc.dev}/include -I${pkgs.gcc.cc}/lib/gcc/${pkgs.stdenv.hostPlatform.config}/${pkgs.gcc.version}/include";
             }
           );
+
+        # Keep release builds independent of optional developer tools in the
+        # default shell. In particular, adding Hermes there must not make
+        # macrod releases fetch or realize Hermes and its Python/npm closure.
+        agent-daemon = pkgs.mkShell {
+          packages = [
+            rustToolchain
+            pkgs.cargo-zigbuild
+            pkgs.zig
+            pkgs.cmake
+            pkgs.perl
+            pkgs.pkg-config
+            pkgs.sccache
+            nsc
+          ];
+          RUSTC_WRAPPER = "${pkgs.sccache}/bin/sccache";
+          CARGO_INCREMENTAL = "0";
+          AWS_LC_SYS_CMAKE_BUILDER = "1";
+        };
       };
     };
 }
