@@ -15,15 +15,6 @@ use crate::workflows::{runners, steps};
 
 /// Build the workflow.
 pub fn push_local_stack_binaries() -> Workflow {
-    // Every push to main, no paths filter. The stack derivation hashes
-    // depend on every file the Nix src filters keep — Rust anywhere
-    // (including tooling/), root *.md via rootDepsSrc, .sh/.sql/.json
-    // assets — which a paths list cannot faithfully enumerate. On
-    // 2026-08-23 a tooling+docs merge changed every service hash without
-    // matching the old filter; nothing published, and the environment
-    // bake plus every Cloud agent compiled the same binaries from source
-    // independently. When hashes are unchanged the run substitutes and
-    // finishes in under a minute, so always running is near-free.
     let push = Push::default().add_branch("main");
 
     Workflow::new("Push local stack binaries")
