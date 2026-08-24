@@ -39,16 +39,15 @@ import {
   useApplyPreset,
 } from '@app/features/next-soup/soup-view/soup-view-tabs';
 import { useIsInboxView } from '@app/features/next-soup/soup-view/use-is-inbox-view';
+import { AgentListEntity } from '@app/features/next-soup/soup-view/views/agents/AgentListEntity';
+import { ResponsiveAgentListHeader } from '@app/features/next-soup/soup-view/views/agents/AgentListHeader';
+import { AgentGroupHeader } from '@app/features/next-soup/soup-view/views/agents/agent-group-header';
 import { CompanyKanban } from '@app/features/next-soup/soup-view/views/companies/CompanyKanban';
 import { CompanyListEntity } from '@app/features/next-soup/soup-view/views/companies/CompanyListEntity';
 import { ResponsiveCompanyListHeader } from '@app/features/next-soup/soup-view/views/companies/CompanyListHeader';
 import { CrmDefaultViewLoader } from '@app/features/next-soup/soup-view/views/companies/CrmDefaultView';
 import { DateGroupHeader } from '@app/features/next-soup/soup-view/views/inbox/date-group-header';
 import { InboxListEntity } from '@app/features/next-soup/soup-view/views/inbox/InboxListEntity';
-import { AGENT_ATTENTION_GROUP_ID } from '@entity/utils/agent-attention';
-import { AgentGroupHeader } from '@app/features/next-soup/soup-view/views/agents/agent-group-header';
-import { AgentListEntity } from '@app/features/next-soup/soup-view/views/agents/AgentListEntity';
-import { ResponsiveAgentListHeader } from '@app/features/next-soup/soup-view/views/agents/AgentListHeader';
 import { TaskListEntity } from '@app/features/next-soup/soup-view/views/tasks/TaskListEntity';
 import { ResponsiveTaskListHeader } from '@app/features/next-soup/soup-view/views/tasks/TaskListHeader';
 import { TaskGroupHeader } from '@app/features/next-soup/soup-view/views/tasks/task-group-header';
@@ -97,6 +96,7 @@ import {
   type ProjectEntity,
   type SearchLocation,
 } from '@entity';
+import { AGENT_ATTENTION_GROUP_ID } from '@entity/utils/agent-attention';
 import SearchIcon from '@icon/macro-magnifying-glass.svg';
 import CaretDownIcon from '@phosphor/caret-down.svg';
 import ChevronRightIcon from '@phosphor/caret-right.svg';

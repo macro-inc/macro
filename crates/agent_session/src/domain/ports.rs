@@ -179,6 +179,10 @@ pub trait AgentSessionRepo: Send + Sync + 'static {
 
     /// Persist the session title the runtime reported. Idempotent; `None`
     /// clears a previously reported title. Returns whether the row changed.
+    #[allow(
+        clippy::needless_lifetimes,
+        reason = "mockall::automock cannot name the elided lifetime in Option<&str>"
+    )]
     fn set_title<'a>(
         &self,
         id: AgentSessionId,
@@ -195,6 +199,10 @@ pub trait AgentSessionRepo: Send + Sync + 'static {
 
     /// Persist the pull request a session produced. Idempotent; `None` clears
     /// a previously detected PR. Returns whether the row changed.
+    #[allow(
+        clippy::needless_lifetimes,
+        reason = "mockall::automock cannot name the elided lifetime in Option<&str>"
+    )]
     fn set_pr_url<'a>(
         &self,
         id: AgentSessionId,

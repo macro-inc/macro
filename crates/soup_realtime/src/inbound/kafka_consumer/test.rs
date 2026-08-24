@@ -112,6 +112,7 @@ fn subscribes_to_all_existing_soup_source_topics() {
             "macro.email",
             "macro.channels",
             "macro.properties",
+            "macro.agent_sessions",
         ]
     );
 }

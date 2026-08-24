@@ -25,6 +25,7 @@ import {
 } from '../context/origin-thread';
 
 export { harnessTitle } from '@core/util/agent-session';
+
 import { harnessTitle } from '@core/util/agent-session';
 
 /**

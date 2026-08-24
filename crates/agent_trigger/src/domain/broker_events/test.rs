@@ -83,6 +83,15 @@ fn event_names_match_the_wire() {
                 message: message(),
             },
         )),
+        AgentTriggerTopicEvent::SessionCreated(AgentSessionLifecycleEvent {
+            session_id: AgentSessionId::TEST_A,
+        }),
+        AgentTriggerTopicEvent::SessionUpdated(AgentSessionLifecycleEvent {
+            session_id: AgentSessionId::TEST_A,
+        }),
+        AgentTriggerTopicEvent::SessionDeleted(AgentSessionLifecycleEvent {
+            session_id: AgentSessionId::TEST_A,
+        }),
     ]
     .into_iter()
     .map(|event| serde_json::to_value(event).expect("serialize event")["event_type"].to_string())

@@ -4,12 +4,12 @@ import {
 } from '@core/constant/allBlocks';
 import { useChannelsContext } from '@core/context/channels';
 import { emailToId } from '@core/user';
+import { harnessTitle } from '@core/util/agent-session';
 import {
   extractSearchSnippet,
   extractSearchTerms,
   mergeAdjacentMacroEmTags,
 } from '@core/util/searchHighlight';
-import { harnessTitle } from '@core/util/agent-session';
 import type {
   AgentSessionEntity,
   CalendarEventEntity,

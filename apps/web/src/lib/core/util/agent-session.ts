@@ -15,7 +15,9 @@ export function harnessTitle(harness: string | undefined): string {
 
 /** The repository name from a session's repo URL, for a compact badge.
  * `https://github.com/macro-inc/macro.git` → `macro-inc/macro`. */
-export function repoNameFromUrl(repoUrl: string | undefined): string | undefined {
+export function repoNameFromUrl(
+  repoUrl: string | undefined
+): string | undefined {
   if (!repoUrl) return undefined;
   const trimmed = repoUrl.replace(/\.git$/, '').replace(/\/+$/, '');
   const segments = trimmed.split('/').filter(Boolean);

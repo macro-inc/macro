@@ -1,8 +1,8 @@
 import type { GroupHeaderProps } from '@app/features/next-soup/create-soup-state';
 import { SoupSectionHeader } from '@app/features/next-soup/soup-view/section-header';
+import type { AgentAttentionState } from '@entity/utils/agent-attention';
 import ChevronRightIcon from '@phosphor/caret-right.svg';
 import { cn, Layer } from '@ui';
-import type { AgentAttentionState } from '@entity/utils/agent-attention';
 
 /** Per-bucket tinting: urgency reads at a glance, like task statuses do. */
 const ATTENTION_GROUP_HEADER_TINTS: Record<AgentAttentionState, string> = {

@@ -37,12 +37,6 @@ import {
 } from '@app/features/next-soup/soup-view/filters-bar/tag-filter-state';
 import { dateBucket } from '@app/features/next-soup/soup-view/group-by-date';
 import {
-  AGENT_ATTENTION_GROUP_ID,
-  AGENT_ATTENTION_LABELS,
-  AGENT_ATTENTION_ORDER,
-  agentAttentionState,
-} from '@entity/utils/agent-attention';
-import {
   INBOX_FILTER_ENTRY_KEY,
   registerInboxFilterSplit,
 } from '@app/features/next-soup/soup-view/inbox-filter-controllers';
@@ -74,6 +68,12 @@ import {
   type Notification,
   toNotificationEntity,
 } from '@entity';
+import {
+  AGENT_ATTENTION_GROUP_ID,
+  AGENT_ATTENTION_LABELS,
+  AGENT_ATTENTION_ORDER,
+  agentAttentionState,
+} from '@entity/utils/agent-attention';
 import { useNotificationsForEntity } from '@notifications';
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import { useQueryClient } from '@queries/client';
