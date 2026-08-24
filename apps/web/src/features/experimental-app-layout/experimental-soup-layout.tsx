@@ -21,15 +21,15 @@ import { useApplyPreset } from '@app/features/next-soup/soup-view/soup-view-tabs
 import { openEntityInSplitFromUnifiedList } from '@app/features/next-soup/utils';
 import { VIEW_TAB_LISTS } from '@app/features/next-soup/soup-view/tab-lists';
 import {
-  CompanyDisplayMenu,
-  CompanyViewsMenu,
-} from '@app/features/next-soup/soup-view/views/companies/CompanyViewsMenu';
+  buildChannelsWorkspacePath,
+  parseChannelsWorkspaceRoute,
+} from '@components/app/split-layout/channelsWorkspaceRoute';
 import { PreviewButton } from '@components/app/split-layout/components/PreviewButton';
 import { Entity } from '@entity';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
-import { ENABLE_CRM } from '@core/constant/featureFlags';
 import { DOCS_BASE, LIST_VIEW_DOCS_URL } from '@app/constants/docs-links';
 import { TOKENS } from '@core/hotkey/tokens';
+import { createBlockInstance } from '@core/orchestrator';
 import SkillIcon from '@icon/skill.svg';
 import WideAutomationIcon from '@icon/wide-automation.svg';
 import PdfAppIcon from '@icon/wide-book.svg';
@@ -43,10 +43,8 @@ import SignalIcon from '@icon/wide-signal.svg';
 import ArrowSquareOutIcon from '@phosphor/arrow-square-out.svg';
 import ExpandIcon from '@phosphor/arrows-out.svg';
 import BrainIcon from '@phosphor/brain.svg';
-import BuildingsIcon from '@phosphor/buildings.svg';
 import CalendarIcon from '@phosphor/calendar-blank.svg';
 import CaretRightIcon from '@phosphor/caret-right.svg';
-import ChatIcon from '@phosphor/chat-circle.svg';
 import ClockIcon from '@phosphor/clock-counter-clockwise.svg';
 import ClipboardIcon from '@phosphor/clipboard-text.svg';
 import EnvelopeOpenIcon from '@phosphor/envelope-open.svg';
@@ -63,6 +61,7 @@ import ShareIcon from '@phosphor/share-network.svg';
 import UserFocusIcon from '@phosphor/user-focus.svg';
 import UsersIcon from '@phosphor/users-three.svg';
 import { useCurrentTeamQuery } from '@queries/team/teams';
+import { useNavigate, useParams } from '@solidjs/router';
 import XIcon from '@phosphor/x.svg';
 import {
   Button,
@@ -95,6 +94,7 @@ import {
   ExperimentalMemoriesView,
   ExperimentalMemoryDetails,
 } from './experimental-memories-view';
+import { ExperimentalMessagesRail } from './experimental-messages-rail';
 import {
   ExperimentalPowersDetailsContext,
   type ExperimentalPowersDetail,
@@ -110,7 +110,7 @@ export type ExperimentalSoupView =
   | 'library'
   | 'machines'
   | 'tasks'
-  | 'people';
+  | 'messages';
 
 const VIEW_TITLES: Record<ExperimentalSoupView, string> = {
   inbox: 'Inbox',
@@ -118,7 +118,7 @@ const VIEW_TITLES: Record<ExperimentalSoupView, string> = {
   library: 'Library',
   machines: 'Powers',
   tasks: 'Tasks',
-  people: 'People',
+  messages: 'Messages',
 };
 
 type ViewNavigationItem = {
@@ -267,6 +267,8 @@ type ExperimentalSoupLayoutProps = {
  */
 export function ExperimentalSoupLayout(props: ExperimentalSoupLayoutProps) {
   const panel = useSplitPanelOrThrow();
+  const navigate = useNavigate();
+  const params = useParams<{ channelsPath?: string }>();
   const soupView = useSoupView();
   const { applyTabPreset } = useApplyPreset();
   const [powersTab, setPowersTab] = createSignal<PowersTab>(
@@ -288,21 +290,11 @@ export function ExperimentalSoupLayout(props: ExperimentalSoupLayoutProps) {
     )
   );
 
-  const contentId = createMemo(() => {
-    const content = panel.handle.content();
-    return content.type === 'component' ? content.id : undefined;
-  });
-
   const searchPlaceholder = createMemo(() => {
     if (props.view === 'inbox') return 'Search inbox';
     if (props.view === 'email') return 'Search email';
     if (props.view === 'library') return 'Search library';
     if (props.view === 'tasks') return 'Search tasks';
-    if (props.view === 'people') {
-      return contentId() === 'companies'
-        ? 'Search companies'
-        : 'Search conversations';
-    }
     if (props.view === 'machines') {
       return powersTab() === 'skills'
         ? 'Search skills'
@@ -422,7 +414,7 @@ export function ExperimentalSoupLayout(props: ExperimentalSoupLayoutProps) {
       applyTabPreset('agents', 'automations');
       return;
     }
-    if (props.view === 'people' && contentId() === 'channels') {
+    if (props.view === 'messages') {
       applyTabPreset('channels', 'experimental-conversations');
     }
   });
@@ -437,37 +429,17 @@ export function ExperimentalSoupLayout(props: ExperimentalSoupLayoutProps) {
     }
   });
 
-  const openPeopleMode = (mode: 'conversations' | 'companies') => {
-    if (mode === 'companies') {
-      if (!ENABLE_CRM() || contentId() === 'companies') return;
-      panel.handle.resetPreview();
-      panel.handle.replace({
-        next: { type: 'component', id: 'companies' },
-        referredFrom: 'sidebar',
-      });
-      return;
-    }
-
-    if (contentId() === 'channels') {
-      applyTabPreset('channels', 'experimental-conversations');
-      return;
-    }
-    panel.handle.resetPreview();
-    panel.handle.replace({
-      next: {
-        type: 'component',
-        id: 'channels',
-        params: {
-          experimentalView: 'people',
-          initialTab: 'experimental-conversations',
-        },
-      },
-      referredFrom: 'sidebar',
-    });
-  };
-
-  const isPeopleConversations = () => contentId() === 'channels';
-  const isPeopleCompanies = () => contentId() === 'companies';
+  const messagesRoute = createMemo(() =>
+    parseChannelsWorkspaceRoute(params.channelsPath)
+  );
+  const selectedMessageChannelId = () =>
+    props.view === 'messages'
+      ? messagesRoute().selectedChannelId
+      : undefined;
+  const selectedMessageChannelBlock = createMemo(() => {
+    const channelId = selectedMessageChannelId();
+    return channelId ? createBlockInstance('channel', channelId) : undefined;
+  });
 
   const ExperimentalFilterControl = () => (
     <div class="flex items-center gap-1">
@@ -525,11 +497,7 @@ export function ExperimentalSoupLayout(props: ExperimentalSoupLayoutProps) {
       </Show>
       <SoupViewContextGroup hideLabel />
       <ExperimentalFilterControl />
-      <Show when={isPeopleCompanies()}>
-        <CompanyDisplayMenu />
-        <CompanyViewsMenu />
-      </Show>
-      <Show when={props.view !== 'people' && props.view !== 'machines'}>
+      <Show when={props.view !== 'messages' && props.view !== 'machines'}>
         <PreviewButton
           hideLabel
           disabled={!props.hasPreviewItems}
@@ -1287,51 +1255,6 @@ export function ExperimentalSoupLayout(props: ExperimentalSoupLayoutProps) {
     </ExperimentalViewSidebarItems>
   );
 
-  const PeopleNavigation = () => (
-    <>
-      <ExperimentalViewSidebarItems class="mt-0">
-        <nav aria-label="People views" class="flex flex-col gap-1">
-        <button
-          type="button"
-          class={cn(
-            'flex w-full shrink-0 items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-sm font-medium transition-colors',
-            isPeopleConversations()
-              ? 'bg-active text-ink'
-              : 'text-ink-muted hover:bg-ink/5 hover:text-ink'
-          )}
-          aria-pressed={isPeopleConversations()}
-          onClick={() => {
-            openPeopleMode('conversations');
-            setViewMenuOpen(false);
-          }}
-        >
-          <ChatIcon class="size-4 shrink-0" />
-          Conversations
-        </button>
-        <Show when={ENABLE_CRM()}>
-          <button
-            type="button"
-            class={cn(
-              'flex w-full shrink-0 items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-sm font-medium transition-colors',
-              isPeopleCompanies()
-                ? 'bg-active text-ink'
-                : 'text-ink-muted hover:bg-ink/5 hover:text-ink'
-            )}
-            aria-pressed={isPeopleCompanies()}
-            onClick={() => {
-              openPeopleMode('companies');
-              setViewMenuOpen(false);
-            }}
-          >
-            <BuildingsIcon class="size-4 shrink-0" />
-            Companies
-          </button>
-        </Show>
-        </nav>
-      </ExperimentalViewSidebarItems>
-    </>
-  );
-
   const ViewTitleRow = (titleProps: {
     title: string;
     navigation: JSX.Element;
@@ -1426,20 +1349,42 @@ export function ExperimentalSoupLayout(props: ExperimentalSoupLayoutProps) {
     </div>
   );
 
-  const PeopleLayout = () => (
-    <div class="flex size-full min-h-0 flex-col">
-      <ViewTitleRow title="People" navigation={<PeopleNavigation />} />
-      <div class="relative flex min-h-0 flex-1">
-        <ExperimentalViewSidebar
-          label="People navigation"
-          collapsed={viewSidebarCollapsed()}
+  const MessagesLayout = () => (
+    <div class="flex size-full min-h-0">
+      <ExperimentalMessagesRail
+        selectedChannelId={selectedMessageChannelId()}
+        onSelect={(channel) =>
+          navigate(
+            buildChannelsWorkspacePath(
+              channel.id,
+              messagesRoute().splitSegments
+            )
+          )
+        }
+      />
+      <div class="min-h-0 min-w-0 flex-1 overflow-hidden">
+        <Show
+          when={selectedMessageChannelBlock()}
+          fallback={
+            <div class="flex size-full items-center justify-center px-6 text-center">
+              <div class="max-w-sm">
+                <h2 class="text-base font-semibold text-ink">
+                  Select a conversation
+                </h2>
+                <p class="mt-2 text-sm leading-5 text-ink-muted">
+                  Choose a channel or person from the rail to open the
+                  conversation here.
+                </p>
+              </div>
+            </div>
+          }
         >
-          <PeopleNavigation />
-        </ExperimentalViewSidebar>
-        <ListContentContainer>
-          <ResponsiveListControls />
-          <Body adjacentToSidebar />
-        </ListContentContainer>
+          {(block) => (
+            <div class="size-full min-h-0">
+              <Dynamic component={block().element} />
+            </div>
+          )}
+        </Show>
       </div>
     </div>
   );
@@ -1462,8 +1407,8 @@ export function ExperimentalSoupLayout(props: ExperimentalSoupLayoutProps) {
         <Match when={props.view === 'tasks'}>
           <TasksLayout />
         </Match>
-        <Match when={props.view === 'people'}>
-          <PeopleLayout />
+        <Match when={props.view === 'messages'}>
+          <MessagesLayout />
         </Match>
       </Switch>
     </div>
@@ -1482,8 +1427,7 @@ export function experimentalSoupViewForContent(args: {
     documents: 'library',
     agents: 'machines',
     tasks: 'tasks',
-    channels: 'people',
-    companies: 'people',
+    channels: 'messages',
   };
   return mapping[args.contentId as ListView];
 }

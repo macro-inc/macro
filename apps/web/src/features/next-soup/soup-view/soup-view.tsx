@@ -244,7 +244,7 @@ interface SoupViewProps {
    * exists for this view.
    */
   initialGroupBy?: string;
-  /** Explicit initial tab used by conceptual views such as People → DMs. */
+  /** Explicit initial tab used by conceptual views such as Messages. */
   initialActiveTab?: string;
   /** Make explicit initial query/predicates win over persisted view state. */
   preferInitialFilters?: boolean;
@@ -497,7 +497,7 @@ export const SoupView = (props: SoupViewProps) => {
     onCleanup(dispose);
   });
 
-  // Channels is the backing list for People in the experiment. Use the
+  // Channels is the backing list for Messages in the experiment. Use the
   // experiment-only conversations preset so team channels and direct messages
   // share one list. `on` keeps the preset's internal reads out of this effect's
   // dependency set.
@@ -507,8 +507,8 @@ export const SoupView = (props: SoupViewProps) => {
         experimentalAppLayoutEnabled() &&
         contentId === 'channels' &&
         soupView.activeTab() !== 'experimental-conversations',
-      (shouldApplyPeoplePreset) => {
-        if (shouldApplyPeoplePreset) {
+      (shouldApplyMessagesPreset) => {
+        if (shouldApplyMessagesPreset) {
           applyRequestedTabPreset('channels', 'experimental-conversations');
         }
       }
@@ -526,8 +526,8 @@ export const SoupView = (props: SoupViewProps) => {
     const content = panel.handle.content();
     const requestedView =
       content.type === 'component' &&
-      content.params?.experimentalView === 'people'
-        ? 'people'
+      content.params?.experimentalView === 'messages'
+        ? 'messages'
         : props.experimentalView;
 
     return experimentalSoupViewForContent({
@@ -538,8 +538,8 @@ export const SoupView = (props: SoupViewProps) => {
 
   createEffect(() => {
     panel.handle.setDisplayName(
-      experimentalView() === 'people'
-        ? 'People'
+      experimentalView() === 'messages'
+        ? 'Messages'
         : experimentalView() === 'machines'
           ? 'Powers'
           : props.viewName
@@ -549,7 +549,7 @@ export const SoupView = (props: SoupViewProps) => {
   createEffect(
     on(
       () =>
-        experimentalView() === 'people' &&
+        experimentalView() === 'messages' &&
         panel.handle.isControllerSplit(),
       (shouldDisengagePreview) => {
         if (shouldDisengagePreview) panel.handle.disengagePreview();

@@ -32,6 +32,7 @@ import { GlobalAppStateProvider } from '@components/app/GlobalAppState';
 import { Layout } from '@components/app/Layout';
 import { ReactiveFavicon } from '@components/app/ReactiveFavicon';
 import {
+  CHANNELS_LAYOUT_ROUTE,
   CHAT_LAYOUT_ROUTE,
   LAYOUT_ROUTE,
 } from '@components/app/split-layout/SplitLayoutRoute';
@@ -230,6 +231,7 @@ const ROUTES: RouteDefinition[] = [
     component: TaskRoute,
   },
   CHAT_LAYOUT_ROUTE,
+  CHANNELS_LAYOUT_ROUTE,
   LAYOUT_ROUTE,
   /** BEGIN - APP ROUTES */
   {
@@ -262,10 +264,6 @@ const ROUTES: RouteDefinition[] = [
   },
   {
     path: '/tasks',
-    component: LAYOUT_ROUTE.component,
-  },
-  {
-    path: '/channels',
     component: LAYOUT_ROUTE.component,
   },
   {

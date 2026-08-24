@@ -383,7 +383,7 @@ registerComponent(
 );
 
 type ChannelsComponentParams = {
-  experimentalView?: 'people';
+  experimentalView?: 'messages';
   initialTab?: string;
 };
 
@@ -394,7 +394,7 @@ registerComponent(
     const preset = getViewPreset('channels', params.initialTab);
     return (
       <SoupView
-        viewName={params.experimentalView === 'people' ? 'People' : 'Channels'}
+        viewName={params.experimentalView === 'messages' ? 'Messages' : 'Channels'}
         initialFilters={preset?.filters}
         initialClientFilters={preset?.clientFilters}
         initialGroupBy={preset?.groupBy}

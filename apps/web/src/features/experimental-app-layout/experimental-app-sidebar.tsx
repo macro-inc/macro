@@ -22,7 +22,7 @@ import HouseIcon from '@phosphor/house.svg';
 import LightningIcon from '@phosphor/lightning.svg';
 import SearchIcon from '@phosphor/magnifying-glass.svg';
 import TrayIcon from '@phosphor/tray.svg';
-import UsersIcon from '@phosphor/users.svg';
+import MessagesIcon from '@phosphor/chats-circle.svg';
 import { useNavigate } from '@solidjs/router';
 import { Button, cn, Tooltip } from '@ui';
 import {
@@ -45,7 +45,7 @@ export type ExperimentalSidebarItemId =
   | 'powers'
   | 'email'
   | 'tasks'
-  | 'people';
+  | 'messages';
 
 type ExperimentalSidebarItem = {
   id: ExperimentalSidebarItemId;
@@ -80,13 +80,13 @@ export const EXPERIMENTAL_SIDEBAR_ITEMS: readonly ExperimentalSidebarItem[] = [
   { id: 'email', label: 'Email', contentId: 'mail', icon: EnvelopeIcon },
   { id: 'tasks', label: 'Tasks', contentId: 'tasks', icon: CheckSquareIcon },
   {
-    id: 'people',
-    label: 'People',
+    id: 'messages',
+    label: 'Messages',
     contentId: 'channels',
-    icon: UsersIcon,
+    icon: MessagesIcon,
     params: {
-      experimentalView: 'people',
-      initialTab: 'recent',
+      experimentalView: 'messages',
+      initialTab: 'experimental-conversations',
     },
   },
 ];
@@ -133,9 +133,7 @@ export function ExperimentalAppSidebar(props: ExperimentalAppSidebarProps) {
   const isActive = (item: ExperimentalSidebarItem) => {
     const content = activeContent();
     if (!content || content.type !== 'component') return false;
-    if (item.id === 'people') {
-      return content.id === 'channels' || content.id === 'companies';
-    }
+    if (item.id === 'messages') return content.id === 'channels';
     return content.id === item.contentId;
   };
 
@@ -164,6 +162,13 @@ export function ExperimentalAppSidebar(props: ExperimentalAppSidebarProps) {
   };
 
   const openItem = (item: ExperimentalSidebarItem, event: MouseEvent) => {
+    if (item.id === 'messages' && !event.shiftKey) {
+      analytics.track('sidebar_click', { view: item.id });
+      navigate('/channels');
+      globalSplitManager()?.returnFocus();
+      return;
+    }
+
     if (!event.shiftKey && isActive(item)) {
       globalSplitManager()?.returnFocus();
       return;
@@ -189,7 +194,7 @@ export function ExperimentalAppSidebar(props: ExperimentalAppSidebarProps) {
   return (
     <aside
       class={cn(
-        'group/experimental-sidebar relative flex h-full shrink-0 flex-col overflow-hidden border-r border-edge-muted/60 bg-page text-sm',
+        'group/experimental-sidebar relative flex h-full shrink-0 flex-col overflow-hidden bg-page text-sm',
         isExpanded() && 'w-60 max-w-60 px-3 pb-3 pt-3 opacity-100',
         isSlim() && 'w-16 max-w-16 px-2 pb-3 pt-3 opacity-100',
         props.sidebarState === 'hidden' &&
