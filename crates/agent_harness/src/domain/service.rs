@@ -289,6 +289,11 @@ where
         request: agent_session::domain::ports::OpenManagedSession,
     ) -> agent_session::domain::error::Result<AgentSession> {
         let defaults = &self.inner.defaults;
+        let sandbox_size = self
+            .inner
+            .sessions
+            .user_sandbox_size(&request.owner)
+            .await?;
         let session = self
             .inner
             .sessions
@@ -303,6 +308,7 @@ where
                 repo_url: Some(defaults.repo_url.clone()),
                 // Managed sandboxes run in the path baked into their image.
                 workspace: agent_session::MANAGED_CONTAINER_WORKSPACE.to_owned(),
+                sandbox_size,
             })
             .await?;
 
@@ -312,6 +318,7 @@ where
             .spawn(SpawnContainer {
                 session_id: session.id,
                 repo_url: defaults.repo_url.clone(),
+                size: sandbox_size,
             })
             .await
         {

@@ -102,6 +102,7 @@ impl SessionOpener for RecordingOpener {
             harness: "opencode".to_owned(),
             repo_url: Some("https://github.com/macro-inc/macro".to_owned()),
             workspace: crate::MANAGED_CONTAINER_WORKSPACE.to_owned(),
+            sandbox_size: crate::domain::model::SandboxSize::Default,
             acp_session_id: None,
             status: SessionStatus::NoMessages,
             created_at: Utc::now(),

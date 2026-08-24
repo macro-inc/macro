@@ -41,7 +41,9 @@ use crate::testing::helpers::agent::FakeAgent;
 use crate::testing::helpers::announcer::AnnouncerMock;
 use crate::testing::helpers::containers::{ContainerMock, ContainerSender, MockContainerManager};
 use agent_session::domain::error::AgentSessionError;
-use agent_session::domain::ports::{OpenExternalAgentSession, SessionOpener as _};
+use agent_session::domain::ports::{
+    OpenExternalAgentSession, OpenManagedSession, SessionOpener as _,
+};
 
 fn sender() -> MacroUserIdStr<'static> {
     MacroUserIdStr::try_from_email("asker@example.com").expect("a valid user id")
@@ -1170,6 +1172,43 @@ async fn open_spawns_at_the_users_default_size() {
     assert_eq!(containers.spawn_sizes(), [SandboxSize::Small]);
     assert_eq!(
         repo.get(id)
+            .await
+            .expect("the session row exists")
+            .sandbox_size,
+        SandboxSize::Small
+    );
+}
+
+#[tokio::test]
+async fn open_managed_session_spawns_at_the_users_default_size() {
+    let (service, repo, containers, _announcer, _runtimes) = harness();
+    repo.set_user_sandbox_size(&sender(), SandboxSize::Small)
+        .await
+        .expect("the user default should persist");
+
+    let open = service.open_managed_session(OpenManagedSession {
+        owner: sender(),
+        prompt: None,
+    });
+    let drive = async {
+        loop {
+            if containers.spawned() == 1 {
+                break;
+            }
+            tokio::task::yield_now().await;
+        }
+        let container = containers
+            .container(session_of(&containers))
+            .expect("the spawned container is findable");
+        complete_handshake(&container).await;
+    };
+    let (opened, _) = tokio::join!(open, drive);
+    let session = opened.expect("open should succeed");
+
+    assert_eq!(containers.spawn_sizes(), [SandboxSize::Small]);
+    assert_eq!(session.sandbox_size, SandboxSize::Small);
+    assert_eq!(
+        repo.get(session.id)
             .await
             .expect("the session row exists")
             .sandbox_size,

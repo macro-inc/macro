@@ -19,6 +19,7 @@ import { formatDate } from '@core/util/date';
 import { openExternalUrl } from '@core/util/url';
 import GitBranch from '@phosphor/git-branch.svg';
 import { agentHarnessServiceClient } from '@service-agent-harness/client';
+import type { AgentSessionResponse } from '@service-agent-harness/generated/schemas';
 import { createMemo, createSignal, For, onCleanup, Show } from 'solid-js';
 import { useAgentSession } from '../../context/AgentSessionContext';
 import {
@@ -38,11 +39,10 @@ import { harnessTitle } from '../AgentSplitHeader';
 
 const SIZES = new Set<string>(['small', 'default', 'large']);
 
-function sessionSandboxSize(session: unknown): SandboxSize {
-  const value =
-    typeof session === 'object' && session !== null && 'sandboxSize' in session
-      ? session.sandboxSize
-      : undefined;
+function sessionSandboxSize(
+  session: AgentSessionResponse | undefined
+): SandboxSize {
+  const value = (session as { sandboxSize?: unknown } | undefined)?.sandboxSize;
   return typeof value === 'string' && SIZES.has(value)
     ? (value as SandboxSize)
     : 'default';
