@@ -37,6 +37,7 @@ import { clearLocalAuthSession } from '@core/auth/logout';
 import { ChatAttachmentsInit } from '@core/component/AI/signal/globalAttachments';
 import { LoadingBlock } from '@core/component/LoadingBlock';
 import { ToastRegion } from '@core/component/Toast/ToastRegion';
+import { LOCAL_ONLY } from '@core/constant/featureFlags';
 import { ChannelsContextProvider } from '@core/context/channels';
 import { EmailLinksContextProvider } from '@core/context/emailLinks';
 import { QuickAccessProvider } from '@core/context/quickAccess';
@@ -614,6 +615,10 @@ function InitialInteractiveOnboardingModal() {
 
   const modalOpen = () =>
     open() &&
+    // Local vite defaults v4 off; without this guard the flag-off fallback
+    // would still open this legacy modal for first-time users. Opt into v4
+    // with VITE_ENABLE_ONBOARDING_V4=true instead.
+    !LOCAL_ONLY &&
     // Onboarding-v4 replaces this modal on desktop; the Layout redirect
     // sends first-time users to /onboarding instead. Desktop waits for the
     // flag to resolve so this doesn't flash before that redirect fires.

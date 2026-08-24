@@ -25,7 +25,8 @@ export type OnboardingV4Flag = {
 
 /**
  * Gate for onboarding v4, controlled by the `enable-onboarding-v4` PostHog
- * flag and overridable locally with `VITE_ENABLE_ONBOARDING_V4`.
+ * flag. Local vite defaults the gate off; set `VITE_ENABLE_ONBOARDING_V4=true`
+ * to opt in. Hosted development defaults on; production follows PostHog.
  */
 export function useOnboardingV4Flag(): Accessor<OnboardingV4Flag> {
   const posthog = usePosthog();

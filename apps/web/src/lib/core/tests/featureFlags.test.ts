@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import { resolveFeatureFlag } from '../constant/featureFlags';
+import {
+  defaultOnboardingV4Override,
+  resolveFeatureFlag,
+} from '../constant/featureFlags';
 
 describe('resolveFeatureFlag', () => {
   it('returns the default when no env override is present', () => {
@@ -31,5 +34,20 @@ describe('resolveFeatureFlag', () => {
     expect(resolveFeatureFlag('TEST_FLAG_INVALID', false)).toBe(false);
 
     delete import.meta.env.VITE_TEST_FLAG_INVALID;
+  });
+});
+
+describe('defaultOnboardingV4Override', () => {
+  it('disables onboarding on the local vite server', () => {
+    expect(defaultOnboardingV4Override(true, true)).toBe(false);
+    expect(defaultOnboardingV4Override(true, false)).toBe(false);
+  });
+
+  it('defaults on in hosted development', () => {
+    expect(defaultOnboardingV4Override(false, true)).toBe(true);
+  });
+
+  it('defers to PostHog in production', () => {
+    expect(defaultOnboardingV4Override(false, false)).toBeUndefined();
   });
 });
