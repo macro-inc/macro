@@ -43,12 +43,12 @@ use bots::domain::models::BotId;
 use super::connection::RuntimeAttachment;
 use super::error::{AgentSessionError, Result};
 use super::model::{
-    AgentSession, AgentSessionId, AgentSessionLog, AuthorKind, ChannelSession,
+    AgentSession, AgentSessionId, AgentSessionLog, AgentSessionRenamed, AuthorKind, ChannelSession,
     CreateAgentSessionParams, LogAppended, Message, MessageId, SessionLog, StoredAgentSessionLog,
 };
 use super::ports::{
-    AgentConnector, AgentSessionLogRepo, AgentSessionLogWriter, AgentSessionRealtime,
-    AgentSessionRepo,
+    AgentConnector, AgentSessionLogRepo, AgentSessionLogWriter, AgentSessionNameGenerator,
+    AgentSessionRealtime, AgentSessionRepo, NoOpAgentSessionNameGenerator,
 };
 use super::session::actors::{SessionActor, SessionCommand, Stepped};
 
@@ -136,10 +136,11 @@ pub trait AgentSessionService: Send + Sync + 'static {
 /// `Folds` answers "what messages does this session's log derive" -
 /// `agent_fold` folding the log on read - and `Rt` streams each frame to
 /// whoever is watching the session's channel right now.
-pub struct AgentSessionServiceImpl<R, Folds, Rt> {
+pub struct AgentSessionServiceImpl<R, Folds, Rt, Namer = NoOpAgentSessionNameGenerator> {
     repo: R,
     folds: Folds,
     realtime: Rt,
+    name_generator: Namer,
     active: Arc<ActiveSessions>,
 }
 
@@ -155,7 +156,25 @@ impl<R, Folds, Rt> AgentSessionServiceImpl<R, Folds, Rt> {
             repo,
             folds,
             realtime,
+            name_generator: NoOpAgentSessionNameGenerator,
             active: Arc::new(DashMap::new()),
+        }
+    }
+}
+
+impl<R, Folds, Rt, Namer> AgentSessionServiceImpl<R, Folds, Rt, Namer> {
+    /// Replace the no-op name generator with a production adapter.
+    #[must_use]
+    pub fn with_name_generator<NextNamer>(
+        self,
+        name_generator: NextNamer,
+    ) -> AgentSessionServiceImpl<R, Folds, Rt, NextNamer> {
+        AgentSessionServiceImpl {
+            repo: self.repo,
+            folds: self.folds,
+            realtime: self.realtime,
+            name_generator,
+            active: self.active,
         }
     }
 
@@ -238,11 +257,12 @@ impl<R, Folds, Rt> AgentSessionServiceImpl<R, Folds, Rt> {
     }
 }
 
-impl<R, Folds, Rt> AgentSessionService for AgentSessionServiceImpl<R, Folds, Rt>
+impl<R, Folds, Rt, Namer> AgentSessionService for AgentSessionServiceImpl<R, Folds, Rt, Namer>
 where
     R: AgentSessionRepo + AgentSessionLogRepo + Clone,
     Folds: FoldedMessageRepo + Clone + Send + Sync + 'static,
     Rt: AgentSessionRealtime + Clone + Send + Sync + 'static,
+    Namer: AgentSessionNameGenerator + Clone,
 {
     async fn create_session(&self, params: CreateAgentSessionParams) -> Result<AgentSession> {
         AgentSessionRepo::create(&self.repo, params).await
@@ -308,7 +328,19 @@ where
         action: AgentAction,
         action_id: AgentActionId,
     ) -> Result<()> {
-        self.deliver_action(id, user_id, action, action_id).await
+        let initial_prompt = initial_prompt_for_rename(&self.folds, id, &action).await;
+
+        self.deliver_action(id, user_id, action, action_id).await?;
+        if let Some(initial_prompt) = initial_prompt {
+            spawn_initial_agent_session_rename(
+                self.repo.clone(),
+                self.realtime.clone(),
+                self.name_generator.clone(),
+                id,
+                initial_prompt,
+            );
+        }
+        Ok(())
     }
 
     async fn next_prompt_message_id(&self, id: AgentSessionId) -> Result<MessageId> {
@@ -327,6 +359,74 @@ where
             entries,
         })
     }
+}
+
+async fn initial_prompt_for_rename<Folds>(
+    folds: &Folds,
+    id: AgentSessionId,
+    action: &AgentAction,
+) -> Option<String>
+where
+    Folds: FoldedMessageRepo,
+{
+    let AgentAction::Prompt(prompt) = action else {
+        return None;
+    };
+    folds
+        .next_turn_id(id)
+        .await
+        .inspect_err(|error| {
+            tracing::warn!(
+                error = ?error,
+                %id,
+                "failed to determine whether agent prompt was the first"
+            );
+        })
+        .ok()
+        .filter(|turn| *turn == MessageId::first(AuthorKind::User).turn)
+        .map(|_| prompt.prompt.clone())
+}
+
+fn spawn_initial_agent_session_rename<R, Rt, Namer>(
+    repo: R,
+    realtime: Rt,
+    name_generator: Namer,
+    id: AgentSessionId,
+    initial_prompt: String,
+) where
+    R: AgentSessionRepo + Clone,
+    Rt: AgentSessionRealtime + Send + Sync + 'static,
+    Namer: AgentSessionNameGenerator + Send + Sync + 'static,
+{
+    tokio::spawn(async move {
+        let result: std::result::Result<(), rootcause::Report> = async {
+            let session = repo
+                .get(id)
+                .await
+                .map_err(|error| rootcause::report!(error))?;
+            let Some(name) = name_generator
+                .generate_name(&session, &initial_prompt)
+                .await?
+            else {
+                return Ok(());
+            };
+            repo.set_name(id, &name)
+                .await
+                .map_err(|error| rootcause::report!(error))?;
+            realtime
+                .publish_renamed(AgentSessionRenamed {
+                    agent_session_id: id,
+                    name,
+                })
+                .await?;
+            Ok(())
+        }
+        .await;
+
+        if let Err(error) = result {
+            tracing::warn!(error = ?error, %id, "failed to auto-rename initial agent session");
+        }
+    });
 }
 
 /// The [`AgentSessionLogRepo`] a session's actor writes through: the durable
@@ -477,6 +577,10 @@ where
 
     async fn set_model(&self, id: AgentSessionId, model: &str) -> Result<()> {
         self.repo.set_model(id, model).await
+    }
+
+    async fn set_name(&self, id: AgentSessionId, name: &str) -> Result<()> {
+        self.repo.set_name(id, name).await
     }
 
     async fn delete(&self, id: AgentSessionId) -> Result<()> {

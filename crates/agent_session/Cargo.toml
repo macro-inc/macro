@@ -11,6 +11,8 @@ test-utils = ["dep:mockall", "agent_fold/test-utils"]
 [dependencies]
 
 agent-client-protocol = { workspace = true }
+agent = { path = "../agent" }
+ai_usage = { path = "../ai_usage" }
 dashmap = { workspace = true }
 macro_uuid = { path = "../macro_uuid" }
 mockall = { workspace = true, optional = true }

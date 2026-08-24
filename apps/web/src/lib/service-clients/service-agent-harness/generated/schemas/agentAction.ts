@@ -6,8 +6,8 @@
  */
 import type { AgentActionOneOf } from './agentActionOneOf';
 import type { AgentActionOneOfFour } from './agentActionOneOfFour';
-import type { AgentActionOneOfNine } from './agentActionOneOfNine';
 import type { AgentActionOneOfSeven } from './agentActionOneOfSeven';
+import type { AgentActionOneOfNine } from './agentActionOneOfNine';
 
 /**
  * One thing a caller wants an agent to do.

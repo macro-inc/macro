@@ -68,6 +68,7 @@ impl SessionOpener for RecordingOpener {
     ) -> crate::domain::error::Result<AgentSession> {
         let session = AgentSession {
             id: AgentSessionId::TEST_A,
+            name: crate::domain::model::DEFAULT_AGENT_SESSION_NAME.to_owned(),
             owner_id: request.owner.clone(),
             thread_id: request.thread.as_ref().map(|thread| thread.thread_id),
             thread_channel_id: request.thread.as_ref().map(|thread| thread.channel_id),

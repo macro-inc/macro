@@ -289,6 +289,8 @@ pub struct ControlRequest {
 pub struct AgentSessionResponse {
     /// The session id.
     pub id: Uuid,
+    /// User-facing session name.
+    pub name: String,
     /// The user who created and owns the session.
     pub owner_id: String,
     /// The root message of the thread the session was created from, if any.
@@ -323,6 +325,7 @@ impl From<AgentSession> for AgentSessionResponse {
     fn from(session: AgentSession) -> Self {
         Self {
             id: session.id.as_uuid(),
+            name: session.name,
             owner_id: session.owner_id.to_string(),
             thread_id: session.thread_id,
             thread_channel_id: session.thread_channel_id,

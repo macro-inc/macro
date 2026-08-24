@@ -466,6 +466,7 @@
         "description": "Response body describing an agent session.\n\nClients deserialize this, so both derives are used.",
         "required": [
           "id",
+          "name",
           "ownerId",
           "botId",
           "model",
@@ -507,6 +508,10 @@
             "type": "string",
             "format": "date-time",
             "description": "When the session was last modified."
+          },
+          "name": {
+            "type": "string",
+            "description": "User-facing session name."
           },
           "originatingMessageId": {
             "type": ["string", "null"],

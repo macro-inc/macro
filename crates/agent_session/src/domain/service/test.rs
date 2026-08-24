@@ -7,6 +7,7 @@ use agent_fold::domain::service::FoldedMessageService;
 use agent_fold::testing::{TURN, parse_log_as, test_session};
 use agent_runtime_protocol::domain::schema::v0::ToServerMessage;
 use macro_uuid::Uuid;
+use std::sync::{Arc, Mutex};
 
 struct Fixture {
     service: AgentSessionServiceImpl<
@@ -34,6 +35,103 @@ fn fixture() -> Fixture {
         repo,
         session,
     }
+}
+
+#[tokio::test]
+async fn only_the_first_prompt_is_selected_for_automatic_naming() {
+    let repo = InMemoryAgentSessionRepo::new();
+    let session = test_session();
+    repo.insert_session(test_agent_session(session));
+    let folds = FoldedMessageService::new(repo.clone());
+    let prompt = AgentAction::prompt("fix the flaky tests");
+
+    assert_eq!(
+        initial_prompt_for_rename(&folds, session, &prompt).await,
+        Some("fix the flaky tests".to_owned())
+    );
+
+    repo.extend_log(parse_log_as(session, TURN));
+    assert_eq!(
+        initial_prompt_for_rename(&folds, session, &prompt).await,
+        None
+    );
+}
+
+#[derive(Clone, Copy)]
+struct FixedNameGenerator;
+
+impl AgentSessionNameGenerator for FixedNameGenerator {
+    async fn generate_name(
+        &self,
+        _session: &AgentSession,
+        initial_prompt: &str,
+    ) -> std::result::Result<Option<String>, rootcause::Report> {
+        assert_eq!(initial_prompt, "fix the flaky tests");
+        Ok(Some("Fix Flaky Tests".to_owned()))
+    }
+}
+
+#[derive(Clone, Default)]
+struct RenameRealtime(Arc<Mutex<Vec<AgentSessionRenamed>>>);
+
+impl AgentSessionRealtime for RenameRealtime {
+    async fn publish(&self, _event: LogAppended) -> std::result::Result<(), rootcause::Report> {
+        Ok(())
+    }
+
+    async fn publish_renamed(
+        &self,
+        event: AgentSessionRenamed,
+    ) -> std::result::Result<(), rootcause::Report> {
+        self.0
+            .lock()
+            .expect("rename store is not poisoned")
+            .push(event);
+        Ok(())
+    }
+}
+
+#[tokio::test]
+async fn background_naming_persists_then_publishes_the_generated_name() {
+    let repo = InMemoryAgentSessionRepo::new();
+    let session = test_session();
+    repo.insert_session(test_agent_session(session));
+    let realtime = RenameRealtime::default();
+
+    spawn_initial_agent_session_rename(
+        repo.clone(),
+        realtime.clone(),
+        FixedNameGenerator,
+        session,
+        "fix the flaky tests".to_owned(),
+    );
+    for _ in 0..20 {
+        if !realtime
+            .0
+            .lock()
+            .expect("rename store is not poisoned")
+            .is_empty()
+        {
+            break;
+        }
+        tokio::task::yield_now().await;
+    }
+
+    assert_eq!(
+        repo.get(session).await.expect("get session").name,
+        "Fix Flaky Tests"
+    );
+    assert_eq!(
+        realtime
+            .0
+            .lock()
+            .expect("rename store is not poisoned")
+            .as_slice(),
+        &[AgentSessionRenamed {
+            agent_session_id: session,
+            name: "Fix Flaky Tests".to_owned(),
+        }]
+    );
 }
 
 /// Any protocol frame will do: the service only stores it, turn detection is

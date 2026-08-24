@@ -49,7 +49,12 @@ export function AgentSplitHeader(props: {
   // against a placeholder and keeps reporting it (see `Block.tsx`), so the
   // block id is the one thing here that is not a shareable session id.
   const { sessionId } = useAgentSession();
-  const title = () => props.title ?? harnessTitle(props.session?.harness);
+  const title = () => {
+    const persistedName = props.session?.name;
+    if (persistedName && persistedName !== 'Agent Session')
+      return persistedName;
+    return props.title ?? persistedName ?? harnessTitle(props.session?.harness);
+  };
   const originThreadDrawer = useDrawerControl(ORIGIN_THREAD_DRAWER_ID);
 
   const copyLink = async () => {

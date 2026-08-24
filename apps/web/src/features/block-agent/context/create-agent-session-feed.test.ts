@@ -15,6 +15,14 @@ const worker = vi.hoisted(() => ({
   messages: [] as FoldedMessage[],
   /** Events the next `pushSessionEntries` resolves with. */
   pushed: [] as { kind: string; message: FoldedMessage }[],
+  getSession: async () => ({
+    isErr: () => false,
+    value: {
+      id: 'session',
+      name: 'Agent Session',
+      harness: 'claude-code',
+    },
+  }),
 }));
 
 const emptyMetadata = {
@@ -40,10 +48,7 @@ vi.mock('@core/agent-fold/client', () => ({
 
 vi.mock('@service-agent-harness/client', () => ({
   agentHarnessServiceClient: {
-    get: vi.fn(async () => ({
-      isErr: () => false,
-      value: { id: 'session', harness: 'claude-code' },
-    })),
+    get: vi.fn(() => worker.getSession()),
     getLog: vi.fn(async () => ({
       isErr: () => false,
       value: { bot: { id: 'bot', name: 'Agent' }, entries: [] },
@@ -74,6 +79,14 @@ describe('createAgentSessionFeed live updates', () => {
   beforeEach(() => {
     worker.messages = [];
     worker.pushed = [];
+    worker.getSession = async () => ({
+      isErr: () => false,
+      value: {
+        id: 'session',
+        name: 'Agent Session',
+        harness: 'claude-code',
+      },
+    });
     vi.resetModules();
   });
 
@@ -108,6 +121,57 @@ describe('createAgentSessionFeed live updates', () => {
     // The acquisition's snapshot metadata and bot land on the feed.
     expect(feed.metadata()?.title).toBe('Fixture session');
     expect(feed.bot()?.name).toBe('Agent');
+  });
+
+  it('applies a persisted session rename without refetching', async () => {
+    const { createAgentSessionFeed } = await import(
+      './create-agent-session-feed'
+    );
+    const { handleAgentSessionRenamed } = await import(
+      '@queries/agent-session/session-metadata-sync'
+    );
+    const feed = createRoot(() => createAgentSessionFeed(() => 'session'));
+    await flush();
+
+    expect(feed.session()?.name).toBe('Agent Session');
+    handleAgentSessionRenamed({
+      agentSessionId: 'session',
+      name: 'Fix Flaky Tests',
+    });
+    expect(feed.session()?.name).toBe('Fix Flaky Tests');
+  });
+
+  it('does not let an in-flight stale fetch overwrite a rename', async () => {
+    let resolveSession!: (
+      value: Awaited<ReturnType<typeof worker.getSession>>
+    ) => void;
+    worker.getSession = () =>
+      new Promise((resolve) => {
+        resolveSession = resolve;
+      });
+    const { createAgentSessionFeed } = await import(
+      './create-agent-session-feed'
+    );
+    const { handleAgentSessionRenamed } = await import(
+      '@queries/agent-session/session-metadata-sync'
+    );
+    const feed = createRoot(() => createAgentSessionFeed(() => 'session'));
+
+    handleAgentSessionRenamed({
+      agentSessionId: 'session',
+      name: 'Fix Flaky Tests',
+    });
+    resolveSession!({
+      isErr: () => false,
+      value: {
+        id: 'session',
+        name: 'Agent Session',
+        harness: 'claude-code',
+      },
+    });
+    await flush();
+
+    expect(feed.session()?.name).toBe('Fix Flaky Tests');
   });
 
   it('replaces a streaming message in place as it grows', async () => {

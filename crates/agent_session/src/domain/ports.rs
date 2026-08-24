@@ -173,6 +173,9 @@ pub trait AgentSessionRepo: Send + Sync + 'static {
     fn set_model(&self, id: AgentSessionId, model: &str)
     -> impl Future<Output = Result<()>> + Send;
 
+    /// Persist the user-facing session name. Idempotent.
+    fn set_name(&self, id: AgentSessionId, name: &str) -> impl Future<Output = Result<()>> + Send;
+
     /// Delete an agent session by id.
     fn delete(&self, id: AgentSessionId) -> impl Future<Output = Result<()>> + Send;
 }
@@ -217,6 +220,38 @@ pub trait AgentSessionRealtime {
         &self,
         event: LogAppended,
     ) -> impl Future<Output = Result<(), rootcause::Report>> + Send;
+
+    /// Publish a user-facing name change to the session's viewers.
+    fn publish_renamed(
+        &self,
+        _event: AgentSessionRenamed,
+    ) -> impl Future<Output = Result<(), rootcause::Report>> + Send {
+        async { Ok(()) }
+    }
+}
+
+/// Generates a concise display name from a session's first prompt.
+pub trait AgentSessionNameGenerator: Send + Sync + 'static {
+    /// Generate a name, or `None` when naming is disabled for this service.
+    fn generate_name(
+        &self,
+        session: &AgentSession,
+        initial_prompt: &str,
+    ) -> impl Future<Output = Result<Option<String>, rootcause::Report>> + Send;
+}
+
+/// Disables automatic agent-session naming.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct NoOpAgentSessionNameGenerator;
+
+impl AgentSessionNameGenerator for NoOpAgentSessionNameGenerator {
+    async fn generate_name(
+        &self,
+        _session: &AgentSession,
+        _initial_prompt: &str,
+    ) -> Result<Option<String>, rootcause::Report> {
+        Ok(None)
+    }
 }
 
 /// An [`AgentSessionRealtime`] that streams nowhere.

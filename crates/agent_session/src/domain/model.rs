@@ -14,6 +14,9 @@ pub use agent_fold::domain::model::{
     Author, AuthorKind, FoldEvent, MessageId, OwnedFoldEvent, TurnId,
 };
 
+/// Display name assigned to a newly created agent session.
+pub const DEFAULT_AGENT_SESSION_NAME: &str = "Agent Session";
+
 #[derive(Debug, Clone, Default, strum::AsRefStr)]
 #[strum(serialize_all = "snake_case")]
 pub enum SessionStatus {
@@ -54,6 +57,8 @@ pub struct CreateAgentSessionParams {
 pub struct AgentSession {
     /// id of the agent session
     pub id: AgentSessionId,
+    /// User-facing session name.
+    pub name: String,
     /// The user who created and owns the session. Immutable for its life.
     pub owner_id: MacroUserIdStr<'static>,
     /// The root message where the bot was originally invoked, if any.
@@ -82,6 +87,15 @@ pub struct AgentSession {
     pub status: SessionStatus,
     pub created_at: DateTime<Utc>,
     pub modified_at: DateTime<Utc>,
+}
+
+/// A persisted agent-session name changed and should be shown to live viewers.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AgentSessionRenamed {
+    /// Renamed session.
+    pub agent_session_id: AgentSessionId,
+    /// New user-facing name.
+    pub name: String,
 }
 
 /// The agent behind a session, as much of it as rendering a message needs.

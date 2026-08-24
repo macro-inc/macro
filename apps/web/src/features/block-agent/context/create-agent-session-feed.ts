@@ -11,6 +11,7 @@
  */
 
 import { acquireAgentSessionFold } from '@queries/agent-session/session-fold';
+import { subscribeAgentSessionRenamed } from '@queries/agent-session/session-metadata-sync';
 import type {
   FoldedMessage,
   SessionMetadata,
@@ -101,13 +102,14 @@ export function createAgentSessionFeed(
   // acquisition or the shared fold leaks a reference.
   let generation = 0;
   let closed = false;
+  let latestRename: { agentSessionId: string; name: string } | undefined;
   onCleanup(() => {
     closed = true;
     release?.();
     release = undefined;
   });
 
-  const [resource] = createResource(sessionId, async (id) => {
+  const [resource, { mutate }] = createResource(sessionId, async (id) => {
     const run = ++generation;
     const superseded = () => closed || generation !== run;
 
@@ -141,8 +143,20 @@ export function createAgentSessionFeed(
       upsert(fold.messages);
     });
 
-    return session.value;
+    return latestRename?.agentSessionId === id
+      ? { ...session.value, name: latestRename.name }
+      : session.value;
   });
+
+  onCleanup(
+    subscribeAgentSessionRenamed((event) => {
+      if (event.agentSessionId !== sessionId()) return;
+      latestRename = event;
+      mutate((session) =>
+        session ? { ...session, name: event.name } : session
+      );
+    })
+  );
 
   const messages = () => list;
   // A user-authored tail means a prompt is awaiting its reply — except when

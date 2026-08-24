@@ -4,9 +4,8 @@
  * agent_harness_service
  * OpenAPI spec version: 0.1.0
  */
-
-import type { AgentSessionLogEntryDtoAllOf } from './agentSessionLogEntryDtoAllOf';
 import type { LogFrameDto } from './logFrameDto';
+import type { AgentSessionLogEntryDtoAllOf } from './agentSessionLogEntryDtoAllOf';
 
 /**
  * One entry of a session's protocol log.

@@ -244,6 +244,7 @@ dependencies = [
  "agent_runtime_protocol",
  "agent_session",
  "agent_trigger",
+ "ai_usage",
  "anyhow",
  "aws-sdk-secretsmanager",
  "aws-sdk-sqs",
@@ -307,9 +308,11 @@ dependencies = [
 name = "agent_session"
 version = "0.1.0"
 dependencies = [
+ "agent",
  "agent-client-protocol",
  "agent_fold",
  "agent_runtime_protocol",
+ "ai_usage",
  "anyhow",
  "axum",
  "bot_id",

@@ -32,6 +32,7 @@ use agent_session::inbound::axum_router::{
     AgentSessionControlState, AgentSessionRouterState, CreateSessionState,
 };
 use agent_session::outbound::connection_gateway_realtime::ConnectionGatewayAgentSessionRealtime;
+use agent_session::outbound::name_generator::HaikuAgentSessionNameGenerator;
 use agent_session::outbound::postgres::PgAgentSessionRepo;
 use agent_trigger::domain::broker_events::AgentSessionMacroEvent;
 use anyhow::Context as _;
@@ -121,7 +122,10 @@ async fn main() -> anyhow::Result<()> {
             connection_gateway.clone(),
             session_repo.clone(),
         ),
-    );
+    )
+    .with_name_generator(HaikuAgentSessionNameGenerator::new(ai_usage::pg_recorder(
+        pool.clone(),
+    )));
 
     // Containers: local Docker when a developer has opted in, Daytona otherwise.
     let containers = if config.dev_dangerous_local_containers {
