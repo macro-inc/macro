@@ -891,7 +891,7 @@ export function createQuickAccessValue(): QuickAccessContextValue {
               profile: 'quick-access-v1',
               buckets,
               query,
-              limit: 500,
+              limit: query.trim() ? 500 : 50,
             });
             const missingDocuments = page.documents.filter(({ recordKey }) => {
               const separator = recordKey.indexOf(':');
