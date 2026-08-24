@@ -9,15 +9,15 @@ import { Button, cn } from '@ui';
 import { createSignal, onCleanup, Show } from 'solid-js';
 import { getCallJoinTab, getCallLeaveTab } from './call-tabs';
 import {
+  clampSlideOffset,
   isHorizontalSlide,
   isSlideDownArmed,
-  SLIDE_HINT_TIMEOUT_MS,
   SLIDE_KNOB_SIZE_PX,
   SLIDE_RETURN_MS,
+  SLIDE_REVEAL_MS,
   SLIDE_SLOT_PADDING_PX,
   SLIDE_TO_CALL_DISTANCE_PX,
   slideDownFraction,
-  slideDownProgress,
 } from './slide-down-call';
 import { useCall } from './use-call';
 
@@ -100,23 +100,21 @@ function SlideDownCallButton(props: {
   onCall: () => void | Promise<void>;
 }) {
   const [offset, setOffset] = createSignal(0);
-  const [dragging, setDragging] = createSignal(false);
-  const [trackRevealed, setTrackRevealed] = createSignal(false);
-  const [placing, setPlacing] = createSignal(false);
+  // The slot exists only while the knob is held: letting go puts it away.
+  const [holding, setHolding] = createSignal(false);
 
   let knobWrapper: HTMLDivElement | undefined;
   let gesture: SlideGesture | null = null;
-  let placingTimer: number | undefined;
-  let hintTimer: number | undefined;
 
-  const trackVisible = () => dragging() || trackRevealed();
   const armed = () => isSlideDownArmed(offset());
   const traveled = () => slideDownFraction(offset());
   const verb = () => (props.callInProgress ? 'join' : 'call');
 
-  // Anything the finger drives runs at 0ms while dragging and eases home on
-  // release. Every animated part shares this so they settle together.
-  const settleDuration = () => (dragging() ? '0ms' : `${SLIDE_RETURN_MS}ms`);
+  // Anything the finger drives tracks it exactly, then eases home together on
+  // release. The slot opens faster than it settles so grabbing feels immediate.
+  const settleDuration = () => (holding() ? '0ms' : `${SLIDE_RETURN_MS}ms`);
+  const openDuration = () =>
+    holding() ? `${SLIDE_REVEAL_MS}ms` : `${SLIDE_RETURN_MS}ms`;
 
   /**
    * Where the knob is actually painted, which lags `offset` while the release
@@ -129,17 +127,6 @@ function SlideDownCallButton(props: {
     return new DOMMatrixReadOnly(transform).m42;
   };
 
-  const revealTrack = () => {
-    window.clearTimeout(hintTimer);
-    hintTimer = window.setTimeout(
-      () => setTrackRevealed(false),
-      SLIDE_HINT_TIMEOUT_MS
-    );
-    if (trackRevealed()) return;
-    setTrackRevealed(true);
-    hapticImpact('light');
-  };
-
   const stopListening = () => {
     window.removeEventListener('pointermove', onPointerMove);
     window.removeEventListener('pointerup', onPointerUp);
@@ -150,24 +137,9 @@ function SlideDownCallButton(props: {
     const active = gesture;
     gesture = null;
     stopListening();
-    setDragging(false);
+    setHolding(false);
     setOffset(0);
-    if (!active) return;
-    if (complete) {
-      window.clearTimeout(hintTimer);
-      setTrackRevealed(false);
-      // Hold the confirmed look until the knob has travelled home, so placing
-      // the call does not flicker back to the resting style mid-flight.
-      window.clearTimeout(placingTimer);
-      setPlacing(true);
-      placingTimer = window.setTimeout(
-        () => setPlacing(false),
-        SLIDE_RETURN_MS
-      );
-      void props.onCall();
-      return;
-    }
-    revealTrack();
+    if (active && complete) void props.onCall();
   };
 
   const onPointerMove = (event: PointerEvent) => {
@@ -178,10 +150,9 @@ function SlideDownCallButton(props: {
       endGesture(false);
       return;
     }
-    const progress = slideDownProgress(dy);
-    if (progress.revealTrack) revealTrack();
-    if (progress.armed && !armed()) hapticImpact('medium');
-    setOffset(progress.offset);
+    const next = clampSlideOffset(dy);
+    if (isSlideDownArmed(next) && !armed()) hapticImpact('medium');
+    setOffset(next);
   };
 
   const onPointerUp = (event: PointerEvent) => {
@@ -203,17 +174,15 @@ function SlideDownCallButton(props: {
     event.preventDefault();
     event.stopPropagation();
 
-    window.clearTimeout(placingTimer);
-    setPlacing(false);
-
     const painted = paintedOffset();
     gesture = {
       pointerId: event.pointerId,
       startX: event.clientX,
       originY: event.clientY - painted,
     };
-    setDragging(true);
+    setHolding(true);
     setOffset(painted);
+    hapticImpact('light');
     // Capture so a release outside the window still ends the gesture.
     knobWrapper?.setPointerCapture?.(event.pointerId);
     window.addEventListener('pointermove', onPointerMove, { passive: false });
@@ -221,11 +190,7 @@ function SlideDownCallButton(props: {
     window.addEventListener('pointercancel', onPointerCancel);
   };
 
-  onCleanup(() => {
-    stopListening();
-    window.clearTimeout(placingTimer);
-    window.clearTimeout(hintTimer);
-  });
+  onCleanup(stopListening);
 
   const onKeyDown = (event: KeyboardEvent) => {
     if (event.key !== 'Enter' && event.key !== ' ') return;
@@ -239,29 +204,26 @@ function SlideDownCallButton(props: {
   return (
     <div class="relative isolate">
       {/* The slot the knob slides down. It stays inside the knob's own column
-          and grows downward out of the header island, so revealing it never
-          eats into the island's silhouette. */}
+          and grows downward out of the header island, so opening it never eats
+          into the island's silhouette. */}
       <div
         aria-hidden="true"
         class={cn(
-          'absolute inset-x-0 top-0 z-0 overflow-hidden rounded-full',
+          'pointer-events-none absolute inset-x-0 top-0 z-0 overflow-hidden rounded-full',
           'bg-inset ring ring-edge-muted ring-inset',
           // Palette-independent depth cue: `inset` and `chrome` sit within a
           // step of each other in the shipped ramps, so colour alone does not
           // read as a recess.
           'shadow-[inset_0_2px_6px_oklch(0_0_0/0.45)]',
           'transition-[height,opacity] ease-out',
-          trackVisible()
-            ? 'pointer-events-auto touch-none opacity-100'
-            : 'pointer-events-none opacity-0'
+          holding() ? 'opacity-100' : 'opacity-0'
         )}
         style={{
-          height: trackVisible()
+          height: holding()
             ? `calc(100% + ${SLIDE_SLOT_PADDING_PX + SLIDE_TO_CALL_DISTANCE_PX}px)`
             : '100%',
-          'transition-duration': `${SLIDE_RETURN_MS}ms`,
+          'transition-duration': openDuration(),
         }}
-        on:pointerdown={onPointerDown}
       >
         {/* Travelled distance. Runs past the knob's top edge to its centre so
             the knob always covers the seam and the two read as one shape. */}
@@ -302,9 +264,9 @@ function SlideDownCallButton(props: {
             'bg-dialog text-xs leading-none font-medium text-ink',
             'ring ring-edge-muted shadow-lg shadow-drop-shadow',
             'transition-opacity ease-out',
-            trackVisible() ? 'opacity-100' : 'opacity-0'
+            holding() ? 'opacity-100' : 'opacity-0'
           )}
-          style={{ 'transition-duration': `${SLIDE_RETURN_MS}ms` }}
+          style={{ 'transition-duration': openDuration() }}
         >
           {/* Both strings share one grid cell so the chip keeps a single width
               and cannot jitter as the threshold is crossed. */}
@@ -330,7 +292,7 @@ function SlideDownCallButton(props: {
       {/* Kept mounted so the live region is in the accessibility tree before
           its text changes; a region inserted with its text is not announced. */}
       <span class="sr-only" role="status">
-        {!trackVisible()
+        {!holding()
           ? ''
           : armed()
             ? `Release to ${verb()}`
@@ -359,11 +321,11 @@ function SlideDownCallButton(props: {
           disabled={props.joining}
           class={cn(
             'touch-none select-none rounded-full',
+            // The confirmed colour fades out over the return, so the knob is
+            // never left green once everything else has settled.
             'transition-[background-color,color] ease-out',
-            // Solid only while sliding: at rest this stays an ordinary
-            // header-island icon button.
-            (armed() || placing()) && 'bg-success text-surface',
-            !armed() && !placing() && trackVisible() && 'bg-ink text-surface'
+            armed() && 'bg-success text-surface',
+            !armed() && holding() && 'bg-ink text-surface'
           )}
           style={{ 'transition-duration': `${SLIDE_RETURN_MS}ms` }}
           onKeyDown={onKeyDown}

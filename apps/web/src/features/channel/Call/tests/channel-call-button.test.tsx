@@ -144,16 +144,19 @@ describe('ChannelCallButton', () => {
     expect(hintText()).toBe('');
   });
 
-  it('reveals the slide hint after a tap that does not complete the gesture', () => {
+  it('shows the slide hint only while the knob is held', () => {
     mocks.touch = true;
     renderButton();
 
     const button = callButton();
     dispatchPointer(button, 'pointerdown', { clientY: 40 });
+    expect(hintText()).toBe('Slide the call button down to call');
+
     dispatchPointer(window, 'pointerup', { clientY: 40 });
 
     expect(mocks.joinCall).not.toHaveBeenCalled();
-    expect(hintText()).toBe('Slide the call button down to call');
+    // Letting go puts the slot away immediately rather than leaving a hint up.
+    expect(hintText()).toBe('');
   });
 
   it('starts a call after sliding down about an inch', async () => {
@@ -220,8 +223,7 @@ describe('ChannelCallButton', () => {
     });
 
     expect(mocks.joinCall).not.toHaveBeenCalled();
-    // A cancel leaves the hint up rather than placing the call.
-    expect(hintText()).toBe('Slide the call button down to call');
+    expect(hintText()).toBe('');
   });
 
   it('ignores a second pointer landing mid-slide', async () => {

@@ -1,41 +1,27 @@
 import { describe, expect, it } from 'vitest';
 import {
+  clampSlideOffset,
   isHorizontalSlide,
   isSlideDownArmed,
   SLIDE_TO_CALL_DISTANCE_PX,
   slideDownFraction,
-  slideDownProgress,
 } from '../slide-down-call';
 
-describe('slideDownProgress', () => {
-  it('clamps upward movement to rest', () => {
-    expect(slideDownProgress(-20)).toEqual({
-      offset: 0,
-      revealTrack: false,
-      armed: false,
-    });
+describe('clampSlideOffset', () => {
+  it('ignores upward movement', () => {
+    expect(clampSlideOffset(-20)).toBe(0);
+    expect(clampSlideOffset(0)).toBe(0);
   });
 
-  it('does not reveal the track for a tap or tiny nudge', () => {
-    expect(slideDownProgress(0).revealTrack).toBe(false);
-    expect(slideDownProgress(4).revealTrack).toBe(false);
+  it('tracks downward movement one to one', () => {
+    expect(clampSlideOffset(12)).toBe(12);
+    expect(clampSlideOffset(SLIDE_TO_CALL_DISTANCE_PX)).toBe(
+      SLIDE_TO_CALL_DISTANCE_PX
+    );
   });
 
-  it('reveals the track after a short downward drag', () => {
-    expect(slideDownProgress(12)).toEqual({
-      offset: 12,
-      revealTrack: true,
-      armed: false,
-    });
-  });
-
-  it('arms the call after dragging about an inch', () => {
-    expect(slideDownProgress(SLIDE_TO_CALL_DISTANCE_PX)).toEqual({
-      offset: SLIDE_TO_CALL_DISTANCE_PX,
-      revealTrack: true,
-      armed: true,
-    });
-    expect(slideDownProgress(SLIDE_TO_CALL_DISTANCE_PX + 40).offset).toBe(
+  it('clamps overshoot to the end of the track', () => {
+    expect(clampSlideOffset(SLIDE_TO_CALL_DISTANCE_PX + 40)).toBe(
       SLIDE_TO_CALL_DISTANCE_PX
     );
   });
