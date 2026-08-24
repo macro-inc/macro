@@ -142,22 +142,15 @@
         ]
       },
       {
-        "group": "Bots",
-        "icon": "bot",
+        "group": "Connections",
         "pages": [
-          {
-            "group": "Bring Your Own Agent",
-            "icon": "plug",
-            "pages": [
-              "integrations/hermes"
-            ]
-          }
+          "integrations/github"
         ]
       },
       {
         "group": "Integrations",
         "pages": [
-          "integrations/github"
+          "integrations/agents"
         ]
       },
       {
