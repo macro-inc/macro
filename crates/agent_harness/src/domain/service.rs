@@ -22,7 +22,7 @@ use tracing::instrument::WithSubscriber as _;
 use crate::domain::error::{HarnessError, Result};
 use crate::domain::model::{
     AgentKind, AnnounceOrigin, AnnouncePrompt, DeliverAction, HarnessCommand, HarnessDefaults,
-    OpenSession, SessionAnnouncement, SpawnContainer,
+    OpenSession, SessionAnnouncement, SpawnContainer, is_macro_staff,
 };
 use crate::domain::ports::{ContainerManager, RuntimeConnections, SessionAnnouncer};
 use crate::domain::sandbox::SandboxResizeEffect;
@@ -418,6 +418,26 @@ where
     Runtimes: RuntimeConnections,
 {
     async fn execute(&self, session_id: AgentSessionId, command: HarnessCommand) -> Result<()> {
+        match &command {
+            HarnessCommand::Open(open)
+                if AgentKind::of(open.bot_id) == AgentKind::Cursor
+                    && !is_macro_staff(&open.origin.sender) =>
+            {
+                return Err(AgentSessionError::Forbidden.into());
+            }
+            HarnessCommand::Deliver(deliver) => {
+                let session = self.sessions.get_session(session_id).await?;
+                if AgentKind::of(session.bot_id) == AgentKind::Cursor
+                    && !deliver.actor.as_ref().is_some_and(is_macro_staff)
+                {
+                    return Err(AgentSessionError::Forbidden.into());
+                }
+            }
+            HarnessCommand::Open(_)
+            | HarnessCommand::SetSandboxSize(_)
+            | HarnessCommand::Delete => {}
+        }
+
         match command {
             HarnessCommand::Open(command) => self.open(session_id, command).await,
             HarnessCommand::Deliver(command) => self.deliver(session_id, command).await,

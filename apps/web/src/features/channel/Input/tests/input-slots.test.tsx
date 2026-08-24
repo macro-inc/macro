@@ -4,8 +4,8 @@
 
 import { render as renderBare, screen } from '@solidjs/testing-library';
 import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
-import type { JSX } from 'solid-js';
 import userEvent from '@testing-library/user-event';
+import type { JSX } from 'solid-js';
 import { describe, expect, it, vi } from 'vitest';
 
 vi.hoisted(() => {
@@ -27,6 +27,10 @@ vi.hoisted(() => {
 vi.mock('@core/util/upload', () => ({
   chatRuleset: {},
   uploadFile: vi.fn(),
+}));
+
+vi.mock('@core/cursor/flag', () => ({
+  useCursorAgentsAccess: () => () => true,
 }));
 
 // Several service clients in StaticMarkdown's import graph build websocket

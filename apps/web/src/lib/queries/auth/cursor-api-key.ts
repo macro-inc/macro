@@ -3,6 +3,7 @@ import { queryClient } from '@queries/client';
 import { authServiceClient } from '@service-auth/client';
 import type { CursorApiKeyStatus } from '@service-auth/generated/schemas';
 import { useMutation, useQuery } from '@tanstack/solid-query';
+import type { Accessor } from 'solid-js';
 
 import { authKeys } from './keys';
 
@@ -32,16 +33,19 @@ export function useCursorApiKeyStatusQuery(options?: {
    */
   neverSuspend?: boolean;
   /**
-   * Skip the request entirely. The composer passes the `@cursor` feature flag,
-   * so users without it never pay for a query whose answer they cannot use.
+   * Skip the request entirely. The composer passes its feature-flag and staff
+   * access gate, so users without access never pay for this query.
    */
-  enabled?: boolean;
+  enabled?: boolean | Accessor<boolean>;
 }) {
   return useQuery(() => ({
     queryKey: authKeys.cursorApiKeyStatus.queryKey,
     queryFn: async () =>
       throwOnErr(async () => await authServiceClient.getCursorApiKeyStatus()),
-    enabled: options?.enabled ?? true,
+    enabled:
+      typeof options?.enabled === 'function'
+        ? options.enabled()
+        : (options?.enabled ?? true),
     placeholderData: options?.neverSuspend ? NOT_CONNECTED : undefined,
   }));
 }

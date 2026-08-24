@@ -29,6 +29,10 @@ vi.mock('@core/util/upload', () => ({
   uploadFile: vi.fn(),
 }));
 
+vi.mock('@core/cursor/flag', () => ({
+  useCursorAgentsAccess: () => () => true,
+}));
+
 // Several service clients in StaticMarkdown's import graph build websocket
 // connections at module scope, which jsdom cannot do. Stub the builder so
 // every module-scope socket is inert.

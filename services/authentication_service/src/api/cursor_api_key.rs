@@ -14,8 +14,12 @@ use axum::{
     Router,
     routing::{delete, get, put},
 };
+use macro_user_id::{email::ReadEmailParts, user_id::MacroUserIdStr};
 
 use crate::api::context::ApiContext;
+
+#[cfg(test)]
+mod test;
 
 pub(in crate::api) mod delete_cursor_api_key;
 pub(in crate::api) mod get_cursor_api_key;
@@ -27,6 +31,13 @@ pub fn router() -> Router<ApiContext> {
         .route("/", get(get_cursor_api_key::handler))
         .route("/", put(put_cursor_api_key::handler))
         .route("/", delete(delete_cursor_api_key::handler))
+}
+
+fn require_macro_staff(user_id: &MacroUserIdStr<'_>) -> Result<(), CursorApiKeyError> {
+    if user_id.email_part().domain_part() != "macro.com" {
+        return Err(CursorApiKeyError::NotMacroStaff);
+    }
+    Ok(())
 }
 
 /// What settings needs to render the Cursor connection.
@@ -57,9 +68,9 @@ pub enum CursorApiKeyError {
     /// This deployment has no KMS key configured for Cursor keys.
     #[error("this deployment does not accept Cursor API keys")]
     Unavailable,
-    /// The caller's user id could not be read.
-    #[error("unable to parse user id")]
-    InvalidMacroUserId,
+    /// Cursor agents are currently restricted to Macro staff.
+    #[error("Cursor agents are only available to Macro staff")]
+    NotMacroStaff,
     /// Encryption or persistence failed.
     #[error("internal error")]
     Internal,
@@ -73,7 +84,7 @@ impl axum::response::IntoResponse for CursorApiKeyError {
             Self::MalformedKey => StatusCode::BAD_REQUEST,
             // Not "forbidden": the caller is allowed, the deployment cannot.
             Self::Unavailable => StatusCode::SERVICE_UNAVAILABLE,
-            Self::InvalidMacroUserId => StatusCode::BAD_REQUEST,
+            Self::NotMacroStaff => StatusCode::FORBIDDEN,
             Self::Internal => StatusCode::INTERNAL_SERVER_ERROR,
         };
         // `to_string` and nothing else: every variant's message is written to

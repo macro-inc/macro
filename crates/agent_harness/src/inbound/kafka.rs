@@ -11,11 +11,10 @@ use agent_trigger::domain::broker_events::{
     AgentTriggerTopicEvent, ChannelEventMetadata, ExistingAgentSessionEvent, NewAgentSessionEvent,
 };
 use bot_id::BotId;
-use macro_user_id::email::ReadEmailParts;
 
 use crate::domain::model::{
     AgentKind, AnnounceOrigin, AnnouncePrompt, DeliverAction, HarnessCommand, MentionOrigin,
-    OpenSession,
+    OpenSession, is_macro_staff,
 };
 
 #[cfg(test)]
@@ -45,14 +44,6 @@ pub enum Skipped {
     Unrecognized,
     /// We are in beta and only allow Macro employees to use this new harness system.
     NotMacroStaff,
-}
-
-/// Whether a sender may drive the managed harnesses at all.
-///
-/// Exact domain match, not a suffix test: `domain_part` is the parsed
-/// domain, so nothing an attacker appends can satisfy it.
-fn is_macro_staff(sender: &macro_user_id::user_id::MacroUserIdStr<'_>) -> bool {
-    sender.email_part().lowercase().domain_part() == "macro.com"
 }
 
 /// Route one trigger event: work for this deployment, or a reason it was

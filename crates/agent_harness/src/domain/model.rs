@@ -4,6 +4,7 @@ use agent_runtime_protocol::domain::action::{AgentAction, AgentActionId};
 use agent_session::domain::model::{AgentSessionId, MessageId, SandboxSize};
 use agent_session::domain::ports::ControlEvent;
 use bot_id::BotId;
+use macro_user_id::email::ReadEmailParts;
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
 
@@ -85,6 +86,11 @@ impl AgentKind {
     pub fn is_managed(self) -> bool {
         !matches!(self, Self::External)
     }
+}
+
+/// Whether a user belongs to the Macro staff domain.
+pub(crate) fn is_macro_staff(user: &MacroUserIdStr<'_>) -> bool {
+    user.email_part().domain_part() == "macro.com"
 }
 
 /// Where a prompt came from, when it came from somewhere the session should

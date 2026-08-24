@@ -86,10 +86,18 @@ export type getCursorApiKeyResponse401 = {
   status: 401;
 };
 
+export type getCursorApiKeyResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
 export type getCursorApiKeyResponseSuccess = getCursorApiKeyResponse200 & {
   headers: Headers;
 };
-export type getCursorApiKeyResponseError = getCursorApiKeyResponse401 & {
+export type getCursorApiKeyResponseError = (
+  | getCursorApiKeyResponse401
+  | getCursorApiKeyResponse403
+) & {
   headers: Headers;
 };
 
@@ -141,6 +149,11 @@ export type putCursorApiKeyResponse401 = {
   status: 401;
 };
 
+export type putCursorApiKeyResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
 export type putCursorApiKeyResponse503 = {
   data: ErrorResponse;
   status: 503;
@@ -152,6 +165,7 @@ export type putCursorApiKeyResponseSuccess = putCursorApiKeyResponse200 & {
 export type putCursorApiKeyResponseError = (
   | putCursorApiKeyResponse400
   | putCursorApiKeyResponse401
+  | putCursorApiKeyResponse403
   | putCursorApiKeyResponse503
 ) & {
   headers: Headers;
@@ -205,11 +219,19 @@ export type deleteCursorApiKeyResponse401 = {
   status: 401;
 };
 
+export type deleteCursorApiKeyResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
 export type deleteCursorApiKeyResponseSuccess =
   deleteCursorApiKeyResponse200 & {
     headers: Headers;
   };
-export type deleteCursorApiKeyResponseError = deleteCursorApiKeyResponse401 & {
+export type deleteCursorApiKeyResponseError = (
+  | deleteCursorApiKeyResponse401
+  | deleteCursorApiKeyResponse403
+) & {
   headers: Headers;
 };
 

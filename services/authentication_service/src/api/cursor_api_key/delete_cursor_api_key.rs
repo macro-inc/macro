@@ -1,8 +1,7 @@
 use axum::{Json, extract::State};
-use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
-use macro_user_id::user_id::MacroUserId;
+use macro_authorization::{MacroAuthorizationExtractor, UserOnly};
 
-use super::{CursorApiKeyError, CursorApiKeyStatus};
+use super::{CursorApiKeyError, CursorApiKeyStatus, require_macro_staff};
 use crate::api::context::{ApiContext, AuthorizationService};
 
 /// Forgets the caller's Cursor API key.
@@ -20,17 +19,16 @@ use crate::api::context::{ApiContext, AuthorizationService};
     responses(
         (status = 200, body = CursorApiKeyStatus),
         (status = 401, body = String),
+        (status = 403, body = model::response::ErrorResponse),
     )
 )]
-#[tracing::instrument(skip(ctx, user_context), err, fields(user_id = user_context.authorization.user.user_context.user_id))]
+#[tracing::instrument(skip(ctx, user_context), err, fields(user_id = %user_context.authorization.macro_user_id))]
 pub async fn handler(
     State(ctx): State<ApiContext>,
-    user_context: MacroAuthorizationExtractor<AuthorizationService, UserOrInternal>,
+    user_context: MacroAuthorizationExtractor<AuthorizationService, UserOnly>,
 ) -> Result<Json<CursorApiKeyStatus>, CursorApiKeyError> {
-    let user_id =
-        MacroUserId::parse_from_str(&user_context.authorization.user.user_context.user_id)
-            .map_err(|_| CursorApiKeyError::InvalidMacroUserId)?
-            .lowercase();
+    let user_id = &user_context.authorization.macro_user_id;
+    require_macro_staff(user_id)?;
 
     cursor_api_key::store::delete_cursor_api_key(&ctx.db, user_id.as_ref())
         .await

@@ -1,4 +1,5 @@
 import { ENABLE_EMAIL } from '@core/constant/featureFlags';
+import { useCursorAgentsAccess } from '@core/cursor/flag';
 import { usePipedreamMcpFlag } from '@core/pipedream/flag';
 import { Show, Suspense } from 'solid-js';
 import { CursorCard } from './Cursor';
@@ -15,6 +16,7 @@ import { SettingsPage, SettingsSection } from './primitives';
  */
 export function ConnectedAccounts() {
   const pipedreamMcp = usePipedreamMcpFlag();
+  const canUseCursor = useCursorAgentsAccess();
   return (
     <SettingsPage
       title="Connections"
@@ -30,9 +32,11 @@ export function ConnectedAccounts() {
           <Suspense>
             <GitHubCard />
           </Suspense>
-          <Suspense>
-            <CursorCard />
-          </Suspense>
+          <Show when={canUseCursor()}>
+            <Suspense>
+              <CursorCard />
+            </Suspense>
+          </Show>
         </div>
       </SettingsSection>
       <Suspense>

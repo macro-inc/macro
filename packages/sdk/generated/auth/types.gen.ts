@@ -988,6 +988,7 @@ export type DeleteCursorApiKeyData = {
 
 export type DeleteCursorApiKeyErrors = {
     401: string;
+    403: ErrorResponse;
 };
 
 export type DeleteCursorApiKeyError = DeleteCursorApiKeyErrors[keyof DeleteCursorApiKeyErrors];
@@ -1007,6 +1008,7 @@ export type GetCursorApiKeyData = {
 
 export type GetCursorApiKeyErrors = {
     401: string;
+    403: ErrorResponse;
 };
 
 export type GetCursorApiKeyError = GetCursorApiKeyErrors[keyof GetCursorApiKeyErrors];
@@ -1027,6 +1029,7 @@ export type PutCursorApiKeyData = {
 export type PutCursorApiKeyErrors = {
     400: ErrorResponse;
     401: string;
+    403: ErrorResponse;
     503: ErrorResponse;
 };
 

@@ -12,12 +12,9 @@ import {
   updateDragInsertPreviewFromCoordinates,
 } from '@core/component/LexicalMarkdown/utils/dragInsertUtils';
 import { isCursorBotId } from '@core/constant/cursorAgent';
-import {
-  ENABLE_CHAT_V3_AGENTS,
-  ENABLE_CURSOR_AGENTS,
-} from '@core/constant/featureFlags';
+import { ENABLE_CHAT_V3_AGENTS } from '@core/constant/featureFlags';
+import { useCursorAgentsAccess } from '@core/cursor/flag';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
-import { useCursorApiKeyStatusQuery } from '@queries/auth/cursor-api-key';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import type { IUser } from '@core/user/types';
 import { uniqueByKey } from '@core/util/compareUtils';
@@ -28,6 +25,7 @@ import {
   uploadFile,
 } from '@core/util/upload';
 import type { EntityData } from '@entity';
+import { useCursorApiKeyStatusQuery } from '@queries/auth/cursor-api-key';
 import { isIOS } from '@solid-primitives/platform';
 import { CollapsedInput, cn, Surface } from '@ui';
 import { $getRoot } from 'lexical';
@@ -258,13 +256,13 @@ export function ChannelInput(props: ChannelInputProps) {
     queueMicrotask(() => focusEditorNow());
   };
 
-  // `@cursor` runs on the mentioning user's own Cursor API key, so it is only
-  // offered to users who have registered one — mentioning it without a key
-  // could only fail. Never suspends and only fetches when the flag is on: this
-  // decides one optional typeahead entry and must not hold up the composer.
+  // `@cursor` is an internal beta that runs on the mentioning user's own API
+  // key. Never suspend the composer or fetch key status unless both rollout
+  // gates permit this user.
+  const canUseCursor = useCursorAgentsAccess();
   const cursorApiKey = useCursorApiKeyStatusQuery({
     neverSuspend: true,
-    enabled: ENABLE_CURSOR_AGENTS(),
+    enabled: canUseCursor,
   });
 
   // Macro AI and Macro Coder (flag-gated) are mentionable in every channel,
@@ -272,7 +270,12 @@ export function ChannelInput(props: ChannelInputProps) {
   // through the same `@`-mention typeahead as participants and re-tagged as
   // bot mentions at send time.
   const mentionUsers: Accessor<IUser[]> = () => {
-    const base = [...(props.participants?.() ?? []), ...(props.bots?.() ?? [])];
+    const cursorEnabled =
+      canUseCursor() && (cursorApiKey.data?.registered ?? false);
+    const base = [
+      ...(props.participants?.() ?? []),
+      ...(props.bots?.() ?? []),
+    ].filter((user) => cursorEnabled || !isCursorBotId(user.id));
     if (
       ENABLE_CHAT_V3_AGENTS() &&
       !base.some((user) => isMacroCoderId(user.id))
@@ -280,10 +283,9 @@ export function ChannelInput(props: ChannelInputProps) {
       base.unshift(macroCoderMentionUser());
     }
     if (
-      ENABLE_CURSOR_AGENTS() &&
+      cursorEnabled &&
       // Hiding it is not enforcement — a mention can still arrive from a
       // copied message or another client — so the harness refuses these too.
-      cursorApiKey.data?.registered &&
       !base.some((user) => isCursorBotId(user.id))
     ) {
       base.unshift(cursorMentionUser());

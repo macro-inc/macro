@@ -18,6 +18,12 @@ export const CURSOR_BOT_NAME = 'Cursor';
 /** Handle used to find the Cursor bot in the mention typeahead (`@cursor`). */
 export const CURSOR_BOT_HANDLE = 'cursor';
 
+/** Whether an email belongs to a Macro staff account. */
+export function isMacroStaffEmail(email: string | undefined): boolean {
+  const parts = email?.toLowerCase().split('@');
+  return parts?.length === 2 && parts[1] === 'macro.com';
+}
+
 /**
  * Whether an id refers to the Cursor bot. Accepts both the bare UUID and the
  * `bot|<uuid>` participant/sender form.
