@@ -220,6 +220,11 @@ impl Display for MacroEm {
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub(crate) struct Hit<T> {
+    /// Physical index this hit came from, e.g. `documents_v2`. OpenSearch
+    /// sends it on every hit; the unified path dispatches on it rather than
+    /// guessing the entity from the `_source` shape.
+    #[serde(rename = "_index")]
+    pub index: String,
     #[serde(rename = "_score")]
     pub score: Option<f64>,
     #[serde(rename = "_source")]

@@ -301,26 +301,63 @@ pub struct UnifiedProjectSearchArgs {
     pub match_all_tags: bool,
 }
 
-/// Possible search result indices for unified search
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
-#[serde(untagged)]
+/// Possible search result indices for unified search.
+///
+/// Deliberately **not** `#[serde(untagged)]`. `_source` carries no type
+/// discriminator, so an untagged enum had to guess the entity from which
+/// fields happened to be present — first matching variant wins, silently, and
+/// several shapes are subsets of others — a calendar doc carries exactly the
+/// `entity_id`, `name`, and `owner_id` that a project doc requires. The hit's
+/// `_index` is an authoritative discriminator, so [`Self::from_source`] uses
+/// that instead.
+#[derive(Debug)]
 pub(crate) enum UnifiedSearchIndex {
     ChannelMessage(ChannelMessageIndex),
     Document(DocumentIndex),
     Chat(ChatIndex),
     Email(Box<EmailIndex>),
     CallRecord(CallRecordIndex),
-    // Must stay ahead of `Project`. A calendar doc carries `entity_id`, `name`,
-    // and `owner_id` — exactly `ProjectIndex`'s required set — so `Project`
-    // would swallow it if it came first. The reverse cannot happen: this
-    // variant also requires `source_link_id` and `ical_uid`, which no other
-    // index maps. `calendar_hit_wins_over_project_variant` locks the order.
     CalendarEvent(CalendarEventIndex),
-    // Keep last: with `untagged`, earlier variants win, and `ProjectIndex`'s
-    // required set is a subset of several other shapes'. Every variant above
-    // requires at least one field a project doc lacks (document_name,
-    // message_id, channel_id, ical_uid, …).
     Project(ProjectIndex),
+}
+
+impl UnifiedSearchIndex {
+    /// Deserialize a hit's `_source` into the variant its index dictates.
+    ///
+    /// Declaration order is irrelevant here: the index decides, so a doc whose
+    /// fields overlap another entity's shape can never be misfiled. An index
+    /// this crate does not know, or a `_source` that fails to parse as the
+    /// shape its own index promises, is an error rather than a guess.
+    fn from_source(index: &str, source: serde_json::Value) -> Result<Self> {
+        let entity = OpenSearchEntityType::from_index_name(index).ok_or_else(|| {
+            crate::error::OpensearchClientError::Unknown {
+                details: format!("hit from unrecognized index `{index}`"),
+                method: Some("UnifiedSearchIndex::from_source".to_string()),
+            }
+        })?;
+
+        fn parse<T: serde::de::DeserializeOwned>(
+            index: &str,
+            source: serde_json::Value,
+        ) -> Result<T> {
+            serde_json::from_value(source).map_err(|error| {
+                crate::error::OpensearchClientError::DeserializationFailed {
+                    details: format!("`{index}` hit did not match its own shape: {error}"),
+                    method: Some("UnifiedSearchIndex::from_source".to_string()),
+                }
+            })
+        }
+
+        Ok(match entity {
+            OpenSearchEntityType::Channels => Self::ChannelMessage(parse(index, source)?),
+            OpenSearchEntityType::Documents => Self::Document(parse(index, source)?),
+            OpenSearchEntityType::Chats => Self::Chat(parse(index, source)?),
+            OpenSearchEntityType::Emails => Self::Email(Box::new(parse(index, source)?)),
+            OpenSearchEntityType::CallRecords => Self::CallRecord(parse(index, source)?),
+            OpenSearchEntityType::CalendarEvents => Self::CalendarEvent(parse(index, source)?),
+            OpenSearchEntityType::Projects => Self::Project(parse(index, source)?),
+        })
+    }
 }
 
 #[derive(Default)]
@@ -802,7 +839,7 @@ fn build_unified_search_request(args: &UnifiedSearchArgs) -> Result<SearchReques
 /// child a parent expands into carries that parent's `entity_id`/`updated_at`,
 /// so the last expanded hit yields the correct `search_after` for the next page.
 fn paginate_unified_hits(
-    hits: Vec<Hit<UnifiedSearchIndex>>,
+    hits: Vec<Hit<serde_json::Value>>,
     page_size: usize,
 ) -> (Vec<SearchHit>, SearchCursorOption) {
     let has_more = hits.len() > page_size;
@@ -810,6 +847,32 @@ fn paginate_unified_hits(
     let results: Vec<SearchHit> = hits
         .into_iter()
         .take(page_size)
+        .filter_map(|hit| {
+            // A hit we cannot place is dropped rather than failing the whole
+            // page — but loudly, because it means an index is in the response
+            // that the caller never asked for, or a doc no longer matches the
+            // shape its index promises.
+            let Hit {
+                index,
+                score,
+                source,
+                highlight,
+                inner_hits,
+            } = hit;
+            match UnifiedSearchIndex::from_source(&index, source) {
+                Ok(source) => Some(Hit {
+                    index,
+                    score,
+                    source,
+                    highlight,
+                    inner_hits,
+                }),
+                Err(error) => {
+                    tracing::error!(error=?error, index=%index, "dropping unplaceable search hit");
+                    None
+                }
+            }
+        })
         .flat_map(expand_hit_into_search_hits)
         .collect();
 
@@ -857,10 +920,12 @@ pub(crate) async fn search_unified(
             details: e.to_string(),
         })?;
 
-    let result: DefaultSearchResponse<UnifiedSearchIndex> = serde_json::from_slice(&bytes)
-        .map_err(|e| OpensearchClientError::SearchDeserializationFailed {
-            details: e.to_string(),
-            raw_body: String::from_utf8_lossy(&bytes).to_string(),
+    let result: DefaultSearchResponse<serde_json::Value> =
+        serde_json::from_slice(&bytes).map_err(|e| {
+            OpensearchClientError::SearchDeserializationFailed {
+                details: e.to_string(),
+                raw_body: String::from_utf8_lossy(&bytes).to_string(),
+            }
         })?;
 
     result.warn_on_shard_failures("search_unified");

@@ -114,6 +114,38 @@ impl OpenSearchEntityType {
     }
 }
 
+impl OpenSearchEntityType {
+    /// Resolve the index name OpenSearch reports on a hit back to its entity.
+    ///
+    /// Hits carry the *physical* index (`documents_v2`), never the alias
+    /// (`documents`), so this accepts either: the alias itself, or the alias
+    /// followed by `_` and a version suffix. No alias is a prefix of another,
+    /// so the match is unambiguous.
+    ///
+    /// `None` means the index is not one this crate knows — a hit from an
+    /// index the caller never asked for, which the caller should reject rather
+    /// than guess about.
+    pub fn from_index_name(index: &str) -> Option<Self> {
+        [
+            Self::Channels,
+            Self::Chats,
+            Self::Documents,
+            Self::Emails,
+            Self::CallRecords,
+            Self::Projects,
+            Self::CalendarEvents,
+        ]
+        .into_iter()
+        .find(|entity| {
+            let alias = entity.index_name();
+            index == alias
+                || index
+                    .strip_prefix(alias)
+                    .is_some_and(|suffix| suffix.starts_with('_'))
+        })
+    }
+}
+
 impl From<OpenSearchEntityType> for SearchEntityType {
     fn from(value: OpenSearchEntityType) -> Self {
         match value {
@@ -145,6 +177,55 @@ impl From<OpenSearchEntityType> for SearchIndex {
 #[cfg(test)]
 mod test {
     use super::*;
+
+    #[test]
+    fn resolves_physical_index_names_back_to_their_entity() {
+        // What OpenSearch actually reports on a hit.
+        assert_eq!(
+            OpenSearchEntityType::from_index_name("calendar_events_v1"),
+            Some(OpenSearchEntityType::CalendarEvents)
+        );
+        assert_eq!(
+            OpenSearchEntityType::from_index_name("documents_v2"),
+            Some(OpenSearchEntityType::Documents)
+        );
+        // The alias on its own resolves too.
+        assert_eq!(
+            OpenSearchEntityType::from_index_name("projects"),
+            Some(OpenSearchEntityType::Projects)
+        );
+        // `call_records` and `calendar_events` share a prefix but neither
+        // prefixes the other, so they never cross-match.
+        assert_eq!(
+            OpenSearchEntityType::from_index_name("call_records_v2"),
+            Some(OpenSearchEntityType::CallRecords)
+        );
+        // An index this crate does not know is not guessed at.
+        assert_eq!(OpenSearchEntityType::from_index_name("reminders_v1"), None);
+        assert_eq!(OpenSearchEntityType::from_index_name(""), None);
+        // A longer alias must not be swallowed by a shorter unrelated one.
+        assert_eq!(OpenSearchEntityType::from_index_name("chatsomething"), None);
+    }
+
+    #[test]
+    fn every_variant_round_trips_through_its_physical_name() {
+        for variant in [
+            OpenSearchEntityType::Channels,
+            OpenSearchEntityType::Chats,
+            OpenSearchEntityType::Documents,
+            OpenSearchEntityType::Emails,
+            OpenSearchEntityType::CallRecords,
+            OpenSearchEntityType::Projects,
+            OpenSearchEntityType::CalendarEvents,
+        ] {
+            let physical = format!("{}_v9", variant.index_name());
+            assert_eq!(
+                OpenSearchEntityType::from_index_name(&physical),
+                Some(variant.clone()),
+                "{physical} must resolve back to its own entity"
+            );
+        }
+    }
 
     #[test]
     fn index_name_matches_search_index() {

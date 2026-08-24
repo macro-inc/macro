@@ -16,6 +16,7 @@ fn expand_document_name_highlight_yields_name_hit_without_goto() {
     // A parent document whose name matched: a top-level `document_name`
     // highlight, no inner_hits (the content branch did not match).
     let hit = Hit {
+        index: "documents_v2".to_string(),
         score: Some(2.0),
         source: UnifiedSearchIndex::Document(DocumentIndex {
             entity_id,
@@ -435,7 +436,7 @@ fn test_deserialization() -> anyhow::Result<()> {
       }
     });
 
-    let _: DefaultSearchResponse<UnifiedSearchIndex> = serde_json::from_value(json)?;
+    let _: DefaultSearchResponse<serde_json::Value> = serde_json::from_value(json)?;
 
     Ok(())
 }
@@ -912,7 +913,7 @@ fn doc_hit_with_chunks(
     entity_id: uuid::Uuid,
     updated_at_millis: i64,
     chunk_count: usize,
-) -> Hit<UnifiedSearchIndex> {
+) -> Hit<serde_json::Value> {
     let chunks: Vec<serde_json::Value> = (0..chunk_count)
         .map(|i| {
             serde_json::json!({
@@ -925,13 +926,14 @@ fn doc_hit_with_chunks(
         .collect();
 
     Hit {
+        index: "documents_v2".to_string(),
         score: Some(1.0),
-        source: UnifiedSearchIndex::Document(DocumentIndex {
-            entity_id,
-            document_name: "Doc".to_string(),
-            owner_id: "alice".to_string(),
-            file_type: "md".to_string(),
-            updated_at_millis: Some(updated_at_millis),
+        source: serde_json::json!({
+            "entity_id": entity_id,
+            "document_name": "Doc",
+            "owner_id": "alice",
+            "file_type": "md",
+            "updated_at_millis": updated_at_millis,
         }),
         highlight: None,
         inner_hits: Some(serde_json::json!({ "term_0": { "hits": { "hits": chunks } } })),
@@ -1028,57 +1030,75 @@ fn paginate_page_size_zero_terminates() {
 }
 
 #[test]
-fn calendar_hit_wins_over_project_variant() -> anyhow::Result<()> {
-    // A calendar doc's `entity_id` + `name` + `owner_id` are exactly
-    // `ProjectIndex`'s required fields, so with an untagged enum the only thing
-    // keeping these hits off the Project variant is declaration order.
-    // `source_link_id` and `ical_uid` are what make the calendar variant
-    // unambiguous in the other direction.
-    let json = serde_json::json!({
-      "took": 2,
-      "timed_out": false,
-      "_shards": { "total": 3, "successful": 3, "skipped": 0, "failed": 0 },
-      "hits": {
-        "total": { "value": 1, "relation": "eq" },
-        "max_score": 3.1,
-        "hits": [
-          {
-            "_index": "calendar_events_v1",
-            "_id": "0197a863-0000-7000-8000-0000000000c1",
-            "_score": 3.1,
-            "_source": {
-              "entity_id": "0197a863-0000-7000-8000-0000000000c1",
-              "name": "Standup",
-              "owner_id": "macro|user@user.com",
-              "source_link_id": "0197a863-0000-7000-8000-0000000000c2",
-              "ical_uid": "abc123@google.com",
-              "status": "confirmed",
-              "is_recurring": true,
-              "starts_at_millis": 1783000000000_i64,
-              "updated_at_millis": 1783000000000_i64
-            },
-            "highlight": {
-              "name": ["<macro_em>Standup</macro_em>"]
-            }
-          }
-        ]
-      }
+fn calendar_source_routes_by_index_not_shape() -> anyhow::Result<()> {
+    // A calendar doc's entity_id + name + owner_id is exactly ProjectIndex's
+    // required set, so nothing in the _source distinguishes the two. The index
+    // does. Feeding the identical body under two indices must produce two
+    // different variants — that is the whole point of dispatching on `_index`.
+    let source = serde_json::json!({
+        "entity_id": "0197a863-0000-7000-8000-0000000000c1",
+        "name": "Standup",
+        "owner_id": "macro|user@user.com",
+        "source_link_id": "0197a863-0000-7000-8000-0000000000c2",
+        "ical_uid": "abc123@google.com",
+        "status": "confirmed",
+        "is_recurring": true,
+        "starts_at_millis": 1783000000000_i64,
+        "updated_at_millis": 1783000000000_i64
     });
 
-    let result: DefaultSearchResponse<UnifiedSearchIndex> = serde_json::from_value(json)?;
+    assert!(matches!(
+        UnifiedSearchIndex::from_source("calendar_events_v1", source.clone())?,
+        UnifiedSearchIndex::CalendarEvent(_)
+    ));
     assert!(
         matches!(
-            result.hits.hits[0].source,
-            UnifiedSearchIndex::CalendarEvent(_)
+            UnifiedSearchIndex::from_source("projects_v1", source)?,
+            UnifiedSearchIndex::Project(_)
         ),
-        "a calendar doc must not deserialize as a project"
+        "the same body under a different index must resolve to that index's shape"
     );
+    Ok(())
+}
 
-    let (hits, _) = paginate_unified_hits(result.hits.hits, 10);
+#[test]
+fn an_unknown_index_is_rejected_not_guessed() {
+    let source = serde_json::json!({
+        "entity_id": "0197a863-0000-7000-8000-0000000000c1",
+        "name": "Something",
+        "owner_id": "macro|user@user.com"
+    });
+    assert!(
+        UnifiedSearchIndex::from_source("reminders_v1", source).is_err(),
+        "a hit from an index we never asked for must not be filed as some other entity"
+    );
+}
+
+#[test]
+fn calendar_hit_carries_its_title_highlight() -> anyhow::Result<()> {
+    // The highlight only arrives because the indexed title field is `name`,
+    // which is in the unified request's fixed highlight field list.
+    let hits = vec![Hit {
+        index: "calendar_events_v1".to_string(),
+        score: Some(3.1),
+        source: serde_json::json!({
+            "entity_id": "0197a863-0000-7000-8000-0000000000c1",
+            "name": "Standup",
+            "owner_id": "macro|user@user.com",
+            "source_link_id": "0197a863-0000-7000-8000-0000000000c2",
+            "ical_uid": "abc123@google.com",
+            "updated_at_millis": 1783000000000_i64
+        }),
+        highlight: Some(std::collections::HashMap::from([(
+            "name".to_string(),
+            vec!["<macro_em>Standup</macro_em>".to_string()],
+        )])),
+        inner_hits: None,
+    }];
+
+    let (hits, _) = paginate_unified_hits(hits, 10);
     assert_eq!(hits.len(), 1);
     assert_eq!(hits[0].entity_type, SearchEntityType::CalendarEvents);
-    // The title highlight only arrives because the indexed field is `name`,
-    // which is in the unified request's highlight field list.
     assert_eq!(
         hits[0].highlight.name.as_deref(),
         Some("<macro_em>Standup</macro_em>")
@@ -1087,11 +1107,38 @@ fn calendar_hit_wins_over_project_variant() -> anyhow::Result<()> {
 }
 
 #[test]
+fn an_unplaceable_hit_is_dropped_without_failing_the_page() {
+    // One good hit, one from an index we do not know. The page survives.
+    let good = Hit {
+        index: "projects_v1".to_string(),
+        score: Some(1.0),
+        source: serde_json::json!({
+            "entity_id": "0197a863-0000-7000-8000-000000000001",
+            "name": "Mobile Redesign",
+            "owner_id": "macro|user@user.com",
+            "updated_at_millis": 1783000000000_i64
+        }),
+        highlight: None,
+        inner_hits: None,
+    };
+    let unplaceable = Hit {
+        index: "reminders_v1".to_string(),
+        score: Some(1.0),
+        source: serde_json::json!({ "entity_id": "0197a863-0000-7000-8000-000000000009" }),
+        highlight: None,
+        inner_hits: None,
+    };
+
+    let (hits, _) = paginate_unified_hits(vec![good, unplaceable], 10);
+    assert_eq!(hits.len(), 1, "the unplaceable hit is dropped, not fatal");
+    assert_eq!(hits[0].entity_type, SearchEntityType::Projects);
+}
+
+#[test]
 fn project_hit_deserializes_and_converts() -> anyhow::Result<()> {
-    // A project doc as the flat projects index returns it. With the untagged
-    // UnifiedSearchIndex enum the Project variant must win: no other variant's
-    // required fields (document_name, title, message_id, channel_id, …) are
-    // present in a project _source.
+    // A project doc as the flat projects index returns it, parsed the way the
+    // client parses a real response: raw `_source`, then dispatched on
+    // `_index`.
     let json = serde_json::json!({
       "took": 3,
       "timed_out": false,
@@ -1123,10 +1170,13 @@ fn project_hit_deserializes_and_converts() -> anyhow::Result<()> {
       }
     });
 
-    let result: DefaultSearchResponse<UnifiedSearchIndex> = serde_json::from_value(json)?;
+    let result: DefaultSearchResponse<serde_json::Value> = serde_json::from_value(json)?;
     assert_eq!(result.hits.hits.len(), 1);
     assert!(matches!(
-        result.hits.hits[0].source,
+        UnifiedSearchIndex::from_source(
+            &result.hits.hits[0].index,
+            result.hits.hits[0].source.clone()
+        )?,
         UnifiedSearchIndex::Project(_)
     ));
 
