@@ -641,7 +641,11 @@ const CALENDAR_EVENTS_BODY = {
       entity_id: {
         type: 'keyword',
       },
-      title: {
+      // The series title. Named `name` rather than `title` because the
+      // unified search request highlights a fixed list of field names, and
+      // `name` is the one every other flat index uses — see the `Highlight`
+      // builder in `opensearch_client::search::unified`.
+      name: {
         type: 'text',
         fields: {
           keyword: {
@@ -655,7 +659,7 @@ const CALENDAR_EVENTS_BODY = {
       // `dynamic: false`, so an unmapped field is silently dropped — reserving
       // it here makes turning renamed instances on a populate + backfill
       // rather than a mapping migration and reindex (macro-2731).
-      override_titles: {
+      override_names: {
         type: 'text',
       },
       owner_id: {

@@ -17,7 +17,10 @@ pub struct UpsertCalendarEventArgs {
     /// The id of the calendar event entity
     #[serde(rename = "entity_id")]
     pub event_id: String,
-    /// The series title
+    /// The series title. Indexed as `name`: the unified search request
+    /// highlights a fixed set of field names, and `name` is the one every
+    /// other flat index uses for its title.
+    #[serde(rename = "name")]
     pub title: String,
     /// Owner of this per-user event projection
     pub owner_id: String,

@@ -1028,6 +1028,65 @@ fn paginate_page_size_zero_terminates() {
 }
 
 #[test]
+fn calendar_hit_wins_over_project_variant() -> anyhow::Result<()> {
+    // A calendar doc's `entity_id` + `name` + `owner_id` are exactly
+    // `ProjectIndex`'s required fields, so with an untagged enum the only thing
+    // keeping these hits off the Project variant is declaration order.
+    // `source_link_id` and `ical_uid` are what make the calendar variant
+    // unambiguous in the other direction.
+    let json = serde_json::json!({
+      "took": 2,
+      "timed_out": false,
+      "_shards": { "total": 3, "successful": 3, "skipped": 0, "failed": 0 },
+      "hits": {
+        "total": { "value": 1, "relation": "eq" },
+        "max_score": 3.1,
+        "hits": [
+          {
+            "_index": "calendar_events_v1",
+            "_id": "0197a863-0000-7000-8000-0000000000c1",
+            "_score": 3.1,
+            "_source": {
+              "entity_id": "0197a863-0000-7000-8000-0000000000c1",
+              "name": "Standup",
+              "owner_id": "macro|user@user.com",
+              "source_link_id": "0197a863-0000-7000-8000-0000000000c2",
+              "ical_uid": "abc123@google.com",
+              "status": "confirmed",
+              "is_recurring": true,
+              "starts_at_millis": 1783000000000_i64,
+              "updated_at_millis": 1783000000000_i64
+            },
+            "highlight": {
+              "name": ["<macro_em>Standup</macro_em>"]
+            }
+          }
+        ]
+      }
+    });
+
+    let result: DefaultSearchResponse<UnifiedSearchIndex> = serde_json::from_value(json)?;
+    assert!(
+        matches!(
+            result.hits.hits[0].source,
+            UnifiedSearchIndex::CalendarEvent(_)
+        ),
+        "a calendar doc must not deserialize as a project"
+    );
+
+    let (hits, _) = paginate_unified_hits(result.hits.hits, 10);
+    assert_eq!(hits.len(), 1);
+    assert_eq!(hits[0].entity_type, SearchEntityType::CalendarEvents);
+    // The title highlight only arrives because the indexed field is `name`,
+    // which is in the unified request's highlight field list.
+    assert_eq!(
+        hits[0].highlight.name.as_deref(),
+        Some("<macro_em>Standup</macro_em>")
+    );
+    Ok(())
+}
+
+#[test]
 fn project_hit_deserializes_and_converts() -> anyhow::Result<()> {
     // A project doc as the flat projects index returns it. With the untagged
     // UnifiedSearchIndex enum the Project variant must win: no other variant's

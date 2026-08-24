@@ -14,7 +14,7 @@ pub(crate) struct CalendarEventSearchConfig;
 
 impl SearchQueryConfig for CalendarEventSearchConfig {
     const USER_ID_KEY: Option<&'static str> = Some("owner_id");
-    const TITLE_KEY: &'static str = "title";
+    const TITLE_KEY: &'static str = "name";
     const ENTITY_INDEX: OpenSearchEntityType = OpenSearchEntityType::CalendarEvents;
 }
 
@@ -27,7 +27,7 @@ impl SearchQueryConfig for CalendarEventSearchConfig {
 /// enrichment time instead.
 ///
 /// Calendar events carry no indexed content, so every mode matches terms
-/// against `title` alone. Access mirrors the soup predicate: `owner_id ==
+/// against `name` alone. Access mirrors the soup predicate: `owner_id ==
 /// caller` or the event's `source_link_id` is one of the caller's delegated
 /// inbox links.
 pub(crate) struct CalendarEventQueryBuilder {
@@ -181,7 +181,9 @@ impl CalendarEventQueryBuilder {
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub(crate) struct CalendarEventIndex {
     pub entity_id: uuid::Uuid,
-    pub title: String,
+    /// The series title, indexed as `name` so it sits in the shared unified
+    /// highlight field list alongside every other entity's title field.
+    pub name: String,
     pub owner_id: String,
     pub source_link_id: String,
     pub ical_uid: String,

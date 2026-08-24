@@ -310,12 +310,16 @@ pub(crate) enum UnifiedSearchIndex {
     Chat(ChatIndex),
     Email(Box<EmailIndex>),
     CallRecord(CallRecordIndex),
-    // Requires `source_link_id` + `ical_uid`, which no other index maps, so
-    // this variant cannot swallow another shape's hits.
+    // Must stay ahead of `Project`. A calendar doc carries `entity_id`, `name`,
+    // and `owner_id` — exactly `ProjectIndex`'s required set — so `Project`
+    // would swallow it if it came first. The reverse cannot happen: this
+    // variant also requires `source_link_id` and `ical_uid`, which no other
+    // index maps. `calendar_hit_wins_over_project_variant` locks the order.
     CalendarEvent(CalendarEventIndex),
-    // Keep last: with `untagged`, earlier variants win and every other doc
-    // shape carries required fields (document_name, title, message_id, …)
-    // a project doc lacks.
+    // Keep last: with `untagged`, earlier variants win, and `ProjectIndex`'s
+    // required set is a subset of several other shapes'. Every variant above
+    // requires at least one field a project doc lacks (document_name,
+    // message_id, channel_id, ical_uid, …).
     Project(ProjectIndex),
 }
 
