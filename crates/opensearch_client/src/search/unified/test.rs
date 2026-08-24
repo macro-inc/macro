@@ -1148,6 +1148,196 @@ fn an_unplaceable_hit_is_dropped_without_failing_the_page() {
     assert_eq!(hits[0].entity_type, SearchEntityType::Projects);
 }
 
+/// A response mixing every entity type, the way a search across all indices
+/// actually comes back. Each hit must land on its own type — this is the case
+/// the untagged enum could get wrong and the reason dispatch is explicit.
+#[test]
+fn a_mixed_response_routes_every_entity_to_its_own_type() -> anyhow::Result<()> {
+    fn hit(index: &str, matched: &str, source: serde_json::Value) -> Hit<serde_json::Value> {
+        Hit {
+            index: index.to_string(),
+            matched_queries: vec![matched.to_string()],
+            score: Some(1.0),
+            source,
+            highlight: None,
+            inner_hits: None,
+        }
+    }
+
+    let id = |n: u8| format!("0197a863-0000-7000-8000-0000000000{n:02}");
+
+    let hits = vec![
+        hit(
+            "channels_v2",
+            "channels",
+            serde_json::json!({
+                "entity_id": id(1), "channel_type": "standard", "org_id": null,
+                "message_id": id(2), "thread_id": id(2), "sender_id": "macro|a",
+                "mentions": [], "updated_at_millis": 1_783_000_000_000_i64
+            }),
+        ),
+        hit(
+            "documents_v2",
+            "documents",
+            serde_json::json!({
+                "entity_id": id(3), "document_name": "Spec", "owner_id": "macro|a",
+                "file_type": "md", "updated_at_millis": 1_783_000_000_001_i64
+            }),
+        ),
+        hit(
+            "chats_v2",
+            "chats",
+            serde_json::json!({
+                "entity_id": id(4), "user_id": "macro|a", "title": "Chat",
+                "updated_at_millis": 1_783_000_000_002_i64
+            }),
+        ),
+        hit(
+            "emails_v2",
+            "emails",
+            serde_json::json!({
+                "entity_id": id(5), "message_id": id(6), "sender": "a@x.com",
+                "recipients": ["b@x.com"], "cc": [], "bcc": [], "labels": [],
+                "link_id": id(7), "user_id": "macro|a", "subject": "Hi",
+                "sent_at_millis": 1_783_000_000_003_i64
+            }),
+        ),
+        hit(
+            "call_records_v2",
+            "call_records",
+            serde_json::json!({
+                "entity_id": id(8), "channel_id": id(9), "participant_ids": [],
+                "name": "Standup call", "started_at_millis": 1_783_000_000_004_i64
+            }),
+        ),
+        hit(
+            "projects_v1",
+            "projects",
+            serde_json::json!({
+                "entity_id": id(10), "name": "Redesign", "owner_id": "macro|a",
+                "updated_at_millis": 1_783_000_000_005_i64
+            }),
+        ),
+        hit(
+            "calendar_events_v1",
+            "calendar_events",
+            serde_json::json!({
+                "entity_id": id(11), "name": "Standup", "owner_id": "macro|a",
+                "source_link_id": id(12), "ical_uid": "abc@google.com",
+                "updated_at_millis": 1_783_000_000_006_i64
+            }),
+        ),
+    ];
+
+    let (results, _) = paginate_unified_hits(hits, 50);
+
+    // Every hit survived: none was dropped as unplaceable.
+    assert_eq!(results.len(), 7, "got {results:?}");
+
+    let by_id: std::collections::HashMap<uuid::Uuid, SearchEntityType> = results
+        .iter()
+        .map(|hit| (hit.entity_id, hit.entity_type.clone()))
+        .collect();
+    for (n, expected) in [
+        (1u8, SearchEntityType::Channels),
+        (3, SearchEntityType::Documents),
+        (4, SearchEntityType::Chats),
+        (5, SearchEntityType::Emails),
+        (8, SearchEntityType::CallRecords),
+        (10, SearchEntityType::Projects),
+        (11, SearchEntityType::CalendarEvents),
+    ] {
+        let entity_id = id(n).parse::<uuid::Uuid>()?;
+        assert_eq!(
+            by_id.get(&entity_id),
+            Some(&expected),
+            "entity {n} routed to the wrong type"
+        );
+    }
+
+    // The downstream split must bucket them the same way.
+    let split = results.into_iter().split_search_response();
+    assert_eq!(split.channel_message.len(), 1);
+    assert_eq!(split.document.len(), 1);
+    assert_eq!(split.chat.len(), 1);
+    assert_eq!(split.email.len(), 1);
+    assert_eq!(split.call_record.len(), 1);
+    assert_eq!(split.project.len(), 1);
+    assert_eq!(split.calendar_event.len(), 1);
+    Ok(())
+}
+
+/// Searching every index must name every clause, or a hit from an unnamed one
+/// would come back with no discriminator and be dropped.
+#[test]
+fn every_searched_index_contributes_a_named_clause() -> anyhow::Result<()> {
+    use strum::IntoEnumIterator as _;
+
+    let args = UnifiedSearchArgs {
+        search_indices: OpenSearchEntityType::iter().collect(),
+        user_id: "user".to_string(),
+        page_size: 10,
+        match_type: "exact".to_string(),
+        document_search_args: UnifiedDocumentSearchArgs {
+            terms: vec!["test".to_string()],
+            ..Default::default()
+        },
+        email_search_args: UnifiedEmailSearchArgs {
+            terms: vec!["test".to_string()],
+            ..Default::default()
+        },
+        channel_message_search_args: UnifiedChannelMessageSearchArgs {
+            terms: vec!["test".to_string()],
+            channel_ids: vec!["c1".to_string()],
+            ..Default::default()
+        },
+        chat_search_args: UnifiedChatSearchArgs {
+            terms: vec!["test".to_string()],
+            ..Default::default()
+        },
+        call_record_search_args: UnifiedCallRecordSearchArgs {
+            terms: vec!["test".to_string()],
+            call_ids: vec!["r1".to_string()],
+            ids_only: true,
+            ..Default::default()
+        },
+        project_search_args: UnifiedProjectSearchArgs {
+            terms: vec!["test".to_string()],
+            ..Default::default()
+        },
+        calendar_event_search_args: UnifiedCalendarEventSearchArgs {
+            terms: vec!["test".to_string()],
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+
+    let json = build_unified_search_request(&args)?.to_json();
+    let should = json["query"]["bool"]["should"]
+        .as_array()
+        .expect("a should clause per searched index");
+
+    let names: std::collections::HashSet<&str> = should
+        .iter()
+        .filter_map(|clause| clause["bool"]["_name"].as_str())
+        .collect();
+
+    for entity in OpenSearchEntityType::iter() {
+        assert!(
+            names.contains(entity.query_name()),
+            "{} contributed an unnamed clause; its hits would be undispatchable",
+            entity.query_name()
+        );
+    }
+    assert_eq!(
+        names.len(),
+        should.len(),
+        "every should clause must be named, got {names:?} across {} clauses",
+        should.len()
+    );
+    Ok(())
+}
+
 #[test]
 fn project_hit_deserializes_and_converts() -> anyhow::Result<()> {
     // A project doc as the flat projects index returns it, parsed the way the
