@@ -19,6 +19,7 @@ import {
   type Component,
   createContext,
   createEffect,
+  createMemo,
   createSignal,
   getOwner,
   type JSX,
@@ -27,7 +28,6 @@ import {
   onCleanup,
   splitProps,
   useContext,
-  createMemo,
 } from 'solid-js';
 import { render } from 'solid-js/web';
 
@@ -270,6 +270,8 @@ function createFullCalendarController(
     SolidContentOptionName,
     ContentRegistration
   >();
+  const [listenForContentRegistrationChange, notifyContentRegistrationChange] =
+    createSignal<void>(undefined, { equals: false });
 
   const requestResize = () => {
     if (isUnmounting() || !calendar()) return;
@@ -292,6 +294,7 @@ function createFullCalendarController(
   };
 
   const buildOptions = createMemo(() => {
+    listenForContentRegistrationChange();
     return buildCalendarOptions(
       getOptions(),
       contentRegistrations,
@@ -363,6 +366,7 @@ function createFullCalendarController(
         token: Symbol(optionName),
       };
       contentRegistrations.set(optionName, registration);
+      notifyContentRegistrationChange();
       resetOptions();
 
       return {
@@ -374,6 +378,7 @@ function createFullCalendarController(
           }
 
           contentRegistrations.delete(optionName);
+          notifyContentRegistrationChange();
           resetOptions();
         },
       };
