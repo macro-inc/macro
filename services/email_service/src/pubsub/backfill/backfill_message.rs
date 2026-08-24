@@ -1,3 +1,4 @@
+use crate::pubsub::backfill::db_error::map_db_error;
 use crate::pubsub::backfill::email_api_error::map_email_api_error;
 use crate::pubsub::backfill::increment_counters;
 use crate::pubsub::context::PubSubContext;
@@ -42,12 +43,7 @@ pub async fn backfill_message(
         false,
     )
     .await
-    .map_err(|e| {
-        ProcessingError::Retryable(DetailedError {
-            reason: FailureReason::DatabaseQueryFailed,
-            source: e.context("Failed to insert final message into database"),
-        })
-    })?;
+    .map_err(|e| map_db_error(e, "Failed to insert final message into database"))?;
 
     // Fan out a PopulateCrmContact job per address involved in the
     // message — every non-draft message contributes, in both
