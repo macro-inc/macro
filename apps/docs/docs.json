@@ -142,10 +142,20 @@
         ]
       },
       {
+        "group": "Bots",
+        "pages": [
+          {
+            "group": "Bring Your Own Agent",
+            "pages": [
+              "integrations/hermes"
+            ]
+          }
+        ]
+      },
+      {
         "group": "Integrations",
         "pages": [
-          "integrations/github",
-          "integrations/hermes"
+          "integrations/github"
         ]
       },
       {
