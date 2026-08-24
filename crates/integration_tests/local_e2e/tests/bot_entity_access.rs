@@ -130,7 +130,7 @@ impl ScopedBotFixture {
         .await
         .context("failed to insert scoped bot")?;
 
-        let hashed = bot_id::HashedBotToken::from_raw(&bot_token);
+        let hashed = bot_token::HashedBotToken::from_raw(&bot_token);
         sqlx::query(
             r#"
             INSERT INTO bot_tokens (id, bot_id, token_hash, token_prefix, label)

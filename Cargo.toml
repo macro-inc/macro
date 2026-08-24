@@ -10,6 +10,7 @@ members = [
   "crates/ai_projections",
   "crates/ai_usage",
   "crates/bot_id",
+  "crates/bot_token",
   "crates/bots",
   "crates/broadcast",
   "crates/calendar_events",

@@ -1,6 +1,15 @@
-//! Hashing and display-prefix helpers for bot bearer tokens.
+//! Hash and display-prefix helpers for bot bearer tokens.
+//!
+//! Mint (`bots`) and auth-time lookup (`macro_authorization`) both persist or
+//! match `token_hash`. This crate owns that digest so the two sides cannot
+//! drift, without either crate depending on the other.
+
+#![deny(missing_docs)]
 
 use sha2::{Digest, Sha256};
+
+#[cfg(test)]
+mod test;
 
 /// Number of characters used as a fallback display prefix.
 const FALLBACK_PREFIX_CHARS: usize = 12;

@@ -28,7 +28,7 @@ async fn insert_bot_token(
     .execute(pool)
     .await
     .unwrap();
-    let hashed = bot_id::HashedBotToken::from_raw(TOKEN);
+    let hashed = bot_token::HashedBotToken::from_raw(TOKEN);
     sqlx::query!(
         r#"
         INSERT INTO bot_tokens (id, bot_id, token_hash, token_prefix, revoked_at)

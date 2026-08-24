@@ -19,6 +19,7 @@ postgres = ["dep:sqlx"]
 [dependencies]
 axum = { workspace = true, optional = true }
 bot_id = { path = "../bot_id" }
+bot_token = { path = "../bot_token" }
 constant_time_eq = { workspace = true }
 macro_auth = { path = "../macro_auth", optional = true }
 macro_env_var = { path = "../macro_env_var", optional = true }

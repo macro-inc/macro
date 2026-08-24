@@ -10,7 +10,7 @@ use super::{
     ports::{BotError, BotRepo, BotService},
     tokens,
 };
-use bot_id::HashedBotToken;
+use bot_token::HashedBotToken;
 use chrono::{DateTime, Utc};
 use entity_access::domain::models::{EntityAccessReceipt, EntityType, MemberParticipantRole};
 use macro_event_broker::MacroEventBroker;

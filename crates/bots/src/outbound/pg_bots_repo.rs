@@ -12,7 +12,7 @@ use crate::domain::{
     ports::BotRepo,
 };
 use anyhow::Context;
-use bot_id::{HashedBotToken, hash_token};
+use bot_token::{HashedBotToken, hash_token};
 use chrono::{DateTime, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
 use sqlx::PgPool;

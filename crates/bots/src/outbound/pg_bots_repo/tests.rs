@@ -646,7 +646,7 @@ async fn create_channel_scoped_bot_creates_bot_participant_and_token(
     assert_eq!(created.token.label.as_deref(), Some("Webhook"));
     assert_eq!(
         created.token.token_prefix,
-        bot_id::token_prefix(&created.bot_token)
+        bot_token::token_prefix(&created.bot_token)
     );
     assert_ne!(created.token.token_prefix, created.bot_token);
     assert_eq!(
@@ -773,7 +773,7 @@ async fn revoke_token_prevents_future_authentication(pool: PgPool) -> anyhow::Re
 
     assert_eq!(
         created.token.token_prefix,
-        bot_id::token_prefix(&created.bearer_token)
+        bot_token::token_prefix(&created.bearer_token)
     );
     assert_ne!(created.token.token_prefix, created.bearer_token);
 
@@ -841,7 +841,7 @@ async fn authenticate_channel_token_accepts_migrated_uuid_token(
 
     let token_id = Uuid::new_v4();
     let raw_token = Uuid::new_v4().to_string();
-    let hashed = bot_id::HashedBotToken::from_raw(&raw_token);
+    let hashed = bot_token::HashedBotToken::from_raw(&raw_token);
     sqlx::query(
         r#"
         INSERT INTO bot_tokens (id, bot_id, token_hash, token_prefix, label)
@@ -870,7 +870,7 @@ async fn authenticate_channel_token_accepts_migrated_uuid_token(
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn rust_token_hash_matches_postgres_digest(pool: PgPool) -> anyhow::Result<()> {
     let raw = "mbot_aabbccddeeff_aabbccddeeffsecret";
-    let rust_hash = bot_id::hash_token(raw);
+    let rust_hash = bot_token::hash_token(raw);
     let postgres_hash =
         sqlx::query_scalar!(r#"SELECT digest(convert_to($1, 'UTF8'), 'sha256')"#, raw,)
             .fetch_one(&pool)

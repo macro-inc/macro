@@ -14,12 +14,8 @@ use uuid::Uuid;
 
 pub use cowlike;
 
-mod token;
-
 #[cfg(test)]
 mod test;
-
-pub use token::{HashedBotToken, hash_token, token_prefix};
 
 const BOT_STORAGE_PREFIX: &str = "bot";
 const UUID_HYPHENATED_LEN: usize = 36;

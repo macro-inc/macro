@@ -101,7 +101,7 @@ impl BotAuthorizationRepo for PgBotAuthorizationRepo {
         &self,
         token: &str,
     ) -> Result<Option<BotTokenAuthorization>, Self::Err> {
-        let token_hash = bot_id::hash_token(token);
+        let token_hash = bot_token::hash_token(token);
         let row = sqlx::query_as!(
             BotTokenAuthorizationRow,
             r#"
