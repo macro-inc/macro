@@ -144,7 +144,8 @@
       {
         "group": "Integrations",
         "pages": [
-          "integrations/github"
+          "integrations/github",
+          "integrations/hermes"
         ]
       },
       {
