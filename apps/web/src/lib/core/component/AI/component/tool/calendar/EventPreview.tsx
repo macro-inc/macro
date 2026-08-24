@@ -261,9 +261,7 @@ export function CalendarToolEventPreview(props: CalendarToolEventPreviewProps) {
     const date = calendarToolPreviewStartDate(editorStart(), editorAllDay());
     const displayed = displayedWindow();
     return (
-      !date ||
-      !displayed ||
-      (date >= displayed.start && date < displayed.end)
+      !date || !displayed || (date >= displayed.start && date < displayed.end)
     );
   };
   const navigate = (direction: 'previous' | 'next') => {
