@@ -346,17 +346,7 @@ function EditableEventComposerGuestsPill(props: EventComposerGuestsPillProps) {
                     event.preventDefault();
                     event.stopPropagation();
                     setOpen(false);
-                    return;
                   }
-                  if (event.key !== 'Tab' || !open()) return;
-                  event.preventDefault();
-                  event.stopPropagation();
-                  input?.dispatchEvent(
-                    new KeyboardEvent('keydown', {
-                      bubbles: true,
-                      key: 'Enter',
-                    })
-                  );
                 }}
               />
             </div>
