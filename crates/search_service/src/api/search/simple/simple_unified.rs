@@ -26,6 +26,16 @@ use opensearch_client::search::documents::{DocumentSearchMode, PropertyFilterArg
 use opensearch_client::search::model::SearchHit;
 use opensearch_client::search::unified::UnifiedSearchArgs;
 
+/// Whether calendar events may appear in this search.
+///
+/// The flag overrides the request, never the reverse. The AI search tools
+/// default `entityTypes` to empty — which means every type — so an environment
+/// whose calendar index has not been created and backfilled cannot rely on
+/// callers opting out.
+fn calendar_events_searchable(requested: bool, flag_enabled: bool) -> bool {
+    requested && flag_enabled
+}
+
 /// Identifies the source of a search result for cursor regeneration
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum SearchSource {
@@ -268,7 +278,10 @@ pub(in crate::api::search) async fn perform_unified_search(
     let should_include_projects = search_filters.should_include_projects;
     let should_include_emails = search_filters.should_include_emails;
     let should_include_call_records = search_filters.should_include_call_records;
-    let should_include_calendar_events = search_filters.should_include_calendar_events;
+    let should_include_calendar_events = calendar_events_searchable(
+        search_filters.should_include_calendar_events,
+        ctx.calendar_search_enabled,
+    );
     let email_terms = search_terms.clone();
 
     // Await all tasks in parallel

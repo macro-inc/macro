@@ -272,6 +272,17 @@ async fn process_event(
             process_call_event(db, opensearch_client, event, partition, offset).await
         }
         DeclaredMacroEvent::CalendarMacroEvent(event) => {
+            if !context.calendar_search_enabled {
+                // The offset is committed either way, so a change that arrives
+                // while the flag is off is not replayed when it flips — the
+                // backfill endpoint is how an enabled environment catches up.
+                tracing::debug!(
+                    partition,
+                    offset,
+                    "calendar search is disabled; skipping calendar event"
+                );
+                return EventOutcome::Ignored;
+            }
             process_calendar_event(context, event, partition, offset).await
         }
         DeclaredMacroEvent::ChannelMacroEvent(event) => {

@@ -95,6 +95,14 @@ pub struct Config {
     #[macro_config_default(8080)]
     pub port: usize,
 
+    /// Whether calendar events are written to the search index. Off by default
+    /// so a deployed environment can carry the code before its calendar index
+    /// exists: an upsert against a missing index would otherwise be
+    /// auto-created with a dynamic mapping, which is not the mapping this
+    /// service expects. Enable only after the create-indices run.
+    #[macro_config_default(false)]
+    pub calendar_search_enabled: bool,
+
     /// The queue max messages per poll
     #[macro_config_default(10)]
     pub queue_max_messages: i32,

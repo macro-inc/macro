@@ -555,6 +555,7 @@ impl From<&ApiContext> for SearchHandlerState {
             opensearch_client: ctx.opensearch_client.clone(),
             entity_access_service: ctx.entity_access_service.clone(),
             authorization_state: ctx.authorization_state.clone(),
+            calendar_search_enabled: ctx.config.calendar_search_enabled,
         }
     }
 }
