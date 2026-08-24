@@ -1,9 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import {
-  defaultOnboardingV4Override,
-  resolveFeatureFlag,
-} from '../constant/featureFlags';
+import { resolveFeatureFlag } from '../constant/featureFlags';
+import { defaultOnboardingV4Override } from '../constant/onboardingV4Override';
 
 describe('resolveFeatureFlag', () => {
   it('returns the default when no env override is present', () => {
