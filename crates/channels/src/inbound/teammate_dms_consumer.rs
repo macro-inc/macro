@@ -66,15 +66,18 @@ pub(crate) struct TeammateDmsJoinedMetadata {
     pub teammate_ids: Vec<MacroUserIdStr<'static>>,
 }
 
+/// Tagged envelope around a `team.member_joined` payload.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "event_type", content = "metadata")]
-enum MemberJoinedEnvelope {
+pub(crate) enum MemberJoinedEnvelope {
+    /// Join payload used to ensure teammate DMs.
     #[serde(rename = "team.member_joined")]
     Payload(TeammateDmsJoinedMetadata),
 }
 
+/// Placeholder for team events this consumer ignores.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-struct IgnoredTeamEvent {
+pub(crate) struct IgnoredTeamEvent {
     event_type: String,
 }
 
