@@ -494,7 +494,7 @@ const parseBooleanOverride = (value: unknown): boolean | undefined =>
 /** Controls the cache-warming GraphQL soup backfill. */
 export const ENABLE_GRAPHQL_BACKFILL = resolveFeatureFlag(
   'ENABLE_GRAPHQL_BACKFILL',
-  false
+  true
 );
 
 /** Independent emergency stop. Any true env/PostHog source wins. */
