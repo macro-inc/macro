@@ -1,15 +1,10 @@
 import { useGlobalBlockOrchestrator } from '@components/app/GlobalAppState';
-import {
-  isSidebarVisible,
-  useSidebarCollapse,
-} from '@components/app/sidebarVisibility';
 import { Resize } from '@core/component/Resize';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { tabTitleSignal } from '@core/signal/tabTitle';
 import { useWindowSize } from '@solid-primitives/resize-observer';
 import { useLocation, useNavigate } from '@solidjs/router';
-import { cn } from '@ui';
 import {
   createEffect,
   createMemo,
@@ -47,6 +42,9 @@ import {
 import { splitMinWidthForContent } from './splitContentSizing';
 import { createSplitFocusTracker } from './splitFocusTracker';
 
+/** The hairline between two splits, and the whole of the gap between them. */
+const SPLIT_SEAM_WIDTH = 1;
+
 type SplitLayoutContainerProps = {
   pairs: string[];
   setManager: Setter<SplitManager | undefined>;
@@ -70,7 +68,6 @@ export function SplitLayoutContainer(props: SplitLayoutContainerProps) {
   );
   restorePreviewPairs(splitManager, initialLayout.previewPairs);
   const [, setTabTitle] = tabTitleSignal;
-  const sidebar = useSidebarCollapse();
 
   // Create the mobile swipe layout once on mobile devices.
   const mobileSwipeLayout: MobileSwipeLayout | undefined =
@@ -121,18 +118,17 @@ export function SplitLayoutContainer(props: SplitLayoutContainerProps) {
 
   return (
     <SplitLayoutContext.Provider value={{ manager: splitManager }}>
-      <div
-        class={cn('size-full p-2 touch:p-0', {
-          'pl-0': isSidebarVisible() && !sidebar.isCollapsed(),
-        })}
-      >
+      {/* No inset: the splits fill the frame and a hairline gutter is the only
+          thing between them. */}
+      <div class="size-full">
         <Show
           when={isNativeMobilePlatform() && mobileSwipeLayout}
           fallback={
             // Desktop: side-by-side resizable splits.
             <Resize.Zone
               direction="horizontal"
-              gutter={8}
+              gutter={SPLIT_SEAM_WIDTH}
+              seam
               captureResizeCtx={splitManager.setResizeContext}
             >
               <For each={ids()}>
