@@ -61,17 +61,23 @@ export const agentHarnessServiceClient = {
   },
 
   getSandboxSize() {
-    return fetchWithToken<SandboxSizeBody>(`${agentHarnessHost}/agent-sandbox-size`, {
-      method: 'GET',
-    });
+    return fetchWithToken<SandboxSizeBody>(
+      `${agentHarnessHost}/agent-sandbox-size`,
+      {
+        method: 'GET',
+      }
+    );
   },
 
   setSandboxSize(size: SandboxSize) {
-    return fetchWithToken<SandboxSizeBody>(`${agentHarnessHost}/agent-sandbox-size`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ size }),
-    });
+    return fetchWithToken<SandboxSizeBody>(
+      `${agentHarnessHost}/agent-sandbox-size`,
+      {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ size }),
+      }
+    );
   },
 
   setSessionSandboxSize(sessionId: string, size: SandboxSize) {

@@ -56,12 +56,13 @@ export function AgentSidePanelSections() {
   const size = () => pendingSize() ?? sessionSandboxSize(session());
 
   const setSandboxSize = async (next: SandboxSize) => {
-    if (next === size() || resizing()) return;
+    const id = sessionId();
+    if (!id || next === size() || resizing()) return;
     const previous = size();
     setPendingSize(next);
     setResizing(true);
     const result = await agentHarnessServiceClient
-      .setSessionSandboxSize(sessionId(), next)
+      .setSessionSandboxSize(id, next)
       .catch(() => undefined);
     setResizing(false);
     if (result === undefined || result.isErr()) {
@@ -122,7 +123,7 @@ export function AgentSidePanelSections() {
           <SidePanel.Row label="Sandbox size">
             <SandboxSizeSelector
               size={size()}
-              disabled={loadFailed() || resizing()}
+              disabled={loadFailed() || resizing() || !sessionId()}
               onSelect={setSandboxSize}
             />
           </SidePanel.Row>
