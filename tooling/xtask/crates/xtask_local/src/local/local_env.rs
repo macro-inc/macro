@@ -172,6 +172,15 @@ impl InfraEnv {
             "OVERRIDE_AUTH_SERVICE_URL".into(),
             "http://authentication-service:8080".into(),
         );
+        // The alias LocalStack provisions for the Cursor API key CMK. Named by
+        // alias rather than key id because `CreateKey` mints a random id every
+        // run, and KMS accepts an alias anywhere a key id goes. Unset would
+        // disable Cursor key registration entirely, so local matches deployed
+        // behaviour instead of being a special case.
+        env.insert(
+            "CURSOR_API_KEY_KMS_KEY_ID".into(),
+            resources::CURSOR_API_KEY_KMS_ALIAS.into(),
+        );
         // Dummy creds: the SDK talks to LocalStack, never real AWS.
         env.insert("AWS_ACCESS_KEY_ID".into(), "test".into());
         env.insert("AWS_SECRET_ACCESS_KEY".into(), "test".into());
