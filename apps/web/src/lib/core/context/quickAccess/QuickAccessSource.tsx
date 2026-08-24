@@ -313,7 +313,8 @@ export function createQuickAccessValue(): QuickAccessContextValue {
     equals: equalActivityMaps,
   });
   const isConnectedSecondaryInbox = useIsConnectedSecondaryInbox();
-  const cacheHost = getGraphqlSoupCacheHost();
+  const graphqlCacheHost = getGraphqlSoupCacheHost();
+  const cacheHost = graphqlCacheHost?.disabled ? undefined : graphqlCacheHost;
   const [cacheRevision, setCacheRevision] = createSignal(0);
   const cachedChannelsQuery = useCachedGraphqlChannelsQuery(cacheHost);
   const unsubscribeCacheChanges = cacheHost?.onCacheChanged(() => {

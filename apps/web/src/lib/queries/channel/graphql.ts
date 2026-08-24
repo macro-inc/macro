@@ -8,6 +8,7 @@ import {
   type GraphqlChannelQuickAccessFieldsFragment,
   GraphqlChannelQuickAccessFieldsFragmentDoc,
 } from '@service-storage/graphql/generated/graphql';
+import { match } from 'ts-pattern';
 
 /** Minimal cached GraphQL channel fields used by Quick Access. */
 export type CachedGraphqlChannel = {
@@ -25,16 +26,13 @@ export type CachedGraphqlChannel = {
 function normalizeChannelType(
   channelType: string
 ): CachedGraphqlChannel['channelType'] {
-  switch (channelType.toLowerCase()) {
-    case 'direct_message':
-      return 'direct_message';
-    case 'private':
-      return 'private';
-    case 'team':
-      return 'team';
-    default:
-      return 'public';
-  }
+  return match<string, CachedGraphqlChannel['channelType']>(
+    channelType.toLowerCase()
+  )
+    .with('direct_message', () => 'direct_message')
+    .with('private', () => 'private')
+    .with('team', () => 'team')
+    .otherwise(() => 'public');
 }
 
 /** Materializes supplied cached GraphQL channel search hits. */

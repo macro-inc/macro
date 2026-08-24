@@ -53,16 +53,20 @@ export function useListChannelsQuery() {
 
 /** Reads the recent Quick Access channel list from the normalized GraphQL cache. */
 export function useCachedGraphqlChannelsQuery(cacheHost?: CacheHost) {
-  return useQuery(() => ({
-    queryKey: channelKeys.quickAccessGraphql(cacheHost?.clientId ?? 'disabled')
-      .queryKey,
-    queryFn: async (): Promise<CachedGraphqlChannel[]> => {
-      if (!cacheHost) return [];
-      return await readCachedGraphqlChannels(cacheHost);
-    },
-    enabled: cacheHost !== undefined,
-    staleTime: Infinity,
-  }));
+  return useQuery(() => {
+    const enabledCacheHost = cacheHost?.disabled ? undefined : cacheHost;
+    return {
+      queryKey: channelKeys.quickAccessGraphql(
+        enabledCacheHost?.clientId ?? 'disabled'
+      ).queryKey,
+      queryFn: async (): Promise<CachedGraphqlChannel[]> => {
+        if (!enabledCacheHost) return [];
+        return await readCachedGraphqlChannels(enabledCacheHost);
+      },
+      enabled: enabledCacheHost !== undefined,
+      staleTime: Infinity,
+    };
+  });
 }
 
 export function invalidateListChannels() {
