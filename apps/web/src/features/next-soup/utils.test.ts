@@ -79,6 +79,7 @@ import {
   executeMarkEntitiesDone,
   getChannelEntityTarget,
   getRowClickFallbackLocation,
+  markChannelTargetSeenOnOpen,
   openEntityInSplitFromUnifiedList,
   preventDuplicatePreviewEntityOpen,
   resolveMarkEntitiesDoneVariables,
@@ -391,6 +392,31 @@ describe('getChannelEntityTarget', () => {
       messageId: 'notif-msg',
       threadId: undefined,
     });
+  });
+
+  it('marks an attached agent notification read even when the global source does not contain it', () => {
+    const notification = sendNotification('agent-notification', 'agent-msg');
+    notification.notification_metadata = {
+      tag: 'channel_message_send',
+      content: {
+        messageId: 'agent-msg',
+        sender: null,
+        senderDisplayName: 'Macro Agent',
+      },
+    } as UnifiedNotification['notification_metadata'];
+    const bulkMarkAsRead = vi.fn(async () => {});
+    const notificationSource = {
+      notificationsByEntity: () => ({}),
+      bulkMarkAsRead,
+    } as unknown as NotificationSource;
+
+    markChannelTargetSeenOnOpen(
+      channelRow({ notifications: [notification] }),
+      notificationSource
+    );
+
+    expect(bulkMarkAsRead).toHaveBeenCalledOnce();
+    expect(bulkMarkAsRead).toHaveBeenCalledWith([notification]);
   });
 
   it('opens a channel row at latest when it has no notifications', () => {

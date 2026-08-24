@@ -49,6 +49,7 @@ import { TaskListEntity } from '@app/features/next-soup/soup-view/views/tasks/Ta
 import { ResponsiveTaskListHeader } from '@app/features/next-soup/soup-view/views/tasks/TaskListHeader';
 import { TaskGroupHeader } from '@app/features/next-soup/soup-view/views/tasks/task-group-header';
 import {
+  markChannelTargetSeenOnOpen,
   markReminderSeenOnOpen,
   openEntityInNewTab,
   openEntityInSplitFromUnifiedList,
@@ -956,6 +957,7 @@ const SoupViewListContent = (props: SoupViewListProps) => {
       type === 'entity' ? args.entity : args.projectEntity
     ) as EntityData;
 
+    markChannelTargetSeenOnOpen(entity, notificationSource);
     markReminderSeenOnOpen(entity, notificationSource);
 
     // FIXME: this never gets called because we have overrides

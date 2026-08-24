@@ -733,6 +733,34 @@ export const openEntityInSplitFromUnifiedList = async (
 };
 
 /**
+ * Mark the attached notification that caused a channel row to target a message.
+ *
+ * The row's Soup edge is authoritative here. The channel block's message marker
+ * discovers notifications through the separately paginated global source, so
+ * an older notification can drive navigation without being present there.
+ */
+export function markChannelTargetSeenOnOpen(
+  entity: EntityData,
+  notificationSource: NotificationSource
+) {
+  const target = getChannelEntityTarget(entity);
+  if (target?.kind !== 'message' || !isWithNotification(entity)) return;
+
+  const notifications = scopeChannelNotificationsForEntity(
+    entity,
+    entity.notifications?.() ?? []
+  ).filter((notification) => {
+    if (notificationIsRead(notification)) return false;
+    return (
+      getChannelNotificationParams(notification).messageId === target.messageId
+    );
+  });
+  if (notifications.length === 0) return;
+
+  void notificationSource.bulkMarkAsRead(notifications);
+}
+
+/**
  * Mark a reminder's notification read when the user opens it.
  *
  * Every other entity type gets this for free from the block it opens into,
