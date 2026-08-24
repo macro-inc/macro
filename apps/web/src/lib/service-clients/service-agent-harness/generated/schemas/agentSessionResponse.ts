@@ -7,9 +7,9 @@
 import type { AgentSessionResponseAcpSessionId } from './agentSessionResponseAcpSessionId';
 import type { AgentSessionResponseOriginatingMessageId } from './agentSessionResponseOriginatingMessageId';
 import type { AgentSessionResponseRepoUrl } from './agentSessionResponseRepoUrl';
-import type { SessionStatusDto } from './sessionStatusDto';
 import type { AgentSessionResponseThreadChannelId } from './agentSessionResponseThreadChannelId';
 import type { AgentSessionResponseThreadId } from './agentSessionResponseThreadId';
+import type { SessionStatusDto } from './sessionStatusDto';
 
 /**
  * Response body describing an agent session.
