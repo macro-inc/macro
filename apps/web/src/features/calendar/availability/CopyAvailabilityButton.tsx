@@ -5,7 +5,7 @@ import CaretRightIcon from '@phosphor/caret-right.svg';
 import CheckIcon from '@phosphor/check.svg';
 import GearIcon from '@phosphor/gear.svg';
 import { ButtonGroup, cn, Dropdown } from '@ui';
-import { createMemo, For, Show } from 'solid-js';
+import { For, Show } from 'solid-js';
 import { useCalendarConnectedInboxes } from '../hooks/use-calendar-connected-inboxes';
 import {
   AVAILABILITY_RANGE_OPTIONS,
@@ -90,12 +90,10 @@ export function CopyAvailabilityButton(props: {
 
   const label = () =>
     props.onInsert ? 'Insert availability' : 'Copy availability';
-  const startTimeLabel = createMemo(() =>
-    timeOptionLabel(START_TIME_OPTIONS, settings().startTime)
-  );
-  const endTimeLabel = createMemo(() =>
-    timeOptionLabel(END_TIME_OPTIONS, settings().endTime)
-  );
+  const startTimeLabel = () =>
+    timeOptionLabel(START_TIME_OPTIONS, settings().startTime);
+  const endTimeLabel = () =>
+    timeOptionLabel(END_TIME_OPTIONS, settings().endTime);
 
   const shareRange = async (rangeKey: AvailabilityRangeKey) => {
     try {
