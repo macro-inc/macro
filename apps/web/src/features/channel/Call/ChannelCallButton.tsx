@@ -6,12 +6,14 @@ import PhoneIcon from '@icon/wide-call.svg';
 import CaretDownIcon from '@phosphor/caret-down.svg';
 import { useActiveCallQuery } from '@queries/call/call';
 import { Button, cn } from '@ui';
-import { createSignal, type JSX, Show } from 'solid-js';
+import { createSignal, onCleanup, Show } from 'solid-js';
 import { getCallJoinTab, getCallLeaveTab } from './call-tabs';
+import {
+  isSlideDownArmed,
+  SLIDE_TO_CALL_DISTANCE_PX,
+  slideDownProgress,
+} from './slide-down-call';
 import { useCall } from './use-call';
-
-/** Distance the call thumb must travel to place the call. 1 CSS inch. */
-export const SLIDE_TO_CALL_DISTANCE_PX = 96;
 
 type SlideGesture = {
   pointerId: number;
@@ -35,12 +37,6 @@ export function ChannelCallButton(props: { channelId: string }) {
     return isCallInProgress() ? 'Join Call' : 'Start Call';
   };
   const label = () => (isCallInProgress() ? 'Join' : 'Call');
-
-  const variant = () => {
-    if (isTouchDevice()) return 'ghost';
-    if (isCallInProgress()) return 'success';
-    return 'base';
-  };
 
   const handleJoin = async () => {
     if (call.isJoining()) return;
@@ -73,7 +69,7 @@ export function ChannelCallButton(props: { channelId: string }) {
           <Button
             onClick={handleJoin}
             tooltip={tooltip()}
-            variant={variant()}
+            variant={isCallInProgress() ? 'success' : 'base'}
             size="sm"
             depth={2}
             class={cn(!isCallInProgress() && 'bg-surface')}
@@ -109,7 +105,7 @@ function SlideDownCallButton(props: {
   let gesture: SlideGesture | null = null;
 
   const trackVisible = () => dragging() || trackRevealed();
-  const armed = () => offset() >= SLIDE_TO_CALL_DISTANCE_PX;
+  const armed = () => isSlideDownArmed(offset());
 
   const revealTrack = () => {
     if (trackRevealed()) return;
@@ -117,9 +113,16 @@ function SlideDownCallButton(props: {
     hapticImpact('light');
   };
 
+  const stopListening = () => {
+    window.removeEventListener('pointermove', onPointerMove);
+    window.removeEventListener('pointerup', onPointerUp);
+    window.removeEventListener('pointercancel', onPointerCancel);
+  };
+
   const endGesture = (complete: boolean) => {
     const active = gesture;
     gesture = null;
+    stopListening();
     setDragging(false);
     setOffset(0);
     if (!active) return;
@@ -131,54 +134,42 @@ function SlideDownCallButton(props: {
     revealTrack();
   };
 
-  const onPointerDown: JSX.EventHandler<HTMLButtonElement, PointerEvent> = (
-    event
-  ) => {
-    if (props.joining) return;
-    if (event.button !== 0) return;
-    event.preventDefault();
-    event.stopPropagation();
-    event.currentTarget.setPointerCapture?.(event.pointerId);
-    gesture = { pointerId: event.pointerId, startY: event.clientY };
-    setDragging(true);
-    setOffset(0);
-  };
-
-  const onPointerMove: JSX.EventHandler<HTMLButtonElement, PointerEvent> = (
-    event
-  ) => {
+  const onPointerMove = (event: PointerEvent) => {
     if (!gesture || event.pointerId !== gesture.pointerId) return;
     event.preventDefault();
-    event.stopPropagation();
-    const dy = Math.max(0, event.clientY - gesture.startY);
-    const next = Math.min(dy, SLIDE_TO_CALL_DISTANCE_PX);
-    if (dy > 4) revealTrack();
-    const crossedThreshold =
-      next >= SLIDE_TO_CALL_DISTANCE_PX && offset() < SLIDE_TO_CALL_DISTANCE_PX;
-    if (crossedThreshold) hapticImpact('medium');
-    setOffset(next);
+    const progress = slideDownProgress(event.clientY - gesture.startY);
+    if (progress.revealTrack) revealTrack();
+    if (progress.armed && !armed()) hapticImpact('medium');
+    setOffset(progress.offset);
   };
 
-  const onPointerUp: JSX.EventHandler<HTMLButtonElement, PointerEvent> = (
-    event
-  ) => {
+  const onPointerUp = (event: PointerEvent) => {
     if (!gesture || event.pointerId !== gesture.pointerId) return;
     event.preventDefault();
-    event.stopPropagation();
-    event.currentTarget.releasePointerCapture?.(event.pointerId);
-    endGesture(armed());
+    endGesture(isSlideDownArmed(offset()));
   };
 
-  const onPointerCancel: JSX.EventHandler<HTMLButtonElement, PointerEvent> = (
-    event
-  ) => {
+  const onPointerCancel = (event: PointerEvent) => {
     if (!gesture || event.pointerId !== gesture.pointerId) return;
     endGesture(false);
   };
 
-  const onKeyDown: JSX.EventHandler<HTMLButtonElement, KeyboardEvent> = (
-    event
-  ) => {
+  const onPointerDown = (event: PointerEvent) => {
+    if (props.joining) return;
+    if (event.button !== 0) return;
+    event.preventDefault();
+    event.stopPropagation();
+    gesture = { pointerId: event.pointerId, startY: event.clientY };
+    setDragging(true);
+    setOffset(0);
+    window.addEventListener('pointermove', onPointerMove, { passive: false });
+    window.addEventListener('pointerup', onPointerUp);
+    window.addEventListener('pointercancel', onPointerCancel);
+  };
+
+  onCleanup(stopListening);
+
+  const onKeyDown = (event: KeyboardEvent) => {
     if (event.key !== 'Enter' && event.key !== ' ') return;
     event.preventDefault();
     void props.onCall();
@@ -187,8 +178,6 @@ function SlideDownCallButton(props: {
   return (
     <div class="relative isolate">
       <div
-        data-testid="call-slide-track"
-        data-visible={trackVisible() ? 'true' : 'false'}
         aria-hidden="true"
         class={cn(
           'island pointer-events-none absolute -inset-x-1 top-0 z-0 rounded-full transition-opacity duration-150',
@@ -199,19 +188,20 @@ function SlideDownCallButton(props: {
           height: `calc(100% + ${SLIDE_TO_CALL_DISTANCE_PX}px)`,
         }}
       >
-        <div class="absolute inset-x-0 bottom-1.5 flex flex-col items-center gap-0 text-ink-muted">
+        <div class="absolute inset-x-0 bottom-1.5 flex flex-col items-center text-ink-muted">
           <CaretDownIcon class="size-3.5 opacity-40" />
           <CaretDownIcon class="size-3.5 opacity-70" />
           <CaretDownIcon class="size-3.5" />
-          <span class="mt-0.5 text-[10px] font-medium leading-none tracking-wide">
+          <span class="mt-0.5 text-2xs font-medium leading-none tracking-wide">
             Slide
           </span>
         </div>
       </div>
       <Show when={trackVisible()}>
         <span class="sr-only" role="status">
-          Slide the call button down to{' '}
-          {props.callInProgress ? 'join' : 'start'} the call
+          {`Slide the call button down to ${
+            props.callInProgress ? 'join' : 'start'
+          } the call`}
         </span>
       </Show>
       <div
@@ -222,6 +212,7 @@ function SlideDownCallButton(props: {
         style={{
           transform: `translateY(${offset()}px)`,
         }}
+        on:pointerdown={onPointerDown}
       >
         <Button
           tooltip={props.tooltip}
@@ -234,10 +225,6 @@ function SlideDownCallButton(props: {
             'touch-none select-none active:bg-transparent',
             armed() && 'bg-success/20 text-success'
           )}
-          onPointerDown={onPointerDown}
-          onPointerMove={onPointerMove}
-          onPointerUp={onPointerUp}
-          onPointerCancel={onPointerCancel}
           onKeyDown={onKeyDown}
         >
           <PhoneIcon />
