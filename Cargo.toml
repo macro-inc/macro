@@ -294,9 +294,9 @@ tracing = "0.1.44"
 tracing-opentelemetry = "0.32.1"
 tracing-subscriber = { version = "0.3.22", features = ["env-filter", "json"] }
 tracing-tree = "0.4.0"
-# Exact remotely available Turso fork revision approved by the browser cache G0.
-# Its source tree is identical to the locally verified cf7de761 revision.
-turso_core = { git = "https://github.com/seanaye/turso", rev = "be9acfe9e5e6efb17911af84047e4855cace53a3", default-features = false }
+# Pin the official upstream revision used by the browser cache. Cache writes use
+# deferred transactions so browser WASM does not initialize Turso's temp database.
+turso_core = { git = "https://github.com/tursodatabase/turso", rev = "79163249538197d01dec5ea7f65519454ed792e2", default-features = false }
 tungstenite = { version = "0.28", features = ["url"] }
 unsynn = "0.3"
 urlencoding = "2.1.3"

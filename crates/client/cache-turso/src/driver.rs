@@ -175,7 +175,12 @@ pub(crate) fn write_transaction<T>(
     connection: &Arc<Connection>,
     operation: impl FnOnce() -> Result<T, TursoStorageError>,
 ) -> Result<T, TursoStorageError> {
-    transaction(connection, "BEGIN IMMEDIATE", operation)
+    // BEGIN IMMEDIATE eagerly initializes Turso's temp database, which reads
+    // std::time::Instant and is unsupported in browser WASM. The connection is
+    // cache-local and operations are serialized, so a deferred write
+    // transaction provides the required atomicity without reserving the writer
+    // lock before the first write statement.
+    transaction(connection, "BEGIN", operation)
 }
 
 fn transaction<T>(
