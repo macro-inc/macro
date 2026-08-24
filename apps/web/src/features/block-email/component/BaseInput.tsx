@@ -2155,6 +2155,7 @@ export function BaseInput(props: {
               </Button>
 
               <CopyAvailabilityButton
+                disabled={sendMutation.isPending}
                 onInsert={(text) => {
                   const editor_ = editor();
                   if (editor_) insertPlainTextAtCursor(editor_, text);

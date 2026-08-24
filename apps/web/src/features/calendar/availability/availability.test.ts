@@ -7,7 +7,9 @@ import {
   DEFAULT_AVAILABILITY_SETTINGS,
   formatAvailabilityText,
   resolveAvailabilityWindow,
+  sanitizeAvailabilitySettings,
 } from './availability';
+import { rangeTimeZoneLabel } from './zone-label';
 
 // Mon Aug 24 2026, 10:00 local.
 const MONDAY_10AM = new Date(2026, 7, 24, 10, 0);
@@ -263,6 +265,83 @@ describe('computeAvailability', () => {
       endTime: '18:00',
       excludeWeekends: true,
     });
+  });
+});
+
+describe('sanitizeAvailabilitySettings', () => {
+  it('keeps valid persisted values', () => {
+    const stored = {
+      startTime: '07:30',
+      endTime: '16:00',
+      excludeWeekends: false,
+    };
+    expect(sanitizeAvailabilitySettings(stored)).toEqual(stored);
+  });
+
+  it('replaces malformed fields with defaults', () => {
+    expect(
+      sanitizeAvailabilitySettings({
+        startTime: 'banana',
+        endTime: 42,
+        excludeWeekends: 'yes',
+      })
+    ).toEqual(DEFAULT_AVAILABILITY_SETTINGS);
+    expect(sanitizeAvailabilitySettings(null)).toEqual(
+      DEFAULT_AVAILABILITY_SETTINGS
+    );
+    expect(sanitizeAvailabilitySettings('true')).toEqual(
+      DEFAULT_AVAILABILITY_SETTINGS
+    );
+  });
+
+  it('fills missing fields from older builds with defaults', () => {
+    expect(sanitizeAvailabilitySettings({ endTime: '17:00' })).toEqual({
+      ...DEFAULT_AVAILABILITY_SETTINGS,
+      endTime: '17:00',
+    });
+  });
+
+  it('resets an inverted workday but keeps the weekend preference', () => {
+    expect(
+      sanitizeAvailabilitySettings({
+        startTime: '18:00',
+        endTime: '09:00',
+        excludeWeekends: false,
+      })
+    ).toEqual({ ...DEFAULT_AVAILABILITY_SETTINGS, excludeWeekends: false });
+  });
+});
+
+describe('rangeTimeZoneLabel', () => {
+  // US DST ends Sun Nov 1 2026; these instants sit on either side of it.
+  const beforeTransition = new Date(Date.UTC(2026, 9, 30, 14, 0));
+  const afterTransition = new Date(Date.UTC(2026, 10, 3, 15, 0));
+  const ZONE = 'America/New_York';
+
+  it('keeps the specific abbreviation while the offset is constant', () => {
+    const single = rangeTimeZoneLabel([beforeTransition], ZONE);
+    expect(single).toBeTruthy();
+    expect(
+      rangeTimeZoneLabel(
+        [beforeTransition, new Date(Date.UTC(2026, 9, 31, 14, 0))],
+        ZONE
+      )
+    ).toBe(single);
+  });
+
+  it('uses a DST-agnostic label across a daylight-saving change', () => {
+    const before = rangeTimeZoneLabel([beforeTransition], ZONE);
+    const after = rangeTimeZoneLabel([afterTransition], ZONE);
+    expect(before).not.toBe(after); // sanity: the range crosses a transition
+
+    const label = rangeTimeZoneLabel([beforeTransition, afterTransition], ZONE);
+    expect(label).toBeTruthy();
+    expect(label).not.toBe(before);
+    expect(label).not.toBe(after);
+  });
+
+  it('returns nothing for an empty range', () => {
+    expect(rangeTimeZoneLabel([], ZONE)).toBeUndefined();
   });
 });
 

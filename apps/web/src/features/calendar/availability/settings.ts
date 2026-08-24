@@ -13,11 +13,24 @@ import { getDefaultCalendarTimeFormat } from '../utils/time-format';
 import {
   type AvailabilitySettings,
   DEFAULT_AVAILABILITY_SETTINGS,
+  sanitizeAvailabilitySettings,
 } from './availability';
 
 const [storedSettings, setStoredSettings] = makePersisted(
-  createSignal<Partial<AvailabilitySettings>>(DEFAULT_AVAILABILITY_SETTINGS),
-  { name: 'macro:pref:calendar:availability' }
+  createSignal<AvailabilitySettings>(DEFAULT_AVAILABILITY_SETTINGS),
+  {
+    name: 'macro:pref:calendar:availability',
+    // Persisted storage is user-editable and may predate fields added later:
+    // malformed JSON or invalid values must never throw or reach the time
+    // formatters, so everything read back is sanitized to a valid shape.
+    deserialize: (raw) => {
+      try {
+        return sanitizeAvailabilitySettings(JSON.parse(raw));
+      } catch {
+        return DEFAULT_AVAILABILITY_SETTINGS;
+      }
+    },
+  }
 );
 
 /** Keeps the workday at least an hour long when one edge crosses the other. */
@@ -32,12 +45,8 @@ function shiftTime(time: string, deltaMinutes: number): string {
 
 /** Shared accessor + setters for the copy-availability settings menu. */
 export function useAvailabilitySettings() {
-  // Merge with defaults so settings saved by older builds keep working
-  // when new fields are added.
-  const settings = (): AvailabilitySettings => ({
-    ...DEFAULT_AVAILABILITY_SETTINGS,
-    ...storedSettings(),
-  });
+  const settings = (): AvailabilitySettings =>
+    sanitizeAvailabilitySettings(storedSettings());
 
   const setStartTime = (startTime: string) => {
     const current = settings();

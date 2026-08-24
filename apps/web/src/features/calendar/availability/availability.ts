@@ -7,6 +7,7 @@
 import type { CalendarOccurrenceItem } from '@service-storage/generated/schemas/calendarOccurrenceItem';
 import type { CalendarTimeFormat } from '../types';
 import { formatCalendarTime } from '../utils/time-format';
+import { rangeTimeZoneLabel } from './zone-label';
 
 /** Supported share ranges, in menu order. */
 export type AvailabilityRangeKey =
@@ -40,6 +41,39 @@ export const DEFAULT_AVAILABILITY_SETTINGS: AvailabilitySettings = {
   endTime: '18:00',
   excludeWeekends: true,
 };
+
+const TIME_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/;
+
+/**
+ * Coerces a persisted (and therefore untrusted) settings value into a valid
+ * shape: malformed fields fall back to their defaults, and an inverted or
+ * empty workday falls back entirely (keeping a valid weekend preference).
+ */
+export function sanitizeAvailabilitySettings(
+  value: unknown
+): AvailabilitySettings {
+  const stored = (
+    typeof value === 'object' && value !== null ? value : {}
+  ) as Partial<Record<keyof AvailabilitySettings, unknown>>;
+  const startTime =
+    typeof stored.startTime === 'string' && TIME_PATTERN.test(stored.startTime)
+      ? stored.startTime
+      : DEFAULT_AVAILABILITY_SETTINGS.startTime;
+  const endTime =
+    typeof stored.endTime === 'string' && TIME_PATTERN.test(stored.endTime)
+      ? stored.endTime
+      : DEFAULT_AVAILABILITY_SETTINGS.endTime;
+  const excludeWeekends =
+    typeof stored.excludeWeekends === 'boolean'
+      ? stored.excludeWeekends
+      : DEFAULT_AVAILABILITY_SETTINGS.excludeWeekends;
+
+  // 'HH:MM' strings order lexicographically, so <= is a time comparison.
+  if (endTime <= startTime) {
+    return { ...DEFAULT_AVAILABILITY_SETTINGS, excludeWeekends };
+  }
+  return { startTime, endTime, excludeWeekends };
+}
 
 /** One contiguous free interval within a single day. */
 interface AvailabilitySlot {
@@ -219,13 +253,6 @@ const dayLabelFormatter = new Intl.DateTimeFormat(undefined, {
   day: 'numeric',
 });
 
-/** Short local timezone label (e.g. "EDT" or "GMT+2") for the header line. */
-function localTimeZoneLabel(now: Date): string | undefined {
-  return new Intl.DateTimeFormat(undefined, { timeZoneName: 'short' })
-    .formatToParts(now)
-    .find((part) => part.type === 'timeZoneName')?.value;
-}
-
 /**
  * Formats availability as plain text ready for an email:
  *
@@ -234,13 +261,22 @@ function localTimeZoneLabel(now: Date): string | undefined {
  * Mon, Aug 24: 2:15 PM – 6:00 PM
  * Tue, Aug 25: 9:00 AM – 11:00 AM, 1:30 PM – 6:00 PM
  * ```
+ *
+ * The header label covers every listed slot: a range that spans a
+ * daylight-saving transition gets a DST-agnostic label instead of the
+ * abbreviation that only holds at copy time.
  */
 export function formatAvailabilityText(
   days: AvailabilityDay[],
   timeFormat: CalendarTimeFormat,
   now: Date
 ): string {
-  const timeZone = localTimeZoneLabel(now);
+  const boundaries = days.flatMap((day) =>
+    day.slots.flatMap((slot) => [slot.start, slot.end])
+  );
+  const timeZone = rangeTimeZoneLabel(
+    boundaries.length > 0 ? boundaries : [now]
+  );
   const header = timeZone
     ? `My availability (${timeZone}):`
     : 'My availability:';
