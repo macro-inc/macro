@@ -28,6 +28,20 @@ import {
   sessionOriginThread,
 } from '../context/origin-thread';
 
+/** Providers whose display casing is not plain title case. */
+const PROVIDER_TITLES: Record<string, string> = {
+  cursor: 'Cursor',
+};
+
+/** 'cursor' → 'Cursor'; unknown providers title-case rather than vanish, so a
+ * new backend provider still gets a working link in an old frontend. */
+function providerTitle(provider: string): string {
+  return (
+    PROVIDER_TITLES[provider] ??
+    provider.charAt(0).toUpperCase() + provider.slice(1)
+  );
+}
+
 /** 'claude-code' → 'Claude Code'; the fallback when the fold has no title. */
 export function harnessTitle(harness: string | undefined): string {
   if (!harness) return 'Agent session';
@@ -91,19 +105,21 @@ export function AgentSplitHeader(props: {
       condition: () => sessionOriginThread(props.session) !== undefined,
     },
     // Externally-served sessions link out to the provider's own page for the
-    // agent. Rendered from the stored url, not a live provider check: a
-    // stale link opening an archived agent is fine, a per-render API call to
-    // validate it is not.
+    // agent. The provider names itself through the session payload — nothing
+    // here is Cursor-specific. Rendered from the stored url, not a live
+    // provider check: a stale link opening an archived agent is fine, a
+    // per-render API call to validate it is not. The label is a closure
+    // because the session arrives after first render, and this component's
+    // body runs once.
     {
-      label: 'Open in Cursor',
+      label: () =>
+        `Open in ${providerTitle(props.session?.external?.provider ?? '')}`,
       icon: ArrowSquareOut,
       action: () => {
         const url = props.session?.external?.url;
         if (url) openExternalUrl(url);
       },
-      condition: () =>
-        props.session?.external?.provider === 'cursor' &&
-        Boolean(props.session?.external?.url),
+      condition: () => Boolean(props.session?.external?.url),
     },
     {
       label: 'Copy link',
