@@ -11,7 +11,7 @@ import {
 } from 'solid-js';
 import { Portal } from 'solid-js/web';
 import { useOnboardingHardMode } from './HardMode';
-import { randomSkipPosition } from './hardModePosition';
+import { randomSkipJumpDelayMs, randomSkipPosition } from './hardModePosition';
 
 /** Where the flow persists its current step, so full-page OAuth round-trips
  * (adding a Gmail inbox, Stripe checkout aborts) resume where they left. */
@@ -121,6 +121,14 @@ export function FeatureList(props: { features: string[] }) {
   );
 }
 
+function SkipJumpTimer(props: { onJump: () => void }) {
+  onMount(() => {
+    const timer = setTimeout(props.onJump, randomSkipJumpDelayMs());
+    onCleanup(() => clearTimeout(timer));
+  });
+  return null;
+}
+
 export function SkipButton(props: {
   label?: string;
   disabled?: boolean;
@@ -133,9 +141,6 @@ export function SkipButton(props: {
     nonce();
     return randomSkipPosition();
   });
-  const dodge = () => {
-    if (hardMode.hardMode()) setNonce((n) => n + 1);
-  };
 
   const button = (className: string) => (
     <Button
@@ -144,7 +149,6 @@ export function SkipButton(props: {
       class={className}
       disabled={props.disabled}
       onClick={props.onClick}
-      onPointerEnter={dodge}
     >
       {props.label ?? 'Skip for now'}
     </Button>
@@ -162,6 +166,9 @@ export function SkipButton(props: {
         if (!layer) return button('self-center text-ink-muted');
         return (
           <Portal mount={layer}>
+            <For each={[nonce()]}>
+              {() => <SkipJumpTimer onJump={() => setNonce((n) => n + 1)} />}
+            </For>
             <div
               class="pointer-events-auto absolute"
               style={{
