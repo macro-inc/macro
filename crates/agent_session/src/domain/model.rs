@@ -43,7 +43,8 @@ pub struct CreateAgentSessionParams {
     pub model: String,
     /// Harness slug.
     pub harness: String,
-    /// Repository the agent works with, when one was stated.
+    /// Repository the agent works with, when the persona named one. `None`
+    /// means the session runs in an empty workspace.
     pub repo_url: Option<String>,
     /// Absolute directory the harness runs in on its runtime.
     pub workspace: String,
@@ -70,7 +71,9 @@ pub struct AgentSession {
     pub model: String,
     /// harness slug - TODO: probably a better type here
     pub harness: String,
-    /// repo we are working with, when one was stated
+    /// repo we are working with, if any. Recorded per session rather than read
+    /// back off the persona, so editing a persona never rewrites the history of
+    /// what a past session actually cloned.
     pub repo_url: Option<String>,
     /// Directory the harness runs in, snapshotted at creation. The session
     /// actor sends it as the working directory of `session/new`, and resume

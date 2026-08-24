@@ -70,10 +70,11 @@ pub fn generate(
 
     // 1. Rust services → runtime image + mounted binaries.
     for svc in services_for_mode(mode) {
+        let container_port = svc.container_port();
         let mut s = dct::Service {
             image: Some(RUNTIME_IMAGE_TAG.to_string()),
             volumes: mounts.iter().cloned().map(dct::Volumes::Simple).collect(),
-            environment: kv(&[("PORT", "8080")]),
+            environment: kv(&[("PORT", &container_port.to_string())]),
             ..Default::default()
         };
         // Named instances need their own host ports (replacing the base ports —
@@ -83,7 +84,7 @@ pub fn generate(
             && !instance.is_default()
             && let Some(port) = svc.host_port
         {
-            s.ports = dct::Ports::Short(vec![format!("{}:8080", instance.port(port))]);
+            s.ports = dct::Ports::Short(vec![format!("{}:{container_port}", instance.port(port))]);
         }
         services.insert(svc.compose_name.to_string(), Some(s));
     }

@@ -250,6 +250,12 @@ use utoipa::OpenApi;
 
         // bots
         bots::inbound::axum_router::get_self_bot_handler,
+        bots::inbound::axum_router::list_mentionable_bots_handler,
+        bots::inbound::axum_router::list_personas_handler,
+        bots::inbound::axum_router::create_persona_handler,
+        bots::inbound::axum_router::get_persona_handler,
+        bots::inbound::axum_router::patch_persona_handler,
+        bots::inbound::axum_router::delete_persona_handler,
         bots::inbound::axum_router::list_bot_channels_handler,
         bots::inbound::axum_router::remove_bot_channel_handler,
         bots::inbound::channel_webhook_router::create_channel_scoped_bot_handler,
@@ -538,6 +544,8 @@ use utoipa::OpenApi;
             PostActivityRequest,
 
             // Bots
+            bots::domain::models::AgentConfig,
+            bots::domain::models::AgentModel,
             bots::domain::models::Bot,
             bots::domain::models::BotKind,
             bots::domain::models::BotOwner,
@@ -550,6 +558,11 @@ use utoipa::OpenApi;
             bots::domain::models::PatchBotRequest,
             bots::domain::models::CreateChannelScopedBotRequest,
             bots::domain::models::CreateChannelScopedBotResponse,
+            bots::domain::models::CreatePersonaRequest,
+            bots::domain::models::Harness,
+            bots::domain::models::MentionableBot,
+            bots::domain::models::PatchPersonaRequest,
+            bots::domain::models::Persona,
 
             // Calls
             call::domain::models::CallTokenResponse,

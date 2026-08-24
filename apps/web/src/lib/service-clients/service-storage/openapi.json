@@ -581,6 +581,48 @@
         }
       }
     },
+    "/bots/mentionable": {
+      "get": {
+        "tags": ["bots"],
+        "summary": "Handler for `GET /bots/mentionable`.",
+        "operationId": "list_mentionable_bots",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/MentionableBot"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/bots/{bot_id}/channels": {
       "get": {
         "tags": ["bots"],
@@ -8706,6 +8748,337 @@
         }
       }
     },
+    "/personas": {
+      "get": {
+        "tags": ["bots"],
+        "summary": "Handler for `GET /personas`.",
+        "operationId": "list_personas",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Persona"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["bots"],
+        "summary": "Handler for `POST /personas`.",
+        "operationId": "create_persona",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreatePersonaRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Persona"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/personas/{bot_id}": {
+      "get": {
+        "tags": ["bots"],
+        "summary": "Handler for `GET /personas/{bot_id}`.",
+        "operationId": "get_persona",
+        "parameters": [
+          {
+            "name": "bot_id",
+            "in": "path",
+            "description": "Persona bot id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Persona"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["bots"],
+        "summary": "Handler for `DELETE /personas/{bot_id}`.",
+        "operationId": "delete_persona",
+        "parameters": [
+          {
+            "name": "bot_id",
+            "in": "path",
+            "description": "Persona bot id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": ["bots"],
+        "summary": "Handler for `PATCH /personas/{bot_id}`.",
+        "operationId": "patch_persona",
+        "parameters": [
+          {
+            "name": "bot_id",
+            "in": "path",
+            "description": "Persona bot id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchPersonaRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Persona"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/pins": {
       "get": {
         "tags": ["pins::get_pins"],
@@ -11269,6 +11642,34 @@
             "description": "The type of the pin"
           }
         }
+      },
+      "AgentConfig": {
+        "type": "object",
+        "description": "What an agent-backed bot runs: the `bot_agent_config` row.",
+        "required": ["harness", "model"],
+        "properties": {
+          "harness": {
+            "$ref": "#/components/schemas/Harness",
+            "description": "Harness the session runs under."
+          },
+          "model": {
+            "$ref": "#/components/schemas/AgentModel",
+            "description": "Model the session is launched with."
+          },
+          "repo_url": {
+            "type": ["string", "null"],
+            "description": "Repository cloned into the workspace. `None` means no checkout: the\nsession gets an empty workspace, and there is no deployment-wide\ndefault standing behind it."
+          },
+          "system_prompt": {
+            "type": ["string", "null"],
+            "description": "Markdown instructions prepended to every session, if any."
+          }
+        }
+      },
+      "AgentModel": {
+        "type": "string",
+        "description": "Model a persona's sessions are launched with.",
+        "enum": ["claude"]
       },
       "Anchor": {
         "oneOf": [
@@ -15446,6 +15847,38 @@
           "token": {
             "type": "string",
             "description": "A pre-generated permission token that you can use for SS"
+          }
+        }
+      },
+      "CreatePersonaRequest": {
+        "type": "object",
+        "description": "Request to create a persona.",
+        "required": ["team_id", "name", "handle", "agent"],
+        "properties": {
+          "agent": {
+            "$ref": "#/components/schemas/AgentConfig",
+            "description": "What it runs."
+          },
+          "avatar_url": {
+            "type": ["string", "null"],
+            "description": "Optional avatar URL."
+          },
+          "description": {
+            "type": ["string", "null"],
+            "description": "Optional description."
+          },
+          "handle": {
+            "type": "string",
+            "description": "Stable handle, used for `@` mentions."
+          },
+          "name": {
+            "type": "string",
+            "description": "Display name."
+          },
+          "team_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Team the persona belongs to. The caller must administer it."
           }
         }
       },
@@ -19735,6 +20168,11 @@
         "description": "Sort method for grouped queries (frecency not supported).",
         "enum": ["viewed_at", "created_at", "updated_at", "viewed_updated"]
       },
+      "Harness": {
+        "type": "string",
+        "description": "Harness a persona's sessions run under.\n\nA closed set: this is what we launch inside the sandbox, not something an\nexternal system reports back. Contrast `agent_session.model`, which records\nwhatever model the running agent tells us it used and is therefore a plain\nstring.",
+        "enum": ["open_code"]
+      },
       "HashMap": {
         "type": "object",
         "additionalProperties": {
@@ -19984,6 +20422,29 @@
       "MacroUserIdStr": {
         "type": "string"
       },
+      "MentionableBot": {
+        "type": "object",
+        "description": "A bot the caller may `@`-mention, projected down to what a typeahead needs.",
+        "required": ["id", "name", "handle"],
+        "properties": {
+          "avatar_url": {
+            "type": ["string", "null"],
+            "description": "Avatar, when it has one."
+          },
+          "handle": {
+            "type": "string",
+            "description": "Handle typed after the `@`."
+          },
+          "id": {
+            "$ref": "#/components/schemas/BotId",
+            "description": "Bot id. Mentions carry this as `bot|{id}`."
+          },
+          "name": {
+            "type": "string",
+            "description": "Display name."
+          }
+        }
+      },
       "Mentions": {
         "type": "object",
         "required": ["users", "mentionId"],
@@ -20157,6 +20618,39 @@
           "nonce": {
             "type": ["string", "null"],
             "description": "Optional optimistic-update nonce."
+          }
+        }
+      },
+      "PatchPersonaRequest": {
+        "type": "object",
+        "description": "Request to patch a persona. Absent fields are left unchanged.",
+        "properties": {
+          "agent": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/AgentConfig",
+                "description": "Replacement agent configuration, applied wholesale when present."
+              }
+            ]
+          },
+          "avatar_url": {
+            "type": ["string", "null"],
+            "description": "Optional avatar URL."
+          },
+          "description": {
+            "type": ["string", "null"],
+            "description": "Optional description."
+          },
+          "handle": {
+            "type": ["string", "null"],
+            "description": "Stable handle."
+          },
+          "name": {
+            "type": ["string", "null"],
+            "description": "Display name."
           }
         }
       },
@@ -20712,6 +21206,25 @@
             "format": "double"
           }
         }
+      },
+      "Persona": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Bot",
+            "description": "The bot identity: name, handle, avatar, ownership."
+          },
+          {
+            "type": "object",
+            "required": ["agent"],
+            "properties": {
+              "agent": {
+                "$ref": "#/components/schemas/AgentConfig",
+                "description": "What it runs."
+              }
+            }
+          }
+        ],
+        "description": "A persona: an agent-backed system bot a team owns and edits."
       },
       "PinRequest": {
         "type": "object",

@@ -716,6 +716,23 @@ export const getSelfBotResponse = zod
   .describe('Bot row.\n\nClients deserialize this, so both derives are used.');
 
 /**
+ * @summary Handler for `GET /bots/mentionable`.
+ */
+export const listMentionableBotsResponseItem = zod
+  .object({
+    avatar_url: zod.string().nullish().describe('Avatar, when it has one.'),
+    handle: zod.string().describe('Handle typed after the `@`.'),
+    id: zod.string(),
+    name: zod.string().describe('Display name.'),
+  })
+  .describe(
+    'A bot the caller may `@`-mention, projected down to what a typeahead needs.'
+  );
+export const listMentionableBotsResponse = zod.array(
+  listMentionableBotsResponseItem
+);
+
+/**
  * @summary Handler for `GET /bots/{bot_id}/channels`.
  */
 export const listBotChannelsParams = zod.object({
@@ -24300,6 +24317,329 @@ export const postItemsSoupAstGroupedResponse = zod
       .describe('Follow-up response for one specific group.'),
   ])
   .describe('Response for grouped soup queries.');
+
+/**
+ * @summary Handler for `GET /personas`.
+ */
+export const listPersonasResponseItem = zod
+  .object({
+    avatar_url: zod.string().nullish().describe('Optional avatar URL.'),
+    created_at: zod.iso.datetime({}).describe('Creation timestamp.'),
+    created_by: zod.string().nullish().describe('User that created this bot.'),
+    deleted_at: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('Soft-delete timestamp.'),
+    description: zod.string().nullish().describe('Optional description.'),
+    handle: zod.string().describe('Stable handle.'),
+    has_agent: zod
+      .boolean()
+      .describe(
+        'Whether mentioning this bot opens a sandboxed coding-agent session.'
+      ),
+    id: zod.string(),
+    kind: zod.enum(['owned', 'system']).describe('Bot kind.'),
+    name: zod.string().describe('Display name.'),
+    owner: zod
+      .union([
+        zod.null(),
+        zod
+          .union([
+            zod
+              .object({
+                type: zod.enum(['user']),
+                user_id: zod.string().describe('Owner user id.'),
+              })
+              .describe('User-owned bot.'),
+            zod
+              .object({
+                team_id: zod.uuid().describe('Owner team id.'),
+                type: zod.enum(['team']),
+              })
+              .describe('Team-owned bot.'),
+          ])
+          .describe('Bot owner.'),
+      ])
+      .optional(),
+    updated_at: zod.iso.datetime({}).describe('Update timestamp.'),
+  })
+  .describe('Bot row.\n\nClients deserialize this, so both derives are used.')
+  .and(
+    zod.object({
+      agent: zod
+        .object({
+          harness: zod
+            .enum(['open_code'])
+            .describe(
+              "Harness a persona's sessions run under.\n\nA closed set: this is what we launch inside the sandbox, not something an\nexternal system reports back. Contrast `agent_session.model`, which records\nwhatever model the running agent tells us it used and is therefore a plain\nstring."
+            ),
+          model: zod
+            .enum(['claude'])
+            .describe("Model a persona's sessions are launched with."),
+          repo_url: zod
+            .string()
+            .nullish()
+            .describe(
+              'Repository cloned into the workspace. `None` means no checkout: the\nsession gets an empty workspace, and there is no deployment-wide\ndefault standing behind it.'
+            ),
+          system_prompt: zod
+            .string()
+            .nullish()
+            .describe(
+              'Markdown instructions prepended to every session, if any.'
+            ),
+        })
+        .describe('What an agent-backed bot runs: the `bot_agent_config` row.'),
+    })
+  )
+  .describe('A persona: an agent-backed system bot a team owns and edits.');
+export const listPersonasResponse = zod.array(listPersonasResponseItem);
+
+/**
+ * @summary Handler for `POST /personas`.
+ */
+export const createPersonaBody = zod
+  .object({
+    agent: zod
+      .object({
+        harness: zod
+          .enum(['open_code'])
+          .describe(
+            "Harness a persona's sessions run under.\n\nA closed set: this is what we launch inside the sandbox, not something an\nexternal system reports back. Contrast `agent_session.model`, which records\nwhatever model the running agent tells us it used and is therefore a plain\nstring."
+          ),
+        model: zod
+          .enum(['claude'])
+          .describe("Model a persona's sessions are launched with."),
+        repo_url: zod
+          .string()
+          .nullish()
+          .describe(
+            'Repository cloned into the workspace. `None` means no checkout: the\nsession gets an empty workspace, and there is no deployment-wide\ndefault standing behind it.'
+          ),
+        system_prompt: zod
+          .string()
+          .nullish()
+          .describe(
+            'Markdown instructions prepended to every session, if any.'
+          ),
+      })
+      .describe('What an agent-backed bot runs: the `bot_agent_config` row.'),
+    avatar_url: zod.string().nullish().describe('Optional avatar URL.'),
+    description: zod.string().nullish().describe('Optional description.'),
+    handle: zod.string().describe('Stable handle, used for `@` mentions.'),
+    name: zod.string().describe('Display name.'),
+    team_id: zod
+      .uuid()
+      .describe('Team the persona belongs to. The caller must administer it.'),
+  })
+  .describe('Request to create a persona.');
+
+/**
+ * @summary Handler for `GET /personas/{bot_id}`.
+ */
+export const getPersonaParams = zod.object({
+  bot_id: zod.uuid().describe('Persona bot id'),
+});
+
+export const getPersonaResponse = zod
+  .object({
+    avatar_url: zod.string().nullish().describe('Optional avatar URL.'),
+    created_at: zod.iso.datetime({}).describe('Creation timestamp.'),
+    created_by: zod.string().nullish().describe('User that created this bot.'),
+    deleted_at: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('Soft-delete timestamp.'),
+    description: zod.string().nullish().describe('Optional description.'),
+    handle: zod.string().describe('Stable handle.'),
+    has_agent: zod
+      .boolean()
+      .describe(
+        'Whether mentioning this bot opens a sandboxed coding-agent session.'
+      ),
+    id: zod.string(),
+    kind: zod.enum(['owned', 'system']).describe('Bot kind.'),
+    name: zod.string().describe('Display name.'),
+    owner: zod
+      .union([
+        zod.null(),
+        zod
+          .union([
+            zod
+              .object({
+                type: zod.enum(['user']),
+                user_id: zod.string().describe('Owner user id.'),
+              })
+              .describe('User-owned bot.'),
+            zod
+              .object({
+                team_id: zod.uuid().describe('Owner team id.'),
+                type: zod.enum(['team']),
+              })
+              .describe('Team-owned bot.'),
+          ])
+          .describe('Bot owner.'),
+      ])
+      .optional(),
+    updated_at: zod.iso.datetime({}).describe('Update timestamp.'),
+  })
+  .describe('Bot row.\n\nClients deserialize this, so both derives are used.')
+  .and(
+    zod.object({
+      agent: zod
+        .object({
+          harness: zod
+            .enum(['open_code'])
+            .describe(
+              "Harness a persona's sessions run under.\n\nA closed set: this is what we launch inside the sandbox, not something an\nexternal system reports back. Contrast `agent_session.model`, which records\nwhatever model the running agent tells us it used and is therefore a plain\nstring."
+            ),
+          model: zod
+            .enum(['claude'])
+            .describe("Model a persona's sessions are launched with."),
+          repo_url: zod
+            .string()
+            .nullish()
+            .describe(
+              'Repository cloned into the workspace. `None` means no checkout: the\nsession gets an empty workspace, and there is no deployment-wide\ndefault standing behind it.'
+            ),
+          system_prompt: zod
+            .string()
+            .nullish()
+            .describe(
+              'Markdown instructions prepended to every session, if any.'
+            ),
+        })
+        .describe('What an agent-backed bot runs: the `bot_agent_config` row.'),
+    })
+  )
+  .describe('A persona: an agent-backed system bot a team owns and edits.');
+
+/**
+ * @summary Handler for `DELETE /personas/{bot_id}`.
+ */
+export const deletePersonaParams = zod.object({
+  bot_id: zod.uuid().describe('Persona bot id'),
+});
+
+/**
+ * @summary Handler for `PATCH /personas/{bot_id}`.
+ */
+export const patchPersonaParams = zod.object({
+  bot_id: zod.uuid().describe('Persona bot id'),
+});
+
+export const patchPersonaBody = zod
+  .object({
+    agent: zod
+      .union([
+        zod.null(),
+        zod
+          .object({
+            harness: zod
+              .enum(['open_code'])
+              .describe(
+                "Harness a persona's sessions run under.\n\nA closed set: this is what we launch inside the sandbox, not something an\nexternal system reports back. Contrast `agent_session.model`, which records\nwhatever model the running agent tells us it used and is therefore a plain\nstring."
+              ),
+            model: zod
+              .enum(['claude'])
+              .describe("Model a persona's sessions are launched with."),
+            repo_url: zod
+              .string()
+              .nullish()
+              .describe(
+                'Repository cloned into the workspace. `None` means no checkout: the\nsession gets an empty workspace, and there is no deployment-wide\ndefault standing behind it.'
+              ),
+            system_prompt: zod
+              .string()
+              .nullish()
+              .describe(
+                'Markdown instructions prepended to every session, if any.'
+              ),
+          })
+          .describe(
+            'What an agent-backed bot runs: the `bot_agent_config` row.'
+          ),
+      ])
+      .optional(),
+    avatar_url: zod.string().nullish().describe('Optional avatar URL.'),
+    description: zod.string().nullish().describe('Optional description.'),
+    handle: zod.string().nullish().describe('Stable handle.'),
+    name: zod.string().nullish().describe('Display name.'),
+  })
+  .describe('Request to patch a persona. Absent fields are left unchanged.');
+
+export const patchPersonaResponse = zod
+  .object({
+    avatar_url: zod.string().nullish().describe('Optional avatar URL.'),
+    created_at: zod.iso.datetime({}).describe('Creation timestamp.'),
+    created_by: zod.string().nullish().describe('User that created this bot.'),
+    deleted_at: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('Soft-delete timestamp.'),
+    description: zod.string().nullish().describe('Optional description.'),
+    handle: zod.string().describe('Stable handle.'),
+    has_agent: zod
+      .boolean()
+      .describe(
+        'Whether mentioning this bot opens a sandboxed coding-agent session.'
+      ),
+    id: zod.string(),
+    kind: zod.enum(['owned', 'system']).describe('Bot kind.'),
+    name: zod.string().describe('Display name.'),
+    owner: zod
+      .union([
+        zod.null(),
+        zod
+          .union([
+            zod
+              .object({
+                type: zod.enum(['user']),
+                user_id: zod.string().describe('Owner user id.'),
+              })
+              .describe('User-owned bot.'),
+            zod
+              .object({
+                team_id: zod.uuid().describe('Owner team id.'),
+                type: zod.enum(['team']),
+              })
+              .describe('Team-owned bot.'),
+          ])
+          .describe('Bot owner.'),
+      ])
+      .optional(),
+    updated_at: zod.iso.datetime({}).describe('Update timestamp.'),
+  })
+  .describe('Bot row.\n\nClients deserialize this, so both derives are used.')
+  .and(
+    zod.object({
+      agent: zod
+        .object({
+          harness: zod
+            .enum(['open_code'])
+            .describe(
+              "Harness a persona's sessions run under.\n\nA closed set: this is what we launch inside the sandbox, not something an\nexternal system reports back. Contrast `agent_session.model`, which records\nwhatever model the running agent tells us it used and is therefore a plain\nstring."
+            ),
+          model: zod
+            .enum(['claude'])
+            .describe("Model a persona's sessions are launched with."),
+          repo_url: zod
+            .string()
+            .nullish()
+            .describe(
+              'Repository cloned into the workspace. `None` means no checkout: the\nsession gets an empty workspace, and there is no deployment-wide\ndefault standing behind it.'
+            ),
+          system_prompt: zod
+            .string()
+            .nullish()
+            .describe(
+              'Markdown instructions prepended to every session, if any.'
+            ),
+        })
+        .describe('What an agent-backed bot runs: the `bot_agent_config` row.'),
+    })
+  )
+  .describe('A persona: an agent-backed system bot a team owns and edits.');
 
 /**
  * @summary Gets the users pinned items

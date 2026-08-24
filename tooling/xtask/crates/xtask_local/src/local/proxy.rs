@@ -65,25 +65,34 @@ fn service_routes() -> String {
     let mut out = String::new();
     for svc in inventory::RUST_SERVICES {
         if let Some(prefix) = svc.path_prefix {
-            out.push_str(&route_block(prefix, svc.compose_name, svc.is_websocket));
+            out.push_str(&route_block(
+                prefix,
+                svc.compose_name,
+                svc.container_port(),
+                svc.is_websocket,
+            ));
         }
     }
     out
 }
 
-/// One Caddy route to a service container (always on `:8080`). HTTP uses
-/// `handle_path` (which strips the prefix); WebSocket needs the bare-prefix
-/// `@matcher` + explicit strip so the frontend's trailing-slash-less connect URL
-/// still matches. The target is the canonical compose service name, which always
-/// resolves on the proxy's networks.
-fn route_block(prefix: &str, target: &str, is_websocket: bool) -> String {
+/// One Caddy route to a service container. The upstream port comes from
+/// [`inventory::RustService::container_port`] — the same source `gen_compose`
+/// uses for the container's `PORT`, so the two cannot drift (they did: the
+/// harness listens on 8101 while this hardcoded 8080, 502ing every
+/// `/agent-harness` request). HTTP uses `handle_path` (which strips the
+/// prefix); WebSocket needs the bare-prefix `@matcher` + explicit strip so the
+/// frontend's trailing-slash-less connect URL still matches. The target is the
+/// canonical compose service name, which always resolves on the proxy's
+/// networks.
+fn route_block(prefix: &str, target: &str, port: u16, is_websocket: bool) -> String {
     if is_websocket {
         let m = matcher_name(prefix);
         format!(
-            "    {m} path {prefix} {prefix}/*\n    handle {m} {{\n        uri strip_prefix {prefix}\n        reverse_proxy {target}:8080\n    }}\n"
+            "    {m} path {prefix} {prefix}/*\n    handle {m} {{\n        uri strip_prefix {prefix}\n        reverse_proxy {target}:{port}\n    }}\n"
         )
     } else {
-        format!("    handle_path {prefix}/* {{\n        reverse_proxy {target}:8080\n    }}\n")
+        format!("    handle_path {prefix}/* {{\n        reverse_proxy {target}:{port}\n    }}\n")
     }
 }
 

@@ -4,12 +4,22 @@ use agent_session::domain::connection::RuntimeAttachment;
 use agent_session::domain::model::AgentSessionId;
 use agent_session::domain::ports::AgentConnector;
 use bot_id::BotId;
+use bots::domain::models::AgentConfig;
 
 use super::error::Result;
 use super::model::{SessionAnnouncement, SpawnContainer};
 
 #[cfg(test)]
 mod test;
+
+/// Reads what a persona runs: its harness, model, instructions and repository.
+///
+/// The `bot_agent_config` table belongs to the `bots` crate, so the adapter
+/// behind this port goes through that crate rather than issuing its own SQL.
+pub trait PersonaConfig: Send + Sync + 'static {
+    /// The configuration for a bot, or `None` when it has no agent config.
+    fn get(&self, bot_id: BotId) -> impl Future<Output = Result<Option<AgentConfig>>> + Send;
+}
 
 /// Posts a pointer to a new agent session into its originating thread.
 pub trait SessionAnnouncer: Send + Sync + 'static {

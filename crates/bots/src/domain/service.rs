@@ -3,9 +3,10 @@
 use super::{
     events::{BotCreatedMetadata, BotDeletedMetadata, BotMacroEvent, BotUpdatedMetadata},
     models::{
-        AuthenticatedBot, Bot, BotChannel, BotChannelListCaller, BotId, BotKind, BotOwner,
-        BotToken, BotTokenCandidate, CreateBotRequest, CreateBotTokenRequest,
-        CreateChannelScopedBotRequest, CreateChannelScopedBotResponse, PatchBotRequest,
+        AgentConfig, AuthenticatedBot, Bot, BotChannel, BotChannelListCaller, BotId, BotKind,
+        BotOwner, BotToken, BotTokenCandidate, CreateBotRequest, CreateBotTokenRequest,
+        CreateChannelScopedBotRequest, CreateChannelScopedBotResponse, CreatePersonaRequest,
+        MentionableBot, PatchBotRequest, PatchPersonaRequest, Persona,
     },
     ports::{BotError, BotRepo, BotService},
     tokens,
@@ -40,6 +41,54 @@ fn validate_handle(handle: &str) -> Result<(), BotError> {
     {
         return Err(BotError::BadRequest(
             "handle must be lowercase ascii, digits, '-' or '_'".to_string(),
+        ));
+    }
+    Ok(())
+}
+
+/// Handles reserved for the ownerless first-party bots. A team persona may not
+/// take one: both appear in the same mention menu, and the database's global
+/// uniqueness index only covers the ownerless rows.
+const RESERVED_HANDLES: [&str; 2] = [bot_id::MACRO_AI_HANDLE, bot_id::MACRO_CODER_HANDLE];
+
+fn validate_persona_handle(handle: &str) -> Result<(), BotError> {
+    if RESERVED_HANDLES.contains(&handle) {
+        return Err(BotError::BadRequest(format!(
+            "@{handle} is reserved for a built-in agent"
+        )));
+    }
+    Ok(())
+}
+
+/// Mirrors the sandbox-side check in `provision.ts`: the URL is interpolated
+/// into a `git clone` inside the container, so anything that could break out
+/// of the argument is rejected before it is ever stored.
+fn validate_repo_url(repo_url: Option<&str>) -> Result<(), BotError> {
+    let Some(repo_url) = repo_url else {
+        return Ok(());
+    };
+    if !repo_url.starts_with("https://") {
+        return Err(BotError::BadRequest(
+            "repository URL must start with https://".to_string(),
+        ));
+    }
+    if repo_url
+        .chars()
+        .any(|ch| ch.is_whitespace() || "\"'`$\\;|&<>()".contains(ch))
+    {
+        return Err(BotError::BadRequest(
+            "repository URL contains illegal characters".to_string(),
+        ));
+    }
+    Ok(())
+}
+
+/// Personas have no inbound surface: we drive them outbound into a sandbox,
+/// so there is no credential for a caller to present as one.
+fn ensure_tokenable(bot: &Bot) -> Result<(), BotError> {
+    if bot.kind == BotKind::System {
+        return Err(BotError::BadRequest(
+            "system bots do not authenticate with tokens".to_string(),
         ));
     }
     Ok(())
@@ -104,20 +153,30 @@ where
             .map_err(|err| BotError::Repo(err.into()))?
             .ok_or_else(|| BotError::NotFound("bot not found".to_string()))?;
 
-        if bot.kind == BotKind::System {
-            return Err(BotError::Unauthorized);
-        }
-
+        // An ownerless bot is a first-party singleton - Macro AI, and Macro
+        // Coder until a team claims it. Nobody edits those.
         let Some(owner) = &bot.owner else {
             return Err(BotError::Unauthorized);
         };
 
-        match owner {
-            BotOwner::User { user_id } if user_id == caller.as_ref() => Ok(bot),
-            BotOwner::Team { team_id }
+        match (bot.kind, owner) {
+            (BotKind::Owned, BotOwner::User { user_id }) if user_id == caller.as_ref() => Ok(bot),
+            (BotKind::Owned, BotOwner::Team { team_id })
                 if self
                     .repo
-                    .user_has_team(caller, *team_id)
+                    .user_has_team(caller.clone(), *team_id)
+                    .await
+                    .map_err(|err| BotError::Repo(err.into()))? =>
+            {
+                Ok(bot)
+            }
+            // A persona is hosted by us on the team's behalf, and editing one
+            // changes what runs in a sandbox we pay for - so it takes an
+            // administrator, not merely a member.
+            (BotKind::System, BotOwner::Team { team_id })
+                if self
+                    .repo
+                    .user_can_administer_team(caller, *team_id)
                     .await
                     .map_err(|err| BotError::Repo(err.into()))? =>
             {
@@ -125,6 +184,21 @@ where
             }
             _ => Err(BotError::Unauthorized),
         }
+    }
+
+    /// Manageability plus "this is actually a persona", for the persona
+    /// endpoints. Keeps `/personas/{id}` from being a second way to edit an
+    /// ordinary owned bot.
+    async fn ensure_persona_manageable(
+        &self,
+        caller: MacroUserIdStr<'static>,
+        bot_id: BotId,
+    ) -> Result<Bot, BotError> {
+        let bot = self.ensure_manageable(caller, bot_id).await?;
+        if bot.kind != BotKind::System {
+            return Err(BotError::NotFound("persona not found".to_string()));
+        }
+        Ok(bot)
     }
 
     async fn authenticate_candidate(
@@ -390,7 +464,8 @@ where
         bot_id: BotId,
         req: CreateBotTokenRequest,
     ) -> Result<super::models::CreateBotTokenResponse, BotError> {
-        self.ensure_manageable(caller, bot_id).await?;
+        let bot = self.ensure_manageable(caller, bot_id).await?;
+        ensure_tokenable(&bot)?;
         let generated_token = tokens::generate_token();
         let token = self
             .repo
@@ -409,7 +484,8 @@ where
         caller: MacroUserIdStr<'static>,
         bot_id: BotId,
     ) -> Result<Vec<BotToken>, BotError> {
-        self.ensure_manageable(caller, bot_id).await?;
+        let bot = self.ensure_manageable(caller, bot_id).await?;
+        ensure_tokenable(&bot)?;
         self.repo
             .list_tokens(bot_id)
             .await
@@ -422,7 +498,8 @@ where
         bot_id: BotId,
         token_id: Uuid,
     ) -> Result<(), BotError> {
-        self.ensure_manageable(caller, bot_id).await?;
+        let bot = self.ensure_manageable(caller, bot_id).await?;
+        ensure_tokenable(&bot)?;
         if self
             .repo
             .revoke_token(bot_id, token_id)
@@ -468,5 +545,157 @@ where
             .await
             .map_err(|err| BotError::Repo(err.into()))?;
         Ok(self.authenticate_candidate(candidate).await?.bot)
+    }
+
+    async fn create_persona(
+        &self,
+        caller: MacroUserIdStr<'static>,
+        req: CreatePersonaRequest,
+    ) -> Result<Persona, BotError> {
+        validate_handle(&req.handle)?;
+        validate_persona_handle(&req.handle)?;
+        validate_repo_url(req.agent.repo_url.as_deref())?;
+
+        if !self
+            .repo
+            .user_can_administer_team(caller.clone(), req.team_id)
+            .await
+            .map_err(|err| BotError::Repo(err.into()))?
+        {
+            return Err(BotError::Unauthorized);
+        }
+
+        let created_by_user_id = caller.clone();
+        let persona = self
+            .repo
+            .create_persona(caller, req)
+            .await
+            .map_err(|err| BotError::Repo(err.into()))?;
+
+        self.publish_bot_event(&BotMacroEvent::created(BotCreatedMetadata {
+            bot_id: persona.bot.id,
+            kind: persona.bot.kind,
+            owner: persona
+                .bot
+                .owner
+                .clone()
+                .expect("persona must be owned by a team"),
+            name: persona.bot.name.clone(),
+            handle: persona.bot.handle.clone(),
+            description: persona.bot.description.clone(),
+            avatar_url: persona.bot.avatar_url.clone(),
+            created_by_user_id,
+            channel_id: None,
+            created_at: persona.bot.created_at,
+        }));
+
+        Ok(persona)
+    }
+
+    async fn list_personas(
+        &self,
+        caller: MacroUserIdStr<'static>,
+    ) -> Result<Vec<Persona>, BotError> {
+        self.repo
+            .list_personas(caller)
+            .await
+            .map_err(|err| BotError::Repo(err.into()))
+    }
+
+    async fn get_persona(
+        &self,
+        caller: MacroUserIdStr<'static>,
+        bot_id: BotId,
+    ) -> Result<Persona, BotError> {
+        self.ensure_persona_manageable(caller, bot_id).await?;
+        self.repo
+            .get_persona(bot_id)
+            .await
+            .map_err(|err| BotError::Repo(err.into()))?
+            .ok_or_else(|| BotError::NotFound("persona not found".to_string()))
+    }
+
+    async fn patch_persona(
+        &self,
+        caller: MacroUserIdStr<'static>,
+        bot_id: BotId,
+        req: PatchPersonaRequest,
+    ) -> Result<Persona, BotError> {
+        self.ensure_persona_manageable(caller.clone(), bot_id)
+            .await?;
+        if let Some(handle) = &req.handle {
+            validate_handle(handle)?;
+            validate_persona_handle(handle)?;
+        }
+        if let Some(agent) = &req.agent {
+            validate_repo_url(agent.repo_url.as_deref())?;
+        }
+
+        let persona = self
+            .repo
+            .patch_persona(bot_id, req)
+            .await
+            .map_err(|err| BotError::Repo(err.into()))?
+            .ok_or_else(|| BotError::NotFound("persona not found".to_string()))?;
+
+        self.publish_bot_event(&BotMacroEvent::updated(BotUpdatedMetadata {
+            bot_id: persona.bot.id,
+            owner: persona
+                .bot
+                .owner
+                .clone()
+                .expect("persona must be owned by a team"),
+            actor_user_id: caller,
+            name: Some(persona.bot.name.clone()),
+            handle: Some(persona.bot.handle.clone()),
+            description: persona.bot.description.clone(),
+            avatar_url: persona.bot.avatar_url.clone(),
+            updated_at: persona.bot.updated_at,
+        }));
+
+        Ok(persona)
+    }
+
+    async fn delete_persona(
+        &self,
+        caller: MacroUserIdStr<'static>,
+        bot_id: BotId,
+    ) -> Result<(), BotError> {
+        let bot = self
+            .ensure_persona_manageable(caller.clone(), bot_id)
+            .await?;
+        if !self
+            .repo
+            .delete_bot(bot_id)
+            .await
+            .map_err(|err| BotError::Repo(err.into()))?
+        {
+            return Err(BotError::NotFound("persona not found".to_string()));
+        }
+
+        self.publish_bot_event(&BotMacroEvent::deleted(BotDeletedMetadata {
+            bot_id,
+            owner: bot.owner.expect("persona must be owned by a team"),
+            actor_user_id: caller,
+        }));
+
+        Ok(())
+    }
+
+    async fn agent_config(&self, bot_id: BotId) -> Result<Option<AgentConfig>, BotError> {
+        self.repo
+            .agent_config(bot_id)
+            .await
+            .map_err(|err| BotError::Repo(err.into()))
+    }
+
+    async fn list_mentionable_bots(
+        &self,
+        caller: MacroUserIdStr<'static>,
+    ) -> Result<Vec<MentionableBot>, BotError> {
+        self.repo
+            .list_mentionable_bots(caller)
+            .await
+            .map_err(|err| BotError::Repo(err.into()))
     }
 }

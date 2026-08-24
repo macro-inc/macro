@@ -3,11 +3,13 @@
 #[cfg(test)]
 mod tests;
 
+use super::personas;
 use crate::domain::{
     models::{
-        AuthenticatedBot, Bot, BotChannel, BotChannelType, BotId, BotKind, BotOwner, BotToken,
-        BotTokenCandidate, CreateBotRequest, CreateBotTokenRequest, CreateChannelScopedBotRequest,
-        PatchBotRequest,
+        AgentConfig, AuthenticatedBot, Bot, BotChannel, BotChannelType, BotId, BotKind, BotOwner,
+        BotToken, BotTokenCandidate, CreateBotRequest, CreateBotTokenRequest,
+        CreateChannelScopedBotRequest, CreatePersonaRequest, MentionableBot, PatchBotRequest,
+        PatchPersonaRequest, Persona,
     },
     ports::BotRepo,
 };
@@ -802,5 +804,43 @@ impl BotRepo for PgBotsRepo {
         .await
         .context("failed to mark bot token used")?;
         Ok(())
+    }
+
+    async fn create_persona(
+        &self,
+        created_by: MacroUserIdStr<'static>,
+        req: CreatePersonaRequest,
+    ) -> Result<Persona, Self::Err> {
+        personas::create_persona(&self.pool, created_by, req).await
+    }
+
+    async fn list_personas(
+        &self,
+        caller: MacroUserIdStr<'static>,
+    ) -> Result<Vec<Persona>, Self::Err> {
+        personas::list_personas(&self.pool, caller).await
+    }
+
+    async fn get_persona(&self, bot_id: BotId) -> Result<Option<Persona>, Self::Err> {
+        personas::get_persona(&self.pool, bot_id).await
+    }
+
+    async fn patch_persona(
+        &self,
+        bot_id: BotId,
+        req: PatchPersonaRequest,
+    ) -> Result<Option<Persona>, Self::Err> {
+        personas::patch_persona(&self.pool, bot_id, req).await
+    }
+
+    async fn agent_config(&self, bot_id: BotId) -> Result<Option<AgentConfig>, Self::Err> {
+        personas::agent_config(&self.pool, bot_id).await
+    }
+
+    async fn list_mentionable_bots(
+        &self,
+        caller: MacroUserIdStr<'static>,
+    ) -> Result<Vec<MentionableBot>, Self::Err> {
+        personas::list_mentionable_bots(&self.pool, caller).await
     }
 }

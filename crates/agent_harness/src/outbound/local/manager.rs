@@ -192,10 +192,7 @@ impl ContainerManager for LocalContainerManager {
 
     #[tracing::instrument(err, skip(self))]
     async fn spawn(&self, command: SpawnContainer) -> Result<Self::Transport> {
-        let SpawnContainer {
-            session_id,
-            repo_url,
-        } = command;
+        let session_id = command.session_id;
 
         if !self
             .docker
@@ -224,7 +221,7 @@ impl ContainerManager for LocalContainerManager {
             image: self.image.clone(),
             name: container_name(session_id),
             labels: vec![(SESSION_LABEL.to_owned(), session_id.to_string())],
-            env: sandbox_env(repo_url, &self.github_token),
+            env: crate::outbound::session_env::session_env(&command, self.github_token.expose()),
             network: self.network.clone(),
         };
         let container = self.docker.run(&spec).await.map_err(unavailable)?;
@@ -276,13 +273,6 @@ fn container_name(session: AgentSessionId) -> String {
 /// its DNS name.
 fn sidecar_address(container: &ContainerRef) -> String {
     format!("{}:{}", container.name, provision::SIDECAR_PORT)
-}
-
-fn sandbox_env(repo_url: String, github_token: &GithubToken) -> Vec<(String, String)> {
-    vec![
-        ("REPO_URL".to_owned(), repo_url),
-        ("GITHUB_TOKEN".to_owned(), github_token.expose().to_owned()),
-    ]
 }
 
 fn unavailable(error: LocalError) -> HarnessError {

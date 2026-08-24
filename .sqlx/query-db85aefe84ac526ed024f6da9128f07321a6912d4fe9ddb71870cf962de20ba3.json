@@ -1,0 +1,26 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE bots\n        SET name = COALESCE($2, name),\n            handle = COALESCE($3, handle),\n            description = COALESCE($4, description),\n            avatar_url = COALESCE($5, avatar_url),\n            updated_at = now()\n        WHERE id = $1\n          AND kind = 'system'\n          AND deleted_at IS NULL\n        RETURNING id\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "db85aefe84ac526ed024f6da9128f07321a6912d4fe9ddb71870cf962de20ba3"
+}

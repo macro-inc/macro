@@ -14,9 +14,8 @@ mod trigger;
 use std::sync::Arc;
 
 use agent_fold::domain::service::FoldedMessageService;
-use agent_harness::domain::model::SessionDefaults;
 use agent_harness::domain::service::AgentHarnessService;
-use agent_harness::inbound::kafka::{RoutedTrigger, route_agent_trigger};
+use agent_harness::inbound::kafka::{RoutedTrigger, route_agent_trigger, trigger_bot_id};
 use agent_harness::inbound::runtime_gateway::RuntimeGatewayState;
 use agent_harness::outbound::channel_announcer::ChannelAnnouncer;
 use agent_harness::outbound::containers::HarnessContainers;
@@ -25,8 +24,9 @@ use agent_harness::outbound::daytona::{
     GithubToken as GithubTokenSecret, Snapshot,
 };
 use agent_harness::outbound::local::{LocalContainerManager, LocalSettings};
+use agent_harness::outbound::persona_config::BotsPersonaConfig;
 use agent_harness::outbound::runtime_registry::RuntimeRegistry;
-use agent_session::domain::ports::NoOpRealtime;
+use agent_session::domain::ports::{BotDirectory, NoOpRealtime};
 use agent_session::domain::service::AgentSessionServiceImpl;
 use agent_session::inbound::axum_router::{
     AgentSessionControlState, AgentSessionRouterState, CreateSessionState,
@@ -35,7 +35,7 @@ use agent_session::outbound::connection_gateway_realtime::ConnectionGatewayAgent
 use agent_session::outbound::postgres::PgAgentSessionRepo;
 use agent_trigger::domain::broker_events::AgentSessionMacroEvent;
 use anyhow::Context as _;
-use bot_id::BotId;
+use bots::domain::service::BotServiceImpl;
 use bots::outbound::pg_bots_repo::PgBotsRepo;
 use bots_directory::PgBotDirectory;
 use channels::domain::service::ChannelServiceImpl;
@@ -92,8 +92,6 @@ async fn main() -> anyhow::Result<()> {
     MacroEntrypoint::default().init();
     agent_harness::install_tls_provider();
     let config = Config::from_env()?;
-    let bot_id = BotId::new_from_uuid(config.harness_bot_id);
-
     let pool = PgPoolOptions::new()
         .min_connections(1)
         .max_connections(5)
@@ -186,7 +184,7 @@ async fn main() -> anyhow::Result<()> {
         NotificationChannelSender::new(notifications),
         ContactsChannelDispatcher::new(contacts_ingress),
     )
-    .with_macro_event_broker(broker);
+    .with_macro_event_broker(broker.clone());
     let channel_service = Arc::new(ChannelServiceImpl::with_dependencies(
         PgChannelsRepo::new(pool.clone()),
         SpawnedChannelEventDispatcher::new(side_effects),
@@ -204,17 +202,18 @@ async fn main() -> anyhow::Result<()> {
     // here because the gateway puts dialed-in sockets into it and the harness
     // takes sessions out of it.
     let runtimes = RuntimeRegistry::new();
+
+    // What a session runs comes from the persona that was mentioned, read
+    // through the bots crate that owns `bot_agent_config`.
+    let personas =
+        BotsPersonaConfig::new(BotServiceImpl::new(PgBotsRepo::new(pool.clone()), broker));
+
     let harness = Arc::new(AgentHarnessService::new(
         sessions,
         containers,
         announcer,
         Arc::clone(&runtimes),
-        SessionDefaults {
-            bot_id,
-            model: config.harness_model.clone(),
-            harness: config.harness_slug.clone(),
-            repo_url: config.harness_repo_url.clone(),
-        },
+        personas,
     ));
 
     // The complete session API is served from this process because it owns the
@@ -263,7 +262,7 @@ async fn main() -> anyhow::Result<()> {
     );
     let gateway_state = RuntimeGatewayState::new(
         runtimes,
-        bots_directory,
+        bots_directory.clone(),
         MacroAuthorizationState::new(Arc::new(authorization_service)),
     );
     let http_port = config.port;
@@ -302,7 +301,6 @@ async fn main() -> anyhow::Result<()> {
     tracing::info!(
         topics = ?DeclaredMacroEvent::topics(),
         group = AgentHarnessConsumerGroup::GROUP_NAME,
-        %bot_id,
         environment = %config.environment,
         "agent harness service listening"
     );
@@ -351,7 +349,25 @@ async fn main() -> anyhow::Result<()> {
                     }
                 };
 
-                let routed = match route_agent_trigger(event.event().event.clone(), bot_id) {
+                let trigger_event = event.event().event.clone();
+                // Whether we provision this bot's sandbox - i.e. we hold a
+                // persona config for it. Resolved here rather than inside the
+                // router, which stays pure translation. A bot we cannot read
+                // is treated as somebody else's to open.
+                let managed = match trigger_bot_id(&trigger_event) {
+                    Some(bot) => bots_directory
+                        .bot_facts(bot)
+                        .await
+                        .inspect_err(|error| {
+                            tracing::warn!(error = ?error, %bot, "could not read bot facts");
+                        })
+                        .ok()
+                        .flatten()
+                        .is_some_and(|facts| facts.is_managed),
+                    None => false,
+                };
+
+                let routed = match route_agent_trigger(trigger_event, managed) {
                     Ok(routed) => routed,
                     Err(skipped) => {
                         tracing::debug!(?skipped, "skipped an agent session event");

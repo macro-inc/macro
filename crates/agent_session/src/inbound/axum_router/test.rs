@@ -119,10 +119,11 @@ impl SessionOpener for RecordingOpener {
     }
 }
 
-/// Serves one canned bot: [`BotId::TEST_A`], an external agent bot owned by
-/// [`OWNER`]. Every other id is unknown.
+/// Serves one canned bot: [`BotId::TEST_A`]. Every other id is unknown.
 struct OneBotDirectory {
     facts: BotFacts,
+    /// What `user_in_team` answers; only team personas ever ask.
+    member: bool,
 }
 
 impl OneBotDirectory {
@@ -132,17 +133,35 @@ impl OneBotDirectory {
                 has_agent: true,
                 is_managed: false,
                 owner_user_id: Some(MacroUserIdStr::try_from(OWNER.to_owned()).unwrap()),
+                team_id: None,
             },
+            member: false,
         }
     }
 
+    /// A global first-party persona: no owner, no team, anyone may run it.
     fn managed_agent() -> Self {
         Self {
             facts: BotFacts {
                 has_agent: true,
                 is_managed: true,
                 owner_user_id: None,
+                team_id: None,
             },
+            member: false,
+        }
+    }
+
+    /// A team persona; `member` is what membership lookups answer.
+    fn team_persona(member: bool) -> Self {
+        Self {
+            facts: BotFacts {
+                has_agent: true,
+                is_managed: true,
+                owner_user_id: None,
+                team_id: Some(Uuid::from_u128(7)),
+            },
+            member,
         }
     }
 
@@ -152,7 +171,9 @@ impl OneBotDirectory {
                 has_agent: false,
                 is_managed: false,
                 owner_user_id: Some(MacroUserIdStr::try_from(OWNER.to_owned()).unwrap()),
+                team_id: None,
             },
+            member: false,
         }
     }
 }
@@ -160,6 +181,14 @@ impl OneBotDirectory {
 impl BotDirectory for OneBotDirectory {
     async fn bot_facts(&self, bot: BotId) -> crate::domain::error::Result<Option<BotFacts>> {
         Ok((bot == BotId::TEST_A).then(|| self.facts.clone()))
+    }
+
+    async fn user_in_team(
+        &self,
+        _user: &MacroUserIdStr<'static>,
+        _team: Uuid,
+    ) -> crate::domain::error::Result<bool> {
+        Ok(self.member)
     }
 }
 
@@ -193,6 +222,15 @@ fn body(bot_id: Option<Uuid>, workspace: &str, owner: Option<&str>) -> String {
             "messageId": "00000000-0000-0000-0000-000000000002",
             "content": "fix the flaky test",
         },
+    })
+    .to_string()
+}
+
+/// The managed shape: a bot and an optional prompt, nothing runtime-shaped.
+fn managed_body(bot_id: Option<Uuid>, prompt: Option<&str>) -> String {
+    serde_json::json!({
+        "botId": bot_id,
+        "prompt": prompt,
     })
     .to_string()
 }
@@ -382,4 +420,77 @@ async fn an_unknown_bot_is_a_404() {
 
     assert_eq!(response.status(), StatusCode::NOT_FOUND);
     assert!(opener.opened.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn a_user_opens_a_managed_session_as_a_global_persona() {
+    let opener = Arc::new(RecordingOpener::default());
+    let request = as_user(
+        OWNER,
+        managed_body(Some(BotId::TEST_A.as_uuid()), Some("fix the flaky test")),
+    );
+
+    let response = router_for(opener.clone(), OneBotDirectory::managed_agent())
+        .oneshot(request)
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::CREATED);
+    let managed = opener.managed.lock().unwrap();
+    assert_eq!(managed.len(), 1);
+    assert_eq!(managed[0].bot_id, BotId::TEST_A);
+    assert_eq!(managed[0].prompt.as_deref(), Some("fix the flaky test"));
+}
+
+#[tokio::test]
+async fn a_managed_session_requires_a_bot() {
+    let opener = Arc::new(RecordingOpener::default());
+    let request = as_user(OWNER, managed_body(None, Some("hello")));
+
+    let response = router_for(opener.clone(), OneBotDirectory::managed_agent())
+        .oneshot(request)
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
+    assert!(opener.managed.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn a_team_personas_sessions_need_membership() {
+    let opener = Arc::new(RecordingOpener::default());
+    let request = as_user(OWNER, managed_body(Some(BotId::TEST_A.as_uuid()), None));
+
+    let response = router_for(opener.clone(), OneBotDirectory::team_persona(false))
+        .oneshot(request)
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::FORBIDDEN);
+    assert!(opener.managed.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn a_team_member_opens_their_personas_session() {
+    let opener = Arc::new(RecordingOpener::default());
+    let request = as_user(OWNER, managed_body(Some(BotId::TEST_A.as_uuid()), None));
+
+    let response = router_for(opener.clone(), OneBotDirectory::team_persona(true))
+        .oneshot(request)
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::CREATED);
+    assert_eq!(opener.managed.lock().unwrap().len(), 1);
+}
+
+#[tokio::test]
+async fn an_external_bot_is_not_openable_as_managed() {
+    let opener = Arc::new(RecordingOpener::default());
+    let request = as_user(OWNER, managed_body(Some(BotId::TEST_A.as_uuid()), None));
+
+    let response = router(opener.clone()).oneshot(request).await.unwrap();
+
+    assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
+    assert!(opener.managed.lock().unwrap().is_empty());
 }

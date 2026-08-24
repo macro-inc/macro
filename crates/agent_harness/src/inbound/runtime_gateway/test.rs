@@ -76,6 +76,16 @@ impl BotDirectory for FactsDirectory {
             ))),
         }
     }
+
+    async fn user_in_team(
+        &self,
+        _user: &macro_user_id::user_id::MacroUserIdStr<'static>,
+        _team: macro_uuid::Uuid,
+    ) -> agent_session::domain::error::Result<bool> {
+        // The gateway authorizes dialing runtimes, not opening sessions, so
+        // membership is never consulted here.
+        unreachable!("the runtime gateway never asks about team membership")
+    }
 }
 
 /// A bot whose runtime its operator hosts: the only kind that may dial.
@@ -84,6 +94,7 @@ fn external_facts() -> BotFacts {
         has_agent: true,
         is_managed: false,
         owner_user_id: Some(MacroUserIdStr::try_from_email("owner@example.com").unwrap()),
+        team_id: None,
     }
 }
 

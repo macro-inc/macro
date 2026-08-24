@@ -86,6 +86,35 @@ export type AddPinRequest = {
     pinType: string;
 };
 
+/**
+ * What an agent-backed bot runs: the `bot_agent_config` row.
+ */
+export type AgentConfig = {
+    /**
+     * Harness the session runs under.
+     */
+    harness: Harness;
+    /**
+     * Model the session is launched with.
+     */
+    model: AgentModel;
+    /**
+     * Repository cloned into the workspace. `None` means no checkout: the
+     * session gets an empty workspace, and there is no deployment-wide
+     * default standing behind it.
+     */
+    repo_url?: string | null;
+    /**
+     * Markdown instructions prepended to every session, if any.
+     */
+    system_prompt?: string | null;
+};
+
+/**
+ * Model a persona's sessions are launched with.
+ */
+export type AgentModel = 'claude';
+
 export type Anchor = PdfAnchor;
 
 export type AnchorId = PdfAnchorId & {
@@ -3011,6 +3040,36 @@ export type CreateMarkdownDocumentResponse = {
     token: string;
 };
 
+/**
+ * Request to create a persona.
+ */
+export type CreatePersonaRequest = {
+    /**
+     * What it runs.
+     */
+    agent: AgentConfig;
+    /**
+     * Optional avatar URL.
+     */
+    avatar_url?: string | null;
+    /**
+     * Optional description.
+     */
+    description?: string | null;
+    /**
+     * Stable handle, used for `@` mentions.
+     */
+    handle: string;
+    /**
+     * Display name.
+     */
+    name: string;
+    /**
+     * Team the persona belongs to. The caller must administer it.
+     */
+    team_id: string;
+};
+
 export type CreateProjectRequest = {
     /**
      * The name of the project.
@@ -5543,6 +5602,16 @@ export type GroupedSoupPage = (GroupedSoupInitialPage & {
  */
 export type GroupedSoupSort = 'viewed_at' | 'created_at' | 'updated_at' | 'viewed_updated';
 
+/**
+ * Harness a persona's sessions run under.
+ *
+ * A closed set: this is what we launch inside the sandbox, not something an
+ * external system reports back. Contrast `agent_session.model`, which records
+ * whatever model the running agent tells us it used and is therefore a plain
+ * string.
+ */
+export type Harness = 'open_code';
+
 export type HashMap = {
     [key: string]: (PresignedUrl & {
         type: 'external';
@@ -5662,6 +5731,28 @@ export type LocationResponseV3 = {
 };
 
 export type MacroUserIdStr = string;
+
+/**
+ * A bot the caller may `@`-mention, projected down to what a typeahead needs.
+ */
+export type MentionableBot = {
+    /**
+     * Avatar, when it has one.
+     */
+    avatar_url?: string | null;
+    /**
+     * Handle typed after the `@`.
+     */
+    handle: string;
+    /**
+     * Bot id. Mentions carry this as `bot|{id}`.
+     */
+    id: BotId;
+    /**
+     * Display name.
+     */
+    name: string;
+};
 
 export type Mentions = {
     mentionId: string;
@@ -5798,6 +5889,29 @@ export type PatchMessageRequest = {
      * Optional optimistic-update nonce.
      */
     nonce?: string | null;
+};
+
+/**
+ * Request to patch a persona. Absent fields are left unchanged.
+ */
+export type PatchPersonaRequest = {
+    agent?: null | AgentConfig;
+    /**
+     * Optional avatar URL.
+     */
+    avatar_url?: string | null;
+    /**
+     * Optional description.
+     */
+    description?: string | null;
+    /**
+     * Stable handle.
+     */
+    handle?: string | null;
+    /**
+     * Display name.
+     */
+    name?: string | null;
 };
 
 export type PatchProjectRequestV2 = {
@@ -5942,6 +6056,16 @@ export type PdfPlaceableCommentAnchorRequest = {
     widthPct: number;
     xPct: number;
     yPct: number;
+};
+
+/**
+ * A persona: an agent-backed system bot a team owns and edits.
+ */
+export type Persona = Bot & {
+    /**
+     * What it runs.
+     */
+    agent: AgentConfig;
 };
 
 export type PinRequest = {
@@ -8683,6 +8807,26 @@ export type GetSelfBotResponses = {
 };
 
 export type GetSelfBotResponse = GetSelfBotResponses[keyof GetSelfBotResponses];
+
+export type ListMentionableBotsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/bots/mentionable';
+};
+
+export type ListMentionableBotsErrors = {
+    401: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type ListMentionableBotsError = ListMentionableBotsErrors[keyof ListMentionableBotsErrors];
+
+export type ListMentionableBotsResponses = {
+    200: Array<MentionableBot>;
+};
+
+export type ListMentionableBotsResponse = ListMentionableBotsResponses[keyof ListMentionableBotsResponses];
 
 export type ListBotChannelsData = {
     body?: never;
@@ -12020,6 +12164,130 @@ export type PostItemsSoupAstGroupedResponses = {
 };
 
 export type PostItemsSoupAstGroupedResponse = PostItemsSoupAstGroupedResponses[keyof PostItemsSoupAstGroupedResponses];
+
+export type ListPersonasData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/personas';
+};
+
+export type ListPersonasErrors = {
+    401: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type ListPersonasError = ListPersonasErrors[keyof ListPersonasErrors];
+
+export type ListPersonasResponses = {
+    200: Array<Persona>;
+};
+
+export type ListPersonasResponse = ListPersonasResponses[keyof ListPersonasResponses];
+
+export type CreatePersonaData = {
+    body: CreatePersonaRequest;
+    path?: never;
+    query?: never;
+    url: '/personas';
+};
+
+export type CreatePersonaErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type CreatePersonaError = CreatePersonaErrors[keyof CreatePersonaErrors];
+
+export type CreatePersonaResponses = {
+    201: Persona;
+};
+
+export type CreatePersonaResponse = CreatePersonaResponses[keyof CreatePersonaResponses];
+
+export type DeletePersonaData = {
+    body?: never;
+    path: {
+        /**
+         * Persona bot id
+         */
+        bot_id: string;
+    };
+    query?: never;
+    url: '/personas/{bot_id}';
+};
+
+export type DeletePersonaErrors = {
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type DeletePersonaError = DeletePersonaErrors[keyof DeletePersonaErrors];
+
+export type DeletePersonaResponses = {
+    204: void;
+};
+
+export type DeletePersonaResponse = DeletePersonaResponses[keyof DeletePersonaResponses];
+
+export type GetPersonaData = {
+    body?: never;
+    path: {
+        /**
+         * Persona bot id
+         */
+        bot_id: string;
+    };
+    query?: never;
+    url: '/personas/{bot_id}';
+};
+
+export type GetPersonaErrors = {
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type GetPersonaError = GetPersonaErrors[keyof GetPersonaErrors];
+
+export type GetPersonaResponses = {
+    200: Persona;
+};
+
+export type GetPersonaResponse = GetPersonaResponses[keyof GetPersonaResponses];
+
+export type PatchPersonaData = {
+    body: PatchPersonaRequest;
+    path: {
+        /**
+         * Persona bot id
+         */
+        bot_id: string;
+    };
+    query?: never;
+    url: '/personas/{bot_id}';
+};
+
+export type PatchPersonaErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type PatchPersonaError = PatchPersonaErrors[keyof PatchPersonaErrors];
+
+export type PatchPersonaResponses = {
+    200: Persona;
+};
+
+export type PatchPersonaResponse = PatchPersonaResponses[keyof PatchPersonaResponses];
 
 export type GetPinsHandlerData = {
     body?: never;

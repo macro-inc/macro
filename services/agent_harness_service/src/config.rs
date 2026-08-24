@@ -4,7 +4,6 @@
 use anyhow::Context;
 use database_env_vars::DatabaseUrl;
 pub use macro_env::Environment;
-use macro_uuid::Uuid;
 
 macro_env_var::env_vars!(
     /// Comma-separated Kafka bootstrap servers.
@@ -62,22 +61,6 @@ pub struct Config {
     /// share. `just run_local` sets `{project}_services`.
     #[macro_config_default(String::new())]
     pub local_container_network: String,
-    /// The bot this deployment answers for.
-    ///
-    /// Configuration rather than a constant: `@claude` and `@codex` are separate
-    /// deployments of this same binary, distinguished only by which bot id they
-    /// watch for. It must be a real `bots` row - `agent_session.bot_id`
-    /// references it.
-    pub harness_bot_id: Uuid,
-    /// Model slug stamped onto sessions this deployment opens.
-    #[macro_config_default(String::from("claude"))]
-    pub harness_model: String,
-    /// Harness slug stamped onto sessions this deployment opens.
-    #[macro_config_default(String::from("opencode"))]
-    pub harness_slug: String,
-    /// Repository sessions run against, until it becomes per-request data.
-    #[macro_config_default(String::from("https://github.com/macro-inc/macro"))]
-    pub harness_repo_url: String,
     /// Key for internal service-to-service calls (the connection gateway).
     pub internal_api_key: String,
     /// Port the control routes are served on.

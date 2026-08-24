@@ -1,0 +1,40 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT c.harness, c.model, c.system_prompt, c.repo_url\n        FROM bot_agent_config c\n        JOIN bots b ON b.id = c.bot_id\n        WHERE c.bot_id = $1\n          AND b.deleted_at IS NULL\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "harness",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "model",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "system_prompt",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "repo_url",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      true
+    ]
+  },
+  "hash": "41fa17c53ab282ed49c5b0009bf54eee9af3abfbd87939c4f7f689ba9ce532ed"
+}

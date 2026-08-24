@@ -1,9 +1,10 @@
 //! Bot ports.
 
 use super::models::{
-    AuthenticatedBot, Bot, BotChannel, BotChannelListCaller, BotId, BotOwner, BotToken,
-    BotTokenCandidate, CreateBotRequest, CreateBotTokenRequest, CreateBotTokenResponse,
-    CreateChannelScopedBotRequest, CreateChannelScopedBotResponse, PatchBotRequest,
+    AgentConfig, AuthenticatedBot, Bot, BotChannel, BotChannelListCaller, BotId, BotOwner,
+    BotToken, BotTokenCandidate, CreateBotRequest, CreateBotTokenRequest, CreateBotTokenResponse,
+    CreateChannelScopedBotRequest, CreateChannelScopedBotResponse, CreatePersonaRequest,
+    MentionableBot, PatchBotRequest, PatchPersonaRequest, Persona,
 };
 use bot_token::HashedBotToken;
 use entity_access::domain::models::{EntityAccessReceipt, MemberParticipantRole};
@@ -139,6 +140,45 @@ pub trait BotRepo: Send + Sync + 'static {
     /// Mark a token as used.
     fn mark_token_used(&self, token_id: Uuid)
     -> impl Future<Output = Result<(), Self::Err>> + Send;
+
+    /// Create a team-scoped agent-backed system bot and its config.
+    fn create_persona(
+        &self,
+        created_by: MacroUserIdStr<'static>,
+        req: CreatePersonaRequest,
+    ) -> impl Future<Output = Result<Persona, Self::Err>> + Send;
+
+    /// List personas belonging to teams the caller is a member of.
+    fn list_personas(
+        &self,
+        caller: MacroUserIdStr<'static>,
+    ) -> impl Future<Output = Result<Vec<Persona>, Self::Err>> + Send;
+
+    /// Get an active persona by id.
+    fn get_persona(
+        &self,
+        bot_id: BotId,
+    ) -> impl Future<Output = Result<Option<Persona>, Self::Err>> + Send;
+
+    /// Patch an active persona's identity and/or agent configuration.
+    fn patch_persona(
+        &self,
+        bot_id: BotId,
+        req: PatchPersonaRequest,
+    ) -> impl Future<Output = Result<Option<Persona>, Self::Err>> + Send;
+
+    /// Read just the agent configuration for a bot, if it has one.
+    fn agent_config(
+        &self,
+        bot_id: BotId,
+    ) -> impl Future<Output = Result<Option<AgentConfig>, Self::Err>> + Send;
+
+    /// List the system bots the caller may mention: the ownerless first-party
+    /// ones plus the personas of every team they belong to.
+    fn list_mentionable_bots(
+        &self,
+        caller: MacroUserIdStr<'static>,
+    ) -> impl Future<Output = Result<Vec<MentionableBot>, Self::Err>> + Send;
 }
 
 /// Bot service.
@@ -261,6 +301,54 @@ pub trait BotService: Send + Sync + 'static {
         channel_id: Uuid,
         token: &str,
     ) -> impl Future<Output = Result<AuthenticatedBot, BotError>> + Send;
+
+    /// Create a persona in a team the caller administers.
+    fn create_persona(
+        &self,
+        caller: MacroUserIdStr<'static>,
+        req: CreatePersonaRequest,
+    ) -> impl Future<Output = Result<Persona, BotError>> + Send;
+
+    /// List personas visible to the caller.
+    fn list_personas(
+        &self,
+        caller: MacroUserIdStr<'static>,
+    ) -> impl Future<Output = Result<Vec<Persona>, BotError>> + Send;
+
+    /// Get a persona the caller may manage.
+    fn get_persona(
+        &self,
+        caller: MacroUserIdStr<'static>,
+        bot_id: BotId,
+    ) -> impl Future<Output = Result<Persona, BotError>> + Send;
+
+    /// Patch a persona the caller may manage.
+    fn patch_persona(
+        &self,
+        caller: MacroUserIdStr<'static>,
+        bot_id: BotId,
+        req: PatchPersonaRequest,
+    ) -> impl Future<Output = Result<Persona, BotError>> + Send;
+
+    /// Delete a persona the caller may manage.
+    fn delete_persona(
+        &self,
+        caller: MacroUserIdStr<'static>,
+        bot_id: BotId,
+    ) -> impl Future<Output = Result<(), BotError>> + Send;
+
+    /// Read a bot's agent configuration. Used by the harness to launch a
+    /// session as the persona that was mentioned.
+    fn agent_config(
+        &self,
+        bot_id: BotId,
+    ) -> impl Future<Output = Result<Option<AgentConfig>, BotError>> + Send;
+
+    /// List the bots the caller may `@`-mention.
+    fn list_mentionable_bots(
+        &self,
+        caller: MacroUserIdStr<'static>,
+    ) -> impl Future<Output = Result<Vec<MentionableBot>, BotError>> + Send;
 }
 
 /// Bot service error.

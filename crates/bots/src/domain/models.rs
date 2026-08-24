@@ -307,3 +307,156 @@ pub struct ChannelWebhookResponse {
     /// Created message id.
     pub message_id: String,
 }
+
+/// Harness a persona's sessions run under.
+///
+/// A closed set: this is what we launch inside the sandbox, not something an
+/// external system reports back. Contrast `agent_session.model`, which records
+/// whatever model the running agent tells us it used and is therefore a plain
+/// string.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[serde(rename_all = "snake_case")]
+pub enum Harness {
+    /// The `opencode` ACP harness.
+    #[default]
+    OpenCode,
+}
+
+impl Harness {
+    /// Storage representation.
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::OpenCode => "opencode",
+        }
+    }
+}
+
+impl std::fmt::Display for Harness {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl std::str::FromStr for Harness {
+    type Err = String;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        match value {
+            "opencode" => Ok(Self::OpenCode),
+            other => Err(format!("unknown harness: {other}")),
+        }
+    }
+}
+
+/// Model a persona's sessions are launched with.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[serde(rename_all = "snake_case")]
+pub enum AgentModel {
+    /// Claude Sonnet. The slug is `claude`, matching the sessions already
+    /// stamped with it before personas existed.
+    #[default]
+    Claude,
+}
+
+impl AgentModel {
+    /// Storage representation.
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Claude => "claude",
+        }
+    }
+}
+
+impl std::fmt::Display for AgentModel {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl std::str::FromStr for AgentModel {
+    type Err = String;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        match value {
+            "claude" => Ok(Self::Claude),
+            other => Err(format!("unknown model: {other}")),
+        }
+    }
+}
+
+/// What an agent-backed bot runs: the `bot_agent_config` row.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+pub struct AgentConfig {
+    /// Harness the session runs under.
+    pub harness: Harness,
+    /// Model the session is launched with.
+    pub model: AgentModel,
+    /// Markdown instructions prepended to every session, if any.
+    pub system_prompt: Option<String>,
+    /// Repository cloned into the workspace. `None` means no checkout: the
+    /// session gets an empty workspace, and there is no deployment-wide
+    /// default standing behind it.
+    pub repo_url: Option<String>,
+}
+
+/// A persona: an agent-backed system bot a team owns and edits.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+pub struct Persona {
+    /// The bot identity: name, handle, avatar, ownership.
+    #[serde(flatten)]
+    pub bot: Bot,
+    /// What it runs.
+    pub agent: AgentConfig,
+}
+
+/// Request to create a persona.
+#[derive(Debug, Clone, Deserialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+pub struct CreatePersonaRequest {
+    /// Team the persona belongs to. The caller must administer it.
+    pub team_id: Uuid,
+    /// Display name.
+    pub name: String,
+    /// Stable handle, used for `@` mentions.
+    pub handle: String,
+    /// Optional description.
+    pub description: Option<String>,
+    /// Optional avatar URL.
+    pub avatar_url: Option<String>,
+    /// What it runs.
+    pub agent: AgentConfig,
+}
+
+/// Request to patch a persona. Absent fields are left unchanged.
+#[derive(Debug, Clone, Default, Deserialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+pub struct PatchPersonaRequest {
+    /// Display name.
+    pub name: Option<String>,
+    /// Stable handle.
+    pub handle: Option<String>,
+    /// Optional description.
+    pub description: Option<String>,
+    /// Optional avatar URL.
+    pub avatar_url: Option<String>,
+    /// Replacement agent configuration, applied wholesale when present.
+    pub agent: Option<AgentConfig>,
+}
+
+/// A bot the caller may `@`-mention, projected down to what a typeahead needs.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+pub struct MentionableBot {
+    /// Bot id. Mentions carry this as `bot|{id}`.
+    pub id: BotId,
+    /// Display name.
+    pub name: String,
+    /// Handle typed after the `@`.
+    pub handle: String,
+    /// Avatar, when it has one.
+    pub avatar_url: Option<String>,
+}

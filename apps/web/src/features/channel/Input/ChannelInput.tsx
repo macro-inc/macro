@@ -11,7 +11,6 @@ import {
   insertDocumentMentionAtDragCoordinates,
   updateDragInsertPreviewFromCoordinates,
 } from '@core/component/LexicalMarkdown/utils/dragInsertUtils';
-import { ENABLE_CHAT_V3_AGENTS } from '@core/constant/featureFlags';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import type { IUser } from '@core/user/types';
@@ -34,12 +33,7 @@ import {
   Show,
   Switch,
 } from 'solid-js';
-import {
-  isMacroAiId,
-  isMacroCoderId,
-  macroAiMentionUser,
-  macroCoderMentionUser,
-} from '../macroAi';
+import { isMacroAiId, macroAiMentionUser } from '../macroAi';
 import { CHANNEL_FILE_PICKER_ACCEPT } from './accepted-file-types';
 import { createInputAttachmentTracker } from './attachment-tracker';
 import { createConfiguredChannelMarkdownEditor } from './configured-markdown-editor';
@@ -252,18 +246,12 @@ export function ChannelInput(props: ChannelInputProps) {
     queueMicrotask(() => focusEditorNow());
   };
 
-  // Macro AI and Macro Coder (flag-gated) are mentionable in every channel,
-  // and any bot added to the channel is mentionable too. All are surfaced
-  // through the same `@`-mention typeahead as participants and re-tagged as
-  // bot mentions at send time.
+  // `props.bots` already carries every bot the user can mention here: the
+  // channel's own webhook bots plus their teams' personas and the first-party
+  // agents (see `useBotMentionUsers`). Macro AI is the one exception - it
+  // predates the bots table and has no row to be listed from.
   const mentionUsers: Accessor<IUser[]> = () => {
     const base = [...(props.participants?.() ?? []), ...(props.bots?.() ?? [])];
-    if (
-      ENABLE_CHAT_V3_AGENTS() &&
-      !base.some((user) => isMacroCoderId(user.id))
-    ) {
-      base.unshift(macroCoderMentionUser());
-    }
     if (!base.some((user) => isMacroAiId(user.id))) {
       base.unshift(macroAiMentionUser());
     }

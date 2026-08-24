@@ -35,16 +35,17 @@ fn announcement_chip(announcement: &SessionAnnouncement) -> AgentAnnouncementChi
     }
 }
 
-/// Posts session announcements as their session's bot through a
-/// [`ChannelService`].
+/// Posts session announcements through a [`ChannelService`], as whichever bot
+/// the announcement names.
 pub struct ChannelAnnouncer<Channels> {
     channels: Arc<Channels>,
     lexical: LexicalClient,
 }
 
 impl<Channels> ChannelAnnouncer<Channels> {
-    /// Post through `channels`, with content composed by `lexical`. The
-    /// sender is per-announcement: whichever bot the session runs for.
+    /// Post announcements through `channels`, with content composed by
+    /// `lexical`. The sending bot comes from each announcement: one harness
+    /// deployment serves every persona, so it cannot be fixed here.
     pub fn new(channels: Arc<Channels>, lexical: LexicalClient) -> Self {
         Self { channels, lexical }
     }

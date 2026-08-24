@@ -85,13 +85,7 @@ impl ContainerManager for NamespaceContainerManager {
     async fn spawn(&self, command: SpawnContainer) -> Result<Self::Transport> {
         let container = ContainerSpec {
             image_ref: self.image_ref.clone(),
-            env: vec![
-                ("REPO_URL".to_owned(), command.repo_url),
-                (
-                    "GITHUB_TOKEN".to_owned(),
-                    self.github_token.expose().to_owned(),
-                ),
-            ],
+            env: crate::outbound::session_env::session_env(&command, self.github_token.expose()),
             exported_ports: vec![provision::SIDECAR_PORT],
         };
         let instance = self
