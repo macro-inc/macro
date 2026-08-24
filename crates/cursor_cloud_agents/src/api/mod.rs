@@ -154,8 +154,14 @@ impl CursorClient {
                 prefix: key.chars().take(4).collect(),
             });
         }
-        // No global timeout: the run stream is long-lived by design.
-        let http = reqwest::Client::builder().build()?;
+        // No global timeout — the run stream is long-lived by design — but a
+        // bounded connect: a peer that neither answers nor closes would
+        // otherwise hang a caller forever, and the session poller runs its
+        // idle check between calls, so one wedged call is a session that
+        // never retires.
+        let http = reqwest::Client::builder()
+            .connect_timeout(std::time::Duration::from_secs(10))
+            .build()?;
         Ok(Self { http, config })
     }
 
