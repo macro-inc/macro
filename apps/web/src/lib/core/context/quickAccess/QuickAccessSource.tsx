@@ -15,13 +15,13 @@ import type {
   SkillEntity,
   SnippetEntity,
 } from '@entity';
-import { queryReadyGate } from '@queries/gate';
+import { useCachedGraphqlChannelsQuery } from '@queries/channel/channels';
 import {
   type CachedGraphqlChannel,
   materializeCachedGraphqlChannels,
-  materializeCachedGraphqlHistoryItems,
-  readCachedGraphqlChannels,
-} from '@queries/history/graphql';
+} from '@queries/channel/graphql';
+import { queryReadyGate } from '@queries/gate';
+import { materializeCachedGraphqlHistoryItems } from '@queries/history/graphql';
 import { type HistoryItem, useHistoryQuery } from '@queries/history/history';
 import { useQuickAccessCrmCompaniesQuery } from '@queries/soup/quick-access-crm-companies';
 import { useQuickAccessSkillsQuery } from '@queries/soup/quick-access-skills';
@@ -315,8 +315,10 @@ export function createQuickAccessValue(): QuickAccessContextValue {
   const isConnectedSecondaryInbox = useIsConnectedSecondaryInbox();
   const cacheHost = getGraphqlSoupCacheHost();
   const [cacheRevision, setCacheRevision] = createSignal(0);
+  const cachedChannelsQuery = useCachedGraphqlChannelsQuery(cacheHost);
   const unsubscribeCacheChanges = cacheHost?.onCacheChanged(() => {
     setCacheRevision((revision) => revision + 1);
+    void cachedChannelsQuery.refetch();
   });
   onCleanup(() => unsubscribeCacheChanges?.());
   const instructionsIdQuery = useInstructionsMdIdQuery();
@@ -349,34 +351,6 @@ export function createQuickAccessValue(): QuickAccessContextValue {
 
   // stable cache for transformed items
   const itemCache = new Map<string, CacheEntry>();
-
-  const [cachedChannels, setCachedChannels] = createSignal<
-    CachedGraphqlChannel[]
-  >([]);
-  const [cachedChannelsLoading, setCachedChannelsLoading] = createSignal(
-    cacheHost !== undefined
-  );
-  if (cacheHost) {
-    let generation = 0;
-    onCleanup(() => {
-      generation += 1;
-    });
-    createEffect(() => {
-      cacheRevision();
-      const currentGeneration = ++generation;
-      void readCachedGraphqlChannels(cacheHost)
-        .then((channelData) => {
-          if (currentGeneration !== generation) return;
-          setCachedChannels(channelData);
-          setCachedChannelsLoading(false);
-        })
-        .catch(() => {
-          if (currentGeneration !== generation) return;
-          setCachedChannels([]);
-          setCachedChannelsLoading(false);
-        });
-    });
-  }
 
   const recentlyViewedQuery = useRecentlyViewedSoupQuery();
 
@@ -456,7 +430,7 @@ export function createQuickAccessValue(): QuickAccessContextValue {
     // The GraphQL cache is authoritative while enabled. Otherwise preserve the
     // existing channel-list source unchanged.
     const channelData = cacheHost
-      ? cachedChannels()
+      ? (cachedChannelsQuery.data ?? [])
       : channels().map(apiChannelToQuickAccessChannel);
     for (const sourceChannel of channelData) {
       const viewedAt = cacheHost
@@ -996,10 +970,13 @@ export function createQuickAccessValue(): QuickAccessContextValue {
   // resolves rather than gating quick access on a slower/failing CRM fetch.
   const isLoading = () =>
     historyQuery.isLoading ||
-    (cacheHost ? cachedChannelsLoading() : channelsLoading());
+    (cacheHost ? cachedChannelsQuery.isLoading : channelsLoading());
 
   const refresh = () => {
-    if (cacheHost) setCacheRevision((revision) => revision + 1);
+    if (cacheHost) {
+      setCacheRevision((revision) => revision + 1);
+      void cachedChannelsQuery.refetch();
+    }
     historyQuery.refetch();
     crmCompaniesQuery.refetch();
     snippetsQuery.refetch();
