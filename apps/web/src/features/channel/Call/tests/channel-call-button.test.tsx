@@ -89,6 +89,10 @@ function renderButton() {
   return render(() => <ChannelCallButton channelId="channel-1" />);
 }
 
+function callButton() {
+  return screen.getByRole('button', { name: 'Start Call' });
+}
+
 function dispatchPointer(
   target: EventTarget,
   type: string,
@@ -105,10 +109,9 @@ function dispatchPointer(
   );
 }
 
-function slideFrom(button: HTMLElement, distance: number) {
-  dispatchPointer(button, 'pointerdown', { clientY: 40 });
-  dispatchPointer(window, 'pointermove', { clientY: 40 + distance });
-  dispatchPointer(window, 'pointerup', { clientY: 40 + distance });
+/** The live region is always mounted; only its text changes. */
+function hintText() {
+  return screen.getByRole('status').textContent;
 }
 
 beforeEach(() => {
@@ -124,7 +127,7 @@ describe('ChannelCallButton', () => {
   it('starts a call on click on desktop', async () => {
     renderButton();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Start Call' }));
+    fireEvent.click(callButton());
 
     await waitFor(() => {
       expect(mocks.joinCall).toHaveBeenCalledOnce();
@@ -135,36 +138,126 @@ describe('ChannelCallButton', () => {
     mocks.touch = true;
     renderButton();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Slide down to call' }));
+    fireEvent.click(callButton());
 
     expect(mocks.joinCall).not.toHaveBeenCalled();
-    expect(
-      screen.queryByText('Slide the call button down to start the call')
-    ).toBeNull();
+    expect(hintText()).toBe('');
   });
 
-  it('reveals the slide track after a tap that does not complete the gesture', () => {
+  it('reveals the slide hint after a tap that does not complete the gesture', () => {
     mocks.touch = true;
     renderButton();
 
-    const button = screen.getByRole('button', { name: 'Slide down to call' });
+    const button = callButton();
     dispatchPointer(button, 'pointerdown', { clientY: 40 });
     dispatchPointer(window, 'pointerup', { clientY: 40 });
 
     expect(mocks.joinCall).not.toHaveBeenCalled();
-    expect(
-      screen.getByText('Slide the call button down to start the call')
-    ).toBeTruthy();
+    expect(hintText()).toBe('Slide the call button down to call');
   });
 
   it('starts a call after sliding down about an inch', async () => {
     mocks.touch = true;
     renderButton();
 
-    slideFrom(
-      screen.getByRole('button', { name: 'Slide down to call' }),
-      SLIDE_TO_CALL_DISTANCE_PX
-    );
+    const button = callButton();
+    dispatchPointer(button, 'pointerdown', { clientY: 40 });
+    dispatchPointer(window, 'pointermove', {
+      clientY: 40 + SLIDE_TO_CALL_DISTANCE_PX,
+    });
+    expect(hintText()).toBe('Release to call');
+
+    dispatchPointer(window, 'pointerup', {
+      clientY: 40 + SLIDE_TO_CALL_DISTANCE_PX,
+    });
+
+    await waitFor(() => {
+      expect(mocks.joinCall).toHaveBeenCalledOnce();
+    });
+  });
+
+  it('does not start a call when the slide is dragged back above the threshold', () => {
+    mocks.touch = true;
+    renderButton();
+
+    const button = callButton();
+    dispatchPointer(button, 'pointerdown', { clientY: 40 });
+    dispatchPointer(window, 'pointermove', {
+      clientY: 40 + SLIDE_TO_CALL_DISTANCE_PX,
+    });
+    dispatchPointer(window, 'pointermove', { clientY: 60 });
+    dispatchPointer(window, 'pointerup', { clientY: 60 });
+
+    expect(mocks.joinCall).not.toHaveBeenCalled();
+  });
+
+  it('abandons the slide when the pointer swings sideways', () => {
+    mocks.touch = true;
+    renderButton();
+
+    const button = callButton();
+    dispatchPointer(button, 'pointerdown', { clientX: 200, clientY: 40 });
+    dispatchPointer(window, 'pointermove', { clientX: 120, clientY: 60 });
+    dispatchPointer(window, 'pointerup', {
+      clientX: 120,
+      clientY: 40 + SLIDE_TO_CALL_DISTANCE_PX,
+    });
+
+    expect(mocks.joinCall).not.toHaveBeenCalled();
+  });
+
+  it('resets cleanly when the gesture is cancelled', () => {
+    mocks.touch = true;
+    renderButton();
+
+    const button = callButton();
+    dispatchPointer(button, 'pointerdown', { clientY: 40 });
+    dispatchPointer(window, 'pointermove', {
+      clientY: 40 + SLIDE_TO_CALL_DISTANCE_PX,
+    });
+    dispatchPointer(window, 'pointercancel', {
+      clientY: 40 + SLIDE_TO_CALL_DISTANCE_PX,
+    });
+
+    expect(mocks.joinCall).not.toHaveBeenCalled();
+    // A cancel leaves the hint up rather than placing the call.
+    expect(hintText()).toBe('Slide the call button down to call');
+  });
+
+  it('ignores a second pointer landing mid-slide', async () => {
+    mocks.touch = true;
+    renderButton();
+
+    const button = callButton();
+    dispatchPointer(button, 'pointerdown', { pointerId: 1, clientY: 40 });
+    dispatchPointer(button, 'pointerdown', { pointerId: 2, clientY: 40 });
+    dispatchPointer(window, 'pointerup', { pointerId: 2, clientY: 40 });
+
+    expect(mocks.joinCall).not.toHaveBeenCalled();
+
+    // The original gesture is still live and can still place the call.
+    dispatchPointer(window, 'pointermove', {
+      pointerId: 1,
+      clientY: 40 + SLIDE_TO_CALL_DISTANCE_PX,
+    });
+    dispatchPointer(window, 'pointerup', {
+      pointerId: 1,
+      clientY: 40 + SLIDE_TO_CALL_DISTANCE_PX,
+    });
+
+    await waitFor(() => {
+      expect(mocks.joinCall).toHaveBeenCalledOnce();
+    });
+  });
+
+  it('places one call per keypress and ignores auto-repeat', async () => {
+    mocks.touch = true;
+    renderButton();
+
+    const button = callButton();
+    fireEvent.keyDown(button, { key: 'Enter' });
+    fireEvent.keyDown(button, { key: 'Enter', repeat: true });
+    fireEvent.keyDown(button, { key: 'Enter', repeat: true });
 
     await waitFor(() => {
       expect(mocks.joinCall).toHaveBeenCalledOnce();

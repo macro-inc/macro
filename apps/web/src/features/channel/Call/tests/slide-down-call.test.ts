@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  isHorizontalSlide,
   isSlideDownArmed,
   SLIDE_TO_CALL_DISTANCE_PX,
   slideDownFraction,
@@ -41,7 +42,7 @@ describe('slideDownProgress', () => {
 });
 
 describe('isSlideDownArmed', () => {
-  it('is false until the thumb reaches the inch mark', () => {
+  it('is false until the knob reaches the inch mark', () => {
     expect(isSlideDownArmed(0)).toBe(false);
     expect(isSlideDownArmed(SLIDE_TO_CALL_DISTANCE_PX - 1)).toBe(false);
     expect(isSlideDownArmed(SLIDE_TO_CALL_DISTANCE_PX)).toBe(true);
@@ -55,5 +56,22 @@ describe('slideDownFraction', () => {
     expect(slideDownFraction(SLIDE_TO_CALL_DISTANCE_PX / 2)).toBe(0.5);
     expect(slideDownFraction(SLIDE_TO_CALL_DISTANCE_PX)).toBe(1);
     expect(slideDownFraction(SLIDE_TO_CALL_DISTANCE_PX * 3)).toBe(1);
+  });
+});
+
+describe('isHorizontalSlide', () => {
+  it('ignores small sideways jitter during a downward slide', () => {
+    expect(isHorizontalSlide(0, 40)).toBe(false);
+    expect(isHorizontalSlide(8, 40)).toBe(false);
+    expect(isHorizontalSlide(-8, 4)).toBe(false);
+  });
+
+  it('hands a mostly sideways swipe back to the panel', () => {
+    expect(isHorizontalSlide(60, 20)).toBe(true);
+    expect(isHorizontalSlide(-60, 20)).toBe(true);
+  });
+
+  it('keeps the slide when downward travel dominates', () => {
+    expect(isHorizontalSlide(30, 90)).toBe(false);
   });
 });
