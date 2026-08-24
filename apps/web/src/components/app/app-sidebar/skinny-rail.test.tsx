@@ -159,16 +159,30 @@ describe('SkinnySidebarRail', () => {
     ]);
   });
 
+  it('labels every destination, Slack-style', () => {
+    mocks.links = [link('mail', 'Email'), link('calendar', 'Calendar')];
+
+    const { container } = renderRail();
+
+    expect(
+      [...container.querySelectorAll('[data-rail-link]')].map(
+        (item) => item.textContent
+      )
+    ).toEqual(['Email', 'Calendar']);
+  });
+
   it('badges a destination with its unread count', () => {
     mocks.links = [link('mail', 'Email'), link('calendar', 'Calendar')];
     mocks.notifications = [unreadEmail('a'), unreadEmail('b')];
 
     const { container } = renderRail();
 
-    const mail = container.querySelector('[data-rail-link="mail"]');
-    const calendar = container.querySelector('[data-rail-link="calendar"]');
-    expect(mail?.textContent).toBe('2');
-    expect(calendar?.textContent).toBe('');
+    const badgeOf = (linkId: string) =>
+      container.querySelector(`[data-rail-link="${linkId}"] [role="status"]`)
+        ?.textContent;
+
+    expect(badgeOf('mail')).toBe('2');
+    expect(badgeOf('calendar')).toBeUndefined();
   });
 
   it('marks the destination the current path is showing', () => {

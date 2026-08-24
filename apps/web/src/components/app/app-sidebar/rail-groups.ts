@@ -1,3 +1,5 @@
+import { type HotkeyToken, TOKENS } from '@core/hotkey/tokens';
+import type { ValidHotkey } from '@core/hotkey/types';
 import type { EntityType } from '@core/types';
 import { notificationIsRead } from '@notifications/notification-helpers';
 import type { UnifiedNotification } from '@notifications/types';
@@ -133,4 +135,41 @@ export function unreadCountsByLinkId(
 /** Badge text: the count, capped so it stays inside the 30px rail. */
 export function formatRailUnreadCount(count: number): string {
   return count > 99 ? '99+' : String(count);
+}
+
+/**
+ * The single-key jumps to rail destinations: `0` is the first destination,
+ * incrementing through the rail's own order, and destinations past `9` get
+ * none. Feature-gated destinations shift the ones after them, so the keys
+ * always match what the rail actually shows.
+ */
+const RAIL_DIGITS = [
+  { key: '0', token: TOKENS.sidebar.goToIndex['0'] },
+  { key: '1', token: TOKENS.sidebar.goToIndex['1'] },
+  { key: '2', token: TOKENS.sidebar.goToIndex['2'] },
+  { key: '3', token: TOKENS.sidebar.goToIndex['3'] },
+  { key: '4', token: TOKENS.sidebar.goToIndex['4'] },
+  { key: '5', token: TOKENS.sidebar.goToIndex['5'] },
+  { key: '6', token: TOKENS.sidebar.goToIndex['6'] },
+  { key: '7', token: TOKENS.sidebar.goToIndex['7'] },
+  { key: '8', token: TOKENS.sidebar.goToIndex['8'] },
+  { key: '9', token: TOKENS.sidebar.goToIndex['9'] },
+] as const satisfies readonly { key: ValidHotkey; token: HotkeyToken }[];
+
+/** A rail destination paired with the digit that jumps to it. */
+export interface RailDigitBinding {
+  link: SidebarItem;
+  key: ValidHotkey;
+  token: HotkeyToken;
+}
+
+/** Pair the rail's destinations with their digit keys, in rail order. */
+export function railDigitBindings(
+  groups: readonly RailGroup[]
+): RailDigitBinding[] {
+  const destinations = groups.flatMap((group) => group.items);
+  return RAIL_DIGITS.flatMap(({ key, token }, index) => {
+    const link = destinations[index];
+    return link ? [{ link, key, token }] : [];
+  });
 }

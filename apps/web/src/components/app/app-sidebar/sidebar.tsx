@@ -100,6 +100,7 @@ import {
   navigateToSidebarView,
   sidebarContent,
 } from './navigation';
+import { railDigitBindings, railGroups } from './rail-groups';
 
 type SidebarSectionLinkId =
   | 'mail'
@@ -299,49 +300,66 @@ export const GoToHotkeys = () => {
   // This must be reactive because prod feature flags can add links after the
   // initial render (e.g. Home), and Hotkey UI resolves tokens from the registry.
   createEffect(() => {
-    const disposers = links().map((link) => {
-      const openSidebarView = (e?: KeyboardEvent) => {
-        e?.preventDefault();
-        if (goToHotkeyVisible()) {
-          resetGoToHotkeysState();
-          debounceResetHotkeysState.clear();
-        }
+    const openSidebarView = (link: SidebarItem) => (e?: KeyboardEvent) => {
+      e?.preventDefault();
+      if (goToHotkeyVisible()) {
+        resetGoToHotkeysState();
+        debounceResetHotkeysState.clear();
+      }
 
-        if (link.id === 'search' && !e?.shiftKey) {
-          const activeSplit = globalSplitManager()?.activeSplit();
-          const content = activeSplit?.content();
-          if (
-            activeSplit &&
-            content?.type === 'component' &&
-            content.id === 'search'
-          ) {
-            requestSearchFocus(activeSplit.id);
-            return true;
-          }
+      if (link.id === 'search' && !e?.shiftKey) {
+        const activeSplit = globalSplitManager()?.activeSplit();
+        const content = activeSplit?.content();
+        if (
+          activeSplit &&
+          content?.type === 'component' &&
+          content.id === 'search'
+        ) {
+          requestSearchFocus(activeSplit.id);
+          return true;
         }
+      }
 
-        const handle = navigateToSidebarView({
-          viewId: link.id,
-          params: link.params,
-          shiftKey: !!e?.shiftKey,
-          activeSplit: globalSplitManager()?.activeSplit(),
-          openWithSplit,
-        });
-        if (link.id === 'search' && handle) {
-          requestSearchFocus(handle.id);
-        }
-        return true;
-      };
-
-      return registerHotkey({
-        hotkey: link.hotkey,
-        scopeId: link.standaloneHotkey ? 'global' : GO_TO_COMMAND_SCOPE,
-        hotkeyToken: link.hotkeyToken,
-        description: `Go to ${link.label}`,
-        keyDownHandler: openSidebarView,
-        icon: link.icon,
+      const handle = navigateToSidebarView({
+        viewId: link.id,
+        params: link.params,
+        shiftKey: !!e?.shiftKey,
+        activeSplit: globalSplitManager()?.activeSplit(),
+        openWithSplit,
       });
-    });
+      if (link.id === 'search' && handle) {
+        requestSearchFocus(handle.id);
+      }
+      return true;
+    };
+
+    const disposers = [
+      ...links().map((link) =>
+        registerHotkey({
+          hotkey: link.hotkey,
+          scopeId: link.standaloneHotkey ? 'global' : GO_TO_COMMAND_SCOPE,
+          hotkeyToken: link.hotkeyToken,
+          description: `Go to ${link.label}`,
+          keyDownHandler: openSidebarView(link),
+          icon: link.icon,
+        })
+      ),
+      // Single-key jumps down the nav rail: `0` is its first destination,
+      // incrementing from there. Hidden from the command menu — every one of
+      // these duplicates a `g`-leader command that is already listed — but the
+      // rail's tooltips surface the digit.
+      ...railDigitBindings(railGroups(links())).map((binding) =>
+        registerHotkey({
+          hotkey: binding.key,
+          scopeId: 'global',
+          hotkeyToken: binding.token,
+          description: `Go to ${binding.link.label}`,
+          keyDownHandler: openSidebarView(binding.link),
+          icon: binding.link.icon,
+          hide: true,
+        })
+      ),
+    ];
 
     onCleanup(() => {
       for (const disposer of disposers) {

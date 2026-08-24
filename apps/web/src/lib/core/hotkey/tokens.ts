@@ -6,16 +6,6 @@ export const TOKENS = {
     sort: 'soup.sort',
     filter: 'soup.filter',
     tabs: {
-      '0': 'soup.tabs.0',
-      '1': 'soup.tabs.1',
-      '2': 'soup.tabs.2',
-      '3': 'soup.tabs.3',
-      '4': 'soup.tabs.4',
-      '5': 'soup.tabs.5',
-      '6': 'soup.tabs.6',
-      '7': 'soup.tabs.7',
-      '8': 'soup.tabs.8',
-      '9': 'soup.tabs.9',
       next: 'soup.tabs.next',
       prev: 'soup.tabs.prev',
     },
@@ -109,6 +99,19 @@ export const TOKENS = {
   // sidebar navigation
   sidebar: {
     goToLeader: 'sidebar.goToLeader',
+    /** Single-key jumps to the nav rail's destinations, in rail order. */
+    goToIndex: {
+      '0': 'sidebar.goToIndex.0',
+      '1': 'sidebar.goToIndex.1',
+      '2': 'sidebar.goToIndex.2',
+      '3': 'sidebar.goToIndex.3',
+      '4': 'sidebar.goToIndex.4',
+      '5': 'sidebar.goToIndex.5',
+      '6': 'sidebar.goToIndex.6',
+      '7': 'sidebar.goToIndex.7',
+      '8': 'sidebar.goToIndex.8',
+      '9': 'sidebar.goToIndex.9',
+    },
     goTo: {
       home: 'sidebar.goTo.home',
       gettingStarted: 'sidebar.goTo.gettingStarted',

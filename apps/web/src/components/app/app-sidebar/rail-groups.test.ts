@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import type { SidebarItem } from './links';
 import {
   formatRailUnreadCount,
+  railDigitBindings,
   railGroups,
   unreadCountsByLinkId,
 } from './rail-groups';
@@ -156,5 +157,51 @@ describe('formatRailUnreadCount', () => {
     expect(formatRailUnreadCount(9)).toBe('9');
     expect(formatRailUnreadCount(99)).toBe('99');
     expect(formatRailUnreadCount(100)).toBe('99+');
+  });
+});
+
+describe('railDigitBindings', () => {
+  const bindingsFor = (ids: string[]) =>
+    railDigitBindings(railGroups(ids.map((id) => link(id)))).map(
+      (binding) => [binding.key, binding.link.id] as const
+    );
+
+  it('starts at 0 and increments down the rail', () => {
+    expect(bindingsFor(['home', 'inbox', 'mail', 'calendar'])).toEqual([
+      ['0', 'home'],
+      ['1', 'inbox'],
+      ['2', 'mail'],
+      ['3', 'calendar'],
+    ]);
+  });
+
+  it('follows the rail order, not the order links arrive in', () => {
+    expect(bindingsFor(['mail', 'home', 'channels', 'inbox'])).toEqual([
+      ['0', 'home'],
+      ['1', 'inbox'],
+      ['2', 'mail'],
+      ['3', 'channels'],
+    ]);
+  });
+
+  it('runs out of keys after the tenth destination', () => {
+    const ids = [
+      'home',
+      'getting-started',
+      'inbox',
+      'recent',
+      'activity',
+      'mail',
+      'calendar',
+      'channels',
+      'calls',
+      'documents',
+      'tasks',
+      'companies',
+    ];
+
+    const bindings = bindingsFor(ids);
+    expect(bindings).toHaveLength(10);
+    expect(bindings.at(-1)).toEqual(['9', 'documents']);
   });
 });

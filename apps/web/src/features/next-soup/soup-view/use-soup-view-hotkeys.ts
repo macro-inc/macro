@@ -354,30 +354,9 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
     return visibleViewTabs(view).map((t) => t.value);
   };
 
-  const switchToTabIndex = (index: number) => {
-    const view = currentView();
-    if (!view) return false;
-    const tabKeys = getTabKeys();
-    if (index < 0 || index >= tabKeys.length) return false;
-    applyTabPreset(view, tabKeys[index]!);
-    return true;
-  };
-
-  // 1-9 number keys to jump to specific tabs
-  const tabNumberKeys = ['1', '2', '3', '4', '5', '6', '7', '8', '9'] as const;
-  for (let i = 0; i < tabNumberKeys.length; i++) {
-    const index = i;
-    const key = tabNumberKeys[i]!;
-    registerHotkey({
-      hotkey: key,
-      scopeId,
-      hotkeyToken: TOKENS.soup.tabs[key],
-      description: `Switch to tab ${key}`,
-      condition: () => getTabKeys().length > index,
-      keyDownHandler: () => switchToTabIndex(index),
-      hide: true,
-    }).withGroup(group);
-  }
+  // The 1-9 keys are the global nav-rail jumps (see `GoToHotkeys`), which a
+  // per-view binding here would shadow inside every tabbed list — so tabs are
+  // reached with tab / shift+tab below, and by clicking.
 
   // fall back to the view's default tab if the soup view active tab accessor
   // returns undefined

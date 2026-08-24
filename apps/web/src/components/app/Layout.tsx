@@ -41,6 +41,8 @@ import {
   type SidebarState,
 } from '@components/app/app-sidebar/sidebar';
 import { SkinnySidebarRail } from '@components/app/app-sidebar/skinny-rail';
+import { SplitNavRail } from '@components/app/app-sidebar/split-rail';
+import { AppTopbar } from '@components/app/app-topbar';
 import { registerMailtoComposerHandler } from '@components/app/mailtoComposerHandler';
 import {
   isSidebarVisible,
@@ -490,6 +492,9 @@ function LayoutInner(props: RouteSectionProps) {
       <Show when={paywallOpen()}>
         <Paywall />
       </Show>
+      <Show when={isSidebarVisible()}>
+        <AppTopbar />
+      </Show>
       <div class="max-h-full grow flex">
         {/* The provider spans the sidebar too so its favorites can register
             sortables with the same drag-drop context as the entity drags. */}
@@ -509,8 +514,8 @@ function LayoutInner(props: RouteSectionProps) {
               }}
             />
           </Show>
-          {/* The collapsed sidebar is a visible 30px rail, not an empty edge:
-              its logo is the peek/expand trigger the old invisible hover strip
+          {/* The collapsed sidebar is a visible rail, not an empty edge: its
+              logo is the peek/expand trigger the old invisible hover strip
               used to be, so hovering an icon can't yank the overlay open over
               the icon being aimed at. */}
           <Show when={sidebarCollapsed()}>
@@ -526,6 +531,12 @@ function LayoutInner(props: RouteSectionProps) {
           <div class="flex-1 w-full min-h-0 font-sans text-ink caret-accent">
             {props.children}
           </div>
+
+          {/* Same destinations as the left rail, docked beside what you are
+              already looking at instead of taking it over. */}
+          <Show when={isSidebarVisible()}>
+            <SplitNavRail />
+          </Show>
         </ItemDndProvider>
       </div>
       <CollapsedSidebarIncomingCallWidget
