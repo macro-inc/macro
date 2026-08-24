@@ -1,4 +1,5 @@
 export * from './actions';
+export * from './agent-commands';
 export * from './await';
 export * from './blame-tooltip';
 export * from './checklist';

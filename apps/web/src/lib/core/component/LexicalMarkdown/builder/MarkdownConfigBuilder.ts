@@ -6,6 +6,7 @@ import type { Action } from '../plugins/actions/types';
 import { buildHandleFromConfig } from './buildHandleFromConfig';
 import type {
   ActionsOptions,
+  AgentCommandsOptions,
   EditorBuilder,
   EditorCallbacks,
   EditorConfig,
@@ -177,6 +178,18 @@ export class EditorConfigBuilder implements EditorBuilder {
    */
   withSkills(): this {
     this.state.skills = true;
+    return this;
+  }
+
+  /**
+   * Enable the agent commands (`/`) typeahead menu — for agent composers.
+   * Lists the slash commands a connected coding agent advertises over ACP;
+   * selecting one inserts `/name` as plain text, which is sent to the agent
+   * as ordinary prompt text. Shares the `/` trigger with the actions and
+   * skills menus, so it only takes effect when both are disabled.
+   */
+  withAgentCommands(config: AgentCommandsOptions): this {
+    this.state.agentCommands = config;
     return this;
   }
 
