@@ -6,6 +6,7 @@ import {
   expectEntityInCurrentList,
   gotoApp,
   LOCAL_E2E,
+  useExpandedSidebar,
 } from './helpers/local-app';
 
 const SIDEBAR_LIST_VIEWS = [
@@ -42,6 +43,7 @@ test.describe('local sidebar views', () => {
 
   for (const view of SIDEBAR_LIST_VIEWS) {
     test(`opens ${view.label} from the sidebar`, async ({ page }) => {
+      await useExpandedSidebar(page);
       await gotoApp(
         page,
         view.id === 'documents' ? '/component/inbox' : '/component/documents'
@@ -77,6 +79,39 @@ test.describe('local sidebar views', () => {
       }
     });
   }
+});
+
+test.describe('local nav rail', () => {
+  test.describe.configure({ timeout: 60_000 });
+
+  // No `useExpandedSidebar`: the rail is what a fresh desktop session gets.
+  test('opens a view from the rail', async ({ page }) => {
+    await gotoApp(page, '/component/documents');
+
+    const link = railLink(page, 'mail');
+    await expect(link).toBeVisible({ timeout: 30_000 });
+    await link.click();
+
+    await expect(page).toHaveURL(/\/app\/component\/mail$/);
+    await expect(railLink(page, 'mail')).toHaveAttribute('data-active', '', {
+      timeout: 10_000,
+    });
+    await expectLoadedListView(page, 'mail');
+  });
+
+  test('docks a view beside the current one from the right-hand rail', async ({
+    page,
+  }) => {
+    await gotoApp(page, '/component/documents');
+
+    const link = splitRailLink(page, 'mail');
+    await expect(link).toBeVisible({ timeout: 30_000 });
+    await link.click();
+
+    // Docked alongside, not in place of: both views stay mounted.
+    await expectLoadedListView(page, 'mail');
+    await expectLoadedListView(page, 'documents');
+  });
 });
 
 async function openSidebarView(page: Page, id: string) {
@@ -117,4 +152,16 @@ async function expectListViewChrome(page: Page, tabs: readonly string[]) {
 
 function sidebarLink(page: Page, id: string): Locator {
   return page.locator(`nav [data-sidebar-link="${id}"]`).first();
+}
+
+function railLink(page: Page, id: string): Locator {
+  return page
+    .locator(`[data-ui="skinny-sidebar-rail"] [data-rail-link="${id}"]`)
+    .first();
+}
+
+function splitRailLink(page: Page, id: string): Locator {
+  return page
+    .locator(`[data-ui="split-nav-rail"] [data-rail-link="${id}"]`)
+    .first();
 }

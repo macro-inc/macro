@@ -6,7 +6,7 @@ import {
   splitContainerSelector,
 } from '../../src/lib/core/dom-selectors';
 import { localE2ESeed } from './fixtures/local-e2e-seed';
-import { gotoApp, LOCAL_E2E } from './helpers/local-app';
+import { gotoApp, LOCAL_E2E, useExpandedSidebar } from './helpers/local-app';
 
 const SEARCH_BAR = '[data-soup-search]';
 const SEEDED_DOCUMENT = localE2ESeed.smoke.projectRoadmap;
@@ -37,6 +37,7 @@ test.describe('local search bar state', () => {
   test('restores the query after switching sidebar views and going back', async ({
     page,
   }) => {
+    await useExpandedSidebar(page);
     await gotoApp(page, '/component/search');
     await search(page, SEEDED_DOCUMENT.document_name);
 

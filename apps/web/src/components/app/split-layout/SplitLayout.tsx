@@ -1,15 +1,10 @@
 import { useGlobalBlockOrchestrator } from '@components/app/GlobalAppState';
-import {
-  isSidebarVisible,
-  useSidebarCollapse,
-} from '@components/app/sidebarVisibility';
 import { Resize } from '@core/component/Resize';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { tabTitleSignal } from '@core/signal/tabTitle';
 import { useWindowSize } from '@solid-primitives/resize-observer';
 import { useLocation, useNavigate } from '@solidjs/router';
-import { cn } from '@ui';
 import {
   createEffect,
   createMemo,
@@ -38,8 +33,17 @@ import {
   loadRestorablePreviewLayout,
   PREVIEW_QUERY_PARAM,
 } from './previewPersistence';
+import {
+  isSideSplit,
+  releaseSideSplit,
+  SIDE_SPLIT_MIN_WIDTH,
+  sideSplitPreferredWidth,
+} from './side-split-sizing';
 import { splitMinWidthForContent } from './splitContentSizing';
 import { createSplitFocusTracker } from './splitFocusTracker';
+
+/** The hairline between two splits, and the whole of the gap between them. */
+const SPLIT_SEAM_WIDTH = 1;
 
 type SplitLayoutContainerProps = {
   pairs: string[];
@@ -64,7 +68,6 @@ export function SplitLayoutContainer(props: SplitLayoutContainerProps) {
   );
   restorePreviewPairs(splitManager, initialLayout.previewPairs);
   const [, setTabTitle] = tabTitleSignal;
-  const sidebar = useSidebarCollapse();
 
   // Create the mobile swipe layout once on mobile devices.
   const mobileSwipeLayout: MobileSwipeLayout | undefined =
@@ -115,62 +118,78 @@ export function SplitLayoutContainer(props: SplitLayoutContainerProps) {
 
   return (
     <SplitLayoutContext.Provider value={{ manager: splitManager }}>
-      <div
-        class={cn('size-full p-2 touch:p-0', {
-          'pl-0': isSidebarVisible() && !sidebar.isCollapsed(),
-        })}
-      >
+      {/* No inset: the splits fill the frame and a hairline gutter is the only
+          thing between them. */}
+      <div class="size-full">
         <Show
           when={isNativeMobilePlatform() && mobileSwipeLayout}
           fallback={
             // Desktop: side-by-side resizable splits.
             <Resize.Zone
               direction="horizontal"
-              gutter={8}
+              gutter={SPLIT_SEAM_WIDTH}
+              seam
               captureResizeCtx={splitManager.setResizeContext}
             >
               <For each={ids()}>
-                {(id, index) => (
-                  <Show when={splitManager.getSplit(id)}>
-                    {(handle) => (
-                      <Suspense>
-                        <Resize.Panel
-                          id={id}
-                          minSize={splitMinWidthForContent(handle().content(), {
-                            isPreviewController: handle().isControllerSplit(),
-                          })}
-                          // A Preview Pair is one layout unit: its two splits
-                          // share the space a single split would get. Both
-                          // members key their group by the Controller's id.
-                          shareGroup={
-                            splitManager.viewerOf(id) !== undefined
-                              ? id
-                              : splitManager.controllerOf(id)
-                          }
-                          // Automatic redistribution targets an engaged
-                          // Controller at its configured preferred width.
-                          // This is not a hard max: the gutter can still be
-                          // dragged past it.
-                          redistributionPreferredSize={splitManager.previewControllerWidth(
-                            id,
-                            viewportSize.width
-                          )}
-                          index={index()}
-                        >
-                          <SplitPanel
-                            split={splits()[index()]!}
-                            handle={handle()}
-                            active={activeSplitSelector(id)}
-                            setPanelRef={(panelRef) =>
-                              panelRefs.set(id, panelRef)
+                {(id, index) => {
+                  // A side split's narrow sizing is keyed by split id, so it
+                  // has to be released when the split leaves the layout.
+                  onCleanup(() => releaseSideSplit(id));
+
+                  return (
+                    <Show when={splitManager.getSplit(id)}>
+                      {(handle) => (
+                        <Suspense>
+                          <Resize.Panel
+                            id={id}
+                            minSize={
+                              isSideSplit(id)
+                                ? SIDE_SPLIT_MIN_WIDTH
+                                : splitMinWidthForContent(handle().content(), {
+                                    isPreviewController:
+                                      handle().isControllerSplit(),
+                                  })
+                            }
+                            // A Preview Pair is one layout unit: its two splits
+                            // share the space a single split would get. Both
+                            // members key their group by the Controller's id.
+                            shareGroup={
+                              splitManager.viewerOf(id) !== undefined
+                                ? id
+                                : splitManager.controllerOf(id)
+                            }
+                            // Automatic redistribution targets an engaged
+                            // Controller at its configured preferred width.
+                            // This is not a hard max: the gutter can still be
+                            // dragged past it.
+                            redistributionPreferredSize={
+                              isSideSplit(id)
+                                ? sideSplitPreferredWidth(
+                                    viewportSize.width ?? 0
+                                  )
+                                : splitManager.previewControllerWidth(
+                                    id,
+                                    viewportSize.width
+                                  )
                             }
                             index={index()}
-                          />
-                        </Resize.Panel>
-                      </Suspense>
-                    )}
-                  </Show>
-                )}
+                          >
+                            <SplitPanel
+                              split={splits()[index()]!}
+                              handle={handle()}
+                              active={activeSplitSelector(id)}
+                              setPanelRef={(panelRef) =>
+                                panelRefs.set(id, panelRef)
+                              }
+                              index={index()}
+                            />
+                          </Resize.Panel>
+                        </Suspense>
+                      )}
+                    </Show>
+                  );
+                }}
               </For>
             </Resize.Zone>
           }

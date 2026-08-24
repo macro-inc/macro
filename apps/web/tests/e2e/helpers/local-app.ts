@@ -7,6 +7,17 @@ import {
 
 export const LOCAL_E2E = process.env.LOCAL_E2E === 'true';
 
+/**
+ * Pin the wide sidebar open before the app loads. Desktop sessions start on the
+ * skinny nav rail, where the wide sidebar's rows are not rendered — a test that
+ * drives those rows has to ask for them. Call before {@link gotoApp}.
+ */
+export async function useExpandedSidebar(page: Page) {
+  await page.addInitScript(() => {
+    window.localStorage.setItem('sidebar-state', '"expanded"');
+  });
+}
+
 export async function gotoApp(page: Page, path: `/${string}`) {
   await page.goto(`/app${path}`);
   await expect(page).not.toHaveURL(/\/app\/(welcome|signup|login)/);

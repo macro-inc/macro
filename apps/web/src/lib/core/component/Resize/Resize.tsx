@@ -22,6 +22,9 @@ import type {
 
 export const ResizeZoneContext = createContext<ResizeZoneCtx>();
 
+/** How far a seam gutter's drag target spills past the hairline, each side. */
+const SEAM_GRAB_PX = 4;
+
 /**
  * Props for the Resize Zone component.
  *
@@ -31,6 +34,8 @@ export const ResizeZoneContext = createContext<ResizeZoneCtx>();
  * @property class - Optional class name for the Zone.
  * @property id - Optional id for the Zone.
  * @property resizable - Optional boolean indicating whether the zone is resizable. Defaults to true.
+ * @property seam - Paint a hairline between panels and widen the drag target
+ *   past it, for zones whose gutter is only as wide as the line itself.
  */
 type ZoneProps = {
   direction: 'horizontal' | 'vertical';
@@ -40,6 +45,7 @@ type ZoneProps = {
   id?: string;
   captureResizeCtx?: (ctx: ResizeZoneCtx) => void;
   resizable?: boolean;
+  seam?: boolean;
 };
 
 /**
@@ -181,6 +187,7 @@ function Zone(props: ParentProps<ZoneProps>) {
                     index={actualIndex}
                     nudge={solver.moveHandle}
                     root={root}
+                    seam={props.seam}
                   />
                 </Show>
               );
@@ -408,6 +415,8 @@ type GutterProps = {
   index: number;
   nudge: (index: number, amt: number) => void;
   root: () => HTMLDivElement | undefined;
+  /** Paint the resting hairline and widen the drag target past it. */
+  seam?: boolean;
 };
 
 function Gutter(props: GutterProps) {
@@ -520,6 +529,41 @@ function Gutter(props: GutterProps) {
       onPointerDown={onPointerDown}
       onKeyDown={onKeyDown}
     >
+      <Show when={props.seam}>
+        {/* A seam-width gutter is too thin to grab, so the target spills past
+            it on both sides. Pointer events here bubble to the gutter. */}
+        <div
+          class="absolute"
+          style={
+            ctx.direction() === 'horizontal'
+              ? {
+                  top: 0,
+                  bottom: 0,
+                  left: `-${SEAM_GRAB_PX}px`,
+                  right: `-${SEAM_GRAB_PX}px`,
+                }
+              : {
+                  left: 0,
+                  right: 0,
+                  top: `-${SEAM_GRAB_PX}px`,
+                  bottom: `-${SEAM_GRAB_PX}px`,
+                }
+          }
+        />
+        <div
+          class="bg-edge-muted absolute"
+          style={{
+            left: ctx.direction() === 'horizontal' ? '50%' : '0',
+            top: ctx.direction() === 'vertical' ? '50%' : '0',
+            width: ctx.direction() === 'horizontal' ? '1px' : '100%',
+            height: ctx.direction() === 'vertical' ? '1px' : '100%',
+            transform:
+              ctx.direction() === 'horizontal'
+                ? 'translateX(-50%)'
+                : 'translateY(-50%)',
+          }}
+        />
+      </Show>
       <div
         class={cn(
           'bg-accent absolute opacity-0 group-focus:opacity-100 rounded-[1px]',
