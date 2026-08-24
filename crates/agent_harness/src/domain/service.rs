@@ -333,6 +333,7 @@ where
             .containers
             .spawn(SpawnContainer {
                 session_id: session.id,
+                bot_id: session.bot_id,
                 repo_url: defaults.repo_url.clone(),
                 size: sandbox_size,
             })
