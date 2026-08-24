@@ -5,7 +5,7 @@ use crate::domain::models::{
     CalendarSyncStatus, CalendarWatchRelease, ConferenceChange, DisconnectedGoogleCalendar,
     EventStatus, EventTransparency, EventVisibility, GoogleCalendarSyncSnapshot,
     GoogleCalendarTarget, GoogleEventSource, GoogleWatchChannel, ProviderCalendar,
-    StoredGoogleCalendar,
+    StoredGoogleCalendar, VisibleCalendar,
 };
 use crate::domain::ports::RetiredCalendarEvent;
 use chrono::{Duration, TimeZone};
@@ -31,6 +31,19 @@ fn mutation_target(is_read_only: bool) -> CalendarEventMutationTarget {
         calendar_id: Uuid::now_v7(),
         provider_calendar_id: "primary".to_string(),
         token_identity: token_identity(),
+    }
+}
+
+fn visible_inbox(email: &str) -> VisibleCalendar {
+    VisibleCalendar {
+        id: Uuid::now_v7(),
+        email_link_id: Uuid::now_v7(),
+        email_address: email.to_string(),
+        name: email.to_string(),
+        color: None,
+        is_primary: true,
+        is_writable: true,
+        default_reminders: Vec::new(),
     }
 }
 
@@ -128,6 +141,7 @@ struct FakeRepo {
     retired_events: Vec<RetiredCalendarEvent>,
     disconnected: Option<DisconnectedGoogleCalendar>,
     disconnect_requests: Arc<Mutex<Vec<(String, Uuid)>>>,
+    visible_calendars: Vec<VisibleCalendar>,
 }
 
 impl Default for FakeRepo {
@@ -142,6 +156,7 @@ impl Default for FakeRepo {
             retired_events: Vec::new(),
             disconnected: None,
             disconnect_requests: Default::default(),
+            visible_calendars: Vec::new(),
         }
     }
 }
@@ -288,7 +303,7 @@ impl CalendarRepository for FakeRepo {
         &self,
         _requester_id: &str,
     ) -> Result<Vec<crate::domain::models::VisibleCalendar>, rootcause::Report> {
-        Ok(Vec::new())
+        Ok(self.visible_calendars.clone())
     }
 
     async fn remove_google_source(
@@ -319,6 +334,7 @@ enum FakeProviderBehavior {
 struct FakeProvider {
     behavior: FakeProviderBehavior,
     calls: Arc<Mutex<Vec<String>>>,
+    rsvp_self_emails: Arc<Mutex<Vec<Vec<String>>>>,
 }
 
 impl FakeProvider {
@@ -326,6 +342,7 @@ impl FakeProvider {
         Self {
             behavior,
             calls: Arc::new(Mutex::new(Vec::new())),
+            rsvp_self_emails: Arc::new(Mutex::new(Vec::new())),
         }
     }
 
@@ -472,7 +489,7 @@ impl GoogleCalendarMutationProvider for FakeProvider {
         _access_token: &str,
         target: &GoogleCalendarTarget,
         master_provider_event_id: &str,
-        _self_email: &str,
+        self_emails: &[String],
         _response: AttendeeResponseStatus,
         scope: &CalendarRsvpScope,
     ) -> Result<GoogleRsvpOutcome, GoogleProviderError> {
@@ -484,6 +501,10 @@ impl GoogleCalendarMutationProvider for FakeProvider {
             .lock()
             .unwrap()
             .push(format!("rsvp:{master_provider_event_id}:{scope}"));
+        self.rsvp_self_emails
+            .lock()
+            .unwrap()
+            .push(self_emails.to_vec());
         if let Some(error) = self.fail() {
             return Err(error);
         }
@@ -1203,6 +1224,34 @@ async fn rsvp_surfaces_attendance_and_persists_the_echo() {
     assert_eq!(
         calls.lock().unwrap().as_slice(),
         ["rsvp:master-id:this:2026-08-14T22:00:00+00:00"]
+    );
+}
+
+#[tokio::test]
+async fn rsvp_addresses_the_requester_inbox_not_the_source_calendar() {
+    let provider = FakeProvider::new(FakeProviderBehavior::Echo);
+    let emails = provider.rsvp_self_emails.clone();
+    service(
+        FakeRepo {
+            mutation_target: Some(mutation_target(false)),
+            visible_calendars: vec![visible_inbox("jackson@example.com")],
+            ..FakeRepo::default()
+        },
+        provider,
+        FakeTokens::ok(),
+    )
+    .respond_to_event(
+        "macro|user",
+        Uuid::now_v7(),
+        AttendeeResponseStatus::Accepted,
+        CalendarRsvpScope::All,
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(
+        emails.lock().unwrap().as_slice(),
+        [vec!["jackson@example.com".to_string()]]
     );
 }
 

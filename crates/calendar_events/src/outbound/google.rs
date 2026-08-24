@@ -1140,7 +1140,7 @@ impl<G: GoogleRequestGate> GoogleCalendarMutationProvider for GoogleCalendarClie
     }
 
     #[tracing::instrument(
-        skip(self, access_token, target, self_email),
+        skip(self, access_token, target, self_emails),
         fields(provider_calendar_id = %target.provider_calendar_id),
         err
     )]
@@ -1149,7 +1149,7 @@ impl<G: GoogleRequestGate> GoogleCalendarMutationProvider for GoogleCalendarClie
         access_token: &str,
         target: &GoogleCalendarTarget,
         master_provider_event_id: &str,
-        self_email: &str,
+        self_emails: &[String],
         response: AttendeeResponseStatus,
         scope: &CalendarRsvpScope,
     ) -> Result<GoogleRsvpOutcome, GoogleProviderError> {
@@ -1173,7 +1173,7 @@ impl<G: GoogleRequestGate> GoogleCalendarMutationProvider for GoogleCalendarClie
                     access_token,
                     target,
                     provider_event_id,
-                    self_email,
+                    self_emails,
                     response,
                 )
                 .await?
@@ -1286,7 +1286,7 @@ impl<G: GoogleRequestGate> GoogleCalendarClient<G> {
         access_token: &str,
         target: &GoogleCalendarTarget,
         provider_event_id: &str,
-        self_email: &str,
+        self_emails: &[String],
         response: AttendeeResponseStatus,
     ) -> Result<RsvpPatch, GoogleProviderError> {
         let Some(current) = self
@@ -1301,9 +1301,7 @@ impl<G: GoogleRequestGate> GoogleCalendarClient<G> {
             return Ok(RsvpPatch::Gone);
         };
         let attendees: Vec<GoogleAttendee> = current.attendees.clone().unwrap_or_default();
-        let Some(self_attendee) =
-            find_self_attendee(&attendees, std::slice::from_ref(&self_email.to_string()))
-        else {
+        let Some(self_attendee) = find_self_attendee(&attendees, self_emails) else {
             return Ok(RsvpPatch::NotAttendee);
         };
         let body = rsvp_patch_body(self_attendee, response);
@@ -1416,18 +1414,13 @@ fn find_self_attendee<'a>(
     attendees: &'a [GoogleAttendee],
     self_emails: &[String],
 ) -> Option<&'a GoogleAttendee> {
-    attendees
-        .iter()
-        .find(|attendee| attendee.is_self)
-        .or_else(|| {
-            attendees.iter().find(|attendee| {
-                attendee.email.as_deref().is_some_and(|email| {
-                    self_emails
-                        .iter()
-                        .any(|self_email| email.eq_ignore_ascii_case(self_email))
-                })
-            })
+    attendees.iter().find(|attendee| {
+        attendee.email.as_deref().is_some_and(|email| {
+            self_emails
+                .iter()
+                .any(|self_email| email.eq_ignore_ascii_case(self_email))
         })
+    })
 }
 
 fn rsvp_patch_body(

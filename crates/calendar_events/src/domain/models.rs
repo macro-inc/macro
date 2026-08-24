@@ -319,10 +319,40 @@ pub struct CalendarAttendee {
     pub is_organizer: bool,
     /// Whether attendance is optional.
     pub is_optional: bool,
-    /// Whether this attendee represents the connected account.
+    /// Whether this attendee is one of the viewing requester's inboxes.
     pub is_self: bool,
     /// Optional attendee comment.
     pub comment: Option<String>,
+}
+
+/// Mark attendees whose email matches a requester inbox as `is_self`.
+///
+/// Stored Google `self` means "the calendar this copy lives on." Reads and
+/// mutation echoes remap that flag to the viewer so RSVP chrome and "(you)"
+/// follow the clicker, not the source calendar.
+pub(crate) fn mark_attendees_self_for_inboxes(
+    attendees: &mut [CalendarAttendee],
+    inbox_emails: &[String],
+) {
+    if inbox_emails.is_empty() {
+        return;
+    }
+    for attendee in attendees {
+        attendee.is_self = inbox_emails
+            .iter()
+            .any(|email| attendee.email.eq_ignore_ascii_case(email));
+    }
+}
+
+/// Unique inbox addresses from calendars visible to the requester.
+pub(crate) fn inbox_emails(calendars: &[VisibleCalendar]) -> Vec<String> {
+    let mut emails: Vec<String> = calendars
+        .iter()
+        .map(|calendar| calendar.email_address.clone())
+        .collect();
+    emails.sort_by(|left, right| left.to_ascii_lowercase().cmp(&right.to_ascii_lowercase()));
+    emails.dedup_by(|left, right| left.eq_ignore_ascii_case(right));
+    emails
 }
 
 /// RSVP state for an attendee.

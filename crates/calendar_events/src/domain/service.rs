@@ -13,7 +13,8 @@ use super::{
         AppliedGoogleGrant, CalendarBackfillClaim, CalendarBackfillFailureDisposition,
         CalendarBackfillFailureOutcome, CalendarBackfillJobKey, CalendarEventUpsert,
         CalendarGrantIntent, CalendarOccurrenceCursor, GoogleBackfillRunReport,
-        GoogleCalendarSyncSnapshot, GoogleScopeSet, OccurrenceRange,
+        GoogleCalendarSyncSnapshot, GoogleScopeSet, OccurrenceRange, inbox_emails,
+        mark_attendees_self_for_inboxes,
     },
     ports::{
         CalendarBackfillRepository, CalendarEventChange, CalendarEventWrite,
@@ -96,9 +97,15 @@ where
         Report,
     > {
         validate_query(&range, limit)?;
-        self.repository
+        let mut rows = self
+            .repository
             .list_occurrences(requester_id, range, cursor, limit)
-            .await
+            .await?;
+        let emails = inbox_emails(&self.repository.list_visible_calendars(requester_id).await?);
+        for (event, _) in &mut rows {
+            mark_attendees_self_for_inboxes(&mut event.attendees, &emails);
+        }
+        Ok(rows)
     }
 
     /// Return the aggregate ingestion state of the requester's visible accounts.

@@ -188,7 +188,7 @@ pub trait GoogleCalendarMutationProvider: Send + Sync + 'static {
         access_token: &str,
         target: &GoogleCalendarTarget,
         master_provider_event_id: &str,
-        self_email: &str,
+        self_emails: &[String],
         response: AttendeeResponseStatus,
         scope: &CalendarRsvpScope,
     ) -> impl Future<Output = Result<GoogleRsvpOutcome, GoogleProviderError>> + Send;
