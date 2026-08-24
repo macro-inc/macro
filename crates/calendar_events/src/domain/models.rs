@@ -325,11 +325,6 @@ pub struct CalendarAttendee {
     pub comment: Option<String>,
 }
 
-/// Mark attendees whose email matches a requester inbox as `is_self`.
-///
-/// Stored Google `self` means "the calendar this copy lives on." Reads and
-/// mutation echoes remap that flag to the viewer so RSVP chrome and "(you)"
-/// follow the clicker, not the source calendar.
 pub(crate) fn mark_attendees_self_for_inboxes(
     attendees: &mut [CalendarAttendee],
     inbox_emails: &[String],
@@ -344,7 +339,6 @@ pub(crate) fn mark_attendees_self_for_inboxes(
     }
 }
 
-/// Unique inbox addresses from calendars visible to the requester.
 pub(crate) fn inbox_emails(calendars: &[VisibleCalendar]) -> Vec<String> {
     let mut emails: Vec<String> = calendars
         .iter()

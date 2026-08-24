@@ -175,10 +175,10 @@ pub trait GoogleCalendarMutationProvider: Send + Sync + 'static {
         original_start: &str,
     ) -> impl Future<Output = Result<GoogleSeriesMutationOutcome, GoogleProviderError>> + Send;
 
-    /// Set the connected account's own RSVP on an event. An event that no
-    /// longer exists at the provider surfaces as [`GoogleRsvpOutcome::Gone`];
-    /// absence of a self attendee surfaces as
-    /// [`GoogleRsvpOutcome::NotAttendee`].
+    /// Set the requester's own RSVP on an event. `self_emails` are the
+    /// requester's connected inboxes. An event that no longer exists at the
+    /// provider surfaces as [`GoogleRsvpOutcome::Gone`]; absence of a matching
+    /// attendee surfaces as [`GoogleRsvpOutcome::NotAttendee`].
     ///
     /// `scope` selects what the response covers: the master for
     /// [`CalendarRsvpScope::All`], one exception instance for

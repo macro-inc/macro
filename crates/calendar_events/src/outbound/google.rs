@@ -1408,8 +1408,6 @@ fn google_response_status(status: AttendeeResponseStatus) -> &'static str {
     }
 }
 
-/// Body updating only the connected attendee's response: `attendeesOmitted`
-/// tells Google the array is partial, so other attendees survive untouched.
 fn find_self_attendee<'a>(
     attendees: &'a [GoogleAttendee],
     self_emails: &[String],
@@ -1423,6 +1421,8 @@ fn find_self_attendee<'a>(
     })
 }
 
+/// Body updating only the connected attendee's response: `attendeesOmitted`
+/// tells Google the array is partial, so other attendees survive untouched.
 fn rsvp_patch_body(
     self_attendee: &GoogleAttendee,
     response: AttendeeResponseStatus,
