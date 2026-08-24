@@ -5,8 +5,8 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { DocumentPreviewDataSubTypeOneOf } from './documentPreviewDataSubTypeOneOf';
-import type { DocumentPreviewDataSubTypeOneOfFive } from './documentPreviewDataSubTypeOneOfFive';
 import type { DocumentPreviewDataSubTypeOneOfThree } from './documentPreviewDataSubTypeOneOfThree';
+import type { DocumentPreviewDataSubTypeOneOfFive } from './documentPreviewDataSubTypeOneOfFive';
 
 /**
  * The sub type of a document preview with associated properties.

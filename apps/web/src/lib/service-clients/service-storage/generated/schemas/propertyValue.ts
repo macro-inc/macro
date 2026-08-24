@@ -5,12 +5,12 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { PropertyValueOneOf } from './propertyValueOneOf';
+import type { PropertyValueOneOfThree } from './propertyValueOneOfThree';
 import type { PropertyValueOneOfFive } from './propertyValueOneOfFive';
+import type { PropertyValueOneOfSeven } from './propertyValueOneOfSeven';
 import type { PropertyValueOneOfNine } from './propertyValueOneOfNine';
 import type { PropertyValueOneOfOneone } from './propertyValueOneOfOneone';
 import type { PropertyValueOneOfOnethree } from './propertyValueOneOfOnethree';
-import type { PropertyValueOneOfSeven } from './propertyValueOneOfSeven';
-import type { PropertyValueOneOfThree } from './propertyValueOneOfThree';
 
 /**
  * Property value (service representation).

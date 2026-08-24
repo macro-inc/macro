@@ -4,9 +4,8 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
-
-import type { EntityPermissionOneOfFiveType } from './entityPermissionOneOfFiveType';
 import type { ParticipantRole } from './participantRole';
+import type { EntityPermissionOneOfFiveType } from './entityPermissionOneOfFiveType';
 
 /**
  * Permission for channel-based entities with an active participant role.

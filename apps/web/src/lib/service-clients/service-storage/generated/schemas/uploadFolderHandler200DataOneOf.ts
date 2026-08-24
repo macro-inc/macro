@@ -4,9 +4,8 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
-
-import type { FileSystemNodeWithIds } from './fileSystemNodeWithIds';
 import type { HashMap } from './hashMap';
+import type { FileSystemNodeWithIds } from './fileSystemNodeWithIds';
 
 export type UploadFolderHandler200DataOneOf = {
   /** maps document id to presigned url (external) or s3 info (internal) */

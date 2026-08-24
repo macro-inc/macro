@@ -58,13 +58,15 @@ export function useRecentlyViewedSoupQuery() {
             })
         );
         return page.items.flatMap((item): RecentlyViewedItem[] => {
-          // Reminders have no `viewedAt` — they are never "viewed", only fired.
+          // Reminders have no `viewedAt` — they are never "viewed", only
+          // fired. Agent sessions record no per-user views either.
           if (
             item.tag === 'call' ||
             item.tag === 'foreignEntity' ||
             item.tag === 'channelThread' ||
             item.tag === 'calendarEvent' ||
-            item.tag === 'reminder'
+            item.tag === 'reminder' ||
+            item.tag === 'agentSession'
           ) {
             return [];
           }

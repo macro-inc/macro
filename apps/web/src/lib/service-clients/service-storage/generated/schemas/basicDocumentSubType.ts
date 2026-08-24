@@ -5,8 +5,8 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { BasicDocumentSubTypeOneOf } from './basicDocumentSubTypeOneOf';
-import type { BasicDocumentSubTypeOneOfFive } from './basicDocumentSubTypeOneOfFive';
 import type { BasicDocumentSubTypeOneOfThree } from './basicDocumentSubTypeOneOfThree';
+import type { BasicDocumentSubTypeOneOfFive } from './basicDocumentSubTypeOneOfFive';
 
 /**
  * Sub type of a document with associated properties encoded in each variant.

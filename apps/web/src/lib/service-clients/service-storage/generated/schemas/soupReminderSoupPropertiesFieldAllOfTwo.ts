@@ -4,10 +4,9 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
-
-import type { SoupReminderSchedule } from './soupReminderSchedule';
 import type { SoupReminderSoupPropertiesFieldAllOfTwoCompletedAt } from './soupReminderSoupPropertiesFieldAllOfTwoCompletedAt';
 import type { SoupReminderSoupPropertiesFieldAllOfTwoReferencedEntity } from './soupReminderSoupPropertiesFieldAllOfTwoReferencedEntity';
+import type { SoupReminderSchedule } from './soupReminderSchedule';
 
 export type SoupReminderSoupPropertiesFieldAllOfTwo = {
   /** Set once a one-shot reminder has fired. */

@@ -4,10 +4,9 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
-
+import type { ChannelType } from './channelType';
 import type { ApiChannelMessage } from './apiChannelMessage';
 import type { ApiChannelParticipant } from './apiChannelParticipant';
-import type { ChannelType } from './channelType';
 
 /**
  * Channel detail: metadata, active participants, and a recent page of messages.

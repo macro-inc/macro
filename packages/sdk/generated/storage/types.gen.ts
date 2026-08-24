@@ -86,6 +86,26 @@ export type AddPinRequest = {
     pinType: string;
 };
 
+/**
+ * Filters for agent coding sessions.
+ */
+export type AgentSessionFilters = {
+    /**
+     * Agent session ids to filter by. Empty to include all visible sessions.
+     */
+    ids?: Array<string>;
+    /**
+     * Opt this query into agent sessions at all. Agent sessions are off by
+     * default — see [`crate::ast::agent_session::AgentSessionLiteral::Include`].
+     * Asking for specific `ids` also opts in.
+     */
+    include?: boolean;
+    /**
+     * Restrict to sessions owned by this user.
+     */
+    owner?: string | null;
+};
+
 export type Anchor = PdfAnchor;
 
 export type AnchorId = PdfAnchorId & {
@@ -650,6 +670,12 @@ export type ApiCountedReaction = {
  * Wire-format entity filter AST accepted by soup AST endpoints.
  */
 export type ApiEntityFilterAst = {
+    /**
+     * Filters applied to agent sessions (wire key `asf`). Opt-in like
+     * reminders: empty/omitted returns **no** sessions, so the caller must
+     * send `inc` or an id to get any.
+     */
+    asf?: unknown;
     /**
      * filters applied to canonical calendar events
      */
@@ -4503,6 +4529,10 @@ export type EmptyResponse = {
  */
 export type EntityFilters = {
     /**
+     * the bundled [AgentSessionFilters]
+     */
+    agent_session_filters?: AgentSessionFilters;
+    /**
      * the bundled [CalendarEventFilters]
      */
     calendar_event_filters?: CalendarEventFilters;
@@ -6774,6 +6804,81 @@ export type SimpleMention = {
 };
 
 /**
+ * The coarse status of an agent session, mirroring the
+ * `agent_session.status` column.
+ */
+export type SoupAgentSessionStatusKind = 'no_messages' | 'event' | 'disconnected';
+
+/**
+ * An agent coding session as displayed in Soup.
+ *
+ * Unlike tasks (documents with a sub type), agent sessions are their own
+ * Soup entity: they live in their own table and carry display state — status,
+ * model, harness, attention badges — no document has.
+ */
+export type SoupAgentSessionSoupPropertiesField = {
+    /**
+     * Properties attached to the entity.
+     */
+    properties: Array<SoupProperty>;
+} & {
+    /**
+     * When the session was created.
+     */
+    createdAt: string;
+    /**
+     * Harness slug serving the session.
+     */
+    harness: string;
+    /**
+     * The agent session id.
+     */
+    id: string;
+    /**
+     * Model slug the session runs on.
+     */
+    model: string;
+    /**
+     * When the session last changed. This is what Soup sorts sessions on.
+     */
+    modifiedAt: string;
+    /**
+     * The user who created and owns the session.
+     */
+    ownerId: string;
+    /**
+     * How many permission requests are awaiting an answer.
+     */
+    pendingPermissionCount: number;
+    /**
+     * The pull request the session produced, when one was detected.
+     */
+    prUrl?: string | null;
+    /**
+     * Repository the session works against, when one was stated.
+     */
+    repoUrl?: string | null;
+    /**
+     * The latest runtime event's wire name (`"acp_ready"`, `"booting"`, ...),
+     * present exactly when `status_kind` is `event`.
+     */
+    statusEventName?: string | null;
+    /**
+     * Coarse session status.
+     */
+    statusKind: SoupAgentSessionStatusKind;
+    /**
+     * The channel the session was spawned from, when it was.
+     */
+    threadChannelId?: string | null;
+    /**
+     * Session title the runtime reported, when it has. Clients fall back to
+     * the harness name.
+     */
+    title?: string | null;
+};
+
+/**
  * API representation of a soup item with its per-viewer enrichments.
  */
 export type SoupApiItem = SoupItem & {
@@ -7571,6 +7676,12 @@ export type SoupItem = {
      */
     data: SoupReminderSoupPropertiesField;
     tag: 'reminder';
+} | {
+    /**
+     * Agent session item.
+     */
+    data: SoupAgentSessionSoupPropertiesField;
+    tag: 'agentSession';
 };
 
 /**

@@ -332,7 +332,9 @@ export type ReminderEntity = EntityBase & {
     id: string;
     // Calendar events are excluded alongside reminders: neither has a
     // previewable block, and the mapper yields `undefined` for both.
-    type: Exclude<EntityType, 'reminder' | 'calendar_event'>;
+    // Agent sessions are excluded the same way — a reminder never
+    // references one, and the mapper yields `undefined` for them too.
+    type: Exclude<EntityType, 'reminder' | 'calendar_event' | 'agent_session'>;
     fileType?: string;
     subType?: string;
   };

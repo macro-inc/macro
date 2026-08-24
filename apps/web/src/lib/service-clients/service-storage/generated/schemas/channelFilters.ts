@@ -6,9 +6,9 @@
  */
 import type { ChannelFiltersImportance } from './channelFiltersImportance';
 import type { ChannelFiltersIsParticipant } from './channelFiltersIsParticipant';
+import type { NotificationFilters } from './notificationFilters';
 import type { ChannelFiltersOrgId } from './channelFiltersOrgId';
 import type { ChannelFiltersTeamId } from './channelFiltersTeamId';
-import type { NotificationFilters } from './notificationFilters';
 
 /**
  * The channel message filters used to filter down what channel messages you search over.

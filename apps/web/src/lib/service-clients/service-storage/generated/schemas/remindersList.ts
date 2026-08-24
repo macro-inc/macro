@@ -4,9 +4,8 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
-
-import type { Reminder } from './reminder';
 import type { RemindersListNextCursor } from './remindersListNextCursor';
+import type { Reminder } from './reminder';
 
 /**
  * The caller's reminders, soonest firing first.

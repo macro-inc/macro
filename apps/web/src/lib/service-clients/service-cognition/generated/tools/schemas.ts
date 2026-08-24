@@ -1661,6 +1661,7 @@ export const ListEntities = z.object({
             z.literal('channel_thread'),
             z.literal('call'),
             z.literal('foreign_entity'),
+            z.literal('agent_session'),
           ];
           const errors = schemas.reduce<z.ZodError[]>(
             (errors, schema) =>
@@ -1996,6 +1997,18 @@ export const ListEntitiesResponse = z.object({
           foreignEntitySource: z.string(),
           metadata: z.any(),
           type: z.literal('foreignEntity'),
+        }),
+        z.object({
+          id: z.string().uuid(),
+          title: z.union([z.string(), z.null()]).optional(),
+          model: z.string(),
+          harness: z.string(),
+          repoUrl: z.union([z.string(), z.null()]).optional(),
+          status: z.string(),
+          statusEventName: z.union([z.string(), z.null()]).optional(),
+          pendingPermissionCount: z.number().int(),
+          prUrl: z.union([z.string(), z.null()]).optional(),
+          type: z.literal('agentSession'),
         }),
       ];
       const errors = schemas.reduce<z.ZodError[]>(

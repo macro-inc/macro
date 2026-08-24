@@ -5,8 +5,8 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { SoupDocumentSubTypeOneOf } from './soupDocumentSubTypeOneOf';
-import type { SoupDocumentSubTypeOneOfFive } from './soupDocumentSubTypeOneOfFive';
 import type { SoupDocumentSubTypeOneOfThree } from './soupDocumentSubTypeOneOfThree';
+import type { SoupDocumentSubTypeOneOfFive } from './soupDocumentSubTypeOneOfFive';
 
 /**
  * Sub type of a document with associated properties encoded in each variant.

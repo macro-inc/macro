@@ -5,9 +5,9 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { EntityPermissionOneOf } from './entityPermissionOneOf';
+import type { EntityPermissionOneOfThree } from './entityPermissionOneOfThree';
 import type { EntityPermissionOneOfFive } from './entityPermissionOneOfFive';
 import type { EntityPermissionOneOfSeven } from './entityPermissionOneOfSeven';
-import type { EntityPermissionOneOfThree } from './entityPermissionOneOfThree';
 
 /**
  * A user's permission for an entity, discriminated by entity kind.

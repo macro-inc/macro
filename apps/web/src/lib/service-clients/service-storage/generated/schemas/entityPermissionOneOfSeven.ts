@@ -4,9 +4,8 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
-
-import type { EntityPermissionOneOfSevenType } from './entityPermissionOneOfSevenType';
 import type { TeamRole } from './teamRole';
+import type { EntityPermissionOneOfSevenType } from './entityPermissionOneOfSevenType';
 
 /**
  * Permission for team-based entities.

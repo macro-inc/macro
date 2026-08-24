@@ -239,8 +239,17 @@ async fn display_state_setters_report_changes(pool: PgPool) {
         .id;
 
     // Each setter reports a change once, then idempotently reports none.
-    assert!(repo.set_title(id, Some("Fix the bug")).await.expect("set title"));
-    assert!(!repo.set_title(id, Some("Fix the bug")).await.expect("restate title"));
+    assert!(
+        repo.set_title(id, Some("Fix the bug"))
+            .await
+            .expect("set title")
+    );
+    assert!(
+        !repo
+            .set_title(id, Some("Fix the bug"))
+            .await
+            .expect("restate title")
+    );
     assert!(repo.set_title(id, None).await.expect("clear title"));
 
     assert!(

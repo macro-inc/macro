@@ -7,8 +7,8 @@
 import type { ProjectCreatedAt } from './projectCreatedAt';
 import type { ProjectDeletedAt } from './projectDeletedAt';
 import type { ProjectParentId } from './projectParentId';
-import type { ProjectType } from './projectType';
 import type { ProjectUpdatedAt } from './projectUpdatedAt';
+import type { ProjectType } from './projectType';
 
 export interface Project {
   /** The time the project was created */

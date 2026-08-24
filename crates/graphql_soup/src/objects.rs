@@ -335,9 +335,7 @@ where
                 GraphqlSoupEntityType::ForeignEntity => GraphqlSoupForeignEntity::<E>::type_name(),
                 GraphqlSoupEntityType::CalendarEvent => GraphqlSoupCalendarEvent::<E>::type_name(),
                 GraphqlSoupEntityType::Reminder => GraphqlSoupReminder::<E>::type_name(),
-                GraphqlSoupEntityType::AgentSession => {
-                    GraphqlSoupAgentSession::<E>::type_name()
-                }
+                GraphqlSoupEntityType::AgentSession => GraphqlSoupAgentSession::<E>::type_name(),
             }
             .into_owned(),
         )

@@ -4,9 +4,8 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
-
-import type { DocumentBasic } from './documentBasic';
 import type { DocumentContent } from './documentContent';
+import type { DocumentBasic } from './documentBasic';
 import type { LocationResponseV3OneOfFiveType } from './locationResponseV3OneOfFiveType';
 
 /**

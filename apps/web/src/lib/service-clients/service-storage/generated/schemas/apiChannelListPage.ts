@@ -4,9 +4,8 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
-
-import type { ApiChannelListPageNextCursor } from './apiChannelListPageNextCursor';
 import type { ApiChannelWithLatest } from './apiChannelWithLatest';
+import type { ApiChannelListPageNextCursor } from './apiChannelListPageNextCursor';
 
 /**
  * A cursor-paginated channel list response.

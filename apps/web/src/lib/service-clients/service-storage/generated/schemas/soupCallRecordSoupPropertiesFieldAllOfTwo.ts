@@ -4,13 +4,12 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
-
-import type { CallStatus } from './callStatus';
-import type { SoupCallRecordParticipant } from './soupCallRecordParticipant';
 import type { SoupCallRecordSoupPropertiesFieldAllOfTwoChannelName } from './soupCallRecordSoupPropertiesFieldAllOfTwoChannelName';
 import type { SoupCallRecordSoupPropertiesFieldAllOfTwoCustomName } from './soupCallRecordSoupPropertiesFieldAllOfTwoCustomName';
 import type { SoupCallRecordSoupPropertiesFieldAllOfTwoDurationMs } from './soupCallRecordSoupPropertiesFieldAllOfTwoDurationMs';
 import type { SoupCallRecordSoupPropertiesFieldAllOfTwoEndedAt } from './soupCallRecordSoupPropertiesFieldAllOfTwoEndedAt';
+import type { SoupCallRecordParticipant } from './soupCallRecordParticipant';
+import type { CallStatus } from './callStatus';
 import type { SoupCallRecordSoupPropertiesFieldAllOfTwoSummary } from './soupCallRecordSoupPropertiesFieldAllOfTwoSummary';
 
 export type SoupCallRecordSoupPropertiesFieldAllOfTwo = {

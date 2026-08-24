@@ -4,9 +4,8 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
-
-import type { SoupApiItemAllOf } from './soupApiItemAllOf';
 import type { SoupItem } from './soupItem';
+import type { SoupApiItemAllOf } from './soupApiItemAllOf';
 
 /**
  * API representation of a soup item with its per-viewer enrichments.

@@ -164,9 +164,7 @@ impl AgentSessionMacroEvent {
         let key = match &event {
             AgentTriggerTopicEvent::SessionCreated(lifecycle)
             | AgentTriggerTopicEvent::SessionUpdated(lifecycle)
-            | AgentTriggerTopicEvent::SessionDeleted(lifecycle) => {
-                lifecycle.session_id.to_string()
-            }
+            | AgentTriggerTopicEvent::SessionDeleted(lifecycle) => lifecycle.session_id.to_string(),
             AgentTriggerTopicEvent::New(_) | AgentTriggerTopicEvent::Existing(_) => {
                 unreachable!("trigger events are keyed by bot id, not built here")
             }

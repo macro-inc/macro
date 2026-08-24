@@ -4,11 +4,10 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
-
-import type { ApiCountedReaction } from './apiCountedReaction';
 import type { ApiMessageAttachment } from './apiMessageAttachment';
-import type { ApiMessageSender } from './apiMessageSender';
 import type { ApiThreadReplyEditedAt } from './apiThreadReplyEditedAt';
+import type { ApiCountedReaction } from './apiCountedReaction';
+import type { ApiMessageSender } from './apiMessageSender';
 
 /**
  * A thread reply shown in preview.

@@ -67,5 +67,8 @@ export function getEntityClickContent(entity: EntityData): SplitContent {
     .with({ type: 'calendar_event' }, () => {
       throw new Error('calendar events are not openable as attachments');
     })
+    .with({ type: 'agent_session' }, () => {
+      throw new Error('agent sessions are not openable as attachments');
+    })
     .exhaustive();
 }

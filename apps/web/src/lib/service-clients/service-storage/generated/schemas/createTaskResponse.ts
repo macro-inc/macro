@@ -4,10 +4,9 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
-
+import type { DocumentResponseMetadata } from './documentResponseMetadata';
 import type { CreateTaskResponseTeamId } from './createTaskResponseTeamId';
 import type { CreateTaskResponseTeamTaskId } from './createTaskResponseTeamTaskId';
-import type { DocumentResponseMetadata } from './documentResponseMetadata';
 
 /**
  * Response for creating a task.

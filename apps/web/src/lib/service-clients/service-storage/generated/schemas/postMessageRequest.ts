@@ -5,9 +5,9 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { NewChannelAttachment } from './newChannelAttachment';
+import type { SimpleMention } from './simpleMention';
 import type { PostMessageRequestNonce } from './postMessageRequestNonce';
 import type { PostMessageRequestThreadId } from './postMessageRequestThreadId';
-import type { SimpleMention } from './simpleMention';
 
 /**
  * Request to send a channel message.

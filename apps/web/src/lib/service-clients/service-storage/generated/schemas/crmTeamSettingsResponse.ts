@@ -4,10 +4,9 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
-
-import type { CrmPermissionRole } from './crmPermissionRole';
 import type { CrmTeamSettingsResponseClosedStageIds } from './crmTeamSettingsResponseClosedStageIds';
 import type { CrmTeamSettingsResponseDefaultTeamViewId } from './crmTeamSettingsResponseDefaultTeamViewId';
+import type { CrmPermissionRole } from './crmPermissionRole';
 
 /**
  * The team's CRM configuration (everything on `team_crm_settings`

@@ -289,7 +289,11 @@ fn row_to_item(row: AgentSessionRow) -> Result<SoupItem<()>, sqlx::Error> {
         "no_messages" => SoupAgentSessionStatusKind::NoMessages,
         "event" => SoupAgentSessionStatusKind::Event,
         "disconnected" => SoupAgentSessionStatusKind::Disconnected,
-        other => return Err(super::type_err(format!("unknown agent session status {other:?}"))),
+        other => {
+            return Err(super::type_err(format!(
+                "unknown agent session status {other:?}"
+            )));
+        }
     };
 
     Ok(SoupItem::AgentSession(SoupAgentSession {

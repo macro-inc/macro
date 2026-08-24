@@ -4,9 +4,8 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
-
-import type { CallRecordPreviewOneOfFourAllOf } from './callRecordPreviewOneOfFourAllOf';
 import type { WithCallId } from './withCallId';
+import type { CallRecordPreviewOneOfFourAllOf } from './callRecordPreviewOneOfFourAllOf';
 
 /**
  * No call with this id exists in either the active or archived tables.

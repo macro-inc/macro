@@ -4,11 +4,10 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
-
-import type { CrmCompanyResponseDescription } from './crmCompanyResponseDescription';
-import type { CrmCompanyResponseName } from './crmCompanyResponseName';
 import type { CrmContactResponse } from './crmContactResponse';
+import type { CrmCompanyResponseDescription } from './crmCompanyResponseDescription';
 import type { CrmDomainResponse } from './crmDomainResponse';
+import type { CrmCompanyResponseName } from './crmCompanyResponseName';
 
 /**
  * A CRM company as returned by `GET /crm/companies/{company_id}`.

@@ -748,8 +748,10 @@ export function optimisticUpdateSoupItemUpdatedAt(
       data: { channel: { id: itemId, updated_at: updatedAt } },
       frecency_score: current.frecency_score,
     });
-  } else if (current.tag === 'call') {
-    // Call records use endedAt/startedAt and channel threads nest message timestamps — skip.
+  } else if (current.tag === 'call' || current.tag === 'agentSession') {
+    // Call records use endedAt/startedAt and channel threads nest message
+    // timestamps — skip. Agent sessions' modifiedAt is projected server-side
+    // from the harness, so there is nothing to bump optimistically.
     return;
   } else {
     const timestamp =

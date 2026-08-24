@@ -4,8 +4,6 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
-
-import type { ApiChannelListParticipant } from './apiChannelListParticipant';
 import type { ApiChannelListType } from './apiChannelListType';
 import type { ApiChannelWithLatestFrecencyScore } from './apiChannelWithLatestFrecencyScore';
 import type { ApiChannelWithLatestInteractedAt } from './apiChannelWithLatestInteractedAt';
@@ -13,6 +11,7 @@ import type { ApiChannelWithLatestLatestMessage } from './apiChannelWithLatestLa
 import type { ApiChannelWithLatestLatestNonThreadMessage } from './apiChannelWithLatestLatestNonThreadMessage';
 import type { ApiChannelWithLatestName } from './apiChannelWithLatestName';
 import type { ApiChannelWithLatestOrgId } from './apiChannelWithLatestOrgId';
+import type { ApiChannelListParticipant } from './apiChannelListParticipant';
 import type { ApiChannelWithLatestTeamId } from './apiChannelWithLatestTeamId';
 import type { ApiChannelWithLatestViewedAt } from './apiChannelWithLatestViewedAt';
 

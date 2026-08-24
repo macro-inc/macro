@@ -4,9 +4,8 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
-
-import type { CreateWebhookRequestHeaders } from './createWebhookRequestHeaders';
 import type { Vec } from './vec';
+import type { CreateWebhookRequestHeaders } from './createWebhookRequestHeaders';
 import type { WebhookScope } from './webhookScope';
 
 /**

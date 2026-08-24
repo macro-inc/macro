@@ -4,9 +4,8 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
-
-import type { EntityReference } from './entityReference';
 import type { PropertyValueOneOfOneoneType } from './propertyValueOneOfOneoneType';
+import type { EntityReference } from './entityReference';
 
 /**
  * Entity reference(s) - always an array (check is_multi_select to determine if single or multi)

@@ -5,16 +5,17 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { SoupItemOneOf } from './soupItemOneOf';
-import type { SoupItemOneOfFive } from './soupItemOneOfFive';
-import type { SoupItemOneOfNine } from './soupItemOneOfNine';
-import type { SoupItemOneOfOnefive } from './soupItemOneOfOnefive';
-import type { SoupItemOneOfOnenine } from './soupItemOneOfOnenine';
-import type { SoupItemOneOfOneone } from './soupItemOneOfOneone';
-import type { SoupItemOneOfOneseven } from './soupItemOneOfOneseven';
-import type { SoupItemOneOfOnethree } from './soupItemOneOfOnethree';
-import type { SoupItemOneOfSeven } from './soupItemOneOfSeven';
 import type { SoupItemOneOfThree } from './soupItemOneOfThree';
+import type { SoupItemOneOfFive } from './soupItemOneOfFive';
+import type { SoupItemOneOfSeven } from './soupItemOneOfSeven';
+import type { SoupItemOneOfNine } from './soupItemOneOfNine';
+import type { SoupItemOneOfOneone } from './soupItemOneOfOneone';
+import type { SoupItemOneOfOnethree } from './soupItemOneOfOnethree';
+import type { SoupItemOneOfOnefive } from './soupItemOneOfOnefive';
+import type { SoupItemOneOfOneseven } from './soupItemOneOfOneseven';
+import type { SoupItemOneOfOnenine } from './soupItemOneOfOnenine';
 import type { SoupItemOneOfTwoone } from './soupItemOneOfTwoone';
+import type { SoupItemOneOfTwothree } from './soupItemOneOfTwothree';
 
 /**
  * A single item in the Soup feed.
@@ -30,4 +31,5 @@ export type SoupItem =
   | SoupItemOneOfOnefive
   | SoupItemOneOfOneseven
   | SoupItemOneOfOnenine
-  | SoupItemOneOfTwoone;
+  | SoupItemOneOfTwoone
+  | SoupItemOneOfTwothree;

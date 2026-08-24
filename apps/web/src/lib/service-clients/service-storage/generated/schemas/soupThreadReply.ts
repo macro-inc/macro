@@ -4,11 +4,10 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
-
-import type { SoupCountedReaction } from './soupCountedReaction';
 import type { SoupMessageAttachment } from './soupMessageAttachment';
-import type { SoupMessageSender } from './soupMessageSender';
 import type { SoupThreadReplyEditedAt } from './soupThreadReplyEditedAt';
+import type { SoupCountedReaction } from './soupCountedReaction';
+import type { SoupMessageSender } from './soupMessageSender';
 
 /**
  * A thread reply shown in preview.

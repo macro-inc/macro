@@ -4,11 +4,10 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
-
-import type { BTreeMap } from './bTreeMap';
 import type { CreateWebhookResponseDeletedAt } from './createWebhookResponseDeletedAt';
-import type { String } from './string';
 import type { Vec } from './vec';
+import type { BTreeMap } from './bTreeMap';
+import type { String } from './string';
 import type { WebhookStatus } from './webhookStatus';
 
 /**

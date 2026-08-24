@@ -166,6 +166,10 @@ export function filterSoupItemByRequestBody(
       { tag: 'reminder' },
       ({ data }) => !isIdFilteredOut(body.reminder_filters?.ids, data.id)
     )
+    .with(
+      { tag: 'agentSession' },
+      ({ data }) => !isIdFilteredOut(body.agent_session_filters?.ids, data.id)
+    )
     .exhaustive();
 }
 

@@ -4,10 +4,9 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
-
-import type { String } from './string';
 import type { ValidateWebhookResponseMessage } from './validateWebhookResponseMessage';
 import type { ValidateWebhookResponseResponseStatus } from './validateWebhookResponseResponseStatus';
+import type { String } from './string';
 
 /**
  * Sanitized result of validating a webhook endpoint.

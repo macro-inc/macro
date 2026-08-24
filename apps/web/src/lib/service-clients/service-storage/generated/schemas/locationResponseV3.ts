@@ -5,8 +5,8 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { LocationResponseV3OneOf } from './locationResponseV3OneOf';
-import type { LocationResponseV3OneOfFive } from './locationResponseV3OneOfFive';
 import type { LocationResponseV3OneOfThree } from './locationResponseV3OneOfThree';
+import type { LocationResponseV3OneOfFive } from './locationResponseV3OneOfFive';
 
 /**
  * Location response with content lifecycle metadata.

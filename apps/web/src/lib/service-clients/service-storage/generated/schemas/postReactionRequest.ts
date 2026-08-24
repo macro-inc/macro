@@ -4,9 +4,8 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
-
-import type { PostReactionRequestNonce } from './postReactionRequestNonce';
 import type { ReactionAction } from './reactionAction';
+import type { PostReactionRequestNonce } from './postReactionRequestNonce';
 
 /**
  * Request to mutate a reaction.

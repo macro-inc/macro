@@ -206,7 +206,7 @@ describe('compileToAst', () => {
     );
 
     expect(ast.asf).toEqual({
-      '&': [{ '|': [{ l: { o: 'macro|owner@example.com' } }] }, { l: 'inc' }],
+      '&': [{ l: { o: 'macro|owner@example.com' } }, { l: 'inc' }],
     });
   });
 

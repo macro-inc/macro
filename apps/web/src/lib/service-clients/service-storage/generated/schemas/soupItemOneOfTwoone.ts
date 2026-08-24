@@ -4,9 +4,8 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
-
-import type { SoupItemOneOfTwooneTag } from './soupItemOneOfTwooneTag';
 import type { SoupReminderSoupPropertiesField } from './soupReminderSoupPropertiesField';
+import type { SoupItemOneOfTwooneTag } from './soupItemOneOfTwooneTag';
 
 /**
  * Reminder item.

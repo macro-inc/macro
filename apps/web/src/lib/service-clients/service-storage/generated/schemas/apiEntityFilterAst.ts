@@ -9,6 +9,10 @@
  * Wire-format entity filter AST accepted by soup AST endpoints.
  */
 export interface ApiEntityFilterAst {
+  /** Filters applied to agent sessions (wire key `asf`). Opt-in like
+reminders: empty/omitted returns **no** sessions, so the caller must
+send `inc` or an id to get any. */
+  asf?: unknown;
   /** filters applied to canonical calendar events */
   calf?: unknown;
   /** the filters that should be applied to the call entity */

@@ -4,9 +4,8 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
-
-import type { PdfAnchorRequestOneOfFourAllOf } from './pdfAnchorRequestOneOfFourAllOf';
 import type { PdfHighlightAnchorRequest } from './pdfHighlightAnchorRequest';
+import type { PdfAnchorRequestOneOfFourAllOf } from './pdfAnchorRequestOneOfFourAllOf';
 
 export type PdfAnchorRequestOneOfFour = PdfHighlightAnchorRequest &
   PdfAnchorRequestOneOfFourAllOf;

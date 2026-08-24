@@ -4,8 +4,7 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
-
-import type { AnchorIdOneOfAllOf } from './anchorIdOneOfAllOf';
 import type { PdfAnchorId } from './pdfAnchorId';
+import type { AnchorIdOneOfAllOf } from './anchorIdOneOfAllOf';
 
 export type AnchorIdOneOf = PdfAnchorId & AnchorIdOneOfAllOf;

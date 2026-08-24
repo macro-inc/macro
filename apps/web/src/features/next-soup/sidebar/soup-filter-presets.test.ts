@@ -247,7 +247,7 @@ describe('agents view presets', () => {
     // Agent sessions are off server-side unless a query names them; this is
     // the ask, scoped to the caller's own sessions.
     expect(ast.asf).toEqual({
-      '&': [{ '|': [{ l: { o: context.userId } }] }, { l: 'inc' }],
+      '&': [{ l: { o: context.userId } }, { l: 'inc' }],
     });
     expect(preset?.clientFilters).toEqual({ and: ['agent-session'] });
     expect(preset?.groupBy).toBe('agent-attention');

@@ -96,11 +96,13 @@ const getEntityRenameData = (
   // Reminders aren't either — the entity-mutation router rejects them, and a
   // reminder's name is its description, edited through the reminders API.
   // Calendar event titles are edited through the calendar mutation API.
+  // Agent session titles come from the runtime through the session log.
   if (
     entity.type === 'crm_company' ||
     entity.type === 'crm_contact' ||
     entity.type === 'reminder' ||
-    entity.type === 'calendar_event'
+    entity.type === 'calendar_event' ||
+    entity.type === 'agent_session'
   ) {
     return null;
   }

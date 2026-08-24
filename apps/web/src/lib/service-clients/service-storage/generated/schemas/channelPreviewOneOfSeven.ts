@@ -4,9 +4,8 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
-
-import type { ChannelPreviewOneOfSevenAllOf } from './channelPreviewOneOfSevenAllOf';
 import type { WithChannelId } from './withChannelId';
+import type { ChannelPreviewOneOfSevenAllOf } from './channelPreviewOneOfSevenAllOf';
 
 /**
  * Channel does not exist.

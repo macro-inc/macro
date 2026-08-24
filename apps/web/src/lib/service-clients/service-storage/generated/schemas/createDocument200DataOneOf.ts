@@ -4,9 +4,8 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
-
-import type { CreateDocument200DataOneOfAllOf } from './createDocument200DataOneOfAllOf';
 import type { DocumentResponse } from './documentResponse';
+import type { CreateDocument200DataOneOfAllOf } from './createDocument200DataOneOfAllOf';
 
 /**
  * Create document response data with content lifecycle metadata.

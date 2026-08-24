@@ -5,9 +5,9 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { SoupCrmCompanySoupPropertiesFieldAllOfTwoDescription } from './soupCrmCompanySoupPropertiesFieldAllOfTwoDescription';
+import type { SoupCrmDomain } from './soupCrmDomain';
 import type { SoupCrmCompanySoupPropertiesFieldAllOfTwoName } from './soupCrmCompanySoupPropertiesFieldAllOfTwoName';
 import type { SoupCrmCompanySoupPropertiesFieldAllOfTwoViewedAt } from './soupCrmCompanySoupPropertiesFieldAllOfTwoViewedAt';
-import type { SoupCrmDomain } from './soupCrmDomain';
 
 export type SoupCrmCompanySoupPropertiesFieldAllOfTwo = {
   /** When the company was created. */

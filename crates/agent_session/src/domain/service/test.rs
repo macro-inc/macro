@@ -394,7 +394,10 @@ async fn permission_traffic_projects_the_pending_count() {
     let session = AgentSessionRepo::get(&fx.repo, fx.session)
         .await
         .expect("get session");
-    assert_eq!(session.pending_permission_count, 1, "the ask is outstanding");
+    assert_eq!(
+        session.pending_permission_count, 1,
+        "the ask is outstanding"
+    );
 
     let response = parse_log_as(
         fx.session,

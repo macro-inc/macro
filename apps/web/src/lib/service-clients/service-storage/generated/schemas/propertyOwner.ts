@@ -5,8 +5,8 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { PropertyOwnerOneOf } from './propertyOwnerOneOf';
-import type { PropertyOwnerOneOfFive } from './propertyOwnerOneOfFive';
 import type { PropertyOwnerOneOfThree } from './propertyOwnerOneOfThree';
+import type { PropertyOwnerOneOfFive } from './propertyOwnerOneOfFive';
 
 /**
  * Defines who owns a property - user-scoped, team-scoped, or system.

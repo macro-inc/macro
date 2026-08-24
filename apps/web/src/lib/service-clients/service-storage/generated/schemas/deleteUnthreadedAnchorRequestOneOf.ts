@@ -4,9 +4,8 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
-
-import type { DeleteUnthreadedAnchorRequestOneOfAllOf } from './deleteUnthreadedAnchorRequestOneOfAllOf';
 import type { DeleteUnthreadedPdfAnchorRequest } from './deleteUnthreadedPdfAnchorRequest';
+import type { DeleteUnthreadedAnchorRequestOneOfAllOf } from './deleteUnthreadedAnchorRequestOneOfAllOf';
 
 export type DeleteUnthreadedAnchorRequestOneOf =
   DeleteUnthreadedPdfAnchorRequest & DeleteUnthreadedAnchorRequestOneOfAllOf;

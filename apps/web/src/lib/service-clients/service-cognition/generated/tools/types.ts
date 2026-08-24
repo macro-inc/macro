@@ -224,7 +224,8 @@ export type ItemType =
   | 'channel'
   | 'channel_thread'
   | 'call'
-  | 'foreign_entity';
+  | 'foreign_entity'
+  | 'agent_session';
 /**
  * Sort order for the list entities AI tool.
  */
@@ -424,6 +425,45 @@ export type EntityItem =
         [k: string]: unknown;
       };
       type: 'foreignEntity';
+    }
+  | {
+      /**
+       * Agent session id.
+       */
+      id: string;
+      /**
+       * Session title, when the runtime reported one.
+       */
+      title?: string | null;
+      /**
+       * Model slug the session runs on.
+       */
+      model: string;
+      /**
+       * Harness slug serving the session.
+       */
+      harness: string;
+      /**
+       * Repository the session works against, when stated.
+       */
+      repoUrl?: string | null;
+      /**
+       * Coarse session status (no_messages, event, disconnected).
+       */
+      status: string;
+      /**
+       * The latest runtime event's wire name, when status is "event".
+       */
+      statusEventName?: string | null;
+      /**
+       * How many permission requests are awaiting an answer.
+       */
+      pendingPermissionCount: number;
+      /**
+       * The pull request the session produced, when one was detected.
+       */
+      prUrl?: string | null;
+      type: 'agentSession';
     };
 /**
  * User-facing notification categories used for list filtering.

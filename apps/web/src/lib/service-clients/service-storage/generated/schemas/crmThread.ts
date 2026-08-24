@@ -4,9 +4,8 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
-
-import type { CrmCommentEntityType } from './crmCommentEntityType';
 import type { CrmThreadDeletedAt } from './crmThreadDeletedAt';
+import type { CrmCommentEntityType } from './crmCommentEntityType';
 
 /**
  * A CRM comment thread: the parent record one or more comments hang off.

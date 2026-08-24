@@ -4,11 +4,10 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
-
+import type { SoupMessageAttachment } from './soupMessageAttachment';
 import type { SoupChannelThreadDeletedAt } from './soupChannelThreadDeletedAt';
 import type { SoupChannelThreadEditedAt } from './soupChannelThreadEditedAt';
 import type { SoupCountedReaction } from './soupCountedReaction';
-import type { SoupMessageAttachment } from './soupMessageAttachment';
 import type { SoupMessageSender } from './soupMessageSender';
 import type { SoupThreadInfo } from './soupThreadInfo';
 

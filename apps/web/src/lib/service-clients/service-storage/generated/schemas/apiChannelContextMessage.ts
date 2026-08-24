@@ -6,8 +6,8 @@
  */
 import type { ApiChannelContextMessageDeletedAt } from './apiChannelContextMessageDeletedAt';
 import type { ApiChannelContextMessageEditedAt } from './apiChannelContextMessageEditedAt';
-import type { ApiChannelContextMessageThreadId } from './apiChannelContextMessageThreadId';
 import type { ApiMessageSender } from './apiMessageSender';
+import type { ApiChannelContextMessageThreadId } from './apiChannelContextMessageThreadId';
 
 /**
  * A channel message returned by the message-context endpoint.
