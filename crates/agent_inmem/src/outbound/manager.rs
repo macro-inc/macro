@@ -7,6 +7,7 @@
 
 use std::sync::Arc;
 
+use agent_client_protocol::schema::v1::SessionId;
 use agent_runtime_protocol::domain::channel::Channel;
 use agent_runtime_protocol::domain::connection::{RuntimeConnection, ServerChannel};
 use agent_runtime_protocol::domain::schema::v0::SystemEvent;
@@ -16,6 +17,7 @@ use macro_user_id::user_id::MacroUserIdStr;
 
 use crate::domain::agent::{AgentState, serve};
 use crate::domain::engine::TurnEngine;
+use crate::domain::replay::{FrameSource, replay_history};
 use crate::domain::session::{SessionState, SessionStore};
 
 #[cfg(test)]
@@ -30,6 +32,10 @@ pub struct SessionFacts {
     pub owner: MacroUserIdStr<'static>,
     /// Model id stamped on the session row.
     pub model: String,
+    /// The ACP session id the row carries, when one was ever negotiated. A
+    /// cold attach hydrates its rebuilt conversation under this id so the
+    /// harness's `session/resume` keeps it.
+    pub acp_session_id: Option<SessionId>,
 }
 
 /// One live agent task and its runtime connection.
@@ -51,16 +57,19 @@ impl Drop for LiveAgent {
 /// Provisions and tears down in-process agents, one per session.
 pub struct InMemAgentManager {
     engine: Arc<dyn TurnEngine>,
+    frames: Arc<dyn FrameSource>,
     store: Arc<SessionStore>,
     live: DashMap<AgentSessionId, LiveAgent>,
 }
 
 impl InMemAgentManager {
-    /// A manager running every session's turns through `engine`.
+    /// A manager running every session's turns through `engine`, rebuilding
+    /// cold sessions' conversations from `frames`.
     #[must_use]
-    pub fn new(engine: Arc<dyn TurnEngine>) -> Self {
+    pub fn new(engine: Arc<dyn TurnEngine>, frames: Arc<dyn FrameSource>) -> Self {
         Self {
             engine,
+            frames,
             store: Arc::new(SessionStore::new()),
             live: DashMap::new(),
         }
@@ -68,14 +77,24 @@ impl InMemAgentManager {
 
     /// Start (or restart) the session's agent and return the transport the
     /// harness attaches. Spawn and resume are the same operation here: the
-    /// conversation store is what persists across reattachment, not the task.
+    /// conversation store is what persists across reattachment, not the
+    /// task - and a session this process has never held (a fresh spawn, or a
+    /// resume after a restart) gets its conversation rebuilt from the durable
+    /// frame log first.
     #[must_use]
-    pub fn attach(&self, facts: SessionFacts) -> ServerChannel {
+    pub async fn attach(&self, facts: SessionFacts) -> ServerChannel {
         // A replaced agent must die before its successor serves the session.
         self.live.remove(&facts.id);
-        self.store
-            .entry(facts.id)
-            .or_insert_with(|| SessionState::new(facts.model.clone()));
+        if !self.store.contains_key(&facts.id) {
+            // Loaded before taking the entry so the read never blocks the
+            // map; `or_insert_with` still wins any race to create it.
+            let history = replay_history(self.frames.frames(facts.id).await);
+            self.store.entry(facts.id).or_insert_with(|| SessionState {
+                acp_session_id: facts.acp_session_id.clone(),
+                model: facts.model.clone(),
+                history,
+            });
+        }
 
         let (server_half, runtime_half) = Channel::duplex();
         let (runtime, acp) = RuntimeConnection::connect(runtime_half);

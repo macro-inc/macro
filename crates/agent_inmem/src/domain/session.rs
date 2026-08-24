@@ -2,8 +2,8 @@
 //!
 //! The durable record of a session is its frame log; what lives here is only
 //! the model-facing conversation the next turn is built from. It survives a
-//! reattach within one process lifetime and is rebuilt empty after a restart
-//! (the log keeps the UI history either way).
+//! reattach within one process lifetime, and a cold attach after a restart
+//! rebuilds it from the frame log (see [`crate::domain::replay`]).
 
 use agent::types::{AssistantMessagePart, ChatMessage, ChatMessageContent, Role};
 use agent_client_protocol::schema::v1::SessionId;

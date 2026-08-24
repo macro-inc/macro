@@ -28,6 +28,7 @@ use agent_harness::outbound::daytona::{
 };
 use agent_harness::outbound::local::{LocalContainerManager, LocalSettings};
 use agent_harness::outbound::runtime_registry::RuntimeRegistry;
+use agent_inmem::outbound::log_frames::LogFrameSource;
 use agent_inmem::outbound::manager::InMemAgentManager;
 use agent_inmem::outbound::rig_engine::RigTurnEngine;
 use agent_session::domain::ports::NoOpRealtime;
@@ -214,9 +215,12 @@ async fn run() -> anyhow::Result<()> {
             .await
             .context("failed to build the in-memory agent tool context")?;
             let engine = Arc::new(RigTurnEngine::new(pool.clone(), tool_context));
+            // Cold attaches (fresh spawns and post-restart resumes) rebuild
+            // their model context from the same log every frame lands in.
+            let frames = Arc::new(LogFrameSource::new(session_repo.clone()));
             Some(InMemRuntime {
                 bot,
-                manager: InMemAgentManager::new(engine),
+                manager: InMemAgentManager::new(engine, frames),
             })
         }
         None => None,
@@ -282,17 +286,21 @@ async fn run() -> anyhow::Result<()> {
         repo_url: config.harness_repo_url.clone(),
     });
     if let Some(bot) = inmem_bot {
-        defaults = defaults.with_bot(
-            bot,
-            SessionDefaults {
-                bot_id: bot,
-                model: config.inmem_model.clone(),
-                harness: config.inmem_harness_slug.clone(),
-                // Stamped but unused: the in-process agent has no workspace
-                // to clone anything into.
-                repo_url: config.harness_repo_url.clone(),
-            },
-        );
+        defaults = defaults
+            .with_bot(
+                bot,
+                SessionDefaults {
+                    bot_id: bot,
+                    model: config.inmem_model.clone(),
+                    harness: config.inmem_harness_slug.clone(),
+                    // Stamped but unused: the in-process agent has no
+                    // workspace to clone anything into.
+                    repo_url: config.harness_repo_url.clone(),
+                },
+            )
+            // Sessions nothing names a bot for (the create menu's) run
+            // in-process too; only mentioning the coder bot gets a sandbox.
+            .with_managed_bot(bot);
     }
     let harness = Arc::new(AgentHarnessService::new(
         sessions,

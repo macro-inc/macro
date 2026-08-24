@@ -19,10 +19,24 @@ use bot_id::BotId;
 use macro_user_id::user_id::MacroUserIdStr;
 
 use super::*;
+use crate::outbound::log_frames::LogFrameSource;
 use crate::testing::ScriptedEngine;
 
 fn owner() -> MacroUserIdStr<'static> {
     MacroUserIdStr::try_from_email("owner@macro.com").expect("a valid user id")
+}
+
+fn manager(repo: &InMemoryAgentSessionRepo, engine: Arc<ScriptedEngine>) -> InMemAgentManager {
+    InMemAgentManager::new(engine, Arc::new(LogFrameSource::new(repo.clone())))
+}
+
+fn facts(id: AgentSessionId) -> SessionFacts {
+    SessionFacts {
+        id,
+        owner: owner(),
+        model: "test-model".to_owned(),
+        acp_session_id: None,
+    }
 }
 
 /// Frames the log holds, flattened to JSON strings for loose assertions.
@@ -75,14 +89,13 @@ async fn a_prompt_runs_end_to_end_through_the_real_session_machine() {
         .await
         .expect("the session row should create");
 
-    let manager = InMemAgentManager::new(Arc::new(ScriptedEngine::new(vec![StreamPart::Content(
-        "streamed reply".to_owned(),
-    )])));
-    let transport = manager.attach(SessionFacts {
-        id,
-        owner: owner(),
-        model: "test-model".to_owned(),
-    });
+    let manager = manager(
+        &repo,
+        Arc::new(ScriptedEngine::new(vec![StreamPart::Content(
+            "streamed reply".to_owned(),
+        )])),
+    );
+    let transport = manager.attach(facts(id)).await;
     sessions
         .attach_session(id, RuntimeAttachment::solo(transport))
         .await
@@ -139,11 +152,7 @@ async fn a_prompt_runs_end_to_end_through_the_real_session_machine() {
     // disconnect-then-resume order the harness's deliver path drives.
     let deadline = tokio::time::Instant::now() + Duration::from_secs(5);
     loop {
-        let transport = manager.attach(SessionFacts {
-            id,
-            owner: owner(),
-            model: "test-model".to_owned(),
-        });
+        let transport = manager.attach(facts(id)).await;
         match sessions
             .attach_session(id, RuntimeAttachment::solo(transport))
             .await
@@ -181,4 +190,135 @@ async fn a_prompt_runs_end_to_end_through_the_real_session_machine() {
         );
         tokio::time::sleep(Duration::from_millis(20)).await;
     }
+}
+
+/// A "restart": the second manager shares nothing with the first but the
+/// durable repo, the way a new process would. The resumed turn must carry
+/// the first turn's conversation, rebuilt from the frame log.
+#[tokio::test]
+async fn a_restarted_manager_rebuilds_the_conversation_from_the_log() {
+    let repo = InMemoryAgentSessionRepo::new();
+    let sessions = AgentSessionServiceImpl::new(
+        repo.clone(),
+        FoldedMessageService::new(repo.clone()),
+        NoOpRealtime,
+    );
+
+    let id = AgentSessionId::new();
+    sessions
+        .create_session(CreateAgentSessionParams {
+            id,
+            owner_id: owner(),
+            bot_id: BotId::TEST_A,
+            thread_id: None,
+            originating_message_id: None,
+            model: "test-model".to_owned(),
+            harness: "macro-inmem".to_owned(),
+            repo_url: None,
+            workspace: "/workspace".to_owned(),
+            sandbox_size: agent_session::domain::model::SandboxSize::Default,
+        })
+        .await
+        .expect("the session row should create");
+
+    let before = manager(
+        &repo,
+        Arc::new(ScriptedEngine::new(vec![StreamPart::Content(
+            "streamed reply".to_owned(),
+        )])),
+    );
+    let transport = before.attach(facts(id)).await;
+    sessions
+        .attach_session(id, RuntimeAttachment::solo(transport))
+        .await
+        .expect("the transport should attach");
+    sessions
+        .send_action(
+            id,
+            Some(owner()),
+            AgentAction::prompt("hello agent"),
+            AgentActionId::mint(),
+        )
+        .await
+        .expect("the prompt should send");
+
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(5);
+    loop {
+        let frames = logged_frames(&repo, id).await;
+        if frames.iter().any(|frame| frame.contains("stopReason")) {
+            break;
+        }
+        assert!(
+            tokio::time::Instant::now() < deadline,
+            "the first prompt never completed; log so far: {frames:#?}"
+        );
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+
+    // Kill the first manager's agents and conversations, as a restart would.
+    drop(before);
+
+    let engine = Arc::new(ScriptedEngine::new(vec![StreamPart::Content(
+        "back again".to_owned(),
+    )]));
+    let after = manager(&repo, Arc::clone(&engine));
+    let row = sessions
+        .get_session(id)
+        .await
+        .expect("the session row should read");
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(5);
+    loop {
+        let transport = after
+            .attach(SessionFacts {
+                acp_session_id: row.acp_session_id.clone(),
+                ..facts(id)
+            })
+            .await;
+        match sessions
+            .attach_session(id, RuntimeAttachment::solo(transport))
+            .await
+        {
+            Ok(()) => break,
+            Err(agent_session::domain::error::AgentSessionError::AlreadyConnected(_)) => {
+                assert!(
+                    tokio::time::Instant::now() < deadline,
+                    "the dropped agent never disconnected"
+                );
+                tokio::time::sleep(Duration::from_millis(20)).await;
+            }
+            Err(error) => panic!("the transport should reattach: {error:?}"),
+        }
+    }
+    sessions
+        .send_action(
+            id,
+            Some(owner()),
+            AgentAction::prompt("still there?"),
+            AgentActionId::mint(),
+        )
+        .await
+        .expect("the prompt should send on the resumed session");
+
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(5);
+    loop {
+        if !engine.requests().is_empty() {
+            break;
+        }
+        assert!(
+            tokio::time::Instant::now() < deadline,
+            "the resumed prompt never reached the engine"
+        );
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+
+    // The rebuilt context: the first turn's prompt and reply, then the new
+    // prompt - not just the new prompt.
+    assert_eq!(
+        engine.requests()[0].1,
+        vec![
+            "hello agent".to_owned(),
+            "streamed reply".to_owned(),
+            "still there?".to_owned()
+        ]
+    );
 }

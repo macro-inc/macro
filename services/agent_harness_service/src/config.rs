@@ -85,7 +85,8 @@ pub struct Config {
     /// Repository sessions run against, until it becomes per-request data.
     #[macro_config_default(String::from("https://github.com/macro-inc/macro"))]
     pub harness_repo_url: String,
-    /// The bot whose sessions run in-process (the in-memory agent). Unset
+    /// The bot whose sessions run in-process (the in-memory agent) - the
+    /// Macro bot, `bot_id::MACRO_AI_BOT_ID`, in every real deployment. Unset
     /// means this deployment serves only the sandboxed bot. It must be a real
     /// `bots` row - `agent_session.bot_id` references it.
     pub inmem_bot_id: Option<Uuid>,

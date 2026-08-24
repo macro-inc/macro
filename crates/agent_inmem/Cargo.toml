@@ -18,6 +18,7 @@ macro_user_id = { path = "../macro_user_id" }
 macro_uuid = { path = "../macro_uuid" }
 memory = { path = "../memory" }
 prompt = { path = "../prompt" }
+serde = { workspace = true }
 serde_json = { workspace = true }
 sqlx = { workspace = true }
 tokio = { workspace = true, features = ["sync", "rt", "time", "macros"] }

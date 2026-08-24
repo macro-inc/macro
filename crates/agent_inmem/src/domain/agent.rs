@@ -173,9 +173,10 @@ pub async fn serve(state: Arc<AgentState>, acp: AcpChannel) -> Result<(), AcpErr
                 let state = Arc::clone(&state);
                 async move |request: ResumeSessionRequest, responder, _connection| {
                     let state = Arc::clone(&state);
-                    // Kept when this process already holds the conversation;
-                    // after a restart the frame log still has the UI history
-                    // and the model context starts over.
+                    // Kept when the state already belongs to this ACP id -
+                    // either this process served the session, or a cold
+                    // attach replayed the frame log back into it (see
+                    // `domain::replay`).
                     state.bind_acp_session(request.session_id, true);
                     responder.respond(ResumeSessionResponse::new())
                 }
@@ -419,7 +420,9 @@ fn prompt_text(request: &PromptRequest) -> String {
 /// Close tool calls that never got a response - a cancelled or failed turn
 /// leaves them dangling, and an unmatched call would poison the next turn's
 /// provider payload. Returns what was synthesized as `(id, name)`.
-fn close_dangling_tool_calls(parts: &mut Vec<AssistantMessagePart>) -> Vec<(String, String)> {
+pub(crate) fn close_dangling_tool_calls(
+    parts: &mut Vec<AssistantMessagePart>,
+) -> Vec<(String, String)> {
     let responded: HashSet<String> = parts
         .iter()
         .filter_map(|part| match part {

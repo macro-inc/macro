@@ -118,6 +118,7 @@ where
                 id: session,
                 owner: row.owner_id,
                 model: row.model,
+                acp_session_id: row.acp_session_id,
             }))
         } else {
             Ok(Route::Sandbox)
@@ -139,7 +140,9 @@ where
 
     async fn spawn(&self, command: SpawnContainer) -> Result<Self::Transport> {
         match self.route(command.session_id).await? {
-            Route::InMem(facts) => Ok(RoutedTransport::InMem(self.inmem().manager.attach(facts))),
+            Route::InMem(facts) => Ok(RoutedTransport::InMem(
+                self.inmem().manager.attach(facts).await,
+            )),
             Route::Sandbox => self
                 .sandbox
                 .spawn(command)
@@ -167,7 +170,9 @@ where
 
     async fn resume(&self, session: AgentSessionId) -> Result<Self::Transport> {
         match self.route(session).await? {
-            Route::InMem(facts) => Ok(RoutedTransport::InMem(self.inmem().manager.attach(facts))),
+            Route::InMem(facts) => Ok(RoutedTransport::InMem(
+                self.inmem().manager.attach(facts).await,
+            )),
             Route::Sandbox => self
                 .sandbox
                 .resume(session)

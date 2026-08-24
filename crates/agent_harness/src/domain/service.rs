@@ -293,18 +293,18 @@ where
         Ok(session)
     }
 
-    /// Provision a sandbox, open a session on it, and deliver the first
-    /// prompt if one came with the request.
+    /// Provision the managed-default bot's runtime, open a session on it,
+    /// and deliver the first prompt if one came with the request.
     ///
     /// Nothing is announced: a managed session opened this way has no
-    /// originating mention and no thread to answer back into. The sandbox is
+    /// originating mention and no thread to answer back into. The runtime is
     /// spawned before the session is attached because there is nothing to
     /// attach to until it exists.
     async fn open_managed_session(
         &self,
         request: agent_session::domain::ports::OpenManagedSession,
     ) -> agent_session::domain::error::Result<AgentSession> {
-        let defaults = self.inner.defaults.base();
+        let defaults = self.inner.defaults.managed();
         let sandbox_size = self
             .inner
             .sessions

@@ -262,13 +262,9 @@ impl MailEnv {
 /// `GITHUB_TOKEN` is left to Doppler / process env so a local sandbox can
 /// still clone.
 ///
-/// TEMPORARY: `INMEM_BOT_ID` is pointed at the *coder* bot, so `@coder`'s
-/// sessions run in-process on the in-memory ACP runtime and no sandbox is
-/// provisioned for them at all - the local Docker provider below is built and
-/// left unused. Reverting is one line - drop the `INMEM_BOT_ID` insert (or
-/// point it at `bot_id::MACRO_AGENT_BOT_ID`,
-/// `00000000-0000-0000-0000-00000000a6e0`, to give the in-memory runtime its
-/// own bot back).
+/// Two managed bots: `@coder` (`HARNESS_BOT_ID`) gets a sandbox from the
+/// local Docker provider, and `@macro` (`INMEM_BOT_ID`) runs in-process on
+/// the in-memory ACP runtime.
 struct AgentHarnessEnv {
     bot_id: &'static str,
     snapshot: &'static str,
@@ -294,11 +290,12 @@ impl AgentHarnessEnv {
 
     fn write(&self, env: &mut BTreeMap<String, String>) {
         env.insert("HARNESS_BOT_ID".into(), self.bot_id.into());
-        // Same bot on both keys: `HarnessContainers::route` compares a
-        // session's bot against the in-memory runtime's, so this hands every
-        // coder session to the in-process agent. Daytona stays constructed and
-        // unused.
-        env.insert("INMEM_BOT_ID".into(), self.bot_id.into());
+        // bot_id::MACRO_AI_BOT_ID: @macro's sessions run on the in-process
+        // ACP runtime, while @coder's get sandboxes from the local provider.
+        env.insert(
+            "INMEM_BOT_ID".into(),
+            "00000000-0000-0000-0000-00000000a1a1".into(),
+        );
         env.insert("DAYTONA_SNAPSHOT".into(), self.snapshot.into());
         env.insert("DAYTONA_API_KEY".into(), String::new());
         env.insert("DEV_DANGEROUS_LOCAL_CONTAINERS".into(), "true".into());
