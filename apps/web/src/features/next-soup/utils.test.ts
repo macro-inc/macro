@@ -419,6 +419,34 @@ describe('getChannelEntityTarget', () => {
     expect(bulkMarkAsRead).toHaveBeenCalledWith([notification]);
   });
 
+  it('reports failures to mark an attached channel notification read', async () => {
+    const error = new Error('mark failed');
+    const consoleError = vi
+      .spyOn(console, 'error')
+      .mockImplementation(() => {});
+    const notification = sendNotification('notification', 'message');
+    const notificationSource = {
+      bulkMarkAsRead: vi.fn(async () => {
+        throw error;
+      }),
+    } as unknown as NotificationSource;
+
+    try {
+      markChannelTargetSeenOnOpen(
+        channelRow({ notifications: [notification] }),
+        notificationSource
+      );
+      await Promise.resolve();
+
+      expect(consoleError).toHaveBeenCalledWith(
+        'Failed to mark message notifications as read',
+        error
+      );
+    } finally {
+      consoleError.mockRestore();
+    }
+  });
+
   it('opens a channel row at latest when it has no notifications', () => {
     expect(getChannelEntityTarget(channelRow())).toEqual({ kind: 'latest' });
   });

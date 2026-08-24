@@ -757,7 +757,9 @@ export function markChannelTargetSeenOnOpen(
   });
   if (notifications.length === 0) return;
 
-  void notificationSource.bulkMarkAsRead(notifications);
+  void notificationSource.bulkMarkAsRead(notifications).catch((error) => {
+    console.error('Failed to mark message notifications as read', error);
+  });
 }
 
 /**
