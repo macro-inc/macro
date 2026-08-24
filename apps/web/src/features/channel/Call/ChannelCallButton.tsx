@@ -10,6 +10,7 @@ import { createSignal, onCleanup, Show } from 'solid-js';
 import { getCallJoinTab, getCallLeaveTab } from './call-tabs';
 import {
   isSlideDownArmed,
+  SLIDE_SLOT_PADDING_PX,
   SLIDE_TO_CALL_DISTANCE_PX,
   slideDownFraction,
   slideDownProgress,
@@ -177,32 +178,34 @@ function SlideDownCallButton(props: {
 
   return (
     <div class="relative isolate">
-      {/* The slot the knob slides down. Sized a hair past the knob on every
-          side so the knob reads as seated in a recess rather than as extra
-          chrome, and origin-top scale anchors the reveal under the button. */}
+      {/* The slot the knob slides down. Overhangs the knob on every side so it
+          reads as a recess rather than extra chrome, and origin-top scale
+          anchors the reveal under the button. */}
       <div
         aria-hidden="true"
         class={cn(
-          'pointer-events-none absolute -inset-x-1 -top-1 z-0 origin-top overflow-hidden rounded-full',
+          'pointer-events-none absolute -inset-x-1 z-0 origin-top overflow-hidden rounded-full',
           'bg-inset ring ring-edge ring-inset',
           'transition-[opacity,scale] duration-200 ease-out',
           trackVisible() ? 'scale-y-100 opacity-100' : 'scale-y-90 opacity-0'
         )}
         style={{
-          height: `calc(100% + 0.5rem + ${SLIDE_TO_CALL_DISTANCE_PX}px)`,
+          top: `-${SLIDE_SLOT_PADDING_PX}px`,
+          height: `calc(100% + ${SLIDE_SLOT_PADDING_PX * 2 + SLIDE_TO_CALL_DISTANCE_PX}px)`,
         }}
       >
-        {/* Trail the knob leaves behind, so remaining travel stays legible. */}
+        {/* Travelled distance, filled in behind the knob so the fill and the
+            knob stay one connected shape instead of two objects with a gap. */}
         <div
           class={cn(
-            'absolute inset-x-0 top-0 transition-colors duration-150',
-            armed() ? 'bg-success/25' : 'bg-ink/15'
+            'absolute inset-x-0 top-0 transition-colors duration-200',
+            armed() ? 'bg-success/40' : 'bg-success/20'
           )}
           style={{ height: `${offset()}px` }}
         />
         {/* Landing target, faded out as the knob arrives on top of it. */}
         <div
-          class="absolute inset-x-0 bottom-2 flex justify-center text-ink-subtle"
+          class="absolute inset-x-0 bottom-2 flex justify-center text-ink"
           style={{ opacity: `${1 - traveled()}` }}
         >
           <CaretDownIcon class="size-4" />
@@ -215,16 +218,33 @@ function SlideDownCallButton(props: {
           } the call`}
         </span>
       </Show>
+      {/* The transition stays declared at all times and only its duration
+          changes, so releasing animates instead of snapping (adding the
+          transition in the same tick as the transform would not animate). */}
       <div
-        class={cn(
-          'relative z-10',
-          !dragging() && 'transition-transform duration-200 ease-out'
-        )}
+        class="relative z-10 transition-transform ease-out"
         style={{
           transform: `translateY(${offset()}px)`,
+          'transition-duration': dragging() ? '0ms' : '260ms',
         }}
         on:pointerdown={onPointerDown}
       >
+        {/* The knob is icon-only, so name the gesture while it is in progress.
+            Rides along with the knob so the two never drift apart. */}
+        <div
+          aria-hidden="true"
+          class={cn(
+            'pointer-events-none absolute top-1/2 right-full mr-2 -translate-y-1/2',
+            'flex h-7 items-center rounded-full px-3 whitespace-nowrap',
+            'bg-chrome text-xs leading-none font-medium text-ink ring ring-edge',
+            'transition-opacity duration-200 ease-out',
+            trackVisible() ? 'opacity-100' : 'opacity-0'
+          )}
+        >
+          {armed()
+            ? `Release to ${props.callInProgress ? 'join' : 'call'}`
+            : `Slide down to ${props.callInProgress ? 'join' : 'call'}`}
+        </div>
         <Button
           // No tooltip: this control is touch-only, and a hover tooltip from a
           // hybrid pointer would sit on top of the slot mid-drag.
@@ -234,11 +254,13 @@ function SlideDownCallButton(props: {
           depth={2}
           disabled={props.joining}
           class={cn(
-            'touch-none select-none rounded-full transition-colors duration-150',
+            'touch-none select-none rounded-full',
+            'transition-[background-color,color,scale] duration-200',
             // Solid only while sliding: at rest this stays an ordinary
             // header-island icon button.
-            armed() && 'bg-success text-surface ring ring-success',
-            !armed() && trackVisible() && 'bg-ink text-surface ring ring-ink'
+            armed() && 'bg-success text-surface',
+            !armed() && trackVisible() && 'bg-ink text-surface',
+            dragging() && 'scale-105'
           )}
           onKeyDown={onKeyDown}
         >

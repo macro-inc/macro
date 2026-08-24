@@ -1,5 +1,11 @@
-/** Distance the call thumb must travel to place the call. 1 CSS inch. */
+/** Distance the call knob must travel to place the call. 1 CSS inch. */
 export const SLIDE_TO_CALL_DISTANCE_PX = 96;
+
+/**
+ * Slot overhang past the knob on each end. Keeps the knob looking seated in a
+ * recess at both ends of its travel instead of flush with the slot's edge.
+ */
+export const SLIDE_SLOT_PADDING_PX = 4;
 
 /** Downward movement (px) before the track is treated as revealed mid-drag. */
 const TRACK_REVEAL_PX = 4;
