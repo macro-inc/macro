@@ -153,6 +153,15 @@ impl FoldMachineImpl {
     pub fn metadata(&self) -> &SessionMetadata {
         &self.state.metadata
     }
+
+    /// How many permission requests are outstanding — asked and neither
+    /// answered nor invalidated by a connection boundary. Callers projecting
+    /// "needs approval" state read this rather than re-deriving the
+    /// request/response correlation.
+    #[must_use]
+    pub fn pending_permission_count(&self) -> usize {
+        self.state.pending_permissions.len()
+    }
 }
 
 impl FoldMachine for FoldMachineImpl {

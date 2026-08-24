@@ -20,6 +20,7 @@ use agent_harness::inbound::kafka::{RoutedTrigger, route_agent_trigger};
 use agent_harness::inbound::runtime_gateway::RuntimeGatewayState;
 use agent_harness::outbound::channel_announcer::ChannelAnnouncer;
 use agent_harness::outbound::containers::HarnessContainers;
+use agent_harness::outbound::lifecycle_events::PublishingAgentSessionRepo;
 use agent_harness::outbound::daytona::{
     DaytonaApiKey as DaytonaApiKeySecret, DaytonaContainerManager, DaytonaSettings,
     GithubToken as GithubTokenSecret, Snapshot,
@@ -112,10 +113,18 @@ async fn main() -> anyhow::Result<()> {
     // Sessions: persistence and live actors. The same repo answers every port,
     // as in the `document_storage_service` root - a session's actor writes its
     // log and pushes each frame at the channel's participants so a viewer sees
-    // it happen.
+    // it happen. The mutating service writes through the publishing decorator,
+    // so realtime Soup learns about every durable session change.
+    let broker = MacroEventBrokerService::new(
+        KafkaEventPublisher::new(config.kafka_brokers.as_ref())
+            .context("failed to create kafka event publisher")?,
+        macro_event_broker::GlobalSpawner,
+    );
     let session_repo = PgAgentSessionRepo::new(pool.clone());
+    let publishing_session_repo =
+        PublishingAgentSessionRepo::new(session_repo.clone(), broker.clone());
     let sessions = AgentSessionServiceImpl::new(
-        session_repo.clone(),
+        publishing_session_repo,
         FoldedMessageService::new(session_repo.clone()),
         ConnectionGatewayAgentSessionRealtime::new(
             connection_gateway.clone(),
@@ -175,11 +184,6 @@ async fn main() -> anyhow::Result<()> {
             macro_queues::ContactsQueue::new().to_string(),
         ),
     });
-    let broker = MacroEventBrokerService::new(
-        KafkaEventPublisher::new(config.kafka_brokers.as_ref())
-            .context("failed to create kafka event publisher")?,
-        macro_event_broker::GlobalSpawner,
-    );
     let side_effects = ChannelSideEffectService::new(
         PgChannelSideEffectContext::new(pool.clone()),
         ConnectionGatewayChannelRealtimePublisher::new(connection_gateway),

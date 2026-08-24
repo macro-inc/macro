@@ -79,6 +79,13 @@ pub struct AgentSession {
     pub workspace: String,
     /// ACP session if we have one
     pub acp_session_id: Option<SessionId>,
+    /// Session title the runtime reported, when it has.
+    pub title: Option<String>,
+    /// How many permission requests are awaiting an answer, projected from
+    /// the session's log the same way `status` is.
+    pub pending_permission_count: i32,
+    /// The pull request the session produced, when one was detected.
+    pub pr_url: Option<String>,
     pub status: SessionStatus,
     pub created_at: DateTime<Utc>,
     pub modified_at: DateTime<Utc>,

@@ -12,6 +12,7 @@ use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::Entity;
 use models_pagination::PaginatedOpaqueCursor;
 use models_soup::{
+    agent_session::{SoupAgentSession, SoupAgentSessionStatusKind},
     calendar_event::SoupCalendarEvent,
     call_record::{SoupCallRecord, SoupCallRecordParticipant},
     chat::SoupChat,
@@ -197,6 +198,7 @@ impl<E: SoupEntityEdges> GraphqlSoupEntity<E> {
             // Calendar events carry no frecency slot; scores never target them.
             Self::CalendarEvent(_) => {}
             Self::Reminder(entity) => entity.2 = score,
+            Self::AgentSession(entity) => entity.2 = score,
         }
         self
     }
@@ -307,6 +309,8 @@ pub enum GraphqlSoupEntity<E: SoupEntityEdges> {
     ForeignEntity(GraphqlSoupForeignEntity<E>),
     /// Reminder entity.
     Reminder(GraphqlSoupReminder<E>),
+    /// Agent session entity.
+    AgentSession(GraphqlSoupAgentSession<E>),
 }
 
 impl<E> GraphqlSoupEntity<E>
@@ -331,6 +335,9 @@ where
                 GraphqlSoupEntityType::ForeignEntity => GraphqlSoupForeignEntity::<E>::type_name(),
                 GraphqlSoupEntityType::CalendarEvent => GraphqlSoupCalendarEvent::<E>::type_name(),
                 GraphqlSoupEntityType::Reminder => GraphqlSoupReminder::<E>::type_name(),
+                GraphqlSoupEntityType::AgentSession => {
+                    GraphqlSoupAgentSession::<E>::type_name()
+                }
             }
             .into_owned(),
         )
@@ -404,6 +411,12 @@ where
                     model_entity::EntityType::Reminder.with_entity_string(item.id.to_string()),
                 );
                 Self::Reminder(GraphqlSoupReminder(item, edges, None))
+            }
+            SoupItem::AgentSession(item) => {
+                let edges = E::from_entity(
+                    model_entity::EntityType::AgentSession.with_entity_string(item.id.to_string()),
+                );
+                Self::AgentSession(GraphqlSoupAgentSession(item, edges, None))
             }
         }
     }
@@ -1975,6 +1988,109 @@ where
     }
 }
 
+/// GraphQL agent session entity.
+pub struct GraphqlSoupAgentSession<E: SoupEntityEdges>(SoupAgentSession<()>, E, Option<f64>);
+
+/// GraphQL representation of the soup agent session.
+#[Object(name = "GraphqlSoupAgentSession")]
+impl<E> GraphqlSoupAgentSession<E>
+where
+    E: SoupEntityEdges,
+{
+    /// The unique identifier.
+    async fn id(&self) -> ID {
+        ID(self.0.id.to_string())
+    }
+
+    /// Canonical entity kind.
+    async fn entity_type(&self) -> GraphqlSoupEntityType {
+        GraphqlSoupEntityType::AgentSession
+    }
+
+    /// User-visible display name — the reported title, when there is one.
+    async fn display_name(&self) -> Option<String> {
+        self.0.title.clone()
+    }
+
+    /// Common agent session metadata. Sessions record no per-user views and
+    /// are hard-deleted, so `viewed_at`/`deleted_at` are absent.
+    async fn metadata(&self) -> GraphqlEntityMetadata {
+        GraphqlEntityMetadata {
+            owner_id: Some(self.0.owner_id.to_string()),
+            parent: None,
+            created_at: Some(self.0.created_at.to_rfc3339()),
+            updated_at: Some(self.0.modified_at.to_rfc3339()),
+            viewed_at: None,
+            deleted_at: None,
+        }
+    }
+
+    /// Model slug the session runs on.
+    async fn model(&self) -> &str {
+        &self.0.model
+    }
+
+    /// Harness slug serving the session.
+    async fn harness(&self) -> &str {
+        &self.0.harness
+    }
+
+    /// Repository the session works against, when one was stated.
+    async fn repo_url(&self) -> Option<&str> {
+        self.0.repo_url.as_deref()
+    }
+
+    /// Coarse session status: no_messages, event, or disconnected.
+    async fn status_kind(&self) -> &'static str {
+        match self.0.status_kind {
+            SoupAgentSessionStatusKind::NoMessages => "no_messages",
+            SoupAgentSessionStatusKind::Event => "event",
+            SoupAgentSessionStatusKind::Disconnected => "disconnected",
+        }
+    }
+
+    /// The latest runtime event's wire name, when the status is an event.
+    async fn status_event_name(&self) -> Option<&str> {
+        self.0.status_event_name.as_deref()
+    }
+
+    /// How many permission requests are awaiting an answer.
+    async fn pending_permission_count(&self) -> i32 {
+        self.0.pending_permission_count
+    }
+
+    /// The pull request the session produced, when one was detected.
+    async fn pr_url(&self) -> Option<&str> {
+        self.0.pr_url.as_deref()
+    }
+
+    /// The channel the session was spawned from, when it was.
+    async fn thread_channel_id(&self) -> Option<ID> {
+        self.0.thread_channel_id.map(|id| ID(id.to_string()))
+    }
+
+    /// The created timestamp in RFC 3339 format.
+    async fn created_at(&self) -> String {
+        self.0.created_at.to_rfc3339()
+    }
+
+    /// The modified timestamp in RFC 3339 format. Soup orders sessions on this.
+    async fn modified_at(&self) -> String {
+        self.0.modified_at.to_rfc3339()
+    }
+
+    #[graphql(flatten)]
+    /// The edges.
+    async fn edges(&self) -> E {
+        self.1.clone()
+    }
+
+    /// The viewer's frecency score for this entity, when loaded.
+    async fn frecency_score(&self) -> Option<f64> {
+        self.2
+    }
+}
+
 /// Implement interface-only dispatch methods for fields whose concrete
 /// GraphQL definitions are supplied by the flattened edge object.
 macro_rules! impl_common_interface_edges {
@@ -2039,6 +2155,7 @@ impl_common_interface_edges!(
     GraphqlSoupCrmCompany,
     GraphqlSoupForeignEntity,
     GraphqlSoupReminder,
+    GraphqlSoupAgentSession,
 );
 
 /// Realtime Soup patch represented as exactly one update or cache deletion.

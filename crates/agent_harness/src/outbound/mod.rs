@@ -3,6 +3,7 @@
 
 pub mod channel_announcer;
 pub mod containers;
+pub mod lifecycle_events;
 pub mod daytona;
 pub mod local;
 pub(crate) mod managed_containers;
