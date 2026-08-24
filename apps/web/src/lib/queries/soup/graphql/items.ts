@@ -180,7 +180,8 @@ export function createGraphqlSoupAstItemsQuery(
         }
         return { input };
       },
-      getNextPageParam: (lastPage) => mapGraphqlSoupPage(lastPage).next_cursor,
+      getNextPageParam: (lastPage) =>
+        lastPage.user.soup.nextCursor ?? undefined,
       enabled: queryOptions.enabled && firstInput !== undefined,
       requestPolicy: 'cache-and-network',
       keepPreviousData: false,
