@@ -1,4 +1,7 @@
 import { analytics } from '@app/lib/analytics';
+import { defaultOnboardingV4Override } from './onboardingV4Override';
+
+export { defaultOnboardingV4Override };
 
 /**
  * This constant reflects whether the app is running locally with hot reload enabled
@@ -581,26 +584,6 @@ export const BOT_MANAGEMENT_OVERRIDE =
 // `useOnboardingV4Flag()` so the gate reacts when PostHog answers (and so
 // callers can wait instead of treating "flags not loaded yet" as "off").
 export const ENABLE_ONBOARDING_V4_FLAG = 'enable-onboarding-v4';
-
-/**
- * Default for `ENABLE_ONBOARDING_V4_OVERRIDE` when `VITE_ENABLE_ONBOARDING_V4`
- * is unset. Local vite (`import.meta.hot`) is off so signing in does not dump
- * you into the stepper — set `VITE_ENABLE_ONBOARDING_V4=true` to work on the
- * flow. Hosted development (`dev.macro.com`) stays on; production defers to
- * PostHog (`undefined`).
- */
-export function defaultOnboardingV4Override(
-  localOnly: boolean,
-  devMode: boolean
-): boolean | undefined {
-  if (localOnly) {
-    return false;
-  }
-  if (devMode) {
-    return true;
-  }
-  return undefined;
-}
 
 // Honor an explicit VITE_ENABLE_ONBOARDING_V4 either way (don't coerce false
 // to undefined).
