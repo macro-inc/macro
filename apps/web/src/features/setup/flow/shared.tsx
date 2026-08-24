@@ -1,7 +1,17 @@
 import ArrowRight from '@phosphor/arrow-right.svg';
 import CheckIcon from '@phosphor/check.svg';
 import { Button, Layer } from '@ui';
-import { For, onCleanup, onMount } from 'solid-js';
+import {
+  createMemo,
+  createSignal,
+  For,
+  onCleanup,
+  onMount,
+  Show,
+} from 'solid-js';
+import { Portal } from 'solid-js/web';
+import { useOnboardingHardMode } from './HardMode';
+import { randomSkipPosition } from './hardModePosition';
 
 /** Where the flow persists its current step, so full-page OAuth round-trips
  * (adding a Gmail inbox, Stripe checkout aborts) resume where they left. */
@@ -116,16 +126,55 @@ export function SkipButton(props: {
   disabled?: boolean;
   onClick: () => void;
 }) {
-  return (
+  const hardMode = useOnboardingHardMode();
+  const [nonce, setNonce] = createSignal(0);
+  const position = createMemo(() => {
+    if (!hardMode.hardMode()) return undefined;
+    nonce();
+    return randomSkipPosition();
+  });
+  const dodge = () => {
+    if (hardMode.hardMode()) setNonce((n) => n + 1);
+  };
+
+  const button = (className: string) => (
     <Button
       variant="ghost"
       size="sm"
-      class="self-center text-ink-muted"
+      class={className}
       disabled={props.disabled}
       onClick={props.onClick}
+      onPointerEnter={dodge}
     >
       {props.label ?? 'Skip for now'}
     </Button>
+  );
+
+  return (
+    <Show
+      when={
+        hardMode.hardMode() && hardMode.skipLayer() ? position() : undefined
+      }
+      fallback={button('self-center text-ink-muted')}
+    >
+      {(pos) => {
+        const layer = hardMode.skipLayer();
+        if (!layer) return button('self-center text-ink-muted');
+        return (
+          <Portal mount={layer}>
+            <div
+              class="pointer-events-auto absolute"
+              style={{
+                left: `${pos().left}%`,
+                top: `${pos().top}%`,
+              }}
+            >
+              {button('text-ink-muted')}
+            </div>
+          </Portal>
+        );
+      }}
+    </Show>
   );
 }
 
