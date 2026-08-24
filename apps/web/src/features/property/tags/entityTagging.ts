@@ -41,6 +41,7 @@ export function tagEntityType(
         'automation',
         'reminder',
         'calendar_event',
+        'agent_session',
         'foreign'
       ),
       () => undefined

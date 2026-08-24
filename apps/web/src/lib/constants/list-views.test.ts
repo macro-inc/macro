@@ -38,4 +38,26 @@ describe('soupItemMatchesListView', () => {
   it('inbox admits rows regardless of touch', () => {
     expect(soupItemMatchesListView(documentItem(), 'inbox')).toBe(true);
   });
+
+  it('agents admits agent sessions and skill docs, not chats', () => {
+    const agentSession = {
+      tag: 'agentSession',
+      data: { id: 'as-1' },
+      frecency_score: 0,
+    } as unknown as SoupApiItem;
+    const chat = {
+      tag: 'chat',
+      data: { id: 'c-1' },
+      frecency_score: 0,
+    } as unknown as SoupApiItem;
+    const skillDoc = {
+      tag: 'document',
+      data: { id: 'd-2', subType: { type: 'skill' } },
+      frecency_score: 0,
+    } as unknown as SoupApiItem;
+
+    expect(soupItemMatchesListView(agentSession, 'agents')).toBe(true);
+    expect(soupItemMatchesListView(skillDoc, 'agents')).toBe(true);
+    expect(soupItemMatchesListView(chat, 'agents')).toBe(false);
+  });
 });

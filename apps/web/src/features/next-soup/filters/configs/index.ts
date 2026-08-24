@@ -1,3 +1,4 @@
+export * from './agent-session';
 export type { FilterContext } from './base';
 export * from './base';
 export * from './company';
@@ -9,6 +10,7 @@ export * from './entity-type';
 export * from './general';
 export * from './task';
 
+import { agentSessionFilter } from './agent-session';
 import type { FilterGroupConfig } from './base';
 import { companyOwnerFilter, companyStageFilter } from './company';
 import {
@@ -65,6 +67,7 @@ import {
 } from './task';
 
 export const SOUP_FILTERS = [
+  agentSessionFilter,
   inboxFilter,
   noiseFilterDef,
   explicitNoiseFilterDef,

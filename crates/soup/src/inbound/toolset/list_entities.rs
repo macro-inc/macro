@@ -15,6 +15,7 @@ use item_filters::{
     SharedEmailFilter,
     ast::{
         EntityFilterAst, LiteralTree,
+        agent_session::AgentSessionLiteral,
         calendar_event::CalendarEventLiteral,
         call::CallLiteral,
         channel::{ChannelLiteral, ChannelThreadLiteral},
@@ -108,6 +109,8 @@ pub enum ItemType {
     Call,
     /// Foreign entity record.
     ForeignEntity,
+    /// AI coding agent session.
+    AgentSession,
 }
 
 /// Item returned by the list entities AI tool.
@@ -237,6 +240,27 @@ pub enum EntityItem {
         /// Foreign entity metadata.
         metadata: serde_json::Value,
     },
+    /// AI coding agent session item.
+    #[serde(rename_all = "camelCase")]
+    AgentSession {
+        /// Agent session id.
+        id: Uuid,
+        /// Session title, when the agent reported one.
+        title: Option<String>,
+        /// Model slug the session runs on.
+        model: String,
+        /// Harness slug the session runs.
+        harness: String,
+        /// Repository the session works against, when stated.
+        repo_url: Option<String>,
+        /// Session status: `no_messages`, `disconnected`, or the latest
+        /// runtime event name.
+        status: String,
+        /// How many permission requests are waiting on a person.
+        pending_permission_count: i32,
+        /// The pull request the session produced, when known.
+        pr_url: Option<String>,
+    },
 }
 
 impl EntityItem {
@@ -317,6 +341,30 @@ impl EntityItem {
                 foreign_entity_source: foreign_entity.foreign_entity_source,
                 metadata: foreign_entity.metadata,
             },
+            SoupItem::AgentSession(session) => EntityItem::AgentSession {
+                id: session.id,
+                title: session.title,
+                model: session.model,
+                harness: session.harness,
+                repo_url: session.repo_url,
+                status: session
+                    .status_event_name
+                    .unwrap_or_else(|| match session.status_kind {
+                        models_soup::agent_session::SoupAgentSessionStatusKind::NoMessages => {
+                            "no_messages".to_owned()
+                        }
+                        models_soup::agent_session::SoupAgentSessionStatusKind::Disconnected => {
+                            "disconnected".to_owned()
+                        }
+                        // `event` always carries a name; this arm is the
+                        // defensive fallback.
+                        models_soup::agent_session::SoupAgentSessionStatusKind::Event => {
+                            "event".to_owned()
+                        }
+                    }),
+                pending_permission_count: session.pending_permission_count,
+                pr_url: session.pr_url,
+            },
         }
     }
 }
@@ -360,7 +408,8 @@ fn any_item_has_tags(items: &[EnrichedSoupItem]) -> bool {
             | SoupItem::ChannelThread(_)
             | SoupItem::Call(_)
             | SoupItem::ForeignEntity(_)
-            | SoupItem::Reminder(_) => return false,
+            | SoupItem::Reminder(_)
+            | SoupItem::AgentSession(_) => return false,
         };
         properties
             .iter()
@@ -563,6 +612,9 @@ impl ListEntities {
             // Reminders are opt-in in Soup, so leaving this unset is already
             // what keeps them out of the tool surface — no force-filter needed.
             reminder_filter: None,
+            // Agent sessions are opt-in the same way; includeTypes below is
+            // what opts the tool in.
+            agent_session_filter: None,
             properties_filter,
         };
 
@@ -637,6 +689,14 @@ impl ListEntities {
             },
             // Same as CrmCompany — no ItemType::Reminder to toggle against.
             reminder_filter: ast.reminder_filter,
+            // Sessions are opt-in: asking for them by type is the opt-in, and
+            // any other includeTypes list already leaves them out.
+            agent_session_filter: if include_types.contains(&ItemType::AgentSession) {
+                ast.agent_session_filter
+                    .or_else(|| Some(Arc::new(Expr::val(AgentSessionLiteral::Include))))
+            } else {
+                ast.agent_session_filter
+            },
             properties_filter: ast.properties_filter,
         }
     }
@@ -864,6 +924,7 @@ pub(super) fn build_summary(
     let mut call_records = 0;
     let mut calendar_events = 0;
     let mut foreign_entities = 0;
+    let mut agent_sessions = 0;
 
     for item in items {
         match item {
@@ -876,6 +937,7 @@ pub(super) fn build_summary(
             EntityItem::Call { .. } => call_records += 1,
             EntityItem::CalendarEvent { .. } => calendar_events += 1,
             EntityItem::ForeignEntity { .. } => foreign_entities += 1,
+            EntityItem::AgentSession { .. } => agent_sessions += 1,
         }
     }
 
@@ -935,6 +997,12 @@ pub(super) fn build_summary(
             "foreign entities"
         };
         parts.push(format!("{foreign_entities} {label}"));
+    }
+    if agent_sessions > 0 {
+        parts.push(format!(
+            "{agent_sessions} agent session{}",
+            if agent_sessions == 1 { "" } else { "s" }
+        ));
     }
 
     let counts = parts.join(", ");

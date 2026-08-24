@@ -27,6 +27,25 @@ fn message() -> ChannelMessagePostedMetadata {
     }
 }
 
+fn lifecycle_metadata() -> AgentSessionLifecycleMetadata {
+    AgentSessionLifecycleMetadata {
+        session_id: AgentSessionId::TEST_A,
+        owner_id: Some("macro|agent-trigger@macro.com".to_owned()),
+    }
+}
+
+#[test]
+fn lifecycle_events_are_keyed_by_session() {
+    let event = AgentSessionMacroEvent::session_updated(lifecycle_metadata());
+    assert_eq!(event.key(), AgentSessionId::TEST_A.to_string());
+    let value = serde_json::to_value(&event.event().event).expect("serialize event");
+    assert_eq!(value["event_type"], "agent_session.updated");
+    assert_eq!(
+        value["metadata"]["session_id"],
+        json!(AgentSessionId::TEST_A)
+    );
+}
+
 #[test]
 fn serializes_a_new_top_level_mention() {
     let event = AgentTriggerTopicEvent::New(NewAgentSessionEvent::TopLevelMentioned(
@@ -83,6 +102,9 @@ fn event_names_match_the_wire() {
                 message: message(),
             },
         )),
+        AgentTriggerTopicEvent::SessionCreated(lifecycle_metadata()),
+        AgentTriggerTopicEvent::SessionUpdated(lifecycle_metadata()),
+        AgentTriggerTopicEvent::SessionDeleted(lifecycle_metadata()),
     ]
     .into_iter()
     .map(|event| serde_json::to_value(event).expect("serialize event")["event_type"].to_string())

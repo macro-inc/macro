@@ -1,3 +1,4 @@
+import { harnessTitle } from '@app/features/block-agent/harness-title';
 import {
   blockNameToDefaultFile,
   itemToSafeName,
@@ -10,6 +11,7 @@ import {
   mergeAdjacentMacroEmTags,
 } from '@core/util/searchHighlight';
 import type {
+  AgentSessionEntity,
   CalendarEventEntity,
   CalendarEventEntityTime,
   CallEntity,
@@ -76,6 +78,7 @@ type SoupEntity =
   | CrmCompanyEntity
   | ReminderEntity
   | CalendarEventEntity
+  | AgentSessionEntity
   | ForeignEntity;
 
 type SoupItemWithOptionalNotifications = DisplayableSoupItem & {
@@ -953,6 +956,31 @@ export const mapApiSoupItemToEntity = (
         sortTs: item.data.nextRunAt,
         frecencyScore: item.frecency_score,
       } satisfies ReminderEntity;
+    })
+    .with({ tag: 'agentSession' }, (item) => {
+      return {
+        type: 'agent_session',
+        id: item.data.id,
+        // The agent-reported title when there is one; otherwise the harness
+        // slug prettified ('claude-code' → 'Claude Code'), matching the
+        // session block's own header fallback.
+        name: item.data.title ?? harnessTitle(item.data.harness),
+        title: item.data.title ?? undefined,
+        ownerId: item.data.ownerId,
+        model: item.data.model,
+        harness: item.data.harness,
+        repoUrl: item.data.repoUrl ?? undefined,
+        statusKind: item.data.statusKind,
+        statusEventName: item.data.statusEventName ?? undefined,
+        pendingPermissionCount: item.data.pendingPermissionCount,
+        prUrl: item.data.prUrl ?? undefined,
+        threadChannelId: item.data.threadChannelId ?? undefined,
+        createdAt: item.data.createdAt,
+        updatedAt: item.data.modifiedAt,
+        // Soup sorts sessions on modified_at.
+        sortTs: item.data.modifiedAt,
+        frecencyScore: item.frecency_score,
+      } satisfies AgentSessionEntity;
     })
     .with({ tag: 'calendarEvent' }, (item) => {
       return {

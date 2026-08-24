@@ -125,6 +125,86 @@ async fn marking_disconnected_persists_and_publishes_the_event() {
     assert_eq!(realtime.published().len(), 1);
 }
 
+/// The writer denormalizes what a session list renders — the title the agent
+/// reported and how many permission requests are outstanding — onto the row.
+#[tokio::test]
+async fn appending_projects_title_and_pending_permissions() {
+    let fx = fixture();
+    let mut logs = connection(fx.repo.clone());
+
+    let to_server = |frame: serde_json::Value| AgentSessionLog {
+        agent_session_id: fx.session,
+        user_id: None,
+        content: Message::ToServer(serde_json::from_value(frame).expect("valid to-server frame")),
+    };
+    let to_runtime = |frame: serde_json::Value| AgentSessionLog {
+        agent_session_id: fx.session,
+        user_id: None,
+        content: Message::ToRuntime(serde_json::from_value(frame).expect("valid to-runtime frame")),
+    };
+
+    // The agent reports a title through `session_info_update`.
+    AgentSessionLogWriter::append(
+        &mut logs,
+        to_server(serde_json::json!({
+            "type": "acp",
+            "jsonrpc": "2.0",
+            "method": "session/update",
+            "params": {
+                "sessionId": "acp-1",
+                "update": {
+                    "sessionUpdate": "session_info_update",
+                    "title": "Fix the flaky test"
+                }
+            }
+        })),
+    )
+    .await
+    .expect("append succeeds");
+    let session = fx.repo.get(fx.session).await.expect("session exists");
+    assert_eq!(session.title.as_deref(), Some("Fix the flaky test"));
+    assert_eq!(session.pending_permission_count, 0);
+
+    // The agent asks for permission: the count goes up.
+    AgentSessionLogWriter::append(
+        &mut logs,
+        to_server(serde_json::json!({
+            "type": "acp",
+            "jsonrpc": "2.0",
+            "id": 7,
+            "method": "session/request_permission",
+            "params": {
+                "sessionId": "acp-1",
+                "toolCall": { "toolCallId": "tool-1" },
+                "options": [
+                    { "optionId": "allow", "name": "Allow", "kind": "allow_once" }
+                ]
+            }
+        })),
+    )
+    .await
+    .expect("append succeeds");
+    let session = fx.repo.get(fx.session).await.expect("session exists");
+    assert_eq!(session.pending_permission_count, 1);
+
+    // The user answers: the count comes back down.
+    AgentSessionLogWriter::append(
+        &mut logs,
+        to_runtime(serde_json::json!({
+            "type": "acp",
+            "jsonrpc": "2.0",
+            "id": 7,
+            "result": {
+                "outcome": { "outcome": "selected", "optionId": "allow" }
+            }
+        })),
+    )
+    .await
+    .expect("append succeeds");
+    let session = fx.repo.get(fx.session).await.expect("session exists");
+    assert_eq!(session.pending_permission_count, 0);
+}
+
 /// The point of the rework: a connection folds its session once, when it
 /// starts, and every frame after that is folded into the state it kept.
 ///

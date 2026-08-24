@@ -24,6 +24,24 @@ describe('defineQueryFilters', () => {
     expect(query.include?.calendarEventId).toEqual([NIL_UUID]);
   });
 
+  it('treats agent session fields as referencing the agent-session target', () => {
+    const query = defineQueryFilters({
+      include: { includeAgentSessions: true },
+    });
+
+    // No match-nothing filter on the agent-session target itself...
+    expect(query.include?.agentSessionId).toBeUndefined();
+    // ...while other entity targets are still excluded.
+    expect(query.include?.documentId).toEqual([NIL_UUID]);
+    expect(query.include?.chatId).toEqual([NIL_UUID]);
+  });
+
+  it('NIL-excludes agent sessions when nothing references them', () => {
+    const query = defineQueryFilters({});
+
+    expect(query.include?.agentSessionId).toEqual([NIL_UUID]);
+  });
+
   it('treats calendar event ids as referencing the calendar target', () => {
     const query = defineQueryFilters({
       exclude: { calendarEventId: [NIL_UUID] },
@@ -41,6 +59,16 @@ describe('compileToAst', () => {
     );
 
     expect(ast.calf).toEqual({ l: { id: NIL_UUID } });
+  });
+
+  it('compiles agent session opt-in and owner to the asf target', () => {
+    const ast = compileToAst(
+      queryStateFrom({
+        include: { includeAgentSessions: true, agentSessionOwnerId: ['u-1'] },
+      })
+    );
+
+    expect(ast.asf).toEqual({ '&': [{ l: { o: 'u-1' } }, { l: 'inc' }] });
   });
 
   it('compiles calendar event ids to the calendar AST target', () => {

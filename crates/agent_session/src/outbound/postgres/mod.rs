@@ -101,6 +101,9 @@ struct AgentSessionRow {
     acp_session_id: Option<String>,
     status: String,
     status_event_name: Option<String>,
+    title: Option<String>,
+    pending_permission_count: i32,
+    pr_url: Option<String>,
     created_at: DateTime<Utc>,
     modified_at: DateTime<Utc>,
 }
@@ -124,6 +127,9 @@ impl TryFrom<AgentSessionRow> for AgentSession {
             workspace: row.workspace,
             acp_session_id: row.acp_session_id.map(Into::into),
             status,
+            title: row.title,
+            pending_permission_count: row.pending_permission_count,
+            pr_url: row.pr_url,
             created_at: row.created_at,
             modified_at: row.modified_at,
         })
@@ -166,7 +172,8 @@ impl AgentSessionRepo for PgAgentSessionRepo {
             RETURNING
                 id, owner_id, thread_id, originating_message_id, bot_id,
                 model, harness, repo_url, workspace, acp_session_id, status,
-                status_event_name, created_at, modified_at,
+                status_event_name, title, pending_permission_count, pr_url,
+                created_at, modified_at,
                 (SELECT channel_id FROM comms_messages WHERE id = agent_session.thread_id)
                     AS "thread_channel_id?"
             "#,
@@ -250,7 +257,8 @@ impl AgentSessionRepo for PgAgentSessionRepo {
             SELECT
                 id, owner_id, thread_id, originating_message_id, bot_id,
                 model, harness, repo_url, workspace, acp_session_id, status,
-                status_event_name, created_at, modified_at,
+                status_event_name, title, pending_permission_count, pr_url,
+                created_at, modified_at,
                 (SELECT channel_id FROM comms_messages WHERE id = agent_session.thread_id)
                     AS "thread_channel_id?"
             FROM agent_session
@@ -283,7 +291,8 @@ impl AgentSessionRepo for PgAgentSessionRepo {
             SELECT
                 id, owner_id, thread_id, originating_message_id, bot_id,
                 model, harness, repo_url, workspace, acp_session_id, status,
-                status_event_name, created_at, modified_at,
+                status_event_name, title, pending_permission_count, pr_url,
+                created_at, modified_at,
                 (SELECT channel_id FROM comms_messages WHERE id = agent_session.thread_id)
                     AS "thread_channel_id?"
             FROM agent_session
@@ -357,8 +366,8 @@ impl AgentSessionRepo for PgAgentSessionRepo {
         Ok(())
     }
 
-    async fn set_model(&self, id: AgentSessionId, model: &str) -> Result<()> {
-        sqlx::query!(
+    async fn set_model(&self, id: AgentSessionId, model: &str) -> Result<bool> {
+        let result = sqlx::query!(
             r#"
             UPDATE agent_session
             SET model = $2,
@@ -372,7 +381,61 @@ impl AgentSessionRepo for PgAgentSessionRepo {
         .execute(&self.pool)
         .await
         .context("failed to persist agent session model")?;
-        Ok(())
+        Ok(result.rows_affected() > 0)
+    }
+
+    async fn set_title(&self, id: AgentSessionId, title: Option<String>) -> Result<bool> {
+        let result = sqlx::query!(
+            r#"
+            UPDATE agent_session
+            SET title = $2,
+                modified_at = NOW()
+            WHERE id = $1
+              AND title IS DISTINCT FROM $2
+            "#,
+            id.as_uuid(),
+            title,
+        )
+        .execute(&self.pool)
+        .await
+        .context("failed to persist agent session title")?;
+        Ok(result.rows_affected() > 0)
+    }
+
+    async fn set_pending_permission_count(&self, id: AgentSessionId, count: i32) -> Result<bool> {
+        let result = sqlx::query!(
+            r#"
+            UPDATE agent_session
+            SET pending_permission_count = $2,
+                modified_at = NOW()
+            WHERE id = $1
+              AND pending_permission_count IS DISTINCT FROM $2
+            "#,
+            id.as_uuid(),
+            count,
+        )
+        .execute(&self.pool)
+        .await
+        .context("failed to persist agent session pending permission count")?;
+        Ok(result.rows_affected() > 0)
+    }
+
+    async fn set_pr_url(&self, id: AgentSessionId, pr_url: Option<String>) -> Result<bool> {
+        let result = sqlx::query!(
+            r#"
+            UPDATE agent_session
+            SET pr_url = $2,
+                modified_at = NOW()
+            WHERE id = $1
+              AND pr_url IS DISTINCT FROM $2
+            "#,
+            id.as_uuid(),
+            pr_url,
+        )
+        .execute(&self.pool)
+        .await
+        .context("failed to persist agent session pr url")?;
+        Ok(result.rows_affected() > 0)
     }
 
     async fn delete(&self, id: AgentSessionId) -> Result<()> {

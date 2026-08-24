@@ -20,6 +20,7 @@ use item_filters::{
     CallStatus, SharedEmailFilter,
     ast::{
         CrmScope, EmailFilterAst, EntityFilterAst,
+        agent_session::AgentSessionLiteral,
         calendar_event::CalendarEventLiteral,
         call::CallLiteral,
         channel::{ChannelLiteral, ChannelThreadLiteral, ChannelTypeFilter},
@@ -345,6 +346,8 @@ pub struct GraphqlEntityFilterAst {
     foreign_entity_filter: Option<GraphqlForeignEntityExpr>,
     /// The reminder filter to apply.
     reminder_filter: Option<GraphqlReminderExpr>,
+    /// The agent session filter to apply.
+    agent_session_filter: Option<GraphqlAgentSessionExpr>,
     /// The properties filter to apply.
     properties_filter: Option<GraphqlFilterPropertiesExpr>,
 }
@@ -377,6 +380,7 @@ impl GraphqlEntityFilterAst {
             crm_company_filter: optional_tree(self.crm_company_filter)?,
             foreign_entity_filter: optional_tree(self.foreign_entity_filter)?,
             reminder_filter: optional_tree(self.reminder_filter)?,
+            agent_session_filter: optional_tree(self.agent_session_filter)?,
             properties_filter: optional_tree(self.properties_filter)?,
         })
     }
@@ -503,6 +507,13 @@ filter_expr_input!(
     GraphqlReminderLiteral,
     ReminderLiteral,
     "ReminderFilterExpr"
+);
+filter_expr_input!(
+    GraphqlAgentSessionExpr,
+    GraphqlAgentSessionBinaryExpr,
+    GraphqlAgentSessionLiteral,
+    AgentSessionLiteral,
+    "AgentSessionFilterExpr"
 );
 /// GraphQL input representing the email filter ast.
 #[cfg_attr(feature = "server", derive(async_graphql::InputObject))]
@@ -1109,6 +1120,40 @@ impl IntoFilterExpr<ReminderLiteral> for GraphqlReminderLiteral {
             Self::Entity(entity) => ReminderLiteral::Entity(entity),
             Self::Completed(completed) => ReminderLiteral::Completed(completed),
             Self::Fired(fired) => ReminderLiteral::Fired(fired),
+        };
+        Ok(Expr::val(literal))
+    }
+}
+
+/// GraphQL input representing the agent session literal.
+#[cfg_attr(feature = "server", derive(async_graphql::OneofObject))]
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+enum GraphqlAgentSessionLiteral {
+    /// Opt this query into agent sessions at all. Sessions are off by
+    /// default, so without this (or an `id`) Soup omits them entirely. Must
+    /// be `true`; omitting the filter is how sessions are excluded.
+    Include(bool),
+    /// The id option.
+    Id(ID),
+    /// Sessions owned by this Macro user id.
+    Owner(String),
+}
+
+impl IntoFilterExpr<AgentSessionLiteral> for GraphqlAgentSessionLiteral {
+    /// Convert this value into the expr representation.
+    fn into_expr(self) -> InputResult<Expr<AgentSessionLiteral>> {
+        let literal = match self {
+            Self::Include(false) => {
+                return Err(InputError::new(
+                    "agent session `include` must be true; omit the filter to exclude sessions",
+                ));
+            }
+            Self::Include(true) => AgentSessionLiteral::Include,
+            Self::Id(id) => AgentSessionLiteral::Id(parse_id(id, "id")?),
+            Self::Owner(owner) => {
+                AgentSessionLiteral::Owner(parse_macro_user_id(owner, "owner")?.to_string())
+            }
         };
         Ok(Expr::val(literal))
     }

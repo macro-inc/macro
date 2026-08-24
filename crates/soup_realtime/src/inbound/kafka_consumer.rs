@@ -14,6 +14,7 @@ use crate::domain::{
     ports::SoupRealtimeService,
     service::SoupRealtimeServiceImpl,
 };
+use agent_trigger::domain::broker_events::{AgentSessionMacroEvent, AgentTriggerTopicEvent};
 use channels::domain::broker_events::{ChannelMacroEvent, ChannelTopicEvent};
 use chat::domain::events::{ChatMacroEvent, ChatTopicEvent};
 use documents::domain::events::{DocumentMacroEvent, DocumentTopicEvent, InteractionReason};
@@ -49,6 +50,7 @@ macro_event_broker::declare_topics!(
         EmailMacroEvent,
         ChannelMacroEvent,
         PropertyMacroEvent,
+        AgentSessionMacroEvent,
 );
 
 fn entity(entity_type: EntityType, entity_id: impl ToString) -> Entity<'static> {
@@ -386,6 +388,28 @@ fn patches_from_property_event(event: &PropertyTopicEvent) -> Vec<SoupRealtimePa
     }
 }
 
+fn patches_from_agent_session_event(event: &AgentTriggerTopicEvent) -> Vec<SoupRealtimePatch> {
+    match event {
+        AgentTriggerTopicEvent::SessionCreated(metadata)
+        | AgentTriggerTopicEvent::SessionUpdated(metadata) => vec![update(
+            EntityType::AgentSession,
+            metadata.session_id.as_uuid(),
+        )],
+        // The session's `entity_access` rows go with the row, so audience
+        // expansion after a delete relies on the expander's short-lived
+        // cache; a viewer whose patch misses simply keeps the row until
+        // their next fetch.
+        AgentTriggerTopicEvent::SessionDeleted(metadata) => vec![delete(
+            EntityType::AgentSession,
+            metadata.session_id.as_uuid(),
+        )],
+        // Trigger signals ask the harness to act; they change no session row
+        // themselves (the harness's writes publish their own lifecycle
+        // facts).
+        AgentTriggerTopicEvent::New(_) | AgentTriggerTopicEvent::Existing(_) => Vec::new(),
+    }
+}
+
 fn patches_from_event(event: &DeclaredMacroEvent) -> Vec<SoupRealtimePatch> {
     match event {
         DeclaredMacroEvent::DocumentMacroEvent(event) => {
@@ -403,6 +427,9 @@ fn patches_from_event(event: &DeclaredMacroEvent) -> Vec<SoupRealtimePatch> {
         }
         DeclaredMacroEvent::PropertyMacroEvent(event) => {
             patches_from_property_event(&event.event().event)
+        }
+        DeclaredMacroEvent::AgentSessionMacroEvent(event) => {
+            patches_from_agent_session_event(&event.event().event)
         }
     }
 }

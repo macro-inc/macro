@@ -269,6 +269,8 @@ export function itemToBlockName(
     return fileTypeToBlockName(item.fileType, icon);
   }
   if (item.type === 'channel_thread') return 'channel';
+  // Agent sessions open (and are iconed as) the agent block.
+  if (item.type === 'agent_session') return 'agent';
   // A reminder has no block of its own; it points at one. A standalone
   // reminder falls through to 'unknown'. Same precedence as the referenced
   // entity would get on its own row, so a task or a .docx resolves to its

@@ -1,3 +1,4 @@
+use crate::agent_session::SoupAgentSession;
 use crate::calendar_event::SoupCalendarEvent;
 use crate::call_record::SoupCallRecord;
 use crate::crm_company::SoupCrmCompany;
@@ -47,6 +48,8 @@ pub enum SoupItem<T = ()> {
     ForeignEntity(SoupForeignEntity),
     /// Reminder item.
     Reminder(SoupReminder<T>),
+    /// Agent session item.
+    AgentSession(SoupAgentSession<T>),
 }
 
 impl<T> SoupItem<T> {
@@ -86,6 +89,9 @@ impl<T> SoupItem<T> {
             SoupItem::Reminder(reminder) => {
                 EntityType::Reminder.with_entity_string(reminder.id.to_string())
             }
+            SoupItem::AgentSession(session) => {
+                EntityType::AgentSession.with_entity_string(session.id.to_string())
+            }
         }
     }
 
@@ -104,6 +110,7 @@ impl<T> SoupItem<T> {
             SoupItem::CrmCompany(company) => company.updated_at,
             SoupItem::ForeignEntity(foreign_entity) => foreign_entity.updated_at,
             SoupItem::Reminder(reminder) => reminder.updated_at,
+            SoupItem::AgentSession(session) => session.modified_at,
         }
     }
 
@@ -183,6 +190,10 @@ impl<T> SoupItem<T> {
             // for — the same way emails always use their precomputed sort_ts.
             // No other ordering means anything for a reminder.
             (SoupItem::Reminder(reminder), _) => reminder.next_run_at,
+            (SoupItem::AgentSession(session), SimpleSortMethod::CreatedAt) => session.created_at,
+            // Sessions have no viewed_at yet; recency follows modified_at for
+            // every other sort.
+            (SoupItem::AgentSession(session), _) => session.modified_at,
         }
     }
 
@@ -223,6 +234,7 @@ impl<T> SoupItem<T> {
             )),
             SoupItem::ForeignEntity(_) => None,
             SoupItem::Reminder(_) => None,
+            SoupItem::AgentSession(_) => None,
         }
     }
 
@@ -449,6 +461,37 @@ impl<T> SoupItem<T> {
                 updated_at,
                 extra: f(extra),
             }),
+            SoupItem::AgentSession(SoupAgentSession {
+                id,
+                owner_id,
+                title,
+                model,
+                harness,
+                repo_url,
+                status_kind,
+                status_event_name,
+                pending_permission_count,
+                pr_url,
+                thread_channel_id,
+                created_at,
+                modified_at,
+                extra,
+            }) => SoupItem::AgentSession(SoupAgentSession {
+                id,
+                owner_id,
+                title,
+                model,
+                harness,
+                repo_url,
+                status_kind,
+                status_event_name,
+                pending_permission_count,
+                pr_url,
+                thread_channel_id,
+                created_at,
+                modified_at,
+                extra: f(extra),
+            }),
         }
     }
 }
@@ -469,6 +512,7 @@ impl<T> Identify for SoupItem<T> {
             SoupItem::CrmCompany(company) => company.id,
             SoupItem::ForeignEntity(foreign_entity) => foreign_entity.id,
             SoupItem::Reminder(reminder) => reminder.id,
+            SoupItem::AgentSession(session) => session.id,
         }
     }
 }

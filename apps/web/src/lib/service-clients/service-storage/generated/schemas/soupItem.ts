@@ -15,6 +15,7 @@ import type { SoupItemOneOfOnethree } from './soupItemOneOfOnethree';
 import type { SoupItemOneOfSeven } from './soupItemOneOfSeven';
 import type { SoupItemOneOfThree } from './soupItemOneOfThree';
 import type { SoupItemOneOfTwoone } from './soupItemOneOfTwoone';
+import type { SoupItemOneOfTwothree } from './soupItemOneOfTwothree';
 
 /**
  * A single item in the Soup feed.
@@ -30,4 +31,5 @@ export type SoupItem =
   | SoupItemOneOfOnefive
   | SoupItemOneOfOneseven
   | SoupItemOneOfOnenine
-  | SoupItemOneOfTwoone;
+  | SoupItemOneOfTwoone
+  | SoupItemOneOfTwothree;

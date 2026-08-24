@@ -231,6 +231,77 @@ async fn set_model_updates_only_the_model(pool: PgPool) {
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn display_state_setters_report_whether_the_row_moved(pool: PgPool) {
+    let repo = PgAgentSessionRepo::new(pool.clone());
+    let bot_id = create_test_bot(&pool).await;
+    let id = create_session(&repo, new_session(bot_id, None, None))
+        .await
+        .id;
+
+    // Title: set, restate (no change), clear.
+    assert!(
+        repo.set_title(id, Some("Fix the flaky test".to_owned()))
+            .await
+            .expect("set title")
+    );
+    assert!(
+        !repo
+            .set_title(id, Some("Fix the flaky test".to_owned()))
+            .await
+            .expect("restate title")
+    );
+    assert_eq!(
+        repo.get(id).await.expect("get session").title.as_deref(),
+        Some("Fix the flaky test")
+    );
+    assert!(repo.set_title(id, None).await.expect("clear title"));
+    assert_eq!(repo.get(id).await.expect("get session").title, None);
+
+    // Pending permission count.
+    assert!(
+        repo.set_pending_permission_count(id, 2)
+            .await
+            .expect("set pending count")
+    );
+    assert!(
+        !repo
+            .set_pending_permission_count(id, 2)
+            .await
+            .expect("restate pending count")
+    );
+    assert_eq!(
+        repo.get(id)
+            .await
+            .expect("get session")
+            .pending_permission_count,
+        2
+    );
+
+    // PR url.
+    assert!(
+        repo.set_pr_url(
+            id,
+            Some("https://github.com/example/example/pull/1".to_owned())
+        )
+        .await
+        .expect("set pr url")
+    );
+    assert!(
+        !repo
+            .set_pr_url(
+                id,
+                Some("https://github.com/example/example/pull/1".to_owned())
+            )
+            .await
+            .expect("restate pr url")
+    );
+    assert_eq!(
+        repo.get(id).await.expect("get session").pr_url.as_deref(),
+        Some("https://github.com/example/example/pull/1")
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn get_missing_session_errors(pool: PgPool) {
     let repo = PgAgentSessionRepo::new(pool);
     let missing = AgentSessionId::new();

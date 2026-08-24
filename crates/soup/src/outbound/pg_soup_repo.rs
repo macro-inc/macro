@@ -17,6 +17,7 @@ use models_soup::{SoupProperty, item::SoupItem};
 use readonly_pool::ReadOnlyPool;
 use system_properties::SystemPropertyKey;
 
+mod agent_session;
 mod calendar_event;
 mod expanded;
 pub mod grouping;
@@ -44,6 +45,7 @@ impl SoupRepo for PgSoupRepo {
         req: SimpleSortRequest<'a>,
     ) -> Result<Vec<SoupItem<()>>, Self::Err> {
         let calendar_req = req.clone();
+        let agent_session_req = req.clone();
         let sort = *req.cursor.sort_method();
         let limit = req.limit;
         let mut items = match req.cursor {
@@ -92,6 +94,7 @@ impl SoupRepo for PgSoupRepo {
             }
         };
         items.extend(calendar_event::cursor_soup(&self.pool.0, calendar_req).await?);
+        items.extend(agent_session::cursor_soup(&self.pool.0, agent_session_req).await?);
         sort_and_truncate(&mut items, sort, limit);
         Ok(items)
     }
@@ -101,6 +104,7 @@ impl SoupRepo for PgSoupRepo {
         req: SimpleSortRequest<'a>,
     ) -> Result<Vec<SoupItem<()>>, Self::Err> {
         let calendar_req = req.clone();
+        let agent_session_req = req.clone();
         let sort = *req.cursor.sort_method();
         let limit = req.limit;
         let mut items = match req.cursor {
@@ -126,6 +130,7 @@ impl SoupRepo for PgSoupRepo {
             }
         };
         items.extend(calendar_event::cursor_soup(&self.pool.0, calendar_req).await?);
+        items.extend(agent_session::cursor_soup(&self.pool.0, agent_session_req).await?);
         sort_and_truncate(&mut items, sort, limit);
         Ok(items)
     }
@@ -135,9 +140,11 @@ impl SoupRepo for PgSoupRepo {
         req: AdvancedSortParams<'a>,
     ) -> Result<Vec<SoupItem<()>>, Self::Err> {
         let calendar_req = req.clone();
+        let agent_session_req = req.clone();
         let mut items =
             expanded::by_ids::expanded_soup_by_ids(&self.pool.0, req.user_id, req.entities).await?;
         items.extend(calendar_event::by_ids(&self.pool.0, calendar_req).await?);
+        items.extend(agent_session::by_ids(&self.pool.0, agent_session_req).await?);
         Ok(items)
     }
 
@@ -146,10 +153,12 @@ impl SoupRepo for PgSoupRepo {
         req: AdvancedSortParams<'a>,
     ) -> Result<Vec<SoupItem<()>>, Self::Err> {
         let calendar_req = req.clone();
+        let agent_session_req = req.clone();
         let mut items =
             unexpanded::by_ids::unexpanded_soup_by_ids(&self.pool.0, req.user_id, req.entities)
                 .await?;
         items.extend(calendar_event::by_ids(&self.pool.0, calendar_req).await?);
+        items.extend(agent_session::by_ids(&self.pool.0, agent_session_req).await?);
         Ok(items)
     }
 
@@ -277,7 +286,8 @@ pub(crate) async fn populate_properties(
                 SoupItem::Channel(_)
                 | SoupItem::ChannelThread(_)
                 | SoupItem::ForeignEntity(_)
-                | SoupItem::Reminder(_) => None,
+                | SoupItem::Reminder(_)
+                | SoupItem::AgentSession(_) => None,
             }
             .map(|properties| properties.iter().cloned().map(SoupProperty::from).collect())
             .unwrap_or_default();

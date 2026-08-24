@@ -143,9 +143,38 @@ pub trait AgentSessionRepo: Send + Sync + 'static {
         acp_session_id: SessionId,
     ) -> impl Future<Output = Result<()>> + Send;
 
-    /// Persist the model the session is running on. Idempotent.
-    fn set_model(&self, id: AgentSessionId, model: &str)
-    -> impl Future<Output = Result<()>> + Send;
+    /// Persist the model the session is running on. Idempotent; returns
+    /// whether the stored value actually changed.
+    fn set_model(
+        &self,
+        id: AgentSessionId,
+        model: &str,
+    ) -> impl Future<Output = Result<bool>> + Send;
+
+    /// Persist the title the agent reported for the session. Idempotent;
+    /// returns whether the stored value actually changed, so a caller
+    /// projecting on every frame can tell followers only when it moved.
+    fn set_title(
+        &self,
+        id: AgentSessionId,
+        title: Option<String>,
+    ) -> impl Future<Output = Result<bool>> + Send;
+
+    /// Persist how many permission requests are outstanding. Idempotent;
+    /// returns whether the stored value actually changed.
+    fn set_pending_permission_count(
+        &self,
+        id: AgentSessionId,
+        count: i32,
+    ) -> impl Future<Output = Result<bool>> + Send;
+
+    /// Persist the pull request the session produced. Idempotent; returns
+    /// whether the stored value actually changed.
+    fn set_pr_url(
+        &self,
+        id: AgentSessionId,
+        pr_url: Option<String>,
+    ) -> impl Future<Output = Result<bool>> + Send;
 
     /// Delete an agent session by id.
     fn delete(&self, id: AgentSessionId) -> impl Future<Output = Result<()>> + Send;

@@ -137,6 +137,9 @@ export function signalFilter(entity: EntityData): boolean {
       // A reminder that has fired is gated into the Inbox by its notification,
       // same as the other notification-driven types.
       return true;
+    case 'agent_session':
+      // Agent sessions only show in the Agents > Sessions tab, not Inbox.
+      return false;
     case 'calendar_event':
       // Calendar events are gated into the Inbox by their event-alarm
       // notifications, same as reminders.

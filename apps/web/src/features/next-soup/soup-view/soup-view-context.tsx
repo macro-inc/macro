@@ -64,6 +64,7 @@ import {
   COMPANY_STAGE_OPTIONS,
   type EntityData,
   getPropertyOptionLabel,
+  isAgentSessionEntity,
   isWithNotification,
   type Notification,
   toNotificationEntity,
@@ -99,6 +100,12 @@ import {
   useContext,
 } from 'solid-js';
 import { unwrap } from 'solid-js/store';
+import {
+  AGENT_ATTENTION_LABELS,
+  AGENT_ATTENTION_ORDER,
+  type AgentAttentionState,
+  agentAttentionState,
+} from './views/agents/agent-attention';
 
 type DataSource<T> = {
   data: Accessor<T[]>;
@@ -617,6 +624,14 @@ export const SoupViewContextProvider: FlowComponent<
   // single flat list and regenerate buckets from whatever's loaded.
   const isClientDateGroup = createMemo(
     () => soup.grouping.activeGroupId() === 'date'
+  );
+
+  // Agent sessions bucket by derived attention state (Needs approval >
+  // Running > PR ready > Past), computed client-side over the flat list —
+  // the same approach as date grouping and the Customers view's stage
+  // grouping. There is no server-side grouping for it.
+  const isClientAgentGroup = createMemo(
+    () => soup.grouping.activeGroupId() === 'agent_attention'
   );
 
   const groupByField = createMemo((): GroupByField | undefined => {
@@ -1280,6 +1295,60 @@ export const SoupViewContextProvider: FlowComponent<
         }
       }
       return groupedRows;
+    }
+
+    // Client-side attention grouping (Agents view): bucket the flat list by
+    // each session's derived attention state, in fixed urgency order.
+    if (enabled() && isClientAgentGroup() && !search.isSearching()) {
+      const buckets = new Map<AgentAttentionState, SoupEntity[]>();
+      for (const entity of entities()) {
+        // Non-session rows cannot say anything about attention; they sink
+        // to the bottom rather than disappearing.
+        const key = isAgentSessionEntity(entity)
+          ? agentAttentionState(entity)
+          : 'past';
+        const bucket = buckets.get(key);
+        if (bucket) {
+          bucket.push(entity);
+        } else {
+          buckets.set(key, [entity]);
+        }
+      }
+
+      const agentRows: SoupRow[] = [];
+      let index = 0;
+      for (const key of AGENT_ATTENTION_ORDER) {
+        const groupEntities = buckets.get(key);
+        if (!groupEntities?.length) continue;
+        const groupMeta: GroupMeta = {
+          key,
+          value: key,
+          label: AGENT_ATTENTION_LABELS[key],
+          count: groupEntities.length,
+          isExpanded: () => soup.grouping.isExpanded(key),
+          toggle: () => soup.grouping.toggle(key),
+        };
+        agentRows.push(
+          soup.buildRow({
+            id: `header:${key}`,
+            index: index++,
+            original: groupEntities[0],
+            group: groupMeta,
+            isGrouped: true,
+          })
+        );
+        for (const entity of groupEntities) {
+          agentRows.push(
+            soup.buildRow({
+              id: entity.id,
+              index: index++,
+              original: entity,
+              group: groupMeta,
+            })
+          );
+        }
+      }
+      return agentRows;
     }
 
     // Client-side date grouping: reuse the single flat (paginated) list and

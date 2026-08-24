@@ -94,7 +94,7 @@ export const soupItemMatchesListView = (
     .with(
       'agents',
       () =>
-        item.tag === 'chat' ||
+        item.tag === 'agentSession' ||
         (item.tag === 'document' && item.data.subType?.type === 'skill')
     )
     .with('mail', () => item.tag === 'emailThread')

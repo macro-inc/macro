@@ -674,6 +674,10 @@ export function buildSingleEntityFilter(
       ...base,
       reminder_filters: { ids: [entityId] },
     }))
+    .with('agentSession', () => ({
+      ...base,
+      agent_session_filters: { ids: [entityId] },
+    }))
     .exhaustive();
 }
 
@@ -745,6 +749,9 @@ export function optimisticUpdateSoupItemUpdatedAt(
     });
   } else if (current.tag === 'call') {
     // Call records use endedAt/startedAt and channel threads nest message timestamps — skip.
+    return;
+  } else if (current.tag === 'agentSession') {
+    // Sessions sort on modified_at, which only their own harness moves.
     return;
   } else {
     const timestamp =

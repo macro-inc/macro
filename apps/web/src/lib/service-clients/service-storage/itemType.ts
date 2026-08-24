@@ -12,7 +12,8 @@ export type ItemType =
   | 'calendar_event'
   | 'foreign'
   | 'crm_company'
-  | 'crm_contact';
+  | 'crm_contact'
+  | 'agent_session';
 
 /** Item types accepted by user history endpoints. */
 export const ITEM_TYPES = [
@@ -29,4 +30,5 @@ export const ITEM_TYPES = [
   'foreign',
   'crm_company',
   'crm_contact',
+  'agent_session',
 ] as const satisfies readonly ItemType[];

@@ -48,11 +48,30 @@ pub enum ExistingAgentSessionEvent {
     Channel(ChannelEventMetadata),
 }
 
+/// A session lifecycle fact mirrored to observers (Soup realtime, and
+/// whoever else lists sessions), as opposed to the trigger signals above
+/// that ask the harness to do something.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AgentSessionLifecycleMetadata {
+    /// The session the fact is about.
+    pub session_id: AgentSessionId,
+    /// The Macro user who owns the session, when the publisher had the row
+    /// at hand. Consumers resolve the audience from `entity_access`, so this
+    /// is informational.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub owner_id: Option<String>,
+}
+
 /// Events publishable to [`MacroAgentSessionsTopic`].
 ///
 /// The serde tag and [`AgentTriggerEventName`] spell the same wire names:
 /// subscribers filter on them, so they are API. `event_names_match_the_wire`
 /// holds the two in step.
+///
+/// Two families share the topic: `agent_trigger.*` signals ask the harness to
+/// act, while `agent_session.*` lifecycle facts tell observers a session row
+/// changed. The harness skips the lifecycle family; Soup realtime skips the
+/// trigger family.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, strum::EnumDiscriminants)]
 #[serde(tag = "event_type", content = "metadata")]
 #[strum_discriminants(
@@ -69,6 +88,18 @@ pub enum AgentTriggerTopicEvent {
     #[serde(rename = "agent_trigger.existing")]
     #[strum_discriminants(strum(serialize = "agent_trigger.existing"))]
     Existing(ExistingAgentSessionEvent),
+    /// A session row was created.
+    #[serde(rename = "agent_session.created")]
+    #[strum_discriminants(strum(serialize = "agent_session.created"))]
+    SessionCreated(AgentSessionLifecycleMetadata),
+    /// A session row changed: status, title, model, pending permissions.
+    #[serde(rename = "agent_session.updated")]
+    #[strum_discriminants(strum(serialize = "agent_session.updated"))]
+    SessionUpdated(AgentSessionLifecycleMetadata),
+    /// A session row was deleted.
+    #[serde(rename = "agent_session.deleted")]
+    #[strum_discriminants(strum(serialize = "agent_session.deleted"))]
+    SessionDeleted(AgentSessionLifecycleMetadata),
 }
 
 impl TopicEvent for AgentTriggerTopicEvent {
@@ -110,6 +141,43 @@ impl AgentSessionMacroEvent {
     #[must_use]
     pub fn existing_event(event: ExistingAgentSessionEvent, bot_id: BotId) -> Self {
         Self::new(bot_id, AgentTriggerTopicEvent::Existing(event))
+    }
+
+    /// A session row was created.
+    #[must_use]
+    pub fn session_created(metadata: AgentSessionLifecycleMetadata) -> Self {
+        Self::lifecycle(AgentTriggerTopicEvent::SessionCreated(metadata))
+    }
+
+    /// A session row changed.
+    #[must_use]
+    pub fn session_updated(metadata: AgentSessionLifecycleMetadata) -> Self {
+        Self::lifecycle(AgentTriggerTopicEvent::SessionUpdated(metadata))
+    }
+
+    /// A session row was deleted.
+    #[must_use]
+    pub fn session_deleted(metadata: AgentSessionLifecycleMetadata) -> Self {
+        Self::lifecycle(AgentTriggerTopicEvent::SessionDeleted(metadata))
+    }
+
+    /// Lifecycle facts are keyed by session id: one session's facts stay in
+    /// order, and trigger partitioning (by bot) is not disturbed — the
+    /// harness skips this family wherever it lands.
+    fn lifecycle(event: AgentTriggerTopicEvent) -> Self {
+        let session_id = match &event {
+            AgentTriggerTopicEvent::SessionCreated(metadata)
+            | AgentTriggerTopicEvent::SessionUpdated(metadata)
+            | AgentTriggerTopicEvent::SessionDeleted(metadata) => metadata.session_id,
+            // Constructors above only hand this the lifecycle family.
+            AgentTriggerTopicEvent::New(_) | AgentTriggerTopicEvent::Existing(_) => {
+                unreachable!("lifecycle constructor called with a trigger event")
+            }
+        };
+        Self {
+            key: session_id.to_string(),
+            event: Event::new(event),
+        }
     }
 
     fn new(bot_id: BotId, event: AgentTriggerTopicEvent) -> Self {

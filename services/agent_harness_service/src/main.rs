@@ -24,6 +24,7 @@ use agent_harness::outbound::daytona::{
     GithubToken as GithubTokenSecret, Snapshot,
 };
 use agent_harness::outbound::runtime_registry::RuntimeRegistry;
+use agent_harness::outbound::session_events::EventedAgentSessionRepo;
 use agent_session::domain::ports::NoOpRealtime;
 use agent_session::domain::service::AgentSessionServiceImpl;
 use agent_session::inbound::axum_router::{
@@ -114,13 +115,24 @@ async fn main() -> anyhow::Result<()> {
         ConnectionGatewayUrl::new()?.to_string(),
     ));
 
+    // The broker is built before the sessions because the session repo is
+    // wrapped in an eventing decorator that mirrors durable session changes
+    // onto `macro.agent_sessions` for Soup realtime.
+    let broker = MacroEventBrokerService::new(
+        KafkaEventPublisher::new(config.kafka_brokers.as_ref())
+            .context("failed to create kafka event publisher")?,
+        macro_event_broker::GlobalSpawner,
+    );
+
     // Sessions: persistence and live actors. The same repo answers every port,
     // as in the `document_storage_service` root - a session's actor writes its
     // log and pushes each frame at the channel's participants so a viewer sees
-    // it happen.
+    // it happen. The service writes through the eventing decorator so every
+    // durable change is mirrored as a lifecycle fact.
     let session_repo = PgAgentSessionRepo::new(pool.clone());
+    let evented_session_repo = EventedAgentSessionRepo::new(session_repo.clone(), broker.clone());
     let sessions = AgentSessionServiceImpl::new(
-        session_repo.clone(),
+        evented_session_repo,
         FoldedMessageService::new(session_repo.clone()),
         ConnectionGatewayAgentSessionRealtime::new(
             connection_gateway.clone(),
@@ -150,11 +162,6 @@ async fn main() -> anyhow::Result<()> {
             macro_queues::ContactsQueue::new().to_string(),
         ),
     });
-    let broker = MacroEventBrokerService::new(
-        KafkaEventPublisher::new(config.kafka_brokers.as_ref())
-            .context("failed to create kafka event publisher")?,
-        macro_event_broker::GlobalSpawner,
-    );
     let side_effects = ChannelSideEffectService::new(
         PgChannelSideEffectContext::new(pool.clone()),
         ConnectionGatewayChannelRealtimePublisher::new(connection_gateway),

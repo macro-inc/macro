@@ -19,20 +19,14 @@ import LinkIcon from '@phosphor/link.svg';
 import TreeStructure from '@phosphor/tree-structure.svg';
 import type { AgentSessionResponse } from '@service-agent-harness/generated/schemas';
 import { For, Show } from 'solid-js';
+import { harnessTitle } from '../harness-title';
+
+export { harnessTitle };
+
 import {
   ORIGIN_THREAD_DRAWER_ID,
   sessionOriginThread,
 } from '../context/origin-thread';
-
-/** 'claude-code' → 'Claude Code'; the fallback when the fold has no title. */
-export function harnessTitle(harness: string | undefined): string {
-  if (!harness) return 'Agent session';
-  return harness
-    .split(/[-_]/)
-    .filter(Boolean)
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(' ');
-}
 
 /**
  * Agent-session identity in the split header chrome plus the standard split

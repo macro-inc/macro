@@ -231,6 +231,20 @@ fragment SoupItemFields on GraphqlSoupEntity {
 							...SoupPropertyFields
 						}
 					}
+					... on GraphqlSoupAgentSession {
+						sessionTitle: displayName
+						ownerId
+						model
+						harness
+						repoUrl
+						statusKind
+						statusEventName
+						pendingPermissionCount
+						prUrl
+						threadChannelId
+						createdAt
+						modifiedAt
+					}
 					... on GraphqlSoupCalendarEvent {
 						calendarEventTitle: title
 						calendarEventStatus: status

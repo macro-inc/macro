@@ -112,6 +112,9 @@ impl AgentSessionRepo for InMemoryAgentSessionRepo {
             workspace: params.workspace,
             acp_session_id: None,
             status: SessionStatus::default(),
+            title: None,
+            pending_permission_count: 0,
+            pr_url: None,
             created_at: now,
             modified_at: now,
         };
@@ -177,7 +180,7 @@ impl AgentSessionRepo for InMemoryAgentSessionRepo {
         Ok(())
     }
 
-    async fn set_model(&self, id: AgentSessionId, model: &str) -> Result<()> {
+    async fn set_model(&self, id: AgentSessionId, model: &str) -> Result<bool> {
         let mut sessions = self
             .sessions
             .lock()
@@ -185,9 +188,60 @@ impl AgentSessionRepo for InMemoryAgentSessionRepo {
         let session = sessions.get_mut(&id).ok_or_else(|| {
             AgentSessionError::Unknown(anyhow::anyhow!("no agent session {}", id.as_uuid()))
         })?;
+        if session.model == model {
+            return Ok(false);
+        }
         session.model = model.to_owned();
         session.modified_at = chrono::Utc::now();
-        Ok(())
+        Ok(true)
+    }
+
+    async fn set_title(&self, id: AgentSessionId, title: Option<String>) -> Result<bool> {
+        let mut sessions = self
+            .sessions
+            .lock()
+            .expect("in-memory session store is not poisoned");
+        let session = sessions.get_mut(&id).ok_or_else(|| {
+            AgentSessionError::Unknown(anyhow::anyhow!("no agent session {}", id.as_uuid()))
+        })?;
+        if session.title == title {
+            return Ok(false);
+        }
+        session.title = title;
+        session.modified_at = chrono::Utc::now();
+        Ok(true)
+    }
+
+    async fn set_pending_permission_count(&self, id: AgentSessionId, count: i32) -> Result<bool> {
+        let mut sessions = self
+            .sessions
+            .lock()
+            .expect("in-memory session store is not poisoned");
+        let session = sessions.get_mut(&id).ok_or_else(|| {
+            AgentSessionError::Unknown(anyhow::anyhow!("no agent session {}", id.as_uuid()))
+        })?;
+        if session.pending_permission_count == count {
+            return Ok(false);
+        }
+        session.pending_permission_count = count;
+        session.modified_at = chrono::Utc::now();
+        Ok(true)
+    }
+
+    async fn set_pr_url(&self, id: AgentSessionId, pr_url: Option<String>) -> Result<bool> {
+        let mut sessions = self
+            .sessions
+            .lock()
+            .expect("in-memory session store is not poisoned");
+        let session = sessions.get_mut(&id).ok_or_else(|| {
+            AgentSessionError::Unknown(anyhow::anyhow!("no agent session {}", id.as_uuid()))
+        })?;
+        if session.pr_url == pr_url {
+            return Ok(false);
+        }
+        session.pr_url = pr_url;
+        session.modified_at = chrono::Utc::now();
+        Ok(true)
     }
 
     async fn delete(&self, id: AgentSessionId) -> Result<()> {
@@ -302,6 +356,9 @@ pub fn test_agent_session(id: AgentSessionId) -> AgentSession {
         workspace: "/workspace".to_string(),
         acp_session_id: None,
         status: SessionStatus::NoMessages,
+        title: None,
+        pending_permission_count: 0,
+        pr_url: None,
         created_at: now,
         modified_at: now,
     }

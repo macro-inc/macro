@@ -238,33 +238,24 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
     },
   },
   agents: {
-    default: 'owned',
+    default: 'sessions',
     tabs: {
-      owned: (ctx) => {
+      sessions: (ctx) => {
         if (!ctx.userId) return undefined;
         return {
+          // Agent sessions are opt-in server-side (like reminders):
+          // `includeAgentSessions` is what surfaces them at all, and
+          // `defineQueryFilters` NIL-excludes every other entity type.
           filters: defineQueryFilters({
-            include: { chatOwnerId: [ctx.userId] },
+            include: {
+              includeAgentSessions: true,
+              agentSessionOwnerId: [ctx.userId],
+            },
           }),
-          clientFilters: { and: ['agent'] },
-        };
-      },
-      running: (ctx) => {
-        if (!ctx.userId) return undefined;
-        return {
-          filters: defineQueryFilters({
-            include: { chatOwnerId: [ctx.userId] },
-          }),
-          clientFilters: { and: ['agent', 'owned-entity'] },
-        };
-      },
-      shared: (ctx) => {
-        if (!ctx.userId) return undefined;
-        return {
-          filters: defineQueryFilters({
-            exclude: { chatOwnerId: [ctx.userId] },
-          }),
-          clientFilters: { and: ['agent', 'shared-entity'] },
+          clientFilters: { and: ['agent-session'] },
+          // Client-side attention bucketing: Needs approval > Running >
+          // PR ready > Past (see `agent-attention.ts`).
+          groupBy: 'agent_attention',
         };
       },
       automations: () => ({

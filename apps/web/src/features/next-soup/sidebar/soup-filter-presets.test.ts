@@ -59,6 +59,54 @@ describe('task view presets', () => {
   });
 });
 
+describe('agents view presets', () => {
+  const context = { userId: 'user-1', isTeamAdmin: false };
+
+  it('defaults to the sessions tab', () => {
+    expect(VIEW_TAB_PRESETS.agents.default).toBe('sessions');
+    expect(Object.keys(VIEW_TAB_PRESETS.agents.tabs)).toEqual([
+      'sessions',
+      'automations',
+      'skills',
+    ]);
+  });
+
+  it('opts the sessions tab into agent sessions, scoped to the owner', () => {
+    const preset = getViewPreset('agents', 'sessions', context);
+    const ast = compileToAst(queryStateFrom(preset?.filters ?? {}));
+
+    // Sessions are off server-side unless a query names them; this is the ask.
+    expect(ast.asf).toEqual({
+      '&': [{ l: { o: 'user-1' } }, { l: 'inc' }],
+    });
+    expect(preset?.clientFilters).toEqual({ and: ['agent-session'] });
+    expect(preset?.groupBy).toBe('agent_attention');
+  });
+
+  it('excludes every other entity type on the sessions tab', () => {
+    const preset = getViewPreset('agents', 'sessions', context);
+    const ast = compileToAst(queryStateFrom(preset?.filters ?? {}));
+
+    expect(ast.df, 'documents').toBeDefined();
+    expect(ast.ef, 'emails').toBeDefined();
+    expect(ast.chanf, 'channels').toBeDefined();
+    expect(ast.cf, 'chats').toBeDefined();
+  });
+
+  it('keeps agent sessions out of every other view', () => {
+    const nilId = '00000000-0000-0000-0000-000000000000';
+    // Views built with defineQueryFilters carry the explicit nil exclusion...
+    expect(
+      getViewPreset('mail', 'important')?.filters.include?.agentSessionId
+    ).toEqual([nilId]);
+    // ...and hand-built queries stay session-free anyway: sessions are
+    // opt-in, and saying nothing about `asf` is the opt-out.
+    const inboxAll = getViewPreset('inbox', 'all')?.filters;
+    const ast = compileToAst(queryStateFrom(inboxAll!));
+    expect(ast.asf).toBeUndefined();
+  });
+});
+
 describe('calendar event scoping', () => {
   it('excludes calendar events from views that do not render them', () => {
     const nilId = '00000000-0000-0000-0000-000000000000';

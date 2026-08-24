@@ -141,6 +141,10 @@ export function crmCompanyFilter(entity: EntityData): boolean {
   return entity.type === 'crm_company';
 }
 
+export function agentSessionsFilter(entity: EntityData): boolean {
+  return entity.type === 'agent_session';
+}
+
 export function remindersFilter(entity: EntityData): boolean {
   return entity.type === 'reminder';
 }

@@ -10,15 +10,23 @@ export type SessionStatusLike =
   | { kind: 'event'; event: string }
   | { kind: 'disconnected' };
 
-type Presentation = {
+export type SessionStatusPresentation = {
   label: string;
   tone: 'positive' | 'neutral' | 'negative';
 };
+
+type Presentation = SessionStatusPresentation;
 
 /** `worktree_ready` → `Worktree ready`. */
 function prettyEventName(event: string): string {
   const words = event.split(/[_-]/).filter(Boolean).join(' ');
   return words.charAt(0).toUpperCase() + words.slice(1);
+}
+
+export function sessionStatusPresentation(
+  status: SessionStatusLike
+): SessionStatusPresentation {
+  return presentation(status);
 }
 
 function presentation(status: SessionStatusLike): Presentation {

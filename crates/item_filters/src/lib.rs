@@ -446,6 +446,34 @@ impl IsEmpty for ReminderFilters {
     }
 }
 
+/// Filters for agent sessions.
+#[derive(Debug, Serialize, Deserialize, Default, PartialEq, Clone)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema, schemars::JsonSchema))]
+pub struct AgentSessionFilters {
+    /// Opt this query into agent sessions at all. Agent sessions are off by
+    /// default — see [`crate::ast::agent_session::AgentSessionLiteral::Include`].
+    /// Asking for specific `ids` also opts in.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub include: bool,
+    /// Agent session ids to filter by. Empty to include all visible sessions.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub ids: Vec<String>,
+    /// Restrict to sessions owned by these Macro user ids.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub owners: Vec<String>,
+}
+
+impl IsEmpty for AgentSessionFilters {
+    fn is_empty(&self) -> bool {
+        let AgentSessionFilters {
+            include,
+            ids,
+            owners,
+        } = self;
+        !include && ids.is_empty() && owners.is_empty()
+    }
+}
+
 /// Filters for foreign entity records.
 #[derive(Debug, Serialize, Deserialize, Default, PartialEq, Clone)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema, schemars::JsonSchema))]
@@ -744,6 +772,9 @@ pub struct EntityFilters {
     /// the bundled [ReminderFilters]
     #[serde(default)]
     pub reminder_filters: ReminderFilters,
+    /// the bundled [AgentSessionFilters]
+    #[serde(default)]
+    pub agent_session_filters: AgentSessionFilters,
     /// property-based filters applied across entity types
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub property_filters: Vec<PropertyFilter>,
@@ -772,6 +803,7 @@ impl IsEmpty for EntityFilters {
             crm_company_filters,
             foreign_entity_filters,
             reminder_filters,
+            agent_session_filters,
             property_filters,
             tag_option_ids,
             // Mode is a modifier on tag_option_ids, not a filter by itself.
@@ -788,6 +820,7 @@ impl IsEmpty for EntityFilters {
             && crm_company_filters.is_empty()
             && foreign_entity_filters.is_empty()
             && reminder_filters.is_empty()
+            && agent_session_filters.is_empty()
             && property_filters.iter().all(IsEmpty::is_empty)
             && tag_option_ids.is_empty()
     }

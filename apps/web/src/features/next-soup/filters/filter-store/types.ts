@@ -63,6 +63,8 @@ export type ArrayFieldFilters = {
   foreignEntitySource?: string[];
   crmCompanyId?: string[];
   reminderId?: string[];
+  agentSessionId?: string[];
+  agentSessionOwnerId?: string[];
   properties?: PropertyFilter[];
   // Selected tags. Kept separate from `properties` because tags combine as a
   // single OR across all tag definitions (personal + team), whereas `properties`
@@ -104,6 +106,8 @@ export type ScalarFieldFilters = {
   calendarEventDone?: boolean;
   // Reminders are off by default in Soup; a view must opt in.
   includeReminders?: boolean;
+  // Agent sessions are off by default in Soup the same way.
+  includeAgentSessions?: boolean;
   reminderCompleted?: boolean;
   /** Whether the reminder has come due. Resolved against the server clock, so
    *  it stays out of the query cache key. */

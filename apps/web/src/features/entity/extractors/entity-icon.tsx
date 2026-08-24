@@ -1,3 +1,4 @@
+import { agentAttentionState } from '@app/features/next-soup/soup-view/views/agents/agent-attention';
 import {
   EntityIcon as CoreEntityIcon,
   type EntityIconProps as CoreEntityIconProps,
@@ -18,6 +19,7 @@ import type {
   GithubPullRequestEntity,
 } from '../types/entity';
 import {
+  isAgentSessionEntity,
   isCallEntity,
   isChannelEntity,
   isChannelMessageEntity,
@@ -131,6 +133,7 @@ export function EntityIcon(props: EntityIconProps) {
         )
         .with({ type: 'foreign' }, () => 'default')
         .with({ type: 'crm_company' }, () => 'crm_company')
+        .with({ type: 'agent_session' }, () => 'agent')
         // Always the bell, never the referenced entity's icon: the row is a
         // reminder first, and what it points at is iconed beside its name
         // instead — see `reminderReferenceIconType`.
@@ -148,6 +151,8 @@ export function EntityIcon(props: EntityIconProps) {
   const isDirectMessage = () => iconType() === 'direct_message';
 
   const isChatEntity = () => props.entity.type === 'chat';
+
+  const isAgentSession = () => isAgentSessionEntity(props.entity);
 
   return (
     <Switch
@@ -177,6 +182,16 @@ export function EntityIcon(props: EntityIconProps) {
         <PulsingStar
           kind="listIcon"
           animate={props.streamState?.type === 'created'}
+          class={props.class}
+        />
+      </Match>
+      <Match when={isAgentSession()}>
+        <PulsingStar
+          kind="listIcon"
+          animate={
+            isAgentSessionEntity(props.entity) &&
+            agentAttentionState(props.entity) === 'running'
+          }
           class={props.class}
         />
       </Match>

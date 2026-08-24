@@ -422,6 +422,34 @@ where
             );
         }
 
+        // Title and pending-permission count are denormalized the same way,
+        // so a session list can render them without folding the log. The
+        // writes are guarded (`IS DISTINCT FROM`), so the per-frame calls
+        // only touch the row when the fold actually moved.
+        if let Some(fold) = self.fold.as_ref() {
+            let title = fold.metadata().title.clone();
+            if let Err(error) = self.repo.set_title(session, title).await {
+                tracing::error!(
+                    error = ?error,
+                    %session,
+                    "failed to project agent session title"
+                );
+            }
+
+            let pending = i32::try_from(fold.pending_permission_count()).unwrap_or(i32::MAX);
+            if let Err(error) = self
+                .repo
+                .set_pending_permission_count(session, pending)
+                .await
+            {
+                tracing::error!(
+                    error = ?error,
+                    %session,
+                    "failed to project agent session pending permission count"
+                );
+            }
+        }
+
         // Best-effort once the durable append has succeeded: the port drops
         // frames by contract, and the log this was derived from is already
         // durable, so the worst a failure costs is a viewer who has to reload.
@@ -475,8 +503,20 @@ where
         self.repo.set_acp_session_id(id, acp_session_id).await
     }
 
-    async fn set_model(&self, id: AgentSessionId, model: &str) -> Result<()> {
+    async fn set_model(&self, id: AgentSessionId, model: &str) -> Result<bool> {
         self.repo.set_model(id, model).await
+    }
+
+    async fn set_title(&self, id: AgentSessionId, title: Option<String>) -> Result<bool> {
+        self.repo.set_title(id, title).await
+    }
+
+    async fn set_pending_permission_count(&self, id: AgentSessionId, count: i32) -> Result<bool> {
+        self.repo.set_pending_permission_count(id, count).await
+    }
+
+    async fn set_pr_url(&self, id: AgentSessionId, pr_url: Option<String>) -> Result<bool> {
+        self.repo.set_pr_url(id, pr_url).await
     }
 
     async fn delete(&self, id: AgentSessionId) -> Result<()> {

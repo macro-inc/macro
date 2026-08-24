@@ -331,8 +331,9 @@ export type ReminderEntity = EntityBase & {
   referencedEntity?: {
     id: string;
     // Calendar events are excluded alongside reminders: neither has a
-    // previewable block, and the mapper yields `undefined` for both.
-    type: Exclude<EntityType, 'reminder' | 'calendar_event'>;
+    // previewable block, and the mapper yields `undefined` for both. Agent
+    // sessions are excluded the same way — a reminder never references one.
+    type: Exclude<EntityType, 'reminder' | 'calendar_event' | 'agent_session'>;
     fileType?: string;
     subType?: string;
   };
@@ -348,6 +349,33 @@ export type ReminderEntity = EntityBase & {
   enabled: boolean;
   /** Set once a one-shot reminder has fired. */
   completedAt?: DateValue | null;
+};
+
+/** The status of an agent coding session, as the soup row carries it. */
+export type AgentSessionStatusKind = 'no_messages' | 'event' | 'disconnected';
+
+export type AgentSessionEntity = EntityBase & {
+  type: 'agent_session';
+  /** The title the agent reported, when one exists. `name` falls back to a
+   * prettified harness slug when it is absent. */
+  title?: string;
+  /** Model slug the session runs on. */
+  model: string;
+  /** Harness slug the session runs (e.g. `claude-code`). */
+  harness: string;
+  /** Repository the session works against, when stated. */
+  repoUrl?: string;
+  /** The kind of status the session is in. */
+  statusKind: AgentSessionStatusKind;
+  /** The wire name of the latest runtime event, when `statusKind` is
+   * `event` — e.g. `booting`, `acp_ready`, `worktree_ready`. */
+  statusEventName?: string;
+  /** How many permission requests are waiting on a person. */
+  pendingPermissionCount: number;
+  /** The pull request the session produced, when known. */
+  prUrl?: string;
+  /** The channel the session was opened from, when opened by a mention. */
+  threadChannelId?: string;
 };
 
 /** Normalized time shape of a calendar event soup row. */
@@ -384,6 +412,7 @@ export type EntityData =
   | AutomationEntity
   | ReminderEntity
   | CalendarEventEntity
+  | AgentSessionEntity
   | ForeignEntity;
 
 const ENTITY_TYPE_VALUES = new Set<EntityData['type']>([
@@ -400,6 +429,7 @@ const ENTITY_TYPE_VALUES = new Set<EntityData['type']>([
   'automation',
   'reminder',
   'calendar_event',
+  'agent_session',
   'foreign',
 ]);
 
@@ -506,6 +536,12 @@ export const isReminderEntity = (
   entity: EntityData
 ): entity is ReminderEntity => {
   return entity.type === 'reminder';
+};
+
+export const isAgentSessionEntity = (
+  entity: EntityData
+): entity is AgentSessionEntity => {
+  return entity.type === 'agent_session';
 };
 
 export const isAutomationEntity = (

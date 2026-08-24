@@ -874,6 +874,8 @@ export function CanvasController(props: ParentProps) {
     if (entityType === 'reminder') return;
     // Nor are calendar events.
     if (entityType === 'calendar_event') return;
+    // Nor are agent sessions.
+    if (entityType === 'agent_session') return;
 
     // Track document mention and get UUID
     let mentionUuid: string | undefined;

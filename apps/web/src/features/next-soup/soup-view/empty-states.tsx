@@ -304,13 +304,8 @@ export function EmptyState(props: {
       <Match when={props.listView === 'agents'}>
         <EmptyStatePanel
           graphic={EmptyStateAiGraphic}
-          title="Get started with agents"
-          description="Create an agent, or use Macro with your favorite AI chat client or code editor via MCP."
-          primaryAction={{
-            label: 'New agent',
-            icon: PlusIcon,
-            onClick: () => runCreateAction('chat'),
-          }}
+          title="No agent sessions yet"
+          description="Mention an agent like @coder in a channel to start a session. Its status, model, and anything waiting on you shows up here."
           documentationUrl={`${DOCS_BASE}/product/agents`}
         />
       </Match>

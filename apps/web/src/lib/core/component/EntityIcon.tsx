@@ -59,7 +59,6 @@ import FolderUser from '@phosphor/folder-user.svg';
 import GlobeIcon from '@phosphor/globe.svg';
 import FileImage from '@phosphor/image.svg';
 import Canvas from '@phosphor/pencil-circle.svg';
-import Robot from '@phosphor/robot.svg';
 import Users from '@phosphor/users.svg';
 import type { PreviewItem } from '@queries/preview';
 import type { ChannelType } from '@service-cognition/generated/schemas/channelType';
@@ -281,9 +280,9 @@ export const ENTITY_ICON_CONFIGS: Record<EntityWithValidIcon, IconConfig> = {
     prettyName: 'Pull Request',
   },
   agent: {
-    icon: Robot,
-    foreground: 'text-default',
-    background: 'bg-default/20',
+    icon: Chat,
+    foreground: 'text-chat',
+    background: 'bg-chat/20',
     prettyName: 'Agent',
   },
   task: {
@@ -389,7 +388,7 @@ const WIDE_ICONS: Record<
   emailInvite: WideCalendar,
   githubPullRequest: GithubIcon,
   pr: GithubIcon,
-  agent: Robot,
+  agent: WideStar,
   task: WideTask,
   snippet: WideSnippet,
   skill: SkillIcon,

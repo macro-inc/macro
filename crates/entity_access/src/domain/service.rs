@@ -586,10 +586,17 @@ where
         entity_type: EntityType,
     ) -> Result<Vec<MacroUserIdStr<'static>>, AccessError> {
         match entity_type {
+            // Agent sessions resolve like the row-granted types: their
+            // `entity_access` rows are the owner (user source) and the
+            // channel the bot was mentioned in (channel source), and the
+            // repo's query already expands channel grants to the channel's
+            // current members — the same expansion the Call arm gets by
+            // resolving through its channel.
             EntityType::Document
             | EntityType::Chat
             | EntityType::Project
-            | EntityType::EmailThread => {
+            | EntityType::EmailThread
+            | EntityType::AgentSession => {
                 let entity_id = Uuid::parse_str(entity_id).map_err(|_| {
                     AccessError::BadRequest("invalid entity_id for get_users_by_entity")
                 })?;

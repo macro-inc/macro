@@ -100,7 +100,9 @@ const getEntityRenameData = (
     entity.type === 'crm_company' ||
     entity.type === 'crm_contact' ||
     entity.type === 'reminder' ||
-    entity.type === 'calendar_event'
+    entity.type === 'calendar_event' ||
+    // Sessions are titled by their agent, not renamed by hand.
+    entity.type === 'agent_session'
   ) {
     return null;
   }
@@ -220,7 +222,9 @@ const renameDssSetData = (
       // names derive from the directory/email, and their soup tags are
       // camelCase 'crmCompany'/'crmContact', not these snake-case itemTypes).
       itemType !== 'crm_company' &&
-      itemType !== 'crm_contact'
+      itemType !== 'crm_contact' &&
+      // Agent sessions are titled by their agent, never renamed here.
+      itemType !== 'agent_session'
     ) {
       txns.set(
         soupTransactionKey(itemType, id),

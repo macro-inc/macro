@@ -112,7 +112,35 @@ fn subscribes_to_all_existing_soup_source_topics() {
             "macro.email",
             "macro.channels",
             "macro.properties",
+            "macro.agent_sessions",
         ]
+    );
+}
+
+#[test]
+fn agent_session_lifecycle_events_map_to_updated_and_deleted_patches() {
+    use agent_trigger::domain::broker_events::AgentTriggerTopicEvent;
+
+    let session_id = Uuid::from_u128(0xA);
+    let event = |event_type: &str| -> AgentTriggerTopicEvent {
+        serde_json::from_value(serde_json::json!({
+            "event_type": event_type,
+            "metadata": { "session_id": session_id }
+        }))
+        .expect("valid lifecycle event")
+    };
+
+    assert_eq!(
+        patches_from_agent_session_event(&event("agent_session.created")),
+        vec![update(EntityType::AgentSession, session_id)]
+    );
+    assert_eq!(
+        patches_from_agent_session_event(&event("agent_session.updated")),
+        vec![update(EntityType::AgentSession, session_id)]
+    );
+    assert_eq!(
+        patches_from_agent_session_event(&event("agent_session.deleted")),
+        vec![delete(EntityType::AgentSession, session_id)]
     );
 }
 

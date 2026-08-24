@@ -153,6 +153,13 @@ impl FoldMachineImpl {
     pub fn metadata(&self) -> &SessionMetadata {
         &self.state.metadata
     }
+
+    /// How many `session/request_permission` requests are outstanding:
+    /// asked and neither answered nor invalidated by a reconnect.
+    #[must_use]
+    pub fn pending_permission_count(&self) -> usize {
+        self.state.pending_permissions.len()
+    }
 }
 
 impl FoldMachine for FoldMachineImpl {

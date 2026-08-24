@@ -14848,6 +14848,7 @@ dependencies = [
 name = "soup_realtime"
 version = "0.1.0"
 dependencies = [
+ "agent_trigger",
  "broadcast",
  "channels",
  "chat",

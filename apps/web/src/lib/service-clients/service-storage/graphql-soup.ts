@@ -42,6 +42,7 @@ import {
   type Client as GraphqlWsClient,
 } from 'graphql-ws';
 import { match } from 'ts-pattern';
+import type { SoupAgentSessionSoupPropertiesField } from './generated/schemas/soupAgentSessionSoupPropertiesField';
 import type { SoupApiItem } from './generated/schemas/soupApiItem';
 import type { SoupCalendarEventSoupPropertiesField } from './generated/schemas/soupCalendarEventSoupPropertiesField';
 import type { SoupCalendarEventTime } from './generated/schemas/soupCalendarEventTime';
@@ -1224,6 +1225,41 @@ export function mapGraphqlSoupItem(item: GraphqlSoupItem): SoupApiItem | null {
             notifications: mapGraphqlNotifications(entity.notifications),
           },
         }) as SoupApiItem
+    )
+    .with(
+      { __typename: 'GraphqlSoupAgentSession' },
+      (entity) =>
+        ({
+          tag: 'agentSession',
+          frecency_score: frecency,
+          is_favorited: entity.isFavorited,
+          data: {
+            id: entity.id,
+            ownerId: entity.ownerId,
+            model: entity.model,
+            harness: entity.harness,
+            repoUrl: entity.repoUrl ?? undefined,
+            // The GraphQL schema types the kind as a plain string of exactly
+            // the REST wire vocabulary.
+            statusKind:
+              entity.statusKind as SoupAgentSessionSoupPropertiesField['statusKind'],
+            title: entity.sessionTitle ?? undefined,
+            statusEventName: entity.statusEventName ?? undefined,
+            pendingPermissionCount: entity.pendingPermissionCount,
+            prUrl: entity.prUrl ?? undefined,
+            threadChannelId: entity.threadChannelId ?? undefined,
+            createdAt: entity.createdAt,
+            modifiedAt: entity.modifiedAt,
+            notifications: mapGraphqlNotifications(entity.notifications),
+            // Sessions are propertyless; the REST shape still carries the
+            // (empty) flattened properties field, which GraphQL omits.
+          } satisfies Omit<
+            SoupAgentSessionSoupPropertiesField,
+            'properties'
+          > & {
+            notifications: ReturnType<typeof mapGraphqlNotifications>;
+          },
+        }) as unknown as SoupApiItem
     )
     .with(
       { __typename: 'GraphqlSoupCalendarEvent' },

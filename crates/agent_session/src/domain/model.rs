@@ -80,6 +80,17 @@ pub struct AgentSession {
     /// ACP session if we have one
     pub acp_session_id: Option<SessionId>,
     pub status: SessionStatus,
+    /// The session title the agent reported through the ACP
+    /// `session_info_update` notification, projected onto the row by the
+    /// live log writer so a list can render a name without folding the log.
+    pub title: Option<String>,
+    /// How many `session/request_permission` requests are outstanding,
+    /// projected the same way. Greater than zero means the session is
+    /// waiting on a person.
+    pub pending_permission_count: i32,
+    /// The pull request the session produced, when one is known. Populated
+    /// by future PR-detection work; carried now so readers can render it.
+    pub pr_url: Option<String>,
     pub created_at: DateTime<Utc>,
     pub modified_at: DateTime<Utc>,
 }

@@ -56,6 +56,9 @@ fn session(id: AgentSessionId, bot_id: BotId) -> AgentSession {
         workspace: "/workspace".to_owned(),
         acp_session_id: None,
         status: SessionStatus::NoMessages,
+        title: None,
+        pending_permission_count: 0,
+        pr_url: None,
         created_at: Utc::now(),
         modified_at: Utc::now(),
     }

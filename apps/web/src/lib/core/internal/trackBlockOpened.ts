@@ -28,6 +28,7 @@ function isSoupEntityTag(
       'foreign',
       'crm_company',
       'crm_contact',
+      'agent_session',
       () => false
     )
     .with('document', 'chat', 'project', 'channel', 'call', () => true)

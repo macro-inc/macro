@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            INSERT INTO agent_session (\n                id, owner_id, thread_id, originating_message_id, bot_id, model,\n                harness, repo_url, workspace, acp_session_id, status,\n                status_event_name\n            )\n            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)\n            RETURNING\n                id, owner_id, thread_id, originating_message_id, bot_id,\n                model, harness, repo_url, workspace, acp_session_id, status,\n                status_event_name, created_at, modified_at,\n                (SELECT channel_id FROM comms_messages WHERE id = agent_session.thread_id)\n                    AS \"thread_channel_id?\"\n            ",
+  "query": "\n            INSERT INTO agent_session (\n                id, owner_id, thread_id, originating_message_id, bot_id, model,\n                harness, repo_url, workspace, acp_session_id, status,\n                status_event_name\n            )\n            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)\n            RETURNING\n                id, owner_id, thread_id, originating_message_id, bot_id,\n                model, harness, repo_url, workspace, acp_session_id, status,\n                status_event_name, title, pending_permission_count, pr_url,\n                created_at, modified_at,\n                (SELECT channel_id FROM comms_messages WHERE id = agent_session.thread_id)\n                    AS \"thread_channel_id?\"\n            ",
   "describe": {
     "columns": [
       {
@@ -65,16 +65,31 @@
       },
       {
         "ordinal": 12,
+        "name": "title",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 13,
+        "name": "pending_permission_count",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 14,
+        "name": "pr_url",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 15,
         "name": "created_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 13,
+        "ordinal": 16,
         "name": "modified_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 14,
+        "ordinal": 17,
         "name": "thread_channel_id?",
         "type_info": "Uuid"
       }
@@ -108,10 +123,13 @@
       true,
       false,
       true,
+      true,
+      false,
+      true,
       false,
       false,
       null
     ]
   },
-  "hash": "4a0dce32f3ee05bc65e3707e9ce5fd4d12fd92d583a422cdf05b29d3d639c5f5"
+  "hash": "44b4a49e6aa690b4c42844166d9220b7e1e97eacf928a9e6b5521e3cbf25b229"
 }

@@ -39,6 +39,9 @@ import {
   useApplyPreset,
 } from '@app/features/next-soup/soup-view/soup-view-tabs';
 import { useIsInboxView } from '@app/features/next-soup/soup-view/use-is-inbox-view';
+import { AgentListEntity } from '@app/features/next-soup/soup-view/views/agents/AgentListEntity';
+import { ResponsiveAgentListHeader } from '@app/features/next-soup/soup-view/views/agents/AgentListHeader';
+import { AgentGroupHeader } from '@app/features/next-soup/soup-view/views/agents/agent-group-header';
 import { CompanyKanban } from '@app/features/next-soup/soup-view/views/companies/CompanyKanban';
 import { CompanyListEntity } from '@app/features/next-soup/soup-view/views/companies/CompanyListEntity';
 import { ResponsiveCompanyListHeader } from '@app/features/next-soup/soup-view/views/companies/CompanyListHeader';
@@ -898,6 +901,8 @@ const SoupViewListContent = (props: SoupViewListProps) => {
   // The per-row component depends on the active view.
   const listEntityComponent = () => {
     if (currentView() === 'tasks') return TaskListEntity;
+    if (currentView() === 'agents' && activeTab() === 'sessions')
+      return AgentListEntity;
     if (currentView() === 'companies') return CompanyListEntity;
     if (isInboxView()) return InboxListEntity;
     return ListEntity;
@@ -905,6 +910,8 @@ const SoupViewListContent = (props: SoupViewListProps) => {
 
   const groupHeaderComponent = () => {
     if (currentView() === 'tasks') return TaskGroupHeader;
+    if (soup.grouping.activeGroupId() === 'agent_attention')
+      return AgentGroupHeader;
     if (soup.grouping.activeGroupId() === 'date') return DateGroupHeader;
     return DefaultGroupHeader;
   };
@@ -1287,6 +1294,15 @@ const SoupViewListContent = (props: SoupViewListProps) => {
                   >
                     <Show when={currentView() === 'tasks' && !isTouchDevice()}>
                       <ResponsiveTaskListHeader class="shrink-0" />
+                    </Show>
+                    <Show
+                      when={
+                        currentView() === 'agents' &&
+                        activeTab() === 'sessions' &&
+                        !isTouchDevice()
+                      }
+                    >
+                      <ResponsiveAgentListHeader class="shrink-0" />
                     </Show>
                     <Show
                       when={currentView() === 'companies' && !isTouchDevice()}

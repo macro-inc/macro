@@ -309,6 +309,9 @@ const getDocumentMentionItemType = (
     .with('foreign', () => {
       throw new Error('foreign entities cannot be document mentions');
     })
+    .with('agent_session', () => {
+      throw new Error('agent sessions cannot be document mentions');
+    })
     .with('crm_company', () => 'crm_company')
     .with('crm_contact', () => 'crm_contact')
     .exhaustive();

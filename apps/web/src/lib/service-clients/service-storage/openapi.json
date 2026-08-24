@@ -11179,6 +11179,30 @@
           }
         }
       },
+      "AgentSessionFilters": {
+        "type": "object",
+        "description": "Filters for agent sessions.",
+        "properties": {
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Agent session ids to filter by. Empty to include all visible sessions."
+          },
+          "include": {
+            "type": "boolean",
+            "description": "Opt this query into agent sessions at all. Agent sessions are off by\ndefault — see [`crate::ast::agent_session::AgentSessionLiteral::Include`].\nAsking for specific `ids` also opts in."
+          },
+          "owners": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Restrict to sessions owned by these Macro user ids."
+          }
+        }
+      },
       "Anchor": {
         "oneOf": [
           {
@@ -12109,6 +12133,9 @@
         "type": "object",
         "description": "Wire-format entity filter AST accepted by soup AST endpoints.",
         "properties": {
+          "asf": {
+            "description": "Filters applied to agent sessions (wire key `asf`). Like reminders,\nempty/omitted returns **no** agent sessions: they are opt-in, so the\ncaller must send `inc` or an id to get any."
+          },
           "calf": {
             "description": "filters applied to canonical calendar events"
           },
@@ -17664,6 +17691,10 @@
         "type": "object",
         "description": "a bundle of all of the filters for each entity type",
         "properties": {
+          "agent_session_filters": {
+            "$ref": "#/components/schemas/AgentSessionFilters",
+            "description": "the bundled [AgentSessionFilters]"
+          },
           "calendar_event_filters": {
             "$ref": "#/components/schemas/CalendarEventFilters",
             "description": "the bundled [CalendarEventFilters]"
@@ -21992,6 +22023,102 @@
           }
         }
       },
+      "SoupAgentSessionStatusKind": {
+        "type": "string",
+        "description": "The kind of status an agent session row carries, mirroring\n`agent_session::domain::model::SessionStatus` on the wire.",
+        "enum": ["no_messages", "event", "disconnected"]
+      },
+      "SoupAgentSession_SoupPropertiesField": {
+        "allOf": [
+          {
+            "type": "object",
+            "description": "Property fields that can be flattened into property-bearing Soup items.",
+            "required": ["properties"],
+            "properties": {
+              "properties": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/SoupProperty"
+                },
+                "description": "Properties attached to the entity."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "id",
+              "ownerId",
+              "model",
+              "harness",
+              "statusKind",
+              "pendingPermissionCount",
+              "createdAt",
+              "modifiedAt"
+            ],
+            "properties": {
+              "createdAt": {
+                "type": "string",
+                "format": "date-time",
+                "description": "When the session was created."
+              },
+              "harness": {
+                "type": "string",
+                "description": "Harness slug the session runs."
+              },
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "description": "The agent session id."
+              },
+              "model": {
+                "type": "string",
+                "description": "Model slug the session runs on."
+              },
+              "modifiedAt": {
+                "type": "string",
+                "format": "date-time",
+                "description": "When the session was last modified. Soup sorts sessions on this."
+              },
+              "ownerId": {
+                "type": "string",
+                "description": "The Macro user who owns the session."
+              },
+              "pendingPermissionCount": {
+                "type": "integer",
+                "format": "int32",
+                "description": "How many permission requests are outstanding. Greater than zero means\nthe session is waiting on a person."
+              },
+              "prUrl": {
+                "type": ["string", "null"],
+                "description": "The pull request the session produced, when one is known."
+              },
+              "repoUrl": {
+                "type": ["string", "null"],
+                "description": "Repository the session works against, when one was stated."
+              },
+              "statusEventName": {
+                "type": ["string", "null"],
+                "description": "The wire name of the latest runtime event, when `status_kind` is\n`event` — e.g. `booting`, `acp_ready`, `worktree_ready`."
+              },
+              "statusKind": {
+                "$ref": "#/components/schemas/SoupAgentSessionStatusKind",
+                "description": "The kind of status the session is in."
+              },
+              "threadChannelId": {
+                "type": ["string", "null"],
+                "format": "uuid",
+                "description": "The channel of the thread the session was opened from, when it was\nopened by a mention."
+              },
+              "title": {
+                "type": ["string", "null"],
+                "description": "The title the agent reported for the session, when one exists."
+              }
+            }
+          }
+        ],
+        "description": "An agent coding session as displayed in Soup.\n\nSessions carry no properties; access resolves through `entity_access`\n(the owner, plus the channel the bot was mentioned in)."
+      },
       "SoupApiItem": {
         "allOf": [
           {
@@ -23190,6 +23317,21 @@
               "tag": {
                 "type": "string",
                 "enum": ["reminder"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Agent session item.",
+            "required": ["data", "tag"],
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/SoupAgentSession_SoupPropertiesField",
+                "description": "Agent session item."
+              },
+              "tag": {
+                "type": "string",
+                "enum": ["agentSession"]
               }
             }
           }

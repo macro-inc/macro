@@ -18,6 +18,7 @@ use filter_ast::Expr;
 use futures::{future::BoxFuture, future::try_join_all};
 use item_filters::ast::{
     EmailFilterAst, EntityFilterAst,
+    agent_session::AgentSessionLiteral,
     calendar_event::CalendarEventLiteral,
     call::CallLiteral,
     channel::{ChannelLiteral, ChannelThreadLiteral},
@@ -341,6 +342,7 @@ fn entity_filter_ast(entities: &[Entity<'static>]) -> Result<EntityFilterAst, So
     let mut foreign_entities = Vec::new();
     let mut calendar_events = Vec::new();
     let mut reminders = Vec::new();
+    let mut agent_sessions = Vec::new();
 
     for entity in entities {
         let id = Uuid::parse_str(entity.entity_id.as_ref()).map_err(|error| {
@@ -365,12 +367,12 @@ fn entity_filter_ast(entities: &[Entity<'static>]) -> Result<EntityFilterAst, So
             EntityType::ForeignEntity => foreign_entities.push(ForeignEntityLiteral::Id(id)),
             EntityType::CalendarEvent => calendar_events.push(CalendarEventLiteral::Id(id)),
             EntityType::Reminder => reminders.push(ReminderLiteral::Id(id)),
+            EntityType::AgentSession => agent_sessions.push(AgentSessionLiteral::Id(id)),
             EntityType::User
             | EntityType::Team
             | EntityType::StaticFile
             | EntityType::CrmContact
-            | EntityType::Skill
-            | EntityType::AgentSession => {
+            | EntityType::Skill => {
                 return Err(rootcause::report!(
                     "entity type {} is not represented in Soup",
                     entity.entity_type
@@ -402,6 +404,7 @@ fn entity_filter_ast(entities: &[Entity<'static>]) -> Result<EntityFilterAst, So
             ForeignEntityLiteral::Id(nil),
         )),
         reminder_filter: Some(literal_tree(reminders, ReminderLiteral::Id(nil))),
+        agent_session_filter: Some(literal_tree(agent_sessions, AgentSessionLiteral::Id(nil))),
         properties_filter: None,
     })
 }

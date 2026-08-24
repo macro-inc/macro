@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT\n                id, owner_id, thread_id, originating_message_id, bot_id,\n                model, harness, repo_url, workspace, acp_session_id, status,\n                status_event_name, created_at, modified_at,\n                (SELECT channel_id FROM comms_messages WHERE id = agent_session.thread_id)\n                    AS \"thread_channel_id?\"\n            FROM agent_session\n            WHERE id = $1\n            ",
+  "query": "\n            SELECT\n                id, owner_id, thread_id, originating_message_id, bot_id,\n                model, harness, repo_url, workspace, acp_session_id, status,\n                status_event_name, title, pending_permission_count, pr_url,\n                created_at, modified_at,\n                (SELECT channel_id FROM comms_messages WHERE id = agent_session.thread_id)\n                    AS \"thread_channel_id?\"\n            FROM agent_session\n            WHERE thread_id = $1 AND bot_id = $2\n            ORDER BY created_at DESC\n            LIMIT 1\n            ",
   "describe": {
     "columns": [
       {
@@ -65,22 +65,38 @@
       },
       {
         "ordinal": 12,
+        "name": "title",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 13,
+        "name": "pending_permission_count",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 14,
+        "name": "pr_url",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 15,
         "name": "created_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 13,
+        "ordinal": 16,
         "name": "modified_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 14,
+        "ordinal": 17,
         "name": "thread_channel_id?",
         "type_info": "Uuid"
       }
     ],
     "parameters": {
       "Left": [
+        "Uuid",
         "Uuid"
       ]
     },
@@ -97,10 +113,13 @@
       true,
       false,
       true,
+      true,
+      false,
+      true,
       false,
       false,
       null
     ]
   },
-  "hash": "1b6a994bc0efcc170efa1e9e9115289830b5bc89bfd64dfdb870a503c34ff07e"
+  "hash": "69e3d4b2f599dcfd69e28bdb1594e9c14e85772aada9efc359d8322c306dfece"
 }
