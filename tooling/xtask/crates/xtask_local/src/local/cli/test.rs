@@ -26,6 +26,35 @@ fn local_e2e_accepts_suite_and_trailing_test_arguments() {
 }
 
 #[test]
+fn stack_update_accepts_binaries_dir_with_build_aux_services() {
+    let cli = Cli::try_parse_from([
+        "cargo-x",
+        "stack",
+        "update",
+        "--binaries-dir",
+        "/tmp/bins",
+        "--build-aux-services",
+    ])
+    .unwrap();
+    let Cmd::Stack(StackCmd::Update(args)) = cli.command else {
+        panic!("expected stack update");
+    };
+    assert_eq!(
+        args.binaries_dir.as_deref(),
+        Some(std::path::Path::new("/tmp/bins"))
+    );
+    assert!(args.build_aux_services);
+}
+
+#[test]
+fn stack_has_no_snapshot_verb() {
+    match Cli::try_parse_from(["cargo-x", "stack", "snapshot"]) {
+        Err(err) => assert_eq!(err.kind(), clap::error::ErrorKind::InvalidSubcommand),
+        Ok(_) => panic!("stack snapshot must not parse"),
+    }
+}
+
+#[test]
 fn seed_scenario_accepts_instance_and_trailing_scenario_arguments() {
     let cli = Cli::try_parse_from([
         "cargo-x",

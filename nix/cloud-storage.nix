@@ -887,7 +887,9 @@
           doppler
           biome
           jq
-          stripe-cli
+          # TEMP: nixpkgs stripe-cli 1.43.2 checkPhase fails in the sandbox
+          # (TestResolvePluginForInstallSucceedsForGAPluginWhenNotLoggedIn).
+          # stripe-cli
           sccache
           rustToolchain
           python3

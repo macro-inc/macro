@@ -287,7 +287,10 @@ impl MobilePushOps for MockPush {
     }
 }
 
-fn make_service(repo: MockRepo, push: MockPush) -> VoipPushServiceImpl<MockRepo, MockPush> {
+fn make_service(
+    repo: MockRepo,
+    push: MockPush,
+) -> VoipPushServiceImpl<MockRepo, MobilePushAdapter<MockPush>> {
     let adapter = MobilePushAdapter {
         push_service: push,
         apns_bundle_id: "com.example.app".to_string(),

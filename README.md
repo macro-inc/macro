@@ -201,7 +201,7 @@ Deeper reading: [key concepts](https://docs.macro.com/concepts/blocks) covers bl
 
 # Running it locally
 
-To run the full app on your machine, follow [Running locally](docs/RUNNING_LOCALLY.md).
+To run the frontend against hosted services, or to run the local stack, follow [Running locally](docs/RUNNING_LOCALLY.md).
 
 To contribute, see [CONTRIBUTING.md](CONTRIBUTING.md).
 

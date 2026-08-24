@@ -5,19 +5,6 @@ name: Push local stack binaries
   push:
     branches:
     - main
-    paths:
-    - Cargo.toml
-    - Cargo.lock
-    - rust-toolchain.toml
-    - crates/**
-    - services/**
-    - nix/**
-    - nix-support/**
-    - flake.nix
-    - flake.lock
-    - '.github/actions/setup-nix/**'
-    - '.github/actions/teardown-nix/**'
-    - '.github/workflows/push_local_stack_binaries.yml'
   workflow_dispatch: {}
 permissions:
   contents: read

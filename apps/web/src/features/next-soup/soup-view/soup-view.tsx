@@ -49,6 +49,7 @@ import { TaskListEntity } from '@app/features/next-soup/soup-view/views/tasks/Ta
 import { ResponsiveTaskListHeader } from '@app/features/next-soup/soup-view/views/tasks/TaskListHeader';
 import { TaskGroupHeader } from '@app/features/next-soup/soup-view/views/tasks/task-group-header';
 import {
+  markChannelTargetSeenOnOpen,
   markReminderSeenOnOpen,
   openEntityInNewTab,
   openEntityInSplitFromUnifiedList,
@@ -964,6 +965,7 @@ const SoupViewListContent = (props: SoupViewListProps) => {
       // Join button (or, in preview, the Viewer's Join prompt) is the only
       // affordance.
       if (!isNonMemberChannelEntity(entity)) {
+        markChannelTargetSeenOnOpen(entity, notificationSource);
         openEntityInNewTab({ entity, location });
       }
       return;
@@ -990,6 +992,9 @@ const SoupViewListContent = (props: SoupViewListProps) => {
       // Single click: focus the row AND open it in the Preview Pair's Viewer.
       // The openWithSplit redirect keeps the Viewer unfocused so keyboard
       // navigation stays in this list.
+      if (!isNonMemberChannelEntity(entity)) {
+        markChannelTargetSeenOnOpen(entity, notificationSource);
+      }
       if (args.rowIndex !== undefined) soup.focus.setIndex(args.rowIndex);
       else soup.focus.set(entity.id);
 
@@ -1003,6 +1008,10 @@ const SoupViewListContent = (props: SoupViewListProps) => {
     }
 
     const finishTouchHighlight = persistSoupNavigationTouchHighlight(event);
+
+    if (!isNonMemberChannelEntity(entity)) {
+      markChannelTargetSeenOnOpen(entity, notificationSource);
+    }
 
     try {
       await openEntityInSplitFromUnifiedList(entity, {

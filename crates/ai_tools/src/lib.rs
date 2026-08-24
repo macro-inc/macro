@@ -1,5 +1,6 @@
 #![recursion_limit = "256"]
 
+use activity::inbound::toolset::activity_toolset;
 use ai_toolset::AsyncToolCollection;
 use ai_toolset::schema::{FrontendSchemas, ToolSchemaGenerator, frontend_schemas_builder};
 
@@ -18,6 +19,7 @@ mod tool_context;
 
 pub use anthropic::toolset::AnthropicToolContext;
 use anthropic::toolset::anthropic_toolset;
+use bots::inbound::toolset::bot_toolset;
 use calendar_events::inbound::toolset::{calendar_toolset, mcp_toolset as calendar_mcp_toolset};
 use call::inbound::toolset::call_toolset;
 use channels::inbound::toolset::channel_toolset;
@@ -49,7 +51,8 @@ pub use tool_context::no_op_schedule_context;
 pub use tool_context::{
     ChannelSideEffectClients, NoOpCallRtcClient, NoOpConnectionService, NoOpNotificationIngress,
     NoOpNotificationService, NoOpScheduleContext, NoOpSnsEndpointManager, NoOpTaskProperties,
-    RequestContext, TaskPropertiesAdapter, ToolCalendarMutationService, ToolCalendarReadService,
+    RequestContext, TaskPropertiesAdapter, ToolActivityToolContext, ToolBotEventBroker,
+    ToolBotService, ToolBotToolContext, ToolCalendarMutationService, ToolCalendarReadService,
     ToolCalendarToolContext, ToolCallRecordQueryService, ToolCallService, ToolCallToolContext,
     ToolChannelEventDispatcher, ToolChannelMessagesService, ToolChannelToolContext,
     ToolChatService, ToolChatToolContext, ToolCommsService, ToolCrmService, ToolCrmToolContext,
@@ -60,7 +63,8 @@ pub use tool_context::{
     ToolPipedreamConnection, ToolProjectService, ToolProjectToolContext, ToolPropertiesService,
     ToolPropertiesToolContext, ToolRemindersService, ToolRemindersToolContext, ToolServiceContext,
     ToolSkillService, ToolSkillToolContext, ToolSoupService, ToolSystemPropertiesService,
-    ToolTeamService, ToolTeamToolContext, ToolUserEmailService, build_calendar_tool_context,
+    ToolTeamService, ToolTeamToolContext, ToolUserEmailService, build_activity_tool_context,
+    build_bot_tool_context, build_calendar_tool_context,
     build_channel_tool_context_with_dispatcher, build_channel_tool_context_with_side_effects,
     build_channel_tool_context_without_side_effects, build_crm_tool_context,
     build_project_tool_context, build_properties_service, build_properties_tool_context,
@@ -90,12 +94,14 @@ pub(crate) fn subagent_toolset() -> AiToolSet {
         .add_toolset(search_toolset())
         .add_tool::<SelfKnowledge, ToolServiceContext>()
         .add_tool::<ListEntities, SoupToolContext<ToolSoupService, ToolEmailService>>()
+        .add_subtoolset::<ToolActivityToolContext>(activity_toolset())
         .add_subtoolset::<ToolDocumentToolContext>(document_toolset())
         .add_subtoolset::<ToolProjectToolContext>(project_toolset())
         .add_subtoolset::<ToolPropertiesToolContext>(properties_toolset())
         .add_subtoolset::<ToolCallToolContext>(call_toolset())
         .add_subtoolset::<ToolChatToolContext>(chat_toolset())
         .add_subtoolset::<ToolChannelToolContext>(channel_toolset())
+        .add_subtoolset::<ToolBotToolContext>(bot_toolset())
         .add_subtoolset::<ToolTeamToolContext>(team_toolset())
         .add_subtoolset::<ToolCrmToolContext>(crm_toolset())
         .add_subtoolset::<ToolSkillToolContext>(skill_toolset())

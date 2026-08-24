@@ -75,14 +75,40 @@ pub struct OpenExternalAgentSession {
     pub thread: Option<SessionThread>,
 }
 
-/// Opens externally-served sessions: rows whose runtime is hosted by the
-/// bot's operator and dials in on its own schedule. Implemented by the
-/// harness, which owns the session-opening semantics.
-pub trait ExternalSessionOpener: Send + Sync + 'static {
+/// Everything needed to open a session the server hosts itself.
+///
+/// Deliberately thin: a managed session runs in a sandbox this deployment
+/// provisions from its own configuration, so the bot, the repository and the
+/// workspace are not the caller's to choose. There is no originating mention
+/// and nothing to announce.
+#[derive(Debug, Clone)]
+pub struct OpenManagedSession {
+    /// The user who owns the session and is credited for its messages.
+    pub owner: MacroUserIdStr<'static>,
+    /// First prompt to deliver once the sandbox is attached. `None` opens an
+    /// idle session its owner prompts from the session's own surface.
+    pub prompt: Option<String>,
+}
+
+/// Opens sessions, however they are served. Implemented by the harness, which
+/// owns the session-opening semantics.
+///
+/// Two openings, because the two runtimes differ in who owns the machine: an
+/// external session's runtime is hosted by the bot's operator and dials in on
+/// its own schedule, while a managed session's sandbox is provisioned here.
+/// That difference is why only one of them takes a workspace.
+pub trait SessionOpener: Send + Sync + 'static {
     /// Open a session and return the persisted row.
     fn open_external_session(
         &self,
         request: OpenExternalAgentSession,
+    ) -> impl Future<Output = Result<AgentSession>> + Send;
+
+    /// Provision a sandbox, open a session on it and return the persisted
+    /// row, delivering `prompt` once it is attached.
+    fn open_managed_session(
+        &self,
+        request: OpenManagedSession,
     ) -> impl Future<Output = Result<AgentSession>> + Send;
 
     /// The session a thread's mentions already route to, if one exists.

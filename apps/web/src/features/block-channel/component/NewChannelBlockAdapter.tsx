@@ -53,7 +53,6 @@ import {
   useChannelType,
 } from '@core/context/channels';
 import { useUserId } from '@core/context/user';
-import { useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isMobile } from '@core/mobile/isMobile';
 import { awaitCondition, createMethodRegistration } from '@core/orchestrator';
@@ -265,14 +264,15 @@ function NewTop(props: { channelId: string }) {
 
 export function NewChannelBlockAdapter(props: BlockChannelProps) {
   // Every other block gets its hotkey scope from `BlockContainer`, which the
-  // channel block does not render — so `blockHotkeyScopeSignal` stayed empty
-  // here and `useBlockEntityCommands` registered nothing at all. Own the scope
-  // directly instead of adopting BlockContainer and its entity tracking.
-  const [attachHotkeys, hotkeyScope] = useHotkeyDOMScope('channel');
-  blockHotkeyScopeSignal.set(hotkeyScope);
-  useBlockEntityCommands();
-
+  // channel block does not render — so set `blockHotkeyScopeSignal` here or
+  // `useBlockEntityCommands` would register nothing at all. Commands go on
+  // the split scope so they keep working while focus sits on split chrome
+  // (header, toolbar, panel div) and across in-split navigation — same as
+  // BlockContainer. The adapter requires a split panel, so unlike
+  // BlockContainer it needs no fallback DOM scope of its own.
   const splitPanel = useSplitPanelOrThrow();
+  blockHotkeyScopeSignal.set(splitPanel.splitHotkeyScope);
+  useBlockEntityCommands();
   const canAutofocusSplitContent = useCanAutofocusSplitContent();
   const { navigatedFromJK } = useNavigatedFromJK();
   const channelId = useBlockId();
@@ -513,7 +513,6 @@ export function NewChannelBlockAdapter(props: BlockChannelProps) {
           onHandled={() => setPendingJoinCall(false)}
         />
         <div
-          ref={attachHotkeys}
           class={cn(
             'h-full flex flex-col px-2 touch:px-0',
             // The channel block is full-frame on mobile (messages scroll

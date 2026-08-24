@@ -1543,6 +1543,27 @@ impl TeamRepository for TeamRepositoryImpl {
     }
 
     #[tracing::instrument(skip(self), err)]
+    async fn list_team_ids_after(
+        &self,
+        after_team_id: Option<uuid::Uuid>,
+        limit: u32,
+    ) -> Result<Vec<uuid::Uuid>, TeamError> {
+        Ok(sqlx::query_scalar!(
+            r#"
+            SELECT id
+            FROM team
+            WHERE $1::uuid IS NULL OR id > $1
+            ORDER BY id
+            LIMIT $2
+            "#,
+            after_team_id,
+            i64::from(limit),
+        )
+        .fetch_all(&self.pool)
+        .await?)
+    }
+
+    #[tracing::instrument(skip(self), err)]
     async fn get_team_id_by_domain(
         &self,
         user_id: &MacroUserIdStr<'_>,

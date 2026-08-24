@@ -6,8 +6,14 @@
  * opencode); see individual file headers.
  */
 
+export { ActionLine, type ActionLineProps } from './ActionLine';
 export { AgentInput, type AgentInputProps } from './AgentInput';
+export { AgentModelSelector } from './AgentModelSelector';
 export { AnimatedNumber } from './AnimatedNumber';
+export {
+  ComposerNotice,
+  type ComposerNoticeProps,
+} from './ComposerNotice';
 export { type CountItem, CountSummary } from './CountSummary';
 export { DiffChanges, type DiffChangesProps } from './DiffChanges';
 export { FoldedAnsiText } from './FoldedAnsiText';

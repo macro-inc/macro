@@ -72,6 +72,7 @@ service = ["dep:entity_access_management", "dep:foreign_entity", "ports"]
 
 [dependencies]
 activity = { path = "../activity", default-features = false }
+bot_id = { path = "../bot_id" }
 # Core
 anyhow = { workspace = true }
 chrono = { workspace = true }

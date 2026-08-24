@@ -96,7 +96,12 @@ vi.mock('@core/component/AI/component/tool/handler', async () => {
   const solid = await vi.importActual<typeof import('solid-js')>('solid-js');
 
   return {
-    RenderTool: (props: { tool_id: string; isComplete: boolean }) => {
+    RenderTool: (props: {
+      tool_id: string;
+      isComplete: boolean;
+      name: string;
+      renderContext: { renderContext: { grouped?: boolean } };
+    }) => {
       solid.onMount(() => {
         lifecycle.toolMounts.set(
           props.tool_id,
@@ -110,7 +115,12 @@ vi.mock('@core/component/AI/component/tool/handler', async () => {
         );
       });
       return (
-        <div data-complete={String(props.isComplete)} data-testid="tool">
+        <div
+          data-complete={String(props.isComplete)}
+          data-grouped={String(props.renderContext.renderContext.grouped)}
+          data-name={props.name}
+          data-testid="tool"
+        >
           {props.tool_id}
         </div>
       );
@@ -358,6 +368,84 @@ describe('AssistantMessageParts streaming identity', () => {
     expect(rendered.getByTestId('thinking').textContent).toBe('First thought');
     expect(rendered.getByTestId('tool').textContent).toBe('tool-1');
     expect(rendered.getByTestId('markdown').textContent).toBe('Interim answer');
+  });
+
+  it('shows the native activity result and suppresses a redundant dashboard', () => {
+    const parts: AssistantMessagePart[] = [
+      { thinking: 'Read the activity', type: 'thinking' },
+      {
+        id: 'activity-tool',
+        json: {
+          from: '2026-08-12T21:57:00Z',
+          to: '2026-08-19T21:57:00Z',
+        },
+        name: 'ReadActivity',
+        type: 'toolCall',
+      },
+      {
+        id: 'activity-tool',
+        json: { activities: [], truncated: false },
+        name: 'ReadActivity',
+        type: 'toolCallResponseJson',
+      },
+      { text: "Here's your activity:", type: 'text' },
+      {
+        id: 'dashboard-tool',
+        json: {
+          view: {
+            widgets: [{ events: [], type: 'timeline' }],
+          },
+        },
+        name: 'DisplayResults',
+        type: 'toolCall',
+      },
+      {
+        id: 'dashboard-tool',
+        json: { message: 'View displayed' },
+        name: 'DisplayResults',
+        type: 'toolCallResponseJson',
+      },
+      {
+        id: 'other-dashboard-tool',
+        json: {
+          view: {
+            widgets: [
+              {
+                source: { entities: [], kind: 'items' },
+                type: 'list',
+              },
+            ],
+          },
+        },
+        name: 'DisplayResults',
+        type: 'toolCall',
+      },
+      {
+        id: 'other-dashboard-tool',
+        json: { message: 'View displayed' },
+        name: 'DisplayResults',
+        type: 'toolCallResponseJson',
+      },
+    ];
+    const rendered = render(() => (
+      <AssistantMessageParts
+        parts={parts}
+        message={{
+          attachments: [],
+          content: parts,
+          id: 'message-1',
+          role: 'assistant',
+        }}
+        isStreaming={false}
+      />
+    ));
+
+    const tools = rendered.getAllByTestId('tool');
+    expect(tools).toHaveLength(2);
+    expect(tools[0].dataset.name).toBe('ReadActivity');
+    expect(tools[0].dataset.grouped).toBe('false');
+    expect(rendered.queryByText('dashboard-tool')).toBeNull();
+    expect(rendered.getByText('other-dashboard-tool')).toBeTruthy();
   });
 
   it('previews only the latest activity group while streaming', async () => {

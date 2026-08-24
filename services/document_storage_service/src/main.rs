@@ -903,6 +903,47 @@ async fn main() -> anyhow::Result<()> {
         )),
     );
 
+    let teammate_dms_brokers = config.kafka_brokers.as_ref().to_string();
+    consumer_tracker.spawn({
+        let cancellation_token = consumer_cancellation_token.clone();
+        let channels = (*channels_service).clone();
+        async move {
+            loop {
+                if cancellation_token.is_cancelled() {
+                    break;
+                }
+
+                tracing::info!("starting teammate DM consumer");
+                let result = channels::inbound::teammate_dms_consumer::run_teammate_dms_consumer(
+                    &teammate_dms_brokers,
+                    channels.clone(),
+                    cancellation_token.cancelled(),
+                )
+                .await;
+
+                if cancellation_token.is_cancelled() {
+                    break;
+                }
+
+                match result {
+                    Ok(()) => tracing::error!("teammate DM consumer exited unexpectedly"),
+                    Err(error) => {
+                        tracing::error!(
+                            error = ?error,
+                            "teammate DM consumer exited unexpectedly"
+                        );
+                    }
+                }
+
+                tokio::select! {
+                    biased;
+                    _ = cancellation_token.cancelled() => break,
+                    _ = tokio::time::sleep(Duration::from_secs(5)) => {}
+                }
+            }
+        }
+    });
+
     // Wire Macro AI to react to mentions. The router posts replies through the
     // channel service we just built and runs the agent loop in-process with the
     // same pre-configured toolset used by other AI hosts.

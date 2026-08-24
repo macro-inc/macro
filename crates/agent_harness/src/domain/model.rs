@@ -26,7 +26,7 @@ pub struct MentionOrigin {
 ///
 /// Only for managed sessions - the ones whose sandbox this deployment
 /// provisions. External sessions are opened through
-/// [`agent_session::domain::ports::ExternalSessionOpener`] instead: they
+/// [`agent_session::domain::ports::SessionOpener`] instead: they
 /// need no provisioning, no announcement, and no first prompt, so they are
 /// a plain create rather than a harness command.
 #[derive(Debug, Clone)]
@@ -174,6 +174,12 @@ pub struct SpawnContainer {
 /// Session-row values that remain deployment configuration for now.
 #[derive(Debug, Clone)]
 pub struct SessionDefaults {
+    /// The bot managed sessions run as.
+    ///
+    /// Configuration rather than a constant for the same reason as the
+    /// trigger path's: `@claude` and `@codex` are separate deployments of one
+    /// binary, differing only in the bot they answer for.
+    pub bot_id: BotId,
     /// Model slug, e.g. `claude`.
     pub model: String,
     /// Harness slug, e.g. `opencode`.

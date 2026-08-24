@@ -12,8 +12,8 @@ use email::{
 use entity_access::domain::ports::{EntityAccessService, NoOpEntityAccessService};
 use entity_mutation::{EntityMutationService, UnavailableEntityMutationService};
 use graphql_activity::{
-    ActivityFeedInput, ActivityReader, GraphqlActivityPage, NoOpActivityReader,
-    resolve_activity_feed,
+    ActivityFeedInput, ActivityOverviewInput, ActivityReader, GraphqlActivityOverview,
+    GraphqlActivityPage, NoOpActivityReader, resolve_activity_feed, resolve_activity_overview,
 };
 use graphql_channel::{
     ChannelActivityAuthorizer, ChannelActivityMutationService, ChannelMutationRoot,
@@ -534,6 +534,16 @@ where
         input: ActivityFeedInput,
     ) -> async_graphql::Result<GraphqlActivityPage> {
         resolve_activity_feed::<AcR>(ctx, &self.user_id, input).await
+    }
+
+    /// The authenticated user's activity over the trailing year, bucketed
+    /// into local dates in the requested time zone.
+    async fn activity_overview(
+        &self,
+        ctx: &Context<'_>,
+        input: ActivityOverviewInput,
+    ) -> async_graphql::Result<GraphqlActivityOverview> {
+        resolve_activity_overview::<AcR>(ctx, &self.user_id, input).await
     }
 
     /// Authenticated user email catalog fields supplied by `graphql_email`.

@@ -12,8 +12,9 @@ use channels::domain::models::PostMessageResponse;
 use entity_access::domain::models::TeamRole;
 use entity_access::domain::{
     models::{
-        AccessError, AccessLevel, BotAccessScope, BotId, CallChannelInfo, EntityPermission,
-        EntityType, ParticipantRole as EntityParticipantRole, RequiredPermission, UserTeamInfo,
+        AccessError, AccessLevel, BotAccessScope, BotId, CallChannelInfo, EntityAccessReceipt,
+        EntityPermission, EntityType, MemberParticipantRole,
+        ParticipantRole as EntityParticipantRole, RequiredPermission, UserTeamInfo,
     },
     ports::EntityAccessService,
 };
@@ -210,8 +211,7 @@ impl BotService for TestBotService {
 
     async fn add_bot_to_channel(
         &self,
-        _caller: MacroUserIdStr<'static>,
-        _channel_id: Uuid,
+        _access: EntityAccessReceipt<MemberParticipantRole>,
         _bot_id: BotId,
     ) -> Result<(), BotError> {
         unimplemented!()
@@ -695,7 +695,7 @@ fn scoped_bot_response(bot_id: BotId) -> CreateChannelScopedBotResponse {
         token: BotToken {
             id: Uuid::new_v4(),
             bot_id,
-            token: bot_token.clone(),
+            token_prefix: "mbot_test".to_string(),
             label: Some("webhook".to_string()),
             last_used_at: None,
             expires_at: None,

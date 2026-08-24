@@ -4,7 +4,6 @@
 
 use std::io::Read;
 use std::os::unix::process::CommandExt;
-use std::path::Path;
 use std::process::{Child, Command, Stdio};
 use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
@@ -40,40 +39,30 @@ pub fn static_dir(instance: &Instance) -> std::path::PathBuf {
 }
 
 /// Build the app bundle for headless serving and stage it into the instance
-/// dir. `prebuilt` skips the build and stages an existing dist (CI hands the
-/// binaries-style artifact straight in). The build mirrors `just build-dev`
+/// dir. The build mirrors `just build-dev`
 /// (dev-mode bundle, production optimizations), except the backend origin is
 /// the `same-origin` sentinel — resolved from `location.origin` at runtime — so
-/// the one bundle works on localhost and through any tunnel/preview hostname.
+/// the one bundle works on localhost and through any tunneled hostname.
 ///
 /// Setting `VITE_LOCAL_BACKEND_ORIGIN` also keeps `import.meta.env.DEV` true
 /// in the static bundle (see `keepImportMetaDev` in apps/web/scripts). `vite build`
 /// otherwise compiles DEV from `NODE_ENV=production`, which drops local-only
 /// paths such as passwordless auto-login (`just run_local` uses `vite serve`,
-/// where DEV is already true). Fly preview sets the same origin env, so it
-/// gets the override without a second flag.
-pub fn build_static(
-    stage: &Stage,
-    instance: &Instance,
-    mode: Mode,
-    prebuilt: Option<&Path>,
-) -> Result<()> {
-    let dist = match prebuilt {
-        Some(dir) => dir.to_owned(),
-        None => {
-            let mut cmd = Command::new("bun");
-            cmd.current_dir(app_dir())
-                .args(["run", "--bun", "build"])
-                .env("MODE", "development")
-                .env("NODE_ENV", "production")
-                .env("VITE_LOCAL_SERVERS", "ALL")
-                .env("VITE_LOCAL_BACKEND_ORIGIN", "same-origin");
-            if mode.spec().runs_local_infra {
-                cmd.env("VITE_AI_EDITING_WORKER_URL", "/ai-editing");
-            }
-            stage.run("Building frontend bundle", &mut cmd)?;
-            app_dir().join("dist")
+/// where DEV is already true). Headless `stack up` sets the same origin env.
+pub fn build_static(stage: &Stage, instance: &Instance, mode: Mode) -> Result<()> {
+    let dist = {
+        let mut cmd = Command::new("bun");
+        cmd.current_dir(app_dir())
+            .args(["run", "--bun", "build"])
+            .env("MODE", "development")
+            .env("NODE_ENV", "production")
+            .env("VITE_LOCAL_SERVERS", "ALL")
+            .env("VITE_LOCAL_BACKEND_ORIGIN", "same-origin");
+        if mode.spec().runs_local_infra {
+            cmd.env("VITE_AI_EDITING_WORKER_URL", "/ai-editing");
         }
+        stage.run("Building frontend bundle", &mut cmd)?;
+        app_dir().join("dist")
     };
     if stage.is_dry_run() {
         return Ok(());

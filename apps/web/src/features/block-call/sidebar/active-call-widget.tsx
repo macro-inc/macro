@@ -11,7 +11,10 @@ import type { ApiChannelWithLatest } from '@service-storage/channel-list-types';
 import { ChannelTypeEnum } from '@service-storage/client';
 import { Avatar, Button, cn, Tooltip } from '@ui';
 import { createMemo, type FlowComponent, For, Show } from 'solid-js';
-import { dismissIncomingCall, useVisibleIncomingCalls } from './incoming-calls';
+import {
+  dismissIncomingCallEverywhere,
+  useVisibleIncomingCalls,
+} from './incoming-calls';
 
 const SLIM_MAX = 4;
 
@@ -157,7 +160,9 @@ export function SidebarActiveCallWidget(props: {
                     <IncomingCallContextMenu
                       callId={call.callId}
                       channelId={call.channelId}
-                      onDismiss={() => dismissIncomingCall(call.callId)}
+                      onDismiss={() =>
+                        dismissIncomingCallEverywhere(call.callId)
+                      }
                     >
                       <Button
                         aria-label={`${displayName(channel())} call`}
@@ -213,7 +218,9 @@ export function SidebarActiveCallWidget(props: {
                     <IncomingCallContextMenu
                       callId={call.callId}
                       channelId={call.channelId}
-                      onDismiss={() => dismissIncomingCall(call.callId)}
+                      onDismiss={() =>
+                        dismissIncomingCallEverywhere(call.callId)
+                      }
                     >
                       <div class="flex items-center gap-1.5 w-full rounded-lg p-2 text-ink-extra-muted hover:bg-ink/3">
                         <button
@@ -273,7 +280,7 @@ export function SidebarActiveCallWidget(props: {
                             onClick={(e) => {
                               e.preventDefault();
                               e.stopPropagation();
-                              dismissIncomingCall(call.callId);
+                              dismissIncomingCallEverywhere(call.callId);
                             }}
                           >
                             <XIcon class="size-3" />

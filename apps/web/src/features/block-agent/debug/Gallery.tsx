@@ -12,8 +12,10 @@ import type {
 import { createSignal, type JSX, onCleanup } from 'solid-js';
 import { Message } from '../component/AgentMessage';
 import {
+  ActionLine,
   AgentInput,
   AnimatedNumber,
+  ComposerNotice,
   CountSummary,
   DiffChanges,
   PierreDiff,
@@ -136,6 +138,26 @@ export default function AgentUiGallery() {
     <StaticMarkdownContext>
       <div class="size-full overflow-auto">
         <div class="mx-auto flex max-w-3xl flex-col gap-8 px-6 py-8">
+          <Item label="ComposerNotice">
+            <ComposerNotice text="Waking the agent's sandbox…" active />
+          </Item>
+
+          <Item label="ActionLine">
+            <ActionLine label="Setting model to claude-opus-5…" />
+            <ActionLine label="Model set to claude-opus-5" />
+            <ActionLine label="Context compacted" />
+            <ActionLine
+              label="Couldn't switch to openai/gpt-5"
+              failed
+              detail="no credentials configured for provider openai"
+            />
+            <ActionLine
+              label="The agent couldn't answer — Internal error: Bad Request: bad request: Authorization header is badly formatted"
+              detail="Internal error: Bad Request: bad request: Authorization header is badly formatted"
+              failed
+            />
+          </Item>
+
           <Item label="ToolCard">
             <ToolCard
               title="Bash"

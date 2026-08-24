@@ -65,6 +65,8 @@ echo "cursor-cloud install: bun cache ready"
 build_local_stack_binaries
 echo "cursor-cloud install: local stack binaries ready"
 
+# Bake the init snapshot on stubs. Runtime stack.sh pulls Doppler when
+# DOPPLER_TOKEN is present; secrets must not land in the durable snapshot.
 just stack up --infra-only --no-doppler --build-aux-services --binaries-dir "${LOCAL_STACK_BINS}/bin" --json
 cleanup_stack
 trap - EXIT

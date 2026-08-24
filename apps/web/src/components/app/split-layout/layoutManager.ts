@@ -489,6 +489,22 @@ export type SplitHandle<TMeta extends ComponentMeta = ComponentMeta> = {
     mergeHistory?: boolean;
     referredFrom?: ReferredFrom;
   }) => void;
+  /**
+   * Point this split at a new id for the same block *without* remounting it.
+   *
+   * `replace` tears the mount down and builds a new one, which is right when
+   * the user navigates somewhere else. This is the other case: the block is
+   * already showing the right thing and only just learned what it is called.
+   * The agent block opens on a client-minted placeholder and adopts its real
+   * session id when the create resolves, with the composer the user is typing
+   * into left untouched.
+   *
+   * Only the id moves — same block type, same mount, same history entry
+   * (rewritten in place, so Back still goes where it did and the URL swaps
+   * without a new entry). A no-op unless the split currently shows a block of
+   * `type`.
+   */
+  adoptContentId: (options: { type: BlockName; nextId: string }) => void;
   removeFromHistory: (predicate: (content: SplitContent) => boolean) => void;
   toggleSpotlight: (force?: boolean) => void;
   setDisplayName: (name: string) => void;
@@ -1006,6 +1022,60 @@ export function createSplitLayout(
     });
   }
 
+  /**
+   * Move a split onto a new id for the block it is already showing, keeping
+   * the mount. See `SplitHandle.adoptContentId` for why this exists.
+   *
+   * The history entry is rewritten rather than pushed, and the navigation
+   * cause is `replace`, so the URL sync swaps the path in place instead of
+   * adding a back step to a placeholder the user can never return to.
+   */
+  function adoptContentId(id: SplitId, type: BlockName, nextId: string) {
+    const i = splitIndexById(id);
+    if (i < 0) return;
+
+    const split = state.splits[i];
+    const current = split.content;
+    if (current.type !== type || current.id === nextId) return;
+    if (
+      isDuplicateSplit(
+        state.splits.filter((s) => s.id !== id),
+        {
+          ...current,
+          id: nextId,
+        }
+      )
+    ) {
+      return;
+    }
+
+    const next: SplitContent = { ...current, id: nextId, params: undefined };
+
+    batch(() => {
+      split.history.replaceCurrent(next);
+      setState('splits', (splits) => {
+        const index = splits.findIndex((s) => s.id === id);
+        if (index < 0) return splits;
+        const previous = splits[index];
+        return splits.with(index, {
+          ...previous,
+          content: next,
+          // The same mount, re-labelled: nothing unmounts here.
+          mount:
+            previous.mount.kind === 'block'
+              ? { ...previous.mount, id: nextId }
+              : previous.mount,
+          lastNavigationCause: 'replace',
+        });
+      });
+      orchestrator.rekeyBlockInstance(
+        resolveBlockAlias(type),
+        current.id,
+        nextId
+      );
+    });
+  }
+
   function reset(id: SplitId) {
     const i = splitIndexById(id);
     if (i < 0) return console.error(`Split with id ${id} not found`);
@@ -1117,6 +1187,8 @@ export function createSplitLayout(
       goForward: () => forward(currentSplit.id),
       replace: ({ next, mergeHistory = false, referredFrom }) =>
         replace(currentSplit.id, { next, mergeHistory, referredFrom }),
+      adoptContentId: ({ type, nextId }) =>
+        adoptContentId(currentSplit.id, type, nextId),
       removeFromHistory: (predicate: (content: SplitContent) => boolean) => {
         removeFromHistory(currentSplit.id, predicate);
       },

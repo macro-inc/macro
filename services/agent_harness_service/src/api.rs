@@ -5,7 +5,7 @@
 
 use agent_harness::inbound::runtime_gateway::{RuntimeGatewayState, runtime_gateway_router};
 use agent_session::domain::ports::{
-    AgentSessionNotificationRecipient, BotDirectory, ExternalSessionOpener,
+    AgentSessionNotificationRecipient, BotDirectory, SessionOpener,
 };
 use agent_session::domain::service::AgentSessionService;
 use agent_session::inbound::axum_router::{
@@ -34,7 +34,7 @@ pub async fn setup_and_serve<T, R, Opener, Bots, Access, Auth>(
 where
     T: AgentSessionService,
     R: AgentSessionNotificationRecipient,
-    Opener: ExternalSessionOpener,
+    Opener: SessionOpener,
     Bots: BotDirectory,
     Access: EntityAccessService,
     Auth: MacroAuthorizationService,
@@ -64,7 +64,7 @@ fn api_router<T, R, Opener, Bots, Access, Auth>(
 where
     T: AgentSessionService,
     R: AgentSessionNotificationRecipient,
-    Opener: ExternalSessionOpener,
+    Opener: SessionOpener,
     Bots: BotDirectory,
     Access: EntityAccessService,
     Auth: MacroAuthorizationService,

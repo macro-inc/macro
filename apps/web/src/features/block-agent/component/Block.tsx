@@ -1,8 +1,9 @@
 import { SidePanel } from '@components/app/side-panel';
+import { SplitPanelContext } from '@components/app/split-layout/context';
 import { useBlockId } from '@core/block';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { LinkedConversationDrawer } from '@core/linked-conversation';
-import { Show } from 'solid-js';
+import { Show, useContext } from 'solid-js';
 
 import {
   AgentSessionProvider,
@@ -12,6 +13,7 @@ import {
   ORIGIN_THREAD_DRAWER_ID,
   sessionOriginThread,
 } from '../context/origin-thread';
+import { forgetPendingSession } from '../context/pending-session';
 import { AgentComposer } from './AgentComposer';
 import { AgentSplitHeader } from './AgentSplitHeader';
 import { AgentSidePanelSections } from './sidepanel/AgentSidePanelSections';
@@ -56,11 +58,23 @@ function AgentBlockContent() {
 
 export default function BlockAgent() {
   const blockId = useBlockId();
+  const split = useContext(SplitPanelContext);
+
+  // A block opened from the create menu mounts against a placeholder while
+  // `POST /agent-sessions` provisions its sandbox — minutes, during which the
+  // user is already typing. When the real id lands the split adopts it in
+  // place: the URL becomes the session's, this mount keeps running, and the
+  // placeholder is gone from history rather than being a back step to
+  // nowhere.
+  const adoptSessionId = (sessionId: string) => {
+    split?.handle.adoptContentId({ type: 'agent', nextId: sessionId });
+    forgetPendingSession(blockId);
+  };
 
   return (
     <Show when={blockId}>
       {(id) => (
-        <AgentSessionProvider sessionId={id()}>
+        <AgentSessionProvider blockId={id()} onSessionId={adoptSessionId}>
           <AgentBlockContent />
         </AgentSessionProvider>
       )}

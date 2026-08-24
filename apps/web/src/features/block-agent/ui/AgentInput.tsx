@@ -2,14 +2,14 @@
  * The agent block's composer: the chat input's look and its markdown editing
  * surface (`MarkdownShell` over a lean `EditorConfigBuilder`), without the
  * rest of `ChatInput`'s machinery — no mentions, attachments, upload queue,
- * model plumbing, or contexts. Visual chrome mirrors
- * `@core/component/AI/component/input/ChatInput.tsx`.
+ * or contexts; model plumbing arrives through the `modelControl` slot. Visual
+ * chrome mirrors `@core/component/AI/component/input/ChatInput.tsx`.
  */
 
 import { buildConfig } from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
 import { Button, SendButton, Surface } from '@ui';
-import { createSignal, Show } from 'solid-js';
+import { createSignal, type JSX, Show } from 'solid-js';
 
 export interface AgentInputProps {
   placeholder?: string;
@@ -20,6 +20,8 @@ export interface AgentInputProps {
   /** Receives the composed markdown. */
   onSend: (markdown: string) => void;
   onStop?: () => void;
+  /** Sits as a pill above the input box, e.g. the session's model selector. */
+  modelControl?: JSX.Element;
 }
 
 /** Past this height the controls drop below the text instead of overlaying it. */
@@ -62,48 +64,61 @@ export function AgentInput(props: AgentInputProps) {
     .onChange(setMarkdown);
 
   return (
-    <Surface class="rounded-xl" depth={2} solid>
-      <div class="relative px-2 py-1.5">
-        {/* No vertical padding of its own: the shell is min-h-8 and editor
+    <div class="flex flex-col gap-1.5">
+      {/* Above the surface rather than inside it: the pill belongs to the
+          composer, not to the outlined field, so it must not eat into the
+          editor's frame or sit within its border. */}
+      <Show when={props.modelControl}>
+        <div class="flex items-center px-0.5">{props.modelControl}</div>
+      </Show>
+      <Surface class="rounded-xl" depth={2} solid>
+        <div class="relative px-2 py-1.5">
+          {/* No vertical padding of its own: the shell is min-h-8 and editor
             paragraphs carry my-1.5, so the row's py-1.5 is the whole frame —
             the same 44px single-line height as ChatInput. */}
-        <div
-          ref={bodyRef}
-          class="pl-1 text-sm text-ink"
-          classList={{
-            'pr-10': !isMultiline(),
-            'pb-8': isMultiline(),
-            // While empty only the placeholder renders; keep it to one clipped
-            // line so it doesn't wrap into the single-line height.
-            'overflow-hidden whitespace-nowrap': markdown().trim().length === 0,
-          }}
-        >
-          <MarkdownShell
-            config={editor}
-            placeholder={props.placeholder ?? 'Message the agent'}
-            autofocus={props.autofocus}
-          />
-        </div>
-
-        <div class="absolute right-1.5 bottom-1.5">
-          <Show
-            when={props.busy && props.onStop}
-            fallback={
-              <SendButton tooltip="Send" disabled={!canSend()} onClick={send} />
-            }
+          <div
+            ref={bodyRef}
+            class="pl-1 text-sm text-ink"
+            classList={{
+              'pr-10': !isMultiline(),
+              'pb-8': isMultiline(),
+              // While empty only the placeholder renders; keep it to one clipped
+              // line so it doesn't wrap into the single-line height.
+              'overflow-hidden whitespace-nowrap':
+                markdown().trim().length === 0,
+            }}
           >
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              label="Stop"
-              onClick={() => props.onStop?.()}
-              class="rounded-[11px] size-7.5 text-ink-extra-muted not-disabled:bg-ink/5 not-disabled:hover:bg-ink/10"
+            <MarkdownShell
+              config={editor}
+              placeholder={props.placeholder ?? 'Message the agent'}
+              autofocus={props.autofocus}
+            />
+          </div>
+
+          <div class="absolute right-1.5 bottom-1.5">
+            <Show
+              when={props.busy && props.onStop}
+              fallback={
+                <SendButton
+                  tooltip="Send"
+                  disabled={!canSend()}
+                  onClick={send}
+                />
+              }
             >
-              <div class="size-3.5 rounded-sm bg-current" />
-            </Button>
-          </Show>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                label="Stop"
+                onClick={() => props.onStop?.()}
+                class="rounded-[11px] size-7.5 text-ink-extra-muted not-disabled:bg-ink/5 not-disabled:hover:bg-ink/10"
+              >
+                <div class="size-3.5 rounded-sm bg-current" />
+              </Button>
+            </Show>
+          </div>
         </div>
-      </div>
-    </Surface>
+      </Surface>
+    </div>
   );
 }

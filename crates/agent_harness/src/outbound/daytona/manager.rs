@@ -16,7 +16,7 @@ use crate::domain::error::{HarnessError, Result};
 use crate::domain::model::SpawnContainer;
 use crate::domain::ports::ContainerManager;
 use crate::outbound::managed_containers::ManagedContainers;
-use crate::outbound::provision;
+use crate::outbound::provision::{self, SESSION_LABEL};
 use crate::outbound::sidecar::SidecarTransport;
 
 const LOG_FETCH_TIMEOUT: Duration = Duration::from_secs(15);
@@ -24,7 +24,6 @@ const IDLE_TIMEOUT: Duration = Duration::from_secs(5 * 60);
 const REAP_INTERVAL: Duration = Duration::from_secs(1);
 const STOP_TIMEOUT: Duration = Duration::from_secs(30);
 const STOP_CONCURRENCY: usize = 10;
-const SESSION_LABEL: &str = "macro.agent_session_id";
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 struct DaytonaSandboxId(String);
@@ -243,6 +242,13 @@ impl ContainerManager for DaytonaContainerManager {
             session_id,
             repo_url,
         } = command;
+        // `GITHUB_TOKEN` is here for `gh auth setup-git` and the github MCP
+        // server. It is also the env var opencode's `github-copilot` provider
+        // activates on, so its mere presence makes opencode advertise every
+        // Copilot model - and a plain PAT is not a Copilot credential, so each
+        // one fails at prompt time with "Authorization header is badly
+        // formatted". `container/opencode.json` pins `enabled_providers` to
+        // keep that list honest; do not drop that pin while this var is set.
         let env = Env::from(HashMap::from([
             ("REPO_URL".to_owned(), repo_url),
             (

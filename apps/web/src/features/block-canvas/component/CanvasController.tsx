@@ -16,6 +16,7 @@ import { observedSize } from '@core/directive/observedSize';
 import { HEIC_EXTENSIONS, HEIC_MIME_TYPES } from '@core/heic/constants';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
+import { HOTKEY_PRIORITY_HIGH } from '@core/hotkey/types';
 import { createMethodRegistration } from '@core/orchestrator';
 import { blockHotkeyScopeSignal } from '@core/signal/blockElement';
 import { blockHandleSignal } from '@core/signal/load';
@@ -341,6 +342,10 @@ export function CanvasController(props: ParentProps) {
       hotkeyToken: TOKENS.canvas.bringToFront,
     });
 
+    // opt+] / opt+[ / shift+arrows are also bound on the split scope (history
+    // forward/back, focus split). Register as 'add' so the split's commands
+    // survive this block, with high priority so the canvas wins while
+    // mounted; a false return (no selection) falls through to the split's.
     registerHotkey({
       hotkey: 'opt+]',
       scopeId: scopeId(),
@@ -351,6 +356,8 @@ export function CanvasController(props: ParentProps) {
         return true;
       },
       hotkeyToken: TOKENS.canvas.bringForward,
+      registrationType: 'add',
+      handlerPriority: HOTKEY_PRIORITY_HIGH,
     });
 
     registerHotkey({
@@ -375,6 +382,8 @@ export function CanvasController(props: ParentProps) {
         return true;
       },
       hotkeyToken: TOKENS.canvas.sendBackward,
+      registrationType: 'add',
+      handlerPriority: HOTKEY_PRIORITY_HIGH,
     });
 
     registerHotkey({
@@ -613,10 +622,13 @@ export function CanvasController(props: ParentProps) {
       scopeId: scopeId(),
       description: 'Nudge right more',
       keyDownHandler: () => {
+        if (!selection.active()) return false;
         nudge('right', true, true);
         return true;
       },
       hotkeyToken: TOKENS.canvas.nudgeRightMore,
+      registrationType: 'add',
+      handlerPriority: HOTKEY_PRIORITY_HIGH,
     });
 
     registerHotkey({
@@ -657,10 +669,13 @@ export function CanvasController(props: ParentProps) {
       scopeId: scopeId(),
       description: 'Nudge left more',
       keyDownHandler: () => {
+        if (!selection.active()) return false;
         nudge('left', true, true);
         return true;
       },
       hotkeyToken: TOKENS.canvas.nudgeLeftMore,
+      registrationType: 'add',
+      handlerPriority: HOTKEY_PRIORITY_HIGH,
     });
 
     registerHotkey({

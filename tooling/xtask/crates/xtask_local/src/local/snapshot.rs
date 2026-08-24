@@ -14,7 +14,7 @@
 //!
 //! Snapshots are tarballs of the Docker volumes, written by a throwaway helper
 //! container, stored under `infra/local/generated/.snapshots/<key>/` (override
-//! with `MACRO_STACK_SNAPSHOT_DIR` — CI bakes this dir into preview images).
+//! with `MACRO_STACK_SNAPSHOT_DIR` — CI and Cloud install can bake this dir).
 
 use std::path::PathBuf;
 use std::process::Command;
@@ -61,8 +61,8 @@ fn archives(instance: &Instance) -> [(&'static str, String); 5] {
 /// archives are written so the files are consistent.
 const STATEFUL_SERVICES: &[&str] = &["postgres", "search", "kafka", "fusionauth", "db"];
 
-/// Where snapshots live. `MACRO_STACK_SNAPSHOT_DIR` overrides for CI bakes and
-/// preview images; the default sits inside the gitignored generated dir.
+/// Where snapshots live. `MACRO_STACK_SNAPSHOT_DIR` overrides for CI and Cloud
+/// install bakes; the default sits inside the gitignored generated dir.
 // xtask is host tooling, not a service reading APP_SECRETS_JSON, so reading the
 // process environment directly is correct here.
 #[allow(clippy::disallowed_methods)]
@@ -104,7 +104,7 @@ impl Plan {
         // cross-arch restore a structural cache miss instead of a latent bug
         // if snapshots are ever shared between machines (e.g. an S3 cache).
         // Today each snapshot store is machine-local or CI-baked for
-        // same-arch Fly machines, so this is insurance, not a behavior change.
+        // same-arch hosts, so this is insurance, not a behavior change.
         h.update(super::arch::detect()?.docker_platform.as_bytes());
 
         // Infra image pins + topology.

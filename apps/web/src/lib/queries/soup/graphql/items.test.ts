@@ -13,7 +13,16 @@ const getGraphqlSoupClientMock = vi.hoisted(() => vi.fn());
 const getGraphqlSoupCacheHostMock = vi.hoisted(() => vi.fn());
 const entityFilterMock = vi.hoisted(() => vi.fn());
 const readRecordsByKeysMock = vi.hoisted(() => vi.fn());
-const mapGraphqlSoupPageMock = vi.hoisted(() => vi.fn((data) => data));
+const mapGraphqlSoupPageMock = vi.hoisted(() =>
+  vi.fn(
+    (data: {
+      user: { soup: { items: unknown[]; nextCursor: string | null } };
+    }) => ({
+      items: data.user.soup.items,
+      next_cursor: data.user.soup.nextCursor,
+    })
+  )
+);
 const mapSoupPageToEntityListMock = vi.hoisted(() =>
   vi.fn((page) => page.items)
 );
@@ -52,6 +61,22 @@ import { createGraphqlSoupAstItemsQuery } from './items';
 type FakeExecution = {
   next(data: unknown): void;
 };
+
+type SoupPageFixture = {
+  items: unknown[];
+  next_cursor: string | null;
+};
+
+function graphqlSoupPage(page: SoupPageFixture) {
+  return {
+    user: {
+      soup: {
+        items: page.items,
+        nextCursor: page.next_cursor,
+      },
+    },
+  };
+}
 
 function makeFakeClient(): {
   client: Client;
@@ -149,10 +174,14 @@ describe('createGraphqlSoupAstItemsQuery', () => {
             expect(query.data()?.entities[0]?.name).toBe('Local task');
           })
           .then(() => {
-            fake.executions[0]?.next({
-              items: [{ id: 'task-1', type: 'document', name: 'Network task' }],
-              next_cursor: null,
-            });
+            fake.executions[0]?.next(
+              graphqlSoupPage({
+                items: [
+                  { id: 'task-1', type: 'document', name: 'Network task' },
+                ],
+                next_cursor: null,
+              })
+            );
             expect(query.isPlaceholderData()).toBe(false);
             expect(query.data()?.entities[0]?.name).toBe('Network task');
             dispose();
@@ -205,10 +234,14 @@ describe('createGraphqlSoupAstItemsQuery', () => {
             expect(query.isPlaceholderData()).toBe(true);
           })
           .then(async () => {
-            fake.executions[0]?.next({
-              items: [{ id: 'task-1', type: 'document', name: 'Network task' }],
-              next_cursor: null,
-            });
+            fake.executions[0]?.next(
+              graphqlSoupPage({
+                items: [
+                  { id: 'task-1', type: 'document', name: 'Network task' },
+                ],
+                next_cursor: null,
+              })
+            );
             expect(query.data()?.entities[0]?.name).toBe('Optimistic task');
 
             notifyCacheChanged();
@@ -239,20 +272,23 @@ describe('createGraphqlSoupAstItemsQuery', () => {
       );
 
       expect(fake.executions).toHaveLength(1);
-      fake.executions[0]?.next(firstPage);
+      fake.executions[0]?.next(graphqlSoupPage(firstPage));
+      expect(mapGraphqlSoupPageMock).toHaveBeenCalledTimes(1);
 
       const initial = query.data();
       const initialEntity = initial?.entities[0];
       expect(initialEntity).toEqual(firstPage.items[0]);
 
-      fake.executions[0]?.next(structuredClone(firstPage));
+      fake.executions[0]?.next(graphqlSoupPage(structuredClone(firstPage)));
       expect(query.data()).toBe(initial);
       expect(query.data()?.entities[0]).toBe(initialEntity);
 
-      fake.executions[0]?.next({
-        ...firstPage,
-        items: [{ ...firstPage.items[0], name: 'Updated task' }],
-      });
+      fake.executions[0]?.next(
+        graphqlSoupPage({
+          ...firstPage,
+          items: [{ ...firstPage.items[0], name: 'Updated task' }],
+        })
+      );
       expect(query.data()?.entities[0]).toBe(initialEntity);
       expect(query.data()?.entities[0]?.name).toBe('Updated task');
 

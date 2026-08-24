@@ -27,28 +27,36 @@ export function MarkMessageNotifications(props: {
     isChannelNotification(n) &&
     n.notification_metadata.content.messageId === props.messageId;
 
+  // A message can generate several notifications — notably one
+  // `document_mention` per mentioned document. Mark every notification for
+  // this message in one batch; selecting only the first leaves the rest unread
+  // and makes a channel row keep targeting the same message.
+  //
   // Not a one-shot latch: a stale refetch can land after the optimistic write
-  // and flip the notification back to unviewed while this row stays mounted,
-  // so re-mark whenever the cache regresses, bounded per mount. inFlight is a
+  // and flip notifications back to unviewed while this row stays mounted, so
+  // re-mark whenever the cache regresses, bounded per mount. inFlight is a
   // signal so a regression that lands mid-mark re-runs the effect on settle.
   const [inFlight, setInFlight] = createSignal(false);
   let attempts = 0;
 
   createEffect(() => {
-    const existing = notifications().find(isMessageNotification);
-    if (
-      !existing ||
-      existing.viewed_at ||
-      inFlight() ||
-      attempts >= MAX_MARK_ATTEMPTS
-    ) {
+    const unread = notifications().filter(
+      (notification) =>
+        isMessageNotification(notification) && !notification.viewed_at
+    );
+    if (unread.length === 0 || inFlight() || attempts >= MAX_MARK_ATTEMPTS) {
       return;
     }
     attempts += 1;
     setInFlight(true);
-    notificationSource.markAsRead(existing).finally(() => {
-      setInFlight(false);
-    });
+    void notificationSource
+      .bulkMarkAsRead(unread)
+      .catch((error) => {
+        console.error('Failed to mark message notifications as read', error);
+      })
+      .finally(() => {
+        setInFlight(false);
+      });
   });
 
   return <>{props.children}</>;

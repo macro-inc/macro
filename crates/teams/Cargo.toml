@@ -4,6 +4,11 @@ name = "teams"
 publish = false
 version = "0.1.0"
 
+[[bin]]
+name = "backfill_teammate_dms"
+path = "src/bin/backfill_teammate_dms.rs"
+required-features = ["backfill_binary"]
+
 [features]
 ai_tools = [
   "dep:ai_toolset",
@@ -21,6 +26,13 @@ axum = [
   "entity_access/axum",
   "entity_access/inbound",
   "entity_access/ports",
+]
+backfill_binary = [
+  "channels/outbound",
+  "dep:database_env_vars",
+  "dep:macro_entrypoint",
+  "outbound",
+  "ports",
 ]
 default = ["ai_tools", "axum", "inbound", "outbound", "ports"]
 inbound = ["axum", "ports"]
@@ -53,9 +65,11 @@ async-trait = { workspace = true, optional = true }
 chrono = { workspace = true }
 channels = { path = "../channels", default-features = false, features = ["ports"] }
 contacts = { path = "../contacts", default-features = false, optional = true }
+database_env_vars = { path = "../database_env_vars", optional = true }
 macro_authorization = { path = "../macro_authorization", optional = true, default-features = false, features = [
   "axum",
 ] }
+macro_entrypoint = { path = "../macro_entrypoint", optional = true }
 macro_event_broker = { path = "../macro_event_broker", default-features = false }
 macro_event_topics = { path = "../macro_event_topics" }
 macro_user_id = { path = "../macro_user_id" }

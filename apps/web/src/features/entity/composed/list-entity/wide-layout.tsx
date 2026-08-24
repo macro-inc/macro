@@ -32,6 +32,7 @@ import { isSearchEntity } from '../../types/search';
 import { AutomationWideContent } from './automation';
 import { CallParticipants, CallWideContent } from './call';
 import {
+  ChannelActiveCallBadge,
   ChannelJoinButton,
   ChannelMessageWideContent,
   ChannelWideContent,
@@ -270,6 +271,9 @@ export function WideLayout(props: LayoutProps) {
               />
             </span>
           )}
+        </Show>
+        <Show when={isChannelEntity(props.entity) && props.entity}>
+          {(entity) => <ChannelActiveCallBadge channelId={entity().id} />}
         </Show>
         <Show
           when={

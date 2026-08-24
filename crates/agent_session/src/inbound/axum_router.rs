@@ -45,8 +45,8 @@ use crate::domain::model::{
     AgentSession, AgentSessionId, Message, SessionBot, SessionStatus, StoredAgentSessionLog,
 };
 use crate::domain::ports::{
-    AgentSessionNotificationRecipient, BotDirectory, BotFacts, ControlEvent, ExternalSessionOpener,
-    OpenExternalAgentSession, SessionThread,
+    AgentSessionNotificationRecipient, BotDirectory, BotFacts, ControlEvent,
+    OpenExternalAgentSession, OpenManagedSession, SessionOpener, SessionThread,
 };
 use crate::domain::service::AgentSessionService;
 use bots::domain::models::BotId;
@@ -648,7 +648,7 @@ pub fn agent_session_create_router<Opener, Bots, Auth, S>(
     state: CreateSessionState<Opener, Bots, Auth>,
 ) -> Router<S>
 where
-    Opener: ExternalSessionOpener,
+    Opener: SessionOpener,
     Bots: BotDirectory,
     Auth: MacroAuthorizationService,
     S: Clone + Send + Sync + 'static,
@@ -663,16 +663,32 @@ where
 
 /// Request body for `POST /agent-sessions`.
 ///
+/// Carries two shapes, told apart by `workspace`. Naming one asks for an
+/// external session: the runtime is the bot operator's, so the caller has to
+/// say which bot and which directory, and must own that bot. Omitting it asks
+/// for a managed session, whose sandbox this deployment provisions from its
+/// own configuration - which is why the fields describing someone else's
+/// runtime must be omitted along with it rather than quietly ignored. Mixing
+/// the two is refused rather than guessed at, so that no request can reach the
+/// managed path carrying a bot the caller was never entitled to name.
+///
 /// Clients serialize this, so both derives are used.
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateAgentSessionRequest {
     /// Bot the session runs for. Bot callers may omit it (their own identity
     /// is used) and must not name another bot; user callers must supply a
-    /// bot they own.
+    /// bot they own. External sessions only: a managed session runs as the
+    /// bot its deployment is configured for.
     pub bot_id: Option<Uuid>,
-    /// Absolute directory the bot's harness runs in on its runtime.
-    pub workspace: String,
+    /// Absolute directory the bot's harness runs in on its runtime. Present
+    /// for an external session, absent for a managed one, which runs in the
+    /// path baked into its image.
+    pub workspace: Option<String>,
+    /// First prompt to deliver once the session is running. Managed sessions
+    /// only - an external runtime sends its own first prompt through the
+    /// control endpoint. Omitted, the session opens idle.
+    pub prompt: Option<String>,
     /// Repository nominally checked out at `workspace`. Informational and
     /// optional: having it cloned there is the runtime operator's job.
     pub repo_url: Option<String>,
@@ -756,6 +772,8 @@ pub enum CreateSessionApiError {
     UnparseableOwner,
     /// The workspace is not an acceptable path.
     InvalidWorkspace(&'static str),
+    /// The request mixed the managed and external shapes.
+    MixedSessionShape,
     /// The thread already routes to a session; carries it for recovery.
     ThreadSessionExists {
         /// The existing session, when it could be resolved.
@@ -800,6 +818,12 @@ impl IntoResponse for CreateSessionApiError {
                 "owner is not a user id".to_owned(),
             ),
             Self::InvalidWorkspace(reason) => (StatusCode::UNPROCESSABLE_ENTITY, reason.to_owned()),
+            Self::MixedSessionShape => (
+                StatusCode::UNPROCESSABLE_ENTITY,
+                "a managed session takes only a prompt; naming a workspace, bot, repo, \
+                 owner or thread asks for an external one"
+                    .to_owned(),
+            ),
             Self::ThreadSessionExists { session_id } => {
                 let body = ThreadSessionExistsResponse {
                     message: THREAD_SESSION_EXISTS_MESSAGE.to_owned(),
@@ -910,7 +934,7 @@ fn resolve_owner(
 /// first prompt through the control endpoint.
 #[tracing::instrument(skip_all, err(Debug))]
 pub async fn create_agent_session_handler<
-    Opener: ExternalSessionOpener,
+    Opener: SessionOpener,
     Bots: BotDirectory,
     Auth: MacroAuthorizationService,
 >(
@@ -918,6 +942,40 @@ pub async fn create_agent_session_handler<
     caller: MacroAuthorizationExtractor<Auth, UserOrBot>,
     Json(request): Json<CreateAgentSessionRequest>,
 ) -> Result<(StatusCode, Json<CreateAgentSessionResponse>), CreateSessionApiError> {
+    // No workspace means the managed shape. It shares this route but not its
+    // authorization: nothing about which bot runs the session is the caller's
+    // to say, so the bot-ownership checks below have nothing to check and are
+    // skipped. That is only sound while the request carries none of the
+    // external fields, which is what this refuses.
+    let Some(workspace) = request.workspace else {
+        if request.bot_id.is_some()
+            || request.repo_url.is_some()
+            || request.thread.is_some()
+            || request.owner.is_some()
+        {
+            return Err(CreateSessionApiError::MixedSessionShape);
+        }
+        let owner = resolve_owner(&caller.authorization, None)?;
+        let session = state
+            .opener
+            .open_managed_session(OpenManagedSession {
+                owner,
+                prompt: request.prompt,
+            })
+            .await?;
+        return Ok((
+            StatusCode::CREATED,
+            Json(CreateAgentSessionResponse {
+                session: session.into(),
+            }),
+        ));
+    };
+
+    // An external runtime sends its own first prompt through the control
+    // endpoint, so accepting one here would silently drop it.
+    if request.prompt.is_some() {
+        return Err(CreateSessionApiError::MixedSessionShape);
+    }
     let bot_id = resolve_bot(&caller.authorization, request.bot_id)?;
 
     let BotFacts {
@@ -944,7 +1002,7 @@ pub async fn create_agent_session_handler<
         return Err(CreateSessionApiError::NotYourBot);
     }
 
-    validate_workspace(&request.workspace)?;
+    validate_workspace(&workspace)?;
     let owner = resolve_owner(&caller.authorization, request.owner)?;
 
     let thread = request.thread.map(|thread| SessionThread {
@@ -957,7 +1015,7 @@ pub async fn create_agent_session_handler<
         .opener
         .open_external_session(OpenExternalAgentSession {
             bot_id,
-            workspace: request.workspace,
+            workspace,
             repo_url: request.repo_url,
             owner,
             thread: thread.clone(),

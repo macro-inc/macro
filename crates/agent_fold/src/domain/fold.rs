@@ -413,7 +413,7 @@ impl FoldState {
                     if self.pending_config_requests.remove(id) || control.is_some() {
                         StepChange::message(control)
                     } else {
-                        StepChange::message(self.end_turn(id, None))
+                        StepChange::message(self.fail_turn(id, &error.message))
                     }
                 }
                 RawJsonRpcMessage::Request(_) | RawJsonRpcMessage::Notification(_) => Vec::new(),
@@ -622,6 +622,55 @@ impl FoldState {
         }
 
         self.close_turn(stop)
+    }
+
+    /// End the open turn because its prompt was answered with an error.
+    ///
+    /// The turn has to end even when the agent produced nothing at all -
+    /// which is the common case, since a runtime that rejects a prompt
+    /// rejects it before writing anything. That is why this cannot go
+    /// through [`Self::close_turn`], whose job is to stamp a stop reason on
+    /// an agent message that exists: here the agent message is created if
+    /// need be, so the failure has somewhere to live and the turn is
+    /// unambiguously over.
+    fn fail_turn(&mut self, response_id: &RequestId, message: &str) -> Option<Changed> {
+        let closes_the_open_turn = self
+            .turn
+            .as_ref()
+            .and_then(|turn| turn.prompt_id.as_ref())
+            .is_some_and(|prompt_id| prompt_id == response_id);
+        if !closes_the_open_turn {
+            return None;
+        }
+
+        // Give the turn an agent message if the runtime never opened one, so
+        // the stop reason - and with it the error - has a message to sit on.
+        let agent = match self.turn.as_ref()?.agent {
+            Some(agent) => agent,
+            None => {
+                let turn_id = self.turn.as_ref()?.id;
+                let agent = self.messages.len();
+                self.messages.push(FoldedMessage {
+                    id: turn_id,
+                    author: Author::Agent,
+                    request_id: None,
+                    parts: NonEmpty::one(MessagePart::Text {
+                        text: String::new(),
+                    }),
+                    stop: None,
+                });
+                if let Some(turn) = self.turn.as_mut() {
+                    turn.agent = Some(agent);
+                }
+                agent
+            }
+        };
+
+        self.turn = None;
+        self.messages[agent].stop = Some(StopReason::Failed {
+            message: message.to_owned(),
+        });
+        Some(Changed::new(agent))
     }
 
     /// Handle a `session/update`.

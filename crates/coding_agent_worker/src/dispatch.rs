@@ -51,7 +51,11 @@ impl WorkExecutor for Dispatcher {
                     // The bot is the one whose credentials this daemon holds,
                     // and naming another one is refused anyway.
                     bot_id: None,
-                    workspace: self.workspace.path.to_string_lossy().into_owned(),
+                    workspace: Some(self.workspace.path.to_string_lossy().into_owned()),
+                    // External sessions carry no first prompt: this daemon is
+                    // the runtime, and it delivers the mention itself through
+                    // the control endpoint. Sending one here is refused.
+                    prompt: None,
                     repo_url: self.workspace.repo_url.clone(),
                     owner: Some(sender.as_ref().to_owned()),
                     thread: Some(CreateSessionThread {

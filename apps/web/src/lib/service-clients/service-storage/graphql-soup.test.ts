@@ -12,9 +12,11 @@ const mocks = vi.hoisted(() => {
       markApiStarted = resolve;
     });
   let queuedMutationCount = 0;
+  let initializationErrorHandler: ((error: Error) => void) | undefined;
+  const cleanupOrder: string[] = [];
   const host = {
     disabled: false,
-    dispose: vi.fn(),
+    dispose: vi.fn(() => cleanupOrder.push('host')),
     enqueueOptimisticMutation: vi.fn(async () => {
       queuedMutationCount += 1;
       return { transactionId: 'tx-1' };
@@ -62,10 +64,23 @@ const mocks = vi.hoisted(() => {
     releaseApi: () => releaseApi?.(),
     resetQueue: () => {
       queuedMutationCount = 0;
+      cleanupOrder.length = 0;
+      initializationErrorHandler = undefined;
     },
     queueDepth: () => queuedMutationCount,
+    recordSubscriptionDisposal: () => cleanupOrder.push('subscriptions'),
+    cleanupOrder: () => [...cleanupOrder],
+    failInitialization: () =>
+      initializationErrorHandler?.(
+        new Error('injected initialization failure')
+      ),
     plainClient,
-    createWorkerCacheHost: vi.fn(() => host),
+    createWorkerCacheHost: vi.fn(
+      (options: { onInitializationError?: (error: Error) => void }) => {
+        initializationErrorHandler = options.onInitializationError;
+        return host;
+      }
+    ),
     createTauriCacheHost: vi.fn(() => host),
   };
 });
@@ -123,7 +138,7 @@ vi.mock('./graphql-soup-websocket', () => ({
   createGraphqlSoupWebSocketUrlResolver: () => () => 'ws://dss.test',
   createGraphqlSoupSubscriptionsLifecycle: () => ({
     replace: vi.fn(),
-    dispose: vi.fn(),
+    dispose: vi.fn(() => mocks.recordSubscriptionDisposal()),
   }),
 }));
 vi.mock('@urql/core', () => ({
@@ -187,6 +202,22 @@ describe('GraphQL Soup browser cache session gate', () => {
     expect(mocks.host.commitOptimisticWrite).toHaveBeenCalledOnce();
     expect(mocks.queueDepth()).toBe(0);
     expect(mocks.host.dispose).not.toHaveBeenCalled();
+  });
+
+  it('unsubscribes cache operations before disposing a failed host', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const soup = await import('./graphql-soup');
+    const cachedClient = soup.getGraphqlSoupClient();
+
+    mocks.failInitialization();
+
+    expect(cachedClient).not.toBe(mocks.plainClient);
+    expect(soup.getGraphqlSoupClient()).toBe(mocks.plainClient);
+    expect(mocks.cleanupOrder()).toEqual(['subscriptions', 'host']);
+    expect(warn).toHaveBeenCalledWith(
+      'graphql cache async init failed; using uncached client',
+      expect.objectContaining({ message: 'injected initialization failure' })
+    );
   });
 
   it('imports and uses the native path without constructing browser workers', async () => {
