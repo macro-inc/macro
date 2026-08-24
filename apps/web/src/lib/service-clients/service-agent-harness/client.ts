@@ -6,14 +6,13 @@ import type {
   ControlRequest,
   CreateAgentSessionRequest,
   CreateAgentSessionResponse,
+  SandboxSize,
+  SandboxSizeBody,
 } from './generated/schemas';
 
+export type { SandboxSize, SandboxSizeBody };
+
 const agentHarnessHost = SERVER_HOSTS['agent-harness'];
-
-/** Named compute tier for a managed coding-agent sandbox. */
-export type SandboxSize = 'small' | 'default' | 'large';
-
-export type SandboxSizeBody = { size: SandboxSize };
 
 /** Authenticated client for controlling live agent sessions. */
 export const agentHarnessServiceClient = {
