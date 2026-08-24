@@ -17,6 +17,7 @@ import {
   ENABLE_CURSOR_AGENTS,
 } from '@core/constant/featureFlags';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
+import { useCursorApiKeyStatusQuery } from '@queries/auth/cursor-api-key';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import type { IUser } from '@core/user/types';
 import { uniqueByKey } from '@core/util/compareUtils';
@@ -257,6 +258,15 @@ export function ChannelInput(props: ChannelInputProps) {
     queueMicrotask(() => focusEditorNow());
   };
 
+  // `@cursor` runs on the mentioning user's own Cursor API key, so it is only
+  // offered to users who have registered one — mentioning it without a key
+  // could only fail. Never suspends and only fetches when the flag is on: this
+  // decides one optional typeahead entry and must not hold up the composer.
+  const cursorApiKey = useCursorApiKeyStatusQuery({
+    neverSuspend: true,
+    enabled: ENABLE_CURSOR_AGENTS(),
+  });
+
   // Macro AI and Macro Coder (flag-gated) are mentionable in every channel,
   // and any bot added to the channel is mentionable too. All are surfaced
   // through the same `@`-mention typeahead as participants and re-tagged as
@@ -271,6 +281,9 @@ export function ChannelInput(props: ChannelInputProps) {
     }
     if (
       ENABLE_CURSOR_AGENTS() &&
+      // Hiding it is not enforcement — a mention can still arrive from a
+      // copied message or another client — so the harness refuses these too.
+      cursorApiKey.data?.registered &&
       !base.some((user) => isCursorBotId(user.id))
     ) {
       base.unshift(cursorMentionUser());
