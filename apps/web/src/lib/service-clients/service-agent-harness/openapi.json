@@ -10,6 +10,92 @@
     "version": "0.1.0"
   },
   "paths": {
+    "/agent-sandbox-size": {
+      "get": {
+        "tags": ["agent-sessions"],
+        "summary": "Read the caller's default sandbox size for new `@coder` sessions.",
+        "operationId": "get_agent_sandbox_size",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SandboxSizeBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": ["agent-sessions"],
+        "summary": "Set the caller's default sandbox size for the next `@coder` mention.",
+        "operationId": "put_agent_sandbox_size",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SandboxSizeBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SandboxSizeBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/agent-sessions": {
       "post": {
         "tags": ["agent-sessions"],
@@ -335,6 +421,77 @@
           }
         }
       }
+    },
+    "/agent-sessions/{session_id}/sandbox-size": {
+      "put": {
+        "tags": ["agent-sessions"],
+        "summary": "Resize this session's sandbox and remember the size as the owner's default.",
+        "operationId": "put_agent_session_sandbox_size",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "ID of the agent session",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SandboxSizeBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SandboxSizeBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -471,6 +628,7 @@
           "model",
           "harness",
           "workspace",
+          "sandboxSize",
           "status",
           "createdAt",
           "modifiedAt"
@@ -520,6 +678,10 @@
           "repoUrl": {
             "type": ["string", "null"],
             "description": "The repository the session works with, when one was stated."
+          },
+          "sandboxSize": {
+            "$ref": "#/components/schemas/SandboxSize",
+            "description": "Compute tier of the managed sandbox."
           },
           "status": {
             "$ref": "#/components/schemas/SessionStatusDto",
@@ -656,6 +818,22 @@
           "direction": {
             "$ref": "#/components/schemas/LogDirectionDto",
             "description": "Which way the frame travelled."
+          }
+        }
+      },
+      "SandboxSize": {
+        "type": "string",
+        "description": "Named compute tier for a managed sandbox.\n\nDisk is always 96 GiB; CPU and RAM vary. The API and database store the\nname, never raw resource integers.",
+        "enum": ["small", "default", "large"]
+      },
+      "SandboxSizeBody": {
+        "type": "object",
+        "description": "Request or response body for a named sandbox size.",
+        "required": ["size"],
+        "properties": {
+          "size": {
+            "$ref": "#/components/schemas/SandboxSize",
+            "description": "Named compute tier."
           }
         }
       },
