@@ -2887,6 +2887,16 @@ type GraphqlNewEmailMetadata {
 }
 
 """
+A newly delivered notification patch.
+"""
+type GraphqlNewNotification {
+	"""
+	The newly delivered notification.
+	"""
+	notification: GraphqlNotification!
+}
+
+"""
 Typed GraphQL union containing every supported notification event payload.
 """
 union GraphqlNotifEvent = GraphqlChannelMentionMetadata | GraphqlDocumentMentionMetadata | GraphqlMentionedInDocumentCommentMetadata | GraphqlRepliedToDocumentCommentThreadMetadata | GraphqlCommentedOnDocumentMetadata | GraphqlChannelInviteMetadata | GraphqlChannelMessageSendMetadata | GraphqlChannelReplyMetadata | GraphqlCallStartedMetadata | GraphqlNewEmailMetadata | GraphqlInboxReauthRequiredMetadata | GraphqlInviteToTeamMetadata | GraphqlTaskAssignedMetadata | GraphqlReminderMetadata | GraphqlCalendarEventReminderMetadata | GraphqlAiResponseMetadata | GraphqlGithubPrStatusChangedMetadata | GraphqlGithubPrCheckRunMetadata | GraphqlGithubReviewRequestedMetadata | GraphqlGithubPrCommentMetadata | GraphqlGithubPrMentionMetadata | GraphqlGithubPrReviewMetadata
@@ -2986,9 +2996,9 @@ enum GraphqlNotificationDocumentSubType {
 }
 
 """
-Realtime notification patch represented as either an update or cache deletion.
+Realtime notification patch represented as a new, updated, or deleted notification.
 """
-union GraphqlNotificationPatch = GraphqlNotification | GraphqlCacheDeletion
+union GraphqlNotificationPatch = GraphqlNewNotification | GraphqlUpdatedNotification | GraphqlCacheDeletion
 
 """
 A numeric property value.
@@ -5253,6 +5263,16 @@ type GraphqlTeamRolePermission {
 	Team membership role held by the viewer.
 	"""
 	role: GraphqlTeamRole!
+}
+
+"""
+An update to an existing notification.
+"""
+type GraphqlUpdatedNotification {
+	"""
+	The updated notification.
+	"""
+	notification: GraphqlNotification!
 }
 
 """
