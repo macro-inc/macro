@@ -95,22 +95,44 @@ pub async fn get_message_and_thread_id_by_provider_id(
 /// Returns `true` if a message already exists for this (provider_id, link_id), else `false`.
 #[tracing::instrument(skip(pool), err)]
 #[allow(clippy::disallowed_methods, reason = "legacy code. fix later")]
+/// Returns which of `provider_message_ids` already exist for the link.
+#[tracing::instrument(skip(pool, provider_message_ids), err)]
+pub async fn filter_existing_provider_message_ids(
+    pool: &PgPool,
+    link_id: Uuid,
+    provider_message_ids: &[String],
+) -> anyhow::Result<std::collections::HashSet<String>> {
+    let rows = sqlx::query_scalar!(
+        r#"
+        SELECT provider_id AS "provider_id!"
+        FROM email_messages
+        WHERE link_id = $1 AND provider_id = ANY($2)
+        "#,
+        link_id,
+        provider_message_ids,
+    )
+    .fetch_all(pool)
+    .await?;
+
+    Ok(rows.into_iter().collect())
+}
+
 pub async fn message_exists_by_provider_id(
     pool: &PgPool,
     provider_id: &str,
     link_id: Uuid,
 ) -> anyhow::Result<bool> {
-    let exists: bool = sqlx::query_scalar(
+    let exists = sqlx::query_scalar!(
         r#"
         SELECT EXISTS(
             SELECT 1
             FROM email_messages
             WHERE provider_id = $1 AND link_id = $2
-        )
+        ) AS "exists!"
         "#,
+        provider_id,
+        link_id,
     )
-    .bind(provider_id)
-    .bind(link_id)
     .fetch_one(pool)
     .await?;
 

@@ -21,6 +21,8 @@ export interface CalendarOccurrencesQueryInput {
 
 export interface CalendarOccurrencesQueryOptions {
   enabled?: boolean;
+  pollWhileSyncing?: boolean;
+  refetchOnWindowFocus?: boolean;
 }
 
 export interface CalendarOccurrencesData {
@@ -115,8 +117,9 @@ export function useCalendarOccurrencesQuery(
         Boolean(userId) && range !== undefined && options?.().enabled !== false,
       staleTime: CALENDAR_STALE_TIME,
       placeholderData: (p) => p,
-      refetchOnWindowFocus: true,
+      refetchOnWindowFocus: options?.().refetchOnWindowFocus ?? true,
       refetchInterval: (query) =>
+        options?.().pollWhileSyncing !== false &&
         query.state.data?.syncStatus === CalendarSyncStatus.syncing
           ? CALENDAR_SYNC_POLL_INTERVAL
           : false,

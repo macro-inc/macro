@@ -4,8 +4,9 @@
 //! actual prompting lives here.
 use crate::model::router::{ModelRouter, RoutedModel};
 use ai_usage::{UsageContext, UsageRecorder};
-use rig_core::agent::{AgentBuilder, PromptResponse};
-use rig_core::completion::{CompletionModel, Prompt};
+use rig_agent::agent::{AgentBuilder, PromptResponse};
+use rig_agent::completion::Prompt;
+use rig_core::completion::CompletionModel;
 use rig_core::message::Message;
 
 const ONE_SHOT_MAX_TOKENS: u64 = 16_000;
@@ -117,6 +118,6 @@ async fn prompt_with_history<M: CompletionModel + 'static>(
     Ok(agent
         .prompt(prompt.clone())
         .extended_details()
-        .with_history(history.to_vec())
+        .history(history.to_vec())
         .await?)
 }

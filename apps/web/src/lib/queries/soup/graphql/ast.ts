@@ -1,4 +1,5 @@
 import type {
+  GraphqlCalendarEventLiteral as GraphqlCalendarEventLiteralInput,
   GraphqlCallLiteral as GraphqlCallLiteralInput,
   GraphqlCallStatus,
   GraphqlChannelLiteral as GraphqlChannelLiteralInput,
@@ -15,7 +16,8 @@ import type {
   GroupedSoupContinuationInput as GraphqlGroupedSoupContinuationInput,
   GroupedSoupInput as GraphqlGroupedSoupInput,
   GraphqlProjectLiteral as GraphqlProjectLiteralInput,
-  GraphqlPropertiesLiteral as GraphqlPropertiesLiteralInput,
+  GraphqlFilterPropertiesLiteral as GraphqlPropertiesLiteralInput,
+  GraphqlReminderLiteral as GraphqlReminderLiteralInput,
   SoupInitialInput as GraphqlSoupInitialInput,
   SoupInput as GraphqlSoupInput,
 } from '@service-storage/graphql/generated/graphql';
@@ -47,6 +49,7 @@ type RestAst =
   | { l: unknown };
 
 type TargetAstKey =
+  | 'calf'
   | 'df'
   | 'pf'
   | 'cf'
@@ -56,11 +59,11 @@ type TargetAstKey =
   | 'callf'
   | 'ccf'
   | 'fef'
+  | 'remf'
   | 'propf';
 
 type AstBody = Partial<Record<TargetAstKey, RestAst>> & {
-  /** Calendar, CRM-address, and CRM-domain filters are REST-only today. */
-  calf?: unknown;
+  /** CRM-address and CRM-domain filters are REST-only today. */
   eca?: string[];
   ecd?: string[];
   emailView?: 'inbox' | 'drafts' | 'sent' | 'all';
@@ -196,6 +199,22 @@ function mapEmailValue(value: unknown): GraphqlEmailValueInput {
   if (typeof value.domain === 'string') return { domain: value.domain };
 
   unsupported('expected partial/complete/domain email value');
+}
+
+function mapCalendarEventLiteral(
+  literal: unknown
+): GraphqlCalendarEventLiteralInput {
+  const [field, value] = singleLiteralField(literal);
+  switch (field) {
+    case 'id':
+      return { id: mapString(value, 'id') };
+    case 'nd':
+      return { notificationDone: mapBoolean(value, 'notificationDone') };
+    case 'ns':
+      return { notificationSeen: mapBoolean(value, 'notificationSeen') };
+    default:
+      unsupported(`calendar event literal ${field}`);
+  }
 }
 
 function mapDocumentLiteral(literal: unknown): GraphqlDocumentLiteralInput {
@@ -444,6 +463,26 @@ function mapForeignEntityLiteral(
   }
 }
 
+function mapReminderLiteral(literal: unknown): GraphqlReminderLiteralInput {
+  const [field, value] = singleLiteralField(literal);
+  switch (field) {
+    // `inc` is a unit literal, so it only ever arrives as `true` — which is
+    // the only value the server accepts, reminders being opt-in.
+    case 'inc':
+      return { include: mapBoolean(value, 'include') };
+    case 'id':
+      return { id: mapString(value, 'id') };
+    case 'ent':
+      return { entity: mapString(value, 'entity') };
+    case 'comp':
+      return { completed: mapBoolean(value, 'completed') };
+    case 'fired':
+      return { fired: mapBoolean(value, 'fired') };
+    default:
+      unsupported(`reminder literal ${field}`);
+  }
+}
+
 function mapPropertiesLiteral(literal: unknown): GraphqlPropertiesLiteralInput {
   if (!isRecord(literal)) unsupported('expected property literal object');
   const propertyDefinitionId = mapString(literal.pd, 'propertyDefinitionId');
@@ -460,6 +499,19 @@ function mapPropertiesLiteral(literal: unknown): GraphqlPropertiesLiteralInput {
   unsupported('expected property value so or er');
 }
 
+function mapSortDirection(
+  sortDirection: SoupParams['sort_direction']
+): GraphqlSoupInitialInput['sortDirection'] {
+  switch (sortDirection) {
+    case 'asc':
+      return 'ASC';
+    case 'desc':
+      return 'DESC';
+    case undefined:
+      return undefined;
+  }
+}
+
 function mapSortMethod(
   sortMethod: SoupParams['sort_method']
 ): GraphqlSoupInitialInput['sortMethod'] {
@@ -474,6 +526,8 @@ function mapSortMethod(
       return 'VIEWED_UPDATED';
     case 'frecency':
       return unsupported('sort_method frecency');
+    case 'touched_by_me':
+      return unsupported('sort_method touched_by_me');
     case undefined:
       return undefined;
   }
@@ -499,9 +553,6 @@ function mapEmailView(
 }
 
 function assertGraphqlCompatibleBody(body: AstBody): void {
-  if (body.calf !== undefined) {
-    unsupported('calendar filters are not supported by GraphQL Soup yet');
-  }
   if (body.eca !== undefined) {
     unsupported(
       'CRM-scoped email address filters are not supported by GraphQL Soup yet'
@@ -518,6 +569,12 @@ function makeGraphqlFilters(body: AstBody): GraphqlEntityFilterAstInput {
   assertGraphqlCompatibleBody(body);
   const filters: GraphqlEntityFilterAstInput = {};
 
+  if (body.calf) {
+    filters.calendarEventFilter = compileExpr(
+      body.calf,
+      mapCalendarEventLiteral
+    );
+  }
   if (body.df)
     filters.documentFilter = compileExpr(body.df, mapDocumentLiteral);
   if (body.pf) filters.projectFilter = compileExpr(body.pf, mapProjectLiteral);
@@ -542,6 +599,9 @@ function makeGraphqlFilters(body: AstBody): GraphqlEntityFilterAstInput {
       mapForeignEntityLiteral
     );
   }
+  if (body.remf) {
+    filters.reminderFilter = compileExpr(body.remf, mapReminderLiteral);
+  }
   if (body.propf) {
     filters.propertiesFilter = compileExpr(body.propf, mapPropertiesLiteral);
   }
@@ -558,12 +618,17 @@ export function makeGraphqlSoupInput(args: {
   assertGraphqlCompatibleBody(body);
   const emailView = mapEmailView(body.emailView);
 
+  // The cursor does not carry the direction, so the continuation has to
+  // re-send it or page two comes back in the opposite order.
+  const sortDirection = mapSortDirection(args.params.sort_direction);
+
   if (args.cursor != null) {
     return {
       continuation: {
         cursor: args.cursor,
         expand: true,
         emailView,
+        sortDirection,
       },
     };
   }
@@ -573,6 +638,7 @@ export function makeGraphqlSoupInput(args: {
       limit: args.params.limit ?? undefined,
       expand: true,
       sortMethod: mapSortMethod(args.params.sort_method),
+      sortDirection,
       emailView,
       filters: makeGraphqlFilters(body),
     },

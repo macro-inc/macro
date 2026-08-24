@@ -5,6 +5,7 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
 import {
+  confirmSessionExpired,
   fetchToken,
   fetchWithToken,
   unsetTokenPromise,
@@ -12,12 +13,26 @@ import {
 
 const RESOURCE_URL = 'https://localhost/resource';
 
+// One of the auth service's definitive "session cannot be refreshed" bodies.
+const REFRESH_REJECTED_BODY = 'no refresh token to refresh';
+
 function jsonResponse(status: number, body: unknown = {}): Response {
   return {
     ok: status >= 200 && status < 300,
     status,
     json: () => Promise.resolve(body),
+    text: () => Promise.resolve(JSON.stringify(body)),
     headers: new Headers({ 'Content-Type': 'application/json' }),
+  } as Response;
+}
+
+function textResponse(status: number, body: string): Response {
+  return {
+    ok: status >= 200 && status < 300,
+    status,
+    json: () => Promise.reject(new SyntaxError('not json')),
+    text: () => Promise.resolve(body),
+    headers: new Headers({ 'Content-Type': 'text/plain' }),
   } as Response;
 }
 
@@ -46,6 +61,7 @@ describe('fetchWithToken refresh latch', () => {
   afterEach(() => {
     global.fetch = originalFetch;
     mockFetch.mockReset();
+    vi.useRealTimers();
   });
 
   const refreshCalls = () =>
@@ -53,7 +69,11 @@ describe('fetchWithToken refresh latch', () => {
 
   test('fires at most one doomed refresh across sequential 401s', async () => {
     mockFetch.mockImplementation((input) =>
-      Promise.resolve(isRefresh(input) ? jsonResponse(400) : jsonResponse(401))
+      Promise.resolve(
+        isRefresh(input)
+          ? textResponse(400, REFRESH_REJECTED_BODY)
+          : jsonResponse(401)
+      )
     );
 
     for (let i = 0; i < 3; i++) {
@@ -63,6 +83,17 @@ describe('fetchWithToken refresh latch', () => {
         expect(result.error.some((e) => e.code === 'UNAUTHORIZED')).toBe(true);
       }
     }
+
+    expect(refreshCalls()).toBe(1);
+  });
+
+  test('a 401 from the refresh endpoint latches', async () => {
+    mockFetch.mockImplementation((input) =>
+      Promise.resolve(isRefresh(input) ? jsonResponse(401) : jsonResponse(401))
+    );
+
+    await fetchWithToken<{ data: string }>(RESOURCE_URL);
+    await fetchWithToken<{ data: string }>(RESOURCE_URL);
 
     expect(refreshCalls()).toBe(1);
   });
@@ -114,9 +145,107 @@ describe('fetchWithToken refresh latch', () => {
     expect(refreshCalls()).toBe(2);
   });
 
+  test('a proxy 400 without a known rejection body does not latch', async () => {
+    mockFetch.mockImplementation((input) =>
+      Promise.resolve(
+        isRefresh(input)
+          ? textResponse(400, '<html>Bad Request</html>')
+          : jsonResponse(401)
+      )
+    );
+
+    const result = await fetchWithToken<{ data: string }>(RESOURCE_URL);
+    await fetchWithToken<{ data: string }>(RESOURCE_URL);
+
+    expect(refreshCalls()).toBe(2);
+    // The transient failure surfaces as-is instead of masquerading as a dead
+    // session.
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) {
+      expect(result.error.some((e) => e.code === 'HTTP_ERROR')).toBe(true);
+      expect(result.error.some((e) => e.code === 'UNAUTHORIZED')).toBe(false);
+    }
+  });
+
+  test('a gateway error (502) surfaces as HTTP_ERROR and does not latch', async () => {
+    mockFetch.mockImplementation((input) =>
+      Promise.resolve(isRefresh(input) ? jsonResponse(502) : jsonResponse(401))
+    );
+
+    const result = await fetchWithToken<{ data: string }>(RESOURCE_URL);
+    await fetchWithToken<{ data: string }>(RESOURCE_URL);
+
+    expect(refreshCalls()).toBe(2);
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) {
+      expect(result.error.some((e) => e.code === 'UNAUTHORIZED')).toBe(false);
+    }
+  });
+
+  test('a latched failure expires after the TTL', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    mockFetch.mockImplementation((input) =>
+      Promise.resolve(
+        isRefresh(input)
+          ? textResponse(400, REFRESH_REJECTED_BODY)
+          : jsonResponse(401)
+      )
+    );
+
+    await fetchWithToken<{ data: string }>(RESOURCE_URL);
+    await fetchWithToken<{ data: string }>(RESOURCE_URL);
+    expect(refreshCalls()).toBe(1);
+
+    vi.setSystemTime(Date.now() + 61_000);
+
+    await fetchWithToken<{ data: string }>(RESOURCE_URL);
+    expect(refreshCalls()).toBe(2);
+  });
+
+  test('regaining visibility clears the latch', async () => {
+    mockFetch.mockImplementation((input) =>
+      Promise.resolve(
+        isRefresh(input)
+          ? textResponse(400, REFRESH_REJECTED_BODY)
+          : jsonResponse(401)
+      )
+    );
+
+    await fetchWithToken<{ data: string }>(RESOURCE_URL);
+    expect(refreshCalls()).toBe(1);
+
+    // jsdom's visibilityState is 'visible', so this models a foregrounding.
+    document.dispatchEvent(new Event('visibilitychange'));
+
+    await fetchWithToken<{ data: string }>(RESOURCE_URL);
+    expect(refreshCalls()).toBe(2);
+  });
+
+  test('regaining connectivity clears the latch', async () => {
+    mockFetch.mockImplementation((input) =>
+      Promise.resolve(
+        isRefresh(input)
+          ? textResponse(400, REFRESH_REJECTED_BODY)
+          : jsonResponse(401)
+      )
+    );
+
+    await fetchWithToken<{ data: string }>(RESOURCE_URL);
+    expect(refreshCalls()).toBe(1);
+
+    window.dispatchEvent(new Event('online'));
+
+    await fetchWithToken<{ data: string }>(RESOURCE_URL);
+    expect(refreshCalls()).toBe(2);
+  });
+
   test('unsetTokenPromise clears the latch so refresh is attempted again', async () => {
     mockFetch.mockImplementation((input) =>
-      Promise.resolve(isRefresh(input) ? jsonResponse(400) : jsonResponse(401))
+      Promise.resolve(
+        isRefresh(input)
+          ? textResponse(400, REFRESH_REJECTED_BODY)
+          : jsonResponse(401)
+      )
     );
 
     await fetchWithToken<{ data: string }>(RESOURCE_URL);
@@ -148,8 +277,8 @@ describe('fetchWithToken refresh latch', () => {
     await tick();
     expect(refreshCalls()).toBe(2);
 
-    // R1 fails under the stale generation.
-    pending[0].resolve(jsonResponse(400));
+    // R1 fails definitively under the stale generation.
+    pending[0].resolve(textResponse(400, REFRESH_REJECTED_BODY));
     expect((await p1).isErr()).toBe(true);
 
     // R1's finally must not have cleared R2's tokenPromise: a call now dedupes
@@ -165,5 +294,38 @@ describe('fetchWithToken refresh latch', () => {
     // R1's stale failure must not have latched: a fresh 401 still refreshes.
     expect((await fetchToken()).isOk()).toBe(true);
     expect(refreshCalls()).toBe(3);
+  });
+
+  test('confirmSessionExpired bypasses the latch and confirms a definitive rejection', async () => {
+    mockFetch.mockImplementation((input) =>
+      Promise.resolve(
+        isRefresh(input)
+          ? textResponse(400, REFRESH_REJECTED_BODY)
+          : jsonResponse(401)
+      )
+    );
+
+    await fetchWithToken<{ data: string }>(RESOURCE_URL);
+    expect(refreshCalls()).toBe(1);
+
+    // Despite the latch, confirmation must consult the server again.
+    await expect(confirmSessionExpired()).resolves.toBe(true);
+    expect(refreshCalls()).toBe(2);
+  });
+
+  test('confirmSessionExpired reports a transient failure as not expired', async () => {
+    mockFetch.mockImplementation((input) =>
+      Promise.resolve(isRefresh(input) ? jsonResponse(503) : jsonResponse(401))
+    );
+
+    await expect(confirmSessionExpired()).resolves.toBe(false);
+  });
+
+  test('confirmSessionExpired reports an alive session as not expired', async () => {
+    mockFetch.mockImplementation((input) =>
+      Promise.resolve(isRefresh(input) ? jsonResponse(200) : jsonResponse(401))
+    );
+
+    await expect(confirmSessionExpired()).resolves.toBe(false);
   });
 });

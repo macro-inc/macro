@@ -166,6 +166,10 @@ fn insert_graphql_context_data(
     ));
     data.insert(complete_graph::email_content_loader(
         macro_user_id.clone(),
+        email_content_reader.clone(),
+    ));
+    data.insert(complete_graph::email_thread_metadata_loader(
+        macro_user_id.clone(),
         email_content_reader,
     ));
     data.insert(complete_graph::entity_favorite_loader(
@@ -181,5 +185,11 @@ fn insert_graphql_context_data(
     data.insert(complete_graph::entity_notifications_loader(
         macro_user_id,
         state.graphql_notification_reader.clone(),
+    ));
+    // The feed resolver reads the reader directly; the edge goes through
+    // the request's DataLoader.
+    data.insert(state.activity_reader.clone());
+    data.insert(complete_graph::entity_activity_loader(
+        state.activity_reader.clone(),
     ));
 }

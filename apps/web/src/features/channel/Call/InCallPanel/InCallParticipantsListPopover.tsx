@@ -1,6 +1,6 @@
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { toast } from '@core/component/Toast/Toast';
-import { tryMacroId, useDisplayName } from '@core/user';
+import { getDisplayName, tryMacroId } from '@core/user';
 import { Popover } from '@kobalte/core/popover';
 import UsersThree from '@phosphor/users-three.svg';
 import { useGetOrCreateDirectMessageMutation } from '@queries/channel/get-or-create-dm';
@@ -54,13 +54,12 @@ export function InCallParticipantNameRow(props: {
     onError: () => toast.failure('Could not open direct message'),
   });
 
-  const raw = profilePictureIdForMember(props.panel, props.member);
-  const [displayName] = useDisplayName(tryMacroId(raw ?? ''));
   const label = createMemo(() => {
     props.panel.callCtx.trackVersion();
     const r = profilePictureIdForMember(props.panel, props.member);
+    const displayName = getDisplayName(tryMacroId(r ?? ''));
     return (
-      displayName() ||
+      displayName ||
       r ||
       (props.member.kind === 'local' ? 'You' : 'Participant')
     );

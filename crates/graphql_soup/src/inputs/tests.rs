@@ -1,6 +1,3 @@
-use async_graphql::ID;
-use filter_ast::Expr;
-use item_filters::ast::{chat::ChatLiteral, document::DocumentLiteral};
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use models_pagination::{CursorVal, Query};
 
@@ -20,6 +17,7 @@ fn maps_email_view_to_soup_request() {
         sort_method: None,
         email_view: Some(GraphqlEmailView::Sent),
         filters: None,
+        sort_direction: None,
     }))
     .into_request(test_macro_user_id(), vec![])
     .unwrap();
@@ -35,6 +33,7 @@ fn defaults_email_view_to_inbox() {
         sort_method: None,
         email_view: None,
         filters: None,
+        sort_direction: None,
     }))
     .into_request(test_macro_user_id(), vec![])
     .unwrap();
@@ -57,6 +56,7 @@ fn maps_soup_cursor_continuation() {
         cursor: cursor.to_string(),
         expand: Some(false),
         email_view: Some(GraphqlEmailView::Sent),
+        sort_direction: None,
     })
     .into_request(test_macro_user_id(), vec![])
     .unwrap();
@@ -116,34 +116,4 @@ fn maps_grouped_cursor_continuation() {
     assert_eq!(request.limit, 25);
     assert_eq!(request.grouping.group_key.as_deref(), Some("document"));
     assert!(matches!(request.cursor, Query::Cursor(_)));
-}
-
-#[test]
-fn expands_document_file_assoc() {
-    let expr = GraphqlDocumentLiteral::FileAssoc("assoc:pdf".to_owned())
-        .into_expr()
-        .unwrap();
-
-    assert!(matches!(expr, Expr::Literal(DocumentLiteral::FileType(_))));
-}
-
-#[test]
-fn builds_binary_filter_expressions() {
-    let expr = GraphqlChatExpr::And(GraphqlChatBinaryExpr {
-        left: Box::new(GraphqlChatExpr::Literal(GraphqlChatLiteral::ChatId(ID(
-            "00000000-0000-0000-0000-000000000001".to_owned(),
-        )))),
-        right: Box::new(GraphqlChatExpr::Literal(GraphqlChatLiteral::ChatId(ID(
-            "00000000-0000-0000-0000-000000000002".to_owned(),
-        )))),
-    })
-    .into_expr()
-    .unwrap();
-
-    assert!(matches!(
-        expr,
-        Expr::And(left, right)
-            if matches!(*left, Expr::Literal(ChatLiteral::ChatId(_)))
-                && matches!(*right, Expr::Literal(ChatLiteral::ChatId(_)))
-    ));
 }

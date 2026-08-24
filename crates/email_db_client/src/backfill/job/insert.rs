@@ -6,20 +6,24 @@ use sqlx::types::Uuid;
 /// Creates an `Init` backfill job for a link. Returns `None` when an active
 /// (`Init`/`InProgress`) job already exists for the link — the `uq_active_backfill_job_per_link`
 /// partial unique index makes this atomic, so concurrent callers don't create duplicates.
+///
+/// `is_recovery` marks stale-cursor recovery jobs: they skip the priority pass
+/// and refresh existing threads instead of skipping them.
 #[tracing::instrument(skip(pool), err)]
 pub async fn create_backfill_job(
     pool: &PgPool,
     link_id: Uuid,
     fusionauth_user_id: &str,
     num_threads: Option<i32>,
+    is_recovery: bool,
 ) -> anyhow::Result<Option<service::backfill::BackfillJob>> {
     let id = macro_uuid::generate_uuid_v7();
 
     let record = sqlx::query_as!(
         db::backfill::BackfillJob,
         r#"
-        INSERT INTO email_backfill_jobs (id, link_id, fusionauth_user_id, threads_requested_limit, status)
-        VALUES ($1, $2, $3, $4, 'Init')
+        INSERT INTO email_backfill_jobs (id, link_id, fusionauth_user_id, threads_requested_limit, status, is_recovery)
+        VALUES ($1, $2, $3, $4, 'Init', $5)
         ON CONFLICT (link_id) WHERE status IN ('Init', 'InProgress') DO NOTHING
         RETURNING
             id,
@@ -35,7 +39,8 @@ pub async fn create_backfill_job(
         id,
         link_id,
         fusionauth_user_id,
-        num_threads
+        num_threads,
+        is_recovery
     )
     .fetch_optional(pool)
     .await?;

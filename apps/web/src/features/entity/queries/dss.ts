@@ -9,6 +9,8 @@ import { throwOnErr } from '@core/util/result';
 import { scheduledActionKeys } from '@queries/agent-schedule/keys';
 import { callKeys } from '@queries/call/keys';
 import { queryClient } from '@queries/client';
+import { notificationKeys } from '@queries/notification/keys';
+import { reminderKeys } from '@queries/reminders/keys';
 import {
   getSoupEntityById,
   invalidateSoupEntity,
@@ -19,9 +21,11 @@ import {
   removeSoupEntitiesFromQueriesReferencing,
 } from '@queries/soup/cache';
 import { soupKeys } from '@queries/soup/keys';
+import { ownTouchStamp } from '@queries/soup/normalized-cache/own-touch';
 import { callServiceClient } from '@service-call/client';
 import { scheduledActionClient } from '@service-scheduled-action/client';
 import type { ItemType } from '@service-storage/client';
+import { storageServiceClient } from '@service-storage/client';
 import { useMutation } from '@tanstack/solid-query';
 import { type EntityData, getEntityProjectId } from '../types/entity';
 
@@ -33,7 +37,8 @@ export function createBulkDeleteDssItemsMutation() {
       type === 'document' ||
       type === 'project' ||
       type === 'call' ||
-      type === 'automation'
+      type === 'automation' ||
+      type === 'reminder'
     );
   };
   return useMutation(() => ({
@@ -51,11 +56,26 @@ export function createBulkDeleteDssItemsMutation() {
               scheduledActionClient.deleteSchedule({ scheduleId: e.id })
             ).then(() => true);
           }
+          if (e.type === 'reminder') {
+            // Deleting a reminder also retracts the notification it produced —
+            // the API does both in one transaction, since a reminder *is* its
+            // notification's event_item.
+            return throwOnErr(() =>
+              storageServiceClient.reminders.deleteReminder(e.id)
+            ).then(() => true);
+          }
           return deleteItem({ id: e.id, itemType: e.type as ItemType });
         })
       );
       if (deletable.some((e) => e.type === 'call')) {
         queryClient.invalidateQueries({ queryKey: callKeys._def });
+      }
+      if (deletable.some((e) => e.type === 'reminder')) {
+        // The reminder lists are their own queries; the soup cache is already
+        // handled by the shared optimistic removal in onMutate. Notifications
+        // too, since the delete retracted them server-side.
+        queryClient.invalidateQueries({ queryKey: reminderKeys._def });
+        queryClient.invalidateQueries({ queryKey: notificationKeys._def });
       }
       if (deletable.some((e) => e.type === 'automation')) {
         const deletedIds = new Set(
@@ -208,6 +228,8 @@ export function createBulkRemoveFromProjectDssEntityMutation() {
           tag,
           data: { id: e.id, projectId: null },
           frecency_score: current?.frecency_score ?? 0,
+          // A move is an Edited activity, i.e. a touch (own-touch.ts).
+          touched_at: ownTouchStamp(e.id),
         });
       });
 
@@ -392,6 +414,8 @@ export function createBulkMoveToProjectDssEntityMutation() {
           tag,
           data: { id: e.id, projectId: project.id },
           frecency_score: current?.frecency_score ?? 0,
+          // A move is an Edited activity, i.e. a touch (own-touch.ts).
+          touched_at: ownTouchStamp(e.id),
         });
       });
     },

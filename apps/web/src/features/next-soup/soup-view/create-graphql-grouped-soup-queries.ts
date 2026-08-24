@@ -69,11 +69,7 @@ type GraphqlGroupedInitialPage = {
 type CreateGraphqlGroupedSoupQueriesArgs = {
   initialPage: Accessor<GraphqlGroupedInitialPage | undefined>;
   groupByField: Accessor<GroupByField | undefined>;
-  soupParams: Accessor<
-    Omit<SoupParams, 'sort_method'> & {
-      sort_method: Exclude<SoupParams['sort_method'], 'frecency'>;
-    }
-  >;
+  soupParams: Accessor<SoupParams>;
   soupBody: Accessor<SoupAstBody>;
   enabled: Accessor<boolean>;
   itemFilter: Accessor<SoupApiItemFilter | undefined>;

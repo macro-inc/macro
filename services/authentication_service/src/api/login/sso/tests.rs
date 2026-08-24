@@ -10,6 +10,9 @@ use super::*;
 fn allowed_original_urls_are_accepted() {
     for original_url in [
         "macro://login",
+        "macro:///welcome",
+        "macro:///otherthing",
+        "macro://otherthing/path",
         "tauri://localhost/app/login",
         "http://tauri.localhost/app/login",
         "https://tauri.localhost/app/login",
@@ -34,7 +37,6 @@ fn untrusted_original_urls_are_rejected() {
         "https://staging.macro.com/app/login",
         "http://macro.com/app/login",
         "http://dev.macro.com/app/login",
-        "macro://attacker.example",
         "tauri://example.com/app/login",
         "http://127.0.0.1:3000/app/login",
         "javascript:alert('redirected')",
@@ -45,6 +47,22 @@ fn untrusted_original_urls_are_rejected() {
             "{original_url} should be rejected"
         );
     }
+}
+
+#[test]
+fn redacted_url_strips_credentials_query_and_fragment_but_keeps_path() {
+    let url =
+        Url::parse("https://alice:secret@evil.example.com/app/login?token=abc123#access_token=xyz")
+            .expect("test URL should parse");
+    let redacted = redact_original_url_for_logging(&url);
+    assert_eq!(redacted.as_str(), "https://evil.example.com/app/login");
+}
+
+#[test]
+fn redacted_url_handles_cannot_be_a_base_urls() {
+    let url = Url::parse("mailto:alice@example.com?subject=hi").expect("test URL should parse");
+    let redacted = redact_original_url_for_logging(&url);
+    assert_eq!(redacted.as_str(), "mailto:alice@example.com");
 }
 
 #[tokio::test]

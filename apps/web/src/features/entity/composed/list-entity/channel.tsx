@@ -1,7 +1,7 @@
 import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import {
+  singleLineMarkdownTheme,
   twoLineClampMarkdownTheme,
-  unifiedListMarkdownTheme,
 } from '@core/component/LexicalMarkdown/theme';
 import { UserIcon } from '@core/component/UserIcon';
 import { DisplayName } from '@entity/components/DisplayName';
@@ -59,13 +59,46 @@ function ChannelMessage(props: {
           fallback={<span class="italic">Attached Items</span>}
         >
           <StaticMarkdown
-            theme={unifiedListMarkdownTheme}
+            theme={singleLineMarkdownTheme}
             markdown={props.message.content}
             singleLine
           />
         </Show>
       </span>
     </>
+  );
+}
+
+/**
+ * One-line channel-message row content: channel name, sender, then the
+ * message text (or its highlighted hit). Shared by the narrow and
+ * single-line row layouts.
+ */
+export function ChannelMessageSingleLine(props: {
+  entity: ChannelMessageEntity;
+}) {
+  const hit = () => firstContentHit(props.entity);
+  return (
+    <span class="flex items-center gap-1 min-w-0 truncate">
+      <span class="shrink-0 text-ink-muted text-xs whitespace-nowrap">
+        {props.entity.channelName}
+      </span>
+      <Show when={props.entity.senderId}>
+        {(id) => <UserIcon id={id()} size="sm" />}
+      </Show>
+      <Show when={hit()}>
+        {(h) => (
+          <span class="shrink-0 text-ink-extra-muted text-xs whitespace-nowrap">
+            <SearchSender hit={h()} />
+          </span>
+        )}
+      </Show>
+      <span class="text-ink/50 font-normal truncate min-w-0">
+        <Show when={hit()} fallback={props.entity.content}>
+          {(h) => <SearchContent hit={h()} singleLine />}
+        </Show>
+      </span>
+    </span>
   );
 }
 
@@ -96,7 +129,6 @@ export function ChannelMessageNarrowBody(props: {
 
 export function ChannelLatestMessageNarrowBody(props: {
   message: NonNullable<ChannelEntity['latestMessage']>;
-  senderFirstName?: string;
 }) {
   return (
     <Entity.Slot
@@ -107,12 +139,12 @@ export function ChannelLatestMessageNarrowBody(props: {
         when={props.message.content?.trim()}
         fallback={<span class="italic">Attached Items</span>}
       >
+        <span class="ph-no-capture font-medium text-ink-muted">
+          <DisplayName id={props.message.senderId} format="firstName" />:{' '}
+        </span>
         <StaticMarkdown
           theme={twoLineClampMarkdownTheme}
-          markdown={
-            (props.senderFirstName ? `**${props.senderFirstName}:** ` : '') +
-            props.message.content.trim()
-          }
+          markdown={props.message.content.trim()}
           singleLine
         />
       </Show>

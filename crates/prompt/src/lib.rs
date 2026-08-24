@@ -15,6 +15,7 @@ pub mod email;
 pub mod math;
 pub mod mcp_item_links;
 pub mod mentions;
+pub mod skills;
 pub mod tone;
 pub mod tool_usage;
 mod types;
@@ -31,9 +32,11 @@ pub static BASE_PROMPT: ComposedPrompt = tone::PROMPT
     .compose(&about_macro::PROMPT);
 
 /// The tool-enabled prompt: [`BASE_PROMPT`] with the tool use instructions,
-/// document-content linking rules, and email inbox behavior appended.
+/// skill-following rules, document-content linking rules, and email inbox
+/// behavior appended.
 pub static TOOL_USE_PROMPT: ComposedPrompt = BASE_PROMPT
     .compose(&tool_usage::PROMPT)
+    .compose(&skills::PROMPT)
     .compose(&document_content_links::PROMPT)
     .compose(&email::PROMPT);
 

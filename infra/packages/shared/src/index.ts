@@ -51,5 +51,6 @@ export {
   type AiToolsInfra,
 } from './ai_tools';
 export { getKafkaClusterPolicy } from './kafka_cluster_policy';
+export { getGatewayAlb, type GatewayAlb } from './gateway';
 
 export * from './service_urls';

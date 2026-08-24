@@ -50,6 +50,9 @@ where
             EntityType::Project => self.repo.get_project_access(entity_id, user_id).await,
             EntityType::EmailThread => self.repo.get_thread_access(entity_id, user_id).await,
             EntityType::Call => self.repo.get_call_access(entity_id, user_id).await,
+            EntityType::AgentSession => {
+                self.repo.get_agent_session_access(entity_id, user_id).await
+            }
             EntityType::CalendarEvent => {
                 self.repo
                     .get_calendar_event_access(entity_id, user_id)
@@ -177,7 +180,8 @@ where
             | EntityType::Chat
             | EntityType::Project
             | EntityType::EmailThread
-            | EntityType::Call => {
+            | EntityType::Call
+            | EntityType::AgentSession => {
                 let access_level = self
                     .repo
                     .get_team_entity_access(bot_id, team_id, entity_id, entity_type)
@@ -238,7 +242,10 @@ where
             EntityType::User
             | EntityType::ChannelMessage
             | EntityType::StaticFile
-            | EntityType::CalendarEvent => {
+            | EntityType::CalendarEvent
+            // A reminder belongs to a user, so a team-scoped bot never reaches one.
+            | EntityType::Reminder
+            | EntityType::Skill => {
                 Err(AccessError::BadRequest("Unsupported bot entity type"))
             }
         }
@@ -309,7 +316,12 @@ where
             Err(error) => {
                 tracing::error!(?error, "bulk email thread ownership check failed");
                 for (thread_id, _) in valid_ids {
-                    receipts.insert(thread_id, Err(AccessError::Internal));
+                    receipts.insert(
+                        thread_id,
+                        Err(AccessError::internal(
+                            "bulk email thread ownership check failed",
+                        )),
+                    );
                 }
                 return receipts;
             }
@@ -403,11 +415,13 @@ where
             | EntityType::Project
             | EntityType::EmailThread
             | EntityType::Call
-            | EntityType::CalendarEvent => {
+            | EntityType::CalendarEvent
+            | EntityType::AgentSession => {
                 self.get_optimized_access(entity_id, user_id, entity_type)
                     .await
             }
             EntityType::Channel => self.get_channel_access(entity_id, user_id).await,
+            EntityType::Reminder => self.repo.get_reminder_access(entity_id, user_id).await,
             EntityType::ForeignEntity => self.get_foreign_entity_access(entity_id, user_id).await,
             EntityType::CrmCompany => Ok(self
                 .get_crm_company_access(entity_id, user_id)
@@ -420,7 +434,11 @@ where
             // Static files are always viewable. This is wrong for owners
             EntityType::StaticFile => Ok(Some(AccessLevel::View)),
             // These entity types either don't have access checks implemented yet, or they should not have access checks.
-            EntityType::Team | EntityType::User | EntityType::ChannelMessage => Ok(None),
+            // Skill refs are access-checked against the underlying skill document.
+            EntityType::Team
+            | EntityType::User
+            | EntityType::ChannelMessage
+            | EntityType::Skill => Ok(None),
         }
     }
 
@@ -472,7 +490,8 @@ where
             | EntityType::Project
             | EntityType::EmailThread
             | EntityType::Call
-            | EntityType::CalendarEvent => {
+            | EntityType::CalendarEvent
+            | EntityType::AgentSession => {
                 let access = self
                     .get_optimized_access(entity_id, user_id, entity_type)
                     .await?;
@@ -519,6 +538,18 @@ where
                     .get_channel_role(&channel_uuid, user_id, user_org_id)
                     .await?;
                 channel_role_result_to_permission(result)
+            }
+            // Ownership is the whole access model, so the only level this can
+            // yield is `Owner` — a caller who is not the owner gets no row.
+            // `ReminderAccessExtractor` builds the same receipt straight from
+            // `get_access_level`; this arm is what lets a non-axum caller (an
+            // AI tool) mint one without reimplementing that.
+            EntityType::Reminder => {
+                let access = self.repo.get_reminder_access(entity_id, user_id).await?;
+                match access {
+                    Some(access_level) => Ok(EntityPermission::AccessLevel { access_level }),
+                    None => Err(AccessError::Unauthorized),
+                }
             }
             _ => Err(AccessError::BadRequest("Unsupported entity type")),
         }

@@ -470,7 +470,10 @@ export function ComposeTask(props: ComposeTaskProps) {
     return true;
   };
 
-  const showTaskCreatedToast = async (documentId: string) => {
+  const showTaskCreatedToast = async (
+    documentId: string,
+    optimisticSnapshot: Uint8Array | undefined
+  ) => {
     // Auto-copy link to clipboard
     const url = buildSimpleEntityUrl({ type: 'task', id: documentId });
     let linkCopied = false;
@@ -481,6 +484,10 @@ export function ComposeTask(props: ComposeTaskProps) {
       toast.failure('Failed to copy link to clipboard');
     }
 
+    const snapshotParams = optimisticSnapshot
+      ? { params: { optimisticSnapshot }, preserveParams: true as const }
+      : {};
+
     toast.success('Task created', {
       subtext: linkCopied ? 'Link copied' : undefined,
       actions: [
@@ -489,7 +496,7 @@ export function ComposeTask(props: ComposeTaskProps) {
           icon: ArrowSquareOutIcon,
           onClick: () => {
             openWithSplit(
-              { type: 'task', id: documentId },
+              { type: 'task', id: documentId, ...snapshotParams },
               { referredFrom: null }
             );
           },
@@ -499,7 +506,7 @@ export function ComposeTask(props: ComposeTaskProps) {
           icon: SplitIcon,
           onClick: () => {
             openWithSplit(
-              { type: 'task', id: documentId },
+              { type: 'task', id: documentId, ...snapshotParams },
               { referredFrom: null, preferNewSplit: true }
             );
           },
@@ -551,7 +558,7 @@ export function ComposeTask(props: ComposeTaskProps) {
       );
       props.onCreateStart?.({ title: taskTitle, content: taskContent });
 
-      const documentId = await createTaskWithProperties(
+      const createdTask = await createTaskWithProperties(
         taskTitle,
         taskContent,
         properties,
@@ -561,7 +568,7 @@ export function ComposeTask(props: ComposeTaskProps) {
 
       setIsCreating(false);
 
-      if (!documentId) {
+      if (!createdTask) {
         props.onCreateFailure?.();
         // Restore the draft and re-open so the user can retry
         saveTaskComposerDraft(draftSnapshot);
@@ -569,10 +576,11 @@ export function ComposeTask(props: ComposeTaskProps) {
         return;
       }
 
+      const { documentId, initialSnapshot } = createdTask;
       if (props.onSuccess) {
         props.onSuccess({ documentId, title: taskTitle, content: taskContent });
       } else {
-        showTaskCreatedToast(documentId);
+        showTaskCreatedToast(documentId, initialSnapshot);
       }
       props.onCreateTask?.(taskTitle, taskContent);
       return;
@@ -581,7 +589,7 @@ export function ComposeTask(props: ComposeTaskProps) {
     resetTitleAndBody();
     setIsCreating(false);
 
-    const documentId = await createTaskWithProperties(
+    const createdTask = await createTaskWithProperties(
       taskTitle,
       taskContent,
       properties,
@@ -589,14 +597,17 @@ export function ComposeTask(props: ComposeTaskProps) {
       (params) => upsertToHistoryMutation.mutate(params)
     );
 
-    if (!documentId) {
+    if (!createdTask) {
       return;
     }
 
+    // Success: clear draft and notify
+    clearTaskComposerDraft();
+    const { documentId, initialSnapshot } = createdTask;
     if (props.onSuccess) {
       props.onSuccess({ documentId, title: taskTitle, content: taskContent });
     } else {
-      showTaskCreatedToast(documentId);
+      showTaskCreatedToast(documentId, initialSnapshot);
     }
     props.onCreateTask?.(taskTitle, taskContent);
   };
@@ -626,7 +637,7 @@ export function ComposeTask(props: ComposeTaskProps) {
       { referredFrom: 'launcher', preferNewSplit: true }
     );
 
-    const documentId = await createTaskWithProperties(
+    const createdTask = await createTaskWithProperties(
       taskTitle,
       taskContent,
       properties,
@@ -636,22 +647,30 @@ export function ComposeTask(props: ComposeTaskProps) {
 
     setIsCreating(false);
 
-    if (!documentId) {
+    if (!createdTask) {
       split?.goBack();
       saveTaskComposerDraft(draftSnapshot);
       popoverSplit({ type: 'component', id: 'task-compose' });
       return;
     }
 
+    const { documentId, initialSnapshot } = createdTask;
+    const snapshotParams = initialSnapshot
+      ? {
+          params: { optimisticSnapshot: initialSnapshot },
+          preserveParams: true as const,
+        }
+      : {};
+
     if (split) {
       split.replace({
-        next: { type: 'task', id: documentId },
+        next: { type: 'task', id: documentId, ...snapshotParams },
         mergeHistory: true,
         referredFrom: 'launcher',
       });
     } else {
       openWithSplit(
-        { type: 'task', id: documentId },
+        { type: 'task', id: documentId, ...snapshotParams },
         { referredFrom: 'launcher', preferNewSplit: true }
       );
     }

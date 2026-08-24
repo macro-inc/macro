@@ -33,6 +33,7 @@ attachment = [
 axum = [
   "dep:axum",
   "dep:axum-extra",
+  "dep:base64",
   "dep:jsonwebtoken",
   "dep:lexical_client",
   "dep:macro_authorization",
@@ -61,6 +62,7 @@ outbound = [
   "dep:base64",
   "dep:entity_access_db_utils",
   "dep:hex",
+  "dep:share_permission_db_utils",
   "dep:sqlx",
   "ports",
 ]
@@ -69,6 +71,8 @@ schema = ["dep:utoipa", "macro_user_id/schema"]
 service = ["dep:entity_access_management", "dep:foreign_entity", "ports"]
 
 [dependencies]
+activity = { path = "../activity", default-features = false }
+bot_id = { path = "../bot_id" }
 # Core
 anyhow = { workspace = true }
 chrono = { workspace = true }
@@ -106,6 +110,7 @@ macro_service_urls = { path = "../macro_service_urls", optional = true }
 macro_sync_service_jwt = { path = "../macro_sync_service_jwt" }
 macro_user_id = { path = "../macro_user_id" }
 macro_uuid = { path = "../macro_uuid" }
+system_skills = { path = "../system_skills" }
 model = { path = "../model" }
 model-entity = { path = "../model-entity" }
 models_permissions = { path = "../models_permissions" }
@@ -131,6 +136,7 @@ base64 = { workspace = true, optional = true }
 cloudfront_sign = { workspace = true }
 entity_access_db_utils = { path = "../entity_access_db_utils", optional = true }
 futures = { workspace = true }
+share_permission_db_utils = { path = "../share_permission_db_utils", optional = true }
 hex = { workspace = true, optional = true }
 sqlx = { workspace = true, optional = true }
 sync_service_client = { path = "../sync_service_client" }
@@ -147,6 +153,7 @@ model_file_type = { path = "../model_file_type", optional = true }
 reqwest = { workspace = true, optional = true }
 schemars = { workspace = true, optional = true }
 sha2 = { workspace = true, optional = true }
+
 
 # Attachment
 attachment = { path = "../attachment", optional = true }

@@ -2,9 +2,31 @@ import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import type { SoupProperty } from '@service-storage/generated/schemas';
 import type { ApiGroupByField as ApiGroupedSoupField } from '@service-storage/generated/schemas/apiGroupByField';
 import type { ApiGroupMeta } from '@service-storage/generated/schemas/apiGroupMeta';
+import type { Params } from '@service-storage/generated/schemas/params';
 import type { SoupApiItem } from '@service-storage/generated/schemas/soupApiItem';
 import { match } from 'ts-pattern';
 import { type GroupByField, type GroupMeta, NOT_SET_GROUP_KEY } from './types';
+
+/** Sort methods the grouped soup endpoints accept. */
+export type GroupedSortMethod = Exclude<
+  NonNullable<Params['sort_method']>,
+  'frecency' | 'touched_by_me'
+>;
+
+/**
+ * Maps a flat-feed sort method onto what the grouped endpoints support.
+ * Frecency and touched-by-me pages are built from their own data sources
+ * (relevance scores / the activity log) that the grouped queries cannot
+ * reproduce, so grouping such a view falls back to update recency within
+ * each group.
+ */
+export function groupedSortMethod(
+  sort: Params['sort_method']
+): GroupedSortMethod | undefined {
+  if (sort == null) return undefined;
+  if (sort === 'frecency' || sort === 'touched_by_me') return 'updated_at';
+  return sort;
+}
 
 function hasProperties<T extends SoupApiItem>(
   item: T

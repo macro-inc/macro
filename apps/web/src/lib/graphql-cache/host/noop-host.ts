@@ -1,9 +1,7 @@
-import {
-  type OptimisticWriteResult,
-  type ReadRecordsArgs,
-  type ReadResult,
-  validateRecordSelectionLimit,
-  type WriteResult,
+import type {
+  EnqueueOptimisticMutationResult,
+  ReadResult,
+  WriteResult,
 } from '../protocol';
 import type { CacheHost } from './types';
 
@@ -27,15 +25,26 @@ export function createNoopCacheHost(reason: string): CacheHost {
     async readQuery(): Promise<ReadResult> {
       return { kind: 'miss' };
     },
-    async readRecords(args: ReadRecordsArgs) {
-      validateRecordSelectionLimit(args.limit);
-      return { records: [], nextCursor: null };
+    async readRecordsByKeys() {
+      return [];
+    },
+    async search() {
+      return { documents: [], nextCursor: null };
+    },
+    async entityFilter() {
+      return { kind: 'unsupported' };
     },
     async writeQuery(): Promise<WriteResult> {
       return emptyWriteResult();
     },
-    async beginOptimisticWrite(): Promise<OptimisticWriteResult> {
+    async hydrateQuery() {
       throw new Error('normalized GraphQL cache is unavailable');
+    },
+    async enqueueOptimisticMutation(): Promise<EnqueueOptimisticMutationResult> {
+      throw new Error('normalized GraphQL cache is unavailable');
+    },
+    async inspectQueryVariants() {
+      return [];
     },
     async inspectQuery() {
       return [];

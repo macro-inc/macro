@@ -1,22 +1,20 @@
 use crate::backfill_completion_service;
+use crate::pubsub::backfill::email_api_error::map_email_api_error;
 use crate::pubsub::context::PubSubContext;
-use crate::pubsub::util::{CheckGmailRateLimitArgs, check_gmail_rate_limit};
 use crate::util::process_pre_insert::sync_labels::sync_labels;
 use crate::util::sync_contacts::sync_contacts;
 use email_db_client::backfill::job::update::{InitLeaseClaim, InitLeaseRenewal};
 use models_email::email::service::backfill::{InitPayload, JobScopedPayload};
 use models_email::email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
 use models_email::email::service::{backfill, link};
-use models_email::gmail::operations::GmailApiOperation;
 use std::cmp::min;
 use uuid::Uuid;
 
 /// This step is invoked via the API when a new job is created.
 /// Populates total_threads value in backfill_job row, and sends the first ListThreads message.
-#[tracing::instrument(skip(ctx, access_token))]
+#[tracing::instrument(skip(ctx))]
 pub async fn init_backfill(
     ctx: &PubSubContext,
-    access_token: &str,
     scope: &JobScopedPayload<InitPayload>,
     link: &link::Link,
     backfill_job: &backfill::BackfillJob,
@@ -37,8 +35,7 @@ pub async fn init_backfill(
             }
         };
 
-    let initialization =
-        initialize_backfill(ctx, access_token, scope, link, backfill_job, lease_token);
+    let initialization = initialize_backfill(ctx, scope, link, backfill_job, lease_token);
     tokio::pin!(initialization);
     let heartbeat = maintain_init_lease(ctx.db.clone(), scope.job_id, lease_token);
     tokio::pin!(heartbeat);
@@ -68,7 +65,6 @@ pub async fn init_backfill(
 
 async fn initialize_backfill(
     ctx: &PubSubContext,
-    access_token: &str,
     scope: &JobScopedPayload<InitPayload>,
     link: &link::Link,
     backfill_job: &backfill::BackfillJob,
@@ -77,22 +73,24 @@ async fn initialize_backfill(
     tracing::info!("Initializing backfill job");
 
     // ensure we have the user's labels in the db
-    sync_labels(&ctx.db, &ctx.gmail_client, access_token, link.id)
+    let labels = ctx
+        .email_api
+        .list_labels(link.id)
         .await
-        .map_err(|e| {
-            ProcessingError::Retryable(DetailedError {
-                reason: FailureReason::DatabaseQueryFailed,
-                source: e.context("Failed to sync labels"),
-            })
-        })?;
+        .map_err(|error| map_email_api_error(error, "Failed to list provider labels"))?;
+    sync_labels(&ctx.db, link.id, &labels).await.map_err(|e| {
+        ProcessingError::Retryable(DetailedError {
+            reason: FailureReason::DatabaseQueryFailed,
+            source: e.context("Failed to reconcile labels"),
+        })
+    })?;
 
     if let Err(e) = sync_contacts(
         link,
         &ctx.db,
-        &ctx.gmail_client,
+        &ctx.email_api,
         &ctx.sqs_client,
         &ctx.macro_event_broker,
-        access_token,
     )
     .await
     {
@@ -101,29 +99,18 @@ async fn initialize_backfill(
 
     let threads_requested_limit = backfill_job.threads_requested_limit;
 
-    check_gmail_rate_limit(CheckGmailRateLimitArgs {
-        redis_client: &ctx.redis_client,
-        link_id: link.id,
-        gmail_operation: GmailApiOperation::UsersGetProfile,
-        retryable: true,
-        is_backfill: true,
-    })
-    .await?;
     // get the total number of threads the user has in their account
-    let total_threads = match ctx
-        .gmail_client
-        .get_profile_threads_total(access_token)
+    let total_threads = ctx
+        .email_api
+        .get_thread_count(link.id)
         .await
-    {
-        Ok(list) => list,
-        Err(e) => {
-            // Construct the structured Retryable error and return immediately.
-            return Err(ProcessingError::Retryable(DetailedError {
-                reason: FailureReason::GmailApiFailed,
-                source: e.context("Failed to get total threads from Gmail API"),
-            }));
-        }
-    };
+        .map_err(|error| map_email_api_error(error, "Failed to get provider thread count"))?;
+    let total_threads = i32::try_from(total_threads).map_err(|error| {
+        ProcessingError::NonRetryable(DetailedError {
+            reason: FailureReason::InvalidData,
+            source: anyhow::Error::new(error).context("Provider thread count exceeds i32"),
+        })
+    })?;
 
     // If thread count is not specified, populate all available threads. Otherwise,
     // populate up to the requested number or total available, whichever is smaller

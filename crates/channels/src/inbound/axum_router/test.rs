@@ -108,7 +108,7 @@ impl TestAccessService {
 
     fn access_err(&self) -> AccessError {
         match self.mode {
-            AccessMode::Allow => AccessError::Internal,
+            AccessMode::Allow => AccessError::internal("test access failure"),
             AccessMode::Deny => AccessError::Unauthorized,
             AccessMode::NotFound => AccessError::NotFound("Channel not found"),
         }

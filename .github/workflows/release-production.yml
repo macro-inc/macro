@@ -22,12 +22,24 @@ jobs:
       PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
       DD_APP_KEY: ${{ secrets.DD_APP_KEY }}
       DD_API_KEY: ${{ secrets.DD_API_KEY }}
+      NIX_CACHE_SIGNING_KEY: ${{ secrets.NIX_CACHE_SIGNING_KEY }}
 
   deploy-sync-service:
     name: Deploy Sync Service
     # The worker calls DSS/SPS at prod URLs, so don't ship it ahead of them.
     needs: [deploy-cloud-storage]
     uses: ./.github/workflows/deploy_sync_service.yml
+    with:
+      environment: prod
+    secrets: inherit
+
+  deploy-ai-editing-worker:
+    name: Deploy AI Editing Worker
+    # Calls DSS/search/auth at prod URLs and opens doc sessions against the prod
+    # sync-service, so it ships behind both. It must also move in lockstep with
+    # cloud-storage's EditDocument tool, which picks the worker's model chains.
+    needs: [deploy-cloud-storage, deploy-sync-service]
+    uses: ./.github/workflows/deploy_ai_editing_worker.yml
     with:
       environment: prod
     secrets: inherit

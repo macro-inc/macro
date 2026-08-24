@@ -1,23 +1,31 @@
 /**
  * Transport-agnostic cache host interface consumed by the urql exchange and
  * imperative writers (websocket handlers). Implementations:
- * - worker-host.ts: browser (SharedWorker + wasm engine, or no-op fallback)
+ * - worker-host.ts: browser (SharedWorker coordinator + elected WASM engine,
+ *   or no-op fallback)
  * - tauri-host.ts (Phase 3b): Tauri IPC to the native engine
  */
 
+import type { EntityResolverWire } from '../exchange/entity-resolvers';
 import type {
   CachedQueryInstanceWire,
+  CachedQueryVariantWire,
   CacheReadPriority,
   ClaimedMutation,
+  EnqueueOptimisticMutationResult,
+  EntityFilterCacheArgs,
+  EntityFilterCacheResult,
+  HydrationResult,
   MutationClaim,
   MutationSettlement,
   OptimisticLinkPatchWire,
-  OptimisticWriteResult,
   QueryRevalidationWire,
   QueryVariableFilter,
-  ReadRecordsArgs,
+  ReadRecordsByKeysArgs,
   ReadResult,
-  SelectedRecordPageWire,
+  SearchCacheArgs,
+  SearchCachePage,
+  SelectedRecordByKeyWire,
   WriteResult,
 } from '../protocol';
 
@@ -29,6 +37,8 @@ export interface CacheReadArgs {
   variables?: Record<string, unknown>;
   /** Prioritizes a pushed, user-visible refresh over incidental reads. */
   priority?: CacheReadPriority;
+  /** Read-only synthetic entity relations compiled by the exchange. */
+  entityResolvers?: readonly EntityResolverWire[];
 }
 
 export interface InspectQueryArgs {
@@ -40,33 +50,61 @@ export interface InspectQueryArgs {
   variableFilters?: QueryVariableFilter[];
 }
 
+/** Variables-only inspection always discovers every cached variant. */
+export type InspectQueryVariantsArgs = Omit<
+  InspectQueryArgs,
+  'variableFilters'
+>;
+
 export interface CacheWriteArgs extends Omit<CacheReadArgs, 'priority'> {
   data: unknown;
+  /** Installs this active query's dependencies from the normalized response. */
+  registerDependencies?: boolean;
   /** Opaque session tag; see protocol.ts `identity`. */
   identity?: string;
 }
 
-export interface BeginOptimisticWriteArgs extends CacheWriteArgs {
+export interface EnqueueOptimisticMutationArgs extends CacheWriteArgs {
   linkPatches?: OptimisticLinkPatchWire[];
   /** Revalidations for relevant cached fields that could not be patched. */
   revalidations?: QueryRevalidationWire[];
 }
 
+/** Lease request used for the claim attempted immediately after enqueue. */
+export interface InitialMutationClaimArgs {
+  owner: string;
+  nowMs: number;
+  leaseExpiresAtMs: number;
+}
+
 export interface CacheHost {
   /** Stable id of this context; used to namespace operation ids. */
   readonly clientId: string;
-  /** True for the storage-free fallback used without SharedWorker support. */
+  /** True for the storage-free fallback when browser cache APIs are unsupported. */
   readonly disabled?: boolean;
 
   readQuery(args: CacheReadArgs): Promise<ReadResult>;
-  /** Projects normalized records through a named GraphQL fragment. */
-  readRecords(args: ReadRecordsArgs): Promise<SelectedRecordPageWire>;
+  /** Projects a bounded explicit set of normalized entity keys. */
+  readRecordsByKeys(
+    args: ReadRecordsByKeysArgs
+  ): Promise<SelectedRecordByKeyWire[]>;
+  /** Searches the compact write-through materialized projection. */
+  search(args: SearchCacheArgs): Promise<SearchCachePage>;
+  /** Evaluates an exact initial Soup filter page over complete local projections. */
+  entityFilter(args: EntityFilterCacheArgs): Promise<EntityFilterCacheResult>;
   writeQuery(args: CacheWriteArgs): Promise<WriteResult>;
-  /** Durably queues a mutation and its optimistic response. */
-  beginOptimisticWrite(
-    args: BeginOptimisticWriteArgs
-  ): Promise<OptimisticWriteResult>;
-  /** Enumerates cached variants of one generated query field selection. */
+  /** Stores a query response and returns only fields not marked `@cacheOnly`. */
+  hydrateQuery(args: Omit<CacheWriteArgs, 'opKey'>): Promise<HydrationResult>;
+  /** Durably queues an optimistic mutation and claims the strict head. */
+  enqueueOptimisticMutation(
+    args: EnqueueOptimisticMutationArgs,
+    claim: InitialMutationClaimArgs
+  ): Promise<EnqueueOptimisticMutationResult>;
+  /** Recovers variables for cached variants without materializing values. */
+  inspectQueryVariants(
+    args: InspectQueryVariantsArgs
+  ): Promise<CachedQueryVariantWire[]>;
+  /** Enumerates and materializes cached query field variants. */
   inspectQuery(args: InspectQueryArgs): Promise<CachedQueryInstanceWire[]>;
   /** Claims the oldest runnable mutation; later entries are never skipped. */
   claimNextMutation(

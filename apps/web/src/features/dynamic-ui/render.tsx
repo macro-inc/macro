@@ -7,11 +7,9 @@ import type {
   WidgetOf,
   WidgetType,
 } from './schema';
-import { Card } from './widgets/Card';
 import { ChannelMessage } from './widgets/ChannelMessage';
 import { List } from './widgets/List';
 import { Md } from './widgets/Md';
-import { Stat } from './widgets/Stat';
 import { Timeline } from './widgets/Timeline';
 
 /**
@@ -24,9 +22,7 @@ import { Timeline } from './widgets/Timeline';
 export function Render(props: { node: Widget }): JSX.Element {
   return match(props.node)
     .with({ type: 'md' }, (n) => <Md {...n} />)
-    .with({ type: 'stat' }, (n) => <Stat {...n} />)
     .with({ type: 'timeline' }, (n) => <Timeline {...n} />)
-    .with({ type: 'card' }, (n) => <Card {...n} />)
     .with({ type: 'channelMessage' }, (n) => <ChannelMessage {...n} />)
     .with({ type: 'list' }, (n) => <List {...n} />)
     .with({ type: 'container' }, (n) => <Container node={n} />)

@@ -67,7 +67,7 @@ describe('runtime — end to end against real Lexical', () => {
       session,
       `editor.convertToHeading('${headingId}', 2); editor.bold('${paragraphId}', 'Bluejay');`
     );
-    expect(summary).toBe('ok');
+    expect(summary).toContain('CHANGED');
     const out = serializeWithXml(session);
     expect(out).toContain('<h2');
     expect(out).toContain('Notes');
@@ -80,7 +80,7 @@ describe('runtime — end to end against real Lexical', () => {
       session,
       `const p = editor.insertParagraphAfter('${ids[0]}', 'hello'); editor.bold(p, 'hello');`
     );
-    expect(summary).toBe('ok');
+    expect(summary).toContain('CHANGED');
     expect(serializeWithXml(session)).toContain('hello');
   });
 
@@ -118,7 +118,7 @@ describe('runtime — writer-authored snippets', () => {
       `editor.insertParagraphAfter('${ids[0]}', snippets.intro);`,
       { intro: 'writer wrote this' }
     );
-    expect(summary).toBe('ok');
+    expect(summary).toContain('CHANGED');
     expect(serializeWithXml(session)).toContain('writer wrote this');
   });
 

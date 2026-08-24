@@ -41,7 +41,10 @@ pub async fn delete_user_entity_access_bulk(
         | EntityType::StaticFile
         | EntityType::CrmCompany
         | EntityType::CrmContact
-        | EntityType::ForeignEntity => {
+        | EntityType::Skill
+        | EntityType::ForeignEntity
+        // Reminders own no entity_access rows to delete.
+        | EntityType::Reminder => {
             anyhow::bail!("invalid entity type")
         }
         EntityType::Project => {
@@ -61,7 +64,11 @@ pub async fn delete_user_entity_access_bulk(
             .execute(transaction.as_mut())
             .await?
         }
-        EntityType::Chat | EntityType::Document | EntityType::EmailThread | EntityType::Call => {
+        EntityType::Chat
+        | EntityType::Document
+        | EntityType::EmailThread
+        | EntityType::Call
+        | EntityType::AgentSession => {
             sqlx::query!(
                 r#"
         DELETE FROM "entity_access"

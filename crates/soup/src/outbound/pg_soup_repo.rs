@@ -2,7 +2,7 @@ use crate::{
     domain::{
         models::{
             AdvancedSortParams, GroupedSortRequest, SimpleSortQuery, SimpleSortRequest,
-            SoupPropertiesField, grouping::ItemGroupingInfo,
+            SoupPropertiesField, TouchedEntity, TouchedSoupRequest, grouping::ItemGroupingInfo,
         },
         ports::SoupRepo,
     },
@@ -20,6 +20,7 @@ use system_properties::SystemPropertyKey;
 mod calendar_event;
 mod expanded;
 pub mod grouping;
+mod touched;
 mod unexpanded;
 
 /// PostgreSQL implementation of [`SoupRepo`].
@@ -188,6 +189,13 @@ impl SoupRepo for PgSoupRepo {
         )
         .await
     }
+
+    async fn touched_soup_page<'a>(
+        &self,
+        req: TouchedSoupRequest<'a>,
+    ) -> Result<Vec<TouchedEntity>, Self::Err> {
+        touched::touched_soup_page(&self.pool.0, req).await
+    }
 }
 
 fn sort_and_truncate(
@@ -266,9 +274,10 @@ pub(crate) async fn populate_properties(
                 SoupItem::CrmCompany(x) => properties_map.get(&x.id.to_string()),
                 SoupItem::Call(x) => properties_map.get(&x.call_id.to_string()),
                 SoupItem::CalendarEvent(x) => properties_map.get(&x.id.to_string()),
-                SoupItem::Channel(_) | SoupItem::ChannelThread(_) | SoupItem::ForeignEntity(_) => {
-                    None
-                }
+                SoupItem::Channel(_)
+                | SoupItem::ChannelThread(_)
+                | SoupItem::ForeignEntity(_)
+                | SoupItem::Reminder(_) => None,
             }
             .map(|properties| properties.iter().cloned().map(SoupProperty::from).collect())
             .unwrap_or_default();

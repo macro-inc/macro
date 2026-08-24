@@ -9,8 +9,8 @@ use uuid::Uuid;
 #[derive(Debug, Error)]
 pub enum ImportError {
     /// Database failure.
-    #[error(transparent)]
-    Db(#[from] sqlx::Error),
+    #[error("database error: {0}")]
+    Db(rootcause::Report),
     /// Metadata failed to (de)serialize.
     #[error("invalid import metadata: {0}")]
     Metadata(#[from] serde_json::Error),

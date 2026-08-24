@@ -31,11 +31,11 @@ database_env_vars = { path = "../../crates/database_env_vars" }
 doppler-config = { workspace = true }
 sqlx = { workspace = true }
 macro_user_id = { path = "../../crates/macro_user_id"}
-cron = { version = "0.16.0" }
+cron = { workspace = true }
 anyhow = { workspace = true }
 macro_uuid = { path = "../../crates/macro_uuid"}
 chrono = { workspace = true}
-chrono-tz = { version = "0.10.4", features = ["serde"] }
+chrono-tz = { workspace = true }
 agent = { path = "../../crates/agent" }
 ai_usage = { path = "../../crates/ai_usage" }
 tokio = { workspace = true, features = ["signal"] }
@@ -48,6 +48,8 @@ ai_toolset = { path = "../../crates/ai_toolset" }
 aws-sdk-sqs = { workspace = true }
 chat = { path = "../../crates/chat" }
 connection_gateway_client = { path = "../../crates/connection_gateway_client" }
+share_permission_db_utils = { path = "../../crates/share_permission_db_utils" }
+models_permissions = { path = "../../crates/models_permissions" }
 macro_db_client = { path = "../../crates/macro_db_client" }
 memory = { path = "../../crates/memory" }
 model = { path = "../../crates/model" }

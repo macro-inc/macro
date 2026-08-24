@@ -5,6 +5,7 @@ export const TOKENS = {
     askAi: 'soup.askAi',
     sort: 'soup.sort',
     filter: 'soup.filter',
+    dismiss: 'soup.dismiss',
     tabs: {
       '0': 'soup.tabs.0',
       '1': 'soup.tabs.1',
@@ -59,6 +60,7 @@ export const TOKENS = {
       copyBranchName: 'entity.action.copyBranchName',
       copyEntityId: 'entity.action.copyEntityId',
       favorite: 'entity.action.favorite',
+      createReminder: 'entity.action.createReminder',
       properties: 'entity.action.properties',
       tags: 'entity.action.tags',
       priority: 'entity.action.priority',
@@ -74,6 +76,20 @@ export const TOKENS = {
   code: {
     toggleComment: 'code.toggleComment',
     escape: 'code.escape',
+  },
+
+  // calendar
+  calendar: {
+    view: {
+      day: 'calendar.view.day',
+      week: 'calendar.view.week',
+      month: 'calendar.view.month',
+    },
+    period: {
+      previous: 'calendar.period.previous',
+      next: 'calendar.period.next',
+      today: 'calendar.period.today',
+    },
   },
 
   // global
@@ -98,6 +114,7 @@ export const TOKENS = {
       home: 'sidebar.goTo.home',
       gettingStarted: 'sidebar.goTo.gettingStarted',
       inbox: 'sidebar.goTo.inbox',
+      recent: 'sidebar.goTo.recent',
       activity: 'sidebar.goTo.activity',
       calendar: 'sidebar.goTo.calendar',
       search: 'sidebar.goTo.search',
@@ -262,6 +279,9 @@ export const TOKENS = {
     taskNewSplit: 'create.taskNewSplit',
     snippet: 'create.snippet',
     snippetNewSplit: 'create.snippetNewSplit',
+    automation: 'create.automation',
+    skill: 'create.skill',
+    reminder: 'create.reminder',
     close_menu: 'create.close_menu',
   },
 

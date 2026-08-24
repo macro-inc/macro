@@ -54,7 +54,7 @@ describe('channel activity and notification GraphQL cache separation', () => {
 
   it('marks the linked notification seen while VIEW activity leaves unread state unchanged', async () => {
     const notificationRecord = {
-      __typename: 'GraphqlSoupNotification' as const,
+      __typename: 'GraphqlNotification' as const,
       id: 'notification-1',
       eventType: 'channel_message_send',
       entityType: 'CHANNEL' as const,
@@ -132,8 +132,33 @@ describe('channel activity and notification GraphQL cache separation', () => {
       notificationIds: ['notification-1'],
       operation: 'MARK_SEEN',
     });
-    expect(updated[0].__typename).toBe('GraphqlSoupNotification');
+    expect(updated[0].__typename).toBe('GraphqlNotification');
     expect(updated[0].id).toBe('notification-1');
+    expect(mutationMock).toHaveBeenLastCalledWith(
+      UpdateNotificationsDocument,
+      {
+        input: {
+          notificationIds: ['notification-1'],
+          operation: 'MARK_SEEN',
+        },
+      },
+      {
+        normalizedCacheOptimistic: {
+          optimisticResponse: {
+            updateNotifications: [
+              {
+                __typename: 'GraphqlNotification',
+                id: 'notification-1',
+                seen: true,
+                viewedAt: expect.any(String),
+              },
+            ],
+          },
+          linkPatches: [],
+          revalidations: [],
+        },
+      }
+    );
     expect(unreadFilterFn(channel)).toBe(false);
   });
 

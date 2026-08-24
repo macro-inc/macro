@@ -39,6 +39,14 @@ pub struct QueryInspection {
 /// One cached argument variant reconstructed as generated query variables.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct CachedQueryVariant {
+    /// Variables recovered from the selected field's normalized arguments.
+    pub variables: serde_json::Map<String, Json>,
+}
+
+/// One materialized cached argument variant.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct CachedQueryInstance {
     /// Variables recovered from the selected field's normalized arguments.
     pub variables: serde_json::Map<String, Json>,
@@ -88,15 +96,15 @@ pub(crate) struct PreparedInspection {
 }
 
 /// The effective owner record and final selected field.
-pub(crate) struct InspectionOwner {
-    pub fields: BTreeMap<String, CacheValue>,
-    pub field: FieldNode,
+pub(crate) struct InspectionOwner<'records, 'selection> {
+    pub fields: &'records BTreeMap<String, CacheValue>,
+    pub field: &'selection FieldNode,
 }
 
 /// Result of resolving the owner through currently loaded effective records.
-pub(crate) enum OwnerResolution {
-    Owner(InspectionOwner),
-    NeedRecord(EntityKey),
+pub(crate) enum OwnerResolution<'records, 'selection> {
+    Owner(InspectionOwner<'records, 'selection>),
+    NeedRecord(EntityKey<'records>),
     Absent,
 }
 
@@ -174,50 +182,47 @@ pub(crate) fn prepare(
 }
 
 /// Resolves the record/object that owns the final selected field.
-pub(crate) fn resolve_owner(
-    records: &HashMap<EntityKey, Record>,
-    operation: &Operation,
+pub(crate) fn resolve_owner<'records, 'selection>(
+    records: &'records HashMap<EntityKey<'static>, Record>,
+    operation: &'selection Operation,
     path: &[String],
-) -> Result<OwnerResolution, QueryInspectionError> {
+) -> Result<OwnerResolution<'records, 'selection>, QueryInspectionError> {
     resolve_record_owner(
         records,
-        &EntityKey::root(),
+        EntityKey::root(),
         meta::QUERY_ROOT_TYPE,
         &operation.selection_set,
         path,
     )
 }
 
-fn resolve_record_owner(
-    records: &HashMap<EntityKey, Record>,
-    key: &EntityKey,
+fn resolve_record_owner<'records, 'selection>(
+    records: &'records HashMap<EntityKey<'static>, Record>,
+    key: EntityKey<'records>,
     declared_type: &str,
-    selections: &[Selection],
+    selections: &'selection [Selection],
     path: &[String],
-) -> Result<OwnerResolution, QueryInspectionError> {
-    let Some(record) = records.get(key) else {
-        return Ok(OwnerResolution::NeedRecord(key.clone()));
+) -> Result<OwnerResolution<'records, 'selection>, QueryInspectionError> {
+    let Some(record) = records.get(&key) else {
+        return Ok(OwnerResolution::NeedRecord(key));
     };
     let concrete = record.typename().unwrap_or(declared_type);
     resolve_fields_owner(records, &record.fields, concrete, selections, path)
 }
 
-fn resolve_fields_owner(
-    records: &HashMap<EntityKey, Record>,
-    fields: &BTreeMap<String, CacheValue>,
+fn resolve_fields_owner<'records, 'selection>(
+    records: &'records HashMap<EntityKey<'static>, Record>,
+    fields: &'records BTreeMap<String, CacheValue>,
     concrete: &str,
-    selections: &[Selection],
+    selections: &'selection [Selection],
     path: &[String],
-) -> Result<OwnerResolution, QueryInspectionError> {
+) -> Result<OwnerResolution<'records, 'selection>, QueryInspectionError> {
     let response_key = &path[0];
     let Some(field) = selected_field(selections, concrete, response_key) else {
         return Ok(OwnerResolution::Absent);
     };
     if path.len() == 1 {
-        return Ok(OwnerResolution::Owner(InspectionOwner {
-            fields: fields.clone(),
-            field: field.clone(),
-        }));
+        return Ok(OwnerResolution::Owner(InspectionOwner { fields, field }));
     }
 
     let storage_key = selected_storage_key(field, &serde_json::Map::new())
@@ -231,9 +236,13 @@ fn resolve_fields_owner(
             field: response_key.clone(),
         })?;
     match value {
-        CacheValue::Ref(key) => {
-            resolve_record_owner(records, key, next_type, &field.selection_set, &path[1..])
-        }
+        CacheValue::Ref(key) => resolve_record_owner(
+            records,
+            key.borrowed(),
+            next_type,
+            &field.selection_set,
+            &path[1..],
+        ),
         CacheValue::Object(object) => {
             let concrete = object
                 .get("__typename")
@@ -251,7 +260,7 @@ fn resolve_fields_owner(
 
 /// Recovers and canonically deduplicates variables from matching owner fields.
 pub(crate) fn recover_variants(
-    owner: &InspectionOwner,
+    owner: &InspectionOwner<'_, '_>,
     prepared: &PreparedInspection,
 ) -> Result<Vec<serde_json::Map<String, Json>>, QueryInspectionError> {
     let mut matching = 0usize;
@@ -267,7 +276,7 @@ pub(crate) fn recover_variants(
                 maximum: MAX_INSPECTED_VARIANTS,
             });
         }
-        let Some(variables) = invert_arguments(&owner.field, &stored_arguments) else {
+        let Some(variables) = invert_arguments(owner.field, &stored_arguments) else {
             continue;
         };
         if prepared

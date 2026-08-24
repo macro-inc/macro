@@ -1,0 +1,95 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                id,\n                description,\n                entity_type,\n                entity_id,\n                remind_at,\n                cron,\n                timezone,\n                next_run_at,\n                enabled,\n                completed_at,\n                created_at,\n                updated_at\n            FROM reminder\n            WHERE user_id = $1\n              AND ($2::text IS NULL OR entity_type = $2)\n              AND ($3::uuid IS NULL OR entity_id = $3)\n              AND ($4::bool OR completed_at IS NULL)\n              -- Keyset: resume strictly after the cursor position in the same\n              -- (next_run_at, created_at, id) order the query returns.\n              AND (\n                  $5::timestamptz IS NULL\n                  OR (next_run_at, created_at, id) > ($5::timestamptz, $6::timestamptz, $7::uuid)\n              )\n            ORDER BY next_run_at ASC, created_at ASC, id ASC\n            LIMIT $8\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "description",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "entity_type",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "entity_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 4,
+        "name": "remind_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 5,
+        "name": "cron",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "timezone",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "next_run_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 8,
+        "name": "enabled",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 9,
+        "name": "completed_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 10,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 11,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Uuid",
+        "Bool",
+        "Timestamptz",
+        "Timestamptz",
+        "Uuid",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      true,
+      false,
+      false,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "e4ef4dc39e836e36f9e85606b1af47108c0a71b1d6248543dd6bb015b4207698"
+}

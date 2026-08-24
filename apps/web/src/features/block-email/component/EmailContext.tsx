@@ -763,14 +763,20 @@ export function EmailProvider(props: FlowProps<{ threadID: string }>) {
   const markSenderSignal = () => {
     const senderEmail = getSenderEmail();
     if (!senderEmail) return false;
-    markSenderSignalWithToast(senderEmail);
+    markSenderSignalWithToast(
+      senderEmail,
+      toHeaderLinkId(threadQuery.data?.link_id)
+    );
     return true;
   };
 
   const markSenderNoise = () => {
     const senderEmail = getSenderEmail();
     if (!senderEmail) return false;
-    markSenderNoiseWithToast(senderEmail);
+    markSenderNoiseWithToast(
+      senderEmail,
+      toHeaderLinkId(threadQuery.data?.link_id)
+    );
     return true;
   };
 

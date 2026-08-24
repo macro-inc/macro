@@ -1,4 +1,5 @@
 import { useChannelsContext } from '@core/context/channels';
+import { useUserId } from '@core/context/user';
 import { usePlatformNotificationState } from '@notifications';
 import { DefaultUserNameResolver } from '@notifications/notification-resolvers';
 import {
@@ -8,7 +9,17 @@ import {
 } from '@queries/call/call';
 import { useCallContext } from './CallContext';
 import { createCallEventsEffect } from './call-events';
+import {
+  createCallResolutionsEffect,
+  publishCallResolution,
+} from './call-resolution';
 import { joinChannelCall } from './join-channel-call';
+import {
+  attachRingCoordination,
+  participateInRing,
+  type RingParticipation,
+  silenceIncomingCallRing,
+} from './ring-coordination';
 
 const RING_VOLUME = 0.11;
 const RING_NOTE_DURATION_S = 0.09;
@@ -56,18 +67,48 @@ function closeCallNotification(callId: string) {
   activeCallNotifications.delete(callId);
 }
 
-function startCallRinger(
-  callId: string,
-  shouldStop: () => boolean,
-  initialSound?: RingSound
-): Ringer {
+/**
+ * Starts this tab's participation in ringing `callId`. Only the tab that
+ * wins the cross-tab election actually makes noise; the others stay silent
+ * but take the ring over if the audible tab goes away mid-ring (see
+ * `ring-coordination.ts`).
+ */
+function startCallRinger(callId: string, shouldStop: () => boolean): Ringer {
   stopCallRinger(callId);
-  const ringer = startRingingLoop(shouldStop, initialSound, () => {
-    if (activeCallRingers.get(callId) === ringer) {
-      activeCallRingers.delete(callId);
-    }
-  });
+
+  let loop: Ringer | undefined;
+  let isReleasingLoop = false;
+  let participation: RingParticipation | undefined;
+  const ringer: Ringer = { stop: () => participation?.stop() };
   activeCallRingers.set(callId, ringer);
+
+  participation = participateInRing({
+    callId,
+    shouldStop,
+    maxDurationMs: MAX_RING_DURATION_MS,
+    onAcquire: () => {
+      loop = startRingingLoop(shouldStop, playRingSound(), () => {
+        // The loop stopping on its own (user joined, max duration) also ends
+        // the participation, so this tab stops heartbeating a claim it no
+        // longer rings for. Guarded so a release-triggered stop does not end
+        // the participation — a demoted tab must stay in the election as a
+        // takeover candidate.
+        if (!isReleasingLoop) participation?.stop();
+      });
+    },
+    onRelease: () => {
+      isReleasingLoop = true;
+      loop?.stop();
+      isReleasingLoop = false;
+      loop = undefined;
+    },
+    onEnd: () => {
+      if (activeCallRingers.get(callId) === ringer) {
+        activeCallRingers.delete(callId);
+      }
+    },
+  });
+
   return ringer;
 }
 
@@ -188,6 +229,16 @@ function startRingingLoop(
  * `call_ended` both stop the ring; `call_answered` additionally closes the
  * incoming-call notification since the user is already in the call.
  *
+ * This component is the sole bridge from those one-shot websocket events to
+ * published call resolutions (`call-resolution.ts`) — resolution consumers
+ * like `IncomingCallEvents` rely on it being mounted for instant dismissal,
+ * falling back to their reconciliation poll otherwise.
+ *
+ * The ring itself is elected across tabs (`ring-coordination.ts`) so an
+ * incoming call sounds like one phone instead of one per open tab; the toast
+ * is already deduplicated separately by the platform-notification leader
+ * election.
+ *
  * Mount once near the app root, inside `<CallProvider>` and
  * `<ChannelsContextProvider>`. The backend already excludes the caller from
  * the broadcast (`call_service::send_call_event` filters on
@@ -198,17 +249,42 @@ export function CallStartedNotifier() {
   const callCtx = useCallContext();
   const channelsCtx = useChannelsContext();
   const notif = usePlatformNotificationState();
+  const userId = useUserId();
+
+  // Attach up front so sibling tabs' ring claims are already recorded when
+  // this tab's own `call_started` event arrives (event delivery across tabs
+  // can be milliseconds to seconds apart).
+  attachRingCoordination();
+
+  createCallResolutionsEffect((resolution) => {
+    if (resolution.type === 'answered') {
+      if (resolution.answeredBy !== userId()) return;
+      stopCallRinger(resolution.callId);
+      closeCallNotification(resolution.callId);
+      return;
+    }
+
+    stopCallRinger(resolution.callId);
+    setActiveCallEndedCache({
+      channelId: resolution.channelId,
+      callId: resolution.callId,
+    });
+    void invalidateActiveCallQueries();
+  });
 
   createCallEventsEffect({
     onCallEnded: ({ channelId, callId }) => {
-      stopCallRinger(callId);
-      setActiveCallEndedCache({ channelId, callId });
-      void invalidateActiveCallQueries();
+      publishCallResolution({ type: 'ended', channelId, callId });
     },
 
-    onCallAnswered: ({ callId }) => {
-      stopCallRinger(callId);
-      closeCallNotification(callId);
+    onCallAnswered: ({ callId, answeredBy }) => {
+      const answeringUserId = answeredBy ?? userId();
+      if (!answeringUserId) return;
+      publishCallResolution({
+        type: 'answered',
+        callId,
+        answeredBy: answeringUserId,
+      });
     },
 
     onCallStarted: ({ channelId, callId, createdBy, isFromSelf }) => {
@@ -250,11 +326,13 @@ async function emitCallStartedNotification(args: {
 }) {
   const { channelId, callId, createdBy, channelName, notif, isJoined } = args;
 
-  // Play the sound regardless of notification permission so a user with
-  // browser notifications denied still gets an audio cue. Keep re-ringing even
-  // when platform notifications are unavailable; in that case the loop stops
-  // when the user joins, the call ends, or after MAX_RING_DURATION_MS.
-  const ringer = startCallRinger(callId, isJoined, playRingSound());
+  // Ring regardless of notification permission so a user with browser
+  // notifications denied still gets an audio cue. Only the tab that wins the
+  // cross-tab election makes noise; this tab still participates so it can
+  // take the ring over if the audible tab closes mid-ring. The ring stops
+  // when the user joins, the call ends, the ring is silenced in any tab, or
+  // after MAX_RING_DURATION_MS.
+  const ringer = startCallRinger(callId, isJoined);
 
   if (notif === 'not-supported') return;
 
@@ -302,7 +380,11 @@ async function emitCallStartedNotification(args: {
     });
     handle.onDismiss(() => {
       untrack();
-      ringer.stop();
+      // Closing the toast is an explicit "stop ringing": the audible tab may
+      // be a sibling, so silence the ring everywhere rather than just here.
+      // Also fires after our own `handle.close()` calls, where the ring is
+      // ending anyway and the extra silence is harmless.
+      silenceIncomingCallRing(callId);
     });
   } finally {
     if (pendingCallNotifications.get(callId) === pending) {

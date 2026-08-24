@@ -6,12 +6,41 @@ description: >-
   rather than reinstalling the store. Init-agnostic: uses systemd units when
   systemd is active (full VMs), otherwise starts nix-daemon directly as a
   background process (e.g. Namespace runners, where systemd is not active).
+  Optionally configures a private S3 binary cache as a substituter: the daemon
+  performs substitution, so it is started with the AWS credentials in its
+  environment. All four cache inputs must be set for the substituter to be
+  configured; otherwise the action behaves exactly as before.
+
+inputs:
+  nix-cache-url:
+    description: >-
+      S3 store URL of the private nix binary cache
+      (e.g. s3://macro-nix-cache?region=us-east-1). Empty disables.
+    required: false
+    default: ''
+  nix-cache-public-key:
+    description: Public signing key the daemon should trust for that cache.
+    required: false
+    default: ''
+  aws-access-key-id:
+    description: AWS access key id for reading the private cache bucket.
+    required: false
+    default: ''
+  aws-secret-access-key:
+    description: AWS secret access key for reading the private cache bucket.
+    required: false
+    default: ''
 
 runs:
   using: composite
   steps:
     - name: Install or re-initialise Nix
       shell: bash
+      env:
+        NIX_CACHE_URL: ${{ inputs.nix-cache-url }}
+        NIX_CACHE_PUBLIC_KEY: ${{ inputs.nix-cache-public-key }}
+        NIX_CACHE_AWS_ACCESS_KEY_ID: ${{ inputs.aws-access-key-id }}
+        NIX_CACHE_AWS_SECRET_ACCESS_KEY: ${{ inputs.aws-secret-access-key }}
       run: |
         set -euo pipefail
 
@@ -21,6 +50,14 @@ runs:
         have_systemd=false
         if [ -d /run/systemd/system ]; then have_systemd=true; fi
 
+        # The private-bucket substituter needs all four pieces: URL, a key to
+        # verify signatures, and AWS credentials for the daemon to read S3.
+        cache_enabled=false
+        if [[ -n "$NIX_CACHE_URL" && -n "$NIX_CACHE_PUBLIC_KEY" \
+              && -n "$NIX_CACHE_AWS_ACCESS_KEY_ID" && -n "$NIX_CACHE_AWS_SECRET_ACCESS_KEY" ]]; then
+          cache_enabled=true
+        fi
+
         write_conf() {
           sudo mkdir -p /etc/nix
           # The minimal config the Determinate installer would have written.
@@ -28,6 +65,14 @@ runs:
             echo "experimental-features = nix-command flakes"
             echo "trusted-users = root runner"
             echo "build-users-group = nixbld"
+            if $cache_enabled; then
+              echo "extra-substituters = $NIX_CACHE_URL"
+              echo "extra-trusted-public-keys = $NIX_CACHE_PUBLIC_KEY"
+              # A missing narinfo is the common case for freshly built crates;
+              # don't let its negative cache linger across a push from another
+              # job in the same run.
+              echo "narinfo-cache-negative-ttl = 30"
+            fi
           } | sudo tee /etc/nix/nix.conf >/dev/null
         }
 
@@ -51,11 +96,18 @@ runs:
             sudo systemctl enable --now nix-daemon.socket nix-daemon.service 2>/dev/null || true
           fi
           # Without systemd (or if the unit failed to come up), run the daemon
-          # directly: it is just a process listening on the daemon socket.
+          # directly: it is just a process listening on the daemon socket. The
+          # daemon is what talks to substituters, so the S3 credentials must be
+          # in *its* environment, not the client's.
           if ! sudo test -S /nix/var/nix/daemon-socket/socket || ! pgrep -x nix-daemon >/dev/null 2>&1; then
             sudo mkdir -p /nix/var/nix/daemon-socket
             sudo rm -f /nix/var/nix/daemon-socket/socket
-            sudo sh -c "nohup '$daemon_bin' >/tmp/nix-daemon.log 2>&1 &"
+            daemon_env=()
+            if $cache_enabled; then
+              daemon_env+=("AWS_ACCESS_KEY_ID=$NIX_CACHE_AWS_ACCESS_KEY_ID")
+              daemon_env+=("AWS_SECRET_ACCESS_KEY=$NIX_CACHE_AWS_SECRET_ACCESS_KEY")
+            fi
+            sudo env "${daemon_env[@]}" sh -c "nohup '$daemon_bin' >/tmp/nix-daemon.log 2>&1 &"
             for _ in $(seq 1 30); do
               if sudo test -S /nix/var/nix/daemon-socket/socket; then break; fi
               sleep 1
@@ -85,9 +137,17 @@ runs:
             sh -s -- install linux --no-confirm --init "$init_flag" \
             --extra-conf "experimental-features = nix-command flakes" \
             --extra-conf "trusted-users = root runner"
-          # With --init none the installer lays out the multi-user store but
-          # starts no service; bring the daemon up ourselves.
+          # Rewrite the config so the substituter block above applies on fresh
+          # installs too, then bring the daemon up ourselves (with --init none
+          # the installer lays out the multi-user store but starts no service).
+          write_conf
           start_daemon
+        fi
+
+        if $cache_enabled; then
+          echo "S3 nix cache substituter configured: $NIX_CACHE_URL"
+        else
+          echo "S3 nix cache substituter not configured (inputs unset); volume-only caching."
         fi
 
         # Make nix discoverable in subsequent (non-login) steps.

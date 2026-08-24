@@ -1,5 +1,5 @@
 import { useUserId } from '@core/context/user';
-import { tryMacroId, useDisplayName } from '@core/user';
+import { getDisplayName, tryMacroId } from '@core/user';
 import type { EntityData } from '../types/entity';
 
 export function EntityOwner(props: { entity: EntityData }) {
@@ -9,7 +9,7 @@ export function EntityOwner(props: { entity: EntityData }) {
   const ownerDisplayName = () => {
     const owner = ownerId();
     if (!owner) return undefined;
-    return useDisplayName(tryMacroId(owner))[0]();
+    return getDisplayName(tryMacroId(owner));
   };
 
   const displayText = () => {

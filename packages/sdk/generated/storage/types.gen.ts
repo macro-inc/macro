@@ -9,12 +9,6 @@ export type ClientOptions = {
  */
 export type AccessLevel = 'view' | 'comment' | 'edit' | 'owner';
 
-export type Activity = {
-    Document: BasicDocument;
-} | {
-    Chat: Chat;
-};
-
 /**
  * The kind of activity a user performs in a channel.
  */
@@ -31,7 +25,7 @@ export type AddFavoriteRequest = {
     /**
      * The type of the entity to favorite.
      */
-    entityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact';
+    entityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill' | 'agent_session';
 };
 
 /**
@@ -681,6 +675,12 @@ export type ApiEntityFilterAst = {
      * the filters that should be applied based on entity properties
      */
     propf?: unknown;
+    /**
+     * Filters applied to reminders (wire key `remf`). Unlike every other
+     * filter here, empty/omitted returns **no** reminders: they are opt-in,
+     * so the caller must send `inc`, an id, or an entity to get any.
+     */
+    remf?: unknown;
 };
 
 /**
@@ -978,6 +978,8 @@ export type BasicDocumentSubType = {
     type: 'task';
 } | {
     type: 'snippet';
+} | {
+    type: 'skill';
 };
 
 export type BomPart = {
@@ -998,6 +1000,8 @@ export type BomPart = {
 
 /**
  * Bot row.
+ *
+ * Clients deserialize this, so both derives are used.
  */
 export type Bot = {
     /**
@@ -1024,6 +1028,10 @@ export type Bot = {
      * Stable handle.
      */
     handle: string;
+    /**
+     * Whether mentioning this bot opens a sandboxed coding-agent session.
+     */
+    has_agent: boolean;
     /**
      * Bot id.
      */
@@ -1127,9 +1135,9 @@ export type BotToken = {
      */
     revoked_at?: string | null;
     /**
-     * Raw bearer token.
+     * Display prefix of the bearer token. The raw secret is never stored here.
      */
-    token: string;
+    token_prefix: string;
 };
 
 /**
@@ -1197,6 +1205,12 @@ export type CalendarEvent = {
      */
     attendees: Array<CalendarAttendee>;
     /**
+     * Calendar the canonical source belongs to, when known. Absent only in
+     * projections stored before calendars were attributed.
+     */
+    calendarId?: string | null;
+    conferenceProvider?: null | ConferenceProvider;
+    /**
      * Direct join URL when known.
      */
     conferenceUrl?: string | null;
@@ -1240,6 +1254,12 @@ export type CalendarEvent = {
      * Raw RFC 5545 recurrence properties (`RRULE`, `RDATE`, `EXDATE`).
      */
     recurrenceLines: Array<string>;
+    /**
+     * Per-user reminder configuration. Skipped when it is the provider
+     * default so projections stored before reminders were modeled still
+     * compare equal.
+     */
+    reminders?: EventReminders;
     /**
      * Provider/iCalendar sequence number.
      */
@@ -1298,6 +1318,108 @@ export type CalendarEventFilters = {
      * Event statuses such as `confirmed`, `tentative`, or `cancelled`.
      */
     statuses?: Array<string>;
+};
+
+/**
+ * Meeting-level fields shown in a calendar event mention preview, taken from
+ * the requester's own projection of the meeting.
+ */
+export type CalendarMentionEvent = {
+    /**
+     * Number of attendees on the requester's copy.
+     */
+    attendeeCount: number;
+    /**
+     * Whether the event repeats.
+     */
+    isRecurring: boolean;
+    /**
+     * Location label, when set.
+     */
+    location?: string | null;
+    /**
+     * Key of the previewed instance, absent when no occurrence is
+     * materialized.
+     */
+    occurrenceKey?: string | null;
+    /**
+     * Organizer email.
+     */
+    organizerEmail?: string | null;
+    /**
+     * Organizer display name.
+     */
+    organizerName?: string | null;
+    /**
+     * Time of the previewed instance: the requested occurrence when it
+     * exists, else the next upcoming one, else the latest past one, else the
+     * series start.
+     */
+    time: EventTime;
+    /**
+     * Display title.
+     */
+    title: string;
+    /**
+     * Entity update time of the requester's copy.
+     */
+    updatedAt: string;
+    /**
+     * The requester's own event entity for the mentioned meeting. Differs
+     * from the mentioned id when the mention came from another attendee.
+     */
+    viewerEventId: string;
+};
+
+/**
+ * Resolution of one mentioned event, in request order.
+ */
+export type CalendarMentionPreviewItem = {
+    event?: null | CalendarMentionEvent;
+    /**
+     * The mentioned event id, echoed from the request.
+     */
+    eventId: string;
+    /**
+     * Visibility of the mentioned event to the requester.
+     */
+    type: CalendarMentionPreviewKind;
+};
+
+/**
+ * Requester-relative visibility of one mentioned event.
+ */
+export type CalendarMentionPreviewKind = 'access' | 'no_access' | 'does_not_exist';
+
+/**
+ * Batch calendar mention preview request.
+ */
+export type CalendarMentionPreviewRequest = {
+    /**
+     * Mentioned events to resolve, at most 100.
+     */
+    items: Array<CalendarMentionPreviewRequestItem>;
+};
+
+/**
+ * One mentioned event to resolve for the requester.
+ */
+export type CalendarMentionPreviewRequestItem = {
+    /**
+     * Mentioned calendar event id.
+     */
+    eventId: string;
+    /**
+     * Occurrence the mention points at, when it targets one instance.
+     */
+    occurrenceKey?: string | null;
+};
+
+/**
+ * Batch calendar mention preview response.
+ */
+export type CalendarMentionPreviewResponse = {
+    items: Array<CalendarMentionPreviewItem>;
 };
 
 /**
@@ -2413,6 +2535,22 @@ export type CommentThread = {
 };
 
 /**
+ * The conferencing system backing an event's join URL.
+ *
+ * Macro generates only Google Meet conferences, so this distinguishes one it
+ * created from a third party's — Zoom and friends arriving as `addOn`
+ * conference data, or a legacy classic Hangout. Clients use it to label the
+ * conference and to tell whether the Meet toggle reflects a Macro-managed
+ * conference.
+ *
+ * It does not gate mutation. An explicit request replaces or detaches any
+ * conference, third-party included, exactly as deleting the event would;
+ * what protects a conference is that omitting the field leaves it untouched,
+ * so an unrelated edit never disturbs it.
+ */
+export type ConferenceProvider = 'google_meet' | 'other';
+
+/**
  * Query parameters for the copy document endpoint.
  */
 export type CopyDocumentQueryParams = {
@@ -2445,6 +2583,36 @@ export type CopyDocumentResponse = {
      * Indicates if an error occurred.
      */
     error: boolean;
+};
+
+/**
+ * Request to create a bot.
+ */
+export type CreateBotRequest = {
+    /**
+     * Optional avatar URL.
+     */
+    avatar_url?: string | null;
+    /**
+     * Optional description.
+     */
+    description?: string | null;
+    /**
+     * Stable handle.
+     */
+    handle: string;
+    /**
+     * Whether mentioning this bot opens a sandboxed coding-agent session. Defaults to false.
+     */
+    has_agent?: boolean | null;
+    /**
+     * Display name.
+     */
+    name: string;
+    /**
+     * Team owner. The caller must be a team administrator or owner. Omit for a user-owned bot.
+     */
+    team_id?: string | null;
 };
 
 export type CreateBulkDocumentResponse = {
@@ -2519,6 +2687,10 @@ export type CreateChannelScopedBotRequest = {
      * Stable handle.
      */
     handle: string;
+    /**
+     * Whether mentioning this bot opens a sandboxed coding-agent session. Defaults to false.
+     */
+    has_agent?: boolean | null;
     /**
      * Display name.
      */
@@ -2825,6 +2997,58 @@ export type CreateProjectResponse = {
 };
 
 /**
+ * Request body for creating a reminder.
+ */
+export type CreateReminderRequest = {
+    /**
+     * What to remind the caller about.
+     */
+    description: string;
+    /**
+     * Id of the entity to attach the reminder to. Requires `entityType`.
+     */
+    entityId?: string | null;
+    /**
+     * Type of the entity to attach the reminder to. Requires `entityId`.
+     */
+    entityType?: null | 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill' | 'agent_session';
+    /**
+     * When and how often the reminder fires.
+     */
+    schedule: ReminderSchedule;
+};
+
+/**
+ * Request body for creating a skill — a markdown document containing
+ * instructions that AI reads and follows when the skill is referenced in an
+ * AI input.
+ */
+export type CreateSkillRequest = {
+    /**
+     * Markdown source text. Defaults to an empty skill document.
+     */
+    markdown?: string | null;
+    /**
+     * Optional project ID to associate the skill with.
+     */
+    projectId?: string | null;
+    /**
+     * The name of the skill.
+     */
+    skillName: string;
+};
+
+/**
+ * Response for creating a skill.
+ */
+export type CreateSkillResponse = {
+    /**
+     * The document ID of the created skill.
+     */
+    documentId: string;
+};
+
+/**
  * Request body for creating a snippet — a reusable markdown document that can
  * be inserted into any markdown area.
  */
@@ -2898,6 +3122,10 @@ export type CreateTaskResponse = {
      */
     documentMetadata: DocumentResponseMetadata;
     /**
+     * Base64-encoded canonical Loro snapshot used to initialize the task.
+     */
+    initialSnapshot: string;
+    /**
      * The team this task number is scoped to.
      */
     teamId?: string | null;
@@ -2930,6 +3158,8 @@ export type CreateViewRequest = {
 
 /**
  * Request to create a webhook.
+ *
+ * Clients serialize this, so both derives are used.
  */
 export type CreateWebhookRequest = {
     /**
@@ -2958,6 +3188,8 @@ export type CreateWebhookRequest = {
 
 /**
  * Webhook returned after creation, including its signing secret.
+ *
+ * Clients deserialize this, so both derives are used.
  */
 export type CreateWebhookResponse = {
     /**
@@ -3511,6 +3743,11 @@ export type DocumentCopiedMetadata = {
  */
 export type DocumentCreatedMetadata = {
     /**
+     * Who mechanically created the document. Absent on events published
+     * before attribution: ingest then treats [`Self::owner`] as the actor.
+     */
+    actor?: string | null;
+    /**
      * Creation timestamp reported by the repository.
      */
     created_at?: string | null;
@@ -3523,6 +3760,7 @@ export type DocumentCreatedMetadata = {
      */
     document_name: string;
     file_type?: null | FileType;
+    on_behalf_of?: null | MacroUserIdStr;
     /**
      * The owner (creator) of the document.
      */
@@ -3777,6 +4015,8 @@ export type DocumentPreviewDataSubType = {
     type: 'task';
 } | {
     type: 'snippet';
+} | {
+    type: 'skill';
 };
 
 /**
@@ -3889,7 +4129,7 @@ export type DocumentStorageServiceApiVersion = 'v1' | 'v2';
  * The document sub type enum represents all values of document sub types.
  * These values should match the `document_sub_type_value` table in macrodb.
  */
-export type DocumentSubType = 'task' | 'snippet';
+export type DocumentSubType = 'task' | 'snippet' | 'skill';
 
 /**
  * Metadata for [`DocumentTopicEvent::SyncContentUpdated`].
@@ -4270,6 +4510,10 @@ export type EntityFilters = {
      */
     property_filters?: Array<PropertyFilter>;
     /**
+     * the bundled [ReminderFilters]
+     */
+    reminder_filters?: ReminderFilters;
+    /**
      * How the `tag_option_ids` combine: `any` (default) matches entities
      * holding at least one selected tag, `all` requires every selected tag.
      */
@@ -4347,6 +4591,38 @@ export type ErrorResponse = {
      * Message to explain failure
      */
     message: string;
+};
+
+/**
+ * One reminder: how it alerts and how many minutes before the event start
+ * (before midnight in the calendar's zone for all-day events) it fires.
+ */
+export type EventReminderOverride = {
+    /**
+     * Provider method, stored verbatim; only `popup` fires Macro
+     * notifications.
+     */
+    method: string;
+    /**
+     * Minutes before the event start.
+     */
+    minutes: number;
+};
+
+/**
+ * Per-user reminder configuration for an event, mirroring Google's model:
+ * either the calendar's default reminders apply, or the explicit overrides
+ * replace them entirely.
+ */
+export type EventReminders = {
+    /**
+     * Explicit reminders replacing the defaults when `use_default` is off.
+     */
+    overrides?: Array<EventReminderOverride>;
+    /**
+     * Whether the calendar's default reminders apply.
+     */
+    useDefault: boolean;
 };
 
 /**
@@ -4454,7 +4730,7 @@ export type Favorite = {
     /**
      * The type of the favorited entity.
      */
-    entityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact';
+    entityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill' | 'agent_session';
     /**
      * File type of the favorited document, when applicable.
      */
@@ -4476,7 +4752,7 @@ export type FavoriteEntityRef = {
     /**
      * The type of the favorited entity.
      */
-    entityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact';
+    entityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill' | 'agent_session';
 };
 
 /**
@@ -4652,17 +4928,6 @@ export type GenericSuccessResponse = {
 };
 
 /**
- * @deprecated
- */
-export type GetActivitiesResponse = {
-    data?: null | UserActivitiesResponse;
-    /**
-     * Indicates if an error occurred
-     */
-    error: boolean;
-};
-
-/**
  * Response from the attachment-references endpoint.
  */
 export type GetAttachmentReferencesResponse = {
@@ -4730,6 +4995,13 @@ export type GetBatchProjectPreviewRequest = {
 
 export type GetBatchProjectPreviewResponse = {
     previews: Array<ProjectPreview>;
+};
+
+/**
+ * Response from looking up a CRM contact by email.
+ */
+export type GetContactByEmailResponse = {
+    contact?: null | CrmContactResponse;
 };
 
 export type GetDocumentKeyResponse = {
@@ -5103,6 +5375,31 @@ export type GithubPullRequestComment = {
      */
     id: number;
     /**
+     * The id of the comment this one replies to, when it is part of a review
+     * thread. Only ever present on `review_comment` sources.
+     */
+    inReplyToId?: number | null;
+    /**
+     * The line in the current diff the comment is anchored to. Cleared by
+     * GitHub when later commits outdate the comment's diff.
+     */
+    line?: number | null;
+    /**
+     * The line the comment was originally anchored to, kept even when the
+     * diff has since changed.
+     */
+    originalLine?: number | null;
+    /**
+     * The repository-relative file path the review comment is anchored to.
+     * Only ever present on `review_comment` sources.
+     */
+    path?: string | null;
+    /**
+     * The id of the pull request review this comment was submitted with.
+     * Only ever present on `review_comment` sources.
+     */
+    pullRequestReviewId?: number | null;
+    /**
      * The GitHub source for the comment, such as `issue_comment` or `review_comment`.
      */
     source: string;
@@ -5256,7 +5553,14 @@ export type LeaveCallResponse = {
 };
 
 /**
+ * Defines who can access an item through its share link.
+ */
+export type LinkShare = 'PUBLIC' | 'TEAM';
+
+/**
  * Webhooks visible to the caller across their personal and team workspaces.
+ *
+ * Clients deserialize this, so both derives are used.
  */
 export type ListWebhooksResponse = {
     /**
@@ -5377,6 +5681,7 @@ export type Params = {
      * Limit the number of items returned. Defaults to 20. Max 500.
      */
     limit?: number | null;
+    sort_direction?: null | SoupApiSortDirection;
     sort_method?: null | SoupApiSort;
 };
 
@@ -5384,6 +5689,32 @@ export type Params = {
  * The role a user has within a channel.
  */
 export type ParticipantRole = 'owner' | 'admin' | 'member';
+
+/**
+ * Request to patch a bot.
+ */
+export type PatchBotRequest = {
+    /**
+     * Optional avatar URL.
+     */
+    avatar_url?: string | null;
+    /**
+     * Optional description.
+     */
+    description?: string | null;
+    /**
+     * Stable handle.
+     */
+    handle?: string | null;
+    /**
+     * Whether mentioning this bot opens a sandboxed coding-agent session. Omit to leave unchanged.
+     */
+    has_agent?: boolean | null;
+    /**
+     * Display name.
+     */
+    name?: string | null;
+};
 
 /**
  * Request to patch a channel.
@@ -6013,6 +6344,130 @@ export type RecentlyDeletedResponseData = {
 };
 
 /**
+ * A reminder belonging to a user.
+ *
+ * `user_id` is deliberately absent: a reminder is only ever read by its owner,
+ * so the field would be redundant on the wire.
+ */
+export type Reminder = {
+    /**
+     * Set once the owner marks the reminder as dealt with. Firing does not
+     * set it — a delivered reminder is waiting on its owner, not finished.
+     */
+    completedAt?: string | null;
+    /**
+     * When the reminder was created.
+     */
+    createdAt: string;
+    /**
+     * What to remind the user about.
+     */
+    description: string;
+    /**
+     * When false, the dispatcher skips this reminder.
+     */
+    enabled: boolean;
+    /**
+     * Id of the associated entity, when the reminder is attached to one.
+     */
+    entityId?: string | null;
+    /**
+     * Type of the associated entity, when the reminder is attached to one.
+     */
+    entityType?: null | 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill' | 'agent_session';
+    /**
+     * Reminder id.
+     */
+    id: string;
+    /**
+     * The next firing, derived from `schedule` on write.
+     */
+    nextRunAt: string;
+    /**
+     * When and how often the reminder fires.
+     */
+    schedule: ReminderSchedule;
+    /**
+     * When the reminder was last modified.
+     */
+    updatedAt: string;
+};
+
+/**
+ * Filters for reminders.
+ */
+export type ReminderFilters = {
+    /**
+     * Filter on whether the owner has marked the reminder done. `None` returns
+     * both.
+     */
+    completed?: boolean | null;
+    /**
+     * Restrict to reminders attached to these entities, each `"{type}:{id}"`.
+     */
+    entities?: Array<string>;
+    /**
+     * Filter on whether the reminder's next run has come due, i.e. it has
+     * fired and is awaiting its owner. `None` returns both.
+     *
+     * Evaluated server-side against the database clock rather than a
+     * timestamp supplied by the caller: a timestamp would land in the query
+     * cache key and change on every render.
+     */
+    fired?: boolean | null;
+    /**
+     * Reminder ids to filter by. Empty to include all of the caller's reminders.
+     */
+    ids?: Array<string>;
+    /**
+     * Opt this query into reminders at all. Reminders are off by default —
+     * see [`crate::ast::reminder::ReminderLiteral::Include`]. Asking for
+     * specific `ids` or `entities` also opts in.
+     */
+    include?: boolean;
+};
+
+/**
+ * When a reminder fires.
+ */
+export type ReminderSchedule = {
+    /**
+     * The instant to fire at.
+     */
+    remindAt: string;
+    type: 'once';
+} | {
+    /**
+     * Cron expression, either the conventional 5-field
+     * `min hour dom mon dow` or the 6-/7-field
+     * `sec min hour dom mon dow [year]`. A 5-field expression is stored
+     * normalized to 6 fields with a zero seconds field, so `0 9 * * *` and
+     * `0 0 9 * * *` are the same schedule and both read back as the latter.
+     */
+    cron: string;
+    /**
+     * The timezone the cron expression is evaluated in.
+     */
+    timezone: string;
+    type: 'recurring';
+};
+
+/**
+ * The caller's reminders, soonest firing first.
+ */
+export type RemindersList = {
+    /**
+     * Pass back as `cursor` to fetch the next page. Absent on the last page —
+     * its absence is the only end-of-list signal, since a page can be short.
+     */
+    nextCursor?: string | null;
+    /**
+     * The reminders.
+     */
+    reminders: Array<Reminder>;
+};
+
+/**
  * Request to remove participants.
  */
 export type RemoveParticipantsRequest = {
@@ -6244,15 +6699,12 @@ export type SharePermissionV2 = {
      * The share permission id
      */
     id: string;
-    /**
-     * If the item is publicly accessible
-     */
-    isPublic: boolean;
+    linkShare?: null | LinkShare;
+    linkShareAccessLevel?: null | AccessLevel;
     /**
      * The owner of the item
      */
     owner: string;
-    publicAccessLevel?: null | AccessLevel;
 };
 
 /**
@@ -6285,7 +6737,7 @@ export type SimpleMention = {
 };
 
 /**
- * API representation of a soup item with its frecency score.
+ * API representation of a soup item with its per-viewer enrichments.
  */
 export type SoupApiItem = SoupItem & {
     frecency_score: number;
@@ -6293,12 +6745,23 @@ export type SoupApiItem = SoupItem & {
      * Whether the requesting user has favorited this entity.
      */
     is_favorited: boolean;
+    /**
+     * The caller's latest own mutation of this entity, present only when the
+     * page was ordered by `touched_by_me`. Clients keep the touched feed
+     * ordered on this value, so it can be bumped optimistically.
+     */
+    touched_at?: string | null;
 };
 
 /**
  * Sort options accepted by non-grouped soup API endpoints.
  */
-export type SoupApiSort = 'viewed_at' | 'created_at' | 'updated_at' | 'viewed_updated' | 'frecency';
+export type SoupApiSort = 'viewed_at' | 'created_at' | 'updated_at' | 'viewed_updated' | 'frecency' | 'touched_by_me';
+
+/**
+ * Sort direction accepted by non-grouped soup API endpoints.
+ */
+export type SoupApiSortDirection = 'asc' | 'desc';
 
 /**
  * An email attachment as displayed in Soup.
@@ -6340,37 +6803,45 @@ export type SoupAttachment = {
 
 /**
  * Timed or all-day calendar event span.
+ *
+ * Fields are camelCased per variant rather than via `rename_all_fields`,
+ * which utoipa ignores — the generated OpenAPI schema would otherwise
+ * claim snake_case fields the wire never carries.
  */
 export type SoupCalendarEventTime = {
     /**
      * Exclusive end.
      */
-    ends_at: string;
+    endsAt: string;
     kind: 'timed';
     /**
      * Inclusive start.
      */
-    starts_at: string;
+    startsAt: string;
     /**
      * Original IANA time zone.
      */
-    time_zone?: string | null;
+    timeZone?: string | null;
 } | {
     /**
      * Exclusive end date.
      */
-    end_date: string;
+    endDate: string;
     kind: 'allDay';
     /**
      * Inclusive start date.
      */
-    start_date: string;
+    startDate: string;
 };
 
 /**
  * A canonical calendar event entity in Soup.
  */
 export type SoupCalendarEventSoupPropertiesField = {
+    /**
+     * Which conferencing system backs `conference_url`.
+     */
+    conferenceProvider?: string | null;
     /**
      * Direct conference join URL.
      */
@@ -6782,6 +7253,8 @@ export type SoupDocumentSubType = {
     type: 'task';
 } | {
     type: 'snippet';
+} | {
+    type: 'skill';
 };
 
 /**
@@ -7055,6 +7528,12 @@ export type SoupItem = {
      */
     data: SoupForeignEntity;
     tag: 'foreignEntity';
+} | {
+    /**
+     * Reminder item.
+     */
+    data: SoupReminderSoupPropertiesField;
+    tag: 'reminder';
 };
 
 /**
@@ -7247,6 +7726,105 @@ export type SoupProperty = {
 };
 
 /**
+ * The entity a reminder is about, resolved server-side.
+ *
+ * A reminder has no block of its own — it opens, and is iconed as, whatever it
+ * references. Which block that is depends on the referenced document's file
+ * type, and the client's icon path is synchronous, so this is resolved here
+ * rather than costing a fetch per row.
+ */
+export type SoupReminderReference = {
+    /**
+     * The referenced entity's type.
+     */
+    entityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill' | 'agent_session';
+    /**
+     * File type, when the reference is a document — `md`, `pdf`, and so on.
+     */
+    fileType?: string | null;
+    /**
+     * The referenced entity's id.
+     */
+    id: string;
+    /**
+     * Sub type, when the reference is a task or snippet document.
+     */
+    subType?: string | null;
+};
+
+/**
+ * How often a reminder fires, flattened for the wire.
+ *
+ * The domain's [`ReminderSchedule`] is an internally-tagged enum carrying a
+ * validated cron type; Soup only needs enough to render "once" vs "every
+ * weekday at 9am", so the cron is exposed as a plain string.
+ */
+export type SoupReminderSchedule = {
+    /**
+     * The instant to fire at.
+     */
+    remindAt: string;
+    type: 'once';
+} | {
+    /**
+     * Cron expression, normalized to the 6-field form.
+     */
+    cron: string;
+    /**
+     * The timezone the cron expression is evaluated in.
+     */
+    timezone: string;
+    type: 'recurring';
+};
+
+/**
+ * A reminder as displayed in Soup.
+ *
+ * Reminders are user-owned rather than shared, so unlike most Soup items they
+ * carry no access metadata — the repository only ever returns the caller's own.
+ */
+export type SoupReminderSoupPropertiesField = {
+    /**
+     * Properties attached to the entity.
+     */
+    properties: Array<SoupProperty>;
+} & {
+    /**
+     * Set once a one-shot reminder has fired.
+     */
+    completedAt?: string | null;
+    /**
+     * When the reminder was created.
+     */
+    createdAt: string;
+    /**
+     * What to remind the user about. Doubles as the display name.
+     */
+    description: string;
+    /**
+     * When false, the dispatcher skips this reminder.
+     */
+    enabled: boolean;
+    /**
+     * The reminder id.
+     */
+    id: string;
+    /**
+     * The next firing. This is what Soup sorts reminders on.
+     */
+    nextRunAt: string;
+    referencedEntity?: null | SoupReminderReference;
+    /**
+     * When and how often the reminder fires.
+     */
+    schedule: SoupReminderSchedule;
+    /**
+     * When the reminder was last modified.
+     */
+    updatedAt: string;
+};
+
+/**
  * Thread metadata and preview replies for soup channel messages.
  */
 export type SoupThreadInfo = {
@@ -7332,6 +7910,22 @@ export type SuccessResponse = {
 export type SyncServiceVersionId = {
     counter: number;
     peer: string;
+};
+
+/**
+ * A built-in system skill: static, code-defined AI instructions surfaced
+ * through the same tools as user-authored skill documents, but with no
+ * document behind them.
+ */
+export type SystemSkillSummary = {
+    /**
+     * The well-known id the skill is referenced by in mentions and AI tools.
+     */
+    id: string;
+    /**
+     * The name of the skill.
+     */
+    name: string;
 };
 
 /**
@@ -7512,16 +8106,44 @@ export type UpdateCrmTeamSettingsRequest = {
 
 export type UpdateOperation = 'add' | 'remove' | 'replace';
 
+/**
+ * Request body for modifying a reminder. Omitted fields are left unchanged;
+ * the entity association is not modifiable.
+ *
+ * Every field is optional but **not** nullable. `Option` here means "absent",
+ * and serde cannot tell an explicit `null` from an omitted key — so a body of
+ * `{"enabled": null}` would deserialize to an empty patch and be rejected as
+ * having no fields to update. `nullable = false` keeps the schema from
+ * advertising a value the API has no meaning for; the deserializer still
+ * tolerates `null` rather than erroring on it.
+ */
+export type UpdateReminderRequest = {
+    /**
+     * Mark the reminder as dealt with, or live again. Distinct from
+     * `enabled`, which controls whether the dispatcher considers it.
+     */
+    completed?: boolean;
+    /**
+     * Replacement description.
+     */
+    description?: string;
+    /**
+     * Whether the reminder should fire at all.
+     */
+    enabled?: boolean;
+    /**
+     * Replacement schedule.
+     */
+    schedule?: ReminderSchedule;
+};
+
 export type UpdateSharePermissionRequestV2 = {
     /**
      * Any channel share permissions to be created/updated/removed
      */
     channelSharePermissions?: Array<UpdateChannelSharePermission> | null;
-    /**
-     * If the item is publicly accessible
-     */
-    isPublic?: boolean | null;
-    publicAccessLevel?: null | AccessLevel;
+    linkShare?: null | LinkShare;
+    linkShareAccessLevel?: null | AccessLevel;
 };
 
 /**
@@ -7558,24 +8180,6 @@ export type UploadFolderRequest = {
 
 export type UpsertUserDocumentViewLocationRequest = {
     location: string;
-};
-
-/**
- * @deprecated
- */
-export type UserActivitiesResponse = {
-    /**
-     * The next offset to be used if there is one
-     */
-    next_offset?: number | null;
-    /**
-     * The activities returned from the query
-     */
-    recent: Array<Activity>;
-    /**
-     * The total number of activities the user has
-     */
-    total: number;
 };
 
 /**
@@ -7680,6 +8284,8 @@ export type ViewsResponse = {
 
 /**
  * Webhook row returned by application APIs.
+ *
+ * Clients deserialize this, so both derives are used.
  */
 export type Webhook = {
     /**
@@ -7763,6 +8369,8 @@ export type WebhookFilter = {
 
 /**
  * Scope that owns a newly-created webhook.
+ *
+ * Clients serialize this, so both derives are used.
  */
 export type WebhookScope = 'user' | 'team';
 
@@ -7818,36 +8426,6 @@ export type WithDocumentId = {
 export type WithProjectId = {
     id: string;
 };
-
-export type GetRecentActivityHandlerData = {
-    body?: never;
-    path?: never;
-    query: {
-        /**
-         * The maximum number of items to retreive. Default 10, max 100.
-         */
-        limit: number;
-        /**
-         * The offset to start from. Default 0.
-         */
-        offset: number;
-    };
-    url: '/activity';
-};
-
-export type GetRecentActivityHandlerErrors = {
-    400: GenericErrorResponse;
-    401: GenericErrorResponse;
-    500: GenericErrorResponse;
-};
-
-export type GetRecentActivityHandlerError = GetRecentActivityHandlerErrors[keyof GetRecentActivityHandlerErrors];
-
-export type GetRecentActivityHandlerResponses = {
-    200: GetActivitiesResponse;
-};
-
-export type GetRecentActivityHandlerResponse = GetRecentActivityHandlerResponses[keyof GetRecentActivityHandlerResponses];
 
 export type DeleteAnchorData = {
     body: DeleteUnthreadedAnchorRequest;
@@ -8180,6 +8758,37 @@ export type ListOccurrencesResponses = {
 };
 
 export type ListOccurrencesResponse = ListOccurrencesResponses[keyof ListOccurrencesResponses];
+
+export type MentionPreviewsData = {
+    body: CalendarMentionPreviewRequest;
+    path?: never;
+    query?: never;
+    url: '/calendar-events/preview';
+};
+
+export type MentionPreviewsErrors = {
+    /**
+     * Too many events in one request
+     */
+    400: unknown;
+    /**
+     * Authentication required
+     */
+    401: unknown;
+    /**
+     * Calendar query failed
+     */
+    500: unknown;
+};
+
+export type MentionPreviewsResponses = {
+    /**
+     * Requester-relative previews for the mentioned events
+     */
+    200: CalendarMentionPreviewResponse;
+};
+
+export type MentionPreviewsResponse = MentionPreviewsResponses[keyof MentionPreviewsResponses];
 
 export type GetBatchCallRecordPreviewData = {
     body: GetBatchCallRecordPreviewRequest;
@@ -9768,6 +10377,35 @@ export type SetCrmCompanyNameResponses = {
 
 export type SetCrmCompanyNameResponse = SetCrmCompanyNameResponses[keyof SetCrmCompanyNameResponses];
 
+export type GetContactByEmailData = {
+    body?: never;
+    path?: never;
+    query: {
+        /**
+         * The contact email to resolve within the caller's team.
+         */
+        email: string;
+    };
+    url: '/crm/contacts/by-email';
+};
+
+export type GetContactByEmailErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type GetContactByEmailError = GetContactByEmailErrors[keyof GetContactByEmailErrors];
+
+export type GetContactByEmailResponses = {
+    /**
+     * The matching contact, or a null contact when none is visible.
+     */
+    200: GetContactByEmailResponse;
+};
+
+export type GetContactByEmailResponse2 = GetContactByEmailResponses[keyof GetContactByEmailResponses];
+
 export type GetContactData = {
     body?: never;
     path: {
@@ -10005,6 +10643,35 @@ export type CreateMarkdownHandlerResponses = {
 
 export type CreateMarkdownHandlerResponse = CreateMarkdownHandlerResponses[keyof CreateMarkdownHandlerResponses];
 
+export type CreateSkillHandlerData = {
+    body: CreateSkillRequest;
+    path?: never;
+    query?: never;
+    url: '/documents/create_skill';
+};
+
+export type CreateSkillHandlerErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type CreateSkillHandlerError = CreateSkillHandlerErrors[keyof CreateSkillHandlerErrors];
+
+export type CreateSkillHandlerResponses = {
+    /**
+     * Response for creating a skill.
+     */
+    200: {
+        /**
+         * The document ID of the created skill.
+         */
+        documentId: string;
+    };
+};
+
+export type CreateSkillHandlerResponse = CreateSkillHandlerResponses[keyof CreateSkillHandlerResponses];
+
 export type CreateSnippetHandlerData = {
     body: CreateSnippetRequest;
     path?: never;
@@ -10062,6 +10729,10 @@ export type CreateTaskHandlerResponses = {
          * Metadata for the created document
          */
         documentMetadata: DocumentResponseMetadata;
+        /**
+         * Base64-encoded canonical Loro snapshot used to initialize the task.
+         */
+        initialSnapshot: string;
         /**
          * The team this task number is scoped to.
          */
@@ -10260,6 +10931,33 @@ export type HandlerResponses = {
 };
 
 export type HandlerResponse = HandlerResponses[keyof HandlerResponses];
+
+export type GetSystemSkillsHandlerData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/documents/system_skills';
+};
+
+export type GetSystemSkillsHandlerErrors = {
+    401: ErrorResponse;
+};
+
+export type GetSystemSkillsHandlerError = GetSystemSkillsHandlerErrors[keyof GetSystemSkillsHandlerErrors];
+
+export type GetSystemSkillsHandlerResponses = {
+    /**
+     * Response listing the built-in system skills.
+     */
+    200: {
+        /**
+         * Every system skill, in display order.
+         */
+        skills: Array<SystemSkillSummary>;
+    };
+};
+
+export type GetSystemSkillsHandlerResponse = GetSystemSkillsHandlerResponses[keyof GetSystemSkillsHandlerResponses];
 
 export type DeleteDocumentData = {
     body?: never;
@@ -10923,7 +11621,7 @@ export type RemoveFavoriteByEntityData = {
         /**
          * The type of an entity in Macro
          */
-        entity_type: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact';
+        entity_type: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill' | 'agent_session';
         /**
          * The id of the favorited entity.
          */
@@ -11143,9 +11841,21 @@ export type GetItemsSoupData = {
          */
         limit?: number;
         /**
-         * Sort method. Options are viewed_at, created_at, updated_at, viewed_updated. Defaults to viewed_at.
+         * Sort method. Options are viewed_at, created_at, updated_at,
+         * viewed_updated, frecency, touched_by_me. Defaults to viewed_at.
          */
         sort_method?: SoupApiSort;
+        /**
+         * Sort direction. Options are asc, desc. Defaults to desc.
+         *
+         * Re-send this with every page: it is not carried in the cursor.
+         *
+         * Applies to the timestamp sort methods only. `asc` combined with
+         * `frecency` is rejected rather than ignored: frecency pages are ordered
+         * by relevance score and the cursor comparison assumes descending, so
+         * there is no ascending frecency order to give.
+         */
+        sort_direction?: SoupApiSortDirection;
         /**
          * Base64 encoded cursor value.
          */
@@ -11730,6 +12440,183 @@ export type RecentlyDeletedResponses = {
 };
 
 export type RecentlyDeletedResponse = RecentlyDeletedResponses[keyof RecentlyDeletedResponses];
+
+export type ListRemindersData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * The type of an entity in Macro
+         */
+        entityType?: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill' | 'agent_session';
+        /**
+         * Restrict to reminders attached to this entity id. Requires `entityType`.
+         */
+        entityId?: string;
+        /**
+         * Include reminders that have already fired.
+         */
+        includeCompleted?: boolean;
+        /**
+         * Page size. Defaults to 100; larger values are capped at 500. A value
+         * that is not a non-negative integer is rejected by the query extractor.
+         */
+        limit?: number;
+        /**
+         * `nextCursor` from a previous page.
+         */
+        cursor?: string;
+    };
+    url: '/reminders';
+};
+
+export type ListRemindersErrors = {
+    400: ErrorResponse;
+    /**
+     * Missing or invalid credentials
+     */
+    401: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type ListRemindersError = ListRemindersErrors[keyof ListRemindersErrors];
+
+export type ListRemindersResponses = {
+    200: RemindersList;
+};
+
+export type ListRemindersResponse = ListRemindersResponses[keyof ListRemindersResponses];
+
+export type CreateReminderData = {
+    body: CreateReminderRequest;
+    path?: never;
+    query?: never;
+    url: '/reminders';
+};
+
+export type CreateReminderErrors = {
+    400: ErrorResponse;
+    /**
+     * Missing or invalid credentials
+     */
+    401: ErrorResponse;
+    /**
+     * No access to the requested entity
+     */
+    403: ErrorResponse;
+    /**
+     * The requested entity does not exist
+     */
+    404: ErrorResponse;
+    /**
+     * Malformed request body (plain text)
+     */
+    422: unknown;
+    500: ErrorResponse;
+};
+
+export type CreateReminderError = CreateReminderErrors[keyof CreateReminderErrors];
+
+export type CreateReminderResponses = {
+    201: Reminder;
+};
+
+export type CreateReminderResponse = CreateReminderResponses[keyof CreateReminderResponses];
+
+export type DeleteReminderData = {
+    body?: never;
+    path: {
+        /**
+         * The reminder id.
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/reminders/{id}';
+};
+
+export type DeleteReminderErrors = {
+    /**
+     * Missing or invalid credentials
+     */
+    401: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type DeleteReminderError = DeleteReminderErrors[keyof DeleteReminderErrors];
+
+export type DeleteReminderResponses = {
+    /**
+     * Reminder deleted
+     */
+    204: void;
+};
+
+export type DeleteReminderResponse = DeleteReminderResponses[keyof DeleteReminderResponses];
+
+export type GetReminderData = {
+    body?: never;
+    path: {
+        /**
+         * The reminder id.
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/reminders/{id}';
+};
+
+export type GetReminderErrors = {
+    /**
+     * Missing or invalid credentials
+     */
+    401: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type GetReminderError = GetReminderErrors[keyof GetReminderErrors];
+
+export type GetReminderResponses = {
+    200: Reminder;
+};
+
+export type GetReminderResponse = GetReminderResponses[keyof GetReminderResponses];
+
+export type UpdateReminderData = {
+    body: UpdateReminderRequest;
+    path: {
+        /**
+         * The reminder id.
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/reminders/{id}';
+};
+
+export type UpdateReminderErrors = {
+    400: ErrorResponse;
+    /**
+     * Missing or invalid credentials
+     */
+    401: ErrorResponse;
+    404: ErrorResponse;
+    /**
+     * Malformed request body (plain text)
+     */
+    422: unknown;
+    500: ErrorResponse;
+};
+
+export type UpdateReminderError = UpdateReminderErrors[keyof UpdateReminderErrors];
+
+export type UpdateReminderResponses = {
+    200: Reminder;
+};
+
+export type UpdateReminderResponse = UpdateReminderResponses[keyof UpdateReminderResponses];
 
 export type GetViewsHandlerData = {
     body?: never;

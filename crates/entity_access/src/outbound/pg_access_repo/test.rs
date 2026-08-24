@@ -463,16 +463,18 @@ async fn crm_contact_access_rejects_invalid_uuid(pool: PgPool) -> anyhow::Result
 }
 
 const PG_BOT_OWNER: &str = "macro|pg-bot-owner@example.com";
+const PG_OTHER_DOCUMENT_OWNER: &str = "macro|other-document-owner@example.com";
 
-async fn insert_pg_bot_user(pool: &PgPool) -> anyhow::Result<()> {
+async fn insert_pg_user(pool: &PgPool, user_id: &str, email: &str) -> anyhow::Result<()> {
     let macro_user_id = Uuid::new_v4();
     sqlx::query!(
         r#"
         INSERT INTO macro_user (id, username, email, stripe_customer_id)
-        VALUES ($1, $2, 'pg-bot-owner@example.com', $2)
+        VALUES ($1, $2, $3, $2)
         "#,
         macro_user_id,
-        PG_BOT_OWNER,
+        user_id,
+        email,
     )
     .execute(pool)
     .await?;
@@ -480,9 +482,10 @@ async fn insert_pg_bot_user(pool: &PgPool) -> anyhow::Result<()> {
     sqlx::query!(
         r#"
         INSERT INTO "User" (id, email, macro_user_id)
-        VALUES ($1, 'pg-bot-owner@example.com', $2)
+        VALUES ($1, $2, $3)
         "#,
-        PG_BOT_OWNER,
+        user_id,
+        email,
         macro_user_id,
     )
     .execute(pool)
@@ -491,16 +494,36 @@ async fn insert_pg_bot_user(pool: &PgPool) -> anyhow::Result<()> {
     Ok(())
 }
 
-async fn insert_pg_bot_team(pool: &PgPool, team_id: Uuid) -> anyhow::Result<()> {
-    insert_pg_bot_user(pool).await?;
+async fn insert_pg_team(
+    pool: &PgPool,
+    team_id: Uuid,
+    owner_id: &str,
+    name: &str,
+) -> anyhow::Result<()> {
     sqlx::query!(
-        "INSERT INTO team (id, name, owner_id) VALUES ($1, 'PG Bot Team', $2)",
+        "INSERT INTO team (id, name, owner_id) VALUES ($1, $2, $3)",
         team_id,
-        PG_BOT_OWNER,
+        name,
+        owner_id,
+    )
+    .execute(pool)
+    .await?;
+    sqlx::query!(
+        r#"
+        INSERT INTO team_user (user_id, team_id, team_role)
+        VALUES ($1, $2, 'owner')
+        "#,
+        owner_id,
+        team_id,
     )
     .execute(pool)
     .await?;
     Ok(())
+}
+
+async fn insert_pg_bot_team(pool: &PgPool, team_id: Uuid) -> anyhow::Result<()> {
+    insert_pg_user(pool, PG_BOT_OWNER, "pg-bot-owner@example.com").await?;
+    insert_pg_team(pool, team_id, PG_BOT_OWNER, "PG Bot Team").await
 }
 
 async fn insert_pg_bot(
@@ -602,6 +625,53 @@ async fn insert_pg_bot_entity_access(
     Ok(())
 }
 
+async fn insert_pg_link_shared_document(
+    pool: &PgPool,
+    document_id: Uuid,
+    owner_id: &str,
+    link_share: &str,
+    access_level: AccessLevel,
+) -> anyhow::Result<()> {
+    let document_id = document_id.to_string();
+    let permission_id = Uuid::new_v4().to_string();
+    let access_level = access_level.to_string();
+
+    sqlx::query!(
+        r#"INSERT INTO "Document" (id, name, owner) VALUES ($1, 'Link Shared Document', $2)"#,
+        document_id,
+        owner_id,
+    )
+    .execute(pool)
+    .await?;
+    sqlx::query!(
+        r#"
+        INSERT INTO "SharePermission" (
+            id,
+            "linkShare",
+            "linkShareAccessLevel"
+        )
+        VALUES ($1, $2, $3::text::"AccessLevel")
+        "#,
+        permission_id,
+        link_share,
+        access_level,
+    )
+    .execute(pool)
+    .await?;
+    sqlx::query!(
+        r#"
+        INSERT INTO "DocumentPermission" ("documentId", "sharePermissionId")
+        VALUES ($1, $2)
+        "#,
+        document_id,
+        permission_id,
+    )
+    .execute(pool)
+    .await?;
+
+    Ok(())
+}
+
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn team_item_access_includes_team_channels_and_bot_grants(
     pool: PgPool,
@@ -651,38 +721,19 @@ async fn team_item_access_includes_team_channels_and_bot_grants(
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn team_item_access_preserves_public_grants(pool: PgPool) -> anyhow::Result<()> {
+async fn team_item_access_allows_public_link_sharing(pool: PgPool) -> anyhow::Result<()> {
     let team_id = Uuid::new_v4();
     let bot_id = BotId::new_from_uuid(Uuid::new_v4());
     let document_id = Uuid::new_v4();
-    let permission_id = Uuid::new_v4().to_string();
     insert_pg_bot_team(&pool, team_id).await?;
     insert_pg_bot(&pool, bot_id, None, Some(team_id)).await?;
-    sqlx::query!(
-        r#"INSERT INTO "Document" (id, name, owner) VALUES ($1, 'Public Document', $2)"#,
-        document_id.to_string(),
+    insert_pg_link_shared_document(
+        &pool,
+        document_id,
         PG_BOT_OWNER,
+        "PUBLIC",
+        AccessLevel::Comment,
     )
-    .execute(&pool)
-    .await?;
-    sqlx::query!(
-        r#"
-        INSERT INTO "SharePermission" (id, "isPublic", "publicAccessLevel")
-        VALUES ($1, true, 'comment')
-        "#,
-        permission_id.as_str(),
-    )
-    .execute(&pool)
-    .await?;
-    sqlx::query!(
-        r#"
-        INSERT INTO "DocumentPermission" ("documentId", "sharePermissionId")
-        VALUES ($1, $2)
-        "#,
-        document_id.to_string(),
-        permission_id.as_str(),
-    )
-    .execute(&pool)
     .await?;
 
     let access = PgAccessRepository::new(pool)
@@ -695,6 +746,76 @@ async fn team_item_access_preserves_public_grants(pool: PgPool) -> anyhow::Resul
         .await?;
 
     assert_eq!(access, Some(AccessLevel::Comment));
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn team_item_access_allows_team_link_for_document_owner_team(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    let team_id = Uuid::new_v4();
+    let bot_id = BotId::new_from_uuid(Uuid::new_v4());
+    let document_id = Uuid::new_v4();
+    insert_pg_bot_team(&pool, team_id).await?;
+    insert_pg_bot(&pool, bot_id, None, Some(team_id)).await?;
+    insert_pg_link_shared_document(&pool, document_id, PG_BOT_OWNER, "TEAM", AccessLevel::Edit)
+        .await?;
+
+    let access = PgAccessRepository::new(pool)
+        .get_team_entity_access(
+            bot_id,
+            team_id,
+            &document_id.to_string(),
+            EntityType::Document,
+        )
+        .await?;
+
+    assert_eq!(access, Some(AccessLevel::Edit));
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn team_item_access_denies_team_link_for_another_document_owner_team(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    let bot_team_id = Uuid::new_v4();
+    let owner_team_id = Uuid::new_v4();
+    let bot_id = BotId::new_from_uuid(Uuid::new_v4());
+    let document_id = Uuid::new_v4();
+    insert_pg_bot_team(&pool, bot_team_id).await?;
+    insert_pg_bot(&pool, bot_id, None, Some(bot_team_id)).await?;
+    insert_pg_user(
+        &pool,
+        PG_OTHER_DOCUMENT_OWNER,
+        "other-document-owner@example.com",
+    )
+    .await?;
+    insert_pg_team(
+        &pool,
+        owner_team_id,
+        PG_OTHER_DOCUMENT_OWNER,
+        "Other Document Owner Team",
+    )
+    .await?;
+    insert_pg_link_shared_document(
+        &pool,
+        document_id,
+        PG_OTHER_DOCUMENT_OWNER,
+        "TEAM",
+        AccessLevel::Edit,
+    )
+    .await?;
+
+    let access = PgAccessRepository::new(pool)
+        .get_team_entity_access(
+            bot_id,
+            bot_team_id,
+            &document_id.to_string(),
+            EntityType::Document,
+        )
+        .await?;
+
+    assert_eq!(access, None);
     Ok(())
 }
 
@@ -924,5 +1045,83 @@ async fn team_item_access_rejects_unsupported_entity_type(pool: PgPool) -> anyho
         error,
         AccessError::BadRequest("Unsupported entity type for team item access")
     ));
+    Ok(())
+}
+
+const REMINDER_OWNER: &str = "macro|reminder-owner@example.com";
+const REMINDER_STRANGER: &str = "macro|reminder-stranger@example.com";
+
+async fn insert_reminder_user(pool: &PgPool, id: &str) -> anyhow::Result<()> {
+    let macro_user_id = Uuid::new_v4();
+    sqlx::query!(
+        r#"INSERT INTO macro_user (id, username, email, stripe_customer_id)
+           VALUES ($1, $2, $2, $2)"#,
+        macro_user_id,
+        id,
+    )
+    .execute(pool)
+    .await?;
+    sqlx::query!(
+        r#"INSERT INTO "User" (id, email, macro_user_id) VALUES ($1, $1, $2)"#,
+        id,
+        macro_user_id,
+    )
+    .execute(pool)
+    .await?;
+    Ok(())
+}
+
+async fn insert_reminder(pool: &PgPool, owner: &str) -> anyhow::Result<Uuid> {
+    let id = Uuid::new_v4();
+    sqlx::query!(
+        r#"INSERT INTO reminder (id, user_id, description, next_run_at, remind_at)
+           VALUES ($1, $2, 'follow up', now(), now())"#,
+        id,
+        owner,
+    )
+    .execute(pool)
+    .await?;
+    Ok(id)
+}
+
+/// Reminder access is ownership and nothing else — the boundary
+/// `ReminderAccessExtractor` relies on to gate every reminder item route.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn reminder_access_is_owner_for_the_owner_and_nothing_for_anyone_else(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    insert_reminder_user(&pool, REMINDER_OWNER).await?;
+    insert_reminder_user(&pool, REMINDER_STRANGER).await?;
+    let reminder_id = insert_reminder(&pool, REMINDER_OWNER).await?;
+    let repo = PgAccessRepository::new(pool);
+
+    let owner = repo
+        .get_reminder_access(&reminder_id.to_string(), Some(&user_id(REMINDER_OWNER)))
+        .await?;
+    assert_eq!(owner, Some(AccessLevel::Owner));
+
+    let stranger = repo
+        .get_reminder_access(&reminder_id.to_string(), Some(&user_id(REMINDER_STRANGER)))
+        .await?;
+    assert_eq!(stranger, None, "a reminder is never shared");
+
+    let anonymous = repo
+        .get_reminder_access(&reminder_id.to_string(), None)
+        .await?;
+    assert_eq!(anonymous, None);
+
+    // A reminder that does not exist is indistinguishable from one that is not
+    // yours, which is what keeps the id from leaking.
+    let missing = repo
+        .get_reminder_access(&Uuid::new_v4().to_string(), Some(&user_id(REMINDER_OWNER)))
+        .await?;
+    assert_eq!(missing, None);
+
+    let malformed = repo
+        .get_reminder_access("not-a-uuid", Some(&user_id(REMINDER_OWNER)))
+        .await
+        .expect_err("a malformed id is a bad request, not a denial");
+    assert!(matches!(malformed, AccessError::BadRequest(_)));
+
     Ok(())
 }

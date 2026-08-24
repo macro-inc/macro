@@ -24,6 +24,8 @@ pub enum GraphqlSoupEntityType {
     ForeignEntity,
     /// Calendar event entity.
     CalendarEvent,
+    /// Reminder entity.
+    Reminder,
 }
 
 /// Canonical entity types accepted by cross-entity APIs.
@@ -57,6 +59,12 @@ pub enum GraphqlEntityType {
     StaticFile,
     /// CRM contact entity.
     CrmContact,
+    /// Reminder entity.
+    Reminder,
+    /// AI skill entity (skill document or built-in system skill).
+    Skill,
+    /// AI coding agent session entity.
+    AgentSession,
 }
 
 impl GraphqlSoupEntityType {
@@ -81,6 +89,7 @@ impl GraphqlSoupEntityType {
             EntityType::CrmCompany => Self::CrmCompany,
             EntityType::ForeignEntity => Self::ForeignEntity,
             EntityType::CalendarEvent => Self::CalendarEvent,
+            EntityType::Reminder => Self::Reminder,
             _ => return None,
         })
     }
@@ -98,6 +107,7 @@ impl GraphqlSoupEntityType {
             Self::CrmCompany => EntityType::CrmCompany,
             Self::ForeignEntity => EntityType::ForeignEntity,
             Self::CalendarEvent => EntityType::CalendarEvent,
+            Self::Reminder => EntityType::Reminder,
         }
     }
 }
@@ -120,6 +130,9 @@ impl GraphqlEntityType {
             EntityType::Team => Self::Team,
             EntityType::StaticFile => Self::StaticFile,
             EntityType::CrmContact => Self::CrmContact,
+            EntityType::Reminder => Self::Reminder,
+            EntityType::Skill => Self::Skill,
+            EntityType::AgentSession => Self::AgentSession,
         }
     }
 
@@ -145,6 +158,9 @@ impl GraphqlEntityType {
             Self::Team => EntityType::Team,
             Self::StaticFile => EntityType::StaticFile,
             Self::CrmContact => EntityType::CrmContact,
+            Self::Reminder => EntityType::Reminder,
+            Self::Skill => EntityType::Skill,
+            Self::AgentSession => EntityType::AgentSession,
         }
     }
 }

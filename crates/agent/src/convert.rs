@@ -145,12 +145,17 @@ fn convert_assistant(msg: &ChatMessage) -> Vec<Message> {
             AssistantMessagePart::ToolCall { name, json, id }
             | AssistantMessagePart::McpToolCall { name, json, id, .. } => {
                 saw_tool_call = true;
+                // Anthropic requires tool_use.input to be an object; older persisted
+                // messages may carry a non-object value from before this was enforced
+                // at the source (see hook.rs on_tool_call), so coerce here too.
+                let input = if json.is_object() {
+                    json.clone()
+                } else {
+                    serde_json::json!({})
+                };
                 assistant_parts.push(AssistantContent::ToolCall(
-                    ToolCall::new(
-                        replay_item_id(id),
-                        ToolFunction::new(name.clone(), json.clone()),
-                    )
-                    .with_call_id(replay_call_id(id)),
+                    ToolCall::new(replay_item_id(id), ToolFunction::new(name.clone(), input))
+                        .with_call_id(replay_call_id(id)),
                 ));
             }
             AssistantMessagePart::ToolCallResponseJson { id, json, .. } => {

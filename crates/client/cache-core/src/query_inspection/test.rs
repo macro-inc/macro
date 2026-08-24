@@ -13,13 +13,15 @@ fn concrete_union_member_outside_selected_fragment_is_absent() {
         selection_set: vec![Selection::Field(FieldNode {
             response_key: "properties".to_string(),
             name: "properties".to_string(),
+            cache_only: false,
             arguments: Vec::new(),
             selection_set: Vec::new(),
         })],
     }];
 
+    let records = HashMap::new();
     let result = resolve_fields_owner(
-        &HashMap::new(),
+        &records,
         &fields,
         "GraphqlSoupChannel",
         &selections,

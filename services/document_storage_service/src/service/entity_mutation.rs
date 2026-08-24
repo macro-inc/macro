@@ -108,7 +108,7 @@ fn access_failure(error: AccessError) -> EntityMutationErrorCode {
         error @ AccessError::BadRequest(_) => {
             EntityMutationErrorCode::invalid(rootcause::report!(error))
         }
-        error @ (AccessError::DatabaseError(_) | AccessError::Internal) => {
+        error @ (AccessError::Unavailable(_) | AccessError::Internal(_)) => {
             EntityMutationErrorCode::internal(rootcause::report!(error))
         }
     }
@@ -184,7 +184,12 @@ fn favoritable(entity_type: EntityType) -> bool {
         | EntityType::ChannelMessage
         | EntityType::StaticFile
         | EntityType::CrmContact
-        | EntityType::CalendarEvent => false,
+        | EntityType::CalendarEvent
+        // Reminders are managed through the reminders API, not favorites.
+        | EntityType::Reminder
+        | EntityType::Skill
+        // Agent sessions are not entity-mutation targets.
+        | EntityType::AgentSession => false,
     }
 }
 
@@ -455,7 +460,10 @@ where
             | EntityType::StaticFile
             | EntityType::CrmCompany
             | EntityType::CrmContact
-            | EntityType::CalendarEvent => {
+            | EntityType::CalendarEvent
+            | EntityType::Reminder
+            | EntityType::Skill
+            | EntityType::AgentSession => {
                 return unsupported(requested, "rename");
             }
         };
@@ -498,7 +506,10 @@ where
             | EntityType::StaticFile
             | EntityType::CrmCompany
             | EntityType::CrmContact
-            | EntityType::CalendarEvent => {
+            | EntityType::CalendarEvent
+            | EntityType::Reminder
+            | EntityType::Skill
+            | EntityType::AgentSession => {
                 return unsupported(requested, "move");
             }
         };
@@ -543,7 +554,10 @@ where
             | EntityType::StaticFile
             | EntityType::CrmCompany
             | EntityType::CrmContact
-            | EntityType::CalendarEvent => {
+            | EntityType::CalendarEvent
+            | EntityType::Reminder
+            | EntityType::Skill
+            | EntityType::AgentSession => {
                 return unsupported(requested, "share policy updates");
             }
         };
@@ -591,7 +605,10 @@ where
             | EntityType::StaticFile
             | EntityType::CrmCompany
             | EntityType::CrmContact
-            | EntityType::CalendarEvent => {
+            | EntityType::CalendarEvent
+            | EntityType::Reminder
+            | EntityType::Skill
+            | EntityType::AgentSession => {
                 return unsupported(requested, "trash");
             }
         };
@@ -618,7 +635,10 @@ where
             | EntityType::StaticFile
             | EntityType::CrmCompany
             | EntityType::CrmContact
-            | EntityType::CalendarEvent => {
+            | EntityType::CalendarEvent
+            | EntityType::Reminder
+            | EntityType::Skill
+            | EntityType::AgentSession => {
                 return unsupported(requested, "restore");
             }
         };
@@ -665,7 +685,10 @@ where
             | EntityType::StaticFile
             | EntityType::CrmCompany
             | EntityType::CrmContact
-            | EntityType::CalendarEvent => {
+            | EntityType::CalendarEvent
+            | EntityType::Reminder
+            | EntityType::Skill
+            | EntityType::AgentSession => {
                 return unsupported(requested, "permanent deletion");
             }
         };
@@ -722,7 +745,10 @@ where
             | EntityType::StaticFile
             | EntityType::CrmCompany
             | EntityType::CrmContact
-            | EntityType::CalendarEvent => {
+            | EntityType::CalendarEvent
+            | EntityType::Reminder
+            | EntityType::Skill
+            | EntityType::AgentSession => {
                 return unsupported(requested, "duplication");
             }
         };

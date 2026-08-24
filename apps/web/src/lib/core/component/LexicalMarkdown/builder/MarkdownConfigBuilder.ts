@@ -169,6 +169,17 @@ export class EditorConfigBuilder implements EditorBuilder {
     return this;
   }
 
+  /**
+   * Enable the skills (`/`) typeahead menu — for AI markdown areas. Lists
+   * skill documents; selecting one inserts a document mention for the skill.
+   * Requires mentions and only takes effect when actions are disabled, since
+   * both own the `/` trigger.
+   */
+  withSkills(): this {
+    this.state.skills = true;
+    return this;
+  }
+
   singleLine(): this {
     this.state.singleLine = true;
     return this;

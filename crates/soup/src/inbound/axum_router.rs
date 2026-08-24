@@ -1,7 +1,8 @@
 use crate::domain::{
     models::{
         EnrichedSoupItem, FrecencyQueryInner, GroupedSortRequest, IntoSoupReqAst, SimpleQueryInner,
-        SoupErr, SoupItemWithProperties, SoupQuery, SoupRequest, SoupType,
+        SoupErr, SoupItemWithProperties, SoupQuery, SoupRequest, SoupSortDirection, SoupType,
+        TouchedQueryInner,
         grouping::{GroupMeta, build_grouped_response},
     },
     ports::SoupService,
@@ -13,7 +14,7 @@ use axum::{
     response::IntoResponse,
     routing::{get, post},
 };
-use axum_extra::either::Either;
+use axum_extra::either::Either3;
 use cowlike::CowLike;
 use email::{
     domain::{
@@ -44,6 +45,7 @@ use item_filters::{
         foreign_entity::ForeignEntityLiteral,
         project::ProjectLiteral,
         properties::{PropertiesLiteral, PropertyEntityType},
+        reminder::ReminderLiteral,
     },
 };
 use macro_authorization::{
@@ -54,7 +56,7 @@ use model_entity::Entity;
 use model_error_response::ErrorResponse;
 use models_grouping::{GroupByField, GroupingConfig};
 use models_pagination::{
-    CursorWithValAndFilter, Frecency, PaginatedOpaqueCursor, SimpleSortMethod, SortMethod,
+    CursorWithValAndFilter, Frecency, PaginatedOpaqueCursor, SimpleSortMethod, TouchedByMe,
     TypeEraseCursor,
 };
 use non_empty::IsEmpty;
@@ -81,9 +83,39 @@ pub struct Params {
     /// Limit the number of items returned. Defaults to 20. Max 500.
     #[serde(default)]
     limit: Option<u16>,
-    /// Sort method. Options are viewed_at, created_at, updated_at, viewed_updated. Defaults to viewed_at.
+    /// Sort method. Options are viewed_at, created_at, updated_at,
+    /// viewed_updated, frecency, touched_by_me. Defaults to viewed_at.
     #[serde(default)]
     sort_method: Option<SoupApiSort>,
+    /// Sort direction. Options are asc, desc. Defaults to desc.
+    ///
+    /// Re-send this with every page: it is not carried in the cursor.
+    ///
+    /// Applies to the timestamp sort methods only. `asc` combined with
+    /// `frecency` is rejected rather than ignored: frecency pages are ordered
+    /// by relevance score and the cursor comparison assumes descending, so
+    /// there is no ascending frecency order to give.
+    #[serde(default)]
+    sort_direction: Option<SoupApiSortDirection>,
+}
+
+/// Sort direction accepted by non-grouped soup API endpoints.
+#[derive(Debug, Clone, Copy, Deserialize, utoipa::ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum SoupApiSortDirection {
+    /// Oldest, or soonest-firing, first.
+    Asc,
+    /// Newest first.
+    Desc,
+}
+
+impl From<SoupApiSortDirection> for SoupSortDirection {
+    fn from(value: SoupApiSortDirection) -> Self {
+        match value {
+            SoupApiSortDirection::Asc => SoupSortDirection::Asc,
+            SoupApiSortDirection::Desc => SoupSortDirection::Desc,
+        }
+    }
 }
 
 /// Sort options accepted by non-grouped soup API endpoints.
@@ -100,16 +132,30 @@ pub enum SoupApiSort {
     ViewedUpdated,
     /// Sort by frecency score.
     Frecency,
+    /// Only entities the caller has mutated, newest own-mutation first.
+    /// Both a filter and an ordering: views don't count, and entities the
+    /// caller never touched are absent.
+    TouchedByMe,
 }
 
 impl SoupApiSort {
-    fn into_sort_method(self) -> SortMethod {
+    /// Builds the initial query for this sort method over the given filters.
+    fn into_query<R>(self, filters: R) -> SoupQuery<R> {
         match self {
-            SoupApiSort::ViewedAt => SortMethod::Simple(SimpleSortMethod::ViewedAt),
-            SoupApiSort::CreatedAt => SortMethod::Simple(SimpleSortMethod::CreatedAt),
-            SoupApiSort::UpdatedAt => SortMethod::Simple(SimpleSortMethod::UpdatedAt),
-            SoupApiSort::ViewedUpdated => SortMethod::Simple(SimpleSortMethod::ViewedUpdated),
-            SoupApiSort::Frecency => SortMethod::Advanced(Frecency),
+            SoupApiSort::ViewedAt => {
+                SoupQuery::new_sort_simple(SimpleSortMethod::ViewedAt, filters)
+            }
+            SoupApiSort::CreatedAt => {
+                SoupQuery::new_sort_simple(SimpleSortMethod::CreatedAt, filters)
+            }
+            SoupApiSort::UpdatedAt => {
+                SoupQuery::new_sort_simple(SimpleSortMethod::UpdatedAt, filters)
+            }
+            SoupApiSort::ViewedUpdated => {
+                SoupQuery::new_sort_simple(SimpleSortMethod::ViewedUpdated, filters)
+            }
+            SoupApiSort::Frecency => SoupQuery::new_sort_frecency(Frecency, filters),
+            SoupApiSort::TouchedByMe => SoupQuery::new_sort_touched(filters),
         }
     }
 }
@@ -496,27 +542,44 @@ where
         R: Clone + Serialize + Send,
     {
         let user_for_favorites = macro_user_id.copied().into_owned();
+        let sort_direction: SoupSortDirection =
+            params.sort_direction.map(Into::into).unwrap_or_default();
         let create_fallback = move || -> SoupQuery<R> {
-            let params_sort = params
+            params
                 .sort_method
-                .map(|s| s.into_sort_method())
-                .unwrap_or(SortMethod::Simple(SimpleSortMethod::ViewedAt));
-            match params_sort {
-                SortMethod::Simple(simple_sort_method) => {
-                    SoupQuery::new_sort_simple(simple_sort_method, filters)
-                }
-                SortMethod::Advanced(frecency) => SoupQuery::new_sort_frecency(frecency, filters),
-            }
+                .unwrap_or(SoupApiSort::ViewedAt)
+                .into_query(filters)
         };
 
         let cursor: SoupQuery<R> = match cursor {
-            Either::E1(l) => l
+            Either3::E1(l) => l
                 .map(SoupQuery::new_cursor_simple)
                 .unwrap_or_else(create_fallback),
-            Either::E2(r) => r
+            Either3::E2(r) => r
                 .map(SoupQuery::new_cursor_frecency)
                 .unwrap_or_else(create_fallback),
+            Either3::E3(t) => t
+                .map(SoupQuery::new_cursor_touched)
+                .unwrap_or_else(create_fallback),
         };
+
+        // Frecency pages are ordered by relevance score and touched pages by
+        // the caller's own latest mutation; neither branch applies the merged
+        // sort the direction would flip. Rejecting beats accepting the
+        // parameter and silently doing nothing with it. Checked against the
+        // resolved query so a frecency/touched *cursor* is caught too, not
+        // just an initial request naming the method.
+        if sort_direction == SoupSortDirection::Asc {
+            match &cursor {
+                SoupQuery::Frecency(_) => {
+                    return Err(SoupHandlerErr::AscendingFrecencyUnsupported);
+                }
+                SoupQuery::Touched(_) => {
+                    return Err(SoupHandlerErr::AscendingTouchedUnsupported);
+                }
+                SoupQuery::Simple(_) => {}
+            }
+        }
 
         // CRM authorization (team membership for CRM scope, admin/owner
         // role for hidden companies) is enforced by the soup domain and
@@ -532,6 +595,7 @@ where
                     },
                     limit: params.limit.unwrap_or(20),
                     cursor,
+                    sort_direction,
                     user: macro_user_id,
                     email_preview_view: email_view,
                     link_ids,
@@ -628,12 +692,17 @@ where
         .with_state(state)
 }
 
-/// API representation of a soup item with its frecency score.
+/// API representation of a soup item with its per-viewer enrichments.
 #[derive(Debug, Serialize, utoipa::ToSchema)]
 pub struct SoupApiItem {
     #[serde(flatten)]
     item: SoupItemWithProperties,
     frecency_score: f64,
+    /// The caller's latest own mutation of this entity, present only when the
+    /// page was ordered by `touched_by_me`. Clients keep the touched feed
+    /// ordered on this value, so it can be bumped optimistically.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    touched_at: Option<chrono::DateTime<chrono::Utc>>,
     /// Whether the requesting user has favorited this entity.
     is_favorited: bool,
 }
@@ -643,6 +712,7 @@ impl SoupApiItem {
         let EnrichedSoupItem {
             item,
             frecency_score,
+            touched_at,
             ..
         } = item;
         SoupApiItem {
@@ -650,6 +720,7 @@ impl SoupApiItem {
             frecency_score: frecency_score
                 .map(|f| f.data.frecency_score)
                 .unwrap_or_default(),
+            touched_at,
             is_favorited: false,
         }
     }
@@ -704,6 +775,15 @@ pub enum SoupHandlerErr {
     /// Hidden CRM company query was requested without admin privileges.
     #[error("Querying hidden CRM companies requires admin/owner team role")]
     CrmAdminRequired,
+    /// Ascending order was requested for a frecency-sorted query.
+    #[error("sort_direction=asc is not supported with sort_method=frecency")]
+    AscendingFrecencyUnsupported,
+    /// Ascending order was requested for a touched-by-me query.
+    #[error("sort_direction=asc is not supported with sort_method=touched_by_me")]
+    AscendingTouchedUnsupported,
+    /// A touched-by-me query carried a filter kind the mode cannot evaluate.
+    #[error("sort_method=touched_by_me does not support {0} filters")]
+    TouchedUnsupportedFilter(&'static str),
 }
 
 impl From<SoupErr> for SoupHandlerErr {
@@ -712,6 +792,9 @@ impl From<SoupErr> for SoupHandlerErr {
             SoupErr::AstErr(expand_err) => SoupHandlerErr::ExpandErr(expand_err),
             SoupErr::CrmTeamRequired => SoupHandlerErr::CrmScopeForbidden,
             SoupErr::CrmAdminRequired => SoupHandlerErr::CrmAdminRequired,
+            SoupErr::TouchedUnsupportedFilter(kind) => {
+                SoupHandlerErr::TouchedUnsupportedFilter(kind)
+            }
             err => SoupHandlerErr::Internal(err),
         }
     }
@@ -720,7 +803,11 @@ impl From<SoupErr> for SoupHandlerErr {
 impl IntoResponse for SoupHandlerErr {
     fn into_response(self) -> axum::response::Response {
         let status_code = match &self {
-            SoupHandlerErr::ExpandErr(_) | SoupHandlerErr::Expand => StatusCode::BAD_REQUEST,
+            SoupHandlerErr::ExpandErr(_)
+            | SoupHandlerErr::Expand
+            | SoupHandlerErr::AscendingFrecencyUnsupported
+            | SoupHandlerErr::AscendingTouchedUnsupported
+            | SoupHandlerErr::TouchedUnsupportedFilter(_) => StatusCode::BAD_REQUEST,
             SoupHandlerErr::CrmScopeForbidden | SoupHandlerErr::CrmAdminRequired => {
                 StatusCode::FORBIDDEN
             }
@@ -827,9 +914,12 @@ struct ApiSoupRequestInner<T> {
     email_view: PreviewView,
 }
 
-type SoupCursor<R> = axum_extra::either::Either<
+type SoupCursor<R> = Either3<
     Option<CursorWithValAndFilter<Uuid, SimpleSortMethod, R>>,
     Option<CursorWithValAndFilter<Uuid, Frecency, R>>,
+    // String id, not Uuid: the touched keyset compares the raw stored
+    // entity id byte-for-byte, so the cursor must not canonicalize it.
+    Option<CursorWithValAndFilter<String, TouchedByMe, R>>,
 >;
 
 /// Gets the items the user has access to
@@ -1104,6 +1194,12 @@ pub struct ApiEntityFilterAst {
     #[serde(default, rename = "ccf")]
     #[schema(value_type = serde_json::Value)]
     pub crm_company_filter: LiteralTree<CrmCompanyLiteral>,
+    /// Filters applied to reminders (wire key `remf`). Unlike every other
+    /// filter here, empty/omitted returns **no** reminders: they are opt-in,
+    /// so the caller must send `inc`, an id, or an entity to get any.
+    #[serde(default, rename = "remf")]
+    #[schema(value_type = serde_json::Value)]
+    pub reminder_filter: LiteralTree<ReminderLiteral>,
     /// the filters that should be applied based on entity properties
     #[serde(default, rename = "propf")]
     #[schema(value_type = serde_json::Value)]
@@ -1146,6 +1242,7 @@ impl IntoSoupReqAst for SoupRequest<ApiEntityFilterAst> {
             soup_type,
             limit,
             cursor,
+            sort_direction,
             user,
             email_preview_view,
             link_ids,
@@ -1160,12 +1257,16 @@ impl IntoSoupReqAst for SoupRequest<ApiEntityFilterAst> {
                     query.try_map_filter(ApiEntityFilterAst::into_optional_entity_ast)?,
                 ))
             }
+            SoupQuery::Touched(TouchedQueryInner(query)) => SoupQuery::Touched(TouchedQueryInner(
+                query.try_map_filter(ApiEntityFilterAst::into_optional_entity_ast)?,
+            )),
         };
 
         Ok(SoupRequest {
             soup_type,
             limit,
             cursor,
+            sort_direction,
             user,
             email_preview_view,
             link_ids,
@@ -1194,6 +1295,7 @@ impl ApiEntityFilterAst {
             foreign_entity_filter,
             call_filter,
             crm_company_filter,
+            reminder_filter,
             properties_filter,
             email_crm_domains,
             email_crm_addresses,
@@ -1261,6 +1363,7 @@ impl ApiEntityFilterAst {
             call_filter,
             crm_company_filter,
             foreign_entity_filter,
+            reminder_filter,
             properties_filter,
         })
     }

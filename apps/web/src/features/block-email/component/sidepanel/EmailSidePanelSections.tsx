@@ -1,3 +1,4 @@
+import { EntityActivitySectionConditional } from '@app/features/activity/EntityActivitySection';
 import {
   EntityPropertiesSection,
   EntityTagsSection,
@@ -43,6 +44,11 @@ export function EmailSidePanelSections(props: EmailSidePanelSectionsProps) {
           />
         </Suspense>
       </SidePanel.Section>
+      <EntityActivitySectionConditional
+        entityId={props.threadId}
+        entityType="THREAD"
+        order={40}
+      />
       <ReferencesSectionConditional threadId={props.threadId} />
     </>
   );

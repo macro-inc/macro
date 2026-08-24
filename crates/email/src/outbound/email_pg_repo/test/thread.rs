@@ -46,6 +46,32 @@ async fn test_thread_by_id_not_found(pool: Pool<Postgres>) -> anyhow::Result<()>
 
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("email_thread"))
+)]
+async fn thread_metadata_by_ids_returns_canonical_rows(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let repo = EmailPgRepo::new(pool);
+    let first_id = Uuid::parse_str("11111111-1111-1111-1111-111111111111")?;
+    let second_id = Uuid::parse_str("22222222-2222-2222-2222-222222222222")?;
+    let missing_id = Uuid::parse_str("99999999-9999-9999-9999-999999999999")?;
+    let canonical_link_id = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
+
+    let mut metadata = repo
+        .thread_metadata_by_ids(&[first_id, missing_id, second_id])
+        .await?;
+    metadata.sort_by_key(|row| row.thread_id);
+
+    assert_eq!(metadata.len(), 2);
+    assert_eq!(metadata[0].thread_id, first_id);
+    assert_eq!(metadata[0].link_id, canonical_link_id);
+    assert!(metadata[0].latest_inbound_message_ts.is_some());
+    assert_eq!(metadata[1].thread_id, second_id);
+    assert_eq!(metadata[1].link_id, canonical_link_id);
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../../fixtures", scripts("email_dynamic_query"))
 )]
 async fn moving_thread_to_project_advances_thread_timestamp(

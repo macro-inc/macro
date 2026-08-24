@@ -21,6 +21,14 @@ export function ComposeSubject(props: {
   const showSummary = () =>
     isMobile() && !editing() && ctx.subject().length > 0;
 
+  const blurOnEscape = (
+    e: KeyboardEvent & { currentTarget: HTMLInputElement }
+  ) => {
+    if (e.key !== 'Escape') return;
+    e.preventDefault();
+    e.currentTarget.blur();
+  };
+
   return (
     <div
       class={cn(
@@ -47,6 +55,7 @@ export function ComposeSubject(props: {
               placeholder="Subject"
               class="w-full resize-none text-sm placeholder:text-ink-placeholder p-1"
               onInput={(e) => ctx.setSubject(e.currentTarget.value)}
+              onKeyDown={blurOnEscape}
               disabled={ctx.disabled()}
             />
           }
@@ -82,6 +91,11 @@ export function ComposeSubject(props: {
               onFocus={() => setEditing(true)}
               onBlur={() => setEditing(false)}
               onKeyDown={(e) => {
+                if (e.key === 'Escape') {
+                  e.preventDefault();
+                  e.currentTarget.blur();
+                  return;
+                }
                 if (e.key === 'Enter') {
                   e.preventDefault();
                   e.currentTarget.blur();

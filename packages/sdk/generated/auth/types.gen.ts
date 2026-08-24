@@ -369,6 +369,31 @@ export type GithubPullRequestComment = {
      */
     id: number;
     /**
+     * The id of the comment this one replies to, when it is part of a review
+     * thread. Only ever present on `review_comment` sources.
+     */
+    inReplyToId?: number | null;
+    /**
+     * The line in the current diff the comment is anchored to. Cleared by
+     * GitHub when later commits outdate the comment's diff.
+     */
+    line?: number | null;
+    /**
+     * The line the comment was originally anchored to, kept even when the
+     * diff has since changed.
+     */
+    originalLine?: number | null;
+    /**
+     * The repository-relative file path the review comment is anchored to.
+     * Only ever present on `review_comment` sources.
+     */
+    path?: string | null;
+    /**
+     * The id of the pull request review this comment was submitted with.
+     * Only ever present on `review_comment` sources.
+     */
+    pullRequestReviewId?: number | null;
+    /**
      * The GitHub source for the comment, such as `issue_comment` or `review_comment`.
      */
     source: string;
@@ -447,6 +472,20 @@ export type InitGmailLinkResponse = {
 };
 
 /**
+ * Response returned when a Microsoft Outlook link is initiated.
+ */
+export type InitOutlookLinkResponse = {
+    /**
+     * The OAuth authorization URL to redirect the user to.
+     */
+    authorization_url: string;
+    /**
+     * The link ID for tracking the OAuth flow.
+     */
+    link_id: string;
+};
+
+/**
  * A single invite entry with email and tier
  */
 export type InviteEntry = {
@@ -465,6 +504,11 @@ export type InviteToTeamRequest = {
      */
     invites: Array<InviteEntry>;
 };
+
+/**
+ * Defines who can access an item through its share link.
+ */
+export type LinkShare = 'PUBLIC' | 'TEAM';
 
 export type MacroApiTokenResponse = {
     /**
@@ -551,6 +595,7 @@ export type PatchTeamCrmSettingsResponse = {
  * Request to update a team
  */
 export type PatchTeamRequest = {
+    default_link_share?: null | LinkShare;
     /**
      * The new name for the team
      */
@@ -713,6 +758,7 @@ export type Team = {
      * `false` when no row exists).
      */
     crm_enabled: boolean;
+    default_link_share?: null | LinkShare;
     /**
      * Whether this team is on an enterprise license. Enterprise teams are
      * billed out-of-band; membership changes skip all Stripe subscription
@@ -1175,6 +1221,10 @@ export type InitGmailLinkData = {
          * **OPTIONAL**. The original url to redirect to.
          */
         original_url: string;
+        /**
+         * **OPTIONAL**. Which capabilities to request consent for: `gmail` (default), `gmail_and_calendar`, or `calendar`. The calendar variants are only honored when the deployment allows calendar scope requests.
+         */
+        scopes?: string;
     };
     url: '/link/gmail';
 };
@@ -1216,6 +1266,34 @@ export type CheckGmailLinkStatusResponses = {
 };
 
 export type CheckGmailLinkStatusResponse = CheckGmailLinkStatusResponses[keyof CheckGmailLinkStatusResponses];
+
+export type InitOutlookLinkData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * **OPTIONAL**. The original URL to redirect to.
+         */
+        original_url?: string;
+    };
+    url: '/link/outlook';
+};
+
+export type InitOutlookLinkErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    404: ErrorResponse;
+    429: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type InitOutlookLinkError = InitOutlookLinkErrors[keyof InitOutlookLinkErrors];
+
+export type InitOutlookLinkResponses = {
+    200: InitOutlookLinkResponse;
+};
+
+export type InitOutlookLinkResponse2 = InitOutlookLinkResponses[keyof InitOutlookLinkResponses];
 
 export type AppleLoginData = {
     body: AppleLoginRequest;

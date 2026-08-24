@@ -27,6 +27,8 @@ struct MockRepo {
     thread_access_calls: Arc<AtomicUsize>,
     owned_email_thread_ids: Arc<Mutex<Vec<Uuid>>>,
     call_access: Arc<Mutex<Option<AccessLevel>>>,
+    agent_session_access: Arc<Mutex<Option<AccessLevel>>>,
+    reminder_access: Arc<Mutex<Option<AccessLevel>>>,
     team_entity_access: Arc<Mutex<Option<AccessLevel>>>,
     team_entity_access_calls: Arc<AtomicUsize>,
     team_channel_role: Arc<Mutex<ChannelRoleResult>>,
@@ -60,6 +62,8 @@ impl MockRepo {
             thread_access_calls: Arc::new(AtomicUsize::new(0)),
             owned_email_thread_ids: Arc::new(Mutex::new(Vec::new())),
             call_access: Arc::new(Mutex::new(None)),
+            agent_session_access: Arc::new(Mutex::new(None)),
+            reminder_access: Arc::new(Mutex::new(None)),
             team_entity_access: Arc::new(Mutex::new(None)),
             team_entity_access_calls: Arc::new(AtomicUsize::new(0)),
             team_channel_role: Arc::new(Mutex::new(ChannelRoleResult::NotFound)),
@@ -111,6 +115,16 @@ impl MockRepo {
     #[allow(dead_code)]
     fn with_call_access(mut self, level: AccessLevel) -> Self {
         self.call_access = Arc::new(Mutex::new(Some(level)));
+        self
+    }
+
+    fn with_reminder_access(mut self, level: AccessLevel) -> Self {
+        self.reminder_access = Arc::new(Mutex::new(Some(level)));
+        self
+    }
+
+    fn with_agent_session_access(mut self, level: AccessLevel) -> Self {
+        self.agent_session_access = Arc::new(Mutex::new(Some(level)));
         self
     }
 
@@ -279,6 +293,22 @@ impl AccessRepository for MockRepo {
         _user_id: Option<&MacroUserId<Lowercase<'_>>>,
     ) -> Result<Option<AccessLevel>, AccessError> {
         Ok(*self.call_access.lock().await)
+    }
+
+    async fn get_agent_session_access(
+        &self,
+        _agent_session_id: &str,
+        _user_id: Option<&MacroUserId<Lowercase<'_>>>,
+    ) -> Result<Option<AccessLevel>, AccessError> {
+        Ok(*self.agent_session_access.lock().await)
+    }
+
+    async fn get_reminder_access(
+        &self,
+        _reminder_id: &str,
+        _user_id: Option<&MacroUserId<Lowercase<'_>>>,
+    ) -> Result<Option<AccessLevel>, AccessError> {
+        Ok(*self.reminder_access.lock().await)
     }
 
     async fn get_team_entity_access(
@@ -672,6 +702,47 @@ async fn test_get_entity_permission_document_no_access_returns_unauthorized() {
 }
 
 #[tokio::test]
+async fn test_get_entity_permission_agent_session_returns_access_level() {
+    let repo = MockRepo::new().with_agent_session_access(AccessLevel::Owner);
+    let service = EntityAccessServiceImpl::new(repo);
+    let user_id = test_user_id();
+
+    let result = service
+        .get_entity_permission(
+            Some(&user_id),
+            "0198a805-3e22-75b2-97eb-d9c6b91accb0",
+            EntityType::AgentSession,
+            None,
+        )
+        .await
+        .unwrap();
+
+    assert!(matches!(
+        result,
+        EntityPermission::AccessLevel {
+            access_level: AccessLevel::Owner
+        }
+    ));
+}
+
+#[tokio::test]
+async fn test_get_entity_permission_agent_session_no_access_returns_unauthorized() {
+    let service = EntityAccessServiceImpl::new(MockRepo::new());
+    let user_id = test_user_id();
+
+    let result = service
+        .get_entity_permission(
+            Some(&user_id),
+            "0198a805-3e22-75b2-97eb-d9c6b91accb0",
+            EntityType::AgentSession,
+            None,
+        )
+        .await;
+
+    assert!(matches!(result, Err(AccessError::Unauthorized)));
+}
+
+#[tokio::test]
 async fn test_get_entity_permission_foreign_entity_returns_view_access_level() {
     let repo = MockRepo::new().with_foreign_entity_access(true);
     let service = EntityAccessServiceImpl::new(repo);
@@ -693,6 +764,84 @@ async fn test_get_entity_permission_foreign_entity_returns_view_access_level() {
             access_level: AccessLevel::View
         }
     ));
+}
+
+/// Reminders reach `get_entity_permission` from AI tools, which mint their own
+/// receipts rather than going through `ReminderAccessExtractor`.
+#[tokio::test]
+async fn test_get_entity_permission_reminder_returns_owner() {
+    let repo = MockRepo::new().with_reminder_access(AccessLevel::Owner);
+    let service = EntityAccessServiceImpl::new(repo);
+    let user_id = test_user_id();
+
+    let result = service
+        .get_entity_permission(
+            Some(&user_id),
+            "11111111-1111-1111-1111-111111111111",
+            EntityType::Reminder,
+            None,
+        )
+        .await
+        .unwrap();
+
+    assert!(matches!(
+        result,
+        EntityPermission::AccessLevel {
+            access_level: AccessLevel::Owner
+        }
+    ));
+}
+
+/// Somebody else's reminder and a reminder that does not exist are the same
+/// answer, which is what keeps an id from leaking.
+#[tokio::test]
+async fn test_get_entity_permission_reminder_not_owned_is_unauthorized() {
+    let repo = MockRepo::new();
+    let service = EntityAccessServiceImpl::new(repo);
+    let user_id = test_user_id();
+
+    let result = service
+        .get_entity_permission(
+            Some(&user_id),
+            "11111111-1111-1111-1111-111111111111",
+            EntityType::Reminder,
+            None,
+        )
+        .await;
+
+    assert!(matches!(result, Err(AccessError::Unauthorized)));
+}
+
+/// The receipt an AI tool actually asks for. `OwnerAccessLevel` is the only
+/// requirement a reminder can satisfy, so this is the whole gate.
+#[tokio::test]
+async fn test_generate_reminder_owner_receipt() {
+    let repo = MockRepo::new().with_reminder_access(AccessLevel::Owner);
+    let service = EntityAccessServiceImpl::new(repo);
+    let user_id = test_user_id();
+
+    let receipt = service
+        .generate_entity_access_receipt::<OwnerAccessLevel>(
+            &user_id,
+            None,
+            "11111111-1111-1111-1111-111111111111",
+            EntityType::Reminder,
+        )
+        .await
+        .expect("owner should get a receipt");
+
+    assert_eq!(receipt.entity().entity_type, EntityType::Reminder);
+    assert_eq!(
+        receipt.entity().entity_id,
+        "11111111-1111-1111-1111-111111111111"
+    );
+    assert_eq!(
+        receipt
+            .get_authenticated_user()
+            .expect("receipt is authenticated")
+            .as_ref(),
+        user_id.as_ref()
+    );
 }
 
 #[tokio::test]

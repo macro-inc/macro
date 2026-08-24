@@ -2,7 +2,7 @@ import { SplitDrawer } from '@components/app/split-layout/components/SplitDrawer
 import { EntityIcon } from '@core/component/EntityIcon';
 import { openDocument } from '@core/component/LexicalMarkdown/component/core/BlockLink';
 import { UserIcon } from '@core/component/UserIcon';
-import { tryMacroId, useDisplayName } from '@core/user';
+import { getDisplayName, tryMacroId } from '@core/user';
 import { type DateValue, formatDate } from '@core/util/date';
 import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
 import { useChatDataQuery } from '@queries/cognition/chat-data';
@@ -170,7 +170,7 @@ function FolderLink(props: { projectId: string; projectName: string }) {
 }
 
 function OwnerValue(props: { ownerId: string }) {
-  const [displayName] = useDisplayName(tryMacroId(props.ownerId));
+  const displayName = () => getDisplayName(tryMacroId(props.ownerId));
   return (
     <>
       <UserIcon id={props.ownerId} size="sm" showTooltip suppressClick />

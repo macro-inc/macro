@@ -39,9 +39,9 @@ import { useCombinedRecipients } from '@core/signal/useCombinedRecipient';
 import {
   type ContactInfo,
   emailToId,
+  getDisplayName,
   recipientEntityMapper,
   tryMacroId,
-  useDisplayName,
   type WithCustomUserInput,
 } from '@core/user';
 import { $generateHtmlFromNodes } from '@lexical/html';
@@ -703,7 +703,7 @@ export function EmailCompose(props: EmailComposeProps) {
       let recipientName = recipients[0].data.email;
 
       if (recipients[0].kind === 'user') {
-        recipientName = useDisplayName(tryMacroId(recipients[0].data.id))[0]();
+        recipientName = getDisplayName(tryMacroId(recipients[0].data.id));
       }
 
       return recipientName ? `Email to ${recipientName}` : 'Draft email';
@@ -713,7 +713,7 @@ export function EmailCompose(props: EmailComposeProps) {
       .slice(0, 2)
       .map((r) => {
         if (r.kind === 'user') {
-          return useDisplayName(tryMacroId(r.data.id))[0]();
+          return getDisplayName(tryMacroId(r.data.id));
         }
         return r.data.email || 'Unknown';
       })
@@ -841,7 +841,7 @@ export function EmailCompose(props: EmailComposeProps) {
         </SplitHeaderLeft>
       </Show>
       <div class="relative flex flex-col size-full min-h-0 overflow-hidden text-sm">
-        <div class="macro-message-width sm:macro-message-padding mx-auto w-full min-h-120 max-h-full my-2 sm:my-12 mobile:my-0 px-2 sm:px-4 mobile:px-0 overflow-hidden mobile:overflow-y-auto mobile:scrollbar-hidden mobile:min-h-full">
+        <div class="macro-message-width sm:macro-message-padding mx-auto w-full min-h-120 max-h-full my-2 sm:my-12 touch:my-0 px-2 sm:px-4 touch:px-0 overflow-hidden touch:overflow-y-auto touch:scrollbar-hidden touch:min-h-full">
           <WrapUnlessMobile
             wrapper={(children) => (
               <Surface depth={2} class="rounded-xl border border-ink-muted/8">
@@ -852,7 +852,7 @@ export function EmailCompose(props: EmailComposeProps) {
             <ComposeLayout
               toolbar={<EmailComposeToolbar editor={editor} />}
               notice={hasLinkError() ? <EmailPermissionsBanner /> : undefined}
-              class="size-full p-4 bg-surface max-h-full mobile:max-h-none overflow-hidden flex flex-col min-h-0 mobile:min-h-full"
+              class="size-full p-4 bg-surface max-h-full touch:max-h-none overflow-hidden flex flex-col min-h-0 touch:min-h-full"
             />
           </WrapUnlessMobile>
         </div>

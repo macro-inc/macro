@@ -72,6 +72,9 @@ class CallKitPlugin: Plugin, @unchecked Sendable {
                 }
                 return self.getMediaSession()
             },
+            existingMediaSession: { [weak self] in
+                self?.mediaSession
+            },
             onVoipTokenUpdated: { [weak self] token in
                 print("[CallKit] Emitting voip-token-updated event tokenLength=\(token.count)")
                 self?.trigger("voip-token-updated", data: ["token": token])

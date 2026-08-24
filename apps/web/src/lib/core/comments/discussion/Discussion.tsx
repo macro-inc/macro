@@ -7,7 +7,7 @@ import { ThreadReplyInputConnector } from '@channel/Thread/ThreadReplyInputConne
 import { replyInputOffsetX } from '@channel/Thread/utils/thread-rail-geometry';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { toast } from '@core/component/Toast/Toast';
-import { tryMacroId, useDisplayName } from '@core/user';
+import { getDisplayName, tryMacroId } from '@core/user';
 import CaretDown from '@phosphor/caret-down.svg';
 import CaretRight from '@phosphor/caret-right.svg';
 import { Key } from '@solid-primitives/keyed';
@@ -174,7 +174,7 @@ export function DiscussionThreadView(props: {
 
   const replyUserId = () => source.currentUserId() ?? root()?.authorId ?? '';
   const macroId = () => tryMacroId(replyUserId());
-  const [displayName] = useDisplayName(macroId());
+  const displayName = () => getDisplayName(macroId());
 
   const isOwn = (comment: DiscussionComment) =>
     comment.authorId === source.currentUserId();

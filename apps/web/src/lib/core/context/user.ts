@@ -23,6 +23,28 @@ type UserContextValue = {
   referralCode: Accessor<string | undefined>;
 };
 
+/**
+ * Derives the auth state from the user-info query. Data-first: a failed
+ * background refetch keeps the previous data alongside the error, and the
+ * last-known auth state must survive it — otherwise an offline cold start
+ * that restored user-info from cache drops all auth-gated chrome.
+ */
+export function deriveIsAuthenticated(
+  query: Pick<
+    ReturnType<typeof useUserInfoQuery>,
+    'isLoading' | 'isError' | 'error' | 'data'
+  >
+): boolean | undefined {
+  // Only a 401 proves the user is signed out; it wins even over retained data.
+  if (thrownResultErrorHasCode(query.error, 'UNAUTHORIZED')) return false;
+  if (query.data) return query.data.authenticated ?? false;
+  // No data and no definitive signal: a transient failure (network blip, 5xx)
+  // leaves the auth state unknown so consumers don't bounce an authenticated
+  // user to login.
+  if (query.isLoading || query.isError) return undefined;
+  return false;
+}
+
 export const [UserContextProvider, useUserContext] =
   createAssertedContextProvider('UserContext', (): UserContextValue => {
     const query = useUserInfoQuery({ enabled: shouldQueryUserInfo });
@@ -33,19 +55,7 @@ export const [UserContextProvider, useUserContext] =
 
     const isLoading = () => query.isLoading;
 
-    const isAuthenticated = createMemo((): boolean | undefined => {
-      if (query.isLoading) return undefined;
-      if (query.isError) {
-        // Only a 401 proves the user is signed out; a transient failure
-        // (network blip, 5xx) leaves the auth state unknown so consumers
-        // don't bounce an authenticated user to login.
-        return thrownResultErrorHasCode(query.error, 'UNAUTHORIZED')
-          ? false
-          : undefined;
-      }
-      if (!query.data) return false;
-      return query.data.authenticated ?? false;
-    });
+    const isAuthenticated = createMemo(() => deriveIsAuthenticated(query));
 
     const userId = createMemo(() => userInfo()?.id);
     const email = createMemo(() => userInfo()?.email);

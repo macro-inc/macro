@@ -1,6 +1,6 @@
 import { analytics } from '@app/lib/analytics';
 import { useChannelTab } from '@channel/Channel/ChannelTabContext';
-import { isMobile } from '@core/mobile/isMobile';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import PhoneIcon from '@icon/wide-call.svg';
 import { useActiveCallQuery } from '@queries/call/call';
 import { Button, cn } from '@ui';
@@ -22,7 +22,7 @@ export function ChannelCallButton(props: { channelId: string }) {
   const label = () => (isCallInProgress() ? 'Join' : 'Call');
 
   const variant = () => {
-    if (isMobile()) return 'ghost';
+    if (isTouchDevice()) return 'ghost';
     if (isCallInProgress()) return 'success';
     return 'base';
   };
@@ -59,8 +59,8 @@ export function ChannelCallButton(props: { channelId: string }) {
         size="sm"
         depth={2}
         class={cn(
-          !isCallInProgress() && !isMobile() && 'bg-surface',
-          isMobile() && 'active:bg-transparent'
+          !isCallInProgress() && !isTouchDevice() && 'bg-surface',
+          isTouchDevice() && 'active:bg-transparent'
         )}
       >
         <PhoneIcon />

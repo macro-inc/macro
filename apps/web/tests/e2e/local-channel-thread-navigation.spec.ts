@@ -45,6 +45,10 @@ async function expectTargetedMessage(
   const target = page.locator(targetSelector(messageId));
   await expect(target).toContainText(text, { timeout: 30_000 });
   await expect(target).toHaveAttribute('data-targeted', '');
+  // The accent highlight flashes and auto-releases once the target settles.
+  await expect(target).not.toHaveAttribute('data-targeted', '', {
+    timeout: 30_000,
+  });
   return target;
 }
 

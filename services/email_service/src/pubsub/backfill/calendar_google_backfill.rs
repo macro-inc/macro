@@ -1,6 +1,7 @@
 use crate::pubsub::context::PubSubContext;
+use crate::pubsub::util::cg_refresh_calendar;
 use calendar_events::domain::{
-    models::{CalendarBackfillJobKey, OccurrenceRange},
+    models::{CalendarBackfillJobKey, GoogleBackfillRunReport, OccurrenceRange},
     service::GoogleCalendarBackfillRunError,
 };
 use chrono::Utc;
@@ -18,7 +19,9 @@ pub async fn calendar_google_backfill(
     link: &Link,
     payload: &CalendarBackfillPayload,
 ) -> Result<(), ProcessingError> {
-    ctx.calendar_backfills
+    let mut report = GoogleBackfillRunReport::default();
+    let run_result = ctx
+        .calendar_backfills
         .google
         .run(
             CalendarBackfillJobKey {
@@ -28,10 +31,23 @@ pub async fn calendar_google_backfill(
             link.macro_id.as_ref(),
             access_token,
             OccurrenceRange::maintenance_horizon(Utc::now()),
+            &mut report,
         )
-        .await
-        .map(|_| ())
-        .map_err(map_run_error)
+        .await;
+    // Quiet token-only polls change nothing; only real changes nudge
+    // active viewers to refetch. The nudge goes out even when the run
+    // ultimately failed: per-calendar commits before the error are
+    // durable, and the retry's quiet re-run would never report them.
+    if report.changed() {
+        cg_refresh_calendar(
+            &ctx.connection_gateway_client,
+            &ctx.db,
+            link.macro_id.as_ref(),
+            link.id,
+        )
+        .await;
+    }
+    run_result.map_err(map_run_error)
 }
 
 fn map_run_error(error: GoogleCalendarBackfillRunError) -> ProcessingError {

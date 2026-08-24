@@ -11,22 +11,29 @@ import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import {
   type CachedQueryInstanceWire,
+  type CachedQueryVariantWire,
   type ClaimedMutation,
+  type EnqueueOptimisticMutationResult,
+  type HydrationResult,
   type MutationClaim,
   type MutationSettlement,
-  type OptimisticWriteResult,
-  type ReadRecordsArgs,
+  type ReadRecordsByKeysArgs,
   type ReadResult,
-  type SelectedRecordPageWire,
-  validateRecordSelectionLimit,
+  type SearchCacheArgs,
+  type SearchCachePage,
+  type SelectedRecordByKeyWire,
+  validateCacheSearchArgs,
+  validateRecordSelectionKeys,
   type WriteResult,
 } from '../protocol';
 import type {
-  BeginOptimisticWriteArgs,
   CacheHost,
   CacheReadArgs,
   CacheWriteArgs,
+  EnqueueOptimisticMutationArgs,
+  InitialMutationClaimArgs,
   InspectQueryArgs,
+  InspectQueryVariantsArgs,
 } from './types';
 
 /** Keep in sync with `OPS_AFFECTED_EVENT` in graphql_cache_plugin. */
@@ -48,8 +55,9 @@ export interface TauriHostOptions {
   scope: string;
   hotCapacity?: number;
   /**
-   * Per-request timeout in ms (default 10s, matching worker-host). A hung
-   * IPC call rejects; the exchange degrades rejected reads to the network.
+   * Request timeout in ms (default 10s, matching worker-host). Applies to all
+   * commands except optimistic enqueue, which remains pending because retrying
+   * an uncertain durable operation could duplicate user intent.
    */
   requestTimeoutMs?: number;
   /** Reports an asynchronous durable-storage initialization failure. */
@@ -70,19 +78,22 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
 
   function request<T>(
     command: string,
-    args: Record<string, unknown>
+    args: Record<string, unknown>,
+    timeout = true
   ): Promise<T> {
     return new Promise<T>((resolve, reject) => {
-      const timer = setTimeout(() => {
-        reject(new Error(`graphql cache ipc timeout: ${command}`));
-      }, requestTimeoutMs);
+      const timer = timeout
+        ? setTimeout(() => {
+            reject(new Error(`graphql cache ipc timeout: ${command}`));
+          }, requestTimeoutMs)
+        : undefined;
       invoke<T>(command, args).then(
         (value) => {
-          clearTimeout(timer);
+          if (timer !== undefined) clearTimeout(timer);
           resolve(value);
         },
         (error) => {
-          clearTimeout(timer);
+          if (timer !== undefined) clearTimeout(timer);
           // Command errors cross the boundary as strings; normalize to
           // Error for parity with worker-host rejections.
           reject(error instanceof Error ? error : new Error(String(error)));
@@ -149,27 +160,49 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
         query: args.query,
         operationName: args.operationName,
         variables: args.variables,
+        entityResolvers: args.entityResolvers,
       });
     },
 
-    async readRecords(args: ReadRecordsArgs): Promise<SelectedRecordPageWire> {
-      const limit = validateRecordSelectionLimit(args.limit);
+    async readRecordsByKeys(
+      args: ReadRecordsByKeysArgs
+    ): Promise<SelectedRecordByKeyWire[]> {
+      const keys = validateRecordSelectionKeys(args.keys);
       await ready;
-      return await request<SelectedRecordPageWire>(
-        'graphql_cache_read_records',
+      return await request<SelectedRecordByKeyWire[]>(
+        'graphql_cache_read_records_by_keys',
         {
           document: args.document,
           fragmentName: args.fragmentName,
-          cursor: args.cursor,
-          limit,
+          keys,
         }
       );
+    },
+
+    async search(args: SearchCacheArgs): Promise<SearchCachePage> {
+      const searchRequest = validateCacheSearchArgs(args);
+      await ready;
+      return await request<SearchCachePage>('graphql_cache_search', {
+        request: searchRequest,
+      });
+    },
+
+    async entityFilter() {
+      // The first profile is browser Turso/OPFS-only.
+      return { kind: 'unsupported' };
     },
 
     async writeQuery(args: CacheWriteArgs): Promise<WriteResult> {
       await ready;
       return await request<WriteResult>('graphql_cache_write', {
         originOpId: args.opKey === undefined ? undefined : opId(args.opKey),
+        registration:
+          args.registerDependencies && args.opKey !== undefined
+            ? {
+                opId: opId(args.opKey),
+                entityResolvers: args.entityResolvers,
+              }
+            : undefined,
         query: args.query,
         operationName: args.operationName,
         variables: args.variables,
@@ -178,12 +211,26 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
       });
     },
 
-    async beginOptimisticWrite(
-      args: BeginOptimisticWriteArgs
-    ): Promise<OptimisticWriteResult> {
+    async hydrateQuery(
+      args: Omit<CacheWriteArgs, 'opKey'>
+    ): Promise<HydrationResult> {
       await ready;
-      return await request<OptimisticWriteResult>(
-        'graphql_cache_begin_optimistic_write',
+      return await request<HydrationResult>('graphql_cache_hydrate', {
+        query: args.query,
+        operationName: args.operationName,
+        variables: args.variables,
+        data: args.data,
+        identity: args.identity,
+      });
+    },
+
+    async enqueueOptimisticMutation(
+      args: EnqueueOptimisticMutationArgs,
+      claim: InitialMutationClaimArgs
+    ): Promise<EnqueueOptimisticMutationResult> {
+      await ready;
+      return await request<EnqueueOptimisticMutationResult>(
+        'graphql_cache_enqueue_optimistic_mutation',
         {
           originOpId: args.opKey === undefined ? undefined : opId(args.opKey),
           query: args.query,
@@ -192,7 +239,25 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
           data: args.data,
           linkPatches: args.linkPatches,
           revalidations: args.revalidations,
-          createdAtMs: Date.now(),
+          createdAtMs: claim.nowMs,
+          owner: claim.owner,
+          nowMs: claim.nowMs,
+          leaseExpiresAtMs: claim.leaseExpiresAtMs,
+        },
+        false
+      );
+    },
+
+    async inspectQueryVariants(
+      args: InspectQueryVariantsArgs
+    ): Promise<CachedQueryVariantWire[]> {
+      await ready;
+      return await request<CachedQueryVariantWire[]>(
+        'graphql_cache_inspect_query_variants',
+        {
+          query: args.query,
+          operationName: args.operationName,
+          path: args.path,
         }
       );
     },

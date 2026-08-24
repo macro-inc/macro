@@ -14,13 +14,13 @@ macro_rules! secret {
 secret!(AWS_ACCESS_KEY);
 secret!(AWS_SECRET_ACCESS_KEY);
 secret!(CLOUDFLARE_API_TOKEN);
+secret!(DAYTONA_API_KEY);
 secret!(DD_API_KEY);
 secret!(DD_APP_KEY);
-secret!(DOPPLER_PREVIEW_TOKEN);
 secret!(DOPPLER_TOKEN);
-secret!(FLY_API_TOKEN);
 secret!(MACOS_DEVELOPER_ID_CERTIFICATE_BASE64);
 secret!(MACOS_DEVELOPER_ID_CERTIFICATE_PASSWORD);
+secret!(NIX_CACHE_SIGNING_KEY);
 secret!(POSTHOG_API_KEY);
 secret!(PULUMI_ACCESS_TOKEN);
 secret!(SEGMENT_WRITE_KEY);
@@ -29,6 +29,19 @@ secret!(SEGMENT_WRITE_KEY_PRODUCTION);
 /// Cloudflare account id. A repo *variable* (not a secret), matching the
 /// hand-written `deploy-lexical-service.yml`.
 pub const CLOUDFLARE_ACCOUNT_ID: &str = "${{ vars.CLOUDFLARE_ACCOUNT_ID }}";
+
+/// S3 nix binary cache store URL, a repo *variable* — e.g.
+/// `s3://macro-nix-cache?region=us-east-1`. The substituter role Cachix used
+/// to play: any /nix cache-volume miss becomes a signed-narinfo download
+/// instead of a from-source rebuild. Empty/unset disables all nix-cache
+/// wiring (setup skips the substituter config; push steps no-op), so the
+/// workflows are safe to run before the bucket exists.
+pub const NIX_CACHE_URL: &str = "${{ vars.NIX_CACHE_URL }}";
+
+/// Public counterpart of [`NIX_CACHE_SIGNING_KEY`], a repo *variable* — e.g.
+/// `nix-cache.macro.com-1:BASE64...`. Trusted by the nix daemon so substituted
+/// paths verify.
+pub const NIX_CACHE_PUBLIC_KEY: &str = "${{ vars.NIX_CACHE_PUBLIC_KEY }}";
 
 /// Nextest thread count for the test job. Tuned for the previous
 /// `linux-extra-beefy` runner; revisit if `namespace-profile-linux-mid` is
@@ -45,23 +58,6 @@ pub const CI_CACHE_TAG: &str = "sccache-ci";
 /// Namespace remote sccache shared by the cloud-storage compile/test jobs and
 /// the workspace dependency checks.
 pub const CI_SCCACHE_NAME: &str = "sccache-ci";
-
-/// Namespace cache tag for the Fly preview deploy job. Its own pool, NOT
-/// [`CI_CACHE_TAG`]: sharing looked economical but was measured cold both ways
-/// (run 28968155599: sccache 2.65% hits, cargo target dir absent). The
-/// check/test jobs compile for the host while this job zigbuilds with
-/// `--target x86_64-unknown-linux-gnu.2.36`, so their sccache entries hash
-/// differently and never serve this job — and they don't persist the cargo
-/// target dir at all, so a volume from the shared pool almost never carries
-/// one. A dedicated low-concurrency pool gives the job's target dir and init
-/// snapshots the best chance of a zero-copy hit; Rust objects use the durable
-/// remote sccache below instead of depending on this volume's placement.
-pub const PREVIEW_CACHE_TAG: &str = "fly-preview";
-
-/// Durable Namespace remote sccache shared by Fly preview jobs. Unlike the
-/// local cache volume, this has an artifact-backed cold tier, so a job placed
-/// on a runner that has never seen the volume can still reuse Rust objects.
-pub const PREVIEW_SCCACHE_NAME: &str = "fly-preview";
 
 /// Namespace cache tag for the web-app jobs (PR checks + preview deploys).
 /// Cache volumes are keyed workspace-wide by tag alone, so a dedicated tag
@@ -84,11 +80,9 @@ pub const SYNC_SERVICE_CACHE_TAG: &str = "sync-service-deploy";
 /// the Nix dev shell and is not available to Namespace's cache planner yet.
 pub const BUN_CACHE_VOLUME_DIR: &str = "/home/runner/.bun/install/cache";
 
-/// Init-snapshot store for the preview job (`MACRO_STACK_SNAPSHOT_DIR`). Lives
-/// on the preview cache volume for the zero-copy fast path; the workflow also
-/// backs each content-addressed snapshot up to Namespace artifact storage so a
-/// cache-volume miss does not force another infra bake.
-pub const PREVIEW_SNAPSHOT_VOLUME_DIR: &str = "/home/runner/.cache/macro-preview-snapshots";
+/// GHCR repository for the agent-harness sandbox image (the same Dockerfile
+/// Daytona snapshots). Pushed as `:$SHA` on PRs and `:$SHA` + `:latest` on main.
+pub const AGENT_HARNESS_GHCR_IMAGE: &str = "ghcr.io/macro-inc/macro-agent-harness";
 
 /// The repo-wide env block (mirrors the original top-level `env:`). Defaults the
 /// linker to `lld`; the heavy jobs override `RUSTFLAGS` to use `mold`.

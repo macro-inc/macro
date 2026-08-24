@@ -5,18 +5,31 @@ publish = false
 version = "0.1.0"
 
 [features]
+default = ["transport"]
+# Connections and the physical wire adapters. Off for wasm: they need tokio,
+# which pulls in mio, which does not build for wasm32. The schema itself needs
+# none of it, and the browser only wants the schema - it folds recorded frames
+# rather than speaking to a runtime.
+transport = ["dep:axum", "dep:futures", "dep:tokio", "dep:tokio-tungstenite"]
 test-utils = []
+utoipa = ["dep:utoipa"]
 
 [dependencies]
 agent-client-protocol = { workspace = true }
-axum = { workspace = true, features = ["ws"] }
-futures = { workspace = true }
+macro_uuid = { path = "../macro_uuid" }
+axum = { workspace = true, features = ["ws"], optional = true }
+futures = { workspace = true, optional = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+specta = { workspace = true }
+specta-serde = { workspace = true }
+specta-typescript = { workspace = true }
 thiserror = { workspace = true }
-tokio = { workspace = true, features = ["rt", "sync"] }
-tokio-tungstenite = { workspace = true }
+tokio = { workspace = true, features = ["rt", "sync"], optional = true }
+tokio-tungstenite = { workspace = true, optional = true }
 tracing = { workspace = true }
+utoipa = { workspace = true, optional = true }
 
 [dev-dependencies]
+agent-client-protocol = { workspace = true }
 tokio = { workspace = true, features = ["io-std", "io-util", "macros", "net", "rt", "rt-multi-thread", "time"] }

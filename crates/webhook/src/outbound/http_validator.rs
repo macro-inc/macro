@@ -10,16 +10,12 @@ use crate::domain::{
     },
     ports::WebhookValidationClient,
 };
-use hmac::{Hmac, Mac};
 use reqwest::{Client, StatusCode, Url, redirect::Policy};
-use sha2::Sha256;
 use std::{net::IpAddr, time::Duration};
 use tokio::net::lookup_host;
 
 const EVENT_NAME: &str = "webhook.validation.test";
 pub(super) const REQUEST_TIMEOUT: Duration = Duration::from_secs(5);
-
-type HmacSha256 = Hmac<Sha256>;
 
 /// Reqwest-backed implementation of [`WebhookValidationClient`].
 #[derive(Clone)]
@@ -129,11 +125,8 @@ pub(super) fn signature_header(
     timestamp: &str,
     raw_body: &[u8],
 ) -> Result<String, anyhow::Error> {
-    let mut mac = HmacSha256::new_from_slice(secret.as_bytes())?;
-    mac.update(timestamp.as_bytes());
-    mac.update(b".");
-    mac.update(raw_body);
-    Ok(format!("v1={}", hex::encode(mac.finalize().into_bytes())))
+    webhook_signature::sign(secret, timestamp, raw_body)
+        .ok_or_else(|| anyhow::anyhow!("failed to key the delivery signature"))
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

@@ -49,6 +49,7 @@ import {
   CLOSE_INLINE_SEARCH_COMMAND,
   createDraggableBlockStore,
   createDragInsertStore,
+  createProgressStatsStore,
   createWordcountStatsStore,
   DefaultShortcuts,
   diffPlugin,
@@ -63,6 +64,7 @@ import {
   markdownPastePlugin,
   mentionsPlugin,
   pinnedPropertiesPlugin,
+  progressPlugin,
   selectionDataPlugin,
   tabIndentationPlugin,
   tableCellResizerPlugin,
@@ -157,7 +159,7 @@ import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import { isSourceDSS, isSourceSyncService } from '@core/util/source';
 import { bufToString } from '@core/util/string';
 import { handleFileFolderDrop } from '@core/util/upload';
-import type { EntityDragEvent } from '@entity';
+import { type EntityDragEvent, isEntityDragEvent } from '@entity';
 import type { LoroManager } from '@macro-inc/collaboration/collab/manager';
 import {
   $isInlineSearchNode,
@@ -427,17 +429,17 @@ export function MarkdownEditor(props: {
     });
   }, 60);
 
-  onDragEnd((event: EntityDragEvent) => {
+  onDragEnd((event) => {
     // dndDragMove is a trailing throttle, so a callback scheduled just before
     // the drop would otherwise fire after it and could re-show the indicator.
     dndDragMove.clear();
     // Only soup entity drags insert mentions (not e.g. sidebar favorite drags).
-    if (event.draggable?.data.dragType !== 'entity') return;
+    if (!isEntityDragEvent(event)) return;
     dndDragEnd(event);
   });
 
-  onDragMove((event: EntityDragEvent) => {
-    if (event.draggable?.data.dragType !== 'entity') return;
+  onDragMove((event) => {
+    if (!isEntityDragEvent(event)) return;
     dndDragMove(event);
   });
 
@@ -964,6 +966,10 @@ export function MarkdownEditor(props: {
   );
   setMdStore('wordcountStats', wordcountStats);
 
+  const [progressStats, setProgressStats] = createProgressStatsStore();
+  plugins.use(progressPlugin({ setStore: setProgressStats }));
+  setMdStore('progressStats', progressStats);
+
   return (
     <LexicalWrapperContext.Provider value={lexicalWrapper}>
       {/* SCUFFED: are these the right transparency values? */}
@@ -1031,9 +1037,9 @@ export function MarkdownEditor(props: {
             aria-hidden="true"
             class="pointer-events-none absolute inset-x-0 top-0 flex flex-col gap-2.5 pt-1"
           >
-            <div class="skeleton-shimmer h-2.5 w-full rounded-full bg-placeholder/30" />
-            <div class="skeleton-shimmer h-2.5 w-full rounded-full bg-placeholder/30" />
-            <div class="skeleton-shimmer h-2.5 w-2/3 rounded-full bg-placeholder/30" />
+            <div class="skeleton-shimmer h-2.5 w-full rounded-full bg-skeleton" />
+            <div class="skeleton-shimmer h-2.5 w-full rounded-full bg-skeleton" />
+            <div class="skeleton-shimmer h-2.5 w-2/3 rounded-full bg-skeleton" />
           </div>
         </Show>
         <Show when={editorReady() && isBlankMarkdown()}>

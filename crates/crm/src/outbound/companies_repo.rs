@@ -1724,6 +1724,57 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
     }
 
     #[tracing::instrument(skip(self), err)]
+    async fn get_contact_by_email_for_team(
+        &self,
+        team_id: &uuid::Uuid,
+        email: &str,
+        include_hidden: bool,
+    ) -> Result<Option<CrmContact>, CrmError> {
+        // Contacts are normalized to lowercase on every write path, so
+        // lowercasing the input preserves use of crm_contacts_email_idx. Team
+        // scope and hidden-row semantics mirror get_contact_for_team.
+        let row = sqlx::query!(
+            r#"
+            SELECT
+                ct.id,
+                ct.company_id,
+                ct.email,
+                ct.name,
+                ct.hidden,
+                ct.first_interaction,
+                ct.last_interaction,
+                ct.created_at,
+                ct.updated_at
+            FROM crm_contacts ct
+            JOIN crm_companies co ON co.id = ct.company_id
+            WHERE ct.email = LOWER($1)
+              AND co.team_id = $2
+              AND ($3 OR (ct.hidden = FALSE AND co.hidden = FALSE))
+            ORDER BY ct.id DESC
+            LIMIT 1
+            "#,
+            email,
+            team_id,
+            include_hidden,
+        )
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+
+        Ok(row.map(|row| CrmContact {
+            id: row.id,
+            company_id: row.company_id,
+            email: row.email,
+            name: row.name,
+            hidden: row.hidden,
+            first_interaction: row.first_interaction,
+            last_interaction: row.last_interaction,
+            created_at: row.created_at,
+            updated_at: row.updated_at,
+        }))
+    }
+
+    #[tracing::instrument(skip(self), err)]
     async fn get_company_for_team(
         &self,
         team_id: &uuid::Uuid,

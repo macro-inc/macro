@@ -1,3 +1,4 @@
+use crate::outbound::email_api::GmailApi;
 use crate::pubsub::context::{
     CalendarBackfillServices, CrmServiceType, NotificationIngressType, PubSubContext,
     PubSubEventBroker,
@@ -5,7 +6,6 @@ use crate::pubsub::context::{
 use crate::pubsub::inbox_sync::process;
 use crate::pubsub::worker_lifecycle::run_until_cancelled;
 use crate::util::redis::RedisClient;
-use authentication_service_client::AuthServiceClient;
 use connection_gateway_client::client::ConnectionGatewayClient;
 use contacts::domain::service::SqsContactsIngress;
 use contacts::outbound::ingress::SqsContactsQueue;
@@ -23,8 +23,7 @@ pub async fn run_worker(
     worker: sqs_worker::SQSWorker,
     sqs_client: sqs_client::SQS,
     contacts_ingress: Arc<SqsContactsIngress<SqsContactsQueue>>,
-    gmail_client: gmail_client::GmailClient,
-    auth_service_client: AuthServiceClient,
+    email_api: GmailApi,
     redis_client: RedisClient,
     notification_ingress_service: Arc<NotificationIngressType>,
     sfs_client: StaticFileServiceClient,
@@ -42,8 +41,7 @@ pub async fn run_worker(
         worker,
         sqs_client,
         contacts_ingress,
-        gmail_client,
-        auth_service_client,
+        email_api,
         redis_client,
         notification_ingress_service,
         sfs_client,
@@ -69,8 +67,7 @@ pub async fn run_worker_with_cancellation(
     worker: sqs_worker::SQSWorker,
     sqs_client: sqs_client::SQS,
     contacts_ingress: Arc<SqsContactsIngress<SqsContactsQueue>>,
-    gmail_client: gmail_client::GmailClient,
-    auth_service_client: AuthServiceClient,
+    email_api: GmailApi,
     redis_client: RedisClient,
     notification_ingress_service: Arc<NotificationIngressType>,
     sfs_client: StaticFileServiceClient,
@@ -84,15 +81,13 @@ pub async fn run_worker_with_cancellation(
     retry_worker: bool,
     cancellation_token: CancellationToken,
 ) {
-    let calendar_backfills =
-        CalendarBackfillServices::new(db.clone(), sqs_client.clone(), redis_client.clone());
+    let calendar_backfills = CalendarBackfillServices::new(db.clone(), redis_client.clone());
     let ctx = PubSubContext {
         db,
         sqs_worker: worker.clone(),
         sqs_client,
         contacts_ingress,
-        gmail_client,
-        auth_service_client,
+        email_api,
         redis_client,
         notification_ingress_service,
         sfs_client,

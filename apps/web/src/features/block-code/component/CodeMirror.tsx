@@ -179,10 +179,10 @@ export function CodeMirror() {
 
   return (
     <div
-      // Full-frame mobile: the floating split chrome overlays the panel, so
+      // Full-frame mobile/tablet: the floating split chrome overlays the panel, so
       // the inset lives on the CodeMirror scroller — code rests below the
       // chrome but under-scrolls it.
-      class="size-full overflow-auto mobile:[&_.cm-scroller]:pt-(--mobile-content-inset-top) mobile:[&_.cm-scroller]:pb-(--mobile-content-inset-bottom)"
+      class="size-full overflow-auto touch:[&_.cm-scroller]:pt-(--mobile-content-inset-top) touch:[&_.cm-scroller]:pb-(--mobile-content-inset-bottom)"
       ref={containerRef}
     />
   );

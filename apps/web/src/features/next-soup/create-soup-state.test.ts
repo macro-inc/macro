@@ -421,6 +421,45 @@ describe('createSoupState', () => {
       });
     });
 
+    it('should skip group headers when skipGroupHeaders is enabled', () => {
+      createRoot((dispose) => {
+        const state = createSoupState();
+        const groupA = createTestGroup('a', 2);
+        const groupB = createTestGroup('b', 1);
+        const a1 = createTestEntity('a1');
+        const a2 = createTestEntity('a2');
+        const b1 = createTestEntity('b1');
+
+        state.setRows([
+          buildTestRow(state, a1, 0, groupA, 'header'),
+          buildTestRow(state, a1, 1, groupA),
+          buildTestRow(state, a2, 2, groupA),
+          buildTestRow(state, b1, 3, groupB, 'header'),
+          buildTestRow(state, b1, 4, groupB),
+        ]);
+
+        // With no focus, down lands on the first entity, not the leading header
+        const first = state.navigate.down({ skipGroupHeaders: true });
+        expect(first?.row.id).toBe('a1');
+
+        state.focus.set('a2');
+
+        // Crossing a group boundary steps over its header
+        const crossed = state.navigate.down({ skipGroupHeaders: true });
+        expect(crossed?.row.id).toBe('b1');
+
+        const back = state.navigate.up({ skipGroupHeaders: true });
+        expect(back?.row.id).toBe('a2');
+
+        // Peeking honors the option without moving focus
+        const peeked = state.navigate.peekOffset(1, { skipGroupHeaders: true });
+        expect(peeked?.row.id).toBe('b1');
+        expect(state.focus.id()).toBe('a2');
+
+        dispose();
+      });
+    });
+
     it('should navigate to first', () => {
       createRoot((dispose) => {
         const entities = [createTestEntity('1'), createTestEntity('2')];

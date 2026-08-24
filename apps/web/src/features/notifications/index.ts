@@ -16,7 +16,6 @@ export {
   usePlatformNotificationState,
 } from './components/PlatformNotificationProvider';
 export { NotificationsPlayground } from './components/Playground';
-export { createTabLeaderSignal } from './notification-election';
 export {
   createEffectOnEntityTypeNotification,
   entityHasUnreadNotifications,
@@ -36,6 +35,7 @@ export {
   useUnreadNotifications,
 } from './notification-helpers';
 export {
+  formatCalendarReminderTime,
   getNotificationAction,
   getNotificationContent,
   getNotificationTargetName,

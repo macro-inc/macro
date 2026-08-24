@@ -262,3 +262,31 @@ async fn update_thread_metadata_syncs_signal_flag(pool: Pool<Postgres>) -> anyho
     );
     Ok(())
 }
+
+// A recomputation that produces the same values must not rewrite the row.
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("sync_thread_signal_flag"))
+)]
+async fn repeated_metadata_recompute_is_noop(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let thread_id = Uuid::parse_str(SIG_THREAD_STALE_PROMO)?;
+    let link_id = Uuid::parse_str("00000000-0000-0000-0000-000000000d01")?;
+
+    let mut conn = pool.acquire().await?;
+    update_thread_metadata(&mut conn, thread_id, link_id).await?;
+    let thread_after_first = get_thread_by_id_and_link_id(&pool, thread_id, link_id)
+        .await?
+        .expect("thread should exist");
+
+    tokio::time::sleep(Duration::from_millis(10)).await;
+
+    update_thread_metadata(&mut conn, thread_id, link_id).await?;
+    let thread_after_second = get_thread_by_id_and_link_id(&pool, thread_id, link_id)
+        .await?
+        .expect("thread should still exist");
+    assert_eq!(
+        thread_after_second.updated_at, thread_after_first.updated_at,
+        "no-op metadata recompute must not rewrite the row"
+    );
+    Ok(())
+}

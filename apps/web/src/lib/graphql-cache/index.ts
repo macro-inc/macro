@@ -4,9 +4,18 @@
  */
 
 export {
+  compileEntityResolvers,
+  type EntityFromArgumentDescriptor,
+  type EntityResolverConfig,
+  type EntityResolverWire,
+  entityFromArgument,
+} from './exchange/entity-resolvers';
+export {
   type CachedSelection,
+  type CachedVariant,
   type InspectionSelection,
   inspect,
+  inspectVariants,
   selectAll,
 } from './exchange/inspection';
 export {
@@ -20,14 +29,15 @@ export {
   prependUnique,
   type QueryRevalidation,
   remove,
+  removeEmbeddedLink,
   type Selection,
   select,
   update,
+  upsertEmbeddedLink,
 } from './exchange/optimistic';
 export {
   type RecordSelection,
-  readRecords,
-  type SelectedRecordPage,
+  readRecordsByKeys,
   selectRecords,
 } from './exchange/record-selection';
 export { createTauriCacheHost } from './host/tauri-host';
@@ -36,24 +46,36 @@ export type {
   CacheReadArgs,
   CacheWriteArgs,
   InspectQueryArgs,
+  InspectQueryVariantsArgs,
 } from './host/types';
 export { createWorkerCacheHost } from './host/worker-host';
 export type {
   CachedQueryInstanceWire,
+  CachedQueryVariantWire,
   CachePush,
   CacheReadPriority,
   CacheRequest,
   CacheResponse,
+  EnqueueOptimisticMutationResult,
+  EntityFilterCacheArgs,
+  EntityFilterCacheResult,
+  InitialMutationClaim,
   MutationSettlement,
   OptimisticWriteResult,
   QueryVariableFilter,
-  ReadRecordsArgs,
+  ReadRecordsByKeysArgs,
   ReadResult,
-  RecordCursor,
-  SelectedRecordPageWire,
+  SearchCacheArgs,
+  SearchCachePage,
+  SearchCursor,
+  SearchDocumentWire,
+  SearchProfile,
+  SelectedRecordByKeyWire,
   WriteResult,
 } from './protocol';
 export {
+  MAX_CACHE_SEARCH_QUERY_BYTES,
   MAX_RECORD_SELECTION_PAGE_SIZE,
-  validateRecordSelectionLimit,
+  validateCacheSearchArgs,
+  validateRecordSelectionKeys,
 } from './protocol';

@@ -50,6 +50,8 @@ use roles_and_permissions::{
 use sqlx::PgPool;
 use tokio_util::task::TaskTracker;
 
+use crate::microsoft_token_cipher::MicrosoftTokenCipher;
+
 pub(crate) type NotificationIngressType = SqsNotificationIngress<SqsQueue>;
 pub(crate) type AuthenticationEventBroker =
     MacroEventBrokerService<KafkaEventPublisher, TaskTracker>;
@@ -111,6 +113,7 @@ pub(crate) struct ApiContext {
     pub db: PgPool,
     pub github_link_service: Arc<GithubLinkServiceType>,
     pub auth_client: Arc<fusionauth::FusionAuthClient>,
+    pub microsoft_token_cipher: Option<Arc<dyn MicrosoftTokenCipher>>,
     pub macro_cache_client: Arc<MacroCache>,
     pub stripe_client: Arc<stripe::Client>,
     pub document_storage_service_client:

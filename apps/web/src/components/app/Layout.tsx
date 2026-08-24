@@ -13,7 +13,7 @@ import {
   Launcher,
   setCreateMenuOpen,
 } from '@app/features/command/Launcher';
-import { MobileSearchOuter } from '@app/features/command/mobile/MobileSearch';
+import { SearchState } from '@app/features/command/mobile/mobileSearchState';
 import { CreateCompanyModal } from '@app/features/companies/CreateCompanyModal';
 import { CreateContactModal } from '@app/features/companies/CreateContactModal';
 import { DevStatusBar } from '@app/features/devtools/DevStatusBar';
@@ -25,9 +25,11 @@ import {
 import { MacroMcpSetupModal } from '@app/features/integrations/mcp-setup/MacroMcpSetupModal';
 import { Paywall } from '@app/features/paywall/Paywall';
 import { PropertyEditorModal } from '@app/features/property/editor/PropertyEditorModal';
+import { ReminderComposerModal } from '@app/features/reminders/ReminderComposerModal';
 import { useOnboardingV4Flag } from '@app/features/setup/flow/useOnboardingV4Flag';
 import { GlobalShareModal } from '@app/features/sharing/global-share-modal/GlobalShareModal';
 import { IosShareSheet } from '@app/features/sharing/ios-share-sheet/IosShareSheet';
+import { ShowFeatureFlag } from '@app/lib/analytics/posthog';
 import { mountGlobalFocusListener } from '@app/signal/focus';
 import { AutomationComposer } from '@block-automation/component';
 import { useCallContextOptional } from '@channel/Call/CallContext';
@@ -45,11 +47,16 @@ import {
   SidebarVisibilityContext,
 } from '@components/app/sidebarVisibility';
 import { useIsAuthenticated } from '@core/auth';
+import {
+  ENABLE_REMINDERS_FLAG,
+  ENABLE_REMINDERS_OVERRIDE,
+} from '@core/constant/featureFlags';
 import { usePaywallState } from '@core/constant/PaywallState';
 import { isSoloSettings } from '@core/constant/SettingsState';
 import { attachGlobalDOMScope } from '@core/hotkey/hotkeys';
 import { isMobile } from '@core/mobile/isMobile';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
 import { updateCookie } from '@core/util/cookies';
 import { useUserInfoQuery } from '@queries/auth/user-info';
@@ -59,7 +66,7 @@ import {
   useLocation,
   useNavigate,
 } from '@solidjs/router';
-import { cn } from '@ui';
+import { cn, ImperativeDialogHost } from '@ui';
 import { ScreencastHotkeys } from '@ui/components/ScreencastHotkeys';
 import {
   createEffect,
@@ -76,8 +83,8 @@ import GlobalShortcuts from './GlobalHotkeys';
 import { ItemDndProvider } from './ItemDragAndDrop';
 import { FloatRegion } from './mobile/float-regions/FloatRegion';
 import { FloatRegionHost } from './mobile/float-regions/FloatRegionHost';
-import { MobileDock } from './mobile/MobileDock';
-import { MobileBottomEdgeFade } from './mobile/MobileEdgeFade';
+import { MobileDockRow } from './mobile/MobileDockRow';
+import { MobileViewsRow } from './mobile/MobileViewsRow';
 import { SwipeDownDismissKeyboard } from './mobile/SwipeDownDismissKeyboard';
 import { useAppSquishHandlers } from './useAppSquishHandlers';
 
@@ -89,14 +96,13 @@ const AUTH_URLS = [
   `${ROUTER_BASE_CONCAT}setup`,
   `${ROUTER_BASE_CONCAT}signup`,
   `${ROUTER_BASE_CONCAT}email-signup-callback`,
-  `${ROUTER_BASE_CONCAT}offline`,
   `${ROUTER_BASE_CONCAT}welcome`,
   `${ROUTER_BASE_CONCAT}mobile-email-signup`,
   `${ROUTER_BASE_CONCAT}team-invite`,
 ];
 
 const [sidebarState, setSidebarState] = makePersisted(
-  createSignal<SidebarState>(!isMobile() ? 'expanded' : 'hidden'),
+  createSignal<SidebarState>(!isTouchDevice() ? 'expanded' : 'hidden'),
   {
     name: 'sidebar-state',
   }
@@ -107,7 +113,7 @@ export function Layout(props: RouteSectionProps) {
   const location = useLocation();
   const sidebarVisible = createMemo(
     () =>
-      !isMobile() &&
+      !isTouchDevice() &&
       isAuthenticated() === true &&
       !AUTH_URLS.includes(location.pathname) &&
       // Settings-as-the-sole-split has its own tab nav — hide app chrome.
@@ -423,6 +429,7 @@ function LayoutInner(props: RouteSectionProps) {
         'relative flex flex-col justify-between w-dvw h-[calc(var(--dvh,1dvh)*100)] pl-(--safe-left) pr-(--safe-right)'
       )}
     >
+      <ImperativeDialogHost />
       <BundleUpdateProgressBar />
       <Suspense>
         <Show when={isAuthenticated()}>
@@ -433,7 +440,7 @@ function LayoutInner(props: RouteSectionProps) {
             <CalendarPermissionPrompt />
           </Show>
           <GlobalShortcuts />
-          <Show when={!isMobile()}>
+          <Show when={!isTouchDevice()}>
             <GoToHotkeys />
             <Suspense>
               <FavoritesCommands />
@@ -450,6 +457,15 @@ function LayoutInner(props: RouteSectionProps) {
           <CreateChannelModal />
           <CreateCompanyModal />
           <CreateContactModal />
+          {/* Reactive, unlike the imperative ENABLE_REMINDERS() gate on the
+              action: this decides whether the composer is mounted at all, so it
+              has to pick up a late PostHog answer. */}
+          <ShowFeatureFlag
+            key={ENABLE_REMINDERS_FLAG}
+            enabledOverride={ENABLE_REMINDERS_OVERRIDE}
+          >
+            <ReminderComposerModal />
+          </ShowFeatureFlag>
           <Show when={isAddInboxDialogOpen()}>
             <AddInboxDialog />
           </Show>
@@ -481,7 +497,7 @@ function LayoutInner(props: RouteSectionProps) {
               onOverlayOpenChange={setSidebarOverlayOpenGuarded}
               onOpenChange={(open) => {
                 if (!open) {
-                  setSidebarState(isMobile() ? 'hidden' : 'slim');
+                  setSidebarState(isTouchDevice() ? 'hidden' : 'slim');
                   return;
                 }
 
@@ -519,19 +535,19 @@ function LayoutInner(props: RouteSectionProps) {
       <CollapsedSidebarCallWidget visible={activeCallWidgetVisible()} />
       <Show
         when={
-          isMobile() &&
+          isTouchDevice() &&
           isAuthenticated() &&
           !AUTH_URLS.includes(location.pathname)
         }
       >
         <FloatRegionHost />
-        <FloatRegion region="dock" active={() => !virtualKeyboardVisible()}>
-          <MobileBottomEdgeFade />
-          <MobileDock />
+        <MobileViewsRow />
+        <FloatRegion
+          region="dock"
+          active={() => !virtualKeyboardVisible() || SearchState.isOpen()}
+        >
+          <MobileDockRow />
         </FloatRegion>
-      </Show>
-      <Show when={isMobile()}>
-        <MobileSearchOuter />
       </Show>
       <SwipeDownDismissKeyboard />
       <Suspense>

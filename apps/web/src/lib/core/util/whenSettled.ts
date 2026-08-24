@@ -1,8 +1,14 @@
-import type { UseQueryResult } from '@tanstack/solid-query';
 import type { Resource } from 'solid-js';
 import { createEffect, createRoot, onCleanup, untrack } from 'solid-js';
 
-type Suspendable<T> = Resource<T> | UseQueryResult<T>;
+type QueryLike<T> = {
+  readonly data: T | undefined;
+  readonly error: Error | null;
+  readonly isError: boolean;
+  readonly isSuccess: boolean;
+};
+
+type Suspendable<T> = Resource<T> | QueryLike<T>;
 
 type SettledState<T> =
   | { status: 'pending' }
@@ -21,7 +27,7 @@ function getSettledState<T>(suspendable: Suspendable<T>): SettledState<T> {
     return { status: 'pending' };
   }
 
-  const query = suspendable as UseQueryResult<T>;
+  const query = suspendable as QueryLike<T>;
   if (query.isError && query.error) {
     return { status: 'error', error: query.error as Error };
   }

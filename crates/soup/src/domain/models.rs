@@ -1,5 +1,8 @@
 pub mod grouping;
 
+#[cfg(test)]
+mod test;
+
 use call::domain::models::GetCallRecordsRequest;
 use channels::domain::models::{GetChannelsRequest, GetThreadReplyRowsRequest};
 use crm::domain::auth::CrmTeamReceipt;
@@ -23,19 +26,37 @@ use item_filters::{
             PropertiesLiteral, PropertyEntityType, properties_filter_can_apply_to,
             properties_filter_matches_propertyless,
         },
+        reminder::ReminderLiteral,
     },
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::Entity;
 use models_grouping::GroupingConfig;
-use models_pagination::{Cursor, CursorWithValAndFilter, Frecency, Query, SimpleSortMethod};
+use models_pagination::{
+    Cursor, CursorWithValAndFilter, Frecency, Query, SimpleSortMethod, TouchedByMe,
+};
 use models_soup::SoupProperty;
 use models_soup::item::SoupItem;
 use non_empty::IsEmpty;
+use reminders::domain::models::SoupOrder;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use thiserror::Error;
 use uuid::Uuid;
+
+/// Direction the merged Soup page is ordered in.
+///
+/// Deliberately Soup's own type rather than one borrowed from the paginator:
+/// `Paginator` already exposes `sort_asc`/`sort_desc`, so this only has to name
+/// the choice, and doing it here keeps the shared pagination crate untouched.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum SoupSortDirection {
+    /// Smallest sort value first — oldest, or soonest for a future timestamp.
+    Asc,
+    /// Largest sort value first. What every view but Scheduled reminders wants.
+    #[default]
+    Desc,
+}
 
 /// Controls whether soup items should include expanded nested data.
 #[derive(Debug, Clone, Copy)]
@@ -142,6 +163,9 @@ pub enum SoupQuery<T> {
     Simple(SimpleQueryInner<T>),
     /// Query sorted by frecency.
     Frecency(FrecencyQueryInner<T>),
+    /// Query filtered and sorted by the user's own latest mutation per
+    /// entity (the activity log's touched-by-me surface).
+    Touched(TouchedQueryInner<T>),
 }
 
 impl<T> SoupQuery<T> {
@@ -156,6 +180,9 @@ impl<T> SoupQuery<T> {
             SoupQuery::Frecency(FrecencyQueryInner(i)) => {
                 SoupQuery::Frecency(FrecencyQueryInner(i.map_filter(f)))
             }
+            SoupQuery::Touched(TouchedQueryInner(i)) => {
+                SoupQuery::Touched(TouchedQueryInner(i.map_filter(f)))
+            }
         }
     }
 }
@@ -167,6 +194,15 @@ pub struct SimpleQueryInner<T>(pub(crate) Query<Uuid, SimpleSortMethod, T>);
 /// the inner private type for [SoupQuery::Frecency]
 #[derive(Debug)]
 pub struct FrecencyQueryInner<T>(pub(crate) Query<Uuid, Frecency, T>);
+
+/// the inner private type for [SoupQuery::Touched]
+///
+/// The id is a [String] rather than a [Uuid]: touched cursors key into the
+/// activity log's TEXT `entity_id` column, and the raw string must survive
+/// the cursor round-trip byte-for-byte (see
+/// [`TouchedPagePosition::entity_id`]).
+#[derive(Debug)]
+pub struct TouchedQueryInner<T>(pub(crate) Query<String, TouchedByMe, T>);
 
 impl<T> SoupQuery<T> {
     /// create a new instance of a [SimpleSortMethod] with [T] this is used to
@@ -199,11 +235,29 @@ impl<T> SoupQuery<T> {
         SoupQuery::Frecency(FrecencyQueryInner(models_pagination::Query::Cursor(cursor)))
     }
 
+    /// create a new instance of a [TouchedByMe] query with [T]. This is used
+    /// to construct the initial page request. To paginate an existing cursor
+    /// see [Self::new_cursor_touched]
+    pub fn new_sort_touched(filters: T) -> Self {
+        SoupQuery::Touched(TouchedQueryInner(models_pagination::Query::Sort(
+            TouchedByMe,
+            filters,
+        )))
+    }
+
+    /// create a new instance of a [TouchedByMe] query with an existing cursor
+    /// on [T]. This is used to continue paginating on an existing cursor.
+    /// To create a new initial page see [Self::new_sort_touched]
+    pub fn new_cursor_touched(cursor: CursorWithValAndFilter<String, TouchedByMe, T>) -> Self {
+        SoupQuery::Touched(TouchedQueryInner(models_pagination::Query::Cursor(cursor)))
+    }
+
     /// Returns the filter payload embedded in this query.
     pub fn filter(&self) -> &T {
         match self {
             SoupQuery::Simple(SimpleQueryInner(query)) => query.filter(),
             SoupQuery::Frecency(FrecencyQueryInner(query)) => query.filter(),
+            SoupQuery::Touched(TouchedQueryInner(query)) => query.filter(),
         }
     }
 }
@@ -218,6 +272,9 @@ impl SoupQuery<EntityFilters> {
             SoupQuery::Frecency(FrecencyQueryInner(query)) => Ok(SoupQuery::Frecency(
                 FrecencyQueryInner(query.try_map_filter(EntityFilterAst::new_from_filters)?),
             )),
+            SoupQuery::Touched(TouchedQueryInner(query)) => Ok(SoupQuery::Touched(
+                TouchedQueryInner(query.try_map_filter(EntityFilterAst::new_from_filters)?),
+            )),
         }
     }
 }
@@ -231,6 +288,20 @@ pub struct SoupRequest<T> {
     pub limit: u16,
     /// Initial query or pagination cursor to execute.
     pub cursor: SoupQuery<T>,
+    /// Direction the merged page is ordered in. Defaults to descending, which
+    /// is what every feed but reminders wants.
+    ///
+    /// One choice per request: the paginator sorts the whole merged page, so
+    /// this cannot differ per entity type within a single feed. It is a
+    /// sibling of the cursor rather than part of it because clients re-send
+    /// the request params on every page, which keeps the cursor format alone.
+    ///
+    /// Only the [`SoupQuery::Simple`] branch honours this. Frecency pages come
+    /// back ordered by relevance score and never have the merged sort applied,
+    /// so there is no ascending frecency order to produce — the REST adapter
+    /// rejects that combination rather than letting it read as supported, and
+    /// the GraphQL adapter cannot express frecency at all.
+    pub sort_direction: SoupSortDirection,
     /// User whose soup should be queried.
     pub user: MacroUserIdStr<'static>,
     /// Email preview view used when hydrating email soup items.
@@ -253,6 +324,7 @@ impl IntoSoupReqAst for SoupRequest<EntityFilters> {
             soup_type,
             limit,
             cursor,
+            sort_direction,
             user,
             email_preview_view,
             link_ids,
@@ -262,6 +334,7 @@ impl IntoSoupReqAst for SoupRequest<EntityFilters> {
             soup_type,
             limit,
             cursor: cursor.into_ast()?,
+            sort_direction,
             user,
             email_preview_view,
             link_ids,
@@ -275,6 +348,7 @@ impl IntoSoupReqAst for SoupRequest<EntityFilterAst> {
             soup_type,
             limit,
             cursor,
+            sort_direction,
             user,
             email_preview_view,
             link_ids,
@@ -284,6 +358,7 @@ impl IntoSoupReqAst for SoupRequest<EntityFilterAst> {
             soup_type,
             limit,
             cursor: cursor.map(|f| if f.is_empty() { None } else { Some(f) }),
+            sort_direction,
             user,
             email_preview_view,
             link_ids,
@@ -356,6 +431,8 @@ impl SoupRequest<Option<EntityFilterAst>> {
                 })),
                 // we don't yet have sort by frecency implemented for emails yet
                 SoupQuery::Frecency(_) => None,
+                // touched-by-me hydrates emails by thread id, not via this leg
+                SoupQuery::Touched(_) => None,
             }?,
             include_frecency: false,
             team_receipt,
@@ -372,6 +449,7 @@ impl SoupRequest<Option<EntityFilterAst>> {
                 ..
             }))) => filter.as_ref(),
             SoupQuery::Frecency(_) => None,
+            SoupQuery::Touched(TouchedQueryInner(query)) => query.filter().as_ref(),
         }
     }
 
@@ -425,6 +503,9 @@ impl SoupRequest<Option<EntityFilterAst>> {
                 })),
                 // query by frecency not yet implemented for call records
                 SoupQuery::Frecency(_) => None,
+                // call records carry no activity of their own (calls land on
+                // the channel), so the touched feed never includes them
+                SoupQuery::Touched(_) => None,
             }?,
         })
     }
@@ -474,6 +555,8 @@ impl SoupRequest<Option<EntityFilterAst>> {
                 }),
             ),
             SoupQuery::Frecency(_) => return None,
+            // CRM has no mutation activity (deferred from touched-by-me)
+            SoupQuery::Touched(_) => return None,
         };
 
         let sort = match sort_method {
@@ -505,6 +588,56 @@ impl SoupRequest<Option<EntityFilterAst>> {
         })
     }
 
+    /// Build the reminder leg of the query.
+    ///
+    /// Unlike every other entity type, reminders are **opt-in**: a query that
+    /// says nothing about them gets none. Adding reminders to Soup therefore
+    /// left every existing view's results unchanged; only views that ask (today
+    /// just the Inbox Signal filter) see them.
+    ///
+    /// Reminders also carry no properties, so an active properties filter that
+    /// cannot match a propertyless item skips the leg — the same gate channels
+    /// and foreign entities use.
+    pub(crate) fn build_reminder_request(
+        &self,
+        limit: i64,
+    ) -> Option<GetRemindersRequest<'static>> {
+        if self.properties_filter_blocks_propertyless() {
+            return None;
+        }
+        // Reminders sort on `next_run_at` regardless of the requested method,
+        // so there is nothing to translate — but frecency has no reminder
+        // scoring and reminders record no activity, so both paths skip them.
+        if matches!(self.cursor, SoupQuery::Frecency(_) | SoupQuery::Touched(_)) {
+            return None;
+        }
+
+        // Absent filter means the query never mentioned reminders, which is the
+        // opt-out. Every pre-existing Soup view lands here.
+        let tree = self.entity_ast().and_then(|a| a.reminder_filter.as_ref())?;
+        let mut extract = ReminderFilterExtract::default();
+        if !extract_reminder_filter(tree, &mut extract) {
+            // Fail closed: an unsupported AST shape would widen the result set.
+            return None;
+        }
+        if !extract.opted_in() {
+            return None;
+        }
+
+        Some(GetRemindersRequest {
+            user_id: self.user.clone(),
+            reminder_ids: extract.ids,
+            entities: extract.entities,
+            completed: extract.completed,
+            fired: extract.fired,
+            order: match self.sort_direction {
+                SoupSortDirection::Asc => SoupOrder::SoonestFirst,
+                SoupSortDirection::Desc => SoupOrder::LatestFirst,
+            },
+            limit,
+        })
+    }
+
     pub(crate) fn build_comms_request(&self) -> Option<GetChannelsRequest> {
         if self.properties_filter_blocks_propertyless() {
             return None;
@@ -531,6 +664,8 @@ impl SoupRequest<Option<EntityFilterAst>> {
                 })),
                 // query by frecency not yet implemented for channels
                 SoupQuery::Frecency(_) => None,
+                // touched-by-me hydrates channels by id, not via this leg
+                SoupQuery::Touched(_) => None,
             }?,
         })
     }
@@ -559,6 +694,9 @@ impl SoupRequest<Option<EntityFilterAst>> {
             })),
             // query by frecency not yet implemented for channel threads
             SoupQuery::Frecency(_) => None,
+            // channel-thread rows carry no activity (messages attribute to
+            // the channel), so the touched feed never includes them
+            SoupQuery::Touched(_) => None,
         }?;
 
         Some(GetThreadReplyRowsRequest {
@@ -593,6 +731,9 @@ impl SoupRequest<Option<EntityFilterAst>> {
             })),
             // query by frecency is not implemented for foreign entities
             SoupQuery::Frecency(_) => None,
+            // foreign entities record no activity, so the touched feed never
+            // includes them
+            SoupQuery::Touched(_) => None,
         }
     }
 
@@ -608,6 +749,45 @@ impl SoupRequest<Option<EntityFilterAst>> {
 
         source_ids
     }
+}
+
+/// Keyset position for a touched-by-me page: the touch timestamp and entity
+/// id of the previous page's last row.
+///
+/// The id stays the raw stored string (never round-tripped through [`Uuid`]):
+/// the SQL keyset compares it byte-for-byte against the `entity_id` TEXT
+/// column, so any canonicalization would shift the page boundary.
+#[derive(Debug, Clone)]
+pub struct TouchedPagePosition {
+    /// The last entity's latest-mutation timestamp.
+    pub occurred_at: chrono::DateTime<chrono::Utc>,
+    /// The last entity's id — the global tiebreaker when two entities share
+    /// a touch timestamp.
+    pub entity_id: String,
+}
+
+/// Parameters for one page of touched-by-me candidates.
+#[derive(Debug)]
+pub struct TouchedSoupRequest<'a> {
+    /// User whose touches are listed; also the access-check subject.
+    pub user_id: MacroUserIdStr<'a>,
+    /// Maximum entities to return.
+    pub limit: u16,
+    /// Resume after this position; `None` for the first page.
+    pub after: Option<TouchedPagePosition>,
+    /// Entity filters folded into the candidate query.
+    pub filter: Option<&'a EntityFilterAst>,
+    /// Every inbox the caller can read; gates email-thread candidates.
+    pub link_ids: &'a [Uuid],
+}
+
+/// One touched entity: what it is and when the user last mutated it.
+#[derive(Debug, Clone)]
+pub struct TouchedEntity {
+    /// The touched entity.
+    pub entity: Entity<'static>,
+    /// The user's latest mutation of it.
+    pub touched_at: chrono::DateTime<chrono::Utc>,
 }
 
 /// ANDs a properties filter into the email filter tree as thread-level
@@ -744,6 +924,111 @@ fn or_is_ids_only(expr: &Expr<CrmCompanyLiteral>, out: &mut CrmCompanyFilterExtr
     }
 }
 
+/// Parameters for the reminder leg of a soup query.
+#[derive(Debug)]
+pub struct GetRemindersRequest<'a> {
+    /// Whose reminders to list. Reminders are private to their owner, so this
+    /// is the whole of the access check.
+    pub user_id: MacroUserIdStr<'a>,
+    /// Filter to specific reminder ids. Empty = all of the user's reminders.
+    pub reminder_ids: Vec<Uuid>,
+    /// Filter to reminders attached to these entities, each `"{type}:{id}"`.
+    /// Empty = no entity constraint.
+    pub entities: Vec<String>,
+    /// Filter on whether the owner marked the reminder done. `None` returns both.
+    pub completed: Option<bool>,
+    /// Filter on whether the reminder has come due. `None` returns both.
+    pub fired: Option<bool>,
+    /// Which end of the `next_run_at` ordering to take `limit` rows from.
+    /// Mirrors the request's sort direction so the leg and the merge agree.
+    pub order: SoupOrder,
+    /// Upper bound on rows returned — the soup paginator re-slices.
+    pub limit: i64,
+}
+
+/// Outcome of walking a `ReminderLiteral` AST.
+#[derive(Debug, Default)]
+pub(crate) struct ReminderFilterExtract {
+    pub(crate) include: bool,
+    pub(crate) ids: Vec<Uuid>,
+    pub(crate) entities: Vec<String>,
+    pub(crate) completed: Option<bool>,
+    pub(crate) fired: Option<bool>,
+}
+
+impl ReminderFilterExtract {
+    /// Whether the query asked for reminders at all. Reminders are off unless
+    /// something in the filter names them.
+    fn opted_in(&self) -> bool {
+        self.include || !self.ids.is_empty() || !self.entities.is_empty()
+    }
+}
+
+/// Walks a `ReminderLiteral` AST collecting ids, entity tokens, and a single
+/// single `Completed(bool)`/`Fired(bool)` constraint. Returns `false` (fail
+/// closed) on `Not(_)`, on conflicting literals, and on an `Or` branch that is not a pure
+/// id/entity sub-tree — the same shape restrictions as the CRM extractor, for
+/// the same reason: a flat extract cannot represent those set semantics.
+fn extract_reminder_filter(expr: &Expr<ReminderLiteral>, out: &mut ReminderFilterExtract) -> bool {
+    match expr {
+        Expr::Literal(ReminderLiteral::Include) => {
+            out.include = true;
+            true
+        }
+        Expr::Literal(ReminderLiteral::Id(id)) => {
+            out.ids.push(*id);
+            true
+        }
+        Expr::Literal(ReminderLiteral::Entity(entity)) => {
+            out.entities.push(entity.clone());
+            true
+        }
+        Expr::Literal(ReminderLiteral::Completed(b)) => match out.completed {
+            Some(prev) if prev != *b => false,
+            _ => {
+                out.completed = Some(*b);
+                true
+            }
+        },
+        Expr::Literal(ReminderLiteral::Fired(b)) => match out.fired {
+            Some(prev) if prev != *b => false,
+            _ => {
+                out.fired = Some(*b);
+                true
+            }
+        },
+        Expr::And(a, b) => extract_reminder_filter(a, out) && extract_reminder_filter(b, out),
+        Expr::Or(a, b) => {
+            // The repo ANDs `ids` against `entities`, so an `Or` spanning both
+            // would come out as an `And` — narrower than asked. Only reject
+            // when this `Or` actually contributes both; ids-only or
+            // entities-only branches still flatten faithfully.
+            let (ids_before, entities_before) = (out.ids.len(), out.entities.len());
+            let ok = reminder_or_is_sets_only(a, out) && reminder_or_is_sets_only(b, out);
+            ok && !(out.ids.len() > ids_before && out.entities.len() > entities_before)
+        }
+        Expr::Not(_) => false,
+    }
+}
+
+/// Helper for [`extract_reminder_filter`]: an `Or` branch must be a pure
+/// id/entity sub-tree — a `Completed`, `Fired`, `And`, or `Not` inside fails
+/// closed.
+fn reminder_or_is_sets_only(expr: &Expr<ReminderLiteral>, out: &mut ReminderFilterExtract) -> bool {
+    match expr {
+        Expr::Literal(ReminderLiteral::Id(id)) => {
+            out.ids.push(*id);
+            true
+        }
+        Expr::Literal(ReminderLiteral::Entity(entity)) => {
+            out.entities.push(entity.clone());
+            true
+        }
+        Expr::Or(a, b) => reminder_or_is_sets_only(a, out) && reminder_or_is_sets_only(b, out),
+        _ => false,
+    }
+}
+
 /// A Soup result with both optional enrichments represented in one model.
 ///
 /// Service methods decide which fields to populate. An unfetched enrichment
@@ -755,6 +1040,10 @@ pub struct EnrichedSoupItem {
     pub item: SoupItem<SoupPropertiesField>,
     /// The aggregate frecency score, when requested and available.
     pub frecency_score: Option<AggregateFrecency>,
+    /// The caller's latest own mutation of this entity, populated only when
+    /// the page was ordered by `touched_by_me`. Clients sort and optimistic-
+    /// reorder the touched feed on this value.
+    pub touched_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
 /// A soup request with optional grouping configuration.
@@ -787,6 +1076,14 @@ pub enum SoupErr {
     /// CRM lookup failed.
     #[error("A CRM error has occurred, see logs for more details")]
     CrmErr,
+    /// Reminder lookup failed.
+    #[error("A reminder error has occurred, see logs for more details")]
+    ReminderErr,
+    /// A touched-by-me query carried a filter kind this mode cannot
+    /// evaluate (the fold lives in another domain's query builder).
+    /// Rejecting beats silently returning a feed with that type missing.
+    #[error("sort_method=touched_by_me does not support {0} filters")]
+    TouchedUnsupportedFilter(&'static str),
     /// The filter requested CRM-scoped data but the caller has no
     /// qualifying team membership.
     #[error("CRM-scoped queries require team membership")]

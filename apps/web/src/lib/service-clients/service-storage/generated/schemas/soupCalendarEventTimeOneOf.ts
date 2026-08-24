@@ -12,10 +12,10 @@ import type { SoupCalendarEventTimeOneOfTimeZone } from './soupCalendarEventTime
  */
 export type SoupCalendarEventTimeOneOf = {
   /** Exclusive end. */
-  ends_at: string;
+  endsAt: string;
   kind: SoupCalendarEventTimeOneOfKind;
   /** Inclusive start. */
-  starts_at: string;
+  startsAt: string;
   /** Original IANA time zone. */
-  time_zone?: SoupCalendarEventTimeOneOfTimeZone;
+  timeZone?: SoupCalendarEventTimeOneOfTimeZone;
 };

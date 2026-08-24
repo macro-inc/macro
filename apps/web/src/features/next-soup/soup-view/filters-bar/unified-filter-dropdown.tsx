@@ -21,16 +21,11 @@ import {
   type ReadFilter,
   useSoupView,
 } from '@app/features/next-soup/soup-view/soup-view-context';
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useDealStages } from '@companies/crm/deal-stages';
 import { CrmStageIcon } from '@companies/crm/StageIcon';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { UserIcon } from '@core/component/UserIcon';
-import {
-  ENABLE_NEW_INBOX_FLAG,
-  ENABLE_NEW_INBOX_OVERRIDE,
-} from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
@@ -356,6 +351,11 @@ const DOCUMENTS_FILTER_CATEGORIES: FilterCategory[] = [
         icon: () => <EntityIcon targetType="snippet" size="xs" />,
       },
       {
+        id: 'doc-skill',
+        label: 'Skills',
+        icon: () => <EntityIcon targetType="skill" size="xs" />,
+      },
+      {
         id: 'file-other',
         label: 'Other',
         icon: () => <EntityIcon targetType="files" size="xs" />,
@@ -377,6 +377,9 @@ export function buildContactLabel(
 
 export const VIEW_FILTER_CATEGORIES: Record<ListView, FilterCategory[]> = {
   inbox: INBOX_FILTER_CATEGORIES,
+  // No refinements yet: the touched-by-me query rejects channel/email
+  // filter trees, so the inbox categories can't be offered wholesale.
+  recent: [],
   agents: [],
   mail: MAIL_FILTER_CATEGORIES,
   documents: DOCUMENTS_FILTER_CATEGORIES,
@@ -385,6 +388,9 @@ export const VIEW_FILTER_CATEGORIES: Record<ListView, FilterCategory[]> = {
   channels: [],
   calls: [],
   folders: [],
+  // The two tabs already split reminders on the only axis they have; there is
+  // nothing further to refine by.
+  reminders: [],
   search: [],
 };
 
@@ -572,10 +578,7 @@ export const UnifiedFilterDropdown = (
     return content.id;
   });
 
-  const newInboxFlag = useFeatureFlag(ENABLE_NEW_INBOX_FLAG, {
-    enabledOverride: ENABLE_NEW_INBOX_OVERRIDE,
-  });
-  const isNewInbox = () => currentView() === 'inbox' && newInboxFlag().enabled;
+  const isInboxView = () => currentView() === 'inbox';
   const githubLinkStatus = useGithubLinkStatusQuery({
     enabled: () => currentView() === 'inbox',
   });
@@ -584,6 +587,10 @@ export const UnifiedFilterDropdown = (
     const view = currentView();
     if (!view) return [];
     const viewCategories = VIEW_FILTER_CATEGORIES[view] ?? [];
+
+    // The Folders tab only lists folders, so document-type refinements are
+    // inapplicable there.
+    if (view === 'documents' && activeTab() === 'folders') return [];
 
     if (view !== 'inbox') return viewCategories;
 
@@ -817,7 +824,66 @@ export const UnifiedFilterDropdown = (
   };
 
   const isTasksView = () => currentView() === 'tasks';
+  const isDocumentsView = () => currentView() === 'documents';
+  const isCreatedByFilterView = () => {
+    const view = currentView();
+    return view === 'documents' || view === 'tasks';
+  };
+  const showCreatedByFilter = () =>
+    isCreatedByFilterView() && !(isDocumentsView() && activeTab() === 'owned');
   const isCompaniesView = () => currentView() === 'companies';
+
+  // The Files "Owned" tab has a creator constraint as part of its base
+  // preset. Keep that constraint when a user clears an explicit Created by
+  // selection, rather than accidentally broadening the tab to every file.
+  const baseCreatedByIds = createMemo(() => {
+    const view = currentView();
+    if (view !== 'documents' && view !== 'tasks') return [];
+    return (
+      getViewPreset(view, activeTab(), {
+        userId: userId(),
+        isTeamAdmin: false,
+      })?.filters.include?.documentOwnerId ?? []
+    );
+  });
+  const createdByIds = createMemo(
+    () => queryFilters.state.include.documentOwnerId ?? []
+  );
+
+  const createdByOptions = createMemo((): SearchableOption[] => {
+    const currentUserId = userId();
+    let meOption: SearchableOption | undefined;
+    const otherContactOptions: SearchableOption[] = [];
+    for (const contact of contacts()) {
+      const opt: SearchableOption = {
+        id: contact.id,
+        label: buildContactLabel(contact, currentUserId),
+        icon: () => (
+          <UserIcon
+            id={contact.id}
+            size="sm"
+            suppressClick
+            showTooltip={false}
+          />
+        ),
+      };
+      if (contact.id === currentUserId) {
+        meOption = opt;
+      } else {
+        otherContactOptions.push(opt);
+      }
+    }
+    return [...(meOption ? [meOption] : []), ...otherContactOptions];
+  });
+
+  const handleCreatedByChange = (ids: string[]) => {
+    const nextIds = ids.length > 0 ? ids : baseCreatedByIds();
+    queryFilters.set({
+      include: {
+        documentOwnerId: nextIds.length > 0 ? nextIds : undefined,
+      },
+    });
+  };
 
   const tagFilter = useTagFilter();
   const showTagsFilter = () => {
@@ -867,7 +933,7 @@ export const UnifiedFilterDropdown = (
         categories().length > 0 ||
         isTasksView() ||
         isCompaniesView() ||
-        isNewInbox() ||
+        isInboxView() ||
         showTagsFilter()
       }
     >
@@ -896,9 +962,9 @@ export const UnifiedFilterDropdown = (
           </Switch>
         </Show>
 
-        <Dropdown.Content class="shadow-menu">
+        <Dropdown.Content class={cn('shadow-menu min-w-32')}>
           <Dropdown.Group>
-            <Show when={isNewInbox()}>
+            <Show when={isInboxView()}>
               <ReadStatusSubmenu
                 value={readFilter()}
                 onChange={setReadFilter}
@@ -907,12 +973,23 @@ export const UnifiedFilterDropdown = (
             <Show
               when={
                 categories().length === 1 &&
+                !isDocumentsView() &&
                 !isTasksView() &&
                 !isCompaniesView() &&
-                !isNewInbox()
+                !isInboxView()
               }
               fallback={
                 <>
+                  <Show when={isDocumentsView() && showTagsFilter()}>
+                    <SearchableFilterSubmenu
+                      label="Tags"
+                      options={tagFilter.options}
+                      activeIds={tagFilter.activeIds}
+                      onChange={tagFilter.onChange}
+                      placeholder="Filter by tag..."
+                    />
+                  </Show>
+
                   <For each={categories()}>
                     {(category) => (
                       <Dropdown.Sub>
@@ -970,6 +1047,16 @@ export const UnifiedFilterDropdown = (
                     />
                   </Show>
 
+                  <Show when={showCreatedByFilter()}>
+                    <SearchableFilterSubmenu
+                      label="Created by"
+                      options={createdByOptions}
+                      activeIds={createdByIds}
+                      onChange={handleCreatedByChange}
+                      placeholder="Search creators..."
+                    />
+                  </Show>
+
                   {/* Stage + Owner filters for the Customers view */}
                   <Show when={isCompaniesView()}>
                     <SearchableFilterSubmenu
@@ -1024,7 +1111,7 @@ export const UnifiedFilterDropdown = (
               </For>
             </Show>
 
-            <Show when={showTagsFilter()}>
+            <Show when={!isDocumentsView() && showTagsFilter()}>
               <SearchableFilterSubmenu
                 label="Tags"
                 options={tagFilter.options}

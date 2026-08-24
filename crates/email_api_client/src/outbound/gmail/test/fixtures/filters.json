@@ -1,0 +1,19 @@
+{
+  "filter": [
+    {
+      "id": "blocked-1",
+      "criteria": { "from": "blocked@example.com" },
+      "action": { "addLabelIds": ["TRASH"] }
+    },
+    {
+      "id": "label-only",
+      "criteria": { "from": "ordinary@example.com" },
+      "action": { "addLabelIds": ["Label_123"] }
+    },
+    {
+      "id": "trash-without-sender",
+      "criteria": { "subject": "discard" },
+      "action": { "addLabelIds": ["TRASH"] }
+    }
+  ]
+}

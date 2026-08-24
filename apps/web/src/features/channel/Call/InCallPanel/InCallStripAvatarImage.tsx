@@ -5,7 +5,7 @@ import {
   stackedAvatarInnerClass,
 } from '@core/component/StackedAvatarsRow';
 import { UserIcon } from '@core/component/UserIcon';
-import { tryMacroId, useDisplayName } from '@core/user';
+import { getDisplayName, tryMacroId } from '@core/user';
 import { Tooltip } from '@ui';
 import { type Component, Show } from 'solid-js';
 
@@ -25,9 +25,10 @@ export const InCallStripAvatarImage: Component<{
   image: InCallStripImage;
   trackCall?: () => unknown;
 }> = (props) => {
-  const [displayName] = useDisplayName(
-    props.image.stripLocalPending ? undefined : tryMacroId(props.image.userId)
-  );
+  const displayName = () =>
+    getDisplayName(
+      props.image.stripLocalPending ? undefined : tryMacroId(props.image.userId)
+    );
 
   const nameLabel = () => {
     props.trackCall?.();

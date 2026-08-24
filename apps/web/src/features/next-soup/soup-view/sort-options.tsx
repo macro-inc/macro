@@ -60,6 +60,12 @@ function sortByViewedAt<T extends EntityData>(a: T, b: T) {
   return compareDateDesc(a.sortTs ?? a.viewedAt, b.sortTs ?? b.viewedAt);
 }
 
+// The Recent feed's order: the viewer's latest own mutation, newest first.
+// Untouched rows compare as epoch zero and sink below every touched row.
+function sortByTouchedAt<T extends EntityData>(a: T, b: T) {
+  return compareDateDesc(a.touchedAt, b.touchedAt);
+}
+
 /**
  * Priority sort order: Urgent (highest) -> High -> Medium -> Low -> No priority (lowest)
  */
@@ -148,6 +154,10 @@ export const SORT_CONFIGS = {
   viewed_at: {
     id: 'viewed_at',
     fn: sortByViewedAt,
+  },
+  touched_at: {
+    id: 'touched_at',
+    fn: sortByTouchedAt,
   },
   priority: {
     id: 'priority',

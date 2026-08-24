@@ -1,5 +1,7 @@
 //! Domain layer: models, ports (trait interfaces), and service implementation.
 
+/// Event-to-activity mappings for this domain.
+pub mod activity;
 pub mod branch_name;
 pub mod content;
 /// Unified entity-mutation capability impls.

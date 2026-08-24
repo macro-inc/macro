@@ -44,6 +44,8 @@ pub struct FieldNode {
     pub response_key: String,
     /// Schema field name.
     pub name: String,
+    /// The field is persisted but omitted from hydration results.
+    pub cache_only: bool,
     pub arguments: Vec<(String, ArgValue)>,
     pub selection_set: Vec<Selection>,
 }
@@ -257,6 +259,13 @@ fn convert_selection_set(
                         arguments.push((arg_name, convert_value(value)?));
                     }
                 }
+                let cache_only = f.directives().is_some_and(|directives| {
+                    directives.directives().any(|directive| {
+                        directive
+                            .name()
+                            .is_some_and(|name| name.text() == "cacheOnly")
+                    })
+                });
                 let selection_set = match f.selection_set() {
                     Some(s) => convert_selection_set(s, fragments, depth + 1)?,
                     None => Vec::new(),
@@ -264,6 +273,7 @@ fn convert_selection_set(
                 out.push(Selection::Field(FieldNode {
                     response_key,
                     name,
+                    cache_only,
                     arguments,
                     selection_set,
                 }));
@@ -399,20 +409,35 @@ pub fn resolve_arg(
     })
 }
 
+/// Resolves all of a field's arguments against operation variables.
+pub fn resolve_args(
+    field: &FieldNode,
+    variables: &serde_json::Map<String, Json>,
+) -> Result<serde_json::Map<String, Json>, MissingVariable> {
+    let mut map = serde_json::Map::new();
+    for (name, value) in &field.arguments {
+        map.insert(name.clone(), resolve_arg(value, variables)?);
+    }
+    Ok(map)
+}
+
+/// Converts already-resolved field arguments to their canonical storage-key
+/// suffix (`None` when the field declares no arguments).
+pub fn resolved_args_key(
+    field: &FieldNode,
+    arguments: &serde_json::Map<String, Json>,
+) -> Option<String> {
+    (!field.arguments.is_empty()).then(|| canonical_json(&Json::Object(arguments.clone())))
+}
+
 /// Resolves a field's arguments to a canonical string (`None` when the field
 /// has no arguments), for use in field storage keys.
 pub fn resolve_args_key(
     field: &FieldNode,
     variables: &serde_json::Map<String, Json>,
 ) -> Result<Option<String>, MissingVariable> {
-    if field.arguments.is_empty() {
-        return Ok(None);
-    }
-    let mut map = serde_json::Map::new();
-    for (name, value) in &field.arguments {
-        map.insert(name.clone(), resolve_arg(value, variables)?);
-    }
-    Ok(Some(canonical_json(&Json::Object(map))))
+    let arguments = resolve_args(field, variables)?;
+    Ok(resolved_args_key(field, &arguments))
 }
 
 #[cfg(test)]

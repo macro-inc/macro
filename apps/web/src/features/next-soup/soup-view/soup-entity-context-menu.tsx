@@ -1,10 +1,14 @@
 import { ContextMenuContent } from '@core/component/ContextMenu';
 import { touchHandler } from '@core/directive/touchHandler';
 import { isMobile } from '@core/mobile/isMobile';
-import { type EntityData, isTaskEntity } from '@entity';
+import type { EntityData } from '@entity';
 import { ContextMenu } from '@kobalte/core/context-menu';
-import { TagPickerPopover, useSoupDocTags } from '@property/tags';
-import { EntityType } from '@service-properties/generated/schemas/entityType';
+import {
+  TagPickerPopover,
+  tagEntityType,
+  useSoupDocTags,
+} from '@property/tags';
+import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import type { SoupProperty } from '@service-storage/generated/schemas/soupProperty';
 import {
   type Accessor,
@@ -14,7 +18,7 @@ import {
   Show,
   Switch,
 } from 'solid-js';
-import { match } from 'ts-pattern';
+import { makeAddTagAction } from '../actions';
 import { useSoupEntityActionDrawer } from './soup-entity-action-drawer-context';
 import { SoupEntityActionsMenu } from './soup-entity-actions-menu';
 import { useSoupView } from './soup-view-context';
@@ -22,17 +26,6 @@ import { useSoupView } from './soup-view-context';
 interface SoupEntityContextMenuProps {
   entity: EntityData;
   onOpenChange?: (open: boolean) => void;
-}
-
-function tagEntityType(entity: EntityData): EntityType | undefined {
-  return match(entity)
-    .when(isTaskEntity, () => EntityType.TASK)
-    .with({ type: 'document' }, () => EntityType.DOCUMENT)
-    .with({ type: 'email' }, () => EntityType.THREAD)
-    .with({ type: 'project' }, () => EntityType.PROJECT)
-    .with({ type: 'chat' }, () => EntityType.CHAT)
-    .with({ type: 'call' }, () => EntityType.CALL_RECORD)
-    .otherwise(() => undefined);
 }
 
 // Detached tag picker anchored at the position the context menu opened from.
@@ -67,6 +60,7 @@ export const SoupEntityContextMenu: FlowComponent<
 > = (props) => {
   const { soup } = useSoupView();
   const drawerManager = useSoupEntityActionDrawer();
+  const addTagAction = makeAddTagAction();
 
   const [tagPickerOpen, setTagPickerOpen] = createSignal(false);
   const [menuPosition, setMenuPosition] = createSignal<{
@@ -84,7 +78,7 @@ export const SoupEntityContextMenu: FlowComponent<
     return [props.entity];
   };
 
-  const canEditTags = () => tagEntityType(props.entity) !== undefined;
+  const canEditTags = () => addTagAction.canExecute(props.entity);
 
   return (
     <Switch>
@@ -115,7 +109,7 @@ export const SoupEntityContextMenu: FlowComponent<
           </ContextMenu.Trigger>
           <ContextMenu.Portal>
             <Show when={props.entity}>
-              <ContextMenuContent class="text-xs text-ink-muted">
+              <ContextMenuContent class="w-64 text-xs text-ink-muted">
                 <SoupEntityActionsMenu
                   entities={menuEntities()}
                   soup={soup}

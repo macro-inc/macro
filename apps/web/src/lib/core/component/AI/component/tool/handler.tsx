@@ -5,6 +5,22 @@ import {
 } from '@service-cognition/generated/tools/tool';
 import { Dynamic } from 'solid-js/web';
 import { bashCodeExecutionHandler } from './BashCodeExecution';
+import {
+  configureBotHandler,
+  createBotHandler,
+  deleteBotHandler,
+  getBotWebhooksHandler,
+  issueBotCredentialHandler,
+  listBotsHandler,
+  manageBotChannelAccessHandler,
+} from './Bots';
+import {
+  createCalendarEventHandler,
+  deleteCalendarEventHandler,
+  listCalendarEventsHandler,
+  listCalendarsHandler,
+  updateCalendarEventHandler,
+} from './CalendarTools';
 import { createDocumentHandler } from './CreateDocument';
 import { createProjectHandler } from './CreateProject';
 import { createTagHandler } from './CreateTag';
@@ -37,6 +53,7 @@ import {
   getEntityPropertiesHandler,
   setEntityPropertyHandler,
 } from './Properties';
+import { readActivityHandler } from './ReadActivity';
 import { readCallRecordHandler } from './ReadCallRecord';
 import {
   readChannelMessageContextHandler,
@@ -48,8 +65,15 @@ import { readContentHandler } from './ReadContent';
 import { readMetadataHandler } from './ReadMetadata';
 import { readProjectHandler } from './ReadProject';
 import { readThreadHandler } from './ReadThread';
+import {
+  createReminderHandler,
+  deleteReminderHandler,
+  listRemindersHandler,
+  updateReminderHandler,
+} from './Reminders';
 import { renameDocumentHandler } from './RenameDocument';
 import { contentSearchHandler, nameSearchHandler } from './Search';
+import { listSkillsHandler, searchSkillsHandler } from './SearchSkills';
 import { searchToolsHandler } from './SearchTools';
 import { selfKnowledgeHandler } from './SelfKnowledge';
 import { sendChannelMessageHandler } from './SendChannelMessage';
@@ -68,6 +92,18 @@ import { webFetchHandler } from './WebFetch';
 import { webSearchHandler } from './WebSearch';
 
 const toolHandlers: ToolHandlerMap<RenderContext> = {
+  ConfigureBot: configureBotHandler,
+  CreateBot: createBotHandler,
+  DeleteBot: deleteBotHandler,
+  GetBotWebhooks: getBotWebhooksHandler,
+  IssueBotCredential: issueBotCredentialHandler,
+  ListBots: listBotsHandler,
+  ManageBotChannelAccess: manageBotChannelAccessHandler,
+  CreateCalendarEvent: createCalendarEventHandler,
+  UpdateCalendarEvent: updateCalendarEventHandler,
+  DeleteCalendarEvent: deleteCalendarEventHandler,
+  ListCalendarEvents: listCalendarEventsHandler,
+  ListCalendars: listCalendarsHandler,
   CreateImportEntity: createImportEntityHandler,
   DeleteImportEntity: deleteImportEntityHandler,
   ImportNotionPage: importNotionPageHandler,
@@ -78,7 +114,9 @@ const toolHandlers: ToolHandlerMap<RenderContext> = {
   ListEntities: listEntitiesHandler,
   ListInboxes: listInboxesHandler,
   ListLabels: listLabelsHandler,
+  ListSkills: listSkillsHandler,
   ListNotifications: listNotificationsHandler,
+  ListReminders: listRemindersHandler,
   ListTags: listTagsHandler,
   ListTeamMembers: listTeamMembersHandler,
   LoadTools: loadToolsHandler,
@@ -90,12 +128,15 @@ const toolHandlers: ToolHandlerMap<RenderContext> = {
   ContentSearch: contentSearchHandler,
   CreateDocument: createDocumentHandler,
   CreateProject: createProjectHandler,
+  CreateReminder: createReminderHandler,
   CreateTag: createTagHandler,
+  DeleteReminder: deleteReminderHandler,
   DeleteTag: deleteTagHandler,
   EditDocument: editDocumentHandler,
   EditTag: editTagHandler,
   GetThread: getThreadHandler,
   NameSearch: nameSearchHandler,
+  ReadActivity: readActivityHandler,
   ReadCallRecord: readCallRecordHandler,
   ReadChannelMessageContext: readChannelMessageContextHandler,
   ReadChannelMessages: readChannelMessagesHandler,
@@ -106,6 +147,7 @@ const toolHandlers: ToolHandlerMap<RenderContext> = {
   ReadMetadata: readMetadataHandler,
   ReadProject: readProjectHandler,
   RenameDocument: renameDocumentHandler,
+  SearchSkills: searchSkillsHandler,
   SearchTools: searchToolsHandler,
   SelfKnowledge: selfKnowledgeHandler,
   SendChannelMessage: sendChannelMessageHandler,
@@ -114,6 +156,7 @@ const toolHandlers: ToolHandlerMap<RenderContext> = {
   BulkSetEntityPropertyOptions: bulkSetEntityPropertyOptionsHandler,
   Subagent: subagentHandler,
   TextEditorCodeExecution: textEditorCodeExecutionHandler,
+  UpdateReminder: updateReminderHandler,
   UpdateThreadLabels: updateThreadLabelsHandler,
   WebFetch: webFetchHandler,
   WebSearch: webSearchHandler,

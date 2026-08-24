@@ -185,6 +185,15 @@ impl CompaniesRepository for StubRepo {
         unimplemented!()
     }
 
+    async fn get_contact_by_email_for_team(
+        &self,
+        _team_id: &uuid::Uuid,
+        _email: &str,
+        _include_hidden: bool,
+    ) -> Result<Option<CrmContact>, CrmError> {
+        unimplemented!()
+    }
+
     async fn get_company_for_team(
         &self,
         _team_id: &uuid::Uuid,

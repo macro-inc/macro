@@ -385,6 +385,7 @@ export function useCreateTeamWithInvitesMutation(
               auto_join_domain: null,
               enterprise: false,
               allow_non_admin_invites: true,
+              default_link_share: 'TEAM',
             };
 
             queryClient.setQueryData<Team[]>(

@@ -38,7 +38,7 @@ import {
   SoupViewTabs,
   useApplyPreset,
 } from '@app/features/next-soup/soup-view/soup-view-tabs';
-import { useIsNewInboxEnabled } from '@app/features/next-soup/soup-view/use-is-new-inbox-enabled';
+import { useIsInboxView } from '@app/features/next-soup/soup-view/use-is-inbox-view';
 import { CompanyKanban } from '@app/features/next-soup/soup-view/views/companies/CompanyKanban';
 import { CompanyListEntity } from '@app/features/next-soup/soup-view/views/companies/CompanyListEntity';
 import { ResponsiveCompanyListHeader } from '@app/features/next-soup/soup-view/views/companies/CompanyListHeader';
@@ -49,6 +49,7 @@ import { TaskListEntity } from '@app/features/next-soup/soup-view/views/tasks/Ta
 import { ResponsiveTaskListHeader } from '@app/features/next-soup/soup-view/views/tasks/TaskListHeader';
 import { TaskGroupHeader } from '@app/features/next-soup/soup-view/views/tasks/task-group-header';
 import {
+  markReminderSeenOnOpen,
   openEntityInNewTab,
   openEntityInSplitFromUnifiedList,
   preventDuplicatePreviewEntityOpen,
@@ -60,7 +61,6 @@ import { CrmStageIcon } from '@companies/crm/StageIcon';
 import type { CrmViewConfig } from '@companies/crm/saved-views';
 import { useCrmUnavailable } from '@companies/crm/team-crm-config';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
-import { FloatRegion } from '@components/app/mobile/float-regions/FloatRegion';
 import { PullToRefresh } from '@components/app/mobile/PullToRefresh';
 import { SwipableRowProvider } from '@components/app/mobile/SwipableRow';
 import { CollapsibleHeaderItem } from '@components/app/split-layout/components/CollapsibleItem';
@@ -80,7 +80,7 @@ import {
 } from '@core/dom-selectors';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
-import { isMobile } from '@core/mobile/isMobile';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { openExternalUrl } from '@core/util/url';
 import { useIsKeyPressActive } from '@core/util/useIsKeyPressActive';
 import {
@@ -208,6 +208,11 @@ const DEFAULT_PREVIEW_VIEWS = new Set(['inbox', 'channels']);
 const CONDENSED_NARROW_LIST_VIEWS: ReadonlySet<ListView> = new Set([
   'channels',
 ]);
+// Mixed-type lists render every entity as one specially designed line (see
+// NarrowSingleLineLayout) instead of the taller per-type narrow layouts.
+const SINGLE_LINE_NARROW_LIST_VIEWS: ReadonlySet<ListView> = new Set([
+  'search',
+]);
 type SoupListEntryState = {
   focus: string | undefined;
   virtualCache?: CacheSnapshot;
@@ -230,6 +235,13 @@ interface SoupViewProps {
   initialGroupBy?: string;
   disableLocalSearch?: boolean;
   /**
+   * Client sort ids applied when the user has no persisted sort preference.
+   * Defaults to `['updated_at']`. Pass `[]` for views whose ordering is the
+   * server's (e.g. Recent's touched-by-me order) so rows render as paged —
+   * an explicit user sort still wins once chosen.
+   */
+  initialClientSort?: string[];
+  /**
    * Client-side entities to merge into the soup results. Useful for entity
    * types (e.g. automation) that don't come back from the soup API.
    * Visibility is controlled by the active client filter set — use a tab
@@ -247,7 +259,7 @@ export const SoupView = (props: SoupViewProps) => {
   const soup = useSoup();
   const panel = useSplitPanelOrThrow();
   const soupView = useSoupView();
-  const isNewInboxEnabled = useIsNewInboxEnabled();
+  const isInboxView = useIsInboxView();
   const openFocusedEntityInPreview = () => {
     const focusedRow = soup.focus.row();
     if (
@@ -350,9 +362,17 @@ export const SoupView = (props: SoupViewProps) => {
         ? (initialCrmView.groupBy ?? undefined)
         : (persistedGroupBy ?? props.initialGroupBy);
 
-      let initialSortIds = initialCrmView?.sort ?? sortPref();
+      // The inbox exposes no sort control on either desktop (the toolbar
+      // hides SoupViewContextSort) or mobile, so its order is always
+      // updated_at. Ignore any sort persisted back when the control was
+      // reachable: honoring it would pin the list to an order the user can
+      // no longer change.
+      let initialSortIds =
+        contentId === 'inbox'
+          ? ['updated_at']
+          : (initialCrmView?.sort ?? sortPref());
       if (initialSortIds.length === 0) {
-        initialSortIds = ['updated_at'];
+        initialSortIds = props.initialClientSort ?? ['updated_at'];
       }
 
       const persistedViewActiveTab = isListViewID(contentId)
@@ -500,7 +520,6 @@ export const SoupView = (props: SoupViewProps) => {
   const isBoardRendered = createMemo(() => isBoardMode() && !crmUnavailable());
 
   const [narrowSearchExpanded, setNarrowSearchExpanded] = createSignal(false);
-  const [mobileSearchOpen, setMobileSearchOpen] = createSignal(false);
   const [searchIsCollapsed, setSearchIsCollapsed] = createSignal(false);
 
   registerHotkey({
@@ -510,11 +529,6 @@ export const SoupView = (props: SoupViewProps) => {
     registrationType: 'add',
     description: 'Search',
     keyDownHandler: () => {
-      if (isMobile()) {
-        if (mobileSearchOpen()) return false;
-        setMobileSearchOpen(true);
-        return true;
-      }
       if (narrowSearchExpanded() || !searchIsCollapsed()) return false;
       setNarrowSearchExpanded(true);
       return true;
@@ -532,12 +546,19 @@ export const SoupView = (props: SoupViewProps) => {
             class={cn(
               'h-full flex gap-3 @max-[380px]/split-header:gap-2 items-center',
               {
-                'shrink-0': !narrowSearchExpanded(),
-                'flex-1 min-w-0': narrowSearchExpanded(),
+                'shrink-0': !isTouchDevice() && !narrowSearchExpanded(),
+                'flex-1 min-w-0': !isTouchDevice() && narrowSearchExpanded(),
+                'w-full flex-1 min-w-0': isTouchDevice(),
               }
             )}
           >
-            <Show when={!isMobile() && !narrowSearchExpanded()}>
+            {/* On mobile/tablet the header strip hosts the filter pills instead of
+                the view title (the bottom accessory region now belongs to the
+                global views row). */}
+            <Show when={isTouchDevice()}>
+              <MobileSoupViewTabs />
+            </Show>
+            <Show when={!isTouchDevice() && !narrowSearchExpanded()}>
               <div class="flex items-center gap-1">
                 <span class="text-sm font-semibold">{props.viewName}</span>
                 <Show when={docsUrl()}>
@@ -557,7 +578,7 @@ export const SoupView = (props: SoupViewProps) => {
             <Show
               when={!narrowSearchExpanded() && !isComponentListView('search')}
             >
-              <Show when={!isMobile()}>
+              <Show when={!isTouchDevice()}>
                 <CollapsibleHeaderItem
                   id="tabs"
                   priority={1}
@@ -576,7 +597,7 @@ export const SoupView = (props: SoupViewProps) => {
             </Show>
             <Show
               when={
-                !isMobile() &&
+                !isTouchDevice() &&
                 !narrowSearchExpanded() &&
                 isComponentListView('mail')
               }
@@ -585,7 +606,7 @@ export const SoupView = (props: SoupViewProps) => {
             </Show>
           </div>
         </SplitHeaderLeft>
-        <Show when={!isMobile()}>
+        <Show when={!isTouchDevice()}>
           <SplitHeaderRight>
             <Show
               when={
@@ -684,20 +705,16 @@ export const SoupView = (props: SoupViewProps) => {
             <SoupViewList />
           </Show>
         </Suspense>
-        <Show when={isMobile()}>
-          <FloatRegion region="accessory">
-            <MobileSoupViewTabs />
-          </FloatRegion>
-        </Show>
       </div>
       <Suspense>
-        {/* The board hides the AI bar: it floats over the bottom edge, where
-            it would cover the board's horizontal scrollbar. */}
+        {/* The board and Preview Controller hide the AI bar: it floats over
+            content that is already constrained in both layouts. */}
         <Show
           when={
             ENABLE_UNIFIED_LIST_AI_INPUT &&
-            !isMobile() &&
-            !isNewInboxEnabled() &&
+            !isTouchDevice() &&
+            !isInboxView() &&
+            !panel.handle.isControllerSplit() &&
             !isBoardRendered() &&
             !isComponentListView('search')
           }
@@ -764,9 +781,9 @@ const SoupViewListContent = (props: SoupViewListProps) => {
 
   const narrowLayout = createMemo<NarrowLayoutVariant>(() => {
     const view = currentView();
-    return view && CONDENSED_NARROW_LIST_VIEWS.has(view)
-      ? 'condensed'
-      : 'standard';
+    if (!view) return 'standard';
+    if (SINGLE_LINE_NARROW_LIST_VIEWS.has(view)) return 'single-line';
+    return CONDENSED_NARROW_LIST_VIEWS.has(view) ? 'condensed' : 'standard';
   });
 
   const focusFirstEntity = () => {
@@ -830,7 +847,20 @@ const SoupViewListContent = (props: SoupViewListProps) => {
   createEffect(() => {
     const ref = soupViewRef();
     if (!ref) return;
-    queueMicrotask(() => ref.focus());
+    queueMicrotask(() => {
+      // Claiming the hotkey scope must not yank focus from active text entry
+      // — e.g. the mobile dock search input, whose session swaps this view in
+      // via the pill row while the user keeps typing (blurring it would drop
+      // the virtual keyboard).
+      const active = document.activeElement;
+      if (
+        active instanceof HTMLElement &&
+        (active.isContentEditable || active.matches('input, textarea'))
+      ) {
+        return;
+      }
+      ref.focus();
+    });
   });
 
   const [attachHotkeys, soupViewScope] = useHotkeyDOMScope('soup-view');
@@ -863,13 +893,13 @@ const SoupViewListContent = (props: SoupViewListProps) => {
   // Register soup view hotkeys (jump navigation, enter, escape, cmd+k, etc.)
   const { applyTabPreset } = useApplyPreset();
 
-  const isNewInboxEnabled = useIsNewInboxEnabled();
+  const isInboxView = useIsInboxView();
 
-  // The per-row component depends on the active view (and the inbox flag).
+  // The per-row component depends on the active view.
   const listEntityComponent = () => {
     if (currentView() === 'tasks') return TaskListEntity;
     if (currentView() === 'companies') return CompanyListEntity;
-    if (isNewInboxEnabled()) return InboxListEntity;
+    if (isInboxView()) return InboxListEntity;
     return ListEntity;
   };
 
@@ -925,6 +955,8 @@ const SoupViewListContent = (props: SoupViewListProps) => {
     const entity = (
       type === 'entity' ? args.entity : args.projectEntity
     ) as EntityData;
+
+    markReminderSeenOnOpen(entity, notificationSource);
 
     // FIXME: this never gets called because we have overrides
     if (event.metaKey || event.ctrlKey) {
@@ -1197,10 +1229,10 @@ const SoupViewListContent = (props: SoupViewListProps) => {
       >
         <SoupViewFileDropzone>
           <div class="@container/u-list size-full unified-list-root flex flex-col relative no-select-children">
-            <Show when={isMobile() && source.isPlaceholderData()}>
+            <Show when={isTouchDevice() && source.isPlaceholderData()}>
               <MobileTabLoadingBar />
             </Show>
-            <Show when={isMobile()}>
+            <Show when={isTouchDevice()}>
               <PullToRefresh
                 scrollContainer={() =>
                   showEmptyState() ? emptyStateRef() : listScrollerRef()
@@ -1218,7 +1250,7 @@ const SoupViewListContent = (props: SoupViewListProps) => {
                   {/* Non-list states pad the chrome top themselves — the
                         panel leaves list views unpadded so rows can
                         under-scroll the status bar. */}
-                  <div class="flex-1 min-h-0 flex flex-col mobile:pt-(--mobile-content-inset-top) mobile:pb-(--mobile-content-inset-bottom)">
+                  <div class="flex-1 min-h-0 flex flex-col touch:pt-(--mobile-content-inset-top) touch:pb-(--mobile-content-inset-bottom)">
                     <LoadingBlock />
                   </div>
                 </Match>
@@ -1229,7 +1261,7 @@ const SoupViewListContent = (props: SoupViewListProps) => {
                     !isPullRefreshing()
                   }
                 >
-                  <div class="flex items-center gap-2 p-3 text-xs text-text-muted mobile:mt-(--mobile-content-inset-top) mobile:mb-(--mobile-content-inset-bottom)">
+                  <div class="flex items-center gap-2 p-3 text-xs text-ink-muted touch:mt-(--mobile-content-inset-top) touch:mb-(--mobile-content-inset-bottom)">
                     <Spinner class="size-3 animate-spin" />
                     Searching...
                   </div>
@@ -1237,7 +1269,7 @@ const SoupViewListContent = (props: SoupViewListProps) => {
                 <Match when={showEmptyState()}>
                   <div
                     ref={setEmptyStateRef}
-                    class="flex-1 min-h-0 flex flex-col mobile:pt-(--mobile-content-inset-top) mobile:pb-(--mobile-content-inset-bottom)"
+                    class="flex-1 min-h-0 flex flex-col touch:pt-(--mobile-content-inset-top) touch:pb-(--mobile-content-inset-bottom)"
                   >
                     <EmptyState
                       listView={currentView()}
@@ -1253,10 +1285,12 @@ const SoupViewListContent = (props: SoupViewListProps) => {
                     ref={localEntityListRef}
                     narrowLayout={narrowLayout()}
                   >
-                    <Show when={currentView() === 'tasks' && !isMobile()}>
+                    <Show when={currentView() === 'tasks' && !isTouchDevice()}>
                       <ResponsiveTaskListHeader class="shrink-0" />
                     </Show>
-                    <Show when={currentView() === 'companies' && !isMobile()}>
+                    <Show
+                      when={currentView() === 'companies' && !isTouchDevice()}
+                    >
                       <ResponsiveCompanyListHeader class="shrink-0" />
                     </Show>
                     <SwipableRowProvider
@@ -1430,6 +1464,10 @@ const SoupViewListContent = (props: SoupViewListProps) => {
                                         soup.predicates.isActive('inbox') &&
                                         !soup.predicates.isActive('noise')
                                       }
+                                      isLastInGroup={(() => {
+                                        const next = rows()[i() + 1];
+                                        return !next || next.getIsGrouped();
+                                      })()}
                                       checked={row.isSelected()}
                                       onChecked={(
                                         next: boolean,
@@ -1493,7 +1531,7 @@ const SoupViewListContent = (props: SoupViewListProps) => {
                                     source.isFetchingNextPage())
                                 }
                               >
-                                <div class="flex items-center gap-2 p-3 text-xs text-text-muted">
+                                <div class="flex items-center gap-2 p-3 text-xs text-ink-muted">
                                   <Spinner class="size-3 animate-spin" />
                                   {source.isFetchingNextPage()
                                     ? 'Loading more...'
@@ -1503,7 +1541,7 @@ const SoupViewListContent = (props: SoupViewListProps) => {
                               <Show when={i() === rows().length - 1}>
                                 {/* Desktop-only: mobile clearance comes
                                       from the in-scroll trailing spacer. */}
-                                <div class="h-15 mobile:hidden" />
+                                <div class="h-15 touch:hidden" />
                               </Show>
                             </>
                           );
@@ -1570,9 +1608,11 @@ const SoupList = (props: SoupListProps) => {
   const [topSpacerRef, setTopSpacerRef] = createSignal<HTMLDivElement>();
   const topSpacerSize = createElementSize(topSpacerRef);
 
-  // Full-frame mobile: rows under-scroll the status bar; this in-scroll
+  // Full-frame touch devices: rows under-scroll the status bar; this in-scroll
   // spacer is their resting inset (safe-top — list views have no header).
-  const topInset = () => (isMobile() ? (topSpacerSize.height ?? 0) : 0);
+  // Keyed on touch, not width: an iPad is a full-frame native app but is wider
+  // than the mobile breakpoint, so a width check would leave it at 0.
+  const topInset = () => (isTouchDevice() ? (topSpacerSize.height ?? 0) : 0);
 
   const handleScroll = (offset: number) => {
     const handle = virtualizerHandle();
@@ -1629,7 +1669,7 @@ const SoupList = (props: SoupListProps) => {
         <div
           ref={setTopSpacerRef}
           aria-hidden
-          class="h-0 block sm:hidden mobile:h-(--mobile-content-inset-top)"
+          class="h-0 block touch:h-(--mobile-content-inset-top)"
         />
         <Virtualizer
           cache={props.cache}
@@ -1646,7 +1686,7 @@ const SoupList = (props: SoupListProps) => {
         >
           {(row, i) => props.children(row, i)}
         </Virtualizer>
-        <Show when={isMobile()}>
+        <Show when={isTouchDevice()}>
           <div aria-hidden class="h-(--mobile-content-inset-bottom)" />
         </Show>
       </div>

@@ -1,5 +1,8 @@
 //! Query for project access level.
 
+#[cfg(test)]
+mod test;
+
 use crate::{domain::models::AccessLevel, outbound::pg_access_repo::queries::SourceIds};
 use sqlx::PgPool;
 use std::str::FromStr;
@@ -16,11 +19,11 @@ pub async fn get_project_access(
         let access_level = sqlx::query_scalar!(
             r#"
             SELECT
-                "publicAccessLevel" as "access_level!"
-            FROM "SharePermission"
-            WHERE "isPublic" = true
-            AND "publicAccessLevel" IS NOT NULL
-            AND id IN (
+                sp."linkShareAccessLevel" AS "access_level!: AccessLevel"
+            FROM "SharePermission" sp
+            WHERE sp."linkShare" = 'PUBLIC'
+            AND sp."linkShareAccessLevel" IS NOT NULL
+            AND sp.id IN (
                 SELECT "sharePermissionId" FROM "ProjectPermission" WHERE "projectId" = $1
             )
 
@@ -30,7 +33,7 @@ pub async fn get_project_access(
         .fetch_optional(pool)
         .await?;
 
-        return Ok(access_level.and_then(|level| AccessLevel::from_str(&level).ok()));
+        return Ok(access_level);
     }
 
     let all_level_strings: Vec<Option<String>> = sqlx::query_scalar!(
@@ -44,14 +47,26 @@ pub async fn get_project_access(
             AND source_id = ANY($2)
 
             UNION ALL
-            -- Source 2: items share permission
+            -- Source 2: project link share permission
             SELECT
-                "publicAccessLevel"::text AS access_level
-            FROM "SharePermission"
-            WHERE "isPublic" = true
-            AND "publicAccessLevel" IS NOT NULL
-            AND id IN (
+                sp."linkShareAccessLevel"::text AS access_level
+            FROM "SharePermission" sp
+            WHERE sp."linkShareAccessLevel" IS NOT NULL
+            AND sp.id IN (
                 SELECT "sharePermissionId" FROM "ProjectPermission" WHERE "projectId" = $3
+            )
+            AND (
+                sp."linkShare" = 'PUBLIC'
+                OR (
+                    sp."linkShare" = 'TEAM'
+                    AND EXISTS (
+                        SELECT 1
+                        FROM "Project" p
+                        JOIN team_user owner_team ON owner_team.user_id = p."userId"
+                        WHERE p.id = $3
+                        AND owner_team.team_id::text = ANY($2)
+                    )
+                )
             )
         ) AS combined_access
         "#,

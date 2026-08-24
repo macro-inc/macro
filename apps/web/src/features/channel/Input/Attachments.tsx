@@ -213,8 +213,8 @@ export function Attachments(props: AttachmentsProps) {
       <div
         class={cn(
           'flex flex-row w-full p-2 gap-2 flex-wrap',
-          // On mobile, attachments scroll horizontally
-          'mobile:flex-nowrap mobile:*:shrink-0 mobile:overflow-x-auto mobile:scrollbar-hidden',
+          // On mobile/tablet, attachments scroll horizontally
+          'touch:flex-nowrap touch:*:shrink-0 touch:overflow-x-auto touch:scrollbar-hidden',
           local.class
         )}
         data-input-attachments={local.kind ?? 'all'}

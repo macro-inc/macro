@@ -184,7 +184,7 @@ export function ComposeLayout(props: {
     <div
       ref={registerRef('containerRef')}
       class={cn(
-        'mobile:pt-[calc(var(--mobile-content-inset-top)+.5rem)]',
+        'touch:pt-[calc(var(--mobile-content-inset-top)+.5rem)]',
         props.class
       )}
     >

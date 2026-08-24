@@ -3,6 +3,7 @@ use crate::types::request::WEB_FETCH_TOOL;
 use crate::types::response::ResponseContentKind;
 use crate::types::response::web_fetch::WebFetchResponse;
 use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
+use ai_toolset::{ToolAnnotated, ToolAnnotations};
 use async_trait::async_trait;
 use schemars::JsonSchema;
 use serde::Deserialize;
@@ -16,6 +17,12 @@ use serde::Deserialize;
 pub struct WebFetch {
     /// The URL to fetch or an instruction describing what to fetch.
     pub input: String,
+}
+
+impl ToolAnnotated for WebFetch {
+    const ANNOTATIONS: ToolAnnotations = ToolAnnotations::read_only("Fetch a web page")
+        .with_open_world()
+        .without_idempotent();
 }
 
 #[async_trait]

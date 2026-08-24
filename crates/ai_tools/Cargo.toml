@@ -8,6 +8,7 @@ version = "0.1.0"
 test-support = []
 
 [dependencies]
+activity = { path = "../activity", default-features = false, features = ["ai_tools", "outbound"] }
 agent = { path = "../agent" }
 ai_usage = { path = "../ai_usage" }
 anthropic = { path = "../anthropic", features = ["toolset"] }
@@ -15,9 +16,12 @@ attachment = { path = "../attachment" }
 non_empty = { path = "../non_empty" }
 ai_toolset = { path = "../ai_toolset" }
 anyhow.workspace = true
+bot_id = { path = "../bot_id" }
 async-trait.workspace = true
 axum = { workspace = true, features = ["macros"] }
 aws-sdk-sqs.workspace = true
+bots = { path = "../bots", default-features = false, features = ["ai_tools", "outbound"] }
+calendar_events = { path = "../calendar_events", features = ["ai_tools", "mutation-client", "postgres"] }
 call = { path = "../call", default-features = false, features = ["ai_tools", "outbound", "ports"] }
 chat = { path = "../chat", features = ["ai_tools", "outbound"] }
 channels = { path = "../channels", features = ["ai_tools", "outbound"] }
@@ -51,6 +55,8 @@ macro_event_broker = { path = "../macro_event_broker" }
 macro_queues = { path = "../macro_queues" }
 macro_user_id = { path = "../macro_user_id" }
 mcp_client = { path = "../mcp_client" }
+mcp_select = { path = "../mcp_select" }
+pipedream_mcp = { path = "../pipedream_mcp" }
 model = { path = "../model" }
 model-entity = { path = "../model-entity" }
 model_notifications = { path = "../model_notifications" }
@@ -66,12 +72,14 @@ models_soup = { path = "../models_soup" }
 rand.workspace = true
 reqwest.workspace = true
 readonly_pool = { path = "../readonly_pool" }
+reminders = { path = "../reminders", default-features = false, features = ["ai_tools", "postgres"] }
 rootcause = { workspace = true }
 schemars.workspace = true
 search_service_client = { path = "../search_service_client" }
 serde.workspace = true
 serde_json.workspace = true
 projects = { path = "../projects", default-features = false, features = ["ai_tools", "outbound", "service"] }
+skills = { path = "../skills", default-features = false, features = ["ai_tools", "outbound"] }
 properties = { path = "../properties", features = ["ai_tools"] }
 soup = { path = "../soup", features = ["ai_tools", "outbound"] }
 sqs_client = { path = "../sqs_client", default-features = false, features = ["email", "gmail"] }

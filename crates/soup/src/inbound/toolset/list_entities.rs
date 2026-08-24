@@ -1,10 +1,13 @@
 //! ListEntities tool for browsing workspace items.
 
 use crate::domain::{
-    models::{EnrichedSoupItem, SoupPropertiesField, SoupQuery, SoupRequest, SoupType},
+    models::{
+        EnrichedSoupItem, SoupPropertiesField, SoupQuery, SoupRequest, SoupSortDirection, SoupType,
+    },
     ports::SoupService,
 };
 use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
+use ai_toolset::{ToolAnnotated, ToolAnnotations};
 use async_trait::async_trait;
 use email::domain::{models::PreviewView, ports::EmailService};
 use filter_ast::Expr;
@@ -124,6 +127,8 @@ pub enum EntityItem {
         location: Option<String>,
         /// Optional conference join URL.
         conference_url: Option<String>,
+        /// Which conferencing system backs the join URL.
+        conference_provider: Option<String>,
         /// Canonical timed or all-day span.
         time: serde_json::Value,
         /// Tags on the event visible to the user.
@@ -140,7 +145,8 @@ pub enum EntityItem {
         /// The document's file type (e.g. md, pdf, docx), when known.
         #[serde(skip_serializing_if = "Option::is_none")]
         file_type: Option<String>,
-        /// The document's sub type: "task" for Macro tasks, "snippet" for snippets.
+        /// The document's sub type: "task" for Macro tasks, "snippet" for snippets,
+        /// "skill" for skills.
         #[serde(skip_serializing_if = "Option::is_none")]
         sub_type: Option<String>,
         /// Tags on the document visible to the user.
@@ -245,6 +251,7 @@ impl EntityItem {
                 status: event.status,
                 location: event.location,
                 conference_url: event.conference_url,
+                conference_provider: event.conference_provider,
                 time: serde_json::to_value(event.time).unwrap_or(serde_json::Value::Null),
                 tags: resolve_applied_tags(&event.extra.properties, tag_map),
             },
@@ -254,6 +261,7 @@ impl EntityItem {
                     match sub_type {
                         SoupDocumentSubType::Task { .. } => "task",
                         SoupDocumentSubType::Snippet {} => "snippet",
+                        SoupDocumentSubType::Skill {} => "skill",
                     }
                     .to_string()
                 }),
@@ -295,10 +303,13 @@ impl EntityItem {
                 created_by: record.created_by,
                 tags: resolve_applied_tags(&record.extra.properties, tag_map),
             },
-            // `entity_filter_ast` force-filters CrmCompany out — kept
-            // loud here so a contract break is obvious, not silent.
+            // `entity_filter_ast` force-filters CrmCompany and Reminder out —
+            // kept loud here so a contract break is obvious, not silent.
             SoupItem::CrmCompany(_) => {
                 unreachable!("ListEntities tool does not surface CrmCompany rows")
+            }
+            SoupItem::Reminder(_) => {
+                unreachable!("ListEntities tool does not surface Reminder rows")
             }
             SoupItem::ForeignEntity(foreign_entity) => EntityItem::ForeignEntity {
                 id: foreign_entity.id,
@@ -348,7 +359,8 @@ fn any_item_has_tags(items: &[EnrichedSoupItem]) -> bool {
             SoupItem::Channel(_)
             | SoupItem::ChannelThread(_)
             | SoupItem::Call(_)
-            | SoupItem::ForeignEntity(_) => return false,
+            | SoupItem::ForeignEntity(_)
+            | SoupItem::Reminder(_) => return false,
         };
         properties
             .iter()
@@ -390,7 +402,7 @@ pub struct ListEntities {
 
     /// Document entity AST filter.
     #[schemars(
-        description = "Full soup AST document filter (df). Use the same shape as /items/soup/ast, e.g. {\"l\":{\"id\":\"...\"}}. For Macro tasks, use {\"l\":{\"dst\":\"task\"}}. For \"completed yesterday\", AND the task subtype with updatedAt bounds, e.g. {\"&\":[{\"l\":{\"dst\":\"task\"}},{\"&\":[{\"l\":{\"ua\":{\"gte\":\"<start>\"}}},{\"l\":{\"ua\":{\"lt\":\"<end>\"}}}]}]} using ISO timestamps.",
+        description = "Full soup AST document filter (df). Use the same shape as /items/soup/ast, e.g. {\"l\":{\"id\":\"...\"}}. For Macro tasks, use {\"l\":{\"dst\":\"task\"}}; for skills, {\"l\":{\"dst\":\"skill\"}}. For \"completed yesterday\", AND the task subtype with updatedAt bounds, e.g. {\"&\":[{\"l\":{\"dst\":\"task\"}},{\"&\":[{\"l\":{\"ua\":{\"gte\":\"<start>\"}}},{\"l\":{\"ua\":{\"lt\":\"<end>\"}}}]}]} using ISO timestamps.",
         with = "Option<serde_json::Value>"
     )]
     #[serde(default, rename = "df")]
@@ -548,6 +560,9 @@ impl ListEntities {
             // AI never sees one.
             crm_company_filter: Some(Arc::new(Expr::val(CrmCompanyLiteral::Id(Uuid::nil())))),
             foreign_entity_filter: self.foreign_entity_filter.clone(),
+            // Reminders are opt-in in Soup, so leaving this unset is already
+            // what keeps them out of the tool surface — no force-filter needed.
+            reminder_filter: None,
             properties_filter,
         };
 
@@ -620,6 +635,8 @@ impl ListEntities {
             } else {
                 Some(Arc::new(Expr::val(ForeignEntityLiteral::Id(Uuid::nil()))))
             },
+            // Same as CrmCompany — no ItemType::Reminder to toggle against.
+            reminder_filter: ast.reminder_filter,
             properties_filter: ast.properties_filter,
         }
     }
@@ -641,6 +658,10 @@ impl ListEntities {
             .clone()
             .or_else(|| self.email_preset.is_some().then_some(vec![ItemType::Email]))
     }
+}
+
+impl ToolAnnotated for ListEntities {
+    const ANNOTATIONS: ToolAnnotations = ToolAnnotations::read_only("Browse workspace");
 }
 
 #[async_trait]
@@ -750,6 +771,8 @@ where
                     soup_type: SoupType::Expanded,
                     limit,
                     cursor: SoupQuery::new_sort_simple(sort_method, filters),
+                    // The tool has no ascending mode; newest first as before.
+                    sort_direction: SoupSortDirection::default(),
                     user: request_context.user_id.clone(),
                     email_preview_view,
                     link_ids,

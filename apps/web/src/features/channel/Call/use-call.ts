@@ -1,5 +1,6 @@
 import { analytics } from '@app/lib/analytics';
 import { useChannelsContext } from '@core/context/channels';
+import { useUserId } from '@core/context/user';
 import { throwOnErr } from '@core/util/result';
 import {
   invalidateActiveCallQueries,
@@ -10,6 +11,7 @@ import { useMutation } from '@tanstack/solid-query';
 import type { DisconnectReason } from 'livekit-client';
 import { createEffect, createSignal, onCleanup } from 'solid-js';
 import { useCallContext } from './CallContext';
+import { publishCallResolution } from './call-resolution';
 import { LK_DISCONNECT_REASON, LK_ROOM_EVENT } from './livekit-loader';
 import { registerCallKitCallEndedHandler } from './use-callkit';
 
@@ -55,7 +57,21 @@ let activeJoinAttempt: ActiveJoinAttempt | null = null;
 // Module-level guard: only one leave can be in flight at a time across all
 // useCall() instances. Prevents a user-initiated leave and a concurrent
 // CallKit call-ended event from both proceeding to disconnect+leaveMutation.
-let leaveInFlight = false;
+// Tracked as a start timestamp so a leave stuck on a hung network request
+// cannot silently swallow every later leave tap.
+const LEAVE_IN_FLIGHT_STALE_MS = 10_000;
+let leaveInFlightSince: number | null = null;
+
+function isLeaveInFlight(): boolean {
+  if (leaveInFlightSince === null) return false;
+  // Deliberately wall-clock, not performance.now(): the performance timeline
+  // freezes while iOS suspends the webview, so a monotonic delta would keep a
+  // pre-suspension leave "in flight" after resume — the stuck-leave symptom
+  // this latch exists to prevent.
+  const elapsed = Date.now() - leaveInFlightSince;
+  // A backwards wall-clock jump must release the latch, not extend it.
+  return elapsed >= 0 && elapsed < LEAVE_IN_FLIGHT_STALE_MS;
+}
 
 /**
  * Hook that orchestrates joining/leaving calls by combining
@@ -67,6 +83,7 @@ let leaveInFlight = false;
 export function useCall(channelId: () => string, options?: UseCallOptions) {
   const callCtx = useCallContext();
   const channelsCtx = useChannelsContext();
+  const userId = useUserId();
   const leaveMutation = useLeaveCallMutation();
 
   // Track the disconnect listener so we can swap it when the room changes.
@@ -81,7 +98,7 @@ export function useCall(channelId: () => string, options?: UseCallOptions) {
   }
 
   function scheduleAutoRejoin(reason?: DisconnectReason) {
-    if (leaveInFlight) return;
+    if (isLeaveInFlight()) return;
 
     if (!shouldAutoRejoin(reason)) {
       options?.onLeave?.();
@@ -176,6 +193,19 @@ export function useCall(channelId: () => string, options?: UseCallOptions) {
           channelTitle:
             channelsCtx.channelsById()[tokenResponse.channelId]?.name ?? null,
         });
+        if (cancelled) return;
+
+        // Publish only once the session is connected — a cancelled or
+        // timed-out join must not silence this user's ring on other tabs.
+        // (onError sets `cancelled` via cancelCurrentJoin.)
+        const answeringUserId = userId();
+        if (answeringUserId) {
+          publishCallResolution({
+            type: 'answered',
+            callId: tokenResponse.callId,
+            answeredBy: answeringUserId,
+          });
+        }
       };
 
       const timeout = new Promise<never>((_, reject) =>
@@ -260,8 +290,9 @@ export function useCall(channelId: () => string, options?: UseCallOptions) {
   };
 
   async function leaveCall(leaveOptions?: { endNativeCall?: boolean }) {
-    if (leaveInFlight) return;
-    leaveInFlight = true;
+    if (isLeaveInFlight()) return;
+    const leaveStartedAt = Date.now();
+    leaveInFlightSince = leaveStartedAt;
     const id = channelId();
     // Detach before disconnect so the RoomEvent.Disconnected handler
     // doesn't double-fire onLeave.
@@ -281,7 +312,11 @@ export function useCall(channelId: () => string, options?: UseCallOptions) {
         await leaveMutation.mutateAsync(id);
       }
     } finally {
-      leaveInFlight = false;
+      // A staled-out leave releases the guard to a newer attempt; don't let
+      // its late completion clear that newer attempt's claim.
+      if (leaveInFlightSince === leaveStartedAt) {
+        leaveInFlightSince = null;
+      }
     }
   }
 

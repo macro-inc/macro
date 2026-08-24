@@ -4,7 +4,7 @@
 use crate::{
     CalendarEventFilters, CallFilters, ChannelFilters, ChannelThreadFilters, ChatFilters,
     CrmCompanyFilters, DocumentFilters, EmailFilters, EntityFilters, ForeignEntityFilters,
-    ProjectFilters, PropertyFilter,
+    ProjectFilters, PropertyFilter, ReminderFilters,
     ast::{
         calendar_event::CalendarEventLiteral,
         call::CallLiteral,
@@ -15,6 +15,7 @@ use crate::{
         foreign_entity::ForeignEntityLiteral,
         project::ProjectLiteral,
         properties::PropertiesLiteral,
+        reminder::ReminderLiteral,
     },
 };
 use document::DocumentLiteral;
@@ -46,6 +47,8 @@ pub mod foreign_entity;
 pub mod project;
 /// contains the ast literal value for property-based filtering
 pub mod properties;
+/// contains the ast literal value for reminders
+pub mod reminder;
 
 #[cfg(test)]
 mod tests;
@@ -219,6 +222,10 @@ pub struct EntityFilterAst {
     #[serde(default, rename = "fef")]
     #[cfg_attr(feature = "schema", schema(value_type = serde_json::Value))]
     pub foreign_entity_filter: LiteralTree<ForeignEntityLiteral>,
+    /// the filters that should be applied to reminders
+    #[serde(default, rename = "remf")]
+    #[cfg_attr(feature = "schema", schema(value_type = serde_json::Value))]
+    pub reminder_filter: LiteralTree<ReminderLiteral>,
     /// the filters that should be applied based on entity properties
     #[serde(default, rename = "propf")]
     #[cfg_attr(feature = "schema", schema(value_type = serde_json::Value))]
@@ -268,6 +275,8 @@ impl EntityFilterAst {
                 entity_filter.foreign_entity_filters,
             )?
             .map(Arc::new),
+            reminder_filter: ReminderFilters::expand_ast(entity_filter.reminder_filters)?
+                .map(Arc::new),
             properties_filter: Vec::<PropertyFilter>::expand_ast(entity_filter.property_filters)?
                 .map(Arc::new),
         }))
@@ -305,6 +314,7 @@ impl EntityFilterAst {
             call_filter: None,
             crm_company_filter: None,
             foreign_entity_filter: None,
+            reminder_filter: None,
             properties_filter: None,
         }
     }
@@ -338,6 +348,7 @@ impl IsEmpty for EntityFilterAst {
             call_filter,
             crm_company_filter,
             foreign_entity_filter,
+            reminder_filter,
             properties_filter,
         } = self;
         calendar_event_filter.is_none()
@@ -350,6 +361,7 @@ impl IsEmpty for EntityFilterAst {
             && call_filter.is_none()
             && crm_company_filter.is_none()
             && foreign_entity_filter.is_none()
+            && reminder_filter.is_none()
             && properties_filter.is_none()
     }
 }

@@ -34,21 +34,21 @@ VALUES ('cccccccc-cccc-cccc-cccc-000000000001', 'Nested Chat', 'user-1', 'aaaaaa
        ('cccccccc-cccc-cccc-cccc-000000000003', 'Private Chat', 'user-1', NULL);
 
 -- Add SharePermission records. This is the new data for testing public access.
-INSERT INTO public."SharePermission" ("id", "isPublic", "publicAccessLevel")
+INSERT INTO public."SharePermission" ("id", "linkShare", "linkShareAccessLevel")
 VALUES
     -- A public 'edit' permission. We'll attach this to the grandparent project.
-    ('sp-public-edit', true, 'edit'),
+    ('sp-public-edit', 'PUBLIC', 'edit'),
     -- A public 'view' permission. We'll attach this to the parent project.
-    ('sp-public-view', true, 'view'),
-    -- A *private* 'owner' permission. This MUST be ignored by the query.
-    ('sp-private-owner', false, 'owner');
+    ('sp-public-view', 'PUBLIC', 'view'),
+    -- A private permission with no link-level access.
+    ('sp-private-owner', NULL, NULL);
 
 -- Link share permissions to projects.
 INSERT INTO public."ProjectPermission" ("projectId", "sharePermissionId")
 VALUES ('aaaaaaaa-aaaa-aaaa-aaaa-000000000001', 'sp-public-edit'),
        ('aaaaaaaa-aaaa-aaaa-aaaa-000000000002', 'sp-public-view');
 
--- Link the private share permission to the chat to test the "isPublic" filter.
+-- Link the private share permission to the chat to test the NULL link share filter.
 INSERT INTO public."ChatPermission" ("chatId", "sharePermissionId")
 VALUES ('cccccccc-cccc-cccc-cccc-000000000001', 'sp-public-edit');
 
