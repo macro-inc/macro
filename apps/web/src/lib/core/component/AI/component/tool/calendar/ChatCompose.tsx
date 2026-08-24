@@ -363,6 +363,8 @@ function CalendarChatComposeContent(props: CalendarChatComposeProps) {
           <CalendarToolEventPreview
             controller={controller}
             eventId={`calendar-tool-preview:${props.toolCallId}`}
+            showPeriodLabel
+            showNavigationControls
             timeZone={
               props.initialData.time.kind === 'timed'
                 ? (props.initialData.time.timeZone ?? undefined)

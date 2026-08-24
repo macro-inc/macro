@@ -6,11 +6,15 @@ import { useCalendarSources } from '@app/features/calendar/hooks/use-calendar-so
 import type { CalendarPeriodView } from '@app/features/calendar/types';
 import { formatLocalDate } from '@app/features/calendar/utils/calendar-date';
 import { getDefaultCalendarTimeFormat } from '@app/features/calendar/utils/time-format';
+import CaretLeftIcon from '@phosphor/caret-left.svg';
+import CaretRightIcon from '@phosphor/caret-right.svg';
 import { createCalendarOccurrenceQueryRange } from '@queries/calendar/occurrences';
-import { cn } from '@ui';
+import { Button, cn } from '@ui';
 import {
   createEffect,
   createMemo,
+  createSignal,
+  type JSX,
   lazy,
   onCleanup,
   Show,
@@ -33,6 +37,10 @@ const CalendarEmbed = lazy(() =>
 );
 
 const MAX_EXISTING_PREVIEW_EVENTS = 50;
+const PREVIEW_MONTH_YEAR_FORMAT = new Intl.DateTimeFormat(undefined, {
+  month: 'long',
+  year: 'numeric',
+});
 
 function previewScrollTime(date: Date) {
   const startMinutes = date.getHours() * 60 + date.getMinutes();
@@ -149,6 +157,12 @@ interface CalendarToolEventPreviewProps {
   controller: CalendarEventFormController;
   eventId: string;
   timeZone?: string;
+  /** Whether to display the preview date's month and year above the grid. */
+  showPeriodLabel?: boolean;
+  /** Whether to show previous/next controls in week and month views. */
+  showNavigationControls?: boolean;
+  /** Optional controls aligned to the right in place of built-in navigation. */
+  navigationControls?: JSX.Element;
   class?: string;
 }
 
@@ -188,8 +202,19 @@ export function CalendarToolEventPreview(props: CalendarToolEventPreviewProps) {
   const previewView = () => previewWindow()?.view ?? 'timeGridDay';
   const previewDayCount = () => previewWindow()?.dayCount;
   const previewLayoutKey = () => previewDayCount() ?? 'standard';
+  const [displayedWindow, setDisplayedWindow] =
+    createSignal<CalendarToolPreviewWindow>();
+  const [displayedDate, setDisplayedDate] = createSignal<Date>();
+  let activeGrid: CalendarGridHandle | undefined;
+  const visibleWindow = createMemo(() => {
+    const displayed = displayedWindow();
+    return displayed?.view === previewView() &&
+      displayed.dayCount === previewDayCount()
+      ? displayed
+      : previewWindow();
+  });
   const range = createMemo(() => {
-    const window = previewWindow();
+    const window = visibleWindow();
     return window
       ? createCalendarOccurrenceQueryRange(window.start, window.end)
       : undefined;
@@ -206,7 +231,7 @@ export function CalendarToolEventPreview(props: CalendarToolEventPreviewProps) {
   );
   const previewEvents = createMemo(() => {
     const event = previewEvent();
-    const window = previewWindow();
+    const window = visibleWindow();
     return event && window
       ? expandCalendarToolPreviewEvents(event, window)
       : [];
@@ -218,83 +243,165 @@ export function CalendarToolEventPreview(props: CalendarToolEventPreviewProps) {
   const eventsById = createMemo(
     () => new Map(events().map((event) => [event.id, event]))
   );
+  const showBuiltInNavigation = () =>
+    props.showNavigationControls === true && previewView() !== 'timeGridDay';
+  const showPreviewHeader = () =>
+    props.showPeriodLabel === true ||
+    showBuiltInNavigation() ||
+    props.navigationControls !== undefined;
+  const periodDate = () => {
+    const displayed = displayedWindow();
+    return displayed?.view === previewView() &&
+      displayed.dayCount === previewDayCount()
+      ? (displayedDate() ?? previewDate())
+      : previewDate();
+  };
+  const navigate = (direction: 'previous' | 'next') => {
+    const api = activeGrid?.api();
+    if (!api) return;
+    if (direction === 'previous') api.prev();
+    else api.next();
+  };
 
   return (
     <div
       role="region"
       aria-label="Calendar event preview"
       class={cn(
-        'calendar-tool-preview relative min-h-0 min-w-0 overflow-hidden rounded-xl border border-edge-muted bg-surface shadow-sm',
+        'calendar-tool-preview relative flex min-h-0 min-w-0 flex-col overflow-hidden rounded-xl border border-edge-muted bg-surface shadow-sm',
         props.class
       )}
     >
-      <Suspense
-        fallback={
-          <CalendarGridSkeleton showDayHeader={false} showAllDaySlot={false} />
-        }
-      >
-        <Show when={previewLayoutKey()} keyed>
-          {(layoutKey) => {
-            // FullCalendar cannot safely remove dayCount in place. Remount only
-            // when entering, leaving, or resizing an exact multi-day layout.
-            const dayCount =
-              typeof layoutKey === 'number' ? layoutKey : undefined;
-            const initialView = previewView();
-            return (
-              <CalendarEmbed
-                initialDate={previewDate() ?? new Date()}
-                events={events()}
-                eventsById={eventsById()}
-                emphasizedEventIds={emphasizedEventIds()}
-                settings={{
-                  initialView,
-                  dayCount,
-                  showDayHeaders: previewView() !== 'timeGridDay',
-                  useNarrowDayHeaders: false,
-                  collapseEmptyAllDaySlot: true,
-                  showWeekends: true,
-                  weekStartsOn: 0,
-                  timeFormat: getDefaultCalendarTimeFormat(),
-                }}
-                selection={{
-                  color: previewColor() ?? 'var(--color-accent)',
-                }}
-              >
-                {(grid) => (
-                  <CalendarPreviewViewport
-                    grid={grid}
-                    start={editorStart()}
-                    allDay={editorAllDay()}
-                    view={previewView()}
-                    initialView={initialView}
-                    dayCount={dayCount}
-                    eventIds={emphasizedEventIds()}
-                  />
-                )}
-              </CalendarEmbed>
-            );
-          }}
-        </Show>
-        <Show when={previewEvent() === undefined}>
-          <div class="pointer-events-none absolute inset-x-2 top-2 rounded-md border border-edge-muted bg-surface px-2 py-1 text-center text-xs text-ink-muted shadow-sm">
-            Enter an end time after the start time to preview this event.
-          </div>
-        </Show>
-        <Show when={occurrenceData.isLoading()}>
-          <div
-            role="status"
-            aria-label="Loading calendar events"
-            class="pointer-events-none absolute right-2 bottom-2 rounded-md border border-edge-muted bg-surface px-2 py-1 text-xs text-ink-muted shadow-sm"
+      <Show when={showPreviewHeader()}>
+        <div class="flex shrink-0 items-center border-b border-edge-muted px-3 py-2">
+          <Show when={props.showPeriodLabel ? periodDate() : undefined}>
+            {(date) => (
+              <div class="text-sm font-semibold text-ink">
+                {PREVIEW_MONTH_YEAR_FORMAT.format(date())}
+              </div>
+            )}
+          </Show>
+          <Show
+            when={
+              props.navigationControls !== undefined || showBuiltInNavigation()
+            }
           >
-            Loading events…
-          </div>
-        </Show>
-        <Show when={occurrenceData.occurrencesQuery.isError}>
-          <div class="absolute inset-x-2 bottom-2 rounded-md border border-edge-muted bg-surface px-2 py-1 text-center text-xs text-ink-muted shadow-sm">
-            Other calendar events couldn’t be loaded.
-          </div>
-        </Show>
-      </Suspense>
+            <div class="ml-auto flex shrink-0 items-center gap-1">
+              <Show
+                when={props.navigationControls !== undefined}
+                fallback={
+                  <>
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      class="rounded-lg"
+                      label={`Previous ${previewView() === 'dayGridMonth' ? 'month' : 'week'}`}
+                      onClick={() => navigate('previous')}
+                    >
+                      <CaretLeftIcon class="size-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      class="rounded-lg"
+                      label={`Next ${previewView() === 'dayGridMonth' ? 'month' : 'week'}`}
+                      onClick={() => navigate('next')}
+                    >
+                      <CaretRightIcon class="size-4" />
+                    </Button>
+                  </>
+                }
+              >
+                {props.navigationControls}
+              </Show>
+            </div>
+          </Show>
+        </div>
+      </Show>
+      <div class="relative min-h-0 flex-1">
+        <Suspense
+          fallback={
+            <CalendarGridSkeleton
+              showDayHeader={false}
+              showAllDaySlot={false}
+            />
+          }
+        >
+          <Show when={previewLayoutKey()} keyed>
+            {(layoutKey) => {
+              // FullCalendar cannot safely remove dayCount in place. Remount only
+              // when entering, leaving, or resizing an exact multi-day layout.
+              const dayCount =
+                typeof layoutKey === 'number' ? layoutKey : undefined;
+              const initialView = previewView();
+              return (
+                <CalendarEmbed
+                  initialDate={previewDate() ?? new Date()}
+                  events={events()}
+                  eventsById={eventsById()}
+                  emphasizedEventIds={emphasizedEventIds()}
+                  settings={{
+                    initialView,
+                    dayCount,
+                    showDayHeaders: previewView() !== 'timeGridDay',
+                    useNarrowDayHeaders: false,
+                    collapseEmptyAllDaySlot: true,
+                    showWeekends: true,
+                    weekStartsOn: 0,
+                    timeFormat: getDefaultCalendarTimeFormat(),
+                  }}
+                  selection={{
+                    color: previewColor() ?? 'var(--color-accent)',
+                  }}
+                  onDatesSet={(info) => {
+                    setDisplayedWindow({
+                      view: info.view.type as CalendarPeriodView,
+                      start: info.start,
+                      end: info.end,
+                      dayCount,
+                    });
+                    setDisplayedDate(info.view.calendar.getDate());
+                  }}
+                >
+                  {(grid) => {
+                    activeGrid = grid;
+                    return (
+                      <CalendarPreviewViewport
+                        grid={grid}
+                        start={editorStart()}
+                        allDay={editorAllDay()}
+                        view={previewView()}
+                        initialView={initialView}
+                        dayCount={dayCount}
+                        eventIds={emphasizedEventIds()}
+                      />
+                    );
+                  }}
+                </CalendarEmbed>
+              );
+            }}
+          </Show>
+          <Show when={previewEvent() === undefined}>
+            <div class="pointer-events-none absolute inset-x-2 top-2 rounded-md border border-edge-muted bg-surface px-2 py-1 text-center text-xs text-ink-muted shadow-sm">
+              Enter an end time after the start time to preview this event.
+            </div>
+          </Show>
+          <Show when={occurrenceData.isLoading()}>
+            <div
+              role="status"
+              aria-label="Loading calendar events"
+              class="pointer-events-none absolute right-2 bottom-2 rounded-md border border-edge-muted bg-surface px-2 py-1 text-xs text-ink-muted shadow-sm"
+            >
+              Loading events…
+            </div>
+          </Show>
+          <Show when={occurrenceData.occurrencesQuery.isError}>
+            <div class="absolute inset-x-2 bottom-2 rounded-md border border-edge-muted bg-surface px-2 py-1 text-center text-xs text-ink-muted shadow-sm">
+              Other calendar events couldn’t be loaded.
+            </div>
+          </Show>
+        </Suspense>
+      </div>
     </div>
   );
 }
