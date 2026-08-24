@@ -704,3 +704,44 @@ async fn an_expired_foreign_stream_falls_back_to_the_run_record() {
         "got {texts:?}"
     );
 }
+
+/// A stream that delivers the answer and then hangs open must not hold the
+/// turn open with it — seen live: the terminal `result` arrived minutes
+/// after the text, and the client showed "writing" long after the answer.
+/// Once the run's record says terminal, the turn closes from the record.
+#[tokio::test(start_paused = true)]
+async fn a_quiet_stream_closes_the_turn_from_the_run_record() {
+    let (service, cursor, notifier) = service(None);
+    let session = service.new_session(Path::new(""), Vec::new());
+
+    let events = cursor.script_stream();
+    events
+        .send(CursorEvent::Assistant {
+            text: "the whole answer".to_owned(),
+        })
+        .expect("stream open");
+    // The sender stays alive: the stream is open and silent, exactly the
+    // observed hang. The record already knows the run finished.
+    cursor.script_run_result(RunOutcome {
+        status: RunStatus::Finished,
+        text: Some("the whole answer".to_owned()),
+    });
+    cursor.script_run_result(RunOutcome {
+        status: RunStatus::Finished,
+        text: Some("the whole answer".to_owned()),
+    });
+
+    let stop = service
+        .prompt(&session, "hi")
+        .await
+        .expect("the turn closes despite the hanging stream");
+    assert_eq!(stop, StopReason::EndTurn);
+    drop(events);
+    // The live text is not repeated by the record-based closure.
+    let text_updates = notifier
+        .updates()
+        .iter()
+        .filter(|(_, update)| matches!(update, SessionUpdate::AgentMessageChunk { .. }))
+        .count();
+    assert_eq!(text_updates, 1);
+}

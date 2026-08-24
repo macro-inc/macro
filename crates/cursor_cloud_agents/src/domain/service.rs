@@ -42,6 +42,15 @@ const POLL_ATTEMPTS: usize = 450;
 /// Consecutive poll failures tolerated before the turn takes the error.
 const POLL_ERROR_TOLERANCE: usize = 5;
 
+/// A stream this quiet gets its run's record checked. Observed live: the
+/// final text arrives and the stream then hangs open, its terminal `result`
+/// minutes behind — and the client shows a turn still "writing" long after
+/// the answer is on screen. Long enough to never fire during ordinary
+/// streaming; short enough that a finished run closes its turn promptly. A
+/// still-running run (quiet tool work) just costs one status read per
+/// interval.
+const STREAM_QUIET_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
+
 /// How long a prompt waits behind a run something else started (the same
 /// agent is drivable from cursor.com) before giving up, in poll intervals.
 const BUSY_ATTEMPTS: usize = 450;
@@ -348,7 +357,33 @@ where
         // Whether any assistant text was delivered live, so a fallback knows
         // not to repeat it from the run's final result.
         let mut streamed_text = false;
-        while let Some(event) = stream.next().await {
+        loop {
+            let next = match tokio::time::timeout(STREAM_QUIET_TIMEOUT, stream.next()).await {
+                Ok(next) => next,
+                // The stream has gone quiet. If the run is already over, the
+                // stream's terminal event is the only thing anyone is waiting
+                // for — take the answer from the record instead of holding
+                // the turn open for it.
+                Err(_elapsed) => {
+                    match self.cursor.run_result(agent, run).await {
+                        Ok(outcome) if outcome.is_terminal() => {
+                            tracing::info!(
+                                %agent, %run, status = ?outcome.status,
+                                "run finished but its stream went quiet; closing the turn from the record"
+                            );
+                            return self
+                                .poll_turn(session_id, session, agent, run, streamed_text)
+                                .await;
+                        }
+                        Ok(_) => continue, // still running; keep listening
+                        Err(error) => {
+                            tracing::warn!(%agent, %run, %error, "quiet-stream status check failed");
+                            continue;
+                        }
+                    }
+                }
+            };
+            let Some(event) = next else { break };
             let event = match event {
                 Ok(event) => event,
                 Err(error) => {
