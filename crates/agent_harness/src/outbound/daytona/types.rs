@@ -77,6 +77,28 @@ impl GithubToken {
     }
 }
 
+/// API key sandboxes use to run Anthropic models.
+///
+/// opencode activates its `anthropic` provider on this variable's value —
+/// empty behaves like absent — so, like [`GithubToken`], it wraps a possibly
+/// empty string and is always injected. Empty means the sandbox has no model
+/// provider at all (`container/opencode.json` enables only `anthropic`), so
+/// managed sessions advertise no models and cannot prompt.
+#[derive(Clone)]
+pub struct AnthropicApiKey(String);
+
+impl AnthropicApiKey {
+    /// Wrap an Anthropic API credential.
+    #[must_use]
+    pub fn new(value: String) -> Self {
+        Self(value)
+    }
+
+    pub(crate) fn expose(&self) -> &str {
+        &self.0
+    }
+}
+
 /// Settings required to create Daytona-backed containers.
 pub struct DaytonaSettings {
     /// Base URL of the Daytona REST API.
@@ -87,4 +109,6 @@ pub struct DaytonaSettings {
     pub snapshot: Snapshot,
     /// Token with read access to the repository cloned into sandboxes.
     pub github_token: GithubToken,
+    /// Key sandboxes run Anthropic models with.
+    pub anthropic_api_key: AnthropicApiKey,
 }

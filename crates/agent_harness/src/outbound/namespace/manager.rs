@@ -11,7 +11,7 @@ use crate::domain::error::{HarnessError, Result};
 use crate::domain::model::SpawnContainer;
 use crate::domain::ports::ContainerManager;
 use crate::domain::sandbox::{SandboxResizeEffect, create_only_resize_effect, resources};
-use crate::outbound::daytona::GithubToken;
+use crate::outbound::daytona::{AnthropicApiKey, GithubToken};
 use crate::outbound::provision;
 use crate::outbound::sidecar::SidecarTransport;
 
@@ -21,6 +21,7 @@ pub struct NamespaceContainerManager {
     image_ref: super::types::ImageRef,
     lifetime: std::time::Duration,
     github_token: GithubToken,
+    anthropic_api_key: AnthropicApiKey,
 }
 
 impl NamespaceContainerManager {
@@ -33,12 +34,14 @@ impl NamespaceContainerManager {
             image_ref,
             lifetime,
             github_token,
+            anthropic_api_key,
         } = settings;
         Self {
             client: NamespaceClient::new(api_url, token),
             image_ref,
             lifetime,
             github_token,
+            anthropic_api_key,
         }
     }
 
@@ -91,6 +94,10 @@ impl ContainerManager for NamespaceContainerManager {
                 (
                     "GITHUB_TOKEN".to_owned(),
                     self.github_token.expose().to_owned(),
+                ),
+                (
+                    "ANTHROPIC_API_KEY".to_owned(),
+                    self.anthropic_api_key.expose().to_owned(),
                 ),
             ],
             exported_ports: vec![provision::SIDECAR_PORT],
