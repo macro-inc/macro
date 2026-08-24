@@ -40,7 +40,6 @@ pub async fn handler(
 
     Ok(Json(CursorApiKeyStatus {
         registered: stored.is_some(),
-        available: ctx.cursor_api_key_cipher.is_some(),
         updated_at: stored.map(|stored| stored.updated_at),
     }))
 }

@@ -3768,13 +3768,9 @@
       },
       "CursorApiKeyStatus": {
         "type": "object",
-        "description": "What settings needs to render the Cursor connection.\n\nDeliberately thin. `registered` drives the whole UI; `updatedAt` lets it say\nwhen the key was last replaced, which is the only thing a user can check\nagainst their own memory when a session starts failing.",
-        "required": ["registered", "available"],
+        "description": "What settings needs to render the Cursor connection.\n\nDeliberately thin. `registered` drives the whole UI; `updatedAt` lets it say\nwhen the key was last replaced, which is the only thing a user can check\nagainst their own memory when a session starts failing.\n\nDeliberately *not* reporting whether the deployment is configured to accept\nkeys. That is operator information: a user who sees it cannot act on it, and\nthe operator already learns it from the startup log. A misconfigured\ndeployment fails the save, which is the honest signal.",
+        "required": ["registered"],
         "properties": {
-          "available": {
-            "type": "boolean",
-            "description": "Whether this deployment accepts Cursor keys at all — false when no KMS\nkey is configured, so the UI can explain rather than fail on save."
-          },
           "registered": {
             "type": "boolean",
             "description": "Whether this user has a key stored."

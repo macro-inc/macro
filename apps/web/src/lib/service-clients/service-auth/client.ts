@@ -154,6 +154,35 @@ export type GithubReauthenticationErrorCode = 'REAUTHENTICATION_REQUIRED';
  *  so auto-join cannot be enabled for it. */
 export type ToggleAutoJoinDomainErrorCode = 'GENERIC_DOMAIN_NOT_ALLOWED';
 
+/**
+ * Surfaces the Cursor API key endpoints' own error message instead of a generic
+ * one derived from the status code.
+ *
+ * These endpoints answer with a body that already says what went wrong and is
+ * written to be safe to show a user — "value does not look like a Cursor API
+ * key", "this deployment does not accept Cursor API keys". The default handler
+ * throws that away and reports `HTTP error! status: 503`, which is how a
+ * misconfigured deployment ended up indistinguishable from a real failure.
+ */
+const cursorApiKeyErrorResponseHandler: ErrorResponseHandler<'CURSOR_API_KEY_ERROR'> =
+  async function handleCursorApiKeyErrorResponse(response) {
+    // Falls back to the status when the body is not the shape we expect: a
+    // failure to parse an error must not replace the error.
+    const message = await response
+      .json()
+      .then((body: unknown) =>
+        typeof body === 'object' && body !== null && 'message' in body
+          ? String((body as { message: unknown }).message)
+          : undefined
+      )
+      .catch(() => undefined);
+
+    return {
+      code: 'CURSOR_API_KEY_ERROR',
+      message: message ?? `HTTP error! status: ${response.status}`,
+    };
+  };
+
 const githubErrorResponseHandler: ErrorResponseHandler<GithubReauthenticationErrorCode> =
   async function handleGithubErrorResponse(response) {
     switch (response.status) {
@@ -528,9 +557,13 @@ export const authServiceClient = {
    */
   async getCursorApiKeyStatus() {
     return (
-      await fetchWithAuth<CursorApiKeyStatus>(`${authHost}/cursor-api-key`, {
-        method: 'GET',
-      })
+      await fetchWithAuth<CursorApiKeyStatus, 'CURSOR_API_KEY_ERROR'>(
+        `${authHost}/cursor-api-key`,
+        {
+          method: 'GET',
+          errorResponseHandler: cursorApiKeyErrorResponseHandler,
+        }
+      )
     ).map((result) => result);
   },
 
@@ -542,10 +575,14 @@ export const authServiceClient = {
    */
   async putCursorApiKey(apiKey: string) {
     return (
-      await fetchWithAuth<CursorApiKeyStatus>(`${authHost}/cursor-api-key`, {
-        method: 'PUT',
-        body: JSON.stringify({ apiKey }),
-      })
+      await fetchWithAuth<CursorApiKeyStatus, 'CURSOR_API_KEY_ERROR'>(
+        `${authHost}/cursor-api-key`,
+        {
+          method: 'PUT',
+          body: JSON.stringify({ apiKey }),
+          errorResponseHandler: cursorApiKeyErrorResponseHandler,
+        }
+      )
     ).map((result) => result);
   },
 
@@ -557,9 +594,13 @@ export const authServiceClient = {
    */
   async deleteCursorApiKey() {
     return (
-      await fetchWithAuth<CursorApiKeyStatus>(`${authHost}/cursor-api-key`, {
-        method: 'DELETE',
-      })
+      await fetchWithAuth<CursorApiKeyStatus, 'CURSOR_API_KEY_ERROR'>(
+        `${authHost}/cursor-api-key`,
+        {
+          method: 'DELETE',
+          errorResponseHandler: cursorApiKeyErrorResponseHandler,
+        }
+      )
     ).map((result) => result);
   },
 

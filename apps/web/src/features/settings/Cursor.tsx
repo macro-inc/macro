@@ -13,12 +13,18 @@ import { IntegrationRow, SettingsCard, SettingsRow } from './primitives';
 const CURSOR_KEY_PREFIX = 'crsr_';
 
 /**
- * Cursor as a Connected-accounts card.
+ * The message a failed request carried, when it carried one.
  *
- * Unlike GitHub and Gmail there is no OAuth flow to start — Cursor issues API
- * keys, so the user pastes one. That difference drives the whole shape of this
- * card: an input rather than a Connect button, and no way to read the key back
- * afterwards.
+ * `ThrownResultError` joins its errors' messages, and for these endpoints those
+ * are the server's own text.
+ */
+function errorMessage(error: unknown): string | undefined {
+  const message = error instanceof Error ? error.message.trim() : '';
+  return message.length > 0 ? message : undefined;
+}
+
+/**
+ * Cursor as a Connected-accounts card.
  */
 export function CursorCard() {
   const status = useCursorApiKeyStatusQuery();
@@ -27,9 +33,6 @@ export function CursorCard() {
 
   const [apiKey, setApiKey] = createSignal('');
   const registered = () => status.data?.registered ?? false;
-  // False when the deployment has no KMS key configured. Saving would fail, so
-  // the field is disabled with an explanation rather than left to 503.
-  const available = () => status.data?.available ?? false;
 
   const handleSave = async () => {
     const key = apiKey().trim();
@@ -43,8 +46,13 @@ export function CursorCard() {
       // there is nothing to edit afterwards — replacing means pasting again.
       setApiKey('');
       toast.success('Cursor connected');
-    } catch {
-      toast.failure('Failed to save your Cursor API key');
+    } catch (error) {
+      // The server's message, not a generic one: it distinguishes a key we
+      // rejected from a deployment that cannot accept keys at all, and both
+      // are written to be shown.
+      toast.failure(
+        errorMessage(error) ?? 'Failed to save your Cursor API key'
+      );
     }
   };
 
@@ -52,8 +60,8 @@ export function CursorCard() {
     try {
       await disconnect.mutateAsync();
       toast.success('Cursor disconnected');
-    } catch {
-      toast.failure('Failed to disconnect Cursor');
+    } catch (error) {
+      toast.failure(errorMessage(error) ?? 'Failed to disconnect Cursor');
     }
   };
 
@@ -62,7 +70,7 @@ export function CursorCard() {
       <IntegrationRow
         icon={<span class="text-sm font-medium text-ink-muted">Cs</span>}
         title="Cursor"
-        description="Run @cursor sessions on your own Cursor account."
+        description="Run @cursor coding sessions on your Cursor account."
       />
 
       <SettingsRow
@@ -76,13 +84,7 @@ export function CursorCard() {
         }
         description={
           <Switch fallback="Paste a key from Cursor's dashboard. Macro stores it encrypted and never shows it again.">
-            <Match when={!available()}>
-              This deployment is not set up to accept Cursor API keys.
-            </Match>
-            <Match when={registered()}>
-              Stored encrypted. Removing it here does not revoke the key at
-              Cursor — do that in your Cursor account.
-            </Match>
+            <Match when={registered()}>Stored encrypted.</Match>
           </Switch>
         }
       >
@@ -101,7 +103,6 @@ export function CursorCard() {
                   class="settings-input ph-no-capture w-56"
                   placeholder={`${CURSOR_KEY_PREFIX}…`}
                   value={apiKey()}
-                  disabled={!available()}
                   onInput={(event) => setApiKey(event.currentTarget.value)}
                   onKeyDown={(event) => {
                     if (event.key === 'Enter') void handleSave();
@@ -111,9 +112,7 @@ export function CursorCard() {
                   variant="base"
                   size="sm"
                   depth={3}
-                  disabled={
-                    !available() || apiKey().length === 0 || saveKey.isPending
-                  }
+                  disabled={apiKey().length === 0 || saveKey.isPending}
                   onClick={handleSave}
                 >
                   Save

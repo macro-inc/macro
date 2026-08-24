@@ -34,14 +34,16 @@ pub fn router() -> Router<ApiContext> {
 /// Deliberately thin. `registered` drives the whole UI; `updatedAt` lets it say
 /// when the key was last replaced, which is the only thing a user can check
 /// against their own memory when a session starts failing.
+///
+/// Deliberately *not* reporting whether the deployment is configured to accept
+/// keys. That is operator information: a user who sees it cannot act on it, and
+/// the operator already learns it from the startup log. A misconfigured
+/// deployment fails the save, which is the honest signal.
 #[derive(Debug, serde::Serialize, serde::Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct CursorApiKeyStatus {
     /// Whether this user has a key stored.
     pub registered: bool,
-    /// Whether this deployment accepts Cursor keys at all — false when no KMS
-    /// key is configured, so the UI can explain rather than fail on save.
-    pub available: bool,
     /// When the stored key was last replaced, if there is one.
     pub updated_at: Option<chrono::DateTime<chrono::Utc>>,
 }

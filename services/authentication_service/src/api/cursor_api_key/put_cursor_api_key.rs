@@ -76,7 +76,6 @@ pub async fn handler(
 
     Ok(Json(CursorApiKeyStatus {
         registered: true,
-        available: true,
         updated_at: Some(stored.updated_at),
     }))
 }
