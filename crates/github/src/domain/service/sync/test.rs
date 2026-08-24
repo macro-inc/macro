@@ -15,7 +15,9 @@ use document_sub_type::DocumentSubType;
 use documents::domain::models::EditDocumentServiceArgs;
 use documents::domain::{
     content::{DocumentContent, DocumentContentLocation},
-    models::{CreateDocumentRepoArgs, DocumentError, LocationQueryParams},
+    models::{
+        CreateDocumentRepoArgs, DocumentError, ImportEmailAttachmentRepoArgs, LocationQueryParams,
+    },
     ports::DocumentService,
     response::{
         CreateDocumentResponseData, DocumentMetadataWithContent, DocumentResponse,
@@ -211,6 +213,14 @@ impl DocumentService for StubDocumentService {
         _user_id: MacroUserIdStr<'static>,
         _args: CreateDocumentRepoArgs,
         _job_id: Option<String>,
+    ) -> Result<CreateDocumentResponseData, DocumentError> {
+        unimplemented!()
+    }
+
+    async fn import_email_attachment(
+        &self,
+        _user_id: MacroUserIdStr<'static>,
+        _args: ImportEmailAttachmentRepoArgs,
     ) -> Result<CreateDocumentResponseData, DocumentError> {
         unimplemented!()
     }

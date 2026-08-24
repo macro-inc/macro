@@ -23,7 +23,8 @@ use sqlx::Row;
 use crate::domain::content::{DocumentContent, DocumentContentState};
 use crate::domain::models::{
     BranchNameContext, Comment, CommentThread, CopyDocumentRepoArgs, CreateDocumentRepoArgs,
-    CreateDocumentRepoResult, DocumentTeamShare, EditDocumentRepoArgs, TeamTaskMetadata, Thread,
+    DocumentTeamShare, EditDocumentRepoArgs, EmailImportRepoOutcome, ImportEmailAttachmentRepoArgs,
+    TeamTaskMetadata, Thread,
 };
 use crate::domain::ports::DocumentRepo;
 
@@ -417,158 +418,69 @@ impl DocumentRepo for PgDocumentRepo {
         &self,
         args: CreateDocumentRepoArgs,
         share_permission: SharePermissionV2,
-    ) -> Result<CreateDocumentRepoResult, Self::Err> {
-        let CreateDocumentRepoArgs {
-            id,
-            sha,
-            document_name,
-            user_id,
-            file_type,
-            project_id,
-            team_id,
-            email_attachment_id,
-            created_at: provided_created_at,
-            sub_type: requested_sub_type,
-            skip_history,
-            attribution: _,
-        } = args;
+    ) -> Result<DocumentMetadata, Self::Err> {
+        let mut transaction = self.pool.begin().await?;
+        let metadata =
+            create::insert_new_document(&mut transaction, args, &share_permission).await?;
+        transaction.commit().await?;
+        Ok(metadata)
+    }
 
-        let now = chrono::Utc::now();
-        let created_at = provided_created_at.as_ref().unwrap_or(&now);
+    #[tracing::instrument(err, skip(self, args, share_permission))]
+    async fn import_email_attachment_document(
+        &self,
+        args: ImportEmailAttachmentRepoArgs,
+        share_permission: SharePermissionV2,
+    ) -> Result<EmailImportRepoOutcome, Self::Err> {
+        let ImportEmailAttachmentRepoArgs {
+            email_attachment_id,
+            create,
+        } = args;
 
         let mut transaction = self.pool.begin().await?;
 
-        if let Some(attachment_id) = email_attachment_id
-            && let Some(existing_id) = create::reuse_email_document(
-                &mut transaction,
-                user_id.as_ref(),
-                &sha,
-                attachment_id,
-            )
-            .await?
+        if let Some(existing_id) = create::reuse_email_document(
+            &mut transaction,
+            create.user_id.as_ref(),
+            &create.sha,
+            email_attachment_id,
+        )
+        .await?
         {
             transaction.commit().await?;
             let metadata = self.get_document_metadata(&existing_id).await?;
-            return Ok(CreateDocumentRepoResult {
-                metadata,
-                created: false,
-            });
+            return Ok(EmailImportRepoOutcome::Reused(metadata));
         }
 
-        // Fetch project name if project_id provided
-        let project_name: Option<String> = if let Some(ref proj_id) = project_id {
-            sqlx::query_scalar!(
-                r#"SELECT name FROM "Project" WHERE id = $1"#,
-                &proj_id.to_string(),
-            )
-            .fetch_optional(&mut *transaction)
-            .await?
-        } else {
-            None
-        };
+        let metadata =
+            create::insert_new_document(&mut transaction, create, &share_permission).await?;
 
-        let document_id = create::insert_document_row(
+        match create::link_document_email(
             &mut transaction,
-            id.as_ref(),
-            &user_id,
-            &document_name,
-            file_type,
-            project_id.as_ref(),
-            created_at,
+            &metadata.document_id,
+            email_attachment_id,
         )
-        .await?;
-
-        // Insert document sub-type
-        let sub_type: Option<DocumentSubType> =
-            create::set_document_sub_type(&mut transaction, &document_id, requested_sub_type)
-                .await?;
-
-        if sub_type == Some(DocumentSubType::Task)
-            && let Some(team_id) = team_id.as_ref()
+        .await
         {
-            create::allocate_team_task_number(&mut transaction, team_id, &document_id).await?;
-        }
-
-        // Insert document version (DocumentBom for docx, DocumentInstance for others)
-        let document_version = create::set_document_version(
-            &mut transaction,
-            &document_id,
-            file_type,
-            sha,
-            created_at,
-        )
-        .await?;
-
-        // Create share permission
-        create::set_share_permission(&mut transaction, &document_id, &share_permission).await?;
-
-        // Add to user history (if not skipped)
-        if !skip_history {
-            create::insert_history(&mut transaction, &document_id, &user_id, created_at).await?;
-        }
-
-        // Insert user entity access (Owner level)
-        entity_access_db_utils::insert_entity_access_row(
-            &mut transaction,
-            &document_id,
-            entity_access_db_utils::EntityType::Document,
-            user_id.as_ref(),
-            entity_access_db_utils::EntityAccessSourceType::User,
-            entity_access_db_utils::AccessLevel::Owner,
-        )
-        .await?;
-
-        if let Some(attachment_id) = email_attachment_id {
-            match create::link_document_email(
-                &mut transaction,
-                &document_id.to_string(),
-                attachment_id,
-            )
-            .await
-            {
-                Ok(()) => {}
-                Err(sqlx::Error::Database(ref db_err)) if db_err.is_unique_violation() => {
-                    transaction.rollback().await?;
-                    let existing_id =
-                        create::find_document_id_for_email_attachment(&self.pool, attachment_id)
-                            .await?
-                            .ok_or_else(|| {
-                                sqlx::Error::Protocol(
-                                    "email attachment already linked but document is missing"
-                                        .into(),
-                                )
-                            })?;
-                    let metadata = self.get_document_metadata(&existing_id).await?;
-                    return Ok(CreateDocumentRepoResult {
-                        metadata,
-                        created: false,
-                    });
-                }
-                Err(e) => return Err(e),
+            Ok(()) => {}
+            Err(sqlx::Error::Database(ref db_err)) if db_err.is_unique_violation() => {
+                transaction.rollback().await?;
+                let existing_id =
+                    create::find_document_id_for_email_attachment(&self.pool, email_attachment_id)
+                        .await?
+                        .ok_or_else(|| {
+                            sqlx::Error::Protocol(
+                                "email attachment already linked but document is missing".into(),
+                            )
+                        })?;
+                let metadata = self.get_document_metadata(&existing_id).await?;
+                return Ok(EmailImportRepoOutcome::Reused(metadata));
             }
+            Err(e) => return Err(e),
         }
 
         transaction.commit().await?;
-
-        Ok(CreateDocumentRepoResult {
-            metadata: DocumentMetadata::new_document(
-                &document_id.to_string(),
-                document_version.id,
-                user_id,
-                &document_name,
-                file_type,
-                &document_version.sha,
-                None,
-                None,
-                None,
-                project_id.map(|s| s.to_string()).as_deref(),
-                project_name.as_deref(),
-                document_version.created_at,
-                document_version.updated_at,
-                sub_type,
-            ),
-            created: true,
-        })
+        Ok(EmailImportRepoOutcome::Created(metadata))
     }
 
     #[tracing::instrument(err, skip(self, args))]

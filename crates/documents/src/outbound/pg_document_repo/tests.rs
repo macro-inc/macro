@@ -11,8 +11,8 @@ use models_permissions::share_permission::{
 use sqlx::{Pool, Postgres, Row};
 
 use crate::domain::models::{
-    CopyDocumentRepoArgs, CreateDocumentRepoArgs, EditDocumentRepoArgs, FileTypeUpdate,
-    GithubPullRequest, GithubPullRequestsResponse,
+    CopyDocumentRepoArgs, CreateDocumentRepoArgs, EditDocumentRepoArgs, EmailImportRepoOutcome,
+    FileTypeUpdate, GithubPullRequest, GithubPullRequestsResponse, ImportEmailAttachmentRepoArgs,
 };
 use crate::domain::ports::DocumentRepo;
 use crate::outbound::pg_document_repo::PgDocumentRepo;
@@ -42,7 +42,6 @@ fn create_document_args(
         file_type: Some(model::document::FileType::Md),
         project_id: None,
         team_id,
-        email_attachment_id: None,
         created_at: None,
         sub_type: is_task.then_some(document_sub_type::DocumentSubType::Task),
         skip_history: false,
@@ -67,7 +66,6 @@ async fn create_task_for_team(
     )
     .await
     .unwrap()
-    .metadata
 }
 
 async fn team_task_numbers(pool: &Pool<Postgres>, team_id: uuid::Uuid) -> Vec<i32> {
@@ -1745,24 +1743,26 @@ fn pdf_share_permission() -> SharePermissionV2 {
     SharePermissionV2::new_document_share_permission(Some(model::document::FileType::Pdf), None)
 }
 
-fn create_email_document_args(
+fn import_email_document_args(
     owner: &str,
     sha: &str,
     email_attachment_id: uuid::Uuid,
-) -> CreateDocumentRepoArgs {
-    CreateDocumentRepoArgs {
-        id: None,
-        sha: sha.to_string(),
-        document_name: "contract".to_string(),
-        user_id: user_id(owner),
-        file_type: Some(model::document::FileType::Pdf),
-        project_id: None,
-        team_id: None,
-        email_attachment_id: Some(email_attachment_id),
-        created_at: None,
-        sub_type: None,
-        skip_history: true,
-        attribution: None,
+) -> ImportEmailAttachmentRepoArgs {
+    ImportEmailAttachmentRepoArgs {
+        email_attachment_id,
+        create: CreateDocumentRepoArgs {
+            id: None,
+            sha: sha.to_string(),
+            document_name: "contract".to_string(),
+            user_id: user_id(owner),
+            file_type: Some(model::document::FileType::Pdf),
+            project_id: None,
+            team_id: None,
+            created_at: None,
+            sub_type: None,
+            skip_history: true,
+            attribution: None,
+        },
     }
 }
 
@@ -1865,33 +1865,33 @@ async fn document_email_rows(pool: &Pool<Postgres>, document_id: &str) -> Vec<uu
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../fixtures", scripts("documents_test_data"))
 )]
-async fn test_create_document_reuses_email_document_by_sha(pool: Pool<Postgres>) {
+async fn test_import_email_attachment_reuses_document_by_sha(pool: Pool<Postgres>) {
     let repo = PgDocumentRepo::new(pool.clone());
     let attachments = insert_email_attachments(&pool, 2).await;
     let sha = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 
     let first = repo
-        .create_document(
-            create_email_document_args(TEST_DOCUMENT_OWNER_ID, sha, attachments[0]),
+        .import_email_attachment_document(
+            import_email_document_args(TEST_DOCUMENT_OWNER_ID, sha, attachments[0]),
             pdf_share_permission(),
         )
         .await
         .unwrap();
     let second = repo
-        .create_document(
-            create_email_document_args(TEST_DOCUMENT_OWNER_ID, sha, attachments[1]),
+        .import_email_attachment_document(
+            import_email_document_args(TEST_DOCUMENT_OWNER_ID, sha, attachments[1]),
             pdf_share_permission(),
         )
         .await
         .unwrap();
 
-    assert!(first.created);
-    assert!(!second.created);
-    assert_eq!(first.document_id, second.document_id);
+    assert!(matches!(first, EmailImportRepoOutcome::Created(_)));
+    assert!(matches!(second, EmailImportRepoOutcome::Reused(_)));
+    assert_eq!(first.metadata().document_id, second.metadata().document_id);
     let mut expected = attachments.clone();
     expected.sort();
     assert_eq!(
-        document_email_rows(&pool, &first.document_id).await,
+        document_email_rows(&pool, &first.metadata().document_id).await,
         expected
     );
 }
@@ -1900,31 +1900,31 @@ async fn test_create_document_reuses_email_document_by_sha(pool: Pool<Postgres>)
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../fixtures", scripts("documents_test_data"))
 )]
-async fn test_create_document_same_attachment_id_reuses_document(pool: Pool<Postgres>) {
+async fn test_import_email_attachment_same_attachment_id_reuses_document(pool: Pool<Postgres>) {
     let repo = PgDocumentRepo::new(pool.clone());
     let attachments = insert_email_attachments(&pool, 1).await;
     let sha = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
 
     let first = repo
-        .create_document(
-            create_email_document_args(TEST_DOCUMENT_OWNER_ID, sha, attachments[0]),
+        .import_email_attachment_document(
+            import_email_document_args(TEST_DOCUMENT_OWNER_ID, sha, attachments[0]),
             pdf_share_permission(),
         )
         .await
         .unwrap();
     let second = repo
-        .create_document(
-            create_email_document_args(TEST_DOCUMENT_OWNER_ID, sha, attachments[0]),
+        .import_email_attachment_document(
+            import_email_document_args(TEST_DOCUMENT_OWNER_ID, sha, attachments[0]),
             pdf_share_permission(),
         )
         .await
         .unwrap();
 
-    assert!(first.created);
-    assert!(!second.created);
-    assert_eq!(first.document_id, second.document_id);
+    assert!(matches!(first, EmailImportRepoOutcome::Created(_)));
+    assert!(matches!(second, EmailImportRepoOutcome::Reused(_)));
+    assert_eq!(first.metadata().document_id, second.metadata().document_id);
     assert_eq!(
-        document_email_rows(&pool, &first.document_id).await,
+        document_email_rows(&pool, &first.metadata().document_id).await,
         attachments
     );
 }
@@ -1933,7 +1933,9 @@ async fn test_create_document_same_attachment_id_reuses_document(pool: Pool<Post
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../fixtures", scripts("documents_test_data"))
 )]
-async fn test_create_document_does_not_reuse_non_email_document_by_sha(pool: Pool<Postgres>) {
+async fn test_import_email_attachment_does_not_reuse_non_email_document_by_sha(
+    pool: Pool<Postgres>,
+) {
     let repo = PgDocumentRepo::new(pool.clone());
     let attachments = insert_email_attachments(&pool, 1).await;
     let sha = "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc";
@@ -1948,43 +1950,76 @@ async fn test_create_document_does_not_reuse_non_email_document_by_sha(pool: Poo
         .await
         .unwrap();
     let imported = repo
-        .create_document(
-            create_email_document_args(TEST_DOCUMENT_OWNER_ID, sha, attachments[0]),
+        .import_email_attachment_document(
+            import_email_document_args(TEST_DOCUMENT_OWNER_ID, sha, attachments[0]),
             pdf_share_permission(),
         )
         .await
         .unwrap();
 
-    assert!(uploaded_doc.created);
-    assert!(imported.created);
-    assert_ne!(uploaded_doc.document_id, imported.document_id);
+    assert!(matches!(imported, EmailImportRepoOutcome::Created(_)));
+    assert_ne!(uploaded_doc.document_id, imported.metadata().document_id);
 }
 
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../fixtures", scripts("documents_test_data"))
 )]
-async fn test_create_document_does_not_reuse_other_owner_sha(pool: Pool<Postgres>) {
+async fn test_import_email_attachment_does_not_reuse_other_owner_sha(pool: Pool<Postgres>) {
     let repo = PgDocumentRepo::new(pool.clone());
     let attachments = insert_email_attachments(&pool, 2).await;
     let sha = "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd";
 
     let owner_doc = repo
-        .create_document(
-            create_email_document_args(TEST_DOCUMENT_OWNER_ID, sha, attachments[0]),
+        .import_email_attachment_document(
+            import_email_document_args(TEST_DOCUMENT_OWNER_ID, sha, attachments[0]),
             pdf_share_permission(),
         )
         .await
         .unwrap();
     let teammate_doc = repo
-        .create_document(
-            create_email_document_args(TEST_DOCUMENT_NON_OWNER_ID, sha, attachments[1]),
+        .import_email_attachment_document(
+            import_email_document_args(TEST_DOCUMENT_NON_OWNER_ID, sha, attachments[1]),
             pdf_share_permission(),
         )
         .await
         .unwrap();
 
-    assert!(owner_doc.created);
-    assert!(teammate_doc.created);
-    assert_ne!(owner_doc.document_id, teammate_doc.document_id);
+    assert!(matches!(owner_doc, EmailImportRepoOutcome::Created(_)));
+    assert!(matches!(teammate_doc, EmailImportRepoOutcome::Created(_)));
+    assert_ne!(
+        owner_doc.metadata().document_id,
+        teammate_doc.metadata().document_id
+    );
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("documents_test_data"))
+)]
+async fn test_create_document_does_not_reuse_email_document_by_sha(pool: Pool<Postgres>) {
+    let repo = PgDocumentRepo::new(pool.clone());
+    let attachments = insert_email_attachments(&pool, 1).await;
+    let sha = "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee";
+
+    let imported = repo
+        .import_email_attachment_document(
+            import_email_document_args(TEST_DOCUMENT_OWNER_ID, sha, attachments[0]),
+            pdf_share_permission(),
+        )
+        .await
+        .unwrap();
+
+    let mut created = create_document_args(TEST_DOCUMENT_OWNER_ID, false, None);
+    created.sha = sha.to_string();
+    created.file_type = Some(model::document::FileType::Pdf);
+    created.document_name = "same-sha-upload".to_string();
+
+    let created_doc = repo
+        .create_document(created, pdf_share_permission())
+        .await
+        .unwrap();
+
+    assert!(matches!(imported, EmailImportRepoOutcome::Created(_)));
+    assert_ne!(imported.metadata().document_id, created_doc.document_id);
 }

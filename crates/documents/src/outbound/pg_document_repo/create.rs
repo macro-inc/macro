@@ -1,7 +1,9 @@
 use document_sub_type::DocumentSubType;
 use macro_user_id::user_id::MacroUserIdStr;
-use model::document::{FileType, VersionIDWithTimeStamps};
+use model::document::{DocumentMetadata, FileType, VersionIDWithTimeStamps};
 use models_permissions::share_permission::SharePermissionV2;
+
+use crate::domain::models::CreateDocumentRepoArgs;
 
 /// Inserts a record into the document table
 /// Returns the document id
@@ -340,4 +342,99 @@ pub async fn reuse_email_document(
     }
 
     Ok(None)
+}
+
+/// Inserts a new `Document` row and its associated create records.
+///
+/// Does not link email attachments. Callers that need that belong on
+/// [`crate::domain::ports::DocumentRepo::import_email_attachment_document`].
+#[tracing::instrument(skip(transaction, args, share_permission), err)]
+pub async fn insert_new_document(
+    transaction: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    args: CreateDocumentRepoArgs,
+    share_permission: &SharePermissionV2,
+) -> Result<DocumentMetadata, sqlx::Error> {
+    let CreateDocumentRepoArgs {
+        id,
+        sha,
+        document_name,
+        user_id,
+        file_type,
+        project_id,
+        team_id,
+        created_at: provided_created_at,
+        sub_type: requested_sub_type,
+        skip_history,
+        attribution: _,
+    } = args;
+
+    let now = chrono::Utc::now();
+    let created_at = provided_created_at.as_ref().unwrap_or(&now);
+
+    let project_name: Option<String> = if let Some(ref proj_id) = project_id {
+        sqlx::query_scalar!(
+            r#"SELECT name FROM "Project" WHERE id = $1"#,
+            &proj_id.to_string(),
+        )
+        .fetch_optional(&mut **transaction)
+        .await?
+    } else {
+        None
+    };
+
+    let document_id = insert_document_row(
+        transaction,
+        id.as_ref(),
+        &user_id,
+        &document_name,
+        file_type,
+        project_id.as_ref(),
+        created_at,
+    )
+    .await?;
+
+    let sub_type: Option<DocumentSubType> =
+        set_document_sub_type(transaction, &document_id, requested_sub_type).await?;
+
+    if sub_type == Some(DocumentSubType::Task)
+        && let Some(team_id) = team_id.as_ref()
+    {
+        allocate_team_task_number(transaction, team_id, &document_id).await?;
+    }
+
+    let document_version =
+        set_document_version(transaction, &document_id, file_type, sha, created_at).await?;
+
+    set_share_permission(transaction, &document_id, share_permission).await?;
+
+    if !skip_history {
+        insert_history(transaction, &document_id, &user_id, created_at).await?;
+    }
+
+    entity_access_db_utils::insert_entity_access_row(
+        transaction,
+        &document_id,
+        entity_access_db_utils::EntityType::Document,
+        user_id.as_ref(),
+        entity_access_db_utils::EntityAccessSourceType::User,
+        entity_access_db_utils::AccessLevel::Owner,
+    )
+    .await?;
+
+    Ok(DocumentMetadata::new_document(
+        &document_id.to_string(),
+        document_version.id,
+        user_id,
+        &document_name,
+        file_type,
+        &document_version.sha,
+        None,
+        None,
+        None,
+        project_id.map(|s| s.to_string()).as_deref(),
+        project_name.as_deref(),
+        document_version.created_at,
+        document_version.updated_at,
+        sub_type,
+    ))
 }

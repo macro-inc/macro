@@ -8,7 +8,9 @@ use macro_user_id::cowlike::CowLike;
 use model::document::{DocumentMetadata, FileType};
 use std::sync::{Arc, Mutex};
 
-use crate::domain::models::{CreateDocumentRepoResult, GithubPullRequest};
+use crate::domain::models::{
+    EmailImportRepoOutcome, GithubPullRequest, ImportEmailAttachmentRepoArgs,
+};
 use crate::domain::ports::{DocumentContentEventService, MockDocumentRepo};
 
 use super::*;
@@ -1900,7 +1902,6 @@ fn create_document_repo_args(file_type: FileType) -> CreateDocumentRepoArgs {
         file_type: Some(file_type),
         project_id: None,
         team_id: None,
-        email_attachment_id: None,
         created_at: None,
         sub_type: None,
         skip_history: false,
@@ -1925,12 +1926,7 @@ async fn create_document_with_team_default(
                 && share_permission.link_share_access_level == expected_access_level
         })
         .times(1)
-        .returning(move |_, _| {
-            Box::pin(std::future::ready(Ok(CreateDocumentRepoResult {
-                metadata: created_metadata.clone(),
-                created: true,
-            })))
-        });
+        .returning(move |_, _| Box::pin(std::future::ready(Ok(created_metadata.clone()))));
     repo.expect_set_document_content()
         .returning(|_, _| Box::pin(std::future::ready(Ok(()))));
     repo.expect_get_team_task_metadata()
@@ -2003,28 +1999,29 @@ async fn create_document_publishes_resolved_attribution() {
     repo.expect_get_team_default_link_share()
         .returning(|_| Box::pin(std::future::ready(Ok(None))));
     let created_metadata = make_test_metadata();
-    repo.expect_create_document().returning(move |_, _| {
-        Box::pin(std::future::ready(Ok(CreateDocumentRepoResult {
-            metadata: created_metadata.clone(),
-            created: true,
-        })))
-    });
+    repo.expect_import_email_attachment_document()
+        .returning(move |_, _| {
+            Box::pin(std::future::ready(Ok(EmailImportRepoOutcome::Created(
+                created_metadata.clone(),
+            ))))
+        });
     repo.expect_set_document_content()
         .returning(|_, _| Box::pin(std::future::ready(Ok(()))));
     repo.expect_get_team_task_metadata()
         .returning(|_| Box::pin(std::future::ready(Ok(None))));
 
     let (service, event_broker) = make_test_service_with_event_broker(repo);
-    let mut args = create_document_repo_args(FileType::Txt);
-    args.email_attachment_id = Some(uuid::Uuid::from_u128(7));
+    let args = ImportEmailAttachmentRepoArgs {
+        email_attachment_id: uuid::Uuid::from_u128(7),
+        create: create_document_repo_args(FileType::Txt),
+    };
 
-    crate::domain::ports::DocumentService::create_document(
+    crate::domain::ports::DocumentService::import_email_attachment(
         &service,
         macro_user_id::user_id::MacroUserIdStr::parse_from_str("macro|user@user.com")
             .unwrap()
             .into_owned(),
         args,
-        None,
     )
     .await
     .unwrap();
@@ -2053,12 +2050,12 @@ async fn create_document_reuse_skips_content_url_and_created_event() {
     repo.expect_get_team_default_link_share()
         .returning(|_| Box::pin(std::future::ready(Ok(None))));
     let created_metadata = make_test_metadata();
-    repo.expect_create_document().returning(move |_, _| {
-        Box::pin(std::future::ready(Ok(CreateDocumentRepoResult {
-            metadata: created_metadata.clone(),
-            created: false,
-        })))
-    });
+    repo.expect_import_email_attachment_document()
+        .returning(move |_, _| {
+            Box::pin(std::future::ready(Ok(EmailImportRepoOutcome::Reused(
+                created_metadata.clone(),
+            ))))
+        });
     repo.expect_set_document_content().times(0);
     repo.expect_get_persisted_document_content()
         .return_once(|_| {
@@ -2070,16 +2067,17 @@ async fn create_document_reuse_skips_content_url_and_created_event() {
         .returning(|_| Box::pin(std::future::ready(Ok(None))));
 
     let (service, event_broker) = make_test_service_with_event_broker(repo);
-    let mut args = create_document_repo_args(FileType::Txt);
-    args.email_attachment_id = Some(uuid::Uuid::from_u128(9));
+    let args = ImportEmailAttachmentRepoArgs {
+        email_attachment_id: uuid::Uuid::from_u128(9),
+        create: create_document_repo_args(FileType::Txt),
+    };
 
-    let response = crate::domain::ports::DocumentService::create_document(
+    let response = crate::domain::ports::DocumentService::import_email_attachment(
         &service,
         macro_user_id::user_id::MacroUserIdStr::parse_from_str("macro|user@user.com")
             .unwrap()
             .into_owned(),
         args,
-        None,
     )
     .await
     .unwrap();
