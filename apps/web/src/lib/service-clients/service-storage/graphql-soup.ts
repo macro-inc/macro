@@ -1,4 +1,7 @@
-import { ENABLE_BEARER_TOKEN_AUTH } from '@core/constant/featureFlags';
+import {
+  ENABLE_BEARER_TOKEN_AUTH,
+  ENABLE_GRAPHQL_SOUP,
+} from '@core/constant/featureFlags';
 import { SERVER_HOSTS } from '@core/constant/servers';
 import { fetchToken } from '@core/util/fetchWithToken';
 import { isTauri } from '@core/util/platform';
@@ -117,12 +120,85 @@ const graphqlSoupClient = createClient({
   preferGetMethod: false,
 });
 
+function createGraphqlSoupWebSocketClient(): GraphqlWsClient {
+  const resolveWebSocketUrl = createGraphqlSoupWebSocketUrlResolver({
+    dssHost,
+    bearerTokenAuth: ENABLE_BEARER_TOKEN_AUTH,
+    getApiToken: getMacroApiToken,
+    refreshCookieAuth: async () => {
+      const result = await fetchToken();
+      if (result.isErr()) {
+        throw new Error('Unable to refresh GraphQL websocket cookie');
+      }
+    },
+  });
+  return createGraphqlWsClient({
+    url: resolveWebSocketUrl,
+    retryAttempts: SOUP_GRAPHQL_WEBSOCKET_RETRY_ATTEMPTS,
+    shouldRetry: shouldRetryGraphqlSoupWebSocket,
+  });
+}
+
+function graphqlSoupSubscriptionExchange(websocketClient: GraphqlWsClient) {
+  return subscriptionExchange({
+    forwardSubscription(payload, request) {
+      const graphqlWsPayload = {
+        query: print(request.query),
+        operationName: payload.operationName,
+        variables: payload.variables,
+        extensions: payload.extensions,
+      };
+      return {
+        subscribe(sink) {
+          const unsubscribe = websocketClient.subscribe(graphqlWsPayload, sink);
+          return { unsubscribe };
+        },
+      };
+    },
+  });
+}
+
+let uncachedRealtimeClient: Client | undefined;
+let uncachedRealtimeCleanup: (() => void) | undefined;
+
+function disposeUncachedRealtimeClient(): void {
+  uncachedRealtimeCleanup?.();
+  uncachedRealtimeCleanup = undefined;
+  uncachedRealtimeClient = undefined;
+}
+
+function getUncachedRealtimeClient(): Client {
+  if (uncachedRealtimeClient) return uncachedRealtimeClient;
+
+  const websocketClient = createGraphqlSoupWebSocketClient();
+  const subscriptionsLifecycle = createGraphqlSoupSubscriptionsLifecycle();
+  const client = createClient({
+    url: `${dssHost}/items/soup/graphql`,
+    preferGetMethod: false,
+    exchanges: [
+      graphqlSoupSubscriptionExchange(websocketClient),
+      fetchExchange,
+    ],
+    fetch: dssGraphqlFetch,
+  });
+  subscriptionsLifecycle.replace(client);
+  uncachedRealtimeClient = client;
+  uncachedRealtimeCleanup = () => {
+    subscriptionsLifecycle.dispose();
+    void websocketClient.dispose();
+  };
+  return client;
+}
+
+let cacheInitializationFailed = false;
+
 /**
  * Whether the normalized cache is active for soup GraphQL queries.
  * Browser: wasm engine in a worker. Tauri: native engine in the host
  * process (graphql_cache_plugin).
  */
 export function graphqlCacheEnabled(): boolean {
+  if (cacheInitializationFailed) return false;
   if (!isTauri() && browserCacheClientActivated) return true;
   return getBrowserTursoCacheRolloutDecision().enabled;
 }
@@ -136,7 +212,10 @@ function fallbackAfterInitializationFailure(): void {
   const cleanup = cachedCacheCleanup;
   cachedCacheCleanup = undefined;
   cachedCacheHost = undefined;
-  cachedClient = graphqlSoupClient;
+  cacheInitializationFailed = true;
+  cachedClient = ENABLE_GRAPHQL_SOUP()
+    ? getUncachedRealtimeClient()
+    : graphqlSoupClient;
   browserCacheClientActivated = false;
   try {
     cleanup?.();
@@ -166,8 +245,13 @@ export function getGraphqlSoupClient(): Client {
   if (!native && browserCacheClientActivated && cachedClient)
     return cachedClient;
   const rollout = getBrowserTursoCacheRolloutDecision();
-  if (!rollout.enabled) return graphqlSoupClient;
+  if (!rollout.enabled) {
+    return ENABLE_GRAPHQL_SOUP()
+      ? getUncachedRealtimeClient()
+      : graphqlSoupClient;
+  }
   if (cachedClient) return cachedClient;
+  disposeUncachedRealtimeClient();
   cachedClient = (() => {
     let host: CacheHost | undefined;
     let websocketClient: GraphqlWsClient | undefined;
@@ -198,22 +282,7 @@ export function getGraphqlSoupClient(): Client {
             onInitializationError,
             rolloutCohort: rollout.cohort,
           });
-      const resolveWebSocketUrl = createGraphqlSoupWebSocketUrlResolver({
-        dssHost,
-        bearerTokenAuth: ENABLE_BEARER_TOKEN_AUTH,
-        getApiToken: getMacroApiToken,
-        refreshCookieAuth: async () => {
-          const result = await fetchToken();
-          if (result.isErr()) {
-            throw new Error('Unable to refresh GraphQL websocket cookie');
-          }
-        },
-      });
-      const graphqlWsClient = createGraphqlWsClient({
-        url: resolveWebSocketUrl,
-        retryAttempts: SOUP_GRAPHQL_WEBSOCKET_RETRY_ATTEMPTS,
-        shouldRetry: shouldRetryGraphqlSoupWebSocket,
-      });
+      const graphqlWsClient = createGraphqlSoupWebSocketClient();
       websocketClient = graphqlWsClient;
       const client = createClient({
         url: `${dssHost}/items/soup/graphql`,
@@ -239,30 +308,13 @@ export function getGraphqlSoupClient(): Client {
             // GraphQL application errors are permanent and roll back.
             shouldRetryMutation: (error) => error.networkError != null,
           }),
-          subscriptionExchange({
-            forwardSubscription(payload, request) {
-              const graphqlWsPayload = {
-                query: print(request.query),
-                operationName: payload.operationName,
-                variables: payload.variables,
-                extensions: payload.extensions,
-              };
-              return {
-                subscribe(sink) {
-                  const unsubscribe = graphqlWsClient.subscribe(
-                    graphqlWsPayload,
-                    sink
-                  );
-                  return { unsubscribe };
-                },
-              };
-            },
-          }),
+          graphqlSoupSubscriptionExchange(graphqlWsClient),
           fetchExchange,
         ],
         fetch: dssGraphqlFetch,
       });
       cachedCacheHost = host;
+      cacheInitializationFailed = false;
       unregisterHost = registerCacheHost(host);
       subscriptionsLifecycle.replace(client, host);
       cachedCacheCleanup = cleanup;
@@ -272,8 +324,11 @@ export function getGraphqlSoupClient(): Client {
       cleanup();
       cachedCacheHost = undefined;
       cachedCacheCleanup = undefined;
+      cacheInitializationFailed = true;
       console.warn('graphql cache init failed; using uncached client', error);
-      return graphqlSoupClient;
+      return ENABLE_GRAPHQL_SOUP()
+        ? getUncachedRealtimeClient()
+        : graphqlSoupClient;
     }
   })();
   return cachedClient;

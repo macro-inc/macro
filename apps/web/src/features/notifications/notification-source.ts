@@ -18,6 +18,11 @@ import type {
   NotifEvent,
   UserUnsubscribe,
 } from '@service-notification/generated/schemas';
+import {
+  graphqlCacheEnabled,
+  mapGraphqlNotification,
+} from '@service-storage/graphql-soup';
+import { subscribeToGraphqlNotificationPatches } from '@service-storage/graphql-soup-websocket';
 import type { UseQueryResult } from '@tanstack/solid-query';
 import {
   type Accessor,
@@ -26,6 +31,7 @@ import {
   createMemo,
   createRoot,
   createSignal,
+  onCleanup,
 } from 'solid-js';
 import { createStore, reconcile } from 'solid-js/store';
 import { fromZodError } from 'zod-validation-error';
@@ -267,6 +273,23 @@ export function createNotificationSource(
     });
   }
 
+  const dispatchIncomingNotification = (
+    notification: UnifiedNotification
+  ): void => {
+    onNotification?.(notification);
+    subscriptions.forEach((subscribe) => subscribe(notification));
+  };
+
+  const unsubscribeFromGraphql = subscribeToGraphqlNotificationPatches(
+    (patch) => {
+      if (!ENABLE_GRAPHQL_SOUP()) return;
+      if (!graphqlCacheEnabled()) void notificationsQuery.refetch();
+      if (patch.__typename !== 'GraphqlNewNotification') return;
+      dispatchIncomingNotification(mapGraphqlNotification(patch.notification));
+    }
+  );
+  onCleanup(unsubscribeFromGraphql);
+
   const mapWebsocketNotification = (
     raw: ConnGatewayNotificationPayload
   ): UnifiedNotification => {
@@ -278,7 +301,7 @@ export function createNotificationSource(
   };
 
   createSocketEffect(ws, (wsData) => {
-    if (wsData.type !== NOTIFICATION_EVENT_TYPE) {
+    if (wsData.type !== NOTIFICATION_EVENT_TYPE || ENABLE_GRAPHQL_SOUP()) {
       return;
     }
     let parsedNotification: UnifiedNotification;
@@ -300,9 +323,7 @@ export function createNotificationSource(
       console.error('Failed to parse notification', wsData.data, e);
       return;
     }
-    onNotification?.(parsedNotification);
-
-    subscriptions.forEach((subscribe) => subscribe(parsedNotification));
+    dispatchIncomingNotification(parsedNotification);
 
     if (notificationsQuery.transport === 'rest') {
       optimisticInsertNotification(parsedNotification);

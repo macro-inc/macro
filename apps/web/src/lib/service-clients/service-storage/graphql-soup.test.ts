@@ -39,6 +39,8 @@ const mocks = vi.hoisted(() => {
     return { data: { committed: true } };
   });
   const plainClient = { kind: 'plain' };
+  const realtimeClient = { kind: 'realtime' };
+  const replaceSubscriptions = vi.fn();
   return {
     get enabled() {
       return enabled;
@@ -75,6 +77,8 @@ const mocks = vi.hoisted(() => {
         new Error('injected initialization failure')
       ),
     plainClient,
+    realtimeClient,
+    replaceSubscriptions,
     createWorkerCacheHost: vi.fn(
       (options: { onInitializationError?: (error: Error) => void }) => {
         initializationErrorHandler = options.onInitializationError;
@@ -87,6 +91,7 @@ const mocks = vi.hoisted(() => {
 
 vi.mock('@core/constant/featureFlags', () => ({
   ENABLE_BEARER_TOKEN_AUTH: false,
+  ENABLE_GRAPHQL_SOUP: () => mocks.graphqlEnabled,
 }));
 vi.mock('@core/constant/servers', () => ({
   SERVER_HOSTS: { 'document-storage-service': 'http://dss.test' },
@@ -137,7 +142,7 @@ vi.mock('./graphql-soup-websocket', () => ({
   shouldRetryGraphqlSoupWebSocket: () => false,
   createGraphqlSoupWebSocketUrlResolver: () => () => 'ws://dss.test',
   createGraphqlSoupSubscriptionsLifecycle: () => ({
-    replace: vi.fn(),
+    replace: mocks.replaceSubscriptions,
     dispose: vi.fn(() => mocks.recordSubscriptionDisposal()),
   }),
 }));
@@ -150,7 +155,11 @@ vi.mock('@urql/core', () => ({
     const cacheExchange = options.exchanges.find(
       ({ kind }) => kind === 'cache'
     );
-    if (!cacheExchange?.host) return mocks.plainClient;
+    if (!cacheExchange?.host) {
+      return options.exchanges.some(({ kind }) => kind === 'subscription')
+        ? mocks.realtimeClient
+        : mocks.plainClient;
+    }
     const host = cacheExchange.host;
     return {
       kind: 'cached',
@@ -178,6 +187,17 @@ describe('GraphQL Soup browser cache session gate', () => {
 
   afterEach(() => {
     vi.unstubAllGlobals();
+  });
+
+  it('keeps GraphQL notification subscriptions active when the cache is disabled', async () => {
+    mocks.enabled = false;
+    const soup = await import('./graphql-soup');
+
+    expect(soup.graphqlCacheEnabled()).toBe(false);
+    expect(soup.getGraphqlSoupClient()).toBe(mocks.realtimeClient);
+    expect(mocks.replaceSubscriptions).toHaveBeenCalledWith(
+      mocks.realtimeClient
+    );
   });
 
   it('latches an activated client through a flag change until navigation', async () => {
@@ -211,8 +231,9 @@ describe('GraphQL Soup browser cache session gate', () => {
 
     mocks.failInitialization();
 
-    expect(cachedClient).not.toBe(mocks.plainClient);
-    expect(soup.getGraphqlSoupClient()).toBe(mocks.plainClient);
+    expect(cachedClient).not.toBe(mocks.realtimeClient);
+    expect(soup.getGraphqlSoupClient()).toBe(mocks.realtimeClient);
+    expect(soup.graphqlCacheEnabled()).toBe(false);
     expect(mocks.cleanupOrder()).toEqual(['subscriptions', 'host']);
     expect(warn).toHaveBeenCalledWith(
       'graphql cache async init failed; using uncached client',
