@@ -63,6 +63,7 @@
         "group": "Agents",
         "pages": [
           "AI/recipes",
+          "AI/bring-your-own",
           "AI/mcp/overview",
           {
             "group": "Tool Reference",
@@ -142,15 +143,9 @@
         ]
       },
       {
-        "group": "Connections",
-        "pages": [
-          "integrations/github"
-        ]
-      },
-      {
         "group": "Integrations",
         "pages": [
-          "integrations/agents"
+          "integrations/github"
         ]
       },
       {

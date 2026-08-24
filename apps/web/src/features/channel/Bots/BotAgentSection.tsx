@@ -41,7 +41,7 @@ export function BotAgentSection(props: {
           <div class="mt-4 border-t border-edge-muted pt-3">
             <a
               class="inline-flex h-7 items-center rounded-md border border-edge-muted px-2 text-xs font-medium text-ink-muted hover:bg-hover hover:text-ink"
-              href="https://docs.macro.com/integrations/agents"
+              href="https://docs.macro.com/AI/bring-your-own"
               target="_blank"
               rel="noopener noreferrer"
             >
