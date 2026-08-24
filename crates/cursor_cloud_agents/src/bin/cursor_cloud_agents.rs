@@ -39,7 +39,7 @@
 use cursor_cloud_agents::api::{ApiKey, CursorClient, CursorConfig};
 use cursor_cloud_agents::domain::model::RepoUrl;
 use cursor_cloud_agents::domain::service::CursorSessionService;
-use cursor_cloud_agents::inbound::acp::{AcpNotifier, AcpWriter, serve};
+use cursor_cloud_agents::inbound::acp::{AcpNotifier, serve};
 use cursor_cloud_agents::outbound::git::GitRepoResolver;
 use macro_env_var::{env_var, maybe_env_var};
 use std::process::ExitCode;
@@ -137,27 +137,18 @@ async fn main() -> ExitCode {
          apply to anything it does"
     );
 
-    // Stdio is just one instantiation of the adapter: the notifier and the
-    // writer share one queue, and `serve` reads whatever it is handed.
-    let (writer, run_writer) = AcpWriter::stdio();
-    let service = Arc::new(CursorSessionService::new(
-        client,
-        AcpNotifier::new(writer.clone()),
-        repos,
-    ));
-
-    // Sequenced, not raced. `select!` cancelled the writer the moment `serve`
-    // returned, which stranded every response still queued behind the one
-    // being written — a client that batched its requests and closed stdin got
-    // only the first answer back.
-    //
-    // `serve` owns the service and the only other writer handle, so when it
-    // returns on EOF both are dropped, the frame queue closes, and the writer
-    // task finishes on its own after draining what is left.
-    let writer_task = tokio::spawn(run_writer);
-    serve(service, tokio::io::stdin(), writer).await;
-    let _ = writer_task.await;
-    ExitCode::SUCCESS
+    // Stdio is just one instantiation of the adapter; the connection drains
+    // its outgoing queue on EOF, so a client that batches requests and closes
+    // stdin still gets every answer.
+    let notifier = AcpNotifier::new();
+    let service = Arc::new(CursorSessionService::new(client, notifier.clone(), repos));
+    match serve(service, notifier, tokio::io::stdin(), tokio::io::stdout()).await {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(error) => {
+            eprintln!("cursor_cloud_agents: acp connection failed: {error}");
+            ExitCode::FAILURE
+        }
+    }
 }
 
 /// A file layer writing to `<dir>/acp-<pid>.log`, or `None` when disabled or

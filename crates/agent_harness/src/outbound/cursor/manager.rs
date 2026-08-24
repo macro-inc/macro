@@ -24,7 +24,7 @@ use cursor_cloud_agents::domain::model::RepoUrl as CursorRepoUrl;
 use cursor_cloud_agents::domain::model::{AcpSessionId, CursorAgentId, CursorRunId, McpServer};
 use cursor_cloud_agents::domain::ports::{CursorAgents, RepoResolver, RunStream};
 use cursor_cloud_agents::domain::service::CursorSessionService;
-use cursor_cloud_agents::inbound::acp::{AcpNotifier, AcpWriter, serve};
+use cursor_cloud_agents::inbound::acp::{AcpNotifier, serve};
 use futures::Stream;
 
 use super::pipe::PipeTransport;
@@ -104,27 +104,28 @@ where
     ) -> PipeTransport {
         let (ours, theirs) = tokio::io::duplex(PIPE_CAPACITY);
         let (agent_reader, agent_writer) = tokio::io::split(theirs);
-        let (writer, run_writer) = AcpWriter::new(agent_writer);
         let cursor = RecordingCursor {
             client: self.client.clone(),
             session_id,
             sessions: self.sessions.clone(),
         };
+        let notifier = AcpNotifier::new();
         let service = Arc::new(CursorSessionService::new(
             cursor,
-            AcpNotifier::new(writer.clone()),
+            notifier.clone(),
             FixedRepo(self.repo.clone()),
         ));
         if let Some((acp_session, agent)) = restore {
             service.restore_session(acp_session, agent, Some(self.repo.clone()), Vec::new());
         }
-        tokio::spawn(run_writer);
         let pipe_closed = tokio_util::sync::CancellationToken::new();
         let shutdown = tokio_util::sync::CancellationToken::new();
         let sync_service = Arc::clone(&service);
         let on_pipe_close = pipe_closed.clone();
         tokio::spawn(async move {
-            serve(service, agent_reader, writer).await;
+            if let Err(error) = serve(service, notifier, agent_reader, agent_writer).await {
+                tracing::warn!(%session_id, error = %error, "cursor acp connection ended with an error");
+            }
             on_pipe_close.cancel();
         });
         // One task is the session's background pulse: it mirrors cursor.com

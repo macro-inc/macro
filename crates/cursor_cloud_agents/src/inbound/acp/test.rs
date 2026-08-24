@@ -1,59 +1,108 @@
-//! Tests for the JSON-RPC dispatch layer, and for [`serve`] over a transport
-//! that is not stdio.
+//! Tests for the ACP adapter, driven over real transports.
 //!
-//! [`dispatch`] is where ACP conformance actually lives — which methods
-//! exist, what `initialize` promises, what an unknown method answers — and
-//! none of it was covered before, because the only writer wrote to real
-//! stdout. [`AcpWriter::channel`] is the seam that fixes that: frames land
-//! in a channel the test drains.
+//! Most tests speak to the agent the way a client would: frames in, frames
+//! out, over an in-memory [`Channel`] pair. That covers the whole path a
+//! production frame takes — the SDK's parse, our handler, the SDK's response
+//! — rather than a dispatch function called directly. One test drives the
+//! byte-stream transport instead, because that is what the binary and the
+//! Macro harness actually serve over, and it is where the frame-ordering
+//! guarantee (a turn's updates precede its own response) is observable.
 
 use super::*;
 use crate::domain::event::CursorEvent;
 use crate::domain::model::{CursorRunId, RunStatus};
-use crate::domain::model::{McpHeader, McpServer, McpTransport};
 use crate::testing::{CursorCall, FakeCursor, FixedRepos};
 use agent_client_protocol::schema::v1::InitializeResponse;
+use agent_client_protocol::{Channel, RawJsonRpcMessage, TransportFrame};
+use futures::StreamExt as _;
+use futures::channel::mpsc;
 use tokio::io::AsyncBufReadExt as _;
 use tokio::io::AsyncWriteExt as _;
 
 type Service = CursorSessionService<FakeCursor, AcpNotifier, FixedRepos>;
 
-/// A service wired to a channel-backed writer, plus the frame receiver.
-fn harness() -> (
-    Arc<Service>,
-    AcpWriter,
-    mpsc::UnboundedReceiver<RawJsonRpcMessage>,
-) {
-    let (writer, frames) = AcpWriter::channel();
+/// The client's end of a served connection.
+struct TestClient {
+    to_agent: mpsc::UnboundedSender<TransportFrame>,
+    from_agent: mpsc::UnboundedReceiver<TransportFrame>,
+}
+
+impl TestClient {
+    /// Send one frame, built by parsing the JSON a client would actually
+    /// write, so the test exercises the same deserialize the wire does.
+    fn send(&self, frame: serde_json::Value) {
+        let message: RawJsonRpcMessage =
+            serde_json::from_value(frame).expect("a well-formed frame");
+        self.to_agent
+            .unbounded_send(TransportFrame::Single(message))
+            .expect("the connection is up");
+    }
+
+    /// The next frame the agent writes, as the JSON it would go out as.
+    async fn next_frame(&mut self) -> serde_json::Value {
+        let frame = tokio::time::timeout(std::time::Duration::from_secs(5), self.from_agent.next())
+            .await
+            .expect("a frame arrives before the test times out")
+            .expect("the agent did not hang up");
+        match frame {
+            TransportFrame::Single(message) => {
+                serde_json::to_value(&message).expect("frames serialize")
+            }
+            other => panic!("expected a single frame, got {other:?}"),
+        }
+    }
+
+    /// One request/response round trip.
+    async fn call(
+        &mut self,
+        id: i64,
+        method: &str,
+        params: serde_json::Value,
+    ) -> serde_json::Value {
+        self.send(serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": id,
+            "method": method,
+            "params": params,
+        }));
+        self.next_frame().await
+    }
+}
+
+/// A served connection over a [`Channel`] pair, plus the pieces the tests
+/// assert against.
+fn harness() -> (Arc<Service>, FakeCursor, TestClient) {
+    let cursor = FakeCursor::new();
+    let (service, client) = serve_over_channel(cursor.clone(), |_| {});
+    (service, cursor, client)
+}
+
+/// [`harness`], with a hook to shape the service before it starts serving —
+/// what a real host does with [`CursorSessionService::restore_session`].
+fn serve_over_channel(
+    cursor: FakeCursor,
+    configure: impl FnOnce(&Service),
+) -> (Arc<Service>, TestClient) {
+    let notifier = AcpNotifier::new();
     let service = Arc::new(CursorSessionService::new(
-        FakeCursor::new(),
-        AcpNotifier::new(writer.clone()),
+        cursor,
+        notifier.clone(),
         FixedRepos(None),
     ));
-    (service, writer, frames)
+    configure(&service);
+    let (agent_end, client_end) = Channel::duplex();
+    tokio::spawn(serve_transport(Arc::clone(&service), notifier, agent_end));
+    (
+        service,
+        TestClient {
+            to_agent: client_end.tx,
+            from_agent: client_end.rx,
+        },
+    )
 }
 
-/// Build a request frame by parsing the JSON a client would actually send,
-/// so the test exercises the same deserialize the read loop does.
-fn request(id: i64, method: &str, params: serde_json::Value) -> RawJsonRpcMessage {
-    serde_json::from_value(serde_json::json!({
-        "jsonrpc": "2.0",
-        "id": id,
-        "method": method,
-        "params": params,
-    }))
-    .expect("a well-formed request frame")
-}
-
-/// The next frame written, as the JSON it would go out as.
-fn next_frame(frames: &mut mpsc::UnboundedReceiver<RawJsonRpcMessage>) -> serde_json::Value {
-    let frame = frames.try_recv().expect("a frame was written");
-    serde_json::to_value(&frame).expect("frames serialize")
-}
-
-/// The next frame's `result`, panicking if it carried an error instead.
-fn expect_result(frames: &mut mpsc::UnboundedReceiver<RawJsonRpcMessage>) -> serde_json::Value {
-    let frame = next_frame(frames);
+/// A response frame's `result`, panicking if it carried an error instead.
+fn expect_result(frame: &serde_json::Value) -> serde_json::Value {
     assert!(
         frame.get("error").is_none(),
         "expected a result, got error {frame}"
@@ -64,9 +113,8 @@ fn expect_result(frames: &mut mpsc::UnboundedReceiver<RawJsonRpcMessage>) -> ser
         .unwrap_or_else(|| panic!("no result in {frame}"))
 }
 
-/// The next frame's JSON-RPC error code, panicking if it succeeded.
-fn expect_error_code(frames: &mut mpsc::UnboundedReceiver<RawJsonRpcMessage>) -> i64 {
-    let frame = next_frame(frames);
+/// A response frame's JSON-RPC error code, panicking if it succeeded.
+fn expect_error_code(frame: &serde_json::Value) -> i64 {
     frame
         .pointer("/error/code")
         .and_then(serde_json::Value::as_i64)
@@ -75,21 +123,19 @@ fn expect_error_code(frames: &mut mpsc::UnboundedReceiver<RawJsonRpcMessage>) ->
 
 /// `initialize` must answer with a version the client can actually speak.
 ///
-/// The response version was hardcoded to `V1` regardless of the request, so a
-/// client offering only v0 was told v1 and the two then disagreed about the
-/// wire format with nothing to detect it.
+/// The response version was once hardcoded to `V1` regardless of the request,
+/// so a client offering only v0 was told v1 and the two then disagreed about
+/// the wire format with nothing to detect it.
 #[tokio::test]
 async fn initialize_negotiates_down_to_the_clients_version() {
-    let (service, writer, mut frames) = harness();
+    let (_service, _cursor, mut client) = harness();
 
-    dispatch(
-        &service,
-        &writer,
-        request(1, "initialize", serde_json::json!({ "protocolVersion": 0 })),
-    );
+    let frame = client
+        .call(1, "initialize", serde_json::json!({ "protocolVersion": 0 }))
+        .await;
 
     let response: InitializeResponse =
-        serde_json::from_value(expect_result(&mut frames)).expect("an initialize response");
+        serde_json::from_value(expect_result(&frame)).expect("an initialize response");
     assert_eq!(
         response.protocol_version,
         ProtocolVersion::V0,
@@ -100,20 +146,18 @@ async fn initialize_negotiates_down_to_the_clients_version() {
 /// A client offering a version newer than ours gets ours, not its own.
 #[tokio::test]
 async fn initialize_caps_a_newer_client_at_our_version() {
-    let (service, writer, mut frames) = harness();
+    let (_service, _cursor, mut client) = harness();
 
-    dispatch(
-        &service,
-        &writer,
-        request(
+    let frame = client
+        .call(
             1,
             "initialize",
             serde_json::json!({ "protocolVersion": 99 }),
-        ),
-    );
+        )
+        .await;
 
     let response: InitializeResponse =
-        serde_json::from_value(expect_result(&mut frames)).expect("an initialize response");
+        serde_json::from_value(expect_result(&frame)).expect("an initialize response");
     assert_eq!(response.protocol_version, ProtocolVersion::V1);
 }
 
@@ -122,16 +166,14 @@ async fn initialize_caps_a_newer_client_at_our_version() {
 /// perfectly well.
 #[tokio::test]
 async fn initialize_advertises_the_prompt_capabilities_we_actually_have() {
-    let (service, writer, mut frames) = harness();
+    let (_service, _cursor, mut client) = harness();
 
-    dispatch(
-        &service,
-        &writer,
-        request(1, "initialize", serde_json::json!({ "protocolVersion": 1 })),
-    );
+    let frame = client
+        .call(1, "initialize", serde_json::json!({ "protocolVersion": 1 }))
+        .await;
 
     let response: InitializeResponse =
-        serde_json::from_value(expect_result(&mut frames)).expect("an initialize response");
+        serde_json::from_value(expect_result(&frame)).expect("an initialize response");
     let capabilities = &response.agent_capabilities.prompt_capabilities;
     assert!(
         capabilities.embedded_context,
@@ -142,32 +184,32 @@ async fn initialize_advertises_the_prompt_capabilities_we_actually_have() {
     assert!(!capabilities.audio);
 }
 
-/// `session/close` must be dispatched, or `CursorSessionService::close` is
-/// dead code and the session map grows for the whole process lifetime.
+/// `session/close` must be served, or `CursorSessionService::close` is dead
+/// code and the session map grows for the whole process lifetime.
 #[tokio::test]
 async fn session_close_forgets_the_session() {
-    let (service, writer, mut frames) = harness();
+    let (service, _cursor, mut client) = harness();
 
-    dispatch(
-        &service,
-        &writer,
-        request(1, "session/new", serde_json::json!({ "cwd": "/workspace" })),
-    );
-    let session = expect_result(&mut frames)["sessionId"]
+    let opened = client
+        .call(
+            1,
+            "session/new",
+            serde_json::json!({ "cwd": "/workspace", "mcpServers": [] }),
+        )
+        .await;
+    let session = expect_result(&opened)["sessionId"]
         .as_str()
         .expect("a session id")
         .to_owned();
 
-    dispatch(
-        &service,
-        &writer,
-        request(
+    let closed = client
+        .call(
             2,
             "session/close",
             serde_json::json!({ "sessionId": session.clone() }),
-        ),
-    );
-    let _ = expect_result(&mut frames);
+        )
+        .await;
+    let _ = expect_result(&closed);
 
     // The service must no longer know it.
     let error = service
@@ -183,34 +225,50 @@ async fn session_close_forgets_the_session() {
 /// Closing a session that was never opened is an error, not a panic.
 #[tokio::test]
 async fn closing_an_unknown_session_is_an_error() {
-    let (service, writer, mut frames) = harness();
+    let (_service, _cursor, mut client) = harness();
 
-    dispatch(
-        &service,
-        &writer,
-        request(
+    let frame = client
+        .call(
             1,
             "session/close",
             serde_json::json!({ "sessionId": "nope" }),
-        ),
-    );
+        )
+        .await;
 
     assert_eq!(
-        expect_error_code(&mut frames),
+        expect_error_code(&frame),
         -32602,
         "an unknown session is invalid params"
     );
 }
 
+/// A `session/new` that omits `mcpServers` is refused, not guessed at.
+///
+/// ACP marks the member required, so a conformant client always sends it —
+/// as `[]` when it configures nothing. This agent used to inject the empty
+/// list itself; now that the schema parses the request before the handler
+/// runs, the schema's strictness is the behaviour, and it matches what the
+/// field's absence actually means: a client this agent does not understand.
+#[tokio::test]
+async fn session_new_requires_the_mcp_servers_member() {
+    let (_service, _cursor, mut client) = harness();
+
+    let frame = client
+        .call(1, "session/new", serde_json::json!({ "cwd": "/workspace" }))
+        .await;
+
+    assert_eq!(expect_error_code(&frame), -32602);
+}
+
 /// Methods this agent genuinely does not implement still answer properly.
 #[tokio::test]
 async fn unimplemented_methods_answer_method_not_found() {
-    let (service, writer, mut frames) = harness();
+    let (_service, _cursor, mut client) = harness();
 
-    for method in ["session/set_mode", "session/fork", "logout"] {
-        dispatch(&service, &writer, request(1, method, serde_json::json!({})));
+    for (id, method) in [(1, "session/set_mode"), (2, "session/fork"), (3, "logout")] {
+        let frame = client.call(id, method, serde_json::json!({})).await;
         assert_eq!(
-            expect_error_code(&mut frames),
+            expect_error_code(&frame),
             -32601,
             "{method} should be method_not_found"
         );
@@ -222,23 +280,21 @@ async fn unimplemented_methods_answer_method_not_found() {
 /// servers are not silently accepted, they are warned about.
 #[tokio::test]
 async fn session_new_still_succeeds_when_mcp_servers_are_named() {
-    let (service, writer, mut frames) = harness();
+    let (_service, _cursor, mut client) = harness();
 
-    dispatch(
-        &service,
-        &writer,
-        request(
+    let frame = client
+        .call(
             1,
             "session/new",
             serde_json::json!({
                 "cwd": "/workspace",
                 "mcpServers": [{ "name": "whatever", "command": "x", "args": [] }],
             }),
-        ),
-    );
+        )
+        .await;
 
     assert!(
-        expect_result(&mut frames)["sessionId"].is_string(),
+        expect_result(&frame)["sessionId"].is_string(),
         "an unhonourable field must not fail the request"
     );
 }
@@ -267,14 +323,13 @@ where
         .expect("the pipe is writable");
 }
 
-/// The adapter must be transport-agnostic: an in-process client driving it
-/// over a `tokio::io::duplex` pipe has to get the same conversation a
-/// subprocess gets over stdio. Nothing about `serve` may assume stdio.
+/// The byte-stream transport carries a whole conversation, and in order.
 ///
-/// The frame order is the other half of the point. The turn's
-/// `session/update` notification has to precede the `session/prompt`
-/// response, which only holds because the notifier and the writer share one
-/// queue — two queues would let the response overtake its own updates.
+/// This is the transport the binary and the Macro harness actually serve
+/// over: newline-delimited JSON on a byte pipe. The frame order is the other
+/// half of the point — the turn's `session/update` notification has to
+/// precede the `session/prompt` response, which holds because notifications
+/// and responses share the connection's one outgoing queue.
 #[tokio::test]
 async fn serve_runs_a_whole_conversation_over_an_in_process_pipe() {
     let (client_side, agent_side) = tokio::io::duplex(16 * 1024);
@@ -284,14 +339,13 @@ async fn serve_runs_a_whole_conversation_over_an_in_process_pipe() {
 
     let cursor = FakeCursor::new();
     let events = cursor.script_stream();
-    let (writer, run_writer) = AcpWriter::new(agent_writer);
+    let notifier = AcpNotifier::new();
     let service = Arc::new(CursorSessionService::new(
         cursor,
-        AcpNotifier::new(writer.clone()),
+        notifier.clone(),
         FixedRepos(None),
     ));
-    let writer_task = tokio::spawn(run_writer);
-    let serve_task = tokio::spawn(serve(service, agent_reader, writer));
+    let serve_task = tokio::spawn(serve(service, notifier, agent_reader, agent_writer));
 
     send_client_frame(
         &mut client_writer,
@@ -309,7 +363,8 @@ async fn serve_runs_a_whole_conversation_over_an_in_process_pipe() {
         &mut client_writer,
         serde_json::json!({
             "jsonrpc": "2.0", "id": 2,
-            "method": "session/new", "params": { "cwd": "/workspace" },
+            "method": "session/new",
+            "params": { "cwd": "/workspace", "mcpServers": [] },
         }),
     )
     .await;
@@ -360,14 +415,15 @@ async fn serve_runs_a_whole_conversation_over_an_in_process_pipe() {
     assert_eq!(answered["id"], 3, "the response follows its own updates");
     assert_eq!(answered["result"]["stopReason"], "end_turn");
 
-    // Hanging up the client end is EOF for `serve`, which drops the service
-    // and its writer handle, which drains and ends the writer task. Both
-    // halves have to go: `tokio::io::split` only closes the pipe once the
-    // last of them is dropped.
+    // Hanging up the client end is EOF for the connection, which drains any
+    // queued frames and resolves. Both halves have to go: `tokio::io::split`
+    // only closes the pipe once the last of them is dropped.
     drop(client_writer);
     drop(client_frames);
-    serve_task.await.expect("serve exits on eof");
-    writer_task.await.expect("the writer drains and exits");
+    serve_task
+        .await
+        .expect("the serve task joins")
+        .expect("clean eof resolves ok");
 }
 
 /// Remote MCP servers named at `session/new` are forwarded to Cursor.
@@ -377,18 +433,10 @@ async fn serve_runs_a_whole_conversation_over_an_in_process_pipe() {
 /// agent — there is nothing to decline.
 #[tokio::test]
 async fn remote_mcp_servers_are_forwarded_to_the_agent() {
-    let (writer, mut frames) = AcpWriter::channel();
-    let cursor = FakeCursor::new();
-    let service = Arc::new(CursorSessionService::new(
-        cursor.clone(),
-        AcpNotifier::new(writer.clone()),
-        FixedRepos(None),
-    ));
+    let (service, cursor, mut client) = harness();
 
-    dispatch(
-        &service,
-        &writer,
-        request(
+    let opened = client
+        .call(
             1,
             "session/new",
             serde_json::json!({
@@ -408,25 +456,23 @@ async fn remote_mcp_servers_are_forwarded_to_the_agent() {
                     },
                 ],
             }),
-        ),
-    );
-    let session = expect_result(&mut frames)["sessionId"]
+        )
+        .await;
+    let session = expect_result(&opened)["sessionId"]
         .as_str()
         .expect("a session id")
         .to_owned();
 
     let events = cursor.script_stream();
     events
-        .send(crate::domain::event::CursorEvent::Result {
-            run_id: crate::domain::model::CursorRunId::new("run-fake-1"),
-            status: crate::domain::model::RunStatus::Finished,
+        .send(CursorEvent::Result {
+            run_id: CursorRunId::new("run-fake-1"),
+            status: RunStatus::Finished,
             text: None,
             duration_ms: None,
         })
         .expect("stream open");
-    events
-        .send(crate::domain::event::CursorEvent::Done)
-        .expect("stream open");
+    events.send(CursorEvent::Done).expect("stream open");
     service
         .prompt(&AcpSessionId::new(session), "go")
         .await
@@ -467,18 +513,10 @@ async fn remote_mcp_servers_are_forwarded_to_the_agent() {
 /// still opens; only the unhonourable server is dropped.
 #[tokio::test]
 async fn stdio_mcp_servers_are_declined_without_failing_the_session() {
-    let (writer, mut frames) = AcpWriter::channel();
-    let cursor = FakeCursor::new();
-    let service = Arc::new(CursorSessionService::new(
-        cursor.clone(),
-        AcpNotifier::new(writer.clone()),
-        FixedRepos(None),
-    ));
+    let (service, cursor, mut client) = harness();
 
-    dispatch(
-        &service,
-        &writer,
-        request(
+    let opened = client
+        .call(
             1,
             "session/new",
             serde_json::json!({
@@ -498,25 +536,23 @@ async fn stdio_mcp_servers_are_declined_without_failing_the_session() {
                     },
                 ],
             }),
-        ),
-    );
-    let session = expect_result(&mut frames)["sessionId"]
+        )
+        .await;
+    let session = expect_result(&opened)["sessionId"]
         .as_str()
         .expect("a session id")
         .to_owned();
 
     let events = cursor.script_stream();
     events
-        .send(crate::domain::event::CursorEvent::Result {
-            run_id: crate::domain::model::CursorRunId::new("run-fake-1"),
-            status: crate::domain::model::RunStatus::Finished,
+        .send(CursorEvent::Result {
+            run_id: CursorRunId::new("run-fake-1"),
+            status: RunStatus::Finished,
             text: None,
             duration_ms: None,
         })
         .expect("stream open");
-    events
-        .send(crate::domain::event::CursorEvent::Done)
-        .expect("stream open");
+    events.send(CursorEvent::Done).expect("stream open");
     service
         .prompt(&AcpSessionId::new(session), "go")
         .await
@@ -534,20 +570,18 @@ async fn stdio_mcp_servers_are_declined_without_failing_the_session() {
     );
 }
 
-/// The capabilities must now claim the remote transports, because they are
-/// really forwarded — advertising false suppressed servers that work.
+/// The capabilities must claim the remote transports, because they are really
+/// forwarded — advertising false suppressed servers that work.
 #[tokio::test]
 async fn initialize_advertises_the_remote_mcp_transports() {
-    let (service, writer, mut frames) = harness();
+    let (_service, _cursor, mut client) = harness();
 
-    dispatch(
-        &service,
-        &writer,
-        request(1, "initialize", serde_json::json!({ "protocolVersion": 1 })),
-    );
+    let frame = client
+        .call(1, "initialize", serde_json::json!({ "protocolVersion": 1 }))
+        .await;
 
     let response: InitializeResponse =
-        serde_json::from_value(expect_result(&mut frames)).expect("an initialize response");
+        serde_json::from_value(expect_result(&frame)).expect("an initialize response");
     let mcp = &response.agent_capabilities.mcp_capabilities;
     assert!(mcp.http, "http MCP servers are forwarded");
     assert!(mcp.sse, "sse MCP servers are forwarded");
@@ -563,19 +597,17 @@ async fn initialize_advertises_the_remote_mcp_transports() {
 /// clients either suppress input the agent handles or send input it drops.
 #[tokio::test]
 async fn the_initialize_response_is_pinned_whole() {
-    let (service, writer, mut frames) = harness();
+    let (_service, _cursor, mut client) = harness();
 
-    dispatch(
-        &service,
-        &writer,
-        request(1, "initialize", serde_json::json!({ "protocolVersion": 1 })),
-    );
+    let frame = client
+        .call(1, "initialize", serde_json::json!({ "protocolVersion": 1 }))
+        .await;
 
-    let mut response = expect_result(&mut frames);
+    let mut response = expect_result(&frame);
     // The version moves with the crate; everything else is the contract.
     if let Some(info) = response
         .get_mut("agentInfo")
-        .and_then(|i| i.as_object_mut())
+        .and_then(|info| info.as_object_mut())
     {
         info.insert("version".to_owned(), serde_json::json!("[crate version]"));
     }
@@ -587,55 +619,34 @@ async fn the_initialize_response_is_pinned_whole() {
 /// prompt the existing agent.
 #[tokio::test]
 async fn session_load_answers_for_restored_sessions_only() {
-    let (client_side, agent_side) = tokio::io::duplex(16 * 1024);
-    let (agent_reader, agent_writer) = tokio::io::split(agent_side);
-    let (client_reader, mut client_writer) = tokio::io::split(client_side);
-    let mut client_frames = tokio::io::BufReader::new(client_reader).lines();
+    let (_service, mut client) = serve_over_channel(FakeCursor::new(), |service| {
+        service.restore_session(
+            AcpSessionId::new("cursor-acp-3"),
+            Some(crate::domain::model::CursorAgentId::new("bc-restored")),
+            None,
+            Vec::new(),
+        );
+    });
 
-    let cursor = FakeCursor::new();
-    let (writer, run_writer) = AcpWriter::new(agent_writer);
-    let service = Arc::new(CursorSessionService::new(
-        cursor,
-        AcpNotifier::new(writer.clone()),
-        FixedRepos(None),
-    ));
-    service.restore_session(
-        AcpSessionId::new("cursor-acp-3"),
-        Some(crate::domain::model::CursorAgentId::new("bc-restored")),
-        None,
-        Vec::new(),
-    );
-    let writer_task = tokio::spawn(run_writer);
-    let serve_task = tokio::spawn(serve(service, agent_reader, writer));
-
-    send_client_frame(
-        &mut client_writer,
-        serde_json::json!({
-            "jsonrpc": "2.0", "id": 1,
-            "method": "session/load",
-            "params": { "sessionId": "cursor-acp-3", "cwd": "/workspace", "mcpServers": [] },
-        }),
-    )
-    .await;
-    let loaded = next_client_frame(&mut client_frames).await;
-    assert_eq!(loaded["id"], 1);
+    let loaded = client
+        .call(
+            1,
+            "session/load",
+            serde_json::json!({
+                "sessionId": "cursor-acp-3", "cwd": "/workspace", "mcpServers": [],
+            }),
+        )
+        .await;
     assert!(loaded.get("error").is_none(), "got {loaded}");
 
-    send_client_frame(
-        &mut client_writer,
-        serde_json::json!({
-            "jsonrpc": "2.0", "id": 2,
-            "method": "session/load",
-            "params": { "sessionId": "cursor-acp-999", "cwd": "/workspace", "mcpServers": [] },
-        }),
-    )
-    .await;
-    let unknown = next_client_frame(&mut client_frames).await;
-    assert_eq!(unknown["id"], 2);
+    let unknown = client
+        .call(
+            2,
+            "session/load",
+            serde_json::json!({
+                "sessionId": "cursor-acp-999", "cwd": "/workspace", "mcpServers": [],
+            }),
+        )
+        .await;
     assert!(unknown.get("error").is_some(), "got {unknown}");
-
-    drop(client_writer);
-    drop(client_frames);
-    serve_task.await.expect("serve ends");
-    writer_task.await.expect("writer ends");
 }
