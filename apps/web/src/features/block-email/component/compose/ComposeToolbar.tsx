@@ -1,5 +1,7 @@
+import { CopyAvailabilityButton } from '@app/features/calendar/availability/CopyAvailabilityButton';
 import { EmailDateSelector } from '@block-email/component/email-date-selector';
 import { MAX_ATTACHMENTS_BYTES_SIZE } from '@block-email/constants';
+import { insertPlainTextAtCursor } from '@block-email/util/insertPlainTextAtCursor';
 import { FormatButtons } from '@channel/Input/FormatButtons';
 import { HeaderIsland } from '@components/app/split-layout/components/HeaderIsland';
 import { SplitHeaderRight } from '@components/app/split-layout/components/SplitHeader';
@@ -114,6 +116,13 @@ export function EmailComposeToolbar(props: {
             >
               <TextAa />
             </Button>
+            <CopyAvailabilityButton
+              disabled={ctx.disabled()}
+              onInsert={(text) => {
+                const editor = props.editor?.();
+                if (editor) insertPlainTextAtCursor(editor, text);
+              }}
+            />
             <Show when={ctx.hasDraft()}>
               <div aria-hidden="true" class="mx-1 h-4 w-px bg-edge-muted/70" />
               <Button
