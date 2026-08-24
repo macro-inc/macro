@@ -4,8 +4,10 @@ use analytics_client::{
 };
 use anyhow::{Context, anyhow};
 use channels::{
-    SpawnedChannelEventDispatcher,
-    domain::{service::ChannelServiceImpl, side_effects::ChannelSideEffectService},
+    domain::{
+        service::ChannelServiceImpl,
+        side_effects::{ChannelSideEffectService, SpawnedChannelEventDispatcher},
+    },
     outbound::{
         connection_gateway_realtime::ConnectionGatewayChannelRealtimePublisher,
         contacts_dispatcher::ContactsChannelDispatcher,

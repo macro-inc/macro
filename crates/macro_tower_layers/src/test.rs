@@ -318,8 +318,6 @@ fn inject_trace_headers_emits_current_span_traceparent() {
 
         let mut headers = http::HeaderMap::new();
         inject_trace_headers(&mut headers);
-        let (stored_traceparent, stored_tracestate) = current_trace_carrier();
-
         let traceparent = headers
             .get("traceparent")
             .expect("traceparent header should be injected inside a span")
@@ -330,8 +328,6 @@ fn inject_trace_headers_emits_current_span_traceparent() {
             traceparent.contains(&trace_id),
             "traceparent {traceparent} should carry the current trace id {trace_id}"
         );
-        assert_eq!(stored_traceparent.as_deref(), Some(traceparent));
-        assert!(stored_tracestate.is_none());
     });
 }
 

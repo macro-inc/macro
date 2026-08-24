@@ -38,8 +38,9 @@ use call::{
 };
 use channels::{
     domain::{
-        list_service::ChannelListServiceImpl, service::ChannelServiceImpl,
-        side_effects::ChannelSideEffectService,
+        list_service::ChannelListServiceImpl,
+        service::ChannelServiceImpl,
+        side_effects::{ChannelSideEffectService, SpawnedChannelEventDispatcher},
     },
     inbound::{axum_router::ChannelsRouterState, list_router::ChannelListRouterState},
     outbound::{
@@ -48,7 +49,6 @@ use channels::{
         notification_sender::NotificationChannelSender,
         pg_channel_reference_share_permissions::PgChannelReferenceSharePermissions,
         pg_channels_repo::PgChannelsRepo, pg_side_effect_context::PgChannelSideEffectContext,
-        spawned_event_dispatcher::SpawnedChannelEventDispatcher,
     },
 };
 use config::{Config, Environment};
@@ -887,7 +887,7 @@ async fn run() -> anyhow::Result<()> {
         Arc::new(PgTaskMatchRepo::new(db.clone())),
     ));
     let channels_repo = PgChannelsRepo::new(db.clone());
-    let (bot_trigger_sender, bot_trigger_receiver) = channel_bots::inbound::bot_trigger_queue();
+    let (bot_trigger_sender, bot_trigger_receiver) = tokio::sync::mpsc::unbounded_channel();
 
     let channel_side_effects = ChannelSideEffectService::new(
         PgChannelSideEffectContext::new(db.clone()),
@@ -895,17 +895,13 @@ async fn run() -> anyhow::Result<()> {
         NotificationChannelSender::new(notification_ingress_service.clone()),
         ContactsChannelDispatcher::new(contacts_ingress.clone()),
     )
-    .with_bot_trigger_dispatcher(bot_trigger_sender)
+    .with_bot_trigger_sender(bot_trigger_sender)
     .with_macro_event_broker(macro_event_broker.clone());
-    let channel_side_effect_tracker = TaskTracker::new();
 
     let channels_service = Arc::new(
         ChannelServiceImpl::with_dependencies(
             channels_repo,
-            SpawnedChannelEventDispatcher::with_task_tracker(
-                channel_side_effects.clone(),
-                channel_side_effect_tracker.clone(),
-            ),
+            SpawnedChannelEventDispatcher::new(channel_side_effects.clone()),
             PgChannelReferenceSharePermissions::new(db.clone(), entity_access_service.clone()),
         )
         .with_mention_extractor(lexical_mention_extractor::LexicalMentionExtractor::new(
@@ -968,10 +964,7 @@ async fn run() -> anyhow::Result<()> {
     macro_agent_tool_context.channel_tool_context =
         ai_tools::build_channel_tool_context_with_dispatcher(
             db.clone(),
-            std::sync::Arc::new(SpawnedChannelEventDispatcher::with_task_tracker(
-                channel_side_effects,
-                channel_side_effect_tracker.clone(),
-            )),
+            std::sync::Arc::new(SpawnedChannelEventDispatcher::new(channel_side_effects)),
             lexical_client.clone(),
         );
     let macro_agent_tools = ai_tools::all_tools();
@@ -990,13 +983,7 @@ async fn run() -> anyhow::Result<()> {
             ),
         ),
     );
-    let bot_trigger_cancellation = CancellationToken::new();
-    let bot_trigger_tracker = TaskTracker::new();
-    bot_trigger_router.spawn(
-        bot_trigger_receiver,
-        bot_trigger_cancellation.clone(),
-        bot_trigger_tracker.clone(),
-    );
+    bot_trigger_router.spawn(bot_trigger_receiver);
 
     let channel_bot_webhook_state =
         bots::inbound::channel_webhook_router::ChannelBotWebhookRouterState::new(
@@ -1383,17 +1370,6 @@ async fn run() -> anyhow::Result<()> {
     consumer_tracker.wait().await;
     tracing::info!("event consumers stopped");
 
-    tracing::info!("waiting for bot triggers to drain");
-    bot_trigger_cancellation.cancel();
-    bot_trigger_tracker.close();
-    drain_or_warn(bot_trigger_tracker.wait(), "bot triggers").await;
-
-    // Bot handlers can post final replies through this tracker, so close it
-    // only after every bot trigger has finished producing channel events.
-    tracing::info!("waiting for channel side effects to drain");
-    channel_side_effect_tracker.close();
-    drain_or_warn(channel_side_effect_tracker.wait(), "channel side effects").await;
-
     tracing::info!("waiting for event broker publishes to drain");
     event_broker_tracker.close();
     match tokio::time::timeout(EVENT_BROKER_DRAIN_TIMEOUT, event_broker_tracker.wait()).await {
@@ -1411,18 +1387,3 @@ async fn run() -> anyhow::Result<()> {
 }
 
 const EVENT_BROKER_DRAIN_TIMEOUT: Duration = Duration::from_secs(10);
-
-const TASK_DRAIN_TIMEOUT: Duration = Duration::from_secs(30);
-
-/// Wait for one shutdown drain, warning rather than hanging forever when a
-/// wedged task never finishes. Shutdown must reach the later drains regardless.
-async fn drain_or_warn(drain: impl Future<Output = ()>, what: &'static str) {
-    match tokio::time::timeout(TASK_DRAIN_TIMEOUT, drain).await {
-        Ok(()) => tracing::info!(drain = what, "drained"),
-        Err(_) => tracing::warn!(
-            drain = what,
-            timeout_seconds = TASK_DRAIN_TIMEOUT.as_secs(),
-            "timed out waiting for a shutdown drain"
-        ),
-    }
-}

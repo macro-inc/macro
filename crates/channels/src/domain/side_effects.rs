@@ -16,7 +16,7 @@ use crate::domain::{
         TypingAction,
     },
     ports::{
-        ChannelBotTriggerDispatcher, ChannelContactsDispatcher, ChannelEventHandler,
+        ChannelContactsDispatcher, ChannelEventDispatcher, ChannelEventHandler,
         ChannelNotificationSender, ChannelRealtimePublisher, ChannelSideEffectContext,
     },
 };
@@ -24,6 +24,8 @@ use bot_id::BotIdStr;
 use macro_event_broker::{MacroEventBroker, NoopMacroEventBroker};
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use std::collections::HashSet;
+use tokio::sync::mpsc::UnboundedSender;
+use tracing::Instrument as _;
 use uuid::Uuid;
 
 /// Entity type used by message mentions that target a bot.
@@ -43,15 +45,12 @@ pub struct ChannelBotTrigger {
     /// Bots explicitly mentioned in the message that are active in the
     /// channel. Empty when the message mentions no bot.
     pub mentioned_bot_ids: Vec<BotId>,
+    /// Trace active when the candidate was dispatched.
+    pub span: tracing::Span,
 }
 
-/// Bot-trigger dispatcher used when no bot runtime is configured.
-#[derive(Debug, Clone, Copy, Default)]
-pub struct NoopChannelBotTriggerDispatcher;
-
-impl ChannelBotTriggerDispatcher for NoopChannelBotTriggerDispatcher {
-    fn dispatch(&self, _trigger: ChannelBotTrigger) {}
-}
+/// Sender for bot-trigger candidates derived from channel messages.
+pub type ChannelBotTriggerSender = UnboundedSender<ChannelBotTrigger>;
 
 /// Collect the bot ids mentioned in a message.
 ///
@@ -337,19 +336,12 @@ pub enum ChannelNotificationEffect {
 
 /// Domain service that derives and dispatches side effects for channel events.
 #[derive(Clone)]
-pub struct ChannelSideEffectService<
-    C,
-    R,
-    N,
-    K,
-    B = NoopMacroEventBroker,
-    T = NoopChannelBotTriggerDispatcher,
-> {
+pub struct ChannelSideEffectService<C, R, N, K, B = NoopMacroEventBroker> {
     context: C,
     realtime: R,
     notifications: N,
     contacts: K,
-    bot_triggers: T,
+    bot_triggers: Option<ChannelBotTriggerSender>,
     macro_event_broker: B,
 }
 
@@ -386,36 +378,24 @@ impl<C, R, N, K> ChannelSideEffectService<C, R, N, K> {
             realtime,
             notifications,
             contacts,
-            bot_triggers: NoopChannelBotTriggerDispatcher,
+            bot_triggers: None,
             macro_event_broker: NoopMacroEventBroker,
         }
     }
 }
 
-impl<C, R, N, K, B, T> ChannelSideEffectService<C, R, N, K, B, T>
-where
-    T: ChannelBotTriggerDispatcher,
-{
-    /// Configure a dispatcher for bot triggers derived from channel messages.
-    pub fn with_bot_trigger_dispatcher<T2: ChannelBotTriggerDispatcher>(
-        self,
-        bot_triggers: T2,
-    ) -> ChannelSideEffectService<C, R, N, K, B, T2> {
-        ChannelSideEffectService {
-            context: self.context,
-            realtime: self.realtime,
-            notifications: self.notifications,
-            contacts: self.contacts,
-            bot_triggers,
-            macro_event_broker: self.macro_event_broker,
-        }
+impl<C, R, N, K, B> ChannelSideEffectService<C, R, N, K, B> {
+    /// Configure a sender for bot triggers derived from channel messages.
+    pub fn with_bot_trigger_sender(mut self, bot_triggers: ChannelBotTriggerSender) -> Self {
+        self.bot_triggers = Some(bot_triggers);
+        self
     }
 
     /// Configure a macro event broker to publish channel events to.
     pub fn with_macro_event_broker<B2: MacroEventBroker>(
         self,
         macro_event_broker: B2,
-    ) -> ChannelSideEffectService<C, R, N, K, B2, T> {
+    ) -> ChannelSideEffectService<C, R, N, K, B2> {
         ChannelSideEffectService {
             context: self.context,
             realtime: self.realtime,
@@ -440,22 +420,64 @@ where
             return;
         }
 
-        self.bot_triggers.dispatch(ChannelBotTrigger {
-            channel_id,
-            message: message.clone(),
-            mentioned_bot_ids: active_bot_mention_ids(mentions, participants),
-        });
+        if let Some(bot_triggers) = &self.bot_triggers
+            && bot_triggers
+                .send(ChannelBotTrigger {
+                    channel_id,
+                    message: message.clone(),
+                    mentioned_bot_ids: active_bot_mention_ids(mentions, participants),
+                    span: tracing::info_span!(
+                        "channel.bot_trigger",
+                        channel.id = %channel_id,
+                        channel.message.id = %message.id,
+                    ),
+                })
+                .is_err()
+        {
+            tracing::warn!(
+                channel_id = %channel_id,
+                message_id = %message.id,
+                "unable to enqueue channel bot trigger; receiver was dropped"
+            );
+        }
     }
 }
 
-impl<C, R, N, K, B, T> ChannelEventHandler for ChannelSideEffectService<C, R, N, K, B, T>
+/// Channel event dispatcher that handles events on spawned tasks.
+#[derive(Clone)]
+pub struct SpawnedChannelEventDispatcher<H> {
+    handler: H,
+}
+
+impl<H> SpawnedChannelEventDispatcher<H> {
+    /// Create a spawned event dispatcher.
+    pub fn new(handler: H) -> Self {
+        Self { handler }
+    }
+}
+
+impl<H> ChannelEventDispatcher for SpawnedChannelEventDispatcher<H>
+where
+    H: ChannelEventHandler,
+{
+    fn dispatch(&self, event: ChannelEvent) {
+        let handler = self.handler.clone();
+        tokio::spawn(
+            async move {
+                handler.handle(event).await;
+            }
+            .instrument(tracing::info_span!("channel.side_effects")),
+        );
+    }
+}
+
+impl<C, R, N, K, B> ChannelEventHandler for ChannelSideEffectService<C, R, N, K, B>
 where
     C: ChannelSideEffectContext + Clone,
     R: ChannelRealtimePublisher + Clone,
     N: ChannelNotificationSender + Clone,
     K: ChannelContactsDispatcher + Clone,
     B: MacroEventBroker + Clone,
-    T: ChannelBotTriggerDispatcher,
 {
     async fn handle(&self, event: ChannelEvent) {
         let contact_sync_users = contact_sync_users_for_event(&event);
@@ -642,13 +664,12 @@ where
     }
 }
 
-impl<C, R, N, K, B, T> ChannelSideEffectService<C, R, N, K, B, T>
+impl<C, R, N, K, B> ChannelSideEffectService<C, R, N, K, B>
 where
     C: ChannelSideEffectContext + Clone,
     R: ChannelRealtimePublisher + Clone,
     N: ChannelNotificationSender + Clone,
     K: ChannelContactsDispatcher + Clone,
-    T: ChannelBotTriggerDispatcher,
 {
     async fn handle_message_posted(&self, event: MessagePostedSideEffects) {
         let MessagePostedSideEffects {

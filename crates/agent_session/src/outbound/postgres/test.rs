@@ -293,20 +293,6 @@ async fn log_create_and_list_by_session_orders_chronologically(pool: PgPool) {
     .await
     .expect("create second log entry");
 
-    sqlx::query!(
-        r#"
-        UPDATE agent_session_log
-        SET traceparent = $2, tracestate = $3
-        WHERE agent_session_id = $1 AND user_id IS NOT NULL
-        "#,
-        session_id.as_uuid(),
-        "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01",
-        "vendor=value",
-    )
-    .execute(&pool)
-    .await
-    .expect("stamp trace context");
-
     let logs = repo
         .list_by_session(session_id)
         .await
@@ -315,11 +301,6 @@ async fn log_create_and_list_by_session_orders_chronologically(pool: PgPool) {
     assert_eq!(logs.len(), 2);
     assert_eq!(logs[0].entry.agent_session_id, session_id);
     assert_eq!(logs[0].entry.user_id, Some(user));
-    assert_eq!(
-        logs[0].traceparent.as_deref(),
-        Some("00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01")
-    );
-    assert_eq!(logs[0].tracestate.as_deref(), Some("vendor=value"));
     assert!(matches!(
         logs[0].entry.content,
         Message::ToServer(ToServerMessage::Event {

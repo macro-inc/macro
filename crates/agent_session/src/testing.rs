@@ -81,8 +81,6 @@ impl InMemoryAgentSessionRepo {
                 .or_default()
                 .push(StoredAgentSessionLog {
                     created_at: chrono::Utc::now(),
-                    traceparent: None,
-                    tracestate: None,
                     entry,
                 });
         }
@@ -207,7 +205,6 @@ impl AgentSessionRepo for InMemoryAgentSessionRepo {
 
 impl AgentSessionLogRepo for InMemoryAgentSessionRepo {
     async fn create(&self, log: AgentSessionLog) -> Result<StoredAgentSessionLog> {
-        let (traceparent, tracestate) = macro_tower_layers::current_trace_carrier();
         let model_change = match &log.content {
             crate::domain::model::Message::ToRuntime(message) => {
                 agent_runtime_protocol::domain::action::AgentSetModelAction::from_runtime(message)
@@ -223,8 +220,6 @@ impl AgentSessionLogRepo for InMemoryAgentSessionRepo {
         let session_id = log.agent_session_id;
         let stored = StoredAgentSessionLog {
             created_at: chrono::Utc::now(),
-            traceparent,
-            tracestate,
             entry: log,
         };
         self.logs

@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT\n                agent_session_id,\n                user_id AS \"user_id: MacroUserIdStr\",\n                direction,\n                content,\n                created_at,\n                traceparent,\n                tracestate\n            FROM agent_session_log\n            WHERE agent_session_id = $1\n            ORDER BY created_at ASC, id ASC\n            ",
+  "query": "\n            SELECT\n                agent_session_id,\n                user_id AS \"user_id: MacroUserIdStr\",\n                direction,\n                content,\n                created_at\n            FROM agent_session_log\n            WHERE agent_session_id = $1\n            ORDER BY created_at ASC, id ASC\n            ",
   "describe": {
     "columns": [
       {
@@ -27,16 +27,6 @@
         "ordinal": 4,
         "name": "created_at",
         "type_info": "Timestamptz"
-      },
-      {
-        "ordinal": 5,
-        "name": "traceparent",
-        "type_info": "Text"
-      },
-      {
-        "ordinal": 6,
-        "name": "tracestate",
-        "type_info": "Text"
       }
     ],
     "parameters": {
@@ -49,10 +39,8 @@
       true,
       false,
       false,
-      false,
-      true,
-      true
+      false
     ]
   },
-  "hash": "46ec6ab883a0cb47c24d3a2e091432787399ac2e5beeb5cf8d748e09cf426cd9"
+  "hash": "1cde65d3dac81774186bec91e2b2f0144945e2536724a934a78479034274327b"
 }

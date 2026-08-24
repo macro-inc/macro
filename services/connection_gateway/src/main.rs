@@ -40,23 +40,12 @@ use service::dynamodb::create_dynamo_db_connection_manager;
 use service::redis::poll_messages;
 use sqlx::postgres::PgPoolOptions;
 use stream::outbound::redis_pg::{RedisPostgresStreamManager, RedisPostgresStreamRepo};
-use tokio::task::JoinSet;
-use tokio_util::sync::CancellationToken;
 use tower_http::cors::CorsLayer;
-
-const SHUTDOWN_DRAIN_TIMEOUT: Duration = Duration::from_secs(10);
 
 #[tokio::main]
 #[tracing::instrument(ret, err)]
 async fn main() -> Result<()> {
     let entrypoint = MacroEntrypoint::default().init();
-    let result = run().await;
-    entrypoint.shutdown();
-    result
-}
-
-#[tracing::instrument(ret, err)]
-async fn run() -> Result<()> {
     let aws_config = macro_aws_config::get_macro_aws_config().await;
 
     let secretsmanager_client = secretsmanager_client::SecretsManager::new(
@@ -130,6 +119,8 @@ async fn run() -> Result<()> {
         last_online_worker,
     };
 
+    tokio::spawn(poll_messages(context.clone()));
+
     let config = Arc::new(config);
     let authorization_state = MacroAuthorizationState::new(Arc::new(AuthorizationService::new(
         MacroAuthJwtValidator::new(jwt_args),
@@ -141,7 +132,7 @@ async fn run() -> Result<()> {
     )));
 
     let app = router(AppState {
-        context: context.clone(),
+        context,
         config: Arc::clone(&config),
         authorization_state,
         frecency_worker: Arc::new(FrecencyAggregatorWorkerHandle::new_worker(
@@ -162,84 +153,9 @@ async fn run() -> Result<()> {
         .await
         .context("failed to bind to port")?;
 
-    let http_shutdown = CancellationToken::new();
-    let redis_shutdown = CancellationToken::new();
-    let mut tasks = JoinSet::new();
-    tasks.spawn({
-        let http_shutdown = http_shutdown.clone();
-        async move {
-            let result = axum::serve(listener, app.into_make_service())
-                .with_graceful_shutdown(http_shutdown.cancelled_owned())
-                .await
-                .context("failed to serve");
-            ("http", result)
-        }
-    });
-    tasks.spawn({
-        let redis_shutdown = redis_shutdown.clone();
-        async move {
-            let result = poll_messages(context, redis_shutdown).await;
-            ("redis poller", result)
-        }
-    });
-
-    let mut run_error = None;
-    tokio::select! {
-        () = macro_entrypoint::shutdown_signal() => {}
-        result = tasks.join_next() => {
-            run_error = Some(match result {
-                Some(Ok((name, Ok(())))) => anyhow::anyhow!("{name} stopped unexpectedly"),
-                Some(Ok((name, Err(error)))) => error.context(format!("{name} stopped")),
-                Some(Err(error)) => anyhow::anyhow!("gateway task failed: {error}"),
-                None => anyhow::anyhow!("gateway tasks stopped unexpectedly"),
-            });
-        }
-    }
-
-    http_shutdown.cancel();
-    redis_shutdown.cancel();
-    let drain = async {
-        while let Some(result) = tasks.join_next().await {
-            match result {
-                Ok((_, Ok(()))) => {}
-                Ok((name, Err(error))) => {
-                    tracing::error!(error=?error, task=name, "gateway task failed during shutdown");
-                    if run_error.is_none() {
-                        run_error = Some(error.context(format!("{name} failed during shutdown")));
-                    }
-                }
-                Err(error) if error.is_cancelled() => {}
-                Err(error) => {
-                    tracing::error!(error=?error, "gateway task failed during shutdown");
-                    if run_error.is_none() {
-                        run_error = Some(anyhow::anyhow!(
-                            "gateway task failed during shutdown: {error}"
-                        ));
-                    }
-                }
-            }
-        }
-    };
-    if tokio::time::timeout(SHUTDOWN_DRAIN_TIMEOUT, drain)
+    let result = axum::serve(listener, app.into_make_service())
         .await
-        .is_err()
-    {
-        tracing::warn!(
-            timeout_seconds = SHUTDOWN_DRAIN_TIMEOUT.as_secs(),
-            "timed out draining gateway tasks; aborting remaining work"
-        );
-        tasks.abort_all();
-        while let Some(result) = tasks.join_next().await {
-            if let Err(error) = result
-                && !error.is_cancelled()
-            {
-                tracing::error!(error=?error, "gateway task failed during cancellation");
-            }
-        }
-    }
-
-    match run_error {
-        Some(error) => Err(error),
-        None => Ok(()),
-    }
+        .context("failed to serve");
+    entrypoint.shutdown();
+    result
 }
