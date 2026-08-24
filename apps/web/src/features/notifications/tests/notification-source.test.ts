@@ -110,7 +110,7 @@ describe('createNotificationSource', () => {
     mocks.doneMutation.mutateAsync.mockReset().mockResolvedValue(undefined);
   });
 
-  it('uses new GraphQL notification patches and ignores connection gateway notifications when enabled', () => {
+  it('coalesces uncached GraphQL patches and ignores connection gateway notifications when enabled', async () => {
     const incoming = notification('new-notification', 'channel', 'channel-1');
     const refetch = vi.fn().mockResolvedValue(undefined);
     mocks.graphqlCacheEnabled = false;
@@ -154,7 +154,7 @@ describe('createNotificationSource', () => {
         notification: incoming,
       });
       expect(onNotification).not.toHaveBeenCalled();
-      expect(refetch).toHaveBeenCalledOnce();
+      expect(refetch).not.toHaveBeenCalled();
 
       mocks.graphqlPatchCallback?.({
         __typename: 'GraphqlNewNotification',
@@ -164,8 +164,44 @@ describe('createNotificationSource', () => {
       expect(onNotification).toHaveBeenCalledWith(incoming);
       expect(subscriber).toHaveBeenCalledOnce();
       expect(subscriber).toHaveBeenCalledWith(incoming);
-      expect(refetch).toHaveBeenCalledTimes(2);
+      expect(refetch).not.toHaveBeenCalled();
+      await Promise.resolve();
+      expect(refetch).toHaveBeenCalledOnce();
       expect(mocks.optimisticInsertNotification).not.toHaveBeenCalled();
+    } finally {
+      dispose();
+    }
+  });
+
+  it('revalidates the notification query for new patches when the GraphQL cache is enabled', async () => {
+    const incoming = notification('new-notification', 'channel', 'channel-1');
+    const refetch = vi.fn().mockResolvedValue(undefined);
+    mocks.graphqlCacheEnabled = true;
+    mocks.graphqlEnabled = true;
+    mocks.notificationsQuery = {
+      data: [],
+      fetchNextPage: vi.fn(),
+      refetch,
+      hasNextPage: false,
+      isFetching: false,
+      isLoading: false,
+      transport: 'graphql',
+    };
+
+    let dispose = () => {};
+    createRoot((rootDispose) => {
+      dispose = rootDispose;
+      createNotificationSource({} as ConnectionGatewayWebsocket);
+    });
+
+    try {
+      mocks.graphqlPatchCallback?.({
+        __typename: 'GraphqlNewNotification',
+        notification: incoming,
+      });
+      expect(refetch).not.toHaveBeenCalled();
+      await Promise.resolve();
+      expect(refetch).toHaveBeenCalledOnce();
     } finally {
       dispose();
     }
