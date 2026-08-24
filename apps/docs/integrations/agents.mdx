@@ -51,14 +51,7 @@ You need:
   </Step>
 
   <Step title="Download macrod">
-    Open the [latest Macro release](https://github.com/macro-inc/macro/releases/latest) and download the `macrod` archive for your operating system and architecture.
-
-    Extract the archive and make the binary executable:
-
-    ```bash
-    tar -xzf macrod-*.tar.gz
-    chmod +x macrod
-    ```
+    Open the [latest Macro release](https://github.com/macro-inc/macro/releases/latest) and download the `macrod` archive for your OS/architecture. Right now we only officially support Mac and Linux.
   </Step>
 
   <Step title="Start the HTTPS tunnel">
@@ -75,6 +68,8 @@ You need:
     <Note>
       A quick-tunnel URL changes whenever `cloudflared` restarts. Create a [named Cloudflare tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/get-started/create-local-tunnel/) for a stable endpoint.
     </Note>
+
+    Alternatively, you can port-forward or deploy your harness to a cloud server.
   </Step>
 
   <Step title="Configure macrod">
@@ -110,8 +105,6 @@ You need:
     | Hermes | `hermes-acp` | `[]` |
     | OpenCode | `opencode` | `["acp"]` |
     | OpenClaw | `openclaw` | `["acp"]` |
-
-    For a team-owned agent, use `bot_scope = "team"`.
   </Step>
 
   <Step title="Start the agent">
@@ -127,4 +120,4 @@ You need:
 
 ## Keep it connected
 
-Both `macrod` and your HTTPS tunnel must stay running. If a quick-tunnel URL changes, update `public_url` in `macro.toml` and restart `macrod`. It will register the new endpoint automatically.
+Both `macrod` and your HTTPS tunnel must stay running for you to be able to start self-hosted agent sessios from Macro.
