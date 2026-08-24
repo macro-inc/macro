@@ -930,6 +930,13 @@ pub(crate) async fn search_unified(
 
     let response = client
         .search(opensearch::SearchParts::Index(&search_indices))
+        // An index that does not exist yet — a newly added entity type before
+        // its create-index run, or an alias mid-reindex — otherwise fails the
+        // whole request with `index_not_found_exception`, taking down search
+        // for every entity rather than just that one. Degrade to the indices
+        // that are present; `warn_on_shard_failures` still reports partial
+        // results from indices that do exist.
+        .ignore_unavailable(true)
         .body(search_request)
         .send()
         .await
