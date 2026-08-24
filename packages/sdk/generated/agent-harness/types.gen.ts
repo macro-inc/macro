@@ -146,6 +146,10 @@ export type AgentSessionResponse = {
      */
     repoUrl?: string | null;
     /**
+     * Compute tier of the managed sandbox.
+     */
+    sandboxSize: SandboxSize;
+    /**
      * The session's status.
      */
     status: SessionStatusDto;
@@ -309,6 +313,24 @@ export type RenameAgentSessionRequest = {
 };
 
 /**
+ * Named compute tier for a managed sandbox.
+ *
+ * Disk is always 96 GiB; CPU and RAM vary. The API and database store the
+ * name, never raw resource integers.
+ */
+export type SandboxSize = 'small' | 'default' | 'large';
+
+/**
+ * Request or response body for a named sandbox size.
+ */
+export type SandboxSizeBody = {
+    /**
+     * Named compute tier.
+     */
+    size: SandboxSize;
+};
+
+/**
  * The agent behind a session, as much of it as rendering a message needs.
  */
 export type SessionBot = {
@@ -341,6 +363,46 @@ export type SessionStatusDto = {
 } | {
     kind: 'disconnected';
 };
+
+export type GetAgentSandboxSizeData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/agent-sandbox-size';
+};
+
+export type GetAgentSandboxSizeErrors = {
+    401: string;
+    500: string;
+};
+
+export type GetAgentSandboxSizeError = GetAgentSandboxSizeErrors[keyof GetAgentSandboxSizeErrors];
+
+export type GetAgentSandboxSizeResponses = {
+    200: SandboxSizeBody;
+};
+
+export type GetAgentSandboxSizeResponse = GetAgentSandboxSizeResponses[keyof GetAgentSandboxSizeResponses];
+
+export type PutAgentSandboxSizeData = {
+    body: SandboxSizeBody;
+    path?: never;
+    query?: never;
+    url: '/agent-sandbox-size';
+};
+
+export type PutAgentSandboxSizeErrors = {
+    401: string;
+    500: string;
+};
+
+export type PutAgentSandboxSizeError = PutAgentSandboxSizeErrors[keyof PutAgentSandboxSizeErrors];
+
+export type PutAgentSandboxSizeResponses = {
+    200: SandboxSizeBody;
+};
+
+export type PutAgentSandboxSizeResponse = PutAgentSandboxSizeResponses[keyof PutAgentSandboxSizeResponses];
 
 export type CreateAgentSessionData = {
     body: CreateAgentSessionRequest;
@@ -496,3 +558,29 @@ export type RenameAgentSessionResponses = {
 };
 
 export type RenameAgentSessionResponse = RenameAgentSessionResponses[keyof RenameAgentSessionResponses];
+
+export type PutAgentSessionSandboxSizeData = {
+    body: SandboxSizeBody;
+    path: {
+        /**
+         * ID of the agent session
+         */
+        session_id: string;
+    };
+    query?: never;
+    url: '/agent-sessions/{session_id}/sandbox-size';
+};
+
+export type PutAgentSessionSandboxSizeErrors = {
+    401: string;
+    403: string;
+    500: string;
+};
+
+export type PutAgentSessionSandboxSizeError = PutAgentSessionSandboxSizeErrors[keyof PutAgentSessionSandboxSizeErrors];
+
+export type PutAgentSessionSandboxSizeResponses = {
+    200: SandboxSizeBody;
+};
+
+export type PutAgentSessionSandboxSizeResponse = PutAgentSessionSandboxSizeResponses[keyof PutAgentSessionSandboxSizeResponses];

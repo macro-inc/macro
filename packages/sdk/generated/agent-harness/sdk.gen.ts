@@ -2,7 +2,7 @@
 
 import type { Client, ClientMeta, Options as Options2, RequestResult, TDataShape } from './client';
 import { client } from './client.gen';
-import type { ControlAgentSessionData, ControlAgentSessionErrors, ControlAgentSessionResponses, CreateAgentSessionData, CreateAgentSessionErrors, CreateAgentSessionResponses, DeleteAgentSessionData, DeleteAgentSessionErrors, DeleteAgentSessionResponses, GetAgentSessionData, GetAgentSessionErrors, GetAgentSessionLogData, GetAgentSessionLogErrors, GetAgentSessionLogResponses, GetAgentSessionResponses, RenameAgentSessionData, RenameAgentSessionErrors, RenameAgentSessionResponses } from './types.gen';
+import type { ControlAgentSessionData, ControlAgentSessionErrors, ControlAgentSessionResponses, CreateAgentSessionData, CreateAgentSessionErrors, CreateAgentSessionResponses, DeleteAgentSessionData, DeleteAgentSessionErrors, DeleteAgentSessionResponses, GetAgentSandboxSizeData, GetAgentSandboxSizeErrors, GetAgentSandboxSizeResponses, GetAgentSessionData, GetAgentSessionErrors, GetAgentSessionLogData, GetAgentSessionLogErrors, GetAgentSessionLogResponses, GetAgentSessionResponses, PutAgentSandboxSizeData, PutAgentSandboxSizeErrors, PutAgentSandboxSizeResponses, PutAgentSessionSandboxSizeData, PutAgentSessionSandboxSizeErrors, PutAgentSessionSandboxSizeResponses, RenameAgentSessionData, RenameAgentSessionErrors, RenameAgentSessionResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -55,6 +55,27 @@ export class Sdk extends HeyApiClient {
     }) {
         super(args);
         Sdk.__registry.set(this, args?.key);
+    }
+    
+    /**
+     * Read the caller's default sandbox size for new `@coder` sessions.
+     */
+    public getAgentSandboxSize<ThrowOnError extends boolean = false>(options?: Options<GetAgentSandboxSizeData, ThrowOnError>): RequestResult<GetAgentSandboxSizeResponses, GetAgentSandboxSizeErrors, ThrowOnError> {
+        return (options?.client ?? this.client).get<GetAgentSandboxSizeResponses, GetAgentSandboxSizeErrors, ThrowOnError>({ url: '/agent-sandbox-size', ...options });
+    }
+    
+    /**
+     * Set the caller's default sandbox size for the next `@coder` mention.
+     */
+    public putAgentSandboxSize<ThrowOnError extends boolean = false>(options: Options<PutAgentSandboxSizeData, ThrowOnError>): RequestResult<PutAgentSandboxSizeResponses, PutAgentSandboxSizeErrors, ThrowOnError> {
+        return (options.client ?? this.client).put<PutAgentSandboxSizeResponses, PutAgentSandboxSizeErrors, ThrowOnError>({
+            url: '/agent-sandbox-size',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
     }
     
     /**
@@ -125,6 +146,20 @@ export class Sdk extends HeyApiClient {
     public renameAgentSession<ThrowOnError extends boolean = false>(options: Options<RenameAgentSessionData, ThrowOnError>): RequestResult<RenameAgentSessionResponses, RenameAgentSessionErrors, ThrowOnError> {
         return (options.client ?? this.client).put<RenameAgentSessionResponses, RenameAgentSessionErrors, ThrowOnError>({
             url: '/agent-sessions/{session_id}/name',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+    
+    /**
+     * Resize this session's sandbox and remember the size as the owner's default.
+     */
+    public putAgentSessionSandboxSize<ThrowOnError extends boolean = false>(options: Options<PutAgentSessionSandboxSizeData, ThrowOnError>): RequestResult<PutAgentSessionSandboxSizeResponses, PutAgentSessionSandboxSizeErrors, ThrowOnError> {
+        return (options.client ?? this.client).put<PutAgentSessionSandboxSizeResponses, PutAgentSessionSandboxSizeErrors, ThrowOnError>({
+            url: '/agent-sessions/{session_id}/sandbox-size',
             ...options,
             headers: {
                 'Content-Type': 'application/json',

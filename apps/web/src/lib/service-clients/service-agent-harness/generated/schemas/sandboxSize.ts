@@ -11,8 +11,7 @@
 Disk is always 96 GiB; CPU and RAM vary. The API and database store the
 name, never raw resource integers.
  */
-export type SandboxSize = typeof SandboxSize[keyof typeof SandboxSize];
-
+export type SandboxSize = (typeof SandboxSize)[keyof typeof SandboxSize];
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const SandboxSize = {

@@ -1,3 +1,4 @@
+import type { SandboxSize } from '../../../generated/agent-harness/types.gen';
 import type { MacroClient } from '../../utils/client';
 import { AgentSession } from './agent-session';
 
@@ -13,5 +14,15 @@ export class AgentSessionNamespace {
   /** Create a managed agent session. */
   createManaged(opts?: { prompt?: string }): Promise<AgentSession> {
     return AgentSession.createManaged(this.client, opts);
+  }
+
+  /** The caller's default sandbox size for new `@coder` sessions. */
+  defaultSandboxSize(): Promise<SandboxSize> {
+    return AgentSession.defaultSandboxSize(this.client);
+  }
+
+  /** Set the caller's default sandbox size for the next `@coder` mention. */
+  setDefaultSandboxSize(size: SandboxSize): Promise<SandboxSize> {
+    return AgentSession.setDefaultSandboxSize(this.client, size);
   }
 }

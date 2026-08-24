@@ -3,6 +3,7 @@ import type {
   AgentActionId,
   AgentSessionLogResponse,
   AgentSessionResponse,
+  SandboxSize,
 } from '../../../generated/agent-harness/types.gen';
 import { unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
@@ -54,6 +55,9 @@ export class AgentSession extends MacroEntity<AgentSessionResponse> {
   /** The session's latest runtime status. */
   readonly status = this.field('status');
 
+  /** Compute tier of the managed sandbox. */
+  readonly sandboxSize = this.field('sandboxSize');
+
   /** When the session was created. */
   readonly createdAt = this.field('createdAt');
 
@@ -68,6 +72,34 @@ export class AgentSession extends MacroEntity<AgentSessionResponse> {
         body: { name },
       }),
     );
+  }
+
+  /** Resize this session's sandbox and remember the size as the owner's default. */
+  async setSandboxSize(size: SandboxSize): Promise<SandboxSize> {
+    const { size: next } = await this.mutate((client) =>
+      client.agentHarness.putAgentSessionSandboxSize({
+        path: { session_id: this.id },
+        body: { size },
+      }),
+    );
+    return next;
+  }
+
+  /** The caller's default sandbox size for new `@coder` sessions. */
+  static async defaultSandboxSize(client: MacroClient): Promise<SandboxSize> {
+    return unwrap(await client.agentHarness.getAgentSandboxSize()).size;
+  }
+
+  /** Set the caller's default sandbox size for the next `@coder` mention. */
+  static async setDefaultSandboxSize(
+    client: MacroClient,
+    size: SandboxSize,
+  ): Promise<SandboxSize> {
+    return unwrap(
+      await client.agentHarness.putAgentSandboxSize({
+        body: { size },
+      }),
+    ).size;
   }
 
   /** Send a prompt or lifecycle operation to the live agent session. */

@@ -8,8 +8,8 @@
 /**
  * Which way a logged frame travelled, mirroring [`Message`]'s discriminant.
  */
-export type LogDirectionDto = typeof LogDirectionDto[keyof typeof LogDirectionDto];
-
+export type LogDirectionDto =
+  (typeof LogDirectionDto)[keyof typeof LogDirectionDto];
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const LogDirectionDto = {

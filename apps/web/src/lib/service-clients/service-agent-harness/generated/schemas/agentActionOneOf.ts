@@ -4,8 +4,9 @@
  * agent_harness_service
  * OpenAPI spec version: 0.1.0
  */
-import type { AgentPromptAction } from './agentPromptAction';
+
 import type { AgentActionOneOfAllOf } from './agentActionOneOfAllOf';
+import type { AgentPromptAction } from './agentPromptAction';
 
 /**
  * Send the agent a prompt.

@@ -13,6 +13,7 @@ const session: AgentSessionResponse = {
   modifiedAt: '2026-08-24T12:00:00Z',
   name: 'Agent Session',
   ownerId: 'macro|owner@example.com',
+  sandboxSize: 'default',
   status: { kind: 'no_messages' },
   workspace: '/workspace',
 };
@@ -41,6 +42,54 @@ describe('AgentSession', () => {
     );
     expect(request?.headers.get('authorization')).toBe('Bearer user-token');
     await expect(request?.json()).resolves.toEqual({ name: 'Fix Flaky Tests' });
+  });
+
+  test('resizes a session sandbox through the agent-harness service', async () => {
+    let request: Request | undefined;
+    globalThis.fetch = (async (input) => {
+      request = input instanceof Request ? input : new Request(input);
+      return Response.json({ size: 'large' }, { status: 200 });
+    }) as typeof fetch;
+    const macro = new Macro({
+      token: 'user-token',
+      hosts: { 'agent-harness': 'https://agent.example.test' },
+    });
+
+    await expect(
+      macro.agentSessions.byId(sessionId).setSandboxSize('large'),
+    ).resolves.toBe('large');
+
+    expect(request?.method).toBe('PUT');
+    expect(request?.url).toBe(
+      `https://agent.example.test/agent-sessions/${sessionId}/sandbox-size`,
+    );
+    await expect(request?.json()).resolves.toEqual({ size: 'large' });
+  });
+
+  test('reads and writes the caller default sandbox size', async () => {
+    const requests: Request[] = [];
+    globalThis.fetch = (async (input) => {
+      const request = input instanceof Request ? input : new Request(input);
+      requests.push(request);
+      return Response.json({ size: 'small' }, { status: 200 });
+    }) as typeof fetch;
+    const macro = new Macro({
+      token: 'user-token',
+      hosts: { 'agent-harness': 'https://agent.example.test' },
+    });
+
+    await expect(macro.agentSessions.defaultSandboxSize()).resolves.toBe(
+      'small',
+    );
+    await expect(
+      macro.agentSessions.setDefaultSandboxSize('small'),
+    ).resolves.toBe('small');
+
+    expect(requests.map((request) => request.method)).toEqual(['GET', 'PUT']);
+    expect(requests.map((request) => request.url)).toEqual([
+      'https://agent.example.test/agent-sandbox-size',
+      'https://agent.example.test/agent-sandbox-size',
+    ]);
   });
 
   test('wraps managed creation, control, logs, and deletion', async () => {

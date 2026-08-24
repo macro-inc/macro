@@ -4,8 +4,9 @@
  * agent_harness_service
  * OpenAPI spec version: 0.1.0
  */
-import type { LogFrameDto } from './logFrameDto';
+
 import type { AgentSessionLogEntryDtoAllOf } from './agentSessionLogEntryDtoAllOf';
+import type { LogFrameDto } from './logFrameDto';
 
 /**
  * One entry of a session's protocol log.
@@ -22,4 +23,5 @@ belongs to the session named once at the top.
 `Deserialize` is for the wire-contract tests only - nothing server-side
 decodes its own response type.
  */
-export type AgentSessionLogEntryDto = LogFrameDto & AgentSessionLogEntryDtoAllOf;
+export type AgentSessionLogEntryDto = LogFrameDto &
+  AgentSessionLogEntryDtoAllOf;
