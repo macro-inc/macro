@@ -15,23 +15,16 @@ use crate::workflows::{runners, steps};
 
 /// Build the workflow.
 pub fn push_local_stack_binaries() -> Workflow {
-    let mut push = Push::default().add_branch("main");
-    for path in [
-        xtask_paths::repo_glob!("Cargo.toml"),
-        xtask_paths::repo_glob!("Cargo.lock"),
-        xtask_paths::repo_glob!("rust-toolchain.toml"),
-        xtask_paths::repo_glob!("crates/**"),
-        xtask_paths::repo_glob!("services/**"),
-        xtask_paths::repo_glob!("nix/**"),
-        xtask_paths::repo_glob!("nix-support/**"),
-        xtask_paths::repo_glob!("flake.nix"),
-        xtask_paths::repo_glob!("flake.lock"),
-        xtask_paths::repo_glob!(".github/actions/setup-nix/**"),
-        xtask_paths::repo_glob!(".github/actions/teardown-nix/**"),
-        xtask_paths::repo_glob!(".github/workflows/push_local_stack_binaries.yml"),
-    ] {
-        push = push.add_path(path);
-    }
+    // Every push to main, no paths filter. The stack derivation hashes
+    // depend on every file the Nix src filters keep — Rust anywhere
+    // (including tooling/), root *.md via rootDepsSrc, .sh/.sql/.json
+    // assets — which a paths list cannot faithfully enumerate. On
+    // 2026-08-23 a tooling+docs merge changed every service hash without
+    // matching the old filter; nothing published, and the environment
+    // bake plus every Cloud agent compiled the same binaries from source
+    // independently. When hashes are unchanged the run substitutes and
+    // finishes in under a minute, so always running is near-free.
+    let push = Push::default().add_branch("main");
 
     Workflow::new("Push local stack binaries")
         .permissions(Permissions {
