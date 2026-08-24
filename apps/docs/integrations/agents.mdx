@@ -4,12 +4,7 @@ icon: "terminal"
 description: "Connect a self-hosted ACP agent harness to Macro with macrod."
 ---
 
-You can run any [Agent Client Protocol (ACP)](https://zed.dev/acp)-compatible agent harness directly in Macro. Examples include:
-
-- [Codex with Zed adapter](https://github.com/agentclientprotocol/codex-acp)
-- [Claude Code with Zed adapter](https://github.com/agentclientprotocol/claude-agent-acp)
-- [OpenClaw](https://openclaw.ai/)
-- [Hermes](https://hermes-agent.nousresearch.com/docs/user-guide/features/acp)
+You can run any [Agent Client Protocol (ACP)](https://zed.dev/acp)-compatible agent harness directly in Macro.
 
 Macro provides `macrod`, a small daemon that runs on your computer and waits for agent sessions. When you start a session or @mention your custom agent, `macrod` launches your configured harness, sends it the prompt, and bridges its ACP connection to Macro.
 
@@ -96,15 +91,7 @@ You need:
     repo_url = "https://github.com/you/your-repository"
     ```
 
-    Change `you@example.com` in `owner_user_id` to the email address you use to sign in to Macro. Replace `mbot_...` with the token from the first step. Set `command` and `args` to the ACP launch command from the second step. For example:
-
-    | Harness | `command` | `args` |
-    | --- | --- | --- |
-    | Claude Code | `npx` | `["-y", "@agentclientprotocol/claude-agent-acp"]` |
-    | Codex | `npx` | `["-y", "@agentclientprotocol/codex-acp"]` |
-    | Hermes | `hermes-acp` | `[]` |
-    | OpenCode | `opencode` | `["acp"]` |
-    | OpenClaw | `openclaw` | `["acp"]` |
+    Change `you@example.com` in `owner_user_id` to the email address you use to sign in to Macro. Replace `mbot_...` with the token from the first step. Set `command` and `args` to the ACP launch command from the second step.
   </Step>
 
   <Step title="Start the agent">
