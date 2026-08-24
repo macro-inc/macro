@@ -1,7 +1,5 @@
-import {
-  useBulkUpdateEntityPropertyOptionsMutation,
-  useInFlightEntityPropertyOptions,
-} from '@queries/properties/entity';
+import { useBulkUpdateEntityPropertyOptionsMutation } from '@queries/properties/entity';
+import { useInFlightEntityPropertyOptions } from '@queries/properties/in-flight-options';
 import {
   useEnsureTagSetMutation,
   useTagsQuery,
@@ -84,8 +82,9 @@ function createDocTags(
   appliedOptionIdsForDefinition: (definitionId: string) => string[],
   persistTagSelection: PersistTagSelection,
   tagSets: Accessor<TagSetResponse[]>,
-  // Optimistic overlay for query-backed sources (undefined for soup/local,
-  // whose sources update optimistically on their own).
+  // Optimistic overlay for sources a mutation cannot write through (query
+  // results, and soup rows whose property record does not exist yet).
+  // Undefined for local sources, which are set synchronously.
   inFlightOptionIdsForDefinition?: (
     definitionId: string
   ) => string[] | undefined
@@ -295,7 +294,12 @@ export function useDocTags(entityId: string, entityType: EntityType) {
 /**
  * Doc-tags backed by an entity's already-loaded soup properties instead of a
  * per-entity fetch. List rows use this so tags render with no extra requests.
- * Mutations patch the soup cache optimistically, so the source stays live.
+ *
+ * Mutations patch the soup cache optimistically, but only where the entity has
+ * a property record to patch: the first tag from a set has no assignment id
+ * until the server answers. The in-flight overlay covers that gap (and any
+ * transport whose cache this row does not read from), so a picked tag always
+ * shows immediately.
  */
 export function useSoupDocTags(
   entityId: string,
@@ -311,11 +315,14 @@ export function useSoupDocTags(
   };
   const persistTagSelection = usePersistTagSelection(entityId, entityType);
   const tagSets = useTagSets();
+  const inFlightOptionIdsForDefinition =
+    useInFlightEntityPropertyOptions(entityId);
 
   return createDocTags(
     appliedOptionIdsForDefinition,
     persistTagSelection,
-    tagSets
+    tagSets,
+    inFlightOptionIdsForDefinition
   );
 }
 

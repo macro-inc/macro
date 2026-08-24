@@ -1,7 +1,8 @@
-import { ROUTER_BASE_CONCAT } from '@app/constants/routerBase';
+import { ROUTER_BASE_CONCAT, toBaseRelative } from '@app/constants/routerBase';
 import { updateUserAuth } from '@core/auth';
 import { toast } from '@core/component/Toast/Toast';
 import { PaywallKey, usePaywallState } from '@core/constant/PaywallState';
+import { currentSettingsReturnTo } from '@core/constant/SettingsState';
 import { getNativeMobilePlatform } from '@core/util/platform';
 import { useInitGmailLink } from '@queries/auth';
 import { invalidateUserInfo } from '@queries/auth/user-info';
@@ -21,6 +22,7 @@ import type { UseQueryResult } from '@tanstack/solid-query';
 import { invoke } from '@tauri-apps/api/core';
 import { err, okAsync, ResultAsync } from 'neverthrow';
 import { createMemo, createSignal } from 'solid-js';
+import { rememberInboxLinkReturn } from './return-layout';
 import { requestShareInboxConfirmation } from './share-conflict';
 
 const [emailRefetchInterval, setEmailRefetchInterval] = createSignal<
@@ -226,6 +228,10 @@ const TOO_MANY_PENDING_LINKS_MESSAGE =
  * provisioned here directly with the `link_id` from the init response. A
  * shared-inbox conflict is surfaced through `requestShareInboxConfirmation`,
  * rendered by the globally mounted dialog.
+ *
+ * Everywhere else — web and desktop — the consent screen replaces the page, so
+ * the layout the user was working in is stashed against the new link id first
+ * and the callback restores it. iOS needs no stash: its layout never unmounts.
  */
 export function useAddInboxFlow() {
   const initGmailLink = useInitGmailLink();
@@ -312,6 +318,13 @@ export function useAddInboxFlow() {
       scopes,
     });
     if (result.isOk()) {
+      // Leaving for Google unloads the app, and the split layout only lives in
+      // the URL — stash it so the callback can put it back rather than landing
+      // everyone on a default layout.
+      rememberInboxLinkReturn(result.value.link_id, {
+        url: `${toBaseRelative(window.location.pathname)}${window.location.search}${window.location.hash}`,
+        settingsReturnTo: currentSettingsReturnTo(),
+      });
       window.location.href = result.value.authorization_url;
     } else if (isPaymentRequired(result.error)) {
       showPaywall(PaywallKey.MULTI_INBOX);

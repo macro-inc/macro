@@ -5,8 +5,8 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type SessionStatusDtoOneOfKind =
-  (typeof SessionStatusDtoOneOfKind)[keyof typeof SessionStatusDtoOneOfKind];
+export type SessionStatusDtoOneOfKind = typeof SessionStatusDtoOneOfKind[keyof typeof SessionStatusDtoOneOfKind];
+
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const SessionStatusDtoOneOfKind = {

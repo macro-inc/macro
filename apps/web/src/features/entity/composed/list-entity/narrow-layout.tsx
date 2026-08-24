@@ -7,7 +7,11 @@ import {
   isTaskEntity,
 } from '../../types/entity';
 import { isSearchEntity } from '../../types/search';
-import { ChannelJoinButton, ChannelMessageSingleLine } from './channel';
+import {
+  ChannelActiveCallBadge,
+  ChannelJoinButton,
+  ChannelMessageSingleLine,
+} from './channel';
 import { EmailInboxChip } from './email';
 import { type LayoutProps, RowIndicator } from './shared';
 
@@ -45,6 +49,13 @@ export function NarrowLayout(props: LayoutProps) {
         </Show>
         <Show when={isEmailEntity(props.entity) && props.entity}>
           {(entity) => <EmailInboxChip entity={entity()} class="ml-auto" />}
+        </Show>
+        <Show when={isChannelEntity(props.entity) && props.entity}>
+          {(entity) => (
+            <span class="ml-auto shrink-0 flex items-center">
+              <ChannelActiveCallBadge channelId={entity().id} />
+            </span>
+          )}
         </Show>
         <Show
           when={

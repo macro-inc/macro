@@ -4,9 +4,8 @@
  * agent_harness_service
  * OpenAPI spec version: 0.1.0
  */
-
-import type { LogDirectionDto } from './logDirectionDto';
 import type { LogFrameDtoContent } from './logFrameDtoContent';
+import type { LogDirectionDto } from './logDirectionDto';
 
 /**
  * The two fields [`AgentSessionLogEntryDto`] flattens in.

@@ -56,10 +56,14 @@ jobs:
           exit 1
         fi
         daytona login --api-key "$DAYTONA_API_KEY"
+        echo "ensuring Daytona snapshot at --cpu ${DAYTONA_SNAPSHOT_CPU} --memory ${DAYTONA_SNAPSHOT_MEMORY} --disk ${DAYTONA_SNAPSHOT_DISK}"
         just --justfile crates/agent_harness/justfile ensure-daytona
       shell: bash
       env:
         DAYTONA_API_KEY: ${{ secrets.DAYTONA_API_KEY }}
+        DAYTONA_SNAPSHOT_CPU: '8'
+        DAYTONA_SNAPSHOT_MEMORY: '16'
+        DAYTONA_SNAPSHOT_DISK: '96'
   publish-image:
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     name: Publish sandbox image to GHCR

@@ -113,6 +113,8 @@ export interface CalendarGridProps {
   eventsById: Map<string, CalendarEvent>;
   settings: CalendarGridSettings;
   selection: CalendarGridSelection;
+  /** Rendered occurrence ids that should visually stand out from nearby events. */
+  emphasizedEventIds?: ReadonlySet<string>;
   eventTimeChangePending?: boolean;
   onDatesSet?: (info: DatesSetArg) => void;
   onEventTimeChange?: (
@@ -159,9 +161,15 @@ export function CalendarGrid(props: CalendarGridProps) {
   const mappedEvents = createMemo<EventInput[]>(() =>
     props.events.map((event) => {
       const mapped = mapCalendarEventToFullCalendar(event);
-      return props.onEventTimeChange
-        ? mapped
-        : { ...mapped, startEditable: false, durationEditable: false };
+      const emphasized = props.emphasizedEventIds?.has(event.id);
+      return {
+        ...mapped,
+        classNames: emphasized ? ['calendar-event-emphasized'] : undefined,
+        startEditable: props.onEventTimeChange ? mapped.startEditable : false,
+        durationEditable: props.onEventTimeChange
+          ? mapped.durationEditable
+          : false,
+      };
     })
   );
   const [eventInteractionActive, setEventInteractionActive] =
@@ -206,6 +214,7 @@ export function CalendarGrid(props: CalendarGridProps) {
           ? undefined
           : { days: props.settings.dayCount }
       }
+      dateAlignment={props.settings.dayCount === undefined ? undefined : 'day'}
       dayHeaders={props.settings.showDayHeaders ?? true}
       allDaySlot={props.settings.showAllDaySlot ?? true}
       height="100%"

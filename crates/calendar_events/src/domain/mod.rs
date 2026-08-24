@@ -1,5 +1,7 @@
 //! Calendar domain layer.
 
+/// Kafka event models for the calendar topic.
+pub mod events;
 /// Domain models.
 pub mod models;
 /// User-initiated calendar mutation policy.

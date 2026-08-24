@@ -75,6 +75,9 @@ impl LocalEnv {
         // deployed envs); local stacks keep it on for development.
         env.insert("CALENDAR_SYNC_ENABLED".into(), "true".into());
         env.insert("CALENDAR_SCOPE_ENABLED".into(), "true".into());
+        // Calendar search ships dark too: off in deployed envs until each has
+        // its calendar index created and backfilled.
+        env.insert("CALENDAR_SEARCH_ENABLED".into(), "true".into());
         self.infra.write(&mut env);
         self.storage.write(&mut env);
         self.queues.write(&mut env);

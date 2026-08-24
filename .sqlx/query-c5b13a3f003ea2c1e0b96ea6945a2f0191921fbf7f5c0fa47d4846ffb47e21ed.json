@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            INSERT INTO agent_session (\n                id, owner_id, thread_id, originating_message_id, bot_id, model,\n                harness, repo_url, workspace, acp_session_id, status,\n                status_event_name\n            )\n            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)\n            RETURNING\n                id, name, owner_id, thread_id, originating_message_id, bot_id,\n                model, harness, repo_url, workspace, acp_session_id, status,\n                status_event_name, created_at, modified_at,\n                (SELECT channel_id FROM comms_messages WHERE id = agent_session.thread_id)\n                    AS \"thread_channel_id?\"\n            ",
+  "query": "\n            INSERT INTO agent_session (\n                id, owner_id, thread_id, originating_message_id, bot_id, model,\n                harness, repo_url, workspace, sandbox_size, acp_session_id, status,\n                status_event_name\n            )\n            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)\n            RETURNING\n                id, name, owner_id, thread_id, originating_message_id, bot_id,\n                model, harness, repo_url, workspace, sandbox_size, acp_session_id, status,\n                status_event_name, created_at, modified_at,\n                (SELECT channel_id FROM comms_messages WHERE id = agent_session.thread_id)\n                    AS \"thread_channel_id?\"\n            ",
   "describe": {
     "columns": [
       {
@@ -55,31 +55,36 @@
       },
       {
         "ordinal": 10,
-        "name": "acp_session_id",
+        "name": "sandbox_size",
         "type_info": "Text"
       },
       {
         "ordinal": 11,
-        "name": "status",
+        "name": "acp_session_id",
         "type_info": "Text"
       },
       {
         "ordinal": 12,
-        "name": "status_event_name",
+        "name": "status",
         "type_info": "Text"
       },
       {
         "ordinal": 13,
+        "name": "status_event_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 14,
         "name": "created_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 14,
+        "ordinal": 15,
         "name": "modified_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 15,
+        "ordinal": 16,
         "name": "thread_channel_id?",
         "type_info": "Uuid"
       }
@@ -91,6 +96,7 @@
         "Uuid",
         "Uuid",
         "Uuid",
+        "Text",
         "Text",
         "Text",
         "Text",
@@ -111,6 +117,7 @@
       false,
       true,
       false,
+      false,
       true,
       false,
       true,
@@ -119,5 +126,5 @@
       null
     ]
   },
-  "hash": "0b917a67b0ae4561afe0431326adeaddee369a7ed72c1b22c7ab86c116a0d131"
+  "hash": "c5b13a3f003ea2c1e0b96ea6945a2f0191921fbf7f5c0fa47d4846ffb47e21ed"
 }

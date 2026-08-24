@@ -18,7 +18,15 @@ import type { NamedTool } from '@service-cognition/generated/tools/tool';
 import type { CreateCalendarEvent } from '@service-cognition/generated/tools/types';
 import { debounce } from '@solid-primitives/scheduled';
 import { Layer } from '@ui';
-import { createMemo, createSignal, onCleanup, Show, Suspense } from 'solid-js';
+import {
+  createMemo,
+  createSignal,
+  ErrorBoundary,
+  onCleanup,
+  Show,
+  Suspense,
+} from 'solid-js';
+import { CalendarToolEventPreview } from './EventPreview';
 import {
   createCalendarEventToEditorInitialValues,
   editorSubmitValuesToCreateCalendarEvent,
@@ -169,6 +177,10 @@ function CalendarChatComposeContent(props: CalendarChatComposeProps) {
     initialValue: createCalendarEventToEditorInitialValues(props.initialData),
     calendarOptions,
     guestOptions,
+    recurrenceTimeZone:
+      props.initialData.time.kind === 'timed'
+        ? (props.initialData.time.timeZone ?? undefined)
+        : undefined,
     onChange: scheduleUpdate,
   });
 
@@ -311,29 +323,56 @@ function CalendarChatComposeContent(props: CalendarChatComposeProps) {
 
   return (
     <Layer depth={2}>
-      <div class="flex max-h-[32rem] min-h-0 flex-col gap-3 rounded-xl border border-edge-muted bg-surface p-4 text-ink shadow-sm">
-        <Show when={showOwnerDisabledMessage()}>
-          <p class="text-xs text-ink-extra-muted/60">
-            Only the chat owner can create or edit this calendar event.
-          </p>
-        </Show>
-        <Show when={props.streamLocked && !showOwnerDisabledMessage()}>
-          <p class="text-xs text-ink-extra-muted/60">
-            Waiting for the response to finish before this event can be edited.
-          </p>
-        </Show>
-        <EventForm
-          controller={controller}
-          disabled={
-            toolFinalized ||
-            ownerGateDisabled() ||
-            props.streamLocked === true ||
-            operation() === 'reject'
+      <div class="flex min-h-0 w-full flex-col gap-4">
+        <div
+          data-calendar-tool-composer
+          class="flex min-h-80 max-h-128 min-w-0 flex-col gap-3 rounded-xl border border-edge-muted bg-surface p-4 text-ink shadow-sm"
+        >
+          <Show when={showOwnerDisabledMessage()}>
+            <p class="text-xs text-ink-extra-muted/60">
+              Only the chat owner can create or edit this calendar event.
+            </p>
+          </Show>
+          <Show when={props.streamLocked && !showOwnerDisabledMessage()}>
+            <p class="text-xs text-ink-extra-muted/60">
+              Waiting for the response to finish before this event can be
+              edited.
+            </p>
+          </Show>
+          <EventForm
+            controller={controller}
+            class="min-w-0"
+            disabled={
+              toolFinalized ||
+              ownerGateDisabled() ||
+              props.streamLocked === true ||
+              operation() === 'reject'
+            }
+            pending={operation() === 'create'}
+            onCancel={() => void handleCancel()}
+            onSubmit={(values) => void handleCreate(values)}
+          />
+        </div>
+        <ErrorBoundary
+          fallback={
+            <div class="flex h-96 items-center justify-center rounded-xl border border-edge-muted bg-surface p-4 text-center text-xs text-ink-muted shadow-sm">
+              Calendar preview unavailable.
+            </div>
           }
-          pending={operation() === 'create'}
-          onCancel={() => void handleCancel()}
-          onSubmit={(values) => void handleCreate(values)}
-        />
+        >
+          <CalendarToolEventPreview
+            controller={controller}
+            eventId={`calendar-tool-preview:${props.toolCallId}`}
+            showPeriodLabel
+            showNavigationControls
+            timeZone={
+              props.initialData.time.kind === 'timed'
+                ? (props.initialData.time.timeZone ?? undefined)
+                : undefined
+            }
+            class="h-96 shrink-0"
+          />
+        </ErrorBoundary>
       </div>
     </Layer>
   );

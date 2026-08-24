@@ -23,6 +23,13 @@ set dotenv-load := true
 # repository in Namespace's nscr.io workspace registry.
 image_name := env_var_or_default("AGENT_HARNESS_IMAGE", "macro-agent-harness")
 
+# Default sandbox size baked into the snapshot. CI exports the same three
+# values. Live Daytona orgs still on the 4/8/10 per-sandbox cap cannot
+# create this until support@daytona.io raises the limit.
+snapshot_cpu := env_var_or_default("DAYTONA_SNAPSHOT_CPU", "8")
+snapshot_memory := env_var_or_default("DAYTONA_SNAPSHOT_MEMORY", "16")
+snapshot_disk := env_var_or_default("DAYTONA_SNAPSHOT_DISK", "96")
+
 # Cheap for the agent to answer, and it proves the repo actually cloned.
 default_prompt := "list the files in the repo root, then stop"
 
@@ -30,30 +37,64 @@ default_prompt := "list the files in the repo root, then stop"
 default:
     @just --list
 
-# Build the Daytona snapshot if missing.
+# Build the Daytona snapshot if missing. If it exists at the wrong size,
+# fail without deleting it (a recreate that 400s on per-sandbox limits
+# would leave @coder unable to spawn).
 ensure-daytona:
     #!/usr/bin/env bash
     set -euo pipefail
     # Daytona has no "build from a local Dockerfile at create time" mode, so
     # the image becomes a snapshot once, out of band, and sandboxes boot from
     # that.
-    if daytona snapshot list | grep -qw {{image_name}}; then
-      echo "snapshot {{image_name}} already exists, skipping build"
-    else
-      echo "building snapshot {{image_name}} (slow: the image bakes two nix dev shells)"
-      # 10GB disk is the account's per-sandbox ceiling; raising it needs Daytona support.
-      # `--context .` matters twice over. Without any `--context` the CLI
-      # auto-detects from COPY lines and misses
-      # `COPY sidecar/Cargo.toml sidecar/Cargo.lock ./`; with per-entry contexts
-      # (`--context sidecar`) it uploads that directory's *contents* flattened, so
-      # the `sidecar/` prefix the Dockerfile copies from does not exist. Either
-      # way the build dies in the sidecar stage with "/sidecar/src: not found".
-      # Passing the directory keeps paths intact - it is only ~84KB.
-      ( cd container && daytona snapshot create {{image_name}} \
-          --dockerfile Dockerfile \
-          --context . \
-          --cpu 4 --memory 8 --disk 10 )
-    fi
+    name={{image_name}}
+    cpu={{snapshot_cpu}}
+    memory={{snapshot_memory}}
+    disk={{snapshot_disk}}
+    echo "desired snapshot $name at --cpu $cpu --memory $memory --disk $disk"
+    state="$(daytona snapshot list --format json | python3 -c '
+import json, sys
+name, cpu, memory, disk = sys.argv[1:5]
+found = next((item for item in json.load(sys.stdin) if item.get("name") == name), None)
+if found is None:
+    print("missing")
+    raise SystemExit(0)
+current_cpu = int(found.get("cpu") or 0)
+current_memory = int(found.get("mem") or found.get("memory") or 0)
+current_disk = int(found.get("disk") or 0)
+if current_cpu == int(cpu) and current_memory == int(memory) and current_disk == int(disk):
+    print("match")
+    raise SystemExit(0)
+print(f"mismatch cpu={current_cpu} memory={current_memory} disk={current_disk}")
+' "$name" "$cpu" "$memory" "$disk")"
+    case "$state" in
+      match)
+        echo "snapshot $name already exists at --cpu $cpu --memory $memory --disk $disk, skipping build"
+        ;;
+      mismatch*)
+        echo "$state" >&2
+        echo "snapshot $name is not --cpu $cpu --memory $memory --disk $disk" >&2
+        echo "not deleting it: recreate with 'just rebuild-daytona' after Daytona raises per-sandbox limits (support@daytona.io)" >&2
+        exit 1
+        ;;
+      missing)
+        echo "building snapshot $name (slow: the image bakes two nix dev shells)"
+        # `--context .` matters twice over. Without any `--context` the CLI
+        # auto-detects from COPY lines and misses
+        # `COPY sidecar/Cargo.toml sidecar/Cargo.lock ./`; with per-entry contexts
+        # (`--context sidecar`) it uploads that directory's *contents* flattened, so
+        # the `sidecar/` prefix the Dockerfile copies from does not exist. Either
+        # way the build dies in the sidecar stage with "/sidecar/src: not found".
+        # Passing the directory keeps paths intact - it is only ~84KB.
+        ( cd container && daytona snapshot create "$name" \
+            --dockerfile Dockerfile \
+            --context . \
+            --cpu "$cpu" --memory "$memory" --disk "$disk" )
+        ;;
+      *)
+        echo "unexpected snapshot state: $state" >&2
+        exit 1
+        ;;
+    esac
 
 # Build the Daytona snapshot if missing, then boot an agent in a sandbox
 boot-daytona prompt=default_prompt: ensure-daytona

@@ -54,7 +54,8 @@ them with tagsMatch=\"all\". Each entry names a tag by its label, matched case-i
 against the user's own tags; only set scope (\"personal\" or \"team\") when the user \
 distinguishes between their personal and team tags. An unknown label fails with the list of \
 available tags — call ListTags first when unsure what tags exist. Only taggable items \
-(documents, emails, AI chats, projects, call records) can match, so channels are dropped \
+(documents, emails, AI chats, projects, call records, calendar events) can match, so \
+channels are dropped \
 while a tag filter is active.")]
     #[serde(default)]
     pub tags: Option<Vec<TagFilter>>,

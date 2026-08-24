@@ -26,6 +26,11 @@ pub struct BoolQuery<'a> {
     /// Boost
     #[serde(skip_serializing_if = "Option::is_none")]
     pub boost: Option<f64>,
+    /// Clause name. OpenSearch echoes the names of every named clause a hit
+    /// matched back in that hit's `matched_queries`, which lets a caller tell
+    /// which branch of a disjunction produced a result.
+    #[serde(rename = "_name", skip_serializing_if = "Option::is_none")]
+    pub name: Option<Cow<'a, str>>,
 }
 
 impl<'a> BoolQuery<'a> {
@@ -70,6 +75,12 @@ impl<'a> BoolQuery<'a> {
         self
     }
 
+    /// Name this clause so hits it matches report it in `matched_queries`.
+    pub fn name(mut self, name: impl Into<Cow<'a, str>>) -> Self {
+        self.name = Some(name.into());
+        self
+    }
+
     /// Convert to an owned version with 'static lifetime
     pub fn to_owned(&self) -> BoolQuery<'static> {
         BoolQuery {
@@ -79,6 +90,7 @@ impl<'a> BoolQuery<'a> {
             filter: Cow::Owned(self.filter.iter().map(|q| q.to_owned()).collect()),
             minimum_should_match: self.minimum_should_match,
             boost: self.boost,
+            name: self.name.as_ref().map(|n| Cow::Owned(n.to_string())),
         }
     }
 }
@@ -124,6 +136,10 @@ impl<'a> ToOpenSearchJson for BoolQuery<'a> {
             bool_obj.insert("boost".to_string(), boost.into());
         }
 
+        if let Some(name) = &self.name {
+            bool_obj.insert("_name".to_string(), Value::String(name.to_string()));
+        }
+
         let mut result = Map::new();
         result.insert("bool".to_string(), Value::Object(bool_obj));
         Value::Object(result)
@@ -139,6 +155,7 @@ pub struct BoolQueryBuilder<'a> {
     filter: Cow<'a, [QueryType<'a>]>,
     minimum_should_match: Option<i32>,
     boost: Option<f64>,
+    name: Option<Cow<'a, str>>,
 }
 
 impl<'a> BoolQueryBuilder<'a> {
@@ -189,6 +206,12 @@ impl<'a> BoolQueryBuilder<'a> {
         self
     }
 
+    /// Name this clause so hits it matches report it in `matched_queries`.
+    pub fn name(&mut self, name: impl Into<Cow<'a, str>>) -> &mut Self {
+        self.name = Some(name.into());
+        self
+    }
+
     /// Build the final BoolQuery
     pub fn build(self) -> BoolQuery<'a> {
         BoolQuery {
@@ -198,6 +221,7 @@ impl<'a> BoolQueryBuilder<'a> {
             filter: self.filter,
             minimum_should_match: self.minimum_should_match,
             boost: self.boost,
+            name: self.name,
         }
     }
 }

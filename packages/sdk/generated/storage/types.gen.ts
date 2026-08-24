@@ -10,6 +10,43 @@ export type ClientOptions = {
 export type AccessLevel = 'view' | 'comment' | 'edit' | 'owner';
 
 /**
+ * A currently active call, as returned by the batch active-calls listing.
+ */
+export type ActiveCallSummary = {
+    /**
+     * The call identifier.
+     */
+    callId: string;
+    /**
+     * The channel this call belongs to.
+     */
+    channelId: string;
+    /**
+     * When the call was created.
+     */
+    createdAt: string;
+    /**
+     * User who created the call.
+     */
+    createdBy: string;
+    /**
+     * Number of active participants. Always >= 1 — calls with no active
+     * participants (e.g. orphaned by a dropped RTC webhook) are excluded.
+     */
+    participantCount: number;
+};
+
+/**
+ * Response listing all active calls in channels the caller is a member of.
+ */
+export type ActiveCallsResponse = {
+    /**
+     * The active calls, newest first.
+     */
+    calls: Array<ActiveCallSummary>;
+};
+
+/**
  * The kind of activity a user performs in a channel.
  */
 export type ActivityType = 'view' | 'interact';
@@ -8789,6 +8826,26 @@ export type MentionPreviewsResponses = {
 };
 
 export type MentionPreviewsResponse = MentionPreviewsResponses[keyof MentionPreviewsResponses];
+
+export type GetActiveCallsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/call/active';
+};
+
+export type GetActiveCallsErrors = {
+    401: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type GetActiveCallsError = GetActiveCallsErrors[keyof GetActiveCallsErrors];
+
+export type GetActiveCallsResponses = {
+    200: ActiveCallsResponse;
+};
+
+export type GetActiveCallsResponse = GetActiveCallsResponses[keyof GetActiveCallsResponses];
 
 export type GetBatchCallRecordPreviewData = {
     body: GetBatchCallRecordPreviewRequest;

@@ -220,6 +220,16 @@ impl Display for MacroEm {
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub(crate) struct Hit<T> {
+    /// Physical index this hit came from, e.g. `documents_v2`. Kept for
+    /// diagnostics only — it is a deployment detail on a naming convention
+    /// nothing enforces, so it must not be used to identify the entity.
+    #[serde(rename = "_index")]
+    pub index: String,
+    /// Names of the query clauses this hit matched. The unified query names
+    /// each entity's clause after that entity, which is how a hit is resolved
+    /// to a type. Absent when the query named no clauses.
+    #[serde(default)]
+    pub matched_queries: Vec<String>,
     #[serde(rename = "_score")]
     pub score: Option<f64>,
     #[serde(rename = "_source")]

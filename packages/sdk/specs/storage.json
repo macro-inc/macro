@@ -836,6 +836,46 @@
         }
       }
     },
+    "/call/active": {
+      "get": {
+        "tags": ["call::inbound::axum_router"],
+        "summary": "Handler for `GET /call/active`.",
+        "description": "Lists all active calls in channels the caller is an active member of,\nnewest first. Calls with no active participants (orphaned by dropped RTC\nwebhooks) are excluded.",
+        "operationId": "get_active_calls",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActiveCallsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/call/record/preview": {
       "post": {
         "tags": ["call::inbound::axum_router"],
@@ -11104,6 +11144,57 @@
         "type": "string",
         "description": "Ordered from least to most access top -> bottom",
         "enum": ["view", "comment", "edit", "owner"]
+      },
+      "ActiveCallSummary": {
+        "type": "object",
+        "description": "A currently active call, as returned by the batch active-calls listing.",
+        "required": [
+          "callId",
+          "channelId",
+          "createdBy",
+          "createdAt",
+          "participantCount"
+        ],
+        "properties": {
+          "callId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The call identifier."
+          },
+          "channelId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The channel this call belongs to."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the call was created."
+          },
+          "createdBy": {
+            "type": "string",
+            "description": "User who created the call."
+          },
+          "participantCount": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Number of active participants. Always >= 1 — calls with no active\nparticipants (e.g. orphaned by a dropped RTC webhook) are excluded."
+          }
+        }
+      },
+      "ActiveCallsResponse": {
+        "type": "object",
+        "description": "Response listing all active calls in channels the caller is a member of.",
+        "required": ["calls"],
+        "properties": {
+          "calls": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ActiveCallSummary"
+            },
+            "description": "The active calls, newest first."
+          }
+        }
       },
       "ActivityType": {
         "type": "string",

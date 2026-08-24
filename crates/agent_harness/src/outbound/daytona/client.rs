@@ -15,6 +15,8 @@ const POLL_INTERVAL: Duration = Duration::from_millis(250);
 #[serde(rename_all = "snake_case")]
 enum SandboxState {
     Started,
+    Stopped,
+    Resizing,
     Error,
     BuildFailed,
     #[serde(other)]
@@ -27,6 +29,9 @@ struct SandboxDto {
     id: String,
     state: SandboxState,
     error_reason: Option<String>,
+    cpu: Option<u32>,
+    memory: Option<u32>,
+    disk: Option<u32>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -67,11 +72,26 @@ struct ExecuteRequest<'a> {
     timeout: u64,
 }
 
-fn configuration_parameters(
-    snapshot: &Snapshot,
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ResizeSandboxRequest {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    cpu: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    memory: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    disk: Option<u32>,
+}
+
+fn resize_not_enabled(status: reqwest::StatusCode, body: &str) -> bool {
+    status == reqwest::StatusCode::NOT_FOUND && body.contains("Cannot POST")
+}
+
+fn configuration_parameters<'a>(
+    snapshot: &'a Snapshot,
     env: Env,
     labels: Labels,
-) -> CreateSandboxRequest<'_> {
+) -> CreateSandboxRequest<'a> {
     CreateSandboxRequest {
         snapshot,
         env,
@@ -99,7 +119,11 @@ impl DaytonaClient {
         }
     }
 
-    /// Create a sandbox and return its Daytona id.
+    /// Create a sandbox from a snapshot and return its Daytona id.
+    ///
+    /// Resource fields must be omitted: Daytona returns 400 ("Cannot specify
+    /// Sandbox resources when using a snapshot") if `cpu` / `memory` / `disk`
+    /// are sent with `snapshot`. Size is applied after start via [`Self::resize`].
     #[tracing::instrument(err, skip(self, env))]
     pub async fn create(&self, snapshot: &Snapshot, env: Env, labels: Labels) -> Result<String> {
         let request = configuration_parameters(snapshot, env, labels);
@@ -113,6 +137,50 @@ impl DaytonaClient {
             .await?;
 
         Ok(sandbox.id)
+    }
+
+    /// Current CPU, RAM, and disk quotas for a sandbox, when Daytona reports them.
+    #[tracing::instrument(err, skip(self))]
+    pub async fn resources(
+        &self,
+        sandbox_id: &str,
+    ) -> Result<(Option<u32>, Option<u32>, Option<u32>)> {
+        let sandbox: SandboxDto = self
+            .json(
+                self.http.get(format!("{}/sandbox/{sandbox_id}", self.base)),
+                "get sandbox",
+            )
+            .await?;
+        Ok((sandbox.cpu, sandbox.memory, sandbox.disk))
+    }
+
+    /// Resize CPU, RAM, and/or disk. Omit a field to leave it unchanged.
+    ///
+    /// In-place resize (running sandbox) accepts CPU/RAM increases only. Disk
+    /// changes and CPU/RAM decreases require a stopped sandbox.
+    #[tracing::instrument(err, skip(self))]
+    pub async fn resize(
+        &self,
+        sandbox_id: &str,
+        cpu: Option<u32>,
+        memory: Option<u32>,
+        disk: Option<u32>,
+    ) -> Result<()> {
+        let result = self
+            .json::<serde::de::IgnoredAny>(
+                self.http
+                    .post(format!("{}/sandbox/{sandbox_id}/resize", self.base))
+                    .json(&ResizeSandboxRequest { cpu, memory, disk }),
+                "resize sandbox",
+            )
+            .await;
+        match result {
+            Ok(_) => Ok(()),
+            Err(DaytonaError::Api { status, body, .. }) if resize_not_enabled(status, &body) => {
+                Err(DaytonaError::ResizeNotEnabled)
+            }
+            Err(error) => Err(error),
+        }
     }
 
     /// Find one sandbox carrying the supplied label.
@@ -165,7 +233,81 @@ impl DaytonaClient {
                             .unwrap_or_else(|| "no reason given".to_owned()),
                     });
                 }
-                SandboxState::Other => {}
+                SandboxState::Stopped | SandboxState::Resizing | SandboxState::Other => {}
+            }
+
+            if Instant::now() >= deadline {
+                return Err(DaytonaError::SandboxStartTimeout {
+                    sandbox_id: sandbox_id.to_owned(),
+                    timeout,
+                });
+            }
+            tokio::time::sleep(POLL_INTERVAL).await;
+        }
+    }
+
+    /// Poll a sandbox until it has stopped or the deadline passes.
+    #[tracing::instrument(err, skip(self))]
+    pub async fn wait_for_stopped(&self, sandbox_id: &str, timeout: Duration) -> Result<()> {
+        let deadline = Instant::now() + timeout;
+        loop {
+            let sandbox: SandboxDto = self
+                .json(
+                    self.http.get(format!("{}/sandbox/{sandbox_id}", self.base)),
+                    "get sandbox",
+                )
+                .await?;
+
+            match sandbox.state {
+                SandboxState::Stopped => return Ok(()),
+                SandboxState::Error | SandboxState::BuildFailed => {
+                    return Err(DaytonaError::SandboxStart {
+                        sandbox_id: sandbox_id.to_owned(),
+                        state: format!("{:?}", sandbox.state),
+                        reason: sandbox
+                            .error_reason
+                            .unwrap_or_else(|| "no reason given".to_owned()),
+                    });
+                }
+                SandboxState::Started | SandboxState::Resizing | SandboxState::Other => {}
+            }
+
+            if Instant::now() >= deadline {
+                return Err(DaytonaError::SandboxStartTimeout {
+                    sandbox_id: sandbox_id.to_owned(),
+                    timeout,
+                });
+            }
+            tokio::time::sleep(POLL_INTERVAL).await;
+        }
+    }
+
+    /// Poll until a resize is no longer in progress.
+    #[tracing::instrument(err, skip(self))]
+    pub async fn wait_for_resize(&self, sandbox_id: &str, timeout: Duration) -> Result<()> {
+        let deadline = Instant::now() + timeout;
+        loop {
+            let sandbox: SandboxDto = self
+                .json(
+                    self.http.get(format!("{}/sandbox/{sandbox_id}", self.base)),
+                    "get sandbox",
+                )
+                .await?;
+
+            match sandbox.state {
+                SandboxState::Resizing => {}
+                SandboxState::Error | SandboxState::BuildFailed => {
+                    return Err(DaytonaError::SandboxStart {
+                        sandbox_id: sandbox_id.to_owned(),
+                        state: format!("{:?}", sandbox.state),
+                        reason: sandbox
+                            .error_reason
+                            .unwrap_or_else(|| "no reason given".to_owned()),
+                    });
+                }
+                SandboxState::Started | SandboxState::Stopped | SandboxState::Other => {
+                    return Ok(());
+                }
             }
 
             if Instant::now() >= deadline {

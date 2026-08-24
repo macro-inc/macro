@@ -8,7 +8,7 @@ mod test;
 use crate::domain::error::{AgentSessionError, Result};
 use crate::domain::model::{
     AgentSession, AgentSessionId, AgentSessionLog, ChannelSession, CreateAgentSessionParams,
-    Message, SessionBot, SessionStatus, StoredAgentSessionLog,
+    Message, SandboxSize, SessionBot, SessionStatus, StoredAgentSessionLog,
 };
 use crate::domain::ports::{AgentSessionLogRepo, AgentSessionRepo};
 use crate::outbound::connection_gateway_realtime::SessionAudience;
@@ -66,6 +66,12 @@ fn parse_status(status: &str, event_name: Option<String>) -> anyhow::Result<Sess
     }
 }
 
+fn parse_sandbox_size(value: &str) -> anyhow::Result<SandboxSize> {
+    value
+        .parse()
+        .map_err(|_| anyhow::anyhow!("unknown agent_session sandbox_size {value:?}"))
+}
+
 /// The wire direction and JSON payload for a [`Message`].
 fn message_columns(message: &Message) -> anyhow::Result<(&'static str, serde_json::Value)> {
     match message {
@@ -99,6 +105,7 @@ struct AgentSessionRow {
     harness: String,
     repo_url: Option<String>,
     workspace: String,
+    sandbox_size: String,
     acp_session_id: Option<String>,
     status: String,
     status_event_name: Option<String>,
@@ -124,6 +131,7 @@ impl TryFrom<AgentSessionRow> for AgentSession {
             harness: row.harness,
             repo_url: row.repo_url,
             workspace: row.workspace,
+            sandbox_size: parse_sandbox_size(&row.sandbox_size)?,
             acp_session_id: row.acp_session_id.map(Into::into),
             status,
             created_at: row.created_at,
@@ -144,6 +152,7 @@ impl AgentSessionRepo for PgAgentSessionRepo {
             harness,
             repo_url,
             workspace,
+            sandbox_size,
         } = params;
 
         // The session row and its access grants land together: a crash between
@@ -161,13 +170,13 @@ impl AgentSessionRepo for PgAgentSessionRepo {
             r#"
             INSERT INTO agent_session (
                 id, owner_id, thread_id, originating_message_id, bot_id, model,
-                harness, repo_url, workspace, acp_session_id, status,
+                harness, repo_url, workspace, sandbox_size, acp_session_id, status,
                 status_event_name
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
             RETURNING
                 id, name, owner_id, thread_id, originating_message_id, bot_id,
-                model, harness, repo_url, workspace, acp_session_id, status,
+                model, harness, repo_url, workspace, sandbox_size, acp_session_id, status,
                 status_event_name, created_at, modified_at,
                 (SELECT channel_id FROM comms_messages WHERE id = agent_session.thread_id)
                     AS "thread_channel_id?"
@@ -181,6 +190,7 @@ impl AgentSessionRepo for PgAgentSessionRepo {
             harness,
             repo_url,
             workspace,
+            sandbox_size.as_str(),
             None::<String>,
             status,
             status_event_name,
@@ -251,7 +261,7 @@ impl AgentSessionRepo for PgAgentSessionRepo {
             r#"
             SELECT
                 id, name, owner_id, thread_id, originating_message_id, bot_id,
-                model, harness, repo_url, workspace, acp_session_id, status,
+                model, harness, repo_url, workspace, sandbox_size, acp_session_id, status,
                 status_event_name, created_at, modified_at,
                 (SELECT channel_id FROM comms_messages WHERE id = agent_session.thread_id)
                     AS "thread_channel_id?"
@@ -284,7 +294,7 @@ impl AgentSessionRepo for PgAgentSessionRepo {
             r#"
             SELECT
                 id, name, owner_id, thread_id, originating_message_id, bot_id,
-                model, harness, repo_url, workspace, acp_session_id, status,
+                model, harness, repo_url, workspace, sandbox_size, acp_session_id, status,
                 status_event_name, created_at, modified_at,
                 (SELECT channel_id FROM comms_messages WHERE id = agent_session.thread_id)
                     AS "thread_channel_id?"
@@ -418,6 +428,65 @@ impl AgentSessionRepo for PgAgentSessionRepo {
         .await
         .context("failed to persist generated agent session name")?;
         Ok(result.rows_affected() == 1)
+    }
+
+    async fn set_sandbox_size(&self, id: AgentSessionId, size: SandboxSize) -> Result<()> {
+        sqlx::query!(
+            r#"
+            UPDATE agent_session
+            SET sandbox_size = $2,
+                modified_at = NOW()
+            WHERE id = $1
+              AND sandbox_size IS DISTINCT FROM $2
+            "#,
+            id.as_uuid(),
+            size.as_str(),
+        )
+        .execute(&self.pool)
+        .await
+        .context("failed to persist agent session sandbox size")?;
+        Ok(())
+    }
+
+    async fn user_sandbox_size(&self, user_id: &MacroUserIdStr<'static>) -> Result<SandboxSize> {
+        let size = sqlx::query_scalar!(
+            r#"
+            SELECT sandbox_size
+            FROM user_agent_sandbox_size
+            WHERE user_id = $1
+            "#,
+            user_id.as_ref(),
+        )
+        .fetch_optional(&self.pool)
+        .await
+        .context("failed to read user sandbox size")?;
+
+        match size {
+            Some(value) => Ok(parse_sandbox_size(&value)?),
+            None => Ok(SandboxSize::Default),
+        }
+    }
+
+    async fn set_user_sandbox_size(
+        &self,
+        user_id: &MacroUserIdStr<'static>,
+        size: SandboxSize,
+    ) -> Result<()> {
+        sqlx::query!(
+            r#"
+            INSERT INTO user_agent_sandbox_size (user_id, sandbox_size, modified_at)
+            VALUES ($1, $2, NOW())
+            ON CONFLICT (user_id) DO UPDATE
+            SET sandbox_size = EXCLUDED.sandbox_size,
+                modified_at = NOW()
+            "#,
+            user_id.as_ref(),
+            size.as_str(),
+        )
+        .execute(&self.pool)
+        .await
+        .context("failed to persist user sandbox size")?;
+        Ok(())
     }
 
     async fn delete(&self, id: AgentSessionId) -> Result<()> {

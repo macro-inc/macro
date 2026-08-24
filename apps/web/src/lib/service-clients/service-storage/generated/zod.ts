@@ -1156,6 +1156,40 @@ export const mentionPreviewsResponse = zod
   .describe('Batch calendar mention preview response.');
 
 /**
+ * Lists all active calls in channels the caller is an active member of,
+newest first. Calls with no active participants (orphaned by dropped RTC
+webhooks) are excluded.
+ * @summary Handler for `GET /call/active`.
+ */
+export const getActiveCallsResponse = zod
+  .object({
+    calls: zod
+      .array(
+        zod
+          .object({
+            callId: zod.uuid().describe('The call identifier.'),
+            channelId: zod.uuid().describe('The channel this call belongs to.'),
+            createdAt: zod.iso
+              .datetime({})
+              .describe('When the call was created.'),
+            createdBy: zod.string().describe('User who created the call.'),
+            participantCount: zod
+              .number()
+              .describe(
+                'Number of active participants. Always >= 1 — calls with no active\nparticipants (e.g. orphaned by a dropped RTC webhook) are excluded.'
+              ),
+          })
+          .describe(
+            'A currently active call, as returned by the batch active-calls listing.'
+          )
+      )
+      .describe('The active calls, newest first.'),
+  })
+  .describe(
+    'Response listing all active calls in channels the caller is a member of.'
+  );
+
+/**
  * Batch-fetches lightweight previews for a list of call ids. Mirrors the
 `POST /documents/preview` endpoint: no per-id access checks, duplicate
 ids are deduplicated server-side, and missing ids come back as

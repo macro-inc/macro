@@ -7,9 +7,10 @@
 import type { AgentSessionResponseAcpSessionId } from './agentSessionResponseAcpSessionId';
 import type { AgentSessionResponseOriginatingMessageId } from './agentSessionResponseOriginatingMessageId';
 import type { AgentSessionResponseRepoUrl } from './agentSessionResponseRepoUrl';
+import type { SandboxSize } from './sandboxSize';
+import type { SessionStatusDto } from './sessionStatusDto';
 import type { AgentSessionResponseThreadChannelId } from './agentSessionResponseThreadChannelId';
 import type { AgentSessionResponseThreadId } from './agentSessionResponseThreadId';
-import type { SessionStatusDto } from './sessionStatusDto';
 
 /**
  * Response body describing an agent session.
@@ -31,14 +32,14 @@ export interface AgentSessionResponse {
   model: string;
   /** When the session was last modified. */
   modifiedAt: string;
-  /** User-facing session name. */
-  name: string;
   /** The exact message that invoked the bot, if any. */
   originatingMessageId?: AgentSessionResponseOriginatingMessageId;
   /** The user who created and owns the session. */
   ownerId: string;
   /** The repository the session works with, when one was stated. */
   repoUrl?: AgentSessionResponseRepoUrl;
+  /** Compute tier of the managed sandbox. */
+  sandboxSize: SandboxSize;
   /** The session's status. */
   status: SessionStatusDto;
   /** The channel `thread_id` lives in, when the session was spawned from a
@@ -48,4 +49,6 @@ thread. */
   threadId?: AgentSessionResponseThreadId;
   /** The directory the session's harness runs in on its runtime. */
   workspace: string;
+  /** User-facing session name. */
+  name: string;
 }

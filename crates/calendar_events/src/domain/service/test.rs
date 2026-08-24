@@ -1,4 +1,5 @@
 use super::*;
+use crate::domain::ports::{CalendarEventChange, CalendarEventWriteOutcome, RetiredCalendarEvent};
 use crate::domain::{
     models::{
         AttendeeResponseStatus, CalendarAttendee, CalendarBackfillClaim,
@@ -16,12 +17,16 @@ use crate::domain::{
     },
 };
 use chrono::{TimeZone, Utc};
+use macro_event_broker::NoopMacroEventBroker;
 use std::sync::{Arc, Mutex};
 
 #[derive(Clone, Default)]
 struct FakeRepo {
     upserts: Arc<Mutex<Vec<CalendarEventUpsert>>>,
     stored_synced_at: Option<chrono::DateTime<Utc>>,
+    /// Retirements the snapshot commit reports back, standing in for sources
+    /// the change feed cancelled or a full snapshot no longer observed.
+    sync_retirements: Vec<RetiredCalendarEvent>,
 }
 
 impl CalendarRepository for FakeRepo {
@@ -42,15 +47,23 @@ impl CalendarRepository for FakeRepo {
         unreachable!()
     }
 
-    async fn upsert_event(&self, write: CalendarEventWrite) -> Result<Uuid, Report> {
+    async fn upsert_event(
+        &self,
+        write: CalendarEventWrite,
+    ) -> Result<CalendarEventWriteOutcome, Report> {
         let upsert = match write {
             CalendarEventWrite::GoogleBackfill { upsert, .. }
             | CalendarEventWrite::UserMutation(upsert)
             | CalendarEventWrite::Fixture(upsert) => upsert,
         };
         let id = upsert.event.id;
+        let owner_id = upsert.event.owner_id.clone();
         self.upserts.lock().unwrap().push(upsert);
-        Ok(id)
+        Ok(CalendarEventWriteOutcome {
+            event_id: id,
+            owner_id,
+            change: CalendarEventChange::Created,
+        })
     }
 
     async fn list_occurrences(
@@ -108,7 +121,7 @@ impl CalendarRepository for FakeRepo {
         _account_id: Uuid,
         _calendar_id: Uuid,
         _provider_event_id: &str,
-    ) -> Result<(), Report> {
+    ) -> Result<Vec<RetiredCalendarEvent>, Report> {
         unreachable!("mutation cleanup is not exercised by sync tests")
     }
 
@@ -135,8 +148,8 @@ impl CalendarRepository for FakeRepo {
         _account_id: Uuid,
         _sync: GoogleCalendarSyncSnapshot,
         _events_upserted: usize,
-    ) -> Result<(), Report> {
-        Ok(())
+    ) -> Result<Vec<RetiredCalendarEvent>, Report> {
+        Ok(self.sync_retirements.clone())
     }
 
     async fn reconcile_google_calendar_list(
@@ -145,8 +158,8 @@ impl CalendarRepository for FakeRepo {
         _lease_token: Uuid,
         _account_id: Uuid,
         _calendar_ids: Vec<Uuid>,
-    ) -> Result<(), Report> {
-        Ok(())
+    ) -> Result<Vec<RetiredCalendarEvent>, Report> {
+        Ok(Vec::new())
     }
 
     async fn record_watch_channel(
@@ -527,6 +540,7 @@ async fn partial_progress_reports_changes_when_a_later_calendar_fails() {
         FakeRepo::default(),
         PartialFailureGoogleProvider,
         lifecycle.clone(),
+        NoopMacroEventBroker,
         None,
     );
 
@@ -563,6 +577,7 @@ async fn google_coordinator_owns_claim_and_completion_lifecycle() {
         FakeRepo::default(),
         FakeGoogleProvider,
         lifecycle.clone(),
+        NoopMacroEventBroker,
         None,
     );
 
@@ -583,6 +598,150 @@ async fn google_coordinator_owns_claim_and_completion_lifecycle() {
 
     assert_eq!(report, GoogleBackfillRunReport::default());
     assert_eq!(lifecycle.completions.lock().unwrap().len(), 1);
+}
+
+/// Records what the backfill published, so a retirement can be distinguished
+/// from an upsert.
+#[derive(Clone, Default)]
+struct RecordingEventBroker {
+    published: Arc<Mutex<Vec<(String, serde_json::Value)>>>,
+}
+
+impl macro_event_broker::MacroEventBroker for RecordingEventBroker {
+    fn send_event<E: macro_event_broker::MacroEvent + ?Sized>(
+        &self,
+        event: &E,
+    ) -> Result<
+        tokio::task::JoinHandle<Result<(), macro_event_broker::EventBrokerError>>,
+        macro_event_broker::EventBrokerError,
+    > {
+        self.published.lock().unwrap().push((
+            event.key().to_string(),
+            serde_json::to_value(event.event())?,
+        ));
+        Ok(tokio::spawn(async { Ok(()) }))
+    }
+}
+
+/// One ordinary calendar whose poll reports a cancelled provider event, so the
+/// snapshot commit runs and its retirements reach the publisher.
+#[derive(Clone)]
+struct CancellingCalendarProvider;
+
+impl GoogleCalendarProvider for CancellingCalendarProvider {
+    async fn list_calendars(
+        &self,
+        _access_token: &str,
+        _email_link_id: Uuid,
+    ) -> Result<Vec<ProviderCalendar>, GoogleProviderError> {
+        Ok(vec![ProviderCalendar {
+            provider_calendar_id: "primary".to_string(),
+            name: "Calendar".to_string(),
+            description: None,
+            time_zone: Some("UTC".to_string()),
+            color: None,
+            access_role: Some("owner".to_string()),
+            is_primary: true,
+            is_selected: true,
+            default_reminders: Vec::new(),
+        }])
+    }
+
+    async fn sync_events(
+        &self,
+        _access_token: &str,
+        context: GoogleEventSyncContext,
+    ) -> Result<GoogleEventSyncBatch, GoogleProviderError> {
+        Ok(GoogleEventSyncBatch {
+            upserts: Vec::new(),
+            observed_provider_event_ids: Some(Vec::new()),
+            next_sync_token: "next".to_string(),
+            materialized_range: Some(context.target.range),
+            cancelled_provider_event_ids: vec!["gone-at-google".to_string()],
+        })
+    }
+
+    async fn watch_calendar(
+        &self,
+        _access_token: &str,
+        _email_link_id: Uuid,
+        _provider_calendar_id: &str,
+        _channel_id: Uuid,
+        _config: &GoogleWatchConfig,
+    ) -> Result<GoogleWatchChannel, GoogleProviderError> {
+        unreachable!("watch is disabled in these tests")
+    }
+}
+
+/// A provider-side deletion reaches search only through the topic: the row is
+/// gone once the snapshot commit lands, so the search backfill — which
+/// enumerates existing rows — can never rediscover it.
+#[tokio::test]
+async fn a_cancelled_provider_event_publishes_a_deletion() {
+    let removed = Uuid::now_v7();
+    let survivor = Uuid::now_v7();
+    let repo = FakeRepo {
+        sync_retirements: vec![
+            RetiredCalendarEvent {
+                event_id: removed,
+                owner_id: "macro|owner".to_string(),
+                deleted: true,
+            },
+            // Another source still backs this one, so its row was rewritten.
+            RetiredCalendarEvent {
+                event_id: survivor,
+                owner_id: "macro|owner".to_string(),
+                deleted: false,
+            },
+        ],
+        ..FakeRepo::default()
+    };
+    let broker = RecordingEventBroker::default();
+    let coordinator = GoogleCalendarBackfillCoordinator::new(
+        repo,
+        CancellingCalendarProvider,
+        FakeLifecycle::claimed(),
+        broker.clone(),
+        None,
+    );
+
+    let mut report = GoogleBackfillRunReport::default();
+    coordinator
+        .run(
+            CalendarBackfillJobKey {
+                job_id: Uuid::now_v7(),
+                email_link_id: Uuid::now_v7(),
+            },
+            "macro|calendar@example.com",
+            "secret",
+            OccurrenceRange::historical_sync(Utc::now()),
+            &mut report,
+        )
+        .await
+        .unwrap();
+
+    let published = broker.published.lock().unwrap().clone();
+    let deleted: Vec<&String> = published
+        .iter()
+        .filter(|(_, payload)| payload.get("calendar_event.deleted").is_some())
+        .map(|(key, _)| key)
+        .collect();
+    let updated: Vec<&String> = published
+        .iter()
+        .filter(|(_, payload)| payload.get("calendar_event.updated").is_some())
+        .map(|(key, _)| key)
+        .collect();
+
+    assert_eq!(
+        deleted,
+        vec![&removed.to_string()],
+        "the retired event must be announced as deleted, got {published:?}"
+    );
+    assert_eq!(
+        updated,
+        vec![&survivor.to_string()],
+        "an event that survived on another source is an update, not a deletion"
+    );
 }
 
 #[derive(Clone)]
@@ -638,6 +797,7 @@ async fn freshly_synced_system_calendars_are_skipped() {
         repo,
         SystemCalendarProvider,
         lifecycle.clone(),
+        NoopMacroEventBroker,
         None,
     );
 
@@ -699,6 +859,7 @@ async fn google_coordinator_surfaces_lease_loss_while_work_is_running() {
         FakeRepo::default(),
         HangingGoogleProvider,
         lifecycle.clone(),
+        NoopMacroEventBroker,
         None,
     );
 
@@ -728,6 +889,7 @@ async fn google_coordinator_keeps_calendar_permission_health_separate_from_gmail
         FakeRepo::default(),
         ReauthGoogleProvider,
         lifecycle.clone(),
+        NoopMacroEventBroker,
         None,
     );
 

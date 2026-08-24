@@ -1,12 +1,13 @@
 //! Outbound capabilities required by the harness domain.
 
 use agent_session::domain::connection::RuntimeAttachment;
-use agent_session::domain::model::AgentSessionId;
+use agent_session::domain::model::{AgentSessionId, SandboxSize};
 use agent_session::domain::ports::AgentConnector;
 use bot_id::BotId;
 
 use super::error::Result;
 use super::model::{SessionAnnouncement, SpawnContainer};
+use super::sandbox::SandboxResizeEffect;
 
 #[cfg(test)]
 mod test;
@@ -55,6 +56,25 @@ pub trait ContainerManager: Send + Sync + 'static {
         &self,
         command: SpawnContainer,
     ) -> impl Future<Output = Result<Self::Transport>> + Send;
+
+    /// How this manager applies a change from `from` to `to`.
+    ///
+    /// Domain uses this to decide whether to close the session before
+    /// [`Self::resize`]. Named size → CPU/RAM mapping is harness policy;
+    /// whether a running container can take that change is a manager
+    /// capability.
+    fn resize_effect(&self, from: SandboxSize, to: SandboxSize) -> SandboxResizeEffect;
+
+    /// Change a live sandbox's compute to `size`.
+    ///
+    /// Domain has already closed the session when [`Self::resize_effect`]
+    /// returned [`SandboxResizeEffect::Restart`]. [`SandboxResizeEffect::InPlace`]
+    /// must not stop the sandbox. Disk is never changed.
+    fn resize(
+        &self,
+        session: AgentSessionId,
+        size: SandboxSize,
+    ) -> impl Future<Output = Result<()>> + Send;
 
     /// Reattach to a session's existing container, starting it if stopped.
     fn resume(

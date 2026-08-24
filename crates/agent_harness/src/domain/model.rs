@@ -1,7 +1,7 @@
 //! Commands and values used by the harness domain.
 
 use agent_runtime_protocol::domain::action::{AgentAction, AgentActionId};
-use agent_session::domain::model::{AgentSessionId, MessageId};
+use agent_session::domain::model::{AgentSessionId, MessageId, SandboxSize};
 use agent_session::domain::ports::ControlEvent;
 use bot_id::BotId;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -90,6 +90,8 @@ pub enum HarnessCommand {
     Open(OpenSession),
     /// Act on a session that already exists.
     Deliver(DeliverAction),
+    /// Change the session's sandbox size and the owner's default.
+    SetSandboxSize(SandboxSize),
     /// Release a session's live resources and delete it.
     Delete,
 }
@@ -169,6 +171,8 @@ pub struct SpawnContainer {
     pub session_id: AgentSessionId,
     /// Repository cloned into the container workspace.
     pub repo_url: String,
+    /// Compute tier to request from the provider.
+    pub size: SandboxSize,
 }
 
 /// Session-row values that remain deployment configuration for now.

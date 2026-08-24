@@ -7,7 +7,7 @@ use agent_runtime_protocol::domain::action::{AgentAction, AgentActionId};
 use agent_session::domain::connection::RuntimeAttachment;
 use agent_session::domain::error::AgentSessionError;
 use agent_session::domain::model::{
-    AgentSession, AgentSessionId, AuthorKind, CreateAgentSessionParams, MessageId,
+    AgentSession, AgentSessionId, AuthorKind, CreateAgentSessionParams, MessageId, SandboxSize,
 };
 use agent_session::domain::ports::{AgentSessionNotificationRecipient, ControlEvent};
 use agent_session::domain::service::AgentSessionService;
@@ -23,6 +23,7 @@ use crate::domain::model::{
     SessionAnnouncement, SessionDefaults, SpawnContainer, is_managed_bot,
 };
 use crate::domain::ports::{ContainerManager, RuntimeConnections, SessionAnnouncer};
+use crate::domain::sandbox::SandboxResizeEffect;
 
 type SessionWorkers = DashMap<AgentSessionId, mpsc::UnboundedSender<QueuedCommand>>;
 
@@ -204,6 +205,16 @@ where
         .map_err(into_session_error)?;
         Ok(action_id)
     }
+
+    async fn set_sandbox_size(
+        &self,
+        id: AgentSessionId,
+        size: SandboxSize,
+    ) -> agent_session::domain::error::Result<()> {
+        self.execute(id, HarnessCommand::SetSandboxSize(size))
+            .await
+            .map_err(into_session_error)
+    }
 }
 
 /// External sessions create the row and announce - the magic-chip message
@@ -238,6 +249,7 @@ where
                 harness: self.inner.defaults.harness.clone(),
                 repo_url: request.repo_url,
                 workspace: request.workspace,
+                sandbox_size: SandboxSize::Default,
                 // The thread linkage is the caller's claim, not an observed
                 // mention; it must not grant the channel anything.
             })
@@ -277,6 +289,11 @@ where
         request: agent_session::domain::ports::OpenManagedSession,
     ) -> agent_session::domain::error::Result<AgentSession> {
         let defaults = &self.inner.defaults;
+        let sandbox_size = self
+            .inner
+            .sessions
+            .user_sandbox_size(&request.owner)
+            .await?;
         let session = self
             .inner
             .sessions
@@ -291,6 +308,7 @@ where
                 repo_url: Some(defaults.repo_url.clone()),
                 // Managed sandboxes run in the path baked into their image.
                 workspace: agent_session::MANAGED_CONTAINER_WORKSPACE.to_owned(),
+                sandbox_size,
             })
             .await?;
 
@@ -300,6 +318,7 @@ where
             .spawn(SpawnContainer {
                 session_id: session.id,
                 repo_url: defaults.repo_url.clone(),
+                size: sandbox_size,
             })
             .await
         {
@@ -385,6 +404,7 @@ where
         match command {
             HarnessCommand::Open(command) => self.open(session_id, command).await,
             HarnessCommand::Deliver(command) => self.deliver(session_id, command).await,
+            HarnessCommand::SetSandboxSize(size) => self.apply_sandbox_size(session_id, size).await,
             HarnessCommand::Delete => self.delete(session_id).await,
         }
     }
@@ -403,6 +423,37 @@ where
         Ok(())
     }
 
+    /// Apply `size` to this session's sandbox and remember it as the owner's default.
+    ///
+    /// The container manager reports whether the change is in-place, needs a
+    /// stop, or is unsupported. Disk is never changed.
+    #[tracing::instrument(err, skip(self), fields(%session_id, %size))]
+    async fn apply_sandbox_size(
+        &self,
+        session_id: AgentSessionId,
+        size: SandboxSize,
+    ) -> Result<()> {
+        let session = self.sessions.get_session(session_id).await?;
+        let effect = self.containers.resize_effect(session.sandbox_size, size);
+        if is_managed_bot(session.bot_id) && effect != SandboxResizeEffect::NoOp {
+            if effect == SandboxResizeEffect::Restart {
+                self.sessions.close_session(session_id).await?;
+            }
+            self.containers.resize(session_id, size).await?;
+            if effect == SandboxResizeEffect::Restart {
+                let container = self.containers.resume(session_id).await?;
+                self.sessions
+                    .attach_session(session_id, RuntimeAttachment::solo(container))
+                    .await?;
+            }
+        }
+        self.sessions.set_sandbox_size(session_id, size).await?;
+        self.sessions
+            .set_user_sandbox_size(&session.owner_id, size)
+            .await?;
+        Ok(())
+    }
+
     #[tracing::instrument(err, skip(self, command), fields(
         %session_id,
         bot_id = %command.bot_id,
@@ -411,6 +462,7 @@ where
     async fn open(&self, session_id: AgentSessionId, command: OpenSession) -> Result<()> {
         let OpenSession { bot_id, origin } = command;
         let repo_url = self.defaults.repo_url.clone();
+        let sandbox_size = self.sessions.user_sandbox_size(&origin.sender).await?;
 
         self.sessions
             .create_session(CreateAgentSessionParams {
@@ -424,6 +476,7 @@ where
                 repo_url: Some(repo_url.clone()),
                 // Managed sandboxes run in the path baked into their image.
                 workspace: agent_session::MANAGED_CONTAINER_WORKSPACE.to_owned(),
+                sandbox_size,
                 // This open came from the trigger pipeline seeing the mention.
             })
             .await?;
@@ -445,6 +498,7 @@ where
             .spawn(SpawnContainer {
                 session_id,
                 repo_url,
+                size: sandbox_size,
             })
             .await
         {

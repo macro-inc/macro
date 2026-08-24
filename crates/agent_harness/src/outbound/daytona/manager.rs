@@ -15,6 +15,9 @@ use super::types::{DaytonaSettings, Env, GithubToken, Labels, PortPreview, Snaps
 use crate::domain::error::{HarnessError, Result};
 use crate::domain::model::SpawnContainer;
 use crate::domain::ports::ContainerManager;
+use crate::domain::sandbox::{
+    SandboxResizeEffect, SandboxResources, resize_effect_from_resources, resources,
+};
 use crate::outbound::managed_containers::ManagedContainers;
 use crate::outbound::provision::{self, SESSION_LABEL};
 use crate::outbound::sidecar::SidecarTransport;
@@ -231,6 +234,103 @@ impl DaytonaContainerManager {
             }
         }
     }
+
+    /// Snapshot creates inherit snapshot quotas. Align CPU/RAM to `size`, then
+    /// run the readiness recipe.
+    async fn align_size_then_bring_up(
+        &self,
+        id: &DaytonaSandboxId,
+        size: agent_session::domain::model::SandboxSize,
+    ) -> Result<DaytonaContainer> {
+        self.client
+            .wait_for_started(id.as_str(), provision::ENSURE_TIMEOUT)
+            .await
+            .map_err(unavailable)?;
+        self.align_size(id, size).await?;
+        self.bring_up(id).await
+    }
+
+    async fn align_size(
+        &self,
+        id: &DaytonaSandboxId,
+        size: agent_session::domain::model::SandboxSize,
+    ) -> Result<()> {
+        let (cpu, memory, _) = self
+            .client
+            .resources(id.as_str())
+            .await
+            .map_err(unavailable)?;
+        let cpu = cpu.ok_or_else(|| {
+            HarnessError::Container("daytona did not report cpu for the new sandbox".to_owned())
+        })?;
+        let memory = memory.ok_or_else(|| {
+            HarnessError::Container("daytona did not report memory for the new sandbox".to_owned())
+        })?;
+        let current = SandboxResources {
+            cpu,
+            memory_gib: memory,
+            disk_gib: 96,
+        };
+        let next = resources(size);
+        let kind = resize_effect_from_resources(current, next);
+        tracing::info!(
+            sandbox_id = %id.as_str(),
+            %size,
+            current_cpu = cpu,
+            current_memory_gib = memory,
+            next_cpu = next.cpu,
+            next_memory_gib = next.memory_gib,
+            ?kind,
+            "aligning sandbox size after snapshot create"
+        );
+        self.apply_resize(id, next, kind).await
+    }
+
+    async fn apply_resize(
+        &self,
+        id: &DaytonaSandboxId,
+        next: SandboxResources,
+        effect: SandboxResizeEffect,
+    ) -> Result<()> {
+        match effect {
+            SandboxResizeEffect::NoOp => Ok(()),
+            SandboxResizeEffect::Unsupported => Err(HarnessError::Container(
+                "daytona reported resize as unsupported".to_owned(),
+            )),
+            SandboxResizeEffect::InPlace => {
+                self.client
+                    .resize(id.as_str(), Some(next.cpu), Some(next.memory_gib), None)
+                    .await
+                    .map_err(unavailable)?;
+                self.client
+                    .wait_for_resize(id.as_str(), provision::ENSURE_TIMEOUT)
+                    .await
+                    .map_err(unavailable)?;
+                Ok(())
+            }
+            SandboxResizeEffect::Restart => {
+                self.client.stop(id.as_str()).await.map_err(unavailable)?;
+                self.client
+                    .wait_for_stopped(id.as_str(), STOP_TIMEOUT)
+                    .await
+                    .map_err(unavailable)?;
+                self.client
+                    .resize(id.as_str(), Some(next.cpu), Some(next.memory_gib), None)
+                    .await
+                    .map_err(unavailable)?;
+                self.client
+                    .wait_for_resize(id.as_str(), provision::ENSURE_TIMEOUT)
+                    .await
+                    .map_err(unavailable)?;
+                self.client.start(id.as_str()).await.map_err(unavailable)?;
+                self.client
+                    .wait_for_started(id.as_str(), provision::ENSURE_TIMEOUT)
+                    .await
+                    .map_err(unavailable)?;
+                Ok(())
+            }
+        }
+    }
 }
 
 impl ContainerManager for DaytonaContainerManager {
@@ -241,6 +341,7 @@ impl ContainerManager for DaytonaContainerManager {
         let SpawnContainer {
             session_id,
             repo_url,
+            size,
         } = command;
         // `GITHUB_TOKEN` is here for `gh auth setup-git` and the github MCP
         // server. It is also the env var opencode's `github-copilot` provider
@@ -278,7 +379,7 @@ impl ContainerManager for DaytonaContainerManager {
             ));
         }
 
-        match self.bring_up(&id).await {
+        match self.align_size_then_bring_up(&id, size).await {
             Ok(container) => Ok(container),
             Err(error) => {
                 self.managed.containers.remove(&id);
@@ -290,6 +391,52 @@ impl ContainerManager for DaytonaContainerManager {
                 Err(error)
             }
         }
+    }
+
+    fn resize_effect(
+        &self,
+        from: agent_session::domain::model::SandboxSize,
+        to: agent_session::domain::model::SandboxSize,
+    ) -> SandboxResizeEffect {
+        crate::domain::sandbox::resize_effect(from, to)
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn resize(
+        &self,
+        session: AgentSessionId,
+        size: agent_session::domain::model::SandboxSize,
+    ) -> Result<()> {
+        let Some(id) = self
+            .client
+            .find_by_label(SESSION_LABEL, &session.to_string())
+            .await
+            .map_err(unavailable)?
+            .map(DaytonaSandboxId::new)
+        else {
+            return Err(HarnessError::Container(format!(
+                "session {session} has no sandbox to resize"
+            )));
+        };
+        let (cpu, memory, _) = self
+            .client
+            .resources(id.as_str())
+            .await
+            .map_err(unavailable)?;
+        let cpu = cpu.ok_or_else(|| {
+            HarnessError::Container("daytona did not report cpu for the sandbox".to_owned())
+        })?;
+        let memory = memory.ok_or_else(|| {
+            HarnessError::Container("daytona did not report memory for the sandbox".to_owned())
+        })?;
+        let current = SandboxResources {
+            cpu,
+            memory_gib: memory,
+            disk_gib: 96,
+        };
+        let next = resources(size);
+        self.apply_resize(&id, next, resize_effect_from_resources(current, next))
+            .await
     }
 
     #[tracing::instrument(err, skip(self))]

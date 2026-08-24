@@ -1,6 +1,7 @@
 use crate::{
     SQS,
     search::{
+        calendar_event::UpsertCalendarEvent,
         call::{CallRecordMessage, RemoveCallRecord},
         channel::ChannelMessageUpdate,
         chat::ChatMessage,
@@ -14,6 +15,7 @@ use aws_sdk_sqs::{self as sqs, types::SendMessageBatchRequestEntry};
 use futures::StreamExt;
 use strum::Display;
 
+pub mod calendar_event;
 pub mod call;
 pub mod channel;
 pub mod chat;
@@ -83,6 +85,8 @@ pub enum SearchQueueMessage {
     RemoveCallRecord(RemoveCallRecord),
     // Project
     UpsertProject(UpsertProject),
+    // Calendar
+    UpsertCalendarEvent(UpsertCalendarEvent),
 
     // User
     RemoveUserProfile(String),
@@ -106,6 +110,7 @@ impl PrimaryId for SearchQueueMessage {
                 message.call_id.clone().unwrap_or_default()
             ),
             SearchQueueMessage::UpsertProject(message) => message.project_id.clone(),
+            SearchQueueMessage::UpsertCalendarEvent(message) => message.event_id.clone(),
 
             SearchQueueMessage::RemoveUserProfile(message) => message.clone(),
         }
@@ -129,6 +134,8 @@ impl SearchQueueMessage {
             SearchQueueMessage::RemoveCallRecord(_) => Operation::Remove,
             // Projects
             SearchQueueMessage::UpsertProject(_) => Operation::UpdateMetadata,
+            // Calendar
+            SearchQueueMessage::UpsertCalendarEvent(_) => Operation::UpdateMetadata,
             // Users
             SearchQueueMessage::RemoveUserProfile(_) => Operation::Remove,
         }

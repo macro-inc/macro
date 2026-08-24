@@ -4,12 +4,10 @@
  * agent_harness_service
  * OpenAPI spec version: 0.1.0
  */
-
-import type { AgentActionOneOfFourAllOf } from './agentActionOneOfFourAllOf';
 import type { AgentSetModelAction } from './agentSetModelAction';
+import type { AgentActionOneOfFourAllOf } from './agentActionOneOfFourAllOf';
 
 /**
  * Switch the model the agent runs on.
  */
-export type AgentActionOneOfFour = AgentSetModelAction &
-  AgentActionOneOfFourAllOf;
+export type AgentActionOneOfFour = AgentSetModelAction & AgentActionOneOfFourAllOf;

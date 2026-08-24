@@ -591,17 +591,20 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
       all: () => ({
         // Temporary: search has no full-text index over foreign entities yet,
         // so always exclude them (matching no record id) until search supports
-        // them. Calendar, CRM, and non-displayable channel-thread rows are
-        // NIL-excluded the same way. `search-supported` mirrors these
-        // exclusions client-side so entities that enter the soup cache outside
-        // this query (e.g. websocket-driven inserts) don't surface in the
-        // search feed.
+        // them. CRM and non-displayable channel-thread rows are NIL-excluded
+        // the same way. Calendar events are not excluded — they carry a title
+        // index of their own. `search-supported` mirrors these exclusions
+        // client-side so entities that enter the soup cache outside this query
+        // (e.g. websocket-driven inserts) don't surface in the search feed.
         filters: {
           include: {
-            calendarEventId: [NIL_UUID],
             foreignEntityRecordId: [NIL_UUID],
             crmCompanyId: [NIL_UUID],
             channelThreadId: [NIL_UUID],
+            // Events are title-indexed, so search returns them — but opening
+            // one needs the calendar block, which the flag gates. Without it
+            // a hit would render an inert row, so exclude the type instead.
+            ...(ENABLE_CALENDAR_UI() ? {} : { calendarEventId: [NIL_UUID] }),
           },
           exclude: getDisabledSnippetSubtypeExclude(),
         },

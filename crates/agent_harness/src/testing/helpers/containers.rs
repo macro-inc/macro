@@ -1,7 +1,7 @@
 //! In-memory container and provisioner test doubles.
 
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
 use agent_client_protocol::RawJsonRpcMessage;
@@ -11,12 +11,13 @@ use agent_runtime_protocol::domain::ports::{
 use agent_runtime_protocol::domain::schema::v0::{
     AcpMessage, SystemEvent, ToRuntimeMessage, ToServerMessage,
 };
-use agent_session::domain::model::AgentSessionId;
+use agent_session::domain::model::{AgentSessionId, SandboxSize};
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender, unbounded_channel};
 
 use crate::domain::error::{HarnessError, Result};
 use crate::domain::model::SpawnContainer;
 use crate::domain::ports::ContainerManager;
+use crate::domain::sandbox::{SandboxResizeEffect, create_only_resize_effect, resize_effect};
 use crate::testing::helpers::agent::FakeAgent;
 
 /// A container connection driven by hand.
@@ -196,6 +197,9 @@ impl TransportReceiver<ToServerMessage> for ContainerReceiver {
 pub struct MockContainerManager {
     containers: Arc<Mutex<HashMap<AgentSessionId, ContainerMock>>>,
     spawn_error: Arc<Mutex<Option<String>>>,
+    spawn_sizes: Arc<Mutex<Vec<SandboxSize>>>,
+    resizes: Arc<Mutex<Vec<(AgentSessionId, SandboxSize)>>>,
+    resize_unsupported: Arc<AtomicBool>,
     resumes: Arc<AtomicUsize>,
     teardowns: Arc<AtomicUsize>,
 }
@@ -245,6 +249,29 @@ impl MockContainerManager {
         self.teardowns.load(Ordering::Relaxed)
     }
 
+    /// Sizes requested at spawn, in order.
+    #[must_use]
+    pub fn spawn_sizes(&self) -> Vec<SandboxSize> {
+        self.spawn_sizes
+            .lock()
+            .expect("spawn sizes lock should not be poisoned")
+            .clone()
+    }
+
+    /// Resize requests, in order.
+    #[must_use]
+    pub fn resizes(&self) -> Vec<(AgentSessionId, SandboxSize)> {
+        self.resizes
+            .lock()
+            .expect("resizes lock should not be poisoned")
+            .clone()
+    }
+
+    /// Report [`SandboxResizeEffect::Unsupported`] for any real size change.
+    pub fn refuse_resize(&self) {
+        self.resize_unsupported.store(true, Ordering::Relaxed);
+    }
+
     fn lock(&self) -> std::sync::MutexGuard<'_, HashMap<AgentSessionId, ContainerMock>> {
         self.containers
             .lock()
@@ -264,9 +291,39 @@ impl ContainerManager for MockContainerManager {
         {
             return Err(HarnessError::Container(message));
         }
+        self.spawn_sizes
+            .lock()
+            .expect("spawn sizes lock should not be poisoned")
+            .push(command.size);
         let container = ContainerMock::default();
         self.lock().insert(command.session_id, container.clone());
         Ok(container)
+    }
+
+    fn resize_effect(&self, from: SandboxSize, to: SandboxSize) -> SandboxResizeEffect {
+        if self.resize_unsupported.load(Ordering::Relaxed) {
+            create_only_resize_effect(from, to)
+        } else {
+            resize_effect(from, to)
+        }
+    }
+
+    async fn resize(&self, session: AgentSessionId, size: SandboxSize) -> Result<(), HarnessError> {
+        if !self.lock().contains_key(&session) {
+            return Err(HarnessError::Container(format!(
+                "no sandbox was ever spawned for {session}"
+            )));
+        }
+        if self.resize_unsupported.load(Ordering::Relaxed) {
+            return Err(HarnessError::Container(
+                "this container manager cannot resize a live sandbox".to_owned(),
+            ));
+        }
+        self.resizes
+            .lock()
+            .expect("resizes lock should not be poisoned")
+            .push((session, size));
+        Ok(())
     }
 
     async fn resume(&self, session: AgentSessionId) -> Result<ContainerMock, HarnessError> {

@@ -6054,6 +6054,7 @@
       "crates/bot_id",
       "crates/bot_token",
       "crates/broadcast",
+      "crates/calendar_events",
       "crates/call",
       "crates/channel_sender",
       "crates/channels",

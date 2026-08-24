@@ -3,6 +3,7 @@ import {
   recipientEntityMapper,
   type WithCustomUserInput,
 } from '@core/user/combinedRecipient';
+import { TZDateMini } from '@date-fns/tz';
 import type { ConferenceChange } from '@service-email/generated/schemas/conferenceChange';
 import type { EventTime } from '@service-email/generated/schemas/eventTime';
 import type { EventReminderOverride } from '@service-storage/generated/schemas/eventReminderOverride';
@@ -320,17 +321,24 @@ export function moveAllDayRange(
 export interface CreateEventEditorStateOptions {
   initialValues: EventEditorInitialValues;
   state: Accessor<EventEditorInitialValues>;
+  recurrenceTimeZone?: string;
 }
 
-function recurrenceConfigFor(values: EventEditorInitialValues) {
+function recurrenceConfigFor(
+  values: EventEditorInitialValues,
+  timeZone?: string
+) {
   return values.recurrenceLines.length > 0
-    ? parseRecurrenceConfig(values.recurrenceLines)
+    ? parseRecurrenceConfig(values.recurrenceLines, timeZone)
     : undefined;
 }
 
-function recurrenceChoiceFor(values: EventEditorInitialValues) {
+function recurrenceChoiceFor(
+  values: EventEditorInitialValues,
+  timeZone?: string
+) {
   if (values.recurrenceLines.length === 0) return 'none';
-  const config = recurrenceConfigFor(values);
+  const config = recurrenceConfigFor(values, timeZone);
   if (!config) return 'existing';
   const start = values.allDay ? parseISO(values.start) : new Date(values.start);
   const preset = recurrencePresetsFor(start).find((candidate) =>
@@ -342,18 +350,23 @@ function recurrenceChoiceFor(values: EventEditorInitialValues) {
 /** Shared recurrence and validation state used by event editor layouts. */
 export function createEventEditorState(options: CreateEventEditorStateOptions) {
   const [initialValues, setInitialValues] = createSignal(options.initialValues);
-  const initialConfig = createMemo(() => recurrenceConfigFor(initialValues()));
+  const initialConfig = createMemo(() =>
+    recurrenceConfigFor(initialValues(), options.recurrenceTimeZone)
+  );
   const hasUnrepresentableRule = () =>
     initialValues().recurrenceLines.length > 0 && !initialConfig();
 
   const startForRecurrence = createMemo(() => {
-    const start = options.state().start;
-    const parsed = options.state().allDay ? parseISO(start) : new Date(start);
-    return Number.isNaN(parsed.getTime()) ? new Date() : parsed;
+    const state = options.state();
+    const parsed = state.allDay ? parseISO(state.start) : new Date(state.start);
+    if (Number.isNaN(parsed.getTime())) return new Date();
+    return !state.allDay && options.recurrenceTimeZone
+      ? TZDateMini.tz(options.recurrenceTimeZone, parsed)
+      : parsed;
   });
   const presets = createMemo(() => recurrencePresetsFor(startForRecurrence()));
   const [recurrenceChoice, setRecurrenceChoice] = createSignal(
-    recurrenceChoiceFor(options.initialValues)
+    recurrenceChoiceFor(options.initialValues, options.recurrenceTimeZone)
   );
   const recurrenceOptions = createMemo<EventEditorRecurrenceOption[]>(() => {
     const values = [
@@ -409,11 +422,19 @@ export function createEventEditorState(options: CreateEventEditorStateOptions) {
     if (choice === 'existing') return undefined;
     if (choice === 'none') return [];
     if (choice === 'custom') {
-      return buildRecurrenceLines(customConfig(), options.state().allDay);
+      return buildRecurrenceLines(
+        customConfig(),
+        options.state().allDay,
+        options.recurrenceTimeZone
+      );
     }
     const preset = presets().find((candidate) => candidate.id === choice);
     return preset
-      ? buildRecurrenceLines(preset.config, options.state().allDay)
+      ? buildRecurrenceLines(
+          preset.config,
+          options.state().allDay,
+          options.recurrenceTimeZone
+        )
       : undefined;
   };
   const dateRangeError = createMemo(() => {
@@ -439,9 +460,12 @@ export function createEventEditorState(options: CreateEventEditorStateOptions) {
   const replaceInitialValues = (next: EventEditorInitialValues) => {
     batch(() => {
       setInitialValues(() => next);
-      setRecurrenceChoice(recurrenceChoiceFor(next));
+      setRecurrenceChoice(
+        recurrenceChoiceFor(next, options.recurrenceTimeZone)
+      );
       setCustomConfig(
-        recurrenceConfigFor(next) ?? defaultCustomConfig(startForRecurrence())
+        recurrenceConfigFor(next, options.recurrenceTimeZone) ??
+          defaultCustomConfig(startForRecurrence())
       );
     });
   };

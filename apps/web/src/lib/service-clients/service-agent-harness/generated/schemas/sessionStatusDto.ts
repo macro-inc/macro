@@ -5,14 +5,11 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { SessionStatusDtoOneOf } from './sessionStatusDtoOneOf';
-import type { SessionStatusDtoOneOfFive } from './sessionStatusDtoOneOfFive';
 import type { SessionStatusDtoOneOfThree } from './sessionStatusDtoOneOfThree';
+import type { SessionStatusDtoOneOfFive } from './sessionStatusDtoOneOfFive';
 
 /**
  * Transport representation of a session's status, mirroring
 [`SessionStatus`].
  */
-export type SessionStatusDto =
-  | SessionStatusDtoOneOf
-  | SessionStatusDtoOneOfThree
-  | SessionStatusDtoOneOfFive;
+export type SessionStatusDto = SessionStatusDtoOneOf | SessionStatusDtoOneOfThree | SessionStatusDtoOneOfFive;

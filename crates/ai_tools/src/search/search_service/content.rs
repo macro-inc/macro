@@ -35,7 +35,7 @@ pub struct ContentSearch {
     pub match_type: SearchMatchType,
 
     #[schemars(
-        description = "Which types of items to search. Leave empty (the default) to search all types — this is almost always what you want. Only set this when the user's request clearly targets one or more specific types. Examples: ['documents'], ['emails', 'documents'], ['channels'], ['call_records']."
+        description = "Which types of items to search. Leave empty (the default) to search all types — this is almost always what you want. Only set this when the user's request clearly targets one or more specific types. Examples: ['documents'], ['emails', 'documents'], ['channels'], ['call_records']. Projects and calendar events carry no indexed content, so they never match here — search those by name with NameSearch instead."
     )]
     #[serde(default)]
     pub entity_types: Vec<UnifiedSearchIndex>,

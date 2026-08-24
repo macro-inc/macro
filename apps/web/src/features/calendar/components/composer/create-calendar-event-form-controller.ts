@@ -90,6 +90,7 @@ export interface CreateCalendarEventFormControllerOptions {
   initialValue: EventEditorInitialValues;
   calendarOptions: Accessor<EventEditorCalendarOption[]>;
   guestOptions: Accessor<EventEditorGuestOption[]>;
+  recurrenceTimeZone?: string;
   onChange?: (value: EventEditorInitialValues) => void;
 }
 
@@ -136,6 +137,7 @@ export function createCalendarEventFormController(
   const recurrence = createEventEditorState({
     initialValues: options.initialValue,
     state,
+    recurrenceTimeZone: options.recurrenceTimeZone,
   });
 
   const effectiveCalendarId = () =>

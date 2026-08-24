@@ -1,4 +1,5 @@
 import { formatOrdinal, plural } from '@core/util/string';
+import { TZDateMini } from '@date-fns/tz';
 import { format } from 'date-fns';
 
 const POSITIVE_INTEGER_REGEX = /^\d+$/;
@@ -460,14 +461,18 @@ const NEVER: RecurrenceEnds = { kind: 'never' };
  * all-day rules carry the plain date, timed rules the local end-of-day
  * instant rendered in UTC.
  */
-function untilValue(date: string, allDay: boolean) {
+function untilValue(date: string, allDay: boolean, timeZone?: string) {
   if (allDay) return date.replaceAll('-', '');
-  const endOfDay = new Date(`${date}T23:59:59`);
+  const [year, month, day] = date.split('-').map(Number);
+  const endOfDay =
+    timeZone && year !== undefined && month !== undefined && day !== undefined
+      ? new TZDateMini(year, month - 1, day, 23, 59, 59, timeZone)
+      : new Date(`${date}T23:59:59`);
   return `${endOfDay.toISOString().slice(0, 19).replaceAll(/[-:]/g, '')}Z`;
 }
 
 /** The local calendar date a stored `UNTIL` value ends on (inclusive). */
-function untilDate(value: string): string | undefined {
+function untilDate(value: string, timeZone?: string): string | undefined {
   const match = value.match(
     /^(\d{4})-?(\d{2})-?(\d{2})(?:T(\d{2}):?(\d{2}):?(\d{2})Z)?$/
   );
@@ -483,13 +488,17 @@ function untilDate(value: string): string | undefined {
       Number(match[6])
     )
   );
-  return format(instant, 'yyyy-MM-dd');
+  return format(
+    timeZone ? TZDateMini.tz(timeZone, instant) : instant,
+    'yyyy-MM-dd'
+  );
 }
 
 /** Serialize a config into a single-`RRULE` recurrence property list. */
 export function buildRecurrenceLines(
   config: RecurrenceConfig,
-  allDay: boolean
+  allDay: boolean,
+  timeZone?: string
 ): string[] {
   const parts = [`FREQ=${config.frequency}`];
   if (config.interval > 1) {
@@ -505,7 +514,7 @@ export function buildRecurrenceLines(
     );
   }
   if (config.ends.kind === 'on') {
-    parts.push(`UNTIL=${untilValue(config.ends.date, allDay)}`);
+    parts.push(`UNTIL=${untilValue(config.ends.date, allDay, timeZone)}`);
   } else if (config.ends.kind === 'after') {
     parts.push(`COUNT=${config.ends.count}`);
   }
@@ -518,7 +527,8 @@ export function buildRecurrenceLines(
  * selectors beyond its vocabulary), which the UI keeps untouched instead.
  */
 export function parseRecurrenceConfig(
-  lines: string[]
+  lines: string[],
+  timeZone?: string
 ): RecurrenceConfig | undefined {
   if (lines.length === 0) return undefined;
   const parsed = parseRecurrenceLines(lines);
@@ -567,7 +577,7 @@ export function parseRecurrenceConfig(
   if (rule.count !== undefined) {
     ends = { kind: 'after', count: rule.count };
   } else if (rule.until !== undefined) {
-    const date = untilDate(rule.until);
+    const date = untilDate(rule.until, timeZone);
     if (date === undefined) return undefined;
     ends = { kind: 'on', date };
   }

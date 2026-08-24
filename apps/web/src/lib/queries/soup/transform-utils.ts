@@ -543,6 +543,40 @@ export const useSearchResponseItemMapper = () => {
         ];
       }
 
+      case 'calendarEvent': {
+        if (!result.metadata) return [];
+        const search = getSearchData({
+          results: result.calendar_event_search_results,
+        });
+
+        // A recurring series is indexed once, as its master. The service
+        // resolves which instance this row means — next upcoming, else most
+        // recent past — so prefer that span over the master's, which for a
+        // long-running series is its original (stale) start.
+        const metadata = result.metadata;
+        const time = toCalendarEventTime(
+          metadata.occurrence?.time ?? metadata.time
+        );
+
+        return [
+          {
+            type: 'calendar_event',
+            id: result.id,
+            name: result.name,
+            ownerId: result.owner_id,
+            status: metadata.status,
+            time,
+            occurrenceKey: metadata.occurrence?.occurrenceKey,
+            conferenceUrl: metadata.conferenceUrl ?? undefined,
+            isReadOnly: metadata.isReadOnly,
+            createdAt: metadata.createdAt,
+            updatedAt: metadata.updatedAt,
+            properties: result.properties ?? undefined,
+            search,
+          },
+        ];
+      }
+
       case 'call': {
         if (!result.metadata) return [];
         const search = getSearchData({
