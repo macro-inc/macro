@@ -13,8 +13,8 @@ pub fn hash_token(token: &str) -> [u8; 32] {
 /// Display prefix for a bot bearer token.
 ///
 /// Current tokens look like `mbot_<hex>_<secret>`. The displayed prefix is
-/// `mbot_<hex>`. Tokens that do not match that shape (UUID leftovers from the
-/// plaintext migration) use the first 12 characters.
+/// `mbot_<hex>`. Tokens that do not match that shape use the first 12 hex
+/// characters of the SHA-256, never a raw substring of the secret.
 pub fn token_prefix(token: &str) -> String {
     if let Some(rest) = token.strip_prefix("mbot_")
         && let Some((prefix, _)) = rest.split_once('_')
@@ -22,7 +22,21 @@ pub fn token_prefix(token: &str) -> String {
     {
         return format!("mbot_{prefix}");
     }
-    token.chars().take(FALLBACK_PREFIX_CHARS).collect()
+    fallback_prefix(token)
+}
+
+fn fallback_prefix(token: &str) -> String {
+    hash_token(token)
+        .into_iter()
+        .take(FALLBACK_PREFIX_CHARS / 2)
+        .fold(
+            String::with_capacity(FALLBACK_PREFIX_CHARS),
+            |mut out, byte| {
+                use std::fmt::Write;
+                let _ = write!(out, "{byte:02x}");
+                out
+            },
+        )
 }
 
 /// Hash and display prefix derived from a raw bot bearer token.
@@ -32,7 +46,7 @@ pub fn token_prefix(token: &str) -> String {
 pub struct HashedBotToken {
     /// SHA-256 of the raw token UTF-8 bytes.
     pub hash: [u8; 32],
-    /// Display prefix (`mbot_<hex>` or the first 12 characters).
+    /// Display prefix (`mbot_<hex>` or a hash-derived fallback).
     pub prefix: String,
 }
 

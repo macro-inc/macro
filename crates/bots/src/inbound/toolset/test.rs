@@ -78,6 +78,8 @@ struct ToolTestBotService {
     created: Arc<Mutex<Option<CreateBotRequest>>>,
     scoped: Arc<Mutex<Option<(Uuid, CreateChannelScopedBotRequest)>>>,
     added: Arc<Mutex<Option<BotId>>>,
+    deleted: Arc<Mutex<Option<BotId>>>,
+    add_error: Option<String>,
 }
 
 impl BotService for ToolTestBotService {
@@ -136,9 +138,10 @@ impl BotService for ToolTestBotService {
     async fn delete_bot(
         &self,
         _caller: MacroUserIdStr<'static>,
-        _bot_id: BotId,
+        bot_id: BotId,
     ) -> Result<(), BotError> {
-        unimplemented!()
+        *self.deleted.lock().expect("delete lock") = Some(bot_id);
+        Ok(())
     }
 
     async fn add_bot_to_channel(
@@ -146,6 +149,9 @@ impl BotService for ToolTestBotService {
         _access: EntityAccessReceipt<MemberParticipantRole>,
         bot_id: BotId,
     ) -> Result<(), BotError> {
+        if let Some(message) = &self.add_error {
+            return Err(BotError::Repo(anyhow::anyhow!(message.clone())));
+        }
         *self.added.lock().expect("add lock") = Some(bot_id);
         Ok(())
     }
@@ -546,6 +552,40 @@ async fn create_bot_for_channel_requires_membership() {
     .expect_err("NoOp entity access rejects membership");
 
     assert_eq!(error.description, "failed to verify channel membership");
+}
+
+#[tokio::test]
+async fn create_bot_for_channel_deletes_bot_when_grant_fails() {
+    let service = ToolTestBotService {
+        add_error: Some("channel grant failed".to_string()),
+        ..ToolTestBotService::default()
+    };
+    let deleted = service.deleted.clone();
+    let created = service.created.clone();
+    let context = BotToolContext::new(
+        service,
+        AllowingEntityAccessService::default(),
+        "https://storage.example.com".to_string(),
+    );
+
+    let error = CreateBot {
+        team_id: None,
+        name: "Build Bot".to_string(),
+        handle: "build-bot".to_string(),
+        description: None,
+        avatar_url: None,
+        channel_id: Some(Uuid::new_v4()),
+        credential_label: None,
+        credential_expires_at: None,
+        has_agent: None,
+    }
+    .call(ServiceContext(context), RequestContext::new(user_id()))
+    .await
+    .expect_err("failed channel grant should not leave a channel-ready bot");
+
+    assert_eq!(error.description, "failed to grant bot channel access");
+    assert!(created.lock().expect("create lock").is_some());
+    assert!(deleted.lock().expect("delete lock").is_some());
 }
 
 #[tokio::test]

@@ -174,10 +174,11 @@ impl CreateBot {
         let access = service_context
             .require_channel_member(&request_context, channel_id)
             .await?;
+        let caller = request_context.user_id.clone();
         let bot = service_context
             .service
             .create_bot(
-                request_context.user_id,
+                caller.clone(),
                 CreateBotRequest {
                     team_id: self.team_id,
                     name: self.name.clone(),
@@ -189,11 +190,23 @@ impl CreateBot {
             )
             .await
             .map_err(|error| bot_tool_error("create bot", error))?;
-        service_context
+        if let Err(error) = service_context
             .service
             .add_bot_to_channel(access, bot.id)
             .await
-            .map_err(|error| bot_tool_error("grant bot channel access", error))?;
+        {
+            let _ = service_context
+                .service
+                .delete_bot(caller, bot.id)
+                .await
+                .inspect_err(|cleanup_error| {
+                    tracing::error!(
+                        error=?cleanup_error,
+                        "failed to delete bot after channel grant failed"
+                    );
+                });
+            return Err(bot_tool_error("grant bot channel access", error));
+        }
         let bot = BotSummary::try_from(bot)?;
         let webhook =
             BotWebhook::for_channel(&service_context.document_storage_service_url, channel_id);

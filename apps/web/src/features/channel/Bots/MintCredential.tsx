@@ -13,6 +13,7 @@ export function useMintBotToken() {
     label?: string;
     expiresAt?: string;
   }) => {
+    if (createToken.isPending) return;
     createToken.mutate(vars, {
       onSuccess: ({ bearer_token }) => setToken(bearer_token),
       onError: () => toast.failure('Failed to create token'),
