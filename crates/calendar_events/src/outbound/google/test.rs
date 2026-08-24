@@ -559,6 +559,34 @@ fn rsvp_patch_updates_only_the_connected_attendee() {
     assert_eq!(attendees[0]["comment"], "unrelated state that must survive");
 }
 
+fn google_attendee(email: &str, is_self: bool) -> GoogleAttendee {
+    serde_json::from_value(serde_json::json!({
+        "email": email,
+        "self": is_self,
+        "responseStatus": "needsAction",
+    }))
+    .unwrap()
+}
+
+#[test]
+fn rsvp_self_is_the_requester_email_not_the_calendar_copy() {
+    let attendees = vec![
+        google_attendee("jacob@example.com", true),
+        google_attendee("jackson@example.com", false),
+    ];
+    let found = find_self_attendee(&attendees, &["jackson@example.com".to_string()]);
+    assert_eq!(
+        found.and_then(|attendee| attendee.email.as_deref()),
+        Some("jackson@example.com")
+    );
+}
+
+#[test]
+fn rsvp_does_not_patch_another_attendee_when_the_requester_is_absent() {
+    let attendees = vec![google_attendee("jacob@example.com", true)];
+    assert!(find_self_attendee(&attendees, &["jackson@example.com".to_string()]).is_none());
+}
+
 #[test]
 fn reminders_round_trip_between_google_and_the_domain() {
     let master: GoogleEvent = serde_json::from_value(serde_json::json!({

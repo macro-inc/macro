@@ -1301,18 +1301,9 @@ impl<G: GoogleRequestGate> GoogleCalendarClient<G> {
             return Ok(RsvpPatch::Gone);
         };
         let attendees: Vec<GoogleAttendee> = current.attendees.clone().unwrap_or_default();
-        let self_attendee = attendees
-            .iter()
-            .find(|attendee| attendee.is_self)
-            .or_else(|| {
-                attendees.iter().find(|attendee| {
-                    attendee
-                        .email
-                        .as_deref()
-                        .is_some_and(|email| email.eq_ignore_ascii_case(self_email))
-                })
-            });
-        let Some(self_attendee) = self_attendee else {
+        let Some(self_attendee) =
+            find_self_attendee(&attendees, std::slice::from_ref(&self_email.to_string()))
+        else {
             return Ok(RsvpPatch::NotAttendee);
         };
         let body = rsvp_patch_body(self_attendee, response);
@@ -1421,6 +1412,24 @@ fn google_response_status(status: AttendeeResponseStatus) -> &'static str {
 
 /// Body updating only the connected attendee's response: `attendeesOmitted`
 /// tells Google the array is partial, so other attendees survive untouched.
+fn find_self_attendee<'a>(
+    attendees: &'a [GoogleAttendee],
+    self_emails: &[String],
+) -> Option<&'a GoogleAttendee> {
+    attendees
+        .iter()
+        .find(|attendee| attendee.is_self)
+        .or_else(|| {
+            attendees.iter().find(|attendee| {
+                attendee.email.as_deref().is_some_and(|email| {
+                    self_emails
+                        .iter()
+                        .any(|self_email| email.eq_ignore_ascii_case(self_email))
+                })
+            })
+        })
+}
+
 fn rsvp_patch_body(
     self_attendee: &GoogleAttendee,
     response: AttendeeResponseStatus,
