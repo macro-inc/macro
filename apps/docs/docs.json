@@ -143,9 +143,11 @@
       },
       {
         "group": "Bots",
+        "icon": "bot",
         "pages": [
           {
             "group": "Bring Your Own Agent",
+            "icon": "plug",
             "pages": [
               "integrations/hermes"
             ]
