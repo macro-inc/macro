@@ -577,16 +577,36 @@ export const BOT_MANAGEMENT_OVERRIDE =
 
 // Onboarding v4: the full-screen stepper new users land in after signup
 // (unified with /login), driving the import machinery with auto-import.
-// PostHog-gated with a dev-mode default; override with
-// VITE_ENABLE_ONBOARDING_V4. Read it through `useOnboardingV4Flag()` so the
-// gate reacts when PostHog answers (and so callers can wait instead of
-// treating "flags not loaded yet" as "off").
+// PostHog-gated; override with VITE_ENABLE_ONBOARDING_V4. Read it through
+// `useOnboardingV4Flag()` so the gate reacts when PostHog answers (and so
+// callers can wait instead of treating "flags not loaded yet" as "off").
 export const ENABLE_ONBOARDING_V4_FLAG = 'enable-onboarding-v4';
-// Honor an explicit VITE_ENABLE_ONBOARDING_V4=false (don't coerce it to
-// undefined), else default on in dev and defer to PostHog in prod.
+
+/**
+ * Default for `ENABLE_ONBOARDING_V4_OVERRIDE` when `VITE_ENABLE_ONBOARDING_V4`
+ * is unset. Local vite (`import.meta.hot`) is off so signing in does not dump
+ * you into the stepper — set `VITE_ENABLE_ONBOARDING_V4=true` to work on the
+ * flow. Hosted development (`dev.macro.com`) stays on; production defers to
+ * PostHog (`undefined`).
+ */
+export function defaultOnboardingV4Override(
+  localOnly: boolean,
+  devMode: boolean
+): boolean | undefined {
+  if (localOnly) {
+    return false;
+  }
+  if (devMode) {
+    return true;
+  }
+  return undefined;
+}
+
+// Honor an explicit VITE_ENABLE_ONBOARDING_V4 either way (don't coerce false
+// to undefined).
 export const ENABLE_ONBOARDING_V4_OVERRIDE =
   getFeatureFlagOverride('ENABLE_ONBOARDING_V4') ??
-  (DEV_MODE_ENV ? true : undefined);
+  defaultOnboardingV4Override(LOCAL_ONLY, DEV_MODE_ENV);
 
 // Calendar UI: calendar surfaces and the elevated-permissions upgrade flow
 // that re-runs Google consent for inboxes connected before the calendar
