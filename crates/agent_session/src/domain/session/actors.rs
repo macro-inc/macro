@@ -37,8 +37,6 @@ use super::{CloseReason, Effect, HandshakeStatus, Input, RuntimeStatus, SessionM
 const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(60);
 /// How long one caller's action has to reach the runtime.
 const COMMAND_DELIVERY_TIMEOUT: Duration = Duration::from_secs(60);
-/// How long one ACP turn may remain active before attribution becomes unsafe.
-const TURN_TIMEOUT: Duration = Duration::from_secs(30 * 60);
 
 /// A caller's request to deliver one action, and the wire back to them.
 pub(crate) struct SessionCommand {
@@ -52,12 +50,6 @@ pub(crate) struct SessionCommand {
 pub(crate) struct SessionCompletion {
     completed: oneshot::Sender<Result<()>>,
     span: tracing::Span,
-}
-
-struct ActiveTurn {
-    request_id: agent_client_protocol::schema::v1::RequestId,
-    span: tracing::Span,
-    deadline: Instant,
 }
 
 /// Whether a [`SessionActor`] has more steps to take.
@@ -88,7 +80,6 @@ pub(crate) struct SessionActor<Connector: AgentConnector, Logs> {
     /// dead. Every effect run before then hangs off it.
     handshake_span: Option<tracing::Span>,
     handshake_deadline: Instant,
-    active_turn: Option<ActiveTurn>,
 }
 
 impl<Connector, Logs> SessionActor<Connector, Logs>
@@ -132,7 +123,6 @@ where
             commands,
             handshake_span: Some(handshake_span),
             handshake_deadline: Instant::now() + HANDSHAKE_TIMEOUT,
-            active_turn: None,
         }
     }
 
@@ -163,18 +153,8 @@ where
                     std::future::pending::<()>().await;
                 }
             };
-            let turn_deadline = self.active_turn.as_ref().map(|turn| turn.deadline);
-            let turn_timeout = async move {
-                match turn_deadline {
-                    Some(deadline) => tokio::time::sleep_until(deadline).await,
-                    None => std::future::pending::<()>().await,
-                }
-            };
             let input = tokio::select! {
             () = handshake_timeout => Input::Closed(CloseReason::HandshakeTimedOut),
-            () = turn_timeout => {
-                Input::Closed(CloseReason::TurnTimedOut)
-            },
             command = self.commands.recv() => match command {
                 Some(SessionCommand { user_id, action, action_id, completed, span }) => Input::Command {
                     from: user_id,
@@ -211,13 +191,11 @@ where
     /// back in - so a `Complete` never fires for an action that was not sent,
     /// and the machine (not this loop) decides what failure means.
     pub(crate) async fn dispatch(&mut self, input: Input<SessionCompletion>) -> Stepped {
-        let mut inbound_span = self.inbound_turn_span(&input);
         let handshake_deadline = self.handshake_deadline;
         let mut handshake_span = self.handshake_span.clone();
-        let produced = match (&inbound_span, &handshake_span) {
-            (Some(span), _) => span.in_scope(|| self.machine.handle(input)),
-            (None, Some(span)) => span.in_scope(|| self.machine.handle(input)),
-            (None, None) => self.machine.handle(input),
+        let produced = match &handshake_span {
+            Some(span) => span.in_scope(|| self.machine.handle(input)),
+            None => self.machine.handle(input),
         };
         let mut effects = VecDeque::from(produced);
         self.finish_handshake_if_complete();
@@ -233,66 +211,47 @@ where
                         Effect::Complete { token, .. } => Some(token.span.clone()),
                         _ => None,
                     });
-                    if let (Some(span), Some(request_id)) =
-                        (command_span.as_ref(), turn_request_id(&message))
-                    {
-                        debug_assert!(self.active_turn.is_none());
-                        self.active_turn = Some(ActiveTurn {
-                            request_id,
-                            span: tracing::info_span!(
-                                parent: span,
-                                "agent.turn",
-                                agent.session.id = %self.machine.id(),
-                                otel.status_code = tracing::field::Empty,
-                                otel.status_description = tracing::field::Empty,
-                            ),
-                            deadline: Instant::now() + TURN_TIMEOUT,
-                        });
-                    }
-                    let turn_span = self.active_turn.as_ref().map(|turn| turn.span.clone());
                     let delivery = self.deliver(from, message);
-                    let (result, close_reason) = match (
-                        turn_span.as_ref(),
-                        command_span.as_ref(),
-                        handshake_span.as_ref(),
-                    ) {
-                        (Some(span), _, _) | (None, Some(span), _) => match tokio::time::timeout(
-                            COMMAND_DELIVERY_TIMEOUT,
-                            delivery.instrument(span.clone()),
-                        )
-                        .await
-                        {
-                            Ok(result) => (result, CloseReason::SendFailed),
-                            Err(_) => (
-                                Err(AgentSessionError::DeliveryTimedOut(self.machine.id())),
-                                CloseReason::SendFailed,
-                            ),
-                        },
-                        (None, None, Some(span)) => match tokio::time::timeout_at(
-                            handshake_deadline,
-                            delivery.instrument(span.clone()),
-                        )
-                        .await
-                        {
-                            Ok(result) => (result, CloseReason::SendFailed),
-                            Err(_) => (
-                                Err(AgentSessionError::Handshake(format!(
-                                    "timed out after {} seconds",
-                                    HANDSHAKE_TIMEOUT.as_secs()
-                                ))),
-                                CloseReason::HandshakeTimedOut,
-                            ),
-                        },
-                        (None, None, None) => {
-                            match tokio::time::timeout(COMMAND_DELIVERY_TIMEOUT, delivery).await {
+                    let (result, close_reason) =
+                        match (command_span.as_ref(), handshake_span.as_ref()) {
+                            (Some(span), _) => match tokio::time::timeout(
+                                COMMAND_DELIVERY_TIMEOUT,
+                                delivery.instrument(span.clone()),
+                            )
+                            .await
+                            {
                                 Ok(result) => (result, CloseReason::SendFailed),
                                 Err(_) => (
                                     Err(AgentSessionError::DeliveryTimedOut(self.machine.id())),
                                     CloseReason::SendFailed,
                                 ),
+                            },
+                            (None, Some(span)) => match tokio::time::timeout_at(
+                                handshake_deadline,
+                                delivery.instrument(span.clone()),
+                            )
+                            .await
+                            {
+                                Ok(result) => (result, CloseReason::SendFailed),
+                                Err(_) => (
+                                    Err(AgentSessionError::Handshake(format!(
+                                        "timed out after {} seconds",
+                                        HANDSHAKE_TIMEOUT.as_secs()
+                                    ))),
+                                    CloseReason::HandshakeTimedOut,
+                                ),
+                            },
+                            (None, None) => {
+                                match tokio::time::timeout(COMMAND_DELIVERY_TIMEOUT, delivery).await
+                                {
+                                    Ok(result) => (result, CloseReason::SendFailed),
+                                    Err(_) => (
+                                        Err(AgentSessionError::DeliveryTimedOut(self.machine.id())),
+                                        CloseReason::SendFailed,
+                                    ),
+                                }
                             }
-                        }
-                    };
+                        };
                     if let Err(error) = result {
                         if let Some(span) = command_span {
                             span.record("otel.status_code", "ERROR");
@@ -310,45 +269,30 @@ where
                 }
                 Effect::Log { message } => {
                     let log = self.log(None, Message::ToServer(message));
-                    let (result, close_reason) =
-                        match (inbound_span.as_ref(), handshake_span.as_ref()) {
-                            (Some(span), _) => match tokio::time::timeout(
-                                COMMAND_DELIVERY_TIMEOUT,
-                                log.instrument(span.clone()),
-                            )
-                            .await
-                            {
-                                Ok(result) => (result, CloseReason::LogFailed),
-                                Err(_) => (
-                                    Err(AgentSessionError::LogTimedOut(self.machine.id())),
-                                    CloseReason::LogFailed,
-                                ),
-                            },
-                            (None, Some(span)) => match tokio::time::timeout_at(
-                                handshake_deadline,
-                                log.instrument(span.clone()),
-                            )
-                            .await
-                            {
-                                Ok(result) => (result, CloseReason::LogFailed),
-                                Err(_) => (
-                                    Err(AgentSessionError::Handshake(format!(
-                                        "timed out after {} seconds",
-                                        HANDSHAKE_TIMEOUT.as_secs()
-                                    ))),
-                                    CloseReason::HandshakeTimedOut,
-                                ),
-                            },
-                            (None, None) => {
-                                match tokio::time::timeout(COMMAND_DELIVERY_TIMEOUT, log).await {
-                                    Ok(result) => (result, CloseReason::LogFailed),
-                                    Err(_) => (
-                                        Err(AgentSessionError::LogTimedOut(self.machine.id())),
-                                        CloseReason::LogFailed,
-                                    ),
-                                }
-                            }
-                        };
+                    let (result, close_reason) = match handshake_span.as_ref() {
+                        Some(span) => match tokio::time::timeout_at(
+                            handshake_deadline,
+                            log.instrument(span.clone()),
+                        )
+                        .await
+                        {
+                            Ok(result) => (result, CloseReason::LogFailed),
+                            Err(_) => (
+                                Err(AgentSessionError::Handshake(format!(
+                                    "timed out after {} seconds",
+                                    HANDSHAKE_TIMEOUT.as_secs()
+                                ))),
+                                CloseReason::HandshakeTimedOut,
+                            ),
+                        },
+                        None => match tokio::time::timeout(COMMAND_DELIVERY_TIMEOUT, log).await {
+                            Ok(result) => (result, CloseReason::LogFailed),
+                            Err(_) => (
+                                Err(AgentSessionError::LogTimedOut(self.machine.id())),
+                                CloseReason::LogFailed,
+                            ),
+                        },
+                    };
                     if let Err(error) = result {
                         tracing::error!(
                             error = ?error,
@@ -392,39 +336,14 @@ where
                     }
                     let _ = token.completed.send(result);
                 }
-                Effect::TurnFinished { request_id, error } => {
-                    // The response child must close before its long-lived turn
-                    // parent, otherwise exporters can observe an inverted tree.
-                    inbound_span.take();
-                    let Some(turn) = self.active_turn.take() else {
-                        tracing::error!(%request_id, "completed an ACP turn with no active span");
-                        continue;
-                    };
-                    debug_assert_eq!(turn.request_id, request_id);
-                    if let Some(error) = error {
-                        turn.span.record("otel.status_code", "ERROR");
-                        turn.span.record("otel.status_description", &error);
-                    }
-                }
                 Effect::Stop { reason } => {
-                    inbound_span.take();
-                    let turn_span = self.active_turn.as_ref().map(|turn| turn.span.clone());
                     let terminal_log = self.log(
                         None,
                         Message::ToServer(ToServerMessage::Event {
                             event: SystemEvent::Disconnected,
                         }),
                     );
-                    let result = match turn_span {
-                        Some(span) => {
-                            tokio::time::timeout(
-                                COMMAND_DELIVERY_TIMEOUT,
-                                terminal_log.instrument(span),
-                            )
-                            .await
-                        }
-                        None => tokio::time::timeout(COMMAND_DELIVERY_TIMEOUT, terminal_log).await,
-                    };
+                    let result = tokio::time::timeout(COMMAND_DELIVERY_TIMEOUT, terminal_log).await;
                     match result {
                         Ok(Ok(())) => {}
                         Ok(Err(error)) => {
@@ -441,7 +360,6 @@ where
                             );
                         }
                     }
-                    self.fail_active_turn(&reason.to_string());
                     tracing::info!(id = %self.machine.id(), %reason, "agent session stopped");
                     stepped = Stepped::Stopped;
                 }
@@ -537,47 +455,11 @@ where
                 Effect::Send { .. }
                 | Effect::Log { .. }
                 | Effect::PersistAcpSession { .. }
-                | Effect::Initialized { .. }
-                | Effect::TurnFinished { .. } => {}
+                | Effect::Initialized { .. } => {}
             }
         }
         if let Some(stop) = stop {
             effects.push_back(stop);
-        }
-    }
-
-    fn inbound_turn_span(&self, input: &Input<SessionCompletion>) -> Option<tracing::Span> {
-        let Input::Inbound(ToServerMessage::Acp(AcpMessage(frame))) = input else {
-            return None;
-        };
-        let turn = self.active_turn.as_ref()?;
-        match frame {
-            RawJsonRpcMessage::Response(response)
-                if frame.response_id() == Some(&turn.request_id) =>
-            {
-                let span = tracing::info_span!(parent: &turn.span, "agent.turn.response");
-                if let agent_client_protocol::schema::v1::Response::Error { error, .. } = response {
-                    span.record("otel.status_code", "ERROR");
-                    span.record(
-                        "otel.status_description",
-                        tracing::field::display(&error.message),
-                    );
-                }
-                Some(span)
-            }
-            RawJsonRpcMessage::Notification(notification)
-                if notification.method.as_ref() == "session/update" =>
-            {
-                Some(tracing::info_span!(parent: &turn.span, "agent.turn.update"))
-            }
-            _ => None,
-        }
-    }
-
-    fn fail_active_turn(&mut self, description: &str) {
-        if let Some(turn) = self.active_turn.take() {
-            turn.span.record("otel.status_code", "ERROR");
-            turn.span.record("otel.status_description", description);
         }
     }
 }
@@ -591,13 +473,4 @@ fn acp_method(message: &ToRuntimeMessage) -> Option<&str> {
         RawJsonRpcMessage::Notification(notification) => Some(notification.method.as_ref()),
         RawJsonRpcMessage::Response(_) => None,
     }
-}
-
-fn turn_request_id(
-    message: &ToRuntimeMessage,
-) -> Option<agent_client_protocol::schema::v1::RequestId> {
-    let ToRuntimeMessage::Acp(AcpMessage(RawJsonRpcMessage::Request(request))) = message else {
-        return None;
-    };
-    (request.method.as_ref() == "session/prompt").then(|| request.id.clone())
 }
