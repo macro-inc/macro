@@ -17,9 +17,9 @@ use super::{
     },
     ports::{
         CalendarBackfillRepository, CalendarEventChange, CalendarEventWrite,
-        CalendarOccurrenceService, CalendarRepository, GoogleCalendarProvider,
-        GoogleCalendarSyncRepository, GoogleEventSyncContext, GoogleProviderError,
-        GoogleProviderErrorKind,
+        CalendarEventWriteOutcome, CalendarOccurrenceService, CalendarRepository,
+        GoogleCalendarProvider, GoogleCalendarSyncRepository, GoogleEventSyncContext,
+        GoogleProviderError, GoogleProviderErrorKind, RetiredCalendarEvent,
     },
 };
 
@@ -483,6 +483,57 @@ where
         }
     }
 
+    /// Publish one calendar topic event. Sync progress is already committed by
+    /// the time this runs, so a publish failure is logged and dropped rather
+    /// than failing the run — the search backfill re-enumerates present rows.
+    fn publish_calendar_event(&self, event: CalendarTopicEvent) {
+        let _ = self
+            .macro_event_broker
+            .send_event(&CalendarMacroEvent::for_change(event))
+            .inspect_err(|error| {
+                tracing::error!(error=?error, "failed to publish calendar event");
+            });
+    }
+
+    /// Announce what a write did to the canonical row. A write that changed
+    /// nothing publishes nothing, so a full snapshot re-observing thousands of
+    /// unchanged events stays off the topic.
+    fn publish_write_outcome(&self, outcome: &CalendarEventWriteOutcome) {
+        let metadata = CalendarEventMetadata {
+            event_id: outcome.event_id,
+            owner_id: outcome.owner_id.clone(),
+        };
+        match outcome.change {
+            CalendarEventChange::Created => {
+                self.publish_calendar_event(CalendarTopicEvent::Created(metadata));
+            }
+            CalendarEventChange::Updated => {
+                self.publish_calendar_event(CalendarTopicEvent::Updated(metadata));
+            }
+            CalendarEventChange::Unchanged => {}
+        }
+    }
+
+    /// Announce every event a source retirement touched. Retiring a source
+    /// does not necessarily remove the event — the row survives, rewritten
+    /// from its next-best remaining source — so each event reports its own
+    /// fate. Without this a provider-side deletion would leave a permanently
+    /// stale search document: the row is gone, so the backfill can never
+    /// re-enumerate it.
+    fn publish_retirements(&self, retired: Vec<RetiredCalendarEvent>) {
+        for event in retired {
+            let metadata = CalendarEventMetadata {
+                event_id: event.event_id,
+                owner_id: event.owner_id,
+            };
+            self.publish_calendar_event(if event.deleted {
+                CalendarTopicEvent::Deleted(metadata)
+            } else {
+                CalendarTopicEvent::Updated(metadata)
+            });
+        }
+    }
+
     /// Fetch and reconcile calendars and events for a connected inbox.
     ///
     /// Progress accumulates into `report` as each calendar commits, so a
@@ -573,34 +624,7 @@ where
                         upsert,
                     })
                     .await?;
-                // A full snapshot re-observes every event, most of them
-                // unchanged; publishing only real changes keeps a sync-token
-                // reset from flooding the topic. Sync progress is already
-                // committed, so a publish failure is logged and dropped
-                // rather than failing the run.
-                let topic_event = match outcome.change {
-                    CalendarEventChange::Created => {
-                        Some(CalendarTopicEvent::Created(CalendarEventMetadata {
-                            event_id: outcome.event_id,
-                            owner_id: outcome.owner_id.clone(),
-                        }))
-                    }
-                    CalendarEventChange::Updated => {
-                        Some(CalendarTopicEvent::Updated(CalendarEventMetadata {
-                            event_id: outcome.event_id,
-                            owner_id: outcome.owner_id.clone(),
-                        }))
-                    }
-                    CalendarEventChange::Unchanged => None,
-                };
-                if let Some(topic_event) = topic_event {
-                    let _ = self
-                        .macro_event_broker
-                        .send_event(&CalendarMacroEvent::for_change(topic_event))
-                        .inspect_err(|error| {
-                            tracing::error!(error=?error, "failed to publish calendar event");
-                        });
-                }
+                self.publish_write_outcome(&outcome);
                 calendar_count += 1;
             }
             // The upserts above committed individually, so they count even
@@ -610,7 +634,8 @@ where
             // Committing per calendar keeps earlier calendars' sync tokens
             // durable when a later calendar's poll fails, so the retry only
             // re-pulls what never committed.
-            self.repository
+            let retired = self
+                .repository
                 .commit_google_calendar_sync(
                     key,
                     lease_token,
@@ -625,6 +650,10 @@ where
                     calendar_count,
                 )
                 .await?;
+            // A provider-side deletion reaches search only here: the row is
+            // gone once the commit lands, so nothing downstream can rediscover
+            // it by re-reading Postgres.
+            self.publish_retirements(retired);
             // Tombstones only apply inside the snapshot commit, so they
             // count once it succeeds.
             report.cancellations_observed += cancellation_count;
@@ -679,9 +708,13 @@ where
             }
         }
 
-        self.repository
+        // A calendar dropped from the provider's list retires its sources, so
+        // the events it backed announce their own fate here too.
+        let retired = self
+            .repository
             .reconcile_google_calendar_list(key, lease_token, account_id, calendar_ids)
             .await?;
+        self.publish_retirements(retired);
 
         Ok(())
     }

@@ -17,8 +17,13 @@ pub struct CalendarEventBackfillRow {
 /// `calendar_event_occurrences` and are not indexed — so this enumerates
 /// exactly the set the index holds.
 ///
-/// This is also the recovery mechanism for a change the `macro.calendar` topic
-/// dropped, not just first-time population.
+/// This recovers a dropped `macro.calendar` change for an event that still
+/// exists, and populates a new index. It cannot recover a **deletion**: the
+/// row is gone, so nothing here enumerates it and a stale search document for
+/// it survives. Deletions reach the index only through the topic's `Deleted`
+/// events, which every retirement path publishes. Removing an orphaned
+/// document would need the reverse sweep — enumerate the index and drop ids
+/// absent from this table — which does not exist yet.
 #[tracing::instrument(skip(db), err)]
 pub async fn get_calendar_events_for_search_backfill(
     db: &Pool<Postgres>,

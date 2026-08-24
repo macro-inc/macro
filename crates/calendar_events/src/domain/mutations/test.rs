@@ -227,7 +227,7 @@ impl CalendarRepository for FakeRepo {
         _account_id: Uuid,
         _sync: GoogleCalendarSyncSnapshot,
         _events_upserted: usize,
-    ) -> Result<(), rootcause::Report> {
+    ) -> Result<Vec<RetiredCalendarEvent>, rootcause::Report> {
         unreachable!()
     }
 
@@ -263,7 +263,7 @@ impl CalendarRepository for FakeRepo {
         _lease_token: Uuid,
         _account_id: Uuid,
         _calendar_ids: Vec<Uuid>,
-    ) -> Result<(), rootcause::Report> {
+    ) -> Result<Vec<RetiredCalendarEvent>, rootcause::Report> {
         unreachable!()
     }
 

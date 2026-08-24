@@ -442,7 +442,7 @@ pub trait CalendarRepository: Send + Sync + 'static {
         account_id: Uuid,
         sync: GoogleCalendarSyncSnapshot,
         events_upserted: usize,
-    ) -> impl Future<Output = Result<(), Report>> + Send;
+    ) -> impl Future<Output = Result<Vec<RetiredCalendarEvent>, Report>> + Send;
 
     /// Record a freshly opened push channel for one calendar under the
     /// backfill's fencing token.
@@ -477,7 +477,7 @@ pub trait CalendarRepository: Send + Sync + 'static {
         lease_token: Uuid,
         account_id: Uuid,
         calendar_ids: Vec<Uuid>,
-    ) -> impl Future<Output = Result<(), Report>> + Send;
+    ) -> impl Future<Output = Result<Vec<RetiredCalendarEvent>, Report>> + Send;
 
     /// Resolve an event visible to the requester to its best Google source
     /// and the connected inbox that can mutate it. `None` covers both an

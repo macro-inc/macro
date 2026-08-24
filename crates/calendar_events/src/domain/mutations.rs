@@ -22,7 +22,7 @@ use super::{
         CalendarMutationService, CalendarRepository, CalendarRsvpScope, CalendarTokenError,
         CalendarUpdateScope, GoogleCalendarMutationProvider, GoogleInstanceUpdateOutcome,
         GoogleProviderError, GoogleProviderErrorKind, GoogleRsvpOutcome,
-        GoogleSeriesMutationOutcome,
+        GoogleSeriesMutationOutcome, RetiredCalendarEvent,
     },
 };
 use crate::domain::events::{CalendarEventMetadata, CalendarMacroEvent, CalendarTopicEvent};
@@ -65,6 +65,24 @@ where
             .inspect_err(|error| {
                 tracing::error!(error=?error, "failed to publish calendar event");
             });
+    }
+
+    /// Announce every event a source retirement touched. Retiring a source
+    /// does not necessarily remove the event — the row survives, rewritten
+    /// from its next-best remaining source — so each event reports its own
+    /// fate.
+    fn publish_retirements(&self, retired: Vec<RetiredCalendarEvent>) {
+        for event in retired {
+            let metadata = CalendarEventMetadata {
+                event_id: event.event_id,
+                owner_id: event.owner_id,
+            };
+            self.publish_calendar_event(if event.deleted {
+                CalendarTopicEvent::Deleted(metadata)
+            } else {
+                CalendarTopicEvent::Updated(metadata)
+            });
+        }
     }
 
     /// Announce what a write did to the canonical row. A write that changed
@@ -335,19 +353,7 @@ where
                     )
                     .await
                     .map_err(|error| CalendarMutationError::PersistFailed(format!("{error:?}")))?;
-                for event in retired {
-                    let metadata = CalendarEventMetadata {
-                        event_id: event.event_id,
-                        owner_id: event.owner_id,
-                    };
-                    self.publish_calendar_event(if event.deleted {
-                        CalendarTopicEvent::Deleted(metadata)
-                    } else {
-                        // The row survives, rewritten from its next-best
-                        // remaining source.
-                        CalendarTopicEvent::Updated(metadata)
-                    });
-                }
+                self.publish_retirements(retired);
                 Ok(())
             }
         }
@@ -475,7 +481,8 @@ where
     /// Best-effort cleanup when the provider reports the event gone: the
     /// regular sync converges the projection either way.
     async fn retire_gone_source(&self, target: &CalendarEventMutationTarget) {
-        self.repository
+        let retired = self
+            .repository
             .remove_google_source(
                 target.account_id,
                 target.calendar_id,
@@ -489,7 +496,10 @@ where
                     "failed to retire a provider-deleted calendar event source"
                 );
             })
-            .ok();
+            .unwrap_or_default();
+        // The row may be gone now, so search cannot rediscover this by
+        // re-reading Postgres — the retirement has to be announced.
+        self.publish_retirements(retired);
     }
 }
 

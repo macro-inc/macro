@@ -1177,7 +1177,8 @@ impl CalendarRepository for PgCalendarRepository {
         account_id: Uuid,
         sync: GoogleCalendarSyncSnapshot,
         events_upserted: usize,
-    ) -> Result<(), Report> {
+    ) -> Result<Vec<RetiredCalendarEvent>, Report> {
+        let mut retired = Vec::new();
         let mut tx = self.pool.begin().await.map_err(report)?;
         fence_google_mutation_tx(&mut tx, key, lease_token, Some(account_id)).await?;
 
@@ -1230,7 +1231,9 @@ impl CalendarRepository for PgCalendarRepository {
             .await
             .map_err(report)?;
             for event_id in affected_event_ids {
-                restore_best_source_or_delete(&mut tx, event_id).await?;
+                if let Some(outcome) = restore_best_source_or_delete(&mut tx, event_id).await? {
+                    retired.push(outcome);
+                }
             }
         }
 
@@ -1256,7 +1259,9 @@ impl CalendarRepository for PgCalendarRepository {
             .await
             .map_err(report)?;
             for event_id in affected_event_ids {
-                restore_best_source_or_delete(&mut tx, event_id).await?;
+                if let Some(outcome) = restore_best_source_or_delete(&mut tx, event_id).await? {
+                    retired.push(outcome);
+                }
             }
         }
 
@@ -1315,7 +1320,8 @@ impl CalendarRepository for PgCalendarRepository {
             ));
         }
 
-        tx.commit().await.map_err(report)
+        tx.commit().await.map_err(report)?;
+        Ok(retired)
     }
 
     #[tracing::instrument(skip(self, channel), fields(job_id = %key.job_id), err)]
@@ -1427,7 +1433,8 @@ impl CalendarRepository for PgCalendarRepository {
         lease_token: Uuid,
         account_id: Uuid,
         calendar_ids: Vec<Uuid>,
-    ) -> Result<(), Report> {
+    ) -> Result<Vec<RetiredCalendarEvent>, Report> {
+        let mut retired = Vec::new();
         let mut tx = self.pool.begin().await.map_err(report)?;
         fence_google_mutation_tx(&mut tx, key, lease_token, Some(account_id)).await?;
 
@@ -1453,7 +1460,9 @@ impl CalendarRepository for PgCalendarRepository {
         .await
         .map_err(report)?;
         for event_id in affected_event_ids {
-            restore_best_source_or_delete(&mut tx, event_id).await?;
+            if let Some(outcome) = restore_best_source_or_delete(&mut tx, event_id).await? {
+                retired.push(outcome);
+            }
         }
 
         sqlx::query!(
@@ -1491,7 +1500,8 @@ impl CalendarRepository for PgCalendarRepository {
         .await
         .map_err(report)?;
 
-        tx.commit().await.map_err(report)
+        tx.commit().await.map_err(report)?;
+        Ok(retired)
     }
 
     #[tracing::instrument(skip(self, requester_id), err)]
@@ -2252,6 +2262,15 @@ async fn clear_calendar_opt_out_tx(
     Ok(())
 }
 
+/// Retirements here are deliberately **not** returned for publication.
+///
+/// Both callers — a grant that lost its calendar scopes, and an explicit
+/// disconnect — purge every event on the inbox at once, so per-event `Deleted`
+/// topic messages would fan out to one message per event in the account.
+/// Search documents for those events are consequently left stale; they are
+/// invisible rather than leaked, because enrichment re-reads visibility from
+/// Postgres and drops a hit whose row is gone. Removing them wants a
+/// purge-by-owner operation, not this path.
 async fn disable_google_calendar_capability_tx(
     tx: &mut Transaction<'_, Postgres>,
     email_link_id: Uuid,

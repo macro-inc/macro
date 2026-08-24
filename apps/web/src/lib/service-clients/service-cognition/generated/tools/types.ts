@@ -1046,7 +1046,7 @@ export interface ContentSearch {
   query: string;
   matchType?: SearchMatchType & string;
   /**
-   * Which types of items to search. Leave empty (the default) to search all types — this is almost always what you want. Only set this when the user's request clearly targets one or more specific types. Examples: ['documents'], ['emails', 'documents'], ['channels'], ['call_records'].
+   * Which types of items to search. Leave empty (the default) to search all types — this is almost always what you want. Only set this when the user's request clearly targets one or more specific types. Examples: ['documents'], ['emails', 'documents'], ['channels'], ['call_records']. Projects and calendar events carry no indexed content, so they never match here — search those by name with NameSearch instead.
    */
   entityTypes?: UnifiedSearchIndex[];
   /**
@@ -3737,7 +3737,7 @@ export interface NameSearch {
    */
   inbox?: string | null;
   /**
-   * Restrict results to items carrying the given tags — any of them by default, every one of them with tagsMatch="all". Each entry names a tag by its label, matched case-insensitively against the user's own tags; only set scope ("personal" or "team") when the user distinguishes between their personal and team tags. An unknown label fails with the list of available tags — call ListTags first when unsure what tags exist. Only taggable items (documents, emails, AI chats, projects, call records) can match, so channels are dropped while a tag filter is active.
+   * Restrict results to items carrying the given tags — any of them by default, every one of them with tagsMatch="all". Each entry names a tag by its label, matched case-insensitively against the user's own tags; only set scope ("personal" or "team") when the user distinguishes between their personal and team tags. An unknown label fails with the list of available tags — call ListTags first when unsure what tags exist. Only taggable items (documents, emails, AI chats, projects, call records, calendar events) can match, so channels are dropped while a tag filter is active.
    */
   tags?: TagFilter[] | null;
   tagsMatch?: TagMatch;
