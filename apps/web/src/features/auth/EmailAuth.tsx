@@ -1,3 +1,4 @@
+import { DEFAULT_ROUTE } from '@app/constants/defaultRoute';
 import { ShareInboxConflictDialog } from '@app/features/inbox/ShareInboxConflictDialog';
 import { useOnboardingV4Flag } from '@app/features/setup/flow/useOnboardingV4Flag';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
@@ -6,8 +7,11 @@ import { redirectToEmailAuth } from '@core/auth/email';
 import { publishLoginSuccess } from '@core/auth/login-events';
 import { LoadingBlock } from '@core/component/LoadingBlock';
 import { toast } from '@core/component/Toast/Toast';
-import { useSettingsState } from '@core/constant/SettingsState';
+import { restoreSettingsReturnTo } from '@core/constant/SettingsState';
+import { appendSettingsSplitToUrl } from '@core/constant/settingsSplitUrl';
+import { settingsTabToSlug } from '@core/constant/settingsTabsConfig';
 import { useEmailLinks } from '@core/email-link';
+import { consumeInboxLinkReturn } from '@core/email-link/return-layout';
 import { isMobile } from '@core/mobile/isMobile';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { whenSettled } from '@core/util/whenSettled';
@@ -98,15 +102,30 @@ function EmailSignupCallback(props: Pick<EmailAuthParams, 'successPath'>) {
 }
 
 /**
+ * Where the callback lands when there is no layout to restore: the app's home
+ * view with the Connections settings page docked beside it, so a user who just
+ * granted access still sees the result. Only reachable when the stash is
+ * missing — storage blocked, or a callback URL opened outside its own flow.
+ */
+const POST_LINK_FALLBACK_ROUTE = appendSettingsSplitToUrl(
+  DEFAULT_ROUTE,
+  settingsTabToSlug('Connected')
+);
+
+/**
  * Handles the OAuth callback after an already-authenticated user adds another Gmail
  * inbox via /link/gmail. Reads `link_id` from the query string and invokes init to
  * provision the second `email_links` row. Falls back to a toast on failure.
+ *
+ * Consent runs as a full page navigation, so the split layout — which lives in
+ * the URL — is gone by the time this mounts. The add-inbox flow stashed it
+ * against this `link_id`; restoring it is what keeps enabling calendar (or
+ * adding an inbox) from clobbering whatever the user had open.
  */
 function EmailLinkCallback(props: Pick<EmailAuthParams, 'successPath'>) {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { query, initEmailLink } = useEmailLinks();
-  const { setActiveTabId } = useSettingsState();
   const [conflict, setConflict] = createSignal<{
     linkId: string;
     emailAddress: string;
@@ -120,9 +139,25 @@ function EmailLinkCallback(props: Pick<EmailAuthParams, 'successPath'>) {
   const userInfoQuery = useUserInfoQuery();
   const onboardingV4 = useOnboardingV4Flag();
 
-  // The desktop settings split doesn't exist on mobile, so the callback
-  // returns mobile users to the list view with the toast as confirmation.
-  const navigateToEmailSettings = () => {
+  // Return to the layout the flow left from, if this callback belongs to a
+  // flow that stashed one. Consent replaced the page, so nothing in memory
+  // survived — the stash is the only record of what the user had open.
+  // Reports true when it navigated, so callers can fall through otherwise.
+  const restoreLayoutBeforeConsent = (linkId: string) => {
+    const stored = consumeInboxLinkReturn(linkId);
+    if (!stored) return false;
+    if (stored.settingsReturnTo) {
+      restoreSettingsReturnTo(stored.settingsReturnTo);
+    }
+    navigate(stored.url, { replace: true });
+    return true;
+  };
+
+  // Where the callback hands the user off, in order of preference: back into
+  // onboarding for a first-run user, then the layout they left, then a
+  // form-factor default — the list view on mobile, where the desktop settings
+  // split doesn't exist and the toast is the confirmation.
+  const navigateAfterLink = (linkId: string) => {
     // A first-run user connected this inbox from the onboarding flow:
     // return straight to it. Landing in mail settings would mount the app
     // shell mid-onboarding just for NewOnboardingRedirect to bounce back.
@@ -135,12 +170,12 @@ function EmailLinkCallback(props: Pick<EmailAuthParams, 'successPath'>) {
       navigate('/onboarding', { replace: true });
       return;
     }
+    if (restoreLayoutBeforeConsent(linkId)) return;
     if (isMobile()) {
       navigateToSuccess();
       return;
     }
-    setActiveTabId('Connected');
-    navigate('/component/mail/component/settings', { replace: true });
+    navigate(POST_LINK_FALLBACK_ROUTE, { replace: true });
   };
 
   const runInit = async (linkId: string, forceShare: boolean) => {
@@ -151,12 +186,12 @@ function EmailLinkCallback(props: Pick<EmailAuthParams, 'successPath'>) {
         // than flashing a stale list until its own refetch lands.
         await query.refetch();
         toast.success('Inbox connected');
-        navigateToEmailSettings();
+        navigateAfterLink(linkId);
       },
       async (err) => {
         if (err.tag === 'AlreadyInitialized') {
           await query.refetch();
-          navigateToEmailSettings();
+          navigateAfterLink(linkId);
           return;
         }
         // The mailbox is already connected by someone else. Hold the callback open
@@ -173,11 +208,11 @@ function EmailLinkCallback(props: Pick<EmailAuthParams, 'successPath'>) {
           toast.failure(
             'Gmail access was not granted. Please allow all requested permissions and try again.'
           );
-          navigateToEmailSettings();
+          navigateAfterLink(linkId);
           return;
         }
         toast.failure('Failed to add inbox');
-        navigateToEmailSettings();
+        navigateAfterLink(linkId);
       }
     );
   };
@@ -209,8 +244,9 @@ function EmailLinkCallback(props: Pick<EmailAuthParams, 'successPath'>) {
           emailAddress={c().emailAddress}
           ownerEmail={c().ownerEmail}
           onCancel={() => {
+            const linkId = c().linkId;
             setConflict(null);
-            navigateToSuccess();
+            if (!restoreLayoutBeforeConsent(linkId)) navigateToSuccess();
           }}
           onShare={() => {
             const linkId = c().linkId;
