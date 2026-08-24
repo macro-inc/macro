@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   isSlideDownArmed,
   SLIDE_TO_CALL_DISTANCE_PX,
+  slideDownFraction,
   slideDownProgress,
 } from '../slide-down-call';
 
@@ -44,5 +45,15 @@ describe('isSlideDownArmed', () => {
     expect(isSlideDownArmed(0)).toBe(false);
     expect(isSlideDownArmed(SLIDE_TO_CALL_DISTANCE_PX - 1)).toBe(false);
     expect(isSlideDownArmed(SLIDE_TO_CALL_DISTANCE_PX)).toBe(true);
+  });
+});
+
+describe('slideDownFraction', () => {
+  it('reports travel as a clamped 0-1 fraction', () => {
+    expect(slideDownFraction(-10)).toBe(0);
+    expect(slideDownFraction(0)).toBe(0);
+    expect(slideDownFraction(SLIDE_TO_CALL_DISTANCE_PX / 2)).toBe(0.5);
+    expect(slideDownFraction(SLIDE_TO_CALL_DISTANCE_PX)).toBe(1);
+    expect(slideDownFraction(SLIDE_TO_CALL_DISTANCE_PX * 3)).toBe(1);
   });
 });

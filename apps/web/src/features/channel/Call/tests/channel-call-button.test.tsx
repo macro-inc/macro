@@ -61,6 +61,7 @@ vi.mock('../use-call', () => ({
 vi.mock('@ui', () => {
   type ButtonProps = {
     tooltip?: string;
+    'aria-label'?: string;
     disabled?: boolean;
     children?: JSX.Element;
     onClick?: JSX.EventHandlerUnion<HTMLButtonElement, MouseEvent>;
@@ -69,7 +70,7 @@ vi.mock('@ui', () => {
   const Button = (props: ButtonProps) => (
     <button
       type="button"
-      aria-label={props.tooltip}
+      aria-label={props['aria-label'] ?? props.tooltip}
       disabled={props.disabled}
       onClick={props.onClick}
       onKeyDown={props.onKeyDown}

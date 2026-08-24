@@ -14,11 +14,20 @@ export function isSlideDownArmed(offset: number): boolean {
   return offset >= SLIDE_TO_CALL_DISTANCE_PX;
 }
 
+/** How far along the track the thumb sits, as a 0–1 fraction. */
+export function slideDownFraction(offset: number): number {
+  return clampOffset(offset) / SLIDE_TO_CALL_DISTANCE_PX;
+}
+
 export function slideDownProgress(dy: number): SlideDownProgress {
-  const offset = Math.min(Math.max(0, dy), SLIDE_TO_CALL_DISTANCE_PX);
+  const offset = clampOffset(dy);
   return {
     offset,
     revealTrack: dy > TRACK_REVEAL_PX,
     armed: isSlideDownArmed(offset),
   };
+}
+
+function clampOffset(dy: number): number {
+  return Math.min(Math.max(0, dy), SLIDE_TO_CALL_DISTANCE_PX);
 }

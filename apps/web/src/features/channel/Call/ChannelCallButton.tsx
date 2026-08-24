@@ -11,6 +11,7 @@ import { getCallJoinTab, getCallLeaveTab } from './call-tabs';
 import {
   isSlideDownArmed,
   SLIDE_TO_CALL_DISTANCE_PX,
+  slideDownFraction,
   slideDownProgress,
 } from './slide-down-call';
 import { useCall } from './use-call';
@@ -80,7 +81,6 @@ export function ChannelCallButton(props: { channelId: string }) {
         }
       >
         <SlideDownCallButton
-          label={label()}
           tooltip={tooltip()}
           joining={call.isJoining()}
           callInProgress={isCallInProgress()}
@@ -92,7 +92,6 @@ export function ChannelCallButton(props: { channelId: string }) {
 }
 
 function SlideDownCallButton(props: {
-  label: string;
   tooltip: string;
   joining: boolean;
   callInProgress: boolean;
@@ -106,6 +105,7 @@ function SlideDownCallButton(props: {
 
   const trackVisible = () => dragging() || trackRevealed();
   const armed = () => isSlideDownArmed(offset());
+  const traveled = () => slideDownFraction(offset());
 
   const revealTrack = () => {
     if (trackRevealed()) return;
@@ -177,24 +177,35 @@ function SlideDownCallButton(props: {
 
   return (
     <div class="relative isolate">
+      {/* The slot the knob slides down. Sized a hair past the knob on every
+          side so the knob reads as seated in a recess rather than as extra
+          chrome, and origin-top scale anchors the reveal under the button. */}
       <div
         aria-hidden="true"
         class={cn(
-          'island pointer-events-none absolute -inset-x-1 top-0 z-0 rounded-full transition-opacity duration-150',
-          props.callInProgress && 'bg-success ring-success',
-          trackVisible() ? 'opacity-100' : 'opacity-0'
+          'pointer-events-none absolute -inset-x-1 -top-1 z-0 origin-top overflow-hidden rounded-full',
+          'bg-inset ring ring-edge ring-inset',
+          'transition-[opacity,scale] duration-200 ease-out',
+          trackVisible() ? 'scale-y-100 opacity-100' : 'scale-y-90 opacity-0'
         )}
         style={{
-          height: `calc(100% + ${SLIDE_TO_CALL_DISTANCE_PX}px)`,
+          height: `calc(100% + 0.5rem + ${SLIDE_TO_CALL_DISTANCE_PX}px)`,
         }}
       >
-        <div class="absolute inset-x-0 bottom-1.5 flex flex-col items-center text-ink-muted">
-          <CaretDownIcon class="size-3.5 opacity-40" />
-          <CaretDownIcon class="size-3.5 opacity-70" />
-          <CaretDownIcon class="size-3.5" />
-          <span class="mt-0.5 text-2xs font-medium leading-none tracking-wide">
-            Slide
-          </span>
+        {/* Trail the knob leaves behind, so remaining travel stays legible. */}
+        <div
+          class={cn(
+            'absolute inset-x-0 top-0 transition-colors duration-150',
+            armed() ? 'bg-success/25' : 'bg-ink/15'
+          )}
+          style={{ height: `${offset()}px` }}
+        />
+        {/* Landing target, faded out as the knob arrives on top of it. */}
+        <div
+          class="absolute inset-x-0 bottom-2 flex justify-center text-ink-subtle"
+          style={{ opacity: `${1 - traveled()}` }}
+        >
+          <CaretDownIcon class="size-4" />
         </div>
       </div>
       <Show when={trackVisible()}>
@@ -215,21 +226,23 @@ function SlideDownCallButton(props: {
         on:pointerdown={onPointerDown}
       >
         <Button
-          tooltip={props.tooltip}
-          tooltipDisabled={dragging() || trackRevealed()}
+          // No tooltip: this control is touch-only, and a hover tooltip from a
+          // hybrid pointer would sit on top of the slot mid-drag.
+          aria-label={props.tooltip}
           variant="ghost"
-          size="sm"
+          size="icon-md"
           depth={2}
           disabled={props.joining}
           class={cn(
-            'touch-none select-none active:bg-transparent',
-            armed() && 'bg-success/20 text-success'
+            'touch-none select-none rounded-full transition-colors duration-150',
+            // Solid only while sliding: at rest this stays an ordinary
+            // header-island icon button.
+            armed() && 'bg-success text-surface ring ring-success',
+            !armed() && trackVisible() && 'bg-ink text-surface ring ring-ink'
           )}
           onKeyDown={onKeyDown}
         >
           <PhoneIcon />
-          <span>{props.label}</span>
-          <CaretDownIcon class="size-3 opacity-70" />
         </Button>
       </div>
     </div>
