@@ -1,0 +1,71 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                bt.id AS token_id,\n                bt.bot_id,\n                bt.token_prefix,\n                bt.label,\n                bt.last_used_at,\n                bt.expires_at,\n                bt.revoked_at,\n                bt.created_at,\n                b.kind\n            FROM bot_tokens bt\n            JOIN bots b ON b.id = bt.bot_id\n            JOIN comms_channel_participants cp\n              ON cp.channel_id = $1\n             AND cp.user_id = ('bot|' || b.id::text)\n             AND cp.left_at IS NULL\n            WHERE bt.token_hash = $2\n              AND b.deleted_at IS NULL\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "token_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "bot_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "token_prefix",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "label",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "last_used_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 5,
+        "name": "expires_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 6,
+        "name": "revoked_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 7,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 8,
+        "name": "kind",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Bytea"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "731fe962bc2376292a2c6ab2dbbb6ea1500ea4a8e3222fb8a60c47fb8e88a89e"
+}

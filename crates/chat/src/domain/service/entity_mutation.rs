@@ -44,7 +44,7 @@ fn access_error(error: AccessError) -> EntityMutationErrorCode {
         error @ AccessError::BadRequest(_) => {
             EntityMutationErrorCode::invalid(rootcause::report!(error))
         }
-        error @ (AccessError::DatabaseError(_) | AccessError::Internal) => {
+        error @ (AccessError::Unavailable(_) | AccessError::Internal(_)) => {
             EntityMutationErrorCode::internal(rootcause::report!(error))
         }
     }

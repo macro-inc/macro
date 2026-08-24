@@ -52,7 +52,9 @@
       # Include Cargo sources plus the .sqlx offline query cache.
       sqlxFilter = path: _type: builtins.match ".*\\.sqlx/.*\\.json$" path != null;
       pdfiumFilter = path: _type: builtins.match ".*pdfium-lib/.*\\.(so|dylib)$" path != null;
-      assetFilter = path: _type: builtins.match ".*\\.(md|html|txt|json|canvas|sql)$" path != null;
+      # `.sh` is required so `include_str!` of
+      # `crates/agent_harness/container/ensure_ready.sh` survives the prune.
+      assetFilter = path: _type: builtins.match ".*\\.(md|html|txt|json|canvas|sql|sh)$" path != null;
       binFilter = path: _type: builtins.match ".*\\.bin$" path != null;
       srcFilter =
         path: type:
@@ -338,6 +340,11 @@
 
       deployServiceBinaryDefinitions = [
         {
+          serviceName = "agent-harness-service";
+          packageName = "agent_harness_service";
+          binaries = [ "agent_harness_service" ];
+        }
+        {
           serviceName = "agent-schedule-service";
           packageName = "scheduled_action";
           binaries = [ "service" ];
@@ -412,6 +419,36 @@
         }
       ];
 
+      localStackBinaryDefinitions = [
+        {
+          serviceName = "local-authentication";
+          packageName = "authentication_service";
+          binaries = [ "authentication_service" ];
+          featureArgs = "--no-default-features --features return_passwordless_code";
+        }
+        {
+          serviceName = "local-search-processing";
+          packageName = "search_processing_service";
+          binaries = [ "search_processing_service" ];
+          featureArgs = "--no-default-features --features processing,service";
+        }
+        {
+          serviceName = "local-upload-finalizer";
+          packageName = "document_upload_finalizer_handler";
+          binaries = [ "document_upload_finalizer_local_worker" ];
+        }
+        {
+          serviceName = "local-agent-trigger";
+          packageName = "agent_trigger_service";
+          binaries = [ "agent_trigger_service" ];
+        }
+        {
+          serviceName = "local-seed-cli";
+          packageName = "seed_cli";
+          binaries = [ "seed_cli" ];
+        }
+      ];
+
       deployBinaryCargoExtraArgs =
         "--locked "
         + pkgs.lib.concatMapStringsSep " " (
@@ -438,6 +475,7 @@
           serviceName,
           packageName,
           binaries,
+          featureArgs ? "",
         }:
         craneLib.buildPackage (
           commonArgs
@@ -450,7 +488,8 @@
             doCheck = false;
             cargoExtraArgs =
               "--locked --package ${packageName} "
-              + pkgs.lib.concatMapStringsSep " " (binary: "--bin ${binary}") binaries;
+              + pkgs.lib.concatMapStringsSep " " (binary: "--bin ${binary}") binaries
+              + pkgs.lib.optionalString (featureArgs != "") " ${featureArgs}";
             CARGO_PROFILE = "release";
             installPhaseCommand = ''
               mkdir -p $out/bin
@@ -468,6 +507,36 @@
           value = deployServiceBinaryPackage def;
         }) deployServiceBinaryDefinitions
       );
+
+      localStackBinaryPackages = pkgs.lib.listToAttrs (
+        map (def: {
+          name = "local-stack-binaries-${def.serviceName}";
+          value = deployServiceBinaryPackage def;
+        }) localStackBinaryDefinitions
+      );
+
+      localStackDeployServiceNames = [
+        "agent-harness-service"
+        "connection-gateway"
+        "contacts-service"
+        "document-cognition-service"
+        "document-storage-service"
+        "email-service"
+        "image-proxy-service"
+        "notification-service"
+        "static-file-service"
+        "unfurl-service"
+      ];
+
+      localStackBinaries = pkgs.buildEnv {
+        name = "local-stack-binaries";
+        pathsToLink = [ "/bin" ];
+        paths =
+          pkgs.lib.attrValues localStackBinaryPackages
+          ++ map (
+            serviceName: deployServiceBinaryPackages."deploy-service-binaries-${serviceName}"
+          ) localStackDeployServiceNames;
+      };
 
       # ── Lambda builds (crane + cargo-zigbuild) ─────────────────────
       # SPIKE: build a Rust Lambda handler reproducibly under nix/crane so
@@ -660,12 +729,107 @@
         }) lambdaNames
       );
 
+      # The Namespace CLI, the other sandbox provider crates/agent_harness
+      # talks to. Only used to mint the bearer tokens its Compute API wants
+      # (`just namespace-token`); the harness itself speaks the API directly.
+      # Not in nixpkgs either, and shipped as goreleaser tarballs rather than
+      # bare binaries, so this unpacks and takes just the nsc binary.
+      nsc =
+        let
+          version = "0.0.551";
+          asset =
+            {
+              x86_64-linux = {
+                arch = "linux_amd64";
+                hash = "sha256-2Ip69WLe+VgbF2E74r4A4ZFfygMfiV+SMqgtGs87b7I=";
+              };
+              aarch64-linux = {
+                arch = "linux_arm64";
+                hash = "sha256-0+KpniE+7nQsFip1Tg5Z42xjAOlhPpdfmwEhQh5Ep4c=";
+              };
+              x86_64-darwin = {
+                arch = "darwin_amd64";
+                hash = "sha256-tpv81Cu1/7b2vq4Tiw4Z7pqCI3SCCiEKRRgJ2rEcX+g=";
+              };
+              aarch64-darwin = {
+                arch = "darwin_arm64";
+                hash = "sha256-x3FYe8DT+5U4D506ioSUfmiT5unG6CGMiGf4r/9jPpc=";
+              };
+            }
+            .${system};
+        in
+        pkgs.stdenvNoCC.mkDerivation {
+          pname = "nsc";
+          inherit version;
+          src = pkgs.fetchurl {
+            url = "https://github.com/namespacelabs/foundation/releases/download/v${version}/nsc_${version}_${asset.arch}.tar.gz";
+            inherit (asset) hash;
+          };
+          sourceRoot = ".";
+          nativeBuildInputs = pkgs.lib.optionals isLinux [ pkgs.autoPatchelfHook ];
+          installPhase = ''
+            runHook preInstall
+            install -Dm755 nsc $out/bin/nsc
+            runHook postInstall
+          '';
+        };
+
+      # The Daytona CLI (sandbox snapshots for crates/agent_harness) is not in
+      # nixpkgs and is only published as prebuilt release binaries, so this
+      # installs the asset rather than building from source. Pinned instead of
+      # tracking `latest` so the shell stays reproducible; bump the version and
+      # the four hashes together.
+      daytona =
+        let
+          version = "0.203.0";
+          asset =
+            {
+              x86_64-linux = {
+                arch = "linux-amd64";
+                hash = "sha256-5r+K1OgFcw1BF1sNJwdlbc0rGAVZSy16eEiCvQ/X8DI=";
+              };
+              aarch64-linux = {
+                arch = "linux-arm64";
+                hash = "sha256-bQa4KpU3gYf2m9+6ClG1qiCa5W+MjX/XgiCv59b1ptA=";
+              };
+              x86_64-darwin = {
+                arch = "darwin-amd64";
+                hash = "sha256-mcygBoN89RsMDmakGy8LEi1XgNc/+g4ImqaTEuPZrW4=";
+              };
+              aarch64-darwin = {
+                arch = "darwin-arm64";
+                hash = "sha256-X29vyGaEGQZN9bNb17SCrIlf3zmtMgaJmKThK7cY2kc=";
+              };
+            }
+            .${system};
+        in
+        pkgs.stdenvNoCC.mkDerivation {
+          pname = "daytona";
+          inherit version;
+          src = pkgs.fetchurl {
+            url = "https://github.com/daytona/clients/releases/download/v${version}/daytona-${asset.arch}";
+            inherit (asset) hash;
+          };
+          dontUnpack = true;
+          # The Linux builds are cgo, so they need their interpreter and
+          # libc rewritten to the store.
+          nativeBuildInputs = pkgs.lib.optionals isLinux [ pkgs.autoPatchelfHook ];
+          installPhase = ''
+            runHook preInstall
+            install -Dm755 $src $out/bin/daytona
+            runHook postInstall
+          '';
+        };
+
       shellTools =
         with pkgs;
         [
+          daytona
+          nsc
           parallel
           docker-compose
           curl
+          openssh
           wget
           kcat
           xz
@@ -709,7 +873,9 @@
           just-lsp
           taplo
           bun
+          brotli
           pnpm
+          postgresql
           sqlx-cli
           typescript-language-server
           nodejs_24
@@ -721,12 +887,18 @@
           doppler
           biome
           jq
-          stripe-cli
+          # TEMP: nixpkgs stripe-cli 1.43.2 checkPhase fails in the sandbox
+          # (TestResolvePluginForInstallSucceedsForGAPluginWhenNotLoggedIn).
+          # stripe-cli
           sccache
           rustToolchain
           python3
         ]
-        ++ pkgs.lib.optionals isLinux [ mold ];
+        ++ pkgs.lib.optionals isLinux [
+          mold
+          docker
+          fuse-overlayfs
+        ];
 
     in
     {
@@ -807,7 +979,10 @@
       }
       // dopplerConfigBinPackages
       // deployServiceBinaryPackages
-      // deployLambdaPackages;
+      // deployLambdaPackages
+      // pkgs.lib.optionalAttrs isLinux {
+        local-stack-binaries = localStackBinaries;
+      };
 
       devShells = {
         default =

@@ -45,22 +45,113 @@ export type ThemePrevious = {
   c4: { l: number; c: number; h: number };
 };
 
-export const semanticTokens = ['page', 'panel', 'inset', 'dialog', 'menu', 'input', 'message', 'hover', 'active', 'button', 'chrome'] as const;
+export const surfaceTokens = [
+  'surface-0',
+  'surface-1',
+  'surface-2',
+  'surface-3',
+  'surface-4',
+] as const;
+
+export const contentTokens = [
+  'content-0',
+  'content-1',
+  'content-2',
+  'content-3',
+  'content-4',
+] as const;
+
+export const edgeTokens = ['edge', 'edge-muted'] as const;
+
+export const paletteTokens = [
+  'red',
+  'orange',
+  'amber',
+  'yellow',
+  'lime',
+  'green',
+  'teal',
+  'cyan',
+  'blue',
+  'violet',
+  'purple',
+  'pink',
+] as const;
+
+export const inputColorTokens = [
+  ...surfaceTokens,
+  ...contentTokens,
+  ...edgeTokens,
+  'accent',
+  ...paletteTokens,
+] as const;
+
+export type InputColorToken = (typeof inputColorTokens)[number];
+
+export const semanticTokens = [
+  'surface',
+  'inset',
+  'lift',
+  'ink',
+  'ink-muted',
+  'ink-subtle',
+  'ink-disabled',
+  'ink-placeholder',
+  'link',
+  'link-hover',
+  'link-visited',
+  'page',
+  'panel',
+  'dialog',
+  'menu',
+  'tooltip',
+  'toast',
+  'input',
+  'input-focus',
+  'message',
+  'hover',
+  'active',
+  'selected',
+  'success',
+  'warning',
+  'failure',
+  'chrome',
+] as const;
 export type SemanticToken = (typeof semanticTokens)[number];
 
+/** Flat, serializable source of truth for authored VNext theme colors. */
+export type ThemeColorTokens = Record<string, string>;
+
+export type ThemeColorMode = 'light' | 'dark';
+
 type TokenColor = {
-  token: SemanticToken,
-  value: { l: number; c: number; h: number }
-}
+  token: SemanticToken;
+  value: { l: number; c: number; h: number };
+};
 
 export type ThemeV2 = {
   id: string;
   name: string;
-  version: number;
+  version: 2;
   depth: number;
   tokens: ThemeV2Tokens;
   overrides?: TokenColor[];
+  /** VNext input and semantic colors. Legacy themes omit this field. */
+  colorTokens?: ThemeColorTokens;
 };
+
+/** Token-only theme format. Legacy ramps and depth are generated compatibility
+ * state and are deliberately not persisted. */
+export type ThemeV3 = {
+  id: string;
+  name: string;
+  version: 3;
+  mode: ThemeColorMode;
+  colorTokens: ThemeColorTokens;
+};
+
+/** The normalized theme shape used by the application at runtime. */
+export type Theme = ThemeV3;
 
 export type ThemeV2Tokens = {
   a0: { l: number; c: number; h: number };

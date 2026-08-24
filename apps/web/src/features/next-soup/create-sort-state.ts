@@ -24,13 +24,16 @@ type SortState<T, TId extends string = string> = {
   available: Record<TId, SortConfig<T>>;
 };
 
+type SortItem<TConfigs> =
+  TConfigs[keyof TConfigs] extends SortConfig<infer T> ? T : never;
+
 export const createSortState = <
-  T,
-  TConfigs extends Record<string, SortConfig<T>>,
+  TConfigs extends Record<string, SortConfig<never>>,
 >(
-  configs: TConfigs,
+  configs: TConfigs & Record<keyof TConfigs, SortConfig<SortItem<TConfigs>>>,
   initialSortIds?: (keyof TConfigs & string)[]
-): SortState<T, keyof TConfigs & string> => {
+): SortState<SortItem<TConfigs>, keyof TConfigs & string> => {
+  type T = SortItem<TConfigs>;
   type TId = keyof TConfigs & string;
   type Entry = { id: TId; reversed: boolean };
 
@@ -98,6 +101,6 @@ export const createSortState = <
     setAll,
     flip,
     clear,
-    available: configs as Record<TId, SortConfig<T>>,
+    available: configs,
   };
 };

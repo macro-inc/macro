@@ -21,8 +21,8 @@ INSERT INTO public."Project" ("id", "name", "userId", "createdAt", "updatedAt")
 INSERT INTO public."Chat" ("id","name","userId", "model", "createdAt", "updatedAt")
 (SELECT 'chat-one', 'test-chat', 'macro|user@user.com', 'gpt-4o', '2019-10-16 00:00:00', '2019-10-16 00:00:00');
 
-INSERT INTO public."SharePermission" ("id", "isPublic", "createdAt", "updatedAt")
-(SELECT 'sp-1', false, '2019-10-16 00:00:00', '2019-10-16 00:00:00');
+INSERT INTO public."SharePermission" ("id", "linkShare", "linkShareAccessLevel", "createdAt", "updatedAt")
+(SELECT 'sp-1', NULL, NULL, '2019-10-16 00:00:00', '2019-10-16 00:00:00');
 
 INSERT INTO public."ChatPermission" ("chatId", "sharePermissionId")
 (SELECT 'chat-one', 'sp-1');

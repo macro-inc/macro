@@ -48,6 +48,17 @@ pub(crate) fn uses_local(name: &str, path: RepoDir<'_>) -> Step<Use> {
     step
 }
 
+/// Namespace remote BuildKit, pinned. Multi-arch `docker buildx --push` goes
+/// through it so nix-in-Docker work does not land on a Small runner's local
+/// daemon.
+pub fn setup_namespace_buildx() -> Step<Use> {
+    Step::new("Set up Namespace Docker builder").uses(
+        "namespacelabs",
+        "nscloud-setup-buildx-action",
+        "d059ed7184f0bc7c8b27e8810cea153d02bcc6dd",
+    ) // v0.0.23
+}
+
 /// `actions/checkout`, pinned. `full_history` fetches the full history, which
 /// the path-filter diff in `path-check` needs. `persist_credentials` controls
 /// whether checkout leaves the token in git config for later steps.
@@ -79,6 +90,18 @@ pub fn setup_rust_light() -> Step<Use> {
         xtask_paths::repo_dir!(".github/actions/setup-rust"),
     )
     .add_with(("sccache", "false"))
+    .add_with(("rust-cache", "false"))
+}
+
+/// [`setup_rust_light`] plus sccache, for jobs that actually compile something
+/// but do not need the Nix dev shell. Pair with
+/// [`configure_namespace_sccache`] to point the wrapper at the remote cache.
+pub fn setup_rust_sccache() -> Step<Use> {
+    uses_local(
+        "Setup Rust",
+        xtask_paths::repo_dir!(".github/actions/setup-rust"),
+    )
+    .add_with(("sccache", "true"))
     .add_with(("rust-cache", "false"))
 }
 
@@ -178,31 +201,10 @@ fn nscloud_cache_action(name: &str) -> Step<Use> {
         .continue_on_error(true)
 }
 
-/// [`mount_cache_volume`] plus the checkout's cargo target dir and the init
-/// snapshot store. Persisting `target/` is what makes the preview job's
-/// zigbuild incremental — cargo's own fingerprints carry across runs, where
-/// remote sccache alone leaves build scripts, native (cmake/zig) compiles, and
-/// linking cold every time. Persisting the snapshot store gives the bake step
-/// a zero-copy fast path; Namespace artifact storage is its durable fallback.
-/// The volume is a block-device mount, so multi-GB trees cost nothing to save
-/// or restore when it hits.
-pub fn mount_cache_volume_with_cargo_target() -> Step<Use> {
-    nscloud_cache_action("Mount Namespace cache volume")
-        .add_with(("cache", "nix"))
-        .add_with((
-            "path",
-            format!(
-                "${{{{ github.workspace }}}}/target\n{}\n/home/runner/.cargo/registry\n/home/runner/.cargo/git",
-                vars::PREVIEW_SNAPSHOT_VOLUME_DIR,
-            ),
-        ))
-}
-
 /// [`mount_cache_volume`] for the wasm worker build. `target/` is listed
-/// explicitly for the same reason [`mount_cache_volume_with_cargo_target`] does
-/// it — `cache: rust` alone is only relied on for the registry/git here. The
-/// last two paths are what wrangler's `[build]` line otherwise redoes every
-/// run: the pinned `worker-build` binary and wasm-pack's downloaded `wasm-opt`.
+/// explicitly so cargo fingerprints survive across runs. The last two paths
+/// are what wrangler's `[build]` line otherwise redoes every run: the pinned
+/// `worker-build` binary and wasm-pack's downloaded `wasm-opt`.
 pub fn mount_wasm_cache_volume() -> Step<Use> {
     nscloud_cache_action("Mount Namespace cache volume")
         .add_with(("cache", "rust"))

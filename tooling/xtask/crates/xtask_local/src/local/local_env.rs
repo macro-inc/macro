@@ -33,6 +33,7 @@ pub struct LocalEnv {
     storage: StorageEnv,
     queues: QueueEnv,
     mail: MailEnv,
+    agent_harness: AgentHarnessEnv,
     service_auth: ServiceAuthEnv,
     fusionauth: FusionAuthEnv,
     boot_stubs: BootStubEnv,
@@ -56,6 +57,7 @@ impl LocalEnv {
             storage: StorageEnv::local(),
             queues: QueueEnv::local(),
             mail: MailEnv::local(),
+            agent_harness: AgentHarnessEnv::local(instance.project_name()),
             service_auth: ServiceAuthEnv::for_instance(name),
             fusionauth: FusionAuthEnv::for_instance(instance),
             boot_stubs: BootStubEnv,
@@ -77,6 +79,7 @@ impl LocalEnv {
         self.storage.write(&mut env);
         self.queues.write(&mut env);
         self.mail.write(&mut env);
+        self.agent_harness.write(&mut env);
         self.service_auth.write(&mut env);
         self.fusionauth.write(&mut env);
         env
@@ -145,6 +148,13 @@ impl InfraEnv {
         env.insert(
             "OVERRIDE_DOCUMENT_STORAGE_SERVICE_URL".into(),
             "http://document-storage-service:8080".into(),
+        );
+        // Lexical has the same host-vs-container split. The plain
+        // `LEXICAL_SERVICE_URL` value does not affect `LexicalServiceUrl`,
+        // which only reads the `OVERRIDE_` form.
+        env.insert(
+            "OVERRIDE_LEXICAL_SERVICE_URL".into(),
+            "http://lexical-service:8096".into(),
         );
         // Same failure mode for the email connect flows: without these,
         // first-inbox provisioning (auth-service → `/email/init`) and Gmail
@@ -236,6 +246,48 @@ impl MailEnv {
             "SENDER_BASE_ADDRESS".into(),
             self.sender_base_address.into(),
         );
+    }
+}
+
+/// The agent harness: which bot it answers for, and where its sandboxes come
+/// from.
+///
+/// Local stacks run sandboxes on the developer's own Docker daemon, so no
+/// Daytona account is involved. `DAYTONA_API_KEY` is seeded empty so Doppler
+/// cannot bill Daytona, while still leaving the key in the map for
+/// `DAYTONA_API_KEY=... DEV_DANGEROUS_LOCAL_CONTAINERS=false just run_local`.
+/// `GITHUB_TOKEN` is left to Doppler / process env so a local sandbox can
+/// still clone.
+struct AgentHarnessEnv {
+    bot_id: &'static str,
+    snapshot: &'static str,
+    /// Image the local provider runs. `run_local` / `stack up` `docker build`
+    /// `crates/agent_harness/container` to this tag (BuildKit cache is the
+    /// freshness check).
+    image: &'static str,
+    /// Network sandboxes join, so this service can dial their sidecars.
+    network: String,
+}
+
+impl AgentHarnessEnv {
+    fn local(project_name: &str) -> Self {
+        AgentHarnessEnv {
+            // bot_id::MACRO_CODER_BOT_ID, seeded by the bots_has_agent migration.
+            bot_id: "00000000-0000-0000-0000-00000000a9e7",
+            snapshot: "macro-agent-harness",
+            image: super::sandbox_image::DEFAULT_LOCAL_TAG,
+            // Compose names a network `<project>_<network>`.
+            network: format!("{project_name}_services"),
+        }
+    }
+
+    fn write(&self, env: &mut BTreeMap<String, String>) {
+        env.insert("HARNESS_BOT_ID".into(), self.bot_id.into());
+        env.insert("DAYTONA_SNAPSHOT".into(), self.snapshot.into());
+        env.insert("DAYTONA_API_KEY".into(), String::new());
+        env.insert("DEV_DANGEROUS_LOCAL_CONTAINERS".into(), "true".into());
+        env.insert("LOCAL_CONTAINER_IMAGE".into(), self.image.into());
+        env.insert("LOCAL_CONTAINER_NETWORK".into(), self.network.clone());
     }
 }
 
@@ -426,6 +478,11 @@ impl BootStubEnv {
             "GITHUB_IDP_ID".into(),
             "99999999-9999-4999-8999-999999999999".into(),
         );
+        // Clone token for local sandboxes. Empty here so `--no-doppler` still
+        // has the key for `GITHUB_TOKEN=... just run_local`; Doppler overlays
+        // a real token when present. Not in `to_env`, so a local stack does
+        // not wipe Doppler's value the way it wipes `DAYTONA_API_KEY`.
+        env.insert("GITHUB_TOKEN".into(), String::new());
         env.insert("STRIPE_SECRET_KEY".into(), "local-stripe-secret".into());
         env.insert("STRIPE_PRICE_ID".into(), "local-stripe-price".into());
         env.insert(

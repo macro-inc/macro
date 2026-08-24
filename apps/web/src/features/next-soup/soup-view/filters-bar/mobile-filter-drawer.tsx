@@ -72,7 +72,10 @@ function scrollAccordionItemToTop(
   });
 }
 
-export const MobileFilterDrawer = () => {
+export const MobileFilterDrawer = (props: {
+  /** Extra classes on the trigger button (rendered only when filters exist). */
+  class?: string;
+}) => {
   const { consolidatedFiltersList, resetToTabDefaults, handleAssigneeChange } =
     useFilterRefinements();
 
@@ -155,8 +158,9 @@ export const MobileFilterDrawer = () => {
     return next.length ? picker.onChange(next) : picker.reset();
   };
 
+  // The inbox is deliberately absent: its order is fixed to updated_at, and
+  // the desktop toolbar hides SoupViewContextSort there for the same reason.
   const VIEW_SORT_OPTIONS: Partial<Record<ListView, SortOption[]>> = {
-    inbox: DEFAULT_SORT_OPTIONS,
     agents: DEFAULT_SORT_OPTIONS,
     mail: EMAIL_SORT_OPTIONS,
     documents: DOCUMENT_SORT_OPTIONS,
@@ -332,7 +336,10 @@ export const MobileFilterDrawer = () => {
           variant="ghost"
           size="sm"
           depth={3}
-          class="island bg-chrome pointer-events-auto relative size-10 shrink-0 rounded-full [&_svg]:size-5"
+          class={cn(
+            'island bg-chrome pointer-events-auto relative size-10 shrink-0 rounded-full [&_svg]:size-6',
+            props.class
+          )}
           ref={pressPulse}
         >
           <SlidersHorizontalIcon />

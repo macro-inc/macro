@@ -1,0 +1,18 @@
+---
+title: CreateImportEntity
+description: "Track an external item (Linear issue, Notion page, Slack channel) in the import ledger. Use status `staged` to propose an item for import BEFORE creating anything; use status `imported` (with entityId) only to record a Macro entity you already created from the item. The response tells you when the item was already imported by the user or a teammate — in that case do NOT create a duplicate; point the user at the existing entity instead."
+---
+
+# CreateImportEntity
+
+Track an external item (Linear issue, Notion page, Slack channel) in the import ledger. Use status `staged` to propose an item for import BEFORE creating anything; use status `imported` (with entityId) only to record a Macro entity you already created from the item. The response tells you when the item was already imported by the user or a teammate — in that case do NOT create a duplicate; point the user at the existing entity instead.
+
+## Parameters
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `source` | `"linear"` \| `"notion"` \| `"slack"` | Yes | External systems items can be imported from. |
+| `foreignId` | string | Yes | Stable id of the item in the source system: the Linear issue identifier (e.g. `ENG-142`), the Notion page URL or id, or the Slack channel id (e.g. `C0123456789`, falling back to the channel name). |
+| `status` | `"staged"` \| `"imported"` | Yes | Status values accepted by [`CreateImportEntity`]. |
+| `metadata` | any | Yes | Metadata describing the item. Linear: {identifier, title, description?, status?, priority?, assignee?, assignee_email?, url?}. Notion: {title, url?, summary?} — never include page content. Slack: {name, channel_id?, purpose?, participants?: [{name, email?}]}. |
+| `entityId` | string | No | The id of the Macro entity you created, required when status is `imported`. The entity type is fixed by source: linear → task, notion → md (document), slack → channel. |

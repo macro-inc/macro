@@ -5,6 +5,7 @@ use crate::domain::{
     ports::{EmailService, GmailTokenProvider},
 };
 use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
+use ai_toolset::{ToolAnnotated, ToolAnnotations};
 use async_trait::async_trait;
 use entity_access::domain::{
     models::{EntityType, ViewAccessLevel},
@@ -105,6 +106,10 @@ pub struct GetThread {
     /// Maximum number of messages to return (default 10).
     #[serde(default)]
     pub limit: Option<i64>,
+}
+
+impl ToolAnnotated for GetThread {
+    const ANNOTATIONS: ToolAnnotations = ToolAnnotations::read_only("Read email thread");
 }
 
 #[async_trait]

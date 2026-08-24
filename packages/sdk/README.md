@@ -94,7 +94,9 @@ Most entities carry user-defined properties and can be favorited:
 
 ```ts
 await doc.favorite();
-await doc.setProperty('prop_status', { text: 'In review' });
+await doc.setProperty(macro.properties.byId('prop_status'), {
+  text: 'In review',
+});
 const props = await doc.properties();
 ```
 
@@ -112,6 +114,21 @@ await channel.send(msg`Hey ${user}, take a look at ${doc}. cc ${here}`);
 ```
 
 These will render as @mentions in the Macro UI.
+
+### Posting to a channel webhook
+
+The web UI can hand you a webhook URL and token for a channel. That token is a
+bot token, so it goes in the normal place:
+
+```ts
+const macro = new Macro({
+  auth: { type: 'bot', token: process.env.MACRO_WEBHOOK_TOKEN },
+});
+
+await macro.channels
+  .byId(channelId)
+  .send(msg`Deploy ${sha} finished. ${here}`);
+```
 
 # Webhook Events
 

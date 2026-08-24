@@ -279,7 +279,7 @@ type RecipientSelectorProps<K extends CombinedRecipientKind> = {
   hideMenuOnEscape?: boolean;
   horizontalScroll?: boolean;
   class?: string;
-  depth?: 0 | 1 | 2 | 3 | 4 | 5;
+  depth?: 0 | 1 | 2 | 3 | 4;
   portalScope?: 'local';
 };
 

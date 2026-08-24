@@ -1,0 +1,34 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                sp.\"linkShareAccessLevel\" AS \"access_level!: AccessLevel\"\n            FROM \"SharePermission\" sp\n            WHERE sp.\"linkShare\" = 'PUBLIC'\n            AND sp.\"linkShareAccessLevel\" IS NOT NULL\n            AND sp.id IN (\n                SELECT \"sharePermissionId\" FROM \"ProjectPermission\" WHERE \"projectId\" = $1\n            )\n\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "access_level!: AccessLevel",
+        "type_info": {
+          "Custom": {
+            "name": "\"AccessLevel\"",
+            "kind": {
+              "Enum": [
+                "view",
+                "comment",
+                "edit",
+                "owner"
+              ]
+            }
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "ba7fb52ae8726661e0725bc5fed9c6f1aed9c012c5bf1e381d46713faed0fa98"
+}

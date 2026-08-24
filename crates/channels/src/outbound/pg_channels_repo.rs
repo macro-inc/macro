@@ -731,7 +731,7 @@ fn id_to_display_name(user_id: &MacroUserIdStr<'static>, name_lookup: &NameLooku
 #[cfg(feature = "list")]
 static CHANNEL_LIST_PREFIX: &str = r#"
     WITH user_channels AS (
-        SELECT DISTINCT c.*
+        SELECT c.*
         FROM comms_channels c
         INNER JOIN comms_channel_participants cp ON cp.channel_id = c.id
         WHERE cp.user_id = $1 AND cp.left_at IS NULL
@@ -743,7 +743,7 @@ static CHANNEL_LIST_PREFIX: &str = r#"
 #[cfg(feature = "list")]
 static CHANNEL_LIST_PREFIX_WITH_TEAM_CHANNELS: &str = r#"
     WITH user_channels AS (
-        SELECT DISTINCT c.*
+        SELECT c.*
         FROM comms_channels c
         WHERE (
             EXISTS (
@@ -768,9 +768,19 @@ static CHANNEL_LIST_PREFIX_WITH_TEAM_CHANNELS: &str = r#"
 #[cfg(feature = "list")]
 static CHANNEL_LIST_SELECT: &str = r#"
     ),
+    paged_channels AS (
+        SELECT uc.*
+        FROM user_channels uc
+        WHERE
+            ($4::timestamptz IS NULL)
+            OR
+            ((CASE $2 WHEN 'created_at' THEN uc.created_at ELSE uc.updated_at END), uc.id::text) < ($4, $5)
+        ORDER BY (CASE $2 WHEN 'created_at' THEN uc.created_at ELSE uc.updated_at END) DESC, uc.id::text DESC
+        LIMIT $3
+    ),
     channel_participants_json AS (
         SELECT
-            uc.id as channel_id,
+            pc.id as channel_id,
             ARRAY_AGG(
                 json_build_object(
                     'channel_id', cp.channel_id,
@@ -780,37 +790,32 @@ static CHANNEL_LIST_SELECT: &str = r#"
                     'left_at', cp.left_at
                 )
             ) as participants
-        FROM user_channels uc
-        JOIN comms_channel_participants cp ON cp.channel_id = uc.id
+        FROM paged_channels pc
+        JOIN comms_channel_participants cp ON cp.channel_id = pc.id
         WHERE cp.left_at IS NULL
-        GROUP BY uc.id
+        GROUP BY pc.id
     )
     SELECT
-        uc.id as "id",
-        uc.name as "name",
-        uc.channel_type as "channel_type",
-        uc.org_id as "org_id",
-        uc.team_id as "team_id",
-        uc.auto_join_team as "auto_join_team",
-        uc.created_at as "created_at",
-        uc.updated_at as "updated_at",
-        uc.owner_id as "owner_id",
+        pc.id as "id",
+        pc.name as "name",
+        pc.channel_type as "channel_type",
+        pc.org_id as "org_id",
+        pc.team_id as "team_id",
+        pc.auto_join_team as "auto_join_team",
+        pc.created_at as "created_at",
+        pc.updated_at as "updated_at",
+        pc.owner_id as "owner_id",
         cpj.participants as "participants_json",
         EXISTS (
             SELECT 1
             FROM comms_channel_participants cp_active
-            WHERE cp_active.channel_id = uc.id
+            WHERE cp_active.channel_id = pc.id
               AND cp_active.user_id = $1
               AND cp_active.left_at IS NULL
         ) as "is_participant"
-    FROM user_channels uc
-    LEFT JOIN channel_participants_json cpj ON cpj.channel_id = uc.id
-    WHERE
-        ($4::timestamptz IS NULL)
-        OR
-        ((CASE $2 WHEN 'created_at' THEN uc.created_at ELSE uc.updated_at END), uc.id::text) < ($4, $5)
-    ORDER BY (CASE $2 WHEN 'created_at' THEN uc.created_at ELSE uc.updated_at END) DESC, uc.id::text DESC
-    LIMIT $3
+    FROM paged_channels pc
+    LEFT JOIN channel_participants_json cpj ON cpj.channel_id = pc.id
+    ORDER BY (CASE $2 WHEN 'created_at' THEN pc.created_at ELSE pc.updated_at END) DESC, pc.id::text DESC
 "#;
 
 #[cfg(feature = "list")]
@@ -930,6 +935,8 @@ fn channel_filter_mentions_participation(expr: &Expr<ChannelLiteral>) -> bool {
 fn build_channel_list_query(
     filter_ast: &LiteralTree<ChannelLiteral>,
 ) -> QueryBuilder<'_, Postgres> {
+    // QueryBuilder is required because the channel filter is an AST with arbitrary
+    // AND/OR/NOT shape. Dynamic literals are constrained to parsed domain types.
     let prefix = if filter_ast
         .as_deref()
         .is_some_and(channel_filter_mentions_participation)

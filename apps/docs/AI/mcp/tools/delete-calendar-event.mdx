@@ -1,0 +1,18 @@
+---
+title: DeleteCalendarEvent
+description: "Delete an event from the user's calendar. The deletion is written to Google immediately and attendees are notified, so confirm with the user before deleting — it cannot be undone. Get the `eventId` from ListCalendarEvents.  For recurring events, `scope` controls how much is removed: \"all\" (default) removes the whole series, \"this_event\" removes one occurrence, and \"this_and_following\" ends the series from an occurrence onward. The scoped variants require `recurrenceId` from the targeted occurrence's ListCalendarEvents entry."
+---
+
+# DeleteCalendarEvent
+
+Delete an event from the user's calendar. The deletion is written to Google immediately and attendees are notified, so confirm with the user before deleting — it cannot be undone. Get the `eventId` from ListCalendarEvents.
+
+For recurring events, `scope` controls how much is removed: "all" (default) removes the whole series, "this_event" removes one occurrence, and "this_and_following" ends the series from an occurrence onward. The scoped variants require `recurrenceId` from the targeted occurrence's ListCalendarEvents entry.
+
+## Parameters
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `eventId` | string | Yes | The event's id, from ListCalendarEvents or CreateCalendarEvent. |
+| `scope` | `"all"` \| `"this_event"` \| `"this_and_following"` | No | How much of a recurring series a deletion removes. |
+| `recurrenceId` | string | No | The `recurrenceId` of the targeted occurrence, from its ListCalendarEvents entry. Required for "this_event" and "this_and_following". |

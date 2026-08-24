@@ -1,4 +1,5 @@
 use crate::api::context::{ApiContext, AuthorizationService};
+use activity::{Actor, Attribution};
 use axum::{
     extract::State,
     response::{IntoResponse, Json, Response},
@@ -9,7 +10,7 @@ use documents_hex::domain::{
     models::DocumentError,
 };
 use entity_access::domain::{
-    models::{EditAccessLevel, ViewAccessLevel},
+    models::{BotAccessScope, EditAccessLevel, ViewAccessLevel},
     ports::EntityAccessService,
 };
 use favorites::domain::ports::FavoritesService;
@@ -170,6 +171,10 @@ pub async fn handler(
     tracing::info!("initialize starter docs");
 
     let user_id = &user_context.authorization.user.macro_user_id;
+    let system_for_user = Attribution::delegated(
+        Actor::new_from_bot(bot_id::MACRO_SYSTEM_BOT_ID),
+        user_id.clone(),
+    );
 
     // Resolve every starter document's deterministic id up front so the
     // templates can cross-link before any document has been created.
@@ -202,6 +207,7 @@ pub async fn handler(
                 NewMarkdownTextDocument {
                     metadata: NewDocumentMetadata::builder(task.name)
                         .id(starter_doc_id(user_id, task.name))
+                        .attribution(system_for_user.clone())
                         .build(),
                     markdown: fill(task.template),
                     subtype: MarkdownSubtype::Task {
@@ -232,6 +238,7 @@ pub async fn handler(
             NewMarkdownTextDocument {
                 metadata: NewDocumentMetadata::builder(HOW_TO_GUIDE_NAME)
                     .id(starter_doc_id(user_id, HOW_TO_GUIDE_NAME))
+                    .attribution(system_for_user.clone())
                     .build(),
                 markdown: fill(HOW_TO_GUIDE_TEMPLATE),
                 subtype: MarkdownSubtype::Note,
@@ -319,9 +326,12 @@ pub async fn handler(
         // properties service takes its authorization as this typed receipt.
         let receipt = match state
             .entity_access_service
-            .generate_entity_access_receipt::<EditAccessLevel>(
-                &user_context.authorization.user.macro_user_id,
-                organization_id,
+            .generate_bot_entity_access_receipt::<EditAccessLevel>(
+                bot_id::MACRO_SYSTEM_BOT_ID,
+                BotAccessScope::User {
+                    user_id: user_context.authorization.user.macro_user_id.clone(),
+                    user_org_id: organization_id,
+                },
                 &document_id,
                 EntityType::Document,
             )

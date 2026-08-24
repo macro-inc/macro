@@ -1,4 +1,29 @@
 """
+Page request for the authenticated user's activity feed.
+"""
+input ActivityFeedInput {
+	"""
+	Opaque cursor from the previous page's `nextCursor`; absent for the
+	first page.
+	"""
+	cursor: String
+	"""
+	Page size; defaults to 25, capped at 100.
+	"""
+	limit: Int
+}
+
+"""
+Request for the authenticated user's trailing-year activity overview.
+"""
+input ActivityOverviewInput {
+	"""
+	IANA time zone used for local dates. Omitted or empty means UTC.
+	"""
+	timeZone: String
+}
+
+"""
 Channel activity operation exposed by GraphQL.
 """
 enum ChannelActivityType {
@@ -39,6 +64,10 @@ type CompleteMutationRoot {
 	"""
 	setEntityProperty(input: SetEntityPropertyInput!): GraphqlProperty!
 	"""
+	Add and remove options across one entity's multi-select properties.
+	"""
+	updateEntityPropertyOptions(input: UpdateEntityPropertyOptionsInput!): [GraphqlProperty!]!
+	"""
 	Rename heterogeneous entities in one request.
 	"""
 	renameEntities(inputs: [RenameEntityInput!]!): EntityMutationPayload!
@@ -47,7 +76,7 @@ type CompleteMutationRoot {
 	"""
 	moveEntities(inputs: [MoveEntityInput!]!): EntityMutationPayload!
 	"""
-	Update public and channel share policies across supported entity kinds.
+	Update link and channel share policies across supported entity kinds.
 	"""
 	updateEntitySharePolicies(inputs: [UpdateEntitySharePolicyInput!]!): EntityMutationPayload!
 	"""
@@ -78,6 +107,10 @@ type CompleteMutationRoot {
 	Update authenticated user-owned notifications and return authoritative rows.
 	"""
 	updateNotifications(input: UpdateNotificationsInput!): [GraphqlNotification!]!
+	"""
+	Update all notifications associated with the requested entities for the authenticated user.
+	"""
+	updateNotificationsForEntity(input: UpdateNotificationsForEntityInput!): [GraphqlNotification!]!
 	"""
 	Mark an accessible email thread as seen and return its authoritative cache record.
 	"""
@@ -137,6 +170,24 @@ type EntityMutationPayload {
 }
 
 """
+One property's option delta within an options update.
+"""
+input EntityPropertyOptionDeltaInput {
+	"""
+	Identifier of the multi-select property definition being changed.
+	"""
+	propertyDefinitionId: ID!
+	"""
+	Options to add to the currently stored value.
+	"""
+	addOptionIds: [ID!]!
+	"""
+	Options to strip from the currently stored value.
+	"""
+	removeOptionIds: [ID!]!
+}
+
+"""
 Canonical entity reference accepted by unified mutations.
 """
 input EntityRefInput {
@@ -151,17 +202,18 @@ input EntityRefInput {
 }
 
 """
-Shared public/channel share-policy update.
+Shared link/channel share-policy update.
 """
 input EntitySharePolicyInput {
 	"""
-	Whether public access should be enabled.
+	Link-sharing audience. Omit to leave unchanged or pass null to disable link sharing.
 	"""
-	isPublic: Boolean
+	linkShare: GraphqlLinkShare
 	"""
-	Public access level when public access is enabled.
+	Link access level. Omit to leave unchanged or pass null to reset it to the default level
+	when a link share exists.
 	"""
-	publicAccessLevel: GraphqlEntityAccessLevel
+	linkShareAccessLevel: GraphqlEntityAccessLevel
 	"""
 	Channel access entries to add, remove, or replace.
 	"""
@@ -176,6 +228,255 @@ type GraphqlAccessLevelPermission {
 	Effective access level held by the viewer.
 	"""
 	accessLevel: GraphqlEntityAccessLevel!
+}
+
+"""
+The typed activity-action vocabulary. One member per durable action, plus
+[`GraphqlActivityUnknownAction`]: rows written by a newer deployment (or
+with an undecodable payload) surface with their raw tag and payload
+instead of failing the page.
+"""
+union GraphqlActivityAction = GraphqlActivityCreated | GraphqlActivityEdited | GraphqlActivityOpened | GraphqlActivityDeleted | GraphqlActivityMessaged | GraphqlActivitySent | GraphqlActivityPropertyChanged | GraphqlActivityParticipantAdded | GraphqlActivityParticipantRemoved | GraphqlActivityCallStarted | GraphqlActivityUnknownAction
+
+"""
+A call was started in the entity.
+"""
+type GraphqlActivityCallStarted {
+	"""
+	The started call.
+	"""
+	callId: ID!
+}
+
+"""
+The entity was created.
+"""
+type GraphqlActivityCreated {
+	"""
+	this object has nothing as a field but we need at least 1 field
+	"""
+	nothing: Boolean!
+}
+
+"""
+One local date with activity.
+"""
+type GraphqlActivityDay {
+	"""
+	Local date in `YYYY-MM-DD` form.
+	"""
+	date: String!
+	"""
+	Number of activities on that date.
+	"""
+	count: Int!
+}
+
+"""
+The entity was soft-deleted.
+"""
+type GraphqlActivityDeleted {
+	"""
+	this object has nothing as a field but we need at least 1 field
+	"""
+	nothing: Boolean!
+}
+
+"""
+The entity's content or metadata was edited.
+"""
+type GraphqlActivityEdited {
+	"""
+	this object has nothing as a field but we need at least 1 field
+	"""
+	nothing: Boolean!
+}
+
+"""
+One entity ranked by its activity count.
+"""
+type GraphqlActivityEntityRank {
+	"""
+	Kind of entity.
+	"""
+	entityType: GraphqlEntityType!
+	"""
+	Entity identifier.
+	"""
+	entityId: ID!
+	"""
+	Number of activities that touched the entity.
+	"""
+	count: Int!
+}
+
+"""
+One activity: a principal did something to an entity at a time.
+
+Carries an entity *reference* only (`entityType`/`entityId`) — clients
+resolve names and metadata from their normalized Soup cache.
+"""
+type GraphqlActivityEvent {
+	"""
+	The activity's stable identifier.
+	"""
+	id: ID!
+	"""
+	The principal that mechanically acted, as a prefix-parseable string
+	(`macro|<email>` for users, `bot|<uuid>` for bots).
+	"""
+	actorId: String!
+	"""
+	Whose activity this is: the delegating user when the actor acted on
+	someone's behalf, otherwise the actor itself.
+	"""
+	subjectId: String!
+	"""
+	The kind of entity acted on.
+	"""
+	entityType: GraphqlEntityType!
+	"""
+	The entity acted on.
+	"""
+	entityId: ID!
+	"""
+	What the principal did.
+	"""
+	action: GraphqlActivityAction!
+	"""
+	When it happened, in RFC 3339 format.
+	"""
+	occurredAt: String!
+}
+
+"""
+A message was sent in the entity.
+"""
+type GraphqlActivityMessaged {
+	"""
+	this object has nothing as a field but we need at least 1 field
+	"""
+	nothing: Boolean!
+}
+
+"""
+The entity was opened by its subject.
+"""
+type GraphqlActivityOpened {
+	"""
+	this object has nothing as a field but we need at least 1 field
+	"""
+	nothing: Boolean!
+}
+
+"""
+Activity aggregated over the authenticated user's trailing year.
+
+This value has no `id`, so the normalized client cache embeds it under
+the authenticated user instead of treating it as a global entity.
+"""
+type GraphqlActivityOverview {
+	"""
+	First local date, inclusive, in `YYYY-MM-DD` form.
+	"""
+	from: String!
+	"""
+	One past the final local date, exclusive, in `YYYY-MM-DD` form.
+	"""
+	to: String!
+	"""
+	IANA time zone used for the window and day buckets.
+	"""
+	timeZone: String!
+	"""
+	Total activity in the window.
+	"""
+	total: Int!
+	"""
+	Sparse positive day counts in ascending order.
+	"""
+	days: [GraphqlActivityDay!]!
+	"""
+	Most active entities in stable rank order.
+	"""
+	topEntities: [GraphqlActivityEntityRank!]!
+}
+
+"""
+One page of the authenticated user's activity, newest first.
+"""
+type GraphqlActivityPage {
+	"""
+	The page's activity events.
+	"""
+	items: [GraphqlActivityEvent!]!
+	"""
+	Cursor for the next page; absent when this page reached the end.
+	"""
+	nextCursor: String
+}
+
+"""
+A principal was added to the entity.
+"""
+type GraphqlActivityParticipantAdded {
+	"""
+	The added principal, as a prefix-parseable string.
+	"""
+	participant: String!
+}
+
+"""
+A principal was removed from the entity.
+"""
+type GraphqlActivityParticipantRemoved {
+	"""
+	The removed principal, as a prefix-parseable string.
+	"""
+	participant: String!
+}
+
+"""
+A property value changed on the entity.
+"""
+type GraphqlActivityPropertyChanged {
+	"""
+	The property definition id.
+	"""
+	property: String!
+	"""
+	The previous value, when the source event carried it.
+	"""
+	from: JSON
+	"""
+	The new value. `null` means the value was cleared — or was literally
+	set to JSON null; the wire cannot distinguish the two.
+	"""
+	to: JSON
+}
+
+"""
+An email message was sent on the thread.
+"""
+type GraphqlActivitySent {
+	"""
+	this object has nothing as a field but we need at least 1 field
+	"""
+	nothing: Boolean!
+}
+
+"""
+An action this deployment's vocabulary doesn't know.
+"""
+type GraphqlActivityUnknownAction {
+	"""
+	The stored action tag.
+	"""
+	tag: String!
+	"""
+	The stored action payload, verbatim.
+	"""
+	payload: JSON
 }
 
 """
@@ -221,11 +522,11 @@ The two operands of a recursive `CalendarEventFilterExpr` binary expression.
 """
 input GraphqlCalendarEventBinaryExpr {
 	"""
-	The left-hand expression.
+	Left expression.
 	"""
 	left: GraphqlCalendarEventExpr!
 	"""
-	The right-hand expression.
+	Right expression.
 	"""
 	right: GraphqlCalendarEventExpr!
 }
@@ -235,19 +536,19 @@ A recursive `CalendarEventFilterExpr` filter expression.
 """
 input GraphqlCalendarEventExpr @oneOf {
 	"""
-	Matches when both expressions match.
+	Both expressions must match.
 	"""
 	and: GraphqlCalendarEventBinaryExpr
 	"""
-	Matches when either expression matches.
+	Either expression may match.
 	"""
 	or: GraphqlCalendarEventBinaryExpr
 	"""
-	Negates an expression.
+	Negate an expression.
 	"""
 	not: GraphqlCalendarEventExpr
 	"""
-	Matches a domain-specific literal condition.
+	Match a literal.
 	"""
 	literal: GraphqlCalendarEventLiteral
 }
@@ -333,11 +634,11 @@ The two operands of a recursive `CallFilterExpr` binary expression.
 """
 input GraphqlCallBinaryExpr {
 	"""
-	The left-hand expression.
+	Left expression.
 	"""
 	left: GraphqlCallExpr!
 	"""
-	The right-hand expression.
+	Right expression.
 	"""
 	right: GraphqlCallExpr!
 }
@@ -347,19 +648,19 @@ A recursive `CallFilterExpr` filter expression.
 """
 input GraphqlCallExpr @oneOf {
 	"""
-	Matches when both expressions match.
+	Both expressions must match.
 	"""
 	and: GraphqlCallBinaryExpr
 	"""
-	Matches when either expression matches.
+	Either expression may match.
 	"""
 	or: GraphqlCallBinaryExpr
 	"""
-	Negates an expression.
+	Negate an expression.
 	"""
 	not: GraphqlCallExpr
 	"""
-	Matches a domain-specific literal condition.
+	Match a literal.
 	"""
 	literal: GraphqlCallLiteral
 }
@@ -461,11 +762,11 @@ The two operands of a recursive `ChannelFilterExpr` binary expression.
 """
 input GraphqlChannelBinaryExpr {
 	"""
-	The left-hand expression.
+	Left expression.
 	"""
 	left: GraphqlChannelExpr!
 	"""
-	The right-hand expression.
+	Right expression.
 	"""
 	right: GraphqlChannelExpr!
 }
@@ -475,19 +776,19 @@ A recursive `ChannelFilterExpr` filter expression.
 """
 input GraphqlChannelExpr @oneOf {
 	"""
-	Matches when both expressions match.
+	Both expressions must match.
 	"""
 	and: GraphqlChannelBinaryExpr
 	"""
-	Matches when either expression matches.
+	Either expression may match.
 	"""
 	or: GraphqlChannelBinaryExpr
 	"""
-	Negates an expression.
+	Negate an expression.
 	"""
 	not: GraphqlChannelExpr
 	"""
-	Matches a domain-specific literal condition.
+	Match a literal.
 	"""
 	literal: GraphqlChannelLiteral
 }
@@ -721,11 +1022,11 @@ The two operands of a recursive `ChannelThreadFilterExpr` binary expression.
 """
 input GraphqlChannelThreadBinaryExpr {
 	"""
-	The left-hand expression.
+	Left expression.
 	"""
 	left: GraphqlChannelThreadExpr!
 	"""
-	The right-hand expression.
+	Right expression.
 	"""
 	right: GraphqlChannelThreadExpr!
 }
@@ -735,19 +1036,19 @@ A recursive `ChannelThreadFilterExpr` filter expression.
 """
 input GraphqlChannelThreadExpr @oneOf {
 	"""
-	Matches when both expressions match.
+	Both expressions must match.
 	"""
 	and: GraphqlChannelThreadBinaryExpr
 	"""
-	Matches when either expression matches.
+	Either expression may match.
 	"""
 	or: GraphqlChannelThreadBinaryExpr
 	"""
-	Negates an expression.
+	Negate an expression.
 	"""
 	not: GraphqlChannelThreadExpr
 	"""
-	Matches a domain-specific literal condition.
+	Match a literal.
 	"""
 	literal: GraphqlChannelThreadLiteral
 }
@@ -819,11 +1120,11 @@ The two operands of a recursive `ChatFilterExpr` binary expression.
 """
 input GraphqlChatBinaryExpr {
 	"""
-	The left-hand expression.
+	Left expression.
 	"""
 	left: GraphqlChatExpr!
 	"""
-	The right-hand expression.
+	Right expression.
 	"""
 	right: GraphqlChatExpr!
 }
@@ -833,19 +1134,19 @@ A recursive `ChatFilterExpr` filter expression.
 """
 input GraphqlChatExpr @oneOf {
 	"""
-	Matches when both expressions match.
+	Both expressions must match.
 	"""
 	and: GraphqlChatBinaryExpr
 	"""
-	Matches when either expression matches.
+	Either expression may match.
 	"""
 	or: GraphqlChatBinaryExpr
 	"""
-	Negates an expression.
+	Negate an expression.
 	"""
 	not: GraphqlChatExpr
 	"""
-	Matches a domain-specific literal condition.
+	Match a literal.
 	"""
 	literal: GraphqlChatLiteral
 }
@@ -953,11 +1254,11 @@ The two operands of a recursive `CrmCompanyFilterExpr` binary expression.
 """
 input GraphqlCrmCompanyBinaryExpr {
 	"""
-	The left-hand expression.
+	Left expression.
 	"""
 	left: GraphqlCrmCompanyExpr!
 	"""
-	The right-hand expression.
+	Right expression.
 	"""
 	right: GraphqlCrmCompanyExpr!
 }
@@ -967,19 +1268,19 @@ A recursive `CrmCompanyFilterExpr` filter expression.
 """
 input GraphqlCrmCompanyExpr @oneOf {
 	"""
-	Matches when both expressions match.
+	Both expressions must match.
 	"""
 	and: GraphqlCrmCompanyBinaryExpr
 	"""
-	Matches when either expression matches.
+	Either expression may match.
 	"""
 	or: GraphqlCrmCompanyBinaryExpr
 	"""
-	Negates an expression.
+	Negate an expression.
 	"""
 	not: GraphqlCrmCompanyExpr
 	"""
-	Matches a domain-specific literal condition.
+	Match a literal.
 	"""
 	literal: GraphqlCrmCompanyLiteral
 }
@@ -1049,11 +1350,11 @@ The two operands of a recursive `DocumentFilterExpr` binary expression.
 """
 input GraphqlDocumentBinaryExpr {
 	"""
-	The left-hand expression.
+	Left expression.
 	"""
 	left: GraphqlDocumentExpr!
 	"""
-	The right-hand expression.
+	Right expression.
 	"""
 	right: GraphqlDocumentExpr!
 }
@@ -1063,19 +1364,19 @@ A recursive `DocumentFilterExpr` filter expression.
 """
 input GraphqlDocumentExpr @oneOf {
 	"""
-	Matches when both expressions match.
+	Both expressions must match.
 	"""
 	and: GraphqlDocumentBinaryExpr
 	"""
-	Matches when either expression matches.
+	Either expression may match.
 	"""
 	or: GraphqlDocumentBinaryExpr
 	"""
-	Negates an expression.
+	Negate an expression.
 	"""
 	not: GraphqlDocumentExpr
 	"""
-	Matches a domain-specific literal condition.
+	Match a literal.
 	"""
 	literal: GraphqlDocumentLiteral
 }
@@ -1215,11 +1516,11 @@ The two operands of a recursive `EmailFilterExpr` binary expression.
 """
 input GraphqlEmailBinaryExpr {
 	"""
-	The left-hand expression.
+	Left expression.
 	"""
 	left: GraphqlEmailExpr!
 	"""
-	The right-hand expression.
+	Right expression.
 	"""
 	right: GraphqlEmailExpr!
 }
@@ -1229,19 +1530,19 @@ A recursive `EmailFilterExpr` filter expression.
 """
 input GraphqlEmailExpr @oneOf {
 	"""
-	Matches when both expressions match.
+	Both expressions must match.
 	"""
 	and: GraphqlEmailBinaryExpr
 	"""
-	Matches when either expression matches.
+	Either expression may match.
 	"""
 	or: GraphqlEmailBinaryExpr
 	"""
-	Negates an expression.
+	Negate an expression.
 	"""
 	not: GraphqlEmailExpr
 	"""
-	Matches a domain-specific literal condition.
+	Match a literal.
 	"""
 	literal: GraphqlEmailLiteral
 }
@@ -1565,7 +1866,7 @@ input GraphqlEntityFilterAst {
 	"""
 	The properties filter to apply.
 	"""
-	propertiesFilter: GraphqlPropertiesExpr
+	propertiesFilter: GraphqlFilterPropertiesExpr
 }
 
 """
@@ -1737,6 +2038,78 @@ enum GraphqlEntityType {
 	AI skill entity (skill document or built-in system skill).
 	"""
 	SKILL
+	"""
+	AI coding agent session entity.
+	"""
+	AGENT_SESSION
+}
+
+"""
+The two operands of a recursive `PropertiesFilterExpr` binary expression.
+"""
+input GraphqlFilterPropertiesBinaryExpr {
+	"""
+	Left expression.
+	"""
+	left: GraphqlFilterPropertiesExpr!
+	"""
+	Right expression.
+	"""
+	right: GraphqlFilterPropertiesExpr!
+}
+
+"""
+A recursive `PropertiesFilterExpr` filter expression.
+"""
+input GraphqlFilterPropertiesExpr @oneOf {
+	"""
+	Both expressions must match.
+	"""
+	and: GraphqlFilterPropertiesBinaryExpr
+	"""
+	Either expression may match.
+	"""
+	or: GraphqlFilterPropertiesBinaryExpr
+	"""
+	Negate an expression.
+	"""
+	not: GraphqlFilterPropertiesExpr
+	"""
+	Match a literal.
+	"""
+	literal: GraphqlFilterPropertiesLiteral
+}
+
+"""
+GraphQL input for matching a property value on an entity.
+"""
+input GraphqlFilterPropertiesLiteral {
+	"""
+	Property definition id to match.
+	"""
+	propertyDefinitionId: ID!
+	"""
+	Optional entity type scope for the property match.
+	"""
+	entityType: GraphqlPropertyEntityType
+	"""
+	Value to compare against the property.
+	"""
+	value: GraphqlFilterPropertyMatchValue!
+}
+
+"""
+GraphQL input value used when matching a property.
+"""
+input GraphqlFilterPropertyMatchValue @oneOf {
+	"""
+	Select option id to match.
+	"""
+	selectOption: ID
+	"""
+	Entity reference id to match.
+	"""
+	entityRef: ID
 }
 
 """
@@ -1744,11 +2117,11 @@ The two operands of a recursive `ForeignEntityFilterExpr` binary expression.
 """
 input GraphqlForeignEntityBinaryExpr {
 	"""
-	The left-hand expression.
+	Left expression.
 	"""
 	left: GraphqlForeignEntityExpr!
 	"""
-	The right-hand expression.
+	Right expression.
 	"""
 	right: GraphqlForeignEntityExpr!
 }
@@ -1758,19 +2131,19 @@ A recursive `ForeignEntityFilterExpr` filter expression.
 """
 input GraphqlForeignEntityExpr @oneOf {
 	"""
-	Matches when both expressions match.
+	Both expressions must match.
 	"""
 	and: GraphqlForeignEntityBinaryExpr
 	"""
-	Matches when either expression matches.
+	Either expression may match.
 	"""
 	or: GraphqlForeignEntityBinaryExpr
 	"""
-	Negates an expression.
+	Negate an expression.
 	"""
 	not: GraphqlForeignEntityExpr
 	"""
-	Matches a domain-specific literal condition.
+	Match a literal.
 	"""
 	literal: GraphqlForeignEntityLiteral
 }
@@ -2408,6 +2781,20 @@ type GraphqlLinkPropertyValue {
 }
 
 """
+Audience allowed to access an entity through its share link.
+"""
+enum GraphqlLinkShare {
+	"""
+	Anyone with the link can access the entity.
+	"""
+	PUBLIC
+	"""
+	Members of the owner's team with the link can access the entity.
+	"""
+	TEAM
+}
+
+"""
 Metadata for a mention in a document comment.
 """
 type GraphqlMentionedInDocumentCommentMetadata {
@@ -2618,11 +3005,11 @@ The two operands of a recursive `ProjectFilterExpr` binary expression.
 """
 input GraphqlProjectBinaryExpr {
 	"""
-	The left-hand expression.
+	Left expression.
 	"""
 	left: GraphqlProjectExpr!
 	"""
-	The right-hand expression.
+	Right expression.
 	"""
 	right: GraphqlProjectExpr!
 }
@@ -2632,19 +3019,19 @@ A recursive `ProjectFilterExpr` filter expression.
 """
 input GraphqlProjectExpr @oneOf {
 	"""
-	Matches when both expressions match.
+	Both expressions must match.
 	"""
 	and: GraphqlProjectBinaryExpr
 	"""
-	Matches when either expression matches.
+	Either expression may match.
 	"""
 	or: GraphqlProjectBinaryExpr
 	"""
-	Negates an expression.
+	Negate an expression.
 	"""
 	not: GraphqlProjectExpr
 	"""
-	Matches a domain-specific literal condition.
+	Match a literal.
 	"""
 	literal: GraphqlProjectLiteral
 }
@@ -2685,60 +3072,6 @@ input GraphqlProjectLiteral @oneOf {
 	The updated at option.
 	"""
 	updatedAt: GraphqlDateLiteral
-}
-
-"""
-The two operands of a recursive `PropertiesFilterExpr` binary expression.
-"""
-input GraphqlPropertiesBinaryExpr {
-	"""
-	The left-hand expression.
-	"""
-	left: GraphqlPropertiesExpr!
-	"""
-	The right-hand expression.
-	"""
-	right: GraphqlPropertiesExpr!
-}
-
-"""
-A recursive `PropertiesFilterExpr` filter expression.
-"""
-input GraphqlPropertiesExpr @oneOf {
-	"""
-	Matches when both expressions match.
-	"""
-	and: GraphqlPropertiesBinaryExpr
-	"""
-	Matches when either expression matches.
-	"""
-	or: GraphqlPropertiesBinaryExpr
-	"""
-	Negates an expression.
-	"""
-	not: GraphqlPropertiesExpr
-	"""
-	Matches a domain-specific literal condition.
-	"""
-	literal: GraphqlPropertiesLiteral
-}
-
-"""
-GraphQL input for matching a property value on an entity.
-"""
-input GraphqlPropertiesLiteral {
-	"""
-	Property definition id to match.
-	"""
-	propertyDefinitionId: ID!
-	"""
-	Optional entity type scope for the property match.
-	"""
-	entityType: GraphqlPropertyEntityType
-	"""
-	Value to compare against the property.
-	"""
-	value: GraphqlPropertyMatchValue!
 }
 
 """
@@ -2890,20 +3223,6 @@ enum GraphqlPropertyEntityType {
 }
 
 """
-GraphQL input value used when matching a property.
-"""
-input GraphqlPropertyMatchValue @oneOf {
-	"""
-	Select option id to match.
-	"""
-	selectOption: ID
-	"""
-	Entity reference id to match.
-	"""
-	entityRef: String
-}
-
-"""
 Canonical entity type accepted for property targets.
 """
 enum GraphqlPropertyTargetEntityType {
@@ -2951,11 +3270,11 @@ The two operands of a recursive `ReminderFilterExpr` binary expression.
 """
 input GraphqlReminderBinaryExpr {
 	"""
-	The left-hand expression.
+	Left expression.
 	"""
 	left: GraphqlReminderExpr!
 	"""
-	The right-hand expression.
+	Right expression.
 	"""
 	right: GraphqlReminderExpr!
 }
@@ -2965,19 +3284,19 @@ A recursive `ReminderFilterExpr` filter expression.
 """
 input GraphqlReminderExpr @oneOf {
 	"""
-	Matches when both expressions match.
+	Both expressions must match.
 	"""
 	and: GraphqlReminderBinaryExpr
 	"""
-	Matches when either expression matches.
+	Either expression may match.
 	"""
 	or: GraphqlReminderBinaryExpr
 	"""
-	Negates an expression.
+	Negate an expression.
 	"""
 	not: GraphqlReminderExpr
 	"""
-	Matches a domain-specific literal condition.
+	Match a literal.
 	"""
 	literal: GraphqlReminderLiteral
 }
@@ -3023,6 +3342,14 @@ type GraphqlReminderMetadata {
 	Reminder description.
 	"""
 	description: String!
+	"""
+	Which firing this notification is for, in RFC 3339 format.
+	
+	The counterpart of a calendar alarm's `occurrenceKey`: it is what tells
+	two notifications from the same recurring reminder apart. Absent on
+	notifications written before recurring dispatch existed.
+	"""
+	scheduledFor: String
 }
 
 """
@@ -3331,6 +3658,12 @@ type GraphqlSoupCalendarEvent implements GraphqlSoupEntity {
 	The authenticated viewer's effective permission for this entity.
 	"""
 	viewerPermission: GraphqlEntityPermission
+	"""
+	The newest activity on this entity, newest first. Loaded lazily and
+	batched across entities; an activity outage degrades to an empty
+	timeline. Deeper history belongs to the viewer's activity feed.
+	"""
+	activity(limit: Int): [GraphqlActivityEvent!]!
 }
 
 """
@@ -3429,6 +3762,12 @@ type GraphqlSoupCall implements GraphqlSoupEntity {
 	The authenticated viewer's effective permission for this entity.
 	"""
 	viewerPermission: GraphqlEntityPermission
+	"""
+	The newest activity on this entity, newest first. Loaded lazily and
+	batched across entities; an activity outage degrades to an empty
+	timeline. Deeper history belongs to the viewer's activity feed.
+	"""
+	activity(limit: Int): [GraphqlActivityEvent!]!
 	"""
 	The viewer's frecency score for this entity, when loaded.
 	"""
@@ -3550,6 +3889,12 @@ type GraphqlSoupChannel implements GraphqlSoupEntity {
 	"""
 	viewerPermission: GraphqlEntityPermission
 	"""
+	The newest activity on this entity, newest first. Loaded lazily and
+	batched across entities; an activity outage degrades to an empty
+	timeline. Deeper history belongs to the viewer's activity feed.
+	"""
+	activity(limit: Int): [GraphqlActivityEvent!]!
+	"""
 	The viewer's frecency score for this entity, when loaded.
 	"""
 	frecencyScore: Float
@@ -3619,6 +3964,12 @@ type GraphqlSoupChannelMessage implements GraphqlSoupEntity {
 	The authenticated viewer's effective permission for this entity.
 	"""
 	viewerPermission: GraphqlEntityPermission
+	"""
+	The newest activity on this entity, newest first. Loaded lazily and
+	batched across entities; an activity outage degrades to an empty
+	timeline. Deeper history belongs to the viewer's activity feed.
+	"""
+	activity(limit: Int): [GraphqlActivityEvent!]!
 	"""
 	The viewer's frecency score for this entity, when loaded.
 	"""
@@ -3762,6 +4113,12 @@ type GraphqlSoupChat implements GraphqlSoupEntity {
 	"""
 	viewerPermission: GraphqlEntityPermission
 	"""
+	The newest activity on this entity, newest first. Loaded lazily and
+	batched across entities; an activity outage degrades to an empty
+	timeline. Deeper history belongs to the viewer's activity feed.
+	"""
+	activity(limit: Int): [GraphqlActivityEvent!]!
+	"""
 	The viewer's frecency score for this entity, when loaded.
 	"""
 	frecencyScore: Float
@@ -3840,6 +4197,12 @@ type GraphqlSoupCrmCompany implements GraphqlSoupEntity {
 	"""
 	viewerPermission: GraphqlEntityPermission
 	"""
+	The newest activity on this entity, newest first. Loaded lazily and
+	batched across entities; an activity outage degrades to an empty
+	timeline. Deeper history belongs to the viewer's activity feed.
+	"""
+	activity(limit: Int): [GraphqlActivityEvent!]!
+	"""
 	The viewer's frecency score for this entity, when loaded.
 	"""
 	frecencyScore: Float
@@ -3917,6 +4280,12 @@ type GraphqlSoupDocument implements GraphqlSoupEntity {
 	The authenticated viewer's effective permission for this entity.
 	"""
 	viewerPermission: GraphqlEntityPermission
+	"""
+	The newest activity on this entity, newest first. Loaded lazily and
+	batched across entities; an activity outage degrades to an empty
+	timeline. Deeper history belongs to the viewer's activity feed.
+	"""
+	activity(limit: Int): [GraphqlActivityEvent!]!
 	"""
 	The viewer's frecency score for this entity, when loaded.
 	"""
@@ -4412,6 +4781,12 @@ type GraphqlSoupEmailThread implements GraphqlSoupEntity {
 	"""
 	viewerPermission: GraphqlEntityPermission
 	"""
+	The newest activity on this entity, newest first. Loaded lazily and
+	batched across entities; an activity outage degrades to an empty
+	timeline. Deeper history belongs to the viewer's activity feed.
+	"""
+	activity(limit: Int): [GraphqlActivityEvent!]!
+	"""
 	The viewer's frecency score for this entity, when loaded.
 	"""
 	frecencyScore: Float
@@ -4473,6 +4848,10 @@ interface GraphqlSoupEntity {
 	The viewer's frecency score for this entity, when loaded.
 	"""
 	frecencyScore: Float
+	"""
+	The newest activity on this entity, newest first.
+	"""
+	activity(limit: Int): [GraphqlActivityEvent!]!
 }
 
 """
@@ -4590,6 +4969,12 @@ type GraphqlSoupForeignEntity implements GraphqlSoupEntity {
 	"""
 	viewerPermission: GraphqlEntityPermission
 	"""
+	The newest activity on this entity, newest first. Loaded lazily and
+	batched across entities; an activity outage degrades to an empty
+	timeline. Deeper history belongs to the viewer's activity feed.
+	"""
+	activity(limit: Int): [GraphqlActivityEvent!]!
+	"""
 	The viewer's frecency score for this entity, when loaded.
 	"""
 	frecencyScore: Float
@@ -4659,6 +5044,12 @@ type GraphqlSoupProject implements GraphqlSoupEntity {
 	The authenticated viewer's effective permission for this entity.
 	"""
 	viewerPermission: GraphqlEntityPermission
+	"""
+	The newest activity on this entity, newest first. Loaded lazily and
+	batched across entities; an activity outage degrades to an empty
+	timeline. Deeper history belongs to the viewer's activity feed.
+	"""
+	activity(limit: Int): [GraphqlActivityEvent!]!
 	"""
 	The viewer's frecency score for this entity, when loaded.
 	"""
@@ -4752,6 +5143,12 @@ type GraphqlSoupReminder implements GraphqlSoupEntity {
 	The authenticated viewer's effective permission for this entity.
 	"""
 	viewerPermission: GraphqlEntityPermission
+	"""
+	The newest activity on this entity, newest first. Loaded lazily and
+	batched across entities; an activity outage degrades to an empty
+	timeline. Deeper history belongs to the viewer's activity feed.
+	"""
+	activity(limit: Int): [GraphqlActivityEvent!]!
 	"""
 	The viewer's frecency score for this entity, when loaded.
 	"""
@@ -4867,6 +5264,16 @@ type GraphqlUser {
 	"""
 	id: ID!
 	"""
+	A page of the authenticated user's own activity, newest first.
+	Delegated actions performed on the user's behalf are included.
+	"""
+	activity(input: ActivityFeedInput!): GraphqlActivityPage!
+	"""
+	The authenticated user's activity over the trailing year, bucketed
+	into local dates in the requested time zone.
+	"""
+	activityOverview(input: ActivityOverviewInput!): GraphqlActivityOverview!
+	"""
 	Labels across every owned or delegated inbox accessible to the authenticated user.
 	"""
 	emailLabels: [GraphqlSoupEmailLabel!]!
@@ -4979,6 +5386,20 @@ input MoveEntityInput {
 	Destination project id. Omit or pass null to move to the root.
 	"""
 	projectId: ID
+}
+
+"""
+Canonical entity reference used to select notifications for updating.
+"""
+input NotificationEntityInput {
+	"""
+	Canonical entity type.
+	"""
+	entityType: GraphqlEntityType!
+	"""
+	Canonical entity identifier.
+	"""
+	entityId: ID!
 }
 
 """
@@ -5177,6 +5598,24 @@ input UpdateEmailThreadLabelInput {
 }
 
 """
+Input for applying option deltas across one entity's properties.
+"""
+input UpdateEntityPropertyOptionsInput {
+	"""
+	Type of entity whose properties are changing.
+	"""
+	entityType: GraphqlPropertyTargetEntityType!
+	"""
+	Identifier of the entity whose properties are changing.
+	"""
+	entityId: String!
+	"""
+	Per-property option deltas applied in one transaction.
+	"""
+	properties: [EntityPropertyOptionDeltaInput!]!
+}
+
+"""
 One share-policy update in a batch.
 """
 input UpdateEntitySharePolicyInput {
@@ -5185,9 +5624,23 @@ input UpdateEntitySharePolicyInput {
 	"""
 	entity: EntityRefInput!
 	"""
-	New public/channel policy values.
+	New link/channel policy values.
 	"""
 	policy: EntitySharePolicyInput!
+}
+
+"""
+Input for updating all notifications associated with any requested entity.
+"""
+input UpdateNotificationsForEntityInput {
+	"""
+	Canonical entities whose notifications should be updated.
+	"""
+	entities: [NotificationEntityInput!]!
+	"""
+	Status operation applied to every matching notification.
+	"""
+	operation: NotificationUpdateOperation!
 }
 
 """

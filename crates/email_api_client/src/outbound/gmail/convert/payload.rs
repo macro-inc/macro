@@ -7,8 +7,8 @@ use models_email::email::service;
 use models_email::gmail::{Header, MessagePart};
 
 use super::message::{find_header, parse_address_header};
-use super::sanitizer::sanitize_email_html;
 use crate::domain::models::EmailApiError;
+use email_utils::sanitize_email_html;
 
 #[derive(Debug, Default)]
 pub(super) struct ParsedGmailPayload {

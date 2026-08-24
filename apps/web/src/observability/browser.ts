@@ -1,3 +1,4 @@
+import { recordBrowserTursoCacheNavigation } from '@graphql-cache/rollout-observability';
 import { Telemetry } from '@macro-inc/observability';
 import { createWebTracingProvider } from '@macro-inc/observability/web';
 // This static import loads the zone.js Promise patch before application modules run.
@@ -62,6 +63,7 @@ export async function initializeBrowserObservability(): Promise<void> {
     tracingProvider: (resource, getUserId) =>
       createWebTracingProvider(telemetryConfig, resource, getUserId),
   });
+  recordBrowserTursoCacheNavigation();
 
   window.addEventListener('pagehide', () => void Telemetry.flush());
   window.addEventListener('error', (event) => {

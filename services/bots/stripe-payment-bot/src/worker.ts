@@ -1,6 +1,7 @@
 import Stripe from 'stripe';
 import type { Env as MacroEnv } from '../../../../packages/sdk/src/config';
 import { createChannelBroadcaster } from './channel';
+import { formatNotification, notificationFromEvent } from './notification';
 
 type WorkerEnv = {
   MACRO_BOT_TOKEN: string;
@@ -19,153 +20,7 @@ const REQUIRED_BINDINGS: readonly (keyof WorkerEnv)[] = [
 
 const MACRO_ENVIRONMENTS: readonly MacroEnv[] = ['dev', 'prod', 'local'];
 
-type Payment = {
-  amount: number;
-  currency: string;
-  customer: string;
-  eventId: string;
-  livemode: boolean;
-  subscriptionId?: string;
-};
-
 const cryptoProvider = Stripe.createSubtleCryptoProvider();
-
-function customerId(
-  customer: string | Stripe.Customer | Stripe.DeletedCustomer | null
-): string | undefined {
-  return typeof customer === 'string' ? customer : customer?.id;
-}
-
-function subscriptionId(
-  subscription: string | Stripe.Subscription | null
-): string | undefined {
-  return typeof subscription === 'string' ? subscription : subscription?.id;
-}
-
-function checkoutPayment(
-  event:
-    | Stripe.CheckoutSessionCompletedEvent
-    | Stripe.CheckoutSessionAsyncPaymentSucceededEvent
-): Payment | undefined {
-  const session = event.data.object;
-  if (
-    session.payment_status !== 'paid' ||
-    session.amount_total === null ||
-    session.currency === null
-  ) {
-    return undefined;
-  }
-
-  const expandedCustomer =
-    typeof session.customer === 'object' &&
-    session.customer !== null &&
-    !('deleted' in session.customer)
-      ? session.customer
-      : undefined;
-  const email =
-    session.customer_details?.email ??
-    session.customer_email ??
-    expandedCustomer?.email;
-  const name = session.customer_details?.name ?? expandedCustomer?.name;
-
-  return {
-    amount: session.amount_total,
-    currency: session.currency,
-    customer:
-      email && name
-        ? `${name} (${email})`
-        : (email ?? name ?? customerId(session.customer) ?? 'Unknown customer'),
-    eventId: event.id,
-    livemode: event.livemode,
-    subscriptionId: subscriptionId(session.subscription),
-  };
-}
-
-async function postTrialPayment(
-  stripe: Stripe,
-  event: Stripe.InvoicePaidEvent
-): Promise<Payment | undefined> {
-  const invoice = event.data.object;
-  if (invoice.status !== 'paid' || invoice.amount_paid <= 0) return undefined;
-
-  const legacyInvoice = invoice as Stripe.Invoice & {
-    subscription?: string | Stripe.Subscription | null;
-  };
-  const subscriptionRef =
-    invoice.parent?.subscription_details?.subscription ??
-    legacyInvoice.subscription;
-  if (!subscriptionRef) return undefined;
-
-  const subscription =
-    typeof subscriptionRef === 'string'
-      ? await stripe.subscriptions.retrieve(subscriptionRef)
-      : subscriptionRef;
-  const trialEnd = subscription.trial_end;
-  const fiveMinutes = 5 * 60;
-  if (
-    trialEnd === null ||
-    trialEnd < invoice.period_start - fiveMinutes ||
-    trialEnd > invoice.period_end + fiveMinutes
-  ) {
-    return undefined;
-  }
-
-  return {
-    amount: invoice.amount_paid,
-    currency: invoice.currency,
-    customer:
-      invoice.customer_email && invoice.customer_name
-        ? `${invoice.customer_name} (${invoice.customer_email})`
-        : (invoice.customer_email ??
-          invoice.customer_name ??
-          customerId(invoice.customer) ??
-          'Unknown customer'),
-    eventId: event.id,
-    livemode: event.livemode,
-    subscriptionId: subscription.id,
-  };
-}
-
-async function paymentFromEvent(
-  stripe: Stripe,
-  event: Stripe.Event
-): Promise<Payment | undefined> {
-  switch (event.type) {
-    case 'checkout.session.completed':
-    case 'checkout.session.async_payment_succeeded':
-      return checkoutPayment(event);
-    case 'invoice.paid':
-      return postTrialPayment(stripe, event);
-    default:
-      return undefined;
-  }
-}
-
-function formatAmount(amount: number, currency: string): string {
-  const code = currency.toUpperCase();
-  const formatter = new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: code,
-  });
-  const fractionDigits = formatter.resolvedOptions().maximumFractionDigits ?? 2;
-  return `${formatter.format(amount / 10 ** fractionDigits)} ${code}`;
-}
-
-function formatPayment(payment: Payment): string {
-  const dashboardPrefix = payment.livemode ? '' : 'test/';
-  const lines = [
-    '💸 New Stripe payment',
-    `Customer: ${payment.customer}`,
-    `Amount: ${formatAmount(payment.amount, payment.currency)}`,
-  ];
-  if (payment.subscriptionId) {
-    lines.push(`Subscription: ${payment.subscriptionId}`);
-  }
-  lines.push(
-    `https://dashboard.stripe.com/${dashboardPrefix}events/${payment.eventId}`
-  );
-  return lines.join('\n');
-}
 
 function missingBindings(env: WorkerEnv): string[] {
   return REQUIRED_BINDINGS.filter((key) => !env[key]);
@@ -225,33 +80,34 @@ export default {
       return new Response('Invalid Stripe webhook', { status: 400 });
     }
 
-    let payment: Payment | undefined;
+    let notification;
     try {
-      payment = await paymentFromEvent(stripe, event);
+      notification = await notificationFromEvent(stripe, event);
     } catch (error) {
-      console.error('Failed to load Stripe payment details', error);
-      return new Response('Failed to load Stripe payment details', {
+      console.error('Failed to load Stripe notification details', error);
+      return new Response('Failed to load Stripe notification details', {
         status: 502,
       });
     }
-    if (!payment) return Response.json({ ok: true, ignored: true });
+    if (!notification) return Response.json({ ok: true, ignored: true });
 
     try {
       await createChannelBroadcaster({
         botToken: env.MACRO_BOT_TOKEN,
         env: macroEnv,
         storageUrl: env.MACRO_STORAGE_URL,
-      })(formatPayment(payment));
+      })(formatNotification(notification));
     } catch (error) {
-      console.error('Failed to post Stripe payment to Macro', error);
-      return new Response('Failed to post Stripe payment to Macro', {
+      console.error('Failed to post Stripe notification to Macro', error);
+      return new Response('Failed to post Stripe notification to Macro', {
         status: 502,
       });
     }
 
-    console.log('Posted Stripe payment', {
-      eventId: payment.eventId,
-      subscriptionId: payment.subscriptionId,
+    console.log('Posted Stripe notification', {
+      kind: notification.kind,
+      eventId: notification.eventId,
+      subscriptionId: notification.subscriptionId,
     });
     return Response.json({ ok: true });
   },

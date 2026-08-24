@@ -172,7 +172,9 @@ export function setPreviewName({
 }: {
   itemId: string;
   name: string;
-  itemType?: ItemType;
+  // Calendar event previews carry required API-served event data, so the
+  // optimistic default constructor cannot fabricate one.
+  itemType?: Exclude<ItemType, 'calendar_event'>;
 }) {
   const prev = getPreviewData(itemId);
   // only merge into accessible entries: a cached no_access/does_not_exist
@@ -195,7 +197,10 @@ export function setPreviewName({
     name,
     loading: false,
     access: 'access',
-    type: itemType ?? prev?.type ?? DEFAULT_ITEM_TYPE,
+    type: (itemType ?? prev?.type ?? DEFAULT_ITEM_TYPE) as Exclude<
+      ItemType,
+      'calendar_event'
+    >,
   };
 
   // if the item isn't in the cache, we can optimistically create a new item
@@ -260,7 +265,7 @@ export function setPreviewOnCreate({
   subType,
 }: {
   itemId: string;
-  itemType: ItemType;
+  itemType: Exclude<ItemType, 'calendar_event'>;
   name?: string;
   fileType?: string;
   subType?: { type: 'task' | 'snippet' | 'skill'; is_completed?: boolean };

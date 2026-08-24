@@ -347,7 +347,7 @@ export type Entity = {
 /**
  * The type of an entity in Macro
  */
-export type EntityType = 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill';
+export type EntityType = 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill' | 'agent_session';
 
 /**
  * A plain old json error response for use with axum.
@@ -980,6 +980,18 @@ export type ReminderMetadata = {
      * The reminder that fired.
      */
     reminderId: string;
+    /**
+     * Which firing this is — the occurrence the reminder came due for.
+     *
+     * What distinguishes two firings of the same recurring reminder, which are
+     * otherwise identical: same id, same description. The collapse key is
+     * built from it, so without it Tuesday's alert would replace Monday's
+     * unread one on the lock screen.
+     *
+     * Optional because notifications written before recurring dispatch existed
+     * have no such field, and they still have to read back.
+     */
+    scheduledFor?: string | null;
 };
 
 /**

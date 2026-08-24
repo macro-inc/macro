@@ -1,18 +1,13 @@
 import { useBlockId } from '@core/block';
 import { ENABLE_LIVE_INDICATORS } from '@core/constant/featureFlags';
 import { createWebsocketEventEffect } from '@macro-inc/collaboration/websocket';
-import { ws } from '@service-connection/websocket';
+import { type FromWebsocketMessage, ws } from '@service-connection/websocket';
 import { createStore, unwrap } from 'solid-js/store';
 import { z } from 'zod';
 
 type IndicatorStore = Record<string, string[]>;
 
 const [indicatorStore, setIndicatorStore] = createStore<IndicatorStore>({});
-
-type IncomingTrackingUpdate = {
-  type: 'user_tracking_change';
-  data: string;
-};
 
 const trackingUpdate = z.object({
   entity_id: z.string(),
@@ -23,7 +18,7 @@ const trackingUpdate = z.object({
 createWebsocketEventEffect(
   ws,
   'user_tracking_change',
-  (data: IncomingTrackingUpdate) => {
+  (data: FromWebsocketMessage) => {
     if (!ENABLE_LIVE_INDICATORS) return;
     const update = trackingUpdate.parse(JSON.parse(data.data));
     setIndicatorStore(update.entity_id, update.user_ids);

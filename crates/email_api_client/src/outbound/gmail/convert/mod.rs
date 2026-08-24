@@ -5,7 +5,6 @@ mod history;
 mod label;
 mod message;
 mod payload;
-pub(crate) mod sanitizer;
 mod thread;
 
 pub(crate) use contact::map_person_to_contact;

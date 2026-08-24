@@ -1,19 +1,14 @@
 import { CREATE_MENU_COMMAND_SCOPE } from '@app/constants/hotkeys';
-import { CREATABLE_BLOCKS } from '@app/features/command/Launcher';
+import { useCreateMenuBlocks } from '@app/features/command/Launcher';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useHotkeyInterceptor } from '@app/signal/hotkeyRoot';
-import {
-  ENABLE_SNIPPETS_FLAG,
-  ENABLE_SNIPPETS_OVERRIDE,
-} from '@core/constant/featureFlags';
 import { setActiveScope } from '@core/hotkey/state';
 import { TOKENS } from '@core/hotkey/tokens';
 import { activateClosestDOMScope } from '@core/hotkey/utils';
 import CreateIcon from '@icon/square-pen-create.svg';
 import PlusIcon from '@phosphor/plus.svg';
 import { Button, Dropdown, Hotkey, NavRow } from '@ui';
-import { createMemo, createSignal, For, onCleanup, Show } from 'solid-js';
+import { createSignal, For, onCleanup, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 
 export const SidebarCreateMenu = (props: {
@@ -24,15 +19,7 @@ export const SidebarCreateMenu = (props: {
   const analytics = useAnalytics();
   const [open, setOpen] = createSignal(false);
   const [focusedIndex, setFocusedIndex] = createSignal(-1);
-  const snippetsFlag = useFeatureFlag(ENABLE_SNIPPETS_FLAG, {
-    enabledOverride: ENABLE_SNIPPETS_OVERRIDE,
-  });
-
-  const blocks = createMemo(() =>
-    CREATABLE_BLOCKS.filter(
-      (block) => block.blockName !== 'snippet' || snippetsFlag().enabled
-    )
-  );
+  const blocks = useCreateMenuBlocks();
 
   const handleOpenChange = (nextOpen: boolean) => {
     if (nextOpen && !open()) {

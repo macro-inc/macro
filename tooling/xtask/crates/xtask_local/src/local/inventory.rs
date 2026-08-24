@@ -244,6 +244,20 @@ pub const RUST_SERVICES: &[RustService] = &[
         opt_in: false,
         no_default_features: true,
     },
+    RustService {
+        compose_name: "agent_harness_service",
+        cargo_bin: "agent_harness_service",
+        package: "agent_harness_service",
+        host_port: Some(Port::AgentHarness),
+        path_prefix: Some("/agent-harness"),
+        is_websocket: false,
+        // Local stacks default to DEV_DANGEROUS_LOCAL_CONTAINERS, so managed
+        // sandboxes run on the host Docker daemon. Daytona is opt-in via
+        // DEV_DANGEROUS_LOCAL_CONTAINERS=false DAYTONA_API_KEY=... just run_local.
+        modes: &[Mode::Local],
+        opt_in: false,
+        no_default_features: false,
+    },
 ];
 
 /// The Rust services that participate in `mode` (opt-in services list no modes,

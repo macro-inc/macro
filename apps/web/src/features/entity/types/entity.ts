@@ -17,6 +17,12 @@ export type EntityBase = {
   name: string;
   ownerId: string;
   frecencyScore?: number;
+  /**
+   * The viewer's latest own mutation of this entity, present only on rows
+   * from `touched_by_me` pages. The Recent feed sorts on it, so mutation
+   * helpers may bump it optimistically.
+   */
+  touchedAt?: DateValue | null;
   createdAt?: DateValue | null;
   updatedAt?: DateValue | null;
   viewedAt?: DateValue | null;

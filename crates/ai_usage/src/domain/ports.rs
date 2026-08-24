@@ -224,8 +224,8 @@ impl UsageContext {
 #[derive(Debug, Error)]
 pub enum UsageError {
     /// A database error.
-    #[error(transparent)]
-    Db(#[from] sqlx::Error),
+    #[error("database error: {0}")]
+    Db(rootcause::Report),
     /// Any other error.
     #[error(transparent)]
     Other(#[from] anyhow::Error),

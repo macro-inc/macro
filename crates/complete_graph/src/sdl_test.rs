@@ -75,6 +75,12 @@ fn soup_response_schema_exposes_frontend_fields() {
         "effects: [SoupPatch!]!",
         "recordChannelActivity(input: RecordChannelActivityInput!): GraphqlChannelActivity!",
         "updateNotifications(input: UpdateNotificationsInput!): [GraphqlNotification!]!",
+        "updateNotificationsForEntity(input: UpdateNotificationsForEntityInput!): [GraphqlNotification!]!",
+        "input UpdateNotificationsForEntityInput {",
+        "entities: [NotificationEntityInput!]!",
+        "input NotificationEntityInput {",
+        "entityType: GraphqlEntityType!",
+        "entityId: ID!",
         "markEmailThreadSeen(input: MarkEmailThreadSeenInput!): GraphqlSoupEmailThread!",
         "updateEmailThreadLabel(input: UpdateEmailThreadLabelInput!): GraphqlSoupEmailThread!",
         "input MarkEmailThreadSeenInput {",
@@ -125,6 +131,36 @@ fn soup_response_schema_exposes_frontend_fields() {
 }
 
 #[test]
+fn activity_overview_is_a_user_scoped_embedded_value() {
+    use apollo_compiler::schema::ExtendedType;
+
+    let schema =
+        apollo_compiler::Schema::parse_and_validate(crate::build_schema().sdl(), "schema.graphql")
+            .expect("generated SDL is valid");
+    let ExtendedType::Object(user) = schema.types.get("GraphqlUser").expect("user type exists")
+    else {
+        panic!("GraphqlUser must be an object");
+    };
+    assert!(user.fields.contains_key("activityOverview"));
+
+    for name in [
+        "GraphqlActivityOverview",
+        "GraphqlActivityDay",
+        "GraphqlActivityEntityRank",
+    ] {
+        let ExtendedType::Object(value) =
+            schema.types.get(name).expect("overview value type exists")
+        else {
+            panic!("{name} must be an object");
+        };
+        assert!(
+            !value.fields.contains_key("id"),
+            "{name} must remain embedded under GraphqlUser"
+        );
+    }
+}
+
+#[test]
 fn soup_interface_exposes_the_complete_shared_entity_contract() {
     use apollo_compiler::schema::ExtendedType;
 
@@ -149,6 +185,7 @@ fn soup_interface_exposes_the_complete_shared_entity_contract() {
         "isFavorited",
         "viewerPermission",
         "frecencyScore",
+        "activity",
     ] {
         assert!(
             entity.fields.contains_key(shared_field),
@@ -176,6 +213,7 @@ fn soup_interface_exposes_the_complete_shared_entity_contract() {
         "viewerPermission",
         "properties",
         "notifications",
+        "activity",
     ] {
         assert!(
             document.fields.contains_key(shared_field),

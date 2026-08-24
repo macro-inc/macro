@@ -56,7 +56,7 @@ export function HoverCard(props: HoverCardProps) {
           <KobalteTooltip.Content class="z-tool-tip max-w-[calc(100vw-32px)]">
             <Surface
               class={cn(
-                'flex items-center justify-center p-2 text-ink-muted text-xs wrap-break-word',
+                'flex items-center justify-center p-2 text-ink-muted text-xs wrap-break-word bg-tooltip',
                 props.contentClass
               )}
               depth={3}

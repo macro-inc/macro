@@ -4,6 +4,7 @@ use super::types::{
     tag_filter_mode,
 };
 use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
+use ai_toolset::{ToolAnnotated, ToolAnnotations};
 use async_trait::async_trait;
 use email::domain::ports::EmailService;
 use item_filters::{EmailFilters, EntityFilters};
@@ -65,6 +66,10 @@ exists in both the personal and team sets is ambiguous — set scope on that ent
 Ignored unless tags is set.")]
     #[serde(default)]
     pub tags_match: TagMatch,
+}
+
+impl ToolAnnotated for NameSearch {
+    const ANNOTATIONS: ToolAnnotations = ToolAnnotations::read_only("Search by name");
 }
 
 #[async_trait]

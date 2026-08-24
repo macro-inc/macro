@@ -1,3 +1,5 @@
+import { parseLocalDate } from '@app/features/calendar/utils/calendar-date';
+import { openCalendarEventSplit } from '@block-calendar/open-calendar-event';
 import { URL_PARAMS as CHANNEL_PARAMS } from '@block-channel/constants';
 import {
   type BlockAlias,
@@ -39,6 +41,8 @@ import { useEntityProperties } from '@property/hooks';
 import {
   type ItemEntity,
   isAccessiblePreviewItem,
+  isCalendarEventPreviewItem,
+  type PreviewCalendarEventAccess,
   type PreviewItemNoAccess,
   useItemPreview,
 } from '@queries/preview';
@@ -153,6 +157,17 @@ function SkillSlashText(props: {
       </span>
     </span>
   );
+}
+
+/** Compact start-time label appended to a calendar event mention pill. */
+export function calendarMentionTimeLabel(
+  event: PreviewCalendarEventAccess['event']
+): string | undefined {
+  if (event.time.kind === 'timed') {
+    return formatDate(event.time.startsAt, { showTime: true });
+  }
+  const startDate = parseLocalDate(event.time.startDate);
+  return startDate ? formatDate(startDate) : undefined;
 }
 
 function InlineTaskProperties(props: { taskId: string }) {
@@ -361,6 +376,19 @@ function InlinePreview(props: {
                         );
                       }}
                     </Show>
+                    <Show when={matches(item(), isCalendarEventPreviewItem)}>
+                      {(calendarItem) => (
+                        <Show
+                          when={calendarMentionTimeLabel(calendarItem().event)}
+                        >
+                          {(timeLabel) => (
+                            <span class="text-current/50 text-[0.8em]">
+                              {` ${timeLabel()}`}
+                            </span>
+                          )}
+                        </Show>
+                      )}
+                    </Show>
                     <span class="relative text-[0.8em] text-current/50 rounded-xs">
                       {(() => {
                         const accessories = mentionsAccessories(
@@ -549,6 +577,27 @@ function DocumentMentionInner(props: DocumentMentionDecoratorProps) {
   });
 
   const open = createCallback((e: MouseEvent | KeyboardEvent | null) => {
+    // The calendar is a singleton block: open it aimed at the viewer's own
+    // copy of the meeting, which the preview resolved through the shared
+    // iCalendar UID.
+    if (verifyBlockName(props.blockName) === 'calendar') {
+      const i = item();
+      const event = isCalendarEventPreviewItem(i) ? i.event : undefined;
+      const paramKey = props.blockParams?.occurrenceKey;
+      openCalendarEventSplit({
+        eventId: event?.viewerEventId ?? props.documentId,
+        occurrenceKey: paramKey ?? event?.occurrenceKey ?? undefined,
+        // The preview's time only locates the instance it previewed; a
+        // mention aimed at a different instance derives its range from the
+        // occurrence key instead.
+        time:
+          !paramKey || paramKey === event?.occurrenceKey
+            ? event?.time
+            : undefined,
+        openInNewSplit: openInNewSplitForMention(e?.shiftKey, e != null),
+      });
+      return;
+    }
     openDocument(
       resolvedBlockName(),
       props.documentId,

@@ -709,13 +709,18 @@ fn build_notification_join(entity_alias: &str, item_type: &str) -> String {
 }
 
 fn build_task_include_cbm_atm_nc_clause() -> String {
-    r#"(
+    // The completed-status option id is interpolated (not `$6`-bound) so this
+    // clause stays usable from queries with a different parameter layout —
+    // the touched-by-me page reuses these folds with its own bind positions.
+    format!(
+        r#"(
         dt.sub_type = 'task'
         AND d.owner = $1
         AND ep_assignees.values->'value' @> jsonb_build_array(jsonb_build_object('entity_id', $1))
-        AND NOT COALESCE(ep_status.values->'value' ? $6, false)
-    )"#
-    .to_string()
+        AND NOT COALESCE(ep_status.values->'value' ? '{completed}', false)
+    )"#,
+        completed = StatusOption::COMPLETED_UUID
+    )
 }
 
 /// NULL-safe equality for nullable columns: FALSE (not UNKNOWN) on NULL, so
@@ -735,7 +740,9 @@ fn date_predicate(col: &str, lit: &DateLiteral) -> String {
     }
 }
 
-fn build_document_filter(ast: Option<&Expr<DocumentLiteral>>) -> String {
+pub(in crate::outbound::pg_soup_repo) fn build_document_filter(
+    ast: Option<&Expr<DocumentLiteral>>,
+) -> String {
     let Some(expr) = ast else {
         return String::new();
     };
@@ -888,7 +895,9 @@ fn build_calendar_event_filter(ast: Option<&Expr<CalendarEventLiteral>>) -> Stri
     }
 }
 
-fn build_chat_filter(ast: Option<&Expr<ChatLiteral>>) -> String {
+pub(in crate::outbound::pg_soup_repo) fn build_chat_filter(
+    ast: Option<&Expr<ChatLiteral>>,
+) -> String {
     let Some(expr) = ast else {
         return String::new();
     };
@@ -932,7 +941,9 @@ fn build_chat_filter(ast: Option<&Expr<ChatLiteral>>) -> String {
     }
 }
 
-fn build_project_filter(ast: Option<&Expr<ProjectLiteral>>) -> String {
+pub(in crate::outbound::pg_soup_repo) fn build_project_filter(
+    ast: Option<&Expr<ProjectLiteral>>,
+) -> String {
     let Some(expr) = ast else {
         return String::new();
     };
@@ -1023,7 +1034,9 @@ pub(in crate::outbound::pg_soup_repo) fn build_properties_filter(
     }
 }
 
-fn document_filter_needs_task_property_joins(ast: Option<&Expr<DocumentLiteral>>) -> bool {
+pub(in crate::outbound::pg_soup_repo) fn document_filter_needs_task_property_joins(
+    ast: Option<&Expr<DocumentLiteral>>,
+) -> bool {
     ast.is_some_and(|expr| {
         expr.collapse_frames(|frame| match frame {
             filter_ast::ExprFrame::And(a, b) | filter_ast::ExprFrame::Or(a, b) => a || b,
@@ -1035,7 +1048,7 @@ fn document_filter_needs_task_property_joins(ast: Option<&Expr<DocumentLiteral>>
     })
 }
 
-fn properties_filter_can_apply_to(
+pub(in crate::outbound::pg_soup_repo) fn properties_filter_can_apply_to(
     ast: Option<&Expr<PropertiesLiteral>>,
     entity_types: &[PropertyEntityType],
 ) -> bool {
@@ -1052,7 +1065,9 @@ fn properties_filter_can_apply_to(
     })
 }
 
-fn chat_filter_is_impossible(ast: Option<&Expr<ChatLiteral>>) -> bool {
+pub(in crate::outbound::pg_soup_repo) fn chat_filter_is_impossible(
+    ast: Option<&Expr<ChatLiteral>>,
+) -> bool {
     ast.is_some_and(|expr| {
         expr.collapse_frames(|frame| match frame {
             filter_ast::ExprFrame::And(a, b) => a || b,
@@ -1065,7 +1080,9 @@ fn chat_filter_is_impossible(ast: Option<&Expr<ChatLiteral>>) -> bool {
     })
 }
 
-fn document_filter_is_impossible(ast: Option<&Expr<DocumentLiteral>>) -> bool {
+pub(in crate::outbound::pg_soup_repo) fn document_filter_is_impossible(
+    ast: Option<&Expr<DocumentLiteral>>,
+) -> bool {
     ast.is_some_and(|expr| {
         expr.collapse_frames(|frame| match frame {
             filter_ast::ExprFrame::And(a, b) => a || b,
@@ -1077,7 +1094,9 @@ fn document_filter_is_impossible(ast: Option<&Expr<DocumentLiteral>>) -> bool {
     })
 }
 
-fn project_filter_is_impossible(ast: Option<&Expr<ProjectLiteral>>) -> bool {
+pub(in crate::outbound::pg_soup_repo) fn project_filter_is_impossible(
+    ast: Option<&Expr<ProjectLiteral>>,
+) -> bool {
     ast.is_some_and(|expr| {
         expr.collapse_frames(|frame| match frame {
             filter_ast::ExprFrame::And(a, b) => a || b,
@@ -1138,7 +1157,10 @@ fn top_needs_user_history(sort_method: SimpleSortMethod) -> bool {
 /// `idx_entity_access_entity_text_type_source`) when the arm's own filters
 /// are selective. The materialized form pinned the worst plan — the whole
 /// corpus was computed and probed against the item table on every page.
-fn access_semi_join(id_sql: &str, entity_type: &str) -> String {
+pub(in crate::outbound::pg_soup_repo) fn access_semi_join(
+    id_sql: &str,
+    entity_type: &str,
+) -> String {
     format!(
         r#"{id_sql} IN (
                     SELECT ea.entity_id::text

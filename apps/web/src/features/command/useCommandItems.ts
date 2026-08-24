@@ -433,7 +433,10 @@ export function useCommandItems(
     queryText: string
   ): CommandMenuItem[] => {
     if (!queryText.trim()) return items.filter(showInRecencyList);
-    if (!quickAccess.usesRecordSelection()) {
+    if (
+      !quickAccess.usesRecordSelection() &&
+      !quickAccess.usesSearchProjection()
+    ) {
       return search()(items, queryText).map((result) => result.item);
     }
 

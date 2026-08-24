@@ -742,6 +742,7 @@ fn reminder_body_is_bounded_for_the_push_payload() {
     let metadata = ReminderMetadata {
         reminder_id: Uuid::parse_str("22222222-2222-4222-8222-222222222222").unwrap(),
         description: "🎉".repeat(2_000),
+        scheduled_for: None,
     };
 
     let body = metadata.format_body(None).unwrap();
@@ -751,22 +752,62 @@ fn reminder_body_is_bounded_for_the_push_payload() {
     assert!(body.len() < 4_096, "must fit inside the APNS payload limit");
 }
 
+/// A reminder metadata collapse key, hashed for comparison.
+fn reminder_key(id: &str, scheduled_for: Option<DateTime<Utc>>) -> String {
+    let entity = EntityType::Document.with_entity_str("doc-1");
+    ReminderMetadata {
+        reminder_id: Uuid::parse_str(id).unwrap(),
+        description: "x".to_string(),
+        scheduled_for,
+    }
+    .collapse_key(&entity)
+    .into_hashed()
+    .into_inner()
+}
+
+/// The 09:00 firing on the given August day, as a daily reminder would produce.
+fn firing(day: u32) -> Option<DateTime<Utc>> {
+    Some(utc_datetime(&format!("2026-08-{day:02}T09:00:00Z")))
+}
+
 #[test]
 fn reminder_collapse_key_is_per_reminder_not_per_entity() {
-    let entity = EntityType::Document.with_entity_str("doc-1");
-    let key = |id: &str| {
-        ReminderMetadata {
-            reminder_id: Uuid::parse_str(id).unwrap(),
-            description: "x".to_string(),
-        }
-        .collapse_key(&entity)
-        .into_hashed()
-        .into_inner()
-    };
-
     // Two reminders on the same document must not collapse into one alert.
     assert_ne!(
-        key("22222222-2222-4222-8222-222222222222"),
-        key("33333333-3333-4333-8333-333333333333")
+        reminder_key("22222222-2222-4222-8222-222222222222", None),
+        reminder_key("33333333-3333-4333-8333-333333333333", None)
     );
+}
+
+#[test]
+fn reminder_collapse_key_separates_two_firings_of_one_reminder() {
+    // A daily reminder's occurrences share an id and a description, so without
+    // the firing in the key Tuesday's alert would replace Monday's unread one.
+    const ID: &str = "22222222-2222-4222-8222-222222222222";
+
+    assert_ne!(reminder_key(ID, firing(3)), reminder_key(ID, firing(4)));
+}
+
+#[test]
+fn reminder_collapse_key_is_stable_for_a_redelivered_firing() {
+    // The behaviour the key existed for in the first place: sending the same
+    // firing twice must replace the alert rather than stack a duplicate.
+    const ID: &str = "22222222-2222-4222-8222-222222222222";
+
+    assert_eq!(reminder_key(ID, firing(3)), reminder_key(ID, firing(3)));
+}
+
+#[test]
+fn reminder_metadata_reads_back_without_a_firing() {
+    // Notifications written before recurring dispatch have no `scheduledFor`,
+    // and must still deserialize rather than breaking the inbox.
+    let stored = serde_json::json!({
+        "reminderId": "22222222-2222-4222-8222-222222222222",
+        "description": "follow up",
+    });
+
+    let metadata: ReminderMetadata =
+        serde_json::from_value(stored).expect("legacy metadata should deserialize");
+
+    assert!(metadata.scheduled_for.is_none());
 }

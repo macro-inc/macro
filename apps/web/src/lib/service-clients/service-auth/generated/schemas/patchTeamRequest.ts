@@ -4,6 +4,7 @@
  * authentication_service
  * OpenAPI spec version: 0.1.0
  */
+import type { PatchTeamRequestDefaultLinkShare } from './patchTeamRequestDefaultLinkShare';
 import type { PatchTeamRequestName } from './patchTeamRequestName';
 import type { PatchTeamRequestSlug } from './patchTeamRequestSlug';
 import type { PatchTeamRequestUserRoleUpdates } from './patchTeamRequestUserRoleUpdates';
@@ -12,6 +13,7 @@ import type { PatchTeamRequestUserRoleUpdates } from './patchTeamRequestUserRole
  * Request to update a team
  */
 export interface PatchTeamRequest {
+  default_link_share?: PatchTeamRequestDefaultLinkShare;
   /** The new name for the team */
   name?: PatchTeamRequestName;
   /** The new slug for the team. This is normalized to SCREAMING_SNAKE_CASE. */

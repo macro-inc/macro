@@ -828,6 +828,8 @@ fn document_event_cases() -> Vec<(DocumentTopicEvent, DocumentEventDescription)>
             DocumentTopicEvent::Created(DocumentCreatedMetadata {
                 document_id: DOCUMENT_ID.to_string(),
                 owner: owner.clone(),
+                actor: None,
+                on_behalf_of: None,
                 document_name: "Document".to_string(),
                 file_type: Some(FileType::Pdf),
                 project_id: Some(PROJECT_ID.to_string()),
@@ -1198,7 +1200,10 @@ fn property_event_cases() -> Vec<(PropertyTopicEvent, PropertyEventDescription<'
                 entity_type: EntityType::Document,
                 property_definition_id: PROPERTY_DEFINITION_ID,
                 actor_user_id: actor_user_id.clone(),
+                actor: None,
+                on_behalf_of: None,
                 value: None,
+                previous_value: None,
                 updated_at: Utc::now(),
             }),
             PropertyEventDescription {
@@ -1216,6 +1221,8 @@ fn property_event_cases() -> Vec<(PropertyTopicEvent, PropertyEventDescription<'
                 entity_type: EntityType::Chat,
                 property_definition_id: PROPERTY_DEFINITION_ID,
                 actor_user_id: actor_user_id.clone(),
+                actor: None,
+                on_behalf_of: None,
             }),
             PropertyEventDescription {
                 action: PropertyIndexAction::Reindex {
@@ -1230,6 +1237,8 @@ fn property_event_cases() -> Vec<(PropertyTopicEvent, PropertyEventDescription<'
                 entity_id: PROPERTY_ENTITY_ID.to_string(),
                 entity_type: EntityType::Thread,
                 actor_user_id,
+                actor: None,
+                on_behalf_of: None,
             }),
             PropertyEventDescription {
                 action: PropertyIndexAction::Reindex {
@@ -1561,6 +1570,8 @@ fn property_envelope_decodes_round_trip_with_entity_key() {
         entity_id: PROPERTY_ENTITY_ID.to_string(),
         entity_type: EntityType::Document,
         actor_user_id: Some(user_id()),
+        actor: None,
+        on_behalf_of: None,
     });
     let message = encoded_message(
         MacroPropertiesTopic::TOPIC_STR,
@@ -1793,6 +1804,8 @@ async fn unsupported_property_schema_message_is_commit_safe() {
         entity_id: PROPERTY_ENTITY_ID.to_string(),
         entity_type: EntityType::Document,
         actor_user_id: Some(user_id()),
+        actor: None,
+        on_behalf_of: None,
     });
     let message = encoded_message(
         MacroPropertiesTopic::TOPIC_STR,

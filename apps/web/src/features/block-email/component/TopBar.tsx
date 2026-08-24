@@ -3,6 +3,7 @@ import {
   ChatWithAgentIcon,
   openChatWithAgent,
 } from '@app/features/chat/ChatWithAgentButton';
+import { makeMoveToProjectAction } from '@app/features/next-soup/actions';
 import { useMaybeSoup } from '@app/features/next-soup/soup-context';
 import {
   openEntityInSplitFromUnifiedList,
@@ -11,14 +12,12 @@ import {
 import type { BlockTool } from '@components/app/ResponsiveBlockToolbar';
 import { ResponsiveBlockToolbar } from '@components/app/ResponsiveBlockToolbar';
 import { useSidePanel } from '@components/app/side-panel';
-import { SplitFileMenu } from '@components/app/split-layout/components/SplitFileMenu';
 import {
   SplitHeaderLeft,
   SplitHeaderRight,
 } from '@components/app/split-layout/components/SplitHeader';
 import {
   SplitHeaderBadge,
-  SplitTitleFileMenu,
   StaticSplitLabel,
 } from '@components/app/split-layout/components/SplitLabel';
 import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
@@ -33,8 +32,11 @@ import { registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
 import { getActiveCommandByToken, runCommand } from '@core/hotkey/utils';
 import { isMobile } from '@core/mobile/isMobile';
+import { buildEntityData } from '@entity';
+import { AnimatedNoiseIcon } from '@icon/wide-noise';
 import IconShared from '@icon/wide-share.svg';
 import { AnimatedTaskIcon } from '@icon/wide-task';
+import ArrowRightIcon from '@phosphor/arrow-right.svg';
 import CheckIcon from '@phosphor/check.svg';
 import EnvelopeSimpleIcon from '@phosphor/envelope-simple.svg';
 import EnvelopeSimpleOpenIcon from '@phosphor/envelope-simple-open.svg';
@@ -59,6 +61,7 @@ export function TopBar(props: {
   const soup = useMaybeSoup();
   const linksQuery = useEmailLinksQuery();
   const sidePanel = useSidePanel();
+  const moveToProjectAction = makeMoveToProjectAction();
 
   if (splitPanel?.splitHotkeyScope) {
     const reg = registerHotkey({
@@ -90,6 +93,28 @@ export function TopBar(props: {
   };
 
   const isDone = () => emailCtx.isThreadDone();
+
+  const emailEntity = () => {
+    const soupEntity = soup?.items.get(props.id)?.original;
+    if (soupEntity?.type === 'email') return soupEntity;
+
+    const thread = emailCtx.thread();
+    return buildEntityData({
+      id: props.id,
+      name: props.title,
+      blockName: 'email',
+      projectId: thread?.project_id ?? undefined,
+      isRead: thread?.is_read,
+      isDraft: props.isDraft,
+      done: thread ? !thread.inbox_visible : undefined,
+    });
+  };
+
+  const moveToFolder = () => {
+    const entity = emailEntity();
+    if (!entity || !moveToProjectAction.canExecute(entity)) return;
+    void moveToProjectAction.execute([entity]);
+  };
 
   // A send-only thread is permanently done, so neither half of the toggle
   // does anything — hide it rather than offer a no-op.
@@ -160,6 +185,7 @@ export function TopBar(props: {
   };
 
   const shareTool: BlockTool = {
+    group: 'sharing',
     label: 'Share',
     icon: IconShared,
     action: () => shareCtx.open(),
@@ -170,6 +196,35 @@ export function TopBar(props: {
 
   const emailActions: BlockTool[] = [
     {
+      label: 'Mark done',
+      icon: CheckIcon,
+      action: toggleMarkDone,
+      condition: () => isOwnThread() && !isDone(),
+      hotkeyToken: TOKENS.entity.action.markDone,
+    },
+    {
+      label: 'Mark as not done',
+      icon: CheckBoldIcon,
+      action: toggleMarkDone,
+      condition: () =>
+        isOwnThread() && isDone() && emailCtx.canMarkThreadNotDone(),
+      hotkeyToken: TOKENS.entity.action.markNotDone,
+    },
+    {
+      label: 'Mark unread',
+      icon: EnvelopeSimpleOpenIcon,
+      action: toggleMarkUnread,
+      condition: () => isOwnThread() && !emailCtx.isThreadMarkedUnread(),
+      hotkeyToken: TOKENS.entity.action.markUnread,
+    },
+    {
+      label: 'Mark read',
+      icon: EnvelopeSimpleIcon,
+      action: toggleMarkUnread,
+      condition: () => isOwnThread() && emailCtx.isThreadMarkedUnread(),
+      hotkeyToken: TOKENS.entity.action.markRead,
+    },
+    {
       label: 'Ask Macro',
       icon: ChatWithAgentIcon,
       action: () => {
@@ -179,20 +234,39 @@ export function TopBar(props: {
       },
       condition: () => !!emailCtx.thread()?.db_id,
     },
-    shareTool,
     {
-      label: 'Task',
+      label: 'Create task',
       icon: AnimatedTaskIcon,
       action: () => props.onCreateTask?.(),
       condition: () => !!props.onCreateTask && !!emailCtx.thread()?.db_id,
     },
+    shareTool,
     {
+      group: 'file',
+      label: 'Move to folder',
+      icon: ArrowRightIcon,
+      action: moveToFolder,
+      condition: () => {
+        const entity = emailEntity();
+        return !!entity && moveToProjectAction.canExecute(entity);
+      },
+    },
+    {
+      group: 'delete',
       label: 'Delete',
       icon: TrashIcon,
       action: trashThread,
       condition: isOwnThread,
     },
     {
+      group: 'sender',
+      label: 'Sender → Noise',
+      icon: AnimatedNoiseIcon,
+      action: () => emailCtx.markSenderNoise(),
+      condition: isOwnThread,
+    },
+    {
+      group: 'sender',
       label: 'Block Sender',
       icon: ProhibitIcon,
       action: () => emailCtx.blockSender(),
@@ -229,7 +303,7 @@ export function TopBar(props: {
           class="ph-no-capture"
           iconType={isInvite() ? 'emailInvite' : 'email'}
           colorIcon={isInvite()}
-          label={isMobile() ? '' : props.title}
+          label={props.title}
           badges={
             props.isDraft
               ? [
@@ -242,22 +316,6 @@ export function TopBar(props: {
           }
         />
       </SplitHeaderLeft>
-
-      <SplitTitleFileMenu>
-        <Show
-          when={emailActions.some(
-            (action) => !action.condition || action.condition()
-          )}
-        >
-          <SplitFileMenu
-            id={props.id}
-            itemType="email"
-            name={props.title}
-            ops={[]}
-            tools={emailActions}
-          />
-        </Show>
-      </SplitTitleFileMenu>
 
       {/* Desktop-only Mark done button, sitting just left of the Previous item
           caret. On mobile this action lives in the bottom reply bar instead.
@@ -316,6 +374,7 @@ export function TopBar(props: {
 
       <ResponsiveBlockToolbar
         tools={tools}
+        menuTools={emailActions}
         ops={[]}
         id={props.id}
         itemType="email"

@@ -14,12 +14,16 @@ import {
   type CachedQueryVariantWire,
   type ClaimedMutation,
   type EnqueueOptimisticMutationResult,
+  type HydrationResult,
   type MutationClaim,
   type MutationSettlement,
-  type ReadRecordsArgs,
+  type ReadRecordsByKeysArgs,
   type ReadResult,
-  type SelectedRecordPageWire,
-  validateRecordSelectionLimit,
+  type SearchCacheArgs,
+  type SearchCachePage,
+  type SelectedRecordByKeyWire,
+  validateCacheSearchArgs,
+  validateRecordSelectionKeys,
   type WriteResult,
 } from '../protocol';
 import type {
@@ -160,24 +164,58 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
       });
     },
 
-    async readRecords(args: ReadRecordsArgs): Promise<SelectedRecordPageWire> {
-      const limit = validateRecordSelectionLimit(args.limit);
+    async readRecordsByKeys(
+      args: ReadRecordsByKeysArgs
+    ): Promise<SelectedRecordByKeyWire[]> {
+      const keys = validateRecordSelectionKeys(args.keys);
       await ready;
-      return await request<SelectedRecordPageWire>(
-        'graphql_cache_read_records',
+      return await request<SelectedRecordByKeyWire[]>(
+        'graphql_cache_read_records_by_keys',
         {
           document: args.document,
           fragmentName: args.fragmentName,
-          cursor: args.cursor,
-          limit,
+          keys,
         }
       );
+    },
+
+    async search(args: SearchCacheArgs): Promise<SearchCachePage> {
+      const searchRequest = validateCacheSearchArgs(args);
+      await ready;
+      return await request<SearchCachePage>('graphql_cache_search', {
+        request: searchRequest,
+      });
+    },
+
+    async entityFilter() {
+      // The first profile is browser Turso/OPFS-only.
+      return { kind: 'unsupported' };
     },
 
     async writeQuery(args: CacheWriteArgs): Promise<WriteResult> {
       await ready;
       return await request<WriteResult>('graphql_cache_write', {
         originOpId: args.opKey === undefined ? undefined : opId(args.opKey),
+        registration:
+          args.registerDependencies && args.opKey !== undefined
+            ? {
+                opId: opId(args.opKey),
+                entityResolvers: args.entityResolvers,
+              }
+            : undefined,
+        query: args.query,
+        operationName: args.operationName,
+        variables: args.variables,
+        data: args.data,
+        identity: args.identity,
+      });
+    },
+
+    async hydrateQuery(
+      args: Omit<CacheWriteArgs, 'opKey'>
+    ): Promise<HydrationResult> {
+      await ready;
+      return await request<HydrationResult>('graphql_cache_hydrate', {
         query: args.query,
         operationName: args.operationName,
         variables: args.variables,

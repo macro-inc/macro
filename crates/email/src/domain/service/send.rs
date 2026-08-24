@@ -30,6 +30,7 @@ where
         let delay_secs = self.sent_undo_delay_secs;
         let send_time = chrono::Utc::now() + Duration::seconds(delay_secs as i64);
         input.send_time = Some(send_time);
+        let actor = input.actor.clone();
 
         let created = self
             .prepare_and_insert_db_message(link, accessible_inboxes, input, false)
@@ -43,13 +44,13 @@ where
             .map_err(|e| EmailErr::RepoErr(anyhow::Error::from(e)))?;
 
         // The undo-window send is now committed and queued; the matching
-        // message_sent / message_send_cancelled event resolves it later.
-        // Actor is not tracked on this path — the inbox owner is on `link`.
+        // message_sent / message_send_cancelled event resolves it later,
+        // reading the actor back off the scheduled row.
         self.publish_email_event(&EmailMacroEvent::message_send_queued(
             MessageSendQueuedMetadata {
                 link_id: link.id,
                 owner: link.macro_id.clone(),
-                actor: None,
+                actor,
                 message_id: created.db_id,
                 thread_id: created.thread_db_id,
                 scheduled_send_at: send_time,

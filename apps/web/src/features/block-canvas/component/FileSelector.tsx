@@ -28,7 +28,7 @@ function ItemOption(props: { file: FileItem; type: ItemType }) {
   const toolManager = useToolManager();
   const select = useSelect();
 
-  const selectFile = (e: MouseEvent | TouchEvent) => {
+  const selectFile = (e: Event) => {
     e.stopPropagation();
     e.preventDefault();
     select.abort();

@@ -25,10 +25,12 @@ async fn sent_payload_is_exactly_the_serialized_envelope_with_no_rpc_wrapper() {
     let (outgoing_tx, mut outgoing_rx) = mpsc::unbounded_channel::<String>();
     let wire: WebSocketWire<()> = WebSocketWire {
         outgoing: outgoing_tx,
-        incoming: AsyncMutex::new(mpsc::unbounded_channel().1),
+        incoming: mpsc::unbounded_channel().1,
     };
+    let (sender, _receiver) = Transport::<ToRuntimeMessage, ()>::split(wire);
 
-    Transport::<ToRuntimeMessage, ()>::send(&wire, acp_to_runtime())
+    sender
+        .send(acp_to_runtime())
         .await
         .expect("send should succeed");
 

@@ -27,6 +27,7 @@ export const makeMoveToProjectAction = () => {
             : 'Moved to folder'
         );
       },
+      onError: () => toast.failure('Failed to move to folder'),
     });
   };
 
@@ -50,6 +51,7 @@ export const makeMoveToProjectAction = () => {
         );
         restoreSoupFocus(nextRow?.id);
       },
+      onError: () => toast.failure('Failed to move to folder'),
       onCancel: () => {
         const firstEntity = entities[0];
         if (firstEntity) {

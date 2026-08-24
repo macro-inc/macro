@@ -30,8 +30,8 @@ async fn main() -> anyhow::Result<()> {
     let tool_context =
         build_tool_service_context_from_env(pool.clone(), event_broker_tracker.clone()).await?;
     let tools = all_tools();
-    let memory_repo = PgMemoryRepo::new(pool.clone());
-    let memory_service = MemoryServiceImpl::new(pool, memory_repo, tool_context, tools);
+    let memory_repo = PgMemoryRepo::new(pool);
+    let memory_service = MemoryServiceImpl::new(memory_repo, tool_context, tools);
 
     tracing::info!("Generating memory for {user}...");
     let memory_result = memory_service.get_or_generate_memory(user).await;

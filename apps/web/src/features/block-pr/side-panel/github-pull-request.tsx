@@ -157,8 +157,8 @@ export function GithubPullRequestDetailsRows(props: {
             when={props.enrichment.authorLogin}
             fallback={
               <>
-                <span class="skeleton-shimmer size-3.5 rounded-full bg-ink/10" />
-                <span class="skeleton-shimmer h-3 w-16 rounded-full bg-ink/10" />
+                <span class="skeleton-shimmer size-3.5 rounded-full bg-skeleton" />
+                <span class="skeleton-shimmer h-3 w-16 rounded-full bg-skeleton" />
               </>
             }
           >
@@ -208,7 +208,7 @@ export function GithubPullRequestDetailsRows(props: {
           href={props.enrichment.url}
           target="_blank"
           rel="noreferrer"
-          class="min-w-0 truncate underline decoration-current/20 decoration-[max(1px,0.1em)] underline-offset-2 hover:decoration-current"
+          class="min-w-0 truncate text-link hover:text-link-hover visited:text-link-visited underline decoration-current/20 decoration-[max(1px,0.1em)] underline-offset-2 hover:decoration-current"
         >
           {props.enrichment.displayName}
         </a>
@@ -246,7 +246,7 @@ export function GithubPullRequestChecksContent(props: {
                       target="_blank"
                       rel="noreferrer"
                       aria-label={`Open ${check.name} on GitHub`}
-                      class="hover:opacity-70 transition-opacity"
+                      class="text-link hover:text-link-hover visited:text-link-visited transition-colors"
                     >
                       <ArrowSquareOut class="size-3" />
                     </a>

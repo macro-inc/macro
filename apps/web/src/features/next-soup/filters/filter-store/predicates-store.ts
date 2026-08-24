@@ -1,10 +1,17 @@
 import { createMemo, createSignal } from 'solid-js';
 
-export type FilterPredicate<T> = (entity: T, ctx?: unknown) => boolean;
+export type FilterPredicate<T, TContext = unknown> = (
+  entity: T,
+  ctx: TContext
+) => boolean;
 
-export type PredicateConfig<T, TId extends string = string> = {
+export type PredicateConfig<
+  T,
+  TId extends string = string,
+  TContext = unknown,
+> = {
   id: TId;
-  predicate: FilterPredicate<T>;
+  predicate: FilterPredicate<T, TContext>;
   query?: unknown;
 };
 
@@ -26,7 +33,8 @@ type SetPredicatesCallback<TId extends string> = (
 
 type PredicatesStoreOptions<
   T,
-  TConfig extends PredicateConfig<T>,
+  TContext,
+  TConfig extends PredicateConfig<T, string, TContext>,
   TId extends string = TConfig['id'],
 > = {
   configs: readonly TConfig[];
@@ -38,9 +46,10 @@ type PredicatesStoreOptions<
 
 export function createPredicatesStore<
   T,
-  TConfig extends PredicateConfig<T>,
+  TContext,
+  TConfig extends PredicateConfig<T, string, TContext>,
   TId extends string = TConfig['id'],
->(options: PredicatesStoreOptions<T, TConfig, TId>) {
+>(options: PredicatesStoreOptions<T, TContext, TConfig, TId>) {
   const { configs, initial = {} } = options;
 
   const configMap = new Map<string, TConfig>(configs.map((c) => [c.id, c]));
@@ -107,7 +116,7 @@ export function createPredicatesStore<
     setOrIds([]);
   };
 
-  const test = (entity: T, ctx?: unknown): boolean => {
+  const test = (entity: T, ctx: TContext): boolean => {
     const andList = andIds();
     const orList = orIds();
 

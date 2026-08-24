@@ -1,9 +1,11 @@
+import { copyCalendarEventMentionTarget } from '@block-calendar/copy-event-mention';
 import { getChannelParams } from '@block-channel/utils/link';
 import { toast } from '@core/component/Toast/Toast';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import { buildSimpleEntityUrl } from '@core/util/url';
 import { type EntityData, isGithubPrEntity } from '@entity';
 import type { SoupState } from '../create-soup-state';
+import { calendarEventLinkTarget } from '../utils';
 
 /**
  * Get the URL type/path segment for an entity
@@ -61,9 +63,29 @@ export const makeCopyLinkAction = () => {
     const entity = entities[0];
     if (!entity) return;
 
+    // The calendar is a singleton block, so there is no /app/calendar_event
+    // route to link an event by id. Events copy the deep link the calendar's
+    // own action writes, with the mention flavor behind it.
+    if (entity.type === 'calendar_event') {
+      await copyCalendarEventMentionTarget({
+        ...calendarEventLinkTarget(entity),
+        title: entity.name || '(No title)',
+      });
+      return;
+    }
+
     const url = getEntityUrl(entity);
 
     await navigator.clipboard.writeText(url);
+    toast.success('Link copied to clipboard');
+  };
+
+  /** Blocks already know their id and URL discriminator even when their full
+   * entity is absent from Quick Access (notably email threads and calls). */
+  const executeByBlock = async (id: string, blockType: string) => {
+    await navigator.clipboard.writeText(
+      buildSimpleEntityUrl({ id, type: blockType })
+    );
     toast.success('Link copied to clipboard');
   };
 
@@ -72,5 +94,5 @@ export const makeCopyLinkAction = () => {
     // Don't clear selection or change focus for copy link
   };
 
-  return { canExecute, execute, executeWithSoup };
+  return { canExecute, execute, executeByBlock, executeWithSoup };
 };

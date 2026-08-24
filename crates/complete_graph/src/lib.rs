@@ -13,6 +13,13 @@ mod schema;
 mod sdl_test;
 
 pub use edges::{SoupEdges, SoupEmailThreadEdges};
+pub use graphql_activity::{
+    ActivityEdgeKey, ActivityEdgeLoad, ActivityFeedInput, ActivityFeedReader,
+    ActivityOverviewInput, ActivityPortReader, ActivityReader, EntityActivityLoader,
+    GraphqlActivityAction, GraphqlActivityDay, GraphqlActivityEntityRank, GraphqlActivityEvent,
+    GraphqlActivityOverview, GraphqlActivityPage, NoOpActivityReader, SoupActivityEdgeReader,
+    entity_activity_loader,
+};
 pub use graphql_channel::{
     ChannelActivityAuthorizer, ChannelActivityMutationService, ChannelMutationRoot,
     GraphqlChannelActivity, GraphqlChannelActivityType, NoOpChannelActivityMutationService,
@@ -31,9 +38,9 @@ pub use graphql_email::{
 pub use graphql_entity_mutation::{
     ChannelSharePolicyInput, DuplicateEntityInput, EntityMutationPayload, EntityMutationRoot,
     EntityRefInput, EntitySharePolicyInput, GraphqlEntityMutationError,
-    GraphqlEntityMutationErrorCode, GraphqlEntityMutationResult, GraphqlMutationError,
-    GraphqlMutationSuccess, GraphqlSharePolicyOperation, MoveEntityInput, RenameEntityInput,
-    UpdateEntitySharePolicyInput,
+    GraphqlEntityMutationErrorCode, GraphqlEntityMutationResult, GraphqlLinkShare,
+    GraphqlMutationError, GraphqlMutationSuccess, GraphqlSharePolicyOperation, MoveEntityInput,
+    RenameEntityInput, UpdateEntitySharePolicyInput,
 };
 pub use graphql_favorite::{
     EntityFavoriteEdgeReader, EntityFavoriteLoader, entity_favorite_loader,
@@ -41,7 +48,7 @@ pub use graphql_favorite::{
 pub use graphql_notification::{
     EntityNotificationsLoader, GraphqlNotificationUpdateOperation, NoOpNotificationMutationService,
     NotificationMutationRoot, NotificationMutationService, SoupNotificationEdgeReader,
-    UpdateNotificationsInput, entity_notifications_loader,
+    UpdateNotificationsForEntityInput, UpdateNotificationsInput, entity_notifications_loader,
 };
 pub use graphql_permission::{
     EntityPermissionEdgeReader, EntityPermissionLoader, GraphqlAccessLevelPermission,

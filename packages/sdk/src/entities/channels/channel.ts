@@ -13,6 +13,7 @@ import { entitySearch } from '../search';
 import type { Team } from '../teams/team';
 import type { User } from '../users/user';
 import { Message } from './message';
+import { postToChannel } from './post';
 import type { Thread } from './thread';
 
 type ChannelDetail = GetChannelResponses[200];
@@ -99,25 +100,22 @@ export class Channel extends PropertiedEntity<ChannelDetail> {
   /** The channel's type (e.g. `public`, `dm`, `private`). */
   readonly type = this.field('channel_type');
 
-  /** Post a message. Plain text, or a rich body composed with `msg`. */
+  /**
+   * Post a message. Plain text, or a rich body composed with `msg`.
+   *
+   * Works with a channel webhook token as well as a normal one — see
+   * {@link postToChannel} for which endpoint that picks and what it costs.
+   */
   async send(
     body: string | RichMessage,
     opts?: { thread?: Thread },
   ): Promise<Message> {
-    const { content, mentions } = toBody(body);
-    const res = unwrap(
-      await this.client.storage.postMessage({
-        path: { channel_id: this.id },
-        body: {
-          content,
-          mentions,
-          attachments: [],
-          thread_id: opts?.thread?.rootId ?? null,
-          nonce: crypto.randomUUID(),
-        },
-      }),
+    const id = await postToChannel(
+      this.client,
+      opts?.thread ?? this,
+      toBody(body),
     );
-    return Message.byId(this.client, this.id, res.id);
+    return Message.byId(this.client, this.id, id);
   }
 
   /** The messages in this channel, most recent first, auto-paginated. */

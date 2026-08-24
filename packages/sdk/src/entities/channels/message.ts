@@ -3,7 +3,7 @@ import type {
   GetMessageWithContextResponses,
   GetThreadRepliesResponses,
 } from '../../../generated/storage/types.gen';
-import type { RichMessage, SimpleMention } from '../../mentions';
+import { type RichMessage, type SimpleMention, toBody } from '../../mentions';
 import { MacroNotFoundError, unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
 import { FavoritableEntity } from '../entity';
@@ -138,12 +138,17 @@ export class Message extends FavoritableEntity<MessageData> {
     return this;
   }
 
-  /** Replace this message's body. */
-  async edit(content: string): Promise<this> {
+  /**
+   * Replace this message's body.
+   *
+   * @param body - Plain text, or a rich body composed with {@link msg}.
+   */
+  async edit(body: string | RichMessage): Promise<this> {
+    const { content, mentions } = toBody(body);
     await this.mutate((c) =>
       c.storage.patchMessage({
         path: { channel_id: this.channelId, message_id: this.id },
-        body: { content },
+        body: { content, mentions },
       }),
     );
     return this;
