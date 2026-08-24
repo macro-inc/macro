@@ -27,6 +27,7 @@ import {
   onCleanup,
   splitProps,
   useContext,
+  createMemo,
 } from 'solid-js';
 import { render } from 'solid-js/web';
 
@@ -290,13 +291,14 @@ function createFullCalendarController(
     customRenderingManager.handle(rendering);
   };
 
-  const buildOptions = () =>
-    buildCalendarOptions(
+  const buildOptions = createMemo(() => {
+    return buildCalendarOptions(
       getOptions(),
       contentRegistrations,
       handleCustomRendering,
       setDateInfo
     );
+  });
 
   const resetOptions = () => {
     const calendarInstance = calendar();

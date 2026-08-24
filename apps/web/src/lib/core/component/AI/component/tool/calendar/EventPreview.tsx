@@ -6,6 +6,7 @@ import { useCalendarSources } from '@app/features/calendar/hooks/use-calendar-so
 import type { CalendarPeriodView } from '@app/features/calendar/types';
 import { formatLocalDate } from '@app/features/calendar/utils/calendar-date';
 import { getDefaultCalendarTimeFormat } from '@app/features/calendar/utils/time-format';
+import CalendarIcon from '@phosphor/calendar-blank.svg';
 import CaretLeftIcon from '@phosphor/caret-left.svg';
 import CaretRightIcon from '@phosphor/caret-right.svg';
 import { createCalendarOccurrenceQueryRange } from '@queries/calendar/occurrences';
@@ -256,11 +257,24 @@ export function CalendarToolEventPreview(props: CalendarToolEventPreviewProps) {
       ? (displayedDate() ?? previewDate())
       : previewDate();
   };
+  const isEventStartVisible = () => {
+    const date = calendarToolPreviewStartDate(editorStart(), editorAllDay());
+    const displayed = displayedWindow();
+    return (
+      !date ||
+      !displayed ||
+      (date >= displayed.start && date < displayed.end)
+    );
+  };
   const navigate = (direction: 'previous' | 'next') => {
     const api = activeGrid?.api();
     if (!api) return;
     if (direction === 'previous') api.prev();
     else api.next();
+  };
+  const goToEvent = () => {
+    const date = calendarToolPreviewStartDate(editorStart(), editorAllDay());
+    if (date) activeGrid?.api()?.gotoDate(date);
   };
 
   return (
@@ -291,6 +305,17 @@ export function CalendarToolEventPreview(props: CalendarToolEventPreviewProps) {
                 when={props.navigationControls !== undefined}
                 fallback={
                   <>
+                    <Show when={!isEventStartVisible()}>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        class="rounded-lg px-2"
+                        onClick={goToEvent}
+                      >
+                        <CalendarIcon class="size-3.5" />
+                        Go to event
+                      </Button>
+                    </Show>
                     <Button
                       variant="ghost"
                       size="icon-sm"
