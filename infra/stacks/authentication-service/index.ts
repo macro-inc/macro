@@ -41,11 +41,12 @@ const CURSOR_API_KEY_KMS_DELETION_WINDOW_IN_DAYS = config.requireNumber(
 // Role ARNs allowed to decrypt Cursor API keys. Empty until the agent harness
 // stack publishes its task role; the key is still created, so registering a key
 // works before any session can read one.
-const CURSOR_API_KEY_READER_ROLE_ARNS = config
-  .get('cursor_api_key_reader_role_arns')
-  ?.split(',')
-  .map((arn: string) => arn.trim())
-  .filter((arn: string) => arn.length > 0) ?? [];
+const CURSOR_API_KEY_READER_ROLE_ARNS =
+  config
+    .get('cursor_api_key_reader_role_arns')
+    ?.split(',')
+    .map((arn: string) => arn.trim())
+    .filter((arn: string) => arn.length > 0) ?? [];
 
 const FUSIONAUTH_CLIENT_SECRET_KEY = config.require(
   `fusionauth_client_secret_key`

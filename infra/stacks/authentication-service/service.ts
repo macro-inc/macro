@@ -301,10 +301,9 @@ export class AuthenticationService extends pulumi.ComponentResource {
               {
                 sid: 'AllowAgentHarnessCursorKeyDecryption',
                 effect: 'Allow',
-                principals: {
-                  type: 'AWS',
-                  identifiers: cursorApiKeyReaderRoleArns,
-                },
+                principals: [
+                  { type: 'AWS', identifiers: cursorApiKeyReaderRoleArns },
+                ],
                 actions: CURSOR_API_KEY_KMS_READ_ACTIONS,
                 resources: ['*'],
               },
