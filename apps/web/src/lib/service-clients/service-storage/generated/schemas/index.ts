@@ -6,6 +6,8 @@
  */
 
 export * from './accessLevel';
+export * from './activeCallSummary';
+export * from './activeCallsResponse';
 export * from './activityType';
 export * from './addFavoriteRequest';
 export * from './addFavoriteRequestEntityType';
