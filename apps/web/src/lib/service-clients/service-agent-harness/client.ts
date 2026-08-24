@@ -37,6 +37,17 @@ export const agentHarnessServiceClient = {
     );
   },
 
+  rename(sessionId: string, name: string) {
+    return fetchWithToken<Record<string, never>>(
+      `${agentHarnessHost}/agent-sessions/${sessionId}/name`,
+      {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name }),
+      }
+    ).then((result) => result.map(() => undefined));
+  },
+
   control(sessionId: string, request: ControlRequest) {
     return fetchWithToken<Record<string, never>>(
       `${agentHarnessHost}/agent-sessions/${sessionId}/control`,

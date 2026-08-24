@@ -401,6 +401,25 @@ impl AgentSessionRepo for PgAgentSessionRepo {
         Ok(())
     }
 
+    async fn set_name_if_default(&self, id: AgentSessionId, name: &str) -> Result<bool> {
+        let result = sqlx::query!(
+            r#"
+            UPDATE agent_session
+            SET name = $2,
+                modified_at = NOW()
+            WHERE id = $1
+              AND name = $3
+            "#,
+            id.as_uuid(),
+            name,
+            crate::domain::model::DEFAULT_AGENT_SESSION_NAME,
+        )
+        .execute(&self.pool)
+        .await
+        .context("failed to persist generated agent session name")?;
+        Ok(result.rows_affected() == 1)
+    }
+
     async fn delete(&self, id: AgentSessionId) -> Result<()> {
         let mut transaction = self
             .pool

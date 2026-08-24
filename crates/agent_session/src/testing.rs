@@ -207,6 +207,22 @@ impl AgentSessionRepo for InMemoryAgentSessionRepo {
         Ok(())
     }
 
+    async fn set_name_if_default(&self, id: AgentSessionId, name: &str) -> Result<bool> {
+        let mut sessions = self
+            .sessions
+            .lock()
+            .expect("in-memory session store is not poisoned");
+        let session = sessions.get_mut(&id).ok_or_else(|| {
+            AgentSessionError::Unknown(anyhow::anyhow!("no agent session {}", id.as_uuid()))
+        })?;
+        if session.name != DEFAULT_AGENT_SESSION_NAME {
+            return Ok(false);
+        }
+        session.name = name.to_owned();
+        session.modified_at = chrono::Utc::now();
+        Ok(true)
+    }
+
     async fn delete(&self, id: AgentSessionId) -> Result<()> {
         self.sessions
             .lock()

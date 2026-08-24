@@ -10,6 +10,7 @@
  * and keeps rows reconciled so a streaming turn updates in place.
  */
 
+import type { AgentSessionRenamedEvent } from '@queries/agent-session/realtime-protocol';
 import { acquireAgentSessionFold } from '@queries/agent-session/session-fold';
 import { subscribeAgentSessionRenamed } from '@queries/agent-session/session-metadata-sync';
 import type {
@@ -102,7 +103,8 @@ export function createAgentSessionFeed(
   // acquisition or the shared fold leaks a reference.
   let generation = 0;
   let closed = false;
-  let latestRename: { agentSessionId: string; name: string } | undefined;
+  let latestRename: AgentSessionRenamedEvent | undefined;
+  let renameRefresh = 0;
   onCleanup(() => {
     closed = true;
     release?.();
@@ -111,6 +113,7 @@ export function createAgentSessionFeed(
 
   const [resource, { mutate }] = createResource(sessionId, async (id) => {
     const run = ++generation;
+    const renameRefreshAtStart = renameRefresh;
     const superseded = () => closed || generation !== run;
 
     release?.();
@@ -143,7 +146,8 @@ export function createAgentSessionFeed(
       upsert(fold.messages);
     });
 
-    return latestRename?.agentSessionId === id
+    return renameRefresh > renameRefreshAtStart &&
+      latestRename?.agentSessionId === id
       ? { ...session.value, name: latestRename.name }
       : session.value;
   });
@@ -151,10 +155,24 @@ export function createAgentSessionFeed(
   onCleanup(
     subscribeAgentSessionRenamed((event) => {
       if (event.agentSessionId !== sessionId()) return;
-      latestRename = event;
-      mutate((session) =>
-        session ? { ...session, name: event.name } : session
-      );
+      const run = ++renameRefresh;
+      void agentHarnessServiceClient
+        .get(event.agentSessionId)
+        .then((session) => {
+          if (
+            session.isErr() ||
+            run !== renameRefresh ||
+            event.agentSessionId !== sessionId()
+          )
+            return;
+          latestRename = {
+            agentSessionId: event.agentSessionId,
+            name: session.value.name,
+          };
+          mutate((current) =>
+            current ? { ...current, name: session.value.name } : current
+          );
+        });
     })
   );
 

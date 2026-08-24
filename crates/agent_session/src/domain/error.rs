@@ -16,6 +16,8 @@ pub enum AgentSessionError {
     ThreadSessionExists,
     #[error("the session owner is not a known user")]
     UnknownOwner,
+    #[error("invalid agent session name: {0}")]
+    InvalidName(&'static str),
     #[error(
         "agent session {0} cannot be restored because the agent supports neither session/resume nor session/load"
     )]

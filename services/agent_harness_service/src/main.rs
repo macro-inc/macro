@@ -26,7 +26,6 @@ use agent_harness::outbound::daytona::{
 };
 use agent_harness::outbound::local::{LocalContainerManager, LocalSettings};
 use agent_harness::outbound::runtime_registry::RuntimeRegistry;
-use agent_session::domain::ports::NoOpRealtime;
 use agent_session::domain::service::AgentSessionServiceImpl;
 use agent_session::inbound::axum_router::{
     AgentSessionControlState, AgentSessionRouterState, CreateSessionState,
@@ -186,7 +185,7 @@ async fn main() -> anyhow::Result<()> {
     );
     let side_effects = ChannelSideEffectService::new(
         PgChannelSideEffectContext::new(pool.clone()),
-        ConnectionGatewayChannelRealtimePublisher::new(connection_gateway),
+        ConnectionGatewayChannelRealtimePublisher::new(connection_gateway.clone()),
         NotificationChannelSender::new(notifications),
         ContactsChannelDispatcher::new(contacts_ingress),
     )
@@ -249,7 +248,7 @@ async fn main() -> anyhow::Result<()> {
         AgentSessionServiceImpl::new(
             session_repo.clone(),
             FoldedMessageService::new(session_repo.clone()),
-            NoOpRealtime,
+            ConnectionGatewayAgentSessionRealtime::new(connection_gateway, session_repo.clone()),
         ),
         entity_access.clone(),
         MacroAuthorizationState::new(Arc::new(authorization_service.clone())),

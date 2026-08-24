@@ -4,6 +4,7 @@
  * agent_harness_service
  * OpenAPI spec version: 0.1.0
  */
+
 import type { BotId } from './botId';
 import type { SessionBotAvatarUrl } from './sessionBotAvatarUrl';
 

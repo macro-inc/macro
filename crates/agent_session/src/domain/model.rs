@@ -17,6 +17,9 @@ pub use agent_fold::domain::model::{
 /// Display name assigned to a newly created agent session.
 pub const DEFAULT_AGENT_SESSION_NAME: &str = "Agent Session";
 
+/// Maximum number of Unicode scalar values in a session name.
+pub const MAX_AGENT_SESSION_NAME_CHARS: usize = 100;
+
 #[derive(Debug, Clone, Default, strum::AsRefStr)]
 #[strum(serialize_all = "snake_case")]
 pub enum SessionStatus {

@@ -34,6 +34,7 @@ use agent_runtime_protocol::domain::action::{AgentAction, AgentActionId};
 use agent_runtime_protocol::domain::schema::v0::{SystemEvent, ToServerMessage};
 use dashmap::DashMap;
 use dashmap::mapref::entry::Entry;
+use entity_access::domain::models::{EntityAccessReceipt, EntityType, OwnerAccessLevel};
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
 use tokio::sync::{mpsc, oneshot};
@@ -44,7 +45,8 @@ use super::connection::RuntimeAttachment;
 use super::error::{AgentSessionError, Result};
 use super::model::{
     AgentSession, AgentSessionId, AgentSessionLog, AgentSessionRenamed, AuthorKind, ChannelSession,
-    CreateAgentSessionParams, LogAppended, Message, MessageId, SessionLog, StoredAgentSessionLog,
+    CreateAgentSessionParams, LogAppended, MAX_AGENT_SESSION_NAME_CHARS, Message, MessageId,
+    SessionLog, StoredAgentSessionLog,
 };
 use super::ports::{
     AgentConnector, AgentSessionLogRepo, AgentSessionLogWriter, AgentSessionNameGenerator,
@@ -68,6 +70,13 @@ pub trait AgentSessionService: Send + Sync + 'static {
 
     /// Get a persisted agent session by id.
     fn get_session(&self, id: AgentSessionId) -> impl Future<Output = Result<AgentSession>> + Send;
+
+    /// Rename a session after owner access has been verified.
+    fn rename_session(
+        &self,
+        access: &EntityAccessReceipt<OwnerAccessLevel>,
+        name: &str,
+    ) -> impl Future<Output = Result<()>> + Send;
 
     /// Delete an agent session by id.
     fn delete_session(&self, id: AgentSessionId) -> impl Future<Output = Result<()>> + Send;
@@ -268,6 +277,35 @@ where
         AgentSessionRepo::create(&self.repo, params).await
     }
 
+    async fn rename_session(
+        &self,
+        access: &EntityAccessReceipt<OwnerAccessLevel>,
+        name: &str,
+    ) -> Result<()> {
+        let name = validate_agent_session_name(name)?;
+        if access.entity().entity_type != EntityType::AgentSession {
+            return Err(AgentSessionError::Unknown(anyhow::anyhow!(
+                "agent session rename received access for another entity type"
+            )));
+        }
+        let id =
+            AgentSessionId::new_from_uuid(Uuid::parse_str(&access.entity().entity_id).map_err(
+                |error| anyhow::anyhow!("invalid agent session access receipt: {error}"),
+            )?);
+        self.repo.set_name(id, name).await?;
+        self.realtime
+            .publish_renamed(AgentSessionRenamed {
+                agent_session_id: id,
+                name: name.to_owned(),
+            })
+            .await
+            .inspect_err(|error| {
+                tracing::warn!(error = ?error, %id, "failed to publish agent session rename");
+            })
+            .ok();
+        Ok(())
+    }
+
     async fn get_session(&self, id: AgentSessionId) -> Result<AgentSession> {
         self.repo.get(id).await
     }
@@ -410,9 +448,13 @@ fn spawn_initial_agent_session_rename<R, Rt, Namer>(
             else {
                 return Ok(());
             };
-            repo.set_name(id, &name)
+            let renamed = repo
+                .set_name_if_default(id, &name)
                 .await
                 .map_err(|error| rootcause::report!(error))?;
+            if !renamed {
+                return Ok(());
+            }
             realtime
                 .publish_renamed(AgentSessionRenamed {
                     agent_session_id: id,
@@ -427,6 +469,24 @@ fn spawn_initial_agent_session_rename<R, Rt, Namer>(
             tracing::warn!(error = ?error, %id, "failed to auto-rename initial agent session");
         }
     });
+}
+
+fn validate_agent_session_name(raw: &str) -> Result<&str> {
+    let name = raw.trim();
+    if name.is_empty() {
+        return Err(AgentSessionError::InvalidName("name must not be blank"));
+    }
+    if name == crate::domain::model::DEFAULT_AGENT_SESSION_NAME {
+        return Err(AgentSessionError::InvalidName(
+            "name must be more specific than the default",
+        ));
+    }
+    if name.chars().count() > MAX_AGENT_SESSION_NAME_CHARS {
+        return Err(AgentSessionError::InvalidName(
+            "name must be at most 100 characters",
+        ));
+    }
+    Ok(name)
 }
 
 /// The [`AgentSessionLogRepo`] a session's actor writes through: the durable
@@ -581,6 +641,10 @@ where
 
     async fn set_name(&self, id: AgentSessionId, name: &str) -> Result<()> {
         self.repo.set_name(id, name).await
+    }
+
+    async fn set_name_if_default(&self, id: AgentSessionId, name: &str) -> Result<bool> {
+        self.repo.set_name_if_default(id, name).await
     }
 
     async fn delete(&self, id: AgentSessionId) -> Result<()> {

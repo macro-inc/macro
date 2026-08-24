@@ -44,6 +44,7 @@ export * from './createSessionThreadThreadId';
 export * from './logDirectionDto';
 export * from './logFrameDto';
 export * from './logFrameDtoContent';
+export * from './renameAgentSessionRequest';
 export * from './sessionBot';
 export * from './sessionBotAvatarUrl';
 export * from './sessionStatusDto';

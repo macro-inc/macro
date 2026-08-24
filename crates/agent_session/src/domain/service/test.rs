@@ -1,11 +1,12 @@
 use super::*;
-use crate::domain::model::Message;
+use crate::domain::model::{DEFAULT_AGENT_SESSION_NAME, Message};
 use crate::domain::ports::NoOpRealtime;
 use crate::testing::{InMemoryAgentSessionRepo, RecordingRealtime, test_agent_session};
 use agent_fold::domain::fold::fold;
 use agent_fold::domain::service::FoldedMessageService;
 use agent_fold::testing::{TURN, parse_log_as, test_session};
 use agent_runtime_protocol::domain::schema::v0::ToServerMessage;
+use entity_access::domain::models::{EntityAccessReceipt, EntityType, OwnerAccessLevel};
 use macro_uuid::Uuid;
 use std::sync::{Arc, Mutex};
 
@@ -91,6 +92,97 @@ impl AgentSessionRealtime for RenameRealtime {
     }
 }
 
+fn owner_access(session: AgentSessionId) -> EntityAccessReceipt<OwnerAccessLevel> {
+    EntityAccessReceipt::dangerously_assert_internal_user(
+        &session.as_uuid().to_string(),
+        EntityType::AgentSession,
+    )
+}
+
+#[tokio::test]
+async fn manual_rename_trims_persists_and_publishes() {
+    let repo = InMemoryAgentSessionRepo::new();
+    let session = test_session();
+    repo.insert_session(test_agent_session(session));
+    let realtime = RenameRealtime::default();
+    let service = AgentSessionServiceImpl::new(
+        repo.clone(),
+        FoldedMessageService::new(repo.clone()),
+        realtime.clone(),
+    );
+
+    service
+        .rename_session(&owner_access(session), "  Fix Flaky Tests  ")
+        .await
+        .expect("rename session");
+
+    let stored = repo.get(session).await.expect("get session");
+    assert_eq!(stored.name, "Fix Flaky Tests");
+    assert_eq!(
+        realtime
+            .0
+            .lock()
+            .expect("rename store is not poisoned")
+            .as_slice(),
+        &[AgentSessionRenamed {
+            agent_session_id: session,
+            name: "Fix Flaky Tests".to_owned(),
+        }]
+    );
+}
+
+#[tokio::test]
+async fn manual_rename_rejects_blank_and_overlong_names() {
+    let repo = InMemoryAgentSessionRepo::new();
+    let session = test_session();
+    repo.insert_session(test_agent_session(session));
+    let service = AgentSessionServiceImpl::new(
+        repo.clone(),
+        FoldedMessageService::new(repo),
+        RenameRealtime::default(),
+    );
+
+    assert!(matches!(
+        service.rename_session(&owner_access(session), "  ").await,
+        Err(AgentSessionError::InvalidName(_))
+    ));
+    assert!(matches!(
+        service
+            .rename_session(&owner_access(session), DEFAULT_AGENT_SESSION_NAME)
+            .await,
+        Err(AgentSessionError::InvalidName(_))
+    ));
+    assert!(matches!(
+        service
+            .rename_session(&owner_access(session), &"a".repeat(101))
+            .await,
+        Err(AgentSessionError::InvalidName(_))
+    ));
+}
+
+#[tokio::test]
+async fn manual_rename_rejects_access_for_another_entity_type() {
+    let repo = InMemoryAgentSessionRepo::new();
+    let session = test_session();
+    repo.insert_session(test_agent_session(session));
+    let service = AgentSessionServiceImpl::new(
+        repo.clone(),
+        FoldedMessageService::new(repo),
+        RenameRealtime::default(),
+    );
+    let wrong_access = EntityAccessReceipt::<OwnerAccessLevel>::dangerously_assert_internal_user(
+        &session.as_uuid().to_string(),
+        EntityType::Document,
+    );
+
+    assert!(
+        service
+            .rename_session(&wrong_access, "New Name")
+            .await
+            .is_err()
+    );
+}
+
 #[tokio::test]
 async fn background_naming_persists_then_publishes_the_generated_name() {
     let repo = InMemoryAgentSessionRepo::new();
@@ -117,10 +209,8 @@ async fn background_naming_persists_then_publishes_the_generated_name() {
         tokio::task::yield_now().await;
     }
 
-    assert_eq!(
-        repo.get(session).await.expect("get session").name,
-        "Fix Flaky Tests"
-    );
+    let stored = repo.get(session).await.expect("get session");
+    assert_eq!(stored.name, "Fix Flaky Tests");
     assert_eq!(
         realtime
             .0
@@ -131,6 +221,39 @@ async fn background_naming_persists_then_publishes_the_generated_name() {
             agent_session_id: session,
             name: "Fix Flaky Tests".to_owned(),
         }]
+    );
+}
+
+#[tokio::test]
+async fn background_naming_does_not_overwrite_a_manual_name() {
+    let repo = InMemoryAgentSessionRepo::new();
+    let session = test_session();
+    let mut stored = test_agent_session(session);
+    stored.name = "Manual Name".to_owned();
+    repo.insert_session(stored);
+    let realtime = RenameRealtime::default();
+
+    spawn_initial_agent_session_rename(
+        repo.clone(),
+        realtime.clone(),
+        FixedNameGenerator,
+        session,
+        "fix the flaky tests".to_owned(),
+    );
+    for _ in 0..20 {
+        tokio::task::yield_now().await;
+    }
+
+    assert_eq!(
+        repo.get(session).await.expect("get session").name,
+        "Manual Name"
+    );
+    assert!(
+        realtime
+            .0
+            .lock()
+            .expect("rename store is not poisoned")
+            .is_empty()
     );
 }
 

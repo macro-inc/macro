@@ -20,6 +20,7 @@ const worker = vi.hoisted(() => ({
     value: {
       id: 'session',
       name: 'Agent Session',
+      modifiedAt: '2026-08-24T12:00:00Z',
       harness: 'claude-code',
     },
   }),
@@ -84,6 +85,7 @@ describe('createAgentSessionFeed live updates', () => {
       value: {
         id: 'session',
         name: 'Agent Session',
+        modifiedAt: '2026-08-24T12:00:00Z',
         harness: 'claude-code',
       },
     });
@@ -123,7 +125,7 @@ describe('createAgentSessionFeed live updates', () => {
     expect(feed.bot()?.name).toBe('Agent');
   });
 
-  it('applies a persisted session rename without refetching', async () => {
+  it('refreshes the persisted name after a rename notification', async () => {
     const { createAgentSessionFeed } = await import(
       './create-agent-session-feed'
     );
@@ -134,10 +136,20 @@ describe('createAgentSessionFeed live updates', () => {
     await flush();
 
     expect(feed.session()?.name).toBe('Agent Session');
+    worker.getSession = async () => ({
+      isErr: () => false,
+      value: {
+        id: 'session',
+        name: 'Fix Flaky Tests',
+        modifiedAt: '2026-08-24T12:00:01Z',
+        harness: 'claude-code',
+      },
+    });
     handleAgentSessionRenamed({
       agentSessionId: 'session',
       name: 'Fix Flaky Tests',
     });
+    await flush();
     expect(feed.session()?.name).toBe('Fix Flaky Tests');
   });
 
@@ -145,10 +157,23 @@ describe('createAgentSessionFeed live updates', () => {
     let resolveSession!: (
       value: Awaited<ReturnType<typeof worker.getSession>>
     ) => void;
-    worker.getSession = () =>
-      new Promise((resolve) => {
-        resolveSession = resolve;
+    let calls = 0;
+    worker.getSession = () => {
+      if (calls++ === 0) {
+        return new Promise((resolve) => {
+          resolveSession = resolve;
+        });
+      }
+      return Promise.resolve({
+        isErr: () => false,
+        value: {
+          id: 'session',
+          name: 'Fix Flaky Tests',
+          modifiedAt: '2026-08-24T12:00:01Z',
+          harness: 'claude-code',
+        },
       });
+    };
     const { createAgentSessionFeed } = await import(
       './create-agent-session-feed'
     );
@@ -161,17 +186,47 @@ describe('createAgentSessionFeed live updates', () => {
       agentSessionId: 'session',
       name: 'Fix Flaky Tests',
     });
+    await flush();
     resolveSession!({
       isErr: () => false,
       value: {
         id: 'session',
         name: 'Agent Session',
+        modifiedAt: '2026-08-24T12:00:00Z',
         harness: 'claude-code',
       },
     });
     await flush();
 
     expect(feed.session()?.name).toBe('Fix Flaky Tests');
+  });
+
+  it('uses persisted state instead of a stale event payload', async () => {
+    const { createAgentSessionFeed } = await import(
+      './create-agent-session-feed'
+    );
+    const { handleAgentSessionRenamed } = await import(
+      '@queries/agent-session/session-metadata-sync'
+    );
+    const feed = createRoot(() => createAgentSessionFeed(() => 'session'));
+    await flush();
+
+    worker.getSession = async () => ({
+      isErr: () => false,
+      value: {
+        id: 'session',
+        name: 'New Name',
+        modifiedAt: '2026-08-24T12:00:02Z',
+        harness: 'claude-code',
+      },
+    });
+    handleAgentSessionRenamed({
+      agentSessionId: 'session',
+      name: 'Stale Name',
+    });
+    await flush();
+
+    expect(feed.session()?.name).toBe('New Name');
   });
 
   it('replaces a streaming message in place as it grows', async () => {

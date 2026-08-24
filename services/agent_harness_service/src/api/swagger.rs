@@ -5,7 +5,7 @@ use agent_session::domain::model::SessionBot;
 use agent_session::inbound::axum_router::{
     self, AgentSessionLogEntryDto, AgentSessionLogResponse, AgentSessionResponse, ControlRequest,
     CreateAgentSessionRequest, CreateAgentSessionResponse, CreateSessionThread, LogDirectionDto,
-    LogFrameDto, SessionStatusDto,
+    LogFrameDto, RenameAgentSessionRequest, SessionStatusDto,
 };
 use utoipa::OpenApi;
 
@@ -15,6 +15,7 @@ use utoipa::OpenApi;
     paths(
         axum_router::create_agent_session_handler,
         axum_router::get_agent_session_handler,
+        axum_router::rename_agent_session_handler,
         axum_router::get_agent_session_log_handler,
         axum_router::control_agent_session_handler,
         axum_router::delete_agent_session_handler,
@@ -27,6 +28,7 @@ use utoipa::OpenApi;
         AgentAction,
         AgentActionId,
         AgentSessionResponse,
+        RenameAgentSessionRequest,
         SessionStatusDto,
         AgentSessionLogResponse,
         AgentSessionLogEntryDto,

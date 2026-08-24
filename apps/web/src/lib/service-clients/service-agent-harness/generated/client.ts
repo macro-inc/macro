@@ -11,6 +11,7 @@ import type {
   ControlRequest,
   CreateAgentSessionRequest,
   CreateAgentSessionResponse,
+  RenameAgentSessionRequest,
 } from './schemas';
 
 /**
@@ -350,4 +351,75 @@ export const getAgentSessionLog = async (
     status: res.status,
     headers: res.headers,
   } as getAgentSessionLogResponse;
+};
+
+/**
+ * @summary Rename an agent session.
+ */
+export type renameAgentSessionResponse204 = {
+  data: void;
+  status: 204;
+};
+
+export type renameAgentSessionResponse400 = {
+  data: string;
+  status: 400;
+};
+
+export type renameAgentSessionResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type renameAgentSessionResponse403 = {
+  data: string;
+  status: 403;
+};
+
+export type renameAgentSessionResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type renameAgentSessionResponseSuccess =
+  renameAgentSessionResponse204 & {
+    headers: Headers;
+  };
+export type renameAgentSessionResponseError = (
+  | renameAgentSessionResponse400
+  | renameAgentSessionResponse401
+  | renameAgentSessionResponse403
+  | renameAgentSessionResponse500
+) & {
+  headers: Headers;
+};
+
+export type renameAgentSessionResponse =
+  | renameAgentSessionResponseSuccess
+  | renameAgentSessionResponseError;
+
+export const getRenameAgentSessionUrl = (sessionId: string) => {
+  return `/agent-sessions/${sessionId}/name`;
+};
+
+export const renameAgentSession = async (
+  sessionId: string,
+  renameAgentSessionRequest: RenameAgentSessionRequest,
+  options?: RequestInit
+): Promise<renameAgentSessionResponse> => {
+  const res = await fetch(getRenameAgentSessionUrl(sessionId), {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(renameAgentSessionRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: renameAgentSessionResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as renameAgentSessionResponse;
 };

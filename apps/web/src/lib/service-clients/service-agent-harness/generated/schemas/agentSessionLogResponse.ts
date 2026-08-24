@@ -4,6 +4,7 @@
  * agent_harness_service
  * OpenAPI spec version: 0.1.0
  */
+
 import type { AgentSessionLogEntryDto } from './agentSessionLogEntryDto';
 import type { SessionBot } from './sessionBot';
 

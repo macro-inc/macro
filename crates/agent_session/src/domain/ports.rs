@@ -176,6 +176,13 @@ pub trait AgentSessionRepo: Send + Sync + 'static {
     /// Persist the user-facing session name. Idempotent.
     fn set_name(&self, id: AgentSessionId, name: &str) -> impl Future<Output = Result<()>> + Send;
 
+    /// Persist an automatically generated name only while the default remains.
+    fn set_name_if_default(
+        &self,
+        id: AgentSessionId,
+        name: &str,
+    ) -> impl Future<Output = Result<bool>> + Send;
+
     /// Delete an agent session by id.
     fn delete(&self, id: AgentSessionId) -> impl Future<Output = Result<()>> + Send;
 }

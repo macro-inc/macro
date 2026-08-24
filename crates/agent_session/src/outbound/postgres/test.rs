@@ -270,6 +270,31 @@ async fn set_name_errors_for_missing_session(pool: PgPool) {
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn generated_name_only_replaces_the_default(pool: PgPool) {
+    let repo = PgAgentSessionRepo::new(pool.clone());
+    let bot_id = create_test_bot(&pool).await;
+    let id = create_session(&repo, new_session(bot_id, None, None))
+        .await
+        .id;
+
+    assert!(
+        repo.set_name_if_default(id, "Generated Name")
+            .await
+            .expect("set generated name")
+    );
+    repo.set_name(id, "Manual Name")
+        .await
+        .expect("set manual name");
+    assert!(
+        !repo
+            .set_name_if_default(id, "Late Generated Name")
+            .await
+            .expect("skip generated name")
+    );
+    assert_eq!(repo.get(id).await.expect("get session").name, "Manual Name");
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn get_missing_session_errors(pool: PgPool) {
     let repo = PgAgentSessionRepo::new(pool);
     let missing = AgentSessionId::new();
