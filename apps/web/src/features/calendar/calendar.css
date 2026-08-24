@@ -349,6 +349,29 @@
 	font-size: clamp(0.625rem, min(6cqi, 20cqh), 0.75rem);
 }
 
+.calendar-view .fc .calendar-event-everyone-declined-indicator {
+	background-color: currentColor;
+}
+
+.calendar-view .fc .calendar-event-everyone-declined-indicator svg {
+	color: var(--color-surface);
+}
+
+.calendar-view
+	.fc
+	.calendar-event-content-selected
+	.calendar-event-everyone-declined-indicator {
+	background-color: var(--color-surface);
+}
+
+.calendar-view
+	.fc
+	.calendar-event-content-selected
+	.calendar-event-everyone-declined-indicator
+	svg {
+	color: var(--color-accent);
+}
+
 .calendar-view .fc .calendar-event-content-compact .calendar-event-title {
 	font-size: inherit;
 }
