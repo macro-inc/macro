@@ -1,2 +1,2 @@
 ALTER TABLE agent_session
-DROP COLUMN name;
+DROP COLUMN IF EXISTS name;

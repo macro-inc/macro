@@ -378,13 +378,15 @@ impl AgentSessionRepo for PgAgentSessionRepo {
     }
 
     async fn set_name(&self, id: AgentSessionId, name: &str) -> Result<()> {
-        sqlx::query!(
+        let result = sqlx::query!(
             r#"
             UPDATE agent_session
             SET name = $2,
-                modified_at = NOW()
+                modified_at = CASE
+                    WHEN name IS DISTINCT FROM $2 THEN NOW()
+                    ELSE modified_at
+                END
             WHERE id = $1
-              AND name IS DISTINCT FROM $2
             "#,
             id.as_uuid(),
             name,
@@ -392,6 +394,10 @@ impl AgentSessionRepo for PgAgentSessionRepo {
         .execute(&self.pool)
         .await
         .context("failed to persist agent session name")?;
+
+        if result.rows_affected() == 0 {
+            return Err(anyhow::anyhow!("agent session not found").into());
+        }
         Ok(())
     }
 

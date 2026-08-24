@@ -259,6 +259,17 @@ async fn set_name_updates_only_the_name(pool: PgPool) {
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn set_name_errors_for_missing_session(pool: PgPool) {
+    let repo = PgAgentSessionRepo::new(pool);
+
+    assert!(
+        repo.set_name(AgentSessionId::new(), "Missing Session")
+            .await
+            .is_err()
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn get_missing_session_errors(pool: PgPool) {
     let repo = PgAgentSessionRepo::new(pool);
     let missing = AgentSessionId::new();

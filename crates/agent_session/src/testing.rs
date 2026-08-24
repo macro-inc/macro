@@ -199,6 +199,9 @@ impl AgentSessionRepo for InMemoryAgentSessionRepo {
         let session = sessions.get_mut(&id).ok_or_else(|| {
             AgentSessionError::Unknown(anyhow::anyhow!("no agent session {}", id.as_uuid()))
         })?;
+        if session.name == name {
+            return Ok(());
+        }
         session.name = name.to_owned();
         session.modified_at = chrono::Utc::now();
         Ok(())

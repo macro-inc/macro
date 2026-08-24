@@ -1,2 +1,2 @@
 ALTER TABLE agent_session
-ADD COLUMN name TEXT NOT NULL DEFAULT 'Agent Session';
+ADD COLUMN IF NOT EXISTS name TEXT NOT NULL DEFAULT 'Agent Session';
