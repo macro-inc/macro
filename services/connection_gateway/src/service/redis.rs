@@ -9,7 +9,6 @@ use crate::{
     context::ApiContext,
     model::message::{Message, record_span_error},
 };
-use tokio_util::sync::CancellationToken;
 
 #[cfg(test)]
 mod test;
@@ -113,7 +112,7 @@ impl FromRedisValue for MessageWithConnection {
 ///
 /// Redis will broadcast requests for message sending to all instances of the `connection_gateway`
 /// If this instance has the connection_id handle to the connection, then it will send the message
-pub async fn poll_messages(ctx: ApiContext, shutdown: CancellationToken) -> Result<()> {
+pub async fn poll_messages(ctx: ApiContext) -> Result<()> {
     tracing::trace!("started polling redis messages");
 
     let (mut sink, mut stream) = ctx.redis_client.get_async_pubsub().await?.split();
@@ -122,14 +121,7 @@ pub async fn poll_messages(ctx: ApiContext, shutdown: CancellationToken) -> Resu
         .await
         .context("Failed to subscribe to reddis channel")?;
 
-    loop {
-        let maybe_message = tokio::select! {
-            () = shutdown.cancelled() => break,
-            maybe_message = stream.next() => match maybe_message {
-                Some(message) => message,
-                None => break,
-            },
-        };
+    while let Some(maybe_message) = stream.next().await {
         let message: MessageWithConnection =
             match maybe_message.get_payload::<MessageWithConnection>() {
                 Ok(msg) => msg,
@@ -160,10 +152,6 @@ pub async fn poll_messages(ctx: ApiContext, shutdown: CancellationToken) -> Resu
             tracing::error!(error=?err, "failed to send message");
         }
     }
-
-    sink.unsubscribe(REDIS_CHANNEL)
-        .await
-        .context("Failed to unsubscribe from redis channel")?;
 
     tracing::trace!("poller exited");
 

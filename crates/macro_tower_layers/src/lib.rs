@@ -60,24 +60,6 @@ pub fn inject_trace_headers(headers: &mut http::HeaderMap) {
     });
 }
 
-/// Returns the current span's W3C trace carrier, when it has a valid context.
-///
-/// This is the persistence counterpart to [`inject_trace_headers`]: callers
-/// can store the carrier beside asynchronous work and later reconnect it to
-/// the trace that produced that work.
-pub fn current_trace_carrier() -> (Option<String>, Option<String>) {
-    let mut headers = http::HeaderMap::new();
-    inject_trace_headers(&mut headers);
-    let value = |name| {
-        headers
-            .get(name)
-            .and_then(|value| value.to_str().ok())
-            .filter(|value| !value.is_empty())
-            .map(str::to_owned)
-    };
-    (value("traceparent"), value("tracestate"))
-}
-
 /// A very simple builder for x-request-ids
 #[derive(Default, Clone)]
 pub struct RequestIdBuilder(Arc<AtomicU64>);

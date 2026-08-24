@@ -4,8 +4,6 @@
  * agent_harness_service
  * OpenAPI spec version: 0.1.0
  */
-import type { AgentSessionLogEntryDtoAllOfTraceparent } from './agentSessionLogEntryDtoAllOfTraceparent';
-import type { AgentSessionLogEntryDtoAllOfTracestate } from './agentSessionLogEntryDtoAllOfTracestate';
 import type { AgentSessionLogEntryDtoAllOfUserId } from './agentSessionLogEntryDtoAllOfUserId';
 
 export type AgentSessionLogEntryDtoAllOf = {
@@ -16,10 +14,6 @@ what a reader has to order these against anything else it is showing
 beside them - the fold derives an order among the messages of one
 session and nothing more. */
   createdAt: string;
-  /** W3C trace parent active when this frame was persisted. */
-  traceparent?: AgentSessionLogEntryDtoAllOfTraceparent;
-  /** Optional W3C vendor trace state accompanying `traceparent`. */
-  tracestate?: AgentSessionLogEntryDtoAllOfTracestate;
   /** The user whose action produced the frame, absent when no user did.
 
 Only prompts carry one, and only when the frame was attributed at the

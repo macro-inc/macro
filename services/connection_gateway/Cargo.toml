@@ -77,7 +77,6 @@ strum = { workspace = true, features = ["derive"] }
 strum_macros = { workspace = true }
 stream = { path = "../../crates/stream" }
 tokio = { workspace = true }
-tokio-util = { workspace = true, features = ["rt"] }
 tower = { workspace = true }
 tower-http = { workspace = true }
 tracing = { workspace = true, features = ["attributes"] }

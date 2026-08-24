@@ -65,7 +65,6 @@ outbound = [
   "dep:serde_json",
   "dep:share_permission_db_utils",
   "dep:sqlx",
-  "dep:tokio-util",
   "entity_access/ports",
   "list",
   "macro_user_id/sqlx",
@@ -127,7 +126,6 @@ sqlx = { workspace = true, optional = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["macros", "sync"], optional = true }
 tokio-retry = { workspace = true, optional = true }
-tokio-util = { workspace = true, features = ["rt"], optional = true }
 tracing = { workspace = true }
 utoipa = { workspace = true, optional = true }
 uuid = { workspace = true }

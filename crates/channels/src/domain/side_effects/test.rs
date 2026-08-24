@@ -10,12 +10,6 @@ use crate::domain::{
 use chrono::Utc;
 use std::sync::{Arc, Mutex};
 
-impl ChannelBotTriggerDispatcher for tokio::sync::mpsc::UnboundedSender<ChannelBotTrigger> {
-    fn dispatch(&self, trigger: ChannelBotTrigger) {
-        self.send(trigger).expect("bot trigger receiver dropped");
-    }
-}
-
 #[derive(Clone)]
 struct FakeContext {
     message_count: i64,
@@ -766,7 +760,7 @@ async fn user_message_with_bot_mention_enqueues_bot_trigger() {
         FakeNotifications::default(),
         FakeContacts::default(),
     )
-    .with_bot_trigger_dispatcher(bot_trigger_sender);
+    .with_bot_trigger_sender(bot_trigger_sender);
     let now = Utc::now();
 
     service
@@ -842,7 +836,7 @@ async fn user_message_with_uninstalled_bot_mention_enqueues_candidate_without_th
         FakeNotifications::default(),
         FakeContacts::default(),
     )
-    .with_bot_trigger_dispatcher(bot_trigger_sender);
+    .with_bot_trigger_sender(bot_trigger_sender);
     let now = Utc::now();
 
     service
@@ -898,7 +892,7 @@ async fn bot_message_never_enqueues_bot_trigger() {
         FakeNotifications::default(),
         FakeContacts::default(),
     )
-    .with_bot_trigger_dispatcher(bot_trigger_sender);
+    .with_bot_trigger_sender(bot_trigger_sender);
 
     service
         .handle(bot_message_posted_event(

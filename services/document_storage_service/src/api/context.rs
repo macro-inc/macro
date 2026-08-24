@@ -23,8 +23,9 @@ use call::{
 };
 use channels::{
     domain::{
-        list_service::ChannelListServiceImpl, service::ChannelServiceImpl,
-        side_effects::ChannelSideEffectService,
+        list_service::ChannelListServiceImpl,
+        service::ChannelServiceImpl,
+        side_effects::{ChannelSideEffectService, SpawnedChannelEventDispatcher},
     },
     inbound::{axum_router::ChannelsRouterState, list_router::ChannelListRouterState},
     outbound::{
@@ -33,7 +34,6 @@ use channels::{
         notification_sender::NotificationChannelSender,
         pg_channel_reference_share_permissions::PgChannelReferenceSharePermissions,
         pg_channels_repo::PgChannelsRepo, pg_side_effect_context::PgChannelSideEffectContext,
-        spawned_event_dispatcher::SpawnedChannelEventDispatcher,
     },
 };
 use connection::{
@@ -343,7 +343,6 @@ pub(crate) type DssChannelService = ChannelServiceImpl<
             NotificationChannelSender<NotificationIngressType>,
             ContactsChannelDispatcher<SqsContactsIngress<SqsContactsQueue>>,
             DssEventBroker,
-            channel_bots::inbound::BotTriggerQueueSender,
         >,
     >,
     PgChannelReferenceSharePermissions<EntityAccessService>,

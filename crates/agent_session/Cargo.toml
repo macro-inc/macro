@@ -32,7 +32,6 @@ macro_authorization = { path = "../macro_authorization", default-features = fals
   "axum",
 ] }
 macro_service_urls = { path = "../macro_service_urls" }
-macro_tower_layers = { path = "../macro_tower_layers" }
 macro_user_id =  { path = "../macro_user_id", features = ["sqlx"] }
 utoipa = { workspace = true }
 rootcause = { workspace = true }

@@ -532,8 +532,6 @@ struct AgentSessionLogRow {
     direction: String,
     content: serde_json::Value,
     created_at: DateTime<Utc>,
-    traceparent: Option<String>,
-    tracestate: Option<String>,
 }
 
 impl TryFrom<AgentSessionLogRow> for StoredAgentSessionLog {
@@ -542,8 +540,6 @@ impl TryFrom<AgentSessionLogRow> for StoredAgentSessionLog {
     fn try_from(row: AgentSessionLogRow) -> anyhow::Result<Self> {
         Ok(Self {
             created_at: row.created_at,
-            traceparent: row.traceparent,
-            tracestate: row.tracestate,
             entry: AgentSessionLog {
                 agent_session_id: AgentSessionId::new_from_uuid(row.agent_session_id),
                 user_id: row.user_id,
@@ -555,7 +551,6 @@ impl TryFrom<AgentSessionLogRow> for StoredAgentSessionLog {
 
 impl AgentSessionLogRepo for PgAgentSessionRepo {
     async fn create(&self, log: AgentSessionLog) -> Result<StoredAgentSessionLog> {
-        let (traceparent, tracestate) = macro_tower_layers::current_trace_carrier();
         let event_status = match &log.content {
             Message::ToServer(ToServerMessage::Event { event }) => {
                 Some(SessionStatus::Event(event.clone()))
@@ -570,10 +565,8 @@ impl AgentSessionLogRepo for PgAgentSessionRepo {
             .context("begin agent session log create")?;
         let created_at = sqlx::query_scalar!(
             r#"
-            INSERT INTO agent_session_log (
-                id, agent_session_id, user_id, direction, content, traceparent, tracestate
-            )
-            VALUES ($1, $2, $3, $4, $5, $6, $7)
+            INSERT INTO agent_session_log (id, agent_session_id, user_id, direction, content)
+            VALUES ($1, $2, $3, $4, $5)
             RETURNING created_at
             "#,
             macro_uuid::generate_uuid_v7(),
@@ -581,8 +574,6 @@ impl AgentSessionLogRepo for PgAgentSessionRepo {
             log.user_id.as_ref().map(|user_id| user_id.as_ref()),
             direction,
             content,
-            traceparent,
-            tracestate,
         )
         .fetch_one(&mut *transaction)
         .await
@@ -614,8 +605,6 @@ impl AgentSessionLogRepo for PgAgentSessionRepo {
 
         Ok(StoredAgentSessionLog {
             created_at,
-            traceparent,
-            tracestate,
             entry: log,
         })
     }
@@ -632,9 +621,7 @@ impl AgentSessionLogRepo for PgAgentSessionRepo {
                 user_id AS "user_id: MacroUserIdStr",
                 direction,
                 content,
-                created_at,
-                traceparent,
-                tracestate
+                created_at
             FROM agent_session_log
             WHERE agent_session_id = $1
             ORDER BY created_at ASC, id ASC
