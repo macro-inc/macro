@@ -8,7 +8,7 @@ You can run any [Agent Client Protocol (ACP)](https://zed.dev/acp)-compatible ag
 
 - [Codex with Zed adapter](https://github.com/agentclientprotocol/codex-acp)
 - [Claude Code with Zed adapter](https://github.com/agentclientprotocol/claude-agent-acp)
-- [Openclaw](https://openclaw.ai/)
+- [OpenClaw](https://openclaw.ai/)
 - [Hermes](https://hermes-agent.nousresearch.com/docs/user-guide/features/acp)
 
 Macro provides `macrod`, a small daemon that runs on your computer and waits for agent sessions. When you start a session or @mention your custom agent, `macrod` launches your configured harness, sends it the prompt, and bridges its ACP connection to Macro.
@@ -26,26 +26,28 @@ You need:
 - A public HTTPS endpoint that forwards webhooks (in this demo, to port `8790`)
 
 <Tip>
-  [Cloudflare Tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/) can provide the HTTPS endpoint without opening a router port. After you [install `cloudflared`](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/), run `cloudflared tunnel --url http://localhost:8790`. Copy the temporary `https://....trycloudflare.com` URL and append `/macro-events` for the `public_url` below.
+  [Cloudflare Tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/) can provide the HTTPS endpoint needed to receive webhooks without opening a router port. To use it, [install `cloudflared`](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/) and run `cloudflared tunnel --url http://localhost:8790`. Then copy the temporary `https://....trycloudflare.com` URL and append `/macro-events` for the `public_url` below.
 </Tip>
 
 <Steps>
   <Step title="Create a Macro agent">
     Open **Settings → Bots → Create bot**. Enable **Make this bot a coding agent**, choose the channels it can join, and create it.
 
-    Copy the agent token when it appears. Macro shows it only once. If you lose it, create a new token from the agent's settings page.
+    Copy the agent token when it appears. Macro shows it only once, but you can create a new one later if you lose it.
   </Step>
 
   <Step title="Prepare an agent harness">
     Install your preferred ACP-compatible agent and identify the command that starts its ACP server. Verify that command before configuring `macrod`.
 
-    For example, Hermes exposes a dedicated ACP executable:
+    These harnesses provide ACP entrypoints:
 
-    ```bash
-    hermes-acp --check
-    ```
+    - **Claude Code:** `npx -y @agentclientprotocol/claude-agent-acp`
+    - **Codex:** `npx -y @agentclientprotocol/codex-acp`
+    - **Hermes:** `hermes-acp` (run `hermes-acp --check` first)
+    - **OpenCode:** `opencode acp`
+    - **OpenClaw:** `openclaw acp`
 
-    OpenCode uses `opencode acp`. Adapter projects such as `codex-acp` and `claude-agent-acp` document their own launch commands.
+    Claude Code and Codex require their linked adapter packages because the base `claude` and `codex` commands do not expose ACP servers directly.
   </Step>
 
   <Step title="Download macrod">
@@ -103,8 +105,11 @@ You need:
 
     | Harness | `command` | `args` |
     | --- | --- | --- |
+    | Claude Code | `npx` | `["-y", "@agentclientprotocol/claude-agent-acp"]` |
+    | Codex | `npx` | `["-y", "@agentclientprotocol/codex-acp"]` |
     | Hermes | `hermes-acp` | `[]` |
     | OpenCode | `opencode` | `["acp"]` |
+    | OpenClaw | `openclaw` | `["acp"]` |
 
     For a team-owned agent, use `bot_scope = "team"`.
   </Step>
