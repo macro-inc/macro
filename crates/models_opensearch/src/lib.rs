@@ -75,6 +75,8 @@ pub enum SearchEntityType {
     strum::Display,
     strum::EnumString,
     strum::AsRefStr,
+    strum::EnumIter,
+    strum::IntoStaticStr,
     serde::Serialize,
     serde::Deserialize,
 )]
@@ -115,34 +117,31 @@ impl OpenSearchEntityType {
 }
 
 impl OpenSearchEntityType {
-    /// Resolve the index name OpenSearch reports on a hit back to its entity.
+    /// Name to tag this entity's clause with in a unified query, and to read
+    /// back out of a hit's `matched_queries`.
     ///
-    /// Hits carry the *physical* index (`documents_v2`), never the alias
-    /// (`documents`), so this accepts either: the alias itself, or the alias
-    /// followed by `_` and a version suffix. No alias is a prefix of another,
-    /// so the match is unambiguous.
+    /// This is the strum representation, so the round trip is generated rather
+    /// than maintained: a new variant gets a name and parses back without any
+    /// list here to keep in step. Deliberately *not* the index name — the
+    /// physical index a hit reports (`documents_v2`) is a deployment detail on
+    /// a naming convention nothing enforces, whereas a clause name is set by
+    /// the query we wrote.
+    pub fn query_name(&self) -> &'static str {
+        // `strum::IntoStaticStr` is what carries the 'static lifetime; the
+        // `AsRefStr` impl borrows from `self`.
+        self.clone().into()
+    }
+
+    /// Resolve the entity from the clause names a hit reported matching.
     ///
-    /// `None` means the index is not one this crate knows — a hit from an
-    /// index the caller never asked for, which the caller should reject rather
-    /// than guess about.
-    pub fn from_index_name(index: &str) -> Option<Self> {
-        [
-            Self::Channels,
-            Self::Chats,
-            Self::Documents,
-            Self::Emails,
-            Self::CallRecords,
-            Self::Projects,
-            Self::CalendarEvents,
-        ]
-        .into_iter()
-        .find(|entity| {
-            let alias = entity.index_name();
-            index == alias
-                || index
-                    .strip_prefix(alias)
-                    .is_some_and(|suffix| suffix.starts_with('_'))
-        })
+    /// Each entity's clause filters `_index` to its own alias, so exactly one
+    /// can match a given hit. `None` means none of the names belong to a known
+    /// entity, or more than one does — either way the caller must reject the
+    /// hit rather than guess at it.
+    pub fn from_matched_queries<'a>(names: impl IntoIterator<Item = &'a str>) -> Option<Self> {
+        let mut matched = names.into_iter().filter_map(|name| name.parse().ok());
+        let first = matched.next()?;
+        matched.next().is_none().then_some(first)
     }
 }
 
@@ -177,67 +176,51 @@ impl From<OpenSearchEntityType> for SearchIndex {
 #[cfg(test)]
 mod test {
     use super::*;
+    use strum::IntoEnumIterator as _;
 
     #[test]
-    fn resolves_physical_index_names_back_to_their_entity() {
-        // What OpenSearch actually reports on a hit.
-        assert_eq!(
-            OpenSearchEntityType::from_index_name("calendar_events_v1"),
-            Some(OpenSearchEntityType::CalendarEvents)
-        );
-        assert_eq!(
-            OpenSearchEntityType::from_index_name("documents_v2"),
-            Some(OpenSearchEntityType::Documents)
-        );
-        // The alias on its own resolves too.
-        assert_eq!(
-            OpenSearchEntityType::from_index_name("projects"),
-            Some(OpenSearchEntityType::Projects)
-        );
-        // `call_records` and `calendar_events` share a prefix but neither
-        // prefixes the other, so they never cross-match.
-        assert_eq!(
-            OpenSearchEntityType::from_index_name("call_records_v2"),
-            Some(OpenSearchEntityType::CallRecords)
-        );
-        // An index this crate does not know is not guessed at.
-        assert_eq!(OpenSearchEntityType::from_index_name("reminders_v1"), None);
-        assert_eq!(OpenSearchEntityType::from_index_name(""), None);
-        // A longer alias must not be swallowed by a shorter unrelated one.
-        assert_eq!(OpenSearchEntityType::from_index_name("chatsomething"), None);
-    }
-
-    #[test]
-    fn every_variant_round_trips_through_its_physical_name() {
-        for variant in [
-            OpenSearchEntityType::Channels,
-            OpenSearchEntityType::Chats,
-            OpenSearchEntityType::Documents,
-            OpenSearchEntityType::Emails,
-            OpenSearchEntityType::CallRecords,
-            OpenSearchEntityType::Projects,
-            OpenSearchEntityType::CalendarEvents,
-        ] {
-            let physical = format!("{}_v9", variant.index_name());
+    fn query_names_round_trip_for_every_variant() {
+        for variant in OpenSearchEntityType::iter() {
             assert_eq!(
-                OpenSearchEntityType::from_index_name(&physical),
+                OpenSearchEntityType::from_matched_queries([variant.query_name()]),
                 Some(variant.clone()),
-                "{physical} must resolve back to its own entity"
+                "{} must parse back from its own query name",
+                variant.query_name()
             );
         }
     }
 
     #[test]
+    fn a_hit_matching_no_known_clause_is_rejected() {
+        assert_eq!(OpenSearchEntityType::from_matched_queries([]), None);
+        assert_eq!(
+            OpenSearchEntityType::from_matched_queries(["reminders"]),
+            None
+        );
+    }
+
+    #[test]
+    fn unrelated_clause_names_do_not_hide_the_entity() {
+        // Naming an inner clause for debugging must not break dispatch.
+        assert_eq!(
+            OpenSearchEntityType::from_matched_queries(["title_term_0", "calendar_events"]),
+            Some(OpenSearchEntityType::CalendarEvents)
+        );
+    }
+
+    #[test]
+    fn an_ambiguous_hit_is_rejected_rather_than_picked() {
+        // Two entity clauses matching one hit means the query is wrong; a
+        // silent first-wins choice is what this whole mechanism replaced.
+        assert_eq!(
+            OpenSearchEntityType::from_matched_queries(["projects", "calendar_events"]),
+            None
+        );
+    }
+
+    #[test]
     fn index_name_matches_search_index() {
-        for variant in [
-            OpenSearchEntityType::Channels,
-            OpenSearchEntityType::Chats,
-            OpenSearchEntityType::Documents,
-            OpenSearchEntityType::Emails,
-            OpenSearchEntityType::CallRecords,
-            OpenSearchEntityType::Projects,
-            OpenSearchEntityType::CalendarEvents,
-        ] {
+        for variant in OpenSearchEntityType::iter() {
             let from_index: SearchIndex = variant.clone().into();
             assert_eq!(variant.index_name(), from_index.as_ref());
         }
