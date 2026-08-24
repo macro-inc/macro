@@ -18,7 +18,7 @@ use agent_session::domain::model::AgentSessionId;
 use agent_session::domain::ports::AgentSessionRepo;
 
 use crate::domain::error::{HarnessError, Result};
-use crate::domain::model::SpawnContainer;
+use crate::domain::model::{AgentKind, SpawnContainer};
 use crate::domain::ports::ContainerManager;
 
 #[cfg(test)]
@@ -70,34 +70,44 @@ where
     type Transport = RoutedTransport<Sandbox::Transport, Cursor::Transport>;
 
     async fn spawn(&self, command: SpawnContainer) -> Result<Self::Transport> {
-        if command.bot_id == bot_id::CURSOR_BOT_ID {
-            Ok(RoutedTransport::Cursor(
+        match command.kind {
+            AgentKind::Cursor => Ok(RoutedTransport::Cursor(
                 self.cursor()?.spawn(command).await?,
-            ))
-        } else {
-            Ok(RoutedTransport::Sandbox(self.sandbox.spawn(command).await?))
+            )),
+            AgentKind::SandboxedCoder => {
+                Ok(RoutedTransport::Sandbox(self.sandbox.spawn(command).await?))
+            }
+            AgentKind::External => Err(external_is_unroutable()),
         }
     }
 
     async fn resume(&self, session: AgentSessionId) -> Result<Self::Transport> {
-        if self.sessions.get(session).await?.bot_id == bot_id::CURSOR_BOT_ID {
-            Ok(RoutedTransport::Cursor(
+        match AgentKind::of(self.sessions.get(session).await?.bot_id) {
+            AgentKind::Cursor => Ok(RoutedTransport::Cursor(
                 self.cursor()?.resume(session).await?,
-            ))
-        } else {
-            Ok(RoutedTransport::Sandbox(
+            )),
+            AgentKind::SandboxedCoder => Ok(RoutedTransport::Sandbox(
                 self.sandbox.resume(session).await?,
-            ))
+            )),
+            AgentKind::External => Err(external_is_unroutable()),
         }
     }
 
     async fn teardown(&self, session: AgentSessionId) -> Result<()> {
-        if self.sessions.get(session).await?.bot_id == bot_id::CURSOR_BOT_ID {
-            self.cursor()?.teardown(session).await
-        } else {
-            self.sandbox.teardown(session).await
+        match AgentKind::of(self.sessions.get(session).await?.bot_id) {
+            AgentKind::Cursor => self.cursor()?.teardown(session).await,
+            AgentKind::SandboxedCoder => self.sandbox.teardown(session).await,
+            AgentKind::External => Err(external_is_unroutable()),
         }
     }
+}
+
+/// The trigger gate never routes external bots here — their operators host
+/// their runtimes — so an external kind reaching a provider decision means a
+/// corrupt session row or a broken gate, and refusing loudly beats picking a
+/// provider that cannot serve it.
+fn external_is_unroutable() -> HarnessError {
+    HarnessError::Container("an external bot's session has no provider to route to".to_owned())
 }
 
 /// A transport that is one provider's or the other's, decided per session.

@@ -21,8 +21,8 @@ use tracing::instrument::WithSubscriber as _;
 
 use crate::domain::error::{HarnessError, Result};
 use crate::domain::model::{
-    AnnounceOrigin, AnnouncePrompt, DeliverAction, HarnessCommand, HarnessDefaults, OpenSession,
-    SessionAnnouncement, SpawnContainer, is_managed_bot,
+    AgentKind, AnnounceOrigin, AnnouncePrompt, DeliverAction, HarnessCommand, HarnessDefaults,
+    OpenSession, SessionAnnouncement, SpawnContainer,
 };
 use crate::domain::ports::{ContainerManager, RuntimeConnections, SessionAnnouncer};
 use crate::domain::sandbox::SandboxResizeEffect;
@@ -333,7 +333,7 @@ where
             .containers
             .spawn(SpawnContainer {
                 session_id: session.id,
-                bot_id: session.bot_id,
+                kind: AgentKind::of(session.bot_id),
                 repo_url: defaults.repo_url.clone(),
                 size: sandbox_size,
             })
@@ -452,7 +452,7 @@ where
     ) -> Result<()> {
         let session = self.sessions.get_session(session_id).await?;
         let effect = self.containers.resize_effect(session.sandbox_size, size);
-        if is_managed_bot(session.bot_id) && effect != SandboxResizeEffect::NoOp {
+        if AgentKind::of(session.bot_id).is_managed() && effect != SandboxResizeEffect::NoOp {
             if effect == SandboxResizeEffect::Restart {
                 self.sessions.close_session(session_id).await?;
             }
@@ -520,7 +520,7 @@ where
             .containers
             .spawn(SpawnContainer {
                 session_id,
-                bot_id,
+                kind: AgentKind::of(bot_id),
                 repo_url,
                 size: sandbox_size,
             })
@@ -585,7 +585,7 @@ where
             // wire.
             Err(AgentSessionError::Disconnected(_)) => {
                 let session = self.sessions.get_session(session_id).await?;
-                if is_managed_bot(session.bot_id) {
+                if AgentKind::of(session.bot_id).is_managed() {
                     let container = self.containers.resume(session_id).await?;
                     self.sessions
                         .attach_session(session_id, RuntimeAttachment::solo(container))

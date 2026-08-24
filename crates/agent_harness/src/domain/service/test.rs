@@ -32,8 +32,8 @@ use macro_uuid::Uuid;
 use super::AgentHarnessService;
 use crate::domain::error::HarnessError;
 use crate::domain::model::{
-    AnnounceOrigin, DeliverAction, HarnessCommand, HarnessDefaults, MentionOrigin, OpenSession,
-    SessionDefaults, SpawnContainer,
+    AgentKind, AnnounceOrigin, DeliverAction, HarnessCommand, HarnessDefaults, MentionOrigin,
+    OpenSession, SessionDefaults, SpawnContainer,
 };
 use crate::domain::ports::ContainerManager as _;
 use crate::outbound::runtime_registry::RuntimeRegistry;
@@ -197,7 +197,7 @@ async fn disconnected_session(
     containers
         .spawn(SpawnContainer {
             session_id: id,
-            bot_id: bot_id::MACRO_CODER_BOT_ID,
+            kind: AgentKind::SandboxedCoder,
             repo_url: "https://github.com/macro-inc/macro".to_owned(),
             size: agent_session::domain::model::SandboxSize::Default,
         })

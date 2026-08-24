@@ -128,10 +128,10 @@ impl AgentSessionRepo for FixedBotSessions {
     }
 }
 
-fn spawn_for(bot: BotId) -> SpawnContainer {
+fn spawn_for(kind: AgentKind) -> SpawnContainer {
     SpawnContainer {
         session_id: AgentSessionId::new(),
-        bot_id: bot,
+        kind,
         repo_url: "https://github.com/macro-inc/macro".to_owned(),
     }
 }
@@ -147,12 +147,12 @@ async fn the_cursor_bot_routes_to_cursor_and_everything_else_to_the_sandbox() {
     );
 
     let spawned = router
-        .spawn(spawn_for(bot_id::CURSOR_BOT_ID))
+        .spawn(spawn_for(AgentKind::Cursor))
         .await
         .expect("spawn");
     assert!(matches!(spawned, RoutedTransport::Cursor(_)));
     let spawned = router
-        .spawn(spawn_for(bot_id::MACRO_CODER_BOT_ID))
+        .spawn(spawn_for(AgentKind::SandboxedCoder))
         .await
         .expect("spawn");
     assert!(matches!(spawned, RoutedTransport::Sandbox(_)));
@@ -190,11 +190,11 @@ async fn an_unarmed_deployment_refuses_cursor_sessions() {
         FixedBotSessions(bot_id::CURSOR_BOT_ID),
     );
 
-    let refused = router.spawn(spawn_for(bot_id::CURSOR_BOT_ID)).await;
+    let refused = router.spawn(spawn_for(AgentKind::Cursor)).await;
     assert!(matches!(refused, Err(HarnessError::Container(_))));
     // The coder bot is untouched by the missing key.
     router
-        .spawn(spawn_for(bot_id::MACRO_CODER_BOT_ID))
+        .spawn(spawn_for(AgentKind::SandboxedCoder))
         .await
         .expect("sandbox spawn still works");
     assert_eq!(sandbox.calls(), ["sandbox:spawn"]);

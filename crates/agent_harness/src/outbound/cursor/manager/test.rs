@@ -1,4 +1,5 @@
 use super::*;
+use crate::domain::model::AgentKind;
 use agent_client_protocol::schema::v1::SessionId;
 use agent_runtime_protocol::domain::ports::{Transport as _, TransportSender as _};
 use agent_runtime_protocol::domain::schema::v0::{AcpMessage, ToRuntimeMessage, ToServerMessage};
@@ -258,7 +259,7 @@ async fn spawning_and_prompting_records_the_minted_agent() {
     let transport = manager
         .spawn(SpawnContainer {
             session_id,
-            bot_id: bot_id::CURSOR_BOT_ID,
+            kind: AgentKind::Cursor,
             repo_url: "https://github.com/macro-inc/macro".to_owned(),
         })
         .await
@@ -425,7 +426,7 @@ async fn an_idle_pipe_is_shut_down() {
     let transport = manager
         .spawn(SpawnContainer {
             session_id: AgentSessionId::new(),
-            bot_id: bot_id::CURSOR_BOT_ID,
+            kind: AgentKind::Cursor,
             repo_url: "https://github.com/macro-inc/macro".to_owned(),
         })
         .await

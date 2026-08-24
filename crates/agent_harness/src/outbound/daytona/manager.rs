@@ -361,9 +361,9 @@ impl ContainerManager for DaytonaContainerManager {
     async fn spawn(&self, command: SpawnContainer) -> Result<DaytonaContainer> {
         let SpawnContainer {
             session_id,
-            // Routing happened upstream; every spawn that reaches Daytona is
-            // a sandbox spawn regardless of which bot asked.
-            bot_id: _,
+            // Routing already consumed the kind; every spawn that reaches
+            // Daytona is a sandbox spawn.
+            kind: _,
             repo_url,
             size,
         } = command;

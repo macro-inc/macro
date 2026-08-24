@@ -14,8 +14,8 @@ use bot_id::BotId;
 use macro_user_id::email::ReadEmailParts;
 
 use crate::domain::model::{
-    AnnounceOrigin, AnnouncePrompt, DeliverAction, HarnessCommand, MentionOrigin, OpenSession,
-    is_managed_bot,
+    AgentKind, AnnounceOrigin, AnnouncePrompt, DeliverAction, HarnessCommand, MentionOrigin,
+    OpenSession,
 };
 
 #[cfg(test)]
@@ -120,7 +120,8 @@ pub fn route_agent_trigger(
                 channel_id: message.channel_id,
                 thread_id: message.thread_id.unwrap_or(message.message_id),
             };
-            if is_managed_bot(bot_id) {
+            let kind = AgentKind::of(bot_id);
+            if kind.is_managed() {
                 // A managed session's prompt is delivered (and announced)
                 // by the deployment that manages it; anyone else stays out
                 // of the way entirely.
@@ -133,7 +134,7 @@ pub fn route_agent_trigger(
                 // Cursor account, and a prompt is spend on it - staff only,
                 // and a sender that is not a user at all is refused rather
                 // than waved through.
-                if bot_id == bot_id::CURSOR_BOT_ID
+                if kind == AgentKind::Cursor
                     && !message
                         .sender
                         .as_user()
