@@ -95,6 +95,13 @@ cargo fmt                   # format
 just clippy                 # extra lints / best practices
 ```
 
+### Pull Requests
+
+PR titles must be Conventional Commits: `type(scope): short description`. Squash-merge
+uses the title as the commit, so write it as the commit message. Common types: `feat`,
+`fix`, `chore`. Examples: `feat(chat): add dev observability`,
+`fix(email): handle empty thread subjects`. Full convention: `CONTRIBUTING.md`.
+
 ### Database Management
 
 Use `just setup_macrodb` or `just initialize_dbs` to create and migrate MacroDB. Those recipes are the same.
