@@ -1,12 +1,14 @@
 import { ToggleSwitch } from '@ui';
 
 /**
- * The message/task mode switch shown in the input footer, next to the
- * format (`Aa`) button in message mode and next to the attach button in
- * task mode. Checked means the input is composing a task. Outlined as a
- * pill so the label and switch read as one control.
+ * A compose-mode switch pill shown in the input footer — one per alternate
+ * face (Task, Event, ...), next to the format (`Aa`) button in message mode
+ * and next to the composer's own actions in the alternate faces. Checked
+ * means the input is composing with that face. Outlined as a pill so the
+ * label and switch read as one control.
  */
-export function TaskModeSwitch(props: {
+export function ComposeModeSwitch(props: {
+  label: string;
   checked: boolean;
   onChange: (checked: boolean) => void;
 }) {
@@ -14,7 +16,7 @@ export function TaskModeSwitch(props: {
     <ToggleSwitch
       checked={props.checked}
       onChange={props.onChange}
-      label="Task"
+      label={props.label}
       // Concentric rounding: the h-4 switch has an 8px radius, so a uniform
       // 6px ring around it needs a 14px outer radius (h-7 rounded-full) and
       // matching 6px padding on the switch side.
