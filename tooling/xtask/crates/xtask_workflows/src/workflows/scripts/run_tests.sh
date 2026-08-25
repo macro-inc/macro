@@ -8,12 +8,20 @@ set -euo pipefail
 # Package selection uses `cargo nextest run -p`, not `--workspace -E rdeps(...)`.
 # The filterset only decides which tests *run* after a workspace build; `-p`
 # is what keeps an unrelated crate's test binary from being compiled.
+#
+# `--lib --bins --tests` is safe with `--workspace` (cargo skips packages that
+# lack a given target type) but fails with `-p` when any selected package has
+# no lib — xtask binaries such as xtask_nextest_filter / xtask_workflows.
+# Unconstrained `-p` still runs that package's tests.
 
 packages="${RUST_PACKAGES:-}"
-base=(--all-features --lib --bins --tests --no-tests=pass --test-threads "$NEXTEST_TEST_THREADS")
+workspace=(--all-features --lib --bins --tests --no-tests=pass --test-threads "$NEXTEST_TEST_THREADS")
+selected=(--all-features --no-tests=pass --test-threads "$NEXTEST_TEST_THREADS")
+sync_service=(--no-tests=pass --test-threads "$NEXTEST_TEST_THREADS" -p sync_service)
 
 if [ -z "$packages" ] || [ "$packages" = "all" ]; then
-  cargo nextest run --workspace --exclude sync_service "${base[@]}"
+  cargo nextest run --workspace --exclude sync_service "${workspace[@]}"
+  cargo nextest run "${sync_service[@]}"
   exit 0
 fi
 
@@ -33,9 +41,9 @@ for p in $packages; do
 done
 
 if [ "${#pkg_args[@]}" -gt 0 ]; then
-  cargo nextest run "${base[@]}" "${pkg_args[@]}"
+  cargo nextest run "${selected[@]}" "${pkg_args[@]}"
 fi
 
 if [ "$sync" = true ]; then
-  cargo nextest run --lib --bins --tests --no-tests=pass --test-threads "$NEXTEST_TEST_THREADS" -p sync_service
+  cargo nextest run "${sync_service[@]}"
 fi

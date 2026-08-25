@@ -16,6 +16,9 @@ use crate::workflows::{
     vars,
 };
 
+#[cfg(test)]
+mod test;
+
 /// Build the workflow.
 pub fn code_check_cloud_storage() -> Workflow {
     Workflow::new("cloud storage code check")
@@ -43,6 +46,10 @@ fn path_check() -> Job {
         .add_output(
             "rust_packages",
             "${{ steps.nextest-filter.outputs.rust_packages }}",
+        )
+        .add_output(
+            "skip_tests",
+            "${{ steps.nextest-filter.outputs.skip_tests }}",
         )
         .add_output(
             "doppler_config_bins",
@@ -81,11 +88,12 @@ fn check() -> Job {
 }
 
 /// cargo nextest against postgres + redis service containers. Skipped when
-/// the path filter selected no Rust packages (Nix-only / unmapped files).
+/// the path filter selected no Rust packages (Nix-only / unmapped files) or
+/// when `skip_tests` is set (`.sqlx`-only diffs still clippy the snapshot).
 fn test() -> Job {
     steps::gated_job()
         .cond(Expression::new(
-            "needs.path-check.outputs.should_run == 'true' && github.event.pull_request.draft == false && needs.path-check.outputs.rust_packages != 'none'",
+            "needs.path-check.outputs.should_run == 'true' && github.event.pull_request.draft == false && needs.path-check.outputs.rust_packages != 'none' && needs.path-check.outputs.skip_tests != 'true'",
         ))
         .runs_on(runners::Runner::RustCi.with_cache_tag(vars::CI_CACHE_TAG))
         .add_env((

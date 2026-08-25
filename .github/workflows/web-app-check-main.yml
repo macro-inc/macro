@@ -38,7 +38,6 @@ jobs:
             - 'Cargo.lock'
             - 'rust-toolchain.toml'
             - 'services/lexical-service/**'
-            - '.github/actions/setup-nix-dev-shell/**'
             - '.github/actions/setup-reqs-web/**'
           api_changed:
             - 'crates/**/*.rs'

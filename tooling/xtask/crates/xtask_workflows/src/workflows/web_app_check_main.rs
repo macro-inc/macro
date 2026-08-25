@@ -11,6 +11,9 @@ use crate::workflows::{
     vars,
 };
 
+#[cfg(test)]
+mod test;
+
 /// Frontend-only jobs share one small Namespace profile with a dedicated cache
 /// tag, so their Nix/Bun state lives on its own volume.
 fn web_runner() -> String {
@@ -179,7 +182,9 @@ fn paths_filter() -> Step<Use> {
     // `api_changed` is only the inputs to `bun run gen-api`. xtask, flake.nix,
     // the Nix dev-shell action, and this workflow file do not change OpenAPI
     // output, so they must not start Typecheck (which compiles the schema
-    // binaries). Workflow YAML drift is `check generated workflows`.
+    // binaries). The Nix dev-shell action is also omitted from `should_run`
+    // so Typecheck (which is `should_run || api_changed`) stays off for a
+    // shell-only tweak. Workflow YAML drift is `check generated workflows`.
     Step::new("Filter changed paths")
         .uses(
             "dorny",
@@ -190,7 +195,7 @@ fn paths_filter() -> Step<Use> {
         .add_with((
             "filters",
             format!(
-                "should_run:\n{artifact_paths}  - 'services/lexical-service/**'\n  - '.github/actions/setup-nix-dev-shell/**'\n  - '.github/actions/setup-reqs-web/**'\napi_changed:\n  - 'crates/**/*.rs'\n  - 'services/**/*.rs'\n  - 'Cargo.toml'\n  - 'Cargo.lock'\n  - 'apps/web/scripts/generate-api-schema.ts'\n  - 'apps/web/scripts/services.ts'\n  - '.github/actions/setup-reqs-web/**'\n"
+                "should_run:\n{artifact_paths}  - 'services/lexical-service/**'\n  - '.github/actions/setup-reqs-web/**'\napi_changed:\n  - 'crates/**/*.rs'\n  - 'services/**/*.rs'\n  - 'Cargo.toml'\n  - 'Cargo.lock'\n  - 'apps/web/scripts/generate-api-schema.ts'\n  - 'apps/web/scripts/services.ts'\n  - '.github/actions/setup-reqs-web/**'\n"
             ),
         ))
 }

@@ -11,6 +11,9 @@ use gh_workflow::{
 
 use crate::workflows::runners;
 
+#[cfg(test)]
+mod test;
+
 /// Build the workflow. The reusable-workflow caller job's `with:` and
 /// `secrets: inherit` are filled in by [`patch`].
 pub fn pulumi_preview_pr() -> Workflow {
@@ -194,13 +197,15 @@ fn detect_affected_services() -> Step<Run> {
               service_changed=false
 
               # Workspace/build-system changes can affect every deployable.
+              # `.sqlx/` lives at the repo root, so a snapshot-only edit would
+              # otherwise match no service path or dependency-closure entry.
               # A crate source edit is not in this list: those preview only the
               # services whose deploy binaries depend on the crate.
               while IFS= read -r file; do
                 if [[ "$file" == "Cargo.toml" || "$file" == "Cargo.lock" || \
                       "$file" == "Cross.toml" || \
                       "$file" == "rust-toolchain.toml" || "$file" == .cargo/* || \
-                      "$file" == .config/* || \
+                      "$file" == .config/* || "$file" == .sqlx/* || \
                       "$file" == tooling/just/* || "$file" == static_assets/* || \
                       "$file" == docker/* || "$file" == "flake.nix" || \
                       "$file" == "flake.lock" || "$file" == nix/* || \

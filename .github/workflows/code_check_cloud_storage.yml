@@ -23,6 +23,7 @@ jobs:
     outputs:
       should_run: ${{ steps.filter.outputs.should_run }}
       rust_packages: ${{ steps.nextest-filter.outputs.rust_packages }}
+      skip_tests: ${{ steps.nextest-filter.outputs.skip_tests }}
       doppler_config_bins: ${{ steps.doppler-bins.outputs.doppler_config_bins }}
     steps:
     - name: Checkout
@@ -111,9 +112,14 @@ jobs:
         #   none — no Rust packages to lint/test (Nix-only, top-level JSON, docs, …)
         #   <names> — space-separated workspace packages (changed + reverse deps)
         #
+        # `skip_tests=true` keeps clippy on a package set while the live-Postgres
+        # test job stays skipped (used for `.sqlx`-only diffs).
+        #
         # Only Cargo/toolchain/config edits force `all`. flake.nix, the Nix shell
         # action, and this workflow file used to live on that list and turned every
         # dev-shell tweak into a full-suite rebuild.
+
+        echo "skip_tests=false" >> "$GITHUB_OUTPUT"
 
         if [ ! -s /tmp/changed-files ]; then
           echo "Unknown or empty change set; running all tests"
@@ -127,13 +133,14 @@ jobs:
           exit 0
         fi
 
-        # A diff touching only `.sqlx/` needs no tests at all. The test job compiles
-        # queries against live Postgres (SQLX_OFFLINE is unset there), so `.sqlx`
-        # contents cannot change test outcomes, and a query change always comes with
-        # a source change in the owning crate.
+        # The test job compiles queries against live Postgres (SQLX_OFFLINE is unset
+        # there), so `.sqlx` contents cannot change test outcomes. Clippy is the
+        # offline SQLx check (`SQLX_OFFLINE=true`), so a snapshot-only diff must
+        # still compile against the cache rather than skip the check job.
         if ! grep -qvE '^\.sqlx/' /tmp/changed-files; then
-          echo "Only .sqlx changes detected; running no tests"
-          echo "rust_packages=none" >> "$GITHUB_OUTPUT"
+          echo "Only .sqlx changes detected; clippy all, skip live-Postgres tests"
+          echo "rust_packages=all" >> "$GITHUB_OUTPUT"
+          echo "skip_tests=true" >> "$GITHUB_OUTPUT"
           exit 0
         fi
 
@@ -299,7 +306,7 @@ jobs:
   test:
     needs:
     - path-check
-    if: needs.path-check.outputs.should_run == 'true' && github.event.pull_request.draft == false && needs.path-check.outputs.rust_packages != 'none'
+    if: needs.path-check.outputs.should_run == 'true' && github.event.pull_request.draft == false && needs.path-check.outputs.rust_packages != 'none' && needs.path-check.outputs.skip_tests != 'true'
     runs-on: namespace-profile-linux-rust-ci;overrides.cache-tag=sccache-ci
     env:
       RUST_PACKAGES: ${{ needs.path-check.outputs.rust_packages }}
@@ -400,12 +407,20 @@ jobs:
         # Package selection uses `cargo nextest run -p`, not `--workspace -E rdeps(...)`.
         # The filterset only decides which tests *run* after a workspace build; `-p`
         # is what keeps an unrelated crate's test binary from being compiled.
+        #
+        # `--lib --bins --tests` is safe with `--workspace` (cargo skips packages that
+        # lack a given target type) but fails with `-p` when any selected package has
+        # no lib — xtask binaries such as xtask_nextest_filter / xtask_workflows.
+        # Unconstrained `-p` still runs that package's tests.
 
         packages="${RUST_PACKAGES:-}"
-        base=(--all-features --lib --bins --tests --no-tests=pass --test-threads "$NEXTEST_TEST_THREADS")
+        workspace=(--all-features --lib --bins --tests --no-tests=pass --test-threads "$NEXTEST_TEST_THREADS")
+        selected=(--all-features --no-tests=pass --test-threads "$NEXTEST_TEST_THREADS")
+        sync_service=(--no-tests=pass --test-threads "$NEXTEST_TEST_THREADS" -p sync_service)
 
         if [ -z "$packages" ] || [ "$packages" = "all" ]; then
-          cargo nextest run --workspace --exclude sync_service "${base[@]}"
+          cargo nextest run --workspace --exclude sync_service "${workspace[@]}"
+          cargo nextest run "${sync_service[@]}"
           exit 0
         fi
 
@@ -425,11 +440,11 @@ jobs:
         done
 
         if [ "${#pkg_args[@]}" -gt 0 ]; then
-          cargo nextest run "${base[@]}" "${pkg_args[@]}"
+          cargo nextest run "${selected[@]}" "${pkg_args[@]}"
         fi
 
         if [ "$sync" = true ]; then
-          cargo nextest run --lib --bins --tests --no-tests=pass --test-threads "$NEXTEST_TEST_THREADS" -p sync_service
+          cargo nextest run "${sync_service[@]}"
         fi
     - name: show sccache stats
       if: always()
