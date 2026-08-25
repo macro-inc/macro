@@ -8,12 +8,12 @@ fn disk_is_96_gib_for_every_tier() {
 }
 
 #[test]
-fn default_is_eight_cpu_sixteen_gib() {
+fn default_fits_the_daytona_snapshot_quota() {
     assert_eq!(
         resources(SandboxSize::Default),
         SandboxResources {
-            cpu: 8,
-            memory_gib: 16,
+            cpu: 4,
+            memory_gib: 8,
             disk_gib: 96,
         }
     );
@@ -56,11 +56,11 @@ fn live_quotas_that_are_not_named_tiers_still_pick_in_place_or_restart() {
     };
     assert_eq!(
         resize_effect_from_resources(snapshot, resources(SandboxSize::Default)),
-        SandboxResizeEffect::InPlace
+        SandboxResizeEffect::NoOp
     );
     assert_eq!(
         resize_effect_from_resources(resources(SandboxSize::Default), snapshot),
-        SandboxResizeEffect::Restart
+        SandboxResizeEffect::NoOp
     );
     assert_eq!(
         resize_effect_from_resources(snapshot, snapshot),

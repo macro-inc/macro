@@ -48,8 +48,8 @@ pub fn resources(size: SandboxSize) -> SandboxResources {
             disk_gib: 96,
         },
         SandboxSize::Default => SandboxResources {
-            cpu: 8,
-            memory_gib: 16,
+            cpu: 4,
+            memory_gib: 8,
             disk_gib: 96,
         },
         SandboxSize::Large => SandboxResources {
