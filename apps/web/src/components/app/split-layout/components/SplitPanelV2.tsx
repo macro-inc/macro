@@ -33,14 +33,14 @@ import {
 } from '../context';
 import { useSplitLayout } from '../layout';
 import type { SplitHandle, SplitState } from '../layoutManager';
+import { effectiveMessagesSidebarWidth } from '../messagesSidebarWidth';
 import { registerSplitHotkeys } from '../registerSplitHotkeys';
 import { createPriorityCollapseController } from './PriorityCollapseOverflowSensor';
 import { SplitDrawerGroup } from './SplitDrawerContext';
 import { SplitHeader } from './SplitHeader';
 import { SplitToolbar } from './SplitToolbar';
-import { SplitPanelV2 } from './SplitPanelV2';
 
-export type SplitPanelProps = {
+type SplitPanelProps = {
   setPanelRef: (ref: HTMLDivElement) => void;
   handle: SplitHandle;
   split: SplitState;
@@ -54,18 +54,7 @@ export type SplitPanelProps = {
  */
 const PREVIEW_VIEWER_OPEN_TRACK_DELAY_MS = 1_500;
 
-export function SplitPanel(props: SplitPanelProps) {
-  return (
-    <Show
-      when={activeAppLayout().splitPanelRenderer === 'v2-composed'}
-      fallback={<LegacySplitPanel {...props} />}
-    >
-      <SplitPanelV2 {...props} />
-    </Show>
-  );
-}
-
-function LegacySplitPanel(props: SplitPanelProps) {
+export function SplitPanelV2(props: SplitPanelProps) {
   const [attachHotKeys, splitHotkeyScope] = useHotkeyDOMScope(
     `split=${props.split.id}`
   );
@@ -163,9 +152,30 @@ function LegacySplitPanel(props: SplitPanelProps) {
     return Boolean(splits && splits.length > 1);
   }
 
+  const contentOwnsSplitChrome = createMemo(() => {
+    const content = props.handle.content();
+    return (
+      content.type === 'component' &&
+      activeAppLayout().contentOwnedSplitChrome.has(content.id)
+    );
+  });
+  const usesFullHeightMessagesSidebar = createMemo(() => {
+    const content = props.handle.content();
+    return (
+      content.type === 'component' &&
+      content.id === 'channels' &&
+      activeAppLayout().capabilities.usesMessagesWorkspace
+    );
+  });
+  const usesNarrowMessagesRail = () =>
+    usesFullHeightMessagesSidebar() && effectiveMessagesSidebarWidth() <= 64;
+
   // On mobile the header stays visible for list views too: it hosts the
-  // floating filter-pill strip (see MobileSoupViewTabs).
-  const shouldHideSplitHeader = createMemo(() => isSoloSettings());
+  // floating filter-pill strip (see MobileSoupViewTabs). V2 content-owned
+  // views compose their own chrome directly inside the view tree.
+  const shouldHideSplitHeader = createMemo(
+    () => isSoloSettings() || contentOwnsSplitChrome()
+  );
 
   const splitFocusStyling = () =>
     !isTouchDevice() &&
@@ -280,6 +290,7 @@ function LegacySplitPanel(props: SplitPanelProps) {
               // mobile/tablet: status bar + floating header strip.
               '--mobile-content-inset-top':
                 'calc(var(--safe-top, 0px) + var(--split-header-height, 0px))',
+              '--messages-sidebar-width': `${effectiveMessagesSidebarWidth()}px`,
               // Slide the preview pane left across the gutter so it sits
               // flush against the controller, keeping its right edge in
               // place. The gutter's drag hit-area still paints (and
@@ -328,6 +339,8 @@ function LegacySplitPanel(props: SplitPanelProps) {
                     ? 'min-h-9'
                     : 'min-h-10.25',
                   'z-split-panel-chrome',
+                  usesFullHeightMessagesSidebar() &&
+                    'absolute left-(--messages-sidebar-width) right-0 top-0',
                   // On mobile/tablet the header collapses to a zero-height grid row;
                   // SplitHeader overlays the body as floating islands.
                   'touch:min-h-0 touch:border-b-0',
@@ -337,13 +350,17 @@ function LegacySplitPanel(props: SplitPanelProps) {
                 <SplitHeader
                   ref={setHeaderRef}
                   collapseController={headerCollapseController}
+                  showSplitControls={
+                    !usesFullHeightMessagesSidebar() || usesNarrowMessagesRail()
+                  }
                 />
               </Panel.Header>
 
               <Panel.Toolbar
                 class={cn(
                   'items-start overflow-visible',
-                  !hasToolbarContent() && 'hidden',
+                  (!hasToolbarContent() || contentOwnsSplitChrome()) &&
+                    'hidden',
                   isTouchDevice() && 'hidden',
                   'border-b-0'
                 )}

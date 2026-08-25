@@ -768,9 +768,14 @@ export function ExperimentalIntegrationsView() {
 
   return (
     <Layer depth={2}>
-      <main class="mx-2 mb-2 min-h-0 min-w-0 flex-1 overflow-y-auto px-6 pb-10 pt-5 @max-[760px]/experimental-soup:mx-1 @max-[760px]/experimental-soup:px-3 @max-[480px]/experimental-soup:px-2">
-        <div class="mb-4 flex h-9 w-full max-w-md items-center gap-2 rounded-full bg-ink/4 px-3 text-ink-muted focus-within:ring-2 focus-within:ring-accent/30">
-          <MagnifyingGlassIcon class="size-3.5 shrink-0" />
+      <main class="mb-2 min-h-0 min-w-0 flex-1 overflow-y-auto px-6 pb-10 pt-5 @max-[760px]/experimental-soup:px-3 @max-[480px]/experimental-soup:px-2">
+        <div class="mb-4 flex min-w-0 items-center">
+          <h1 class="m-0 min-w-0 flex-1 truncate text-2xl font-medium tracking-[-0.03em] text-ink">
+            Integrations
+          </h1>
+        </div>
+        <div class="mb-4 flex h-10 w-full min-w-20 max-w-md items-center gap-1 rounded-full border border-edge-muted bg-ink/5 px-3 text-sm text-ink-muted hover:bg-ink/7 hover:text-ink focus-within:border-accent focus-within:bg-ink/7 focus-within:text-ink">
+          <MagnifyingGlassIcon class="size-4 shrink-0" />
           <input
             type="search"
             value={search()}

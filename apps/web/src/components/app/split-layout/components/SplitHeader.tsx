@@ -1,9 +1,8 @@
 import { isListViewID, LIST_VIEW_ID } from '@app/constants/list-views';
-import { experimentalAppLayoutEnabled } from '@app/features/experimental-app-layout/state';
+import { activeAppLayout } from '@app/features/app-layout/layout-state';
 import { useSoup } from '@app/features/next-soup/soup-context';
 import { openEntityInSplitFromUnifiedList } from '@app/features/next-soup/utils';
 import { CALENDAR_BLOCK_ID } from '@block-calendar/types';
-import { useSidebarCollapse } from '@components/app/sidebarVisibility';
 import type { BlockName } from '@core/block';
 import {
   ContextMenuContent,
@@ -17,7 +16,6 @@ import { isMobile } from '@core/mobile/isMobile';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import type { EntityDragEvent } from '@entity';
-import { AnimatedSquareSidebarIcon } from '@icon/square-sidebar';
 import SplitIcon from '@icon/wide-newSplit.svg';
 import { ContextMenu } from '@kobalte/core/context-menu';
 import ArrowClockwise from '@phosphor/arrow-clockwise.svg';
@@ -34,7 +32,6 @@ import { createDroppable, useDragDropContext } from '@thisbeyond/solid-dnd';
 import { Button, cn } from '@ui';
 import {
   createMemo,
-  createSignal,
   type ParentProps,
   type Setter,
   Show,
@@ -51,7 +48,7 @@ import {
   PriorityCollapseOverflowSensor,
 } from './PriorityCollapseOverflowSensor';
 
-function getEntitySplitContent(data: EntityDragEvent['draggable']['data']):
+export function getEntitySplitContent(data: EntityDragEvent['draggable']['data']):
   | {
       type: SplitContent['type'];
       id: string;
@@ -91,7 +88,7 @@ function getEntitySplitContent(data: EntityDragEvent['draggable']['data']):
 const splitHeaderControlClass = () =>
   cn(
     'rounded-lg touch:p-1',
-    experimentalAppLayoutEnabled() ? 'p-0.5' : 'p-1'
+    activeAppLayout().capabilities.compactSplitHeader ? 'p-0.5' : 'p-1'
   );
 
 function SplitBackButton() {
@@ -126,45 +123,6 @@ function SplitForwardButton() {
     >
       <ArrowRight class="h-4" />
     </Button>
-  );
-}
-
-function SidebarExpandButton() {
-  const panel = useContext(SplitPanelContext);
-  const layout = useContext(SplitLayoutContext);
-  const sidebar = useSidebarCollapse();
-  const [hovering, setHovering] = createSignal(false);
-
-  const isLeftmostSplit = () =>
-    layout?.manager.splits()[0]?.id === panel?.handle.id;
-  const visible = () => sidebar.isCollapsed() && isLeftmostSplit();
-
-  return (
-    <div
-      class={cn(
-        'overflow-hidden transition-[width,opacity,margin] duration-[120ms] ease-in-out',
-        visible()
-          ? 'w-8 @max-[380px]/split-header:w-0 @max-[380px]/split-header:opacity-0 opacity-100 mr-1 @max-[380px]/split-header:mr-0'
-          : 'w-0 opacity-0 mr-0'
-      )}
-      aria-hidden={!visible()}
-    >
-      <Button
-        class={splitHeaderControlClass()}
-        label="Expand Sidebar"
-        hotkey={TOKENS.global.toggleSidebar}
-        disabled={!visible()}
-        tabindex={visible() ? undefined : -1}
-        onClick={() => sidebar.expand()}
-        onMouseEnter={() => setHovering(true)}
-        onMouseLeave={() => setHovering(false)}
-      >
-        <AnimatedSquareSidebarIcon
-          class="size-4"
-          triggerAnimation={hovering()}
-        />
-      </Button>
-    </div>
   );
 }
 
@@ -305,7 +263,7 @@ function SoupNavigationButtons() {
   );
 }
 
-function SplitHeaderContextMenu(props: ParentProps) {
+export function SplitHeaderContextMenu(props: ParentProps) {
   const panel = useContext(SplitPanelContext);
   const layout = useContext(SplitLayoutContext);
   if (!panel || !layout) return props.children;
@@ -469,24 +427,17 @@ function SplitHeaderContextMenu(props: ParentProps) {
 export function SplitHeader(props: {
   ref: Setter<HTMLDivElement | null>;
   collapseController: PriorityCollapseController;
+  showSplitControls?: boolean;
 }) {
   const panel = useContext(SplitPanelContext);
-  const layout = useContext(SplitLayoutContext);
-  const sidebar = useSidebarCollapse();
   if (!panel) {
     throw new Error('<SplitHeader> must be used within a <SplitLayout>');
   }
 
-  const showCloseControl = () =>
-    !!layout &&
-    layout.manager.splits().length - layout.manager.previewPairs().length > 1 &&
-    !panel.handle.isViewerSplit();
-  const showSidebarExpandControl = () =>
-    !!layout &&
-    sidebar.isCollapsed() &&
-    layout.manager.splits()[0]?.id === panel.handle.id;
+  const showCloseControl = () => true;
+  const showSplitControls = () => props.showSplitControls !== false;
   const showLeadingControls = () =>
-    showCloseControl() || showSidebarExpandControl();
+    showSplitControls() && showCloseControl();
 
   const droppableId = `split-header-${panel.handle.id}`;
   const droppable = createDroppable(droppableId, {
@@ -560,19 +511,13 @@ export function SplitHeader(props: {
           class="absolute inset-0 flex justify-start items-center touch:px-(--mobile-chrome-gutter) touch:gap-2"
           ref={props.collapseController.setRow}
         >
-          <Show
-            when={isTouchDevice()}
-            fallback={
-              <div class="relative flex h-full items-center gap-2 pl-4 @max-[720px]/split-header:pl-2">
+          <Show when={showSplitControls()}>
+            <Show
+              when={isTouchDevice()}
+              fallback={
+                <div class="relative flex h-full items-center gap-2 pl-4 @max-[720px]/split-header:pl-2">
                 <Show when={showLeadingControls()}>
-                  <div
-                    class={cn(
-                      'flex items-center',
-                      !showCloseControl() &&
-                        '@max-[380px]/split-header:hidden'
-                    )}
-                  >
-                    <SidebarExpandButton />
+                  <div class="flex items-center">
                     <SplitCloseButton />
                   </div>
                 </Show>
@@ -597,7 +542,8 @@ export function SplitHeader(props: {
               <Show when={!isListViewID(panel.handle.content().id)}>
                 <SplitBackButton />
               </Show>
-            </HeaderIsland>
+              </HeaderIsland>
+            </Show>
           </Show>
 
           {/* On mobile nothing clips this region (islands float over the

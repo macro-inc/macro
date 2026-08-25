@@ -32,6 +32,7 @@ import { GlobalAppStateProvider } from '@components/app/GlobalAppState';
 import { Layout } from '@components/app/Layout';
 import { ReactiveFavicon } from '@components/app/ReactiveFavicon';
 import {
+  BRAIN_LAYOUT_ROUTE,
   CHANNELS_LAYOUT_ROUTE,
   CHAT_LAYOUT_ROUTE,
   LAYOUT_ROUTE,
@@ -232,6 +233,7 @@ const ROUTES: RouteDefinition[] = [
   },
   CHAT_LAYOUT_ROUTE,
   CHANNELS_LAYOUT_ROUTE,
+  BRAIN_LAYOUT_ROUTE,
   LAYOUT_ROUTE,
   /** BEGIN - APP ROUTES */
   {
@@ -248,10 +250,6 @@ const ROUTES: RouteDefinition[] = [
   },
   {
     path: '/reminders',
-    component: LAYOUT_ROUTE.component,
-  },
-  {
-    path: '/agents',
     component: LAYOUT_ROUTE.component,
   },
   {

@@ -1,11 +1,9 @@
-import { ExperimentalActivityView } from '@app/features/experimental-app-layout/experimental-activity-view';
-import { experimentalAppLayoutEnabled } from '@app/features/experimental-app-layout/state';
+import { activeAppLayoutSurfaces } from '@app/features/app-layout/layout-surfaces';
 import { dateBucket } from '@app/features/next-soup/soup-view/group-by-date';
 import { SoupSectionHeader } from '@app/features/next-soup/soup-view/section-header';
 import { SplitHeaderLeft } from '@components/app/split-layout/components/SplitHeader';
 import { openDocument } from '@core/component/LexicalMarkdown/component/core/BlockLink';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
-import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
 import { formatRelativeTimestamp } from '@entity/utils/timestamp';
 import { usePropertyEntityDisplay } from '@property/hooks';
@@ -15,6 +13,7 @@ import type { EntityType } from '@service-properties/generated/schemas/entityTyp
 import type { GraphqlEntityType } from '@service-storage/graphql/generated/graphql';
 import { Button, cn } from '@ui';
 import { type Component, createMemo, For, Show } from 'solid-js';
+import { Dynamic } from 'solid-js/web';
 import { match } from 'ts-pattern';
 import { ActionGlyph } from './action-glyph';
 import { ActionPhrase } from './action-phrase';
@@ -110,7 +109,7 @@ export function MyActivityView() {
 
   return (
     <Show
-      when={experimentalAppLayoutEnabled() && !isTouchDevice()}
+      when={activeAppLayoutSurfaces()?.ActivityView}
       fallback={
         <div class="@container/u-list flex size-full flex-col">
           <SplitHeaderLeft>
@@ -120,9 +119,11 @@ export function MyActivityView() {
         </div>
       }
     >
-      <ExperimentalActivityView>
-        <FeedContent experimental />
-      </ExperimentalActivityView>
+      {(ActivityView) => (
+        <Dynamic component={ActivityView()}>
+          <FeedContent experimental />
+        </Dynamic>
+      )}
     </Show>
   );
 }

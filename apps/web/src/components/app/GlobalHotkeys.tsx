@@ -9,10 +9,11 @@ import {
   createMenuOpen,
   setCreateMenuOpen,
 } from '@app/features/command/Launcher';
+import { APP_LAYOUT_DEFINITIONS } from '@app/features/app-layout/layout-registry';
 import {
-  experimentalAppLayoutEnabled,
-  toggleExperimentalAppLayout,
-} from '@app/features/experimental-app-layout/state';
+  effectiveAppLayoutId,
+  selectAppLayout,
+} from '@app/features/app-layout/layout-state';
 import { openMacroMcpSetupModal } from '@app/features/integrations/mcp-setup/MacroMcpSetupModal';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
@@ -225,32 +226,31 @@ export default function GlobalShortcuts() {
     runWithInputFocused: true,
   });
 
-  registerHotkey({
-    scopeId: 'global',
-    description: () =>
-      experimentalAppLayoutEnabled()
-        ? 'Switch to classic app layout'
-        : 'Try new app layout',
-    keyDownHandler: () => {
-      const enabled = toggleExperimentalAppLayout();
-      toast.success(
-        enabled ? 'New app layout enabled' : 'Classic app layout enabled'
-      );
-      return true;
-    },
-    icon: GridIcon,
-    keywords: [
-      'sidebar',
-      'layout',
-      'views',
-      'classic',
-      'old',
-      'new',
-      'experiment',
-    ],
-    displayPriority: 9,
-    runWithInputFocused: true,
-  });
+  for (const layout of APP_LAYOUT_DEFINITIONS) {
+    registerHotkey({
+      scopeId: 'global',
+      description: `Use ${layout.label} app layout`,
+      keyDownHandler: () => {
+        selectAppLayout(layout.id);
+        toast.success(`${layout.label} app layout enabled`);
+        return true;
+      },
+      icon: GridIcon,
+      keywords: [
+        'sidebar',
+        'layout',
+        'views',
+        'classic',
+        'old',
+        'new',
+        'experiment',
+        layout.label,
+      ],
+      displayPriority: 9,
+      hide: () => effectiveAppLayoutId() === layout.id,
+      runWithInputFocused: true,
+    });
+  }
 
   registerHotkey({
     hotkeyToken: TOKENS.global.commandMenu,

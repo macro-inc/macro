@@ -1,5 +1,5 @@
 import { isListViewID } from '@app/constants/list-views';
-import { experimentalAppLayoutEnabled } from '@app/features/experimental-app-layout/state';
+import { activeAppLayout } from '@app/features/app-layout/layout-state';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
@@ -24,5 +24,5 @@ export function useIsNewInboxEnabled() {
   return () =>
     currentView() === 'inbox' &&
     (newInboxFlag().enabled ||
-      (experimentalAppLayoutEnabled() && !isTouchDevice()));
+      (activeAppLayout().capabilities.usesNewInbox && !isTouchDevice()));
 }

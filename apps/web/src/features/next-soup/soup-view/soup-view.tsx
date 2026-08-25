@@ -1,15 +1,9 @@
 import { LIST_VIEW_DOCS_URL } from '@app/constants/docs-links';
 import { isListViewID, type ListView } from '@app/constants/list-views';
 import { SoupChatInput } from '@app/features/chat/SoupChatInput';
-import { ExperimentalAutomationCard } from '@app/features/experimental-app-layout/experimental-automation-card';
-import { ExperimentalGroupHeader } from '@app/features/experimental-app-layout/experimental-group-header';
-import { ExperimentalListEntity } from '@app/features/experimental-app-layout/experimental-list-entity';
-import {
-  ExperimentalSoupLayout,
-  type ExperimentalSoupView,
-  experimentalSoupViewForContent,
-} from '@app/features/experimental-app-layout/experimental-soup-layout';
-import { experimentalAppLayoutEnabled } from '@app/features/experimental-app-layout/state';
+import { activeAppLayout } from '@app/features/app-layout/layout-state';
+import { activeAppLayoutSurfaces } from '@app/features/app-layout/layout-surfaces';
+import type { ExperimentalSoupView } from '@app/features/experimental-app-layout/experimental-soup-layout';
 import {
   makeMarkDoneAction,
   useEntityActionHotkeys,
@@ -448,7 +442,8 @@ export const SoupView = (props: SoupViewProps) => {
     if (
       !DEFAULT_PREVIEW_VIEWS.has(contentId) ||
       !previewOpenPreference() ||
-      (experimentalAppLayoutEnabled() && contentId === 'channels')
+      (activeAppLayout().capabilities.usesMessagesWorkspace &&
+        contentId === 'channels')
     ) {
       initialPreviewResolved = true;
       return;
@@ -504,7 +499,7 @@ export const SoupView = (props: SoupViewProps) => {
   createEffect(
     on(
       () =>
-        experimentalAppLayoutEnabled() &&
+        activeAppLayout().capabilities.usesMessagesWorkspace &&
         contentId === 'channels' &&
         soupView.activeTab() !== 'experimental-conversations',
       (shouldApplyMessagesPreset) => {
@@ -516,12 +511,8 @@ export const SoupView = (props: SoupViewProps) => {
   );
 
   const experimentalView = createMemo(() => {
-    if (
-      !experimentalAppLayoutEnabled() ||
-      isTouchDevice()
-    ) {
-      return undefined;
-    }
+    const resolveSoupView = activeAppLayoutSurfaces()?.resolveSoupView;
+    if (!resolveSoupView) return undefined;
 
     const content = panel.handle.content();
     const requestedView =
@@ -530,19 +521,17 @@ export const SoupView = (props: SoupViewProps) => {
         ? 'messages'
         : props.experimentalView;
 
-    return experimentalSoupViewForContent({
+    return resolveSoupView({
       contentId,
       requestedView,
     });
   });
 
   createEffect(() => {
+    const view = experimentalView();
     panel.handle.setDisplayName(
-      experimentalView() === 'messages'
-        ? 'Messages'
-        : experimentalView() === 'machines'
-          ? 'Powers'
-          : props.viewName
+      (view && activeAppLayout().experimentalViewNames?.[view]) ??
+        props.viewName
     );
   });
 
@@ -797,12 +786,13 @@ export const SoupView = (props: SoupViewProps) => {
         }
       >
         {(view) => (
-          <ExperimentalSoupLayout
+          <Dynamic
+            component={activeAppLayoutSurfaces()?.SoupLayout}
             view={view()}
             initialSearchText={props.initialSearchText}
             hasPreviewItems={hasPreviewItems()}
             onPreviewEngage={openFocusedEntityInPreview}
-            onPreviewOpenChange={(open) => {
+            onPreviewOpenChange={(open: boolean) => {
               if (DEFAULT_PREVIEW_VIEWS.has(contentId))
                 setPreviewOpenPreference(open);
             }}
@@ -814,7 +804,7 @@ export const SoupView = (props: SoupViewProps) => {
                 </Show>
               </Suspense>
             </div>
-          </ExperimentalSoupLayout>
+          </Dynamic>
         )}
       </Show>
       <Suspense>
@@ -1015,14 +1005,17 @@ const SoupViewListContent = (props: SoupViewListProps) => {
     if (currentView() === 'companies') return CompanyListEntity;
     if (currentView() === 'inbox' && (props.experimental || isNewInboxEnabled()))
       return InboxListEntity;
-    if (props.experimental) return ExperimentalListEntity;
+    if (props.experimental)
+      return activeAppLayoutSurfaces()?.SoupListEntity ?? ListEntity;
     return ListEntity;
   };
 
   const groupHeaderComponent = () => {
     if (currentView() === 'tasks') return TaskGroupHeader;
+    if (currentView() === 'companies') return DefaultGroupHeader;
     if (soup.grouping.activeGroupId() === 'date') return DateGroupHeader;
-    if (props.experimental) return ExperimentalGroupHeader;
+    if (props.experimental)
+      return activeAppLayoutSurfaces()?.SoupGroupHeader ?? DefaultGroupHeader;
     return DefaultGroupHeader;
   };
 
@@ -1363,7 +1356,8 @@ const SoupViewListContent = (props: SoupViewListProps) => {
           <For each={automationRows()}>
             {(row) => (
               <SoupEntityContextMenu entity={row.original}>
-                <ExperimentalAutomationCard
+                <Dynamic
+                  component={activeAppLayoutSurfaces()?.SoupAutomationCard}
                   entity={row.original as AutomationEntity}
                   highlighted={row.isFocused()}
                   onMouseMove={() => {
@@ -1691,8 +1685,8 @@ const SoupViewListContent = (props: SoupViewListProps) => {
                                         });
                                       }}
                                       onProjectClick={(
-                                        projectEntity,
-                                        event
+                                        projectEntity: ProjectEntity,
+                                        event: PointerEvent | MouseEvent
                                       ) => {
                                         onEntityClick({
                                           type: 'project',

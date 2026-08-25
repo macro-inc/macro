@@ -1,22 +1,18 @@
-import { makePersisted } from '@solid-primitives/storage';
-import { createSignal } from 'solid-js';
+import {
+  activeAppLayout,
+  selectAppLayout,
+} from '@app/features/app-layout/layout-state';
 
-const EXPERIMENTAL_APP_LAYOUT_STORAGE_KEY =
-  'macro:pref:experimental-app-layout';
+/** Compatibility accessor for behavior shared by all non-Classic layouts. */
+export const experimentalAppLayoutEnabled = () =>
+  activeAppLayout().capabilities.experimentalSurfaces;
 
-/**
- * Device-local switch for the reversible app layout experiment.
- *
- * This intentionally defaults to the classic experience and is shared at
- * module scope so the command menu, sidebar, and soup views update together
- * without a reload.
- */
-export const [experimentalAppLayoutEnabled, setExperimentalAppLayoutEnabled] =
-  makePersisted(createSignal(false), {
-    name: EXPERIMENTAL_APP_LAYOUT_STORAGE_KEY,
-  });
+/** Compatibility setter. New callers should select a registered layout id. */
+export function setExperimentalAppLayoutEnabled(enabled: boolean) {
+  selectAppLayout(enabled ? 'experimental-v1' : 'classic');
+}
 
-/** Toggle between the classic and experimental desktop app layouts. */
+/** Compatibility binary toggle between Classic and the frozen v1 experiment. */
 export function toggleExperimentalAppLayout(): boolean {
   const enabled = !experimentalAppLayoutEnabled();
   setExperimentalAppLayoutEnabled(enabled);

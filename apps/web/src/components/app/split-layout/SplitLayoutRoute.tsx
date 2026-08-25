@@ -1,4 +1,4 @@
-import { experimentalAppLayoutEnabled } from '@app/features/experimental-app-layout/state';
+import { activeAppLayout } from '@app/features/app-layout/layout-state';
 import { setGlobalSplitManager } from '@app/signal/splitLayout';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import type { WithRequired } from '@core/util/withRequired';
@@ -8,6 +8,11 @@ import {
   useParams,
 } from '@solidjs/router';
 import { SplitLayoutContainer } from './SplitLayout';
+import {
+  getLastBrainWorkspaceSelection,
+  parseBrainWorkspaceRoute,
+  serializeBrainWorkspacePath,
+} from './brainWorkspaceRoute';
 import {
   parseChannelsWorkspaceRoute,
   serializeChannelsWorkspacePath,
@@ -20,10 +25,22 @@ type LayoutPath = {
 };
 
 function LayoutRoute(props: RouteSectionProps & LayoutPath) {
+  const brainWorkspaceEnabled = () =>
+    activeAppLayout().capabilities.usesBrainWorkspace && !isTouchDevice();
+
   return (
     <SplitLayoutContainer
       pairs={props.params.splits?.split('/') ?? []}
       setManager={setGlobalSplitManager}
+      serializePath={
+        brainWorkspaceEnabled()
+          ? (segments) =>
+              serializeBrainWorkspacePath(
+                segments,
+                getLastBrainWorkspaceSelection()
+              )
+          : undefined
+      }
     />
   );
 }
@@ -31,7 +48,7 @@ function LayoutRoute(props: RouteSectionProps & LayoutPath) {
 function ChannelsLayoutRoute() {
   const params = useParams<{ channelsPath?: string }>();
   const messagesWorkspaceEnabled = () =>
-    experimentalAppLayoutEnabled() && !isTouchDevice();
+    activeAppLayout().capabilities.usesMessagesWorkspace && !isTouchDevice();
   const route = () => parseChannelsWorkspaceRoute(params.channelsPath);
   const pairs = () => {
     const { selectedChannelId, splitSegments } = route();
@@ -60,6 +77,34 @@ function ChannelsLayoutRoute() {
   );
 }
 
+function BrainLayoutRoute() {
+  const params = useParams<{ brainPath?: string }>();
+  const brainWorkspaceEnabled = () =>
+    activeAppLayout().capabilities.usesBrainWorkspace && !isTouchDevice();
+  const route = () => parseBrainWorkspaceRoute(params.brainPath);
+  const pairs = () => [
+    'component',
+    'agents',
+    ...(brainWorkspaceEnabled() ? route().splitSegments : []),
+  ];
+
+  return (
+    <SplitLayoutContainer
+      pairs={pairs()}
+      setManager={setGlobalSplitManager}
+      serializePath={
+        brainWorkspaceEnabled()
+          ? (segments) =>
+              serializeBrainWorkspacePath(
+                segments,
+                getLastBrainWorkspaceSelection() ?? route().selection
+              )
+          : undefined
+      }
+    />
+  );
+}
+
 function ChatLayoutRoute() {
   return (
     <SplitLayoutContainer
@@ -76,6 +121,12 @@ export const CHANNELS_LAYOUT_ROUTE: WithRequired<
 > = {
   path: '/channels/*channelsPath',
   component: ChannelsLayoutRoute,
+};
+
+/** Brain workspace route; the optional tail is its selected section or chat. */
+export const BRAIN_LAYOUT_ROUTE: WithRequired<RouteDefinition, 'component'> = {
+  path: '/agents/*brainPath',
+  component: BrainLayoutRoute,
 };
 
 /** Standalone chat workspace route; the optional tail is the active chat id. */

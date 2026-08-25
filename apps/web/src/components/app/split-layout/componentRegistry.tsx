@@ -1,7 +1,8 @@
 import { useActivityFeedFlag } from '@app/features/activity/use-activity-feed-flag';
+import { activeAppLayoutSurfaces } from '@app/features/app-layout/layout-surfaces';
 import type { EventEditorInitialValues } from '@app/features/calendar/components/composer/event-form-model';
 import type { CalendarEvent } from '@app/features/calendar/types';
-import { ExperimentalChatView } from '@app/features/experimental-app-layout/experimental-chat-view';
+import { ExperimentalChatView as ExperimentalChatViewV1 } from '@app/features/experimental-app-layout/experimental-chat-view';
 import { GettingStarted } from '@app/features/getting-started';
 import { Home } from '@app/features/home';
 import { queryStateFrom } from '@app/features/next-soup/filters/filter-store';
@@ -40,6 +41,7 @@ import EmptyStatePreviewIcon from '@design/empty-state-doc.svg';
 import { useAutomationEntities } from '@queries/agent-schedule/entities';
 import { EmptyStatePanel } from '@ui';
 import { type Component, type JSXElement, lazy, onMount, Show } from 'solid-js';
+import { Dynamic } from 'solid-js/web';
 import type { SplitContent } from './layoutManager';
 import { useSplitPanelOrThrow } from './layoutUtils';
 import { previewEmptyStateForContent } from './previewController';
@@ -159,7 +161,13 @@ registerComponent(
   'chat-workspace',
   withAuth(() => {
     usePageViewTracking('chat');
-    return <ExperimentalChatView />;
+    return (
+      <Dynamic
+        component={
+          activeAppLayoutSurfaces()?.ChatView ?? ExperimentalChatViewV1
+        }
+      />
+    );
   })
 );
 

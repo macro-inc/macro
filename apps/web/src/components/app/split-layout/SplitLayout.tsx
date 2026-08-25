@@ -1,4 +1,4 @@
-import { experimentalAppLayoutEnabled } from '@app/features/experimental-app-layout/state';
+import { activeAppLayout } from '@app/features/app-layout/layout-state';
 import { useGlobalBlockOrchestrator } from '@components/app/GlobalAppState';
 import {
   isSidebarVisible,
@@ -123,7 +123,8 @@ export function SplitLayoutContainer(props: SplitLayoutContainerProps) {
         class={cn('size-full p-2 touch:p-0', {
           'pl-0':
             isSidebarVisible() &&
-            (!sidebar.isCollapsed() || experimentalAppLayoutEnabled()),
+            (!sidebar.isCollapsed() ||
+              activeAppLayout().capabilities.removesSplitContentLeftPadding),
         })}
       >
         <Show
