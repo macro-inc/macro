@@ -1,5 +1,20 @@
 # Cache Revision Plan
 
+## Implementation status
+
+Implemented in the browser and Tauri cache stacks:
+
+- `cache-core::Engine` owns a generation-local, checked `u64` revision;
+- logical view mutations install one revision after successful storage work;
+- write, predicate, and explicit-record-selection results carry that revision;
+- WASM/native boundaries serialize revisions as canonical decimal strings;
+- worker pushes carry the exact engine revision and engine replacement clears consumer watermarks;
+- normalized-cache results identify live-network, cache-hit, and affected-reread sources;
+- flat GraphQL Soup accepts local membership only when filter, selection, and current-engine revisions agree;
+- revision-bound local predicate pagination remains deferred as described below.
+
+No durable schema, storage trait, Turso metadata, or OPFS format was changed.
+
 ## Objective
 
 Add an in-memory cache revision to `cache-core` and propagate it through the browser cache stack so consumers can distinguish these states without issuing a new API request:

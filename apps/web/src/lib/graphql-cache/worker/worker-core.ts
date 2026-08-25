@@ -84,6 +84,28 @@ function isQueryDataWrite(request: CacheRequest): boolean {
   return request.kind === 'write' || request.kind === 'hydrate';
 }
 
+function revisionAdvancementCategory(
+  request: CacheRequest
+):
+  | 'authoritative-write'
+  | 'optimistic-enqueue'
+  | 'optimistic-commit'
+  | 'optimistic-rollback'
+  | 'external-invalidation'
+  | 'deletion'
+  | 'clear'
+  | undefined {
+  return match(request.kind)
+    .with('write', 'hydrate', () => 'authoritative-write' as const)
+    .with('enqueue-optimistic-mutation', () => 'optimistic-enqueue' as const)
+    .with('commit-optimistic-write', () => 'optimistic-commit' as const)
+    .with('rollback-optimistic-write', () => 'optimistic-rollback' as const)
+    .with('invalidate', () => 'external-invalidation' as const)
+    .with('delete-records', () => 'deletion' as const)
+    .with('clear', () => 'clear' as const)
+    .otherwise(() => undefined);
+}
+
 function requestPriority(request: CacheRequest): number {
   if (request.kind === 'hydrate') return BACKGROUND_HYDRATION_PRIORITY;
   if (request.kind === 'read') {
@@ -184,6 +206,16 @@ export class CacheWorkerCore {
     try {
       const result = await this.enqueue(request);
       const durationMs = this.now() - startedAt;
+      const revisionCategory = revisionAdvancementCategory(request);
+      if (revisionCategory !== undefined) {
+        this.telemetry.record({
+          name: 'graphql_cache.revision_advance',
+          operationCategory: category,
+          outcome: 'success',
+          errorCode: 'none',
+          revisionCategory,
+        });
+      }
       this.telemetry.record({
         name: 'graphql_cache.engine_request',
         operationCategory: category,

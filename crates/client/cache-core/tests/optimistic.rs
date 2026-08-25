@@ -529,6 +529,11 @@ fn claim_failure_after_enqueue_preserves_one_durable_visible_mutation() {
             .await
             .unwrap();
 
+        assert_eq!(
+            result.write_result.revision,
+            engine.current_revision(),
+            "the failed lease claim must not add a second revision"
+        );
         assert!(matches!(
             result.initial_claim,
             InitialClaimOutcome::Failed(EngineError::Storage(ref error))
@@ -732,6 +737,7 @@ fn stale_claim_cannot_settle_mutation() {
             )
             .await
             .unwrap();
+        let revision_before_stale_settlement = engine.current_revision();
         let error = engine
             .rollback_optimistic_write(
                 transaction,
@@ -743,6 +749,7 @@ fn stale_claim_cannot_settle_mutation() {
             .await
             .unwrap_err();
         assert!(matches!(error, EngineError::StaleMutationClaim(id) if id == transaction));
+        assert_eq!(engine.current_revision(), revision_before_stale_settlement);
         assert_eq!(
             engine.storage().load_mutation_queue().await.unwrap().len(),
             1
