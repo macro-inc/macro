@@ -221,7 +221,10 @@ describe('UserTooltip copy actions', () => {
 
   it('hides Copy name when displayName equals email', () => {
     render(() => (
-      <UserTooltip displayName="jane.doe@example.com" email="jane.doe@example.com" />
+      <UserTooltip
+        displayName="jane.doe@example.com"
+        email="jane.doe@example.com"
+      />
     ));
 
     expect(screen.queryByRole('button', { name: 'Copy name' })).toBeNull();
@@ -238,7 +241,9 @@ describe('UserTooltip copy actions', () => {
   });
 
   it('hides Copy name when displayName is blank', () => {
-    render(() => <UserTooltip displayName="   " email="jane.doe@example.com" />);
+    render(() => (
+      <UserTooltip displayName="   " email="jane.doe@example.com" />
+    ));
 
     expect(screen.queryByRole('button', { name: 'Copy name' })).toBeNull();
     expect(screen.getByRole('button', { name: 'Copy email' })).toBeTruthy();
