@@ -1,8 +1,8 @@
 import { openExternalUrl } from '@core/util/url';
-import CaretDown from '@phosphor/caret-down.svg';
-import CaretRight from '@phosphor/caret-right.svg';
-import GlobeIcon from '@phosphor/globe-simple.svg';
-import LinkIcon from '@phosphor/link.svg';
+import CaretDown from '@lucide/chevron-down.svg';
+import CaretRight from '@lucide/chevron-right.svg';
+import GlobeIcon from '@lucide/globe.svg';
+import LinkIcon from '@lucide/link.svg';
 import { proxyResource } from '@service-unfurl/client';
 import type { GetUnfurlResponse } from '@service-unfurl/generated/schemas/getUnfurlResponse';
 import { cn } from '@ui';

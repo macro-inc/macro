@@ -1,5 +1,5 @@
-import RefreshIcon from '@phosphor/arrow-clockwise.svg';
-import WarningIcon from '@phosphor/warning.svg';
+import RefreshIcon from '@lucide/rotate-cw.svg';
+import WarningIcon from '@lucide/triangle-alert.svg';
 import { Button } from '@ui';
 import {
   createSignal,

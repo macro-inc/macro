@@ -1,7 +1,7 @@
 import type { TagFilterMode } from '@app/features/next-soup/filters/filter-store/types';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { Combobox } from '@kobalte/core/combobox';
-import XIcon from '@phosphor/x.svg';
+import XIcon from '@lucide/x.svg';
 import { Button, Dropdown, Layer, SingleSelectCheck } from '@ui';
 import {
   type Accessor,

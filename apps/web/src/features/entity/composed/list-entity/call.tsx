@@ -1,7 +1,7 @@
 import { formatCallDuration } from '@block-call/utils';
 import { UserIcon } from '@core/component/UserIcon';
 import { matches } from '@core/util/match';
-import UserCircleIcon from '@phosphor/user-circle.svg';
+import UserCircleIcon from '@lucide/circle-user.svg';
 import { UserGroup } from '@property/component/propertyValue/UserGroup';
 import { usePropertyEntityDisplay } from '@property/hooks';
 import type { EntityReference } from '@property/types';

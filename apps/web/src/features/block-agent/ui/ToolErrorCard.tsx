@@ -9,10 +9,10 @@
  */
 
 import { Collapsible } from '@kobalte/core/collapsible';
-import CaretRight from '@phosphor/caret-right.svg';
-import Check from '@phosphor/check.svg';
-import Copy from '@phosphor/copy.svg';
-import Prohibit from '@phosphor/prohibit.svg';
+import Prohibit from '@lucide/ban.svg';
+import Check from '@lucide/check.svg';
+import CaretRight from '@lucide/chevron-right.svg';
+import Copy from '@lucide/copy.svg';
 import { Button } from '@ui';
 import { createMemo, createSignal, Show } from 'solid-js';
 

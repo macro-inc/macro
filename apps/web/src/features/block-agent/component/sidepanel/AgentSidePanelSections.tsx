@@ -17,7 +17,7 @@ import { registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
 import { formatDate } from '@core/util/date';
 import { openExternalUrl } from '@core/util/url';
-import GitBranch from '@phosphor/git-branch.svg';
+import GitBranch from '@lucide/git-branch.svg';
 import { agentHarnessServiceClient } from '@service-agent-harness/client';
 import { createMemo, createSignal, For, onCleanup, Show } from 'solid-js';
 import { useAgentSession } from '../../context/AgentSessionContext';

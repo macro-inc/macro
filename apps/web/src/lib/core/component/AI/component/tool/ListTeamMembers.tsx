@@ -1,7 +1,7 @@
 import { UserIcon } from '@core/component/UserIcon';
 import { getDisplayName, tryMacroId } from '@core/user';
-import Envelope from '@phosphor-icons/core/regular/envelope.svg';
-import Users from '@phosphor-icons/core/regular/users.svg';
+import Envelope from '@lucide/mail.svg';
+import Users from '@lucide/users.svg';
 import type { NamedTool } from '@service-cognition/generated/tools/tool';
 import { For, Show } from 'solid-js';
 import { BaseTool } from './BaseTool';

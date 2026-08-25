@@ -7,7 +7,7 @@ import { AnimatedFileMdIcon } from '@icon/wide-fileMd';
 import { AnimatedInboxIcon } from '@icon/wide-inbox';
 import { AnimatedStarIcon } from '@icon/wide-star';
 import { AnimatedTaskIcon } from '@icon/wide-task';
-import BellIcon from '@phosphor/bell-simple.svg';
+import BellIcon from '@lucide/bell.svg';
 import { type Accessor, createMemo } from 'solid-js';
 import type { MobileTouchIconComponent } from './MobileTouchMenu';
 import type { MobileNavViewId } from './mobile-nav-views';

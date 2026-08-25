@@ -1,5 +1,5 @@
 import { hapticImpact } from '@core/mobile/haptics';
-import DotsThreeIcon from '@phosphor/dots-three.svg';
+import DotsThreeIcon from '@lucide/ellipsis.svg';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { cn } from '@ui';
 import {

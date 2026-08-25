@@ -94,11 +94,11 @@ import {
   type SearchLocation,
 } from '@entity';
 import SearchIcon from '@icon/macro-magnifying-glass.svg';
-import CaretDownIcon from '@phosphor/caret-down.svg';
-import ChevronRightIcon from '@phosphor/caret-right.svg';
-import CheckIcon from '@phosphor/check.svg';
-import InfoIcon from '@phosphor/info.svg';
-import Spinner from '@phosphor/spinner.svg';
+import CheckIcon from '@lucide/check.svg';
+import CaretDownIcon from '@lucide/chevron-down.svg';
+import ChevronRightIcon from '@lucide/chevron-right.svg';
+import InfoIcon from '@lucide/info.svg';
+import Spinner from '@lucide/loader-circle.svg';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { debounce } from '@solid-primitives/scheduled';
 import { Button, cn, Layer, Tooltip } from '@ui';

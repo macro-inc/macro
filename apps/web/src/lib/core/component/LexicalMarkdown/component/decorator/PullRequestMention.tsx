@@ -2,6 +2,10 @@ import { useSplitLayout } from '@components/app/split-layout/layout';
 import { HoverCard } from '@core/component/HoverCard';
 import { openInNewSplitForMention } from '@core/util/openInNewSplit';
 import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
+import GitMerge from '@lucide/git-merge.svg';
+import GitPullRequest from '@lucide/git-pull-request.svg';
+import OpenIcon from '@lucide/maximize-2.svg';
+import ChatCircle from '@lucide/message-circle.svg';
 import {
   $isPullRequestMentionNode,
   HISTORIC_TAG,
@@ -9,10 +13,6 @@ import {
   SKIP_DOM_SELECTION_TAG,
   SKIP_SCROLL_INTO_VIEW_TAG,
 } from '@macro-inc/lexical-core';
-import OpenIcon from '@phosphor/arrows-out.svg';
-import ChatCircle from '@phosphor/chat-circle.svg';
-import GitMerge from '@phosphor/git-merge.svg';
-import GitPullRequest from '@phosphor/git-pull-request.svg';
 import { usePrMentionQuery } from '@queries/storage/pr-mention';
 import type {
   ForeignEntity,

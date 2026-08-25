@@ -9,11 +9,11 @@ import {
   useCanEdit,
   useIsDocumentOwner,
 } from '@core/signal/permissions';
-import ChatTeardrop from '@phosphor/chat-teardrop.svg';
-import Signature from '@phosphor/signature.svg';
-import Textbox from '@phosphor/textbox.svg';
-import Trash from '@phosphor/trash-simple.svg';
-import Cancel from '@phosphor/x.svg';
+import ChatTeardrop from '@lucide/message-circle.svg';
+import Signature from '@lucide/signature.svg';
+import Textbox from '@lucide/text-cursor-input.svg';
+import Trash from '@lucide/trash-2.svg';
+import Cancel from '@lucide/x.svg';
 import { Button } from '@ui';
 import { createMemo, Show } from 'solid-js';
 import { placeableIdMap, useDeletePlaceable } from '../store/placeables';

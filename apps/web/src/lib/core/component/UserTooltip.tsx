@@ -11,7 +11,7 @@ import WideChat from '@icon/wide-chat.svg';
 import WideContact from '@icon/wide-contact.svg';
 import WideCopy from '@icon/wide-copy.svg';
 import WideTask from '@icon/wide-task.svg';
-import IconCheck from '@phosphor/check.svg';
+import IconCheck from '@lucide/check.svg';
 import { useGetOrCreateDirectMessageMutation } from '@queries/channel/get-or-create-dm';
 import { useCrmContactByEmailQuery } from '@queries/crm/contacts';
 import { useCurrentTeamQuery } from '@queries/team/teams';

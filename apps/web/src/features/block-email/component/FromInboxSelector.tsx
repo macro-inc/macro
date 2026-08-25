@@ -1,8 +1,8 @@
 import { inboxIconProps } from '@core/component/inboxIcon';
 import { UserIcon } from '@core/component/UserIcon';
 import { emailToMacroId, getDisplayName } from '@core/user';
-import ChevronDown from '@phosphor/caret-down.svg';
-import Check from '@phosphor/check.svg';
+import Check from '@lucide/check.svg';
+import ChevronDown from '@lucide/chevron-down.svg';
 import { cn, Dropdown } from '@ui';
 import { For, Show } from 'solid-js';
 

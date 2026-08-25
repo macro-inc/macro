@@ -6,7 +6,7 @@ import {
 } from '@components/app/mobile/use-mobile-nav';
 import { hapticImpact } from '@core/mobile/haptics';
 import { usePreserveFocusOnButtonTaps } from '@core/mobile/usePreserveFocusOnButtonTaps';
-import XIcon from '@phosphor/x.svg';
+import XIcon from '@lucide/x.svg';
 import { cn } from '@ui';
 import { createEffect, on } from 'solid-js';
 import { SearchState } from './mobileSearchState';

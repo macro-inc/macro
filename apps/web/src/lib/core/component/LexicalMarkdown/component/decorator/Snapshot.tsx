@@ -9,13 +9,13 @@ import { verifyBlockName } from '@core/constant/allBlocks';
 import { matches } from '@core/util/match';
 import { openInNewSplitForMention } from '@core/util/openInNewSplit';
 import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
+import EyeSlashDuo from '@lucide/eye-off.svg';
+import LoadingSpinner from '@lucide/loader-circle.svg';
+import TrashSimple from '@lucide/trash-2.svg';
 import {
   $isSnapshotNode,
   type SnapshotDecoratorProps,
 } from '@macro-inc/lexical-core';
-import EyeSlashDuo from '@phosphor/eye-slash.svg';
-import LoadingSpinner from '@phosphor/spinner.svg';
-import TrashSimple from '@phosphor/trash-simple.svg';
 import { isAccessiblePreviewItem, useItemPreview } from '@queries/preview';
 import { blockNameToItemType } from '@service-storage/client';
 import { createCallback } from '@solid-primitives/rootless';

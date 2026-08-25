@@ -3,8 +3,8 @@
 import { toast } from '@core/component/Toast/Toast';
 import { SERVER_HOSTS } from '@core/constant/servers';
 import { throwOnErr } from '@core/util/result';
-import SpinnerIcon from '@phosphor/spinner.svg';
-import XIcon from '@phosphor/x.svg';
+import SpinnerIcon from '@lucide/loader-circle.svg';
+import XIcon from '@lucide/x.svg';
 import {
   invalidateUserTeams,
   useCurrentTeamQuery,

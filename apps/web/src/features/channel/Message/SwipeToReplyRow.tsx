@@ -4,7 +4,7 @@ import {
 } from '@components/app/mobile/SwipableRow';
 import { triggerFocusInput } from '@core/directive/focusInput';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import ReplyIcon from '@phosphor/arrow-bend-up-left.svg';
+import ReplyIcon from '@lucide/corner-up-left.svg';
 import { type ParentProps, Show, useContext } from 'solid-js';
 import type { MessageActions, MessageData } from './types';
 

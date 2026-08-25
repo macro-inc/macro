@@ -1,4 +1,4 @@
-import IconTextA from '@phosphor-icons/core/regular/text-aa.svg?component-solid';
+import IconTextA from '@lucide/case-sensitive.svg?component-solid';
 import type { ThemeV3 } from '@theme/types/themeTypes';
 import { cn } from '@ui';
 import type { JSX } from 'solid-js';

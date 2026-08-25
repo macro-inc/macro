@@ -1,12 +1,12 @@
 import { SidePanel } from '@components/app/side-panel/SidePanel';
-import ArrowSquareOut from '@phosphor/arrow-square-out.svg';
-import CheckCircle from '@phosphor/check-circle.svg';
-import Circle from '@phosphor/circle.svg';
-import CircleNotch from '@phosphor/circle-notch.svg';
-import GitMerge from '@phosphor/git-merge.svg';
-import GitPullRequest from '@phosphor/git-pull-request.svg';
-import MinusCircle from '@phosphor/minus-circle.svg';
-import XCircle from '@phosphor/x-circle.svg';
+import Circle from '@lucide/circle.svg';
+import CheckCircle from '@lucide/circle-check.svg';
+import MinusCircle from '@lucide/circle-minus.svg';
+import XCircle from '@lucide/circle-x.svg';
+import ArrowSquareOut from '@lucide/external-link.svg';
+import GitMerge from '@lucide/git-merge.svg';
+import GitPullRequest from '@lucide/git-pull-request.svg';
+import CircleNotch from '@lucide/loader-circle.svg';
 import type {
   GithubPullRequest,
   GithubPullRequestCheckRun,

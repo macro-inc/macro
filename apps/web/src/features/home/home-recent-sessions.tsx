@@ -2,7 +2,7 @@ import { QUERY_FILTERS_BASE } from '@app/features/next-soup/filters/query-filter
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
 import { EntityIcon } from '@core/component/EntityIcon';
-import ChevronRightIcon from '@phosphor/caret-right.svg';
+import ChevronRightIcon from '@lucide/chevron-right.svg';
 import {
   type SoupItemsQueryArgs,
   useSoupItemsQuery,

@@ -1,5 +1,5 @@
-import KeyIcon from '@phosphor/key.svg';
-import XIcon from '@phosphor/x.svg';
+import KeyIcon from '@lucide/key.svg';
+import XIcon from '@lucide/x.svg';
 import type { Bot } from '@service-storage/generated/schemas/bot';
 import { Button, Dialog, Panel } from '@ui';
 import { createSignal, Show } from 'solid-js';

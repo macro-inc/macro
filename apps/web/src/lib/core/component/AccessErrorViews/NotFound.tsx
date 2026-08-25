@@ -1,4 +1,4 @@
-import Question from '@phosphor-icons/core/regular/question.svg?component-solid';
+import Question from '@lucide/circle-help.svg?component-solid';
 
 /**
  * @description This is the view for when a user tries to access an item that returns a 404 indicating it does not exist or it has been deleted.

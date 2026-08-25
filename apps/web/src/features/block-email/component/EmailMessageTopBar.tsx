@@ -1,6 +1,6 @@
 import { useEmail } from '@core/context/user';
 import type { DateValue } from '@core/util/date';
-import CaretRight from '@phosphor/caret-right.svg';
+import CaretRight from '@lucide/chevron-right.svg';
 import type { ApiMessage } from '@service-email/generated/schemas';
 import { Button, cn, Tooltip } from '@ui';
 import {

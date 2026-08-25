@@ -40,17 +40,17 @@ import { plural } from '@core/util/string';
 import { handleFileFolderDrop } from '@core/util/upload';
 import { ToggleButton as KToggleButton } from '@kobalte/core/toggle-button';
 import { $generateHtmlFromNodes } from '@lexical/html';
+import ChevronDown from '@lucide/chevron-down.svg';
+import CaretRight from '@lucide/chevron-right.svg';
+import DotsThree from '@lucide/ellipsis.svg';
+import Paperclip from '@lucide/paperclip.svg';
+import ArrowCounterClockwise from '@lucide/rotate-ccw.svg?component-solid';
+import Trash from '@lucide/trash.svg';
 import {
   $appendWatermarkNodeToLast,
   $removeAllWatermarkNodes,
 } from '@macro-inc/lexical-core';
 import { Telemetry } from '@macro-inc/observability';
-import ChevronDown from '@phosphor/caret-down.svg';
-import CaretRight from '@phosphor/caret-right.svg';
-import DotsThree from '@phosphor/dots-three.svg';
-import Paperclip from '@phosphor/paperclip.svg';
-import Trash from '@phosphor/trash.svg';
-import ArrowCounterClockwise from '@phosphor-icons/core/regular/arrow-counter-clockwise.svg?component-solid';
 import { queryClient } from '@queries/client';
 import {
   useAddForwardedAttachmentsMutation,

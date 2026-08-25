@@ -33,10 +33,9 @@ vi.mock('@core/constant/featureFlags', () => ({
   ENABLE_GRAPHQL_SOUP: mocks.graphqlSoupEnabled,
 }));
 
-vi.mock(
-  '@phosphor-icons/core/regular/arrow-counter-clockwise.svg?component-solid',
-  () => ({ default: () => null })
-);
+vi.mock('@lucide/rotate-ccw.svg?component-solid', () => ({
+  default: () => null,
+}));
 
 vi.mock('@core/component/Toast/Toast', () => ({
   toast: {

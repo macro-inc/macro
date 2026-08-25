@@ -1,6 +1,6 @@
 import type { GroupHeaderProps } from '@app/features/next-soup/create-soup-state';
 import { SoupSectionHeader } from '@app/features/next-soup/soup-view/section-header';
-import ChevronRightIcon from '@phosphor/caret-right.svg';
+import ChevronRightIcon from '@lucide/chevron-right.svg';
 import { cn, Layer } from '@ui';
 
 export const DateGroupHeader = (

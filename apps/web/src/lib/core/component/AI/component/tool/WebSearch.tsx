@@ -1,5 +1,5 @@
 import { UnfurlLink } from '@core/component/Link';
-import Globe from '@phosphor-icons/core/regular/globe.svg';
+import Globe from '@lucide/globe.svg';
 import { createSignal, For } from 'solid-js';
 import { BaseTool } from './BaseTool';
 import { Tool } from './Tool';

@@ -2,9 +2,9 @@ import { LoadingBlock } from '@core/component/LoadingBlock';
 import { PcNoiseGrid } from '@core/component/PcNoiseGrid';
 import { getDisplayName, tryMacroId } from '@core/user';
 import LogoIcon from '@icon/macro-logo.svg';
-import EnvelopeIcon from '@phosphor/envelope.svg';
-import SpinnerIcon from '@phosphor/spinner.svg';
-import UsersThreeIcon from '@phosphor/users-three.svg';
+import SpinnerIcon from '@lucide/loader-circle.svg';
+import EnvelopeIcon from '@lucide/mail.svg';
+import UsersThreeIcon from '@lucide/users.svg';
 import { useUserInfo } from '@queries/auth';
 import {
   useJoinTeamMutation,

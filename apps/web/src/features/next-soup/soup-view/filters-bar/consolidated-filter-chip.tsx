@@ -1,6 +1,6 @@
 import { Combobox } from '@kobalte/core/combobox';
-import CheckIcon from '@phosphor/check.svg';
-import XIcon from '@phosphor/x.svg';
+import CheckIcon from '@lucide/check.svg';
+import XIcon from '@lucide/x.svg';
 import { Button, cn, Dropdown, Layer } from '@ui';
 import {
   type Accessor,

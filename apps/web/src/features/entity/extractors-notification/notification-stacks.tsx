@@ -3,13 +3,13 @@ import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
 import { ContextMenuContent, MenuItem } from '@core/component/ContextMenu';
 import { ContextMenu } from '@kobalte/core/context-menu';
+import CheckIcon from '@lucide/check.svg';
 import {
   getMostRecentNotification,
   type NotificationStack,
   openNotification,
   stackNotifications,
 } from '@notifications';
-import CheckIcon from '@phosphor/check.svg';
 import { Button, cn } from '@ui';
 import { createEffect, type JSX, Show } from 'solid-js';
 import { createStore, reconcile } from 'solid-js/store';

@@ -2,7 +2,7 @@ import type { SystemSortOption } from '@app/features/next-soup/soup-view/sort-op
 import { useSoupView } from '@app/features/next-soup/soup-view/soup-view-context';
 import { useCrmDisplayOptions } from '@companies/crm/display-options';
 import { useListLayout } from '@entity/composed/list-entity/shared';
-import ArrowDownIcon from '@phosphor/arrow-down.svg';
+import ArrowDownIcon from '@lucide/arrow-down.svg';
 import { cn } from '@ui/utils/classname';
 import { createMemo, For, Show } from 'solid-js';
 import '../tasks/list-property-value.css';

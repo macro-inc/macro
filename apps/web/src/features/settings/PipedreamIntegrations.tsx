@@ -5,8 +5,8 @@ import {
 } from '@core/component/AI/constant/mcpServers';
 import { toast } from '@core/component/Toast/Toast';
 import { proxyImageUrl } from '@core/util/imageProxy';
-import PlugIcon from '@phosphor-icons/core/regular/plug.svg?component-solid';
-import XIcon from '@phosphor-icons/core/regular/x.svg?component-solid';
+import PlugIcon from '@lucide/plug.svg?component-solid';
+import XIcon from '@lucide/x.svg?component-solid';
 import {
   connectPipedreamApp,
   useDeletePipedreamConnectionMutation,

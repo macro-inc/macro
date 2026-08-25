@@ -7,8 +7,8 @@ import {
   ENABLE_TASK_DUPLICATES_FLAG,
   ENABLE_TASK_DUPLICATES_OVERRIDE,
 } from '@core/constant/featureFlags';
-import CaretDownIcon from '@phosphor/caret-down.svg';
-import WarningIcon from '@phosphor/warning.svg';
+import CaretDownIcon from '@lucide/chevron-down.svg';
+import WarningIcon from '@lucide/triangle-alert.svg';
 import {
   useDismissTaskDuplicatesMutation,
   useTaskDuplicatesQuery,

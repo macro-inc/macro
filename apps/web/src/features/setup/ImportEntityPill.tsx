@@ -1,5 +1,5 @@
 import { buildSimpleEntityUrl } from '@core/util/url';
-import SpinnerIcon from '@phosphor/spinner-gap.svg';
+import SpinnerIcon from '@lucide/loader-circle.svg';
 import { entityLabel, type ImportEntity } from '@queries/import';
 import { type JSX, Match, Switch } from 'solid-js';
 import { ItemPill } from './primitives';

@@ -1,4 +1,4 @@
-import TrayArrowDown from '@phosphor-icons/core/regular/tray-arrow-down.svg';
+import TrayArrowDown from '@lucide/import.svg';
 import { createSignal } from 'solid-js';
 import { match } from 'ts-pattern';
 import { BaseTool } from './BaseTool';

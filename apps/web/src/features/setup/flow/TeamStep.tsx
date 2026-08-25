@@ -1,9 +1,9 @@
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { useEmail } from '@core/context/user';
 import { idToDisplayName } from '@core/user/util';
-import CheckIcon from '@phosphor/check.svg';
-import Plus from '@phosphor/plus.svg';
-import XIcon from '@phosphor/x.svg';
+import CheckIcon from '@lucide/check.svg';
+import Plus from '@lucide/plus.svg';
+import XIcon from '@lucide/x.svg';
 import { useContacts, useContactsQuery } from '@queries/contacts/contacts';
 import { useOnboardingQuery } from '@queries/onboarding';
 import {

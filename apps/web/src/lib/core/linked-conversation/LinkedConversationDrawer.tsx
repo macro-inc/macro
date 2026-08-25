@@ -2,7 +2,7 @@ import { navigateToChannelMessage } from '@block-channel/utils/link';
 import { useGlobalBlockOrchestrator } from '@components/app/GlobalAppState';
 import { SplitDrawer } from '@components/app/split-layout/components/SplitDrawer';
 import { useDrawerControl } from '@components/app/split-layout/components/SplitDrawerContext';
-import ArrowSquareOut from '@phosphor/arrow-square-out.svg';
+import ArrowSquareOut from '@lucide/external-link.svg';
 import { Button } from '@ui';
 import { Show } from 'solid-js';
 import { createChannelThreadSource } from './channel-thread-source';

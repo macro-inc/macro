@@ -3,7 +3,7 @@ import {
   Combobox,
   type ComboboxRootItemComponentProps,
 } from '@kobalte/core/combobox';
-import CaretDownIcon from '@phosphor/caret-down.svg';
+import CaretDownIcon from '@lucide/chevron-down.svg';
 import { useBotsQuery } from '@queries/bots/bots';
 import { useAddBotToChannelMutation } from '@queries/channel/channel-bots';
 import type { Bot } from '@service-storage/generated/schemas/bot';

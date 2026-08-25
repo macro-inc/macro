@@ -11,6 +11,13 @@ import { ENABLE_BLOCK_IN_BLOCK } from '@core/constant/featureFlags';
 import { canNestBlock, createBlockInstance } from '@core/orchestrator';
 import { blockElementSignal } from '@core/signal/blockElement';
 import { matches } from '@core/util/match';
+import Clipboard from '@lucide/clipboard.svg';
+import ClockIcon from '@lucide/clock.svg';
+import DotsThree from '@lucide/list.svg';
+import LoadingSpinner from '@lucide/loader-circle.svg';
+import Minimize from '@lucide/minimize-2.svg';
+import TrashSimple from '@lucide/trash-2.svg';
+import UserIcon from '@lucide/user.svg';
 import {
   $convertCardToMention,
   $getId,
@@ -22,13 +29,6 @@ import {
   setDocumentCardPreviewComponent,
   unsetDocumentCardPreviewCache,
 } from '@macro-inc/lexical-core';
-import Minimize from '@phosphor/arrows-in.svg';
-import Clipboard from '@phosphor/clipboard.svg';
-import ClockIcon from '@phosphor/clock.svg';
-import DotsThree from '@phosphor/list.svg';
-import LoadingSpinner from '@phosphor/spinner.svg';
-import TrashSimple from '@phosphor/trash-simple.svg';
-import UserIcon from '@phosphor/user.svg';
 import {
   type AccessiblePreviewItem,
   isAccessiblePreviewItem,

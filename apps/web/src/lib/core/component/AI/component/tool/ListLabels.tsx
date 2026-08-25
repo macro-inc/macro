@@ -1,4 +1,4 @@
-import TagSimple from '@phosphor-icons/core/regular/tag-simple.svg';
+import TagSimple from '@lucide/tag.svg';
 import { BaseTool } from './BaseTool';
 import { createToolRenderer } from './ToolRenderer';
 

@@ -3,7 +3,7 @@ import type { ChatSendInput } from '@core/component/AI/component/input/buildRequ
 import { MODEL_PRETTYNAME, MODEL_PROVIDER } from '@core/component/AI/constant';
 import { Model } from '@core/component/AI/types';
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
-import LockIcon from '@phosphor-icons/core/regular/lock-simple.svg?component-solid';
+import LockIcon from '@lucide/lock.svg?component-solid';
 
 import { cognitionApiServiceClient } from '@service-cognition/client';
 import type { ChatMessageStream } from '@service-connection/stream';

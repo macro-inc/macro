@@ -1,6 +1,6 @@
-import CaretRight from '@phosphor-icons/core/bold/caret-right-bold.svg?component-solid';
-import CheckIcon from '@phosphor-icons/core/bold/check-bold.svg?component-solid';
-import ClipboardIcon from '@phosphor-icons/core/bold/clipboard-bold.svg?component-solid';
+import CheckIcon from '@lucide/check.svg?component-solid';
+import CaretRight from '@lucide/chevron-right.svg?component-solid';
+import ClipboardIcon from '@lucide/clipboard.svg?component-solid';
 import { Button, cn } from '@ui';
 import { createSignal, For, Show } from 'solid-js';
 import {

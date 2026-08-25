@@ -1,5 +1,5 @@
-import CheckIcon from '@phosphor-icons/core/bold/check-bold.svg?component-solid';
-import ClipboardIcon from '@phosphor-icons/core/bold/clipboard-bold.svg?component-solid';
+import CheckIcon from '@lucide/check.svg?component-solid';
+import ClipboardIcon from '@lucide/clipboard.svg?component-solid';
 import { Button } from '@ui';
 import { For } from 'solid-js';
 import { CLI_COMMANDS, MACRO_MCP_CONFIG } from './mcpConstants';

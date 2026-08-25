@@ -14,8 +14,8 @@ import { getNativeMobilePlatform } from '@core/util/platform';
 import IconApple from '@icon/macro-apple.svg';
 import IconGoogle from '@icon/macro-google.svg';
 import LogoIcon from '@icon/macro-logo.svg';
-import ArrowLeft from '@phosphor/arrow-left.svg';
-import ArrowRight from '@phosphor/arrow-right.svg';
+import ArrowLeft from '@lucide/arrow-left.svg';
+import ArrowRight from '@lucide/arrow-right.svg';
 import { useUserInfo } from '@queries/auth';
 import {
   invalidateAllAfterLogin,

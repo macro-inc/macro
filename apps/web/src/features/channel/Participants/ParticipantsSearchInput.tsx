@@ -1,4 +1,4 @@
-import MagnifyingGlassIcon from '@phosphor/magnifying-glass.svg';
+import MagnifyingGlassIcon from '@lucide/search.svg';
 
 export function ParticipantsSearchInput(props: {
   value: string;

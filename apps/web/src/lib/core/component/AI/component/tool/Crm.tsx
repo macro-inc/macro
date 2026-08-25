@@ -1,4 +1,4 @@
-import Buildings from '@phosphor-icons/core/regular/buildings.svg';
+import Buildings from '@lucide/building-2.svg';
 import type { NamedTool } from '@service-cognition/generated/tools/tool';
 import { For, Show } from 'solid-js';
 import { BaseTool } from './BaseTool';

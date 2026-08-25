@@ -2,15 +2,15 @@ import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import { toast } from '@core/component/Toast/Toast';
 import { isMobileWidth } from '@core/mobile/mobileWidth';
 import { blockElementSignal } from '@core/signal/blockElement';
+import Copy from '@lucide/copy.svg';
+import DotsThree from '@lucide/list.svg';
+import TrashSimple from '@lucide/trash-2.svg';
+import TextT from '@lucide/type.svg';
 import {
   $convertPasteToText,
   $isPasteNode,
   type PasteNodeDecoratorProps,
 } from '@macro-inc/lexical-core';
-import Copy from '@phosphor/copy.svg';
-import DotsThree from '@phosphor/list.svg';
-import TextT from '@phosphor/text-t.svg';
-import TrashSimple from '@phosphor/trash-simple.svg';
 import { Button, cn, Dialog, Dropdown, Layer } from '@ui';
 import { $createNodeSelection, $getNodeByKey, $setSelection } from 'lexical';
 import { createSignal, Show, useContext } from 'solid-js';

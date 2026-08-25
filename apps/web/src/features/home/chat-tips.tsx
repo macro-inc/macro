@@ -1,12 +1,12 @@
 import { LIST_VIEW_DOCS_URL } from '@app/constants/docs-links';
 import { useSettingsState } from '@core/constant/SettingsState';
-import ArrowUpRightIcon from '@phosphor/arrow-up-right.svg';
-import AtIcon from '@phosphor/at.svg';
-import BookOpenIcon from '@phosphor/book-open.svg';
-import ChevronRightIcon from '@phosphor/caret-right.svg';
-import PaperPlaneTiltIcon from '@phosphor/paper-plane-tilt.svg';
-import PlugsConnectedIcon from '@phosphor/plugs-connected.svg';
-import PuzzlePieceIcon from '@phosphor/puzzle-piece.svg';
+import ArrowUpRightIcon from '@lucide/arrow-up-right.svg';
+import AtIcon from '@lucide/at-sign.svg';
+import BookOpenIcon from '@lucide/book-open.svg';
+import ChevronRightIcon from '@lucide/chevron-right.svg';
+import PlugsConnectedIcon from '@lucide/plug-zap.svg';
+import PuzzlePieceIcon from '@lucide/puzzle.svg';
+import PaperPlaneTiltIcon from '@lucide/send.svg';
 import { Hotkey } from '@ui';
 import { SetupRow } from './home-rows';
 

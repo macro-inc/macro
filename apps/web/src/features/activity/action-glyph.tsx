@@ -1,13 +1,13 @@
-import ChatCircle from '@phosphor/chat-circle.svg';
-import Eye from '@phosphor/eye.svg';
-import PaperPlaneTilt from '@phosphor/paper-plane-tilt.svg';
-import PencilSimple from '@phosphor/pencil-simple.svg';
-import Phone from '@phosphor/phone.svg';
-import Plus from '@phosphor/plus.svg';
-import SlidersHorizontal from '@phosphor/sliders-horizontal.svg';
-import Trash from '@phosphor/trash.svg';
-import UserMinus from '@phosphor/user-minus.svg';
-import UserPlus from '@phosphor/user-plus.svg';
+import Eye from '@lucide/eye.svg';
+import ChatCircle from '@lucide/message-circle.svg';
+import PencilSimple from '@lucide/pencil.svg';
+import Phone from '@lucide/phone.svg';
+import Plus from '@lucide/plus.svg';
+import PaperPlaneTilt from '@lucide/send.svg';
+import SlidersHorizontal from '@lucide/sliders-horizontal.svg';
+import Trash from '@lucide/trash.svg';
+import UserMinus from '@lucide/user-minus.svg';
+import UserPlus from '@lucide/user-plus.svg';
 import type { ActivityEvent } from '@queries/activity/graphql/entity';
 import { Dynamic } from 'solid-js/web';
 

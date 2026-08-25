@@ -1,7 +1,7 @@
 import { UserGroup } from '@core/component/UserGroup';
 import { UserIcon } from '@core/component/UserIcon';
 import { seedMockDisplayNames } from '@core/user/displayName';
-import User from '@phosphor-icons/core/regular/user.svg?component-solid';
+import User from '@lucide/user.svg?component-solid';
 import { Avatar } from '@ui';
 import { For } from 'solid-js';
 

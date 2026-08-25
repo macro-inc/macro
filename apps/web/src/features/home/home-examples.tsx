@@ -3,7 +3,7 @@ import { isMobile } from '@core/mobile/isMobile';
 import { AnimatedEmailIcon } from '@icon/wide-email';
 import { AnimatedFileMdIcon } from '@icon/wide-fileMd';
 import { AnimatedSearchIcon } from '@icon/wide-search';
-import XIcon from '@phosphor/x.svg';
+import XIcon from '@lucide/x.svg';
 import { createSignal, For, type JSX, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { replaceHomeComposerSelection } from './home-composer-selection';

@@ -1,4 +1,4 @@
-import CaretDownIcon from '@phosphor/caret-down.svg';
+import CaretDownIcon from '@lucide/chevron-down.svg';
 import { cn } from '@ui';
 import { Show } from 'solid-js';
 import { useProperty } from '../core/context';

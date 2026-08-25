@@ -1,6 +1,6 @@
 import { FEATURED_MCP_SERVERS } from '@core/component/AI/constant/mcpServers';
 import GmailIcon from '@icon/mcp-gmail.svg';
-import SpinnerIcon from '@phosphor/spinner-gap.svg';
+import SpinnerIcon from '@lucide/loader-circle.svg';
 import { useContacts } from '@queries/contacts/contacts';
 import { getBackfillProgress } from '@queries/email/backfill';
 import { useEmailLinksQuery } from '@queries/email/link';

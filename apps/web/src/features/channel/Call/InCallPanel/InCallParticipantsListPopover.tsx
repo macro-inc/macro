@@ -2,7 +2,7 @@ import { useSplitLayout } from '@components/app/split-layout/layout';
 import { toast } from '@core/component/Toast/Toast';
 import { getDisplayName, tryMacroId } from '@core/user';
 import { Popover } from '@kobalte/core/popover';
-import UsersThree from '@phosphor/users-three.svg';
+import UsersThree from '@lucide/users.svg';
 import { useGetOrCreateDirectMessageMutation } from '@queries/channel/get-or-create-dm';
 import { cn, Surface } from '@ui';
 import { createMemo, createSignal, For, Show } from 'solid-js';

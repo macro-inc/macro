@@ -1,4 +1,4 @@
-import ArrowsClockwiseIcon from '@phosphor-icons/core/regular/arrows-clockwise.svg?component-solid';
+import ArrowsClockwiseIcon from '@lucide/refresh-cw.svg?component-solid';
 import {
   type BackfillProgress,
   getBackfillProgress,

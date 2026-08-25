@@ -4,8 +4,8 @@
  * failed — retry it. Pure component: props in, JSX out.
  */
 
-import ArrowClockwise from '@phosphor/arrow-clockwise.svg';
-import X from '@phosphor/x.svg';
+import ArrowClockwise from '@lucide/rotate-cw.svg';
+import X from '@lucide/x.svg';
 import { Button } from '@ui';
 import { For, Show } from 'solid-js';
 

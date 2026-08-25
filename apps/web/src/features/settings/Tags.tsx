@@ -1,9 +1,9 @@
-import PencilIcon from '@phosphor/pencil-simple.svg';
-import PlusIcon from '@phosphor/plus.svg';
-import SpinnerIcon from '@phosphor/spinner.svg';
-import TrashIcon from '@phosphor/trash.svg';
-import UsersIcon from '@phosphor/users-three.svg';
-import XIcon from '@phosphor/x.svg';
+import SpinnerIcon from '@lucide/loader-circle.svg';
+import PencilIcon from '@lucide/pencil.svg';
+import PlusIcon from '@lucide/plus.svg';
+import TrashIcon from '@lucide/trash.svg';
+import UsersIcon from '@lucide/users.svg';
+import XIcon from '@lucide/x.svg';
 import { TagDot } from '@property/tags/TagDot';
 import {
   type EditableTag,

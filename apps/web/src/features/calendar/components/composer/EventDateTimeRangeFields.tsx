@@ -1,7 +1,7 @@
 import { Popover } from '@kobalte/core/popover';
-import ArrowRightIcon from '@phosphor/arrow-right.svg';
-import CalendarBlankIcon from '@phosphor/calendar-blank.svg';
-import CaretDownIcon from '@phosphor/caret-down.svg';
+import ArrowRightIcon from '@lucide/arrow-right.svg';
+import CalendarBlankIcon from '@lucide/calendar.svg';
+import CaretDownIcon from '@lucide/chevron-down.svg';
 import { Calendar } from '@ui/components/Calendar';
 import { Layer } from '@ui/components/Layer';
 import { ToggleSwitch } from '@ui/components/ToggleSwitch';

@@ -29,7 +29,7 @@ import { toast } from '@core/component/Toast/Toast';
 import { ScrollIndicators } from '@core/component/VerticalScrollIndicators';
 import { isMobile } from '@core/mobile/isMobile';
 import type { DateSelectArg, DatesSetArg } from '@fullcalendar/core';
-import SpinnerIcon from '@phosphor/spinner-gap.svg';
+import SpinnerIcon from '@lucide/loader-circle.svg';
 import { useVisibleCalendarsQuery } from '@queries/calendar/calendars';
 import { useUpdateCalendarEventMutation } from '@queries/calendar/mutations';
 import {

@@ -10,8 +10,8 @@ import {
   Entity,
   type EntityData,
 } from '@entity';
-import CheckIcon from '@phosphor/check.svg';
-import SearchIcon from '@phosphor/magnifying-glass.svg';
+import CheckIcon from '@lucide/check.svg';
+import SearchIcon from '@lucide/search.svg';
 import { useSearchInputFocus } from '@property/utils';
 import { useSearchSoupQuery } from '@queries/soup/search';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';

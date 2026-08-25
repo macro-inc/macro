@@ -5,11 +5,11 @@ import {
 import { pressPulse } from '@components/app/mobile/pressPulse';
 import { ScrollIndicators } from '@core/component/VerticalScrollIndicators';
 import { Accordion } from '@kobalte/core/accordion';
-import ChevronDownIcon from '@phosphor/caret-down.svg';
-import CheckIcon from '@phosphor/check.svg';
-import SearchIcon from '@phosphor/magnifying-glass.svg';
-import XIcon from '@phosphor/x.svg';
-import SlidersHorizontalIcon from '@phosphor-icons/core/regular/sliders-horizontal.svg?component-solid';
+import CheckIcon from '@lucide/check.svg';
+import ChevronDownIcon from '@lucide/chevron-down.svg';
+import SearchIcon from '@lucide/search.svg';
+import SlidersHorizontalIcon from '@lucide/sliders-horizontal.svg?component-solid';
+import XIcon from '@lucide/x.svg';
 import { Button, cn } from '@ui';
 import { createMemo, createSignal, For, Match, Show, Switch } from 'solid-js';
 import { type SearchFacetVM, useSearchFacets } from './search-facets';

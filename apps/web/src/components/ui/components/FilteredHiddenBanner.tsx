@@ -1,4 +1,4 @@
-import XIcon from '@phosphor/x.svg';
+import XIcon from '@lucide/x.svg';
 import { Show } from 'solid-js';
 import { cn } from '../utils/classname';
 

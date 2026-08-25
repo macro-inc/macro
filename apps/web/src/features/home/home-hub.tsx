@@ -7,16 +7,16 @@ import { EntityIcon, getEntityIconType } from '@core/component/EntityIcon';
 import { useSettingsState } from '@core/constant/SettingsState';
 import { isMobile } from '@core/mobile/isMobile';
 import type { Entity } from '@core/types';
+import ArrowUpRightIcon from '@lucide/arrow-up-right.svg';
+import BookOpenIcon from '@lucide/book-open.svg';
+import ChevronRightIcon from '@lucide/chevron-right.svg';
+import PlusIcon from '@lucide/plus.svg';
+import XIcon from '@lucide/x.svg';
 import {
   compositeEntity,
   fetchNotificationsForEntities,
   openNotification,
 } from '@notifications';
-import ArrowUpRightIcon from '@phosphor/arrow-up-right.svg';
-import BookOpenIcon from '@phosphor/book-open.svg';
-import ChevronRightIcon from '@phosphor/caret-right.svg';
-import PlusIcon from '@phosphor/plus.svg';
-import XIcon from '@phosphor/x.svg';
 import { createHomeRecommendations } from '@queries/ai/createHomeRecommendations';
 import {
   deriveRecommendedView,

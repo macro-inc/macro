@@ -1,6 +1,6 @@
 import { UserIcon } from '@core/component/UserIcon';
 import { useUnfurl } from '@core/signal/unfurl';
-import LinkIcon from '@phosphor/link.svg';
+import LinkIcon from '@lucide/link.svg';
 import { usePropertyEntityDisplay } from '@property/hooks';
 import type { Property } from '@property/types';
 import {

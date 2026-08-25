@@ -17,15 +17,15 @@ import {
   getDOMCellFromTarget,
   type TableCellNode,
 } from '@lexical/table';
-import ColumnsIcon from '@phosphor/columns.svg';
-import ColumnsPlusLeftIcon from '@phosphor/columns-plus-left.svg';
-import ColumnsPlusRightIcon from '@phosphor/columns-plus-right.svg';
-import CornersOutIcon from '@phosphor/corners-out.svg';
-import DotsIcon from '@phosphor/dots-six-vertical.svg';
-import RowsIcon from '@phosphor/rows.svg';
-import RowsPlusBottomIcon from '@phosphor/rows-plus-bottom.svg';
-import RowsPlusTopIcon from '@phosphor/rows-plus-top.svg';
-import TrashIcon from '@phosphor/trash-simple.svg';
+import ColumnsPlusRightIcon from '@lucide/between-horizontal-end.svg';
+import ColumnsPlusLeftIcon from '@lucide/between-horizontal-start.svg';
+import RowsPlusBottomIcon from '@lucide/between-vertical-end.svg';
+import RowsPlusTopIcon from '@lucide/between-vertical-start.svg';
+import ColumnsIcon from '@lucide/columns-2.svg';
+import CornersOutIcon from '@lucide/fullscreen.svg';
+import DotsIcon from '@lucide/grip-vertical.svg';
+import RowsIcon from '@lucide/rows-2.svg';
+import TrashIcon from '@lucide/trash-2.svg';
 import { createCallback } from '@solid-primitives/rootless';
 import { Layer } from '@ui';
 import {

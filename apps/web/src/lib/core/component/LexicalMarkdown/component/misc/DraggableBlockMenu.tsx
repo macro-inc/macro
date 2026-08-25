@@ -1,6 +1,6 @@
 import { ScopedPortal } from '@core/component/ScopedPortal';
 import { $isListItemNode, $isListNode, type ListItemNode } from '@lexical/list';
-import Dots from '@phosphor/dots-six-vertical.svg';
+import Dots from '@lucide/grip-vertical.svg';
 import { $getNearestNodeFromDOMNode } from 'lexical';
 import { Show, useContext } from 'solid-js';
 import type { SetStoreFunction, Store } from 'solid-js/store';

@@ -5,8 +5,8 @@ import {
   Model,
 } from '@core/component/AI/constant';
 import type { TModel } from '@core/component/AI/types';
-import CaretDown from '@phosphor-icons/core/regular/caret-down.svg?component-solid';
-import LockIcon from '@phosphor-icons/core/regular/lock-simple.svg?component-solid';
+import CaretDown from '@lucide/chevron-down.svg?component-solid';
+import LockIcon from '@lucide/lock.svg?component-solid';
 import { cn, Dropdown } from '@ui';
 import { For, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';

@@ -20,10 +20,10 @@ import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { createSkill } from '@core/util/create';
 import { buildSimpleEntityUrl } from '@core/util/url';
 import { mergeRegister } from '@lexical/utils';
-import ArrowSquareOutIcon from '@phosphor/arrow-square-out.svg';
-import ArrowsOutIcon from '@phosphor/arrows-out.svg';
-import SplitIcon from '@phosphor/square-half.svg';
-import XIcon from '@phosphor/x.svg';
+import ArrowSquareOutIcon from '@lucide/external-link.svg';
+import ArrowsOutIcon from '@lucide/maximize-2.svg';
+import SplitIcon from '@lucide/square-split-horizontal.svg';
+import XIcon from '@lucide/x.svg';
 import { onElementConnect } from '@solid-primitives/lifecycle';
 import { Button, Hotkey, Scroll } from '@ui';
 import {

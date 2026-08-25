@@ -7,8 +7,8 @@ import {
 } from '@core/comments/discussion';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { ENABLE_PR_DISCUSSION_INPUT } from '@core/constant/featureFlags';
-import CaretDown from '@phosphor/caret-down.svg';
-import CaretRight from '@phosphor/caret-right.svg';
+import CaretDown from '@lucide/chevron-down.svg';
+import CaretRight from '@lucide/chevron-right.svg';
 import type { GithubPullRequestComment } from '@service-storage/generated/schemas';
 import { ToggleSwitch } from '@ui';
 import { createMemo, createSignal, For, Match, Show, Switch } from 'solid-js';

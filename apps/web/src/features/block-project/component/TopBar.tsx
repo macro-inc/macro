@@ -41,7 +41,7 @@ import { isMobile } from '@core/mobile/isMobile';
 import { useCanEdit, useIsDocumentOwner } from '@core/signal/permissions';
 import { buildSimpleEntityUrl } from '@core/util/url';
 import IconShared from '@icon/wide-share.svg';
-import Info from '@phosphor/info.svg';
+import Info from '@lucide/info.svg';
 import { createMemo, For, Show } from 'solid-js';
 import { ProjectCreateMenu, useProjectCreateTools } from './ProjectCreateMenu';
 

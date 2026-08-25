@@ -37,15 +37,15 @@ import { buildSimpleEntityUrl } from '@core/util/url';
 import UserCircle from '@icon/wide-user-circle.svg';
 import WideUsers from '@icon/wide-users.svg';
 import { Dialog } from '@kobalte/core/dialog';
-import ChevronDownIcon from '@phosphor/caret-down.svg';
-import IconComment from '@phosphor/chat-teardrop.svg';
-import CheckIcon from '@phosphor/check.svg';
-import CopyIcon from '@phosphor/copy.svg';
-import IconEye from '@phosphor/eye.svg';
-import IconLink from '@phosphor/link.svg';
-import IconEdit from '@phosphor/pencil.svg';
-import IconShared from '@phosphor/share.svg';
-import IconX from '@phosphor/x.svg';
+import CheckIcon from '@lucide/check.svg';
+import ChevronDownIcon from '@lucide/chevron-down.svg';
+import CopyIcon from '@lucide/copy.svg';
+import IconEye from '@lucide/eye.svg';
+import IconLink from '@lucide/link.svg';
+import IconComment from '@lucide/message-circle.svg';
+import IconEdit from '@lucide/pencil.svg';
+import IconShared from '@lucide/share.svg';
+import IconX from '@lucide/x.svg';
 import { cognitionApiServiceClient } from '@service-cognition/client';
 import {
   blockNameToItemType,

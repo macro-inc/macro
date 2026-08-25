@@ -29,9 +29,9 @@ import {
 } from '@core/util/currentBlockDocumentName';
 import { downloadFile } from '@filesystem/download';
 import IconShared from '@icon/wide-share.svg';
-import DownloadSimple from '@phosphor/download-simple.svg';
-import Info from '@phosphor/info.svg';
-import Quotes from '@phosphor/quotes.svg';
+import DownloadSimple from '@lucide/download.svg';
+import Info from '@lucide/info.svg';
+import Quotes from '@lucide/quote.svg';
 import { createCallback } from '@solid-primitives/rootless';
 import { useGetFileBlob } from '../signal/blockData';
 

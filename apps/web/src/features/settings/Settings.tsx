@@ -20,10 +20,10 @@ import type { ValidHotkey } from '@core/hotkey/types';
 import { isMobile } from '@core/mobile/isMobile';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { activeTabId, setActiveTabId } from '@core/signal/settingsTab';
-import ArrowsIn from '@phosphor/arrows-in.svg';
-import ArrowsOut from '@phosphor/arrows-out.svg';
-import CaretLeftIcon from '@phosphor/caret-left.svg';
-import SignOutIcon from '@phosphor/sign-out.svg';
+import CaretLeftIcon from '@lucide/chevron-left.svg';
+import SignOutIcon from '@lucide/log-out.svg';
+import ArrowsOut from '@lucide/maximize-2.svg';
+import ArrowsIn from '@lucide/minimize-2.svg';
 import { useLocation } from '@solidjs/router';
 import { Button, cn, Layer, SideNav } from '@ui';
 import {

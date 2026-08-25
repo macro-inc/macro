@@ -1,10 +1,10 @@
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
-import Gear from '@phosphor/gear.svg';
-import Microphone from '@phosphor/microphone.svg';
-import MicrophoneSlash from '@phosphor/microphone-slash.svg';
-import Screencast from '@phosphor/screencast.svg';
-import VideoCamera from '@phosphor/video-camera.svg';
-import VideoCameraSlash from '@phosphor/video-camera-slash.svg';
+import Microphone from '@lucide/mic.svg';
+import MicrophoneSlash from '@lucide/mic-off.svg';
+import Screencast from '@lucide/screen-share.svg';
+import Gear from '@lucide/settings.svg';
+import VideoCamera from '@lucide/video.svg';
+import VideoCameraSlash from '@lucide/video-off.svg';
 import { cn, Dropdown, InlineCheckbox } from '@ui';
 import { Show } from 'solid-js';
 import { match } from 'ts-pattern';

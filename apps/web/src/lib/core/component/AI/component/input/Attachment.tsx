@@ -2,8 +2,8 @@ import type { Attachment, AttachmentPreview } from '@core/component/AI/types';
 import { isImageAttachment } from '@core/component/AI/util/attachment';
 import { ImagePreview } from '@core/component/ImagePreview';
 import { toast } from '@core/component/Toast/Toast';
-import XIcon from '@phosphor/x.svg';
-import Spinner from '@phosphor-icons/core/bold/spinner-gap-bold.svg?component-solid';
+import Spinner from '@lucide/loader-circle.svg?component-solid';
+import XIcon from '@lucide/x.svg';
 import type { Accessor } from 'solid-js';
 import { createSignal, For, Match, Show, Suspense, Switch } from 'solid-js';
 

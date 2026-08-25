@@ -1,7 +1,7 @@
 import { useUserId } from '@core/context/user';
+import CheckIcon from '@lucide/check.svg';
+import XIcon from '@lucide/x.svg';
 import { DiffNode, setDOMFactory } from '@macro-inc/lexical-core';
-import CheckIcon from '@phosphor/check.svg';
-import XIcon from '@phosphor/x.svg';
 import { render } from 'solid-js/web';
 
 export function registerDiffNodeFactory() {

@@ -5,6 +5,22 @@ import { LinkNode } from '@lexical/link';
 import { ListNode } from '@lexical/list';
 import { HeadingNode, QuoteNode } from '@lexical/rich-text';
 import { INSERT_TABLE_COMMAND, TableNode } from '@lexical/table';
+import CodeBlock from '@lucide/code-xml.svg';
+import VideoIcon from '@lucide/file-video.svg';
+import TableIcon from '@lucide/grid-2x2.svg';
+import TextH1 from '@lucide/heading-1.svg';
+import TextH2 from '@lucide/heading-2.svg';
+import TextH3 from '@lucide/heading-3.svg';
+import ImageIcon from '@lucide/image.svg';
+import LinkIcon from '@lucide/link.svg';
+import ListBullets from '@lucide/list.svg';
+import ListChecks from '@lucide/list-checks.svg';
+import ListNumbers from '@lucide/list-ordered.svg';
+import Minus from '@lucide/minus.svg';
+import Quote from '@lucide/quote.svg';
+import MathIcon from '@lucide/sigma.svg';
+import CheckSquare from '@lucide/square-check.svg';
+import TextT from '@lucide/type.svg';
 import {
   $createDocumentMentionNode,
   AwaitNode,
@@ -15,22 +31,6 @@ import {
   ImageNode,
   VideoNode,
 } from '@macro-inc/lexical-core';
-import CheckSquare from '@phosphor/check-square.svg';
-import CodeBlock from '@phosphor/code-block.svg';
-import VideoIcon from '@phosphor/file-video.svg';
-import MathIcon from '@phosphor/function.svg';
-import TableIcon from '@phosphor/grid-four.svg';
-import ImageIcon from '@phosphor/image.svg';
-import LinkIcon from '@phosphor/link.svg';
-import ListBullets from '@phosphor/list-bullets.svg';
-import ListChecks from '@phosphor/list-checks.svg';
-import ListNumbers from '@phosphor/list-numbers.svg';
-import Minus from '@phosphor/minus.svg';
-import Quote from '@phosphor/quotes.svg';
-import TextH1 from '@phosphor/text-h-one.svg';
-import TextH3 from '@phosphor/text-h-three.svg';
-import TextH2 from '@phosphor/text-h-two.svg';
-import TextT from '@phosphor/text-t.svg';
 import type { LexicalEditor } from 'lexical';
 import { nanoid } from 'nanoid';
 import { INSERT_HORIZONTAL_RULE_COMMAND } from '..';

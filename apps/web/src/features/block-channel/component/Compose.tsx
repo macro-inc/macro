@@ -37,7 +37,7 @@ import {
   handleFileFolderDrop,
   uploadFile,
 } from '@core/util/upload';
-import InfoIcon from '@phosphor/info.svg';
+import InfoIcon from '@lucide/info.svg';
 import { useCreateChannelMutation } from '@queries/channel/channels';
 import { Surface } from '@ui';
 import { createEffect, createMemo, createSignal, on, Show } from 'solid-js';
@@ -243,7 +243,7 @@ export function ChannelCompose() {
               hideMenuOnEscape
             />
             <div class="mt-6 p-3 flex flex-row items-center border border-edge-muted text-ink-placeholder rounded-md">
-              <InfoIcon class="shrink-0 size-8 mr-4 fill-edge" />
+              <InfoIcon class="shrink-0 size-8 mr-4 text-edge" />
               <p class="text-xs">
                 Send a Macro message to anyone. Share your files, tasks, emails;
                 you can <code>@mention</code> anything. If your message

@@ -1,7 +1,7 @@
 import { formatDateAndTime } from '@entity';
-import BellSimple from '@phosphor-icons/core/regular/bell-simple.svg';
-import Check from '@phosphor-icons/core/regular/check.svg';
-import Trash from '@phosphor-icons/core/regular/trash.svg';
+import BellSimple from '@lucide/bell.svg';
+import Check from '@lucide/check.svg';
+import Trash from '@lucide/trash-2.svg';
 import type { NamedTool } from '@service-cognition/generated/tools/tool';
 import type {
   ListReminders as ListRemindersTool,

@@ -12,8 +12,8 @@ import type {
   SelectRootItemComponentProps,
 } from '@kobalte/core/select';
 import { Select as KobalteSelect } from '@kobalte/core/select';
-import CaretDownIcon from '@phosphor/caret-down.svg';
-import CheckIcon from '@phosphor/check.svg';
+import CheckIcon from '@lucide/check.svg';
+import CaretDownIcon from '@lucide/chevron-down.svg';
 import { type Component, createSignal, type JSX, splitProps } from 'solid-js';
 import { cn } from '../utils/classname';
 import { Layer } from './Layer';

@@ -1,4 +1,4 @@
-import TrashIcon from '@phosphor/trash.svg';
+import TrashIcon from '@lucide/trash.svg';
 import { Button } from '@ui';
 
 type BotDetailActionsProps = {

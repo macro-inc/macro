@@ -1,9 +1,9 @@
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { openInNewSplitForMention } from '@core/util/openInNewSplit';
 import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
+import BuildingIcon from '@lucide/building-2.svg';
+import UserIcon from '@lucide/user.svg';
 import type { ContactMentionDecoratorProps } from '@macro-inc/lexical-core';
-import BuildingIcon from '@phosphor/buildings.svg';
-import UserIcon from '@phosphor/user.svg';
 import { cn } from '@ui';
 import { COMMAND_PRIORITY_NORMAL, KEY_ENTER_COMMAND } from 'lexical';
 import { createSignal, Show, useContext } from 'solid-js';

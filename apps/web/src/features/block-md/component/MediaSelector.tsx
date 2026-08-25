@@ -7,9 +7,9 @@ import {
 } from '@core/constant/allBlocks';
 import { fileDrop } from '@core/directive/fileDrop';
 import { fileSelector } from '@core/directive/fileSelector';
-import ImageIcon from '@phosphor/image.svg';
-import UploadSimple from '@phosphor-icons/core/bold/upload-simple-bold.svg?component-solid';
-import CaretDown from '@phosphor-icons/core/regular/caret-down.svg';
+import CaretDown from '@lucide/chevron-down.svg';
+import ImageIcon from '@lucide/image.svg';
+import UploadSimple from '@lucide/upload.svg?component-solid';
 import { useHistoryQuery } from '@queries/history/history';
 import { Dropdown } from '@ui';
 import type { LexicalEditor } from 'lexical';

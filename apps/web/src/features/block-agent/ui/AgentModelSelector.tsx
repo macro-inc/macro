@@ -7,7 +7,7 @@
  * own. Renders nothing until the harness has advertised its models.
  */
 
-import CaretDown from '@phosphor-icons/core/regular/caret-down.svg?component-solid';
+import CaretDown from '@lucide/chevron-down.svg?component-solid';
 import type { ModelOption } from '@service-agent-fold/generated/types';
 import { cn, Dropdown } from '@ui';
 import { For, Show } from 'solid-js';

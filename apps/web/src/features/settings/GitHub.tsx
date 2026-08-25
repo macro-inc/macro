@@ -1,7 +1,7 @@
 import { toast } from '@core/component/Toast/Toast';
 import { SERVER_HOSTS } from '@core/constant/servers';
 import GithubIcon from '@icon/mcp-github.svg';
-import ArrowUpRightIcon from '@phosphor/arrow-up-right.svg';
+import ArrowUpRightIcon from '@lucide/arrow-up-right.svg';
 import {
   useDeleteGithubLinkMutation,
   useGithubLinkStatusQuery,

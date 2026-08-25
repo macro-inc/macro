@@ -1,6 +1,6 @@
 import type { ReplyType } from '@block-email/util/replyType';
-import ArrowBendUpLeft from '@phosphor/arrow-bend-up-left.svg';
-import ArrowBendUpRight from '@phosphor/arrow-bend-up-right.svg';
+import ArrowBendUpLeft from '@lucide/corner-up-left.svg';
+import ArrowBendUpRight from '@lucide/corner-up-right.svg';
 import type { ApiMessage } from '@service-email/generated/schemas';
 import { createCallback } from '@solid-primitives/rootless';
 import { Button } from '@ui';

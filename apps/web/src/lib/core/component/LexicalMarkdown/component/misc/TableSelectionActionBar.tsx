@@ -22,11 +22,11 @@ import {
   $mergeCells,
   $unmergeCell,
 } from '@lexical/table';
-import ClipboardIcon from '@phosphor/clipboard.svg';
-import CopyIcon from '@phosphor/copy.svg';
-import CornersInIcon from '@phosphor/corners-in.svg';
-import CornersOutIcon from '@phosphor/corners-out.svg';
-import ScissorsIcon from '@phosphor/scissors.svg';
+import ClipboardIcon from '@lucide/clipboard.svg';
+import CopyIcon from '@lucide/copy.svg';
+import CornersOutIcon from '@lucide/fullscreen.svg';
+import CornersInIcon from '@lucide/minimize.svg';
+import ScissorsIcon from '@lucide/scissors.svg';
 import { createCallback } from '@solid-primitives/rootless';
 import { Layer } from '@ui';
 import {

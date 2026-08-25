@@ -23,12 +23,12 @@ import {
   type WithCustomUserInput,
 } from '@core/user';
 import { whenSettled } from '@core/util/whenSettled';
+import ArrowCounterClockwise from '@lucide/rotate-ccw.svg?component-solid';
 import {
   compositeEntity,
   createEffectOnEntityTypeNotification,
   setDoneOverride,
 } from '@notifications';
-import ArrowCounterClockwise from '@phosphor-icons/core/regular/arrow-counter-clockwise.svg?component-solid';
 import { queryClient } from '@queries/client';
 import { emailKeys } from '@queries/email/keys';
 import { useNonPrimaryEmailLinkIdHeader } from '@queries/email/link';

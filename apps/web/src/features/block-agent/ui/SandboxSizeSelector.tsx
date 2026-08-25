@@ -1,4 +1,4 @@
-import CaretDown from '@phosphor-icons/core/regular/caret-down.svg?component-solid';
+import CaretDown from '@lucide/chevron-down.svg?component-solid';
 import sizes from '@sandbox-sizes';
 import { Dropdown } from '@ui';
 import { For } from 'solid-js';

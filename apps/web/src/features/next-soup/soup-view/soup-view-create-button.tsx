@@ -17,10 +17,10 @@ import {
   openFilePicker,
   openFolderPicker,
 } from '@core/util/upload';
-import BuildingsIcon from '@phosphor/buildings.svg';
-import ChevronDownIcon from '@phosphor/caret-down.svg';
-import PlusCircleIcon from '@phosphor/plus-circle.svg';
-import UploadIcon from '@phosphor/upload-simple.svg';
+import BuildingsIcon from '@lucide/building-2.svg';
+import ChevronDownIcon from '@lucide/chevron-down.svg';
+import PlusCircleIcon from '@lucide/circle-plus.svg';
+import UploadIcon from '@lucide/upload.svg';
 import { Button, cn, Dropdown } from '@ui';
 import { createMemo, For, Show } from 'solid-js';
 import { NewCallButton } from './NewCallButton';

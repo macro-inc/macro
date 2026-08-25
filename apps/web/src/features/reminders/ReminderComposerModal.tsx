@@ -16,7 +16,7 @@ import {
   useListKeyBindings,
 } from '@core/util/useListKeyBindings';
 import { type EntityData, InlineEntity } from '@entity';
-import BellIcon from '@phosphor/bell-simple.svg';
+import BellIcon from '@lucide/bell.svg';
 import {
   reminderSoupPatch,
   reminderTarget,

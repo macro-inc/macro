@@ -12,11 +12,11 @@ import {
   getTaskPriorityOptionId,
   getTaskStatusOptionId,
 } from '@entity/utils/task-properties';
-import ArrowClockwiseIcon from '@phosphor/arrow-clockwise.svg';
-import ClockIcon from '@phosphor/clock.svg';
-import EyeIcon from '@phosphor/eye.svg';
-import FlagIcon from '@phosphor/flag.svg';
-import ListChecksIcon from '@phosphor/list-checks.svg';
+import ClockIcon from '@lucide/clock.svg';
+import EyeIcon from '@lucide/eye.svg';
+import FlagIcon from '@lucide/flag.svg';
+import ListChecksIcon from '@lucide/list-checks.svg';
+import ArrowClockwiseIcon from '@lucide/rotate-cw.svg';
 import { PROPERTY_OPTION_IDS } from '@property/constants';
 import type { JSX } from 'solid-js';
 

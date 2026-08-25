@@ -3,7 +3,7 @@ import { favoriteDisplayName, favoriteSplitContent } from '@app/util/favorites';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { createHotkeyGroup, registerHotkey } from '@core/hotkey/hotkeys';
 import { registerScope } from '@core/hotkey/utils';
-import Star from '@phosphor/star.svg';
+import Star from '@lucide/star.svg';
 import { useFavoritesData } from '@queries/favorites/favorites';
 import type { Favorite } from '@service-storage/generated/schemas/favorite';
 import { createEffect, onCleanup } from 'solid-js';

@@ -22,7 +22,7 @@ import {
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import type { BuildEntityDataArgs } from '@entity';
 import { ContextMenu } from '@kobalte/core/context-menu';
-import CaretDownIcon from '@phosphor/caret-down.svg';
+import CaretDownIcon from '@lucide/chevron-down.svg';
 import { cn, Tooltip } from '@ui';
 import {
   type Accessor,

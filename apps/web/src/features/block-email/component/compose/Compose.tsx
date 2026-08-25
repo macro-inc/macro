@@ -45,13 +45,12 @@ import {
   type WithCustomUserInput,
 } from '@core/user';
 import { $generateHtmlFromNodes } from '@lexical/html';
+import ArrowCounterClockwise from '@lucide/rotate-ccw.svg?component-solid';
 import {
   $appendWatermarkNodeToLast,
   $removeAllWatermarkNodes,
 } from '@macro-inc/lexical-core';
 import { Telemetry } from '@macro-inc/observability';
-
-import ArrowCounterClockwise from '@phosphor-icons/core/regular/arrow-counter-clockwise.svg?component-solid';
 import { queryClient } from '@queries/client';
 import {
   useRemoveDraftAttachmentMutation,

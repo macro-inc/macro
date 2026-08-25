@@ -1,5 +1,5 @@
 import { ItemPreview } from '@core/component/ItemPreview';
-import ArrowSquareIn from '@phosphor-icons/core/regular/arrow-square-in.svg';
+import ArrowSquareIn from '@lucide/square-arrow-out-up-left.svg';
 import type { MoveableEntityType } from '@service-cognition/generated/tools/types';
 import type { ItemType } from '@service-storage/client';
 import { Show, Suspense } from 'solid-js';

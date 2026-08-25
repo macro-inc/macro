@@ -1,4 +1,4 @@
-import Trash from '@phosphor-icons/core/regular/trash.svg';
+import Trash from '@lucide/trash-2.svg';
 import { BaseTool } from './BaseTool';
 import { createToolRenderer } from './ToolRenderer';
 

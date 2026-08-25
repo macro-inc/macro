@@ -1,6 +1,6 @@
 import type { FeaturedMcpServer } from '@core/component/AI/constant/mcpServers';
-import ArrowUpRightIcon from '@phosphor/arrow-up-right.svg';
-import SpinnerIcon from '@phosphor/spinner-gap.svg';
+import ArrowUpRightIcon from '@lucide/arrow-up-right.svg';
+import SpinnerIcon from '@lucide/loader-circle.svg';
 import { cn, Layer } from '@ui';
 import { Match, Switch } from 'solid-js';
 import { StatusDot } from '../settings/integration-ui';

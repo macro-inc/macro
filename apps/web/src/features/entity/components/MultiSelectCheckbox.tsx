@@ -1,4 +1,4 @@
-import CheckIcon from '@phosphor/check.svg';
+import CheckIcon from '@lucide/check.svg';
 import { cn } from '@ui';
 import { Show } from 'solid-js';
 

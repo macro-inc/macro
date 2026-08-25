@@ -5,10 +5,10 @@ import { isMobile } from '@core/mobile/isMobile';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import SidePanelIcon from '@icon/square-half-filled.svg';
 import { Accordion } from '@kobalte/core/accordion';
-import ArrowLeft from '@phosphor/arrow-left.svg';
-import CaretRight from '@phosphor/caret-right.svg';
-import CircleDashedEmpty from '@phosphor/circle-dashed.svg';
-import InfoIcon from '@phosphor/info.svg';
+import ArrowLeft from '@lucide/arrow-left.svg';
+import CaretRight from '@lucide/chevron-right.svg';
+import CircleDashedEmpty from '@lucide/circle-dashed.svg';
+import InfoIcon from '@lucide/info.svg';
 import { Button, Panel, Scroll } from '@ui';
 import { cn } from '@ui/utils/classname';
 import {

@@ -6,10 +6,10 @@ import {
 } from '@core/component/AI/constant/mcpServers';
 import { toast } from '@core/component/Toast/Toast';
 import { openExternalUrl } from '@core/util/url';
-import CheckIcon from '@phosphor-icons/core/regular/check.svg?component-solid';
-import PlugIcon from '@phosphor-icons/core/regular/plug.svg?component-solid';
-import PlusIcon from '@phosphor-icons/core/regular/plus.svg?component-solid';
-import XIcon from '@phosphor-icons/core/regular/x.svg?component-solid';
+import CheckIcon from '@lucide/check.svg?component-solid';
+import PlugIcon from '@lucide/plug.svg?component-solid';
+import PlusIcon from '@lucide/plus.svg?component-solid';
+import XIcon from '@lucide/x.svg?component-solid';
 import {
   useAddMcpServerMutation,
   useDeleteMcpServerMutation,

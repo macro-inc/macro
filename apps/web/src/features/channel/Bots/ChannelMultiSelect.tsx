@@ -3,10 +3,10 @@ import {
   Combobox,
   type ComboboxRootItemComponentProps,
 } from '@kobalte/core/combobox';
-import CaretDownIcon from '@phosphor/caret-down.svg';
-import CheckIcon from '@phosphor/check.svg';
-import HashIcon from '@phosphor/hash.svg';
-import XIcon from '@phosphor/x.svg';
+import CheckIcon from '@lucide/check.svg';
+import CaretDownIcon from '@lucide/chevron-down.svg';
+import HashIcon from '@lucide/hash.svg';
+import XIcon from '@lucide/x.svg';
 import { Surface } from '@ui';
 import { type Component, createMemo, For, Show } from 'solid-js';
 import {

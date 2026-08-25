@@ -1,6 +1,6 @@
 import type { UserIconProps } from '@core/component/UserIcon';
-import DotsThree from '@phosphor/dots-three.svg';
-import User from '@phosphor-icons/core/regular/user.svg?component-solid';
+import DotsThree from '@lucide/ellipsis.svg';
+import User from '@lucide/user.svg?component-solid';
 import { cn } from '@ui';
 import { type Component, Show } from 'solid-js';
 

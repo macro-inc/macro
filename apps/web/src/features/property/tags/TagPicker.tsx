@@ -1,10 +1,10 @@
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
 import { Popover } from '@kobalte/core/popover';
-import CircleDashedEmpty from '@phosphor/circle-dashed.svg';
-import FilterIcon from '@phosphor/funnel-simple.svg';
-import PencilIcon from '@phosphor/pencil-simple.svg';
-import PlusIcon from '@phosphor/plus.svg';
+import CircleDashedEmpty from '@lucide/circle-dashed.svg';
+import FilterIcon from '@lucide/funnel.svg';
+import PencilIcon from '@lucide/pencil.svg';
+import PlusIcon from '@lucide/plus.svg';
 import { OptionCheckBox } from '@property/editors/selectors/OptionCheckBox';
 import {
   DropdownSearchInput,

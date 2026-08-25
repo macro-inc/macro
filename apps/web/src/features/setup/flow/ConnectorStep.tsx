@@ -1,7 +1,7 @@
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import type { FeaturedMcpServer } from '@core/component/AI/constant/mcpServers';
 import { usePipedreamMcpFlag } from '@core/pipedream/flag';
-import SpinnerIcon from '@phosphor/spinner-gap.svg';
+import SpinnerIcon from '@lucide/loader-circle.svg';
 import { useMcpServersQuery } from '@queries/mcp-servers';
 import { usePipedreamConnectionsQuery } from '@queries/pipedream-connectors';
 import { Layer } from '@ui';

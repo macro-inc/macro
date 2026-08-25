@@ -2,13 +2,13 @@ import { useMaybeSoup } from '@app/features/next-soup/soup-context';
 import { restoreSoupFocus } from '@app/features/next-soup/utils';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { toast } from '@core/component/Toast/Toast';
+import ArrowCounterClockwise from '@lucide/rotate-ccw.svg?component-solid';
 import type { NotificationStack, UnifiedNotification } from '@notifications';
 import {
   executeMarkNotificationsDone,
   executeMarkNotificationsUndone,
   getAllNotificationsFromGroup,
 } from '@notifications';
-import ArrowCounterClockwise from '@phosphor-icons/core/regular/arrow-counter-clockwise.svg?component-solid';
 import { useUndoableMutation } from '@queries/undo';
 
 interface NotificationActionsProps {

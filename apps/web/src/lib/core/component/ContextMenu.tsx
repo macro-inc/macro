@@ -1,8 +1,8 @@
 import type { HotkeyToken } from '@core/hotkey/tokens';
 import { isMobile } from '@core/mobile/isMobile';
 import { ContextMenu } from '@kobalte/core/context-menu';
-import CaretRight from '@phosphor/caret-right.svg?component-solid';
-import CheckIcon from '@phosphor/check.svg?component-solid';
+import CheckIcon from '@lucide/check.svg?component-solid';
+import CaretRight from '@lucide/chevron-right.svg?component-solid';
 import {
   addCtrlJKMenuNavigation,
   cn,

@@ -17,7 +17,7 @@ import { addMediaFromFile } from '@core/component/LexicalMarkdown/plugins/media'
 import { initializeEditorEmpty } from '@core/component/LexicalMarkdown/utils';
 import { useUserId } from '@core/context/user';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
-import PaperclipIcon from '@phosphor-icons/core/regular/paperclip.svg?component-solid';
+import PaperclipIcon from '@lucide/paperclip.svg?component-solid';
 import { Modals } from '@property/component/modal';
 import { PropertiesProvider } from '@property/context/PropertiesContext';
 import { InlineTagsPill } from '@property/tags';

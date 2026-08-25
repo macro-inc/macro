@@ -7,7 +7,7 @@ import {
   $isTableCellNode,
   getDOMCellFromTarget,
 } from '@lexical/table';
-import TrashIcon from '@phosphor/trash-simple.svg';
+import TrashIcon from '@lucide/trash-2.svg';
 import { createCallback } from '@solid-primitives/rootless';
 import { Layer } from '@ui';
 import { $getNearestNodeFromDOMNode, isHTMLElement } from 'lexical';

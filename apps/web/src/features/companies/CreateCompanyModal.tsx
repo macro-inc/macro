@@ -1,8 +1,8 @@
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useFocusLock } from '@core/util/createControlledOpenSignal';
 import { ThrownResultError } from '@core/util/result';
-import BuildingsIcon from '@phosphor/buildings.svg';
-import XIcon from '@phosphor/x.svg';
+import BuildingsIcon from '@lucide/building-2.svg';
+import XIcon from '@lucide/x.svg';
 import { useCreateCompanyMutation } from '@queries/crm/companies';
 import { Button, Dialog, Panel } from '@ui';
 import { createMemo, createSignal, Show } from 'solid-js';

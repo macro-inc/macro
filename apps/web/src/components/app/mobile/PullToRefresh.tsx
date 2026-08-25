@@ -1,7 +1,7 @@
 import { toast } from '@core/component/Toast/Toast';
 import { hapticImpact } from '@core/mobile/haptics';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import Spinner from '@phosphor-icons/core/bold/spinner-bold.svg';
+import Spinner from '@lucide/loader-circle.svg';
 import { cn } from '@ui';
 import {
   type Accessor,

@@ -25,10 +25,10 @@ import { ENABLE_GRAPHQL_SOUP } from '@core/constant/featureFlags';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { ContextMenu } from '@kobalte/core/context-menu';
 import { Tooltip as KobalteTooltip } from '@kobalte/core/tooltip';
+import CaretDownIcon from '@lucide/chevron-down.svg';
 import { isChannelNotification } from '@notifications/notification-helpers';
 import { getChannelNotificationParams } from '@notifications/notification-navigation';
 import type { UnifiedNotification } from '@notifications/types';
-import CaretDownIcon from '@phosphor/caret-down.svg';
 import {
   favoriteEntityKey,
   useFavoritesData,

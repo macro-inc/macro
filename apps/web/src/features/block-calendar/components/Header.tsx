@@ -17,10 +17,10 @@ import {
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isMobile } from '@core/mobile/isMobile';
-import CalendarBlankIcon from '@phosphor/calendar-blank.svg';
-import CaretLeftIcon from '@phosphor/caret-left.svg';
-import CaretRightIcon from '@phosphor/caret-right.svg';
-import PlusIcon from '@phosphor/plus.svg';
+import CalendarBlankIcon from '@lucide/calendar.svg';
+import CaretLeftIcon from '@lucide/chevron-left.svg';
+import CaretRightIcon from '@lucide/chevron-right.svg';
+import PlusIcon from '@lucide/plus.svg';
 import { Button } from '@ui';
 import { usePager } from '@ui/components/Pager';
 import { createMemo, createSignal, onCleanup, Show } from 'solid-js';

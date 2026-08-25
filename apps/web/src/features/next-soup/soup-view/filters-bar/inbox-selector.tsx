@@ -5,9 +5,9 @@ import { CollapsibleHeaderItem } from '@components/app/split-layout/components/C
 import { ENABLE_MULTI_INBOX_OVERRIDE } from '@core/constant/featureFlags';
 import { useSettingsState } from '@core/constant/SettingsState';
 import { Combobox } from '@kobalte/core/combobox';
-import CaretDownIcon from '@phosphor/caret-down.svg';
-import PlusIcon from '@phosphor/plus.svg';
-import TrayIcon from '@phosphor/tray.svg';
+import CaretDownIcon from '@lucide/chevron-down.svg';
+import TrayIcon from '@lucide/inbox.svg';
+import PlusIcon from '@lucide/plus.svg';
 import { Button, cn } from '@ui';
 import { Show } from 'solid-js';
 import { useInboxPicker } from './inbox-picker';

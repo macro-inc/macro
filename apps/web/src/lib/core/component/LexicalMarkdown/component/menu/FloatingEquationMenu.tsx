@@ -1,7 +1,7 @@
 import clickOutside from '@core/directive/clickOutside';
 import { useCanEdit } from '@core/signal/permissions';
+import Check from '@lucide/circle-check.svg';
 import { $isEquationNode } from '@macro-inc/lexical-core';
-import Check from '@phosphor/check-circle.svg';
 import { createCallback } from '@solid-primitives/rootless';
 import { Tooltip } from '@ui';
 import { $getNodeByKey } from 'lexical';

@@ -1,6 +1,6 @@
 import { ActivityTimelineRow } from '@app/features/activity/activity-timeline-row';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
-import ClockCounterClockwise from '@phosphor-icons/core/regular/clock-counter-clockwise.svg';
+import ClockCounterClockwise from '@lucide/history.svg';
 import type { ActivityEvent } from '@queries/activity/graphql/entity';
 import type { NamedTool } from '@service-cognition/generated/tools/tool';
 import type { GraphqlEntityType } from '@service-storage/graphql/generated/graphql';

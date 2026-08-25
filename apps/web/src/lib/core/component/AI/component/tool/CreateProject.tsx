@@ -1,5 +1,5 @@
 import { ItemPreview } from '@core/component/ItemPreview';
-import FolderPlus from '@phosphor-icons/core/regular/folder-plus.svg';
+import FolderPlus from '@lucide/folder-plus.svg';
 import { Show, Suspense } from 'solid-js';
 import { BaseTool } from './BaseTool';
 import { createToolRenderer } from './ToolRenderer';

@@ -1,7 +1,7 @@
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
-import FolderOpen from '@phosphor-icons/core/regular/folder-open.svg';
+import FolderOpen from '@lucide/folder-open.svg';
 import type { NamedTool } from '@service-cognition/generated/tools/tool';
 import { createSignal } from 'solid-js';
 import { VList } from 'virtua/solid';

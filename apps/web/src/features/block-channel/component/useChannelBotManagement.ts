@@ -12,9 +12,9 @@ import {
 import { useSettingsState } from '@core/constant/SettingsState';
 import { useChannelType } from '@core/context/channels';
 import { createHotkeyGroup, registerHotkey } from '@core/hotkey/hotkeys';
-import CopyIcon from '@phosphor/copy.svg';
-import PlusIcon from '@phosphor/plus.svg';
-import RobotIcon from '@phosphor/robot.svg';
+import RobotIcon from '@lucide/bot.svg';
+import CopyIcon from '@lucide/copy.svg';
+import PlusIcon from '@lucide/plus.svg';
 import { ChannelTypeEnum } from '@service-storage/client';
 import { createSignal, onCleanup } from 'solid-js';
 

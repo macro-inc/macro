@@ -1,4 +1,4 @@
-import Globe from '@phosphor-icons/core/regular/globe.svg';
+import Globe from '@lucide/globe.svg';
 import { BaseTool } from './BaseTool';
 import { createToolRenderer } from './ToolRenderer';
 

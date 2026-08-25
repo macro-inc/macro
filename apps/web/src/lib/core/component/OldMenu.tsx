@@ -14,7 +14,7 @@ import {
   offset,
   shift,
 } from '@floating-ui/dom';
-import CaretRight from '@phosphor-icons/core/regular/caret-right.svg?component-solid';
+import CaretRight from '@lucide/chevron-right.svg?component-solid';
 import { cn } from '@ui';
 import {
   type Component,

@@ -2,8 +2,8 @@ import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { useUserId } from '@core/context/user';
 import { useAddInboxFlow } from '@core/email-link';
 import GmailIcon from '@icon/mcp-gmail.svg';
-import ArrowUpRightIcon from '@phosphor/arrow-up-right.svg';
-import SpinnerIcon from '@phosphor/spinner-gap.svg';
+import ArrowUpRightIcon from '@lucide/arrow-up-right.svg';
+import SpinnerIcon from '@lucide/loader-circle.svg';
 import { invalidateEmailLinks, useEmailLinksQuery } from '@queries/email/link';
 import { cn, Layer } from '@ui';
 import {

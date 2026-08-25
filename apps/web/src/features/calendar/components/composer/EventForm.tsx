@@ -1,4 +1,4 @@
-import SpinnerIcon from '@phosphor/spinner.svg';
+import SpinnerIcon from '@lucide/loader-circle.svg';
 import { Button, cn, Layer } from '@ui';
 import { createEffect, createUniqueId, Show } from 'solid-js';
 import type { CalendarEventFormController } from './create-calendar-event-form-controller';

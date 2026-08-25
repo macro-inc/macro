@@ -8,7 +8,7 @@ import {
   ListEntityNoopMetadataProvider,
   ListLayoutProvider,
 } from '@entity';
-import CheckIcon from '@phosphor/check.svg';
+import CheckIcon from '@lucide/check.svg';
 import { cn } from '@ui';
 import { createSignal, For, Show } from 'solid-js';
 

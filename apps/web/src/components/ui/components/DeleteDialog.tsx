@@ -1,4 +1,4 @@
-import SpinnerIcon from '@phosphor/spinner.svg';
+import SpinnerIcon from '@lucide/loader-circle.svg';
 import type { JSX } from 'solid-js';
 import { createSignal, createUniqueId, Show } from 'solid-js';
 import { cn } from '../utils/classname';

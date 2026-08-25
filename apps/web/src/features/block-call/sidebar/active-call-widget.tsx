@@ -6,7 +6,7 @@ import { useChannelsContext } from '@core/context/channels';
 import { useUserId } from '@core/context/user';
 import PhoneIcon from '@icon/wide-call.svg';
 import { ContextMenu } from '@kobalte/core/context-menu';
-import XIcon from '@phosphor/x.svg';
+import XIcon from '@lucide/x.svg';
 import type { ApiChannelWithLatest } from '@service-storage/channel-list-types';
 import { ChannelTypeEnum } from '@service-storage/client';
 import { Avatar, Button, cn, Tooltip } from '@ui';

@@ -5,7 +5,7 @@ import {
 import { OldMenu } from '@core/component/OldMenu';
 import { blockAcceptedFileExtensionSet } from '@core/constant/allBlocks';
 import { onKeyDownClick, onKeyUpClick } from '@core/util/click';
-import FileText from '@phosphor-icons/core/regular/file-text.svg?component-solid';
+import FileText from '@lucide/file-text.svg?component-solid';
 import { useHistoryQuery } from '@queries/history/history';
 import type { ItemType } from '@service-storage/client';
 import type { FileType } from '@service-storage/generated/schemas/fileType';

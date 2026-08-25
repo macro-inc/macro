@@ -1,6 +1,6 @@
 import { useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import SmileyIcon from '@phosphor/smiley.svg';
+import SmileyIcon from '@lucide/smile.svg';
 import { cn } from '@ui';
 import { createSignal, For, Show } from 'solid-js';
 import { useMessage, useMessageActions } from './context';

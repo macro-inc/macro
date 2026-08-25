@@ -23,18 +23,18 @@ import {
 } from '@core/signal/profilePicture';
 import { createStaticFile } from '@core/util/create';
 import { openFilePicker } from '@core/util/upload';
+import CheckIcon from '@lucide/check.svg';
+import WarningCircleIcon from '@lucide/circle-alert.svg';
+import SpinnerIcon from '@lucide/loader-circle.svg';
+import SignOutIcon from '@lucide/log-out.svg?component-solid';
+import PencilIcon from '@lucide/pencil.svg';
+import TrashIcon from '@lucide/trash.svg';
+import IconUpload from '@lucide/upload.svg?component-solid';
 import { type BundleUpdateStatus, useTauri } from '@macro/tauri';
 import {
   type SupportedNotificationSettings,
   useNotificationSettings,
 } from '@notifications';
-import CheckIcon from '@phosphor/check.svg';
-import PencilIcon from '@phosphor/pencil-simple.svg';
-import SpinnerIcon from '@phosphor/spinner-gap.svg';
-import TrashIcon from '@phosphor/trash.svg';
-import WarningCircleIcon from '@phosphor/warning-circle.svg';
-import SignOutIcon from '@phosphor-icons/core/regular/sign-out.svg?component-solid';
-import IconUpload from '@phosphor-icons/core/regular/upload-simple.svg?component-solid';
 import {
   invalidateOwnUserName,
   useOwnUserName,

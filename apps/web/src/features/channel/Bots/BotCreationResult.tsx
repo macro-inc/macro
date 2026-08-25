@@ -1,5 +1,5 @@
-import HashIcon from '@phosphor/hash.svg';
-import CheckCircleIcon from '@phosphor-icons/core/assets/fill/check-circle-fill.svg?component-solid';
+import CheckCircleIcon from '@lucide/circle-check.svg?component-solid';
+import HashIcon from '@lucide/hash.svg';
 import type { Bot } from '@service-storage/generated/schemas/bot';
 import { Button, Surface } from '@ui';
 import { For, Show } from 'solid-js';

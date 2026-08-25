@@ -7,16 +7,16 @@ import {
 } from '@core/component/SlidableNumberInput';
 import { themeColors, themeStyles } from '@core/component/Themes';
 import { isMobileWidth } from '@core/mobile/mobileWidth';
-import AlignBottom from '@phosphor-icons/core/regular/align-bottom.svg?component-solid';
-import AlignCenterHorizontal from '@phosphor-icons/core/regular/align-center-horizontal.svg?component-solid';
-import AlignCenterVertical from '@phosphor-icons/core/regular/align-center-vertical.svg?component-solid';
-import AlignLeft from '@phosphor-icons/core/regular/align-left.svg?component-solid';
-import AlignRight from '@phosphor-icons/core/regular/align-right.svg?component-solid';
-import AlignTop from '@phosphor-icons/core/regular/align-top.svg?component-solid';
-import Reverse from '@phosphor-icons/core/regular/arrows-horizontal.svg?component-solid';
-import CornersOut from '@phosphor-icons/core/regular/corners-out.svg?component-solid';
-import TextAa from '@phosphor-icons/core/regular/text-aa.svg?component-solid';
-import TrashSimple from '@phosphor-icons/core/regular/trash-simple.svg?component-solid';
+import AlignCenterHorizontal from '@lucide/align-center-horizontal.svg?component-solid';
+import AlignCenterVertical from '@lucide/align-center-vertical.svg?component-solid';
+import AlignBottom from '@lucide/align-end-horizontal.svg?component-solid';
+import AlignRight from '@lucide/align-end-vertical.svg?component-solid';
+import AlignTop from '@lucide/align-start-horizontal.svg?component-solid';
+import AlignLeft from '@lucide/align-start-vertical.svg?component-solid';
+import TextAa from '@lucide/case-sensitive.svg?component-solid';
+import CornersOut from '@lucide/fullscreen.svg?component-solid';
+import Reverse from '@lucide/move-horizontal.svg?component-solid';
+import TrashSimple from '@lucide/trash-2.svg?component-solid';
 import { Button, cn, Tooltip } from '@ui';
 import type { JSX } from 'solid-js';
 import {

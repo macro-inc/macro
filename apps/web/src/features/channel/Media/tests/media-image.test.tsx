@@ -6,12 +6,9 @@ import { render, screen } from '@solidjs/testing-library';
 import { describe, expect, it, vi } from 'vitest';
 import { MediaImage } from '../MediaImage';
 
-vi.mock(
-  '@phosphor-icons/core/bold/spinner-gap-bold.svg?component-solid',
-  () => ({
-    default: () => <span data-testid="spinner-icon" />,
-  })
-);
+vi.mock('@lucide/loader-circle.svg?component-solid', () => ({
+  default: () => <span data-testid="spinner-icon" />,
+}));
 
 describe('MediaImage', () => {
   it('keeps rendering a local preview when the primary source fails', () => {

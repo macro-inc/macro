@@ -1,7 +1,7 @@
 import { TabsInset } from '@core/component/TabsInset';
-import TagIcon from '@phosphor/tag-simple.svg';
-import TrashIcon from '@phosphor/trash.svg';
-import XIcon from '@phosphor/x.svg';
+import TagIcon from '@lucide/tag.svg';
+import TrashIcon from '@lucide/trash.svg';
+import XIcon from '@lucide/x.svg';
 import {
   type CreateTagResult,
   useCreateTagMutation,

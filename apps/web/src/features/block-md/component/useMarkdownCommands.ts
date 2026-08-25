@@ -3,15 +3,15 @@ import { createHotkeyGroup, registerHotkey } from '@core/hotkey/hotkeys';
 import type { HotkeyToken } from '@core/hotkey/tokens';
 import { TOKENS } from '@core/hotkey/tokens';
 import type { ValidHotkey } from '@core/hotkey/types';
-import BugIcon from '@phosphor/bug.svg';
-import TextCode from '@phosphor/code.svg';
-import TextHighlight from '@phosphor/paint-roller.svg';
-import TextBold from '@phosphor/text-b.svg';
-import TextItalic from '@phosphor/text-italic.svg';
-import TextStrikethrough from '@phosphor/text-strikethrough.svg';
-import TextSub from '@phosphor/text-subscript.svg';
-import TextSuper from '@phosphor/text-superscript.svg';
-import TextUnderline from '@phosphor/text-underline.svg';
+import TextBold from '@lucide/bold.svg';
+import BugIcon from '@lucide/bug.svg';
+import TextCode from '@lucide/code.svg';
+import TextItalic from '@lucide/italic.svg';
+import TextHighlight from '@lucide/paint-roller.svg';
+import TextStrikethrough from '@lucide/strikethrough.svg';
+import TextSub from '@lucide/subscript.svg';
+import TextSuper from '@lucide/superscript.svg';
+import TextUnderline from '@lucide/underline.svg';
 import {
   FORMAT_TEXT_COMMAND,
   type LexicalEditor,

@@ -2,7 +2,7 @@ import { LoadingBlock } from '@core/component/LoadingBlock';
 import { PcNoiseGrid } from '@core/component/PcNoiseGrid';
 import { ThrownResultError } from '@core/util/result';
 import LogoIcon from '@icon/macro-logo.svg';
-import UsersThreeIcon from '@phosphor/users-three.svg';
+import UsersThreeIcon from '@lucide/users.svg';
 import { useUserInfo } from '@queries/auth';
 import { useJoinChannelByCodeMutation } from '@queries/channel/join-links';
 import { useLocation, useNavigate, useSearchParams } from '@solidjs/router';

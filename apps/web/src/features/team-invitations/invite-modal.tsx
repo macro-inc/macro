@@ -2,8 +2,8 @@ import { toast } from '@core/component/Toast/Toast';
 import { useReferralCode } from '@core/context/user';
 
 import { getWebOrigin } from '@core/util/webOrigin';
-import ClipboardIcon from '@phosphor/clipboard.svg';
-import CloseIcon from '@phosphor/x.svg';
+import ClipboardIcon from '@lucide/clipboard.svg';
+import CloseIcon from '@lucide/x.svg';
 import { authServiceClient } from '@service-auth/client';
 import { contactsClient } from '@service-contacts/client';
 import { Button, Dialog, Panel } from '@ui';

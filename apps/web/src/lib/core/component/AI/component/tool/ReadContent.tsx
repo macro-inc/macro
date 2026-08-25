@@ -1,6 +1,6 @@
 import { EntityIcon } from '@core/component/EntityIcon';
 import { ItemPreview } from '@core/component/ItemPreview';
-import Newspaper from '@phosphor-icons/core/regular/newspaper.svg';
+import Newspaper from '@lucide/newspaper.svg';
 import { useSystemSkillsQuery } from '@queries/storage/system-skills';
 import { Show, Suspense } from 'solid-js';
 import { BaseTool } from './BaseTool';

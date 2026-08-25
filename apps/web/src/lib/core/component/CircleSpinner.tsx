@@ -1,4 +1,4 @@
-import Spinner from '@phosphor/spinner.svg';
+import Spinner from '@lucide/loader-circle.svg';
 import type { Component, JSX } from 'solid-js';
 
 export const CircleSpinner: Component<JSX.SvgSVGAttributes<SVGSVGElement>> = (

@@ -4,7 +4,7 @@ import {
   Combobox,
   type ComboboxRootItemComponentProps,
 } from '@kobalte/core/combobox';
-import SearchIcon from '@phosphor/magnifying-glass.svg';
+import SearchIcon from '@lucide/search.svg';
 import { useSearchInputFocus } from '@property/utils';
 import { Surface } from '@ui';
 import { format, setHours, setMinutes, startOfDay } from 'date-fns';
