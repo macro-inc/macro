@@ -1,5 +1,4 @@
 import { useCalendarUiFlag } from '@app/features/calendar/hooks/use-calendar-ui-flag';
-import WideCalendarIcon from '@icon/wide-calendar.svg';
 import { AnimatedCallIcon } from '@icon/wide-call';
 import { AnimatedChannelIcon } from '@icon/wide-channel';
 import { AnimatedEmailIcon } from '@icon/wide-email';
@@ -8,6 +7,7 @@ import { AnimatedInboxIcon } from '@icon/wide-inbox';
 import { AnimatedStarIcon } from '@icon/wide-star';
 import { AnimatedTaskIcon } from '@icon/wide-task';
 import BellIcon from '@lucide/bell.svg';
+import WideCalendarIcon from '@lucide/calendar.svg';
 import { type Accessor, createMemo } from 'solid-js';
 import type { MobileTouchIconComponent } from './MobileTouchMenu';
 import type { MobileNavViewId } from './mobile-nav-views';

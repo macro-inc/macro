@@ -37,10 +37,10 @@ import {
 } from '@core/util/currentBlockDocumentName';
 import { buildSimpleEntityUrl } from '@core/util/url';
 import { downloadFile } from '@filesystem/download';
-import IconShared from '@icon/wide-share.svg';
 import DownloadSimple from '@lucide/download.svg';
 import Info from '@lucide/info.svg';
 import Quotes from '@lucide/quote.svg';
+import IconShared from '@lucide/share.svg';
 import { createCallback } from '@solid-primitives/rootless';
 import { onMount } from 'solid-js';
 import { URL_PARAMS } from '../constants';

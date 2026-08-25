@@ -1,5 +1,5 @@
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
-import BotIcon from '@icon/wide-bot.svg';
+import BotIcon from '@lucide/bot.svg';
 import BugIcon from '@lucide/bug.svg';
 import BuildingsIcon from '@lucide/building-2.svg';
 import CpuIcon from '@lucide/cpu.svg';

@@ -28,10 +28,10 @@ import {
   useBlockDocumentName,
 } from '@core/util/currentBlockDocumentName';
 import { downloadFile } from '@filesystem/download';
-import IconShared from '@icon/wide-share.svg';
 import Download from '@lucide/download.svg';
 import Info from '@lucide/info.svg';
 import Quotes from '@lucide/quote.svg';
+import IconShared from '@lucide/share.svg';
 import { createCallback } from '@solid-primitives/rootless';
 
 export function TopBar() {

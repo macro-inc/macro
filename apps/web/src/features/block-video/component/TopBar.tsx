@@ -27,11 +27,11 @@ import {
   useBlockDocumentName,
 } from '@core/util/currentBlockDocumentName';
 import { downloadFile } from '@filesystem/download';
-import IconShared from '@icon/wide-share.svg';
 import Download from '@lucide/download.svg';
 import Info from '@lucide/info.svg';
 import Spinner from '@lucide/loader-circle.svg';
 import Quotes from '@lucide/quote.svg';
+import IconShared from '@lucide/share.svg';
 import { createCallback } from '@solid-primitives/rootless';
 import { createSignal } from 'solid-js';
 import { useGetFileBlob } from '../signal/blockData';

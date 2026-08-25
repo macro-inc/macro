@@ -18,10 +18,10 @@ import {
 } from '@core/component/TopBar/ShareButton';
 import { DEV_MODE_ENV } from '@core/constant/featureFlags';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
-import IconShared from '@icon/wide-share.svg';
 import Info from '@lucide/info.svg';
 import ChatDebugIcon from '@lucide/message-square-text.svg';
 import Notepad from '@lucide/notebook.svg';
+import IconShared from '@lucide/share.svg';
 import type { Accessor } from 'solid-js';
 
 export function TopBar(props: {
