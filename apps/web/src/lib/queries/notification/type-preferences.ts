@@ -9,6 +9,17 @@ import { notificationKeys } from './keys';
 const PREFERENCES_STALE_TIME = 5 * 60 * 1000;
 const PREFERENCES_GC_TIME = 10 * 60 * 1000;
 
+/**
+ * Stable empty prefs (all types on — the API default) so this query never
+ * suspends. Solid Query's `useQuery` is a `createResource`; reading `.data`
+ * throws into Suspense while `state.data` is undefined. A defined
+ * placeholder keeps the observer on `.latest` instead. `suspense: false`
+ * is a no-op in `@tanstack/solid-query`.
+ */
+const EMPTY_TYPE_PREFERENCES: GetNotificationTypePreferencesResponse = {
+  disabled_types: [],
+};
+
 async function fetchNotificationTypePreferences() {
   return throwOnErr(() =>
     notificationServiceClient.getNotificationTypePreferences()
@@ -21,6 +32,7 @@ export function useNotificationTypePreferencesQuery() {
     queryFn: fetchNotificationTypePreferences,
     staleTime: PREFERENCES_STALE_TIME,
     gcTime: PREFERENCES_GC_TIME,
+    placeholderData: (previous) => previous ?? EMPTY_TYPE_PREFERENCES,
   }));
 }
 

@@ -391,13 +391,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
                   </Suspense>
                 </Show>
                 <Show when={isCurrentTab('Notifications')}>
-                  <Suspense
-                    fallback={
-                      <div class="animate-pulse bg-skeleton rounded h-4 w-32 m-6" />
-                    }
-                  >
-                    <Notifications />
-                  </Suspense>
+                  <Notifications />
                 </Show>
                 <Show when={isCurrentTab('Billing')}>
                   <Suspense>

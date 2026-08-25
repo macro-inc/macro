@@ -16,7 +16,7 @@ import {
   useUnmuteItemMutation,
 } from '@queries/notification/unsubscribes';
 import { ToggleSwitch } from '@ui';
-import { For, Show, Suspense } from 'solid-js';
+import { For, Show } from 'solid-js';
 import {
   SettingsCard,
   SettingsPage,
@@ -24,25 +24,15 @@ import {
   SettingsSection,
 } from './primitives';
 
-function NotificationsFallback() {
-  return <div class="animate-pulse bg-skeleton rounded h-4 w-32 m-6" />;
-}
-
 export function Notifications() {
-  return (
-    <Suspense fallback={<NotificationsFallback />}>
-      <NotificationsContent />
-    </Suspense>
-  );
-}
-
-function NotificationsContent() {
   const analytics = useAnalytics();
   const platformSettings = useNotificationSettings();
   const preferencesQuery = useNotificationTypePreferencesQuery();
   const setTypeEnabled = useSetNotificationTypeEnabledMutation();
   const mutedEntitiesQuery = useMutedEntitiesQuery({ limit: 100 });
   const unmuteItem = useUnmuteItemMutation();
+  const prefsPending = () =>
+    preferencesQuery.isPlaceholderData && preferencesQuery.isFetching;
 
   const disabledTypes = () =>
     new Set(preferencesQuery.data?.disabled_types ?? []);
@@ -115,7 +105,7 @@ function NotificationsContent() {
             <ToggleSwitch
               size="md"
               checked={isTypeEnabled(EMAIL_DIGEST_NOTIFICATION_TYPE)}
-              disabled={preferencesQuery.isLoading}
+              disabled={prefsPending()}
               onChange={(enabled) =>
                 toggleType(EMAIL_DIGEST_NOTIFICATION_TYPE, enabled)
               }
@@ -137,7 +127,7 @@ function NotificationsContent() {
                     <ToggleSwitch
                       size="md"
                       checked={isTypeEnabled(event.type)}
-                      disabled={preferencesQuery.isLoading}
+                      disabled={prefsPending()}
                       onChange={(enabled) => toggleType(event.type, enabled)}
                     />
                   </SettingsRow>

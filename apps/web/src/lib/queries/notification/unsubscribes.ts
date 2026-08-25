@@ -5,6 +5,9 @@ import { useMutation, useQuery } from '@tanstack/solid-query';
 import { queryClient } from '../client';
 import { notificationKeys } from './keys';
 
+/** Stable empty list so this query never suspends. See type-preferences. */
+const NO_MUTED_ENTITIES: UserUnsubscribe[] = [];
+
 async function fetchUnsubscribes() {
   const response = await notificationServiceClient.getUnsubscribes();
   if (response.isErr()) {
@@ -23,6 +26,7 @@ export function useMutedEntitiesQuery(args?: { limit?: number }) {
     initialPageParam: { limit },
     staleTime: 1000 * 60 * 5,
     gcTime: 1000 * 60 * 10,
+    placeholderData: (previous) => previous ?? NO_MUTED_ENTITIES,
   }));
 }
 
