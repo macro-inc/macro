@@ -18,6 +18,8 @@ export const SidebarCreateMenu = (props: {
   isSlim: () => boolean;
   variant?: 'row' | 'icon';
   icon?: 'create' | 'plus';
+  /** Menu placement; defaults to the sidebar's side-anchored flyout. */
+  placement?: 'right-start' | 'bottom-start' | 'bottom-end';
   filled?: boolean;
   large?: boolean;
   onMenuOpenChange?: (open: boolean) => void;
@@ -83,7 +85,7 @@ export const SidebarCreateMenu = (props: {
     <Dropdown
       open={open()}
       onOpenChange={handleOpenChange}
-      placement="right-start"
+      placement={props.placement ?? 'right-start'}
       gutter={8}
     >
       <Show

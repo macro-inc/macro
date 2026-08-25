@@ -121,8 +121,11 @@ export function SplitLayoutContainer(props: SplitLayoutContainerProps) {
     <SplitLayoutContext.Provider value={{ manager: splitManager }}>
       <div
         class={cn('size-full p-2 touch:p-0', {
+          // Only a sidebar already occupies the left edge; under the top bar
+          // the splits keep their gutter on every side.
           'pl-0':
             isSidebarVisible() &&
+            !activeAppLayout().capabilities.usesTopBar &&
             (!sidebar.isCollapsed() ||
               activeAppLayout().capabilities.removesSplitContentLeftPadding),
         })}

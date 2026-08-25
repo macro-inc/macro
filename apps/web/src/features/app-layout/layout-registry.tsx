@@ -4,6 +4,8 @@ export type AppLayoutCapabilities = {
   usesMessagesWorkspace: boolean;
   usesBrainWorkspace: boolean;
   usesCalendarWorkspace: boolean;
+  /** App chrome is a horizontal bar above the splits instead of a sidebar. */
+  usesTopBar: boolean;
   compactSplitHeader: boolean;
   removesSplitContentLeftPadding: boolean;
 };
@@ -39,6 +41,7 @@ export const APP_LAYOUT_DEFINITIONS = [
       usesMessagesWorkspace: false,
       usesBrainWorkspace: false,
       usesCalendarWorkspace: false,
+      usesTopBar: false,
       compactSplitHeader: false,
       removesSplitContentLeftPadding: false,
     },
@@ -54,6 +57,7 @@ export const APP_LAYOUT_DEFINITIONS = [
       usesMessagesWorkspace: true,
       usesBrainWorkspace: false,
       usesCalendarWorkspace: false,
+      usesTopBar: false,
       compactSplitHeader: true,
       removesSplitContentLeftPadding: true,
     },
@@ -73,6 +77,29 @@ export const APP_LAYOUT_DEFINITIONS = [
       usesMessagesWorkspace: true,
       usesBrainWorkspace: true,
       usesCalendarWorkspace: true,
+      usesTopBar: false,
+      compactSplitHeader: true,
+      removesSplitContentLeftPadding: true,
+    },
+    contentOwnedSplitChrome: V2_CONTENT_OWNED_CHROME,
+    experimentalViewNames: {
+      crm: 'CRM',
+      library: 'Drive',
+      machines: 'Brain',
+      messages: 'Chat',
+    },
+  },
+  {
+    id: 'experimental-v3',
+    label: 'Experimental v3',
+    splitPanelRenderer: 'v2-composed',
+    capabilities: {
+      experimentalSurfaces: true,
+      usesNewInbox: true,
+      usesMessagesWorkspace: true,
+      usesBrainWorkspace: true,
+      usesCalendarWorkspace: true,
+      usesTopBar: true,
       compactSplitHeader: true,
       removesSplitContentLeftPadding: true,
     },
@@ -99,8 +126,6 @@ export function isAppLayoutId(value: unknown): value is AppLayoutId {
   return APP_LAYOUTS_BY_ID.has(value as AppLayoutId);
 }
 
-export function getAppLayoutDefinition(
-  id: AppLayoutId
-): AppLayoutDefinition {
+export function getAppLayoutDefinition(id: AppLayoutId): AppLayoutDefinition {
   return APP_LAYOUTS_BY_ID.get(id) ?? APP_LAYOUT_DEFINITIONS[0];
 }

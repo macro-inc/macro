@@ -18,6 +18,7 @@ import {
   ExperimentalSoupLayout as ExperimentalSoupLayoutV2,
   experimentalSoupViewForContent as experimentalSoupViewForContentV2,
 } from '@app/features/experimental-app-layout-v2/experimental-soup-layout';
+import { ExperimentalAppTopBar } from '@app/features/experimental-app-layout-v3/experimental-app-topbar';
 import type { SidebarState } from '@components/app/app-sidebar/sidebar';
 import type { ActivityEvent } from '@queries/activity/graphql/entity';
 import type { Component, ParentProps } from 'solid-js';
@@ -41,17 +42,19 @@ export type ActivityViewSurfaceProps = ParentProps<{
 }>;
 
 export type AppLayoutSurfaces = {
-  AppSidebar: Component<AppSidebarSurfaceProps>;
+  /**
+   * Layouts hang their app chrome off exactly one of these: `AppSidebar` for a
+   * vertical rail beside the splits, `AppTopBar` for a bar above them.
+   */
+  AppSidebar?: Component<AppSidebarSurfaceProps>;
+  AppTopBar?: Component;
   ActivityView: Component<ActivityViewSurfaceProps>;
   ChatView: Component;
   SoupLayout: Component<any>;
   SoupListEntity: Component<any>;
   SoupGroupHeader: Component<any>;
   SoupAutomationCard: Component<any>;
-  resolveSoupView: (args: {
-    contentId: string;
-    requestedView?: any;
-  }) => any;
+  resolveSoupView: (args: { contentId: string; requestedView?: any }) => any;
 };
 
 const APP_LAYOUT_SURFACES: Partial<Record<AppLayoutId, AppLayoutSurfaces>> = {
@@ -67,6 +70,17 @@ const APP_LAYOUT_SURFACES: Partial<Record<AppLayoutId, AppLayoutSurfaces>> = {
   },
   'experimental-v2': {
     AppSidebar: ExperimentalAppSidebarV2,
+    ActivityView: ExperimentalActivityViewV2,
+    ChatView: ExperimentalChatViewV2,
+    SoupLayout: ExperimentalSoupLayoutV2,
+    SoupListEntity: ExperimentalListEntityV2,
+    SoupGroupHeader: ExperimentalGroupHeaderV2,
+    SoupAutomationCard: ExperimentalAutomationCardV2,
+    resolveSoupView: experimentalSoupViewForContentV2,
+  },
+  // V3 keeps every V2 content surface and swaps the sidebar for a top bar.
+  'experimental-v3': {
+    AppTopBar: ExperimentalAppTopBar,
     ActivityView: ExperimentalActivityViewV2,
     ChatView: ExperimentalChatViewV2,
     SoupLayout: ExperimentalSoupLayoutV2,
