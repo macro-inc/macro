@@ -1,5 +1,6 @@
 import CaretDownIcon from '@phosphor/caret-down.svg';
 import type { JSX, ParentProps } from 'solid-js';
+import { cn } from '../utils/classname';
 import { Button, type ButtonVariant } from './Button';
 import { ButtonGroup } from './ButtonGroup';
 import { Dropdown } from './Dropdown';
@@ -20,7 +21,7 @@ export function SplitActionButton(props: SplitActionButtonProps) {
     <Dropdown placement="bottom-start">
       <ButtonGroup
         variant={variant()}
-        class={`h-8 rounded-full ${props.class ?? ''}`}
+        class={cn('h-8 rounded-full', props.class)}
       >
         <Button
           variant={variant()}

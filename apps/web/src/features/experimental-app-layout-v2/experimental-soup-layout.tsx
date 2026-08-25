@@ -1111,6 +1111,7 @@ export function ExperimentalSoupLayout(props: ExperimentalSoupLayoutProps) {
           <SoupViewCreateButton
             inline
             experimental
+            buttonClass="rounded-lg"
             preferredOptionId={
               powersTab() === 'skills' ? 'skill' : 'automation'
             }
@@ -1783,7 +1784,11 @@ export function ExperimentalSoupLayout(props: ExperimentalSoupLayoutProps) {
         <h1 class="m-0 min-w-0 flex-1 truncate text-2xl font-semibold tracking-[-0.03em] text-ink">
           {headerProps.title}
         </h1>
-        <SoupViewCreateButton inline experimental />
+        <SoupViewCreateButton
+          inline
+          experimental
+          buttonClass="rounded-lg"
+        />
       </div>
     </div>
   );
@@ -1798,7 +1803,11 @@ export function ExperimentalSoupLayout(props: ExperimentalSoupLayoutProps) {
           </h1>
           <InboxTabs />
         </div>
-        <SoupViewCreateButton inline experimental />
+        <SoupViewCreateButton
+          inline
+          experimental
+          buttonClass="rounded-lg"
+        />
       </ComposedSplitHeader>
       <ListContentContainer>
         <header class="shrink-0 px-4 pb-5 pt-4 @max-[760px]/experimental-soup:px-3 @max-[480px]/experimental-soup:px-2">
@@ -1823,7 +1832,11 @@ export function ExperimentalSoupLayout(props: ExperimentalSoupLayoutProps) {
           <h1 class="m-0 min-w-0 flex-1 truncate text-2xl font-semibold tracking-[-0.03em] text-ink">
             Email
           </h1>
-          <SoupViewCreateButton inline experimental />
+          <SoupViewCreateButton
+            inline
+            experimental
+            buttonClass="rounded-lg"
+          />
         </div>
         <div class="mt-5 min-h-0 flex-1 overflow-y-auto">
           <EmailNavigation />
@@ -1864,7 +1877,11 @@ export function ExperimentalSoupLayout(props: ExperimentalSoupLayoutProps) {
           <h1 class="m-0 min-w-0 flex-1 truncate text-2xl font-semibold tracking-[-0.03em] text-ink">
             Drive
           </h1>
-          <SoupViewCreateButton inline experimental />
+          <SoupViewCreateButton
+            inline
+            experimental
+            buttonClass="rounded-lg"
+          />
         </div>
         <div class="mt-5 min-h-0 flex-1 overflow-y-auto">
           <LibraryNavigation />
@@ -1908,7 +1925,11 @@ export function ExperimentalSoupLayout(props: ExperimentalSoupLayoutProps) {
           <h1 class="m-0 min-w-0 flex-1 truncate text-2xl font-semibold tracking-[-0.03em] text-ink">
             Tasks
           </h1>
-          <SoupViewCreateButton inline experimental />
+          <SoupViewCreateButton
+            inline
+            experimental
+            buttonClass="rounded-lg"
+          />
         </div>
         <div class="mt-5 min-h-0 flex-1 overflow-y-auto">
           <TaskNavigation />
@@ -1942,7 +1963,11 @@ export function ExperimentalSoupLayout(props: ExperimentalSoupLayoutProps) {
         <h1 class="m-0 min-w-0 flex-1 truncate text-2xl font-semibold tracking-[-0.03em] text-ink">
           CRM
         </h1>
-        <SoupViewCreateButton inline experimental />
+        <SoupViewCreateButton
+          inline
+          experimental
+          buttonClass="rounded-lg"
+        />
       </ComposedSplitHeader>
       <ListContentContainer>
         <header class="shrink-0 px-4 pb-5 pt-4 @max-[760px]/experimental-soup:px-3 @max-[480px]/experimental-soup:px-2">

@@ -20,6 +20,7 @@ export const SidebarCreateMenu = (props: {
   icon?: 'create' | 'plus';
   filled?: boolean;
   large?: boolean;
+  triggerClass?: string;
   onMenuOpenChange?: (open: boolean) => void;
   onAgentSelect?: () => void;
 }) => {
@@ -91,7 +92,10 @@ export const SidebarCreateMenu = (props: {
         fallback={
           <Dropdown.Trigger
             as={NavRow}
-            class="center h-8 bg-ink/4 text-[13px]"
+            class={cn(
+              'center h-8 bg-ink/4 text-[13px]',
+              props.triggerClass
+            )}
             fullWidth
             tooltipPlacement="right"
             tooltipDisabled={!props.isSlim()}
@@ -131,7 +135,8 @@ export const SidebarCreateMenu = (props: {
               : 'size-[26px] [&_svg]:size-4!',
             props.filled
               ? 'border-transparent bg-ink/8 text-ink shadow-none hover:bg-ink/12 hover:text-ink!'
-              : 'bg-surface shadow-md shadow-drop-shadow'
+              : 'bg-surface shadow-md shadow-drop-shadow',
+            props.triggerClass
           )}
           label="Create"
           hotkey={TOKENS.global.createCommand}

@@ -112,7 +112,7 @@ function ChatHistorySection(props: {
           <Button
             variant="cta"
             size="sm"
-            class="h-9 shrink-0 rounded-full px-3"
+            class="h-9 shrink-0 rounded-lg px-3"
             onClick={props.onNewChat}
           >
             <PlusIcon class="size-3.5" />

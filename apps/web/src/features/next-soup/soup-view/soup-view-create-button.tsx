@@ -134,6 +134,7 @@ export const SoupViewCreateButton = (
     experimental?: boolean;
     hideLabel?: boolean;
     preferredOptionId?: string;
+    buttonClass?: string;
   } = {}
 ) => {
   const panel = useSplitPanelOrThrow();
@@ -210,7 +211,8 @@ export const SoupViewCreateButton = (
           ? 'h-8 rounded-full border-transparent px-3'
           : 'border-0 rounded-full px-3 py-2 pl-1',
         buttonProps.hideLabel &&
-          (props.experimental ? 'size-8 rounded-full px-0' : 'pr-1')
+          (props.experimental ? 'size-8 rounded-full px-0' : 'pr-1'),
+        props.buttonClass
       )}
       size="sm"
       label={buttonProps.hideLabel ? singleCreateLabel() : undefined}
@@ -242,6 +244,7 @@ export const SoupViewCreateButton = (
       label={createLabel()}
       icon={<PlusIcon class="size-4" />}
       onPrimaryAction={() => handleSelect(options()[0])}
+      class={props.buttonClass}
     >
       <CreateOptionItems />
     </SplitActionButton>
@@ -252,7 +255,10 @@ export const SoupViewCreateButton = (
       <Dropdown.Trigger
         variant="cta"
         size="sm"
-        class="h-8 rounded-full border-transparent px-3 font-semibold"
+        class={cn(
+          'h-8 rounded-full border-transparent px-3 font-semibold',
+          props.buttonClass
+        )}
         aria-label="New"
       >
         <PlusIcon class="size-4" />
@@ -278,7 +284,8 @@ export const SoupViewCreateButton = (
             ? 'h-10 rounded-xl border-transparent px-3'
             : 'border-0 rounded-full px-3 py-2 pl-1',
           buttonProps.hideLabel &&
-            (props.experimental ? 'min-w-10 rounded-full px-2' : 'pr-1')
+            (props.experimental ? 'min-w-10 rounded-full px-2' : 'pr-1'),
+          props.buttonClass
         )}
       >
         <CreateGlyph />

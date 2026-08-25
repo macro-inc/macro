@@ -251,6 +251,7 @@ export function ExperimentalAppSidebar(props: ExperimentalAppSidebarProps) {
                   icon="plus"
                   filled
                   large
+                  triggerClass="rounded-lg"
                   onAgentSelect={openChatView}
                 />
               }
@@ -259,6 +260,7 @@ export function ExperimentalAppSidebar(props: ExperimentalAppSidebarProps) {
                 isSlim={isSlim}
                 variant="row"
                 icon="plus"
+                triggerClass="rounded-lg"
                 onAgentSelect={openChatView}
               />
             </Show>

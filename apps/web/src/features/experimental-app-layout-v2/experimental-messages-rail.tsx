@@ -610,7 +610,7 @@ export function ExperimentalMessagesRail(props: ExperimentalMessagesRailProps) {
               action={() => (
                 <button
                   type="button"
-                  class="flex size-7 shrink-0 items-center justify-center rounded-full text-ink-muted transition-colors hover:bg-hover hover:text-ink focus-visible:ring-2 focus-visible:ring-accent/40"
+                  class="flex size-7 shrink-0 items-center justify-center rounded-lg text-ink-muted transition-colors hover:bg-hover hover:text-ink focus-visible:ring-2 focus-visible:ring-accent/40"
                   aria-label="Create channel"
                   onClick={() => openNewChannelModal()}
                 >
@@ -648,7 +648,7 @@ export function ExperimentalMessagesRail(props: ExperimentalMessagesRailProps) {
               action={() => (
                 <button
                   type="button"
-                  class="flex size-7 shrink-0 items-center justify-center rounded-full text-ink-muted transition-colors hover:bg-hover hover:text-ink focus-visible:ring-2 focus-visible:ring-accent/40"
+                  class="flex size-7 shrink-0 items-center justify-center rounded-lg text-ink-muted transition-colors hover:bg-hover hover:text-ink focus-visible:ring-2 focus-visible:ring-accent/40"
                   aria-label="Start direct message"
                   onClick={() => {
                     CommandState.clearQuery();

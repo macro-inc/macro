@@ -181,7 +181,7 @@ function ExperimentalCalendarWorkspaceContent() {
     <Button
       variant="cta"
       size="sm"
-      class="h-8 shrink-0 rounded-full px-3 font-semibold"
+      class="h-8 shrink-0 rounded-lg px-3 font-semibold"
       onClick={() => openEventComposer()}
     >
       <PlusIcon class="size-3.5" />
@@ -297,7 +297,7 @@ function ExperimentalCalendarWorkspaceContent() {
             <Button
               variant="cta"
               size="icon-md"
-              class="absolute left-2 top-2 z-annotation-layer hidden rounded-xl opacity-65 shadow-md shadow-drop-shadow/30 transition-opacity hover:opacity-100 focus-visible:opacity-100 @max-[720px]/experimental-soup:inline-flex"
+              class="absolute left-2 top-2 z-annotation-layer hidden rounded-lg opacity-65 shadow-md shadow-drop-shadow/30 transition-opacity hover:opacity-100 focus-visible:opacity-100 @max-[720px]/experimental-soup:inline-flex"
               label="New event"
               tooltipPlacement="right"
               onClick={() => openEventComposer()}
