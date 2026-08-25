@@ -17,7 +17,7 @@ import { createEffect, onCleanup } from 'solid-js';
 // Bump when a default backfill input changes so persisted opaque cursors
 // cannot retain the previous server-side filters.
 const BACKFILL_VERSION = 6;
-const PAGE_LIMIT = 250;
+const PAGE_LIMIT = 100;
 // Five threads × twenty messages reaches the backend's 100-message cap.
 const EMAIL_CONTENT_PAGE_LIMIT = 5;
 const PAGE_DELAY_MS = 2_000;
