@@ -11,7 +11,7 @@ const TIERS: {
   detail: string;
 }[] = [
   { id: 'small', label: 'Small', detail: '2 vCPU · 4 GiB · 96 GiB' },
-  { id: 'default', label: 'Default', detail: '8 vCPU · 16 GiB · 96 GiB' },
+  { id: 'default', label: 'Default', detail: '4 vCPU · 8 GiB · 96 GiB' },
   { id: 'large', label: 'Large', detail: '16 vCPU · 32 GiB · 96 GiB' },
 ];
 

@@ -15,7 +15,7 @@ mod test;
 pub enum SandboxSize {
     /// 2 vCPU / 4 GiB RAM / 96 GiB disk.
     Small,
-    /// 8 vCPU / 16 GiB RAM / 96 GiB disk.
+    /// 4 vCPU / 8 GiB RAM / 96 GiB disk.
     #[default]
     Default,
     /// 16 vCPU / 32 GiB RAM / 96 GiB disk.
