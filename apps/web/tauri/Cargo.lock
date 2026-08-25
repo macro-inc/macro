@@ -164,6 +164,7 @@ dependencies = [
  "tauri-plugin-http",
  "tauri-plugin-input-accessory",
  "tauri-plugin-log",
+ "tauri-plugin-network-status",
  "tauri-plugin-notification",
  "tauri-plugin-notifications",
  "tauri-plugin-opener",
@@ -5950,6 +5951,14 @@ dependencies = [
  "thiserror 2.0.18",
  "time",
  "tracing",
+]
+
+[[package]]
+name = "tauri-plugin-network-status"
+version = "0.1.0"
+dependencies = [
+ "tauri",
+ "tauri-plugin",
 ]
 
 [[package]]
