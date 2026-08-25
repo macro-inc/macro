@@ -417,12 +417,18 @@ export const SoupView = (props: SoupViewProps) => {
     });
   });
 
-  // Fresh preview-default views engage as soon as the layout can form a pair,
+  // Preview-default views engage as soon as the layout can form a pair,
   // without waiting for rows. useSoupPreviewAvailability owns disengagement: a
   // settled result with no previewable rows only suspends the pair and
   // re-engages once an entity arrives, so an initially empty view still lands
   // in preview mode. Resolving here keeps a manual exit from being undone by
   // later Soup updates.
+  //
+  // The preference alone decides engagement, independent of navigation cause:
+  // navigating the Controller away dissolves its Preview Pair, so an entry
+  // restored via history back/forward has no pair left to revive and must
+  // re-engage here like a fresh arrival. Manual toggles write the preference,
+  // which keeps an explicit exit from being resurrected by history navigation.
   let initialPreviewResolved = false;
   createEffect(() => {
     if (initialPreviewResolved) return;
@@ -430,10 +436,7 @@ export const SoupView = (props: SoupViewProps) => {
       initialPreviewResolved = true;
       return;
     }
-    if (
-      panel.handle.lastNavigationCause() !== 'fresh' ||
-      panel.handle.isViewerSplit()
-    ) {
+    if (panel.handle.isViewerSplit()) {
       initialPreviewResolved = true;
       return;
     }
