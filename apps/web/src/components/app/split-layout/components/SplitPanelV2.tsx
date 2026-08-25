@@ -155,8 +155,10 @@ export function SplitPanelV2(props: SplitPanelProps) {
   const contentOwnsSplitChrome = createMemo(() => {
     const content = props.handle.content();
     return (
-      content.type === 'component' &&
-      activeAppLayout().contentOwnedSplitChrome.has(content.id)
+      (content.type === 'component' &&
+        activeAppLayout().contentOwnedSplitChrome.has(content.id)) ||
+      (content.type === 'calendar' &&
+        activeAppLayout().capabilities.usesCalendarWorkspace)
     );
   });
   const usesFullHeightMessagesSidebar = createMemo(() => {

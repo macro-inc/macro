@@ -3,6 +3,7 @@ export type AppLayoutCapabilities = {
   usesNewInbox: boolean;
   usesMessagesWorkspace: boolean;
   usesBrainWorkspace: boolean;
+  usesCalendarWorkspace: boolean;
   compactSplitHeader: boolean;
   removesSplitContentLeftPadding: boolean;
 };
@@ -37,6 +38,7 @@ export const APP_LAYOUT_DEFINITIONS = [
       usesNewInbox: false,
       usesMessagesWorkspace: false,
       usesBrainWorkspace: false,
+      usesCalendarWorkspace: false,
       compactSplitHeader: false,
       removesSplitContentLeftPadding: false,
     },
@@ -51,6 +53,7 @@ export const APP_LAYOUT_DEFINITIONS = [
       usesNewInbox: true,
       usesMessagesWorkspace: true,
       usesBrainWorkspace: false,
+      usesCalendarWorkspace: false,
       compactSplitHeader: true,
       removesSplitContentLeftPadding: true,
     },
@@ -69,6 +72,7 @@ export const APP_LAYOUT_DEFINITIONS = [
       usesNewInbox: true,
       usesMessagesWorkspace: true,
       usesBrainWorkspace: true,
+      usesCalendarWorkspace: true,
       compactSplitHeader: true,
       removesSplitContentLeftPadding: true,
     },
