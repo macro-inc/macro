@@ -1109,35 +1109,13 @@ input[type="number"] {
   mask-image: linear-gradient(to bottom, black 25%, transparent 92%);
 }
 
-@keyframes experimental-v2-view-switch-roll-in {
-  0% {
-    opacity: 0.78;
-    transform: translateY(13px) rotateX(-8deg) scale(0.7);
-  }
-  100% {
-    opacity: 1;
-    transform: translateY(0) rotateX(0) scale(1);
-  }
-}
-
-.experimental-v2-view-switch-current-in {
-  animation: experimental-v2-view-switch-roll-in 300ms
-    cubic-bezier(0.22, 0.7, 0.25, 1) both;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .experimental-v2-view-switch-current-in {
-    animation: none;
-  }
-}
-
-.experimental-v2-view-switch:is(:hover, :focus-visible)
+.experimental-v2-view-switch:not([data-suppress-hover]):is(:hover, :focus-visible)
   .experimental-v2-view-switch-current {
   opacity: 0.55;
   transform: translateY(-3px) rotateX(12deg);
 }
 
-.experimental-v2-view-switch:is(:hover, :focus-visible)
+.experimental-v2-view-switch:not([data-suppress-hover]):is(:hover, :focus-visible)
   .experimental-v2-view-switch-next {
   opacity: 0.52;
   transform: translateY(0) rotateX(-26deg);

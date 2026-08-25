@@ -542,9 +542,15 @@ function ActivityDetails(props: {
 function ActivityWorkspaceHeader(props: {
   title: 'Activity' | 'Inbox';
   onSwitch: () => void;
-  animate?: boolean;
 }) {
-  const destination = () => (props.title === 'Activity' ? 'Inbox' : 'Activity');
+  const [pointerOver, setPointerOver] = createSignal(false);
+  const [suppressHover, setSuppressHover] = createSignal(false);
+  const destination = () =>
+    props.title === 'Activity' ? 'Inbox' : 'Activity';
+  const switchView = () => {
+    setSuppressHover(pointerOver());
+    props.onSwitch();
+  };
   return (
     <ComposedSplitHeader
       class="absolute! left-0 top-0 z-1 flex flex-col items-stretch px-4 pb-3 pt-2 @max-[760px]/experimental-activity:px-3 @max-[480px]/experimental-activity:px-2"
@@ -563,23 +569,20 @@ function ActivityWorkspaceHeader(props: {
           type="button"
           class="experimental-v2-view-switch flex w-40 max-w-full items-center justify-between gap-2.5 rounded-xl px-1 py-1 text-ink outline-none transition-colors hover:text-accent focus-visible:ring-2 focus-visible:ring-accent/40"
           aria-label={`Switch to ${destination()}`}
-          onClick={props.onSwitch}
+          data-suppress-hover={suppressHover() ? true : undefined}
+          onPointerEnter={() => setPointerOver(true)}
+          onPointerLeave={() => {
+            setPointerOver(false);
+            setSuppressHover(false);
+          }}
+          onClick={switchView}
         >
           <span class="experimental-v2-view-switch-label">
-            <Show keyed when={props.title}>
-              {(title) => (
-                <span
-                  class={cn(
-                    'experimental-v2-view-switch-current-frame',
-                    props.animate && 'experimental-v2-view-switch-current-in'
-                  )}
-                >
-                  <span class="experimental-v2-view-switch-current">
-                    {title}
-                  </span>
-                </span>
-              )}
-            </Show>
+            <span class="experimental-v2-view-switch-current-frame">
+              <span class="experimental-v2-view-switch-current">
+                {props.title}
+              </span>
+            </span>
             <span
               aria-hidden="true"
               class="experimental-v2-view-switch-next"
@@ -597,7 +600,6 @@ function ActivityWorkspaceHeader(props: {
 /** Combined Activity and Inbox workspace for Experimental v2. */
 export function ExperimentalActivityView(props: ActivityViewSurfaceProps) {
   const [tab, setTab] = createSignal<ActivityTab>('inbox');
-  const [hasSwitched, setHasSwitched] = createSignal(false);
   const [selectedKey, setSelectedKey] = createSignal<string>();
   const [searchQuery, setSearchQuery] = createSignal('');
   const [sort, setSort] = createSignal<ActivitySort>('newest');
@@ -653,7 +655,6 @@ export function ExperimentalActivityView(props: ActivityViewSurfaceProps) {
   };
 
   const switchView = () => {
-    setHasSwitched(true);
     setTab((current) => (current === 'activity' ? 'inbox' : 'activity'));
     setSelectedKey(undefined);
   };
@@ -663,7 +664,6 @@ export function ExperimentalActivityView(props: ActivityViewSurfaceProps) {
       <ActivityWorkspaceHeader
         title={tab() === 'activity' ? 'Activity' : 'Inbox'}
         onSwitch={switchView}
-        animate={hasSwitched()}
       />
       <Suspense fallback={<div class="size-full bg-panel" />}>
         <Show
