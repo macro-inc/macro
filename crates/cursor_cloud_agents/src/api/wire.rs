@@ -28,11 +28,92 @@ pub struct RepoSelection {
     pub starting_ref: String,
 }
 
-/// An explicit model choice.
+/// An explicit model choice: an id plus the params that pin its variant.
+///
+/// Both halves are required in practice. Cursor answers a bare id with
+/// `validation_error: Model 'grok-4.5' does not match a known variant`, so
+/// `params` is omitted only when a caller genuinely has none to send.
 #[derive(Debug, Serialize)]
 pub struct ModelSelection {
     /// Model id, e.g. `composer-2.5`.
     pub id: String,
+    /// The variant's parameters. Omitted when empty rather than sent as `[]`,
+    /// which Cursor reads as "a variant with no params" and may not have.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub params: Vec<ModelParamSelection>,
+}
+
+/// One `{id, value}` parameter of a model variant.
+#[derive(Debug, Serialize)]
+pub struct ModelParamSelection {
+    /// The parameter's id, e.g. `reasoning`.
+    pub id: String,
+    /// Its value, always a string on this wire — Cursor enumerates booleans as
+    /// `"true"`/`"false"`.
+    pub value: String,
+}
+
+impl From<&crate::domain::model::ModelChoice> for ModelSelection {
+    fn from(choice: &crate::domain::model::ModelChoice) -> Self {
+        Self {
+            id: choice.id.clone(),
+            params: choice
+                .params
+                .iter()
+                .map(|param| ModelParamSelection {
+                    id: param.id.clone(),
+                    value: param.value.clone(),
+                })
+                .collect(),
+        }
+    }
+}
+
+/// `GET /v1/models` response.
+#[derive(Debug, Deserialize)]
+pub struct ListModelsResponse {
+    /// The offered models. Cursor names this `items`.
+    #[serde(default)]
+    pub items: Vec<ModelListing>,
+}
+
+/// One model as `GET /v1/models` describes it.
+///
+/// `parameters` — the per-parameter list of permitted values — is deliberately
+/// not modelled: `variants` already enumerates every combination Cursor will
+/// accept, which is the only question this crate asks. Reading both would mean
+/// deciding what to do when they disagree.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ModelListing {
+    /// The id to send.
+    pub id: String,
+    /// The human-readable name.
+    pub display_name: Option<String>,
+    /// The accepted id+params combinations.
+    #[serde(default)]
+    pub variants: Vec<VariantListing>,
+}
+
+/// One accepted parameter combination for a model.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VariantListing {
+    /// The parameters this variant fixes.
+    #[serde(default)]
+    pub params: Vec<ParamListing>,
+    /// Whether Cursor marks this the default.
+    #[serde(default)]
+    pub is_default: bool,
+}
+
+/// One `{id, value}` pair inside a variant.
+#[derive(Debug, Deserialize)]
+pub struct ParamListing {
+    /// The parameter's id.
+    pub id: String,
+    /// Its value.
+    pub value: String,
 }
 
 /// One MCP server for a new agent to connect to.
@@ -188,6 +269,15 @@ pub struct RunSummary {
 pub struct CreateRunRequest {
     /// The follow-up prompt.
     pub prompt: PromptBody,
+    /// The model for this run.
+    ///
+    /// Undocumented on this endpoint — Cursor's reference lists only `prompt`,
+    /// `mode` and `mcpServers`, and says follow-up runs inherit the agent's
+    /// model — but the endpoint validates it and honours it. Its schema is
+    /// strict (an unknown key is a `validation_error` naming the key), which is
+    /// how the field was confirmed to exist rather than be ignored.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub model: Option<ModelSelection>,
 }
 
 /// `POST /v1/agents/{id}/runs` response.

@@ -9,7 +9,8 @@
 
 use crate::domain::event::CursorEvent;
 use crate::domain::model::{
-    AcpSessionId, CursorAgentId, CursorRunId, McpServer, RepoUrl, RunListing, RunOutcome,
+    AcpSessionId, CursorAgentId, CursorModel, CursorRunId, McpServer, ModelChoice, RepoUrl,
+    RunListing, RunOutcome,
 };
 use agent_client_protocol::schema::v1::SessionUpdate;
 use futures::Stream;
@@ -21,22 +22,40 @@ pub trait CursorAgents {
     /// an agent only exists once there is a prompt to run, which is why this
     /// returns both ids at once.
     ///
-    /// `mcp_servers` is applied here and nowhere else: Cursor fixes an
-    /// agent's MCP configuration at creation, so a follow-up run cannot add
-    /// to it. An empty slice leaves Cursor's own configuration untouched.
+    /// `mcp_servers` is applied here: Cursor fixes an agent's MCP
+    /// configuration at creation. An empty slice leaves Cursor's own
+    /// configuration untouched.
+    ///
+    /// `model` absent means "whatever the user's own Cursor settings resolve
+    /// to" — Cursor falls back user default, then team, then system — which is
+    /// a better default than any id this crate could pick.
     fn create_agent(
         &self,
         prompt: &str,
         repo: Option<&RepoUrl>,
         mcp_servers: &[McpServer],
+        model: Option<&ModelChoice>,
     ) -> impl Future<Output = Result<(CursorAgentId, CursorRunId), rootcause::Report>> + Send;
 
     /// Send a follow-up prompt to an existing agent, opening a new run.
+    ///
+    /// `model` is honoured per run, which is what makes a mid-session model
+    /// change possible: the field is undocumented on this endpoint but
+    /// validated by it, and absent means the agent's own model stands.
     fn create_run(
         &self,
         agent: &CursorAgentId,
         prompt: &str,
+        model: Option<&ModelChoice>,
     ) -> impl Future<Output = Result<CursorRunId, rootcause::Report>> + Send;
+
+    /// The models this account may choose from, with the variants each accepts.
+    ///
+    /// Cursor validates an id together with its params, so the variants are
+    /// not decoration — they are the only source of a selection it will accept.
+    fn list_models(
+        &self,
+    ) -> impl Future<Output = Result<Vec<CursorModel>, rootcause::Report>> + Send;
 
     /// Cancel a run. Terminal: a cancelled run cannot resume.
     fn cancel_run(

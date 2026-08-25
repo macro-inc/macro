@@ -121,7 +121,7 @@ Settings needs its own small surface regardless, for the connections tab:
 `GET /me/cursor-key` → `{ registered: bool }`, `PUT` to set, `DELETE` to revoke.
 The `GET` never returns key material.
 
-### 3. Repo and model: hardcoded for the first pass
+### 3. Repo hardcoded for the first pass; model chosen per session
 
 **Repo: hardcoded to `https://github.com/macro-inc/macro`.** Deliberately
 temporary. `agent_session.repo_url` is `TEXT NOT NULL`, so a session must name
@@ -136,13 +136,38 @@ the Cursor API. That failure needs to surface as a legible session error
 ("Cursor cannot access this repository") rather than a generic 400, because it
 will be the most common first-run failure.
 
-**Model: omit the field.** Cursor resolves user default → team default → system
-default when `model` is absent from `POST /v1/agents`. That is both less code
-than pinning an id and more correct — it respects whatever the user already
-chose in their own Cursor settings, which is what "whatever normal is" means in
-practice. `cursor_acp` already treats `CURSOR_MODEL` as optional, so this is the
-existing path. If we later want to pin one, it becomes a constant next to the
-repo, and `GET /v1/models` is the source of valid ids.
+**Model: chosen per session, over ACP.** Absent, Cursor resolves user default →
+team default → system default, and that stays the default: it respects whatever
+the user already chose in their own Cursor settings. But it is no longer the only
+option — the session advertises the account's models as an ACP `model` config
+option and accepts `session/set_config_option` at any time.
+
+Two API facts this rests on, both established by probing rather than from the
+docs, which are wrong about the first:
+
+- **`POST /v1/agents/{id}/runs` accepts `model`.** Cursor's reference lists only
+  `prompt`, `mode` and `mcpServers` for follow-up runs and states that they
+  inherit the agent's model. They do not have to: the field is validated and
+  honoured there. The endpoint's schema is strict — an unknown key comes back as
+  `validation_error` naming the key — which is how the field was shown to exist
+  rather than be silently ignored. The full accepted set is `prompt`, `model`,
+  `mode`, `mcpServers`, `envVars`.
+- **A selection is an id *plus* its params.** `{"id": "grok-4.5"}` is rejected
+  with `Model 'grok-4.5' does not match a known variant`; the same id with
+  `effort=high, fast=true` is accepted. `GET /v1/models` enumerates the accepted
+  combinations as `variants`, one flagged `isDefault`.
+
+So a mid-session model change needs no new agent and no second credential — it is
+a field on the next run, reachable with the user's own scoped `crsr_` key. There
+is no agent-level model update: `PATCH`/`PUT`/`POST` on `/v1/agents/{id}` do not
+exist.
+
+One thing the API will not tell us: which model a run actually used. It is absent
+from the run record, the run list and the stream, so the advertised current value
+is our own record of what we last asked for.
+
+`CURSOR_MODEL` still pins a starting model for the standalone binary, by id; its
+params come from that model's default variant.
 
 ### 4. Agent sessions page
 

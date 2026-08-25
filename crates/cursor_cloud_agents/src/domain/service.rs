@@ -26,7 +26,8 @@ mod test;
 use crate::domain::error::SessionError;
 use crate::domain::event::{CursorEvent, InteractionUpdate};
 use crate::domain::model::{
-    AcpSessionId, CursorAgentId, CursorRunId, McpServer, RepoUrl, RunStatus,
+    AcpSessionId, CursorAgentId, CursorModel, CursorRunId, McpServer, ModelChoice, RepoUrl,
+    RunStatus,
 };
 use crate::domain::ports::{CursorAgents, RepoResolver, RunStream, SessionNotifier};
 use crate::domain::translate::TranslateMachine;
@@ -104,6 +105,12 @@ struct SessionState {
     /// whenever Cursor happens to end the stream. Replaced per turn, so a
     /// cancel can never carry into the next one.
     cancel: tokio_util::sync::CancellationToken,
+    /// The model this session's next run will use.
+    ///
+    /// `None` means "whatever this user's own Cursor settings resolve to" —
+    /// Cursor falls back user default, then team, then system — which is the
+    /// right answer until a client says otherwise.
+    model: Option<ModelChoice>,
     /// Carried across turns so tool-call ids stay deduplicated for the whole
     /// session.
     translator: TranslateMachine,
@@ -135,6 +142,12 @@ pub struct CursorSessionService<Cursor, Notifier, Repos> {
     sessions: Mutex<HashMap<AcpSessionId, Arc<Session>>>,
     /// Monotonic counter for minting session ids without a clock or RNG.
     next_session: Mutex<u64>,
+    /// A model id this deployment pins, applied to every new session. `None`
+    /// leaves the choice to Cursor's own default resolution.
+    default_model_id: Option<String>,
+    /// `GET /v1/models`, fetched once. The table is static for the life of a
+    /// process and every `session/new` would otherwise re-fetch it.
+    models: tokio::sync::Mutex<Option<Vec<CursorModel>>>,
 }
 
 impl<Cursor, Notifier, Repos> CursorSessionService<Cursor, Notifier, Repos>
@@ -151,7 +164,21 @@ where
             repos,
             sessions: Mutex::new(HashMap::new()),
             next_session: Mutex::new(0),
+            default_model_id: None,
+            models: tokio::sync::Mutex::new(None),
         }
+    }
+
+    /// Pin the model every new session starts on, by id.
+    ///
+    /// The id alone, because a caller configuring this has only ever had an id
+    /// to give (`CURSOR_MODEL`); its params are resolved from Cursor's own
+    /// default variant, since Cursor rejects an id whose params are not a
+    /// variant it knows.
+    #[must_use]
+    pub fn with_default_model(mut self, model_id: Option<String>) -> Self {
+        self.default_model_id = model_id;
+        self
     }
 
     /// Open a session for a client working at `cwd`.
@@ -191,6 +218,105 @@ where
         id
     }
 
+    /// The models this account may choose from, fetched once and reused.
+    pub async fn models(&self) -> Result<Vec<CursorModel>, SessionError> {
+        let mut cached = self.models.lock().await;
+        if let Some(models) = cached.as_ref() {
+            return Ok(models.clone());
+        }
+        let models = self
+            .cursor
+            .list_models()
+            .await
+            .map_err(SessionError::Cursor)?;
+        *cached = Some(models.clone());
+        Ok(models)
+    }
+
+    /// The model a session's next run will use, by id.
+    ///
+    /// This is what *we* last asked for, not what Cursor ran: no API surface
+    /// reports a run's model back — not the run record, not the run list, not
+    /// the stream — so our own record is the only answer available.
+    pub async fn session_model_id(
+        &self,
+        session_id: &AcpSessionId,
+    ) -> Result<Option<String>, SessionError> {
+        Ok(self
+            .effective_model(session_id)
+            .await?
+            .map(|model| model.id))
+    }
+
+    /// Choose the model a session's next run will use.
+    ///
+    /// Takes effect on the next run rather than the one streaming now, which
+    /// Cursor fixes at creation. Resolved against `GET /v1/models` so an id
+    /// Cursor would reject is refused here, with the list, instead of failing
+    /// at the next prompt.
+    pub async fn set_model(
+        &self,
+        session_id: &AcpSessionId,
+        model_id: &str,
+    ) -> Result<(), SessionError> {
+        let session = self.session(session_id)?;
+        let models = self.models().await?;
+        let model = models
+            .iter()
+            .find(|model| model.id == model_id)
+            .ok_or_else(|| {
+                SessionError::Cursor(rootcause::report!(
+                    "no cursor model with id {model_id}; this account offers {}",
+                    models
+                        .iter()
+                        .map(|model| model.id.as_str())
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                ))
+            })?;
+        session.state.lock().expect("session state poisoned").model = Some(model.default_choice());
+        Ok(())
+    }
+
+    /// The session's explicit choice, or the deployment's pinned default
+    /// resolved to a variant Cursor will accept.
+    ///
+    /// The default is resolved on first use rather than at `session/new`, which
+    /// is synchronous and cannot reach the API, and then stored so the lookup
+    /// happens once per session.
+    async fn effective_model(
+        &self,
+        session_id: &AcpSessionId,
+    ) -> Result<Option<ModelChoice>, SessionError> {
+        let session = self.session(session_id)?;
+        if let Some(model) = session
+            .state
+            .lock()
+            .expect("session state poisoned")
+            .model
+            .clone()
+        {
+            return Ok(Some(model));
+        }
+        let Some(default_id) = self.default_model_id.as_deref() else {
+            return Ok(None);
+        };
+        let models = self.models().await?;
+        let Some(model) = models.iter().find(|model| model.id == default_id) else {
+            // Configuration naming a model this account cannot use is worth
+            // saying out loud, but not worth failing a prompt over: Cursor's
+            // own default resolution is a working answer.
+            tracing::warn!(
+                default_id,
+                "the configured cursor model is not offered to this account; using Cursor's default"
+            );
+            return Ok(None);
+        };
+        let choice = model.default_choice();
+        session.state.lock().expect("session state poisoned").model = Some(choice.clone());
+        Ok(Some(choice))
+    }
+
     /// Run one prompt to completion, delivering updates as they stream.
     ///
     /// Resolves with the turn's ACP stop reason once the run's stream ends.
@@ -223,6 +349,11 @@ where
 
         // Claim the turn before any network call so a racing second prompt
         // fails fast instead of creating a second agent.
+        // Resolved before the turn commits to a path: both the create-agent
+        // and the follow-up-run branch send it, and a mid-turn change must not
+        // land on a run that is already going.
+        let model = self.effective_model(session_id).await?;
+
         let (existing_agent, cancel) = {
             let mut state = session.state.lock().expect("session state poisoned");
             if state.active_run.is_some() {
@@ -239,7 +370,9 @@ where
             Some(agent) => {
                 // Queue behind any run still going (the same agent advances
                 // from cursor.com too) instead of failing the prompt.
-                let run = self.create_run_when_free(&agent, prompt, &cancel).await?;
+                let run = self
+                    .create_run_when_free(&agent, prompt, model.as_ref(), &cancel)
+                    .await?;
                 // Catch the session's view up on whatever it missed while it
                 // was not looking. After the create on purpose: creating
                 // proved the agent free, so every missed run is terminal and
@@ -256,7 +389,12 @@ where
             }
             None => {
                 self.cursor
-                    .create_agent(prompt, session.repo.as_ref(), &session.mcp_servers)
+                    .create_agent(
+                        prompt,
+                        session.repo.as_ref(),
+                        &session.mcp_servers,
+                        model.as_ref(),
+                    )
                     .await?
             }
         };
@@ -531,6 +669,7 @@ where
         &self,
         agent: &CursorAgentId,
         prompt: &str,
+        model: Option<&ModelChoice>,
         cancel: &tokio_util::sync::CancellationToken,
     ) -> Result<CursorRunId, SessionError> {
         for _ in 0..BUSY_ATTEMPTS {
@@ -539,7 +678,7 @@ where
                     "the prompt was cancelled while waiting for the agent to be free"
                 )));
             }
-            match self.cursor.create_run(agent, prompt).await {
+            match self.cursor.create_run(agent, prompt, model).await {
                 Ok(run) => return Ok(run),
                 Err(error) if error.to_string().contains("agent_busy") => {
                     tracing::info!(%agent, "agent busy (a run is active, possibly from cursor.com); waiting");

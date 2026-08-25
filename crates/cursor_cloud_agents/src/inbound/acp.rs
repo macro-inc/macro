@@ -37,8 +37,10 @@ use agent_client_protocol::schema::v1::{
     CloseSessionRequest, CloseSessionResponse, ContentBlock, Error as AcpError, HttpHeader,
     Implementation, InitializeRequest, InitializeResponse, LoadSessionRequest, LoadSessionResponse,
     McpCapabilities, McpServer as AcpMcpServer, NewSessionRequest, NewSessionResponse,
-    PromptCapabilities, PromptRequest, PromptResponse, SessionId, SessionNotification,
-    SessionUpdate,
+    PromptCapabilities, PromptRequest, PromptResponse, SessionConfigId, SessionConfigKind,
+    SessionConfigOption, SessionConfigSelect, SessionConfigSelectOption,
+    SessionConfigSelectOptions, SessionConfigValueId, SessionId, SessionNotification,
+    SessionUpdate, SetSessionConfigOptionRequest, SetSessionConfigOptionResponse,
 };
 use agent_client_protocol::{
     Agent, ByteStreams, Client, ConnectTo, ConnectionTo, on_receive_notification,
@@ -46,6 +48,14 @@ use agent_client_protocol::{
 };
 use std::sync::{Arc, OnceLock};
 use tokio_util::compat::{TokioAsyncReadCompatExt as _, TokioAsyncWriteCompatExt as _};
+
+/// The ACP config-option id for a session's model.
+///
+/// Defined here rather than shared with the Macro harness: this crate is a
+/// standalone ACP agent (see the `cursor_cloud_agents` binary) and must not
+/// depend on its embedder. `"model"` is the id every ACP client looks for, and
+/// the harness uses the same literal for the same reason.
+const MODEL_CONFIG_ID: &str = "model";
 
 /// Delivers session updates as `session/update` notifications on the ACP
 /// connection.
@@ -295,7 +305,11 @@ where
                 async move |request: NewSessionRequest, responder, _connection| {
                     let mcp_servers = forwardable_mcp_servers(request.mcp_servers);
                     let session = service.new_session(&request.cwd, mcp_servers);
-                    responder.respond(NewSessionResponse::new(SessionId::new(session.as_str())))
+                    let options = session_config_options(&service, &session).await;
+                    responder.respond(
+                        NewSessionResponse::new(SessionId::new(session.as_str()))
+                            .config_options(options),
+                    )
                 }
             },
             on_receive_request!(),
@@ -343,7 +357,8 @@ where
                     // a replay would tell the client what it already knows.
                     let session = AcpSessionId::new(request.session_id.0.as_ref());
                     if service.has_session(&session) {
-                        responder.respond(LoadSessionResponse::new())
+                        let options = session_config_options(&service, &session).await;
+                        responder.respond(LoadSessionResponse::new().config_options(options))
                     } else {
                         responder.respond_with_error(AcpError::invalid_params())
                     }
@@ -364,6 +379,34 @@ where
                     } else {
                         responder.respond_with_error(AcpError::invalid_params())
                     }
+                }
+            },
+            on_receive_request!(),
+        )
+        .on_receive_request(
+            {
+                let service = Arc::clone(&service);
+                async move |request: SetSessionConfigOptionRequest, responder, _connection| {
+                    let session = AcpSessionId::new(request.session_id.0.as_ref());
+                    // Only the model is configurable, so anything else is the
+                    // client naming an option this agent never advertised.
+                    if request.config_id.to_string() != MODEL_CONFIG_ID {
+                        return responder.respond_with_error(AcpError::invalid_params());
+                    }
+                    let Some(model) = request.value.as_value_id() else {
+                        return responder.respond_with_error(AcpError::invalid_params());
+                    };
+                    if let Err(error) = service.set_model(&session, &model.to_string()).await {
+                        // The id is the client's to get right, and the error
+                        // names what this account may choose instead.
+                        tracing::warn!(error = %error, "could not set the session model");
+                        return responder.respond_with_error(AcpError::invalid_params());
+                    }
+                    // Answered with the whole option set, not just the new
+                    // value: that is the shape a client folds config from, and
+                    // it is the same shape `session/new` sent.
+                    let options = session_config_options(&service, &session).await;
+                    responder.respond(SetSessionConfigOptionResponse::new(options))
                 }
             },
             on_receive_request!(),
@@ -389,6 +432,71 @@ where
         )
         .connect_to(transport)
         .await
+}
+
+/// The session's config options: the model select, and nothing else yet.
+///
+/// This is the whole of how a client learns which models exist and which one a
+/// session is on — ACP carries it as `configOptions` on the `session/new`,
+/// `session/load` and `session/set_config_option` responses, and a client reads
+/// the same field whichever response it arrived on.
+///
+/// One entry per model, using Cursor's own default variant, rather than one per
+/// variant: `claude-opus-4-8` alone offers forty, and a picker listing hundreds
+/// of near-identical rows is worse than one listing the models. Exposing the
+/// variant parameters (`effort`, `reasoning`, `fast`) is a separate control and
+/// a separate change.
+///
+/// A failure to reach `GET /v1/models` costs the picker, not the session: the
+/// options come back empty and the client simply has nothing to offer, which is
+/// the state it was in before any of this existed.
+async fn session_config_options<Cursor, Notifier, Repos>(
+    service: &CursorSessionService<Cursor, Notifier, Repos>,
+    session: &AcpSessionId,
+) -> Vec<SessionConfigOption>
+where
+    Cursor: CursorAgents + RunStream,
+    Notifier: SessionNotifier,
+    Repos: RepoResolver,
+{
+    let models = match service.models().await {
+        Ok(models) => models,
+        Err(error) => {
+            tracing::warn!(error = %error, "could not list cursor models; offering no model choice");
+            return Vec::new();
+        }
+    };
+    let current = match service.session_model_id(session).await {
+        Ok(current) => current,
+        Err(error) => {
+            tracing::warn!(error = %error, "could not read the session's model");
+            return Vec::new();
+        }
+    };
+    // With no explicit or configured choice, Cursor resolves the user's own
+    // default and never tells us which it picked, so there is no id to mark
+    // current. Naming the first model would be a guess the client would render
+    // as fact.
+    let Some(current) = current else {
+        return Vec::new();
+    };
+    let options: Vec<SessionConfigSelectOption> = models
+        .iter()
+        .map(|model| {
+            SessionConfigSelectOption::new(
+                SessionConfigValueId::new(model.id.clone()),
+                model.display_name.clone(),
+            )
+        })
+        .collect();
+    vec![SessionConfigOption::new(
+        SessionConfigId::new(MODEL_CONFIG_ID),
+        "Model",
+        SessionConfigKind::Select(SessionConfigSelect::new(
+            SessionConfigValueId::new(current),
+            SessionConfigSelectOptions::Ungrouped(options),
+        )),
+    )]
 }
 
 /// Concatenate a prompt's content blocks into the single string Cursor takes.

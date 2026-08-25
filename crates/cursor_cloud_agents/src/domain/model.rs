@@ -237,3 +237,76 @@ pub struct McpHeader {
     /// Header value.
     pub value: String,
 }
+
+/// A model choice: an id, plus the parameters that make it a *variant*.
+///
+/// Cursor validates the pair, not the id alone — `grok-4.5` with no params is
+/// rejected with `does not match a known variant`, while the same id with
+/// `effort=high, fast=true` is accepted. So a bare id is not a usable
+/// selection and this type never models one.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct ModelChoice {
+    /// The model id, e.g. `claude-sonnet-5`.
+    pub id: String,
+    /// The variant's parameters, in the order Cursor listed them.
+    pub params: Vec<ModelParam>,
+}
+
+/// One tunable of a model variant, e.g. `effort=high`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ModelParam {
+    /// The parameter's id, e.g. `effort`.
+    pub id: String,
+    /// The chosen value, e.g. `high`. A string even for booleans: Cursor's own
+    /// enumeration gives `"true"`/`"false"` as values, not JSON booleans.
+    pub value: String,
+}
+
+/// A model Cursor offers, as `GET /v1/models` describes it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CursorModel {
+    /// The id to send, e.g. `gpt-5.5`.
+    pub id: String,
+    /// The name a person should see, e.g. `GPT-5.5`.
+    pub display_name: String,
+    /// The concrete id+params combinations Cursor will accept, one of which it
+    /// marks as the default.
+    pub variants: Vec<ModelVariant>,
+}
+
+impl CursorModel {
+    /// The variant Cursor marks default, or its first — the params to send
+    /// when a caller names a model and nothing more.
+    ///
+    /// Cursor rejects a selection whose params are not a known variant, so
+    /// "the model with no params" is not an option; something has to be
+    /// chosen, and Cursor's own default is the least surprising choice.
+    #[must_use]
+    pub fn default_variant(&self) -> Option<&ModelVariant> {
+        self.variants
+            .iter()
+            .find(|variant| variant.is_default)
+            .or_else(|| self.variants.first())
+    }
+
+    /// This model as a selection, using [`Self::default_variant`].
+    #[must_use]
+    pub fn default_choice(&self) -> ModelChoice {
+        ModelChoice {
+            id: self.id.clone(),
+            params: self
+                .default_variant()
+                .map(|variant| variant.params.clone())
+                .unwrap_or_default(),
+        }
+    }
+}
+
+/// One accepted id+params combination for a model.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ModelVariant {
+    /// The parameters this variant fixes.
+    pub params: Vec<ModelParam>,
+    /// Whether Cursor marks this the model's default variant.
+    pub is_default: bool,
+}

@@ -2,7 +2,8 @@
 
 use crate::domain::event::CursorEvent;
 use crate::domain::model::{
-    AcpSessionId, CursorAgentId, CursorRunId, McpServer, RepoUrl, RunListing, RunOutcome,
+    AcpSessionId, CursorAgentId, CursorModel, CursorRunId, McpServer, ModelChoice, RepoUrl,
+    RunListing, RunOutcome,
 };
 use crate::domain::ports::{CursorAgents, RepoResolver, RunStream, SessionNotifier};
 use agent_client_protocol::schema::v1::SessionUpdate;
@@ -41,10 +42,10 @@ pub fn fixture_events(name: &str) -> Vec<CursorEvent> {
 /// What a [`FakeCursor`] was asked to do.
 #[derive(Debug, Clone, PartialEq)]
 pub enum CursorCall {
-    /// `create_agent(prompt, repo, mcp_servers)`.
-    CreateAgent(String, Option<RepoUrl>, Vec<McpServer>),
-    /// `create_run(agent, prompt)`.
-    CreateRun(CursorAgentId, String),
+    /// `create_agent(prompt, repo, mcp_servers, model)`.
+    CreateAgent(String, Option<RepoUrl>, Vec<McpServer>, Option<ModelChoice>),
+    /// `create_run(agent, prompt, model)`.
+    CreateRun(CursorAgentId, String, Option<ModelChoice>),
     /// `cancel_run(agent, run)`.
     CancelRun(CursorAgentId, CursorRunId),
     /// `run_result(agent, run)`.
@@ -71,6 +72,8 @@ struct FakeCursorState {
     run_listings: Vec<RunListing>,
     /// Errors the next `create_run` calls answer with, consumed in order.
     create_run_errors: Vec<String>,
+    /// The answer every `list_models` call gets.
+    models: Vec<CursorModel>,
 }
 
 impl FakeCursor {
@@ -112,6 +115,11 @@ impl FakeCursor {
         for _ in 0..count {
             state.create_run_errors.push(message.to_owned());
         }
+    }
+
+    /// Set the models `list_models` answers with.
+    pub fn script_models(&self, models: Vec<CursorModel>) {
+        self.inner.lock().expect("fake cursor poisoned").models = models;
     }
 
     /// Set the agent's run history, newest first, for `list_runs`.
@@ -167,11 +175,13 @@ impl CursorAgents for FakeCursor {
         prompt: &str,
         repo: Option<&RepoUrl>,
         mcp_servers: &[McpServer],
+        model: Option<&ModelChoice>,
     ) -> Result<(CursorAgentId, CursorRunId), rootcause::Report> {
         self.record(CursorCall::CreateAgent(
             prompt.to_owned(),
             repo.cloned(),
             mcp_servers.to_vec(),
+            model.cloned(),
         ));
         let mut state = self.inner.lock().expect("fake cursor poisoned");
         state.next_run += 1;
@@ -185,8 +195,13 @@ impl CursorAgents for FakeCursor {
         &self,
         agent: &CursorAgentId,
         prompt: &str,
+        model: Option<&ModelChoice>,
     ) -> Result<CursorRunId, rootcause::Report> {
-        self.record(CursorCall::CreateRun(agent.clone(), prompt.to_owned()));
+        self.record(CursorCall::CreateRun(
+            agent.clone(),
+            prompt.to_owned(),
+            model.cloned(),
+        ));
         let mut state = self.inner.lock().expect("fake cursor poisoned");
         if !state.create_run_errors.is_empty() {
             let message = state.create_run_errors.remove(0);
@@ -194,6 +209,15 @@ impl CursorAgents for FakeCursor {
         }
         state.next_run += 1;
         Ok(CursorRunId::new(format!("run-fake-{}", state.next_run)))
+    }
+
+    async fn list_models(&self) -> Result<Vec<CursorModel>, rootcause::Report> {
+        Ok(self
+            .inner
+            .lock()
+            .expect("fake cursor poisoned")
+            .models
+            .clone())
     }
 
     async fn cancel_run(

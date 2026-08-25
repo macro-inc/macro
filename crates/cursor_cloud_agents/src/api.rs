@@ -23,12 +23,13 @@ pub mod wire;
 use crate::api::record::SseRecording;
 use crate::api::wire::{
     AgentSummary, ArchiveAgentResponse, CreateAgentRequest, CreateAgentResponse, CreateRunRequest,
-    CreateRunResponse, ListAgentsResponse, ListRunsResponse, McpServerSelection, MeResponse,
-    ModelSelection, PromptBody, RepoSelection, RunDetail,
+    CreateRunResponse, ListAgentsResponse, ListModelsResponse, ListRunsResponse,
+    McpServerSelection, MeResponse, ModelSelection, PromptBody, RepoSelection, RunDetail,
 };
 use crate::domain::event::CursorEvent;
 use crate::domain::model::{
-    CursorAgentId, CursorRunId, McpServer, RepoUrl, RunListing, RunOutcome,
+    CursorAgentId, CursorModel, CursorRunId, McpServer, ModelChoice, ModelParam, ModelVariant,
+    RepoUrl, RunListing, RunOutcome,
 };
 use crate::domain::ports::{CursorAgents, RunStream};
 use futures::{Stream, StreamExt as _};
@@ -294,6 +295,7 @@ impl CursorAgents for CursorClient {
         prompt: &str,
         repo: Option<&RepoUrl>,
         mcp_servers: &[McpServer],
+        model: Option<&ModelChoice>,
     ) -> Result<(CursorAgentId, CursorRunId), rootcause::Report> {
         let request = CreateAgentRequest {
             prompt: PromptBody {
@@ -307,7 +309,7 @@ impl CursorAgents for CursorClient {
                     }]
                 })
                 .unwrap_or_default(),
-            model: self.config.model.clone().map(|id| ModelSelection { id }),
+            model: model.map(ModelSelection::from),
             mcp_servers: mcp_servers.iter().map(McpServerSelection::from).collect(),
         };
         let reply: CreateAgentResponse = self.post_json("/v1/agents", &request).await?;
@@ -323,16 +325,46 @@ impl CursorAgents for CursorClient {
         &self,
         agent: &CursorAgentId,
         prompt: &str,
+        model: Option<&ModelChoice>,
     ) -> Result<CursorRunId, rootcause::Report> {
         let request = CreateRunRequest {
             prompt: PromptBody {
                 text: prompt.to_owned(),
             },
+            model: model.map(ModelSelection::from),
         };
         let reply: CreateRunResponse = self
             .post_json(&format!("/v1/agents/{agent}/runs"), &request)
             .await?;
         Ok(CursorRunId::new(reply.into_run_id()))
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn list_models(&self) -> Result<Vec<CursorModel>, rootcause::Report> {
+        let reply: ListModelsResponse = self.get_json("/v1/models").await?;
+        Ok(reply
+            .items
+            .into_iter()
+            .map(|listing| CursorModel {
+                display_name: listing.display_name.unwrap_or_else(|| listing.id.clone()),
+                id: listing.id,
+                variants: listing
+                    .variants
+                    .into_iter()
+                    .map(|variant| ModelVariant {
+                        params: variant
+                            .params
+                            .into_iter()
+                            .map(|param| ModelParam {
+                                id: param.id,
+                                value: param.value,
+                            })
+                            .collect(),
+                        is_default: variant.is_default,
+                    })
+                    .collect(),
+            })
+            .collect())
     }
 
     #[tracing::instrument(skip(self), err)]

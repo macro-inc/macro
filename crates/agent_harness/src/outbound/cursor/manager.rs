@@ -26,7 +26,9 @@ use agent_session::domain::model::{AgentSession, AgentSessionId, ExternalSession
 use agent_session::domain::ports::{AgentSessionRepo, ExternalSessionRepo};
 use cursor_cloud_agents::api::{ApiKey, CursorClient, CursorConfig};
 use cursor_cloud_agents::domain::model::RepoUrl as CursorRepoUrl;
-use cursor_cloud_agents::domain::model::{AcpSessionId, CursorAgentId, CursorRunId, McpServer};
+use cursor_cloud_agents::domain::model::{
+    AcpSessionId, CursorAgentId, CursorModel, CursorRunId, McpServer, ModelChoice,
+};
 use cursor_cloud_agents::domain::ports::{CursorAgents, RepoResolver, RunStream};
 use cursor_cloud_agents::domain::service::CursorSessionService;
 use cursor_cloud_agents::inbound::acp::{AcpNotifier, serve};
@@ -350,8 +352,12 @@ where
         prompt: &str,
         repo: Option<&CursorRepoUrl>,
         mcp_servers: &[McpServer],
+        model: Option<&ModelChoice>,
     ) -> std::result::Result<(CursorAgentId, CursorRunId), rootcause::Report> {
-        let (agent, run) = self.client.create_agent(prompt, repo, mcp_servers).await?;
+        let (agent, run) = self
+            .client
+            .create_agent(prompt, repo, mcp_servers, model)
+            .await?;
         let summary = self
             .client
             .get_agent(&agent)
@@ -379,8 +385,13 @@ where
         &self,
         agent: &CursorAgentId,
         prompt: &str,
+        model: Option<&ModelChoice>,
     ) -> std::result::Result<CursorRunId, rootcause::Report> {
-        self.client.create_run(agent, prompt).await
+        self.client.create_run(agent, prompt, model).await
+    }
+
+    async fn list_models(&self) -> std::result::Result<Vec<CursorModel>, rootcause::Report> {
+        self.client.list_models().await
     }
 
     async fn cancel_run(

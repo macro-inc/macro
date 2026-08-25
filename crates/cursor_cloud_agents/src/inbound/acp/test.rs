@@ -10,7 +10,7 @@
 
 use super::*;
 use crate::domain::event::CursorEvent;
-use crate::domain::model::{CursorRunId, RunStatus};
+use crate::domain::model::{CursorModel, CursorRunId, ModelParam, ModelVariant, RunStatus};
 use crate::testing::{CursorCall, FakeCursor, FixedRepos};
 use agent_client_protocol::schema::v1::InitializeResponse;
 use agent_client_protocol::{Channel, RawJsonRpcMessage, TransportFrame};
@@ -83,12 +83,24 @@ fn serve_over_channel(
     cursor: FakeCursor,
     configure: impl FnOnce(&Service),
 ) -> (Arc<Service>, TestClient) {
+    serve_over_channel_with_default_model(cursor, None, configure)
+}
+
+/// [`serve_over_channel`], for a deployment that pins a model.
+///
+/// Separate because the default is fixed at construction: it is deployment
+/// configuration, not something a client can set, and the service takes it by
+/// value.
+fn serve_over_channel_with_default_model(
+    cursor: FakeCursor,
+    default_model: Option<&str>,
+    configure: impl FnOnce(&Service),
+) -> (Arc<Service>, TestClient) {
     let notifier = AcpNotifier::new();
-    let service = Arc::new(CursorSessionService::new(
-        cursor,
-        notifier.clone(),
-        FixedRepos(None),
-    ));
+    let service = Arc::new(
+        CursorSessionService::new(cursor, notifier.clone(), FixedRepos(None))
+            .with_default_model(default_model.map(str::to_owned)),
+    );
     configure(&service);
     let (agent_end, client_end) = Channel::duplex();
     tokio::spawn(serve_transport(Arc::clone(&service), notifier, agent_end));
@@ -479,7 +491,7 @@ async fn remote_mcp_servers_are_forwarded_to_the_agent() {
         .expect("prompt runs");
 
     let calls = cursor.calls();
-    let [CursorCall::CreateAgent(_, _, servers)] = calls.as_slice() else {
+    let [CursorCall::CreateAgent(_, _, servers, _)] = calls.as_slice() else {
         panic!("expected one create_agent, got {calls:?}");
     };
     assert_eq!(
@@ -559,7 +571,7 @@ async fn stdio_mcp_servers_are_declined_without_failing_the_session() {
         .expect("prompt runs");
 
     let calls = cursor.calls();
-    let [CursorCall::CreateAgent(_, _, servers)] = calls.as_slice() else {
+    let [CursorCall::CreateAgent(_, _, servers, _)] = calls.as_slice() else {
         panic!("expected one create_agent");
     };
     let names: Vec<&str> = servers.iter().map(|server| server.name.as_str()).collect();
@@ -649,4 +661,197 @@ async fn session_load_answers_for_restored_sessions_only() {
         )
         .await;
     assert!(unknown.get("error").is_some(), "got {unknown}");
+}
+
+/// Two models, the second with a non-trivial default variant, as
+/// `GET /v1/models` would report them.
+fn offered_models() -> Vec<CursorModel> {
+    vec![
+        CursorModel {
+            id: "composer-2.5".to_owned(),
+            display_name: "Composer 2.5".to_owned(),
+            variants: vec![ModelVariant {
+                params: Vec::new(),
+                is_default: true,
+            }],
+        },
+        CursorModel {
+            id: "gpt-5.5".to_owned(),
+            display_name: "GPT-5.5".to_owned(),
+            variants: vec![
+                ModelVariant {
+                    params: vec![ModelParam {
+                        id: "reasoning".to_owned(),
+                        value: "low".to_owned(),
+                    }],
+                    is_default: false,
+                },
+                ModelVariant {
+                    params: vec![ModelParam {
+                        id: "reasoning".to_owned(),
+                        value: "medium".to_owned(),
+                    }],
+                    is_default: true,
+                },
+            ],
+        },
+    ]
+}
+
+/// `session/new` advertises the account's models as an ACP select, which is the
+/// whole of how a client learns what it may pick.
+#[tokio::test]
+async fn session_new_advertises_the_models_as_a_config_option() {
+    let cursor = FakeCursor::new();
+    cursor.script_models(offered_models());
+    let (_service, mut client) =
+        serve_over_channel_with_default_model(cursor, Some("composer-2.5"), |_| {});
+
+    let response = client
+        .call(
+            1,
+            "session/new",
+            serde_json::json!({"cwd": "/workspace", "mcpServers": []}),
+        )
+        .await;
+    let result = expect_result(&response);
+    let options = result["configOptions"]
+        .as_array()
+        .expect("config options are advertised");
+    let [option] = options.as_slice() else {
+        panic!("expected exactly the model option, got {options:?}");
+    };
+    assert_eq!(option["id"], "model");
+    assert_eq!(option["currentValue"], "composer-2.5");
+    let values: Vec<&str> = option["options"]
+        .as_array()
+        .expect("selectable options")
+        .iter()
+        .map(|entry| entry["value"].as_str().expect("a value id"))
+        .collect();
+    assert_eq!(values, vec!["composer-2.5", "gpt-5.5"]);
+}
+
+/// Setting the model mid-session is accepted and reflected back, and the next
+/// run carries it — the point being that Cursor honours `model` on a follow-up
+/// run, so a change does not have to wait for a new agent.
+#[tokio::test]
+async fn setting_the_model_changes_what_the_next_run_asks_for() {
+    let cursor = FakeCursor::new();
+    cursor.script_models(offered_models());
+    let (_service, mut client) =
+        serve_over_channel_with_default_model(cursor.clone(), Some("composer-2.5"), |_| {});
+
+    let session = expect_result(
+        &client
+            .call(
+                1,
+                "session/new",
+                serde_json::json!({"cwd": "/workspace", "mcpServers": []}),
+            )
+            .await,
+    )["sessionId"]
+        .as_str()
+        .expect("a session id")
+        .to_owned();
+
+    let response = client
+        .call(
+            2,
+            "session/set_config_option",
+            serde_json::json!({
+                "sessionId": session,
+                "configId": "model",
+                "value": "gpt-5.5",
+            }),
+        )
+        .await;
+    let result = expect_result(&response);
+    // Answered with the whole option set, so a client folds config from one
+    // shape whichever response carried it.
+    assert_eq!(result["configOptions"][0]["currentValue"], "gpt-5.5");
+
+    // And the run actually asks for it. This is the behaviour the whole feature
+    // rests on: Cursor honours `model` on a follow-up run, so the choice does
+    // not have to wait for a new agent — and it must carry the variant's params,
+    // because Cursor rejects an id whose params are not a variant it knows.
+    let events = cursor.script_stream();
+    events
+        .send(CursorEvent::Result {
+            run_id: CursorRunId::new("run-fake-1"),
+            status: RunStatus::Finished,
+            text: None,
+            duration_ms: Some(1),
+        })
+        .expect("stream open");
+    events.send(CursorEvent::Done).expect("stream open");
+    client
+        .call(
+            3,
+            "session/prompt",
+            serde_json::json!({
+                "sessionId": session,
+                "prompt": [{"type": "text", "text": "go"}],
+            }),
+        )
+        .await;
+
+    let asked = cursor
+        .calls()
+        .into_iter()
+        .find_map(|call| match call {
+            CursorCall::CreateAgent(_, _, _, model) => Some(model),
+            _ => None,
+        })
+        .expect("the turn created an agent");
+    let asked = asked.expect("the turn named a model");
+    assert_eq!(asked.id, "gpt-5.5");
+    assert_eq!(
+        asked.params,
+        vec![ModelParam {
+            id: "reasoning".to_owned(),
+            value: "medium".to_owned(),
+        }],
+        "the default variant's params travel with the id"
+    );
+}
+
+/// An id this account was never offered is refused here, with the list, rather
+/// than accepted and left to fail at the next prompt as a Cursor
+/// `validation_error`.
+#[tokio::test]
+async fn setting_an_unoffered_model_is_refused() {
+    let cursor = FakeCursor::new();
+    cursor.script_models(offered_models());
+    let (_service, mut client) =
+        serve_over_channel_with_default_model(cursor, Some("composer-2.5"), |_| {});
+
+    let session = expect_result(
+        &client
+            .call(
+                1,
+                "session/new",
+                serde_json::json!({"cwd": "/workspace", "mcpServers": []}),
+            )
+            .await,
+    )["sessionId"]
+        .as_str()
+        .expect("a session id")
+        .to_owned();
+
+    let response = client
+        .call(
+            2,
+            "session/set_config_option",
+            serde_json::json!({
+                "sessionId": session,
+                "configId": "model",
+                "value": "gpt-9-imaginary",
+            }),
+        )
+        .await;
+    assert!(
+        response.get("error").is_some(),
+        "expected an error, got {response}"
+    );
 }

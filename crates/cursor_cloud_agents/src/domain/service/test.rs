@@ -55,7 +55,8 @@ async fn first_prompt_creates_the_agent_with_the_session_repo() {
         vec![CursorCall::CreateAgent(
             "do it".to_owned(),
             Some(repo),
-            Vec::new()
+            Vec::new(),
+            None
         )]
     );
     let updates = notifier.updates();
@@ -483,7 +484,12 @@ async fn session_mcp_servers_reach_agent_creation() {
 
     assert_eq!(
         cursor.calls(),
-        vec![CursorCall::CreateAgent("go".to_owned(), None, servers)]
+        vec![CursorCall::CreateAgent(
+            "go".to_owned(),
+            None,
+            servers,
+            None
+        )]
     );
 }
 
@@ -501,7 +507,12 @@ async fn a_session_without_mcp_servers_forwards_none() {
 
     assert_eq!(
         cursor.calls(),
-        vec![CursorCall::CreateAgent("go".to_owned(), None, Vec::new())]
+        vec![CursorCall::CreateAgent(
+            "go".to_owned(),
+            None,
+            Vec::new(),
+            None
+        )]
     );
 }
 
@@ -530,7 +541,8 @@ async fn a_restored_session_prompts_its_existing_agent() {
         cursor.calls(),
         vec![CursorCall::CreateRun(
             CursorAgentId::new("bc-restored"),
-            "continue".to_owned()
+            "continue".to_owned(),
+            None
         )]
     );
 }

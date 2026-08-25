@@ -105,12 +105,13 @@ async fn main() -> ExitCode {
         return ExitCode::from(78);
     };
 
+    let configured_model = CursorModel::new().and_then(|model| model.value().map(str::to_owned));
     let config = CursorConfig {
         api_key: ApiKey::new(api_key.as_ref()),
         base_url: CursorApiBase::new()
             .and_then(|base| base.value().map(str::to_owned))
             .unwrap_or_else(|| cursor_cloud_agents::api::CURSOR_API_BASE_URL.to_owned()),
-        model: CursorModel::new().and_then(|model| model.value().map(str::to_owned)),
+        model: configured_model.clone(),
         starting_ref: CursorRef::new()
             .and_then(|reference| reference.value().map(str::to_owned))
             .unwrap_or_else(|| "main".to_owned()),
@@ -141,7 +142,13 @@ async fn main() -> ExitCode {
     // its outgoing queue on EOF, so a client that batches requests and closes
     // stdin still gets every answer.
     let notifier = AcpNotifier::new();
-    let service = Arc::new(CursorSessionService::new(client, notifier.clone(), repos));
+    // `CURSOR_MODEL` names an id; its params come from Cursor's default
+    // variant for that model, since Cursor rejects an id whose params are not a
+    // variant it knows. A client may change it per session from here.
+    let service = Arc::new(
+        CursorSessionService::new(client, notifier.clone(), repos)
+            .with_default_model(configured_model),
+    );
     match serve(service, notifier, tokio::io::stdin(), tokio::io::stdout()).await {
         Ok(()) => ExitCode::SUCCESS,
         Err(error) => {
