@@ -11,7 +11,7 @@ import {
   splitProps,
 } from 'solid-js';
 import { ChannelInput, type ChannelInputProps } from './ChannelInput';
-import { ComposeModeActions } from './ComposeModeActions';
+import { ComposeModeTabs } from './ComposeModeTabs';
 import { type ChannelComposeMode, coerceComposeMode } from './compose-mode';
 import { EventComposer, type EventComposerSendPayload } from './EventComposer';
 import { createEventModeAvailability } from './event-mode-availability';
@@ -37,24 +37,24 @@ export type ComposeModeChannelInputProps = Omit<
   onSendTask: (task: TaskComposerSendPayload) => void;
   /**
    * Event compose mode configuration. Presence is read once at mount;
-   * without it the event action button never shows. Even with it, the
-   * button only shows while the calendar UI is available to the viewer.
+   * without it the mode toggle never offers an event tab. Even with it,
+   * the tab only shows while the calendar UI is available to the viewer.
    */
   eventMode?: ChannelInputEventMode;
   /** Persistence keys for the composer drafts and selected input mode. */
   composePersistence?: InputComposePersistence;
 };
 
-function MessageModeActions(props: { modeActions: JSX.Element }) {
+function MessageModeActions(props: { modeTabs: JSX.Element }) {
   return (
     <Show
       when={isPlatform('ios')}
       fallback={
         <Input.Actions>
           <Input.Actions.Left>
+            {props.modeTabs}
             <Input.AttachFilesAction />
             <Input.ToggleFormatAction />
-            {props.modeActions}
           </Input.Actions.Left>
           <Input.Actions.Right>
             <Input.SendAction />
@@ -153,12 +153,11 @@ export function ComposeModeChannelInput(props: ComposeModeChannelInputProps) {
     });
   };
 
-  // Each face's footer shows the same mode action buttons (its own lit),
-  // so any face can toggle back to the message or switch straight into
-  // any other.
-  const modeActions = (current: ChannelComposeMode) => (
+  // Each face's footer shows the same mode toggle at the bottom left (its
+  // own tab raised), so any face can switch straight into any other.
+  const modeTabs = (current: ChannelComposeMode) => (
     <Show when={canUseTaskMode()}>
-      <ComposeModeActions
+      <ComposeModeTabs
         mode={current}
         showEvent={canUseEventMode()}
         onModeChange={setMode}
@@ -230,7 +229,7 @@ export function ComposeModeChannelInput(props: ComposeModeChannelInputProps) {
                     restoredMode === 'task' ? (local.autofocus ?? true) : true
                   }
                   draftPersistenceKey={local.composePersistence?.taskDraftKey}
-                  modeSwitch={modeActions('task')}
+                  modeSwitch={modeTabs('task')}
                   onSend={handleTaskSend}
                 />
               </div>
@@ -256,7 +255,7 @@ export function ComposeModeChannelInput(props: ComposeModeChannelInputProps) {
                     draftPersistenceKey={
                       local.composePersistence?.eventDraftKey
                     }
-                    modeSwitch={modeActions('event')}
+                    modeSwitch={modeTabs('event')}
                     onSend={handleEventSend}
                   />
                 </div>
@@ -266,7 +265,7 @@ export function ComposeModeChannelInput(props: ComposeModeChannelInputProps) {
         </div>
       )}
     >
-      <MessageModeActions modeActions={modeActions('message')} />
+      <MessageModeActions modeTabs={modeTabs('message')} />
     </ChannelInput>
   );
 }

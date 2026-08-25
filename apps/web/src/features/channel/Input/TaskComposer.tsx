@@ -359,6 +359,7 @@ export function TaskComposer(props: {
           and the property pills above it. */}
       <div class="shrink-0 flex w-full flex-row justify-between items-center p-2 space-x-2">
         <div class="flex items-center gap-2">
+          {props.modeSwitch}
           <input
             ref={(el) => {
               attachInputRef = el;
@@ -376,7 +377,6 @@ export function TaskComposer(props: {
           >
             <PaperclipIcon />
           </InputActionButton>
-          {props.modeSwitch}
         </div>
         <SendButton
           tooltip="Create task and send"

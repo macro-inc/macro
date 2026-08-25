@@ -97,6 +97,10 @@ vi.mock('@phosphor/check-square.svg', () => ({
   default: () => <span data-testid="task-icon" />,
 }));
 
+vi.mock('@phosphor/chat-text.svg', () => ({
+  default: () => <span data-testid="chat-icon" />,
+}));
+
 vi.mock('@phosphor/calendar-blank.svg', () => ({
   default: () => <span data-testid="calendar-icon" />,
 }));
@@ -289,12 +293,12 @@ describe('Channel input compose modes', () => {
   it('keeps the base channel input message-only', () => {
     render(() => <ChannelInput input={baseInput} />);
 
-    expect(screen.queryByRole('button', { name: 'Create task' })).toBeNull();
+    expect(screen.queryByRole('radio', { name: 'Task' })).toBeNull();
     expect(screen.queryByTestId('task-composer')).toBeNull();
     expect(screen.queryByTestId('event-composer')).toBeNull();
   });
 
-  it('shows the mode action buttons at the normal input width', () => {
+  it('shows the mode toggle with the chat tab selected at the normal input width', () => {
     const { container } = render(() => (
       <ComposeModeChannelInput
         input={baseInput}
@@ -306,22 +310,32 @@ describe('Channel input compose modes', () => {
     expect(container.firstElementChild?.classList).toContain(
       'macro-message-width'
     );
-    expect(screen.getByRole('button', { name: 'Create task' })).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Create event' })).toBeTruthy();
+    expect(screen.getByRole('radio', { name: 'Chat' })).toHaveProperty(
+      'checked',
+      true
+    );
+    expect(screen.getByRole('radio', { name: 'Task' })).toHaveProperty(
+      'checked',
+      false
+    );
+    expect(screen.getByRole('radio', { name: 'Event' })).toHaveProperty(
+      'checked',
+      false
+    );
     expect(screen.queryByTestId('task-composer')).toBeNull();
     expect(screen.queryByTestId('event-composer')).toBeNull();
   });
 
-  it('hides the event action without an event mode config', () => {
+  it('hides the event tab without an event mode config', () => {
     render(() => (
       <ComposeModeChannelInput input={baseInput} onSendTask={() => {}} />
     ));
 
-    expect(screen.getByRole('button', { name: 'Create task' })).toBeTruthy();
-    expect(screen.queryByRole('button', { name: 'Create event' })).toBeNull();
+    expect(screen.getByRole('radio', { name: 'Task' })).toBeTruthy();
+    expect(screen.queryByRole('radio', { name: 'Event' })).toBeNull();
   });
 
-  it('hides the event action while the calendar UI is unavailable', () => {
+  it('hides the event tab while the calendar UI is unavailable', () => {
     eventModeAvailable.value = false;
     try {
       render(() => (
@@ -332,8 +346,8 @@ describe('Channel input compose modes', () => {
         />
       ));
 
-      expect(screen.getByRole('button', { name: 'Create task' })).toBeTruthy();
-      expect(screen.queryByRole('button', { name: 'Create event' })).toBeNull();
+      expect(screen.getByRole('radio', { name: 'Task' })).toBeTruthy();
+      expect(screen.queryByRole('radio', { name: 'Event' })).toBeNull();
     } finally {
       eventModeAvailable.value = true;
     }
@@ -345,7 +359,7 @@ describe('Channel input compose modes', () => {
       <ComposeModeChannelInput input={baseInput} onSendTask={() => {}} />
     ));
 
-    await user.click(screen.getByRole('button', { name: 'Create task' }));
+    await user.click(screen.getByRole('radio', { name: 'Task' }));
 
     expect(screen.getByTestId('task-composer')).toBeTruthy();
     const messageFace = container.querySelector('[data-input-face="message"]');
@@ -353,13 +367,15 @@ describe('Channel input compose modes', () => {
     expect(messageFace?.classList.contains('hidden')).toBe(true);
     expect(taskFace?.classList.contains('hidden')).toBe(false);
 
-    // The lit task button in the composer footer toggles back to message
-    // mode but keeps the composer mounted for its draft.
-    await user.click(
-      within(taskFace as HTMLElement).getByRole('button', {
-        name: 'Create task',
-      })
+    // The toggle in the composer footer has the task tab raised; picking
+    // the chat tab returns to message mode but keeps the composer mounted
+    // for its draft.
+    const composerFace = within(taskFace as HTMLElement);
+    expect(composerFace.getByRole('radio', { name: 'Task' })).toHaveProperty(
+      'checked',
+      true
     );
+    await user.click(composerFace.getByRole('radio', { name: 'Chat' }));
 
     expect(messageFace?.classList.contains('hidden')).toBe(false);
     expect(taskFace?.classList.contains('hidden')).toBe(true);
@@ -376,7 +392,7 @@ describe('Channel input compose modes', () => {
       />
     ));
 
-    await user.click(screen.getByRole('button', { name: 'Create event' }));
+    await user.click(screen.getByRole('radio', { name: 'Event' }));
 
     expect(screen.getByTestId('event-composer')).toBeTruthy();
     const messageFace = container.querySelector('[data-input-face="message"]');
@@ -384,11 +400,12 @@ describe('Channel input compose modes', () => {
     expect(messageFace?.classList.contains('hidden')).toBe(true);
     expect(eventFace?.classList.contains('hidden')).toBe(false);
 
-    await user.click(
-      within(eventFace as HTMLElement).getByRole('button', {
-        name: 'Create event',
-      })
+    const composerFace = within(eventFace as HTMLElement);
+    expect(composerFace.getByRole('radio', { name: 'Event' })).toHaveProperty(
+      'checked',
+      true
     );
+    await user.click(composerFace.getByRole('radio', { name: 'Chat' }));
 
     expect(messageFace?.classList.contains('hidden')).toBe(false);
     expect(eventFace?.classList.contains('hidden')).toBe(true);
@@ -405,12 +422,10 @@ describe('Channel input compose modes', () => {
       />
     ));
 
-    await user.click(screen.getByRole('button', { name: 'Create task' }));
+    await user.click(screen.getByRole('radio', { name: 'Task' }));
     const taskFace = container.querySelector('[data-input-face="task"]');
     await user.click(
-      within(taskFace as HTMLElement).getByRole('button', {
-        name: 'Create event',
-      })
+      within(taskFace as HTMLElement).getByRole('radio', { name: 'Event' })
     );
 
     const eventFace = container.querySelector('[data-input-face="event"]');
@@ -435,7 +450,7 @@ describe('Channel input compose modes', () => {
         composePersistence={composePersistence}
       />
     ));
-    await user.click(screen.getByRole('button', { name: 'Create task' }));
+    await user.click(screen.getByRole('radio', { name: 'Task' }));
     expect(
       first.container
         .querySelector('[data-input-face="task"]')
@@ -492,7 +507,7 @@ describe('Channel input compose modes', () => {
       <ComposeModeChannelInput input={baseInput} onSendTask={onSendTask} />
     ));
 
-    await user.click(screen.getByRole('button', { name: 'Create task' }));
+    await user.click(screen.getByRole('radio', { name: 'Task' }));
     await user.click(screen.getByTestId('task-composer-send'));
 
     expect(onSendTask).toHaveBeenCalledOnce();
@@ -516,7 +531,7 @@ describe('Channel input compose modes', () => {
       />
     ));
 
-    await user.click(screen.getByRole('button', { name: 'Create event' }));
+    await user.click(screen.getByRole('radio', { name: 'Event' }));
     await user.click(screen.getByTestId('event-composer-send'));
 
     expect(onSendEvent).toHaveBeenCalledOnce();
