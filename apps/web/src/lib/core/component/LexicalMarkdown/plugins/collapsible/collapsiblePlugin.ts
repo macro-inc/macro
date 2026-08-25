@@ -1,5 +1,5 @@
 import { $isHeadingNode } from '@lexical/rich-text';
-import { $isTableNode } from '@lexical/table';
+import { $isTableNode, $isTableSelection } from '@lexical/table';
 import {
   $findMatchingParent,
   $insertNodeToNearestRoot,
@@ -112,17 +112,27 @@ function $wrapTargetInCollapsible(
   title.selectEnd();
 }
 
-function $insertCollapsible(heading: CollapsibleHeading): boolean {
+function $tableFromSelection() {
   const selection = $getSelection();
-  if (!$isRangeSelection(selection)) return false;
+  if ($isTableSelection(selection) || $isRangeSelection(selection)) {
+    const anchor = selection.anchor.getNode();
+    if ($isTableNode(anchor)) return anchor;
+    return $findMatchingParent(anchor, $isTableNode);
+  }
+  return null;
+}
 
-  const anchor = selection.anchor.getNode();
-  const table = $findMatchingParent(anchor, $isTableNode);
-  if (table && $canHostTable(table.getParent())) {
+function $insertCollapsible(heading: CollapsibleHeading): boolean {
+  const table = $tableFromSelection();
+  if (table) {
     $wrapTargetInCollapsible(table, heading);
     return true;
   }
 
+  const selection = $getSelection();
+  if (!$isRangeSelection(selection)) return false;
+
+  const anchor = selection.anchor.getNode();
   const top = anchor.getTopLevelElement();
   if (
     top &&
