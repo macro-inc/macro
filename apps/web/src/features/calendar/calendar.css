@@ -501,6 +501,10 @@
 	box-shadow: 0 0 0 1px var(--color-ink-muted);
 }
 
+.calendar-view .fc .fc-event:focus-visible::after {
+	background: transparent;
+}
+
 .calendar-view .fc .fc-event:hover .calendar-event-content {
 	background-color: var(--color-hover);
 }
