@@ -209,6 +209,10 @@ export type UserToolResponseForToolCalendarEvent =
       UserAction: ToolCalendarEvent;
     };
 /**
+ * Channel types an agent may create.
+ */
+export type NewChannelType = 'private' | 'team';
+/**
  * External systems items can be imported from.
  */
 export type ImportSource = 'linear' | 'notion' | 'slack';
@@ -510,6 +514,10 @@ export type NotificationEntityType =
  * Channel-access change to apply to a bot.
  */
 export type BotChannelAccessAction = 'grant' | 'revoke';
+/**
+ * Membership change to apply.
+ */
+export type ParticipantAction = 'add' | 'remove';
 /**
  * The kind of entity to move.
  */
@@ -1934,6 +1942,42 @@ export interface ToolEventAttendee {
    * Whether attendance is optional.
    */
   isOptional: boolean;
+}
+/**
+ * Create a private or team channel and add its first members. Use `private` for an invite-only channel and `team` for a channel owned by the current user's team. Do not use this for a direct message — those are created separately. Team id is resolved from the current user; do not invent one. Participants accept `macro|<email>` ids from ListTeamMembers or bare emails. Creating a team channel when the user has no team fails; create a private channel instead. Creating a team channel with no participants adds the current user so the channel is valid. Use only when the user asks to create a channel.
+ */
+export interface CreateChannel {
+  /**
+   * Display name for the new channel.
+   */
+  name: string;
+  channelType: NewChannelType;
+  /**
+   * People to add, as `macro|<email>` ids or bare emails. Defaults to none. A team channel with an empty list adds the current user.
+   */
+  participants?: string[];
+}
+/**
+ * Response from [`CreateChannel`].
+ */
+export interface CreateChannelResponse {
+  /**
+   * Created channel id.
+   */
+  channelId: string;
+  /**
+   * Trimmed channel name.
+   */
+  name: string;
+  channelType: NewChannelType;
+  /**
+   * Canonical participant ids sent with the create request.
+   */
+  participants: string[];
+  /**
+   * Human-readable result summary.
+   */
+  summary: string;
 }
 /**
  * Create a plaintext document.
@@ -3658,6 +3702,38 @@ export interface ManageBotChannelAccessResponse {
   summary: string;
 }
 /**
+ * Add or remove members of an existing channel. Requires the current user to be a channel member. Direct-message channels cannot change membership. The channel owner cannot be removed. Participants accept `macro|<email>` ids from ListTeamMembers or bare emails. Use `add` to invite people and `remove` to take them out. Use only when the user asks to change who is in a channel.
+ */
+export interface ManageChannelParticipants {
+  /**
+   * Channel id whose membership should change.
+   */
+  channelId: string;
+  action: ParticipantAction;
+  /**
+   * People to add or remove, as `macro|<email>` ids or bare emails. Must not be empty.
+   */
+  participants: string[];
+}
+/**
+ * Response from [`ManageChannelParticipants`].
+ */
+export interface ManageChannelParticipantsResponse {
+  /**
+   * Channel whose membership changed.
+   */
+  channelId: string;
+  action: ParticipantAction;
+  /**
+   * Canonical participant ids that were requested.
+   */
+  participants: string[];
+  /**
+   * Human-readable result summary.
+   */
+  summary: string;
+}
+/**
  * Mark one or more notifications as done or not done for the current user. Use this when the user has completed the action associated with a notification.
  */
 export interface MarkNotificationsDone {
@@ -4665,6 +4741,40 @@ export interface ProjectItem {
    * When the item was last updated.
    */
   updatedAt?: string | null;
+}
+/**
+ * Rename an existing channel. Requires the current user to be a channel admin or owner. Direct-message channels cannot be renamed. Use only when the user asks to rename a channel.
+ */
+export interface RenameChannel {
+  /**
+   * Channel id to rename.
+   */
+  channelId: string;
+  /**
+   * New display name for the channel.
+   */
+  name: string;
+}
+/**
+ * Response from [`RenameChannel`].
+ */
+export interface RenameChannelResponse {
+  /**
+   * Channel that was renamed.
+   */
+  channelId: string;
+  /**
+   * New trimmed name.
+   */
+  name: string;
+  /**
+   * Previous display name when it could be read.
+   */
+  previousName?: string | null;
+  /**
+   * Human-readable result summary.
+   */
+  summary: string;
 }
 /**
  * Rename a document. Requires edit access to the document.

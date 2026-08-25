@@ -29,6 +29,10 @@ type ToolParserMap = {
     call: types.CreateCalendarEvent;
     response: types.UserToolResponseForToolCalendarEvent;
   };
+  CreateChannel: {
+    call: types.CreateChannel;
+    response: types.CreateChannelResponse;
+  };
   CreateDocument: {
     call: types.CreateDocument;
     response: types.CreateDocumentResponse;
@@ -126,6 +130,10 @@ type ToolParserMap = {
     call: types.ManageBotChannelAccess;
     response: types.ManageBotChannelAccessResponse;
   };
+  ManageChannelParticipants: {
+    call: types.ManageChannelParticipants;
+    response: types.ManageChannelParticipantsResponse;
+  };
   MarkNotificationsDone: {
     call: types.MarkNotificationsDone;
     response: types.MarkNotificationsResponse;
@@ -167,6 +175,10 @@ type ToolParserMap = {
   };
   ReadProject: { call: types.ReadProject; response: types.ReadProjectResponse };
   ReadThread: { call: types.ReadThread; response: types.ReadResponse };
+  RenameChannel: {
+    call: types.RenameChannel;
+    response: types.RenameChannelResponse;
+  };
   RenameDocument: {
     call: types.RenameDocument;
     response: types.RenameDocumentResponse;
@@ -231,6 +243,10 @@ const toolParserMap = {
   CreateCalendarEvent: {
     call: schemas.CreateCalendarEvent,
     response: schemas.UserToolResponseForToolCalendarEvent,
+  },
+  CreateChannel: {
+    call: schemas.CreateChannel,
+    response: schemas.CreateChannelResponse,
   },
   CreateDocument: {
     call: schemas.CreateDocument,
@@ -344,6 +360,10 @@ const toolParserMap = {
     call: schemas.ManageBotChannelAccess,
     response: schemas.ManageBotChannelAccessResponse,
   },
+  ManageChannelParticipants: {
+    call: schemas.ManageChannelParticipants,
+    response: schemas.ManageChannelParticipantsResponse,
+  },
   MarkNotificationsDone: {
     call: schemas.MarkNotificationsDone,
     response: schemas.MarkNotificationsResponse,
@@ -394,6 +414,10 @@ const toolParserMap = {
     response: schemas.ReadProjectResponse,
   },
   ReadThread: { call: schemas.ReadThread, response: schemas.ReadResponse },
+  RenameChannel: {
+    call: schemas.RenameChannel,
+    response: schemas.RenameChannelResponse,
+  },
   RenameDocument: {
     call: schemas.RenameDocument,
     response: schemas.RenameDocumentResponse,
@@ -472,6 +496,10 @@ type ToolDataMap = {
   CreateCalendarEvent: {
     call: types.CreateCalendarEvent;
     response: types.UserToolResponseForToolCalendarEvent;
+  };
+  CreateChannel: {
+    call: types.CreateChannel;
+    response: types.CreateChannelResponse;
   };
   CreateDocument: {
     call: types.CreateDocument;
@@ -570,6 +598,10 @@ type ToolDataMap = {
     call: types.ManageBotChannelAccess;
     response: types.ManageBotChannelAccessResponse;
   };
+  ManageChannelParticipants: {
+    call: types.ManageChannelParticipants;
+    response: types.ManageChannelParticipantsResponse;
+  };
   MarkNotificationsDone: {
     call: types.MarkNotificationsDone;
     response: types.MarkNotificationsResponse;
@@ -611,6 +643,10 @@ type ToolDataMap = {
   };
   ReadProject: { call: types.ReadProject; response: types.ReadProjectResponse };
   ReadThread: { call: types.ReadThread; response: types.ReadResponse };
+  RenameChannel: {
+    call: types.RenameChannel;
+    response: types.RenameChannelResponse;
+  };
   RenameDocument: {
     call: types.RenameDocument;
     response: types.RenameDocumentResponse;

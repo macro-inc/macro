@@ -21,6 +21,11 @@ import {
   listCalendarsHandler,
   updateCalendarEventHandler,
 } from './CalendarTools';
+import {
+  createChannelHandler,
+  manageChannelParticipantsHandler,
+  renameChannelHandler,
+} from './ChannelMutations';
 import { createDocumentHandler } from './CreateDocument';
 import { createProjectHandler } from './CreateProject';
 import { createTagHandler } from './CreateTag';
@@ -93,6 +98,7 @@ import { webSearchHandler } from './WebSearch';
 
 const toolHandlers: ToolHandlerMap<RenderContext> = {
   ConfigureBot: configureBotHandler,
+  CreateChannel: createChannelHandler,
   CreateBot: createBotHandler,
   DeleteBot: deleteBotHandler,
   GetBotWebhooks: getBotWebhooksHandler,
@@ -115,6 +121,7 @@ const toolHandlers: ToolHandlerMap<RenderContext> = {
   ListInboxes: listInboxesHandler,
   ListLabels: listLabelsHandler,
   ListSkills: listSkillsHandler,
+  ManageChannelParticipants: manageChannelParticipantsHandler,
   ListNotifications: listNotificationsHandler,
   ListReminders: listRemindersHandler,
   ListTags: listTagsHandler,
@@ -146,6 +153,7 @@ const toolHandlers: ToolHandlerMap<RenderContext> = {
   ReadContent: readContentHandler,
   ReadMetadata: readMetadataHandler,
   ReadProject: readProjectHandler,
+  RenameChannel: renameChannelHandler,
   RenameDocument: renameDocumentHandler,
   SearchSkills: searchSkillsHandler,
   SearchTools: searchToolsHandler,
