@@ -11,6 +11,7 @@ import {
   onCleanup,
   Show,
 } from 'solid-js';
+import { CopySubjectButton } from './CopySubjectButton';
 import { MessageContainer } from './MessageContainer';
 
 // Fraction of the list height reserved below the newest message so it rests
@@ -179,6 +180,7 @@ export function MessageList(props: MessageListProps) {
           <div class="macro-message-width macro-message-padding w-full">
             <h1 class="text-xl font-semibold text-ink pt-1 pb-0 tracking-tight text-balance">
               {props.title}
+              <CopySubjectButton subject={props.title ?? ''} class="ml-2" />
             </h1>
           </div>
         </div>
