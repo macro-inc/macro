@@ -37,6 +37,7 @@ impl ActorInboxes {
     }
 
     /// A single-address actor for fixtures.
+    #[cfg(test)]
     pub(crate) fn sole(email: impl Into<String>) -> Self {
         Self {
             emails: vec![email.into().to_ascii_lowercase()],
