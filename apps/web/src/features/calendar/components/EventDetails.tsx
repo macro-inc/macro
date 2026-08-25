@@ -14,6 +14,7 @@ import CaretDownIcon from '@phosphor/caret-down.svg';
 import CheckIcon from '@phosphor/check.svg';
 import GlobeIcon from '@phosphor/globe.svg';
 import MapPinIcon from '@phosphor/map-pin.svg';
+import PhoneIcon from '@phosphor/phone.svg';
 import QuestionMarkIcon from '@phosphor/question-mark.svg';
 import TextAlignLeftIcon from '@phosphor/text-align-left.svg';
 import PersonIcon from '@phosphor/user.svg';
@@ -35,6 +36,10 @@ import {
 import { Dynamic } from 'solid-js/web';
 import type { CalendarEvent, CalendarTimeFormat } from '../types';
 import { isSameLocalDate, parseLocalDate } from '../utils/calendar-date';
+import {
+  isPhoneOnlyLocation,
+  parseEventLocation,
+} from '../utils/event-location';
 import {
   formatReminderOffset,
   REMINDER_METHOD_POPUP,
@@ -336,6 +341,41 @@ function findOrganizer(event: CalendarEvent): CalendarOrganizer | undefined {
 }
 
 /**
+ * The location row. A phone number written into the location becomes a call
+ * link, so a dial-in number takes one click instead of being retyped into a
+ * phone by hand.
+ */
+function EventLocationItem(props: { location: string }) {
+  const segments = createMemo(() => parseEventLocation(props.location));
+
+  return (
+    <div class="contents">
+      <Dynamic
+        aria-hidden="true"
+        class="mt-0.5 size-5 text-ink-extra-muted sm:size-4"
+        component={isPhoneOnlyLocation(segments()) ? PhoneIcon : MapPinIcon}
+      />
+      <span class="select-text">
+        <For each={segments()}>
+          {(segment) =>
+            segment.kind === 'phone' ? (
+              <a
+                class="text-link hover:text-link-hover hover:underline"
+                href={segment.telUrl}
+              >
+                {segment.text}
+              </a>
+            ) : (
+              segment.text
+            )
+          }
+        </For>
+      </span>
+    </div>
+  );
+}
+
+/**
  * The reminders the event resolves to, one line each: its own overrides when
  * it departed from the calendar defaults, the calendar defaults otherwise.
  * Nothing renders while the calendar (and so its defaults) is unknown.
@@ -509,13 +549,8 @@ export function EventDetails(props: {
         )}
       </Show>
 
-      <Show when={props.event.location}>
-        {(location) => (
-          <div class="contents">
-            <MapPinIcon class="mt-0.5 size-5 text-ink-extra-muted sm:size-4" />
-            <span class="select-text">{location()}</span>
-          </div>
-        )}
+      <Show when={props.event.location?.trim()}>
+        {(location) => <EventLocationItem location={location()} />}
       </Show>
 
       <Show when={props.event.description}>
