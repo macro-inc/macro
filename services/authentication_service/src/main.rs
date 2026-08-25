@@ -114,7 +114,7 @@ async fn main() -> anyhow::Result<()> {
     let cursor_api_key_cipher = Arc::new(cursor_api_key::cipher::KmsCursorApiKeyCipher::new(
         cursor_api_key::cipher::AwsKmsCiphertexts::new(
             aws_sdk_kms::Client::new(&aws_config),
-            config.cursor_api_key_kms_key_id.to_string(),
+            config.cursor_api_key_kms_key_id()?,
         ),
     )) as Arc<dyn cursor_api_key::cipher::CursorApiKeyCipher>;
 
