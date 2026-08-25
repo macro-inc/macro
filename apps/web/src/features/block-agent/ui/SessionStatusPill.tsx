@@ -16,7 +16,7 @@ type Presentation = {
 };
 
 /** `worktree_ready` → `Worktree ready`. */
-function prettyEventName(event: string): string {
+export function prettyEventName(event: string): string {
   const words = event.split(/[_-]/).filter(Boolean).join(' ');
   return words.charAt(0).toUpperCase() + words.slice(1);
 }

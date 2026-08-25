@@ -5,18 +5,11 @@
  * boundary.
  */
 
-import { Show } from 'solid-js';
 import { useAgentSession } from '../context/AgentSessionContext';
-import {
-  AgentInput,
-  AgentModelSelector,
-  ComposerNotice,
-  QueuedPromptList,
-} from '../ui';
+import { AgentInput, AgentModelSelector, QueuedPromptList } from '../ui';
 
 export function AgentComposer() {
-  const { composer, loadFailed, metadata, pending, resuming } =
-    useAgentSession();
+  const { composer, loadFailed, metadata, pending } = useAgentSession();
 
   // A session still being created was created by this user, one action ago,
   // and has an empty transcript: the only thing to do with it is type. The
@@ -25,9 +18,6 @@ export function AgentComposer() {
 
   return (
     <>
-      <Show when={resuming()}>
-        <ComposerNotice text="Waking the agent's sandbox…" active />
-      </Show>
       <QueuedPromptList
         prompts={composer.queue()}
         sendingId={composer.sendingId()}
