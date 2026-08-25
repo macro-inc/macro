@@ -506,6 +506,31 @@ async fn find_for_channel_matches_the_originating_thread_and_bot(pool: PgPool) {
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn find_all_for_thread_includes_external_identity(pool: PgPool) {
+    let repo = PgAgentSessionRepo::new(pool.clone());
+    insert_user(&pool, OWNER).await;
+    let bot_id = create_test_bot(&pool).await;
+    let (_channel, thread, originating_message) = insert_originating_thread_fixture(&pool).await;
+    let session = create_session(
+        &repo,
+        new_session(bot_id, Some(thread), Some(originating_message)),
+    )
+    .await;
+    let external = cursor_external("bc-thread-list");
+    ExternalSessionRepo::upsert(&repo, session.id, external.clone())
+        .await
+        .expect("attach an external identity");
+
+    let listed = AgentSessionRepo::find_all_for_thread(&repo, thread)
+        .await
+        .expect("list sessions for the thread");
+
+    assert_eq!(listed.len(), 1);
+    assert_eq!(listed[0].id, session.id);
+    assert_eq!(listed[0].external, Some(external));
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn find_for_channel_requires_thread_and_bot_for_originating_match(pool: PgPool) {
     let repo = PgAgentSessionRepo::new(pool.clone());
     let bot = create_test_bot(&pool).await;
