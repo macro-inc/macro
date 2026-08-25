@@ -5,7 +5,7 @@ use agent_session::domain::ports::AgentSessionRepo;
 use channels::domain::broker_events::{ChannelMacroEvent, ChannelTopicEvent};
 use macro_event_broker::{EventBrokerError, MacroEvent as _, MacroEventBroker};
 
-use super::broker_events::AgentTriggerTopicEvent;
+use super::broker_events::AgentTriggerEventName;
 use super::service::{AgentBotLookup, AgentTriggerService};
 
 /// Failure while evaluating or publishing one channel event.
@@ -51,10 +51,7 @@ where
         tracing::debug!(message_id = %posted.message_id, "agent trigger yielded no event");
     }
     for yielded in yielded_events {
-        let event_type = match &yielded.event().event {
-            AgentTriggerTopicEvent::New(_) => "agent_trigger.new",
-            AgentTriggerTopicEvent::Existing(_) => "agent_trigger.existing",
-        };
+        let event_type: &'static str = AgentTriggerEventName::from(&yielded.event().event).into();
         tracing::info!(
             macro.event.id = %yielded.event().event_id,
             macro.event.type = event_type,

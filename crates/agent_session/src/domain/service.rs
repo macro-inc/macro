@@ -375,25 +375,20 @@ impl<R, Folds, Rt, Namer> AgentSessionServiceImpl<R, Folds, Rt, Namer> {
             .ok_or(AgentSessionError::Disconnected(id))?;
 
         let (completed, result) = oneshot::channel();
-        let action_name = match &action {
-            AgentAction::Prompt(_) => "prompt",
-            AgentAction::SetModel(_) => "set_model",
-            AgentAction::Compact => "compact",
-            AgentAction::Stop => "stop",
-        };
+        let span = tracing::info_span!(
+            "agent.session.command",
+            agent.session.id = %id,
+            agent.action.name = action.as_ref(),
+            otel.status_code = tracing::field::Empty,
+            otel.status_description = tracing::field::Empty,
+        );
         if commands
             .send(SessionCommand {
                 user_id,
                 action,
                 action_id,
                 completed,
-                span: tracing::info_span!(
-                    "agent.session.command",
-                    agent.session.id = %id,
-                    agent.action.name = action_name,
-                    otel.status_code = tracing::field::Empty,
-                    otel.status_description = tracing::field::Empty,
-                ),
+                span,
             })
             .await
             .is_err()

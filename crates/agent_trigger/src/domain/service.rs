@@ -108,12 +108,9 @@ where
         if let Some(session_id) = session_id(&existing)
             && !seen_sessions.insert(session_id)
         {
-            tracing::Span::current().record("agent.trigger.outcome", "duplicate_session");
-            log_no_event(
-                posted,
-                mentioned_bot,
-                NoEventReason::DuplicateSession { session_id },
-            );
+            let reason = NoEventReason::DuplicateSession { session_id };
+            tracing::Span::current().record("agent.trigger.outcome", reason.as_ref());
+            log_no_event(posted, mentioned_bot, reason);
             return Ok(None);
         }
         let bot = match &existing {
@@ -140,21 +137,11 @@ where
                 Ok(Some(event))
             }
             AgentSessionEventDecision::NoEvent(reason) => {
-                tracing::Span::current().record("agent.trigger.outcome", no_event_name(reason));
+                tracing::Span::current().record("agent.trigger.outcome", reason.as_ref());
                 log_no_event(posted, mentioned_bot, reason);
                 Ok(None)
             }
         }
-    }
-}
-
-const fn no_event_name(reason: NoEventReason) -> &'static str {
-    match reason {
-        NoEventReason::MissingBotContext => "missing_bot_context",
-        NoEventReason::BotHasNoAgent { .. } => "bot_has_no_agent",
-        NoEventReason::OwnMessage { .. } => "own_message",
-        NoEventReason::MentionRequired { .. } => "mention_required",
-        NoEventReason::DuplicateSession { .. } => "duplicate_session",
     }
 }
 
