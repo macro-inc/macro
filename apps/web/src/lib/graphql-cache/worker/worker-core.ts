@@ -60,8 +60,9 @@ export interface CacheWorkerCoreOptions {
   queueDiagnosticsTimeoutMs?: number;
 }
 
-// Backfill hydration is cache warming; foreground reads and authoritative
-// writes must be able to overtake it while it is queued.
+// Backfill hydration is cache warming, so foreground reads may overtake it.
+// Hydration and authoritative writes still retain arrival order so stale
+// hydration cannot overwrite a newer queued response.
 const BACKGROUND_HYDRATION_PRIORITY = -1;
 const NORMAL_READ_PRIORITY = 0;
 const USER_VISIBLE_READ_PRIORITY = 1;
@@ -74,6 +75,10 @@ function isOrderingBarrier(request: CacheRequest): boolean {
     request.kind === 'teardown' ||
     request.kind === 'clear'
   );
+}
+
+function isQueryDataWrite(request: CacheRequest): boolean {
+  return request.kind === 'write' || request.kind === 'hydrate';
 }
 
 function requestPriority(request: CacheRequest): number {
@@ -328,12 +333,24 @@ export class CacheWorkerCore {
     );
     if (segmentEnd === -1) segmentEnd = this.queue.length;
 
+    const firstQueryDataWrite = this.queue
+      .slice(0, segmentEnd)
+      .findIndex((queued) => isQueryDataWrite(queued.request));
     let index = 0;
     if (segmentEnd > 0) {
       for (let i = 1; i < segmentEnd; i += 1) {
         const candidate = this.queue[i];
         const selected = this.queue[index];
-        if (candidate && selected && candidate.priority > selected.priority) {
+        const preservesWriteOrder =
+          !candidate ||
+          !isQueryDataWrite(candidate.request) ||
+          i === firstQueryDataWrite;
+        if (
+          candidate &&
+          selected &&
+          preservesWriteOrder &&
+          candidate.priority > selected.priority
+        ) {
           index = i;
         }
       }

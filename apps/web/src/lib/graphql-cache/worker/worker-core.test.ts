@@ -330,6 +330,76 @@ describe('CacheWorkerCore', () => {
     ]);
   });
 
+  it('does not let stale hydration overwrite a newer queued write', async () => {
+    let releaseBlocker!: () => void;
+    let markBlockerStarted!: () => void;
+    const blocker = new Promise<void>((resolve) => {
+      releaseBlocker = resolve;
+    });
+    const blockerStarted = new Promise<void>((resolve) => {
+      markBlockerStarted = resolve;
+    });
+    const record = { id: 'doc-1', title: 'initial' };
+    const mergeDocument = (data: unknown) => {
+      Object.assign(
+        record,
+        (data as { document: { id: string; title: string } }).document
+      );
+    };
+    const readQuery = vi.fn(async () => {
+      markBlockerStarted();
+      await blocker;
+      return { kind: 'miss' as const };
+    });
+    const hydrateQuery = vi.fn(async (...args: unknown[]) => {
+      mergeDocument(args[3]);
+      return { changed: [], affectedOps: [], reset: false, data: null };
+    });
+    const writeQuery = vi.fn(async (...args: unknown[]) => {
+      mergeDocument(args[4]);
+      return { changed: [], affectedOps: [], reset: false };
+    });
+    loadCacheWasmMock.mockResolvedValue({
+      openCache: vi.fn().mockResolvedValue({
+        readQuery,
+        hydrateQuery,
+        writeQuery,
+      }),
+    });
+    const port = { postMessage: vi.fn() };
+    const core = new CacheWorkerCore();
+    await core.handleRequest(port, {
+      id: 1,
+      kind: 'init',
+      scope: 'scope-1',
+    });
+
+    const running = core.handleRequest(port, {
+      id: 2,
+      kind: 'read',
+      query: 'query Blocker { blocker }',
+    });
+    await blockerStarted;
+    const hydration = core.handleRequest(port, {
+      id: 3,
+      kind: 'hydrate',
+      query: 'query Backfill { document { id title } }',
+      data: { document: { id: 'doc-1', title: 'stale' } },
+    });
+    const write = core.handleRequest(port, {
+      id: 4,
+      kind: 'write',
+      query: 'query Current { document { id title } }',
+      data: { document: { id: 'doc-1', title: 'newer' } },
+    });
+
+    releaseBlocker();
+    await Promise.all([running, hydration, write]);
+
+    expect(record).toEqual({ id: 'doc-1', title: 'newer' });
+    expect(hydrateQuery).toHaveBeenCalledBefore(writeQuery);
+  });
+
   it('coalesces queued affected rereads and runs them ahead of incidental reads', async () => {
     const order: string[] = [];
     let releaseBlocker!: () => void;
