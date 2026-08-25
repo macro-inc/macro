@@ -26,6 +26,11 @@ export function ConfirmDrawer(props: ConfirmDialogProps) {
     setInternalOpen(false);
     setTimeout(() => props.onOpenChange(false), CLOSE_MS);
   };
+  const confirm = () => {
+    if (!internalOpen()) return;
+    setInternalOpen(false);
+    setTimeout(() => props.onConfirm(), CLOSE_MS);
+  };
 
   return (
     <MobileDrawer
@@ -52,7 +57,7 @@ export function ConfirmDrawer(props: ConfirmDialogProps) {
               variant={TONE_VARIANT[props.tone ?? 'default']}
               size="lg"
               class="w-full rounded-lg"
-              onClick={props.onConfirm}
+              onClick={confirm}
             >
               {props.confirmLabel ?? 'Confirm'}
             </Button>
