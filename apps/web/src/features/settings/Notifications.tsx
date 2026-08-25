@@ -7,12 +7,8 @@ import {
   NOTIFICATION_EVENT_GROUPS,
 } from '@notifications/notification-event-catalog';
 import { useNotificationSettings } from '@notifications/notification-settings';
-import { createMutedEntitiesQuery } from '@notifications/queries/muted-entities-query';
-import {
-  createNotificationTypePreferencesQuery,
-  createSetNotificationTypeEnabledMutation,
-} from '@notifications/queries/type-preferences-query';
-import { notificationServiceClient } from '@service-notification/client';
+import { createMutedEntities } from '@notifications/queries/muted-entities-query';
+import { createNotificationTypePreferences } from '@notifications/queries/type-preferences-query';
 import { ToggleSwitch } from '@ui';
 import { For, Show } from 'solid-js';
 import {
@@ -25,34 +21,26 @@ import {
 export function Notifications() {
   const analytics = useAnalytics();
   const platformSettings = useNotificationSettings();
-  const preferencesQuery = createNotificationTypePreferencesQuery();
-  const setTypeEnabled = createSetNotificationTypeEnabledMutation();
-  const mutedEntitiesQuery = createMutedEntitiesQuery({ limit: 100 });
+  const preferences = createNotificationTypePreferences();
+  const mutedEntities = createMutedEntities();
 
-  const disabledTypes = () =>
-    new Set(preferencesQuery.data?.disabled_types ?? []);
+  const disabledTypes = () => new Set(preferences.data().disabled_types);
 
   const isTypeEnabled = (type: string) => !disabledTypes().has(type);
 
-  const preferencesBusy = () =>
-    preferencesQuery.isLoading ||
-    (preferencesQuery.isPlaceholderData && preferencesQuery.isFetching);
-
   const toggleType = async (type: string, enabled: boolean) => {
     try {
-      await setTypeEnabled.mutateAsync({ type, enabled });
+      await preferences.setTypeEnabled(type, enabled);
     } catch {
       toast.failure('Could not update notification preference');
     }
   };
 
   const unmuteEntity = async (item: { item_id: string; item_type: string }) => {
-    const result = await notificationServiceClient.removeUnsubscribeItem(item);
+    const result = await mutedEntities.unmute(item);
     if (result.isErr()) {
       toast.failure('Could not unmute item');
-      return;
     }
-    await mutedEntitiesQuery.refetch();
   };
 
   const pushLabel = isNativeMobilePlatform()
@@ -105,7 +93,7 @@ export function Notifications() {
             <ToggleSwitch
               size="md"
               checked={isTypeEnabled(EMAIL_DIGEST_NOTIFICATION_TYPE)}
-              disabled={preferencesBusy()}
+              disabled={preferences.loading()}
               onChange={(enabled) =>
                 toggleType(EMAIL_DIGEST_NOTIFICATION_TYPE, enabled)
               }
@@ -127,7 +115,7 @@ export function Notifications() {
                     <ToggleSwitch
                       size="md"
                       checked={isTypeEnabled(event.type)}
-                      disabled={preferencesBusy()}
+                      disabled={preferences.loading()}
                       onChange={(enabled) => toggleType(event.type, enabled)}
                     />
                   </SettingsRow>
@@ -144,7 +132,7 @@ export function Notifications() {
       >
         <SettingsCard>
           <Show
-            when={(mutedEntitiesQuery.data ?? []).length > 0}
+            when={mutedEntities.data().length > 0}
             fallback={
               <SettingsRow
                 label="Nothing muted"
@@ -152,7 +140,7 @@ export function Notifications() {
               />
             }
           >
-            <For each={mutedEntitiesQuery.data ?? []}>
+            <For each={mutedEntities.data()}>
               {(item) => (
                 <SettingsRow
                   label={mutedEntityTypeLabel(item.item_type)}

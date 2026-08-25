@@ -391,9 +391,11 @@ export function SettingsPanel(props: SettingsPanelProps) {
                   </Suspense>
                 </Show>
                 <Show when={isCurrentTab('Notifications')}>
-                  <Suspense>
-                    <Notifications />
-                  </Suspense>
+                  {/* No Suspense. Solid Query refetches through createResource
+                      on every cache write. An empty boundary unmounts the page
+                      for a frame after each preference toggle. The queries
+                      keep placeholder data so they never need to suspend. */}
+                  <Notifications />
                 </Show>
                 <Show when={isCurrentTab('Billing')}>
                   <Suspense>

@@ -1,14 +1,11 @@
 import { throwOnErr } from '@core/util/result';
 import { applyPreferenceToggle } from '@notifications/apply-preference-toggle';
-import { notificationTypePreferencesPlaceholder } from '@notifications/notification-preferences-placeholder';
+import { EMPTY_NOTIFICATION_TYPE_PREFERENCES } from '@notifications/notification-preferences-placeholder';
 import { queryClient } from '@queries/client';
 import { notificationKeys } from '@queries/notification/keys';
 import { notificationServiceClient } from '@service-notification/client';
 import type { GetNotificationTypePreferencesResponse } from '@service-notification/generated/schemas/getNotificationTypePreferencesResponse';
-import { useMutation, useQuery } from '@tanstack/solid-query';
-
-const PREFERENCES_STALE_TIME = 5 * 60 * 1000;
-const PREFERENCES_GC_TIME = 10 * 60 * 1000;
+import { createSignal, onMount } from 'solid-js';
 
 async function fetchNotificationTypePreferences() {
   return throwOnErr(() =>
@@ -16,53 +13,56 @@ async function fetchNotificationTypePreferences() {
   );
 }
 
-export function createNotificationTypePreferencesQuery() {
-  return useQuery(() => ({
-    queryKey: notificationKeys.preferences.queryKey,
-    queryFn: fetchNotificationTypePreferences,
-    staleTime: PREFERENCES_STALE_TIME,
-    gcTime: PREFERENCES_GC_TIME,
-    placeholderData: notificationTypePreferencesPlaceholder,
-  }));
+function writePreferencesCache(next: GetNotificationTypePreferencesResponse) {
+  queryClient.setQueryData(notificationKeys.preferences.queryKey, next);
 }
 
-export function createSetNotificationTypeEnabledMutation() {
-  return useMutation(() => ({
-    mutationFn: async (vars: { type: string; enabled: boolean }) => {
-      if (vars.enabled) {
+/**
+ * Preferences for the settings page. Not a Solid Query hook.
+ * `useQuery` is a `createResource`; Settings and the split panel wrap
+ * this tab in empty Suspense, so a cache write after a toggle remounts
+ * the page. Keep the list in a signal instead.
+ */
+export function createNotificationTypePreferences() {
+  const cached =
+    queryClient.getQueryData<GetNotificationTypePreferencesResponse>(
+      notificationKeys.preferences.queryKey
+    );
+  const [data, setData] = createSignal(
+    cached ?? EMPTY_NOTIFICATION_TYPE_PREFERENCES
+  );
+  const [loading, setLoading] = createSignal(cached === undefined);
+
+  onMount(() => {
+    void fetchNotificationTypePreferences()
+      .then((next) => {
+        setData(next);
+        writePreferencesCache(next);
+      })
+      .finally(() => setLoading(false));
+  });
+
+  const setTypeEnabled = async (type: string, enabled: boolean) => {
+    const previous = data();
+    const next = applyPreferenceToggle(previous, type, enabled);
+    setData(next);
+    writePreferencesCache(next);
+    try {
+      if (enabled) {
         await throwOnErr(() =>
-          notificationServiceClient.enableNotificationType(vars.type)
+          notificationServiceClient.enableNotificationType(type)
         );
       } else {
         await throwOnErr(() =>
-          notificationServiceClient.disableNotificationType(vars.type)
+          notificationServiceClient.disableNotificationType(type)
         );
       }
-    },
-    onMutate: async (vars) => {
-      await queryClient.cancelQueries({
-        queryKey: notificationKeys.preferences.queryKey,
-      });
-      const previous =
-        queryClient.getQueryData<GetNotificationTypePreferencesResponse>(
-          notificationKeys.preferences.queryKey
-        );
-      queryClient.setQueryData<GetNotificationTypePreferencesResponse>(
-        notificationKeys.preferences.queryKey,
-        (current) => applyPreferenceToggle(current, vars.type, vars.enabled)
-      );
-      return { previous };
-    },
-    onError: (_error, _vars, context) => {
-      queryClient.setQueryData(
-        notificationKeys.preferences.queryKey,
-        context?.previous
-      );
-    },
-    onSettled: () => {
-      void queryClient.invalidateQueries({
-        queryKey: notificationKeys.preferences.queryKey,
-      });
-    },
-  }));
+    } catch (error) {
+      setData(previous);
+      writePreferencesCache(previous);
+      throw error;
+    }
+  };
+
+  return { data, loading, setTypeEnabled };
 }
