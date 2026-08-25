@@ -218,7 +218,7 @@ fn server_error_emits_only_failure_event() {
 
         CustomOnResponse::new_with_threshold(Duration::from_millis(200))
             .on_response(&response, latency, &span);
-        CustomOnFailure { emit_event: true }.on_failure("Status code: 500", latency, &span);
+        CustomOnFailure.on_failure("Status code: 500", latency, &span);
     });
 
     assert_eq!(captured.event_count(Level::ERROR), 1);
@@ -228,27 +228,6 @@ fn server_error_emits_only_failure_event() {
     let fields = captured.recorded_span_fields.lock().unwrap();
     assert_eq!(fields.get("http.response.status_code").unwrap(), "500");
     assert_eq!(fields.get("latency_ms").unwrap(), "300");
-    assert_eq!(fields.get("otel.status_code").unwrap(), "\"ERROR\"");
-}
-
-#[test]
-fn quiet_server_error_marks_the_span_without_emitting_an_event() {
-    let (subscriber, captured) = TracingCapture::new();
-
-    with_default(subscriber, || {
-        let request = Request::builder().uri("/documents").body(()).unwrap();
-        let span = MakeHttpRequestSpan.make_span(&request);
-        let response = Response::builder().status(500).body(()).unwrap();
-        let latency = Duration::from_millis(300);
-
-        CustomOnResponse::new_with_threshold(Duration::from_millis(200))
-            .on_response(&response, latency, &span);
-        CustomOnFailure { emit_event: false }.on_failure("Status code: 500", latency, &span);
-    });
-
-    assert!(captured.event_levels.lock().unwrap().is_empty());
-    let fields = captured.recorded_span_fields.lock().unwrap();
-    assert_eq!(fields.get("http.response.status_code").unwrap(), "500");
     assert_eq!(fields.get("otel.status_code").unwrap(), "\"ERROR\"");
 }
 

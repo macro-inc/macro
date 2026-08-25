@@ -44,10 +44,7 @@ where
     Auth: MacroAuthorizationService,
 {
     let app = api_router(read_state, control_state, create_state, gateway_state)
-        .layer(
-            MacroRequestIdAndTracingLayer::new_without_failure_events(Duration::from_millis(200))
-                .into_inner(),
-        )
+        .layer(MacroRequestIdAndTracingLayer::new(Duration::from_millis(200)).into_inner())
         .merge(Router::new().route("/health", get(health)))
         .layer(macro_cors::cors_layer())
         .merge(SwaggerUi::new("/docs").url("/api-doc/openapi.json", swagger::ApiDoc::openapi()));
