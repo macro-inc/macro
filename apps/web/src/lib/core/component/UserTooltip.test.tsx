@@ -2,7 +2,8 @@
  * @vitest-environment jsdom
  */
 
-import { render, screen } from '@solidjs/testing-library';
+import { toast } from '@core/component/Toast/Toast';
+import { fireEvent, render, screen } from '@solidjs/testing-library';
 import userEvent from '@testing-library/user-event';
 import type { JSX } from 'solid-js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -75,12 +76,20 @@ vi.mock('./UserIcon', () => ({
   UserIcon: () => <div data-testid="user-icon" />,
 }));
 
+const writeText = vi.fn();
+
 beforeEach(() => {
   mocks.crmFlagEnabled = true;
   mocks.teamCrmEnabled = true;
   mocks.contact = { id: 'contact-1' };
   mocks.openWithSplit.mockReset();
   mocks.onClose.mockReset();
+  writeText.mockReset();
+  vi.mocked(toast.success).mockReset();
+  Object.defineProperty(navigator, 'clipboard', {
+    configurable: true,
+    value: { writeText },
+  });
 });
 
 describe('UserTooltip CRM contact action', () => {
@@ -160,5 +169,81 @@ describe('UserTooltip CRM contact action', () => {
     expect(screen.getByText('Panat Taranat')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Copy email' })).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Open contact' })).toBeNull();
+  });
+});
+
+describe('UserTooltip copy actions', () => {
+  it('copies the displayed name, toasts Name copied, and does not close', () => {
+    render(() => (
+      <UserTooltip
+        displayName="Panat Taranat"
+        email="panat@pync.com"
+        onClose={mocks.onClose}
+      />
+    ));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Copy name' }));
+
+    expect(writeText).toHaveBeenCalledWith('Panat Taranat');
+    expect(toast.success).toHaveBeenCalledWith('Name copied');
+    expect(mocks.onClose).not.toHaveBeenCalled();
+  });
+
+  it('copies email only, toasts Email copied, and does not close', () => {
+    render(() => (
+      <UserTooltip
+        displayName="Panat Taranat"
+        email="panat@pync.com"
+        onClose={mocks.onClose}
+      />
+    ));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Copy email' }));
+
+    expect(writeText).toHaveBeenCalledWith('panat@pync.com');
+    expect(writeText).not.toHaveBeenCalledWith('Panat Taranat');
+    expect(toast.success).toHaveBeenCalledWith('Email copied');
+    expect(mocks.onClose).not.toHaveBeenCalled();
+  });
+
+  it('hides Copy name for Me / me', () => {
+    const { unmount } = render(() => (
+      <UserTooltip displayName="Me" email="me@example.com" />
+    ));
+    expect(screen.queryByRole('button', { name: 'Copy name' })).toBeNull();
+    unmount();
+
+    render(() => <UserTooltip displayName="me" email="me@example.com" />);
+    expect(screen.queryByRole('button', { name: 'Copy name' })).toBeNull();
+  });
+
+  it('hides Copy name when displayName equals email', () => {
+    render(() => (
+      <UserTooltip displayName="panat@pync.com" email="panat@pync.com" />
+    ));
+
+    expect(screen.queryByRole('button', { name: 'Copy name' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Copy email' })).toBeTruthy();
+  });
+
+  it('hides Copy name when displayName equals the email local-part', () => {
+    render(() => <UserTooltip displayName="panat" email="panat@pync.com" />);
+
+    expect(screen.queryByRole('button', { name: 'Copy name' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Copy email' })).toBeTruthy();
+  });
+
+  it('hides Copy name when displayName is blank', () => {
+    render(() => <UserTooltip displayName="   " email="panat@pync.com" />);
+
+    expect(screen.queryByRole('button', { name: 'Copy name' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Copy email' })).toBeTruthy();
+  });
+
+  it('shows Copy name when there is a real name and no email', () => {
+    render(() => <UserTooltip displayName="Panat Taranat" />);
+
+    expect(screen.getByRole('button', { name: 'Copy name' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Copy email' })).toBeNull();
   });
 });
