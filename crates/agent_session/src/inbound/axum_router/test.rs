@@ -1,6 +1,5 @@
 use super::*;
-use crate::domain::model::{AgentSessionLog, SessionStatus};
-use agent_runtime_protocol::domain::schema::v0::ToServerMessage;
+use crate::domain::model::SessionStatus;
 use axum::body::Body;
 use axum::http::{Request, header};
 use chrono::Utc;

@@ -119,7 +119,7 @@ fn harness() -> (
 }
 
 /// Play the agent's half of the ACP handshake.
-async fn complete_handshake(container: &ContainerMock) {
+async fn complete_session_handshake(container: &ContainerMock) {
     let agent = container.agent();
     let already = agent.received_requests().len();
     container.sends_ready();
@@ -127,6 +127,11 @@ async fn complete_handshake(container: &ContainerMock) {
     agent.completes_initialize(InitializeResponse::new(PROTOCOL_VERSION));
     agent.wait_for_requests(already + 2).await;
     agent.opens_session(NewSessionResponse::new("acp-test"));
+}
+
+async fn complete_handshake(container: &ContainerMock) {
+    complete_session_handshake(container).await;
+    let agent = container.agent();
     agent.completes_prompt().await;
 }
 
@@ -1206,7 +1211,7 @@ async fn open_managed_session_spawns_at_the_users_default_size() {
         let container = containers
             .container(session_of(&containers))
             .expect("the spawned container is findable");
-        complete_handshake(&container).await;
+        complete_session_handshake(&container).await;
     };
     let (opened, _) = tokio::join!(open, drive);
     let session = opened.expect("open should succeed");

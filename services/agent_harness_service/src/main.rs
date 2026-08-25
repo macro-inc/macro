@@ -388,6 +388,9 @@ async fn run() -> anyhow::Result<()> {
                                 HarnessCommand::Open(_) => "agent_trigger.new",
                                 HarnessCommand::Deliver(_) => "agent_trigger.existing",
                                 HarnessCommand::Delete => "agent_trigger.delete",
+                                HarnessCommand::SetSandboxSize(_) => {
+                                    "agent_trigger.set_sandbox_size"
+                                }
                             };
                             tracing::Span::current().record("macro.event.type", event_type);
                             let execution_span = tracing::info_span!(

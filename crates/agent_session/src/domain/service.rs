@@ -260,6 +260,7 @@ impl<R, Folds, Rt, Namer> AgentSessionServiceImpl<R, Folds, Rt, Namer> {
             active: self.active,
             tasks: self.tasks,
             cancellation: self.cancellation,
+            lifecycle: self.lifecycle,
         }
     }
 

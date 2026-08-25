@@ -356,6 +356,30 @@ impl AgentSessionRepo for BlockingPromptLogs {
         self.repo.set_model(id, model).await
     }
 
+    async fn set_name(&self, id: AgentSessionId, name: &str) -> Result<()> {
+        self.repo.set_name(id, name).await
+    }
+
+    async fn set_name_if_default(&self, id: AgentSessionId, name: &str) -> Result<bool> {
+        self.repo.set_name_if_default(id, name).await
+    }
+
+    async fn set_sandbox_size(&self, id: AgentSessionId, size: SandboxSize) -> Result<()> {
+        self.repo.set_sandbox_size(id, size).await
+    }
+
+    async fn user_sandbox_size(&self, user_id: &MacroUserIdStr<'static>) -> Result<SandboxSize> {
+        self.repo.user_sandbox_size(user_id).await
+    }
+
+    async fn set_user_sandbox_size(
+        &self,
+        user_id: &MacroUserIdStr<'static>,
+        size: SandboxSize,
+    ) -> Result<()> {
+        self.repo.set_user_sandbox_size(user_id, size).await
+    }
+
     async fn delete(&self, id: AgentSessionId) -> Result<()> {
         self.repo.delete(id).await
     }
