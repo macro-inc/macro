@@ -5,15 +5,18 @@ use std::{
 
 use chrono::{DateTime, Utc};
 use entity_access::domain::models::{EntityAccessReceipt, MemberTeamRole};
-use item_filters::ast::{
-    call::CallLiteral,
-    channel::{ChannelLiteral, ChannelThreadLiteral},
-    chat::ChatLiteral,
-    crm_company::CrmCompanyLiteral,
-    document::DocumentLiteral,
-    email::EmailLiteral,
-    foreign_entity::ForeignEntityLiteral,
-    project::ProjectLiteral,
+use item_filters::{
+    SharedEmailFilter,
+    ast::{
+        call::CallLiteral,
+        channel::{ChannelLiteral, ChannelThreadLiteral},
+        chat::ChatLiteral,
+        crm_company::CrmCompanyLiteral,
+        document::DocumentLiteral,
+        email::EmailLiteral,
+        foreign_entity::ForeignEntityLiteral,
+        project::ProjectLiteral,
+    },
 };
 use models_pagination::{Paginated, PaginatedCursor};
 use models_properties::service::property_definition_with_options::PropertyDefinitionWithOptions;
@@ -210,6 +213,18 @@ fn collect_ids<T>(expr: &Expr<T>, literal_id: impl Copy + Fn(&T) -> Option<Uuid>
     }
 }
 
+/// Return whether an email expression explicitly includes shared threads.
+fn includes_shared_threads(expr: &Expr<EmailLiteral>) -> bool {
+    match expr {
+        Expr::And(left, right) | Expr::Or(left, right) => {
+            includes_shared_threads(left) || includes_shared_threads(right)
+        }
+        Expr::Not(_) => false,
+        Expr::Literal(EmailLiteral::Shared(SharedEmailFilter::Include)) => true,
+        Expr::Literal(_) => false,
+    }
+}
+
 #[tokio::test]
 async fn batches_all_keys_for_one_user_into_one_soup_request() {
     let user_id = user("macro|one@example.com");
@@ -364,6 +379,24 @@ async fn context_loader_returns_none_for_a_missing_item() {
         .expect("missing item is not a loader failure");
 
     assert!(item.is_none());
+}
+
+#[test]
+fn email_entity_filter_includes_shared_threads() {
+    let thread_id = Uuid::from_u128(20);
+    let entities = vec![EntityType::EmailThread.with_entity_string(thread_id.to_string())];
+
+    let ast = entity_filter_ast(&entities).expect("valid AST");
+    let email_filter = ast.email_filter.tree.as_deref().expect("email filter");
+
+    assert!(includes_shared_threads(email_filter));
+    assert_eq!(
+        collect_ids(email_filter, |literal| match literal {
+            EmailLiteral::ThreadId(id) => Some(*id),
+            _ => None,
+        }),
+        HashSet::from([thread_id])
+    );
 }
 
 #[test]
