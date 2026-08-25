@@ -1,15 +1,14 @@
-import {
-  PIPEDREAM_ICON_MAP,
-  pipedreamAppAvailableInEnv,
-} from '@core/component/AI/constant/mcpServers';
+import { PIPEDREAM_ICON_MAP } from '@core/component/AI/constant/mcpServers';
 import { toast } from '@core/component/Toast/Toast';
-import { proxyImageUrl } from '@core/util/imageProxy';
+import { PipedreamConnectorIcon } from '@core/pipedream/ConnectorIcon';
+import {
+  createPipedreamCatalogConnect,
+  createPipedreamCatalogSearch,
+} from '@core/pipedream/catalog';
 import PlugIcon from '@phosphor-icons/core/regular/plug.svg?component-solid';
 import XIcon from '@phosphor-icons/core/regular/x.svg?component-solid';
 import {
-  connectPipedreamApp,
   useDeletePipedreamConnectionMutation,
-  usePipedreamCatalogQuery,
   usePipedreamConnectionsQuery,
   useUpdatePipedreamConnectionMutation,
 } from '@queries/pipedream-connectors';
@@ -18,7 +17,7 @@ import type {
   PipedreamConnectionResponse,
 } from '@service-cognition/client';
 import { Button, ToggleSwitch } from '@ui';
-import { createSignal, For, onCleanup, Show } from 'solid-js';
+import { createMemo, createSignal, For, Show } from 'solid-js';
 import { ConnectAction } from './integration-ui';
 import { IntegrationRow, SettingsCard, SettingsSection } from './primitives';
 
@@ -119,71 +118,28 @@ function ServerRow(props: { server: PipedreamConnectionResponse }) {
  * Once connected, the app shows up as a regular {@link ServerRow} instead.
  */
 function CatalogRow(props: { entry: PipedreamCatalogEntryResponse }) {
-  const [busy, setBusy] = createSignal(false);
-
-  const handleConnect = async () => {
-    if (busy()) return;
-    setBusy(true);
-    try {
-      const outcome = await connectPipedreamApp({
-        appSlug: props.entry.app_slug,
-        serverName: props.entry.display_name,
-      });
-      if (outcome === 'connected') {
-        toast.success(`${props.entry.display_name} connected`);
-      } else if (outcome === 'unsupported') {
-        toast.failure('Connectors are not available on this deployment');
-      }
-    } catch {
-      toast.failure(`Failed to connect ${props.entry.display_name}`);
-    } finally {
-      setBusy(false);
-    }
-  };
+  const { connect, busy } = createPipedreamCatalogConnect({
+    entry: () => props.entry,
+    onConnected: (entry) => toast.success(`${entry.display_name} connected`),
+  });
 
   return (
     <IntegrationRow
-      icon={<CatalogIcon entry={props.entry} />}
+      icon={
+        <PipedreamConnectorIcon
+          appSlug={props.entry.app_slug}
+          iconUrl={props.entry.icon_url}
+        />
+      }
       title={props.entry.display_name}
       description={props.entry.description ?? props.entry.app_slug}
     >
-      <ConnectAction label="Connect" onClick={handleConnect} loading={busy()} />
+      <ConnectAction
+        label="Connect"
+        onClick={() => void connect()}
+        loading={busy()}
+      />
     </IntegrationRow>
-  );
-}
-
-/**
- * Connector icon: our bundled SVG for the apps we ship icons for, the
- * directory-provided icon otherwise, and a generic plug as the fallback.
- * Directory icons load through the image proxy — the app's COEP blocks
- * cross-origin images from hosts that don't send CORP headers.
- */
-function CatalogIcon(props: { entry: PipedreamCatalogEntryResponse }) {
-  const BundledIcon = () => PIPEDREAM_ICON_MAP.get(props.entry.app_slug);
-  return (
-    <Show
-      when={BundledIcon()}
-      fallback={
-        <Show
-          when={props.entry.icon_url}
-          fallback={<PlugIcon class="size-5" />}
-        >
-          {(iconUrl) => (
-            <img
-              src={proxyImageUrl(iconUrl())}
-              alt=""
-              loading="lazy"
-              class="size-5 rounded object-contain"
-            />
-          )}
-        </Show>
-      }
-    >
-      {(Icon) => {
-        const C = Icon();
-        return <C class="size-5" />;
-      }}
-    </Show>
   );
 }
 
@@ -195,29 +151,14 @@ function CatalogIcon(props: { entry: PipedreamCatalogEntryResponse }) {
 export function PipedreamIntegrationsSection() {
   const serversQuery = usePipedreamConnectionsQuery();
 
-  const [searchInput, setSearchInput] = createSignal('');
-  const [search, setSearch] = createSignal('');
-  let debounceTimer: ReturnType<typeof setTimeout> | undefined;
-  const onSearchInput = (value: string) => {
-    setSearchInput(value);
-    clearTimeout(debounceTimer);
-    debounceTimer = setTimeout(() => setSearch(value), 250);
-  };
-  onCleanup(() => clearTimeout(debounceTimer));
-
-  const catalogQuery = usePipedreamCatalogQuery(search);
-
   const servers = () => serversQuery.data ?? [];
-  const connectedSlugs = () => new Set(servers().map((s) => s.app_slug));
+  const connectedSlugs = createMemo(
+    () => new Set(servers().map((s) => s.app_slug))
+  );
 
-  const offered = (entry: PipedreamCatalogEntryResponse) =>
-    pipedreamAppAvailableInEnv(entry.app_slug) &&
-    !connectedSlugs().has(entry.app_slug);
-
-  const browseResults = () =>
-    (catalogQuery.data?.pages ?? [])
-      .flatMap((page) => page.servers)
-      .filter(offered);
+  const catalog = createPipedreamCatalogSearch(connectedSlugs);
+  const catalogQuery = catalog.query;
+  const browseResults = catalog.entries;
 
   return (
     <SettingsSection
@@ -255,8 +196,8 @@ export function PipedreamIntegrationsSection() {
             type="search"
             class="settings-input w-full"
             placeholder="Search all connectors..."
-            value={searchInput()}
-            onInput={(e) => onSearchInput(e.currentTarget.value)}
+            value={catalog.searchInput()}
+            onInput={(e) => catalog.onSearchInput(e.currentTarget.value)}
           />
         </div>
 
@@ -290,11 +231,11 @@ export function PipedreamIntegrationsSection() {
             when={
               !catalogQuery.isFetching &&
               browseResults().length === 0 &&
-              search().trim()
+              catalog.search().trim()
             }
           >
             <div class="px-6 py-6 text-center text-sm text-ink-muted">
-              No connectors found for "{search().trim()}".
+              No connectors found for "{catalog.search().trim()}".
             </div>
           </Show>
 
