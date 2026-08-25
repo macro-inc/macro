@@ -1,13 +1,19 @@
 import { EntityActivitySectionConditional } from '@app/features/activity/EntityActivitySection';
 import {
+  type CorrespondenceParty,
+  CorrespondenceSidePanelSection,
+  externalParties,
+} from '@app/features/correspondence';
+import {
   EntityPropertiesSection,
   EntityTagsSection,
 } from '@app/features/property/side-panel/properties';
 import { SidePanel } from '@components/app/side-panel';
 import { References } from '@core/component/References';
+import { useEmail } from '@core/context/user';
 import { useAttachmentReferencesQuery } from '@queries/storage/attachment-references';
 import type { ItemType } from '@service-storage/client';
-import { Show, Suspense } from 'solid-js';
+import { createMemo, Show, Suspense } from 'solid-js';
 import { useEmailContext } from '../EmailContext';
 
 interface EmailSidePanelSectionsProps {
@@ -18,6 +24,30 @@ interface EmailSidePanelSectionsProps {
 export function EmailSidePanelSections(props: EmailSidePanelSectionsProps) {
   const emailCtx = useEmailContext();
   const canEdit = () => emailCtx.permissions().isOwner;
+  const currentUserEmail = useEmail();
+
+  // Everyone visibly on the chain — senders and To/Cc recipients across every
+  // message. Bcc is left out: it is deliberately hidden correspondence and
+  // doesn't belong in a "who is on this thread" summary.
+  const externalThreadParties = createMemo<CorrespondenceParty[]>(() => {
+    const messages = emailCtx.thread()?.messages ?? [];
+    const participants: CorrespondenceParty[] = [];
+    for (const message of messages) {
+      if (message.from?.email) {
+        participants.push({
+          email: message.from.email,
+          name: message.from.name ?? undefined,
+        });
+      }
+      for (const contact of [...message.to, ...message.cc]) {
+        participants.push({
+          email: contact.email,
+          name: contact.name ?? undefined,
+        });
+      }
+    }
+    return externalParties(participants, currentUserEmail());
+  });
 
   return (
     <>
@@ -44,6 +74,10 @@ export function EmailSidePanelSections(props: EmailSidePanelSectionsProps) {
           />
         </Suspense>
       </SidePanel.Section>
+      <CorrespondenceSidePanelSection
+        parties={externalThreadParties()}
+        order={35}
+      />
       <EntityActivitySectionConditional
         entityId={props.threadId}
         entityType="THREAD"

@@ -36,6 +36,18 @@ export function emailFilterForAddress(email: string): unknown {
 }
 
 /**
+ * Any-direction match for any of the given addresses. Returns `undefined`
+ * when the list is empty so the caller can skip setting `ef` entirely.
+ */
+export function emailFilterForAddresses(
+  addresses: string[]
+): unknown | undefined {
+  if (addresses.length === 0) return undefined;
+  const trees = addresses.map((address) => emailFilterForAddress(address));
+  return trees.reduce((acc, cur) => ({ '|': [acc, cur] }));
+}
+
+/**
  * Any-direction match for any of the given domains. Returns `undefined`
  * when the list is empty so the caller can skip setting `ef` entirely.
  */

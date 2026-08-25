@@ -3,6 +3,7 @@ import type { CrmCommentEntityType } from '@service-storage/generated/schemas/cr
 
 export const crmKeys = createQueryKeys('crm', {
   company: (companyId: string) => [companyId],
+  companyForDomain: (domain: string) => [domain],
   contact: (contactId: string) => [contactId],
   contactByEmail: (teamId: string, email: string) => [teamId, email],
   comments: (entityType: CrmCommentEntityType, entityId: string) => [
