@@ -47,6 +47,7 @@ function createMockOrchestrator(): BlockOrchestrator {
       detach: vi.fn(),
       dispose: vi.fn(),
     })),
+    rekeyBlockInstance: vi.fn(),
   } as unknown as BlockOrchestrator;
 }
 
@@ -271,6 +272,87 @@ describe('layoutManager', () => {
         dispose();
       });
     });
+
+    it('jumps back to the nearest earlier entry matching a predicate', () => {
+      createRoot((dispose) => {
+        const manager = createSplitLayout(createMockOrchestrator(), [
+          { type: 'component', id: 'inbox' },
+        ]);
+        const split = manager.getSplit(manager.splits()[0].id)!;
+
+        split.replace({ next: { type: 'md', id: 'doc-1' } });
+        split.replace({ next: { type: 'component', id: 'tasks' } });
+        split.replace({ next: { type: 'md', id: 'doc-2' } });
+        split.replace({ next: { type: 'channel', id: 'ch-1' } });
+
+        const moved = split.goBackTo(
+          (content) => content.type === 'component' && content.id === 'tasks'
+        );
+
+        expect(moved).toBe(true);
+        expect(split.content()).toMatchObject({
+          type: 'component',
+          id: 'tasks',
+        });
+        // The skipped entries stay ahead, so forward still reaches them.
+        expect(split.canGoForward()).toBe(true);
+
+        dispose();
+      });
+    });
+
+    it('skips history entries another split already displays', () => {
+      createRoot((dispose) => {
+        const manager = createSplitLayout(createMockOrchestrator(), [
+          { type: 'component', id: 'inbox' },
+          { type: 'md', id: 'doc-1' },
+        ]);
+        const [listSplitState, docSplitState] = manager.splits();
+        const listSplit = manager.getSplit(listSplitState.id)!;
+        const docSplit = manager.getSplit(docSplitState.id)!;
+
+        // The list split walks through doc-1 — which the other split is
+        // already showing — before landing on a channel.
+        listSplit.replace({ next: { type: 'md', id: 'doc-1' } });
+        listSplit.replace({ next: { type: 'channel', id: 'ch-1' } });
+
+        const moved = listSplit.goBackTo(
+          (content) => content.type === 'md' && content.id === 'doc-1'
+        );
+
+        // doc-1 is unmountable here, so nothing moves: the split keeps showing
+        // the channel rather than stranding its history on an entry it never
+        // mounted.
+        expect(moved).toBe(false);
+        expect(listSplit.content()).toMatchObject({
+          type: 'channel',
+          id: 'ch-1',
+        });
+        expect(docSplit.content()).toMatchObject({ type: 'md', id: 'doc-1' });
+
+        dispose();
+      });
+    });
+
+    it('leaves the split put when nothing earlier matches', () => {
+      createRoot((dispose) => {
+        const manager = createSplitLayout(createMockOrchestrator(), [
+          { type: 'component', id: 'inbox' },
+        ]);
+        const split = manager.getSplit(manager.splits()[0].id)!;
+
+        split.replace({ next: { type: 'md', id: 'doc-1' } });
+
+        const moved = split.goBackTo(
+          (content) => content.type === 'component' && content.id === 'tasks'
+        );
+
+        expect(moved).toBe(false);
+        expect(split.content()).toMatchObject({ type: 'md', id: 'doc-1' });
+
+        dispose();
+      });
+    });
   });
 
   describe('navigation params', () => {
@@ -368,6 +450,88 @@ describe('layoutManager', () => {
 
         expect(split.content()).toMatchObject(channelWithTarget);
 
+        dispose();
+      });
+    });
+  });
+
+  describe('adoptContentId', () => {
+    it('moves the split onto the new id without remounting or pushing history', () => {
+      createRoot((dispose) => {
+        const orchestrator = createMockOrchestrator();
+        const manager = createSplitLayout(orchestrator, [
+          { type: 'agent', id: 'pending-1' },
+        ]);
+        const split = manager.splits()[0]!;
+        const handle = manager.getSplit(split.id)!;
+        const mountBefore = split.mount;
+        const historyLengthBefore = handle.history().length;
+        const mountsBefore = (
+          orchestrator.createBlockInstance as ReturnType<typeof vi.fn>
+        ).mock.calls.length;
+
+        handle.adoptContentId({ type: 'agent', nextId: 'session-1' });
+
+        const after = manager.splits()[0]!;
+        expect(after.content).toEqual({ type: 'agent', id: 'session-1' });
+        // The same block instance, re-labelled: nothing was mounted again.
+        expect(after.mount.kind).toBe('block');
+        expect(
+          after.mount.kind === 'block' ? after.mount.handle : undefined
+        ).toBe(mountBefore.kind === 'block' ? mountBefore.handle : null);
+        expect(
+          (orchestrator.createBlockInstance as ReturnType<typeof vi.fn>).mock
+            .calls.length
+        ).toBe(mountsBefore);
+        expect(handle.history()).toHaveLength(historyLengthBefore);
+        expect(handle.history().at(-1)).toEqual({
+          type: 'agent',
+          id: 'session-1',
+        });
+        expect(orchestrator.rekeyBlockInstance).toHaveBeenCalledWith(
+          'agent',
+          'pending-1',
+          'session-1'
+        );
+        // `replace` is what the URL sync reads to swap the path in place
+        // rather than adding a step back to a placeholder.
+        expect(after.lastNavigationCause).toBe('replace');
+
+        dispose();
+      });
+    });
+
+    it('ignores a type that is not what the split is showing', () => {
+      createRoot((dispose) => {
+        const manager = createSplitLayout(createMockOrchestrator(), [
+          { type: 'agent', id: 'pending-1' },
+        ]);
+        const handle = manager.getSplit(manager.splits()[0]!.id)!;
+
+        handle.adoptContentId({ type: 'md', nextId: 'session-1' });
+
+        expect(manager.splits()[0]!.content).toEqual({
+          type: 'agent',
+          id: 'pending-1',
+        });
+        dispose();
+      });
+    });
+
+    it('refuses an id another split already shows', () => {
+      createRoot((dispose) => {
+        const manager = createSplitLayout(createMockOrchestrator(), [
+          { type: 'agent', id: 'pending-1' },
+          { type: 'agent', id: 'session-1' },
+        ]);
+        const handle = manager.getSplit(manager.splits()[0]!.id)!;
+
+        handle.adoptContentId({ type: 'agent', nextId: 'session-1' });
+
+        expect(manager.splits()[0]!.content).toEqual({
+          type: 'agent',
+          id: 'pending-1',
+        });
         dispose();
       });
     });

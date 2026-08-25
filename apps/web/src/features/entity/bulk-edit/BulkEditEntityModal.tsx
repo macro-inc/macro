@@ -67,6 +67,7 @@ const BulkEditEntityModalContent = (props: {
                 entities={props.entities}
                 onFinish={handleFinish}
                 onCancel={handleCancel}
+                onError={handleError}
               />
             </Show>
           </div>

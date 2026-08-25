@@ -5,6 +5,7 @@ export const TOKENS = {
     askAi: 'soup.askAi',
     sort: 'soup.sort',
     filter: 'soup.filter',
+    dismiss: 'soup.dismiss',
     tabs: {
       '0': 'soup.tabs.0',
       '1': 'soup.tabs.1',
@@ -126,7 +127,6 @@ export const TOKENS = {
       calls: 'sidebar.goTo.calls',
       companies: 'sidebar.goTo.companies',
       folders: 'sidebar.goTo.folders',
-      reminders: 'sidebar.goTo.reminders',
     },
   },
 
@@ -281,6 +281,9 @@ export const TOKENS = {
     snippetNewSplit: 'create.snippetNewSplit',
     automation: 'create.automation',
     skill: 'create.skill',
+    reminder: 'create.reminder',
+    agent: 'create.agent',
+    agentNewSplit: 'create.agentNewSplit',
     close_menu: 'create.close_menu',
   },
 

@@ -16,6 +16,8 @@ fn expand_document_name_highlight_yields_name_hit_without_goto() {
     // A parent document whose name matched: a top-level `document_name`
     // highlight, no inner_hits (the content branch did not match).
     let hit = Hit {
+        index: "documents_v2".to_string(),
+        matched_queries: vec!["documents".to_string()],
         score: Some(2.0),
         source: UnifiedSearchIndex::Document(DocumentIndex {
             entity_id,
@@ -435,7 +437,7 @@ fn test_deserialization() -> anyhow::Result<()> {
       }
     });
 
-    let _: DefaultSearchResponse<UnifiedSearchIndex> = serde_json::from_value(json)?;
+    let _: DefaultSearchResponse<serde_json::Value> = serde_json::from_value(json)?;
 
     Ok(())
 }
@@ -492,6 +494,7 @@ fn test_build_unified_search_request_content() -> anyhow::Result<()> {
         },
         call_record_search_args: UnifiedCallRecordSearchArgs::default(),
         project_search_args: UnifiedProjectSearchArgs::default(),
+        calendar_event_search_args: UnifiedCalendarEventSearchArgs::default(),
         cursor: SearchCursorOption::NotDone(Some(SearchMethodCursor::UpdatedAt {
             entity_id,
             updated_at: time,
@@ -503,18 +506,20 @@ fn test_build_unified_search_request_content() -> anyhow::Result<()> {
     // Documents and chats are join-shape (has_child); compute their
     // sub-queries from the builders rather than inlining the has_child
     // JSON. Emails and channels are flat and stay inline below.
-    let doc_should = QueryType::from(
-        DocumentQueryBuilder::from(DocumentSearchArgs::from(unified_search_args.clone()))
-            .build_bool_query()?
-            .build(),
-    )
-    .to_json();
-    let chat_should = QueryType::from(
-        ChatQueryBuilder::from(ChatSearchArgs::from(unified_search_args.clone()))
-            .build_bool_query()?
-            .build(),
-    )
-    .to_json();
+    let doc_query_builder =
+        DocumentQueryBuilder::from(DocumentSearchArgs::from(unified_search_args.clone()));
+    let doc_should = {
+        let mut builder = doc_query_builder.build_bool_query()?;
+        builder.name(OpenSearchEntityType::Documents.query_name());
+        QueryType::from(builder.build()).to_json()
+    };
+    let chat_query_builder =
+        ChatQueryBuilder::from(ChatSearchArgs::from(unified_search_args.clone()));
+    let chat_should = {
+        let mut builder = chat_query_builder.build_bool_query()?;
+        builder.name(OpenSearchEntityType::Chats.query_name());
+        QueryType::from(builder.build()).to_json()
+    };
 
     let expected = serde_json::json!({
       "collapse": {
@@ -666,6 +671,7 @@ fn test_build_unified_search_request_content() -> anyhow::Result<()> {
                     }
                   }
                 ],
+                "_name": "emails",
                 "must": [
                   {
                     "bool": {
@@ -720,6 +726,7 @@ fn test_build_unified_search_request_content() -> anyhow::Result<()> {
                     }
                   }
                 ],
+                "_name": "channels",
                 "must": [
                   {
                     "bool": {
@@ -794,6 +801,7 @@ fn test_build_unified_search_request_content() -> anyhow::Result<()> {
         },
         call_record_search_args: UnifiedCallRecordSearchArgs::default(),
         project_search_args: UnifiedProjectSearchArgs::default(),
+        calendar_event_search_args: UnifiedCalendarEventSearchArgs::default(),
         cursor: SearchCursorOption::NotDone(Some(SearchMethodCursor::UpdatedAt {
             entity_id,
             updated_at: time,
@@ -830,12 +838,13 @@ fn test_build_unified_search_request_single_index() -> anyhow::Result<()> {
 
     // Documents are join-shape (has_child); compute the sub-query from the
     // builder rather than inlining the has_child JSON.
-    let doc_should = QueryType::from(
-        DocumentQueryBuilder::from(DocumentSearchArgs::from(unified_search_args.clone()))
-            .build_bool_query()?
-            .build(),
-    )
-    .to_json();
+    let doc_query_builder =
+        DocumentQueryBuilder::from(DocumentSearchArgs::from(unified_search_args.clone()));
+    let doc_should = {
+        let mut builder = doc_query_builder.build_bool_query()?;
+        builder.name(OpenSearchEntityType::Documents.query_name());
+        QueryType::from(builder.build()).to_json()
+    };
 
     let expected = serde_json::json!(
           {
@@ -910,7 +919,7 @@ fn doc_hit_with_chunks(
     entity_id: uuid::Uuid,
     updated_at_millis: i64,
     chunk_count: usize,
-) -> Hit<UnifiedSearchIndex> {
+) -> Hit<serde_json::Value> {
     let chunks: Vec<serde_json::Value> = (0..chunk_count)
         .map(|i| {
             serde_json::json!({
@@ -923,13 +932,15 @@ fn doc_hit_with_chunks(
         .collect();
 
     Hit {
+        index: "documents_v2".to_string(),
+        matched_queries: vec!["documents".to_string()],
         score: Some(1.0),
-        source: UnifiedSearchIndex::Document(DocumentIndex {
-            entity_id,
-            document_name: "Doc".to_string(),
-            owner_id: "alice".to_string(),
-            file_type: "md".to_string(),
-            updated_at_millis: Some(updated_at_millis),
+        source: serde_json::json!({
+            "entity_id": entity_id,
+            "document_name": "Doc",
+            "owner_id": "alice",
+            "file_type": "md",
+            "updated_at_millis": updated_at_millis,
         }),
         highlight: None,
         inner_hits: Some(serde_json::json!({ "term_0": { "hits": { "hits": chunks } } })),
@@ -1026,11 +1037,312 @@ fn paginate_page_size_zero_terminates() {
 }
 
 #[test]
+fn calendar_source_routes_by_matched_clause_not_shape() -> anyhow::Result<()> {
+    // A calendar doc's entity_id + name + owner_id is exactly ProjectIndex's
+    // required set, so nothing in the _source distinguishes the two. The clause
+    // the hit matched does. Feeding the identical body under two clause names
+    // must produce two different variants.
+    let source = serde_json::json!({
+        "entity_id": "0197a863-0000-7000-8000-0000000000c1",
+        "name": "Standup",
+        "owner_id": "macro|user@user.com",
+        "source_link_id": "0197a863-0000-7000-8000-0000000000c2",
+        "ical_uid": "abc123@google.com",
+        "status": "confirmed",
+        "is_recurring": true,
+        "starts_at_millis": 1783000000000_i64,
+        "updated_at_millis": 1783000000000_i64
+    });
+
+    assert!(matches!(
+        UnifiedSearchIndex::from_matched(&["calendar_events".to_string()], source.clone())?,
+        UnifiedSearchIndex::CalendarEvent(_)
+    ));
+    assert!(
+        matches!(
+            UnifiedSearchIndex::from_matched(&["projects".to_string()], source)?,
+            UnifiedSearchIndex::Project(_)
+        ),
+        "the same body under a different clause must resolve to that clause's shape"
+    );
+    Ok(())
+}
+
+#[test]
+fn an_unknown_clause_is_rejected_not_guessed() {
+    let source = serde_json::json!({
+        "entity_id": "0197a863-0000-7000-8000-0000000000c1",
+        "name": "Something",
+        "owner_id": "macro|user@user.com"
+    });
+    assert!(
+        UnifiedSearchIndex::from_matched(&["reminders".to_string()], source.clone()).is_err(),
+        "a hit matching no known entity clause must not be filed as some other entity"
+    );
+    assert!(
+        UnifiedSearchIndex::from_matched(&[], source).is_err(),
+        "a hit that reported no clause names at all has no discriminator"
+    );
+}
+
+#[test]
+fn calendar_hit_carries_its_title_highlight() -> anyhow::Result<()> {
+    // The highlight only arrives because the indexed title field is `name`,
+    // which is in the unified request's fixed highlight field list.
+    let hits = vec![Hit {
+        index: "calendar_events_v1".to_string(),
+        matched_queries: vec!["calendar_events".to_string()],
+        score: Some(3.1),
+        source: serde_json::json!({
+            "entity_id": "0197a863-0000-7000-8000-0000000000c1",
+            "name": "Standup",
+            "owner_id": "macro|user@user.com",
+            "source_link_id": "0197a863-0000-7000-8000-0000000000c2",
+            "ical_uid": "abc123@google.com",
+            "updated_at_millis": 1783000000000_i64
+        }),
+        highlight: Some(std::collections::HashMap::from([(
+            "name".to_string(),
+            vec!["<macro_em>Standup</macro_em>".to_string()],
+        )])),
+        inner_hits: None,
+    }];
+
+    let (hits, _) = paginate_unified_hits(hits, 10);
+    assert_eq!(hits.len(), 1);
+    assert_eq!(hits[0].entity_type, SearchEntityType::CalendarEvents);
+    assert_eq!(
+        hits[0].highlight.name.as_deref(),
+        Some("<macro_em>Standup</macro_em>")
+    );
+    Ok(())
+}
+
+#[test]
+fn an_unplaceable_hit_is_dropped_without_failing_the_page() {
+    // One good hit, one from an index we do not know. The page survives.
+    let good = Hit {
+        index: "projects_v1".to_string(),
+        matched_queries: vec!["projects".to_string()],
+        score: Some(1.0),
+        source: serde_json::json!({
+            "entity_id": "0197a863-0000-7000-8000-000000000001",
+            "name": "Mobile Redesign",
+            "owner_id": "macro|user@user.com",
+            "updated_at_millis": 1783000000000_i64
+        }),
+        highlight: None,
+        inner_hits: None,
+    };
+    let unplaceable = Hit {
+        index: "reminders_v1".to_string(),
+        matched_queries: vec!["reminders".to_string()],
+        score: Some(1.0),
+        source: serde_json::json!({ "entity_id": "0197a863-0000-7000-8000-000000000009" }),
+        highlight: None,
+        inner_hits: None,
+    };
+
+    let (hits, _) = paginate_unified_hits(vec![good, unplaceable], 10);
+    assert_eq!(hits.len(), 1, "the unplaceable hit is dropped, not fatal");
+    assert_eq!(hits[0].entity_type, SearchEntityType::Projects);
+}
+
+/// A response mixing every entity type, the way a search across all indices
+/// actually comes back. Each hit must land on its own type — this is the case
+/// the untagged enum could get wrong and the reason dispatch is explicit.
+#[test]
+fn a_mixed_response_routes_every_entity_to_its_own_type() -> anyhow::Result<()> {
+    fn hit(index: &str, matched: &str, source: serde_json::Value) -> Hit<serde_json::Value> {
+        Hit {
+            index: index.to_string(),
+            matched_queries: vec![matched.to_string()],
+            score: Some(1.0),
+            source,
+            highlight: None,
+            inner_hits: None,
+        }
+    }
+
+    let id = |n: u8| format!("0197a863-0000-7000-8000-0000000000{n:02}");
+
+    let hits = vec![
+        hit(
+            "channels_v2",
+            "channels",
+            serde_json::json!({
+                "entity_id": id(1), "channel_type": "standard", "org_id": null,
+                "message_id": id(2), "thread_id": id(2), "sender_id": "macro|a",
+                "mentions": [], "updated_at_millis": 1_783_000_000_000_i64
+            }),
+        ),
+        hit(
+            "documents_v2",
+            "documents",
+            serde_json::json!({
+                "entity_id": id(3), "document_name": "Spec", "owner_id": "macro|a",
+                "file_type": "md", "updated_at_millis": 1_783_000_000_001_i64
+            }),
+        ),
+        hit(
+            "chats_v2",
+            "chats",
+            serde_json::json!({
+                "entity_id": id(4), "user_id": "macro|a", "title": "Chat",
+                "updated_at_millis": 1_783_000_000_002_i64
+            }),
+        ),
+        hit(
+            "emails_v2",
+            "emails",
+            serde_json::json!({
+                "entity_id": id(5), "message_id": id(6), "sender": "a@x.com",
+                "recipients": ["b@x.com"], "cc": [], "bcc": [], "labels": [],
+                "link_id": id(7), "user_id": "macro|a", "subject": "Hi",
+                "sent_at_millis": 1_783_000_000_003_i64
+            }),
+        ),
+        hit(
+            "call_records_v2",
+            "call_records",
+            serde_json::json!({
+                "entity_id": id(8), "channel_id": id(9), "participant_ids": [],
+                "name": "Standup call", "started_at_millis": 1_783_000_000_004_i64
+            }),
+        ),
+        hit(
+            "projects_v1",
+            "projects",
+            serde_json::json!({
+                "entity_id": id(10), "name": "Redesign", "owner_id": "macro|a",
+                "updated_at_millis": 1_783_000_000_005_i64
+            }),
+        ),
+        hit(
+            "calendar_events_v1",
+            "calendar_events",
+            serde_json::json!({
+                "entity_id": id(11), "name": "Standup", "owner_id": "macro|a",
+                "source_link_id": id(12), "ical_uid": "abc@google.com",
+                "updated_at_millis": 1_783_000_000_006_i64
+            }),
+        ),
+    ];
+
+    let (results, _) = paginate_unified_hits(hits, 50);
+
+    // Every hit survived: none was dropped as unplaceable.
+    assert_eq!(results.len(), 7, "got {results:?}");
+
+    let by_id: std::collections::HashMap<uuid::Uuid, SearchEntityType> = results
+        .iter()
+        .map(|hit| (hit.entity_id, hit.entity_type.clone()))
+        .collect();
+    for (n, expected) in [
+        (1u8, SearchEntityType::Channels),
+        (3, SearchEntityType::Documents),
+        (4, SearchEntityType::Chats),
+        (5, SearchEntityType::Emails),
+        (8, SearchEntityType::CallRecords),
+        (10, SearchEntityType::Projects),
+        (11, SearchEntityType::CalendarEvents),
+    ] {
+        let entity_id = id(n).parse::<uuid::Uuid>()?;
+        assert_eq!(
+            by_id.get(&entity_id),
+            Some(&expected),
+            "entity {n} routed to the wrong type"
+        );
+    }
+
+    // The downstream split must bucket them the same way.
+    let split = results.into_iter().split_search_response();
+    assert_eq!(split.channel_message.len(), 1);
+    assert_eq!(split.document.len(), 1);
+    assert_eq!(split.chat.len(), 1);
+    assert_eq!(split.email.len(), 1);
+    assert_eq!(split.call_record.len(), 1);
+    assert_eq!(split.project.len(), 1);
+    assert_eq!(split.calendar_event.len(), 1);
+    Ok(())
+}
+
+/// Searching every index must name every clause, or a hit from an unnamed one
+/// would come back with no discriminator and be dropped.
+#[test]
+fn every_searched_index_contributes_a_named_clause() -> anyhow::Result<()> {
+    use strum::IntoEnumIterator as _;
+
+    let args = UnifiedSearchArgs {
+        search_indices: OpenSearchEntityType::iter().collect(),
+        user_id: "user".to_string(),
+        page_size: 10,
+        match_type: "exact".to_string(),
+        document_search_args: UnifiedDocumentSearchArgs {
+            terms: vec!["test".to_string()],
+            ..Default::default()
+        },
+        email_search_args: UnifiedEmailSearchArgs {
+            terms: vec!["test".to_string()],
+            ..Default::default()
+        },
+        channel_message_search_args: UnifiedChannelMessageSearchArgs {
+            terms: vec!["test".to_string()],
+            channel_ids: vec!["c1".to_string()],
+            ..Default::default()
+        },
+        chat_search_args: UnifiedChatSearchArgs {
+            terms: vec!["test".to_string()],
+            ..Default::default()
+        },
+        call_record_search_args: UnifiedCallRecordSearchArgs {
+            terms: vec!["test".to_string()],
+            call_ids: vec!["r1".to_string()],
+            ids_only: true,
+            ..Default::default()
+        },
+        project_search_args: UnifiedProjectSearchArgs {
+            terms: vec!["test".to_string()],
+            ..Default::default()
+        },
+        calendar_event_search_args: UnifiedCalendarEventSearchArgs {
+            terms: vec!["test".to_string()],
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+
+    let json = build_unified_search_request(&args)?.to_json();
+    let should = json["query"]["bool"]["should"]
+        .as_array()
+        .expect("a should clause per searched index");
+
+    let names: std::collections::HashSet<&str> = should
+        .iter()
+        .filter_map(|clause| clause["bool"]["_name"].as_str())
+        .collect();
+
+    for entity in OpenSearchEntityType::iter() {
+        assert!(
+            names.contains(entity.query_name()),
+            "{} contributed an unnamed clause; its hits would be undispatchable",
+            entity.query_name()
+        );
+    }
+    assert_eq!(
+        names.len(),
+        should.len(),
+        "every should clause must be named, got {names:?} across {} clauses",
+        should.len()
+    );
+    Ok(())
+}
+
+#[test]
 fn project_hit_deserializes_and_converts() -> anyhow::Result<()> {
-    // A project doc as the flat projects index returns it. With the untagged
-    // UnifiedSearchIndex enum the Project variant must win: no other variant's
-    // required fields (document_name, title, message_id, channel_id, …) are
-    // present in a project _source.
+    // A project doc as the flat projects index returns it, parsed the way the
+    // client parses a real response: raw `_source`, then dispatched on
+    // `_index`.
     let json = serde_json::json!({
       "took": 3,
       "timed_out": false,
@@ -1054,6 +1366,7 @@ fn project_hit_deserializes_and_converts() -> anyhow::Result<()> {
                 { "definition_id": "0197a863-0000-7000-8000-00000000000a", "values": ["opt-1"] }
               ]
             },
+            "matched_queries": ["projects"],
             "highlight": {
               "name": ["<macro_em>Mobile</macro_em> Redesign"]
             }
@@ -1062,10 +1375,13 @@ fn project_hit_deserializes_and_converts() -> anyhow::Result<()> {
       }
     });
 
-    let result: DefaultSearchResponse<UnifiedSearchIndex> = serde_json::from_value(json)?;
+    let result: DefaultSearchResponse<serde_json::Value> = serde_json::from_value(json)?;
     assert_eq!(result.hits.hits.len(), 1);
     assert!(matches!(
-        result.hits.hits[0].source,
+        UnifiedSearchIndex::from_matched(
+            &result.hits.hits[0].matched_queries,
+            result.hits.hits[0].source.clone()
+        )?,
         UnifiedSearchIndex::Project(_)
     ));
 

@@ -28,7 +28,7 @@ fn embedded_assets_select_their_consumers() {
     let filter = compute_filter(&graph, "static_assets/schema.graphql\n").unwrap();
     assert_eq!(
         filter,
-        "rdeps(=cache-core)|rdeps(=complete_graph)|rdeps(=documents)|rdeps(=seed_cli)|rdeps(=xtask_workflows)"
+        "rdeps(=cache-core)|rdeps(=collab_surface)|rdeps(=complete_graph)|rdeps(=documents)|rdeps(=seed_cli)|rdeps(=xtask_workflows)"
     );
 
     let mixed = compute_filter(
@@ -38,7 +38,7 @@ fn embedded_assets_select_their_consumers() {
     .unwrap();
     assert_eq!(
         mixed,
-        "rdeps(=cache-core)|rdeps(=complete_graph)|rdeps(=documents)|rdeps(=email_validator)|rdeps(=seed_cli)|rdeps(=xtask_workflows)"
+        "rdeps(=cache-core)|rdeps(=collab_surface)|rdeps(=complete_graph)|rdeps(=documents)|rdeps(=email_validator)|rdeps(=seed_cli)|rdeps(=xtask_workflows)"
     );
 }
 

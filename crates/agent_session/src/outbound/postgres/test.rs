@@ -1,4 +1,5 @@
 use super::*;
+use crate::domain::model::DEFAULT_AGENT_SESSION_NAME;
 use agent_client_protocol::RawJsonRpcMessage;
 use agent_runtime_protocol::domain::schema::v0::{AcpMessage, SystemEvent};
 use bots::domain::models::{BotOwner, CreateBotRequest};
@@ -67,6 +68,7 @@ async fn create_test_bot(pool: &PgPool) -> BotId {
                 handle: format!("test-agent-{}", macro_uuid::generate_uuid_v7()),
                 description: None,
                 avatar_url: None,
+                has_agent: None,
             },
         )
         .await
@@ -87,7 +89,9 @@ fn new_session(
         originating_message_id,
         model: "claude-sonnet-5".to_string(),
         harness: "claude-code".to_string(),
-        repo_url: "https://github.com/example/example".to_string(),
+        repo_url: Some("https://github.com/example/example".to_string()),
+        workspace: "/workspace".to_string(),
+        sandbox_size: SandboxSize::Default,
     }
 }
 
@@ -175,12 +179,14 @@ async fn create_and_get_round_trips(pool: PgPool) {
     assert_eq!(created.created_at, session.created_at);
     assert_eq!(created.modified_at, session.modified_at);
     assert_eq!(session.id, id);
+    assert_eq!(session.name, DEFAULT_AGENT_SESSION_NAME);
     assert_eq!(session.bot_id, bot_id);
     assert_eq!(
         session.owner_id.to_string(),
         "macro|agent-session-owner@example.com"
     );
     assert_eq!(session.thread_id, None);
+    assert_eq!(session.sandbox_size, SandboxSize::Default);
     assert!(matches!(session.status, SessionStatus::NoMessages));
 }
 
@@ -198,7 +204,10 @@ async fn set_acp_session_id_updates_only_the_resume_identity(pool: PgPool) {
         .expect("persist ACP session id");
 
     let updated = repo.get(id).await.expect("get updated agent session");
-    assert_eq!(updated.acp_session_id.as_deref(), Some("acp-session-1"));
+    assert_eq!(
+        updated.acp_session_id,
+        Some(SessionId::from("acp-session-1"))
+    );
     assert!(matches!(
         updated.status,
         SessionStatus::Event(SystemEvent::AcpReady)
@@ -222,6 +231,111 @@ async fn set_model_updates_only_the_model(pool: PgPool) {
     assert_eq!(
         repo.get(id).await.expect("get session").modified_at,
         modified_at
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn set_name_updates_only_the_name(pool: PgPool) {
+    let repo = PgAgentSessionRepo::new(pool.clone());
+    let bot_id = create_test_bot(&pool).await;
+    let id = create_session(&repo, new_session(bot_id, None, None))
+        .await
+        .id;
+
+    repo.set_name(id, "Fix Flaky Tests")
+        .await
+        .expect("persist name");
+    assert_eq!(
+        repo.get(id).await.expect("get session").name,
+        "Fix Flaky Tests"
+    );
+
+    let modified_at = repo.get(id).await.expect("get session").modified_at;
+    repo.set_name(id, "Fix Flaky Tests")
+        .await
+        .expect("restate name");
+    assert_eq!(
+        repo.get(id).await.expect("get session").modified_at,
+        modified_at
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn set_name_errors_for_missing_session(pool: PgPool) {
+    let repo = PgAgentSessionRepo::new(pool);
+
+    assert!(
+        repo.set_name(AgentSessionId::new(), "Missing Session")
+            .await
+            .is_err()
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn generated_name_only_replaces_the_default(pool: PgPool) {
+    let repo = PgAgentSessionRepo::new(pool.clone());
+    let bot_id = create_test_bot(&pool).await;
+    let id = create_session(&repo, new_session(bot_id, None, None))
+        .await
+        .id;
+
+    assert!(
+        repo.set_name_if_default(id, "Generated Name")
+            .await
+            .expect("set generated name")
+    );
+    repo.set_name(id, "Manual Name")
+        .await
+        .expect("set manual name");
+    assert!(
+        !repo
+            .set_name_if_default(id, "Late Generated Name")
+            .await
+            .expect("skip generated name")
+    );
+    assert_eq!(repo.get(id).await.expect("get session").name, "Manual Name");
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn sandbox_size_round_trips_and_user_default_falls_back(pool: PgPool) {
+    let repo = PgAgentSessionRepo::new(pool.clone());
+    let bot_id = create_test_bot(&pool).await;
+    let owner = user_id(OWNER);
+    let id = create_session(&repo, new_session(bot_id, None, None))
+        .await
+        .id;
+
+    assert_eq!(
+        repo.user_sandbox_size(&owner)
+            .await
+            .expect("missing default"),
+        SandboxSize::Default
+    );
+
+    repo.set_sandbox_size(id, SandboxSize::Large)
+        .await
+        .expect("persist session size");
+    assert_eq!(
+        repo.get(id).await.expect("get session").sandbox_size,
+        SandboxSize::Large
+    );
+
+    repo.set_user_sandbox_size(&owner, SandboxSize::Small)
+        .await
+        .expect("persist user default");
+    assert_eq!(
+        repo.user_sandbox_size(&owner).await.expect("user default"),
+        SandboxSize::Small
+    );
+
+    repo.set_user_sandbox_size(&owner, SandboxSize::Large)
+        .await
+        .expect("upsert user default");
+    assert_eq!(
+        repo.user_sandbox_size(&owner)
+            .await
+            .expect("upserted default"),
+        SandboxSize::Large
     );
 }
 
@@ -317,7 +431,7 @@ async fn find_for_channel_matches_the_originating_thread_and_bot(pool: PgPool) {
     let repo = PgAgentSessionRepo::new(pool.clone());
     let bot_a = create_test_bot(&pool).await;
     let bot_b = create_test_bot(&pool).await;
-    let (_originating_channel, thread, originating_message) =
+    let (originating_channel, thread, originating_message) =
         insert_originating_thread_fixture(&pool).await;
 
     let session = create_session(
@@ -325,6 +439,9 @@ async fn find_for_channel_matches_the_originating_thread_and_bot(pool: PgPool) {
         new_session(bot_b, Some(thread), Some(originating_message)),
     )
     .await;
+    // The create response must already resolve the thread's channel: linked
+    // -thread navigation renders from this row without a second lookup.
+    assert_eq!(session.thread_channel_id, Some(originating_channel));
     // A session from some other context must not shadow the lookup.
     create_session(&repo, new_session(bot_a, None, None)).await;
 
@@ -337,6 +454,7 @@ async fn find_for_channel_matches_the_originating_thread_and_bot(pool: PgPool) {
     };
     assert_eq!(matched.id, session.id);
     assert_eq!(matched.originating_message_id, Some(originating_message));
+    assert_eq!(matched.thread_channel_id, Some(originating_channel));
 
     let wrong_bot = repo
         .find_for_channel(Some(thread), Some(bot_a))

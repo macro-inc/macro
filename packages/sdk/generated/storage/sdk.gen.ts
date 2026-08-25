@@ -2,7 +2,7 @@
 
 import type { Client, ClientMeta, Options as Options2, RequestResult, TDataShape } from './client';
 import { client } from './client.gen';
-import type { AddFavoriteData, AddFavoriteErrors, AddFavoriteResponses, AddParticipantsData, AddParticipantsErrors, AddParticipantsResponses, AddPinHandlerData, AddPinHandlerErrors, AddPinHandlerResponses, BulkWakeupSyncServiceDocumentsData, BulkWakeupSyncServiceDocumentsErrors, BulkWakeupSyncServiceDocumentsResponses, CallWebhookData, CallWebhookErrors, CallWebhookResponses, CheckActiveCallData, CheckActiveCallErrors, CheckActiveCallResponses, CopyDocumentData, CopyDocumentErrors, CopyDocumentResponses, CreateAnchorData, CreateAnchorErrors, CreateAnchorResponses, CreateChannelData, CreateChannelErrors, CreateChannelResponses, CreateChannelScopedBotData, CreateChannelScopedBotErrors, CreateChannelScopedBotResponses, CreateCommentData, CreateCommentErrors, CreateCommentResponses, CreateCrmCommentData, CreateCrmCommentErrors, CreateCrmCommentResponses, CreateCrmCompanyData, CreateCrmCompanyErrors, CreateCrmCompanyResponses, CreateCrmContactData, CreateCrmContactErrors, CreateCrmContactResponses, CreateDocumentData, CreateDocumentErrors, CreateDocumentResponses, CreateEntityMentionData, CreateEntityMentionErrors, CreateEntityMentionResponses, CreateInstructionsHandlerData, CreateInstructionsHandlerErrors, CreateInstructionsHandlerResponses, CreateMarkdownHandlerData, CreateMarkdownHandlerErrors, CreateMarkdownHandlerResponses, CreateProjectHandlerData, CreateProjectHandlerErrors, CreateProjectHandlerResponses, CreateReminderData, CreateReminderErrors, CreateReminderResponses, CreateSkillHandlerData, CreateSkillHandlerErrors, CreateSkillHandlerResponses, CreateSnippetHandlerData, CreateSnippetHandlerErrors, CreateSnippetHandlerResponses, CreateTaskHandlerData, CreateTaskHandlerErrors, CreateTaskHandlerResponses, CreateViewHandlerData, CreateViewHandlerErrors, CreateViewHandlerResponses, CreateWebhookData, CreateWebhookErrors, CreateWebhookResponses, DeleteAnchorData, DeleteAnchorErrors, DeleteAnchorResponses, DeleteCallRecordData, DeleteCallRecordErrors, DeleteCallRecordResponses, DeleteChannelData, DeleteChannelErrors, DeleteChannelResponses, DeleteCommentData, DeleteCommentErrors, DeleteCommentResponses, DeleteCrmCommentData, DeleteCrmCommentErrors, DeleteCrmCommentResponses, DeleteDocumentData, DeleteDocumentErrors, DeleteDocumentResponses, DeleteEntityMentionData, DeleteEntityMentionErrors, DeleteEntityMentionResponses, DeleteHistoryHandlerData, DeleteHistoryHandlerErrors, DeleteHistoryHandlerResponses, DeleteMessageData, DeleteMessageErrors, DeleteMessageResponses, DeleteProjectHandlerData, DeleteProjectHandlerErrors, DeleteProjectHandlerResponses, DeleteReminderData, DeleteReminderErrors, DeleteReminderResponses, DeleteUserDocumentViewLocationData, DeleteUserDocumentViewLocationErrors, DeleteUserDocumentViewLocationResponses, DeleteViewHandlerData, DeleteViewHandlerErrors, DeleteViewHandlerResponses, DeleteWebhookData, DeleteWebhookErrors, DeleteWebhookResponses, EditAnchorData, EditAnchorErrors, EditAnchorResponses, EditCallRecordData, EditCallRecordErrors, EditCallRecordResponses, EditCallTranscriptData, EditCallTranscriptErrors, EditCallTranscriptResponses, EditCommentData, EditCommentErrors, EditCommentResponses, EditCrmCommentData, EditCrmCommentErrors, EditCrmCommentResponses, EditDocumentData, EditDocumentErrors, EditDocumentResponses, EditProjectV2Data, EditProjectV2Errors, EditProjectV2Responses, EditThreadV2Data, EditThreadV2Errors, EditThreadV2Responses, ExcludeDefaultViewHandlerData, ExcludeDefaultViewHandlerErrors, ExcludeDefaultViewHandlerResponses, ExportDocumentData, ExportDocumentErrors, ExportDocumentResponses, GetActivityData, GetActivityErrors, GetActivityResponses, GetAttachmentReferencesData, GetAttachmentReferencesErrors, GetAttachmentReferencesResponses, GetBatchCallRecordPreviewData, GetBatchCallRecordPreviewErrors, GetBatchCallRecordPreviewResponses, GetBatchChannelPreviewData, GetBatchChannelPreviewErrors, GetBatchChannelPreviewResponses, GetBatchPreviewHandlerData, GetBatchPreviewHandlerErrors, GetBatchPreviewHandlerResponses, GetBatchProjectPreviewData, GetBatchProjectPreviewErrors, GetBatchProjectPreviewResponses, GetCallRecordData, GetCallRecordErrors, GetCallRecordResponses, GetChannelAttachmentsData, GetChannelAttachmentsErrors, GetChannelAttachmentsResponses, GetChannelData, GetChannelErrors, GetChannelJoinLinkData, GetChannelJoinLinkErrors, GetChannelJoinLinkResponses, GetChannelMessagesData, GetChannelMessagesErrors, GetChannelMessagesResponses, GetChannelParticipantsData, GetChannelParticipantsErrors, GetChannelParticipantsResponses, GetChannelResponses, GetChannelsData, GetChannelsErrors, GetChannelsResponses, GetCompanyData, GetCompanyErrors, GetCompanyResponses, GetContactData, GetContactErrors, GetContactResponses, GetCrmTeamSettingsData, GetCrmTeamSettingsErrors, GetCrmTeamSettingsResponses, GetDocumentAnchorsData, GetDocumentAnchorsErrors, GetDocumentAnchorsResponses, GetDocumentBranchNameData, GetDocumentBranchNameErrors, GetDocumentBranchNameResponses, GetDocumentByTeamSlugData, GetDocumentByTeamSlugErrors, GetDocumentByTeamSlugResponses, GetDocumentCommentsData, GetDocumentCommentsErrors, GetDocumentCommentsResponses, GetDocumentData, GetDocumentErrors, GetDocumentGithubPullRequestsData, GetDocumentGithubPullRequestsErrors, GetDocumentGithubPullRequestsResponses, GetDocumentListHandlerData, GetDocumentListHandlerErrors, GetDocumentListHandlerResponses, GetDocumentLocationV3Data, GetDocumentLocationV3Errors, GetDocumentLocationV3Responses, GetDocumentPermissionsTokenData, GetDocumentPermissionsTokenErrors, GetDocumentPermissionsTokenResponses, GetDocumentPermissionsV2Data, GetDocumentPermissionsV2Errors, GetDocumentPermissionsV2Responses, GetDocumentProcessingResultData, GetDocumentProcessingResultErrors, GetDocumentProcessingResultResponses, GetDocumentResponses, GetDocumentShortIdData, GetDocumentShortIdErrors, GetDocumentShortIdResponses, GetDocumentTeamShareData, GetDocumentTeamShareErrors, GetDocumentTeamShareResponses, GetDocumentVersionData, GetDocumentVersionErrors, GetDocumentVersionResponses, GetDocumentViewsHandlerData, GetDocumentViewsHandlerErrors, GetDocumentViewsHandlerResponses, GetEntityPermissionData, GetEntityPermissionErrors, GetEntityPermissionResponses, GetForeignEntityData, GetForeignEntityErrors, GetForeignEntityResponses, GetHistoryHandlerData, GetHistoryHandlerErrors, GetHistoryHandlerResponses, GetInstructionsHandlerData, GetInstructionsHandlerErrors, GetInstructionsHandlerResponses, GetItemsSoupData, GetItemsSoupErrors, GetItemsSoupResponses, GetLocationHandlerData, GetLocationHandlerErrors, GetLocationHandlerResponses, GetMessageWithContextData, GetMessageWithContextErrors, GetMessageWithContextResponses, GetOrCreateCallData, GetOrCreateCallErrors, GetOrCreateCallResponses, GetOrCreateDmData, GetOrCreateDmErrors, GetOrCreateDmResponses, GetOrCreatePrivateData, GetOrCreatePrivateErrors, GetOrCreatePrivateResponses, GetPendingProjectsHandlerData, GetPendingProjectsHandlerErrors, GetPendingProjectsHandlerResponses, GetPinsHandlerData, GetPinsHandlerErrors, GetPinsHandlerResponses, GetProjectContentHandlerData, GetProjectContentHandlerErrors, GetProjectContentHandlerResponses, GetProjectHandlerData, GetProjectHandlerErrors, GetProjectHandlerResponses, GetProjectPermissionsV2Data, GetProjectPermissionsV2Errors, GetProjectPermissionsV2Responses, GetProjectsHandlerData, GetProjectsHandlerErrors, GetProjectsHandlerResponses, GetProjectUserAccessLevelData, GetProjectUserAccessLevelErrors, GetProjectUserAccessLevelResponses, GetReminderData, GetReminderErrors, GetReminderResponses, GetRingStatusData, GetRingStatusErrors, GetRingStatusResponses, GetSelfBotData, GetSelfBotErrors, GetSelfBotResponses, GetSystemSkillsHandlerData, GetSystemSkillsHandlerErrors, GetSystemSkillsHandlerResponses, GetThreadRepliesData, GetThreadRepliesErrors, GetThreadRepliesResponses, GetUserDocumentsHandlerData, GetUserDocumentsHandlerErrors, GetUserDocumentsHandlerResponses, GetUserDocumentViewLocationData, GetUserDocumentViewLocationErrors, GetUserDocumentViewLocationResponses, GetViewsHandlerData, GetViewsHandlerErrors, GetViewsHandlerResponses, GetWebhookData, GetWebhookErrors, GetWebhookResponses, HandlerData, HandlerErrors, HandlerResponses, HealthHandlerData, HealthHandlerResponses, IngestTranscriptData, IngestTranscriptErrors, IngestTranscriptResponses, InitializeUserDocumentsData, InitializeUserDocumentsErrors, InitializeUserDocumentsResponses, InstallSyncData, InstallSyncErrors, JobProcessingResultHandlerData, JobProcessingResultHandlerErrors, JobProcessingResultHandlerResponses, JoinChannelByCodeData, JoinChannelByCodeErrors, JoinChannelByCodeResponses, JoinChannelData, JoinChannelErrors, JoinChannelResponses, LeaveChannelData, LeaveChannelErrors, LeaveChannelResponses, LeaveOrEndCallData, LeaveOrEndCallErrors, LeaveOrEndCallResponses, ListBotChannelsData, ListBotChannelsErrors, ListBotChannelsResponses, ListCompanyContactsData, ListCompanyContactsErrors, ListCompanyContactsResponses, ListCrmCommentsData, ListCrmCommentsErrors, ListCrmCommentsResponses, ListFavoritesData, ListFavoritesErrors, ListFavoritesResponses, ListOccurrencesData, ListOccurrencesErrors, ListOccurrencesResponses, ListRemindersData, ListRemindersErrors, ListRemindersResponses, ListWebhooksData, ListWebhooksErrors, ListWebhooksResponses, MentionPreviewsData, MentionPreviewsErrors, MentionPreviewsResponses, PatchChannelData, PatchChannelErrors, PatchChannelResponses, PatchMessageData, PatchMessageErrors, PatchMessageResponses, PatchViewHandlerData, PatchViewHandlerErrors, PatchViewHandlerResponses, PatchWebhookData, PatchWebhookErrors, PatchWebhookResponses, PermanentlyDeleteDocumentData, PermanentlyDeleteDocumentErrors, PermanentlyDeleteDocumentResponses, PermanentlyDeleteProjectData, PermanentlyDeleteProjectErrors, PermanentlyDeleteProjectResponses, PostActivityData, PostActivityErrors, PostActivityResponses, PostChannelBotWebhookData, PostChannelBotWebhookErrors, PostChannelBotWebhookResponses, PostChannelMessagesData, PostChannelMessagesErrors, PostChannelMessagesResponses, PostItemsSoupAstData, PostItemsSoupAstErrors, PostItemsSoupAstGroupedData, PostItemsSoupAstGroupedErrors, PostItemsSoupAstGroupedResponses, PostItemsSoupAstResponses, PostItemsSoupData, PostItemsSoupErrors, PostItemsSoupResponses, PostMessageData, PostMessageErrors, PostMessageResponses, PostReactionData, PostReactionErrors, PostReactionResponses, PostTypingData, PostTypingErrors, PostTypingResponses, PresaveDocumentHandlerData, PresaveDocumentHandlerErrors, PresaveDocumentHandlerResponses, PutCrmTeamSettingsData, PutCrmTeamSettingsErrors, PutCrmTeamSettingsResponses, RecentlyDeletedData, RecentlyDeletedErrors, RecentlyDeletedResponses, RemoveBotFromChannelByBotData, RemoveBotFromChannelByBotErrors, RemoveBotFromChannelByBotResponses, RemoveFavoriteByEntityData, RemoveFavoriteByEntityErrors, RemoveFavoriteByEntityResponses, RemoveParticipantsData, RemoveParticipantsErrors, RemoveParticipantsResponses, RemovePinHandlerData, RemovePinHandlerErrors, RemovePinHandlerResponses, ReorderFavoritesData, ReorderFavoritesErrors, ReorderFavoritesResponses, ReorderPinsHandlerData, ReorderPinsHandlerErrors, ReorderPinsHandlerResponses, ResolveChannelMessageData, ResolveChannelMessageErrors, ResolveChannelMessageResponses, RevertDeleteDocumentData, RevertDeleteDocumentErrors, RevertDeleteDocumentResponses, RevertDeleteProjectData, RevertDeleteProjectErrors, RevertDeleteProjectResponses, SaveDocumentHandlerData, SaveDocumentHandlerErrors, SaveDocumentHandlerResponses, SetCompanyHiddenData, SetCompanyHiddenErrors, SetCompanyHiddenResponses, SetContactHiddenData, SetContactHiddenErrors, SetContactHiddenResponses, SetCrmCompanyNameData, SetCrmCompanyNameErrors, SetCrmCompanyNameResponses, SetCrmContactNameData, SetCrmContactNameErrors, SetCrmContactNameResponses, SetDocumentTeamShareData, SetDocumentTeamShareErrors, SetDocumentTeamShareResponses, SetEmailSyncData, SetEmailSyncErrors, SetEmailSyncResponses, SimpleSaveData, SimpleSaveErrors, SimpleSaveResponses, ToggleShareWithTeamData, ToggleShareWithTeamErrors, ToggleShareWithTeamResponses, UpdateReminderData, UpdateReminderErrors, UpdateReminderResponses, UploadExtractFolderHandlerData, UploadExtractFolderHandlerErrors, UploadExtractFolderHandlerResponses, UploadFolderHandlerData, UploadFolderHandlerErrors, UploadFolderHandlerResponses, UpsertHistoryHandlerData, UpsertHistoryHandlerErrors, UpsertHistoryHandlerResponses, UpsertUserDocumentViewLocationData, UpsertUserDocumentViewLocationErrors, UpsertUserDocumentViewLocationResponses, ValidateDocumentPermissionsTokenData, ValidateDocumentPermissionsTokenErrors, ValidateDocumentPermissionsTokenResponses, ValidateWebhookData, ValidateWebhookErrors, ValidateWebhookResponses } from './types.gen';
+import type { AddFavoriteData, AddFavoriteErrors, AddFavoriteResponses, AddParticipantsData, AddParticipantsErrors, AddParticipantsResponses, AddPinHandlerData, AddPinHandlerErrors, AddPinHandlerResponses, BulkWakeupSyncServiceDocumentsData, BulkWakeupSyncServiceDocumentsErrors, BulkWakeupSyncServiceDocumentsResponses, CallWebhookData, CallWebhookErrors, CallWebhookResponses, CheckActiveCallData, CheckActiveCallErrors, CheckActiveCallResponses, CopyDocumentData, CopyDocumentErrors, CopyDocumentResponses, CreateAnchorData, CreateAnchorErrors, CreateAnchorResponses, CreateChannelData, CreateChannelErrors, CreateChannelResponses, CreateChannelScopedBotData, CreateChannelScopedBotErrors, CreateChannelScopedBotResponses, CreateCollabSurfaceTokenData, CreateCollabSurfaceTokenErrors, CreateCollabSurfaceTokenResponses, CreateCommentData, CreateCommentErrors, CreateCommentResponses, CreateCrmCommentData, CreateCrmCommentErrors, CreateCrmCommentResponses, CreateCrmCompanyData, CreateCrmCompanyErrors, CreateCrmCompanyResponses, CreateCrmContactData, CreateCrmContactErrors, CreateCrmContactResponses, CreateDocumentData, CreateDocumentErrors, CreateDocumentResponses, CreateEntityMentionData, CreateEntityMentionErrors, CreateEntityMentionResponses, CreateInstructionsHandlerData, CreateInstructionsHandlerErrors, CreateInstructionsHandlerResponses, CreateMarkdownHandlerData, CreateMarkdownHandlerErrors, CreateMarkdownHandlerResponses, CreateProjectHandlerData, CreateProjectHandlerErrors, CreateProjectHandlerResponses, CreateReminderData, CreateReminderErrors, CreateReminderResponses, CreateSkillHandlerData, CreateSkillHandlerErrors, CreateSkillHandlerResponses, CreateSnippetHandlerData, CreateSnippetHandlerErrors, CreateSnippetHandlerResponses, CreateTaskHandlerData, CreateTaskHandlerErrors, CreateTaskHandlerResponses, CreateViewHandlerData, CreateViewHandlerErrors, CreateViewHandlerResponses, CreateWebhookData, CreateWebhookErrors, CreateWebhookResponses, DeleteAnchorData, DeleteAnchorErrors, DeleteAnchorResponses, DeleteCallRecordData, DeleteCallRecordErrors, DeleteCallRecordResponses, DeleteChannelData, DeleteChannelErrors, DeleteChannelResponses, DeleteCollabSurfaceData, DeleteCollabSurfaceErrors, DeleteCollabSurfaceResponses, DeleteCommentData, DeleteCommentErrors, DeleteCommentResponses, DeleteCrmCommentData, DeleteCrmCommentErrors, DeleteCrmCommentResponses, DeleteDocumentData, DeleteDocumentErrors, DeleteDocumentResponses, DeleteEntityMentionData, DeleteEntityMentionErrors, DeleteEntityMentionResponses, DeleteHistoryHandlerData, DeleteHistoryHandlerErrors, DeleteHistoryHandlerResponses, DeleteMessageData, DeleteMessageErrors, DeleteMessageResponses, DeleteProjectHandlerData, DeleteProjectHandlerErrors, DeleteProjectHandlerResponses, DeleteReminderData, DeleteReminderErrors, DeleteReminderResponses, DeleteUserDocumentViewLocationData, DeleteUserDocumentViewLocationErrors, DeleteUserDocumentViewLocationResponses, DeleteViewHandlerData, DeleteViewHandlerErrors, DeleteViewHandlerResponses, DeleteWebhookData, DeleteWebhookErrors, DeleteWebhookResponses, EditAnchorData, EditAnchorErrors, EditAnchorResponses, EditCallRecordData, EditCallRecordErrors, EditCallRecordResponses, EditCallTranscriptData, EditCallTranscriptErrors, EditCallTranscriptResponses, EditCommentData, EditCommentErrors, EditCommentResponses, EditCrmCommentData, EditCrmCommentErrors, EditCrmCommentResponses, EditDocumentData, EditDocumentErrors, EditDocumentResponses, EditProjectV2Data, EditProjectV2Errors, EditProjectV2Responses, EditThreadV2Data, EditThreadV2Errors, EditThreadV2Responses, EnsureCollabSurfaceData, EnsureCollabSurfaceErrors, EnsureCollabSurfaceResponses, ExcludeDefaultViewHandlerData, ExcludeDefaultViewHandlerErrors, ExcludeDefaultViewHandlerResponses, ExportDocumentData, ExportDocumentErrors, ExportDocumentResponses, GetActiveCallsData, GetActiveCallsErrors, GetActiveCallsResponses, GetActivityData, GetActivityErrors, GetActivityResponses, GetAttachmentReferencesData, GetAttachmentReferencesErrors, GetAttachmentReferencesResponses, GetBatchCallRecordPreviewData, GetBatchCallRecordPreviewErrors, GetBatchCallRecordPreviewResponses, GetBatchChannelPreviewData, GetBatchChannelPreviewErrors, GetBatchChannelPreviewResponses, GetBatchPreviewHandlerData, GetBatchPreviewHandlerErrors, GetBatchPreviewHandlerResponses, GetBatchProjectPreviewData, GetBatchProjectPreviewErrors, GetBatchProjectPreviewResponses, GetCallRecordData, GetCallRecordErrors, GetCallRecordResponses, GetChannelAttachmentsData, GetChannelAttachmentsErrors, GetChannelAttachmentsResponses, GetChannelData, GetChannelErrors, GetChannelJoinLinkData, GetChannelJoinLinkErrors, GetChannelJoinLinkResponses, GetChannelMessagesData, GetChannelMessagesErrors, GetChannelMessagesResponses, GetChannelParticipantsData, GetChannelParticipantsErrors, GetChannelParticipantsResponses, GetChannelResponses, GetChannelsData, GetChannelsErrors, GetChannelsResponses, GetCollabSurfaceData, GetCollabSurfaceErrors, GetCollabSurfaceResponses, GetCompanyData, GetCompanyErrors, GetCompanyResponses, GetContactByEmailData, GetContactByEmailErrors, GetContactByEmailResponses, GetContactData, GetContactErrors, GetContactResponses, GetCrmTeamSettingsData, GetCrmTeamSettingsErrors, GetCrmTeamSettingsResponses, GetDocumentAnchorsData, GetDocumentAnchorsErrors, GetDocumentAnchorsResponses, GetDocumentBranchNameData, GetDocumentBranchNameErrors, GetDocumentBranchNameResponses, GetDocumentByTeamSlugData, GetDocumentByTeamSlugErrors, GetDocumentByTeamSlugResponses, GetDocumentCommentsData, GetDocumentCommentsErrors, GetDocumentCommentsResponses, GetDocumentData, GetDocumentErrors, GetDocumentGithubPullRequestsData, GetDocumentGithubPullRequestsErrors, GetDocumentGithubPullRequestsResponses, GetDocumentListHandlerData, GetDocumentListHandlerErrors, GetDocumentListHandlerResponses, GetDocumentLocationV3Data, GetDocumentLocationV3Errors, GetDocumentLocationV3Responses, GetDocumentPermissionsTokenData, GetDocumentPermissionsTokenErrors, GetDocumentPermissionsTokenResponses, GetDocumentPermissionsV2Data, GetDocumentPermissionsV2Errors, GetDocumentPermissionsV2Responses, GetDocumentProcessingResultData, GetDocumentProcessingResultErrors, GetDocumentProcessingResultResponses, GetDocumentResponses, GetDocumentShortIdData, GetDocumentShortIdErrors, GetDocumentShortIdResponses, GetDocumentTeamShareData, GetDocumentTeamShareErrors, GetDocumentTeamShareResponses, GetDocumentVersionData, GetDocumentVersionErrors, GetDocumentVersionResponses, GetDocumentViewsHandlerData, GetDocumentViewsHandlerErrors, GetDocumentViewsHandlerResponses, GetEntityPermissionData, GetEntityPermissionErrors, GetEntityPermissionResponses, GetForeignEntityData, GetForeignEntityErrors, GetForeignEntityResponses, GetHistoryHandlerData, GetHistoryHandlerErrors, GetHistoryHandlerResponses, GetInstructionsHandlerData, GetInstructionsHandlerErrors, GetInstructionsHandlerResponses, GetItemsSoupData, GetItemsSoupErrors, GetItemsSoupResponses, GetLocationHandlerData, GetLocationHandlerErrors, GetLocationHandlerResponses, GetMessageWithContextData, GetMessageWithContextErrors, GetMessageWithContextResponses, GetOrCreateCallData, GetOrCreateCallErrors, GetOrCreateCallResponses, GetOrCreateDmData, GetOrCreateDmErrors, GetOrCreateDmResponses, GetOrCreatePrivateData, GetOrCreatePrivateErrors, GetOrCreatePrivateResponses, GetPendingProjectsHandlerData, GetPendingProjectsHandlerErrors, GetPendingProjectsHandlerResponses, GetPinsHandlerData, GetPinsHandlerErrors, GetPinsHandlerResponses, GetProjectContentHandlerData, GetProjectContentHandlerErrors, GetProjectContentHandlerResponses, GetProjectHandlerData, GetProjectHandlerErrors, GetProjectHandlerResponses, GetProjectPermissionsV2Data, GetProjectPermissionsV2Errors, GetProjectPermissionsV2Responses, GetProjectsHandlerData, GetProjectsHandlerErrors, GetProjectsHandlerResponses, GetProjectUserAccessLevelData, GetProjectUserAccessLevelErrors, GetProjectUserAccessLevelResponses, GetReminderData, GetReminderErrors, GetReminderResponses, GetRingStatusData, GetRingStatusErrors, GetRingStatusResponses, GetSelfBotData, GetSelfBotErrors, GetSelfBotResponses, GetSystemSkillsHandlerData, GetSystemSkillsHandlerErrors, GetSystemSkillsHandlerResponses, GetThreadRepliesData, GetThreadRepliesErrors, GetThreadRepliesResponses, GetUserDocumentsHandlerData, GetUserDocumentsHandlerErrors, GetUserDocumentsHandlerResponses, GetUserDocumentViewLocationData, GetUserDocumentViewLocationErrors, GetUserDocumentViewLocationResponses, GetViewsHandlerData, GetViewsHandlerErrors, GetViewsHandlerResponses, GetWebhookData, GetWebhookErrors, GetWebhookResponses, HandlerData, HandlerErrors, HandlerResponses, HealthHandlerData, HealthHandlerResponses, IngestTranscriptData, IngestTranscriptErrors, IngestTranscriptResponses, InitializeUserDocumentsData, InitializeUserDocumentsErrors, InitializeUserDocumentsResponses, InstallSyncData, InstallSyncErrors, JobProcessingResultHandlerData, JobProcessingResultHandlerErrors, JobProcessingResultHandlerResponses, JoinChannelByCodeData, JoinChannelByCodeErrors, JoinChannelByCodeResponses, JoinChannelData, JoinChannelErrors, JoinChannelResponses, LeaveChannelData, LeaveChannelErrors, LeaveChannelResponses, LeaveOrEndCallData, LeaveOrEndCallErrors, LeaveOrEndCallResponses, ListBotChannelsData, ListBotChannelsErrors, ListBotChannelsResponses, ListCompanyContactsData, ListCompanyContactsErrors, ListCompanyContactsResponses, ListCrmCommentsData, ListCrmCommentsErrors, ListCrmCommentsResponses, ListFavoritesData, ListFavoritesErrors, ListFavoritesResponses, ListOccurrencesData, ListOccurrencesErrors, ListOccurrencesResponses, ListRemindersData, ListRemindersErrors, ListRemindersResponses, ListWebhooksData, ListWebhooksErrors, ListWebhooksResponses, MentionPreviewsData, MentionPreviewsErrors, MentionPreviewsResponses, PatchChannelData, PatchChannelErrors, PatchChannelResponses, PatchMessageData, PatchMessageErrors, PatchMessageResponses, PatchViewHandlerData, PatchViewHandlerErrors, PatchViewHandlerResponses, PatchWebhookData, PatchWebhookErrors, PatchWebhookResponses, PermanentlyDeleteDocumentData, PermanentlyDeleteDocumentErrors, PermanentlyDeleteDocumentResponses, PermanentlyDeleteProjectData, PermanentlyDeleteProjectErrors, PermanentlyDeleteProjectResponses, PostActivityData, PostActivityErrors, PostActivityResponses, PostChannelBotWebhookData, PostChannelBotWebhookErrors, PostChannelBotWebhookResponses, PostChannelMessagesData, PostChannelMessagesErrors, PostChannelMessagesResponses, PostItemsSoupAstData, PostItemsSoupAstErrors, PostItemsSoupAstGroupedData, PostItemsSoupAstGroupedErrors, PostItemsSoupAstGroupedResponses, PostItemsSoupAstResponses, PostItemsSoupData, PostItemsSoupErrors, PostItemsSoupResponses, PostMessageData, PostMessageErrors, PostMessageResponses, PostReactionData, PostReactionErrors, PostReactionResponses, PostTypingData, PostTypingErrors, PostTypingResponses, PresaveDocumentHandlerData, PresaveDocumentHandlerErrors, PresaveDocumentHandlerResponses, PutCrmTeamSettingsData, PutCrmTeamSettingsErrors, PutCrmTeamSettingsResponses, RecentlyDeletedData, RecentlyDeletedErrors, RecentlyDeletedResponses, RemoveBotFromChannelByBotData, RemoveBotFromChannelByBotErrors, RemoveBotFromChannelByBotResponses, RemoveFavoriteByEntityData, RemoveFavoriteByEntityErrors, RemoveFavoriteByEntityResponses, RemoveParticipantsData, RemoveParticipantsErrors, RemoveParticipantsResponses, RemovePinHandlerData, RemovePinHandlerErrors, RemovePinHandlerResponses, ReorderFavoritesData, ReorderFavoritesErrors, ReorderFavoritesResponses, ReorderPinsHandlerData, ReorderPinsHandlerErrors, ReorderPinsHandlerResponses, ResolveChannelMessageData, ResolveChannelMessageErrors, ResolveChannelMessageResponses, RevertDeleteDocumentData, RevertDeleteDocumentErrors, RevertDeleteDocumentResponses, RevertDeleteProjectData, RevertDeleteProjectErrors, RevertDeleteProjectResponses, SaveDocumentHandlerData, SaveDocumentHandlerErrors, SaveDocumentHandlerResponses, SetCompanyHiddenData, SetCompanyHiddenErrors, SetCompanyHiddenResponses, SetContactHiddenData, SetContactHiddenErrors, SetContactHiddenResponses, SetCrmCompanyNameData, SetCrmCompanyNameErrors, SetCrmCompanyNameResponses, SetCrmContactNameData, SetCrmContactNameErrors, SetCrmContactNameResponses, SetDocumentTeamShareData, SetDocumentTeamShareErrors, SetDocumentTeamShareResponses, SetEmailSyncData, SetEmailSyncErrors, SetEmailSyncResponses, SimpleSaveData, SimpleSaveErrors, SimpleSaveResponses, ToggleShareWithTeamData, ToggleShareWithTeamErrors, ToggleShareWithTeamResponses, UpdateReminderData, UpdateReminderErrors, UpdateReminderResponses, UploadExtractFolderHandlerData, UploadExtractFolderHandlerErrors, UploadExtractFolderHandlerResponses, UploadFolderHandlerData, UploadFolderHandlerErrors, UploadFolderHandlerResponses, UpsertHistoryHandlerData, UpsertHistoryHandlerErrors, UpsertHistoryHandlerResponses, UpsertUserDocumentViewLocationData, UpsertUserDocumentViewLocationErrors, UpsertUserDocumentViewLocationResponses, ValidateDocumentPermissionsTokenData, ValidateDocumentPermissionsTokenErrors, ValidateDocumentPermissionsTokenResponses, ValidateWebhookData, ValidateWebhookErrors, ValidateWebhookResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -20,7 +20,7 @@ export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends 
 
 class HeyApiClient {
     protected client: Client;
-    
+
     constructor(args?: {
         client?: Client;
     }) {
@@ -30,9 +30,9 @@ class HeyApiClient {
 
 class HeyApiRegistry<T> {
     private readonly defaultKey = 'default';
-    
+
     private readonly instances: Map<string, T> = new Map();
-    
+
     get(key?: string): T {
         const instance = this.instances.get(key ?? this.defaultKey);
         if (!instance) {
@@ -40,7 +40,7 @@ class HeyApiRegistry<T> {
         }
         return instance;
     }
-    
+
     set(value: T, key?: string): void {
         this.instances.set(key ?? this.defaultKey, value);
     }
@@ -48,7 +48,7 @@ class HeyApiRegistry<T> {
 
 export class Sdk extends HeyApiClient {
     public static readonly __registry: HeyApiRegistry<Sdk> = new HeyApiRegistry<Sdk>();
-    
+
     constructor(args?: {
         client?: Client;
         key?: string;
@@ -56,7 +56,7 @@ export class Sdk extends HeyApiClient {
         super(args);
         Sdk.__registry.set(this, args?.key);
     }
-    
+
     /**
      * Deletes a single unthreaded anchor for a document
      * If you need to delete a threaded anchor, see the delete comment handler
@@ -71,7 +71,7 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Edits a single anchor for a document
      */
@@ -85,14 +85,14 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Gets a set of comment anchors for a document
      */
     public getDocumentAnchors<ThrowOnError extends boolean = false>(options: Options<GetDocumentAnchorsData, ThrowOnError>): RequestResult<GetDocumentAnchorsResponses, GetDocumentAnchorsErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetDocumentAnchorsResponses, GetDocumentAnchorsErrors, ThrowOnError>({ url: '/annotations/anchors/document/{document_id}', ...options });
     }
-    
+
     /**
      * Creates an unthreaded anchor for a document
      * If you need to create a threaded anchor, see the create comment handler
@@ -107,7 +107,7 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Deletes a single comment for a document
      */
@@ -121,7 +121,7 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Edits a single comment for a document
      */
@@ -135,14 +135,14 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Gets a set of comment threads for a document
      */
     public getDocumentComments<ThrowOnError extends boolean = false>(options: Options<GetDocumentCommentsData, ThrowOnError>): RequestResult<GetDocumentCommentsResponses, GetDocumentCommentsErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetDocumentCommentsResponses, GetDocumentCommentsErrors, ThrowOnError>({ url: '/annotations/comments/document/{document_id}', ...options });
     }
-    
+
     /**
      * Creates a single comment for a document
      * Optionally creates a new thread/anchor if one does not exist
@@ -157,35 +157,35 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Handler for `GET /bots/me`.
      */
     public getSelfBot<ThrowOnError extends boolean = false>(options?: Options<GetSelfBotData, ThrowOnError>): RequestResult<GetSelfBotResponses, GetSelfBotErrors, ThrowOnError> {
         return (options?.client ?? this.client).get<GetSelfBotResponses, GetSelfBotErrors, ThrowOnError>({ url: '/bots/me', ...options });
     }
-    
+
     /**
      * Handler for `GET /bots/{bot_id}/channels`.
      */
     public listBotChannels<ThrowOnError extends boolean = false>(options: Options<ListBotChannelsData, ThrowOnError>): RequestResult<ListBotChannelsResponses, ListBotChannelsErrors, ThrowOnError> {
         return (options.client ?? this.client).get<ListBotChannelsResponses, ListBotChannelsErrors, ThrowOnError>({ url: '/bots/{bot_id}/channels', ...options });
     }
-    
+
     /**
      * Handler for `DELETE /bots/{bot_id}/channels/{channel_id}`.
      */
     public removeBotFromChannelByBot<ThrowOnError extends boolean = false>(options: Options<RemoveBotFromChannelByBotData, ThrowOnError>): RequestResult<RemoveBotFromChannelByBotResponses, RemoveBotFromChannelByBotErrors, ThrowOnError> {
         return (options.client ?? this.client).delete<RemoveBotFromChannelByBotResponses, RemoveBotFromChannelByBotErrors, ThrowOnError>({ url: '/bots/{bot_id}/channels/{channel_id}', ...options });
     }
-    
+
     /**
      * Return calendar occurrences visible to the authenticated requester.
      */
     public listOccurrences<ThrowOnError extends boolean = false>(options: Options<ListOccurrencesData, ThrowOnError>): RequestResult<ListOccurrencesResponses, ListOccurrencesErrors, ThrowOnError> {
         return (options.client ?? this.client).get<ListOccurrencesResponses, ListOccurrencesErrors, ThrowOnError>({ url: '/calendar-events', ...options });
     }
-    
+
     /**
      * Resolve mentioned calendar events to the requester's own projections.
      */
@@ -199,7 +199,18 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
+    /**
+     * Handler for `GET /call/active`.
+     *
+     * Lists all active calls in channels the caller is an active member of,
+     * newest first. Calls with no active participants (orphaned by dropped RTC
+     * webhooks) are excluded.
+     */
+    public getActiveCalls<ThrowOnError extends boolean = false>(options?: Options<GetActiveCallsData, ThrowOnError>): RequestResult<GetActiveCallsResponses, GetActiveCallsErrors, ThrowOnError> {
+        return (options?.client ?? this.client).get<GetActiveCallsResponses, GetActiveCallsErrors, ThrowOnError>({ url: '/call/active', ...options });
+    }
+
     /**
      * Handler for `POST /call/record/preview`.
      *
@@ -218,7 +229,7 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Handler for `DELETE /call/record/{call_id}`.
      *
@@ -228,7 +239,7 @@ export class Sdk extends HeyApiClient {
     public deleteCallRecord<ThrowOnError extends boolean = false>(options: Options<DeleteCallRecordData, ThrowOnError>): RequestResult<DeleteCallRecordResponses, DeleteCallRecordErrors, ThrowOnError> {
         return (options.client ?? this.client).delete<DeleteCallRecordResponses, DeleteCallRecordErrors, ThrowOnError>({ url: '/call/record/{call_id}', ...options });
     }
-    
+
     /**
      * Handler for `GET /call/record/{call_id}`.
      *
@@ -239,7 +250,7 @@ export class Sdk extends HeyApiClient {
     public getCallRecord<ThrowOnError extends boolean = false>(options: Options<GetCallRecordData, ThrowOnError>): RequestResult<GetCallRecordResponses, GetCallRecordErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetCallRecordResponses, GetCallRecordErrors, ThrowOnError>({ url: '/call/record/{call_id}', ...options });
     }
-    
+
     /**
      * Handler for `PATCH /call/record/{call_id}`.
      *
@@ -256,7 +267,7 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Handler for `POST /call/record/{call_id}/share-with-team/toggle`.
      *
@@ -266,7 +277,7 @@ export class Sdk extends HeyApiClient {
     public toggleShareWithTeam<ThrowOnError extends boolean = false>(options: Options<ToggleShareWithTeamData, ThrowOnError>): RequestResult<ToggleShareWithTeamResponses, ToggleShareWithTeamErrors, ThrowOnError> {
         return (options.client ?? this.client).post<ToggleShareWithTeamResponses, ToggleShareWithTeamErrors, ThrowOnError>({ url: '/call/record/{call_id}/share-with-team/toggle', ...options });
     }
-    
+
     /**
      * Handler for `PATCH /call/record/{call_id}/transcript`.
      *
@@ -284,7 +295,7 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Handler for `GET /call/ring-status/{call_id}`.
      *
@@ -299,7 +310,7 @@ export class Sdk extends HeyApiClient {
     public getRingStatus<ThrowOnError extends boolean = false>(options: Options<GetRingStatusData, ThrowOnError>): RequestResult<GetRingStatusResponses, GetRingStatusErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetRingStatusResponses, GetRingStatusErrors, ThrowOnError>({ url: '/call/ring-status/{call_id}', ...options });
     }
-    
+
     /**
      * Handler for `POST /call/webhook`.
      *
@@ -310,14 +321,14 @@ export class Sdk extends HeyApiClient {
     public callWebhook<ThrowOnError extends boolean = false>(options?: Options<CallWebhookData, ThrowOnError>): RequestResult<CallWebhookResponses, CallWebhookErrors, ThrowOnError> {
         return (options?.client ?? this.client).post<CallWebhookResponses, CallWebhookErrors, ThrowOnError>({ url: '/call/webhook', ...options });
     }
-    
+
     /**
      * Handler for `DELETE /call/{channel_id}`.
      */
     public leaveOrEndCall<ThrowOnError extends boolean = false>(options: Options<LeaveOrEndCallData, ThrowOnError>): RequestResult<LeaveOrEndCallResponses, LeaveOrEndCallErrors, ThrowOnError> {
         return (options.client ?? this.client).delete<LeaveOrEndCallResponses, LeaveOrEndCallErrors, ThrowOnError>({ url: '/call/{channel_id}', ...options });
     }
-    
+
     /**
      * Handler for `GET /call/{channel_id}`.
      *
@@ -327,7 +338,7 @@ export class Sdk extends HeyApiClient {
     public getOrCreateCall<ThrowOnError extends boolean = false>(options: Options<GetOrCreateCallData, ThrowOnError>): RequestResult<GetOrCreateCallResponses, GetOrCreateCallErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetOrCreateCallResponses, GetOrCreateCallErrors, ThrowOnError>({ url: '/call/{channel_id}', ...options });
     }
-    
+
     /**
      * Handler for `GET /call/{channel_id}/active`.
      *
@@ -336,7 +347,7 @@ export class Sdk extends HeyApiClient {
     public checkActiveCall<ThrowOnError extends boolean = false>(options: Options<CheckActiveCallData, ThrowOnError>): RequestResult<CheckActiveCallResponses, CheckActiveCallErrors, ThrowOnError> {
         return (options.client ?? this.client).get<CheckActiveCallResponses, CheckActiveCallErrors, ThrowOnError>({ url: '/call/{channel_id}/active', ...options });
     }
-    
+
     /**
      * Handler for `POST /call/{channel_id}/transcript`.
      *
@@ -354,7 +365,7 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Handler for `POST /channels`.
      */
@@ -368,14 +379,14 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Handler for `GET /channels/activity`.
      */
     public getActivity<ThrowOnError extends boolean = false>(options?: Options<GetActivityData, ThrowOnError>): RequestResult<GetActivityResponses, GetActivityErrors, ThrowOnError> {
         return (options?.client ?? this.client).get<GetActivityResponses, GetActivityErrors, ThrowOnError>({ url: '/channels/activity', ...options });
     }
-    
+
     /**
      * Handler for `POST /channels/activity`.
      */
@@ -389,14 +400,14 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Handler for `GET /channels/attachments/{entity_type}/{entity_id}/references`.
      */
     public getAttachmentReferences<ThrowOnError extends boolean = false>(options: Options<GetAttachmentReferencesData, ThrowOnError>): RequestResult<GetAttachmentReferencesResponses, GetAttachmentReferencesErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetAttachmentReferencesResponses, GetAttachmentReferencesErrors, ThrowOnError>({ url: '/channels/attachments/{entity_type}/{entity_id}/references', ...options });
     }
-    
+
     /**
      * Handler for `POST /channels/get_or_create_dm`.
      */
@@ -410,7 +421,7 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Handler for `POST /channels/get_or_create_private`.
      */
@@ -424,14 +435,14 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Handler for `POST /channels/join/{join_code}`.
      */
     public joinChannelByCode<ThrowOnError extends boolean = false>(options: Options<JoinChannelByCodeData, ThrowOnError>): RequestResult<JoinChannelByCodeResponses, JoinChannelByCodeErrors, ThrowOnError> {
         return (options.client ?? this.client).post<JoinChannelByCodeResponses, JoinChannelByCodeErrors, ThrowOnError>({ url: '/channels/join/{join_code}', ...options });
     }
-    
+
     /**
      * Handler for `POST /channels/mentions`.
      */
@@ -445,14 +456,14 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Handler for `DELETE /channels/mentions/{mention_id}`.
      */
     public deleteEntityMention<ThrowOnError extends boolean = false>(options: Options<DeleteEntityMentionData, ThrowOnError>): RequestResult<DeleteEntityMentionResponses, DeleteEntityMentionErrors, ThrowOnError> {
         return (options.client ?? this.client).delete<DeleteEntityMentionResponses, DeleteEntityMentionErrors, ThrowOnError>({ url: '/channels/mentions/{mention_id}', ...options });
     }
-    
+
     /**
      * Handler for `POST /channels/preview`.
      */
@@ -466,21 +477,21 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Handler for `DELETE /channels/{channel_id}`.
      */
     public deleteChannel<ThrowOnError extends boolean = false>(options: Options<DeleteChannelData, ThrowOnError>): RequestResult<DeleteChannelResponses, DeleteChannelErrors, ThrowOnError> {
         return (options.client ?? this.client).delete<DeleteChannelResponses, DeleteChannelErrors, ThrowOnError>({ url: '/channels/{channel_id}', ...options });
     }
-    
+
     /**
      * Handler for `GET /channels/{channel_id}`.
      */
     public getChannel<ThrowOnError extends boolean = false>(options: Options<GetChannelData, ThrowOnError>): RequestResult<GetChannelResponses, GetChannelErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetChannelResponses, GetChannelErrors, ThrowOnError>({ url: '/channels/{channel_id}', ...options });
     }
-    
+
     /**
      * Handler for `PATCH /channels/{channel_id}`.
      */
@@ -494,14 +505,14 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Handler for `GET /channels/{channel_id}/attachments`.
      */
     public getChannelAttachments<ThrowOnError extends boolean = false>(options: Options<GetChannelAttachmentsData, ThrowOnError>): RequestResult<GetChannelAttachmentsResponses, GetChannelAttachmentsErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetChannelAttachmentsResponses, GetChannelAttachmentsErrors, ThrowOnError>({ url: '/channels/{channel_id}/attachments', ...options });
     }
-    
+
     /**
      * Handler for `POST /channels/{channel_id}/bots/scoped`.
      */
@@ -515,28 +526,28 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Handler for `POST /channels/{channel_id}/join`.
      */
     public joinChannel<ThrowOnError extends boolean = false>(options: Options<JoinChannelData, ThrowOnError>): RequestResult<JoinChannelResponses, JoinChannelErrors, ThrowOnError> {
         return (options.client ?? this.client).post<JoinChannelResponses, JoinChannelErrors, ThrowOnError>({ url: '/channels/{channel_id}/join', ...options });
     }
-    
+
     /**
      * Handler for `GET /channels/{channel_id}/join-link`.
      */
     public getChannelJoinLink<ThrowOnError extends boolean = false>(options: Options<GetChannelJoinLinkData, ThrowOnError>): RequestResult<GetChannelJoinLinkResponses, GetChannelJoinLinkErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetChannelJoinLinkResponses, GetChannelJoinLinkErrors, ThrowOnError>({ url: '/channels/{channel_id}/join-link', ...options });
     }
-    
+
     /**
      * Handler for `POST /channels/{channel_id}/leave`.
      */
     public leaveChannel<ThrowOnError extends boolean = false>(options: Options<LeaveChannelData, ThrowOnError>): RequestResult<LeaveChannelResponses, LeaveChannelErrors, ThrowOnError> {
         return (options.client ?? this.client).post<LeaveChannelResponses, LeaveChannelErrors, ThrowOnError>({ url: '/channels/{channel_id}/leave', ...options });
     }
-    
+
     /**
      * Handler for `POST /channels/{channel_id}/message`.
      */
@@ -550,14 +561,14 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Handler for `DELETE /channels/{channel_id}/message/{message_id}`.
      */
     public deleteMessage<ThrowOnError extends boolean = false>(options: Options<DeleteMessageData, ThrowOnError>): RequestResult<DeleteMessageResponses, DeleteMessageErrors, ThrowOnError> {
         return (options.client ?? this.client).delete<DeleteMessageResponses, DeleteMessageErrors, ThrowOnError>({ url: '/channels/{channel_id}/message/{message_id}', ...options });
     }
-    
+
     /**
      * Handler for `PATCH /channels/{channel_id}/message/{message_id}`.
      */
@@ -571,14 +582,14 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Handler for `GET /channels/{channel_id}/messages`.
      */
     public getChannelMessages<ThrowOnError extends boolean = false>(options: Options<GetChannelMessagesData, ThrowOnError>): RequestResult<GetChannelMessagesResponses, GetChannelMessagesErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetChannelMessagesResponses, GetChannelMessagesErrors, ThrowOnError>({ url: '/channels/{channel_id}/messages', ...options });
     }
-    
+
     /**
      * Handler for `POST /channels/{channel_id}/messages`.
      */
@@ -592,28 +603,28 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Handler for `GET /channels/{channel_id}/messages/{message_id}/context`.
      */
     public getMessageWithContext<ThrowOnError extends boolean = false>(options: Options<GetMessageWithContextData, ThrowOnError>): RequestResult<GetMessageWithContextResponses, GetMessageWithContextErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetMessageWithContextResponses, GetMessageWithContextErrors, ThrowOnError>({ url: '/channels/{channel_id}/messages/{message_id}/context', ...options });
     }
-    
+
     /**
      * Handler for `GET /channels/{channel_id}/messages/{message_id}/replies`.
      */
     public getThreadReplies<ThrowOnError extends boolean = false>(options: Options<GetThreadRepliesData, ThrowOnError>): RequestResult<GetThreadRepliesResponses, GetThreadRepliesErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetThreadRepliesResponses, GetThreadRepliesErrors, ThrowOnError>({ url: '/channels/{channel_id}/messages/{message_id}/replies', ...options });
     }
-    
+
     /**
      * Handler for `GET /channels/{channel_id}/messages/{message_id}/resolve`.
      */
     public resolveChannelMessage<ThrowOnError extends boolean = false>(options: Options<ResolveChannelMessageData, ThrowOnError>): RequestResult<ResolveChannelMessageResponses, ResolveChannelMessageErrors, ThrowOnError> {
         return (options.client ?? this.client).get<ResolveChannelMessageResponses, ResolveChannelMessageErrors, ThrowOnError>({ url: '/channels/{channel_id}/messages/{message_id}/resolve', ...options });
     }
-    
+
     /**
      * Handler for `DELETE /channels/{channel_id}/participants`.
      */
@@ -627,14 +638,14 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Handler for `GET /channels/{channel_id}/participants`.
      */
     public getChannelParticipants<ThrowOnError extends boolean = false>(options: Options<GetChannelParticipantsData, ThrowOnError>): RequestResult<GetChannelParticipantsResponses, GetChannelParticipantsErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetChannelParticipantsResponses, GetChannelParticipantsErrors, ThrowOnError>({ url: '/channels/{channel_id}/participants', ...options });
     }
-    
+
     /**
      * Handler for `POST /channels/{channel_id}/participants`.
      */
@@ -648,7 +659,7 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Handler for `POST /channels/{channel_id}/reaction`.
      */
@@ -662,7 +673,7 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Handler for `POST /channels/{channel_id}/typing`.
      */
@@ -676,7 +687,7 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Handler for `POST /channels/{channel_id}/webhook`.
      */
@@ -690,14 +701,54 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
+    /**
+     * Soft-delete a collab surface.
+     */
+    public deleteCollabSurface<ThrowOnError extends boolean = false>(options: Options<DeleteCollabSurfaceData, ThrowOnError>): RequestResult<DeleteCollabSurfaceResponses, DeleteCollabSurfaceErrors, ThrowOnError> {
+        return (options.client ?? this.client).delete<DeleteCollabSurfaceResponses, DeleteCollabSurfaceErrors, ThrowOnError>({ url: '/collab_surfaces/{id}', ...options });
+    }
+
+    /**
+     * Fetch a collab surface.
+     */
+    public getCollabSurface<ThrowOnError extends boolean = false>(options: Options<GetCollabSurfaceData, ThrowOnError>): RequestResult<GetCollabSurfaceResponses, GetCollabSurfaceErrors, ThrowOnError> {
+        return (options.client ?? this.client).get<GetCollabSurfaceResponses, GetCollabSurfaceErrors, ThrowOnError>({ url: '/collab_surfaces/{id}', ...options });
+    }
+
+    /**
+     * Idempotently ensure a collab surface exists (load-or-create).
+     *
+     * The id is caller-supplied, so an embedding surface can hold a stable id
+     * and blindly ensure it on mount: the first ensure creates and initializes
+     * the session, every later one (including concurrent ones) returns the same
+     * surface. A soft-deleted id is `410 Gone` and never comes back.
+     */
+    public ensureCollabSurface<ThrowOnError extends boolean = false>(options: Options<EnsureCollabSurfaceData, ThrowOnError>): RequestResult<EnsureCollabSurfaceResponses, EnsureCollabSurfaceErrors, ThrowOnError> {
+        return (options.client ?? this.client).put<EnsureCollabSurfaceResponses, EnsureCollabSurfaceErrors, ThrowOnError>({
+            url: '/collab_surfaces/{id}',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+
+    /**
+     * Mint a sync-service connection token for a surface.
+     */
+    public createCollabSurfaceToken<ThrowOnError extends boolean = false>(options: Options<CreateCollabSurfaceTokenData, ThrowOnError>): RequestResult<CreateCollabSurfaceTokenResponses, CreateCollabSurfaceTokenErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<CreateCollabSurfaceTokenResponses, CreateCollabSurfaceTokenErrors, ThrowOnError>({ url: '/collab_surfaces/{id}/token', ...options });
+    }
+
     /**
      * Handle channel list requests for `GET /comms/channels`.
      */
     public getChannels<ThrowOnError extends boolean = false>(options?: Options<GetChannelsData, ThrowOnError>): RequestResult<GetChannelsResponses, GetChannelsErrors, ThrowOnError> {
         return (options?.client ?? this.client).get<GetChannelsResponses, GetChannelsErrors, ThrowOnError>({ url: '/comms/channels', ...options });
     }
-    
+
     /**
      * Soft-delete a CRM comment, scoped to the requesting user's team. When it
      * was the thread's last live comment, the thread is soft-deleted too
@@ -706,7 +757,7 @@ export class Sdk extends HeyApiClient {
     public deleteCrmComment<ThrowOnError extends boolean = false>(options: Options<DeleteCrmCommentData, ThrowOnError>): RequestResult<DeleteCrmCommentResponses, DeleteCrmCommentErrors, ThrowOnError> {
         return (options.client ?? this.client).delete<DeleteCrmCommentResponses, DeleteCrmCommentErrors, ThrowOnError>({ url: '/crm/comment/{comment_id}', ...options });
     }
-    
+
     /**
      * Edit a CRM comment's text, scoped to the requesting user's team via the
      * comment's thread → entity → company. Returns the updated comment.
@@ -721,7 +772,7 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * List the comment threads on a CRM company or contact. Access is
      * enforced by [`EntityPermissionExtractor`] against the path's
@@ -732,7 +783,7 @@ export class Sdk extends HeyApiClient {
     public listCrmComments<ThrowOnError extends boolean = false>(options: Options<ListCrmCommentsData, ThrowOnError>): RequestResult<ListCrmCommentsResponses, ListCrmCommentsErrors, ThrowOnError> {
         return (options.client ?? this.client).get<ListCrmCommentsResponses, ListCrmCommentsErrors, ThrowOnError>({ url: '/crm/comments/{entity_type}/{entity_id}', ...options });
     }
-    
+
     /**
      * Create a comment on a CRM company or contact — a new thread, or a reply
      * when `threadId` is supplied. Returns the full thread (with all comments)
@@ -749,7 +800,7 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Manually create a CRM company for the caller's team. Any team member
      * may create one. The domain must not already be tracked by the team
@@ -767,7 +818,7 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Fetch a single CRM company by id, hydrated with its domains, the
      * primary domain's directory display metadata (name + description),
@@ -780,7 +831,7 @@ export class Sdk extends HeyApiClient {
     public getCompany<ThrowOnError extends boolean = false>(options: Options<GetCompanyData, ThrowOnError>): RequestResult<GetCompanyResponses, GetCompanyErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetCompanyResponses, GetCompanyErrors, ThrowOnError>({ url: '/crm/companies/{company_id}', ...options });
     }
-    
+
     /**
      * List the contacts of a CRM company. Access is enforced by
      * [`CrmCompanyAccessLevelExtractor`]: the user must be on the team that
@@ -791,7 +842,7 @@ export class Sdk extends HeyApiClient {
     public listCompanyContacts<ThrowOnError extends boolean = false>(options: Options<ListCompanyContactsData, ThrowOnError>): RequestResult<ListCompanyContactsResponses, ListCompanyContactsErrors, ThrowOnError> {
         return (options.client ?? this.client).get<ListCompanyContactsResponses, ListCompanyContactsErrors, ThrowOnError>({ url: '/crm/companies/{company_id}/contacts', ...options });
     }
-    
+
     /**
      * Manually create a contact under a CRM company. Access is enforced by
      * [`CrmCompanyAccessLevelExtractor`]: the caller must be on the team
@@ -811,7 +862,7 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Toggle `email_sync` on a CRM company. Purely a visibility flag —
      * it gates whether team members can see each other's emails with
@@ -827,7 +878,7 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Toggle `hidden` on a CRM company. Hiding also disables
      * `email_sync` and soft-hides every contact under the company.
@@ -845,7 +896,7 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Rename a CRM company. Access is enforced by
      * [`CrmCompanyAccessLevelExtractor`]: the caller must be on the team
@@ -863,7 +914,17 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
+    /**
+     * Look up a CRM contact by email in the caller's team. Returns a null
+     * `contact` when no visible contact exists. Any team member may resolve a
+     * visible contact; admin/owner callers may also resolve hidden contacts and
+     * contacts under hidden companies.
+     */
+    public getContactByEmail<ThrowOnError extends boolean = false>(options: Options<GetContactByEmailData, ThrowOnError>): RequestResult<GetContactByEmailResponses, GetContactByEmailErrors, ThrowOnError> {
+        return (options.client ?? this.client).get<GetContactByEmailResponses, GetContactByEmailErrors, ThrowOnError>({ url: '/crm/contacts/by-email', ...options });
+    }
+
     /**
      * Fetch a single CRM contact by id. Access is enforced by
      * [`CrmContactAccessLevelExtractor`]: the user must be on the team that
@@ -874,7 +935,7 @@ export class Sdk extends HeyApiClient {
     public getContact<ThrowOnError extends boolean = false>(options: Options<GetContactData, ThrowOnError>): RequestResult<GetContactResponses, GetContactErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetContactResponses, GetContactErrors, ThrowOnError>({ url: '/crm/contacts/{contact_id}', ...options });
     }
-    
+
     /**
      * Toggle `hidden` on a CRM contact. Hiding is a display-only opt-out
      * scoped to the team that owns the contact's company.
@@ -889,7 +950,7 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Rename a CRM contact. Access is enforced by
      * [`CrmContactAccessLevelExtractor`]: the caller must be on the team
@@ -907,7 +968,7 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Read the caller's team CRM configuration. Any team member may read;
      * teams without a settings row get the defaults.
@@ -915,7 +976,7 @@ export class Sdk extends HeyApiClient {
     public getCrmTeamSettings<ThrowOnError extends boolean = false>(options?: Options<GetCrmTeamSettingsData, ThrowOnError>): RequestResult<GetCrmTeamSettingsResponses, GetCrmTeamSettingsErrors, ThrowOnError> {
         return (options?.client ?? this.client).get<GetCrmTeamSettingsResponses, GetCrmTeamSettingsErrors, ThrowOnError>({ url: '/crm/settings', ...options });
     }
-    
+
     /**
      * Partially update the caller's team CRM configuration. Any team
      * member may update the views fields (`team_views`,
@@ -934,14 +995,14 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Gets the users documents to populate their recent document list
      */
     public getUserDocumentsHandler<ThrowOnError extends boolean = false>(options: Options<GetUserDocumentsHandlerData, ThrowOnError>): RequestResult<GetUserDocumentsHandlerResponses, GetUserDocumentsHandlerErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetUserDocumentsHandlerResponses, GetUserDocumentsHandlerErrors, ThrowOnError>({ url: '/documents', ...options });
     }
-    
+
     /**
      * Handler for `POST /documents`.
      *
@@ -958,7 +1019,7 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Creates and initializes a markdown document in one backend-owned lifecycle.
      */
@@ -972,7 +1033,7 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Creates a skill document with initialized markdown content in one
      * backend-owned lifecycle. Skills are markdown documents containing
@@ -989,7 +1050,7 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Creates a snippet document with initialized markdown content in one
      * backend-owned lifecycle. Snippets are created personal; team sharing is
@@ -1005,7 +1066,7 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Creates a task document with properties and initialized markdown content in
      * one backend-owned lifecycle.
@@ -1020,18 +1081,18 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     public initializeUserDocuments<ThrowOnError extends boolean = false>(options?: Options<InitializeUserDocumentsData, ThrowOnError>): RequestResult<InitializeUserDocumentsResponses, InitializeUserDocumentsErrors, ThrowOnError> {
         return (options?.client ?? this.client).post<InitializeUserDocumentsResponses, InitializeUserDocumentsErrors, ThrowOnError>({ url: '/documents/initialize_user_documents', ...options });
     }
-    
+
     /**
      * Gets a list of all the user's documents so they are able to be searched on
      */
     public getDocumentListHandler<ThrowOnError extends boolean = false>(options?: Options<GetDocumentListHandlerData, ThrowOnError>): RequestResult<GetDocumentListHandlerResponses, GetDocumentListHandlerErrors, ThrowOnError> {
         return (options?.client ?? this.client).get<GetDocumentListHandlerResponses, GetDocumentListHandlerErrors, ThrowOnError>({ url: '/documents/list', ...options });
     }
-    
+
     /**
      * Validates the provided document permissions token
      */
@@ -1045,14 +1106,14 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Generates a document permissions token for a provided document id
      */
     public getDocumentPermissionsToken<ThrowOnError extends boolean = false>(options: Options<GetDocumentPermissionsTokenData, ThrowOnError>): RequestResult<GetDocumentPermissionsTokenResponses, GetDocumentPermissionsTokenErrors, ThrowOnError> {
         return (options.client ?? this.client).post<GetDocumentPermissionsTokenResponses, GetDocumentPermissionsTokenErrors, ThrowOnError>({ url: '/documents/permissions_token/{document_id}', ...options });
     }
-    
+
     /**
      * Takes the docx document bom parts and generates presigned urls to upload
      * any new content
@@ -1069,7 +1130,7 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     public getBatchPreviewHandler<ThrowOnError extends boolean = false>(options: Options<GetBatchPreviewHandlerData, ThrowOnError>): RequestResult<GetBatchPreviewHandlerResponses, GetBatchPreviewHandlerErrors, ThrowOnError> {
         return (options.client ?? this.client).post<GetBatchPreviewHandlerResponses, GetBatchPreviewHandlerErrors, ThrowOnError>({
             url: '/documents/preview',
@@ -1080,7 +1141,7 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Handler for `GET /documents/slug/{slug}`.
      *
@@ -1089,14 +1150,14 @@ export class Sdk extends HeyApiClient {
     public getDocumentByTeamSlug<ThrowOnError extends boolean = false>(options: Options<GetDocumentByTeamSlugData, ThrowOnError>): RequestResult<GetDocumentByTeamSlugResponses, GetDocumentByTeamSlugErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetDocumentByTeamSlugResponses, GetDocumentByTeamSlugErrors, ThrowOnError>({ url: '/documents/slug/{slug}', ...options });
     }
-    
+
     /**
      * Resolves the current user's starter documents.
      */
     public handler<ThrowOnError extends boolean = false>(options?: Options<HandlerData, ThrowOnError>): RequestResult<HandlerResponses, HandlerErrors, ThrowOnError> {
         return (options?.client ?? this.client).get<HandlerResponses, HandlerErrors, ThrowOnError>({ url: '/documents/starter_docs', ...options });
     }
-    
+
     /**
      * Lists the built-in system skills. System skills are static, code-defined
      * AI instructions (see the `system_skills` crate); they surface in the
@@ -1106,7 +1167,7 @@ export class Sdk extends HeyApiClient {
     public getSystemSkillsHandler<ThrowOnError extends boolean = false>(options?: Options<GetSystemSkillsHandlerData, ThrowOnError>): RequestResult<GetSystemSkillsHandlerResponses, GetSystemSkillsHandlerErrors, ThrowOnError> {
         return (options?.client ?? this.client).get<GetSystemSkillsHandlerResponses, GetSystemSkillsHandlerErrors, ThrowOnError>({ url: '/documents/system_skills', ...options });
     }
-    
+
     /**
      * Handler for `DELETE /documents/{document_id}`.
      *
@@ -1115,7 +1176,7 @@ export class Sdk extends HeyApiClient {
     public deleteDocument<ThrowOnError extends boolean = false>(options: Options<DeleteDocumentData, ThrowOnError>): RequestResult<DeleteDocumentResponses, DeleteDocumentErrors, ThrowOnError> {
         return (options.client ?? this.client).delete<DeleteDocumentResponses, DeleteDocumentErrors, ThrowOnError>({ url: '/documents/{document_id}', ...options });
     }
-    
+
     /**
      * Handler for `GET /documents/{document_id}`.
      *
@@ -1124,7 +1185,7 @@ export class Sdk extends HeyApiClient {
     public getDocument<ThrowOnError extends boolean = false>(options: Options<GetDocumentData, ThrowOnError>): RequestResult<GetDocumentResponses, GetDocumentErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetDocumentResponses, GetDocumentErrors, ThrowOnError>({ url: '/documents/{document_id}', ...options });
     }
-    
+
     /**
      * Handler for `PATCH /documents/{document_id}`.
      *
@@ -1142,7 +1203,7 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Creates a new version of a document
      */
@@ -1156,7 +1217,7 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Handler for `GET /documents/{document_id}/branch_name`.
      *
@@ -1166,7 +1227,7 @@ export class Sdk extends HeyApiClient {
     public getDocumentBranchName<ThrowOnError extends boolean = false>(options: Options<GetDocumentBranchNameData, ThrowOnError>): RequestResult<GetDocumentBranchNameResponses, GetDocumentBranchNameErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetDocumentBranchNameResponses, GetDocumentBranchNameErrors, ThrowOnError>({ url: '/documents/{document_id}/branch_name', ...options });
     }
-    
+
     /**
      * Handler for `POST /documents/{document_id}/copy`.
      *
@@ -1183,7 +1244,7 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Generates a presigned url to download the raw content of the document
      * For files with modification layers, they will not be applied in the downloaded file.
@@ -1191,7 +1252,7 @@ export class Sdk extends HeyApiClient {
     public exportDocument<ThrowOnError extends boolean = false>(options: Options<ExportDocumentData, ThrowOnError>): RequestResult<ExportDocumentResponses, ExportDocumentErrors, ThrowOnError> {
         return (options.client ?? this.client).get<ExportDocumentResponses, ExportDocumentErrors, ThrowOnError>({ url: '/documents/{document_id}/export', ...options });
     }
-    
+
     /**
      * Handler for `GET /documents/{document_id}/github_prs`.
      *
@@ -1201,14 +1262,14 @@ export class Sdk extends HeyApiClient {
     public getDocumentGithubPullRequests<ThrowOnError extends boolean = false>(options: Options<GetDocumentGithubPullRequestsData, ThrowOnError>): RequestResult<GetDocumentGithubPullRequestsResponses, GetDocumentGithubPullRequestsErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetDocumentGithubPullRequestsResponses, GetDocumentGithubPullRequestsErrors, ThrowOnError>({ url: '/documents/{document_id}/github_prs', ...options });
     }
-    
+
     /**
      * Gets the presigned url(s) for the document. aka location
      */
     public getLocationHandler<ThrowOnError extends boolean = false>(options: Options<GetLocationHandlerData, ThrowOnError>): RequestResult<GetLocationHandlerResponses, GetLocationHandlerErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetLocationHandlerResponses, GetLocationHandlerErrors, ThrowOnError>({ url: '/documents/{document_id}/location', ...options });
     }
-    
+
     /**
      * Handler for `GET /documents/{document_id}/location_v3`.
      *
@@ -1217,35 +1278,35 @@ export class Sdk extends HeyApiClient {
     public getDocumentLocationV3<ThrowOnError extends boolean = false>(options: Options<GetDocumentLocationV3Data, ThrowOnError>): RequestResult<GetDocumentLocationV3Responses, GetDocumentLocationV3Errors, ThrowOnError> {
         return (options.client ?? this.client).get<GetDocumentLocationV3Responses, GetDocumentLocationV3Errors, ThrowOnError>({ url: '/documents/{document_id}/location_v3', ...options });
     }
-    
+
     /**
      * Permanently deletes a document.
      */
     public permanentlyDeleteDocument<ThrowOnError extends boolean = false>(options: Options<PermanentlyDeleteDocumentData, ThrowOnError>): RequestResult<PermanentlyDeleteDocumentResponses, PermanentlyDeleteDocumentErrors, ThrowOnError> {
         return (options.client ?? this.client).delete<PermanentlyDeleteDocumentResponses, PermanentlyDeleteDocumentErrors, ThrowOnError>({ url: '/documents/{document_id}/permanent', ...options });
     }
-    
+
     /**
      * Fetches the document pdf processing result for a given document id
      */
     public getDocumentProcessingResult<ThrowOnError extends boolean = false>(options: Options<GetDocumentProcessingResultData, ThrowOnError>): RequestResult<GetDocumentProcessingResultResponses, GetDocumentProcessingResultErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetDocumentProcessingResultResponses, GetDocumentProcessingResultErrors, ThrowOnError>({ url: '/documents/{document_id}/processing', ...options });
     }
-    
+
     /**
      * Fetches the document processing result for a given document id and job id
      */
     public jobProcessingResultHandler<ThrowOnError extends boolean = false>(options: Options<JobProcessingResultHandlerData, ThrowOnError>): RequestResult<JobProcessingResultHandlerResponses, JobProcessingResultHandlerErrors, ThrowOnError> {
         return (options.client ?? this.client).get<JobProcessingResultHandlerResponses, JobProcessingResultHandlerErrors, ThrowOnError>({ url: '/documents/{document_id}/processing/{job_id}', ...options });
     }
-    
+
     /**
      * Deletes a specific document
      */
     public revertDeleteDocument<ThrowOnError extends boolean = false>(options: Options<RevertDeleteDocumentData, ThrowOnError>): RequestResult<RevertDeleteDocumentResponses, RevertDeleteDocumentErrors, ThrowOnError> {
         return (options.client ?? this.client).put<RevertDeleteDocumentResponses, RevertDeleteDocumentErrors, ThrowOnError>({ url: '/documents/{document_id}/revert_delete', ...options });
     }
-    
+
     /**
      * Handler for `GET /documents/{document_id}/short_id`.
      *
@@ -1254,7 +1315,7 @@ export class Sdk extends HeyApiClient {
     public getDocumentShortId<ThrowOnError extends boolean = false>(options: Options<GetDocumentShortIdData, ThrowOnError>): RequestResult<GetDocumentShortIdResponses, GetDocumentShortIdErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetDocumentShortIdResponses, GetDocumentShortIdErrors, ThrowOnError>({ url: '/documents/{document_id}/short_id', ...options });
     }
-    
+
     /**
      * For any file that isn't PDF or DOCX, use this endpoint for saving.
      * This endpoint will allow you to save the document by providing the file content as part of a multipart request. Use key 'file' along with the file bytes.
@@ -1263,7 +1324,7 @@ export class Sdk extends HeyApiClient {
     public simpleSave<ThrowOnError extends boolean = false>(options: Options<SimpleSaveData, ThrowOnError>): RequestResult<SimpleSaveResponses, SimpleSaveErrors, ThrowOnError> {
         return (options.client ?? this.client).put<SimpleSaveResponses, SimpleSaveErrors, ThrowOnError>({ url: '/documents/{document_id}/simple_save', ...options });
     }
-    
+
     /**
      * Gets the team-share state of a document. The team is resolved from the
      * document owner's team membership; `teamId` is omitted when the owner does
@@ -1272,7 +1333,7 @@ export class Sdk extends HeyApiClient {
     public getDocumentTeamShare<ThrowOnError extends boolean = false>(options: Options<GetDocumentTeamShareData, ThrowOnError>): RequestResult<GetDocumentTeamShareResponses, GetDocumentTeamShareErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetDocumentTeamShareResponses, GetDocumentTeamShareErrors, ThrowOnError>({ url: '/documents/{document_id}/team_share', ...options });
     }
-    
+
     /**
      * Sets the team-share state of a document. Sharing grants the document
      * owner's team Edit access; unsharing removes the team's access. Requires
@@ -1288,35 +1349,35 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Gets the list of users who have viewed a given document
      */
     public getDocumentViewsHandler<ThrowOnError extends boolean = false>(options: Options<GetDocumentViewsHandlerData, ThrowOnError>): RequestResult<GetDocumentViewsHandlerResponses, GetDocumentViewsHandlerErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetDocumentViewsHandlerResponses, GetDocumentViewsHandlerErrors, ThrowOnError>({ url: '/documents/{document_id}/views', ...options });
     }
-    
+
     /**
      * Gets a particular document by its id
      */
     public getDocumentVersion<ThrowOnError extends boolean = false>(options: Options<GetDocumentVersionData, ThrowOnError>): RequestResult<GetDocumentVersionResponses, GetDocumentVersionErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetDocumentVersionResponses, GetDocumentVersionErrors, ThrowOnError>({ url: '/documents/{document_id}/{document_version_id}', ...options });
     }
-    
+
     /**
      * Get the current user's permission for a given entity.
      */
     public getEntityPermission<ThrowOnError extends boolean = false>(options: Options<GetEntityPermissionData, ThrowOnError>): RequestResult<GetEntityPermissionResponses, GetEntityPermissionErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetEntityPermissionResponses, GetEntityPermissionErrors, ThrowOnError>({ url: '/entity/{entity_type}/{entity_id}/permissions', ...options });
     }
-    
+
     /**
      * List the caller's favorites.
      */
     public listFavorites<ThrowOnError extends boolean = false>(options?: Options<ListFavoritesData, ThrowOnError>): RequestResult<ListFavoritesResponses, ListFavoritesErrors, ThrowOnError> {
         return (options?.client ?? this.client).get<ListFavoritesResponses, ListFavoritesErrors, ThrowOnError>({ url: '/favorites', ...options });
     }
-    
+
     /**
      * Favorite an entity in the caller's collection.
      */
@@ -1330,7 +1391,7 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Persist a manual order for the caller's favorites.
      */
@@ -1344,77 +1405,77 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Remove a favorite by entity.
      */
     public removeFavoriteByEntity<ThrowOnError extends boolean = false>(options: Options<RemoveFavoriteByEntityData, ThrowOnError>): RequestResult<RemoveFavoriteByEntityResponses, RemoveFavoriteByEntityErrors, ThrowOnError> {
         return (options.client ?? this.client).delete<RemoveFavoriteByEntityResponses, RemoveFavoriteByEntityErrors, ThrowOnError>({ url: '/favorites/{entity_type}/{entity_id}', ...options });
     }
-    
+
     /**
      * Get a visible foreign entity by its internal ID.
      */
     public getForeignEntity<ThrowOnError extends boolean = false>(options: Options<GetForeignEntityData, ThrowOnError>): RequestResult<GetForeignEntityResponses, GetForeignEntityErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetForeignEntityResponses, GetForeignEntityErrors, ThrowOnError>({ url: '/foreign_entity/{id}', ...options });
     }
-    
+
     /**
      * Redirects an authenticated user to the github sync app installation page.
      */
     public installSync<ThrowOnError extends boolean = false>(options?: Options<InstallSyncData, ThrowOnError>): RequestResult<unknown, InstallSyncErrors, ThrowOnError> {
         return (options?.client ?? this.client).get<unknown, InstallSyncErrors, ThrowOnError>({ url: '/github/install-sync', ...options });
     }
-    
+
     /**
      * Health check
      */
     public healthHandler<ThrowOnError extends boolean = false>(options?: Options<HealthHandlerData, ThrowOnError>): RequestResult<HealthHandlerResponses, unknown, ThrowOnError> {
         return (options?.client ?? this.client).get<HealthHandlerResponses, unknown, ThrowOnError>({ url: '/health', ...options });
     }
-    
+
     /**
      * Gets the users history
      */
     public getHistoryHandler<ThrowOnError extends boolean = false>(options?: Options<GetHistoryHandlerData, ThrowOnError>): RequestResult<GetHistoryHandlerResponses, GetHistoryHandlerErrors, ThrowOnError> {
         return (options?.client ?? this.client).get<GetHistoryHandlerResponses, GetHistoryHandlerErrors, ThrowOnError>({ url: '/history', ...options });
     }
-    
+
     /**
      * Deletes an item from the user's history
      */
     public deleteHistoryHandler<ThrowOnError extends boolean = false>(options: Options<DeleteHistoryHandlerData, ThrowOnError>): RequestResult<DeleteHistoryHandlerResponses, DeleteHistoryHandlerErrors, ThrowOnError> {
         return (options.client ?? this.client).delete<DeleteHistoryHandlerResponses, DeleteHistoryHandlerErrors, ThrowOnError>({ url: '/history/{item_type}/{item_id}', ...options });
     }
-    
+
     /**
      * Upserts an item into the user's history and performs other necessary tracking actions
      */
     public upsertHistoryHandler<ThrowOnError extends boolean = false>(options: Options<UpsertHistoryHandlerData, ThrowOnError>): RequestResult<UpsertHistoryHandlerResponses, UpsertHistoryHandlerErrors, ThrowOnError> {
         return (options.client ?? this.client).post<UpsertHistoryHandlerResponses, UpsertHistoryHandlerErrors, ThrowOnError>({ url: '/history/{item_type}/{item_id}', ...options });
     }
-    
+
     /**
      * Gets the instructions document for the current user
      */
     public getInstructionsHandler<ThrowOnError extends boolean = false>(options?: Options<GetInstructionsHandlerData, ThrowOnError>): RequestResult<GetInstructionsHandlerResponses, GetInstructionsHandlerErrors, ThrowOnError> {
         return (options?.client ?? this.client).get<GetInstructionsHandlerResponses, GetInstructionsHandlerErrors, ThrowOnError>({ url: '/instructions', ...options });
     }
-    
+
     /**
      * Creates an instructions document for the current user
      */
     public createInstructionsHandler<ThrowOnError extends boolean = false>(options?: Options<CreateInstructionsHandlerData, ThrowOnError>): RequestResult<CreateInstructionsHandlerResponses, CreateInstructionsHandlerErrors, ThrowOnError> {
         return (options?.client ?? this.client).post<CreateInstructionsHandlerResponses, CreateInstructionsHandlerErrors, ThrowOnError>({ url: '/instructions', ...options });
     }
-    
+
     /**
      * Gets the items the user has access to
      */
     public getItemsSoup<ThrowOnError extends boolean = false>(options?: Options<GetItemsSoupData, ThrowOnError>): RequestResult<GetItemsSoupResponses, GetItemsSoupErrors, ThrowOnError> {
         return (options?.client ?? this.client).get<GetItemsSoupResponses, GetItemsSoupErrors, ThrowOnError>({ url: '/items/soup', ...options });
     }
-    
+
     /**
      * Gets the items the user has access to
      */
@@ -1428,7 +1489,7 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Gets the items the user has access to using AST filters
      */
@@ -1442,7 +1503,7 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Gets the items grouped by the specified field using AST filters.
      */
@@ -1456,14 +1517,14 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Gets the users pinned items
      */
     public getPinsHandler<ThrowOnError extends boolean = false>(options?: Options<GetPinsHandlerData, ThrowOnError>): RequestResult<GetPinsHandlerResponses, GetPinsHandlerErrors, ThrowOnError> {
         return (options?.client ?? this.client).get<GetPinsHandlerResponses, GetPinsHandlerErrors, ThrowOnError>({ url: '/pins', ...options });
     }
-    
+
     /**
      * Saves the updated order of the pins for the user
      */
@@ -1477,7 +1538,7 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Deletes the pin for the user
      */
@@ -1491,7 +1552,7 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Pins the item for the user
      */
@@ -1505,14 +1566,14 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * List projects visible to the authenticated user.
      */
     public getProjectsHandler<ThrowOnError extends boolean = false>(options?: Options<GetProjectsHandlerData, ThrowOnError>): RequestResult<GetProjectsHandlerResponses, GetProjectsHandlerErrors, ThrowOnError> {
         return (options?.client ?? this.client).get<GetProjectsHandlerResponses, GetProjectsHandlerErrors, ThrowOnError>({ url: '/projects', ...options });
     }
-    
+
     /**
      * Create a project, optionally beneath an existing project.
      */
@@ -1526,14 +1587,14 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * List pending root projects owned by the authenticated user.
      */
     public getPendingProjectsHandler<ThrowOnError extends boolean = false>(options?: Options<GetPendingProjectsHandlerData, ThrowOnError>): RequestResult<GetPendingProjectsHandlerResponses, GetPendingProjectsHandlerErrors, ThrowOnError> {
         return (options?.client ?? this.client).get<GetPendingProjectsHandlerResponses, GetPendingProjectsHandlerErrors, ThrowOnError>({ url: '/projects/pending', ...options });
     }
-    
+
     /**
      * Get previews for a batch of project IDs.
      */
@@ -1547,7 +1608,7 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Upload a folder tree and create its upload destinations.
      */
@@ -1561,7 +1622,7 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Create a request for extracting an uploaded folder archive.
      */
@@ -1575,70 +1636,70 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Soft-delete a project and all of its children.
      */
     public deleteProjectHandler<ThrowOnError extends boolean = false>(options: Options<DeleteProjectHandlerData, ThrowOnError>): RequestResult<DeleteProjectHandlerResponses, DeleteProjectHandlerErrors, ThrowOnError> {
         return (options.client ?? this.client).delete<DeleteProjectHandlerResponses, DeleteProjectHandlerErrors, ThrowOnError>({ url: '/projects/{id}', ...options });
     }
-    
+
     /**
      * Get project metadata.
      */
     public getProjectHandler<ThrowOnError extends boolean = false>(options: Options<GetProjectHandlerData, ThrowOnError>): RequestResult<GetProjectHandlerResponses, GetProjectHandlerErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetProjectHandlerResponses, GetProjectHandlerErrors, ThrowOnError>({ url: '/projects/{id}', ...options });
     }
-    
+
     /**
      * Get the caller's project access level.
      */
     public getProjectUserAccessLevel<ThrowOnError extends boolean = false>(options: Options<GetProjectUserAccessLevelData, ThrowOnError>): RequestResult<GetProjectUserAccessLevelResponses, GetProjectUserAccessLevelErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetProjectUserAccessLevelResponses, GetProjectUserAccessLevelErrors, ThrowOnError>({ url: '/projects/{id}/access_level', ...options });
     }
-    
+
     /**
      * Get a project's immediate children.
      */
     public getProjectContentHandler<ThrowOnError extends boolean = false>(options: Options<GetProjectContentHandlerData, ThrowOnError>): RequestResult<GetProjectContentHandlerResponses, GetProjectContentHandlerErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetProjectContentHandlerResponses, GetProjectContentHandlerErrors, ThrowOnError>({ url: '/projects/{id}/content', ...options });
     }
-    
+
     /**
      * Permanently delete a soft-deleted project and all of its children.
      */
     public permanentlyDeleteProject<ThrowOnError extends boolean = false>(options: Options<PermanentlyDeleteProjectData, ThrowOnError>): RequestResult<PermanentlyDeleteProjectResponses, PermanentlyDeleteProjectErrors, ThrowOnError> {
         return (options.client ?? this.client).delete<PermanentlyDeleteProjectResponses, PermanentlyDeleteProjectErrors, ThrowOnError>({ url: '/projects/{id}/permanent', ...options });
     }
-    
+
     /**
      * Get a project's share permissions.
      */
     public getProjectPermissionsV2<ThrowOnError extends boolean = false>(options: Options<GetProjectPermissionsV2Data, ThrowOnError>): RequestResult<GetProjectPermissionsV2Responses, GetProjectPermissionsV2Errors, ThrowOnError> {
         return (options.client ?? this.client).get<GetProjectPermissionsV2Responses, GetProjectPermissionsV2Errors, ThrowOnError>({ url: '/projects/{id}/permissions', ...options });
     }
-    
+
     /**
      * Restore a soft-deleted project and its children.
      */
     public revertDeleteProject<ThrowOnError extends boolean = false>(options: Options<RevertDeleteProjectData, ThrowOnError>): RequestResult<RevertDeleteProjectResponses, RevertDeleteProjectErrors, ThrowOnError> {
         return (options.client ?? this.client).put<RevertDeleteProjectResponses, RevertDeleteProjectErrors, ThrowOnError>({ url: '/projects/{id}/revert_delete', ...options });
     }
-    
+
     /**
      * Gets the users recently deleted items.
      */
     public recentlyDeleted<ThrowOnError extends boolean = false>(options?: Options<RecentlyDeletedData, ThrowOnError>): RequestResult<RecentlyDeletedResponses, RecentlyDeletedErrors, ThrowOnError> {
         return (options?.client ?? this.client).get<RecentlyDeletedResponses, RecentlyDeletedErrors, ThrowOnError>({ url: '/recents/deleted', ...options });
     }
-    
+
     /**
      * List the caller's reminders, soonest firing first.
      */
     public listReminders<ThrowOnError extends boolean = false>(options?: Options<ListRemindersData, ThrowOnError>): RequestResult<ListRemindersResponses, ListRemindersErrors, ThrowOnError> {
         return (options?.client ?? this.client).get<ListRemindersResponses, ListRemindersErrors, ThrowOnError>({ url: '/reminders', ...options });
     }
-    
+
     /**
      * Create a reminder, optionally attached to an entity the caller can view.
      */
@@ -1652,21 +1713,21 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Delete one of the caller's reminders.
      */
     public deleteReminder<ThrowOnError extends boolean = false>(options: Options<DeleteReminderData, ThrowOnError>): RequestResult<DeleteReminderResponses, DeleteReminderErrors, ThrowOnError> {
         return (options.client ?? this.client).delete<DeleteReminderResponses, DeleteReminderErrors, ThrowOnError>({ url: '/reminders/{id}', ...options });
     }
-    
+
     /**
      * Fetch one of the caller's reminders.
      */
     public getReminder<ThrowOnError extends boolean = false>(options: Options<GetReminderData, ThrowOnError>): RequestResult<GetReminderResponses, GetReminderErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetReminderResponses, GetReminderErrors, ThrowOnError>({ url: '/reminders/{id}', ...options });
     }
-    
+
     /**
      * Modify one of the caller's reminders.
      */
@@ -1680,11 +1741,11 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     public getViewsHandler<ThrowOnError extends boolean = false>(options?: Options<GetViewsHandlerData, ThrowOnError>): RequestResult<GetViewsHandlerResponses, GetViewsHandlerErrors, ThrowOnError> {
         return (options?.client ?? this.client).get<GetViewsHandlerResponses, GetViewsHandlerErrors, ThrowOnError>({ url: '/saved_views', ...options });
     }
-    
+
     public createViewHandler<ThrowOnError extends boolean = false>(options: Options<CreateViewHandlerData, ThrowOnError>): RequestResult<CreateViewHandlerResponses, CreateViewHandlerErrors, ThrowOnError> {
         return (options.client ?? this.client).post<CreateViewHandlerResponses, CreateViewHandlerErrors, ThrowOnError>({
             url: '/saved_views',
@@ -1695,7 +1756,7 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     public excludeDefaultViewHandler<ThrowOnError extends boolean = false>(options: Options<ExcludeDefaultViewHandlerData, ThrowOnError>): RequestResult<ExcludeDefaultViewHandlerResponses, ExcludeDefaultViewHandlerErrors, ThrowOnError> {
         return (options.client ?? this.client).post<ExcludeDefaultViewHandlerResponses, ExcludeDefaultViewHandlerErrors, ThrowOnError>({
             url: '/saved_views/exclude_default',
@@ -1706,11 +1767,11 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     public deleteViewHandler<ThrowOnError extends boolean = false>(options: Options<DeleteViewHandlerData, ThrowOnError>): RequestResult<DeleteViewHandlerResponses, DeleteViewHandlerErrors, ThrowOnError> {
         return (options.client ?? this.client).delete<DeleteViewHandlerResponses, DeleteViewHandlerErrors, ThrowOnError>({ url: '/saved_views/{saved_view_id}', ...options });
     }
-    
+
     public patchViewHandler<ThrowOnError extends boolean = false>(options: Options<PatchViewHandlerData, ThrowOnError>): RequestResult<PatchViewHandlerResponses, PatchViewHandlerErrors, ThrowOnError> {
         return (options.client ?? this.client).patch<PatchViewHandlerResponses, PatchViewHandlerErrors, ThrowOnError>({
             url: '/saved_views/{saved_view_id}',
@@ -1721,7 +1782,7 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     public bulkWakeupSyncServiceDocuments<ThrowOnError extends boolean = false>(options: Options<BulkWakeupSyncServiceDocumentsData, ThrowOnError>): RequestResult<BulkWakeupSyncServiceDocumentsResponses, BulkWakeupSyncServiceDocumentsErrors, ThrowOnError> {
         return (options.client ?? this.client).post<BulkWakeupSyncServiceDocumentsResponses, BulkWakeupSyncServiceDocumentsErrors, ThrowOnError>({
             url: '/sync_service/wakeup',
@@ -1732,7 +1793,7 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Edits the share permissions of a thread.
      */
@@ -1746,21 +1807,21 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Deletes a document location for the user
      */
     public deleteUserDocumentViewLocation<ThrowOnError extends boolean = false>(options: Options<DeleteUserDocumentViewLocationData, ThrowOnError>): RequestResult<DeleteUserDocumentViewLocationResponses, DeleteUserDocumentViewLocationErrors, ThrowOnError> {
         return (options.client ?? this.client).delete<DeleteUserDocumentViewLocationResponses, DeleteUserDocumentViewLocationErrors, ThrowOnError>({ url: '/user_document_view_location/{document_id}', ...options });
     }
-    
+
     /**
      * Gets a UserPdfDocumentLocation entry
      */
     public getUserDocumentViewLocation<ThrowOnError extends boolean = false>(options: Options<GetUserDocumentViewLocationData, ThrowOnError>): RequestResult<GetUserDocumentViewLocationResponses, GetUserDocumentViewLocationErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetUserDocumentViewLocationResponses, GetUserDocumentViewLocationErrors, ThrowOnError>({ url: '/user_document_view_location/{document_id}', ...options });
     }
-    
+
     public upsertUserDocumentViewLocation<ThrowOnError extends boolean = false>(options: Options<UpsertUserDocumentViewLocationData, ThrowOnError>): RequestResult<UpsertUserDocumentViewLocationResponses, UpsertUserDocumentViewLocationErrors, ThrowOnError> {
         return (options.client ?? this.client).post<UpsertUserDocumentViewLocationResponses, UpsertUserDocumentViewLocationErrors, ThrowOnError>({
             url: '/user_document_view_location/{document_id}',
@@ -1771,14 +1832,14 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Gets the current documents share permissions
      */
     public getDocumentPermissionsV2<ThrowOnError extends boolean = false>(options: Options<GetDocumentPermissionsV2Data, ThrowOnError>): RequestResult<GetDocumentPermissionsV2Responses, GetDocumentPermissionsV2Errors, ThrowOnError> {
         return (options.client ?? this.client).get<GetDocumentPermissionsV2Responses, GetDocumentPermissionsV2Errors, ThrowOnError>({ url: '/v2/documents/{document_id}/permissions', ...options });
     }
-    
+
     /**
      * Edit project metadata and sharing settings.
      */
@@ -1792,14 +1853,14 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * List the caller's webhooks.
      */
     public listWebhooks<ThrowOnError extends boolean = false>(options?: Options<ListWebhooksData, ThrowOnError>): RequestResult<ListWebhooksResponses, ListWebhooksErrors, ThrowOnError> {
         return (options?.client ?? this.client).get<ListWebhooksResponses, ListWebhooksErrors, ThrowOnError>({ url: '/webhook/webhooks', ...options });
     }
-    
+
     /**
      * Create a webhook.
      */
@@ -1813,21 +1874,21 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Delete a webhook.
      */
     public deleteWebhook<ThrowOnError extends boolean = false>(options: Options<DeleteWebhookData, ThrowOnError>): RequestResult<DeleteWebhookResponses, DeleteWebhookErrors, ThrowOnError> {
         return (options.client ?? this.client).delete<DeleteWebhookResponses, DeleteWebhookErrors, ThrowOnError>({ url: '/webhook/webhooks/{webhook_id}', ...options });
     }
-    
+
     /**
      * Get a webhook.
      */
     public getWebhook<ThrowOnError extends boolean = false>(options: Options<GetWebhookData, ThrowOnError>): RequestResult<GetWebhookResponses, GetWebhookErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetWebhookResponses, GetWebhookErrors, ThrowOnError>({ url: '/webhook/webhooks/{webhook_id}', ...options });
     }
-    
+
     /**
      * Patch a webhook.
      */
@@ -1841,7 +1902,7 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Validate a webhook endpoint.
      */

@@ -77,8 +77,12 @@ let activationValue: PageToEngineEnvelope | undefined;
 let telemetry: BroadcastChannel | undefined;
 let ignoreHeartbeats = false;
 
+const sendEngine = (message: EngineToCoordinatorEnvelope): void => {
+  controlPort?.postMessage([1, message]);
+};
+
 const sendStaleResponse = (ownerEpoch: number, routeId: number): void => {
-  controlPort?.postMessage(
+  sendEngine(
     withVersion<EngineToCoordinatorEnvelope>({
       kind: 'engine-response',
       ownerEpoch,
@@ -165,14 +169,22 @@ async function activate(
         database = await openDatabase(activation.scope);
         const activeDatabase = database;
         port.onmessage = (event: MessageEvent<unknown>) => {
-          const parsed = validateCoordinatorToEngineEnvelope(event.data);
+          if (Array.isArray(event.data) && event.data[0] === 1) {
+            requestShutdown?.();
+            return;
+          }
+          const payload =
+            Array.isArray(event.data) && event.data[0] === 0
+              ? event.data[1]
+              : event.data;
+          const parsed = validateCoordinatorToEngineEnvelope(payload);
           if (!parsed.ok) return;
           const message: CoordinatorToEngineEnvelope = parsed.value;
           if (message.ownerEpoch !== activation.ownerEpoch) return;
           switch (message.kind) {
             case 'heartbeat':
               if (!ignoreHeartbeats) {
-                port.postMessage(
+                sendEngine(
                   withVersion<EngineToCoordinatorEnvelope>({
                     kind: 'heartbeat-ack',
                     ownerEpoch: activation.ownerEpoch,
@@ -211,7 +223,7 @@ async function activate(
                       error instanceof Error ? error.message : String(error),
                   };
                 }
-                port.postMessage(
+                sendEngine(
                   withVersion<EngineToCoordinatorEnvelope>({
                     kind: 'engine-response',
                     ownerEpoch: activation.ownerEpoch,
@@ -224,7 +236,7 @@ async function activate(
                   (message.request.kind === 'write' ||
                     message.request.kind === 'clear')
                 ) {
-                  port.postMessage(
+                  sendEngine(
                     withVersion<EngineToCoordinatorEnvelope>({
                       kind: 'engine-push',
                       ownerEpoch: activation.ownerEpoch,
@@ -237,7 +249,8 @@ async function activate(
           }
         };
         port.start();
-        port.postMessage(
+        port.postMessage([0]);
+        sendEngine(
           withVersion<EngineToCoordinatorEnvelope>({
             kind: 'engine-ready',
             tabId: activation.tabId,
@@ -264,7 +277,7 @@ async function activate(
         await queue;
         database.close();
         database = undefined;
-        port.postMessage(
+        sendEngine(
           withVersion<EngineToCoordinatorEnvelope>({
             kind: 'engine-drained',
             tabId: activation.tabId,

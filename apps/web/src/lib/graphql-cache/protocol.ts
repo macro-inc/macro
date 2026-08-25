@@ -51,6 +51,19 @@ export type SearchCachePage = {
   nextCursor: SearchCursor | null;
 };
 
+/** Exact initial-page request over the canonical GraphQL Soup filter input. */
+export type EntityFilterCacheArgs = {
+  filters: Record<string, unknown>;
+  sortMethod: 'CREATED_AT' | 'UPDATED_AT' | 'VIEWED_AT' | 'VIEWED_UPDATED';
+  sortDirection: 'ASC' | 'DESC';
+  limit: number;
+};
+
+export type EntityFilterCacheResult =
+  | { kind: 'complete'; keys: string[]; optimistic: boolean }
+  | { kind: 'unsupported' }
+  | { kind: 'incomplete' };
+
 export type ReadRecordsByKeysArgs = {
   /** Serialized generated fragment document. */
   document: string;
@@ -403,6 +416,10 @@ export type CacheRequest = { id: number } & (
   | {
       kind: 'search';
       request: SearchCacheArgs & { nowMs: number };
+    }
+  | {
+      kind: 'entity-filter';
+      request: EntityFilterCacheArgs;
     }
   | {
       kind: 'inspect-query';

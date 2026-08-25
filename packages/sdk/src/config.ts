@@ -3,6 +3,7 @@ export type Env = 'dev' | 'prod' | 'local';
 /** The backend services the SDK talks to. Note `search` and `properties` are
  * served on the storage host, so they point there. */
 export type ServiceName =
+  | 'agent-harness'
   | 'storage'
   | 'auth'
   | 'email'
@@ -24,6 +25,7 @@ export const WEB_APP_URLS: Record<Env, string> = {
 
 export const HOSTS: Record<Env, Record<ServiceName, string>> = {
   dev: {
+    'agent-harness': 'https://agent-harness-dev.macro.com',
     storage: 'https://cloud-storage-dev.macro.com',
     auth: 'https://auth-service-dev.macro.com',
     email: 'https://email-service-dev.macro.com',
@@ -38,6 +40,7 @@ export const HOSTS: Record<Env, Record<ServiceName, string>> = {
     unfurl: 'https://unfurl-service-dev.macro.com',
   },
   prod: {
+    'agent-harness': 'https://agent-harness.macro.com',
     storage: 'https://cloud-storage.macro.com',
     auth: 'https://auth-service.macro.com',
     email: 'https://email-service.macro.com',
@@ -52,6 +55,7 @@ export const HOSTS: Record<Env, Record<ServiceName, string>> = {
     unfurl: 'https://unfurl-service.macro.com',
   },
   local: {
+    'agent-harness': 'http://localhost:8101',
     storage: 'http://localhost:8086',
     auth: 'http://localhost:8080',
     email: 'http://localhost:8087',

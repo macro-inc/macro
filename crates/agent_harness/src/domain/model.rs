@@ -1,7 +1,7 @@
 //! Commands and values used by the harness domain.
 
 use agent_runtime_protocol::domain::action::{AgentAction, AgentActionId};
-use agent_session::domain::model::{AgentSessionId, MessageId};
+use agent_session::domain::model::{AgentSessionId, MessageId, SandboxSize};
 use agent_session::domain::ports::ControlEvent;
 use bot_id::BotId;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -23,12 +23,29 @@ pub struct MentionOrigin {
 }
 
 /// Open a new session for a mention.
+///
+/// Only for managed sessions - the ones whose sandbox this deployment
+/// provisions. External sessions are opened through
+/// [`agent_session::domain::ports::SessionOpener`] instead: they
+/// need no provisioning, no announcement, and no first prompt, so they are
+/// a plain create rather than a harness command.
 #[derive(Debug, Clone)]
 pub struct OpenSession {
     /// The bot that was mentioned.
     pub bot_id: BotId,
     /// The mention itself.
     pub origin: MentionOrigin,
+}
+
+/// Whether this deployment provisions a runtime for `bot`'s sessions.
+///
+/// The Macro coder bot's sessions run in a provisioned sandbox and the Macro
+/// bot's run in-process; every other agent bot hosts its own runtime and
+/// dials the gateway. This becomes a bot attribute the day managed bots stop
+/// being a closed set.
+#[must_use]
+pub fn is_managed_bot(bot: BotId) -> bool {
+    bot == bot_id::MACRO_CODER_BOT_ID || bot == bot_id::MACRO_AI_BOT_ID
 }
 
 /// Where a prompt came from, when it came from somewhere the session should
@@ -74,6 +91,8 @@ pub enum HarnessCommand {
     Open(OpenSession),
     /// Act on a session that already exists.
     Deliver(DeliverAction),
+    /// Change the session's sandbox size and the owner's default.
+    SetSandboxSize(SandboxSize),
     /// Release a session's live resources and delete it.
     Delete,
 }
@@ -93,8 +112,10 @@ impl DeliverAction {
         }
     }
 
-    /// A control request under a caller-visible id. Names no origin: whoever
-    /// called the endpoint is looking at the session already.
+    /// A control request under a caller-visible id. Names no origin: control
+    /// is "deliver this to the session", and announcing a prompt into its
+    /// channel is the trigger pipeline's job, keyed on what it observed
+    /// rather than anything a caller claims.
     pub fn control(id: AgentActionId, event: ControlEvent) -> Self {
         Self {
             id,
@@ -105,11 +126,33 @@ impl DeliverAction {
     }
 }
 
+/// Announce a prompt an external runtime delivers itself.
+///
+/// For a mention in an external session's thread, the trigger pipeline fans
+/// out twice: the bot's runtime gets the webhook and sends the prompt through
+/// the control endpoint, and this posts the magic-chip message the replies
+/// render into. Split that way because each side is the only one that can
+/// do its half honestly: only the runtime can reach its harness, and only
+/// the observed trigger event can vouch for the channel context.
+#[derive(Debug, Clone)]
+pub struct AnnouncePrompt {
+    /// The bot the trigger named; must match the session row before posting.
+    pub bot_id: BotId,
+    /// Where the mention was posted.
+    pub origin: AnnounceOrigin,
+    /// The mention's text, quoted in the announcement.
+    pub content: String,
+    /// Who mentioned the bot.
+    pub sender: MacroUserIdStr<'static>,
+}
+
 /// Facts required to announce one prompt into its originating context.
 #[derive(Debug, Clone)]
 pub struct SessionAnnouncement {
     /// Agent session represented by the announcement.
     pub session_id: AgentSessionId,
+    /// The bot the session runs for; the announcement posts as it.
+    pub bot_id: BotId,
     /// Channel containing the mention that opened the session.
     pub origin_channel_id: Uuid,
     /// Thread where the announcement should be posted.
@@ -129,15 +172,88 @@ pub struct SpawnContainer {
     pub session_id: AgentSessionId,
     /// Repository cloned into the container workspace.
     pub repo_url: String,
+    /// Compute tier to request from the provider.
+    pub size: SandboxSize,
 }
 
 /// Session-row values that remain deployment configuration for now.
 #[derive(Debug, Clone)]
 pub struct SessionDefaults {
+    /// The bot managed sessions run as.
+    ///
+    /// Configuration rather than a constant for the same reason as the
+    /// trigger path's: `@claude` and `@codex` are separate deployments of one
+    /// binary, differing only in the bot they answer for.
+    pub bot_id: BotId,
     /// Model slug, e.g. `claude`.
     pub model: String,
     /// Harness slug, e.g. `opencode`.
     pub harness: String,
     /// Repository sessions run against.
     pub repo_url: String,
+}
+
+/// Session defaults for every bot a deployment answers for.
+///
+/// One deployment can serve more than one managed bot (the sandboxed coder
+/// bot and the in-process Macro bot), and each stamps different defaults onto
+/// the sessions it opens.
+#[derive(Debug, Clone)]
+pub struct HarnessDefaults {
+    default: SessionDefaults,
+    per_bot: Vec<(BotId, SessionDefaults)>,
+    managed_bot: Option<BotId>,
+}
+
+impl HarnessDefaults {
+    /// Defaults every bot shares until one is given its own.
+    #[must_use]
+    pub fn new(default: SessionDefaults) -> Self {
+        Self {
+            default,
+            per_bot: Vec::new(),
+            managed_bot: None,
+        }
+    }
+
+    /// Stamp `bot`'s sessions with `defaults` instead of the shared ones.
+    #[must_use]
+    pub fn with_bot(mut self, bot: BotId, defaults: SessionDefaults) -> Self {
+        self.per_bot.push((bot, defaults));
+        self
+    }
+
+    /// Open managed sessions - the ones nothing names a bot for, like the
+    /// create menu's - as `bot` instead of the deployment's own.
+    #[must_use]
+    pub fn with_managed_bot(mut self, bot: BotId) -> Self {
+        self.managed_bot = Some(bot);
+        self
+    }
+
+    /// The defaults a session opens with when no particular bot is named -
+    /// the `with_managed_bot` override when one is set, the deployment's own
+    /// bot otherwise.
+    #[must_use]
+    pub fn managed(&self) -> &SessionDefaults {
+        match self.managed_bot {
+            Some(bot) => self.for_bot(bot),
+            None => &self.default,
+        }
+    }
+
+    /// The defaults `bot`'s sessions are stamped with.
+    #[must_use]
+    pub fn for_bot(&self, bot: BotId) -> &SessionDefaults {
+        self.per_bot
+            .iter()
+            .find(|(candidate, _)| *candidate == bot)
+            .map_or(&self.default, |(_, defaults)| defaults)
+    }
+}
+
+impl From<SessionDefaults> for HarnessDefaults {
+    fn from(default: SessionDefaults) -> Self {
+        Self::new(default)
+    }
 }

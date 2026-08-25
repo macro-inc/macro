@@ -371,8 +371,10 @@ async fn main() -> anyhow::Result<()> {
 
     let search_service_client = Arc::new(search_service_client);
 
-    let properties_tool_context =
-        ai_tools::build_properties_tool_context(properties_service, entity_access_service.clone());
+    let properties_tool_context = ai_tools::build_properties_tool_context(
+        properties_service.clone(),
+        entity_access_service.clone(),
+    );
 
     tracing::info!("initialized properties tool context");
 
@@ -566,6 +568,11 @@ async fn main() -> anyhow::Result<()> {
         email_service_client: email_service_client_external.clone(),
         soup_service: soup_service.clone(),
         email_service: email_service_for_tools.clone(),
+        activity_tool_context: ai_tools::build_activity_tool_context(
+            db.clone(),
+            properties_service,
+            entity_access_service.clone(),
+        ),
         document_tool_context: document_tool_context.clone(),
         properties_tool_context: properties_tool_context.clone(),
         email_tool_context: email_tool_context.clone(),
@@ -585,6 +592,12 @@ async fn main() -> anyhow::Result<()> {
         ),
         chat_tool_context,
         channel_tool_context,
+        bot_tool_context: ai_tools::build_bot_tool_context(
+            db.clone(),
+            ai_tools::ToolBotEventBroker::Real(macro_event_broker.clone()),
+            entity_access_service.clone(),
+            DocumentStorageServiceUrl::new()?.to_string(),
+        ),
         project_tool_context,
         team_tool_context: ai_tools::build_team_tool_context(db.clone()),
         crm_tool_context: ai_tools::build_crm_tool_context(db.clone()),
@@ -605,7 +618,6 @@ async fn main() -> anyhow::Result<()> {
     // Build memory service
     let memory_repo = memory::outbound::pg_memory_repo::PgMemoryRepo::new(db.clone());
     let memory_service = Arc::new(memory::domain::service::MemoryServiceImpl::new(
-        db.clone(),
         memory_repo,
         tool_service_context.clone(),
         all_tools,

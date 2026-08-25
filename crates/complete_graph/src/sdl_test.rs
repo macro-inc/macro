@@ -95,7 +95,10 @@ fn soup_response_schema_exposes_frontend_fields() {
         "type CompleteSubscriptionRoot {",
         "soupUpdates: [SoupPatch!]!",
         "notificationUpdates: GraphqlNotificationPatch!",
-        "union GraphqlNotificationPatch = GraphqlNotification | GraphqlCacheDeletion",
+        "union GraphqlNotificationPatch = GraphqlNewNotification | GraphqlUpdatedNotification | GraphqlCacheDeletion",
+        "type GraphqlNewNotification {",
+        "notification: GraphqlNotification!",
+        "type GraphqlUpdatedNotification {",
         "type GraphqlNotification {",
         "metadata: GraphqlNotifEvent!",
     ] {
@@ -128,6 +131,36 @@ fn soup_response_schema_exposes_frontend_fields() {
         !sdl.to_ascii_lowercase().contains("fusionauth"),
         "internal FusionAuth identifiers must not enter the GraphQL contract"
     );
+}
+
+#[test]
+fn activity_overview_is_a_user_scoped_embedded_value() {
+    use apollo_compiler::schema::ExtendedType;
+
+    let schema =
+        apollo_compiler::Schema::parse_and_validate(crate::build_schema().sdl(), "schema.graphql")
+            .expect("generated SDL is valid");
+    let ExtendedType::Object(user) = schema.types.get("GraphqlUser").expect("user type exists")
+    else {
+        panic!("GraphqlUser must be an object");
+    };
+    assert!(user.fields.contains_key("activityOverview"));
+
+    for name in [
+        "GraphqlActivityOverview",
+        "GraphqlActivityDay",
+        "GraphqlActivityEntityRank",
+    ] {
+        let ExtendedType::Object(value) =
+            schema.types.get(name).expect("overview value type exists")
+        else {
+            panic!("{name} must be an object");
+        };
+        assert!(
+            !value.fields.contains_key("id"),
+            "{name} must remain embedded under GraphqlUser"
+        );
+    }
 }
 
 #[test]

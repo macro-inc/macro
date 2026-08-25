@@ -8,7 +8,6 @@ import {
   CompanyDisplayMenu,
   CompanyViewsMenu,
 } from '@app/features/next-soup/soup-view/views/companies/CompanyViewsMenu';
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { CollapsibleToolbarItem } from '@components/app/split-layout/components/CollapsibleItem';
 import { PreviewButton } from '@components/app/split-layout/components/PreviewButton';
 import {
@@ -16,10 +15,6 @@ import {
   SplitToolbarRight,
 } from '@components/app/split-layout/components/SplitToolbar';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
-import {
-  ENABLE_NEW_INBOX_FLAG,
-  ENABLE_NEW_INBOX_OVERRIDE,
-} from '@core/constant/featureFlags';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { createMemo, createSignal, Show } from 'solid-js';
 
@@ -46,17 +41,10 @@ export function SoupFiltersBar(props: {
   });
   const isTagView = createMemo(() => props.variant === 'tag');
 
-  // The new inbox hides sort (it's fixed to updated_at for this view).
-  const newInboxFlag = useFeatureFlag(ENABLE_NEW_INBOX_FLAG, {
-    enabledOverride: ENABLE_NEW_INBOX_OVERRIDE,
-  });
-  const isNewInbox = createMemo(() => {
+  // The inbox hides sort (it's fixed to updated_at for this view).
+  const isInboxView = createMemo(() => {
     const content = panel.handle.content();
-    return (
-      content.type === 'component' &&
-      content.id === 'inbox' &&
-      newInboxFlag().enabled
-    );
+    return content.type === 'component' && content.id === 'inbox';
   });
 
   const CollapsibleGroup = () => (
@@ -84,14 +72,14 @@ export function SoupFiltersBar(props: {
           when={!isSearchView() && !isTagView()}
           fallback={
             <Show when={isTagView()} fallback={<SearchFiltersRow />}>
-              <Show when={!isNewInbox()}>
+              <Show when={!isInboxView()}>
                 <SoupViewContextSort />
               </Show>
               <CollapsibleGroup />
             </Show>
           }
         >
-          <Show when={!isNewInbox()}>
+          <Show when={!isInboxView()}>
             <SoupViewContextSort />
           </Show>
           <CollapsibleGroup />

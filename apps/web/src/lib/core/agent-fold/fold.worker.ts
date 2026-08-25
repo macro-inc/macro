@@ -53,7 +53,14 @@ async function serve(request: FoldRequest): Promise<FoldResponse> {
       streams.get(sessionId)?.free();
       const stream = new wasm.FoldStream(sessionId);
       streams.set(sessionId, stream);
-      return { id, kind, ok: true as const, messages: stream.extend(entries) };
+      const messages = stream.extend(entries);
+      return {
+        id,
+        kind,
+        ok: true as const,
+        messages,
+        metadata: stream.metadata(),
+      };
     })
     .with({ kind: 'push' }, ({ id, kind, sessionId, entries }) => {
       const stream = streams.get(sessionId);
@@ -70,7 +77,13 @@ async function serve(request: FoldRequest): Promise<FoldResponse> {
     .with({ kind: 'messages' }, ({ id, kind, sessionId }) => {
       const stream = streams.get(sessionId);
       if (!stream) throw new Error(`no open fold for session ${sessionId}`);
-      return { id, kind, ok: true as const, messages: stream.messages() };
+      return {
+        id,
+        kind,
+        ok: true as const,
+        messages: stream.messages(),
+        metadata: stream.metadata(),
+      };
     })
     .with({ kind: 'close' }, ({ id, kind, sessionId }) => {
       streams.get(sessionId)?.free();

@@ -1,5 +1,5 @@
 import type { ActivityViewSurfaceProps } from '@app/features/app-layout/layout-surfaces';
-import { displayEntityType } from '@app/features/activity/my-activity-view';
+import { displayEntityType } from '@app/features/activity/display-entity-type';
 import {
   actionAsPropertyChange,
   describeAction,

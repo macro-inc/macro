@@ -303,6 +303,46 @@ export class CoordinatorCore {
     return this.transitionToAbruptLoss(tabId, ownerEpoch, reason);
   }
 
+  departForNavigation(
+    tabId: string,
+    ownerEpoch: OwnerEpoch,
+    reason: string
+  ): CoordinatorAction[] {
+    const state = this.stateValue;
+    if (
+      (state.kind !== 'active' &&
+        state.kind !== 'activating' &&
+        state.kind !== 'draining') ||
+      state.tabId !== tabId ||
+      state.ownerEpoch !== ownerEpoch
+    ) {
+      return this.recordProtocolViolation(
+        `unexpected navigation departure from ${tabId} at epoch ${ownerEpoch}`
+      );
+    }
+
+    const nextDatabaseAction: DatabaseAction =
+      state.kind === 'activating' ? state.databaseAction : 'open-existing';
+    const actions = this.rejectEpochRequests(
+      ownerEpoch,
+      `owner epoch ${ownerEpoch} departed for navigation: ${reason}`,
+      OWNER_EPOCH_LOST_ERROR_CODE
+    );
+    this.removeTabRecord(tabId);
+    this.retiringTabs.delete(tabId);
+    actions.push(
+      { kind: 'close-engine-route', tabId, ownerEpoch },
+      { kind: 'drop-tab', tabId }
+    );
+    this.stateValue = {
+      kind: 'waiting-for-tab',
+      nextDatabaseAction,
+    };
+    actions.push(...this.activateNext(nextDatabaseAction));
+    this.assertInvariants();
+    return actions;
+  }
+
   tabLost(
     tabId: string,
     reason = 'tab liveness lock was released'

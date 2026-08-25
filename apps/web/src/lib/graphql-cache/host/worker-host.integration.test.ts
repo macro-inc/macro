@@ -9,11 +9,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { makeSubject, pipe, type Source, subscribe } from 'wonka';
 import { normalizedCacheExchange } from '../exchange/normalized-cache-exchange';
 import type { CacheRequest, CacheResponse } from '../protocol';
+import { installCacheCoordinatorWorker } from '../worker/cache-coordinator-runtime';
 import { installCacheEngineWorker } from '../worker/cache-engine-runtime';
-import {
-  type CoordinatorMessagePort,
-  CoordinatorRouter,
-} from '../worker/coordinator-router';
+import { CoordinatorRouter } from '../worker/coordinator-router';
 import type { CacheHost } from './types';
 import { createWorkerCacheHost } from './worker-host';
 
@@ -69,21 +67,28 @@ function optimisticMutation(key: number, query: Operation['query']): Operation {
   } as never);
 }
 
-class LinkedMessagePort {
+class LinkedMessagePort extends EventTarget {
   peer: LinkedMessagePort | undefined;
   onmessage: ((event: MessageEvent<unknown>) => void) | null = null;
   onmessageerror: (() => void) | null = null;
   closed = false;
 
-  postMessage(message: unknown, transfer: Transferable[] = []): void {
+  postMessage(
+    message: unknown,
+    transfer: Transferable[] | StructuredSerializeOptions = []
+  ): void {
     const peer = this.peer;
     if (this.closed || !peer || peer.closed) return;
+    const ports = (
+      Array.isArray(transfer) ? transfer : (transfer.transfer ?? [])
+    ) as MessagePort[];
     queueMicrotask(() => {
       if (peer.closed) return;
       peer.onmessage?.({
         data: message,
-        ports: transfer,
+        ports,
       } as unknown as MessageEvent);
+      peer.dispatchEvent(new MessageEvent('message', { data: message, ports }));
     });
   }
 
@@ -239,7 +244,10 @@ class IntegrationSharedWorker {
   constructor(router: CoordinatorRouter) {
     const channel = new LinkedMessageChannel();
     this.port = channel.port1;
-    router.connect(channel.port2 as unknown as CoordinatorMessagePort);
+    installCacheCoordinatorWorker({
+      endpoint: channel.port2 as unknown as MessagePort,
+      router,
+    });
   }
 
   fail(message: string): void {
@@ -502,7 +510,7 @@ describe('worker CacheHost coordinator integration', () => {
     host.dispose();
   });
 
-  it('keeps API forwarding at zero when pagehide abandons an admitted enqueue', async () => {
+  it('keeps API forwarding at zero and preserves scope when pagehide abandons an admitted enqueue', async () => {
     const gate = deferred();
     enqueueGates.set('HoldPagehide', gate.promise);
     localStorage.setItem('graphql-cache:scope', 'integration-scope');
@@ -528,10 +536,8 @@ describe('worker CacheHost coordinator integration', () => {
     expect(results[0]?.error?.networkError).toMatchObject({
       errorCode: 'admitted-enqueue-uncertain',
     });
-    await vi.waitFor(() =>
-      expect(localStorage.getItem('graphql-cache:scope')).toBe(
-        'quarantine:integration-scope'
-      )
+    expect(localStorage.getItem('graphql-cache:scope')).toBe(
+      'integration-scope'
     );
   });
 

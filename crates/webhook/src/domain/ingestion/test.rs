@@ -159,7 +159,7 @@ impl EntityAccessService for MockAccessService {
     ) -> Result<Vec<MacroUserIdStr<'static>>, AccessError> {
         lock(&self.calls).push((entity_id.to_string(), entity_type));
         match self.failure {
-            Some(AccessFailure::Internal) => Err(AccessError::Internal),
+            Some(AccessFailure::Internal) => Err(AccessError::internal("mock access failure")),
             None => Ok(self.users.clone()),
         }
     }
@@ -447,6 +447,8 @@ fn document_event_cases() -> Vec<EventCase> {
                 DocumentTopicEvent::Created(DocumentCreatedMetadata {
                     document_id: DOCUMENT_ID.to_string(),
                     owner: user_id("macro|owner@example.com"),
+                    actor: None,
+                    on_behalf_of: None,
                     document_name: "notes".to_string(),
                     file_type: None,
                     project_id: None,
@@ -1264,11 +1266,13 @@ async fn malformed_document_id_is_permanent_and_skips_access_resolution() {
 
 #[test]
 fn classifies_adapter_and_contract_errors() {
-    let database_error = WebhookEventIngestionError::EntityAccess(AccessError::DatabaseError(
-        sqlx::Error::PoolTimedOut,
-    ));
-    assert!(database_error.is_transient());
-    assert!(WebhookEventIngestionError::EntityAccess(AccessError::Internal).is_transient());
+    let transient_db_error =
+        WebhookEventIngestionError::EntityAccess(AccessError::from(sqlx::Error::PoolTimedOut));
+    assert!(transient_db_error.is_transient());
+    let permanent_db_error =
+        WebhookEventIngestionError::EntityAccess(AccessError::from(sqlx::Error::RowNotFound));
+    assert!(!permanent_db_error.is_transient());
+    assert!(!WebhookEventIngestionError::EntityAccess(AccessError::internal("bug")).is_transient());
     assert!(!WebhookEventIngestionError::EntityAccess(AccessError::Unauthorized).is_transient());
 
     let serialization_error = serde_json::from_str::<Value>("{").expect_err("invalid json");
@@ -1279,7 +1283,7 @@ fn classifies_adapter_and_contract_errors() {
 }
 
 #[tokio::test]
-async fn entity_access_internal_error_is_transient() {
+async fn entity_access_internal_error_is_not_transient() {
     let access = MockAccessService {
         users: Vec::new(),
         failure: Some(AccessFailure::Internal),
@@ -1297,7 +1301,141 @@ async fn entity_access_internal_error_is_transient() {
 
     assert!(matches!(
         error,
-        WebhookEventIngestionError::EntityAccess(AccessError::Internal)
+        WebhookEventIngestionError::EntityAccess(AccessError::Internal(_))
     ));
-    assert!(error.is_transient());
+    assert!(!error.is_transient());
+}
+
+fn agent_trigger_new_event() -> Event<agent_trigger::domain::broker_events::AgentTriggerTopicEvent>
+{
+    use agent_trigger::domain::broker_events::{
+        AgentBotMentionedEvent, AgentTriggerTopicEvent, NewAgentSessionEvent,
+    };
+    use channels::domain::broker_events::ChannelMessagePostedMetadata;
+    use channels::domain::models::ChannelType;
+
+    Event::new(AgentTriggerTopicEvent::New(
+        NewAgentSessionEvent::TopLevelMentioned(AgentBotMentionedEvent {
+            bot_id: bot_id::BotId::new_from_uuid(uuid::Uuid::from_u128(0xB07)),
+            message: ChannelMessagePostedMetadata {
+                channel_id: uuid::Uuid::from_u128(1),
+                message_id: uuid::Uuid::from_u128(2),
+                thread_id: None,
+                sender: sender("macro|asker@example.com"),
+                triggered_by: None,
+                channel_type: ChannelType::Public,
+                content: "fix the flaky test".to_owned(),
+                mentions: vec![],
+                attachments: vec![],
+                created_at: timestamp(),
+            },
+        }),
+    ))
+}
+
+fn agent_trigger_existing_event()
+-> Event<agent_trigger::domain::broker_events::AgentTriggerTopicEvent> {
+    use agent_trigger::domain::broker_events::{
+        AgentTriggerTopicEvent, ChannelEventMetadata, ExistingAgentSessionEvent,
+    };
+    use channels::domain::broker_events::ChannelMessagePostedMetadata;
+    use channels::domain::models::ChannelType;
+
+    Event::new(AgentTriggerTopicEvent::Existing(
+        ExistingAgentSessionEvent::Channel(ChannelEventMetadata {
+            bot_id: bot_id::BotId::new_from_uuid(uuid::Uuid::from_u128(0xB07)),
+            session_id: agent_session::domain::model::AgentSessionId::TEST_A,
+            message: ChannelMessagePostedMetadata {
+                channel_id: uuid::Uuid::from_u128(1),
+                message_id: uuid::Uuid::from_u128(2),
+                thread_id: None,
+                sender: sender("macro|asker@example.com"),
+                triggered_by: None,
+                channel_type: ChannelType::Public,
+                content: "and now the other one".to_owned(),
+                mentions: vec![],
+                attachments: vec![],
+                created_at: timestamp(),
+            },
+        }),
+    ))
+}
+
+/// A follow-up on a session that exists asks the session, not the channel:
+/// the session carries its own grants, so whatever channel a later message
+/// landed in is incidental.
+#[tokio::test]
+async fn an_existing_session_trigger_is_gated_by_the_session() {
+    let access = MockAccessService::with_users(vec![user_id(PERSONAL_WORKSPACE_ID)]);
+    let repository = MockRepository::new(
+        vec![PERSONAL_WORKSPACE_ID.to_string()],
+        vec![webhook("wh_agent_feed", PERSONAL_WORKSPACE_ID)],
+    );
+    let service = service(access.clone(), repository.clone(), MockEnqueuer::default());
+
+    service
+        .ingest_agent_trigger_event(agent_trigger_existing_event())
+        .await
+        .expect("agent trigger events are ingested");
+
+    assert_eq!(
+        lock(&access.calls).as_slice(),
+        &[(
+            agent_session::domain::model::AgentSessionId::TEST_A.to_string(),
+            EntityType::AgentSession
+        )],
+    );
+}
+
+#[tokio::test]
+async fn agent_trigger_events_are_scoped_by_the_channel_but_named_by_the_bot() {
+    let access = MockAccessService::with_users(vec![user_id(PERSONAL_WORKSPACE_ID)]);
+    let repository = MockRepository::new(
+        vec![PERSONAL_WORKSPACE_ID.to_string()],
+        vec![webhook("wh_agent_feed", PERSONAL_WORKSPACE_ID)],
+    );
+    let enqueuer = MockEnqueuer::default();
+    let service = service(access.clone(), repository.clone(), enqueuer.clone());
+    let event = agent_trigger_new_event();
+
+    service
+        .ingest_agent_trigger_event(event.clone())
+        .await
+        .expect("agent trigger events are ingested");
+
+    let bot_id = bot_id::BotId::new_from_uuid(uuid::Uuid::from_u128(0xB07)).to_string();
+    // Who may see it is decided by the channel the mention sits in - the same
+    // question a channel event asks - not by the bot.
+    assert_eq!(
+        lock(&access.calls).as_slice(),
+        &[(uuid::Uuid::from_u128(1).to_string(), EntityType::Channel)],
+    );
+    let repository_state = lock(&repository.state);
+    // ...but the entity matched on is the bot, so a filter's `ids` scopes a
+    // subscriber to exactly one bot's triggers.
+    assert_eq!(repository_state.match_calls.len(), 1);
+    assert_eq!(repository_state.match_calls[0].entity_id, bot_id);
+    assert_eq!(
+        repository_state.match_calls[0].event_name,
+        "agent_trigger.new"
+    );
+    assert_eq!(
+        repository_state.match_calls[0].workspace_ids,
+        vec![PERSONAL_WORKSPACE_ID.to_string()]
+    );
+    drop(repository_state);
+
+    // The delivered body is the broker envelope, verbatim: exactly what the
+    // daemon on the other end decodes.
+    let enqueuer_state = lock(&enqueuer.state);
+    assert_eq!(enqueuer_state.attempted_messages.len(), 1);
+    let normalized = &enqueuer_state.attempted_messages[0].event;
+    assert_eq!(normalized.event_name, "agent_trigger.new");
+    assert_eq!(normalized.entity_type, "bot");
+    assert_eq!(normalized.entity_id, bot_id);
+    assert_eq!(normalized.ordering_key, bot_id);
+    assert_eq!(
+        normalized.broker_envelope,
+        serde_json::to_value(&event).expect("a serializable envelope"),
+    );
 }

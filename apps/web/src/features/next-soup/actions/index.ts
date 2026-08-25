@@ -1,3 +1,4 @@
+export { makeAddTagAction } from './make-add-tag-action';
 export { makeBlockSenderAction } from './make-block-sender-action';
 export { makeCopyAction } from './make-copy-action';
 export { makeCopyBranchNameAction } from './make-copy-branch-name-action';

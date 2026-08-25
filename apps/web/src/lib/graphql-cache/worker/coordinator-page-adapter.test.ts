@@ -6,22 +6,32 @@ import {
 } from './coordinator-page-adapter';
 import { CACHE_COORDINATOR_PROTOCOL_VERSION } from './coordinator-protocol';
 
-class FakeCoordinatorPort {
+class FakeCoordinatorPort extends EventTarget {
   readonly messages: Array<{ message: unknown; transfer: Transferable[] }> = [];
   onmessage: ((event: MessageEvent<unknown>) => void) | null = null;
-  onmessageerror: (() => void) | null = null;
+  onmessageerror: (() => void) | null = () => {
+    this.dispatchEvent(new MessageEvent('messageerror'));
+  };
   closed = false;
   readonly events: string[] = [];
   readonly throwKinds = new Set<string>();
 
   postMessage(message: unknown, transfer: Transferable[] = []): void {
-    const kind = String((message as { kind?: unknown }).kind);
+    if (Array.isArray(message) && message[0] === 1) {
+      this.events.push('post:effect-close');
+      return;
+    }
+    const payload =
+      Array.isArray(message) && message[0] === 0 ? message[1] : message;
+    const kind = String((payload as { kind?: unknown }).kind);
     this.events.push(`post:${kind}`);
     if (this.throwKinds.has(kind)) throw new Error(`${kind} send failed`);
-    this.messages.push({ message, transfer });
+    this.messages.push({ message: payload, transfer });
   }
 
-  start(): void {}
+  start(): void {
+    this.dispatchEvent(new MessageEvent('message', { data: [0] }));
+  }
 
   close(): void {
     this.closed = true;
@@ -29,7 +39,7 @@ class FakeCoordinatorPort {
   }
 
   receive(message: unknown): void {
-    this.onmessage?.({ data: message } as MessageEvent);
+    this.dispatchEvent(new MessageEvent('message', { data: [1, message] }));
   }
 }
 
@@ -171,8 +181,10 @@ describe('CacheCoordinatorPageAdapter', () => {
       order.push('terminated');
     };
     coordinatorPort.postMessage = (message, transfer = []) => {
-      coordinatorPort.messages.push({ message, transfer });
-      if ((message as { kind?: string }).kind === 'engine-lost') {
+      const payload =
+        Array.isArray(message) && message[0] === 0 ? message[1] : message;
+      coordinatorPort.messages.push({ message: payload, transfer });
+      if ((payload as { kind?: string }).kind === 'engine-lost') {
         order.push('loss-reported');
       }
     };
@@ -308,6 +320,45 @@ describe('CacheCoordinatorPageAdapter', () => {
     expect(terminalErrors).toEqual(['coordinator construction failed']);
   });
 
+  it('closes an unpublished SharedWorker when Effect transport setup fails', async () => {
+    const coordinatorPort = new FakeCoordinatorPort();
+    const addEventListener =
+      coordinatorPort.addEventListener.bind(coordinatorPort);
+    vi.spyOn(coordinatorPort, 'addEventListener').mockImplementation(
+      (type, listener, options) => {
+        if (type === 'messageerror') {
+          throw new Error('transport listener setup failed');
+        }
+        addEventListener(type, listener, options);
+      }
+    );
+    const terminalErrors: string[] = [];
+    const messages: unknown[] = [];
+    const adapter = createCacheCoordinatorPageAdapter({
+      scope: 'scope',
+      tabId: 'tab-a',
+      lockManager: heldLockManager(),
+      createSharedWorker: () => ({
+        port: coordinatorPort as unknown as MessagePort,
+      }),
+      createDedicatedWorker: () => new FakeWorker(),
+      onTerminalError: (error) => terminalErrors.push(error.message),
+    });
+    adapter.onmessage = (event) => messages.push(event.data);
+
+    adapter.postMessage({ id: 1, kind: 'clear' });
+    await vi.waitFor(() => expect(messages).toHaveLength(1));
+
+    expect(coordinatorPort.closed).toBe(true);
+    expect(coordinatorPort.events.filter((event) => event === 'close')).toEqual(
+      ['close']
+    );
+    expect(messages).toEqual([
+      { id: 1, ok: false, error: 'transport listener setup failed' },
+    ]);
+    expect(terminalErrors).toEqual(['transport listener setup failed']);
+  });
+
   it('keeps registered coordinator protocol diagnostics advisory', async () => {
     const coordinatorPort = new FakeCoordinatorPort();
     const protocolErrors: string[] = [];
@@ -428,7 +479,9 @@ describe('CacheCoordinatorPageAdapter', () => {
 
     expect(dedicatedFactory).not.toHaveBeenCalled();
     expect(coordinatorPort.closed).toBe(true);
-    expect(terminalErrors).toEqual(['coordinator MessagePort messageerror']);
+    expect(terminalErrors).toEqual([
+      'coordinator Effect transport failed: Effect worker transport messageerror',
+    ]);
   });
 
   it.each(['register-tab', 'cache-request'] as const)(
@@ -556,11 +609,24 @@ describe('CacheCoordinatorPageAdapter', () => {
   });
 
   it.each([
-    { graceful: true, throwKind: 'graceful-departure' },
-    { graceful: false, throwKind: 'disconnect-tab' },
+    {
+      graceful: true,
+      preserveDatabase: false,
+      throwKind: 'graceful-departure',
+    },
+    {
+      graceful: false,
+      preserveDatabase: false,
+      throwKind: 'disconnect-tab',
+    },
+    {
+      graceful: false,
+      preserveDatabase: true,
+      throwKind: 'navigation-departure',
+    },
   ])(
-    'settles $graceful disposal when $throwKind send throws',
-    async ({ graceful, throwKind }) => {
+    'settles disposal when $throwKind send throws',
+    async ({ graceful, preserveDatabase, throwKind }) => {
       const coordinatorPort = new FakeCoordinatorPort();
       const worker = new FakeWorker();
       const terminalErrors: string[] = [];
@@ -585,7 +651,7 @@ describe('CacheCoordinatorPageAdapter', () => {
       coordinatorPort.receive(election(1));
       coordinatorPort.throwKinds.add(throwKind);
 
-      await adapter.dispose({ graceful });
+      await adapter.dispose({ graceful, preserveDatabase });
 
       expect(worker.terminated).toBe(true);
       expect(coordinatorPort.closed).toBe(true);
@@ -732,7 +798,7 @@ describe('CacheCoordinatorPageAdapter', () => {
     ]);
   });
 
-  it('escalates an owner graceful drain to abrupt disposal on pagehide', async () => {
+  it('escalates an owner graceful drain to storage-preserving navigation disposal', async () => {
     const coordinatorPort = new FakeCoordinatorPort();
     const worker = new FakeWorker();
     const adapter = createCacheCoordinatorPageAdapter({
@@ -752,15 +818,23 @@ describe('CacheCoordinatorPageAdapter', () => {
 
     const graceful = adapter.dispose({ graceful: true });
     expect(worker.terminated).toBe(false);
-    const abrupt = adapter.dispose({ graceful: false });
-    expect(abrupt).toBe(graceful);
-    await abrupt;
+    const navigation = adapter.dispose({
+      graceful: false,
+      preserveDatabase: true,
+    });
+    expect(navigation).toBe(graceful);
+    await navigation;
 
     expect(worker.terminated).toBe(true);
     expect(coordinatorPort.closed).toBe(true);
     expect(
-      coordinatorPort.events.filter((event) => event === 'post:disconnect-tab')
+      coordinatorPort.events.filter(
+        (event) => event === 'post:navigation-departure'
+      )
     ).toHaveLength(1);
+    expect(
+      coordinatorPort.events.filter((event) => event === 'post:disconnect-tab')
+    ).toHaveLength(0);
   });
 
   it('terminal-fails when the owned engine crashes during graceful drain', async () => {

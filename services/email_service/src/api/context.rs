@@ -38,6 +38,7 @@ pub(crate) type CalendarMutationSvc = CalendarMutationServiceImpl<
     PgCalendarRepository,
     GoogleCalendarClient<RedisCalendarRequestGate>,
     CalendarTokenProviderAdapter,
+    EmailEventBroker,
 >;
 pub(crate) type EmailEntityAccessService = EntityAccessServiceImpl<PgAccessRepository>;
 pub(crate) type EmailEntityAccessManagementService =

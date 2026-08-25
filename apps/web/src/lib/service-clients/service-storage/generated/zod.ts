@@ -713,7 +713,7 @@ export const getSelfBotResponse = zod
       .optional(),
     updated_at: zod.iso.datetime({}).describe('Update timestamp.'),
   })
-  .describe('Bot row.');
+  .describe('Bot row.\n\nClients deserialize this, so both derives are used.');
 
 /**
  * @summary Handler for `GET /bots/{bot_id}/channels`.
@@ -1154,6 +1154,40 @@ export const mentionPreviewsResponse = zod
     ),
   })
   .describe('Batch calendar mention preview response.');
+
+/**
+ * Lists all active calls in channels the caller is an active member of,
+newest first. Calls with no active participants (orphaned by dropped RTC
+webhooks) are excluded.
+ * @summary Handler for `GET /call/active`.
+ */
+export const getActiveCallsResponse = zod
+  .object({
+    calls: zod
+      .array(
+        zod
+          .object({
+            callId: zod.uuid().describe('The call identifier.'),
+            channelId: zod.uuid().describe('The channel this call belongs to.'),
+            createdAt: zod.iso
+              .datetime({})
+              .describe('When the call was created.'),
+            createdBy: zod.string().describe('User who created the call.'),
+            participantCount: zod
+              .number()
+              .describe(
+                'Number of active participants. Always >= 1 — calls with no active\nparticipants (e.g. orphaned by a dropped RTC webhook) are excluded.'
+              ),
+          })
+          .describe(
+            'A currently active call, as returned by the batch active-calls listing.'
+          )
+      )
+      .describe('The active calls, newest first.'),
+  })
+  .describe(
+    'Response listing all active calls in channels the caller is a member of.'
+  );
 
 /**
  * Batch-fetches lightweight previews for a list of call ids. Mirrors the
@@ -2287,6 +2321,12 @@ export const createChannelScopedBotBody = zod
     avatar_url: zod.string().nullish().describe('Optional avatar URL.'),
     description: zod.string().nullish().describe('Optional description.'),
     handle: zod.string().describe('Stable handle.'),
+    has_agent: zod
+      .boolean()
+      .nullish()
+      .describe(
+        'Whether mentioning this bot opens a sandboxed coding-agent session. Defaults to false.'
+      ),
     name: zod.string().describe('Display name.'),
     team_id: zod
       .uuid()
@@ -3218,6 +3258,156 @@ export const postChannelBotWebhookResponse = zod
   .describe('Response returned after posting a channel webhook message.');
 
 /**
+ * @summary Fetch a collab surface.
+ */
+export const getCollabSurfaceParams = zod.object({
+  id: zod.uuid().describe('The surface id.'),
+});
+
+export const getCollabSurfaceResponse = zod
+  .object({
+    id: zod
+      .uuid()
+      .describe('The surface id — also the sync-service session key.'),
+    parentEntityId: zod.string().describe('Id of the parent entity.'),
+    parentEntityType: zod
+      .enum([
+        'user',
+        'chat',
+        'channel',
+        'channel_message',
+        'document',
+        'project',
+        'email_thread',
+        'calendar_event',
+        'team',
+        'call',
+        'foreign_entity',
+        'static_file',
+        'crm_company',
+        'crm_contact',
+        'reminder',
+        'skill',
+        'agent_session',
+      ])
+      .describe('The type of an entity in Macro')
+      .describe('Type of the parent entity.'),
+    state: zod
+      .enum(['pending', 'ready'])
+      .describe(
+        'Lifecycle state of a collab surface.\n\n`Pending` means the row exists but the sync-service session may not: the\nrow is inserted before the durable object is initialized and flipped to\n`Ready` once the initial snapshot is stored. A persisted `Pending` row is\nan ensure that died or failed mid-init; the next ensure for the same id\nretries initialization (the initializer tolerates an already-initialized\nsession), so `Pending` is self-healing rather than terminal.'
+      ),
+  })
+  .describe('A collab surface, as returned by the API.');
+
+/**
+ * The id is caller-supplied, so an embedding surface can hold a stable id
+and blindly ensure it on mount: the first ensure creates and initializes
+the session, every later one (including concurrent ones) returns the same
+surface. A soft-deleted id is `410 Gone` and never comes back.
+ * @summary Idempotently ensure a collab surface exists (load-or-create).
+ */
+export const ensureCollabSurfaceParams = zod.object({
+  id: zod.uuid().describe('The surface id.'),
+});
+
+export const ensureCollabSurfaceBody = zod
+  .object({
+    initialMarkdown: zod
+      .string()
+      .optional()
+      .describe(
+        'Markdown to seed the surface with when this ensure creates it. Empty\n(or omitted) seeds the canonical blank document. Ignored when the\nsurface already exists and is ready.'
+      ),
+    parentEntityId: zod.string().describe('Id of the parent entity (a uuid).'),
+    parentEntityType: zod
+      .enum([
+        'user',
+        'chat',
+        'channel',
+        'channel_message',
+        'document',
+        'project',
+        'email_thread',
+        'calendar_event',
+        'team',
+        'call',
+        'foreign_entity',
+        'static_file',
+        'crm_company',
+        'crm_contact',
+        'reminder',
+        'skill',
+        'agent_session',
+      ])
+      .describe('The type of an entity in Macro')
+      .describe('Type of the parent entity access derives from.'),
+  })
+  .describe('Request body for ensuring a collab surface.');
+
+export const ensureCollabSurfaceResponse = zod
+  .object({
+    id: zod
+      .uuid()
+      .describe('The surface id — also the sync-service session key.'),
+    parentEntityId: zod.string().describe('Id of the parent entity.'),
+    parentEntityType: zod
+      .enum([
+        'user',
+        'chat',
+        'channel',
+        'channel_message',
+        'document',
+        'project',
+        'email_thread',
+        'calendar_event',
+        'team',
+        'call',
+        'foreign_entity',
+        'static_file',
+        'crm_company',
+        'crm_contact',
+        'reminder',
+        'skill',
+        'agent_session',
+      ])
+      .describe('The type of an entity in Macro')
+      .describe('Type of the parent entity.'),
+    state: zod
+      .enum(['pending', 'ready'])
+      .describe(
+        'Lifecycle state of a collab surface.\n\n`Pending` means the row exists but the sync-service session may not: the\nrow is inserted before the durable object is initialized and flipped to\n`Ready` once the initial snapshot is stored. A persisted `Pending` row is\nan ensure that died or failed mid-init; the next ensure for the same id\nretries initialization (the initializer tolerates an already-initialized\nsession), so `Pending` is self-healing rather than terminal.'
+      ),
+  })
+  .describe('A collab surface, as returned by the API.');
+
+/**
+ * @summary Soft-delete a collab surface.
+ */
+export const deleteCollabSurfaceParams = zod.object({
+  id: zod.uuid().describe('The surface id.'),
+});
+
+/**
+ * @summary Mint a sync-service connection token for a surface.
+ */
+export const createCollabSurfaceTokenParams = zod.object({
+  id: zod.uuid().describe('The surface id.'),
+});
+
+export const createCollabSurfaceTokenResponse = zod
+  .object({
+    token: zod
+      .string()
+      .describe(
+        'The signed JWT to pass to the sync-service websocket connect.'
+      ),
+  })
+  .describe(
+    'Response carrying a freshly minted sync-service connection token.'
+  );
+
+/**
  * @summary Handle channel list requests for `GET /comms/channels`.
  */
 export const getChannelsQueryLimitMin = 0;
@@ -4046,6 +4236,60 @@ export const setCrmCompanyNameBody = zod
       ),
   })
   .describe('Request body for `PUT \/companies\/{company_id}\/name`.');
+
+/**
+ * @summary Look up a CRM contact by email in the caller's team. Returns a null
+`contact` when no visible contact exists. Any team member may resolve a
+visible contact; admin/owner callers may also resolve hidden contacts and
+contacts under hidden companies.
+ */
+export const getContactByEmailQueryParams = zod.object({
+  email: zod
+    .string()
+    .describe("The contact email to resolve within the caller's team."),
+});
+
+export const getContactByEmailResponse = zod
+  .object({
+    contact: zod
+      .union([
+        zod.null(),
+        zod
+          .object({
+            companyId: zod
+              .uuid()
+              .describe('The id of the company the contact belongs to.'),
+            createdAt: zod.iso
+              .datetime({})
+              .describe('When the contact record was created.'),
+            email: zod.string().describe("The contact's email address."),
+            firstInteraction: zod.iso
+              .datetime({})
+              .describe('Earliest known interaction with this contact.'),
+            hidden: zod
+              .boolean()
+              .describe(
+                'Whether the contact is hidden from CRM listings for the\nrequesting team. Non-admin viewers never see `hidden = true`\nrows (the endpoint filters them out); admin\/owner callers see\nhidden contacts so they can render the right toggle state.'
+              ),
+            id: zod.uuid().describe('The id of the contact record.'),
+            lastInteraction: zod.iso
+              .datetime({})
+              .describe('Most recent known interaction with this contact.'),
+            name: zod
+              .string()
+              .nullish()
+              .describe('Display name observed for the contact, if any.'),
+            updatedAt: zod.iso
+              .datetime({})
+              .describe('When the contact record was last updated.'),
+          })
+          .describe(
+            'A CRM contact as returned by `GET \/crm\/companies\/{company_id}\/contacts`.'
+          ),
+      ])
+      .optional(),
+  })
+  .describe('Response from looking up a CRM contact by email.');
 
 /**
  * @summary Fetch a single CRM contact by id. Access is enforced by
@@ -26952,14 +27196,16 @@ export const listWebhooksResponse = zod
             updated_at: zod.iso.datetime({}).describe('Update timestamp.'),
             workspace_id: zod.string().describe('Owning workspace id.'),
           })
-          .describe('Webhook row returned by application APIs.')
+          .describe(
+            'Webhook row returned by application APIs.\n\nClients deserialize this, so both derives are used.'
+          )
       )
       .describe(
         "The caller's webhooks, newest first. Signing secrets are omitted."
       ),
   })
   .describe(
-    'Webhooks visible to the caller across their personal and team workspaces.'
+    'Webhooks visible to the caller across their personal and team workspaces.\n\nClients deserialize this, so both derives are used.'
   );
 
 /**
@@ -26998,9 +27244,13 @@ export const createWebhookBody = zod
       ),
     scope: zod
       .enum(['user', 'team'])
-      .describe('Scope that owns a newly-created webhook.'),
+      .describe(
+        'Scope that owns a newly-created webhook.\n\nClients serialize this, so both derives are used.'
+      ),
   })
-  .describe('Request to create a webhook.');
+  .describe(
+    'Request to create a webhook.\n\nClients serialize this, so both derives are used.'
+  );
 
 /**
  * @summary Get a webhook.
@@ -27056,7 +27306,9 @@ export const getWebhookResponse = zod
     updated_at: zod.iso.datetime({}).describe('Update timestamp.'),
     workspace_id: zod.string().describe('Owning workspace id.'),
   })
-  .describe('Webhook row returned by application APIs.');
+  .describe(
+    'Webhook row returned by application APIs.\n\nClients deserialize this, so both derives are used.'
+  );
 
 /**
  * @summary Delete a webhook.
@@ -27164,7 +27416,9 @@ export const patchWebhookResponse = zod
     updated_at: zod.iso.datetime({}).describe('Update timestamp.'),
     workspace_id: zod.string().describe('Owning workspace id.'),
   })
-  .describe('Webhook row returned by application APIs.');
+  .describe(
+    'Webhook row returned by application APIs.\n\nClients deserialize this, so both derives are used.'
+  );
 
 /**
  * @summary Validate a webhook endpoint.

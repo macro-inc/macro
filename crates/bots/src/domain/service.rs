@@ -10,7 +10,9 @@ use super::{
     ports::{BotError, BotRepo, BotService},
     tokens,
 };
+use bot_token::HashedBotToken;
 use chrono::{DateTime, Utc};
+use entity_access::domain::models::{EntityAccessReceipt, EntityType, MemberParticipantRole};
 use macro_event_broker::MacroEventBroker;
 use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;
@@ -198,10 +200,16 @@ where
         let generated_token = tokens::generate_token();
         let (bot, token) = self
             .repo
-            .create_channel_scoped_bot(owner, caller, channel_id, generated_token, req)
+            .create_channel_scoped_bot(
+                owner,
+                caller,
+                channel_id,
+                HashedBotToken::from_raw(&generated_token),
+                req,
+            )
             .await
             .map_err(|err| BotError::Repo(err.into()))?;
-        let bot_token = token.token.clone();
+        let bot_token = generated_token;
 
         self.publish_bot_event(&BotMacroEvent::created(BotCreatedMetadata {
             bot_id: bot.id,
@@ -308,10 +316,20 @@ where
 
     async fn add_bot_to_channel(
         &self,
-        caller: MacroUserIdStr<'static>,
-        channel_id: Uuid,
+        access: EntityAccessReceipt<MemberParticipantRole>,
         bot_id: BotId,
     ) -> Result<(), BotError> {
+        if access.entity().entity_type != EntityType::Channel {
+            return Err(BotError::BadRequest(
+                "channel access receipt required".to_string(),
+            ));
+        }
+        let channel_id = Uuid::parse_str(&access.entity().entity_id)
+            .map_err(|error| BotError::BadRequest(error.to_string()))?;
+        let caller = access
+            .get_authenticated_user()
+            .cloned()
+            .map_err(|_| BotError::Unauthorized)?;
         self.ensure_manageable(caller, bot_id).await?;
         self.repo
             .add_bot_to_channel(channel_id, bot_id)
@@ -376,14 +394,13 @@ where
         let generated_token = tokens::generate_token();
         let token = self
             .repo
-            .create_token(bot_id, generated_token, req)
+            .create_token(bot_id, HashedBotToken::from_raw(&generated_token), req)
             .await
             .map_err(|err| BotError::Repo(err.into()))?;
-        let bearer_token = token.token.clone();
 
         Ok(super::models::CreateBotTokenResponse {
             token,
-            bearer_token,
+            bearer_token: generated_token,
         })
     }
 

@@ -1,20 +1,23 @@
 //! In-memory container and provisioner test doubles.
 
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
 use agent_client_protocol::RawJsonRpcMessage;
-use agent_runtime_protocol::domain::ports::{Transport, TransportError};
+use agent_runtime_protocol::domain::ports::{
+    Transport, TransportError, TransportReceiver, TransportSender,
+};
 use agent_runtime_protocol::domain::schema::v0::{
     AcpMessage, SystemEvent, ToRuntimeMessage, ToServerMessage,
 };
-use agent_session::domain::model::AgentSessionId;
+use agent_session::domain::model::{AgentSessionId, SandboxSize};
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender, unbounded_channel};
 
 use crate::domain::error::{HarnessError, Result};
 use crate::domain::model::SpawnContainer;
 use crate::domain::ports::ContainerManager;
+use crate::domain::sandbox::{SandboxResizeEffect, create_only_resize_effect, resize_effect};
 use crate::testing::helpers::agent::FakeAgent;
 
 /// A container connection driven by hand.
@@ -111,7 +114,38 @@ impl ContainerMock {
     }
 }
 
+/// A [`ContainerMock`]'s sending half. Shares the mock's recorded state, so a
+/// test still observes sends through the mock it kept.
+pub struct ContainerSender {
+    agent: FakeAgent,
+    outbound: Arc<Mutex<Vec<ToRuntimeMessage>>>,
+    send_budget: Arc<Mutex<Option<usize>>>,
+}
+
+/// A [`ContainerMock`]'s receiving half.
+pub struct ContainerReceiver {
+    inbound: Arc<tokio::sync::Mutex<Inbound>>,
+}
+
 impl Transport<ToRuntimeMessage, ToServerMessage> for ContainerMock {
+    type Sender = ContainerSender;
+    type Receiver = ContainerReceiver;
+
+    fn split(self) -> (Self::Sender, Self::Receiver) {
+        (
+            ContainerSender {
+                agent: self.agent,
+                outbound: self.outbound,
+                send_budget: self.send_budget,
+            },
+            ContainerReceiver {
+                inbound: self.inbound,
+            },
+        )
+    }
+}
+
+impl TransportSender<ToRuntimeMessage> for ContainerSender {
     async fn send(&self, message: ToRuntimeMessage) -> Result<(), TransportError> {
         if let Some(budget) = self
             .send_budget
@@ -138,8 +172,10 @@ impl Transport<ToRuntimeMessage, ToServerMessage> for ContainerMock {
 
         Ok(())
     }
+}
 
-    async fn recv(&self) -> Result<Option<ToServerMessage>, TransportError> {
+impl TransportReceiver<ToServerMessage> for ContainerReceiver {
+    async fn recv(&mut self) -> Result<Option<ToServerMessage>, TransportError> {
         let mut inbound = self.inbound.lock().await;
         let Inbound { events, frames } = &mut *inbound;
 
@@ -160,6 +196,10 @@ impl Transport<ToRuntimeMessage, ToServerMessage> for ContainerMock {
 #[derive(Clone, Default)]
 pub struct MockContainerManager {
     containers: Arc<Mutex<HashMap<AgentSessionId, ContainerMock>>>,
+    spawn_error: Arc<Mutex<Option<String>>>,
+    spawn_sizes: Arc<Mutex<Vec<SandboxSize>>>,
+    resizes: Arc<Mutex<Vec<(AgentSessionId, SandboxSize)>>>,
+    resize_unsupported: Arc<AtomicBool>,
     resumes: Arc<AtomicUsize>,
     teardowns: Arc<AtomicUsize>,
 }
@@ -189,6 +229,14 @@ impl MockContainerManager {
         self.lock().len()
     }
 
+    /// Make the next sandbox spawn fail with `message`.
+    pub fn fail_next_spawn(&self, message: impl Into<String>) {
+        *self
+            .spawn_error
+            .lock()
+            .expect("spawn error lock should not be poisoned") = Some(message.into());
+    }
+
     /// How many times an existing sandbox was requested.
     #[must_use]
     pub fn resumed(&self) -> usize {
@@ -199,6 +247,29 @@ impl MockContainerManager {
     #[must_use]
     pub fn torn_down(&self) -> usize {
         self.teardowns.load(Ordering::Relaxed)
+    }
+
+    /// Sizes requested at spawn, in order.
+    #[must_use]
+    pub fn spawn_sizes(&self) -> Vec<SandboxSize> {
+        self.spawn_sizes
+            .lock()
+            .expect("spawn sizes lock should not be poisoned")
+            .clone()
+    }
+
+    /// Resize requests, in order.
+    #[must_use]
+    pub fn resizes(&self) -> Vec<(AgentSessionId, SandboxSize)> {
+        self.resizes
+            .lock()
+            .expect("resizes lock should not be poisoned")
+            .clone()
+    }
+
+    /// Report [`SandboxResizeEffect::Unsupported`] for any real size change.
+    pub fn refuse_resize(&self) {
+        self.resize_unsupported.store(true, Ordering::Relaxed);
     }
 
     fn lock(&self) -> std::sync::MutexGuard<'_, HashMap<AgentSessionId, ContainerMock>> {
@@ -212,9 +283,47 @@ impl ContainerManager for MockContainerManager {
     type Transport = ContainerMock;
 
     async fn spawn(&self, command: SpawnContainer) -> Result<ContainerMock, HarnessError> {
+        if let Some(message) = self
+            .spawn_error
+            .lock()
+            .expect("spawn error lock should not be poisoned")
+            .take()
+        {
+            return Err(HarnessError::Container(message));
+        }
+        self.spawn_sizes
+            .lock()
+            .expect("spawn sizes lock should not be poisoned")
+            .push(command.size);
         let container = ContainerMock::default();
         self.lock().insert(command.session_id, container.clone());
         Ok(container)
+    }
+
+    fn resize_effect(&self, from: SandboxSize, to: SandboxSize) -> SandboxResizeEffect {
+        if self.resize_unsupported.load(Ordering::Relaxed) {
+            create_only_resize_effect(from, to)
+        } else {
+            resize_effect(from, to)
+        }
+    }
+
+    async fn resize(&self, session: AgentSessionId, size: SandboxSize) -> Result<(), HarnessError> {
+        if !self.lock().contains_key(&session) {
+            return Err(HarnessError::Container(format!(
+                "no sandbox was ever spawned for {session}"
+            )));
+        }
+        if self.resize_unsupported.load(Ordering::Relaxed) {
+            return Err(HarnessError::Container(
+                "this container manager cannot resize a live sandbox".to_owned(),
+            ));
+        }
+        self.resizes
+            .lock()
+            .expect("resizes lock should not be poisoned")
+            .push((session, size));
+        Ok(())
     }
 
     async fn resume(&self, session: AgentSessionId) -> Result<ContainerMock, HarnessError> {

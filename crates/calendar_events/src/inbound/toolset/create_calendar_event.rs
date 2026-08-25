@@ -8,7 +8,8 @@ use schemars::JsonSchema;
 use serde::Deserialize;
 
 use super::{
-    AttendeeInput, CalendarToolContext, EventTimeInput, ToolCalendarEvent, mutation_tool_error,
+    AttendeeInput, CalendarToolContext, EventRemindersInput, EventTimeInput, ToolCalendarEvent,
+    mutation_tool_error,
 };
 use crate::domain::{
     models::{CalendarEventDraft, ConferenceChange},
@@ -21,9 +22,12 @@ use crate::domain::{
 #[schemars(
     title = "CreateCalendarEvent",
     description = "\
-Create an event on the user's calendar, inviting any listed attendees through Google \
-Calendar. The event is written to Google immediately, so attendees receive invitations the \
-moment it is created — confirm details with the user before creating events with attendees.\n\
+Prepare an event on the user's calendar, inviting any listed attendees through Google \
+Calendar. In Macro chat this tool opens an inline composer so the user can review, edit, and \
+confirm the event; use the tool to present the proposal instead of asking for a redundant \
+confirmation in prose. When the pending call is executed, the event is written to Google \
+immediately and attendees receive invitations. Other clients should confirm attendee events \
+before executing the call.\n\
 \n\
 The event lands on the user's primary calendar unless `calendarId` (from ListCalendars) \
 targets another one. For recurring events pass RFC 5545 lines in `recurrenceLines`, e.g. \
@@ -77,6 +81,13 @@ pub struct CreateCalendarEvent {
     #[serde(default)]
     pub calendar_id: Option<uuid::Uuid>,
 
+    /// Reminder configuration.
+    #[schemars(
+        description = "Reminder configuration for the event. Omit to use the selected calendar's defaults."
+    )]
+    #[serde(default)]
+    pub reminders: Option<EventRemindersInput>,
+
     /// Whether to attach a Google Meet conference.
     #[schemars(
         description = "Attach a freshly generated Google Meet video conference to the event."
@@ -86,7 +97,8 @@ pub struct CreateCalendarEvent {
 }
 
 impl ToolAnnotated for CreateCalendarEvent {
-    const ANNOTATIONS: ToolAnnotations = ToolAnnotations::additive("Create calendar event");
+    const ANNOTATIONS: ToolAnnotations =
+        ToolAnnotations::additive("Create calendar event").with_open_world();
 }
 
 #[async_trait]
@@ -120,7 +132,7 @@ where
             recurrence_lines: self.recurrence_lines.clone(),
             visibility: None,
             transparency: None,
-            reminders: None,
+            reminders: self.reminders.clone().map(Into::into),
             conference: self.add_google_meet.then_some(ConferenceChange::GoogleMeet),
         };
 

@@ -8,6 +8,7 @@ use std::{
 };
 
 use channels::domain::{
+    dm::{EnsureDms, EnsureDmsSummary},
     models::{
         AttachmentEntityReference, ChannelAttachmentType, ChannelMessageFilters,
         ChannelParticipant, ChannelType, CreateChannelRequest, CreateChannelResponse,
@@ -124,6 +125,7 @@ struct MockTeamRepository {
     delete_team_calls: Arc<Mutex<Vec<uuid::Uuid>>>,
     fail_delete_team: bool,
     fail_get_all_team_members: bool,
+    team_ids: Vec<uuid::Uuid>,
 }
 
 impl MockTeamRepository {
@@ -197,6 +199,7 @@ impl MockTeamRepository {
             delete_team_calls: Arc::new(Mutex::new(Vec::new())),
             fail_delete_team: false,
             fail_get_all_team_members: false,
+            team_ids: Vec::new(),
         }
     }
 
@@ -740,6 +743,22 @@ impl TeamRepository for MockTeamRepository {
         let member = self.add_user_to_team_result.clone();
         async move { Ok(member) }
     }
+
+    fn list_team_ids_after(
+        &self,
+        after_team_id: Option<uuid::Uuid>,
+        limit: u32,
+    ) -> impl Future<Output = Result<Vec<uuid::Uuid>, TeamError>> + Send {
+        let mut team_ids = self
+            .team_ids
+            .iter()
+            .copied()
+            .filter(|team_id| after_team_id.is_none_or(|after| *team_id > after))
+            .collect::<Vec<_>>();
+        team_ids.sort();
+        team_ids.truncate(limit as usize);
+        async move { Ok(team_ids) }
+    }
 }
 
 // -- Mock CustomerRepository --
@@ -867,11 +886,14 @@ struct RecordingChannelService {
     auto_join_calls: Arc<Mutex<Vec<(uuid::Uuid, String)>>>,
     leave_calls: Arc<Mutex<Vec<(uuid::Uuid, String)>>>,
     restore_calls: Arc<Mutex<Vec<(String, Vec<uuid::Uuid>)>>>,
+    ensure_dms_calls: Arc<Mutex<Vec<EnsureDms>>>,
+    ensure_dms_summary: EnsureDmsSummary,
     leave_channel_ids: Vec<uuid::Uuid>,
     fail_create: bool,
     fail_auto_join: bool,
     fail_leave: bool,
     fail_restore: bool,
+    fail_ensure_dms: bool,
 }
 
 impl ChannelService for RecordingChannelService {
@@ -1019,6 +1041,24 @@ impl ChannelService for RecordingChannelService {
                 )))
             } else {
                 Ok(())
+            }
+        }
+    }
+
+    fn ensure_dms(
+        &self,
+        command: EnsureDms,
+    ) -> impl Future<Output = Result<EnsureDmsSummary, ChannelMutationErr>> + Send {
+        self.ensure_dms_calls.lock().unwrap().push(command);
+        let summary = self.ensure_dms_summary;
+        let fail = self.fail_ensure_dms;
+        async move {
+            if fail {
+                Err(ChannelMutationErr::Repo(anyhow::anyhow!(
+                    "ensure direct messages failed"
+                )))
+            } else {
+                Ok(summary)
             }
         }
     }
@@ -2004,6 +2044,7 @@ async fn create_team_creates_default_team_channel() {
     team_repository.created_team = team;
     let channel_service = RecordingChannelService::default();
     let create_calls = channel_service.create_calls.clone();
+    let ensure_dms_calls = channel_service.ensure_dms_calls.clone();
     let service = TeamServiceImpl::new(
         team_repository,
         MockCustomerRepository::default(),
@@ -2035,6 +2076,7 @@ async fn create_team_creates_default_team_channel() {
         call.request.participants,
         HashSet::from([owner.into_owned()])
     );
+    assert!(ensure_dms_calls.lock().unwrap().is_empty());
 }
 
 #[tokio::test]
@@ -4132,6 +4174,7 @@ async fn team_event_invite_join_uses_accepted_invite_snapshot() {
     let metadata = &events[0].envelope["metadata"];
     assert_eq!(metadata["team_id"], team_id.to_string());
     assert_eq!(metadata["member_id"], user_id.as_ref());
+    assert_eq!(metadata["teammate_ids"], serde_json::json!([]));
     assert_eq!(metadata["role"], "member");
     assert_eq!(metadata["join_method"]["type"], "invite_accepted");
     assert_eq!(metadata["join_method"]["invite_id"], invite_id.to_string());
@@ -4216,6 +4259,7 @@ async fn test_remove_user_from_team_decrements_customer_seat_count() {
 
     let channels_repo = RecordingChannelService::default();
     let remove_channel_calls = channels_repo.leave_calls.clone();
+    let ensure_dms_calls = channels_repo.ensure_dms_calls.clone();
     let roles_service = MockUserRolesAndPermissionsService::default();
     let remove_role_calls = roles_service.remove_calls.clone();
 
@@ -4248,6 +4292,7 @@ async fn test_remove_user_from_team_decrements_customer_seat_count() {
         vec![(team_id, member_id.as_ref().to_string())]
     );
     assert_eq!(remove_role_calls.lock().unwrap().len(), 1);
+    assert!(ensure_dms_calls.lock().unwrap().is_empty());
 }
 
 #[tokio::test]
@@ -4933,6 +4978,7 @@ async fn try_join_team_by_domain_enterprise_bypasses_billing_and_preserves_side_
     let metadata = &published_events[0].envelope["metadata"];
     assert_eq!(metadata["team_id"], team_id.to_string());
     assert_eq!(metadata["member_id"], user_id.as_ref());
+    assert_eq!(metadata["teammate_ids"], serde_json::json!([]));
     assert_eq!(metadata["role"], "member");
     assert_eq!(metadata["join_method"]["type"], "domain_auto_join");
 }
@@ -6045,4 +6091,100 @@ async fn try_join_team_by_domain_free_team_at_cap_skips() {
     assert_eq!(*remove_user_calls.lock().unwrap(), 1);
     assert!(increment_calls.lock().unwrap().is_empty());
     assert!(roles_service.upsert_calls.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn invite_join_does_not_create_teammate_dms_inline() {
+    let team_id = uuid::Uuid::from_u128(7100);
+    let invite_id = uuid::Uuid::from_u128(7101);
+    let owner = MacroUserIdStr::parse_from_str("macro|owner@example.com").unwrap();
+    let joiner = MacroUserIdStr::parse_from_str("macro|joiner@example.com").unwrap();
+    let teammate = MacroUserIdStr::parse_from_str("macro|teammate@example.com").unwrap();
+    let team = Team::new(
+        team_id,
+        "DM Team".to_string(),
+        "DM_TEAM".to_string(),
+        owner.clone().into_owned(),
+        false,
+        true,
+    );
+    let team_repository = make_enterprise_join_team_repository(team_id, invite_id, &joiner)
+        .with_team(team)
+        .with_team_members(vec![
+            make_team_member(team_id, owner.as_ref(), TeamRole::Owner),
+            make_team_member(team_id, teammate.as_ref(), TeamRole::Member),
+            make_team_member(team_id, teammate.as_ref(), TeamRole::Admin),
+            make_team_member(team_id, joiner.as_ref(), TeamRole::Member),
+        ]);
+    let channels = RecordingChannelService::default();
+    let event_broker = RecordingEventBroker::default();
+    let service = TeamServiceImpl::new(
+        team_repository,
+        MockCustomerRepository::default(),
+        channels.clone(),
+        MockUserRolesAndPermissionsService::default(),
+        Arc::new(MockNotificationIngress::new(HashSet::new())),
+        NoOpCrmEnqueuer,
+        NoOpTeamCrmSettingsRepository,
+    )
+    .with_event_broker(event_broker.clone());
+
+    service.join_team(&invite_id, &joiner).await.unwrap();
+
+    assert!(channels.ensure_dms_calls.lock().unwrap().is_empty());
+    let events = event_broker.events();
+    assert_eq!(events.len(), 1);
+    assert_eq!(
+        events[0].envelope["metadata"]["teammate_ids"],
+        serde_json::json!([owner.as_ref(), teammate.as_ref()])
+    );
+}
+
+#[tokio::test]
+async fn domain_join_does_not_create_teammate_dms_inline() {
+    let team_id = uuid::Uuid::from_u128(7110);
+    let owner = MacroUserIdStr::parse_from_str("macro|owner@example.com").unwrap();
+    let joiner = MacroUserIdStr::parse_from_str("macro|joiner@example.com").unwrap();
+    let teammate = MacroUserIdStr::parse_from_str("macro|teammate@example.com").unwrap();
+    let team = Team::new(
+        team_id,
+        "DM Team".to_string(),
+        "DM_TEAM".to_string(),
+        owner.clone().into_owned(),
+        false,
+        true,
+    );
+    let team_repository = make_enterprise_domain_join_team_repository(team_id, &joiner)
+        .with_team(team)
+        .with_team_members(vec![
+            make_team_member(team_id, teammate.as_ref(), TeamRole::Member),
+            make_team_member(team_id, teammate.as_ref(), TeamRole::Admin),
+            make_team_member(team_id, joiner.as_ref(), TeamRole::Member),
+        ]);
+    let channels = RecordingChannelService::default();
+    let event_broker = RecordingEventBroker::default();
+    let service = TeamServiceImpl::new(
+        team_repository,
+        MockCustomerRepository::default(),
+        channels.clone(),
+        MockUserRolesAndPermissionsService::default(),
+        Arc::new(MockNotificationIngress::new(HashSet::new())),
+        NoOpCrmEnqueuer,
+        NoOpTeamCrmSettingsRepository,
+    )
+    .with_event_broker(event_broker.clone());
+
+    service
+        .try_join_team_by_domain(&joiner)
+        .await
+        .unwrap()
+        .unwrap();
+
+    assert!(channels.ensure_dms_calls.lock().unwrap().is_empty());
+    let events = event_broker.events();
+    assert_eq!(events.len(), 1);
+    assert_eq!(
+        events[0].envelope["metadata"]["teammate_ids"],
+        serde_json::json!([owner.as_ref(), teammate.as_ref()])
+    );
 }

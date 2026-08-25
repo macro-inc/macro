@@ -56,12 +56,20 @@ export type TabToCoordinatorEnvelope =
       kind: 'attach-engine-port';
       tabId: string;
       ownerEpoch: OwnerEpoch;
+      enginePort: MessagePort;
     }
   | {
       coordinatorVersion: 2;
       kind: 'graceful-departure';
       tabId: string;
       ownerEpoch: OwnerEpoch;
+    }
+  | {
+      coordinatorVersion: 2;
+      kind: 'navigation-departure';
+      tabId: string;
+      ownerEpoch: OwnerEpoch;
+      reason: string;
     }
   | {
       coordinatorVersion: 2;
@@ -284,6 +292,16 @@ const isOptionalRecord = (
   value: unknown
 ): value is Record<string, unknown> | undefined =>
   value === undefined || isRecord(value);
+
+const isMessagePort = (value: unknown): value is MessagePort =>
+  typeof value === 'object' &&
+  value !== null &&
+  'postMessage' in value &&
+  typeof value.postMessage === 'function' &&
+  'close' in value &&
+  typeof value.close === 'function' &&
+  'start' in value &&
+  typeof value.start === 'function';
 
 const isPath = (value: unknown): boolean =>
   Array.isArray(value) &&
@@ -520,6 +538,25 @@ export function isCacheRequest(value: unknown): value is CacheRequest {
         hasOnlyKeys(value, ['id', 'kind', 'request']) &&
         isSearchRequest(value.request)
       );
+    case 'entity-filter': {
+      const request = value.request;
+      return (
+        hasOnlyKeys(value, ['id', 'kind', 'request']) &&
+        isRecord(request) &&
+        hasOnlyKeys(request, [
+          'filters',
+          'sortMethod',
+          'sortDirection',
+          'limit',
+        ]) &&
+        isRecord(request.filters) &&
+        ['CREATED_AT', 'UPDATED_AT', 'VIEWED_AT', 'VIEWED_UPDATED'].includes(
+          request.sortMethod as string
+        ) &&
+        (request.sortDirection === 'ASC' || request.sortDirection === 'DESC') &&
+        isValidCacheSearchLimit(request.limit)
+      );
+    }
     case 'inspect-query':
       return (
         hasOnlyKeys(value, [
@@ -602,6 +639,20 @@ export function validateTabToCoordinatorEnvelope(
       }
       break;
     case 'attach-engine-port':
+      if (
+        hasOnlyKeys(value, [
+          'coordinatorVersion',
+          'kind',
+          'tabId',
+          'ownerEpoch',
+          'enginePort',
+        ]) &&
+        isPositiveInteger(value.ownerEpoch) &&
+        isMessagePort(value.enginePort)
+      ) {
+        return pass(value as TabToCoordinatorEnvelope);
+      }
+      break;
     case 'graceful-departure':
       if (
         hasOnlyKeys(value, [
@@ -611,6 +662,21 @@ export function validateTabToCoordinatorEnvelope(
           'ownerEpoch',
         ]) &&
         isPositiveInteger(value.ownerEpoch)
+      ) {
+        return pass(value as TabToCoordinatorEnvelope);
+      }
+      break;
+    case 'navigation-departure':
+      if (
+        hasOnlyKeys(value, [
+          'coordinatorVersion',
+          'kind',
+          'tabId',
+          'ownerEpoch',
+          'reason',
+        ]) &&
+        isPositiveInteger(value.ownerEpoch) &&
+        isNonEmptyString(value.reason)
       ) {
         return pass(value as TabToCoordinatorEnvelope);
       }

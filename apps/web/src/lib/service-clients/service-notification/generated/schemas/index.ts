@@ -177,6 +177,7 @@ export * from './realtimeNotifTaggedContentValueAllOfNotificationMetadata';
 export * from './realtimeNotifTaggedContentValueAllOfSenderId';
 export * from './realtimeNotifTaggedContentValueAllOfViewedAt';
 export * from './reminderMetadata';
+export * from './reminderMetadataScheduledFor';
 export * from './repliedToDocumentCommentThreadMetadata';
 export * from './repliedToDocumentCommentThreadMetadataFileType';
 export * from './repliedToDocumentCommentThreadMetadataSenderProfilePictureUrl';

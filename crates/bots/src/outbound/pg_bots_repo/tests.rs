@@ -7,6 +7,10 @@ use crate::domain::{
     ports::{BotError, BotService},
     service::BotServiceImpl,
 };
+use entity_access::domain::models::{
+    Entity, EntityAccessReceipt, EntityPermission, EntityType, MemberParticipantRole,
+    ParticipantRole,
+};
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_event_broker::{EventBrokerError, MacroEvent, MacroEventBroker, NoopMacroEventBroker};
 use serde_json::{Value, json};
@@ -23,6 +27,23 @@ fn user_id(value: &str) -> MacroUserIdStr<'static> {
     MacroUserIdStr::try_from(value.to_string()).expect("valid macro user id")
 }
 
+fn channel_member_receipt(
+    caller: &str,
+    channel_id: Uuid,
+) -> EntityAccessReceipt<MemberParticipantRole> {
+    EntityAccessReceipt::try_new_authenticated_user(
+        user_id(caller),
+        Entity {
+            entity_id: channel_id.to_string(),
+            entity_type: EntityType::Channel,
+        },
+        EntityPermission::ChannelRole {
+            role: ParticipantRole::Member,
+        },
+    )
+    .expect("member role satisfies channel membership")
+}
+
 fn create_req(handle: &str) -> CreateBotRequest {
     CreateBotRequest {
         team_id: None,
@@ -30,6 +51,7 @@ fn create_req(handle: &str) -> CreateBotRequest {
         handle: handle.to_string(),
         description: Some("Posts alarm notifications".to_string()),
         avatar_url: None,
+        has_agent: None,
     }
 }
 
@@ -42,6 +64,7 @@ fn create_channel_scoped_req(handle: &str) -> CreateChannelScopedBotRequest {
         avatar_url: None,
         token_label: Some("Webhook".to_string()),
         token_expires_at: None,
+        has_agent: None,
     }
 }
 
@@ -327,6 +350,85 @@ async fn create_user_owned_bot_records_user_owner(pool: PgPool) -> anyhow::Resul
     );
     assert_eq!(bot.created_by.as_deref(), Some(USER_OWNER));
     assert_eq!(bot.handle, "datadog");
+    assert!(!bot.has_agent);
+
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn create_bot_stores_requested_has_agent(pool: PgPool) -> anyhow::Result<()> {
+    let service = service(&pool);
+    let mut request = create_req("agent-bot");
+    request.has_agent = Some(true);
+
+    let bot = service.create_bot(user_id(USER_OWNER), request).await?;
+
+    assert!(bot.has_agent);
+    assert!(
+        service
+            .get_bot(user_id(USER_OWNER), bot.id)
+            .await?
+            .has_agent
+    );
+
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn patch_bot_toggles_has_agent_and_leaves_it_unchanged_when_omitted(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    let service = service(&pool);
+    let bot = service
+        .create_bot(user_id(USER_OWNER), create_req("agent-toggle"))
+        .await?;
+    assert!(!bot.has_agent);
+
+    let enabled = service
+        .patch_bot(
+            user_id(USER_OWNER),
+            bot.id,
+            PatchBotRequest {
+                name: None,
+                handle: None,
+                description: None,
+                avatar_url: None,
+                has_agent: Some(true),
+            },
+        )
+        .await?;
+    assert!(enabled.has_agent);
+
+    let renamed = service
+        .patch_bot(
+            user_id(USER_OWNER),
+            bot.id,
+            PatchBotRequest {
+                name: Some("Renamed".to_string()),
+                handle: None,
+                description: None,
+                avatar_url: None,
+                has_agent: None,
+            },
+        )
+        .await?;
+    assert_eq!(renamed.name, "Renamed");
+    assert!(renamed.has_agent);
+
+    let disabled = service
+        .patch_bot(
+            user_id(USER_OWNER),
+            bot.id,
+            PatchBotRequest {
+                name: None,
+                handle: None,
+                description: None,
+                avatar_url: None,
+                has_agent: Some(false),
+            },
+        )
+        .await?;
+    assert!(!disabled.has_agent);
 
     Ok(())
 }
@@ -405,13 +507,13 @@ async fn add_remove_channel_bot_requires_bot_usability_and_soft_removes(
         .await?;
 
     let err = service
-        .add_bot_to_channel(user_id(USER_OTHER), channel_id, bot.id)
+        .add_bot_to_channel(channel_member_receipt(USER_OTHER, channel_id), bot.id)
         .await
         .expect_err("non-owner must not add someone else's bot");
     assert!(matches!(err, BotError::Unauthorized));
 
     service
-        .add_bot_to_channel(user_id(USER_OWNER), channel_id, bot.id)
+        .add_bot_to_channel(channel_member_receipt(USER_OWNER, channel_id), bot.id)
         .await?;
 
     let active_count: i64 = sqlx::query_scalar(
@@ -489,13 +591,19 @@ async fn list_bot_channels_requires_manageable_bot_and_returns_only_active_chann
     assert!(empty_channels.is_empty());
 
     service
-        .add_bot_to_channel(user_id(USER_OWNER), removed_channel_id, bot.id)
+        .add_bot_to_channel(
+            channel_member_receipt(USER_OWNER, removed_channel_id),
+            bot.id,
+        )
         .await?;
     service
         .remove_bot_from_channel(user_id(USER_OWNER), removed_channel_id, bot.id)
         .await?;
     service
-        .add_bot_to_channel(user_id(USER_OWNER), active_channel_id, bot.id)
+        .add_bot_to_channel(
+            channel_member_receipt(USER_OWNER, active_channel_id),
+            bot.id,
+        )
         .await?;
 
     let channels = service
@@ -523,16 +631,24 @@ async fn create_channel_scoped_bot_creates_bot_participant_and_token(
         .create_channel_scoped_bot(
             user_id(USER_OWNER),
             channel_id,
-            create_channel_scoped_req("scoped-alerts"),
+            CreateChannelScopedBotRequest {
+                has_agent: Some(true),
+                ..create_channel_scoped_req("scoped-alerts")
+            },
         )
         .await?;
 
     assert_eq!(created.bot.kind, BotKind::Owned);
     assert_eq!(created.bot.handle, "scoped-alerts");
+    assert!(created.bot.has_agent);
     assert_eq!(created.bot.created_by.as_deref(), Some(USER_OWNER));
     assert_eq!(created.token.bot_id, created.bot.id);
     assert_eq!(created.token.label.as_deref(), Some("Webhook"));
-    assert_eq!(created.token.token, created.bot_token);
+    assert_eq!(
+        created.token.token_prefix,
+        bot_token::token_prefix(&created.bot_token)
+    );
+    assert_ne!(created.token.token_prefix, created.bot_token);
     assert_eq!(
         active_channel_participant_count(&pool, channel_id, created.bot.id).await?,
         1
@@ -655,7 +771,11 @@ async fn revoke_token_prevents_future_authentication(pool: PgPool) -> anyhow::Re
         )
         .await?;
 
-    assert_eq!(created.token.token, created.bearer_token);
+    assert_eq!(
+        created.token.token_prefix,
+        bot_token::token_prefix(&created.bearer_token)
+    );
+    assert_ne!(created.token.token_prefix, created.bearer_token);
 
     let authenticated = service.authenticate_token(&created.bearer_token).await?;
     assert_eq!(authenticated.bot_id, bot.id);
@@ -675,7 +795,7 @@ async fn revoke_token_prevents_future_authentication(pool: PgPool) -> anyhow::Re
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn list_tokens_returns_raw_token_for_manageable_bot(pool: PgPool) -> anyhow::Result<()> {
+async fn list_tokens_returns_prefix_not_raw_secret(pool: PgPool) -> anyhow::Result<()> {
     let service = service(&pool);
     let bot = service
         .create_bot(user_id(USER_OWNER), create_req("listed-token"))
@@ -697,7 +817,8 @@ async fn list_tokens_returns_raw_token_for_manageable_bot(pool: PgPool) -> anyho
     assert_eq!(tokens.len(), 1);
     assert_eq!(tokens[0].id, created.token.id);
     assert_eq!(tokens[0].bot_id, bot.id);
-    assert_eq!(tokens[0].token, created.bearer_token);
+    assert_eq!(tokens[0].token_prefix, created.token.token_prefix);
+    assert_ne!(tokens[0].token_prefix, created.bearer_token);
     assert_eq!(tokens[0].label.as_deref(), Some("Listable"));
 
     Ok(())
@@ -715,20 +836,22 @@ async fn authenticate_channel_token_accepts_migrated_uuid_token(
         .create_bot(user_id(USER_OWNER), create_req("migrated-uuid-token"))
         .await?;
     service
-        .add_bot_to_channel(user_id(USER_OWNER), channel_id, bot.id)
+        .add_bot_to_channel(channel_member_receipt(USER_OWNER, channel_id), bot.id)
         .await?;
 
     let token_id = Uuid::new_v4();
     let raw_token = Uuid::new_v4().to_string();
+    let hashed = bot_token::HashedBotToken::from_raw(&raw_token);
     sqlx::query(
         r#"
-        INSERT INTO bot_tokens (id, bot_id, token, label)
-        VALUES ($1, $2, $3, $4)
+        INSERT INTO bot_tokens (id, bot_id, token_hash, token_prefix, label)
+        VALUES ($1, $2, $3, $4, $5)
         "#,
     )
     .bind(token_id)
     .bind(bot.id.as_uuid())
-    .bind(&raw_token)
+    .bind(&hashed.hash[..])
+    .bind(&hashed.prefix)
     .bind("migrated row")
     .execute(&pool)
     .await?;
@@ -741,6 +864,20 @@ async fn authenticate_channel_token_accepts_migrated_uuid_token(
     assert_eq!(authenticated.kind, BotKind::Owned);
     assert!(token_last_used_at(&pool, token_id).await?.is_some());
 
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn rust_token_hash_matches_postgres_digest(pool: PgPool) -> anyhow::Result<()> {
+    let raw = "mbot_aabbccddeeff_aabbccddeeffsecret";
+    let rust_hash = bot_token::hash_token(raw);
+    let postgres_hash =
+        sqlx::query_scalar!(r#"SELECT digest(convert_to($1, 'UTF8'), 'sha256')"#, raw,)
+            .fetch_one(&pool)
+            .await?
+            .expect("pgcrypto digest returns bytea");
+
+    assert_eq!(rust_hash.as_slice(), postgres_hash.as_slice());
     Ok(())
 }
 
@@ -850,6 +987,7 @@ async fn patch_and_delete_publish_requested_fields_and_team_owner(
         handle: None,
         description: Some("Replacement description".to_string()),
         avatar_url: None,
+        has_agent: None,
     };
     let patched = service
         .patch_bot(user_id(TEAM_ADMIN), bot.id, patch_request)
@@ -908,7 +1046,7 @@ async fn non_lifecycle_and_failed_operations_do_not_publish(pool: PgPool) -> any
     service.get_bot(user_id(USER_OWNER), bot.id).await?;
     service.list_channel_bots(channel_id).await?;
     service
-        .add_bot_to_channel(user_id(USER_OWNER), channel_id, bot.id)
+        .add_bot_to_channel(channel_member_receipt(USER_OWNER, channel_id), bot.id)
         .await?;
     service
         .list_bot_channels(BotChannelListCaller::User(user_id(USER_OWNER)), bot.id)
@@ -942,6 +1080,7 @@ async fn non_lifecycle_and_failed_operations_do_not_publish(pool: PgPool) -> any
                 handle: None,
                 description: None,
                 avatar_url: None,
+                has_agent: None,
             },
         )
         .await;
@@ -993,6 +1132,7 @@ async fn scheduling_failures_do_not_change_successful_mutations(
                 handle: None,
                 description: None,
                 avatar_url: None,
+                has_agent: None,
             },
         )
         .await?;

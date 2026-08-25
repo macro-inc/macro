@@ -9,7 +9,6 @@ import { type ItemType, storageServiceClient } from '@service-storage/client';
 import { getGraphqlSoupCacheHost } from '@service-storage/graphql-soup';
 import {
   type QueryClient,
-  type QueryKey,
   queryOptions,
   type Updater,
   useMutation,
@@ -76,17 +75,23 @@ export function setHistoryItemFileType(itemId: string, fileType: string) {
   }));
 }
 
+const fetchHistory = async (): Promise<HistoryQueryFnResult> => {
+  const result = await throwOnErr(
+    async () => await storageServiceClient.getUsersHistory()
+  );
+  return transformHistoryResponse(result);
+};
+
 const historyQueryOptions = queryOptions({
   queryKey: historyKeys.list.queryKey,
-  queryFn: async (): Promise<HistoryQueryFnResult> => {
-    const result = await throwOnErr(
-      async () => await storageServiceClient.getUsersHistory()
-    );
-    return transformHistoryResponse(result);
-  },
+  queryFn: fetchHistory,
   staleTime: HISTORY_STALE_TIME,
   gcTime: HISTORY_GC_TIME,
 });
+
+type HistoryQueryKey =
+  | typeof historyKeys.list.queryKey
+  | typeof historyKeys.graphqlList.queryKey;
 
 export function useHistoryQuery() {
   const graphqlSoupFlag = useFeatureFlag(ENABLE_GRAPHQL_SOUP_FLAG, {
@@ -98,27 +103,33 @@ export function useHistoryQuery() {
     return cacheHost?.disabled ? undefined : cacheHost;
   };
 
-  return useQuery<HistoryQueryFnResult, Error, HistoryQueryFnResult, QueryKey>(
-    () => {
-      const cacheHost = graphqlCacheHost();
-      if (cacheHost) {
-        return {
-          queryKey: historyKeys.graphqlList.queryKey,
-          queryFn: () => readCachedGraphqlHistoryItems(cacheHost),
-          placeholderData: (prev: HistoryQueryFnResult | undefined) => prev,
-          staleTime: Infinity,
-          refetchOnMount: 'always' as const,
-          reconcile: 'id',
-        };
-      }
-
+  return useQuery<
+    HistoryQueryFnResult,
+    Error,
+    HistoryQueryFnResult,
+    HistoryQueryKey
+  >(() => {
+    const cacheHost = graphqlCacheHost();
+    if (cacheHost) {
       return {
-        ...historyQueryOptions,
+        queryKey: historyKeys.graphqlList.queryKey,
+        queryFn: () => readCachedGraphqlHistoryItems(cacheHost),
         placeholderData: (prev: HistoryQueryFnResult | undefined) => prev,
+        staleTime: Infinity,
+        refetchOnMount: 'always' as const,
         reconcile: 'id',
       };
     }
-  );
+
+    return {
+      queryKey: historyKeys.list.queryKey,
+      queryFn: fetchHistory,
+      staleTime: HISTORY_STALE_TIME,
+      gcTime: HISTORY_GC_TIME,
+      placeholderData: (prev: HistoryQueryFnResult | undefined) => prev,
+      reconcile: 'id',
+    };
+  });
 }
 
 export async function prefetchHistory() {

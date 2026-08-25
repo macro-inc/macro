@@ -9,7 +9,8 @@
 mod test;
 
 use ::activity::{
-    Activity, ActivitySource, Actor, CommonAction, EntityType, Ingest, PropertyChange, event_time,
+    Activity, ActivitySource, Actor, Attribution, CommonAction, EntityType, Ingest, PropertyChange,
+    event_time,
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use models_properties::EntityType as PropertyEntityType;
@@ -33,22 +34,37 @@ fn entity_type(property_entity: &PropertyEntityType) -> Option<EntityType> {
     }
 }
 
+fn event_attribution(
+    actor: &Option<Actor<'static>>,
+    on_behalf_of: &Option<MacroUserIdStr<'static>>,
+    actor_user_id: &Option<MacroUserIdStr<'static>>,
+) -> Option<Attribution> {
+    if let Some(actor) = actor.clone() {
+        return Some(match on_behalf_of.clone() {
+            Some(subject) => Attribution::delegated(actor, subject),
+            None => Attribution::direct(actor),
+        });
+    }
+    actor_user_id
+        .clone()
+        .map(|user| Attribution::direct(Actor::new_from_user(user)))
+}
+
 fn attributed(
     event_id: uuid::Uuid,
-    actor: &Option<MacroUserIdStr<'static>>,
+    attribution: Option<Attribution>,
     property_entity: &PropertyEntityType,
     entity_id: &str,
     action: CommonAction,
     occurred_at: chrono::DateTime<chrono::Utc>,
 ) -> Ingest {
-    let (Some(actor), Some(entity_type)) = (actor, entity_type(property_entity)) else {
+    let (Some(attribution), Some(entity_type)) = (attribution, entity_type(property_entity)) else {
         return Ingest::Ignore;
     };
-    Ingest::Insert(vec![Activity::common(
+    Ingest::Insert(vec![Activity::attributed(
         event_id,
         0,
-        Actor::new_from_user(actor.clone()),
-        None,
+        attribution,
         entity_type,
         entity_id,
         action,
@@ -65,7 +81,7 @@ impl ActivitySource for PropertyTopicEvent {
         match self {
             PropertyTopicEvent::EntityPropertyUpdated(m) => attributed(
                 event_id,
-                &m.actor_user_id,
+                event_attribution(&m.actor, &m.on_behalf_of, &m.actor_user_id),
                 &m.entity_type,
                 &m.entity_id,
                 CommonAction::PropertyChanged(PropertyChange {
@@ -91,7 +107,7 @@ impl ActivitySource for PropertyTopicEvent {
             ),
             PropertyTopicEvent::EntityPropertyDeleted(m) => attributed(
                 event_id,
-                &m.actor_user_id,
+                event_attribution(&m.actor, &m.on_behalf_of, &m.actor_user_id),
                 &m.entity_type,
                 &m.entity_id,
                 CommonAction::PropertyChanged(PropertyChange {
@@ -105,7 +121,7 @@ impl ActivitySource for PropertyTopicEvent {
             // mutation of the entity.
             PropertyTopicEvent::EntityPropertiesCleared(m) => attributed(
                 event_id,
-                &m.actor_user_id,
+                event_attribution(&m.actor, &m.on_behalf_of, &m.actor_user_id),
                 &m.entity_type,
                 &m.entity_id,
                 CommonAction::Edited,

@@ -1,5 +1,6 @@
 import {
   PdfCoParseSchema as CoParseSchema,
+  PdfModificationDataOnServerSchema,
   PdfSegmentSchema as TSegmentSchema,
 } from '@coparse/document-processing-types';
 import {
@@ -12,6 +13,7 @@ import {
 } from '@core/service';
 import { z } from 'zod';
 import * as schemas from './generated/zod';
+import { ITEM_TYPES } from './itemType';
 
 const _ChatMessageSchema = z.object({
   content: z.string().describe('Content of the message'),
@@ -20,6 +22,11 @@ const _ChatMessageSchema = z.object({
 });
 
 const _ChatResponseSchema = z.object({});
+
+const ProcessingResultTypeSchema = z.enum(['PREPROCESS', 'SPLIT_TEXTS']);
+
+/** Available document processing result variants. */
+export type ProcessingResultType = z.infer<typeof ProcessingResultTypeSchema>;
 
 const DocxDocumentPartLocation = z.object({
   sha: z.string(),
@@ -283,6 +290,37 @@ const PermissionsTokensSvc = new Svc('Permissions Tokens Service')
     throws: withFetchErrors(),
   });
 
+const CollabSurfacesSvc = new Svc('Collab Surfaces Service')
+  .use('fetchErrors', fetchErrorsSvc)
+  .fn('ensure', {
+    description:
+      'idempotently ensures a collab surface exists (load-or-create) attached to a parent entity, with its sync-service session initialized',
+    args: schemas.ensureCollabSurfaceBody.extend(
+      schemas.ensureCollabSurfaceParams.shape
+    ).shape,
+    result: schemas.ensureCollabSurfaceResponse.shape,
+    modifies: true,
+    throws: withFetchErrors(),
+  })
+  .fn('get', {
+    description: 'fetches a collab surface',
+    args: schemas.getCollabSurfaceParams.shape,
+    result: schemas.getCollabSurfaceResponse.shape,
+    throws: withFetchErrors(),
+  })
+  .fn('createToken', {
+    description: 'mints a sync-service connection token for a collab surface',
+    args: schemas.createCollabSurfaceTokenParams.shape,
+    result: schemas.createCollabSurfaceTokenResponse.shape,
+    throws: withFetchErrors(),
+  })
+  .fn('delete', {
+    description: 'soft-deletes a collab surface',
+    args: schemas.deleteCollabSurfaceParams.shape,
+    modifies: true,
+    throws: withFetchErrors(),
+  });
+
 const InstructionsSvc = new Svc('Instructions Service')
   .use('fetchErrors', fetchErrorsSvc)
   .fn('create', {
@@ -304,6 +342,12 @@ export type GetDocumentPermissionsTokenResponse = z.infer<
 >;
 export type ValidateDocumentPermissionsTokenResponse = z.infer<
   typeof schemas.validateDocumentPermissionsTokenResponse
+>;
+export type CollabSurfaceResponse = z.infer<
+  typeof schemas.getCollabSurfaceResponse
+>;
+export type CollabSurfaceTokenResponse = z.infer<
+  typeof schemas.createCollabSurfaceTokenResponse
 >;
 
 export const StorageService = new Svc('Document++ Storage Service API')
@@ -336,7 +380,7 @@ export const StorageService = new Svc('Document++ Storage Service API')
     description: schemas.upsertHistoryHandlerResponse.description!,
     args: {
       itemId: schemas.upsertHistoryHandlerParams.shape.item_id,
-      itemType: schemas.upsertHistoryHandlerParams.shape.item_type,
+      itemType: z.enum(ITEM_TYPES),
     },
     result: schemas.upsertHistoryHandlerResponse.shape.data.shape,
     modifies: true,
@@ -347,7 +391,7 @@ export const StorageService = new Svc('Document++ Storage Service API')
     description: schemas.deleteHistoryHandlerResponse.description!,
     args: {
       itemId: schemas.deleteHistoryHandlerParams.shape.item_id,
-      itemType: schemas.deleteHistoryHandlerParams.shape.item_type,
+      itemType: z.enum(ITEM_TYPES),
     },
     result: schemas.deleteHistoryHandlerResponse.shape.data.shape,
     modifies: true,
@@ -484,6 +528,7 @@ export const StorageService = new Svc('Document++ Storage Service API')
     description: schemas.getDocumentProcessingResultParams.description!,
     args: {
       documentId: schemas.getDocumentProcessingResultParams.shape.document_id,
+      type: ProcessingResultTypeSchema,
     },
     result: {
       preprocess: CoParseSchema.optional(),
@@ -496,6 +541,7 @@ export const StorageService = new Svc('Document++ Storage Service API')
     args: {
       documentId: schemas.jobProcessingResultHandlerParams.shape.document_id,
       jobId: schemas.jobProcessingResultHandlerParams.shape.job_id,
+      type: ProcessingResultTypeSchema,
     },
     result: {
       preprocess: CoParseSchema.optional(),
@@ -514,7 +560,8 @@ export const StorageService = new Svc('Document++ Storage Service API')
     description: schemas.saveDocumentHandlerResponse.description!,
     args: {
       documentId: schemas.saveDocumentHandlerParams.shape.document_id,
-      ...schemas.saveDocumentHandlerBody.shape,
+      modificationData: PdfModificationDataOnServerSchema,
+      sha: z.string(),
     },
     result:
       schemas.saveDocumentHandlerResponse.shape.data.shape.documentMetadata
@@ -715,6 +762,7 @@ export const StorageService = new Svc('Document++ Storage Service API')
   .use('annotations', AnnotationsSvc)
   .use('projects', ProjectsSvc)
   .use('permissionsTokens', PermissionsTokensSvc)
+  .use('collabSurfaces', CollabSurfacesSvc)
   .use('instructions', InstructionsSvc)
   .use('views', ViewsSvc)
   .use('favorites', FavoritesSvc);

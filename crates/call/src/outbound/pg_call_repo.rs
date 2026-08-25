@@ -22,10 +22,10 @@ use sqlx::PgPool;
 use uuid::Uuid;
 
 use crate::domain::models::{
-    AddParticipantError, ArchivedCall, Call, CallParticipant, CallRecord, CallRecordParticipant,
-    CallRecordPreview, CallRecordPreviewData, CallRecordTranscriptSegment, CustomSpeakerAssignment,
-    DeletedCallRecordStorageKeys, EditCallRecordRequest, EnrichedCallTranscript,
-    TranscriptSegmentRequest, WithCallId,
+    ActiveCallSummary, AddParticipantError, ArchivedCall, Call, CallParticipant, CallRecord,
+    CallRecordParticipant, CallRecordPreview, CallRecordPreviewData, CallRecordTranscriptSegment,
+    CustomSpeakerAssignment, DeletedCallRecordStorageKeys, EditCallRecordRequest,
+    EnrichedCallTranscript, TranscriptSegmentRequest, WithCallId,
 };
 use crate::domain::ports::CallRepository;
 
@@ -461,6 +461,53 @@ impl CallRepository for PgCallRepo {
                 egress_id: row.egress_id,
             })
         })
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn get_active_calls_for_user<'a>(
+        &self,
+        user_id: MacroUserIdStr<'a>,
+    ) -> Result<Vec<ActiveCallSummary>, Self::Err> {
+        // Visibility is plain channel membership, deliberately matching how
+        // call_started/call_ended websocket recipients are chosen — badge
+        // state and event delivery must agree.
+        let rows = sqlx::query!(
+            r#"
+            SELECT
+                c.id AS call_id,
+                c.channel_id,
+                c.created_by,
+                c.created_at,
+                p.participant_count AS "participant_count!"
+            FROM calls c
+            JOIN LATERAL (
+                SELECT COUNT(*) AS participant_count
+                FROM call_participants cp
+                WHERE cp.call_id = c.id AND cp.left_at IS NULL
+            ) p ON p.participant_count > 0
+            WHERE EXISTS (
+                SELECT 1 FROM comms_channel_participants ccp
+                WHERE ccp.channel_id = c.channel_id
+                  AND ccp.user_id = $1
+                  AND ccp.left_at IS NULL
+            )
+            ORDER BY c.created_at DESC
+            "#,
+            user_id.as_ref(),
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(rows
+            .into_iter()
+            .map(|row| ActiveCallSummary {
+                call_id: row.call_id,
+                channel_id: row.channel_id,
+                created_by: row.created_by,
+                created_at: row.created_at,
+                participant_count: row.participant_count,
+            })
+            .collect())
     }
 
     #[tracing::instrument(err, skip(self))]

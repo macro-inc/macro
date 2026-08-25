@@ -21,6 +21,16 @@ export class CrmNamespace {
     return Contact.byId(this.client, id);
   }
 
+  /** Resolve a CRM contact by email in the caller's current team, if present. */
+  async contactByEmail(email: string): Promise<Contact | undefined> {
+    const { contact } = unwrap(
+      await this.client.storage.getContactByEmail({
+        query: { email },
+      }),
+    );
+    return contact ? Contact.from(this.client, contact) : undefined;
+  }
+
   /** Create a CRM company for the caller's current team. */
   async createCompany(opts: CreateCrmCompanyRequest): Promise<Company> {
     return Company.from(

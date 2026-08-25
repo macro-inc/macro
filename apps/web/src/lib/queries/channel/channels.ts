@@ -1,6 +1,7 @@
 import { analytics } from '@app/lib/analytics';
 import { toast } from '@core/component/Toast/Toast';
 import { throwOnErr } from '@core/util/result';
+import type { CacheHost } from '@graphql-cache/index';
 import { queryClient } from '@queries/client';
 import { type MutationCallbacks, withCallbacks } from '@queries/utils';
 import type { ApiChannelWithLatest } from '@service-storage/channel-list-types';
@@ -14,6 +15,10 @@ import type { CreateChannelResponse } from '@service-storage/generated/schemas/c
 import type { PatchChannelRequest } from '@service-storage/generated/schemas/patchChannelRequest';
 import { useMutation, useQuery } from '@tanstack/solid-query';
 import { invalidateChannelParticipants } from './channel-participants';
+import {
+  type CachedGraphqlChannel,
+  readCachedGraphqlChannels,
+} from './graphql';
 import { channelKeys } from './keys';
 
 const CHANNEL_LIST_PAGE_SIZE = 100;
@@ -44,6 +49,24 @@ export function useListChannelsQuery() {
     queryKey: channelKeys.listChannels.queryKey,
     queryFn: ({ signal }) => fetchAllChannels(signal),
   }));
+}
+
+/** Reads the recent Quick Access channel list from the normalized GraphQL cache. */
+export function useCachedGraphqlChannelsQuery(cacheHost?: CacheHost) {
+  return useQuery(() => {
+    const enabledCacheHost = cacheHost?.disabled ? undefined : cacheHost;
+    return {
+      queryKey: channelKeys.quickAccessGraphql(
+        enabledCacheHost?.clientId ?? 'disabled'
+      ).queryKey,
+      queryFn: async (): Promise<CachedGraphqlChannel[]> => {
+        if (!enabledCacheHost) return [];
+        return await readCachedGraphqlChannels(enabledCacheHost);
+      },
+      enabled: enabledCacheHost !== undefined,
+      staleTime: Infinity,
+    };
+  });
 }
 
 export function invalidateListChannels() {

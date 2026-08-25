@@ -45,13 +45,17 @@ fn message(mentions: Vec<SimpleMention>) -> ChannelMessagePostedMetadata {
 fn session(id: AgentSessionId, bot_id: BotId) -> AgentSession {
     AgentSession {
         id,
+        name: agent_session::domain::model::DEFAULT_AGENT_SESSION_NAME.to_owned(),
         owner_id: MacroUserIdStr::try_from_email("owner@example.com").expect("valid macro user id"),
         thread_id: None,
+        thread_channel_id: None,
         originating_message_id: None,
         bot_id,
         model: "model".to_owned(),
         harness: "harness".to_owned(),
-        repo_url: "https://example.com/repo".to_owned(),
+        repo_url: Some("https://example.com/repo".to_owned()),
+        workspace: "/workspace".to_owned(),
+        sandbox_size: agent_session::domain::model::SandboxSize::Default,
         acp_session_id: None,
         status: SessionStatus::NoMessages,
         created_at: Utc::now(),

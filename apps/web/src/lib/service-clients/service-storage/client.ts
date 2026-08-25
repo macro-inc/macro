@@ -103,6 +103,8 @@ import type { GetAttachmentReferencesResponse } from './generated/schemas/getAtt
 import type { GetBatchChannelPreviewRequest } from './generated/schemas/getBatchChannelPreviewRequest';
 import type { GetBatchChannelPreviewResponse } from './generated/schemas/getBatchChannelPreviewResponse';
 import type { GetBatchProjectPreviewResponse } from './generated/schemas/getBatchProjectPreviewResponse';
+import type { GetContactByEmailParams } from './generated/schemas/getContactByEmailParams';
+import type { GetContactByEmailResponse } from './generated/schemas/getContactByEmailResponse';
 import type { GetDocumentPermissionsResponseDataV2 } from './generated/schemas/getDocumentPermissionsResponseDataV2';
 import type { GetDocumentProcessingResultResponse } from './generated/schemas/getDocumentProcessingResultResponse';
 import type { GetDocumentResponseData } from './generated/schemas/getDocumentResponseData';
@@ -160,8 +162,15 @@ import type { UserViewsResponse } from './generated/schemas/userViewsResponse';
 import type { View } from './generated/schemas/view';
 import type { ViewsResponse } from './generated/schemas/viewsResponse';
 import { saveDocumentHandlerResponse } from './generated/zod';
+import type { ItemType } from './itemType';
+
+export type { ItemType } from './itemType';
+
 import type {
+  CollabSurfaceResponse,
+  CollabSurfaceTokenResponse,
   GetDocumentPermissionsTokenResponse,
+  ProcessingResultType,
   StorageServiceClient,
   ValidateDocumentPermissionsTokenResponse,
 } from './service';
@@ -226,19 +235,6 @@ type Success = {
 };
 type SuccessResponse = { data: Success };
 
-export type ItemType =
-  | CloudStorageItemType
-  | 'channel'
-  | 'email'
-  | 'channel_message'
-  | 'channel_thread'
-  | 'call'
-  | 'automation'
-  | 'calendar_event'
-  | 'foreign'
-  | 'crm_company'
-  | 'crm_contact';
-
 export const DEFAULT_ITEM_TYPE: ItemType = 'document';
 
 export type { ApiAttachmentChannelReference } from './generated/schemas/apiAttachmentChannelReference';
@@ -288,6 +284,8 @@ type CreateBotRequest = {
   handle: string;
   description?: string;
   avatar_url?: string;
+  /** Whether mentioning this bot opens a coding-agent session. Defaults to false. */
+  has_agent?: boolean;
 };
 
 type PatchBotRequest = {
@@ -295,6 +293,8 @@ type PatchBotRequest = {
   handle?: string;
   description?: string;
   avatar_url?: string;
+  /** Whether mentioning this bot opens a coding-agent session. Omit to leave unchanged. */
+  has_agent?: boolean;
 };
 
 type CreateBotTokenRequest = {
@@ -391,7 +391,6 @@ export function isCloudStorageItem(
   return Object.values(CloudStorageItemTypeMap).includes(item as any);
 }
 
-type ProcessingResultType = 'PREPROCESS' | 'SPLIT_TEXTS';
 export type ProcessingResultResponseType<T extends ProcessingResultType> =
   T extends 'PREPROCESS'
     ? ICoParse
@@ -678,7 +677,11 @@ export const storageServiceClient = {
   },
 
   async createChannelScopedBot(
-    args: WithChannelId & CreateChannelScopedBotRequest
+    args: WithChannelId &
+      CreateChannelScopedBotRequest & {
+        /** Whether mentioning this bot opens a coding-agent session. Defaults to false. */
+        has_agent?: boolean;
+      }
   ) {
     const { channel_id, ...request } = args;
     return (
@@ -1081,6 +1084,43 @@ export const storageServiceClient = {
           body: JSON.stringify(args),
         }
       );
+    },
+  },
+
+  collabSurfaces: {
+    async ensure(args) {
+      return await dssFetch<CollabSurfaceResponse>(
+        `/collab_surfaces/${args.id}`,
+        {
+          method: 'PUT',
+          body: JSON.stringify({
+            parentEntityType: args.parentEntityType,
+            parentEntityId: args.parentEntityId,
+            initialMarkdown: args.initialMarkdown ?? '',
+          }),
+        }
+      );
+    },
+    async get(args) {
+      return await dssFetch<CollabSurfaceResponse>(
+        `/collab_surfaces/${args.id}`
+      );
+    },
+    // Uses SYNC_PERMISSION_TOKEN_DSS_HOST (like createPermissionToken) so the
+    // token is always signed by the DSS whose JWT secret matches the sync
+    // service's secret.
+    async createToken(args) {
+      return await fetchWithToken<CollabSurfaceTokenResponse>(
+        `${SYNC_PERMISSION_TOKEN_DSS_HOST}/collab_surfaces/${args.id}/token`,
+        {
+          method: 'POST',
+        }
+      );
+    },
+    async delete(args) {
+      return await dssFetch(`/collab_surfaces/${args.id}`, {
+        method: 'DELETE',
+      });
     },
   },
   async getUsersHistory() {
@@ -2468,6 +2508,16 @@ export const storageServiceClient = {
     return await dssFetch<CrmContactResponse>(`/crm/contacts/${contactId}`, {
       method: 'GET',
     });
+  },
+  async getContactByEmail({
+    email,
+    signal,
+  }: GetContactByEmailParams & { signal?: AbortSignal }) {
+    const query = new URLSearchParams({ email });
+    return await dssFetch<GetContactByEmailResponse>(
+      `/crm/contacts/by-email?${query.toString()}`,
+      { method: 'GET', signal }
+    );
   },
   async setContactName({
     contactId,

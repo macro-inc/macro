@@ -6,6 +6,9 @@
 //! wasm — wasm futures aren't
 //! `Send`.
 
+use crate::predicate::{
+    PredicateIndexStorage, PredicateQueryResult, ProjectionMutation, ProjectionState,
+};
 use crate::queue::{
     ClaimedMutation, MutationClaimRequest, MutationClaimToken, MutationId, NewQueuedMutation,
     QueuedMutation,
@@ -13,6 +16,7 @@ use crate::queue::{
 use crate::search::{SearchCursor, SearchDocument, SearchProfile, project_search_documents};
 use crate::value::{EntityKey, Record};
 use maybe_send::MaybeSend;
+use predicate_index::{IndexDocument, RecordKey as PredicateRecordKey, evaluate_reference};
 use std::collections::{BTreeMap, HashMap};
 use std::convert::Infallible;
 use std::sync::Arc;
@@ -54,6 +58,13 @@ pub trait Storage: MaybeSend {
     fn put_batch(
         &mut self,
         entries: Vec<(EntityKey<'static>, Record)>,
+    ) -> impl Future<Output = Result<(), Self::Error>> + MaybeSend;
+
+    /// Atomically upserts records and generic projection lifecycle changes.
+    fn put_batch_with_projections(
+        &mut self,
+        entries: Vec<(EntityKey<'static>, Record)>,
+        projections: Vec<ProjectionMutation>,
     ) -> impl Future<Output = Result<(), Self::Error>> + MaybeSend;
 
     /// Deletes records (absent keys are ignored).
@@ -131,6 +142,15 @@ pub trait Storage: MaybeSend {
         entries: Vec<(EntityKey<'static>, Record)>,
     ) -> impl Future<Output = Result<bool, Self::Error>> + MaybeSend;
 
+    /// Atomically settles a mutation with real records and projection changes.
+    fn complete_mutation_with_projections(
+        &mut self,
+        id: MutationId,
+        claim: MutationClaimToken,
+        entries: Vec<(EntityKey<'static>, Record)>,
+        projections: Vec<ProjectionMutation>,
+    ) -> impl Future<Output = Result<bool, Self::Error>> + MaybeSend;
+
     /// Atomically removes a permanently failed mutation and its optimistic
     /// layer. Returns `false` when the claim is stale.
     fn discard_mutation(
@@ -149,6 +169,7 @@ pub trait Storage: MaybeSend {
 pub struct InMemoryStorage {
     records: HashMap<EntityKey<'static>, Record>,
     search_documents: HashMap<(SearchProfile, EntityKey<'static>), SearchDocument>,
+    projections: HashMap<PredicateRecordKey, ProjectionState>,
     mutations: BTreeMap<
         MutationId,
         (
@@ -206,6 +227,16 @@ impl Storage for InMemoryStorage {
             }
             self.records.insert(key, record);
         }
+        Ok(())
+    }
+
+    async fn put_batch_with_projections(
+        &mut self,
+        entries: Vec<(EntityKey<'static>, Record)>,
+        projections: Vec<ProjectionMutation>,
+    ) -> Result<(), Self::Error> {
+        self.put_batch(entries).await?;
+        apply_in_memory_projection_mutations(&mut self.projections, projections);
         Ok(())
     }
 
@@ -355,6 +386,17 @@ impl Storage for InMemoryStorage {
         claim: MutationClaimToken,
         entries: Vec<(EntityKey<'static>, Record)>,
     ) -> Result<bool, Self::Error> {
+        self.complete_mutation_with_projections(id, claim, entries, Vec::new())
+            .await
+    }
+
+    async fn complete_mutation_with_projections(
+        &mut self,
+        id: MutationId,
+        claim: MutationClaimToken,
+        entries: Vec<(EntityKey<'static>, Record)>,
+        projections: Vec<ProjectionMutation>,
+    ) -> Result<bool, Self::Error> {
         let Some((mutation, _)) = self.mutations.get(&id) else {
             return Ok(false);
         };
@@ -370,6 +412,7 @@ impl Storage for InMemoryStorage {
             }
             self.records.insert(key, record);
         }
+        apply_in_memory_projection_mutations(&mut self.projections, projections);
         self.mutations.remove(&id);
         Ok(true)
     }
@@ -392,8 +435,105 @@ impl Storage for InMemoryStorage {
     async fn clear(&mut self) -> Result<(), Self::Error> {
         self.records.clear();
         self.search_documents.clear();
+        self.projections.clear();
         self.mutations.clear();
         Ok(())
+    }
+}
+
+impl PredicateIndexStorage for InMemoryStorage {
+    async fn delete_batch_with_projections(
+        &mut self,
+        keys: &[EntityKey<'static>],
+        projection_keys: &[PredicateRecordKey],
+    ) -> Result<(), Self::Error> {
+        self.delete_batch(keys).await?;
+        for key in projection_keys {
+            self.projections.remove(key);
+        }
+        Ok(())
+    }
+
+    async fn query_predicate_index(
+        &self,
+        query: &predicate_index::ValidatedIndexQuery,
+    ) -> Result<PredicateQueryResult, Self::Error> {
+        let query_descriptor = query.as_query();
+        let queried_partitions = query_descriptor
+            .partitions
+            .iter()
+            .map(|partition| &partition.partition)
+            .collect::<std::collections::HashSet<_>>();
+        if self.projections.values().any(|projection| {
+            projection.profile() == &query_descriptor.profile
+                && queried_partitions.contains(projection.partition())
+                && matches!(projection, ProjectionState::Incomplete { .. })
+        }) {
+            return Ok(PredicateQueryResult::Incomplete);
+        }
+
+        let documents = self
+            .projections
+            .values()
+            .filter_map(|projection| match projection {
+                ProjectionState::Complete(document) => Some(document.clone()),
+                ProjectionState::Incomplete { .. } => None,
+            })
+            .collect::<Vec<IndexDocument>>();
+        Ok(PredicateQueryResult::Complete(
+            evaluate_reference(query, &documents)
+                .into_iter()
+                .map(|hit| hit.record_key)
+                .collect(),
+        ))
+    }
+
+    async fn get_index_documents(
+        &self,
+        keys: &[PredicateRecordKey],
+    ) -> Result<Vec<Option<IndexDocument>>, Self::Error> {
+        Ok(keys
+            .iter()
+            .map(|key| match self.projections.get(key) {
+                Some(ProjectionState::Complete(document)) => Some(document.clone()),
+                Some(ProjectionState::Incomplete { .. }) | None => None,
+            })
+            .collect())
+    }
+}
+
+fn apply_in_memory_projection_mutations(
+    projections: &mut HashMap<PredicateRecordKey, ProjectionState>,
+    mutations: Vec<ProjectionMutation>,
+) {
+    for mutation in mutations {
+        match mutation {
+            ProjectionMutation::Replace(document) => {
+                projections.insert(
+                    document.record_key.clone(),
+                    ProjectionState::Complete(document),
+                );
+            }
+            ProjectionMutation::MarkIncomplete {
+                record_key,
+                profile,
+                partition,
+                kind,
+            } => {
+                projections.insert(
+                    record_key.clone(),
+                    ProjectionState::Incomplete {
+                        record_key,
+                        profile,
+                        partition,
+                        kind,
+                    },
+                );
+            }
+            ProjectionMutation::Delete(record_key) => {
+                projections.remove(&record_key);
+            }
+        }
     }
 }
 

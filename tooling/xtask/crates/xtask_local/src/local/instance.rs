@@ -102,6 +102,8 @@ pub enum Port {
     /// per-instance port offsets come from declaration order, and removing a
     /// variant would shift every one declared after it.
     AgentProxy = 8091,
+    /// Agent session control API.
+    AgentHarness = 8101,
 }
 
 impl Port {

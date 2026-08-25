@@ -77,7 +77,7 @@ export function SplitPanelV2(props: SplitPanelProps) {
   const splitLayoutHelpers = useSplitLayout();
 
   registerSplitHotkeys({
-    goHome: () =>
+    goToList: () =>
       props.handle.replace({
         next: { type: 'component', id: LIST_VIEW_ID.inbox },
         referredFrom: 'hotkey',

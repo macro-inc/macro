@@ -313,6 +313,59 @@ fn folds_every_official_tool_kind() {
     insta::assert_debug_snapshot!(agent.parts);
 }
 
+/// An edit call that never reports a diff content block — Claude Code's
+/// `Write` — synthesizes a whole-file diff from `rawInput`'s
+/// `{filePath, content}`, on the opening frame or a later patch.
+#[test]
+fn synthesizes_a_write_diff_from_raw_input() {
+    let log = parse_log(concat!(
+        r#"{"direction":"to_runtime","content":{"type":"acp","jsonrpc":"2.0","id":"p","method":"session/prompt","params":{"sessionId":"s","prompt":[{"type":"text","text":"hi"}]}}}"#,
+        "\n",
+        // Opened with the raw input already present, no diff content ever.
+        r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s","update":{"sessionUpdate":"tool_call","toolCallId":"w","title":"write","kind":"edit","status":"in_progress","rawInput":{"filePath":"/repo/readme.md","content":"hello\n"}}}}}"#,
+        "\n",
+        r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s","update":{"sessionUpdate":"tool_call_update","toolCallId":"w","status":"completed"}}}}"#,
+    ));
+
+    let messages = fold(log);
+    let MessagePart::ToolUse { detail, .. } = &messages[1].parts[0] else {
+        panic!("first part is the write: {:?}", messages[1].parts);
+    };
+    let ToolDetail::Edit { diffs } = detail else {
+        panic!("write folds to an edit: {detail:?}");
+    };
+    assert_eq!(diffs.len(), 1);
+    assert_eq!(diffs[0].path, std::path::PathBuf::from("/repo/readme.md"));
+    assert_eq!(
+        diffs[0].old_text, None,
+        "prior contents are not on the wire"
+    );
+    assert_eq!(diffs[0].new_text, "hello\n");
+}
+
+/// A reported diff block wins over the synthesized raw-input diff.
+#[test]
+fn reported_diffs_beat_the_synthesized_write_diff() {
+    let log = parse_log(concat!(
+        r#"{"direction":"to_runtime","content":{"type":"acp","jsonrpc":"2.0","id":"p","method":"session/prompt","params":{"sessionId":"s","prompt":[{"type":"text","text":"hi"}]}}}"#,
+        "\n",
+        r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s","update":{"sessionUpdate":"tool_call","toolCallId":"e","title":"edit","kind":"edit","status":"in_progress","rawInput":{"filePath":"/repo/a.rs","content":"whole file"}}}}}"#,
+        "\n",
+        r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s","update":{"sessionUpdate":"tool_call_update","toolCallId":"e","status":"completed","content":[{"type":"diff","path":"/repo/a.rs","oldText":"old","newText":"new"}]}}}}"#,
+    ));
+
+    let messages = fold(log);
+    let MessagePart::ToolUse { detail, .. } = &messages[1].parts[0] else {
+        panic!("first part is the edit: {:?}", messages[1].parts);
+    };
+    let ToolDetail::Edit { diffs } = detail else {
+        panic!("edit folds to diffs: {detail:?}");
+    };
+    assert_eq!(diffs.len(), 1);
+    assert_eq!(diffs[0].old_text.as_deref(), Some("old"));
+    assert_eq!(diffs[0].new_text, "new");
+}
+
 /// A patch for a tool call that was never opened is logged, not fatal.
 #[test]
 fn reports_a_patch_before_open() {
@@ -424,4 +477,64 @@ fn replays_local_recordings() {
             );
         }
     }
+}
+
+/// The exchange the local database recorded after a switch to a provider
+/// whose credentials were broken: the prompt is answered with a JSON-RPC
+/// error and nothing else ever arrives.
+const FAILED_PROMPT: &str = concat!(
+    r#"{"direction":"to_runtime","content":{"type":"acp","jsonrpc":"2.0","id":"p","method":"session/prompt","params":{"sessionId":"s1","prompt":[{"type":"text","text":"hi"}]}}}"#,
+    "\n",
+    r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","id":"p","error":{"code":-32603,"message":"Internal error: Bad Request: bad request: Authorization header is badly formatted"}}}"#,
+);
+
+/// A turn whose prompt errors is over, and says why.
+///
+/// The bug this pins: the turn used to be left with no stop reason at all,
+/// which every reader takes to mean "still running" — so one failed prompt
+/// wedged the composer against a turn that had already died, and the error
+/// itself was dropped on the floor.
+#[test]
+fn a_prompt_answered_with_an_error_ends_its_turn() {
+    let messages = fold(parse_log(FAILED_PROMPT));
+
+    assert_eq!(messages.len(), 2, "the prompt, and the turn that failed");
+    let agent = messages.last().expect("an agent message");
+    assert_eq!(agent.author, Author::Agent);
+    assert_eq!(
+        agent.stop,
+        Some(StopReason::Failed {
+            message: "Internal error: Bad Request: bad request: Authorization header is badly \
+                      formatted"
+                .to_owned()
+        }),
+        "the runtime's own words, carried verbatim"
+    );
+}
+
+/// The failure lands on whatever the agent had already said, rather than
+/// opening a second message beside it.
+#[test]
+fn a_turn_that_had_started_talking_fails_in_place() {
+    let chunk = concat!(
+        r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","method":"session/update","#,
+        r#""params":{"sessionId":"s1","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"working"}}}}}"#,
+    );
+    let (prompt, error) = FAILED_PROMPT
+        .split_once('\n')
+        .expect("the fixture has two frames");
+    let log = format!("{prompt}\n{chunk}\n{error}");
+
+    let messages = fold(parse_log(&log));
+
+    assert_eq!(messages.len(), 2, "no extra message for the failure");
+    let agent = messages.last().expect("an agent message");
+    assert!(matches!(agent.stop, Some(StopReason::Failed { .. })));
+    assert_eq!(
+        agent.parts.first(),
+        Some(&MessagePart::Text {
+            text: "working".to_owned()
+        }),
+        "what the agent managed to say is kept"
+    );
 }

@@ -7,7 +7,6 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('@core/constant/featureFlags', () => ({
   ENABLE_CALENDAR_UI: () => mocks.calendarUiEnabled,
-  ENABLE_NEW_INBOX: () => false,
   ENABLE_REMINDERS: () => mocks.remindersEnabled,
   ENABLE_SNIPPETS: () => true,
   ENABLE_SUPPORTED_SOUP_FOREIGN_ENTITIES_OVERRIDE: false,
@@ -26,7 +25,7 @@ import { getViewPreset, VIEW_TAB_PRESETS } from './soup-filter-presets';
 const mailTabs = Object.keys(VIEW_TAB_PRESETS.mail.tabs);
 
 describe('mail view presets', () => {
-  it('groups every mail tab by date independently of the new inbox flag', () => {
+  it('groups every mail tab by date', () => {
     for (const tab of mailTabs) {
       expect(getViewPreset('mail', tab)?.groupBy).toBe('date');
     }
@@ -61,15 +60,28 @@ describe('task view presets', () => {
 });
 
 describe('calendar event scoping', () => {
-  it('excludes calendar events from views that do not render them', () => {
-    const nilId = '00000000-0000-0000-0000-000000000000';
+  const nilId = '00000000-0000-0000-0000-000000000000';
 
+  it('excludes calendar events from feeds that do not render them', () => {
     expect(
       getViewPreset('mail', 'important')?.filters.include?.calendarEventId
     ).toEqual([nilId]);
     expect(
       getViewPreset('inbox', 'all')?.filters.include?.calendarEventId
     ).toEqual([nilId]);
+  });
+
+  it('searches calendar events, which carry a title index of their own', () => {
+    expect(
+      getViewPreset('search', 'all')?.filters.include?.calendarEventId
+    ).toBeUndefined();
+  });
+
+  it('excludes them from search when the calendar UI is off', () => {
+    // Opening a hit needs the calendar block, which the flag gates, so
+    // without it a result would render an inert row.
+    mocks.calendarUiEnabled = false;
+
     expect(
       getViewPreset('search', 'all')?.filters.include?.calendarEventId
     ).toEqual([nilId]);

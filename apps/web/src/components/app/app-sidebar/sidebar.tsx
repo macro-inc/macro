@@ -53,7 +53,6 @@ import {
   ENABLE_CALLS,
   ENABLE_CRM,
   ENABLE_NEW_PRICING_OVERRIDE,
-  ENABLE_REMINDERS,
 } from '@core/constant/featureFlags';
 import {
   type SettingsTab,
@@ -64,6 +63,7 @@ import {
   useSettingsTabAvailable,
 } from '@core/constant/settingsTabsConfig';
 import { useEmail, useUserId } from '@core/context/user';
+import { hotkeyScopeNeutralAttribute } from '@core/dom-selectors';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { clearPressedKeys } from '@core/hotkey/state';
 import { type HotkeyToken, TOKENS } from '@core/hotkey/tokens';
@@ -74,6 +74,7 @@ import LogoIcon from '@icon/macro-logo.svg';
 import { AnimatedActivityIcon } from '@icon/wide-activity';
 import WideCalendarIcon from '@icon/wide-calendar.svg';
 import { AnimatedCallIcon } from '@icon/wide-call';
+import PhoneIcon from '@icon/wide-call.svg';
 import { AnimatedChannelIcon } from '@icon/wide-channel';
 import { AnimatedCompanyIcon } from '@icon/wide-company';
 import { AnimatedEmailIcon } from '@icon/wide-email';
@@ -84,7 +85,6 @@ import { AnimatedSearchIcon } from '@icon/wide-search';
 import { AnimatedStarIcon } from '@icon/wide-star';
 import { AnimatedTaskIcon } from '@icon/wide-task';
 import { ContextMenu } from '@kobalte/core/context-menu';
-import BellSimpleIcon from '@phosphor/bell-simple.svg';
 import CaretRightIcon from '@phosphor/caret-right.svg';
 import CaretUpIcon from '@phosphor/caret-up.svg';
 import CompassIcon from '@phosphor/compass.svg';
@@ -95,6 +95,7 @@ import SignOutIcon from '@phosphor/sign-out.svg';
 import UsersThreeIcon from '@phosphor/users-three.svg';
 import XIcon from '@phosphor/x.svg';
 import { isRealNamePart, useOwnUserName } from '@queries/auth/user-name-self';
+import { useActiveCallsQuery } from '@queries/call/call';
 import { useEmailLinksQuery } from '@queries/email/link';
 import {
   useJoinTeamMutation,
@@ -129,7 +130,7 @@ interface SidebarItem {
   href: string;
   params?: Record<string, unknown>;
   icon?: Component<
-    JSX.SvgSVGAttributes<SVGSVGElement> | { triggerAnimation?: boolean }
+    JSX.SvgSVGAttributes<SVGSVGElement> & { triggerAnimation?: boolean }
   >;
   hotkey: ValidHotkey;
   hotkeyToken: HotkeyToken;
@@ -1048,17 +1049,6 @@ const RECENT_LINK: SidebarItem = {
   hotkeyToken: TOKENS.sidebar.goTo.recent,
 };
 
-const REMINDERS_LINK: SidebarItem = {
-  id: 'reminders',
-  label: 'Reminders',
-  href: LIST_VIEW_PATHS.reminders,
-  icon: BellSimpleIcon,
-  // `r` is Calendar; `m` is free and the only other letter in "reminders" that
-  // is not already a sidebar destination.
-  hotkey: 'm',
-  hotkeyToken: TOKENS.sidebar.goTo.reminders,
-};
-
 /**
  * Assemble the ordered sidebar link list: the static links plus Home, Getting
  * started, and the flag-gated Activity, Calendar, Calls, and CRM entries in
@@ -1085,7 +1075,7 @@ const buildSidebarLinks = (
   ];
 
   if (showRecent) {
-    // Directly below Inbox; Activity and Reminders anchor after it.
+    // Directly below Inbox; Activity anchors after it.
     const idx = links.findIndex((link) => link.id === 'inbox');
     links = [...links.slice(0, idx + 1), RECENT_LINK, ...links.slice(idx + 1)];
   }
@@ -1096,21 +1086,6 @@ const buildSidebarLinks = (
     links = [
       ...links.slice(0, idx + 1),
       ACTIVITY_LINK,
-      ...links.slice(idx + 1),
-    ];
-  }
-
-  if (ENABLE_REMINDERS()) {
-    // Directly below Activity, or below Recent/Inbox when Activity is off.
-    const anchorId = showActivity
-      ? 'activity'
-      : showRecent
-        ? 'recent'
-        : 'inbox';
-    const idx = links.findIndex((l) => l.id === anchorId);
-    links = [
-      ...links.slice(0, idx + 1),
-      REMINDERS_LINK,
       ...links.slice(idx + 1),
     ];
   }
@@ -1339,6 +1314,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
       sidebarState={sidebarDisplayState()}
       hotkeyVisible={goToHotkeyVisible()}
       onContextMenuOpenChange={handleOverlayDropdownOpenChange}
+      trailing={link.id === 'channels' ? <ChannelsActiveCallIcon /> : undefined}
       removeAction={
         link.id === 'getting-started'
           ? {
@@ -1374,7 +1350,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
   // lives in the collapsible Workspace section. `findLink` drops ids that
   // `buildSidebarLinks` gated out, so flag-gated rows need no filter here.
   const topLinks = createMemo(() =>
-    ['home', 'getting-started', 'inbox', 'recent', 'activity', 'reminders']
+    ['home', 'getting-started', 'inbox', 'recent', 'activity']
       .filter(
         (id) => id !== 'getting-started' || !gettingStartedVisibility.hidden()
       )
@@ -1496,8 +1472,14 @@ export const AppSidebar = (props: AppSidebarProps) => {
   });
   onCleanup(sidebarHotkeyRegistration.dispose);
 
+  // hotkeyScopeNeutralAttribute: focusing anything in the sidebar (rows, the
+  // workspace toggle, ...) must not flip the active hotkey scope to 'global',
+  // which would mute the active split's hotkeys until the user clicks back
+  // into a split. The sidebar's own hotkeys register on the 'global' scope,
+  // which every scope chain reaches, so they don't need the flip either.
   return (
     <div
+      {...hotkeyScopeNeutralAttribute}
       class={cn(
         'group/sidebar flex flex-col gap-0 overflow-hidden bg-surface px-3 pb-3 pt-4 text-[13px]',
         isExpanded() && 'relative h-full shrink-0 max-w-55 w-55 opacity-100',
@@ -1721,6 +1703,12 @@ interface SidebarLinkProps extends SidebarItem {
    */
   trailingWhenActive?: JSX.Element;
   /**
+   * Always-visible indicator at the link's right edge (unlike
+   * `trailingWhenActive`). In slim mode it overlays the icon's top-right
+   * corner instead, since the label region is hidden.
+   */
+  trailing?: JSX.Element;
+  /**
    * Swaps the icon for an X while the row is hovered (expanded sidebar only —
    * in slim mode the icon is the whole row, so the swap would hijack
    * navigation). Clicking the X calls `onRemove` instead of navigating.
@@ -1808,6 +1796,21 @@ const SidebarOpenInSplitMenu = (props: SidebarOpenInSplitMenuProps) => {
         </ContextMenuContent>
       </ContextMenu.Portal>
     </ContextMenu>
+  );
+};
+
+/**
+ * Accent phone icon on the Channels link while any channel the user is a
+ * member of has a live call. Backed by the shared all-active-calls query,
+ * which the call websocket events keep current.
+ */
+const ChannelsActiveCallIcon = () => {
+  const activeCallsQuery = useActiveCallsQuery();
+
+  return (
+    <Show when={(activeCallsQuery.data ?? []).length > 0}>
+      <PhoneIcon class="size-4 shrink-0 text-accent fill-accent" />
+    </Show>
   );
 };
 
@@ -1940,6 +1943,19 @@ const SidebarLinkRow = (props: SidebarLinkProps) => {
       <div class="flex items-center gap-1 group-data-[slim=true]/sidebar:hidden">
         <span class="whitespace-nowrap">{props.label}</span>
       </div>
+
+      <Show when={props.trailing}>
+        <div
+          class={cn(
+            'flex items-center',
+            props.sidebarState === 'slim'
+              ? 'absolute -top-1 -right-1'
+              : 'ml-auto'
+          )}
+        >
+          {props.trailing}
+        </div>
+      </Show>
 
       <Show
         when={

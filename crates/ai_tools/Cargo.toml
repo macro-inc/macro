@@ -8,6 +8,7 @@ version = "0.1.0"
 test-support = []
 
 [dependencies]
+activity = { path = "../activity", default-features = false, features = ["ai_tools", "outbound"] }
 agent = { path = "../agent" }
 ai_usage = { path = "../ai_usage" }
 anthropic = { path = "../anthropic", features = ["toolset"] }
@@ -15,9 +16,11 @@ attachment = { path = "../attachment" }
 non_empty = { path = "../non_empty" }
 ai_toolset = { path = "../ai_toolset" }
 anyhow.workspace = true
+bot_id = { path = "../bot_id" }
 async-trait.workspace = true
 axum = { workspace = true, features = ["macros"] }
 aws-sdk-sqs.workspace = true
+bots = { path = "../bots", default-features = false, features = ["ai_tools", "outbound"] }
 calendar_events = { path = "../calendar_events", features = ["ai_tools", "mutation-client", "postgres"] }
 call = { path = "../call", default-features = false, features = ["ai_tools", "outbound", "ports"] }
 chat = { path = "../chat", features = ["ai_tools", "outbound"] }

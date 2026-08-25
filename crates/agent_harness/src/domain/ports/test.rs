@@ -6,6 +6,7 @@ use agent_client_protocol::schema::v1::{
 use agent_fold::domain::service::FoldedMessageService;
 use agent_runtime_protocol::domain::action::{AgentAction, AgentActionId};
 use agent_session::PROTOCOL_VERSION;
+use agent_session::domain::connection::RuntimeAttachment;
 use agent_session::domain::error::AgentSessionError;
 use agent_session::domain::model::{AgentSessionId, CreateAgentSessionParams, Message};
 use agent_session::domain::ports::{AgentSessionLogRepo, NoOpRealtime};
@@ -31,7 +32,9 @@ fn params(id: AgentSessionId) -> CreateAgentSessionParams {
         originating_message_id: None,
         model: "claude".to_owned(),
         harness: "opencode".to_owned(),
-        repo_url: "https://github.com/macro/macro".to_owned(),
+        repo_url: Some("https://github.com/macro/macro".to_owned()),
+        workspace: "/workspace".to_owned(),
+        sandbox_size: agent_session::domain::model::SandboxSize::Default,
     }
 }
 
@@ -61,6 +64,7 @@ async fn container_session_runs_and_logs_end_to_end() {
         .spawn(SpawnContainer {
             session_id: id,
             repo_url: "https://github.com/macro/macro".to_owned(),
+            size: agent_session::domain::model::SandboxSize::Default,
         })
         .await
         .unwrap();
@@ -68,7 +72,7 @@ async fn container_session_runs_and_logs_end_to_end() {
 
     let record = sessions.create_session(params(id)).await.unwrap();
     sessions
-        .attach_session(id, container.clone())
+        .attach_session(id, RuntimeAttachment::solo(container.clone()))
         .await
         .unwrap();
     assert_eq!(record.id, id);
@@ -95,6 +99,7 @@ async fn container_session_runs_and_logs_end_to_end() {
     agent.wait_for_requests(2).await;
     agent.opens_session(NewSessionResponse::new("acp-container-test"));
     agent.wait_for_requests(3).await;
+    agent.completes_prompt().await;
     send.await.unwrap().unwrap();
 
     assert_eq!(
@@ -112,15 +117,14 @@ async fn container_session_runs_and_logs_end_to_end() {
     assert!(matches!(logs[5].entry.content, Message::ToRuntime(_)));
     assert_eq!(logs[5].entry.user_id, Some(owner()));
 
-    sessions
-        .send_action(
-            id,
-            Some(owner()),
-            AgentAction::prompt("and run clippy"),
-            AgentActionId::mint(),
-        )
-        .await
-        .unwrap();
+    let send = sessions.send_action(
+        id,
+        Some(owner()),
+        AgentAction::prompt("and run clippy"),
+        AgentActionId::mint(),
+    );
+    let (result, ()) = tokio::join!(send, agent.completes_prompt());
+    result.unwrap();
     assert_eq!(containers.spawned(), 1);
     assert_eq!(containers.resumed(), 0);
     assert_eq!(
@@ -144,8 +148,14 @@ async fn attaching_a_second_transport_to_an_active_session_fails() {
     let second = ContainerMock::default();
 
     sessions.create_session(params(id)).await.unwrap();
-    sessions.attach_session(id, first).await.unwrap();
-    let error = sessions.attach_session(id, second).await.unwrap_err();
+    sessions
+        .attach_session(id, RuntimeAttachment::solo(first))
+        .await
+        .unwrap();
+    let error = sessions
+        .attach_session(id, RuntimeAttachment::solo(second))
+        .await
+        .unwrap_err();
 
     assert!(matches!(error, AgentSessionError::AlreadyConnected(found) if found == id));
 }

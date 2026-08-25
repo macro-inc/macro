@@ -6,6 +6,7 @@
 #![deny(missing_docs)]
 
 pub mod about_macro;
+pub mod agent_session;
 pub mod channel_mention;
 pub mod citations;
 pub mod connected_toolsets;

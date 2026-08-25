@@ -2499,6 +2499,11 @@
             "type": "string",
             "format": "uuid",
             "description": "The reminder that fired."
+          },
+          "scheduledFor": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Which firing this is — the occurrence the reminder came due for.\n\nWhat distinguishes two firings of the same recurring reminder, which are\notherwise identical: same id, same description. The collapse key is\nbuilt from it, so without it Tuesday's alert would replace Monday's\nunread one on the lock screen.\n\nOptional because notifications written before recurring dispatch existed\nhave no such field, and they still have to read back."
           }
         }
       },

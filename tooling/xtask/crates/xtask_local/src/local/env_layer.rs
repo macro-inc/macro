@@ -199,7 +199,7 @@ fn pull_aws_credentials(env: &mut BTreeMap<String, String>) {
 /// Pull Doppler secrets as a flat env overlay (mirrors the old
 /// `just get_environment`). Two modes:
 ///
-/// - `DOPPLER_TOKEN` in the process env (CI, Fly preview machines) is a
+/// - `DOPPLER_TOKEN` in the process env (CI, Cloud agents) is a
 ///   config-scoped service token: download WITHOUT `--project`/`--config` (the
 ///   token pins them), and treat failure as fatal — whoever provisioned the
 ///   token explicitly asked for these secrets, so proceeding without them

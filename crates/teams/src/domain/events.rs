@@ -120,6 +120,13 @@ pub struct TeamMemberJoinedMetadata {
     pub team_id: Uuid,
     /// User who joined the team.
     pub member_id: MacroUserIdStr<'static>,
+    /// Other current teammates the joining member should have a DM with.
+    ///
+    /// Sorted and de-duplicated. Empty when the roster could not be loaded or
+    /// the team has no other members. Missing on events published before this
+    /// field existed.
+    #[serde(default)]
+    pub teammate_ids: Vec<MacroUserIdStr<'static>>,
     /// Role assigned to the new member.
     pub role: TeamRole,
     /// Mechanism by which the member joined.

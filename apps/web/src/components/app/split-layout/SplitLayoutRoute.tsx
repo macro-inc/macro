@@ -4,7 +4,6 @@ import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import type { WithRequired } from '@core/util/withRequired';
 import {
   type RouteDefinition,
-  type RouteSectionProps,
   useParams,
 } from '@solidjs/router';
 import { SplitLayoutContainer } from './SplitLayout';
@@ -18,19 +17,14 @@ import {
   serializeChannelsWorkspacePath,
 } from './channelsWorkspaceRoute';
 
-type LayoutPath = {
-  params: {
-    splits: string | undefined;
-  };
-};
-
-function LayoutRoute(props: RouteSectionProps & LayoutPath) {
+function LayoutRoute() {
+  const params = useParams<{ splits?: string }>();
   const brainWorkspaceEnabled = () =>
     activeAppLayout().capabilities.usesBrainWorkspace && !isTouchDevice();
 
   return (
     <SplitLayoutContainer
-      pairs={props.params.splits?.split('/') ?? []}
+      pairs={params.splits?.split('/') ?? []}
       setManager={setGlobalSplitManager}
       serializePath={
         brainWorkspaceEnabled()

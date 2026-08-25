@@ -187,6 +187,11 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
       });
     },
 
+    async entityFilter() {
+      // The first profile is browser Turso/OPFS-only.
+      return { kind: 'unsupported' };
+    },
+
     async writeQuery(args: CacheWriteArgs): Promise<WriteResult> {
       await ready;
       return await request<WriteResult>('graphql_cache_write', {

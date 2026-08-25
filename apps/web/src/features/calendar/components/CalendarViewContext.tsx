@@ -27,7 +27,9 @@ interface CalendarPreferences {
   timeFormat: CalendarTimeFormat;
 }
 
-const CALENDAR_PREFERENCES_KEY = 'macro:pref:calendar:settings';
+/** Storage key for calendar display preferences (also read at copy time by
+ * the availability feature, which runs outside this context). */
+export const CALENDAR_PREFERENCES_KEY = 'macro:pref:calendar:settings';
 
 function createCalendarEventSelection() {
   const [event, setEvent] = createSignal<CalendarEvent>();

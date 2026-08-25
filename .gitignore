@@ -35,3 +35,4 @@ infra/local/generated/
 .pi/outputs/
 .commandcode/
 **/.webhook.json
+/artifacts

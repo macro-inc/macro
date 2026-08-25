@@ -7,7 +7,6 @@ import {
 } from '@app/features/next-soup/filters/filter-store';
 import {
   ENABLE_CALENDAR_UI,
-  ENABLE_NEW_INBOX,
   ENABLE_REMINDERS,
   ENABLE_SNIPPETS,
   ENABLE_SUPPORTED_SOUP_FOREIGN_ENTITIES_OVERRIDE,
@@ -117,9 +116,10 @@ const getInboxSignalFilters = () => {
       emailShared: 'exclude',
       // Reminders are off by default server-side rather than excluded by
       // `defineQueryFilters` (there is no `remf` entry in ID_FIELD_NAMES), so
-      // this literal is the only thing that surfaces them — and Signal is the
-      // only view that sends it. Behind the flag so an unflagged user never
-      // pays for the reminders lookup on every Signal fetch.
+      // this literal is the only thing that surfaces them; the inbox Reminders
+      // tab below sends it too, for the not-yet-fired slice. Behind the flag
+      // so an unflagged user never pays for the reminders lookup on every
+      // Signal fetch.
       ...(ENABLE_REMINDERS() ? { includeReminders: true } : {}),
       // Calendar events with a not-done notification (a fired event alarm).
       // Referencing `calf` opts the calendar arm into the signal query, which
@@ -184,12 +184,12 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
       signal: () => ({
         filters: getInboxSignalFilters(),
         clientFilters: { and: ['inbox'] },
-        groupBy: ENABLE_NEW_INBOX() ? 'date' : undefined,
+        groupBy: 'date',
       }),
       noise: () => ({
         filters: getInboxNoiseFilters(),
         clientFilters: { and: ['noise'] },
-        groupBy: ENABLE_NEW_INBOX() ? 'date' : undefined,
+        groupBy: 'date',
       }),
       all: () => ({
         filters: {
@@ -216,7 +216,23 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
           emailView: 'all',
         },
         clientFilters: { and: ['explicit-noise'] },
-        groupBy: ENABLE_NEW_INBOX() ? 'date' : undefined,
+        groupBy: 'date',
+      }),
+      // Pending reminders only: scheduled but not yet fired. A fired reminder
+      // has already hit the inbox — Signal surfaces it through its not-done
+      // notification — so this tab is the forward-looking complement: what is
+      // coming, not what is due. Soonest first, since "newest first" on future
+      // dates would put December above tomorrow.
+      reminders: () => ({
+        filters: defineQueryFilters({
+          include: {
+            includeReminders: true,
+            reminderCompleted: false,
+            reminderFired: false,
+          },
+        }),
+        clientFilters: { and: ['reminders-scheduled'] },
+        sortDirection: 'asc',
       }),
     },
   },
@@ -642,17 +658,20 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
       all: () => ({
         // Temporary: search has no full-text index over foreign entities yet,
         // so always exclude them (matching no record id) until search supports
-        // them. Calendar, CRM, and non-displayable channel-thread rows are
-        // NIL-excluded the same way. `search-supported` mirrors these
-        // exclusions client-side so entities that enter the soup cache outside
-        // this query (e.g. websocket-driven inserts) don't surface in the
-        // search feed.
+        // them. CRM and non-displayable channel-thread rows are NIL-excluded
+        // the same way. Calendar events are not excluded — they carry a title
+        // index of their own. `search-supported` mirrors these exclusions
+        // client-side so entities that enter the soup cache outside this query
+        // (e.g. websocket-driven inserts) don't surface in the search feed.
         filters: {
           include: {
-            calendarEventId: [NIL_UUID],
             foreignEntityRecordId: [NIL_UUID],
             crmCompanyId: [NIL_UUID],
             channelThreadId: [NIL_UUID],
+            // Events are title-indexed, so search returns them — but opening
+            // one needs the calendar block, which the flag gates. Without it
+            // a hit would render an inert row, so exclude the type instead.
+            ...(ENABLE_CALENDAR_UI() ? {} : { calendarEventId: [NIL_UUID] }),
           },
           exclude: getDisabledSnippetSubtypeExclude(),
         },

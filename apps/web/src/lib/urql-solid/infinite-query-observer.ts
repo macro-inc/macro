@@ -59,6 +59,27 @@ type NextPageParamResult<PageParam> = {
   error: CombinedError | null;
 };
 
+type SelectionCache<PageData, PageParam, SelectedData> = {
+  pages: readonly PageData[];
+  pageParams: readonly PageParam[];
+  select: InfiniteOptions<
+    PageData,
+    AnyVariables,
+    PageParam,
+    SelectedData
+  >['select'];
+  previousData: SelectedData | undefined;
+  data: SelectedData | undefined;
+  error: CombinedError | null;
+};
+
+function sameReferences<T>(left: readonly T[], right: readonly T[]): boolean {
+  return (
+    left.length === right.length &&
+    left.every((value, index) => Object.is(value, right[index]))
+  );
+}
+
 function shallowEqualContext(
   left: Partial<OperationContext> | undefined,
   right: Partial<OperationContext> | undefined
@@ -120,6 +141,13 @@ export class InfiniteQueryObserver<
     SelectedData
   >;
   private readonly result = new ObserverResult(() => this.getCurrentResult());
+  // urql page data is immutable; unchanged references therefore represent the
+  // same selector input across fetching/stale-only observer emissions.
+  private selectionCache:
+    | SelectionCache<PageData, PageParam, SelectedData>
+    | undefined;
+  private emissionBatchDepth = 0;
+  private pendingEmission = false;
   private actionController = new AbortController();
   private destroyed = false;
   private fetchNextPromise:
@@ -155,18 +183,9 @@ export class InfiniteQueryObserver<
     SelectedData
   > {
     const infiniteData = this.successfulPages();
-    let data = this.state.previousData;
-    let derivationError: CombinedError | null = null;
-
-    if (infiniteData.pages.length > 0) {
-      try {
-        data = this.options.select
-          ? this.options.select(infiniteData)
-          : (infiniteData as SelectedData);
-      } catch (cause) {
-        derivationError = toCombinedError(cause);
-      }
-    }
+    const selection = this.deriveSelectedData(infiniteData);
+    const data = selection.data;
+    let derivationError = selection.error;
 
     const pageResults = this.pages.map((page) =>
       page.observer.getCurrentResult()
@@ -223,6 +242,45 @@ export class InfiniteQueryObserver<
       fetchNextPage: this.fetchNextPage,
       refetch: this.refetch,
     };
+  }
+
+  private deriveSelectedData(
+    infiniteData: UrqlInfiniteData<PageData, PageParam>
+  ): { data: SelectedData | undefined; error: CombinedError | null } {
+    if (infiniteData.pages.length === 0) {
+      return { data: this.state.previousData, error: null };
+    }
+
+    const select = this.options.select;
+    const cached = this.selectionCache;
+    if (
+      cached !== undefined &&
+      cached.select === select &&
+      Object.is(cached.previousData, this.state.previousData) &&
+      sameReferences(cached.pages, infiniteData.pages) &&
+      sameReferences(cached.pageParams, infiniteData.pageParams)
+    ) {
+      return { data: cached.data, error: cached.error };
+    }
+
+    let data = this.state.previousData;
+    let error: CombinedError | null = null;
+    try {
+      data = select ? select(infiniteData) : (infiniteData as SelectedData);
+    } catch (cause) {
+      error = toCombinedError(cause);
+    }
+
+    this.selectionCache = {
+      pages: infiniteData.pages,
+      pageParams: infiniteData.pageParams,
+      select,
+      previousData: this.state.previousData,
+      data,
+      error,
+    };
+
+    return { data, error };
   }
 
   setReference(
@@ -310,55 +368,59 @@ export class InfiniteQueryObserver<
     options: InfiniteOptions<PageData, Variables, PageParam, SelectedData>,
     client: Client
   ): void {
-    const wasEnabled = this.state.enabled;
-    const previousResult = this.getCurrentResult();
-    this.options = options;
-    this.client = client;
+    this.batchEmissions(() => {
+      const wasEnabled = this.state.enabled;
+      const previousResult = this.getCurrentResult();
+      this.options = options;
+      this.client = client;
 
-    if (options.enabled === false) {
-      this.cancelActions();
-      this.setState({ enabled: false });
+      if (options.enabled === false) {
+        this.cancelActions();
+        this.setState({ enabled: false });
 
-      for (const page of this.pages) {
-        page.observer.setOptions(this.pageOptions(page, false), client);
+        for (const page of this.pages) {
+          page.observer.setOptions(this.pageOptions(page, false), client);
+        }
+        this.emit();
+        return;
+      }
+
+      const initialVariables = options.variables(options.initialPageParam, 0);
+      const request = createRequest<PageData, Variables>(
+        options.query,
+        initialVariables
+      );
+      const queryKey: InfiniteQueryKey<PageParam> = {
+        key: request.key,
+        initialPageParam: options.initialPageParam,
+        requestPolicy: options.requestPolicy,
+        context: options.context,
+      };
+      const queryChanged = !sameQuery(this.queryKey, queryKey);
+
+      if (queryChanged) {
+        this.cancelActions();
+        this.setState({
+          previousData:
+            options.keepPreviousData !== false
+              ? previousResult.data
+              : undefined,
+          paginationError: undefined,
+        });
+        this.queryKey = queryKey;
+        this.destroyPages();
+      }
+
+      this.setState({ enabled: true });
+      if (this.pages.length === 0) {
+        this.appendPage(options.initialPageParam, 0, initialVariables);
+      } else if (!wasEnabled) {
+        for (const page of this.pages) {
+          page.observer.setOptions(this.pageOptions(page, true), client);
+        }
       }
       this.emit();
-      return;
-    }
-
-    const initialVariables = options.variables(options.initialPageParam, 0);
-    const request = createRequest<PageData, Variables>(
-      options.query,
-      initialVariables
-    );
-    const queryKey: InfiniteQueryKey<PageParam> = {
-      key: request.key,
-      initialPageParam: options.initialPageParam,
-      requestPolicy: options.requestPolicy,
-      context: options.context,
-    };
-    const queryChanged = !sameQuery(this.queryKey, queryKey);
-
-    if (queryChanged) {
-      this.cancelActions();
-      this.setState({
-        previousData:
-          options.keepPreviousData !== false ? previousResult.data : undefined,
-        paginationError: undefined,
-      });
-      this.queryKey = queryKey;
-      this.destroyPages();
-    }
-
-    this.setState({ enabled: true });
-    if (this.pages.length === 0) {
-      this.appendPage(options.initialPageParam, 0, initialVariables);
-    } else if (!wasEnabled) {
-      for (const page of this.pages) {
-        page.observer.setOptions(this.pageOptions(page, true), client);
-      }
-    }
-    this.emit();
+    });
   }
 
   private pageOptions(
@@ -668,7 +730,28 @@ export class InfiniteQueryObserver<
     return this.result.getActionResult();
   }
 
+  private batchEmissions(update: () => void): void {
+    this.emissionBatchDepth += 1;
+    try {
+      update();
+    } finally {
+      this.emissionBatchDepth -= 1;
+      if (this.emissionBatchDepth === 0 && this.pendingEmission) {
+        this.pendingEmission = false;
+        this.emitNow();
+      }
+    }
+  }
+
   private emit(): void {
+    if (this.emissionBatchDepth > 0) {
+      this.pendingEmission = true;
+      return;
+    }
+    this.emitNow();
+  }
+
+  private emitNow(): void {
     this.currentResult = this.buildResult();
     this.result.notify();
   }

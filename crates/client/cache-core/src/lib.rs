@@ -11,6 +11,7 @@ pub mod entity_resolver;
 pub mod link_patch;
 pub mod meta;
 pub mod normalize;
+pub mod predicate;
 pub mod query_inspection;
 mod query_path;
 pub mod queue;

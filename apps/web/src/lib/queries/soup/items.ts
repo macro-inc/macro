@@ -410,7 +410,9 @@ export function useSoupAstItemsQuery(
         : restQuery.isFetching;
     },
     get isPlaceholderData() {
-      return usesGraphql() ? false : restQuery.isPlaceholderData;
+      return usesGraphql()
+        ? activeGraphqlQuery().isPlaceholderData()
+        : restQuery.isPlaceholderData;
     },
     get isFetchingNextPage() {
       return usesGraphql()

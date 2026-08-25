@@ -204,12 +204,19 @@ export default function GlobalShortcuts() {
       description: item.description,
       condition: () =>
         (item.condition?.() ?? true) &&
+        (item.enabled?.() ?? true) &&
         (item.blockName !== 'snippet' || snippetsFlag().enabled),
+      // Entries that deliberately share a key (the flagged agent pair) opt
+      // into 'add' so both survive registration and the dispatcher picks the
+      // one whose condition passes, rather than the later silently winning.
+      registrationType: item.registrationType,
       keyDownHandler: item.keyDownHandler,
       icon: Plus,
       tags: item.tags,
       keywords: item.keywords,
-      hide: () => item.blockName === 'snippet' && !snippetsFlag().enabled,
+      hide: () =>
+        !(item.enabled?.() ?? true) ||
+        (item.blockName === 'snippet' && !snippetsFlag().enabled),
       runWithInputFocused: true,
     });
   });

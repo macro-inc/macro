@@ -1,7 +1,8 @@
 {
   "include": [
     "./src/**/*",
-    "./src/lib/core/component/Emoji/cldr-tags.json"
+    "./src/lib/core/component/Emoji/cldr-tags.json",
+    "../../crates/agent_harness/sandbox_sizes.json"
   ],
   "exclude": [
     "./tests/**/*",
@@ -9,8 +10,7 @@
     "./src/features/block-code/scripts/**/*"
   ],
   "compilerOptions": {
-    "noImplicitAny": true,
-    "strictNullChecks": true,
+    "strict": true,
     "noUnusedLocals": false,
     "noUnusedParameters": false,
     "noFallthroughCasesInSwitch": true,
@@ -44,6 +44,9 @@
       "@types/facebook-pixel"
     ],
     "paths": {
+      "@sandbox-sizes": [
+        "../../crates/agent_harness/sandbox_sizes.json"
+      ],
       "loro-crdt": [
         "../../node_modules/loro-crdt"
       ],

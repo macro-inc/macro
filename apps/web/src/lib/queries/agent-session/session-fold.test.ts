@@ -41,11 +41,18 @@ function event(session: string, n: number) {
 
 const bot = { id: 'bot-id', name: 'Agent' };
 const message = { agentSessionId: 'session-a' } as FoldedMessage;
+const metadata = {
+  model: null,
+  supportedModels: [],
+  title: null,
+  availableCommands: [],
+  status: null,
+};
 
 beforeEach(() => {
   vi.clearAllMocks();
-  fold.openSession.mockResolvedValue([message]);
-  fold.sessionMessages.mockResolvedValue([message]);
+  fold.openSession.mockResolvedValue({ messages: [message], metadata });
+  fold.sessionMessages.mockResolvedValue({ messages: [message], metadata });
   fold.pushSessionEntries.mockResolvedValue([]);
   harness.getLog.mockResolvedValue(ok({ bot, entries: [] }));
 });
@@ -138,6 +145,25 @@ describe('shared session folds', () => {
     second.release();
     expect(fold.closeSession).toHaveBeenCalledOnce();
     expect(fold.closeSession).toHaveBeenCalledWith('session-a');
+  });
+
+  it('routes metadata push events to metadata sinks, latest wins', async () => {
+    const seen: unknown[] = [];
+    const acquired = await acquireAgentSessionFold({
+      agentSessionId: 'session-a',
+      onMetadata: (value) => seen.push(value),
+    });
+    expect(acquired.metadata).toEqual(metadata);
+
+    fold.pushSessionEntries.mockResolvedValue([
+      { kind: 'metadata', metadata: { ...metadata, title: 'First' } },
+      { kind: 'metadata', metadata: { ...metadata, title: 'Second' } },
+    ]);
+    handleAgentSessionLog(event('session-a', 1));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(seen).toEqual([{ ...metadata, title: 'Second' }]);
+    acquired.release();
   });
 
   it('releases a failed acquisition without retaining shared state', async () => {

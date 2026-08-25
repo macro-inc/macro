@@ -67,15 +67,14 @@ function filterDataToQueryFilters(data: QueryState): EntityFilters {
   const filters: EntityFilters = {};
   const { include } = data;
 
-  // Calendar events are not displayed in Soup search. Older restored query
-  // states predate calendarEventId, so treat a missing field as match-nothing;
-  // an explicit include/exclude remains authoritative.
-  const calendarEventIds =
-    include.calendarEventId ??
-    (data.exclude.calendarEventId === undefined ? [NIL_UUID] : undefined);
-  if (calendarEventIds?.length) {
+  // Calendar events are searchable by title, so they are scoped like every
+  // other entity type: a view that names ids gets them, one that names none
+  // leaves the type unfiltered. Views that should not surface events keep
+  // NIL-excluding them (the inbox feed does), and every view's client
+  // predicates gate the merged pool regardless.
+  if (include.calendarEventId?.length) {
     filters.calendar_event_filters = {
-      calendar_event_ids: calendarEventIds,
+      calendar_event_ids: include.calendarEventId,
     };
   }
 

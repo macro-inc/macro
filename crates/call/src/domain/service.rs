@@ -36,8 +36,8 @@ use crate::domain::models::{
 };
 
 use super::models::{
-    AddParticipantError, ArchivedCall, Call, CallActiveResponse, CallError, CallRecord,
-    CallRecordTranscriptSegment, CallTokenResponse, CallTranscriptCustomSpeakerResult,
+    ActiveCallsResponse, AddParticipantError, ArchivedCall, Call, CallActiveResponse, CallError,
+    CallRecord, CallRecordTranscriptSegment, CallTokenResponse, CallTranscriptCustomSpeakerResult,
     EgressS3Config, EnrichedCallTranscript, GetBatchCallRecordPreviewRequest,
     GetBatchCallRecordPreviewResponse, GetCallRecordsRequest, LeaveCallResponse, RingStatus,
     RingStatusResponse, TranscriptSegmentRequest,
@@ -498,6 +498,20 @@ impl<
             created_by: c.created_by,
             created_at: c.created_at,
         }))
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn get_active_calls(
+        &self,
+        user_id: MacroUserIdStr<'_>,
+    ) -> Result<ActiveCallsResponse, CallError> {
+        let calls = self
+            .repo
+            .get_active_calls_for_user(user_id)
+            .await
+            .map_err(|e| CallError::Internal(e.into()))?;
+
+        Ok(ActiveCallsResponse { calls })
     }
 
     #[tracing::instrument(err, skip(self))]

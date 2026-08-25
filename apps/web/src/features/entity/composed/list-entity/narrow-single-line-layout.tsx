@@ -7,7 +7,11 @@ import {
   isTaskEntity,
 } from '../../types/entity';
 import { isSearchEntity } from '../../types/search';
-import { ChannelJoinButton, ChannelMessageSingleLine } from './channel';
+import {
+  ChannelActiveCallBadge,
+  ChannelJoinButton,
+  ChannelMessageSingleLine,
+} from './channel';
 import { EmailIdentity, EmailInboxChip } from './email';
 import { type LayoutProps, RowIndicator } from './shared';
 
@@ -68,6 +72,13 @@ export function NarrowSingleLineLayout(props: LayoutProps) {
             <span class="min-w-0 truncate font-semibold">
               <Entity.Title entity={props.entity} />
             </span>
+            <Show when={isChannelEntity(props.entity) && props.entity}>
+              {(entity) => (
+                <span class="ml-auto shrink-0 flex items-center">
+                  <ChannelActiveCallBadge channelId={entity().id} />
+                </span>
+              )}
+            </Show>
             <Show
               when={
                 isChannelEntity(props.entity) &&

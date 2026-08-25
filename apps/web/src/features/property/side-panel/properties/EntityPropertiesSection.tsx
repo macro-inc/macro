@@ -19,7 +19,7 @@ import {
 } from '@property/context/PropertiesContext';
 import { useAllProperties } from '@property/editor/hooks/useAllProperties';
 import { useEntityProperties, usePropertyEntityDisplay } from '@property/hooks';
-import { TagsRow } from '@property/tags';
+import { isTaggableEntityType, TagsRow } from '@property/tags';
 import type {
   Property,
   PropertyApiValues,
@@ -81,21 +81,12 @@ export interface EntityTagsSectionProps {
   order?: number;
 }
 
-const TAGGABLE_ENTITY_TYPES: ReadonlySet<EntityType> = new Set<EntityType>([
-  'DOCUMENT',
-  'TASK',
-  'THREAD',
-  'PROJECT',
-  'CHAT',
-  'CALL_RECORD',
-]);
-
 export function EntityTagsSection(props: EntityTagsSectionProps) {
   const tagsQuery = useTagsQuery();
   const isAuthenticated = useIsAuthenticated();
 
   return (
-    <Show when={TAGGABLE_ENTITY_TYPES.has(props.entityType)}>
+    <Show when={isTaggableEntityType(props.entityType)}>
       <SidePanel.Section id="tags" title="Tags" defaultOpen order={props.order}>
         <Show
           when={isAuthenticated() !== false && !tagsQuery.isError}
@@ -311,8 +302,7 @@ export function EntityPropertiesSection(props: EntityPropertiesSectionProps) {
 
           <Show
             when={
-              props.showTags !== false &&
-              TAGGABLE_ENTITY_TYPES.has(props.entityType)
+              props.showTags !== false && isTaggableEntityType(props.entityType)
             }
           >
             <div class="mb-2 flex items-center gap-3">

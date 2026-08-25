@@ -305,6 +305,13 @@ pub trait TeamRepository: Clone + Send + Sync + 'static {
         team_id: &uuid::Uuid,
         user_id: &MacroUserIdStr<'_>,
     ) -> impl Future<Output = Result<Option<TeamMember<'static>>, TeamError>> + Send;
+
+    /// Return team ids after `after_team_id`, ordered by id, limited to `limit`.
+    fn list_team_ids_after(
+        &self,
+        after_team_id: Option<uuid::Uuid>,
+        limit: u32,
+    ) -> impl Future<Output = Result<Vec<uuid::Uuid>, TeamError>> + Send;
 }
 
 /// The TeamMembersService defines read-only team membership queries.

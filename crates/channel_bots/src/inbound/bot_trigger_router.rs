@@ -5,6 +5,7 @@ use std::sync::Arc;
 use channels::domain::ports::ChannelService;
 use channels::domain::side_effects::ChannelBotTrigger;
 use tokio::sync::mpsc::UnboundedReceiver;
+use tracing::Instrument as _;
 
 use crate::domain::{
     models::BotEvent,
@@ -61,8 +62,9 @@ where
         tokio::spawn(async move {
             while let Some(candidate) = candidates.recv().await {
                 let router = self.clone();
+                let span = candidate.span.clone();
                 tokio::spawn(async move {
-                    router.run(candidate).await;
+                    router.run(candidate).instrument(span).await;
                 });
             }
         });

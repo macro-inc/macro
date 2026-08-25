@@ -1929,8 +1929,7 @@ export const completeHandler = async (
 };
 
 /**
- * Curated priority connectors come first (flagged `priority`), followed by
-results from Pipedream's app directory.
+ * Results come from Pipedream's app directory, most popular first.
  * @summary Browse or search the catalog of connectable apps.
  */
 export type browsePipedreamMcpCatalogResponse200 = {

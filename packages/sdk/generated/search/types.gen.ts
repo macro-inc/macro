@@ -35,6 +35,132 @@ export type CalendarEventFilters = {
 };
 
 /**
+ * Metadata for a calendar event fetched from the database.
+ *
+ * The index carries the master span for ranking, but the occurrence a row
+ * should display depends on when the query ran, so it is resolved here
+ * rather than indexed.
+ */
+export type CalendarEventMetadata = {
+    /**
+     * Direct conference join URL when known.
+     */
+    conferenceUrl?: string | null;
+    createdAt: string;
+    /**
+     * Whether the canonical source prohibits mutation.
+     */
+    isReadOnly: boolean;
+    /**
+     * Whether the series carries a recurrence rule. Lets a row render a
+     * recurring badge without parsing the rules.
+     */
+    isRecurring: boolean;
+    occurrence?: null | CalendarEventSearchOccurrence;
+    /**
+     * Canonical status (`confirmed`, `tentative`, `cancelled`).
+     */
+    status: string;
+    /**
+     * The series' own span.
+     */
+    time: CalendarEventSearchTime;
+    updatedAt: string;
+};
+
+/**
+ * The instance a search row points at.
+ *
+ * A recurring series is indexed once, as its master. Which instance the row
+ * should show is decided per request rather than baked into the index: the
+ * next occurrence at or after now, else the most recent past one. This is
+ * the same resolution a calendar mention performs, so a search row and a
+ * mention of the same event agree on where they land.
+ */
+export type CalendarEventSearchOccurrence = {
+    /**
+     * Stable key of the resolved instance within its series.
+     */
+    occurrenceKey: string;
+    /**
+     * Span of the resolved instance.
+     */
+    time: CalendarEventSearchTime;
+};
+
+/**
+ * A single response item, part of the CalendarEventSearchResponse object
+ */
+export type CalendarEventSearchResponseItem = {
+    calendar_event_search_results: Array<CalendarEventSearchResult>;
+    created_at: string;
+    /**
+     * Standardized fields that all item types will share.
+     */
+    id: string;
+    name: string;
+    owner_id: string;
+    updated_at: string;
+};
+
+/**
+ * CalendarEventSearchResponseItem with metadata fetched from macrodb.
+ */
+export type CalendarEventSearchResponseItemWithMetadata = CalendarEventSearchResponseItem & {
+    metadata?: null | CalendarEventMetadata;
+    /**
+     * Entity properties (e.g. tags) on the event.
+     */
+    properties?: Array<SoupProperty> | null;
+};
+
+export type CalendarEventSearchResult = {
+    highlight: SearchHighlight;
+    /**
+     * The score of the result
+     */
+    score?: number | null;
+};
+
+/**
+ * Timed or all-day span of a calendar event.
+ *
+ * Deliberately a local mirror of `models_soup::calendar_event::SoupCalendarEventTime`
+ * rather than a reuse of it: this module needs both `ToSchema` (OpenAPI) and
+ * `JsonSchema` (AI tool schemas), and `models_soup` carries no schemars
+ * dependency. The wire shape is identical and must stay that way, so a
+ * client can decode a search row and a soup row with one mapping.
+ *
+ * Fields are camelCased per variant rather than via `rename_all_fields`,
+ * which utoipa ignores.
+ */
+export type CalendarEventSearchTime = {
+    /**
+     * Exclusive end.
+     */
+    endsAt: string;
+    kind: 'timed';
+    /**
+     * Inclusive start.
+     */
+    startsAt: string;
+    /**
+     * Original IANA time zone.
+     */
+    timeZone?: string | null;
+} | {
+    /**
+     * Exclusive end date.
+     */
+    endDate: string;
+    kind: 'allDay';
+    /**
+     * Inclusive start date.
+     */
+    startDate: string;
+};
+
+/**
  * Filters for call records.
  */
 export type CallFilters = {
@@ -1517,6 +1643,41 @@ export type SearchResponse = {
  */
 export type SharedEmailFilter = 'exclude' | 'include' | 'only';
 
+export type SimpleCalendarEventSearchResponseBaseItemHumanReadableTimestamp = {
+    /**
+     * The calendar event id
+     */
+    calendar_event_id: string;
+    /**
+     * DateTime<Utc> ts_seconds deserialization + RFC3339 serialization
+     */
+    created_at: string;
+    /**
+     * The highlights on the event
+     */
+    highlight: SearchHighlight;
+    /**
+     * Whether the series carries a recurrence rule
+     */
+    is_recurring: boolean;
+    /**
+     * Stable key of the instance this row points at, when one resolved
+     */
+    occurrence_key?: string | null;
+    /**
+     * The event title
+     */
+    title: string;
+    /**
+     * DateTime<Utc> ts_seconds deserialization + RFC3339 serialization
+     */
+    updated_at: string;
+    /**
+     * The owner of this event projection
+     */
+    user_id: string;
+};
+
 export type SimpleCallRecordSearchResponseBaseItemHumanReadableTimestamp = {
     call_id: string;
     channel_id: string;
@@ -1973,6 +2134,8 @@ export type SimpleUnifiedSearchResponseBaseItem = (SimpleDocumentSearchResponseB
     type: 'project';
 }) | (SimpleCallRecordSearchResponseBaseItemHumanReadableTimestamp & {
     type: 'call';
+}) | (SimpleCalendarEventSearchResponseBaseItemHumanReadableTimestamp & {
+    type: 'calendarEvent';
 });
 
 export type SimpleUnifiedSearchResponseBaseItemHumanReadableTimestamp = (SimpleDocumentSearchResponseBaseItemHumanReadableTimestamp & {
@@ -1987,6 +2150,8 @@ export type SimpleUnifiedSearchResponseBaseItemHumanReadableTimestamp = (SimpleD
     type: 'project';
 }) | (SimpleCallRecordSearchResponseBaseItemHumanReadableTimestamp & {
     type: 'call';
+}) | (SimpleCalendarEventSearchResponseBaseItemHumanReadableTimestamp & {
+    type: 'calendarEvent';
 });
 
 /**
@@ -2077,6 +2242,8 @@ export type UnifiedSearchResponseItem = (DocumentSearchResponseItemWithMetadata 
     type: 'call';
 }) | (CrmCompanySearchResponseItem & {
     type: 'company';
+}) | (CalendarEventSearchResponseItemWithMetadata & {
+    type: 'calendarEvent';
 });
 
 export type UnifiedSearchData = {

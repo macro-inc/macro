@@ -4,12 +4,20 @@ import { analytics } from '@app/lib/analytics';
  * This constant reflects whether the app is running locally with hot reload enabled
  *
  * @returns true in bun run dev, false otherwise
+ *
+ * Distinct from `import.meta.env.DEV` (true under vite serve *and* local-backend
+ * static bundles) and `DEV_MODE_ENV` (true whenever MODE=development, including
+ * dev.macro.com).
  */
 export const LOCAL_ONLY = !!import.meta.hot;
 
 type FeatureFlagValue = 'true' | 'false' | undefined;
 
-function getFeatureFlagOverride(flagName: string): boolean | undefined {
+/**
+ * Reads a `VITE_<flagName>` env override. Returns `undefined` when unset, so
+ * callers can fall through to PostHog rather than forcing the flag off.
+ */
+export function getFeatureFlagOverride(flagName: string): boolean | undefined {
   const envKey = `VITE_${flagName}` as const;
   const value = import.meta.env[envKey] as FeatureFlagValue;
 
@@ -424,7 +432,7 @@ export const USE_MACRO_PR_SUMMARY_BLOCK = resolveFeatureFlag(
 );
 
 // skips over posthog and sets the ENABLE_CALLS feature to true if we are in dev mode
-const ENABLE_CALLS_OVERRIDE = DEV_MODE_ENV ? true : undefined;
+const ENABLE_CALLS_OVERRIDE = DEV_MODE_ENV ? true : true;
 
 export function ENABLE_CALLS(): boolean {
   if (ENABLE_CALLS_OVERRIDE !== undefined) {
@@ -490,7 +498,7 @@ const parseBooleanOverride = (value: unknown): boolean | undefined =>
 /** Controls the cache-warming GraphQL soup backfill. */
 export const ENABLE_GRAPHQL_BACKFILL = resolveFeatureFlag(
   'ENABLE_GRAPHQL_BACKFILL',
-  false
+  true
 );
 
 /** Independent emergency stop. Any true env/PostHog source wins. */
@@ -558,20 +566,6 @@ export const ENABLE_HOME_RECOMMENDATIONS_OVERRIDE =
 
 export const ENABLE_NEW_PRICING_OVERRIDE =
   resolveFeatureFlag('ENABLE_NEW_PRICING', DEV_MODE_ENV) || undefined;
-
-// New inbox: renders the Inbox list view with the notification card layout and
-// expandable thread reply sub-items. PostHog-gated with a dev-mode default;
-// override with VITE_ENABLE_NEW_INBOX.
-export const ENABLE_NEW_INBOX_FLAG = 'enable-new-inbox-view';
-export const ENABLE_NEW_INBOX_OVERRIDE =
-  resolveFeatureFlag('ENABLE_NEW_INBOX', DEV_MODE_ENV) || undefined;
-export function ENABLE_NEW_INBOX() {
-  if (ENABLE_NEW_INBOX_OVERRIDE !== undefined) {
-    return ENABLE_NEW_INBOX_OVERRIDE;
-  }
-
-  return analytics.posthog.isFeatureEnabled(ENABLE_NEW_INBOX_FLAG) ?? false;
-}
 
 // Channel mode where replying and editing do not happen inline, but in a single unified input instead.
 export const UNIFIED_CHANNEL_INPUT = resolveFeatureFlag(

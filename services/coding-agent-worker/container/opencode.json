@@ -1,6 +1,9 @@
 {
   "$schema": "https://opencode.ai/config.json",
-  "model": "anthropic/claude-sonnet-5",
+  "enabled_providers": [
+    "opencode"
+  ],
+  "model": "opencode/big-pickle",
   "permission": {
     "edit": "allow",
     "bash": "allow",
@@ -9,7 +12,12 @@
   "mcp": {
     "github": {
       "type": "local",
-      "command": ["github-mcp-server", "stdio", "--toolsets", "issues,pull_requests"],
+      "command": [
+        "github-mcp-server",
+        "stdio",
+        "--toolsets",
+        "issues,pull_requests"
+      ],
       "environment": {
         "GITHUB_PERSONAL_ACCESS_TOKEN": "{env:GITHUB_TOKEN}"
       },

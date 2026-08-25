@@ -40,6 +40,8 @@ fn created_maps_to_a_created_activity_with_the_metadata_timestamp() {
     let event = envelope(DocumentTopicEvent::Created(DocumentCreatedMetadata {
         document_id: DOCUMENT_ID.to_string(),
         owner: user("macro|creator@example.com"),
+        actor: None,
+        on_behalf_of: None,
         document_name: "spec".to_string(),
         file_type: Some(FileType::Md),
         project_id: None,
@@ -54,6 +56,55 @@ fn created_maps_to_a_created_activity_with_the_metadata_timestamp() {
     assert_eq!(activity.entity_id, DOCUMENT_ID);
     assert_eq!(activity.occurred_at, created_at);
     assert_eq!(activity.id, activity_id(event.event_id, 0));
+    assert_eq!(activity.actor.as_ref(), "macro|creator@example.com");
+}
+
+#[test]
+fn created_with_system_actor_is_not_the_owner_subject() {
+    let event = envelope(DocumentTopicEvent::Created(DocumentCreatedMetadata {
+        document_id: DOCUMENT_ID.to_string(),
+        owner: user("macro|owner@example.com"),
+        actor: Some(Actor::new_from_bot(bot_id::MACRO_SYSTEM_BOT_ID)),
+        on_behalf_of: None,
+        document_name: "invoice".to_string(),
+        file_type: None,
+        project_id: None,
+        sub_type: None,
+        created_at: None,
+    }));
+
+    let activity = single_activity(event.event.ingest(event.event_id));
+    assert_eq!(activity.action, Action::Created);
+    assert_eq!(
+        activity.actor.as_ref(),
+        bot_id::MACRO_SYSTEM_BOT_ID.into_storage_id().as_ref()
+    );
+    assert_eq!(
+        activity.subject_id,
+        bot_id::MACRO_SYSTEM_BOT_ID.into_storage_id().as_ref()
+    );
+}
+
+#[test]
+fn created_on_behalf_of_the_owner_stays_on_their_feed() {
+    let event = envelope(DocumentTopicEvent::Created(DocumentCreatedMetadata {
+        document_id: DOCUMENT_ID.to_string(),
+        owner: user("macro|owner@example.com"),
+        actor: Some(Actor::new_from_bot(bot_id::MACRO_SYSTEM_BOT_ID)),
+        on_behalf_of: Some(user("macro|owner@example.com")),
+        document_name: "welcome".to_string(),
+        file_type: None,
+        project_id: None,
+        sub_type: None,
+        created_at: None,
+    }));
+
+    let activity = single_activity(event.event.ingest(event.event_id));
+    assert_eq!(
+        activity.actor.as_ref(),
+        bot_id::MACRO_SYSTEM_BOT_ID.into_storage_id().as_ref()
+    );
+    assert_eq!(activity.subject_id, "macro|owner@example.com");
 }
 
 #[test]

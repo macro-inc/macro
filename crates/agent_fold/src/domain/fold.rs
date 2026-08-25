@@ -53,7 +53,7 @@ use std::borrow::Cow;
 
 use crate::domain::error::FoldError;
 use crate::domain::log::{AgentSessionId, AgentSessionLog, Message};
-use crate::domain::meta::{claude_code, command_from_raw_input};
+use crate::domain::meta::{claude_code, command_from_raw_input, file_edit_from_raw_input};
 use crate::domain::model::{
     AnsiText, Author, AvailableCommand, Control, ControlOutcome, FileDiff, FoldEvent,
     FoldedMessage, MessagePart, ModelOption, PermissionOption, PermissionOptionKind,
@@ -413,7 +413,7 @@ impl FoldState {
                     if self.pending_config_requests.remove(id) || control.is_some() {
                         StepChange::message(control)
                     } else {
-                        StepChange::message(self.end_turn(id, None))
+                        StepChange::message(self.fail_turn(id, &error.message))
                     }
                 }
                 RawJsonRpcMessage::Request(_) | RawJsonRpcMessage::Notification(_) => Vec::new(),
@@ -622,6 +622,55 @@ impl FoldState {
         }
 
         self.close_turn(stop)
+    }
+
+    /// End the open turn because its prompt was answered with an error.
+    ///
+    /// The turn has to end even when the agent produced nothing at all -
+    /// which is the common case, since a runtime that rejects a prompt
+    /// rejects it before writing anything. That is why this cannot go
+    /// through [`Self::close_turn`], whose job is to stamp a stop reason on
+    /// an agent message that exists: here the agent message is created if
+    /// need be, so the failure has somewhere to live and the turn is
+    /// unambiguously over.
+    fn fail_turn(&mut self, response_id: &RequestId, message: &str) -> Option<Changed> {
+        let closes_the_open_turn = self
+            .turn
+            .as_ref()
+            .and_then(|turn| turn.prompt_id.as_ref())
+            .is_some_and(|prompt_id| prompt_id == response_id);
+        if !closes_the_open_turn {
+            return None;
+        }
+
+        // Give the turn an agent message if the runtime never opened one, so
+        // the stop reason - and with it the error - has a message to sit on.
+        let agent = match self.turn.as_ref()?.agent {
+            Some(agent) => agent,
+            None => {
+                let turn_id = self.turn.as_ref()?.id;
+                let agent = self.messages.len();
+                self.messages.push(FoldedMessage {
+                    id: turn_id,
+                    author: Author::Agent,
+                    request_id: None,
+                    parts: NonEmpty::one(MessagePart::Text {
+                        text: String::new(),
+                    }),
+                    stop: None,
+                });
+                if let Some(turn) = self.turn.as_mut() {
+                    turn.agent = Some(agent);
+                }
+                agent
+            }
+        };
+
+        self.turn = None;
+        self.messages[agent].stop = Some(StopReason::Failed {
+            message: message.to_owned(),
+        });
+        Some(Changed::new(agent))
     }
 
     /// Handle a `session/update`.
@@ -1137,7 +1186,7 @@ fn tool_detail(
             exit_code: claude_code::terminal_exit_code(meta),
         },
         ToolKind::Edit => ToolDetail::Edit {
-            diffs: diffs(content),
+            diffs: edit_diffs(content, raw_input),
         },
         ToolKind::Read => ToolDetail::Read {
             paths: location_paths(locations),
@@ -1199,6 +1248,13 @@ fn patch_detail(
                     *existing = found;
                 }
             }
+            // A call that never reports a diff block (Claude Code's `Write`)
+            // may still deliver its raw input on a later update.
+            if existing.is_empty()
+                && let Some(found) = synthesized_edit_diff(raw_input)
+            {
+                *existing = vec![found];
+            }
         }
         ToolDetail::Read { paths } | ToolDetail::Delete { paths } | ToolDetail::Move { paths } => {
             if let Some(found) = locations.map(location_paths)
@@ -1231,6 +1287,28 @@ fn patch_detail(
             }
         }
     }
+}
+
+/// An edit call's diffs: the reported diff blocks, or — for calls that never
+/// report one, like Claude Code's `Write` — a whole-file diff synthesized
+/// from the raw input.
+fn edit_diffs(content: &[ToolCallContent], raw_input: Option<&serde_json::Value>) -> Vec<FileDiff> {
+    let found = diffs(content);
+    if !found.is_empty() {
+        return found;
+    }
+    synthesized_edit_diff(raw_input).into_iter().collect()
+}
+
+/// A whole-file diff from `{filePath, content}` raw input. The prior contents
+/// are not on the wire, so the file reads as new.
+fn synthesized_edit_diff(raw_input: Option<&serde_json::Value>) -> Option<FileDiff> {
+    let (path, content) = file_edit_from_raw_input(raw_input)?;
+    Some(FileDiff {
+        path: path.into(),
+        old_text: None,
+        new_text: content,
+    })
 }
 
 /// The diffs among a tool call's content blocks.

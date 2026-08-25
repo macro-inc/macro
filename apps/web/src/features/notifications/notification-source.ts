@@ -1,4 +1,7 @@
-import { ENABLE_DOCUMENT_MENTION_NOTIFICATIONS } from '@core/constant/featureFlags';
+import {
+  ENABLE_DOCUMENT_MENTION_NOTIFICATIONS,
+  ENABLE_GRAPHQL_SOUP,
+} from '@core/constant/featureFlags';
 import type { Entity } from '@core/types';
 import { createSocketEffect } from '@macro-inc/collaboration/websocket';
 import {
@@ -15,6 +18,8 @@ import type {
   NotifEvent,
   UserUnsubscribe,
 } from '@service-notification/generated/schemas';
+import { mapGraphqlNotification } from '@service-storage/graphql-soup';
+import { subscribeToGraphqlNotificationPatches } from '@service-storage/graphql-soup-websocket';
 import type { UseQueryResult } from '@tanstack/solid-query';
 import {
   type Accessor,
@@ -23,6 +28,7 @@ import {
   createMemo,
   createRoot,
   createSignal,
+  onCleanup,
 } from 'solid-js';
 import { createStore, reconcile } from 'solid-js/store';
 import { fromZodError } from 'zod-validation-error';
@@ -39,6 +45,7 @@ export const CHANNEL_EVENT_TYPES = [
   'channel_mention',
   'channel_message_send',
   'channel_message_reply',
+  'document_mention',
 ] as const;
 
 export const DOCUMENT_COMMENT_EVENT_TYPES = [
@@ -229,6 +236,10 @@ export function createNotificationSource(
   });
 
   createEffect(() => {
+    // TODO(dev-rb/notifications): Remove this legacy eager pagination when the
+    // REST notification source is retired. GraphQL consumers should use Soup
+    // notification edges or dedicated notification queries instead.
+    if (ENABLE_GRAPHQL_SOUP()) return;
     if (!notificationsQuery.data) return;
     if (notificationsQuery.hasNextPage && !notificationsQuery.isFetching) {
       notificationsQuery.fetchNextPage();
@@ -245,6 +256,8 @@ export function createNotificationSource(
     setMutedEntities(reconcile(mutedEntities));
   });
 
+  // TODO(dev-rb/notifications): Verify whether document-mention suppression is
+  // still required, and remove this source-based cleanup when it is not.
   if (!ENABLE_DOCUMENT_MENTION_NOTIFICATIONS) {
     createEffect(() => {
       const toDiscard = notifications().filter(
@@ -257,6 +270,61 @@ export function createNotificationSource(
     });
   }
 
+  const dispatchIncomingNotification = (
+    notification: UnifiedNotification
+  ): void => {
+    onNotification?.(notification);
+    subscriptions.forEach((subscribe) => subscribe(notification));
+  };
+
+  let graphqlRefetchScheduled = false;
+  let graphqlRefetchInFlight = false;
+  let graphqlRefetchPending = false;
+  let graphqlSubscriptionDisposed = false;
+
+  const runGraphqlNotificationRefetch = async (): Promise<void> => {
+    if (graphqlSubscriptionDisposed || graphqlRefetchInFlight) return;
+    graphqlRefetchInFlight = true;
+    try {
+      do {
+        graphqlRefetchPending = false;
+        try {
+          await notificationsQuery.refetch();
+        } catch (error) {
+          console.warn(
+            'Failed to refresh notifications after GraphQL patch',
+            error
+          );
+        }
+      } while (graphqlRefetchPending && !graphqlSubscriptionDisposed);
+    } finally {
+      graphqlRefetchInFlight = false;
+    }
+  };
+
+  const scheduleGraphqlNotificationRefetch = (): void => {
+    graphqlRefetchPending = true;
+    if (graphqlRefetchScheduled || graphqlRefetchInFlight) return;
+    graphqlRefetchScheduled = true;
+    queueMicrotask(() => {
+      graphqlRefetchScheduled = false;
+      void runGraphqlNotificationRefetch();
+    });
+  };
+
+  const unsubscribeFromGraphql = subscribeToGraphqlNotificationPatches(
+    (patch) => {
+      if (!ENABLE_GRAPHQL_SOUP()) return;
+      scheduleGraphqlNotificationRefetch();
+      if (patch.__typename !== 'GraphqlNewNotification') return;
+      dispatchIncomingNotification(mapGraphqlNotification(patch.notification));
+    }
+  );
+  onCleanup(() => {
+    graphqlSubscriptionDisposed = true;
+    unsubscribeFromGraphql();
+  });
+
   const mapWebsocketNotification = (
     raw: ConnGatewayNotificationPayload
   ): UnifiedNotification => {
@@ -268,7 +336,7 @@ export function createNotificationSource(
   };
 
   createSocketEffect(ws, (wsData) => {
-    if (wsData.type !== NOTIFICATION_EVENT_TYPE) {
+    if (wsData.type !== NOTIFICATION_EVENT_TYPE || ENABLE_GRAPHQL_SOUP()) {
       return;
     }
     let parsedNotification: UnifiedNotification;
@@ -290,9 +358,7 @@ export function createNotificationSource(
       console.error('Failed to parse notification', wsData.data, e);
       return;
     }
-    onNotification?.(parsedNotification);
-
-    subscriptions.forEach((subscribe) => subscribe(parsedNotification));
+    dispatchIncomingNotification(parsedNotification);
 
     if (notificationsQuery.transport === 'rest') {
       optimisticInsertNotification(parsedNotification);

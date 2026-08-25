@@ -1,12 +1,22 @@
 use super::*;
-use crate::domain::model::Message;
+use crate::PROTOCOL_VERSION;
+use crate::domain::model::{DEFAULT_AGENT_SESSION_NAME, Message, SessionBot};
 use crate::domain::ports::NoOpRealtime;
+use crate::domain::session::HandshakeStatus;
 use crate::testing::{InMemoryAgentSessionRepo, RecordingRealtime, test_agent_session};
 use agent_fold::domain::fold::fold;
 use agent_fold::domain::service::FoldedMessageService;
 use agent_fold::testing::{TURN, parse_log_as, test_session};
-use agent_runtime_protocol::domain::schema::v0::ToServerMessage;
+use agent_runtime_protocol::domain::ports::{
+    Transport, TransportError, TransportReceiver, TransportSender,
+};
+use agent_runtime_protocol::domain::schema::v0::ToRuntimeMessage;
+use agent_runtime_protocol::domain::schema::v0::{AcpMessage, ToServerMessage};
+use entity_access::domain::models::{EntityAccessReceipt, EntityType, OwnerAccessLevel};
 use macro_uuid::Uuid;
+use std::sync::{Arc, Mutex};
+use tokio::sync::Notify;
+use tracing::instrument::WithSubscriber as _;
 
 struct Fixture {
     service: AgentSessionServiceImpl<
@@ -34,6 +44,733 @@ fn fixture() -> Fixture {
         repo,
         session,
     }
+}
+
+#[tokio::test]
+async fn only_the_first_prompt_is_selected_for_automatic_naming() {
+    let repo = InMemoryAgentSessionRepo::new();
+    let session = test_session();
+    repo.insert_session(test_agent_session(session));
+    let folds = FoldedMessageService::new(repo.clone());
+    let prompt = AgentAction::prompt("fix the flaky tests");
+
+    assert_eq!(
+        initial_prompt_for_rename(&folds, session, &prompt).await,
+        Some("fix the flaky tests".to_owned())
+    );
+
+    repo.extend_log(parse_log_as(session, TURN));
+    assert_eq!(
+        initial_prompt_for_rename(&folds, session, &prompt).await,
+        None
+    );
+}
+
+#[derive(Clone, Copy)]
+struct FixedNameGenerator;
+
+impl AgentSessionNameGenerator for FixedNameGenerator {
+    async fn generate_name(
+        &self,
+        _session: &AgentSession,
+        initial_prompt: &str,
+    ) -> std::result::Result<Option<String>, rootcause::Report> {
+        assert_eq!(initial_prompt, "fix the flaky tests");
+        Ok(Some("Fix Flaky Tests".to_owned()))
+    }
+}
+
+#[derive(Clone, Default)]
+struct RenameRealtime(Arc<Mutex<Vec<AgentSessionRenamed>>>);
+
+impl AgentSessionRealtime for RenameRealtime {
+    async fn publish(&self, _event: LogAppended) -> std::result::Result<(), rootcause::Report> {
+        Ok(())
+    }
+
+    async fn publish_renamed(
+        &self,
+        event: AgentSessionRenamed,
+    ) -> std::result::Result<(), rootcause::Report> {
+        self.0
+            .lock()
+            .expect("rename store is not poisoned")
+            .push(event);
+        Ok(())
+    }
+}
+
+struct PendingTransport;
+
+#[derive(Clone)]
+struct PendingSender;
+
+struct PendingReceiver;
+
+struct RecordingTransport {
+    outbound: mpsc::Sender<ToRuntimeMessage>,
+    inbound: mpsc::Receiver<ToServerMessage>,
+}
+
+#[derive(Clone)]
+struct RecordingSender(mpsc::Sender<ToRuntimeMessage>);
+
+impl Transport<ToRuntimeMessage, ToServerMessage> for RecordingTransport {
+    type Sender = RecordingSender;
+    type Receiver = mpsc::Receiver<ToServerMessage>;
+
+    fn split(self) -> (Self::Sender, Self::Receiver) {
+        (RecordingSender(self.outbound), self.inbound)
+    }
+}
+
+impl TransportSender<ToRuntimeMessage> for RecordingSender {
+    async fn send(&self, message: ToRuntimeMessage) -> std::result::Result<(), TransportError> {
+        self.0
+            .send(message)
+            .await
+            .map_err(|_| TransportError::Client("test receiver closed".to_owned()))
+    }
+}
+
+#[derive(Clone)]
+struct BlockingPromptLogs {
+    repo: InMemoryAgentSessionRepo,
+    entered: Arc<Notify>,
+    release: Arc<Notify>,
+    hang_disconnect: bool,
+}
+
+impl AgentSessionLogWriter for BlockingPromptLogs {
+    async fn append(&mut self, log: AgentSessionLog) -> Result<()> {
+        let is_prompt = matches!(
+            &log.content,
+            Message::ToRuntime(ToRuntimeMessage::Acp(AcpMessage(
+                agent_client_protocol::RawJsonRpcMessage::Request(request)
+            ))) if request.method.as_ref() == "session/prompt"
+        );
+        if is_prompt {
+            self.entered.notify_one();
+            self.release.notified().await;
+        }
+        AgentSessionLogRepo::create(&self.repo, log).await?;
+        Ok(())
+    }
+}
+
+fn owner_access(session: AgentSessionId) -> EntityAccessReceipt<OwnerAccessLevel> {
+    EntityAccessReceipt::dangerously_assert_internal_user(
+        &session.as_uuid().to_string(),
+        EntityType::AgentSession,
+    )
+}
+
+#[tokio::test]
+async fn manual_rename_trims_persists_and_publishes() {
+    let repo = InMemoryAgentSessionRepo::new();
+    let session = test_session();
+    repo.insert_session(test_agent_session(session));
+    let realtime = RenameRealtime::default();
+    let service = AgentSessionServiceImpl::new(
+        repo.clone(),
+        FoldedMessageService::new(repo.clone()),
+        realtime.clone(),
+    );
+
+    service
+        .rename_session(&owner_access(session), "  Fix Flaky Tests  ")
+        .await
+        .expect("rename session");
+
+    let stored = repo.get(session).await.expect("get session");
+    assert_eq!(stored.name, "Fix Flaky Tests");
+    assert_eq!(
+        realtime
+            .0
+            .lock()
+            .expect("rename store is not poisoned")
+            .as_slice(),
+        &[AgentSessionRenamed {
+            agent_session_id: session,
+            name: "Fix Flaky Tests".to_owned(),
+        }]
+    );
+}
+
+#[tokio::test]
+async fn manual_rename_rejects_blank_and_overlong_names() {
+    let repo = InMemoryAgentSessionRepo::new();
+    let session = test_session();
+    repo.insert_session(test_agent_session(session));
+    let service = AgentSessionServiceImpl::new(
+        repo.clone(),
+        FoldedMessageService::new(repo),
+        RenameRealtime::default(),
+    );
+
+    assert!(matches!(
+        service.rename_session(&owner_access(session), "  ").await,
+        Err(AgentSessionError::InvalidName(_))
+    ));
+    assert!(matches!(
+        service
+            .rename_session(&owner_access(session), DEFAULT_AGENT_SESSION_NAME)
+            .await,
+        Err(AgentSessionError::InvalidName(_))
+    ));
+    assert!(matches!(
+        service
+            .rename_session(&owner_access(session), &"a".repeat(101))
+            .await,
+        Err(AgentSessionError::InvalidName(_))
+    ));
+}
+
+#[tokio::test]
+async fn manual_rename_rejects_access_for_another_entity_type() {
+    let repo = InMemoryAgentSessionRepo::new();
+    let session = test_session();
+    repo.insert_session(test_agent_session(session));
+    let service = AgentSessionServiceImpl::new(
+        repo.clone(),
+        FoldedMessageService::new(repo),
+        RenameRealtime::default(),
+    );
+    let wrong_access = EntityAccessReceipt::<OwnerAccessLevel>::dangerously_assert_internal_user(
+        &session.as_uuid().to_string(),
+        EntityType::Document,
+    );
+
+    assert!(
+        service
+            .rename_session(&wrong_access, "New Name")
+            .await
+            .is_err()
+    );
+}
+
+#[tokio::test]
+async fn background_naming_persists_then_publishes_the_generated_name() {
+    let repo = InMemoryAgentSessionRepo::new();
+    let session = test_session();
+    repo.insert_session(test_agent_session(session));
+    let realtime = RenameRealtime::default();
+
+    spawn_initial_agent_session_rename(
+        repo.clone(),
+        realtime.clone(),
+        FixedNameGenerator,
+        session,
+        "fix the flaky tests".to_owned(),
+    );
+    for _ in 0..20 {
+        if !realtime
+            .0
+            .lock()
+            .expect("rename store is not poisoned")
+            .is_empty()
+        {
+            break;
+        }
+        tokio::task::yield_now().await;
+    }
+
+    let stored = repo.get(session).await.expect("get session");
+    assert_eq!(stored.name, "Fix Flaky Tests");
+    assert_eq!(
+        realtime
+            .0
+            .lock()
+            .expect("rename store is not poisoned")
+            .as_slice(),
+        &[AgentSessionRenamed {
+            agent_session_id: session,
+            name: "Fix Flaky Tests".to_owned(),
+        }]
+    );
+}
+
+#[tokio::test]
+async fn background_naming_does_not_overwrite_a_manual_name() {
+    let repo = InMemoryAgentSessionRepo::new();
+    let session = test_session();
+    let mut stored = test_agent_session(session);
+    stored.name = "Manual Name".to_owned();
+    repo.insert_session(stored);
+    let realtime = RenameRealtime::default();
+
+    spawn_initial_agent_session_rename(
+        repo.clone(),
+        realtime.clone(),
+        FixedNameGenerator,
+        session,
+        "fix the flaky tests".to_owned(),
+    );
+    for _ in 0..20 {
+        tokio::task::yield_now().await;
+    }
+
+    assert_eq!(
+        repo.get(session).await.expect("get session").name,
+        "Manual Name"
+    );
+    assert!(
+        realtime
+            .0
+            .lock()
+            .expect("rename store is not poisoned")
+            .is_empty()
+    );
+}
+
+impl AgentSessionRepo for BlockingPromptLogs {
+    async fn create(&self, params: CreateAgentSessionParams) -> Result<AgentSession> {
+        AgentSessionRepo::create(&self.repo, params).await
+    }
+
+    async fn get(&self, id: AgentSessionId) -> Result<AgentSession> {
+        self.repo.get(id).await
+    }
+
+    async fn session_bot(&self, id: BotId) -> Result<SessionBot> {
+        self.repo.session_bot(id).await
+    }
+
+    async fn find_for_channel(
+        &self,
+        thread_id: Option<Uuid>,
+        bot_id: Option<BotId>,
+    ) -> Result<ChannelSession> {
+        self.repo.find_for_channel(thread_id, bot_id).await
+    }
+
+    async fn set_acp_session_id(
+        &self,
+        id: AgentSessionId,
+        acp_session_id: SessionId,
+    ) -> Result<()> {
+        self.repo.set_acp_session_id(id, acp_session_id).await
+    }
+
+    async fn set_model(&self, id: AgentSessionId, model: &str) -> Result<()> {
+        self.repo.set_model(id, model).await
+    }
+
+    async fn set_name(&self, id: AgentSessionId, name: &str) -> Result<()> {
+        self.repo.set_name(id, name).await
+    }
+
+    async fn set_name_if_default(&self, id: AgentSessionId, name: &str) -> Result<bool> {
+        self.repo.set_name_if_default(id, name).await
+    }
+
+    async fn set_sandbox_size(&self, id: AgentSessionId, size: SandboxSize) -> Result<()> {
+        self.repo.set_sandbox_size(id, size).await
+    }
+
+    async fn user_sandbox_size(&self, user_id: &MacroUserIdStr<'static>) -> Result<SandboxSize> {
+        self.repo.user_sandbox_size(user_id).await
+    }
+
+    async fn set_user_sandbox_size(
+        &self,
+        user_id: &MacroUserIdStr<'static>,
+        size: SandboxSize,
+    ) -> Result<()> {
+        self.repo.set_user_sandbox_size(user_id, size).await
+    }
+
+    async fn delete(&self, id: AgentSessionId) -> Result<()> {
+        self.repo.delete(id).await
+    }
+}
+
+impl AgentSessionLogRepo for BlockingPromptLogs {
+    async fn create(&self, log: AgentSessionLog) -> Result<StoredAgentSessionLog> {
+        if self.hang_disconnect
+            && matches!(
+                &log.content,
+                Message::ToServer(ToServerMessage::Event {
+                    event: SystemEvent::Disconnected
+                })
+            )
+        {
+            return std::future::pending().await;
+        }
+        AgentSessionLogRepo::create(&self.repo, log).await
+    }
+
+    async fn list_by_session(
+        &self,
+        agent_session_id: AgentSessionId,
+    ) -> Result<Vec<StoredAgentSessionLog>> {
+        AgentSessionLogRepo::list_by_session(&self.repo, agent_session_id).await
+    }
+}
+
+impl Transport<ToRuntimeMessage, ToServerMessage> for PendingTransport {
+    type Sender = PendingSender;
+    type Receiver = PendingReceiver;
+
+    fn split(self) -> (Self::Sender, Self::Receiver) {
+        (PendingSender, PendingReceiver)
+    }
+}
+
+impl TransportSender<ToRuntimeMessage> for PendingSender {
+    async fn send(&self, _message: ToRuntimeMessage) -> std::result::Result<(), TransportError> {
+        Ok(())
+    }
+}
+
+impl TransportReceiver<ToServerMessage> for PendingReceiver {
+    async fn recv(&mut self) -> std::result::Result<Option<ToServerMessage>, TransportError> {
+        std::future::pending().await
+    }
+}
+
+async fn open_test_session(
+    inbound: &mpsc::Sender<ToServerMessage>,
+    outbound: &mut mpsc::Receiver<ToRuntimeMessage>,
+    session: AgentSessionId,
+) {
+    inbound
+        .send(ToServerMessage::Event {
+            event: SystemEvent::AcpReady,
+        })
+        .await
+        .unwrap();
+    let _initialize = outbound.recv().await.expect("initialize request");
+    inbound
+        .send(ToServerMessage::Acp(AcpMessage(
+            agent_client_protocol::RawJsonRpcMessage::response(
+                agent_client_protocol::schema::v1::RequestId::Str(format!(
+                    "agent_session:{session}:0"
+                )),
+                Ok(serde_json::to_value(
+                    agent_client_protocol::schema::v1::InitializeResponse::new(PROTOCOL_VERSION),
+                )
+                .unwrap()),
+            ),
+        )))
+        .await
+        .unwrap();
+    let _open = outbound.recv().await.expect("session/new request");
+    inbound
+        .send(ToServerMessage::Acp(AcpMessage(
+            agent_client_protocol::RawJsonRpcMessage::response(
+                agent_client_protocol::schema::v1::RequestId::Str(format!(
+                    "agent_session:{session}:1"
+                )),
+                Ok(serde_json::to_value(
+                    agent_client_protocol::schema::v1::NewSessionResponse::new("acp-1"),
+                )
+                .unwrap()),
+            ),
+        )))
+        .await
+        .unwrap();
+}
+
+#[tokio::test]
+async fn a_stopping_lifecycle_entry_blocks_a_second_attach() {
+    let fx = fixture();
+    let (_stopped, marker) = fx.service.begin_stop(fx.session, false);
+
+    let result = fx
+        .service
+        .attach_session(fx.session, RuntimeAttachment::solo(PendingTransport))
+        .await;
+
+    assert!(matches!(result, Err(AgentSessionError::AlreadyConnected(id)) if id == fx.session));
+    fx.service.active.remove_if(&fx.session, |_, active| {
+        Arc::ptr_eq(&active.marker, &marker)
+    });
+}
+
+#[tokio::test]
+async fn close_claiming_an_attach_reservation_prevents_actor_start() {
+    let fx = fixture();
+    let reservation = fx
+        .service
+        .reserve_attach(fx.session)
+        .await
+        .expect("attach reserves before reading");
+    let session = fx.repo.get(fx.session).await.expect("session exists");
+    let (stopped, marker) = fx.service.begin_stop(fx.session, false);
+
+    let result = fx
+        .service
+        .activate_reserved(
+            session,
+            RuntimeAttachment::solo(PendingTransport),
+            reservation,
+        )
+        .await;
+    AgentSessionServiceImpl::<
+        InMemoryAgentSessionRepo,
+        FoldedMessageService<InMemoryAgentSessionRepo>,
+        NoOpRealtime,
+    >::wait_stopped(stopped)
+    .await;
+
+    assert!(matches!(result, Err(AgentSessionError::Disconnected(id)) if id == fx.session));
+    assert!(
+        fx.service
+            .active
+            .get(&fx.session)
+            .unwrap()
+            .commands
+            .is_none()
+    );
+    fx.service.active.remove_if(&fx.session, |_, active| {
+        Arc::ptr_eq(&active.marker, &marker)
+    });
+}
+
+#[tokio::test]
+async fn shutdown_prevents_a_reserved_attach_from_spawning() {
+    let fx = fixture();
+    let reservation = fx
+        .service
+        .reserve_attach(fx.session)
+        .await
+        .expect("attach reserves before reading");
+    let session = fx.repo.get(fx.session).await.expect("session exists");
+
+    fx.service.shutdown().await;
+    let result = fx
+        .service
+        .activate_reserved(
+            session,
+            RuntimeAttachment::solo(PendingTransport),
+            reservation,
+        )
+        .await;
+
+    assert!(matches!(result, Err(AgentSessionError::Disconnected(id)) if id == fx.session));
+    assert!(fx.service.tasks.is_closed());
+}
+
+#[tokio::test]
+async fn close_does_not_remove_a_concurrent_delete_guard() {
+    let fx = fixture();
+    let (_stopped, marker) = fx.service.begin_stop(fx.session, true);
+
+    fx.service
+        .close_session(fx.session)
+        .await
+        .expect("close observes the stopped actor");
+
+    assert!(fx.service.active.contains_key(&fx.session));
+    fx.service.active.remove_if(&fx.session, |_, active| {
+        Arc::ptr_eq(&active.marker, &marker)
+    });
+}
+
+/// A command sent while the handshake never completes cannot hang its caller
+/// forever - see [`HANDSHAKE_TIMEOUT`]. Without that bound, this test would
+/// simply never finish. The actor it was stuck in cannot linger afterwards
+/// either: its `commands` sender is gone from `active`, the same signal
+/// `close_session` relies on to mean the actor tore itself down.
+#[tokio::test]
+async fn a_command_stuck_behind_a_stalled_handshake_times_out_as_disconnected() {
+    let fx = fixture();
+    fx.service
+        .attach_session(fx.session, RuntimeAttachment::solo(PendingTransport))
+        .await
+        .expect("attach succeeds");
+
+    let result = fx
+        .service
+        .send_action(
+            fx.session,
+            None,
+            AgentAction::prompt("hello"),
+            AgentActionId::mint(),
+        )
+        .await;
+
+    assert!(
+        matches!(result, Err(AgentSessionError::Disconnected(id)) if id == fx.session),
+        "a stalled handshake times out rather than hanging forever, got {result:?}"
+    );
+    assert!(
+        fx.service
+            .active
+            .get(&fx.session)
+            .is_none_or(|active| active.commands.is_none()),
+        "the stuck actor's connector is released, not left running"
+    );
+}
+
+#[tokio::test]
+async fn cancellation_does_not_drop_an_effect_batch_after_machine_mutation() {
+    let repo = InMemoryAgentSessionRepo::new();
+    let session = test_session();
+    repo.insert_session(test_agent_session(session));
+    let entered = Arc::new(Notify::new());
+    let release = Arc::new(Notify::new());
+    let logs = BlockingPromptLogs {
+        repo: repo.clone(),
+        entered: entered.clone(),
+        release: release.clone(),
+        hang_disconnect: false,
+    };
+    let (outbound_tx, mut outbound_rx) = mpsc::channel(8);
+    let (inbound_tx, inbound_rx) = mpsc::channel(8);
+    let (commands, command_rx) = mpsc::channel(8);
+    let (handshake, _) = watch::channel(HandshakeStatus::Pending);
+    let actor = SessionActor::new(
+        session,
+        None,
+        "/workspace".to_owned(),
+        RecordingTransport {
+            outbound: outbound_tx,
+            inbound: inbound_rx,
+        },
+        logs,
+        command_rx,
+        handshake,
+    );
+    let active = Arc::new(ActiveSessions::new());
+    let cancellation = CancellationToken::new();
+    let marker = Arc::new(());
+    let (stopped_tx, _) = watch::channel(false);
+    let task = tokio::spawn(run_session(
+        actor,
+        Arc::downgrade(&active),
+        marker,
+        stopped_tx,
+        cancellation.clone(),
+    ));
+
+    open_test_session(&inbound_tx, &mut outbound_rx, session).await;
+
+    let (completed, result) = oneshot::channel();
+    commands
+        .send(SessionCommand {
+            user_id: None,
+            action: AgentAction::prompt("keep dispatching"),
+            action_id: AgentActionId::mint(),
+            completed,
+            span: tracing::info_span!("test.command"),
+        })
+        .await
+        .unwrap();
+    entered.notified().await;
+    cancellation.cancel();
+    release.notify_one();
+
+    let prompt = outbound_rx
+        .recv()
+        .await
+        .expect("prompt is still dispatched");
+    assert!(matches!(
+        prompt,
+        ToRuntimeMessage::Acp(AcpMessage(
+            agent_client_protocol::RawJsonRpcMessage::Request(request)
+        )) if request.method.as_ref() == "session/prompt"
+    ));
+    result.await.unwrap().expect("delivery completes");
+    task.await.unwrap();
+}
+
+#[tokio::test(start_paused = true)]
+async fn live_inbound_logs_do_not_reuse_the_expired_handshake_deadline() {
+    let repo = InMemoryAgentSessionRepo::new();
+    let session = test_session();
+    repo.insert_session(test_agent_session(session));
+    let entered = Arc::new(Notify::new());
+    let release = Arc::new(Notify::new());
+    let logs = BlockingPromptLogs {
+        repo: repo.clone(),
+        entered: entered.clone(),
+        release: release.clone(),
+        hang_disconnect: false,
+    };
+    let (outbound_tx, mut outbound_rx) = mpsc::channel(8);
+    let (inbound_tx, inbound_rx) = mpsc::channel(8);
+    let (commands, command_rx) = mpsc::channel(8);
+    let (handshake, _) = watch::channel(HandshakeStatus::Pending);
+    let actor = SessionActor::new(
+        session,
+        None,
+        "/workspace".to_owned(),
+        RecordingTransport {
+            outbound: outbound_tx,
+            inbound: inbound_rx,
+        },
+        logs,
+        command_rx,
+        handshake,
+    );
+    let active = Arc::new(ActiveSessions::new());
+    let cancellation = CancellationToken::new();
+    let (stopped_tx, _) = watch::channel(false);
+    let task = tokio::spawn(
+        run_session(
+            actor,
+            Arc::downgrade(&active),
+            Arc::new(()),
+            stopped_tx,
+            cancellation.clone(),
+        )
+        .with_current_subscriber(),
+    );
+    open_test_session(&inbound_tx, &mut outbound_rx, session).await;
+
+    release.notify_one();
+    let (completed, result) = oneshot::channel();
+    commands
+        .send(SessionCommand {
+            user_id: None,
+            action: AgentAction::prompt("keep working"),
+            action_id: AgentActionId::mint(),
+            completed,
+            span: tracing::info_span!("test.command"),
+        })
+        .await
+        .unwrap();
+    entered.notified().await;
+    let _prompt = outbound_rx.recv().await.expect("prompt request");
+    result.await.unwrap().expect("prompt delivered");
+
+    tokio::time::advance(std::time::Duration::from_secs(61)).await;
+    inbound_tx
+        .send(ToServerMessage::Acp(AcpMessage(
+            agent_client_protocol::RawJsonRpcMessage::notification(
+                "session/update".to_owned(),
+                serde_json::json!({ "sessionId": "acp-1", "update": {} }),
+            )
+            .unwrap(),
+        )))
+        .await
+        .unwrap();
+
+    let mut persisted = false;
+    for _ in 0..20 {
+        tokio::task::yield_now().await;
+        persisted = AgentSessionLogRepo::list_by_session(&repo, session)
+            .await
+            .unwrap()
+            .iter()
+            .any(|stored| {
+                matches!(
+                    &stored.entry.content,
+                    Message::ToServer(ToServerMessage::Acp(AcpMessage(
+                        agent_client_protocol::RawJsonRpcMessage::Notification(notification)
+                    ))) if notification.method.as_ref() == "session/update"
+                )
+            });
+        if persisted {
+            break;
+        }
+    }
+    assert!(persisted, "live update should use the regular log timeout");
+
+    cancellation.cancel();
+    task.await.unwrap();
 }
 
 /// Any protocol frame will do: the service only stores it, turn detection is
@@ -88,6 +825,64 @@ async fn appending_persists_the_event() {
         .await
         .expect("in-memory repo cannot fail");
     assert_eq!(log.len(), 2);
+}
+
+#[tokio::test]
+async fn marking_disconnected_persists_and_publishes_the_event() {
+    let repo = InMemoryAgentSessionRepo::new();
+    let session = test_session();
+    repo.insert_session(test_agent_session(session));
+    let realtime = RecordingRealtime::new();
+    let service = AgentSessionServiceImpl::new(
+        repo.clone(),
+        FoldedMessageService::new(repo.clone()),
+        realtime.clone(),
+    );
+
+    service
+        .mark_disconnected(session)
+        .await
+        .expect("disconnect is recorded");
+
+    let stored = AgentSessionLogRepo::list_by_session(&repo, session)
+        .await
+        .expect("stored log can be read");
+    assert!(matches!(
+        &stored[..],
+        [StoredAgentSessionLog {
+            entry: AgentSessionLog {
+                content: Message::ToServer(ToServerMessage::Event {
+                    event: SystemEvent::Disconnected,
+                }),
+                ..
+            },
+            ..
+        }]
+    ));
+    assert_eq!(realtime.published().len(), 1);
+}
+
+#[tokio::test(start_paused = true)]
+async fn marking_disconnected_is_bounded_when_persistence_hangs() {
+    let repo = InMemoryAgentSessionRepo::new();
+    let session = test_session();
+    repo.insert_session(test_agent_session(session));
+    let hanging = BlockingPromptLogs {
+        repo: repo.clone(),
+        entered: Arc::new(Notify::new()),
+        release: Arc::new(Notify::new()),
+        hang_disconnect: true,
+    };
+    let service =
+        AgentSessionServiceImpl::new(hanging, FoldedMessageService::new(repo), NoOpRealtime);
+    let disconnect = tokio::spawn(async move { service.mark_disconnected(session).await });
+    tokio::task::yield_now().await;
+    tokio::time::advance(SESSION_PERSIST_TIMEOUT).await;
+
+    assert!(matches!(
+        disconnect.await.unwrap(),
+        Err(AgentSessionError::LogTimedOut(id)) if id == session
+    ));
 }
 
 /// The point of the rework: a connection folds its session once, when it

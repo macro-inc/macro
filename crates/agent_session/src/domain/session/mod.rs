@@ -11,4 +11,6 @@ mod types;
 mod tests;
 
 pub use session::SessionMachine;
-pub use types::{CloseReason, Effect, Input, RuntimeStatus, StopReason};
+pub use types::{
+    CloseReason, Effect, HandshakeStatus, Input, RuntimeStatus, SessionRestoreSupport, StopReason,
+};

@@ -14,9 +14,9 @@ use sqlx::PgPool;
 use uuid::Uuid;
 
 use crate::domain::models::{
-    DueFiring, DueReminder, InvalidCron, NewReminder, Reminder, ReminderBatch, ReminderCron,
-    ReminderCursor, ReminderFilter, ReminderForSoup, ReminderReference, ReminderSchedule,
-    ReminderUpdate, SoupOrder, SoupReminderQuery,
+    Advance, Completion, DueFiring, DueReminder, InvalidCron, NewReminder, Reminder, ReminderBatch,
+    ReminderCron, ReminderCursor, ReminderFilter, ReminderForSoup, ReminderReference,
+    ReminderSchedule, ReminderUpdate, SoupOrder, SoupReminderQuery,
 };
 use crate::domain::ports::{ReminderDispatchRepo, RemindersRepo};
 
@@ -649,13 +649,14 @@ impl ReminderDispatchRepo for PgRemindersRepo {
 
     #[tracing::instrument(err, skip(self))]
     async fn due_firings(&self, now: DateTime<Utc>) -> Result<Vec<DueFiring>, Self::Err> {
-        // Driven by `reminder_due_idx`: (next_run_at) WHERE enabled AND
-        // completed_at IS NULL, with recurring rows filtered out on top.
+        // Driven by `reminder_due_v2_idx`: (next_run_at) WHERE enabled AND
+        // (cron IS NOT NULL OR completed_at IS NULL).
         //
-        // Recurring reminders are excluded here as well as at delivery because
-        // one is never completed and never has its next_run_at advanced, so it
-        // stays due forever — every sweep would re-fan the same rows and pay
-        // for a message each, indefinitely.
+        // Both schedule kinds. A recurring reminder stops being due the moment
+        // delivery rolls its `next_run_at` forward, which is why that advance
+        // shares a transaction with the sent occurrence — see
+        // `complete_occurrence_and_advance`. Were the two ever to come apart, the
+        // row would fall out of this query permanently rather than merely re-fan.
         //
         // Unbounded on purpose: a sweep publishes ids, so the cost of a large
         // one is a batch send per ten rows, and the ceiling is the queue's
@@ -676,8 +677,11 @@ impl ReminderDispatchRepo for PgRemindersRepo {
             SELECT r.id, r.next_run_at
             FROM reminder r
             WHERE r.enabled
-              AND r.completed_at IS NULL
-              AND r.cron IS NULL
+              -- Completion is per-firing, so it only retires a one-shot. A
+              -- recurring reminder its owner has ticked off keeps coming due:
+              -- they dealt with the last nudge, not with the standing
+              -- arrangement, and ending that is what deleting is for.
+              AND (r.cron IS NOT NULL OR r.completed_at IS NULL)
               AND r.next_run_at <= $1
               AND NOT EXISTS (
                   SELECT 1
@@ -706,10 +710,9 @@ impl ReminderDispatchRepo for PgRemindersRepo {
     async fn find_due_reminder(&self, firing: DueFiring) -> Result<Option<DueReminder>, Self::Err> {
         // Matching `next_run_at` exactly is what makes a stale message safe: an
         // edit moves the firing, and this then finds nothing rather than
-        // delivering the reminder at a time the user cancelled.
-        //
-        // `cron IS NULL` is deliberately absent — the domain refuses recurring
-        // reminders itself so the gap stays visible there.
+        // delivering the reminder at a time the user cancelled. It does the
+        // same for a recurring firing that was re-fanned after the series had
+        // already moved past it.
         let row = sqlx::query_as!(
             DueReminderRow,
             r#"
@@ -731,7 +734,9 @@ impl ReminderDispatchRepo for PgRemindersRepo {
             WHERE id = $1
               AND next_run_at = $2
               AND enabled
-              AND completed_at IS NULL
+              -- Matches `due_firings`: a completed recurring reminder is still
+              -- deliverable, a completed one-shot is finished.
+              AND (cron IS NOT NULL OR completed_at IS NULL)
             "#,
             firing.reminder_id,
             firing.scheduled_for,
@@ -804,15 +809,24 @@ impl ReminderDispatchRepo for PgRemindersRepo {
     }
 
     #[tracing::instrument(err, skip(self))]
-    async fn complete_occurrence(
+    async fn complete_occurrence_and_advance(
         &self,
         reminder_id: Uuid,
         scheduled_for: DateTime<Utc>,
-    ) -> Result<(), Self::Err> {
-        // Only the occurrence. Delivery is not completion: `completed_at` means
-        // the owner is finished with the reminder, and a reminder that has just
-        // arrived in their inbox plainly is not. What stops a delivered firing
-        // being sent twice is this row, which `due_firings` excludes on.
+        advance: Option<Advance>,
+    ) -> Result<Completion, Self::Err> {
+        // One transaction, because the two writes are only correct together.
+        // Marking the occurrence sent is what stops this firing going out
+        // twice; advancing `next_run_at` is what brings the next one around. A
+        // recurring reminder that got the first without the second would be
+        // excluded by its own sent occurrence and never move again — silently
+        // dead, and invisible until someone noticed the notifications had
+        // stopped. Every other failure here is retryable; that one is not.
+        let mut tx = self.pool.begin().await?;
+
+        // The reminder itself is left alone. Delivery is not completion:
+        // `completed_at` means the owner is finished with the reminder, and one
+        // that has just arrived in their inbox plainly is not.
         sqlx::query!(
             r#"
             UPDATE reminder_occurrence
@@ -822,8 +836,109 @@ impl ReminderDispatchRepo for PgRemindersRepo {
             reminder_id,
             scheduled_for,
         )
-        .execute(&self.pool)
+        .execute(tx.as_mut())
         .await?;
+
+        let Some(advance) = advance else {
+            tx.commit().await?;
+            return Ok(Completion::NoAdvance);
+        };
+
+        // `next_run_at = $3` guards against overwriting a reschedule the owner
+        // made while this delivery was in flight. Their time is a decision; the
+        // advance is bookkeeping, so a mismatch here is a correct no-op rather
+        // than a lost update.
+        //
+        // Which row count tells apart from a failed advance: both leave the
+        // reminder where it was, and only this says which happened.
+        let advanced = sqlx::query!(
+            r#"
+            UPDATE reminder
+            SET next_run_at = $2,
+                -- Cleared only when the owner was notified. A firing they can
+                -- see supersedes their "done" on the previous one; a firing
+                -- rolled forward in silence supersedes nothing.
+                completed_at = CASE WHEN $4::bool THEN NULL ELSE completed_at END,
+                updated_at = now()
+            WHERE id = $1 AND next_run_at = $3
+            "#,
+            reminder_id,
+            advance.next_run_at,
+            scheduled_for,
+            advance.clear_completion,
+        )
+        .execute(tx.as_mut())
+        .await?
+        .rows_affected();
+
+        tx.commit().await?;
+
+        Ok(if advanced > 0 {
+            Completion::Advanced
+        } else {
+            Completion::NotAdvanced
+        })
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn retract_notifications(
+        &self,
+        reminder_id: Uuid,
+        before: DateTime<Utc>,
+    ) -> Result<(), Self::Err> {
+        // Reaches into `notification` for the same reason `delete_reminder`
+        // does: a reminder *is* its notification's `event_item`, so the two are
+        // one thing to a reader even though they belong to different domains.
+        // `user_notification` cascades from this row.
+        //
+        // Bounded by the firing rather than clearing the reminder outright, so
+        // the notification this delivery just created — and any a concurrent
+        // delivery of a later firing created — survive. `scheduledFor` is the
+        // firing each notification was written for; rows without it predate
+        // recurring dispatch and are older than anything being delivered now.
+        //
+        // Read the candidates, decide here, delete by id.
+        //
+        // The obvious form is one statement comparing the metadata timestamp
+        // directly, but that needs a cast, and a cast in a predicate fails the
+        // whole statement on a single malformed value — which, since a failed
+        // retraction is swallowed, would show up as tidying that quietly never
+        // happened. `pg_input_is_valid` would guard it, but that is Postgres 16
+        // and production runs 14. Parsing here costs one round trip on a cold
+        // path and cannot be defeated by a bad row or an older server.
+        let candidates = sqlx::query!(
+            r#"
+            SELECT id, metadata->>'scheduledFor' AS "scheduled_for?"
+            FROM notification
+            WHERE event_item_type = 'reminder' AND event_item_id = $1
+            "#,
+            reminder_id.to_string(),
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        let stale: Vec<Uuid> = candidates
+            .into_iter()
+            .filter(|row| match row.scheduled_for.as_deref() {
+                // No firing recorded: written before recurring dispatch, so
+                // older than anything being delivered now.
+                None => true,
+                // Unreadable is treated as stale, which is what it is.
+                Some(raw) => match DateTime::parse_from_rfc3339(raw) {
+                    Ok(at) => at.with_timezone(&Utc) < before,
+                    Err(_) => true,
+                },
+            })
+            .map(|row| row.id)
+            .collect();
+
+        if stale.is_empty() {
+            return Ok(());
+        }
+
+        sqlx::query!(r#"DELETE FROM notification WHERE id = ANY($1)"#, &stale)
+            .execute(&self.pool)
+            .await?;
 
         Ok(())
     }

@@ -5,11 +5,13 @@ members = [
   "crates/activity",
   "crates/agent", "crates/agent_fold",
   "crates/agent_harness",
+  "crates/agent_inmem",
   "crates/agent_runtime_protocol", "crates/agent_session",
   "crates/agent_trigger",
   "crates/ai_projections",
   "crates/ai_usage",
   "crates/bot_id",
+  "crates/bot_token",
   "crates/bots",
   "crates/broadcast",
   "crates/calendar_events",
@@ -18,6 +20,8 @@ members = [
   "crates/client/cache-turso",
   "crates/client/cache-wasm",
   "crates/client/turso-opfs",
+  "crates/coding_agent_worker",
+  "crates/collab_surface",
   "crates/complete_graph",
   "crates/cowlike",
   "crates/crm",
@@ -38,7 +42,9 @@ members = [
   "crates/graphql_permission",
   "crates/graphql_properties",
   "crates/graphql_soup",
+  "crates/graphql_soup_filter_input",
   "crates/import",
+  "crates/item_filter_index",
   "crates/integration_tests/local_e2e",
   "crates/loops_client",
   "crates/macro_authorization",
@@ -52,15 +58,19 @@ members = [
   "crates/mcp_select",
   "crates/pipedream_mcp",
   "crates/onboarding",
+  "crates/predicate_index",
   "crates/prompt",
   "crates/properties_service",
   "crates/reminders",
   "crates/search_service",
   "crates/skills",
+  "crates/soup_filter_cache_adapter",
+  "crates/soup_filter_projection",
   "crates/soup_realtime",
   "crates/system_skills",
   "crates/task_dedup",
   "crates/unfurl",
+  "crates/webhook_signature",
   "crates/worker-rs-otel",
   "crates/workspace-hack",
   "services/agent_harness_service",
@@ -241,7 +251,7 @@ reqwest = { version = "0.13", default-features = false, features = [
   "rustls",
 ] }
 rmcp = "1.6.0"
-rootcause = { version = "0.12" }
+rootcause = { version = "0.12", features = ["compat-anyhow1"] }
 rustls = { version = "0.23", default-features = false, features = ["aws_lc_rs"] }
 rootcause-tracing = "0.12.1"
 schemars = { version = "1.0.4", features = ["chrono04", "uuid1"] }
@@ -281,13 +291,14 @@ tower-http = { version = "0.6.1", features = [
   "cors",
   "trace",
 ] }
+toml = "0.8"
 tracing = "0.1.44"
 tracing-opentelemetry = "0.32.1"
 tracing-subscriber = { version = "0.3.22", features = ["env-filter", "json"] }
 tracing-tree = "0.4.0"
-# Exact remotely available Turso fork revision approved by the browser cache G0.
-# Its source tree is identical to the locally verified cf7de761 revision.
-turso_core = { git = "https://github.com/seanaye/turso", rev = "be9acfe9e5e6efb17911af84047e4855cace53a3", default-features = false }
+# Pin the official upstream revision used by the browser cache. Cache writes use
+# deferred transactions so browser WASM does not initialize Turso's temp database.
+turso_core = { git = "https://github.com/tursodatabase/turso", rev = "79163249538197d01dec5ea7f65519454ed792e2", default-features = false }
 tungstenite = { version = "0.28", features = ["url"] }
 unsynn = "0.3"
 urlencoding = "2.1.3"

@@ -4,7 +4,7 @@ import {
   SplitHeaderContextMenu,
 } from '@components/app/split-layout/components/SplitHeader';
 import { SplitPanelContext } from '@components/app/split-layout/context';
-import type { EntityDragEvent } from '@entity';
+import { isEntityDragEvent } from '@entity';
 import { createDroppable, useDragDropContext } from '@thisbeyond/solid-dnd';
 import { cn } from '@ui';
 import {
@@ -41,8 +41,8 @@ export function ComposedSplitHeader(props: ComponentProps<'header'>) {
     );
   });
 
-  onDragEnd((event: EntityDragEvent) => {
-    if (event.droppable?.id !== droppableId) return;
+  onDragEnd((event) => {
+    if (!isEntityDragEvent(event) || event.droppable?.id !== droppableId) return;
     const data = event.draggable?.data;
     if (!data || data.dragType !== 'entity') return;
 

@@ -13,6 +13,8 @@ import type { WebhookStatus } from './webhookStatus';
 
 /**
  * Webhook row returned by application APIs.
+
+Clients deserialize this, so both derives are used.
  */
 export interface Webhook {
   /** Creation timestamp. */

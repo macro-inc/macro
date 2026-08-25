@@ -21,16 +21,11 @@ import {
   type ReadFilter,
   useSoupView,
 } from '@app/features/next-soup/soup-view/soup-view-context';
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useDealStages } from '@companies/crm/deal-stages';
 import { CrmStageIcon } from '@companies/crm/StageIcon';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { UserIcon } from '@core/component/UserIcon';
-import {
-  ENABLE_NEW_INBOX_FLAG,
-  ENABLE_NEW_INBOX_OVERRIDE,
-} from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
@@ -583,10 +578,7 @@ export const UnifiedFilterDropdown = (
     return content.id;
   });
 
-  const newInboxFlag = useFeatureFlag(ENABLE_NEW_INBOX_FLAG, {
-    enabledOverride: ENABLE_NEW_INBOX_OVERRIDE,
-  });
-  const isNewInbox = () => currentView() === 'inbox' && newInboxFlag().enabled;
+  const isInboxView = () => currentView() === 'inbox';
   const githubLinkStatus = useGithubLinkStatusQuery({
     enabled: () => currentView() === 'inbox',
   });
@@ -943,7 +935,7 @@ export const UnifiedFilterDropdown = (
         categories().length > 0 ||
         isTasksView() ||
         isCompaniesView() ||
-        isNewInbox() ||
+        isInboxView() ||
         showTagsFilter()
       }
     >
@@ -974,7 +966,7 @@ export const UnifiedFilterDropdown = (
 
         <Dropdown.Content class={cn('shadow-menu min-w-32')}>
           <Dropdown.Group>
-            <Show when={isNewInbox()}>
+            <Show when={isInboxView()}>
               <ReadStatusSubmenu
                 value={readFilter()}
                 onChange={setReadFilter}
@@ -986,7 +978,7 @@ export const UnifiedFilterDropdown = (
                 !isDocumentsView() &&
                 !isTasksView() &&
                 !isCompaniesView() &&
-                !isNewInbox()
+                !isInboxView()
               }
               fallback={
                 <>

@@ -319,7 +319,7 @@ function CalendarPagerWorkspace() {
       <Show
         when={activeAppLayout().capabilities.usesCalendarWorkspace}
         fallback={
-          <SidePanel.Layout>
+          <SidePanel.Layout persistKey="calendar">
             <WorkspaceContent />
           </SidePanel.Layout>
         }

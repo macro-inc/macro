@@ -66,6 +66,10 @@ import {
 } from '@notifications';
 import { queryClient } from '@queries/client';
 import { emailKeys } from '@queries/email/keys';
+import {
+  type NotificationEntityRef,
+  updateNotificationsForEntities,
+} from '@queries/notification/entity-mutations';
 import { notificationKeys } from '@queries/notification/keys';
 import {
   bulkMarkNotificationsAsDone,
@@ -729,6 +733,36 @@ export const openEntityInSplitFromUnifiedList = async (
 };
 
 /**
+ * Mark the attached notification that caused a channel row to target a message.
+ *
+ * The row's Soup edge is authoritative here. The channel block's message marker
+ * discovers notifications through the separately paginated global source, so
+ * an older notification can drive navigation without being present there.
+ */
+export function markChannelTargetSeenOnOpen(
+  entity: EntityData,
+  notificationSource: NotificationSource
+) {
+  const target = getChannelEntityTarget(entity);
+  if (target?.kind !== 'message' || !isWithNotification(entity)) return;
+
+  const notifications = scopeChannelNotificationsForEntity(
+    entity,
+    entity.notifications?.() ?? []
+  ).filter((notification) => {
+    if (notificationIsRead(notification)) return false;
+    return (
+      getChannelNotificationParams(notification).messageId === target.messageId
+    );
+  });
+  if (notifications.length === 0) return;
+
+  void notificationSource.bulkMarkAsRead(notifications).catch((error) => {
+    console.error('Failed to mark message notifications as read', error);
+  });
+}
+
+/**
  * Mark a reminder's notification read when the user opens it.
  *
  * Every other entity type gets this for free from the block it opens into,
@@ -754,6 +788,17 @@ export function markReminderSeenOnOpen(
 }
 
 /** Build the singleton block params for an event row's target occurrence. */
+/**
+ * The event and instance a calendar row points at, resolved exactly as the
+ * open path resolves it so a copied link lands where a click would.
+ */
+export function calendarEventLinkTarget(
+  entity: Extract<EntityData, { type: 'calendar_event' }>
+): { eventId: string; occurrenceKey?: string } {
+  const { eventId, occurrenceKey } = calendarBlockParamsForEntity(entity);
+  return { eventId: eventId ?? entity.id, occurrenceKey };
+}
+
 function calendarBlockParamsForEntity(
   entity: Extract<EntityData, { type: 'calendar_event' }>
 ): CalendarBlockProps {
@@ -777,7 +822,9 @@ function calendarBlockParamsForEntity(
 
   return {
     eventId: content?.eventId ?? entity.id,
-    occurrenceKey: content?.occurrenceKey,
+    // A reminder names a precise instance, so it wins; otherwise fall back to
+    // whatever resolved the row (search supplies one, soup does not).
+    occurrenceKey: content?.occurrenceKey ?? entity.occurrenceKey,
     range: time ? createCalendarBlockRange(time) : undefined,
   };
 }
@@ -1418,11 +1465,6 @@ export function applyEntitiesNotDoneOptimistic(args: {
 }
 
 /**
- * Fires the archive + bulk-done APIs for the given ids. Throws on any
- * failure; caller is responsible for rollback via the context returned by
- * `applyEntitiesDoneOptimistic`.
- */
-/**
  * Flip the reminders' own `completed` column. One PATCH each — the reminders
  * API has no bulk endpoint, and a mark-done selection is normally one row.
  */
@@ -1433,17 +1475,30 @@ function setRemindersCompleted(
   return reminderIds.map((id) => setReminderCompleted(id, completed));
 }
 
+/**
+ * Fires archive, selective ID-scoped notification, entity-scoped notification,
+ * and reminder completion writes. Returns the authoritative notification IDs
+ * produced by the entity write. Throws on any failure; the caller owns rollback
+ * through the context returned by `applyEntitiesDoneOptimistic`.
+ */
 export async function executeMarkEntitiesDone(args: {
   emailIds: string[];
   notificationIds: string[];
+  notificationEntities?: NotificationEntityRef[];
   reminderIds?: string[];
-}): Promise<void> {
-  const { emailIds, notificationIds, reminderIds = [] } = args;
+}): Promise<string[]> {
+  const {
+    emailIds,
+    notificationIds,
+    notificationEntities = [],
+    reminderIds = [],
+  } = args;
   await Promise.all([
     queryClient.cancelQueries({ queryKey: queryKeys.all.email }),
     queryClient.cancelQueries({ queryKey: notificationKeys.user._def }),
   ]);
 
+  let authoritativeNotificationIds: string[] = [];
   const results = await Promise.allSettled([
     ...emailIds.map((id) =>
       throwOnErr(
@@ -1452,6 +1507,16 @@ export async function executeMarkEntitiesDone(args: {
     ),
     notificationIds.length > 0
       ? bulkMarkNotificationsAsDone(notificationIds)
+      : Promise.resolve(),
+    notificationEntities.length > 0
+      ? updateNotificationsForEntities({
+          entities: notificationEntities,
+          operation: 'MARK_DONE',
+        }).then((notifications) => {
+          authoritativeNotificationIds = notifications.map(
+            (notification) => notification.id
+          );
+        })
       : Promise.resolve(),
     ...setRemindersCompleted(reminderIds, true),
   ]);
@@ -1487,6 +1552,8 @@ export async function executeMarkEntitiesDone(args: {
     }),
     ...emailIds.map((id) => invalidateSoupEntity(id)),
   ]);
+
+  return authoritativeNotificationIds;
 }
 
 /**

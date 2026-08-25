@@ -783,6 +783,7 @@ function getSearchResultId(result: UnifiedSearchResponseItem): string {
     .with({ type: 'project' }, (r) => r.id)
     .with({ type: 'call' }, (r) => r.call_id)
     .with({ type: 'company' }, (r) => r.id)
+    .with({ type: 'calendarEvent' }, (r) => r.id)
     .exhaustive();
 }
 

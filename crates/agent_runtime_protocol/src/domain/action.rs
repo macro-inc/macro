@@ -127,9 +127,10 @@ impl AgentSetModelAction {
 }
 
 /// One thing a caller wants an agent to do.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, strum::AsRefStr)]
 #[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
 #[serde(tag = "type", rename_all = "camelCase")]
+#[strum(serialize_all = "snake_case")]
 pub enum AgentAction {
     /// Send the agent a prompt.
     Prompt(AgentPromptAction),

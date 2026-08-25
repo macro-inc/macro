@@ -65,3 +65,17 @@ fragment GraphqlProjectQuickAccessName on GraphqlSoupProject {
 	ownerId
 	createdAt
 }
+
+fragment GraphqlChannelQuickAccessFields on GraphqlSoupChannel {
+	__typename
+	name
+	channelType
+	ownerId
+	createdAt
+	updatedAt
+	viewedAt
+	interactedAt
+	participants {
+		userId
+	}
+}

@@ -267,6 +267,9 @@ function makeFakeHost(): FakeHost {
     async search() {
       return { documents: [], nextCursor: null };
     },
+    async entityFilter() {
+      return { kind: 'unsupported' };
+    },
     async writeQuery(args): Promise<WriteResult> {
       host.writes.push({
         opKey: args.opKey,
@@ -1078,6 +1081,30 @@ describe('normalizedCacheExchange', () => {
     expect(host.reads.map((read) => read.entityResolvers)).toEqual([
       EXPECTED_ENTITY_RESOLVERS,
       EXPECTED_ENTITY_RESOLVERS,
+    ]);
+  });
+
+  it('emits an affected cache result while an authoritative query remains in flight', async () => {
+    host.scriptRead({ kind: 'hit', data: { status: 'In Review' } });
+    const { ops, results, forwarded, client } = controlledQueryHarness(host);
+    ops.next(makeOp(8, 'cache-and-network'));
+    await tick();
+
+    expect(forwarded).toHaveLength(1);
+    expect(results.map((result) => [result.data, result.stale])).toEqual([
+      [{ status: 'In Review' }, true],
+    ]);
+
+    host.scriptRead({ kind: 'hit', data: { status: 'Completed' } });
+    host.pushAffected([8]);
+    await tick();
+
+    expect(client.reexecuteOperation).not.toHaveBeenCalled();
+    expect(forwarded).toHaveLength(1);
+    expect(host.reads.at(-1)?.priority).toBe('user-visible');
+    expect(results.map((result) => [result.data, result.stale])).toEqual([
+      [{ status: 'In Review' }, true],
+      [{ status: 'Completed' }, true],
     ]);
   });
 
@@ -1974,7 +2001,7 @@ describe('normalizedCacheExchange', () => {
       expect(host.commits).toHaveLength(0);
     });
 
-    it('retains a retryable network failure and still returns the error', async () => {
+    it('retains a retryable network failure as a successful local write', async () => {
       const error = new CombinedError({
         networkError: new Error('offline'),
       });
@@ -1992,31 +2019,46 @@ describe('normalizedCacheExchange', () => {
         { transactionId: 'txn-1', error: error.message },
       ]);
       expect(host.rollbacks).toHaveLength(0);
-      expect(results[0]?.error).toBe(error);
+      expect(results[0]?.error).toBeUndefined();
+      expect(results[0]?.data).toEqual(optimistic);
       expect(optimisticMutationDispositionOf(results[0])).toEqual({
         kind: 'queued',
         transactionId: 'txn-1',
       });
     });
 
-    it('reports a later mutation as queued while a deferred head blocks it', async () => {
+    it('accepts later local writes while a deferred offline head blocks the network', async () => {
       const error = new CombinedError({
         networkError: new Error('offline'),
       });
+      const firstOptimistic = {
+        setEntityProperty: { id: 'prop-1', displayName: 'Doing' },
+      };
+      const secondOptimistic = {
+        setEntityProperty: { id: 'prop-1', displayName: 'Completed' },
+      };
       const { ops, results, forwarded } = harness(
         host,
         (op) => (op.kind === 'mutation' ? { error, data: undefined } : {}),
         { shouldRetryMutation: () => true }
       );
 
-      ops.next(makeMutationOp(1, optimistic));
+      ops.next(makeMutationOp(1, firstOptimistic));
       await tick();
-      ops.next(makeMutationOp(2, optimistic));
+      ops.next(makeMutationOp(2, secondOptimistic));
       await tick();
 
       expect(host.claims).toEqual(['txn-1']);
       expect(forwarded.map((op) => op.key)).toEqual([1]);
+      expect(host.begins.map((begin) => begin.data)).toEqual([
+        firstOptimistic,
+        secondOptimistic,
+      ]);
       expect(results).toHaveLength(2);
+      expect(results[0]?.error).toBeUndefined();
+      expect(results[1]?.error).toBeUndefined();
+      expect(results[0]?.data).toEqual(firstOptimistic);
+      expect(results[1]?.data).toEqual(secondOptimistic);
       expect(optimisticMutationDispositionOf(results[1])).toEqual({
         kind: 'queued',
         transactionId: 'txn-2',

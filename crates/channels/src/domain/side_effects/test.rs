@@ -1604,6 +1604,7 @@ fn broker_events_map_message_posted_mentions_per_entity() {
         .into_storage_id()
         .to_string();
     let macro_ai_principal = bot_id::MACRO_AI_BOT_ID.into_storage_id().to_string();
+    let macro_coder_principal = bot_id::MACRO_CODER_BOT_ID.into_storage_id().to_string();
     let uninstalled_bot_principal = BotId::new_from_uuid(Uuid::new_v4())
         .into_storage_id()
         .to_string();
@@ -1618,6 +1619,8 @@ fn broker_events_map_message_posted_mentions_per_entity() {
             mention(BOT_MENTION_ENTITY_TYPE, &bot_principal),
             // Macro AI surfaced through the user-mention UI still counts.
             mention("user", &macro_ai_principal),
+            // Macro Coder is globally available without a participant row.
+            mention(BOT_MENTION_ENTITY_TYPE, &macro_coder_principal),
             // A valid bot principal that is not installed emits nothing.
             mention(BOT_MENTION_ENTITY_TYPE, &uninstalled_bot_principal),
             // A bot-tagged mention with a malformed id emits nothing.
@@ -1628,8 +1631,8 @@ fn broker_events_map_message_posted_mentions_per_entity() {
             mention("user", "macro|bob@example.com"),
             mention("document", "doc-1"),
         ],
-        // Macro AI needs no participant row: it is a code-defined system bot
-        // available in every channel.
+        // System bots need no participant rows: they are available in every
+        // channel.
         &[bot_principal.as_str()],
     ));
 
@@ -1666,6 +1669,7 @@ fn broker_events_map_message_posted_mentions_per_entity() {
         vec![
             ("bot".to_string(), bot_principal),
             ("user".to_string(), macro_ai_principal),
+            ("bot".to_string(), macro_coder_principal),
             ("user".to_string(), "macro|alice@example.com".to_string()),
             ("user".to_string(), "macro|bob@example.com".to_string()),
             ("document".to_string(), "doc-1".to_string()),

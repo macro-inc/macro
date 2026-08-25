@@ -307,7 +307,7 @@ pub async fn build_tool_service_context_from_env(
     );
 
     let properties_tool_context = crate::tool_context::build_properties_tool_context(
-        properties_service,
+        properties_service.clone(),
         entity_access_service.clone(),
     );
 
@@ -399,6 +399,11 @@ pub async fn build_tool_service_context_from_env(
         email_service_client: email_ext_client,
         soup_service,
         email_service: email_service_for_tools,
+        activity_tool_context: crate::tool_context::build_activity_tool_context(
+            pool.clone(),
+            properties_service,
+            entity_access_service.clone(),
+        ),
         document_tool_context,
         properties_tool_context,
         email_tool_context,
@@ -412,6 +417,12 @@ pub async fn build_tool_service_context_from_env(
         import_tool_context: ToolImportToolContext::unwired(),
         chat_tool_context,
         channel_tool_context,
+        bot_tool_context: crate::tool_context::build_bot_tool_context(
+            pool.clone(),
+            crate::tool_context::ToolBotEventBroker::Real(macro_event_broker.clone()),
+            entity_access_service.clone(),
+            document_storage_service_url,
+        ),
         project_tool_context,
         team_tool_context: crate::tool_context::build_team_tool_context(pool.clone()),
         crm_tool_context: crate::tool_context::build_crm_tool_context(pool.clone()),

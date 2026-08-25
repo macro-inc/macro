@@ -144,28 +144,36 @@ function turnEndedActivity(
 ): MagicChipActivity | undefined {
   const stop = response?.stop;
   if (!stop) return undefined;
-  return match(stop)
-    .with({ kind: 'end_turn' }, () => ({
-      // A clean end with prose settles before activity is consulted, so
-      // reaching this arm means the agent closed the turn empty-handed.
-      label: 'Agent finished without a response',
-      busy: false,
-    }))
-    .with({ kind: 'cancelled' }, () => ({ label: 'Stopped', busy: false }))
-    .with({ kind: 'refusal' }, () => ({
-      label: 'Request refused',
-      busy: false,
-    }))
-    .with({ kind: 'max_tokens' }, () => ({
-      label: 'Response limit reached',
-      busy: false,
-    }))
-    .with({ kind: 'max_turn_requests' }, () => ({
-      label: 'Turn limit reached',
-      busy: false,
-    }))
-    .with({ kind: 'other' }, ({ reason }) => ({ label: reason, busy: false }))
-    .exhaustive();
+  return (
+    match(stop)
+      .with({ kind: 'end_turn' }, () => ({
+        // A clean end with prose settles before activity is consulted, so
+        // reaching this arm means the agent closed the turn empty-handed.
+        label: 'Agent finished without a response',
+        busy: false,
+      }))
+      .with({ kind: 'cancelled' }, () => ({ label: 'Stopped', busy: false }))
+      .with({ kind: 'refusal' }, () => ({
+        label: 'Request refused',
+        busy: false,
+      }))
+      .with({ kind: 'max_tokens' }, () => ({
+        label: 'Response limit reached',
+        busy: false,
+      }))
+      .with({ kind: 'max_turn_requests' }, () => ({
+        label: 'Turn limit reached',
+        busy: false,
+      }))
+      .with({ kind: 'other' }, ({ reason }) => ({ label: reason, busy: false }))
+      // The runtime errored the prompt. The chip has one line, so it says that
+      // much and leaves the runtime's message to the session itself.
+      .with({ kind: 'failed' }, () => ({
+        label: "Agent couldn't answer",
+        busy: false,
+      }))
+      .exhaustive()
+  );
 }
 
 /**

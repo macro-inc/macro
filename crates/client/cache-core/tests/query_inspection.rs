@@ -4,6 +4,7 @@ use cache_core::engine::{BeginOptimisticWrite, Engine};
 use cache_core::link_patch::{
     LinkOperation, LinkPathSegment, ListItemByScalar, OptimisticLinkPatch,
 };
+use cache_core::predicate::ProjectionMutation;
 use cache_core::query_inspection::{MAX_INSPECTED_VARIANTS, QueryInspection, QueryInspectionError};
 use cache_core::queue::{
     ClaimedMutation, MutationClaimRequest, MutationClaimToken, MutationId, NewQueuedMutation,
@@ -104,6 +105,16 @@ impl Storage for OwnerOnlyStorage {
         self.0.put_batch(entries).await
     }
 
+    async fn put_batch_with_projections(
+        &mut self,
+        entries: Vec<(EntityKey<'static>, Record)>,
+        projections: Vec<ProjectionMutation>,
+    ) -> Result<(), Self::Error> {
+        self.0
+            .put_batch_with_projections(entries, projections)
+            .await
+    }
+
     async fn delete_batch(&mut self, keys: &[EntityKey<'static>]) -> Result<(), Self::Error> {
         self.0.delete_batch(keys).await
     }
@@ -145,6 +156,18 @@ impl Storage for OwnerOnlyStorage {
         entries: Vec<(EntityKey<'static>, Record)>,
     ) -> Result<bool, Self::Error> {
         self.0.complete_mutation(id, claim, entries).await
+    }
+
+    async fn complete_mutation_with_projections(
+        &mut self,
+        id: MutationId,
+        claim: MutationClaimToken,
+        entries: Vec<(EntityKey<'static>, Record)>,
+        projections: Vec<ProjectionMutation>,
+    ) -> Result<bool, Self::Error> {
+        self.0
+            .complete_mutation_with_projections(id, claim, entries, projections)
+            .await
     }
 
     async fn discard_mutation(

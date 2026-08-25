@@ -3,6 +3,14 @@ import { toast } from '@core/component/Toast/Toast';
 import { writeClipboardData } from '@core/util/dataTransfer';
 import { CALENDAR_BLOCK_ID } from './types';
 
+/** What a copied event needs to come back as a mention or a deep link. */
+export type CalendarMentionTarget = {
+  eventId: string;
+  title: string;
+  /** Pins one instance of a recurring series; absent for a series mention. */
+  occurrenceKey?: string;
+};
+
 function isRecurring(event: CalendarEvent): boolean {
   return event.recurrenceLines.length > 0 || event.recurrenceId !== undefined;
 }
@@ -13,19 +21,19 @@ function isRecurring(event: CalendarEvent): boolean {
  * `importDOM`. A series mention names the whole event; an instance of a
  * recurring event pins its occurrence key.
  */
-function mentionHtml(event: CalendarEvent): string {
+function mentionHtml(target: CalendarMentionTarget): string {
   const span = document.createElement('span');
   span.setAttribute('data-document-mention', 'true');
-  span.setAttribute('data-document-id', event.eventId);
-  span.setAttribute('data-document-name', event.title);
+  span.setAttribute('data-document-id', target.eventId);
+  span.setAttribute('data-document-name', target.title);
   span.setAttribute('data-block-name', 'calendar');
-  if (isRecurring(event)) {
+  if (target.occurrenceKey) {
     span.setAttribute(
       'data-block-params',
-      JSON.stringify({ occurrenceKey: event.occurrenceKey })
+      JSON.stringify({ occurrenceKey: target.occurrenceKey })
     );
   }
-  span.textContent = event.title;
+  span.textContent = target.title;
   return span.outerHTML;
 }
 
@@ -52,17 +60,25 @@ export function calendarEventDeepLink(target: {
  * Copy an event to the clipboard as a calendar mention (rich flavor) with a
  * deep link fallback (plain flavor). Must be called from a user gesture.
  */
-export async function copyCalendarEventMention(event: CalendarEvent) {
+export async function copyCalendarEventMentionTarget(
+  target: CalendarMentionTarget
+) {
   const written = await writeClipboardData({
-    'text/html': mentionHtml(event),
-    'text/plain': calendarEventDeepLink({
-      eventId: event.eventId,
-      occurrenceKey: isRecurring(event) ? event.occurrenceKey : undefined,
-    }),
+    'text/html': mentionHtml(target),
+    'text/plain': calendarEventDeepLink(target),
   });
   if (written) {
     toast.success('Copied event to clipboard');
   } else {
     toast.failure('Failed to copy event');
   }
+}
+
+/** Copy a calendar-grid event, pinning the instance when it repeats. */
+export async function copyCalendarEventMention(event: CalendarEvent) {
+  await copyCalendarEventMentionTarget({
+    eventId: event.eventId,
+    title: event.title,
+    occurrenceKey: isRecurring(event) ? event.occurrenceKey : undefined,
+  });
 }

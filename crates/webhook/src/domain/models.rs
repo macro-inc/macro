@@ -318,7 +318,9 @@ impl std::str::FromStr for WebhookStatus {
 }
 
 /// Scope that owns a newly-created webhook.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+///
+/// Clients serialize this, so both derives are used.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum WebhookScope {
@@ -351,7 +353,9 @@ impl WebhookEndpointSchemePolicy {
 }
 
 /// Request to create a webhook.
-#[derive(Debug, Clone, Deserialize)]
+///
+/// Clients serialize this, so both derives are used.
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 pub struct CreateWebhookRequest {
     /// Scope that owns the webhook.
@@ -397,6 +401,8 @@ pub enum CreateWebhookOutcome {
 }
 
 /// Webhook row returned by application APIs.
+///
+/// Clients deserialize this, so both derives are used.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 pub struct Webhook {
@@ -434,6 +440,8 @@ pub struct Webhook {
 }
 
 /// Webhook returned after creation, including its signing secret.
+///
+/// Clients deserialize this, so both derives are used.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 pub struct CreateWebhookResponse {
@@ -490,6 +498,8 @@ impl From<Webhook> for CreateWebhookResponse {
 }
 
 /// Webhooks visible to the caller across their personal and team workspaces.
+///
+/// Clients deserialize this, so both derives are used.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 pub struct ListWebhooksResponse {
