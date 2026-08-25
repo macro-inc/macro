@@ -31,7 +31,10 @@ export function SendButton(props: SendButtonProps) {
       aria-label={local['aria-label'] ?? 'Send'}
       tooltip={local.tooltip ?? 'Send'}
       class={cn(
-        'rounded-[11px] size-7.5 [&_svg]:stroke-[4px]',
+        // `glass` rather than the `glass-sm` that icon-sm would pick up: the
+        // send button is a prominent floating action, and at half strength the
+        // rim vanishes into the solid accent fill.
+        'rounded-[11px] size-7.5 [&_svg]:stroke-[4px] glass',
         'transition-transform ease duration-150',
         'data-disabled:opacity-100 data-disabled:text-ink-extra-muted! data-disabled:bg-ink-muted/5',
         'active:not-disabled:scale-95',
