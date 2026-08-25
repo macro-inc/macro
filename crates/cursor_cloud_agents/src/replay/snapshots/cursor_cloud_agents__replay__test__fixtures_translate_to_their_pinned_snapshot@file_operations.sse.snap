@@ -1,8 +1,8 @@
 ---
-source: crates/cursor_acp/src/replay/test.rs
+source: crates/cursor_cloud_agents/src/replay/test.rs
 assertion_line: 208
 expression: updates(sse)
-input_file: crates/cursor_acp/fixtures/real/file_operations.sse
+input_file: crates/cursor_cloud_agents/fixtures/real/file_operations.sse
 ---
 [
   {
@@ -382,6 +382,11 @@ input_file: crates/cursor_acp/fixtures/real/file_operations.sse
     "kind": "edit",
     "status": "in_progress",
     "title": "edit_file",
+    "locations": [
+      {
+        "path": "/tmp/probe/a.txt"
+      }
+    ],
     "rawInput": {
       "path": "/tmp/probe/a.txt"
     }
@@ -392,6 +397,11 @@ input_file: crates/cursor_acp/fixtures/real/file_operations.sse
     "kind": "edit",
     "status": "in_progress",
     "title": "edit_file",
+    "locations": [
+      {
+        "path": "/tmp/probe/a.txt"
+      }
+    ],
     "rawInput": {
       "path": "/tmp/probe/a.txt",
       "streamContent": "hello"
@@ -403,6 +413,18 @@ input_file: crates/cursor_acp/fixtures/real/file_operations.sse
     "kind": "edit",
     "status": "completed",
     "title": "edit_file",
+    "content": [
+      {
+        "type": "diff",
+        "path": "/tmp/probe/a.txt",
+        "newText": "hello"
+      }
+    ],
+    "locations": [
+      {
+        "path": "/tmp/probe/a.txt"
+      }
+    ],
     "rawInput": {
       "path": "/tmp/probe/a.txt",
       "streamContent": "hello"
@@ -447,6 +469,11 @@ input_file: crates/cursor_acp/fixtures/real/file_operations.sse
     "kind": "read",
     "status": "in_progress",
     "title": "read_file",
+    "locations": [
+      {
+        "path": "/tmp/probe/a.txt"
+      }
+    ],
     "rawInput": {
       "path": "/tmp/probe/a.txt"
     }
@@ -457,6 +484,11 @@ input_file: crates/cursor_acp/fixtures/real/file_operations.sse
     "kind": "read",
     "status": "completed",
     "title": "read_file",
+    "locations": [
+      {
+        "path": "/tmp/probe/a.txt"
+      }
+    ],
     "rawInput": {
       "path": "/tmp/probe/a.txt"
     },
@@ -817,6 +849,11 @@ input_file: crates/cursor_acp/fixtures/real/file_operations.sse
     "kind": "edit",
     "status": "in_progress",
     "title": "edit_file",
+    "locations": [
+      {
+        "path": "/tmp/probe/b.txt"
+      }
+    ],
     "rawInput": {
       "path": "/tmp/probe/b.txt"
     }
@@ -827,6 +864,11 @@ input_file: crates/cursor_acp/fixtures/real/file_operations.sse
     "kind": "edit",
     "status": "in_progress",
     "title": "edit_file",
+    "locations": [
+      {
+        "path": "/tmp/probe/b.txt"
+      }
+    ],
     "rawInput": {
       "path": "/tmp/probe/b.txt",
       "streamContent": "hello"
@@ -838,6 +880,18 @@ input_file: crates/cursor_acp/fixtures/real/file_operations.sse
     "kind": "edit",
     "status": "completed",
     "title": "edit_file",
+    "content": [
+      {
+        "type": "diff",
+        "path": "/tmp/probe/b.txt",
+        "newText": "hello"
+      }
+    ],
+    "locations": [
+      {
+        "path": "/tmp/probe/b.txt"
+      }
+    ],
     "rawInput": {
       "path": "/tmp/probe/b.txt",
       "streamContent": "hello"
@@ -882,6 +936,11 @@ input_file: crates/cursor_acp/fixtures/real/file_operations.sse
     "kind": "delete",
     "status": "in_progress",
     "title": "delete_file",
+    "locations": [
+      {
+        "path": "/tmp/probe/a.txt"
+      }
+    ],
     "rawInput": {
       "path": "/tmp/probe/a.txt",
       "toolCallId": "call-0030ac8a-125f-4c64-99fb-2433876e5e74-3\nfc_9416dae7-fff6-9502-822d-044f9cdb491e_0"
@@ -893,6 +952,11 @@ input_file: crates/cursor_acp/fixtures/real/file_operations.sse
     "kind": "delete",
     "status": "completed",
     "title": "delete_file",
+    "locations": [
+      {
+        "path": "/tmp/probe/a.txt"
+      }
+    ],
     "rawInput": {
       "path": "/tmp/probe/a.txt",
       "toolCallId": "call-0030ac8a-125f-4c64-99fb-2433876e5e74-3\nfc_9416dae7-fff6-9502-822d-044f9cdb491e_0"
@@ -935,6 +999,11 @@ input_file: crates/cursor_acp/fixtures/real/file_operations.sse
     "kind": "delete",
     "status": "in_progress",
     "title": "delete_file",
+    "locations": [
+      {
+        "path": "/tmp/probe/b.txt"
+      }
+    ],
     "rawInput": {
       "path": "/tmp/probe/b.txt",
       "toolCallId": "call-a17661fe-25c3-4ab9-9b07-7855ed67e238-4\nfc_5fc6b01a-2fa9-91e0-a121-4cbc1e561fba_0"
@@ -946,6 +1015,11 @@ input_file: crates/cursor_acp/fixtures/real/file_operations.sse
     "kind": "delete",
     "status": "completed",
     "title": "delete_file",
+    "locations": [
+      {
+        "path": "/tmp/probe/b.txt"
+      }
+    ],
     "rawInput": {
       "path": "/tmp/probe/b.txt",
       "toolCallId": "call-a17661fe-25c3-4ab9-9b07-7855ed67e238-4\nfc_5fc6b01a-2fa9-91e0-a121-4cbc1e561fba_0"

@@ -1,8 +1,8 @@
 ---
-source: crates/cursor_acp/src/replay/test.rs
+source: crates/cursor_cloud_agents/src/replay/test.rs
 assertion_line: 208
 expression: updates(sse)
-input_file: crates/cursor_acp/fixtures/real/list_and_delete.sse
+input_file: crates/cursor_cloud_agents/fixtures/real/list_and_delete.sse
 ---
 [
   {
@@ -386,6 +386,11 @@ input_file: crates/cursor_acp/fixtures/real/list_and_delete.sse
     "kind": "read",
     "status": "in_progress",
     "title": "read_file",
+    "locations": [
+      {
+        "path": "/workspace/Cargo.toml"
+      }
+    ],
     "rawInput": {
       "path": "/workspace/Cargo.toml",
       "limit": 20
@@ -415,6 +420,11 @@ input_file: crates/cursor_acp/fixtures/real/list_and_delete.sse
     "kind": "search",
     "status": "completed",
     "title": "file_search",
+    "locations": [
+      {
+        "path": "/workspace"
+      }
+    ],
     "rawInput": {
       "targetDirectory": "/workspace",
       "globPattern": "docs/PROBE.md"
@@ -433,6 +443,11 @@ input_file: crates/cursor_acp/fixtures/real/list_and_delete.sse
     "kind": "read",
     "status": "completed",
     "title": "read_file",
+    "locations": [
+      {
+        "path": "/workspace/Cargo.toml"
+      }
+    ],
     "rawInput": {
       "path": "/workspace/Cargo.toml",
       "limit": 20
@@ -809,6 +824,11 @@ input_file: crates/cursor_acp/fixtures/real/list_and_delete.sse
     "kind": "delete",
     "status": "in_progress",
     "title": "delete_file",
+    "locations": [
+      {
+        "path": "/workspace/docs/PROBE.md"
+      }
+    ],
     "rawInput": {
       "path": "/workspace/docs/PROBE.md",
       "toolCallId": "call-2d274b1d-3f53-44f4-93bb-b2037398ad4f-4\nfc_78b9af8d-993a-9fba-b12a-2bb75454319c_1"

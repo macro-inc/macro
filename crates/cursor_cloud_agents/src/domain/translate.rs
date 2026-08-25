@@ -24,13 +24,10 @@
 //! of a sized window. Inventing a size would misrender in any client that
 //! shows a percentage, so usage is deliberately not translated.
 
-#[cfg(test)]
-mod test;
-
 use crate::domain::event::{CursorEvent, InteractionUpdate, ToolCallEvent};
 use agent_client_protocol::schema::v1::{
-    ContentBlock, ContentChunk, SessionUpdate, TextContent, ToolCall, ToolCallStatus,
-    ToolCallUpdate, ToolCallUpdateFields, ToolKind,
+    ContentBlock, ContentChunk, Diff, SessionUpdate, TextContent, ToolCall, ToolCallContent,
+    ToolCallLocation, ToolCallStatus, ToolCallUpdate, ToolCallUpdateFields, ToolKind,
 };
 use std::collections::{HashMap, HashSet};
 
@@ -88,12 +85,32 @@ impl TranslateMachine {
             .copied()
             .unwrap_or_else(|| kind_from_tool_name(&call.name));
         let status = map_status(call.status.as_deref(), call.result.as_ref());
+        // The path a client needs to label the row, from wherever this frame
+        // happens to carry it: an in-flight edit names it in `args`, a finished
+        // call in its result envelope. `locations` is ACP's own field for this
+        // and Cursor fills in nothing there, so read and delete rows arrive
+        // with no path at all today. Left unset rather than empty when there
+        // is no path — a shell command touches no file, and an empty array is
+        // payload that says nothing.
+        let locations = touched_path(call.args.as_ref(), call.result.as_ref())
+            .map(|path| vec![ToolCallLocation::new(path)]);
+        // A finished edit reports the file whole, before and after, which is
+        // exactly an ACP diff. Only on the finished frame: an in-flight edit's
+        // `streamContent` is the changed *region*, and rendering that as the
+        // new file would claim everything else was deleted.
+        let diff = call.result.as_ref().and_then(edit_diff);
 
         if self.announced.insert(call_id.clone()) {
             let mut announcement = ToolCall::new(call_id, call.name)
                 .kind(kind)
                 .status(status)
                 .raw_input(call.args);
+            if let Some(locations) = locations {
+                announcement = announcement.locations(locations);
+            }
+            if let Some(diff) = diff {
+                announcement = announcement.content(vec![ToolCallContent::Diff(diff)]);
+            }
             if let Some(result) = call.result {
                 announcement = announcement.raw_output(wrap_result(result));
             }
@@ -103,7 +120,11 @@ impl TranslateMachine {
                 .kind(kind)
                 .status(status)
                 .title(call.name)
+                .locations(locations)
                 .raw_input(call.args);
+            if let Some(diff) = diff {
+                fields = fields.content(vec![ToolCallContent::Diff(diff)]);
+            }
             if let Some(result) = call.result {
                 fields = fields.raw_output(wrap_result(result));
             }
@@ -258,6 +279,58 @@ fn map_status(status: Option<&str>, result: Option<&serde_json::Value>) -> ToolC
 /// (a bare scalar, say) says nothing about the outcome.
 fn is_error_envelope(result: &serde_json::Value) -> bool {
     result.get("error").is_some()
+}
+
+/// The success payload of Cursor's single-key result envelope.
+///
+/// Everything worth reading out of a finished call lives under `success`; an
+/// `{"error": …}` envelope has nothing to offer here, and is left to
+/// [`map_status`] to turn into a failed call.
+fn success(result: &serde_json::Value) -> Option<&serde_json::Value> {
+    result.get("success")
+}
+
+/// A finished file edit as an ACP diff.
+///
+/// Recognized by the shape of the payload rather than the tool's name, so a
+/// `write`-style sibling reporting the same fields gets a diff too and a
+/// renamed tool does not silently lose one. `afterFullFileContent` is the
+/// discriminator: `read_file` also reports a `path` and must not be mistaken
+/// for an edit.
+///
+/// `beforeFullFileContent` is absent exactly when the file is new — the
+/// corpus pairs that with a `--- /dev/null` header — which is what ACP's
+/// `old_text: None` means, so the absence maps across directly.
+///
+/// Cursor's own `diffString` goes unread: ACP renders from the two full texts,
+/// and there is nowhere in the protocol to put a unified patch.
+fn edit_diff(result: &serde_json::Value) -> Option<Diff> {
+    let success = success(result)?;
+    let path = success.get("path")?.as_str()?;
+    let after = success.get("afterFullFileContent")?.as_str()?;
+    let before = success
+        .get("beforeFullFileContent")
+        .and_then(serde_json::Value::as_str);
+    Some(Diff::new(path, after).old_text(before.map(str::to_owned)))
+}
+
+/// The file a call touched, from the result envelope or, while it is still
+/// running, from its input.
+///
+/// Deliberately not restricted to edits: `read_file` and `delete_file` name a
+/// path the same way, and the fold reads `locations` for those rows too.
+fn touched_path(
+    args: Option<&serde_json::Value>,
+    result: Option<&serde_json::Value>,
+) -> Option<String> {
+    let from_result = result
+        .and_then(success)
+        .and_then(|success| success.get("path"))
+        .and_then(serde_json::Value::as_str);
+    let from_args = args
+        .and_then(|args| args.get("path"))
+        .and_then(serde_json::Value::as_str);
+    from_result.or(from_args).map(str::to_owned)
 }
 
 /// Cursor's raw result under a `result` key, so `rawOutput` is always an

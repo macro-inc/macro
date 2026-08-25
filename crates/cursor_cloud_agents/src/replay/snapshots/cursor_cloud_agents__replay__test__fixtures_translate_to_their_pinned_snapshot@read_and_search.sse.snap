@@ -1,8 +1,8 @@
 ---
-source: crates/cursor_acp/src/replay/test.rs
+source: crates/cursor_cloud_agents/src/replay/test.rs
 assertion_line: 208
 expression: updates(sse)
-input_file: crates/cursor_acp/fixtures/real/read_and_search.sse
+input_file: crates/cursor_cloud_agents/fixtures/real/read_and_search.sse
 ---
 [
   {
@@ -225,6 +225,11 @@ input_file: crates/cursor_acp/fixtures/real/read_and_search.sse
     "kind": "search",
     "status": "completed",
     "title": "file_search",
+    "locations": [
+      {
+        "path": "/workspace"
+      }
+    ],
     "rawInput": {
       "targetDirectory": "/workspace",
       "globPattern": "README.md"
@@ -520,6 +525,11 @@ input_file: crates/cursor_acp/fixtures/real/read_and_search.sse
     "kind": "read",
     "status": "in_progress",
     "title": "read_file",
+    "locations": [
+      {
+        "path": "/workspace/README.md"
+      }
+    ],
     "rawInput": {
       "path": "/workspace/README.md",
       "limit": 80
@@ -542,6 +552,11 @@ input_file: crates/cursor_acp/fixtures/real/read_and_search.sse
     "kind": "read",
     "status": "completed",
     "title": "read_file",
+    "locations": [
+      {
+        "path": "/workspace/README.md"
+      }
+    ],
     "rawInput": {
       "path": "/workspace/README.md",
       "limit": 80
@@ -614,6 +629,11 @@ input_file: crates/cursor_acp/fixtures/real/read_and_search.sse
     "kind": "search",
     "status": "in_progress",
     "title": "grep_search",
+    "locations": [
+      {
+        "path": "/home/ubuntu/.cursor/projects/workspace/agent-tools/b67f184a-4793-436d-8108-3abbf899512f.txt"
+      }
+    ],
     "rawInput": {
       "pattern": "get-message-queue",
       "path": "/home/ubuntu/.cursor/projects/workspace/agent-tools/b67f184a-4793-436d-8108-3abbf899512f.txt",
@@ -630,6 +650,11 @@ input_file: crates/cursor_acp/fixtures/real/read_and_search.sse
     "kind": "search",
     "status": "completed",
     "title": "grep_search",
+    "locations": [
+      {
+        "path": "/home/ubuntu/.cursor/projects/workspace/agent-tools/b67f184a-4793-436d-8108-3abbf899512f.txt"
+      }
+    ],
     "rawInput": {
       "pattern": "get-message-queue",
       "path": "/home/ubuntu/.cursor/projects/workspace/agent-tools/b67f184a-4793-436d-8108-3abbf899512f.txt",

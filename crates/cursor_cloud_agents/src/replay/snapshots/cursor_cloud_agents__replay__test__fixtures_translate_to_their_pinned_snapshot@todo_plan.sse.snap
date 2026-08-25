@@ -1,8 +1,8 @@
 ---
-source: crates/cursor_acp/src/replay/test.rs
+source: crates/cursor_cloud_agents/src/replay/test.rs
 assertion_line: 208
 expression: updates(sse)
-input_file: crates/cursor_acp/fixtures/real/todo_plan.sse
+input_file: crates/cursor_cloud_agents/fixtures/real/todo_plan.sse
 ---
 [
   {
@@ -940,6 +940,11 @@ input_file: crates/cursor_acp/fixtures/real/todo_plan.sse
     "kind": "read",
     "status": "in_progress",
     "title": "read_file",
+    "locations": [
+      {
+        "path": "/workspace/README.md"
+      }
+    ],
     "rawInput": {
       "path": "/workspace/README.md",
       "limit": 80
@@ -951,6 +956,11 @@ input_file: crates/cursor_acp/fixtures/real/todo_plan.sse
     "kind": "read",
     "status": "in_progress",
     "title": "read_file",
+    "locations": [
+      {
+        "path": "/workspace/.github/workflows/code_check_cloud_storage.yml"
+      }
+    ],
     "rawInput": {
       "path": "/workspace/.github/workflows/code_check_cloud_storage.yml",
       "limit": 40
@@ -962,6 +972,11 @@ input_file: crates/cursor_acp/fixtures/real/todo_plan.sse
     "kind": "search",
     "status": "in_progress",
     "title": "grep_search",
+    "locations": [
+      {
+        "path": "/workspace/README.md"
+      }
+    ],
     "rawInput": {
       "pattern": "badge|github.com/.*/actions",
       "path": "/workspace/README.md",
@@ -1036,6 +1051,11 @@ input_file: crates/cursor_acp/fixtures/real/todo_plan.sse
     "kind": "search",
     "status": "completed",
     "title": "grep_search",
+    "locations": [
+      {
+        "path": "/workspace/README.md"
+      }
+    ],
     "rawInput": {
       "pattern": "badge|github.com/.*/actions",
       "path": "/workspace/README.md",
@@ -1080,6 +1100,11 @@ input_file: crates/cursor_acp/fixtures/real/todo_plan.sse
     "kind": "read",
     "status": "completed",
     "title": "read_file",
+    "locations": [
+      {
+        "path": "/workspace/.github/workflows/code_check_cloud_storage.yml"
+      }
+    ],
     "rawInput": {
       "path": "/workspace/.github/workflows/code_check_cloud_storage.yml",
       "limit": 40
@@ -1105,6 +1130,11 @@ input_file: crates/cursor_acp/fixtures/real/todo_plan.sse
     "kind": "read",
     "status": "completed",
     "title": "read_file",
+    "locations": [
+      {
+        "path": "/workspace/README.md"
+      }
+    ],
     "rawInput": {
       "path": "/workspace/README.md",
       "limit": 80
@@ -1550,6 +1580,11 @@ input_file: crates/cursor_acp/fixtures/real/todo_plan.sse
     "kind": "read",
     "status": "in_progress",
     "title": "read_file",
+    "locations": [
+      {
+        "path": "/workspace/README.md"
+      }
+    ],
     "rawInput": {
       "path": "/workspace/README.md",
       "offset": 220,
@@ -1562,6 +1597,11 @@ input_file: crates/cursor_acp/fixtures/real/todo_plan.sse
     "kind": "read",
     "status": "in_progress",
     "title": "read_file",
+    "locations": [
+      {
+        "path": "/workspace/.github/workflows/web-app-check-main.yml"
+      }
+    ],
     "rawInput": {
       "path": "/workspace/.github/workflows/web-app-check-main.yml",
       "limit": 25
@@ -1573,6 +1613,11 @@ input_file: crates/cursor_acp/fixtures/real/todo_plan.sse
     "kind": "read",
     "status": "in_progress",
     "title": "read_file",
+    "locations": [
+      {
+        "path": "/workspace/.github/workflows/code_check_infra.yml"
+      }
+    ],
     "rawInput": {
       "path": "/workspace/.github/workflows/code_check_infra.yml",
       "limit": 15
@@ -1584,6 +1629,11 @@ input_file: crates/cursor_acp/fixtures/real/todo_plan.sse
     "kind": "read",
     "status": "completed",
     "title": "read_file",
+    "locations": [
+      {
+        "path": "/workspace/README.md"
+      }
+    ],
     "rawInput": {
       "path": "/workspace/README.md",
       "offset": 220,
@@ -1736,6 +1786,11 @@ input_file: crates/cursor_acp/fixtures/real/todo_plan.sse
     "kind": "read",
     "status": "completed",
     "title": "read_file",
+    "locations": [
+      {
+        "path": "/workspace/.github/workflows/web-app-check-main.yml"
+      }
+    ],
     "rawInput": {
       "path": "/workspace/.github/workflows/web-app-check-main.yml",
       "limit": 25
@@ -1761,6 +1816,11 @@ input_file: crates/cursor_acp/fixtures/real/todo_plan.sse
     "kind": "read",
     "status": "completed",
     "title": "read_file",
+    "locations": [
+      {
+        "path": "/workspace/.github/workflows/code_check_infra.yml"
+      }
+    ],
     "rawInput": {
       "path": "/workspace/.github/workflows/code_check_infra.yml",
       "limit": 15
