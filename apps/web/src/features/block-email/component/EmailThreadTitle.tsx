@@ -17,12 +17,12 @@ export function EmailThreadTitle(props: {
   return (
     <h1
       class={cn(
-        'ph-no-capture group/subject max-w-full text-pretty font-semibold tracking-tight text-ink select-text cursor-text',
+        'ph-no-capture group/subject inline-block max-w-full min-w-0 text-pretty font-semibold tracking-tight text-ink select-text cursor-text wrap-break-word leading-snug',
         props.class
       )}
     >
       {cluster().lead}
-      <span class="whitespace-nowrap">
+      <span class={cluster().lead ? 'whitespace-nowrap' : undefined}>
         {cluster().last}
         <CopySubjectButton
           subject={props.title}

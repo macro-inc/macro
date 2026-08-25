@@ -2,7 +2,7 @@ import { toast } from '@core/component/Toast/Toast';
 import WideCopy from '@icon/wide-copy.svg';
 import IconCheck from '@phosphor/check.svg';
 import { debounce } from '@solid-primitives/scheduled';
-import { cn, Tooltip } from '@ui';
+import { cn } from '@ui';
 import { createSignal, Show } from 'solid-js';
 import { isPlaceholderSubject } from '../util/subjectText';
 
@@ -28,21 +28,19 @@ export function CopySubjectButton(props: { subject: string; class?: string }) {
 
   return (
     <Show when={copyableSubject(props.subject)}>
-      <Tooltip label="Copy subject" as="span">
-        <button
-          type="button"
-          aria-label="Copy subject"
-          class={cn(
-            'inline-flex align-middle size-6 items-center justify-center rounded-md select-none text-ink-muted hover:bg-ink/5 hover:text-ink',
-            props.class
-          )}
-          onClick={handleCopy}
-        >
-          <Show when={copied()} fallback={<WideCopy class="size-3.5" />}>
-            <IconCheck class="size-3.5" />
-          </Show>
-        </button>
-      </Tooltip>
+      <button
+        type="button"
+        aria-label="Copy subject"
+        class={cn(
+          'inline-flex align-middle size-6 items-center justify-center rounded-md select-none text-ink-muted hover:bg-ink/5 hover:text-ink',
+          props.class
+        )}
+        onClick={handleCopy}
+      >
+        <Show when={copied()} fallback={<WideCopy class="size-3.5" />}>
+          <IconCheck class="size-3.5" />
+        </Show>
+      </button>
     </Show>
   );
 }
