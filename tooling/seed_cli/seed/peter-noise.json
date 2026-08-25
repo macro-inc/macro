@@ -1,0 +1,833 @@
+{
+  "user_id": "96ac2271-1d06-45e9-925f-0e7e5020b093",
+  "email_address": "peter@macro.com",
+  "provider": "Gmail",
+  "labels": [
+    {
+      "provider_label_id": "INBOX",
+      "name": "INBOX",
+      "label_type": "System"
+    },
+    {
+      "provider_label_id": "SPAM",
+      "name": "SPAM",
+      "label_type": "System"
+    },
+    {
+      "provider_label_id": "TRASH",
+      "name": "TRASH",
+      "label_type": "System"
+    },
+    {
+      "provider_label_id": "UNREAD",
+      "name": "UNREAD",
+      "label_type": "System"
+    },
+    {
+      "provider_label_id": "STARRED",
+      "name": "STARRED",
+      "label_type": "System"
+    },
+    {
+      "provider_label_id": "IMPORTANT",
+      "name": "IMPORTANT",
+      "label_type": "System"
+    },
+    {
+      "provider_label_id": "SENT",
+      "name": "SENT",
+      "label_type": "System"
+    },
+    {
+      "provider_label_id": "DRAFT",
+      "name": "DRAFT",
+      "label_type": "System"
+    },
+    {
+      "provider_label_id": "CATEGORY_PERSONAL",
+      "name": "CATEGORY_PERSONAL",
+      "label_type": "System"
+    },
+    {
+      "provider_label_id": "CATEGORY_SOCIAL",
+      "name": "CATEGORY_SOCIAL",
+      "label_type": "System"
+    },
+    {
+      "provider_label_id": "CATEGORY_PROMOTIONS",
+      "name": "CATEGORY_PROMOTIONS",
+      "label_type": "System"
+    },
+    {
+      "provider_label_id": "CATEGORY_UPDATES",
+      "name": "CATEGORY_UPDATES",
+      "label_type": "System"
+    },
+    {
+      "provider_label_id": "CATEGORY_FORUMS",
+      "name": "CATEGORY_FORUMS",
+      "label_type": "System"
+    }
+  ],
+  "threads": [
+    {
+      "provider_id": "seedb677052e2c36",
+      "inbox_visible": true,
+      "is_read": true,
+      "messages": [
+        {
+          "provider_id": "seedadb7f01a2ce6",
+          "subject": "Action Required: Q3 Planning",
+          "snippet": null,
+          "sent_at": "2020-03-18T05:15:20Z",
+          "is_read": true,
+          "is_starred": false,
+          "is_sent": false,
+          "from": {
+            "email": "fakecontact7@gmail.com",
+            "name": "Grace Wilson",
+            "photo_url": null
+          },
+          "to": [
+            {
+              "email": "peter@macro.com",
+              "name": "Me",
+              "photo_url": null
+            }
+          ],
+          "cc": [],
+          "body_template": "welcome",
+          "label_ids": [
+            "INBOX",
+            "CATEGORY_PROMOTIONS"
+          ]
+        }
+      ]
+    },
+    {
+      "provider_id": "seeda35fea552fe2",
+      "inbox_visible": true,
+      "is_read": true,
+      "messages": [
+        {
+          "provider_id": "seed4e0717fedc93",
+          "subject": "FYI - Policy Update",
+          "snippet": null,
+          "sent_at": "2020-06-29T15:15:29Z",
+          "is_read": true,
+          "is_starred": false,
+          "is_sent": false,
+          "from": {
+            "email": "fakecontact9@gmail.com",
+            "name": "Irene Taylor",
+            "photo_url": null
+          },
+          "to": [
+            {
+              "email": "peter@macro.com",
+              "name": "Me",
+              "photo_url": null
+            }
+          ],
+          "cc": [
+            {
+              "email": "fakecontact9@gmail.com",
+              "name": "Irene Taylor",
+              "photo_url": null
+            }
+          ],
+          "body_template": "project_update",
+          "label_ids": [
+            "INBOX",
+            "CATEGORY_PROMOTIONS"
+          ]
+        }
+      ]
+    },
+    {
+      "provider_id": "seed37b27ee71a37",
+      "inbox_visible": true,
+      "is_read": true,
+      "messages": [
+        {
+          "provider_id": "seede4e6cf47449a",
+          "subject": "New feature request",
+          "snippet": null,
+          "sent_at": "2020-09-01T05:15:49Z",
+          "is_read": true,
+          "is_starred": false,
+          "is_sent": false,
+          "from": {
+            "email": "fakecontact8@gmail.com",
+            "name": "Henry Moore",
+            "photo_url": null
+          },
+          "to": [
+            {
+              "email": "peter@macro.com",
+              "name": "Me",
+              "photo_url": null
+            }
+          ],
+          "cc": [],
+          "body_template": "meeting_followup",
+          "label_ids": [
+            "INBOX",
+            "CATEGORY_PROMOTIONS"
+          ]
+        }
+      ]
+    },
+    {
+      "provider_id": "seeded5cd5b45b03",
+      "inbox_visible": true,
+      "is_read": true,
+      "messages": [
+        {
+          "provider_id": "seedc330a594cd7a",
+          "subject": "New feature request",
+          "snippet": null,
+          "sent_at": "2021-02-12T07:00:54Z",
+          "is_read": true,
+          "is_starred": false,
+          "is_sent": false,
+          "from": {
+            "email": "fakecontact8@gmail.com",
+            "name": "Henry Moore",
+            "photo_url": null
+          },
+          "to": [
+            {
+              "email": "peter@macro.com",
+              "name": "Me",
+              "photo_url": null
+            }
+          ],
+          "cc": [],
+          "body_template": "invoice",
+          "label_ids": [
+            "INBOX",
+            "CATEGORY_PROMOTIONS"
+          ]
+        }
+      ]
+    },
+    {
+      "provider_id": "seedc0b9d6cd5e3b",
+      "inbox_visible": true,
+      "is_read": false,
+      "messages": [
+        {
+          "provider_id": "seed4cf88611c9a0",
+          "subject": "Re: Design Review",
+          "snippet": null,
+          "sent_at": "2021-03-22T12:50:50Z",
+          "is_read": false,
+          "is_starred": false,
+          "is_sent": false,
+          "from": {
+            "email": "fakecontact4@gmail.com",
+            "name": "David Brown",
+            "photo_url": null
+          },
+          "to": [
+            {
+              "email": "peter@macro.com",
+              "name": "Me",
+              "photo_url": null
+            },
+            {
+              "email": "fakecontact7@gmail.com",
+              "name": "Grace Wilson",
+              "photo_url": null
+            }
+          ],
+          "cc": [],
+          "body_template": "meeting_followup",
+          "label_ids": [
+            "INBOX",
+            "CATEGORY_PROMOTIONS",
+            "UNREAD"
+          ]
+        }
+      ]
+    },
+    {
+      "provider_id": "seedd665756342e8",
+      "inbox_visible": true,
+      "is_read": false,
+      "messages": [
+        {
+          "provider_id": "seed70d897f1d6bc",
+          "subject": "Quick Question",
+          "snippet": null,
+          "sent_at": "2021-07-25T14:25:43Z",
+          "is_read": false,
+          "is_starred": false,
+          "is_sent": false,
+          "from": {
+            "email": "fakecontact3@gmail.com",
+            "name": "Carol Williams",
+            "photo_url": null
+          },
+          "to": [
+            {
+              "email": "peter@macro.com",
+              "name": "Me",
+              "photo_url": null
+            }
+          ],
+          "cc": [],
+          "body_template": "quick_question",
+          "label_ids": [
+            "INBOX",
+            "CATEGORY_PROMOTIONS",
+            "UNREAD"
+          ]
+        }
+      ]
+    },
+    {
+      "provider_id": "seedb7a7826f212b",
+      "inbox_visible": true,
+      "is_read": false,
+      "messages": [
+        {
+          "provider_id": "seedff03ce7c7772",
+          "subject": "FYI - Policy Update",
+          "snippet": null,
+          "sent_at": "2021-11-09T06:14:02Z",
+          "is_read": false,
+          "is_starred": false,
+          "is_sent": false,
+          "from": {
+            "email": "fakecontact1@gmail.com",
+            "name": "Alice Johnson",
+            "photo_url": null
+          },
+          "to": [
+            {
+              "email": "peter@macro.com",
+              "name": "Me",
+              "photo_url": null
+            },
+            {
+              "email": "fakecontact2@gmail.com",
+              "name": "Bob Smith",
+              "photo_url": null
+            }
+          ],
+          "cc": [
+            {
+              "email": "fakecontact2@gmail.com",
+              "name": "Bob Smith",
+              "photo_url": null
+            }
+          ],
+          "body_template": "quick_question",
+          "label_ids": [
+            "INBOX",
+            "CATEGORY_PROMOTIONS",
+            "UNREAD"
+          ]
+        }
+      ]
+    },
+    {
+      "provider_id": "seedec8ea5f382d1",
+      "inbox_visible": true,
+      "is_read": true,
+      "messages": [
+        {
+          "provider_id": "seedaab57b0343e8",
+          "subject": "Re: Design Review",
+          "snippet": null,
+          "sent_at": "2022-01-22T22:09:22Z",
+          "is_read": true,
+          "is_starred": false,
+          "is_sent": false,
+          "from": {
+            "email": "fakecontact7@gmail.com",
+            "name": "Grace Wilson",
+            "photo_url": null
+          },
+          "to": [
+            {
+              "email": "peter@macro.com",
+              "name": "Me",
+              "photo_url": null
+            }
+          ],
+          "cc": [
+            {
+              "email": "fakecontact9@gmail.com",
+              "name": "Irene Taylor",
+              "photo_url": null
+            },
+            {
+              "email": "fakecontact8@gmail.com",
+              "name": "Henry Moore",
+              "photo_url": null
+            }
+          ],
+          "body_template": "invoice",
+          "label_ids": [
+            "INBOX",
+            "CATEGORY_PROMOTIONS"
+          ]
+        }
+      ]
+    },
+    {
+      "provider_id": "seed5e1ccdafa2ab",
+      "inbox_visible": true,
+      "is_read": true,
+      "messages": [
+        {
+          "provider_id": "seed8e445a0e7182",
+          "subject": "FYI - Policy Update",
+          "snippet": null,
+          "sent_at": "2022-06-08T21:29:23Z",
+          "is_read": true,
+          "is_starred": false,
+          "is_sent": false,
+          "from": {
+            "email": "fakecontact3@gmail.com",
+            "name": "Carol Williams",
+            "photo_url": null
+          },
+          "to": [
+            {
+              "email": "peter@macro.com",
+              "name": "Me",
+              "photo_url": null
+            }
+          ],
+          "cc": [],
+          "body_template": "meeting_followup",
+          "label_ids": [
+            "INBOX",
+            "CATEGORY_PROMOTIONS"
+          ]
+        }
+      ]
+    },
+    {
+      "provider_id": "seed816abb14badc",
+      "inbox_visible": false,
+      "is_read": true,
+      "messages": [
+        {
+          "provider_id": "seed5de612810e81",
+          "subject": "Re: Design Review",
+          "snippet": null,
+          "sent_at": "2022-09-19T05:56:45Z",
+          "is_read": true,
+          "is_starred": false,
+          "is_sent": true,
+          "from": {
+            "email": "peter@macro.com",
+            "name": "Me",
+            "photo_url": null
+          },
+          "to": [
+            {
+              "email": "fakecontact3@gmail.com",
+              "name": "Carol Williams",
+              "photo_url": null
+            },
+            {
+              "email": "fakecontact6@gmail.com",
+              "name": "Frank Miller",
+              "photo_url": null
+            },
+            {
+              "email": "fakecontact2@gmail.com",
+              "name": "Bob Smith",
+              "photo_url": null
+            }
+          ],
+          "cc": [],
+          "body_template": "invoice",
+          "label_ids": [
+            "SENT"
+          ]
+        }
+      ]
+    },
+    {
+      "provider_id": "seed82cbaa703679",
+      "inbox_visible": true,
+      "is_read": true,
+      "messages": [
+        {
+          "provider_id": "seed1a0e58a4cea7",
+          "subject": "Meeting Follow-up",
+          "snippet": null,
+          "sent_at": "2023-01-21T03:51:34Z",
+          "is_read": true,
+          "is_starred": false,
+          "is_sent": false,
+          "from": {
+            "email": "fakecontact4@gmail.com",
+            "name": "David Brown",
+            "photo_url": null
+          },
+          "to": [
+            {
+              "email": "peter@macro.com",
+              "name": "Me",
+              "photo_url": null
+            }
+          ],
+          "cc": [],
+          "body_template": "invoice",
+          "label_ids": [
+            "INBOX",
+            "CATEGORY_PROMOTIONS"
+          ]
+        }
+      ]
+    },
+    {
+      "provider_id": "seed33c67c27acbb",
+      "inbox_visible": true,
+      "is_read": true,
+      "messages": [
+        {
+          "provider_id": "seedd1edad5c8806",
+          "subject": "FYI - Policy Update",
+          "snippet": null,
+          "sent_at": "2023-05-08T11:57:38Z",
+          "is_read": true,
+          "is_starred": false,
+          "is_sent": false,
+          "from": {
+            "email": "fakecontact7@gmail.com",
+            "name": "Grace Wilson",
+            "photo_url": null
+          },
+          "to": [
+            {
+              "email": "peter@macro.com",
+              "name": "Me",
+              "photo_url": null
+            }
+          ],
+          "cc": [],
+          "body_template": "meeting_followup",
+          "label_ids": [
+            "INBOX",
+            "CATEGORY_PROMOTIONS"
+          ]
+        }
+      ]
+    },
+    {
+      "provider_id": "seedadf7630af409",
+      "inbox_visible": false,
+      "is_read": true,
+      "messages": [
+        {
+          "provider_id": "seedb42a36d5d1d6",
+          "subject": "Lunch tomorrow?",
+          "snippet": null,
+          "sent_at": "2023-06-14T02:34:51Z",
+          "is_read": true,
+          "is_starred": false,
+          "is_sent": true,
+          "from": {
+            "email": "peter@macro.com",
+            "name": "Me",
+            "photo_url": null
+          },
+          "to": [
+            {
+              "email": "fakecontact2@gmail.com",
+              "name": "Bob Smith",
+              "photo_url": null
+            },
+            {
+              "email": "fakecontact3@gmail.com",
+              "name": "Carol Williams",
+              "photo_url": null
+            },
+            {
+              "email": "fakecontact4@gmail.com",
+              "name": "David Brown",
+              "photo_url": null
+            }
+          ],
+          "cc": [],
+          "body_template": "quick_question",
+          "label_ids": [
+            "SENT"
+          ]
+        }
+      ]
+    },
+    {
+      "provider_id": "seed8f44b4a323ea",
+      "inbox_visible": true,
+      "is_read": false,
+      "messages": [
+        {
+          "provider_id": "seedafa1de160f5c",
+          "subject": "Re: Design Review",
+          "snippet": null,
+          "sent_at": "2023-09-08T05:15:27Z",
+          "is_read": false,
+          "is_starred": false,
+          "is_sent": false,
+          "from": {
+            "email": "fakecontact8@gmail.com",
+            "name": "Henry Moore",
+            "photo_url": null
+          },
+          "to": [
+            {
+              "email": "peter@macro.com",
+              "name": "Me",
+              "photo_url": null
+            },
+            {
+              "email": "fakecontact4@gmail.com",
+              "name": "David Brown",
+              "photo_url": null
+            }
+          ],
+          "cc": [],
+          "body_template": "welcome",
+          "label_ids": [
+            "INBOX",
+            "CATEGORY_PROMOTIONS",
+            "UNREAD"
+          ]
+        }
+      ]
+    },
+    {
+      "provider_id": "seed60c309e80cdf",
+      "inbox_visible": true,
+      "is_read": false,
+      "messages": [
+        {
+          "provider_id": "seed5f231027be86",
+          "subject": "Thanks for your help!",
+          "snippet": null,
+          "sent_at": "2024-02-04T04:57:03Z",
+          "is_read": false,
+          "is_starred": false,
+          "is_sent": false,
+          "from": {
+            "email": "fakecontact1@gmail.com",
+            "name": "Alice Johnson",
+            "photo_url": null
+          },
+          "to": [
+            {
+              "email": "peter@macro.com",
+              "name": "Me",
+              "photo_url": null
+            },
+            {
+              "email": "fakecontact7@gmail.com",
+              "name": "Grace Wilson",
+              "photo_url": null
+            }
+          ],
+          "cc": [],
+          "body_template": "welcome",
+          "label_ids": [
+            "INBOX",
+            "CATEGORY_PROMOTIONS",
+            "UNREAD"
+          ]
+        }
+      ]
+    },
+    {
+      "provider_id": "seed2974e28d38d2",
+      "inbox_visible": true,
+      "is_read": true,
+      "messages": [
+        {
+          "provider_id": "seed93d5e8142463",
+          "subject": "Action Required: Q3 Planning",
+          "snippet": null,
+          "sent_at": "2024-04-26T00:19:53Z",
+          "is_read": true,
+          "is_starred": false,
+          "is_sent": false,
+          "from": {
+            "email": "fakecontact8@gmail.com",
+            "name": "Henry Moore",
+            "photo_url": null
+          },
+          "to": [
+            {
+              "email": "peter@macro.com",
+              "name": "Me",
+              "photo_url": null
+            }
+          ],
+          "cc": [],
+          "body_template": "invoice",
+          "label_ids": [
+            "INBOX",
+            "CATEGORY_PROMOTIONS"
+          ]
+        }
+      ]
+    },
+    {
+      "provider_id": "seedfd02525dd93f",
+      "inbox_visible": false,
+      "is_read": true,
+      "messages": [
+        {
+          "provider_id": "seed1fe180611247",
+          "subject": "Lunch tomorrow?",
+          "snippet": null,
+          "sent_at": "2024-08-30T16:11:23Z",
+          "is_read": true,
+          "is_starred": false,
+          "is_sent": true,
+          "from": {
+            "email": "peter@macro.com",
+            "name": "Me",
+            "photo_url": null
+          },
+          "to": [
+            {
+              "email": "fakecontact3@gmail.com",
+              "name": "Carol Williams",
+              "photo_url": null
+            },
+            {
+              "email": "fakecontact8@gmail.com",
+              "name": "Henry Moore",
+              "photo_url": null
+            }
+          ],
+          "cc": [],
+          "body_template": "quick_question",
+          "label_ids": [
+            "SENT"
+          ]
+        }
+      ]
+    },
+    {
+      "provider_id": "seedd8d170b6d9d4",
+      "inbox_visible": true,
+      "is_read": true,
+      "messages": [
+        {
+          "provider_id": "seedbfe033e5d7ca",
+          "subject": "Action Required: Q3 Planning",
+          "snippet": null,
+          "sent_at": "2025-01-05T01:52:53Z",
+          "is_read": true,
+          "is_starred": false,
+          "is_sent": false,
+          "from": {
+            "email": "fakecontact1@gmail.com",
+            "name": "Alice Johnson",
+            "photo_url": null
+          },
+          "to": [
+            {
+              "email": "peter@macro.com",
+              "name": "Me",
+              "photo_url": null
+            }
+          ],
+          "cc": [],
+          "body_template": "meeting_followup",
+          "label_ids": [
+            "INBOX",
+            "CATEGORY_PROMOTIONS"
+          ]
+        }
+      ]
+    },
+    {
+      "provider_id": "seed4540de2a7f6e",
+      "inbox_visible": true,
+      "is_read": true,
+      "messages": [
+        {
+          "provider_id": "seedcf10977272e0",
+          "subject": "Scheduling conflict",
+          "snippet": null,
+          "sent_at": "2025-04-19T14:53:11Z",
+          "is_read": true,
+          "is_starred": false,
+          "is_sent": false,
+          "from": {
+            "email": "fakecontact3@gmail.com",
+            "name": "Carol Williams",
+            "photo_url": null
+          },
+          "to": [
+            {
+              "email": "peter@macro.com",
+              "name": "Me",
+              "photo_url": null
+            }
+          ],
+          "cc": [],
+          "body_template": "meeting_followup",
+          "label_ids": [
+            "INBOX",
+            "CATEGORY_PROMOTIONS"
+          ]
+        }
+      ]
+    },
+    {
+      "provider_id": "seed3cee632e2b9f",
+      "inbox_visible": false,
+      "is_read": true,
+      "messages": [
+        {
+          "provider_id": "seed55c65cfeae1d",
+          "subject": "Meeting Follow-up",
+          "snippet": null,
+          "sent_at": "2025-07-20T01:24:44Z",
+          "is_read": true,
+          "is_starred": false,
+          "is_sent": true,
+          "from": {
+            "email": "peter@macro.com",
+            "name": "Me",
+            "photo_url": null
+          },
+          "to": [
+            {
+              "email": "fakecontact5@gmail.com",
+              "name": "Eve Davis",
+              "photo_url": null
+            },
+            {
+              "email": "fakecontact7@gmail.com",
+              "name": "Grace Wilson",
+              "photo_url": null
+            },
+            {
+              "email": "fakecontact6@gmail.com",
+              "name": "Frank Miller",
+              "photo_url": null
+            }
+          ],
+          "cc": [],
+          "body_template": "invoice",
+          "label_ids": [
+            "SENT"
+          ]
+        }
+      ]
+    }
+  ]
+}
