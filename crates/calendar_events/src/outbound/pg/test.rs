@@ -2312,13 +2312,21 @@ async fn mutation_target_resolves_only_for_visible_requesters(pool: PgPool) {
     assert_eq!(target.calendar_id, provider.1);
     assert_eq!(target.provider_calendar_id, "primary");
     assert_eq!(target.owner_id, owner_id);
-    assert_eq!(target.token_identity.provider, "GMAIL");
+    assert_eq!(target.acting.token_identity().provider, "GMAIL");
+    assert!(matches!(
+        target.acting,
+        crate::domain::models::CalendarActingIdentity::AsSelf { .. }
+    ));
 
     let delegated = repo
         .get_event_mutation_target(delegate_id, event_id)
         .await
-        .unwrap();
-    assert!(delegated.is_some(), "delegate sees the mutation target");
+        .unwrap()
+        .expect("delegate sees the mutation target");
+    assert!(matches!(
+        delegated.acting,
+        crate::domain::models::CalendarActingIdentity::OnBehalfOf { .. }
+    ));
 
     let hidden = repo
         .get_event_mutation_target(stranger_id, event_id)

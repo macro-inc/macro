@@ -1,11 +1,11 @@
 use super::*;
 use crate::domain::models::{
-    AppliedGoogleGrant, CalendarAttendee, CalendarAttendeeInput, CalendarBackfillJobKey,
-    CalendarCreationTarget, CalendarEventSource, CalendarLinkTokenIdentity, CalendarOccurrence,
-    CalendarOccurrenceCursor, CalendarSyncStatus, CalendarWatchRelease, ConferenceChange,
-    DisconnectedGoogleCalendar, EventStatus, EventTransparency, EventVisibility,
-    GoogleCalendarSyncSnapshot, GoogleCalendarTarget, GoogleEventSource, GoogleWatchChannel,
-    ProviderCalendar, StoredGoogleCalendar, VisibleCalendar,
+    ActorInboxes, AppliedGoogleGrant, CalendarActingIdentity, CalendarAttendee,
+    CalendarAttendeeInput, CalendarBackfillJobKey, CalendarCreationTarget, CalendarEventSource,
+    CalendarLinkTokenIdentity, CalendarOccurrence, CalendarOccurrenceCursor, CalendarSyncStatus,
+    CalendarWatchRelease, ConferenceChange, DisconnectedGoogleCalendar, EventStatus,
+    EventTransparency, EventVisibility, GoogleCalendarSyncSnapshot, GoogleCalendarTarget,
+    GoogleEventSource, GoogleWatchChannel, ProviderCalendar, StoredGoogleCalendar, VisibleCalendar,
 };
 use crate::domain::ports::RetiredCalendarEvent;
 use chrono::{Duration, TimeZone};
@@ -30,7 +30,7 @@ fn mutation_target(is_read_only: bool) -> CalendarEventMutationTarget {
         account_id: Uuid::now_v7(),
         calendar_id: Uuid::now_v7(),
         provider_calendar_id: "primary".to_string(),
-        token_identity: token_identity(),
+        acting: CalendarActingIdentity::as_self(token_identity(), Vec::new()),
     }
 }
 
@@ -46,19 +46,6 @@ fn echo_attendee(email: &str, is_self: bool) -> CalendarAttendee {
     }
 }
 
-fn visible_inbox(email: &str) -> VisibleCalendar {
-    VisibleCalendar {
-        id: Uuid::now_v7(),
-        email_link_id: Uuid::now_v7(),
-        email_address: email.to_string(),
-        name: email.to_string(),
-        color: None,
-        is_primary: true,
-        is_writable: true,
-        default_reminders: Vec::new(),
-    }
-}
-
 fn creation_target(is_read_only: bool) -> CalendarCreationTarget {
     CalendarCreationTarget {
         owner_id: "macro|self@example.com".to_string(),
@@ -67,7 +54,7 @@ fn creation_target(is_read_only: bool) -> CalendarCreationTarget {
         calendar_id: Uuid::now_v7(),
         provider_calendar_id: "primary".to_string(),
         is_read_only,
-        token_identity: token_identity(),
+        acting: CalendarActingIdentity::as_self(token_identity(), Vec::new()),
     }
 }
 
@@ -155,6 +142,7 @@ struct FakeRepo {
     disconnect_requests: Arc<Mutex<Vec<(String, Uuid)>>>,
     visible_calendars: Vec<VisibleCalendar>,
     fail_list_visible: bool,
+    fail_owned_inboxes: bool,
 }
 
 impl Default for FakeRepo {
@@ -171,6 +159,7 @@ impl Default for FakeRepo {
             disconnect_requests: Default::default(),
             visible_calendars: Vec::new(),
             fail_list_visible: false,
+            fail_owned_inboxes: false,
         }
     }
 }
@@ -301,6 +290,9 @@ impl CalendarRepository for FakeRepo {
         _requester_id: &str,
         _event_id: Uuid,
     ) -> Result<Option<CalendarEventMutationTarget>, rootcause::Report> {
+        if self.fail_owned_inboxes {
+            return Err(rootcause::report!("owned inboxes unavailable"));
+        }
         Ok(self.mutation_target.clone())
     }
 
@@ -310,6 +302,9 @@ impl CalendarRepository for FakeRepo {
         _email_link_id: Option<Uuid>,
         _calendar_id: Option<Uuid>,
     ) -> Result<Option<CalendarCreationTarget>, rootcause::Report> {
+        if self.fail_owned_inboxes {
+            return Err(rootcause::report!("owned inboxes unavailable"));
+        }
         Ok(self.creation_target.clone())
     }
 
@@ -321,6 +316,16 @@ impl CalendarRepository for FakeRepo {
             return Err(rootcause::report!("visible calendars unavailable"));
         }
         Ok(self.visible_calendars.clone())
+    }
+
+    async fn owned_inbox_emails(
+        &self,
+        _requester_id: &str,
+    ) -> Result<Vec<String>, rootcause::Report> {
+        if self.fail_owned_inboxes {
+            return Err(rootcause::report!("owned inboxes unavailable"));
+        }
+        Ok(Vec::new())
     }
 
     async fn remove_google_source(
@@ -514,7 +519,7 @@ impl GoogleCalendarMutationProvider for FakeProvider {
         _access_token: &str,
         target: &GoogleCalendarTarget,
         master_provider_event_id: &str,
-        self_emails: &[String],
+        actor: &ActorInboxes,
         _response: AttendeeResponseStatus,
         scope: &CalendarRsvpScope,
     ) -> Result<GoogleRsvpOutcome, GoogleProviderError> {
@@ -529,7 +534,7 @@ impl GoogleCalendarMutationProvider for FakeProvider {
         self.rsvp_self_emails
             .lock()
             .unwrap()
-            .push(self_emails.to_vec());
+            .push(actor.iter().map(str::to_string).collect());
         if let Some(error) = self.fail() {
             return Err(error);
         }
@@ -698,7 +703,7 @@ async fn create_does_not_write_when_inbox_lookup_fails() {
     let calls = provider.calls.clone();
     let repo = FakeRepo {
         creation_target: Some(creation_target(false)),
-        fail_list_visible: true,
+        fail_owned_inboxes: true,
         ..FakeRepo::default()
     };
     let upserts = repo.upserts.clone();
@@ -722,8 +727,13 @@ async fn create_returned_echo_marks_requester_inboxes_as_self() {
     ];
     let created = service(
         FakeRepo {
-            creation_target: Some(creation_target(false)),
-            visible_calendars: vec![visible_inbox("jackson@example.com")],
+            creation_target: Some(CalendarCreationTarget {
+                acting: CalendarActingIdentity::as_self(
+                    token_identity(),
+                    vec!["jackson@example.com".to_string()],
+                ),
+                ..creation_target(false)
+            }),
             ..FakeRepo::default()
         },
         provider,
@@ -1301,10 +1311,14 @@ async fn rsvp_surfaces_attendance_and_persists_the_echo() {
 async fn rsvp_addresses_the_requester_inbox_not_the_source_calendar() {
     let provider = FakeProvider::new(FakeProviderBehavior::Echo);
     let emails = provider.rsvp_self_emails.clone();
+    let mut target = mutation_target(false);
+    target.acting = CalendarActingIdentity::on_behalf_of(
+        token_identity(),
+        vec!["jackson@example.com".to_string()],
+    );
     service(
         FakeRepo {
-            mutation_target: Some(mutation_target(false)),
-            visible_calendars: vec![visible_inbox("jackson@example.com")],
+            mutation_target: Some(target),
             ..FakeRepo::default()
         },
         provider,
@@ -1323,6 +1337,74 @@ async fn rsvp_addresses_the_requester_inbox_not_the_source_calendar() {
         emails.lock().unwrap().as_slice(),
         [vec!["jackson@example.com".to_string()]]
     );
+}
+
+#[tokio::test]
+async fn rsvp_through_a_delegated_inbox_never_hands_the_subject_email_to_the_provider() {
+    let provider = FakeProvider::new(FakeProviderBehavior::Echo);
+    let emails = provider.rsvp_self_emails.clone();
+    let mut target = mutation_target(false);
+    target.acting = CalendarActingIdentity::on_behalf_of(
+        CalendarLinkTokenIdentity {
+            fusionauth_user_id: "fusion-jacob".to_string(),
+            email_address: "jacob@example.com".to_string(),
+            provider: "GMAIL".to_string(),
+        },
+        vec!["jackson@example.com".to_string()],
+    );
+    service(
+        FakeRepo {
+            mutation_target: Some(target),
+            ..FakeRepo::default()
+        },
+        provider,
+        FakeTokens::ok(),
+    )
+    .respond_to_event(
+        "macro|user",
+        Uuid::now_v7(),
+        AttendeeResponseStatus::Accepted,
+        CalendarRsvpScope::All,
+    )
+    .await
+    .unwrap();
+
+    let recorded = emails.lock().unwrap();
+    assert_eq!(recorded.len(), 1);
+    assert!(
+        recorded[0]
+            .iter()
+            .any(|email| email == "jackson@example.com")
+    );
+    assert!(!recorded[0].iter().any(|email| email == "jacob@example.com"));
+}
+
+#[tokio::test]
+async fn rsvp_through_a_delegated_inbox_without_an_own_inbox_is_not_attendee_before_any_provider_call()
+ {
+    let provider = FakeProvider::new(FakeProviderBehavior::Echo);
+    let calls = provider.calls.clone();
+    let mut target = mutation_target(false);
+    target.acting = CalendarActingIdentity::on_behalf_of(token_identity(), Vec::new());
+    let error = service(
+        FakeRepo {
+            mutation_target: Some(target),
+            ..FakeRepo::default()
+        },
+        provider,
+        FakeTokens::ok(),
+    )
+    .respond_to_event(
+        "macro|user",
+        Uuid::now_v7(),
+        AttendeeResponseStatus::Accepted,
+        CalendarRsvpScope::All,
+    )
+    .await
+    .unwrap_err();
+
+    assert!(matches!(error, CalendarMutationError::NotAttendee));
+    assert!(calls.lock().unwrap().is_empty());
 }
 
 #[tokio::test]

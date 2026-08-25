@@ -569,12 +569,14 @@ fn google_attendee(email: &str, is_self: bool) -> GoogleAttendee {
 }
 
 #[test]
-fn rsvp_self_is_the_requester_email_not_the_calendar_copy() {
+fn rsvp_patches_the_actor_row_not_the_google_self_flag() {
     let attendees = vec![
         google_attendee("jacob@example.com", true),
         google_attendee("jackson@example.com", false),
     ];
-    let found = find_self_attendee(&attendees, &["jackson@example.com".to_string()]);
+    let actor = ActorInboxes::from_owned(vec!["jackson@example.com".to_string()])
+        .expect("owned addresses remain after normalize");
+    let found = find_actor_attendee(&attendees, &actor);
     assert_eq!(
         found.and_then(|attendee| attendee.email.as_deref()),
         Some("jackson@example.com")
@@ -584,7 +586,9 @@ fn rsvp_self_is_the_requester_email_not_the_calendar_copy() {
 #[test]
 fn rsvp_does_not_patch_another_attendee_when_the_requester_is_absent() {
     let attendees = vec![google_attendee("jacob@example.com", true)];
-    assert!(find_self_attendee(&attendees, &["jackson@example.com".to_string()]).is_none());
+    let actor = ActorInboxes::from_owned(vec!["jackson@example.com".to_string()])
+        .expect("owned addresses remain after normalize");
+    assert!(find_actor_attendee(&attendees, &actor).is_none());
 }
 
 #[test]

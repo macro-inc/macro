@@ -236,33 +236,3 @@ fn popup_minutes_resolve_defaults_and_deduplicate() {
         "explicitly no reminders resolves to nothing even with defaults"
     );
 }
-
-fn attendee(email: &str, is_self: bool) -> CalendarAttendee {
-    CalendarAttendee {
-        email: email.to_string(),
-        display_name: None,
-        response_status: AttendeeResponseStatus::NeedsAction,
-        is_organizer: false,
-        is_optional: false,
-        is_self,
-        comment: None,
-    }
-}
-
-#[test]
-fn self_follows_requester_inboxes_not_the_provider_flag() {
-    let mut attendees = vec![
-        attendee("jacob@example.com", true),
-        attendee("jackson@example.com", false),
-    ];
-    mark_attendees_self_for_inboxes(&mut attendees, &["jackson@example.com".to_string()]);
-    assert!(!attendees[0].is_self);
-    assert!(attendees[1].is_self);
-}
-
-#[test]
-fn empty_inbox_list_leaves_provider_self_untouched() {
-    let mut attendees = vec![attendee("jacob@example.com", true)];
-    mark_attendees_self_for_inboxes(&mut attendees, &[]);
-    assert!(attendees[0].is_self);
-}

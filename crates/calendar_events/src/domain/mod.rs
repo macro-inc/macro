@@ -1,5 +1,7 @@
 //! Calendar domain layer.
 
+/// Who a calendar mutation acts as, and through whose account it writes.
+pub mod acting;
 /// Kafka event models for the calendar topic.
 pub mod events;
 /// Domain models.

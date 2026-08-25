@@ -10,11 +10,10 @@ use macro_event_broker::MacroEventBroker;
 
 use super::{
     models::{
-        AppliedGoogleGrant, CalendarBackfillClaim, CalendarBackfillFailureDisposition,
-        CalendarBackfillFailureOutcome, CalendarBackfillJobKey, CalendarEventUpsert,
-        CalendarGrantIntent, CalendarOccurrenceCursor, GoogleBackfillRunReport,
-        GoogleCalendarSyncSnapshot, GoogleScopeSet, OccurrenceRange, inbox_emails,
-        mark_attendees_self_for_inboxes,
+        ActorInboxes, AppliedGoogleGrant, CalendarBackfillClaim,
+        CalendarBackfillFailureDisposition, CalendarBackfillFailureOutcome, CalendarBackfillJobKey,
+        CalendarEventUpsert, CalendarGrantIntent, CalendarOccurrenceCursor,
+        GoogleBackfillRunReport, GoogleCalendarSyncSnapshot, GoogleScopeSet, OccurrenceRange,
     },
     ports::{
         CalendarBackfillRepository, CalendarEventChange, CalendarEventWrite,
@@ -101,9 +100,12 @@ where
             .repository
             .list_occurrences(requester_id, range, cursor, limit)
             .await?;
-        let emails = inbox_emails(&self.repository.list_visible_calendars(requester_id).await?);
-        for (event, _) in &mut rows {
-            mark_attendees_self_for_inboxes(&mut event.attendees, &emails);
+        if let Some(viewer) =
+            ActorInboxes::from_owned(self.repository.owned_inbox_emails(requester_id).await?)
+        {
+            for (event, _) in &mut rows {
+                viewer.mark_attendees(&mut event.attendees);
+            }
         }
         Ok(rows)
     }

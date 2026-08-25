@@ -6,6 +6,8 @@ use chrono::{DateTime, NaiveDate, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+pub use super::acting::{ActorInboxes, CalendarActingIdentity};
+
 /// Read and write events on every calendar the user can access. Covers the
 /// event list, get, instances, insert, patch, and watch calls.
 pub const GOOGLE_CALENDAR_EVENTS_SCOPE: &str = "https://www.googleapis.com/auth/calendar.events";
@@ -320,38 +322,12 @@ pub struct CalendarAttendee {
     /// Whether attendance is optional.
     pub is_optional: bool,
     /// Whether this attendee is one of the viewing requester's inboxes.
+    ///
+    /// Outbound projections use the requester's owned inboxes only.
+    /// Persisted rows keep the provider's flag, which reminder decline reads.
     pub is_self: bool,
     /// Optional attendee comment.
     pub comment: Option<String>,
-}
-
-/// Mark attendees whose email matches a viewing requester inbox as `is_self`.
-///
-/// An empty list leaves the provider's flags untouched so a missing inbox
-/// catalog cannot silently erase the calendar-copy identity.
-pub(crate) fn mark_attendees_self_for_inboxes(
-    attendees: &mut [CalendarAttendee],
-    inbox_emails: &[String],
-) {
-    if inbox_emails.is_empty() {
-        return;
-    }
-    for attendee in attendees {
-        attendee.is_self = inbox_emails
-            .iter()
-            .any(|email| attendee.email.eq_ignore_ascii_case(email));
-    }
-}
-
-/// Unique inbox addresses from the requester's visible calendars.
-pub(crate) fn inbox_emails(calendars: &[VisibleCalendar]) -> Vec<String> {
-    let mut emails: Vec<String> = calendars
-        .iter()
-        .map(|calendar| calendar.email_address.clone())
-        .collect();
-    emails.sort_by_key(|email| email.to_ascii_lowercase());
-    emails.dedup_by(|left, right| left.eq_ignore_ascii_case(right));
-    emails
 }
 
 /// RSVP state for an attendee.
@@ -926,8 +902,8 @@ pub struct CalendarEventMutationTarget {
     pub calendar_id: Uuid,
     /// Provider calendar identifier used in Google API paths.
     pub provider_calendar_id: String,
-    /// Token identity of the connected inbox.
-    pub token_identity: CalendarLinkTokenIdentity,
+    /// Who the mutation acts as, and through whose grant it writes.
+    pub acting: CalendarActingIdentity,
 }
 
 impl CalendarEventMutationTarget {
@@ -991,8 +967,8 @@ pub struct CalendarCreationTarget {
     pub provider_calendar_id: String,
     /// Whether the provider role prohibits event creation.
     pub is_read_only: bool,
-    /// Token identity of the connected inbox.
-    pub token_identity: CalendarLinkTokenIdentity,
+    /// Who the creation acts as, and through whose grant it writes.
+    pub acting: CalendarActingIdentity,
 }
 
 impl CalendarCreationTarget {

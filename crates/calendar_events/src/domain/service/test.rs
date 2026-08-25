@@ -116,6 +116,10 @@ impl CalendarRepository for FakeRepo {
         Ok(Vec::new())
     }
 
+    async fn owned_inbox_emails(&self, _requester_id: &str) -> Result<Vec<String>, Report> {
+        Ok(Vec::new())
+    }
+
     async fn remove_google_source(
         &self,
         _account_id: Uuid,
