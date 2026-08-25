@@ -213,15 +213,37 @@ fn collect_ids<T>(expr: &Expr<T>, literal_id: impl Copy + Fn(&T) -> Option<Uuid>
     }
 }
 
-/// Return whether an email expression explicitly includes shared threads.
-fn includes_shared_threads(expr: &Expr<EmailLiteral>) -> bool {
+/// Collect thread IDs from an expression that contains only positive thread-ID literals.
+fn positive_email_thread_ids(expr: &Expr<EmailLiteral>) -> Option<HashSet<Uuid>> {
     match expr {
         Expr::And(left, right) | Expr::Or(left, right) => {
-            includes_shared_threads(left) || includes_shared_threads(right)
+            let mut ids = positive_email_thread_ids(left)?;
+            ids.extend(positive_email_thread_ids(right)?);
+            Some(ids)
         }
-        Expr::Not(_) => false,
-        Expr::Literal(EmailLiteral::Shared(SharedEmailFilter::Include)) => true,
-        Expr::Literal(_) => false,
+        Expr::Not(_) => None,
+        Expr::Literal(EmailLiteral::ThreadId(id)) => Some(HashSet::from([*id])),
+        Expr::Literal(_) => None,
+    }
+}
+
+/// Return whether positive thread IDs are combined with shared-thread inclusion via `And`.
+fn includes_shared_threads(expr: &Expr<EmailLiteral>, expected_ids: &HashSet<Uuid>) -> bool {
+    let is_shared_include = |expr: &Expr<EmailLiteral>| {
+        matches!(
+            expr,
+            Expr::Literal(EmailLiteral::Shared(SharedEmailFilter::Include))
+        )
+    };
+    let has_expected_ids =
+        |expr: &Expr<EmailLiteral>| positive_email_thread_ids(expr).as_ref() == Some(expected_ids);
+
+    match expr {
+        Expr::And(left, right) => {
+            (has_expected_ids(left) && is_shared_include(right))
+                || (is_shared_include(left) && has_expected_ids(right))
+        }
+        Expr::Or(_, _) | Expr::Not(_) | Expr::Literal(_) => false,
     }
 }
 
@@ -389,14 +411,10 @@ fn email_entity_filter_includes_shared_threads() {
     let ast = entity_filter_ast(&entities).expect("valid AST");
     let email_filter = ast.email_filter.tree.as_deref().expect("email filter");
 
-    assert!(includes_shared_threads(email_filter));
-    assert_eq!(
-        collect_ids(email_filter, |literal| match literal {
-            EmailLiteral::ThreadId(id) => Some(*id),
-            _ => None,
-        }),
-        HashSet::from([thread_id])
-    );
+    assert!(includes_shared_threads(
+        email_filter,
+        &HashSet::from([thread_id])
+    ));
 }
 
 #[test]
@@ -457,16 +475,10 @@ fn encodes_requested_ids_and_disables_unrequested_entity_branches() {
         ),
         HashSet::from([nil])
     );
-    assert_eq!(
-        collect_ids(
-            ast.email_filter.tree.as_deref().expect("email filter"),
-            |literal| match literal {
-                EmailLiteral::ThreadId(id) => Some(*id),
-                _ => None,
-            }
-        ),
-        HashSet::from([nil])
-    );
+    assert!(includes_shared_threads(
+        ast.email_filter.tree.as_deref().expect("email filter"),
+        &HashSet::from([nil])
+    ));
     assert_eq!(
         collect_ids(
             ast.channel_thread_filter
