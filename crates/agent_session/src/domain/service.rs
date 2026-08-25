@@ -61,6 +61,17 @@ use super::session::{CloseReason, Input};
 const COMMAND_BUFFER: usize = 1028;
 /// Persistence may delay lifecycle teardown, but never indefinitely.
 const SESSION_PERSIST_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(60);
+/// How long a command may sit queued behind the ACP handshake
+/// (`Booting`/`Initializing`/`Opening`) before the caller gives up on it.
+/// The runtime never completes a queued command on its own until it reaches
+/// `Live` - see [`super::session::session::SessionMachine::on_command`] - so
+/// without this bound a stalled handshake (e.g. the runtime process never
+/// sends `AcpReady`, or never answers `initialize`/`session/new`) hangs the
+/// caller forever.
+#[cfg(not(test))]
+const HANDSHAKE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
+#[cfg(test)]
+const HANDSHAKE_TIMEOUT: std::time::Duration = std::time::Duration::from_millis(50);
 
 struct ActiveSession {
     commands: Option<mpsc::Sender<SessionCommand>>,
@@ -395,9 +406,29 @@ impl<R, Folds, Rt, Namer> AgentSessionServiceImpl<R, Folds, Rt, Namer> {
         {
             return Err(AgentSessionError::Disconnected(id));
         }
-        match result.await {
-            Ok(result) => result,
-            Err(_) => Err(AgentSessionError::Disconnected(id)),
+        // Not needed past this point, and holding it would be exactly the bug
+        // `begin_stop` exists to avoid: a live sender clone keeping the
+        // channel open no matter how many others get dropped, so the actor
+        // can only notice by hitting its own much longer internal deadline
+        // instead of promptly.
+        drop(commands);
+        match tokio::time::timeout(HANDSHAKE_TIMEOUT, result).await {
+            Ok(Ok(result)) => result,
+            Ok(Err(_)) => Err(AgentSessionError::Disconnected(id)),
+            Err(_elapsed) => {
+                // The actor is presumably still stuck in the handshake, so it
+                // is stopped directly - the same "drop the sender, the actor
+                // notices and tears itself down" mechanism `close_session`
+                // uses - rather than left to queue behind the same stall
+                // forever.
+                let (stopped, marker) = self.begin_stop(id, false);
+                Self::wait_stopped(stopped).await;
+                self.active.remove_if(&id, |_, active| {
+                    Arc::ptr_eq(&active.marker, &marker) && !active.deleting
+                });
+                tracing::warn!(%id, "agent session command timed out waiting for the ACP handshake");
+                Err(AgentSessionError::Disconnected(id))
+            }
         }
     }
 
