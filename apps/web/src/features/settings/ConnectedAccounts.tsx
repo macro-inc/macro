@@ -11,8 +11,8 @@ import { SettingsPage, SettingsSection } from './primitives';
 
 /**
  * Consolidated "Connections" page: one card per external account the user can
- * link (Gmail, GitHub), plus the agent's MCP integrations — so everything
- * Macro is connected to lives in one place.
+ * link (Gmail, GitHub), then the agent's MCP integrations, then the coding
+ * agents — so everything Macro is connected to lives in one place.
  */
 export function ConnectedAccounts() {
   const pipedreamMcp = usePipedreamMcpFlag();
@@ -32,11 +32,6 @@ export function ConnectedAccounts() {
           <Suspense>
             <GitHubCard />
           </Suspense>
-          <Show when={canUseCursor()}>
-            <Suspense>
-              <CursorCard />
-            </Suspense>
-          </Show>
         </div>
       </SettingsSection>
       <Suspense>
@@ -44,6 +39,16 @@ export function ConnectedAccounts() {
           <PipedreamIntegrationsSection />
         </Show>
       </Suspense>
+      <Show when={canUseCursor()}>
+        <SettingsSection
+          title="Coding sessions"
+          description="Connect a coding agent so Macro can run sessions on your own account."
+        >
+          <Suspense>
+            <CursorCard />
+          </Suspense>
+        </SettingsSection>
+      </Show>
     </SettingsPage>
   );
 }

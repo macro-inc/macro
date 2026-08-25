@@ -58,6 +58,11 @@ const PIPE_CAPACITY: usize = 64 * 1024;
 /// about a second instead of waiting for the next Macro prompt. One
 /// `list_runs` per second per live session; a session mid-turn skips its
 /// tick, and the poll dies with the pipe.
+///
+/// A fixed rate rather than a delay between polls: `list_runs` is a network
+/// call, so sleeping this long *after* each one would quietly make the real
+/// period `1s + latency` — the mirror falling furthest behind exactly when
+/// Cursor is slowest.
 const FOREIGN_SYNC_INTERVAL: std::time::Duration = std::time::Duration::from_secs(1);
 
 /// A pipe idle this long is shut down, Daytona's reaper made local: the
@@ -66,8 +71,34 @@ const FOREIGN_SYNC_INTERVAL: std::time::Duration = std::time::Duration::from_sec
 /// is none — but the pipe's tasks and its per-second cursor.com poll.
 const CURSOR_IDLE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5 * 60);
 
+/// How often the idle timeout is evaluated.
+///
+/// Separate from [`FOREIGN_SYNC_INTERVAL`] because the two answer different
+/// questions: the mirror's rate is how stale a cursor.com turn may look, this
+/// is how late a pipe may be reclaimed. Checking a five-minute deadline once
+/// a second would spend three hundred wakeups to fire once, and would tie the
+/// reaper's precision to a poll rate chosen for something else. The cost of a
+/// coarse check is that a pipe lives up to this long past its deadline, which
+/// for reclaiming two idle tasks is nothing.
+const CURSOR_IDLE_CHECK_INTERVAL: std::time::Duration = std::time::Duration::from_secs(30);
+
 /// The ref new agents start their work from.
 const DEFAULT_STARTING_REF: &str = "main";
+
+/// A ticker of period `every`, first firing one period from now.
+///
+/// Two deliberate choices `tokio::time::interval` would not have made. It
+/// fires its first tick immediately, which here would poll cursor.com the
+/// instant a pipe opens — before the first prompt, on a session that has no
+/// agent to ask about yet. And it defaults to [`MissedTickBehavior::Burst`],
+/// which after one slow poll fires the whole backlog back to back at Cursor's
+/// API; [`MissedTickBehavior::Delay`] just resumes the cadence from the tick
+/// that ran late.
+fn interval_from_now(every: std::time::Duration) -> tokio::time::Interval {
+    let mut ticker = tokio::time::interval_at(tokio::time::Instant::now() + every, every);
+    ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+    ticker
+}
 
 /// Every session this deployment opens works on the one configured
 /// repository, resolved without looking at the workspace path — the path
@@ -169,20 +200,22 @@ where
             }
             on_pipe_close.cancel();
         });
-        // One task is the session's background pulse: it mirrors cursor.com
-        // activity every tick and retires the pipe once nothing has moved
-        // through it for the idle timeout.
+        // One task carries the session's two background jobs, on their own
+        // cadences: mirroring cursor.com, and retiring a pipe nothing has
+        // moved through.
         // tokio's clock, not std's: identical on a running service, and it
-        // honours `tokio::time::pause` so the idle path is testable without
-        // five real minutes.
+        // honours `tokio::time::pause` so both paths are testable without
+        // waiting out five real minutes.
         let last_activity = Arc::new(std::sync::Mutex::new(tokio::time::Instant::now()));
         let observed = Arc::clone(&last_activity);
         let reaper_shutdown = shutdown.clone();
         tokio::spawn(async move {
+            let mut mirror = interval_from_now(FOREIGN_SYNC_INTERVAL);
+            let mut reaper = interval_from_now(CURSOR_IDLE_CHECK_INTERVAL);
             loop {
                 tokio::select! {
                     () = pipe_closed.cancelled() => break,
-                    () = tokio::time::sleep(FOREIGN_SYNC_INTERVAL) => {
+                    _ = reaper.tick() => {
                         let idle = last_activity
                             .lock()
                             .expect("activity clock poisoned")
@@ -192,8 +225,8 @@ where
                             reaper_shutdown.cancel();
                             break;
                         }
-                        sync_service.sync_foreign_runs().await;
                     }
+                    _ = mirror.tick() => sync_service.sync_foreign_runs().await,
                 }
             }
         });
