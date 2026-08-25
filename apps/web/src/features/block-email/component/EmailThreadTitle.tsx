@@ -29,7 +29,7 @@ export function EmailThreadTitle(props: {
           class={cn(
             'ml-1.5 select-none',
             props.copyReveal === 'hover' &&
-              'opacity-0 group-hover/subject:opacity-100 focus-visible:opacity-100'
+              'opacity-0 transition-opacity group-hover/subject:opacity-100 hover:opacity-100 focus-visible:opacity-100'
           )}
         />
       </span>

@@ -38,6 +38,8 @@ describe('EmailThreadTitle', () => {
 
     expect(cluster?.className).toContain('whitespace-nowrap');
     expect(cluster?.contains(copy)).toBe(true);
+    expect(copy.className).toContain('text-ink');
+    expect(copy.className).not.toContain('text-ink-muted');
   });
 
   it('does not force a single unspaced subject onto one line', () => {
