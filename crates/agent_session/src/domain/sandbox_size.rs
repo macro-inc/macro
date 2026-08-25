@@ -8,17 +8,18 @@ mod test;
 
 /// Named compute tier for a managed sandbox.
 ///
-/// Disk is always 96 GiB; CPU and RAM vary. The API and database store the
-/// name, never raw resource integers.
+/// Small is 2 vCPU / 4 GiB / 24 GiB disk, default is 4 / 8 / 96, large is
+/// 8 / 16 / 128. The API and database store the name, never raw resource
+/// integers.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub enum SandboxSize {
-    /// 2 vCPU / 4 GiB RAM / 96 GiB disk.
+    /// 2 vCPU / 4 GiB RAM / 24 GiB disk.
     Small,
-    /// 8 vCPU / 16 GiB RAM / 96 GiB disk.
+    /// 4 vCPU / 8 GiB RAM / 96 GiB disk.
     #[default]
     Default,
-    /// 16 vCPU / 32 GiB RAM / 96 GiB disk.
+    /// 8 vCPU / 16 GiB RAM / 128 GiB disk.
     Large,
 }
 

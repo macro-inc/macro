@@ -18,13 +18,13 @@ Macro Coder sessions always get one Daytona size, and that size is not chosen in
 - `agent_session` stores model, harness, repo, and workspace, not sandbox size.
 - Macro Coder sessions are opened by the mention trigger. `POST /agent-sessions` rejects managed bots. There is no UI or API for a user to pick a size.
 
-The wanted product is three named tiers (`small`, `default`, `large`), with `default` being 8 vCPU / 16 GiB RAM / 96 GiB disk, and a way for a user to choose a tier that future `@coder` sessions actually use.
+The wanted product is three named tiers (`small`, `default`, `large`), with `default` being 4 vCPU / 8 GiB RAM / 96 GiB disk, and a way for a user to choose a tier that future `@coder` sessions actually use.
 
 ## Decisions
 
 1. **Named tiers, not raw integers.** The domain type is `SandboxSize::{Small, Default, Large}`. UI and API never send `cpu` / `memory` / `disk`. Those numbers are a provider mapping owned by the harness domain.
-2. **`default` is 8 / 16 / 96.** That is the new Macro Coder size. `small` and `large` are scaled off it (numbers below; confirm `large` against the live Daytona quota before shipping it).
-3. **One snapshot, size after create.** Do not build three snapshots. Rebuild `macro-agent-harness` at the default resource profile (`--cpu 8 --memory 16 --disk 96`). Daytona returns 400 if `cpu` / `memory` / `disk` are sent on `POST /sandbox` with a snapshot, so spawn creates from the snapshot, waits for start, and applies the named tier with `POST /sandbox/{id}/resize` (hot if CPU/RAM only increase, cold if either decreases). Disk is never sent on resize. Namespace maps the same tier onto `virtual_cpu` / `memory_megabytes` at create time.
+2. **`default` is 4 / 8 / 96.** That is the Macro Coder size. `small` is 2 / 4 / 24 and `large` is 8 / 16 / 128.
+3. **One snapshot, size after create.** Do not build three snapshots. Rebuild `macro-agent-harness` at the default resource profile (`--cpu 4 --memory 8 --disk 96`) once Daytona allows that disk. Daytona returns 400 if `cpu` / `memory` / `disk` are sent on `POST /sandbox` with a snapshot, so spawn creates from the snapshot, waits for start, and applies the named tier with `POST /sandbox/{id}/resize` (hot if CPU/RAM only increase, cold if either decreases). Disk is never sent on resize. Namespace maps the same tier onto `virtual_cpu` / `memory_megabytes` at create time.
 4. **Size is snapshotted onto the session at spawn and can be changed in place when the manager allows it.** CPU/RAM upgrades are in-place on a running Daytona sandbox. Downgrades stop, resize, and start it again. Disk never changes. Local Docker and Namespace report `Unsupported` (no in-place resize).
 5. **User default drives mention spawn.** `@coder` has no settings chrome. The harness reads the mentioning user's default size (falling back to `default`) and writes it onto the new session before `spawn`.
 6. **Sandbox size is not an `AgentAction`.** `AgentAction` is ACP (`prompt`, `set_model`, `compact`, `stop`). Size is harness/container policy. Do not send it to the agent. Use a dedicated settings endpoint for the user default, and a field on the session response for the size this session was spawned with.
@@ -33,7 +33,7 @@ The wanted product is three named tiers (`small`, `default`, `large`), with `def
 
 ## Goals
 
-- Every new Macro Coder sandbox is 8 vCPU / 16 GiB / 96 GiB unless the user picked `small` or `large`.
+- Every new Macro Coder sandbox is 4 vCPU / 8 GiB / 96 GiB unless the user picked `small` or `large`.
 - `GET` session includes `sandboxSize`.
 - A user can set their default size; the next `@coder` mention uses it.
 - Unknown or raw resource payloads are rejected at the API boundary.
@@ -57,9 +57,9 @@ Units match Daytona: CPU cores, memory GiB, disk GiB.
 
 | Tier      | vCPU | RAM | Disk | Notes                                      |
 | --------- | ---- | --- | ---- | ------------------------------------------ |
-| `small`   | 2    | 4   | 96   | Cheap / short tasks                        |
-| `default` | 8    | 16  | 96   | The new Macro Coder size                   |
-| `large`   | 16   | 32  | 96   | Same disk so live sessions can hot-resize  |
+| `small`   | 2    | 4   | 24   | Cheap / short tasks      |
+| `default` | 4    | 8   | 96   | The Macro Coder size     |
+| `large`   | 8    | 16  | 128  | More CPU, RAM, and disk  |
 
 Namespace create gets the same tier, mapped onto its shape (`virtual_cpu`, `memory_megabytes` = RAM GiB × 1024). It has no disk field today, so disk is Daytona-only until Namespace exposes one.
 
@@ -160,7 +160,7 @@ disk: u32,   // GiB
 
 `configuration_parameters` sends `snapshot`, `env`, `labels`, and `auto_stop_interval: 0` only. Daytona rejects `cpu` / `memory` / `disk` on snapshot creates (HTTP 400: "Cannot specify Sandbox resources when using a snapshot"). Size is applied after start via `POST /sandbox/{id}/resize` with `cpu` and `memory` only.
 
-Snapshot create in `justfile` / `ensure-daytona` is `--cpu 8 --memory 16 --disk 96` so a `default` spawn is a no-op after create, `large` is an in-place resize, and `small` is a restart resize. Rebuild the snapshot (delete + create); `snapshot create` will not replace an existing name.
+Snapshot create in `justfile` / `ensure-daytona` stays at the live cap (`--cpu 4 --memory 8 --disk 10`) until Daytona allows the product default (`--cpu 4 --memory 8 --disk 96`). A `default` spawn is then a CPU/RAM no-op after create, `large` is an in-place resize, and `small` is a restart resize. Rebuild the snapshot (delete + create); `snapshot create` will not replace an existing name.
 
 Verify with a throwaway sandbox: create from the snapshot with no resource fields, wait until started, stay inside the org per-sandbox cap, shrink while stopped, then raise CPU/RAM in place without sending `disk`, and confirm disk is unchanged. Always delete the sandbox.
 
@@ -212,11 +212,11 @@ When the editor wraps past one line, the chip stays bottom-right with send, same
 ```
                               ┌──────────────────────────┐
                               │ Small                    │
-                              │ 2 vCPU · 4 GB · 20 GB    │
+                              │ 2 vCPU · 4 GB · 24 GB    │
                               │ ✓ Default                │
-                              │ 8 vCPU · 16 GB · 96 GB   │
+                              │ 4 vCPU · 8 GB · 96 GB    │
                               │ Large                    │
-                              │ 16 vCPU · 32 GB · 200 GB │
+                              │ 8 vCPU · 16 GB · 128 GB  │
                               │                          │
                               │ Applies to new @coder    │
                               │ sessions                 │
@@ -245,7 +245,7 @@ No picker on `AgentSplitHeader`. No mention-typeahead control.
 
 ### 1. Default size bump (can ship alone)
 
-- Snapshot flags → 8 / 16 / 96.
+- Snapshot flags → live cap 4 / 8 / 10 until disk quota allows product default 4 / 8 / 96.
 - Daytona create omits `cpu`/`memory`/`disk`.
 - Tests: Daytona create JSON omits resource fields; resize omits `disk`; snapshot justfile comment about the 10GB ceiling is removed.
 - No UI. Every new sandbox is `default`.
@@ -281,7 +281,7 @@ No picker on `AgentSplitHeader`. No mention-typeahead control.
 
 - **Snapshot create rejects resource fields (HTTP 400).** Mitigated by inheriting snapshot quotas on create and applying the named tier with resize.
 - **`POST /sandbox/{id}/resize` 404s with `Cannot POST` when the route is not registered on this API.** Daytona documents resize as available to all organizations. The client maps that 404 to `ResizeNotEnabled`. A missing sandbox 404s with "not found" instead.
-- **Live per-sandbox cap is 4 vCPU / 8 GiB / 10 GiB.** `POST /snapshots` with `--cpu 8 --memory 16 --disk 96` returns 400: "CPU request 8 exceeds maximum allowed per sandbox (4)". Ask Daytona to raise per-sandbox limits to at least 16 / 32 / 96 (`large`) before rebuilding `macro-agent-harness`. Do not delete the live 4/8/10 snapshot until that create would succeed.
+- **Live per-sandbox cap is 4 vCPU / 8 GiB / 10 GiB.** `POST /snapshots` with `--disk 96` (product default) or `--cpu 8` (`large`) 400s until the org quota is raised. Ask Daytona to raise per-sandbox limits to at least 8 / 16 / 128 (`large`) before rebuilding `macro-agent-harness`. Do not delete the live 4/8/10 snapshot until that create would succeed.
 - **`large` exceeds quota.** Keep it out of the public enum until a create succeeds.
 - **Users think the picker resizes the open session.** Header copy + toast. Size on the session response is the spawned size, not the pending default.
 - **Mention already spawned before the UI is visible.** That is why the picker edits the *next* session's default, not the current sandbox.

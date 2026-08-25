@@ -255,7 +255,7 @@ impl DaytonaContainerManager {
         id: &DaytonaSandboxId,
         size: agent_session::domain::model::SandboxSize,
     ) -> Result<()> {
-        let (cpu, memory, _) = self
+        let (cpu, memory, disk) = self
             .client
             .resources(id.as_str())
             .await
@@ -269,7 +269,7 @@ impl DaytonaContainerManager {
         let current = SandboxResources {
             cpu,
             memory_gib: memory,
-            disk_gib: 96,
+            disk_gib: disk.unwrap_or(0),
         };
         let next = resources(size);
         let kind = resize_effect_from_resources(current, next);
@@ -418,7 +418,7 @@ impl ContainerManager for DaytonaContainerManager {
                 "session {session} has no sandbox to resize"
             )));
         };
-        let (cpu, memory, _) = self
+        let (cpu, memory, disk) = self
             .client
             .resources(id.as_str())
             .await
@@ -432,7 +432,7 @@ impl ContainerManager for DaytonaContainerManager {
         let current = SandboxResources {
             cpu,
             memory_gib: memory,
-            disk_gib: 96,
+            disk_gib: disk.unwrap_or(0),
         };
         let next = resources(size);
         self.apply_resize(&id, next, resize_effect_from_resources(current, next))

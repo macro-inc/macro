@@ -23,11 +23,11 @@ set dotenv-load := true
 # repository in Namespace's nscr.io workspace registry.
 image_name := env_var_or_default("AGENT_HARNESS_IMAGE", "macro-agent-harness")
 
-# Snapshot resources Daytona will accept today. Product `default` is still
-# 8/16/96 (see domain/sandbox.rs), but POST /snapshots 400s above the live
-# per-sandbox cap of 4 vCPU / 8 GiB / 10 GiB. Keep these aligned with the
-# existing `macro-agent-harness` snapshot until support@daytona.io raises
-# the limit; then bump CI + these defaults and `just rebuild-daytona`.
+# Snapshot resources Daytona will accept today. Product `default` is 4/8/96
+# (see domain/sandbox.rs); POST /snapshots 400s above the live per-sandbox
+# cap of 4 vCPU / 8 GiB / 10 GiB. Keep these aligned with the existing
+# `macro-agent-harness` snapshot until support@daytona.io raises disk;
+# then bump CI + these defaults and `just rebuild-daytona`.
 snapshot_cpu := env_var_or_default("DAYTONA_SNAPSHOT_CPU", "4")
 snapshot_memory := env_var_or_default("DAYTONA_SNAPSHOT_MEMORY", "8")
 snapshot_disk := env_var_or_default("DAYTONA_SNAPSHOT_DISK", "10")

@@ -7,16 +7,15 @@ mod test;
 
 /// CPU, RAM, and disk for one sandbox size.
 ///
-/// Disk is 96 GiB for every tier so a live session can raise CPU/RAM in place
-/// without a disk migrate. Growing disk requires a stop; shrinking it is not
-/// supported.
+/// Disk grows with the named tier. Daytona snapshot creates inherit snapshot
+/// disk; live CPU/RAM resize does not send disk.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SandboxResources {
     /// vCPU cores.
     pub cpu: u32,
     /// RAM in GiB.
     pub memory_gib: u32,
-    /// Disk in GiB. Constant across tiers.
+    /// Disk in GiB.
     pub disk_gib: u32,
 }
 
@@ -38,33 +37,35 @@ pub enum SandboxResizeEffect {
     Unsupported,
 }
 
-/// Resources for `size`. Disk is always 96 GiB.
+/// Resources for `size`.
+///
+/// Small is 2 vCPU / 4 GiB / 24 GiB, default is 4 / 8 / 96, large is 8 / 16 / 128.
 #[must_use]
 pub fn resources(size: SandboxSize) -> SandboxResources {
     match size {
         SandboxSize::Small => SandboxResources {
             cpu: 2,
             memory_gib: 4,
-            disk_gib: 96,
+            disk_gib: 24,
         },
         SandboxSize::Default => SandboxResources {
-            cpu: 8,
-            memory_gib: 16,
+            cpu: 4,
+            memory_gib: 8,
             disk_gib: 96,
         },
         SandboxSize::Large => SandboxResources {
-            cpu: 16,
-            memory_gib: 32,
-            disk_gib: 96,
+            cpu: 8,
+            memory_gib: 16,
+            disk_gib: 128,
         },
     }
 }
 
 /// CPU/RAM comparison used by managers that can resize a live container.
 ///
-/// Disk is ignored: named tiers never change disk, and shrinking it is not
-/// supported. Spawn uses this against a snapshot's live CPU/RAM because
-/// `POST /sandbox` with a snapshot cannot set resources.
+/// Disk is ignored: Daytona resize does not send disk, so a live session keeps
+/// the snapshot's disk. Spawn uses this against a snapshot's live CPU/RAM
+/// because `POST /sandbox` with a snapshot cannot set resources.
 #[must_use]
 pub fn resize_effect(from: SandboxSize, to: SandboxSize) -> SandboxResizeEffect {
     resize_effect_from_resources(resources(from), resources(to))

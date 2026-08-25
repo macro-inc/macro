@@ -8,8 +8,9 @@
 /**
  * Named compute tier for a managed sandbox.
 
-Disk is always 96 GiB; CPU and RAM vary. The API and database store the
-name, never raw resource integers.
+Small is 2 vCPU / 4 GiB / 24 GiB disk, default is 4 / 8 / 96, large is
+8 / 16 / 128. The API and database store the name, never raw resource
+integers.
  */
 export type SandboxSize = (typeof SandboxSize)[keyof typeof SandboxSize];
 
