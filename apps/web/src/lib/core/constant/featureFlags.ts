@@ -13,7 +13,11 @@ export const LOCAL_ONLY = !!import.meta.hot;
 
 type FeatureFlagValue = 'true' | 'false' | undefined;
 
-function getFeatureFlagOverride(flagName: string): boolean | undefined {
+/**
+ * Reads a `VITE_<flagName>` env override. Returns `undefined` when unset, so
+ * callers can fall through to PostHog rather than forcing the flag off.
+ */
+export function getFeatureFlagOverride(flagName: string): boolean | undefined {
   const envKey = `VITE_${flagName}` as const;
   const value = import.meta.env[envKey] as FeatureFlagValue;
 
@@ -676,6 +680,22 @@ export function ENABLE_CHAT_V3_AGENTS(): boolean {
   return (
     analytics.posthog.isFeatureEnabled(ENABLE_CHAT_V3_AGENTS_FLAG) ?? false
   );
+}
+
+// The `@cursor` mention entry: agent sessions served by Cursor cloud agents
+// on Macro's Cursor account. PostHog-gated per user; the backend additionally
+// restricts these sessions to @macro.com senders. Override with
+// VITE_ENABLE_CURSOR_AGENTS.
+export const ENABLE_CURSOR_AGENTS_FLAG = 'enable-cursor-agents';
+export const ENABLE_CURSOR_AGENTS_OVERRIDE =
+  getFeatureFlagOverride('ENABLE_CURSOR_AGENTS') ??
+  (DEV_MODE_ENV ? true : undefined);
+export function ENABLE_CURSOR_AGENTS(): boolean {
+  if (ENABLE_CURSOR_AGENTS_OVERRIDE !== undefined) {
+    return ENABLE_CURSOR_AGENTS_OVERRIDE;
+  }
+
+  return analytics.posthog.isFeatureEnabled(ENABLE_CURSOR_AGENTS_FLAG) ?? false;
 }
 
 // The Recent view: the touched-by-me feed (everything the viewer mutated,

@@ -14,6 +14,6 @@ import type { PipedreamCatalogResponseNextCursor } from './pipedreamCatalogRespo
 export interface PipedreamCatalogResponse {
   /** Cursor for the next page. Absent on the last page. */
   next_cursor?: PipedreamCatalogResponseNextCursor;
-  /** Catalog entries in display order (priority connectors first). */
+  /** Catalog entries in display order (most popular first). */
   servers: PipedreamCatalogEntryResponse[];
 }

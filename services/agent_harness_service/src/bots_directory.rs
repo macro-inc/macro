@@ -4,7 +4,7 @@
 //! facts that gate opening sessions, and this answers them from the bots
 //! repo without either domain crate growing a dependency on `bots`.
 
-use agent_harness::domain::model::is_managed_bot;
+use agent_harness::domain::model::AgentKind;
 use agent_session::domain::error::{AgentSessionError, Result};
 use agent_session::domain::ports::{BotDirectory, BotFacts};
 use bot_id::BotId;
@@ -48,7 +48,7 @@ impl BotDirectory for PgBotDirectory {
         };
         Ok(Some(BotFacts {
             has_agent: row.has_agent,
-            is_managed: is_managed_bot(bot),
+            is_managed: AgentKind::of(bot).is_managed(),
             owner_user_id,
         }))
     }

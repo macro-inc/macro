@@ -49,6 +49,7 @@ fn serializes_an_existing_channel_event() {
         ChannelEventMetadata {
             bot_id: BotId::TEST_A,
             session_id: AgentSessionId::TEST_A,
+            kind: ChannelKind::MentionThread,
             message: message(),
         },
     ));
@@ -80,6 +81,7 @@ fn event_names_match_the_wire() {
             ChannelEventMetadata {
                 bot_id: BotId::TEST_A,
                 session_id: AgentSessionId::TEST_A,
+                kind: ChannelKind::MentionThread,
                 message: message(),
             },
         )),
@@ -92,4 +94,18 @@ fn event_names_match_the_wire() {
         .collect();
 
     assert_eq!(names, wire_names);
+}
+
+#[test]
+fn channel_kinds_round_trip_in_snake_case() {
+    for (kind, wire) in [
+        (ChannelKind::MentionThread, "mention_thread"),
+        (ChannelKind::QuoteReply, "quote_reply"),
+        (ChannelKind::Inferred, "inferred"),
+    ] {
+        let value = serde_json::to_value(kind).expect("serialize kind");
+        assert_eq!(value, json!(wire));
+        let parsed: ChannelKind = serde_json::from_value(value).expect("deserialize kind");
+        assert_eq!(parsed, kind);
+    }
 }

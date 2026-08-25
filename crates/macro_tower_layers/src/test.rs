@@ -1,8 +1,10 @@
 use super::*;
+use axum::{Router, body::Body, routing::get};
 use std::{
     collections::{HashMap, HashSet},
     sync::{Arc, Mutex},
 };
+use tower::ServiceExt;
 use tower_http::trace::{MakeSpan, OnFailure, OnResponse};
 use tracing::{
     Level,
@@ -120,6 +122,7 @@ fn request_span_uses_info_and_safe_structured_fields() {
 
     let declared_fields = captured.declared_span_fields.lock().unwrap();
     assert!(declared_fields.contains("http.request.method"));
+    assert!(declared_fields.contains("http.route"));
     assert!(declared_fields.contains("url.path"));
     assert!(declared_fields.contains("request.id"));
     assert!(declared_fields.contains("http.response.status_code"));
@@ -132,6 +135,34 @@ fn request_span_uses_info_and_safe_structured_fields() {
     assert_eq!(fields.get("url.path").unwrap(), "\"/documents/123\"");
     assert_eq!(fields.get("request.id").unwrap(), "\"request-42\"");
     assert!(fields.values().all(|value| !value.contains("secret")));
+}
+
+#[tokio::test]
+async fn request_span_records_the_matched_route() {
+    let (subscriber, captured) = TracingCapture::new();
+    let _guard = set_default(subscriber);
+    let app = Router::new()
+        .route("/documents/{id}", get(|| async {}))
+        .layer(MacroRequestIdAndTracingLayer::new(Duration::from_millis(200)).into_inner());
+
+    app.oneshot(
+        Request::builder()
+            .uri("/documents/123")
+            .body(Body::empty())
+            .unwrap(),
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(
+        captured
+            .recorded_span_fields
+            .lock()
+            .unwrap()
+            .get("http.route")
+            .unwrap(),
+        "\"/documents/{id}\""
+    );
 }
 
 #[test]

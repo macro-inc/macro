@@ -107,6 +107,28 @@ export type CreateUserRequest = {
 };
 
 /**
+ * What settings needs to render the Cursor connection.
+ *
+ * Deliberately thin. `registered` drives the whole UI; `updatedAt` lets it say
+ * when the key was last replaced, which is the only thing a user can check
+ * against their own memory when a session starts failing.
+ *
+ * Deliberately *not* reporting anything about the deployment itself. That is
+ * operator information: a user who sees it cannot act on it, and a service
+ * that cannot reach KMS does not start.
+ */
+export type CursorApiKeyStatus = {
+    /**
+     * Whether this user has a key stored.
+     */
+    registered: boolean;
+    /**
+     * When the stored key was last replaced, if there is one.
+     */
+    updatedAt?: string | null;
+};
+
+/**
  * Empty response is required due to custom fetch forcing `response.json()`
  */
 export type EmptyResponse = {
@@ -680,6 +702,16 @@ export type ProfilePictures = {
     pictures: Array<UserProfilePicture>;
 };
 
+/**
+ * The key the user pasted.
+ */
+export type PutCursorApiKeyRequest = {
+    /**
+     * A `crsr_…` Cursor API key.
+     */
+    apiKey: string;
+};
+
 export type PutUserNameQueryParams = {
     /**
      * First Name of user
@@ -945,6 +977,67 @@ export type UserTokensResponse = {
      */
     refresh_token: string;
 };
+
+export type DeleteCursorApiKeyData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/cursor-api-key';
+};
+
+export type DeleteCursorApiKeyErrors = {
+    401: string;
+    403: ErrorResponse;
+};
+
+export type DeleteCursorApiKeyError = DeleteCursorApiKeyErrors[keyof DeleteCursorApiKeyErrors];
+
+export type DeleteCursorApiKeyResponses = {
+    200: CursorApiKeyStatus;
+};
+
+export type DeleteCursorApiKeyResponse = DeleteCursorApiKeyResponses[keyof DeleteCursorApiKeyResponses];
+
+export type GetCursorApiKeyData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/cursor-api-key';
+};
+
+export type GetCursorApiKeyErrors = {
+    401: string;
+    403: ErrorResponse;
+};
+
+export type GetCursorApiKeyError = GetCursorApiKeyErrors[keyof GetCursorApiKeyErrors];
+
+export type GetCursorApiKeyResponses = {
+    200: CursorApiKeyStatus;
+};
+
+export type GetCursorApiKeyResponse = GetCursorApiKeyResponses[keyof GetCursorApiKeyResponses];
+
+export type PutCursorApiKeyData = {
+    body: PutCursorApiKeyRequest;
+    path?: never;
+    query?: never;
+    url: '/cursor-api-key';
+};
+
+export type PutCursorApiKeyErrors = {
+    400: ErrorResponse;
+    401: string;
+    403: ErrorResponse;
+};
+
+export type PutCursorApiKeyError = PutCursorApiKeyErrors[keyof PutCursorApiKeyErrors];
+
+export type PutCursorApiKeyResponses = {
+    200: CursorApiKeyStatus;
+};
+
+export type PutCursorApiKeyResponse = PutCursorApiKeyResponses[keyof PutCursorApiKeyResponses];
 
 export type VerifyFusionauthUserEmailData = {
     body?: never;

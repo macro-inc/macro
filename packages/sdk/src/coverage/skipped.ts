@@ -39,12 +39,14 @@ export const authExcluded = [
   'createPortalSession',
   'createTeam',
   'createUser',
+  'deleteCursorApiKey',
   'deleteGithubLink',
   'deleteTeam',
   'deleteTeamInviteHandler',
   'deleteUser',
   'enrichGithubPullRequests',
   'generateEmailLink',
+  'getCursorApiKey',
   'getLegacyUserPermissions',
   'getPermissions',
   'getReferralCode',
@@ -74,6 +76,7 @@ export const authExcluded = [
   'patchUserOnboarding',
   'patchUserTutorial',
   'postProfilePictures',
+  'putCursorApiKey',
   'putProfilePicture',
   'putUserName',
   'refresh',
@@ -90,7 +93,7 @@ export const authExcluded = [
   'verifyEmailLink',
   'verifyFusionauthUserEmail',
   'verifyMergeRequest',
-] as const satisfies readonly (keyof AuthSdk)[];
+];
 
 export const authBacklog = [
   'macroApiToken',
