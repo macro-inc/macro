@@ -57,15 +57,20 @@ pub(crate) const MAX_SSE_PAYLOAD: NonZeroUsize = match NonZeroUsize::new(16 * 10
     None => panic!("the payload limit is a non-zero literal"),
 };
 
-/// A Cursor API key that never prints itself.
+/// A Cursor API key that never prints itself and does not outlive its client.
 ///
 /// The key used to be a bare `String` in a `Debug`-deriving config, so a
 /// single `tracing::debug!(?config)` — or any `{:?}` on the client — wrote a
 /// live credential into the user's log file. A newtype whose `Debug` redacts
 /// makes that unrepresentable; the plaintext leaves only through
 /// [`ApiKey::expose`], which is the Basic-auth header and nothing else.
+///
+/// `Zeroizing` because server-side these are *users'* keys, decrypted per
+/// session and held for as long as the session's client lives. That is a copy
+/// per concurrent session in a long-lived process, so the least it can do is
+/// not linger in freed memory once the session ends.
 #[derive(Clone)]
-pub struct ApiKey(String);
+pub struct ApiKey(zeroize::Zeroizing<String>);
 
 impl ApiKey {
     /// Wrap a key.
@@ -76,12 +81,12 @@ impl ApiKey {
     /// before anything validates or sends it.
     #[must_use]
     pub fn new(key: impl AsRef<str>) -> Self {
-        Self(
+        Self(zeroize::Zeroizing::new(
             key.as_ref()
                 .trim()
                 .trim_matches(|character| character == '"' || character == '\'')
                 .to_owned(),
-        )
+        ))
     }
 
     /// The plaintext key. Only for handing to the transport that authenticates
@@ -117,11 +122,13 @@ pub struct CursorConfig {
 /// Why a [`CursorClient`] could not be constructed.
 #[derive(Debug, thiserror::Error)]
 pub enum CursorClientError {
-    /// The key is missing or does not look like a Cursor key. Caught here so
-    /// a placeholder (`"..."`) fails at startup with a message instead of at
-    /// the first prompt with a bare 401.
+    /// The key does not look like a Cursor key. Caught here so a placeholder
+    /// (`"..."`) fails when the client is built, with a message, instead of at
+    /// the first prompt with a bare 401. The length and prefix are the only
+    /// diagnostics that are safe to print: enough to recognize a placeholder
+    /// or a stray quote, never enough to reconstruct a real key.
     #[error(
-        "CURSOR_API_KEY does not look like a Cursor key (got {length} chars starting {prefix:?}, expected a \"crsr_\" prefix)"
+        "not a Cursor API key (got {length} chars starting {prefix:?}, expected a \"crsr_\" prefix)"
     )]
     MalformedKey {
         /// Length of the offending key.

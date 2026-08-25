@@ -210,6 +210,7 @@ dependencies = [
  "channel_sender",
  "channels",
  "chrono",
+ "cursor_api_key",
  "cursor_cloud_agents",
  "dashmap",
  "futures",
@@ -250,6 +251,7 @@ dependencies = [
  "ai_tools",
  "ai_usage",
  "anyhow",
+ "aws-sdk-kms",
  "aws-sdk-secretsmanager",
  "aws-sdk-sqs",
  "axum",
@@ -258,6 +260,7 @@ dependencies = [
  "channels",
  "connection_gateway_client",
  "contacts",
+ "cursor_api_key",
  "cursor_cloud_agents",
  "database_env_vars",
  "entity_access",
@@ -4366,6 +4369,7 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "workspace-hack",
+ "zeroize",
 ]
 
 [[package]]

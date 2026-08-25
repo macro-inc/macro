@@ -35,6 +35,7 @@ tokio = { workspace = true, features = ["io-std", "io-util", "sync", "time"] }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
+zeroize = { workspace = true }
 
 [dev-dependencies]
 insta = { version = "1.48.0", features = ["glob", "json"] }
