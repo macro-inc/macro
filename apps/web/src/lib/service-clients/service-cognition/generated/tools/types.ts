@@ -744,10 +744,6 @@ export type ToolEntityType =
   | 'call'
   | 'user'
   | 'company';
-/**
- * How the agent expresses the policy on the wire. Parsed into the domain
- * `SenderPolicy` at this boundary.
- */
 export type ToolSenderPolicy = 'signal' | 'noise' | 'block';
 /**
  * Content of a text editor code execution response - either a result or an error

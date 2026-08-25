@@ -131,6 +131,7 @@
               "AI/mcp/tools/send-channel-message",
               "AI/mcp/tools/send-email",
               "AI/mcp/tools/set-entity-property",
+              "AI/mcp/tools/set-sender-policy",
               "AI/mcp/tools/subagent",
               "AI/mcp/tools/text-editor-code-execution",
               "AI/mcp/tools/update-calendar-event",
