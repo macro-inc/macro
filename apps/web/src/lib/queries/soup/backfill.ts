@@ -361,7 +361,8 @@ export const runSoupBackfills = Effect.fn('runSoupBackfills')(function* (
         Effect.retry({
           times: BACKFILL_RETRY_COUNT,
           schedule: BACKFILL_RETRY_SCHEDULE,
-        })
+        }),
+        Effect.ignore
       ),
     { concurrency: 1, discard: true }
   );

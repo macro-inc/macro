@@ -1,7 +1,7 @@
 import { render } from '@solidjs/testing-library';
 import * as Effect from 'effect/Effect';
 import { createSignal, Show } from 'solid-js';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   loadSoupBackfillCheckpoint,
   runSoupBackfills,
@@ -54,6 +54,10 @@ describe('runSoupBackfills', () => {
     graphqlMocks.hydrateGraphqlSoup.mockReset();
   });
 
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it('runs each lane to completion before starting the next lane', async () => {
     const order: string[] = [];
     let finishFirstLane!: () => void;
@@ -89,6 +93,33 @@ describe('runSoupBackfills', () => {
       true
     );
     expect(loadSoupBackfillCheckpoint('user-1', 'second-lane').completed).toBe(
+      true
+    );
+  });
+
+  it('continues to later lanes after a lane exhausts its retries', async () => {
+    vi.useFakeTimers();
+    const failedFetch = vi.fn(async () => {
+      throw new Error('failed lane');
+    });
+    const laterFetch = vi.fn(async () => ({ nextCursor: null }));
+
+    const running = Effect.runPromise(
+      runSoupBackfills('user-1', [
+        lane('failed-lane', failedFetch),
+        lane('later-lane', laterFetch),
+      ])
+    );
+
+    await vi.advanceTimersByTimeAsync(31_000);
+    await running;
+
+    expect(failedFetch).toHaveBeenCalledTimes(6);
+    expect(laterFetch).toHaveBeenCalledOnce();
+    expect(loadSoupBackfillCheckpoint('user-1', 'failed-lane').completed).toBe(
+      false
+    );
+    expect(loadSoupBackfillCheckpoint('user-1', 'later-lane').completed).toBe(
       true
     );
   });
