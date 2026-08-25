@@ -254,6 +254,36 @@ fn test_partial_and_domain_emit_different_predicates_for_same_string() {
 }
 
 #[test]
+fn test_notification_seen_compiles_to_thread_is_read() {
+    let unread = build_thread_email_filter(
+        &Expr::Literal(EmailLiteral::NotificationSeen(false)),
+        DEFAULT_SORT_TS,
+    )
+    .to_debug_sql();
+    assert!(unread.contains("t.is_read = FALSE"));
+
+    let read = build_thread_email_filter(
+        &Expr::Literal(EmailLiteral::NotificationSeen(true)),
+        DEFAULT_SORT_TS,
+    )
+    .to_debug_sql();
+    assert!(read.contains("t.is_read = TRUE"));
+}
+
+#[test]
+fn test_notification_seen_is_noop_in_message_filter() {
+    for seen in [true, false] {
+        let result = build_message_email_filter(
+            &Expr::Literal(EmailLiteral::NotificationSeen(seen)),
+            &ResolvedFilters::empty(),
+        );
+        let debug = result.to_debug_sql();
+        assert!(debug.contains("TRUE"));
+        assert!(!debug.contains("is_read"));
+    }
+}
+
+#[test]
 fn test_importance_compiles_to_thread_signal_flag() {
     let thread = build_thread_email_filter(
         &Expr::Literal(EmailLiteral::Importance(true)),
