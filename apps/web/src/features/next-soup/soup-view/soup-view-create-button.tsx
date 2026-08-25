@@ -148,19 +148,6 @@ export const SoupViewCreateButton = (
       ? viewOptions.filter((option) => option.id === props.preferredOptionId)
       : viewOptions;
   });
-  const libraryCreateOptions = createMemo(() =>
-    options().filter(
-      (option) =>
-        option.id !== 'import-file' && option.id !== 'import-folder'
-    )
-  );
-  const libraryUploadOptions = createMemo(() =>
-    options().filter(
-      (option) =>
-        option.id === 'import-file' || option.id === 'import-folder'
-    )
-  );
-
   const createLabel = createMemo(() => {
     const view = currentView();
     if (!view) return 'Create';
@@ -255,32 +242,23 @@ export const SoupViewCreateButton = (
   );
 
   const LibraryCreateButton = () => (
-    <div class="flex items-center gap-2">
-      <SplitActionButton
-        label="New"
-        icon={<PlusIcon class="size-4" />}
-        onPrimaryAction={() => handleSelect(libraryCreateOptions()[0])}
+    <Dropdown placement="bottom-start">
+      <Dropdown.Trigger
+        variant="cta"
+        size="sm"
+        class="h-8 rounded-full border-transparent px-3 font-semibold"
+        aria-label="New"
       >
-        <CreateOptionItems items={libraryCreateOptions()} />
-      </SplitActionButton>
-      <Dropdown placement="bottom-end">
-        <Dropdown.Trigger
-          variant="base"
-          size="icon-sm"
-          depth={2}
-          class="!size-8 rounded-full bg-surface [&_svg]:size-3.5!"
-          label="Upload"
-          aria-label="Upload"
-        >
-          <UploadIcon />
-        </Dropdown.Trigger>
-        <Dropdown.Content>
-          <Dropdown.Group>
-            <CreateOptionItems items={libraryUploadOptions()} />
-          </Dropdown.Group>
-        </Dropdown.Content>
-      </Dropdown>
-    </div>
+        <PlusIcon class="size-4" />
+        <span>New</span>
+        <ChevronDownIcon class="size-2.5" />
+      </Dropdown.Trigger>
+      <Dropdown.Content>
+        <Dropdown.Group>
+          <CreateOptionItems />
+        </Dropdown.Group>
+      </Dropdown.Content>
+    </Dropdown>
   );
 
   const MultiOptionButton = (buttonProps: { hideLabel?: boolean }) => (

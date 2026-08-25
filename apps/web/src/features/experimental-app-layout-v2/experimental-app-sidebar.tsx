@@ -135,6 +135,7 @@ export function ExperimentalAppSidebar(props: ExperimentalAppSidebarProps) {
   );
 
   const isActive = (item: ExperimentalSidebarItem) => {
+    if (item.id === 'search') return false;
     const content = activeContent();
     if (!content) return false;
     if (item.id === 'calendar') {
@@ -153,19 +154,14 @@ export function ExperimentalAppSidebar(props: ExperimentalAppSidebarProps) {
     navigate('/chat');
   };
 
-  const openUtilityView = (
-    view: 'calendar' | 'search',
-    event: MouseEvent
-  ) => {
-    analytics.track('sidebar_click', { view });
+  const openCalendarView = (event: MouseEvent) => {
+    analytics.track('sidebar_click', { view: 'calendar' });
     layout.openWithSplit(
-      view === 'calendar'
-        ? { type: 'calendar', id: CALENDAR_BLOCK_ID }
-        : { type: 'component', id: 'search' },
+      { type: 'calendar', id: CALENDAR_BLOCK_ID },
       {
         preferNewSplit: event.shiftKey,
         mergeHistory: false,
-        allowDuplicate: view !== 'calendar',
+        allowDuplicate: false,
         referredFrom: 'sidebar',
       }
     );
@@ -173,8 +169,15 @@ export function ExperimentalAppSidebar(props: ExperimentalAppSidebarProps) {
   };
 
   const openItem = (item: ExperimentalSidebarItem, event: MouseEvent) => {
-    if (item.id === 'calendar' || item.id === 'search') {
-      openUtilityView(item.id, event);
+    if (item.id === 'search') {
+      analytics.track('sidebar_click', { view: 'search' });
+      analytics.track('command_menu_open', { from: 'sidebar_search' });
+      CommandState.open();
+      return;
+    }
+
+    if (item.id === 'calendar') {
+      openCalendarView(event);
       return;
     }
 
