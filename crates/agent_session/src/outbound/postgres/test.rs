@@ -1,4 +1,5 @@
 use super::*;
+use crate::domain::model::DEFAULT_AGENT_SESSION_NAME;
 use agent_client_protocol::RawJsonRpcMessage;
 use agent_runtime_protocol::domain::schema::v0::{AcpMessage, SystemEvent};
 use bots::domain::models::{BotOwner, CreateBotRequest};
@@ -90,6 +91,7 @@ fn new_session(
         harness: "claude-code".to_string(),
         repo_url: Some("https://github.com/example/example".to_string()),
         workspace: "/workspace".to_string(),
+        sandbox_size: SandboxSize::Default,
     }
 }
 
@@ -177,12 +179,14 @@ async fn create_and_get_round_trips(pool: PgPool) {
     assert_eq!(created.created_at, session.created_at);
     assert_eq!(created.modified_at, session.modified_at);
     assert_eq!(session.id, id);
+    assert_eq!(session.name, DEFAULT_AGENT_SESSION_NAME);
     assert_eq!(session.bot_id, bot_id);
     assert_eq!(
         session.owner_id.to_string(),
         "macro|agent-session-owner@example.com"
     );
     assert_eq!(session.thread_id, None);
+    assert_eq!(session.sandbox_size, SandboxSize::Default);
     assert!(matches!(session.status, SessionStatus::NoMessages));
 }
 
@@ -227,6 +231,111 @@ async fn set_model_updates_only_the_model(pool: PgPool) {
     assert_eq!(
         repo.get(id).await.expect("get session").modified_at,
         modified_at
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn set_name_updates_only_the_name(pool: PgPool) {
+    let repo = PgAgentSessionRepo::new(pool.clone());
+    let bot_id = create_test_bot(&pool).await;
+    let id = create_session(&repo, new_session(bot_id, None, None))
+        .await
+        .id;
+
+    repo.set_name(id, "Fix Flaky Tests")
+        .await
+        .expect("persist name");
+    assert_eq!(
+        repo.get(id).await.expect("get session").name,
+        "Fix Flaky Tests"
+    );
+
+    let modified_at = repo.get(id).await.expect("get session").modified_at;
+    repo.set_name(id, "Fix Flaky Tests")
+        .await
+        .expect("restate name");
+    assert_eq!(
+        repo.get(id).await.expect("get session").modified_at,
+        modified_at
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn set_name_errors_for_missing_session(pool: PgPool) {
+    let repo = PgAgentSessionRepo::new(pool);
+
+    assert!(
+        repo.set_name(AgentSessionId::new(), "Missing Session")
+            .await
+            .is_err()
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn generated_name_only_replaces_the_default(pool: PgPool) {
+    let repo = PgAgentSessionRepo::new(pool.clone());
+    let bot_id = create_test_bot(&pool).await;
+    let id = create_session(&repo, new_session(bot_id, None, None))
+        .await
+        .id;
+
+    assert!(
+        repo.set_name_if_default(id, "Generated Name")
+            .await
+            .expect("set generated name")
+    );
+    repo.set_name(id, "Manual Name")
+        .await
+        .expect("set manual name");
+    assert!(
+        !repo
+            .set_name_if_default(id, "Late Generated Name")
+            .await
+            .expect("skip generated name")
+    );
+    assert_eq!(repo.get(id).await.expect("get session").name, "Manual Name");
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn sandbox_size_round_trips_and_user_default_falls_back(pool: PgPool) {
+    let repo = PgAgentSessionRepo::new(pool.clone());
+    let bot_id = create_test_bot(&pool).await;
+    let owner = user_id(OWNER);
+    let id = create_session(&repo, new_session(bot_id, None, None))
+        .await
+        .id;
+
+    assert_eq!(
+        repo.user_sandbox_size(&owner)
+            .await
+            .expect("missing default"),
+        SandboxSize::Default
+    );
+
+    repo.set_sandbox_size(id, SandboxSize::Large)
+        .await
+        .expect("persist session size");
+    assert_eq!(
+        repo.get(id).await.expect("get session").sandbox_size,
+        SandboxSize::Large
+    );
+
+    repo.set_user_sandbox_size(&owner, SandboxSize::Small)
+        .await
+        .expect("persist user default");
+    assert_eq!(
+        repo.user_sandbox_size(&owner).await.expect("user default"),
+        SandboxSize::Small
+    );
+
+    repo.set_user_sandbox_size(&owner, SandboxSize::Large)
+        .await
+        .expect("upsert user default");
+    assert_eq!(
+        repo.user_sandbox_size(&owner)
+            .await
+            .expect("upserted default"),
+        SandboxSize::Large
     );
 }
 

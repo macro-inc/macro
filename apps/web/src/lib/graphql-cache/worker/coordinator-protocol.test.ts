@@ -16,6 +16,12 @@ const version = {
   coordinatorVersion: CACHE_COORDINATOR_PROTOCOL_VERSION,
 } as const;
 
+const enginePort = {
+  postMessage() {},
+  close() {},
+  start() {},
+} as unknown as MessagePort;
+
 describe('coordinator runtime protocol', () => {
   it('validates cache RPCs and rejects unknown fields or kinds', () => {
     expect(isCacheRequest({ id: 0, kind: 'clear' })).toBe(true);
@@ -172,12 +178,20 @@ describe('coordinator runtime protocol', () => {
       kind: 'attach-engine-port',
       tabId: 'tab',
       ownerEpoch: 1,
+      enginePort,
     },
     {
       ...version,
       kind: 'graceful-departure',
       tabId: 'tab',
       ownerEpoch: 1,
+    },
+    {
+      ...version,
+      kind: 'navigation-departure',
+      tabId: 'tab',
+      ownerEpoch: 1,
+      reason: 'pagehide',
     },
     {
       ...version,

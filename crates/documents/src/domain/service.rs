@@ -1051,6 +1051,7 @@ impl<
         let file_type = args.file_type;
         let project_id = args.project_id;
         let sha = args.sha.clone();
+        let attribution = args.resolved_attribution();
 
         // The owner's team default link-share preference decides the initial
         // share permission; without a team the per-file-type default applies.
@@ -1177,6 +1178,8 @@ impl<
             DocumentCreatedMetadata {
                 document_id: document_metadata.document_id.clone(),
                 owner: document_metadata.owner.clone(),
+                actor: Some(attribution.actor()),
+                on_behalf_of: attribution.on_behalf_of(),
                 document_name: document_metadata.document_name.clone(),
                 file_type,
                 project_id: project_id.map(|p| p.to_string()),

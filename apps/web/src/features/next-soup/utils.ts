@@ -733,6 +733,36 @@ export const openEntityInSplitFromUnifiedList = async (
 };
 
 /**
+ * Mark the attached notification that caused a channel row to target a message.
+ *
+ * The row's Soup edge is authoritative here. The channel block's message marker
+ * discovers notifications through the separately paginated global source, so
+ * an older notification can drive navigation without being present there.
+ */
+export function markChannelTargetSeenOnOpen(
+  entity: EntityData,
+  notificationSource: NotificationSource
+) {
+  const target = getChannelEntityTarget(entity);
+  if (target?.kind !== 'message' || !isWithNotification(entity)) return;
+
+  const notifications = scopeChannelNotificationsForEntity(
+    entity,
+    entity.notifications?.() ?? []
+  ).filter((notification) => {
+    if (notificationIsRead(notification)) return false;
+    return (
+      getChannelNotificationParams(notification).messageId === target.messageId
+    );
+  });
+  if (notifications.length === 0) return;
+
+  void notificationSource.bulkMarkAsRead(notifications).catch((error) => {
+    console.error('Failed to mark message notifications as read', error);
+  });
+}
+
+/**
  * Mark a reminder's notification read when the user opens it.
  *
  * Every other entity type gets this for free from the block it opens into,
@@ -758,6 +788,17 @@ export function markReminderSeenOnOpen(
 }
 
 /** Build the singleton block params for an event row's target occurrence. */
+/**
+ * The event and instance a calendar row points at, resolved exactly as the
+ * open path resolves it so a copied link lands where a click would.
+ */
+export function calendarEventLinkTarget(
+  entity: Extract<EntityData, { type: 'calendar_event' }>
+): { eventId: string; occurrenceKey?: string } {
+  const { eventId, occurrenceKey } = calendarBlockParamsForEntity(entity);
+  return { eventId: eventId ?? entity.id, occurrenceKey };
+}
+
 function calendarBlockParamsForEntity(
   entity: Extract<EntityData, { type: 'calendar_event' }>
 ): CalendarBlockProps {
@@ -781,7 +822,9 @@ function calendarBlockParamsForEntity(
 
   return {
     eventId: content?.eventId ?? entity.id,
-    occurrenceKey: content?.occurrenceKey,
+    // A reminder names a precise instance, so it wins; otherwise fall back to
+    // whatever resolved the row (search supplies one, soup does not).
+    occurrenceKey: content?.occurrenceKey ?? entity.occurrenceKey,
     range: time ? createCalendarBlockRange(time) : undefined,
   };
 }

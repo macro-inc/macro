@@ -5,6 +5,7 @@ import { createSignal } from 'solid-js';
 import { createLexicalWrapper } from '../context/LexicalWrapperContext';
 import {
   actionsPlugin,
+  agentCommandsPlugin,
   awaitPlugin,
   codePlugin,
   createAccessoryStore,
@@ -94,6 +95,16 @@ export function buildHandleFromConfig(config: EditorConfig): EditorHandle {
     !actionsMenuOps &&
     config.mentions &&
     !config.mentions.entities &&
+    config.type !== 'plain-text'
+      ? createMenuOperations()
+      : undefined;
+  // Agent commands (`/` menu) list the slash commands a connected coding
+  // agent advertises over ACP. They share the `/` trigger with the actions
+  // and skills menus, so they only activate when neither owns it.
+  const agentCommandsMenuOps =
+    config.agentCommands &&
+    !actionsMenuOps &&
+    !skillsMenuOps &&
     config.type !== 'plain-text'
       ? createMenuOperations()
       : undefined;
@@ -208,6 +219,15 @@ export function buildHandleFromConfig(config: EditorConfig): EditorHandle {
     if (skillsMenuOps) {
       plugins.use(skillsPlugin({ menu: skillsMenuOps }));
     }
+
+    if (agentCommandsMenuOps && config.agentCommands) {
+      plugins.use(
+        agentCommandsPlugin({
+          menu: agentCommandsMenuOps,
+          commands: config.agentCommands.commands,
+        })
+      );
+    }
   }
 
   // Media (images, videos)
@@ -306,7 +326,8 @@ export function buildHandleFromConfig(config: EditorConfig): EditorHandle {
           (tagsMenuOps?.isOpen() ?? false) ||
           (emojisMenuOps?.isOpen() ?? false) ||
           (snippetsMenuOps?.isOpen() ?? false) ||
-          (skillsMenuOps?.isOpen() ?? false),
+          (skillsMenuOps?.isOpen() ?? false) ||
+          (agentCommandsMenuOps?.isOpen() ?? false),
       })
     );
   }
@@ -332,7 +353,16 @@ export function buildHandleFromConfig(config: EditorConfig): EditorHandle {
       const actions = actionsMenuOps?.isOpen() ?? false;
       const snippets = snippetsMenuOps?.isOpen() ?? false;
       const skills = skillsMenuOps?.isOpen() ?? false;
-      return mentions || tags || emojis || actions || snippets || skills;
+      const agentCommands = agentCommandsMenuOps?.isOpen() ?? false;
+      return (
+        mentions ||
+        tags ||
+        emojis ||
+        actions ||
+        snippets ||
+        skills ||
+        agentCommands
+      );
     },
   };
 
@@ -355,6 +385,7 @@ export function buildHandleFromConfig(config: EditorConfig): EditorHandle {
       emojisMenuOps,
       snippetsMenuOps,
       skillsMenuOps,
+      agentCommandsMenuOps,
       accessoryStore,
       dragInsertStore,
       draggableBlockStore,

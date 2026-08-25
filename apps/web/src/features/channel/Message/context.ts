@@ -4,6 +4,14 @@ import type { MessageActions, MessageData } from './types';
 const MessageContext = createContext<Accessor<MessageData>>();
 const MessageActionsContext = createContext<MessageActions>();
 
+type MessageActionMenuVisibility = {
+  visible: Accessor<boolean>;
+  setPersistent: (persistent: boolean) => void;
+};
+
+const MessageActionMenuVisibilityContext =
+  createContext<MessageActionMenuVisibility>();
+
 export type SearchHighlightTermsLookup = (
   messageId: string
 ) => readonly string[] | undefined;
@@ -12,6 +20,8 @@ const SearchHighlightTermsContext = createContext<SearchHighlightTermsLookup>();
 
 export const MessageProvider = MessageContext.Provider;
 export const MessageActionsProvider = MessageActionsContext.Provider;
+export const MessageActionMenuVisibilityProvider =
+  MessageActionMenuVisibilityContext.Provider;
 export const SearchHighlightTermsProvider =
   SearchHighlightTermsContext.Provider;
 
@@ -29,6 +39,16 @@ export function useMessage(): Accessor<MessageData> {
 
 export function useMessageActions(): MessageActions | undefined {
   return useContext(MessageActionsContext);
+}
+
+export function useMessageActionMenuVisibility(): MessageActionMenuVisibility {
+  const ctx = useContext(MessageActionMenuVisibilityContext);
+  if (!ctx) {
+    throw new Error(
+      'useMessageActionMenuVisibility must be used within <Message.Root>'
+    );
+  }
+  return ctx;
 }
 
 export type MessageActionDrawerState = {

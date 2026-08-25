@@ -836,6 +836,46 @@
         }
       }
     },
+    "/call/active": {
+      "get": {
+        "tags": ["call::inbound::axum_router"],
+        "summary": "Handler for `GET /call/active`.",
+        "description": "Lists all active calls in channels the caller is an active member of,\nnewest first. Calls with no active participants (orphaned by dropped RTC\nwebhooks) are excluded.",
+        "operationId": "get_active_calls",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActiveCallsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/call/record/preview": {
       "post": {
         "tags": ["call::inbound::axum_router"],
@@ -4051,6 +4091,313 @@
           },
           "401": {
             "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/collab_surfaces/{id}": {
+      "get": {
+        "tags": ["collab_surfaces"],
+        "summary": "Fetch a collab surface.",
+        "operationId": "get_collab_surface",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "The surface id.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CollabSurfaceResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": ["collab_surfaces"],
+        "summary": "Idempotently ensure a collab surface exists (load-or-create).",
+        "description": "The id is caller-supplied, so an embedding surface can hold a stable id\nand blindly ensure it on mount: the first ensure creates and initializes\nthe session, every later one (including concurrent ones) returns the same\nsurface. A soft-deleted id is `410 Gone` and never comes back.",
+        "operationId": "ensure_collab_surface",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "The surface id.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EnsureCollabSurfaceRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CollabSurfaceResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "No access to the parent entity",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The parent entity does not exist",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "The surface id was deleted and cannot be reused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Malformed request body (plain text)"
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["collab_surfaces"],
+        "summary": "Soft-delete a collab surface.",
+        "operationId": "delete_collab_surface",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "The surface id.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Deleted"
+          },
+          "401": {
+            "description": "Missing or invalid credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/collab_surfaces/{id}/token": {
+      "post": {
+        "tags": ["collab_surfaces"],
+        "summary": "Mint a sync-service connection token for a surface.",
+        "operationId": "create_collab_surface_token",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "The surface id.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CollabSurfaceTokenResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid credentials",
             "content": {
               "application/json": {
                 "schema": {
@@ -11105,6 +11452,57 @@
         "description": "Ordered from least to most access top -> bottom",
         "enum": ["view", "comment", "edit", "owner"]
       },
+      "ActiveCallSummary": {
+        "type": "object",
+        "description": "A currently active call, as returned by the batch active-calls listing.",
+        "required": [
+          "callId",
+          "channelId",
+          "createdBy",
+          "createdAt",
+          "participantCount"
+        ],
+        "properties": {
+          "callId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The call identifier."
+          },
+          "channelId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The channel this call belongs to."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the call was created."
+          },
+          "createdBy": {
+            "type": "string",
+            "description": "User who created the call."
+          },
+          "participantCount": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Number of active participants. Always >= 1 — calls with no active\nparticipants (e.g. orphaned by a dropped RTC webhook) are excluded."
+          }
+        }
+      },
+      "ActiveCallsResponse": {
+        "type": "object",
+        "description": "Response listing all active calls in channels the caller is a member of.",
+        "required": ["calls"],
+        "properties": {
+          "calls": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ActiveCallSummary"
+            },
+            "description": "The active calls, newest first."
+          }
+        }
+      },
       "ActivityType": {
         "type": "string",
         "description": "The kind of activity a user performs in a channel.",
@@ -12762,7 +13160,7 @@
       "BotToken": {
         "type": "object",
         "description": "Bot token metadata.",
-        "required": ["id", "bot_id", "token", "created_at"],
+        "required": ["id", "bot_id", "token_prefix", "created_at"],
         "properties": {
           "bot_id": {
             "$ref": "#/components/schemas/BotId",
@@ -12797,9 +13195,9 @@
             "format": "date-time",
             "description": "Revocation timestamp."
           },
-          "token": {
+          "token_prefix": {
             "type": "string",
-            "description": "Raw bearer token."
+            "description": "Display prefix of the bearer token. The raw secret is never stored here."
           }
         }
       },
@@ -14736,6 +15134,65 @@
         "type": "string",
         "enum": ["document", "chat", "project"]
       },
+      "CollabSurfaceResponse": {
+        "type": "object",
+        "description": "A collab surface, as returned by the API.",
+        "required": ["id", "parentEntityType", "parentEntityId", "state"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The surface id — also the sync-service session key."
+          },
+          "parentEntityId": {
+            "type": "string",
+            "description": "Id of the parent entity."
+          },
+          "parentEntityType": {
+            "oneOf": [
+              {
+                "type": "string",
+                "description": "The type of an entity in Macro",
+                "enum": [
+                  "user",
+                  "chat",
+                  "channel",
+                  "channel_message",
+                  "document",
+                  "project",
+                  "email_thread",
+                  "calendar_event",
+                  "team",
+                  "call",
+                  "foreign_entity",
+                  "static_file",
+                  "crm_company",
+                  "crm_contact",
+                  "reminder",
+                  "skill",
+                  "agent_session"
+                ]
+              }
+            ],
+            "description": "Type of the parent entity."
+          },
+          "state": {
+            "$ref": "#/components/schemas/SurfaceState",
+            "description": "Lifecycle state (`ready` for every surface visible via the API)."
+          }
+        }
+      },
+      "CollabSurfaceTokenResponse": {
+        "type": "object",
+        "description": "Response carrying a freshly minted sync-service connection token.",
+        "required": ["token"],
+        "properties": {
+          "token": {
+            "type": "string",
+            "description": "The signed JWT to pass to the sync-service websocket connect."
+          }
+        }
+      },
       "Comment": {
         "type": "object",
         "required": ["commentId", "threadId", "owner", "text"],
@@ -16474,6 +16931,10 @@
         "description": "Metadata for [`DocumentTopicEvent::Created`].",
         "required": ["document_id", "owner", "document_name"],
         "properties": {
+          "actor": {
+            "type": ["string", "null"],
+            "description": "Who mechanically created the document. Absent on events published\nbefore attribution: ingest then treats [`Self::owner`] as the actor."
+          },
           "created_at": {
             "type": ["string", "null"],
             "format": "date-time",
@@ -16495,6 +16956,17 @@
               {
                 "$ref": "#/components/schemas/FileType",
                 "description": "File type of the document, when known."
+              }
+            ]
+          },
+          "on_behalf_of": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/MacroUserIdStr",
+                "description": "The user whose feed this creation belongs on, when different from\n[`Self::actor`]. Absent means the actor is also the subject."
               }
             ]
           },
@@ -17659,6 +18131,49 @@
       "EmptyResponse": {
         "type": "object",
         "description": "Empty response is required due to custom fetch forcing `response.json()`"
+      },
+      "EnsureCollabSurfaceRequest": {
+        "type": "object",
+        "description": "Request body for ensuring a collab surface.",
+        "required": ["parentEntityType", "parentEntityId"],
+        "properties": {
+          "initialMarkdown": {
+            "type": "string",
+            "description": "Markdown to seed the surface with when this ensure creates it. Empty\n(or omitted) seeds the canonical blank document. Ignored when the\nsurface already exists and is ready."
+          },
+          "parentEntityId": {
+            "type": "string",
+            "description": "Id of the parent entity (a uuid)."
+          },
+          "parentEntityType": {
+            "oneOf": [
+              {
+                "type": "string",
+                "description": "The type of an entity in Macro",
+                "enum": [
+                  "user",
+                  "chat",
+                  "channel",
+                  "channel_message",
+                  "document",
+                  "project",
+                  "email_thread",
+                  "calendar_event",
+                  "team",
+                  "call",
+                  "foreign_entity",
+                  "static_file",
+                  "crm_company",
+                  "crm_contact",
+                  "reminder",
+                  "skill",
+                  "agent_session"
+                ]
+              }
+            ],
+            "description": "Type of the parent entity access derives from."
+          }
+        }
       },
       "EntityFilters": {
         "type": "object",
@@ -23726,6 +24241,11 @@
             "description": "Indicates if an error occurred"
           }
         }
+      },
+      "SurfaceState": {
+        "type": "string",
+        "description": "Lifecycle state of a collab surface.\n\n`Pending` means the row exists but the sync-service session may not: the\nrow is inserted before the durable object is initialized and flipped to\n`Ready` once the initial snapshot is stored. A persisted `Pending` row is\nan ensure that died or failed mid-init; the next ensure for the same id\nretries initialization (the initializer tolerates an already-initialized\nsession), so `Pending` is self-healing rather than terminal.",
+        "enum": ["pending", "ready"]
       },
       "SyncServiceVersionID": {
         "type": "object",

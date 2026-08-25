@@ -51,8 +51,8 @@ enum Cmd {
     DestroyLocal(InstanceArgs),
     /// Start, seed, and test an isolated local E2E stack.
     LocalE2e(super::e2e::LocalE2eArgs),
-    /// Headless stack orchestration (previews, agents, CI) — no TTY, no
-    /// attached dev server; the proxy serves a static frontend bundle.
+    /// Headless stack orchestration (agents, CI) — no TTY, no attached
+    /// dev server; the proxy serves a static frontend bundle.
     #[command(subcommand)]
     Stack(StackCmd),
 }
@@ -61,14 +61,12 @@ enum Cmd {
 pub enum StackCmd {
     /// Bring a full local stack up and return (only containers keep running).
     Up(super::stack::UpArgs),
-    /// Rebuild binaries (and optionally the frontend) and reload what changed.
+    /// Adopt a new build into the running stack. Data survives.
     Update(super::stack::UpdateArgs),
     /// Report the instance's containers, health, and URLs (`--json` for machines).
     Status(super::stack::StatusArgs),
     /// Tear the instance down: containers, volumes, and state.
     Down(super::stack::DownArgs),
-    /// Report the init-snapshot key/location for this instance.
-    Snapshot(super::stack::SnapshotArgs),
 }
 
 #[derive(Args, Clone, Default)]
@@ -259,7 +257,6 @@ fn run(cli: Cli) -> Result<()> {
             StackCmd::Update(a) => super::stack::update(&a),
             StackCmd::Status(a) => super::stack::status(&a),
             StackCmd::Down(a) => super::stack::down(&a),
-            StackCmd::Snapshot(a) => super::stack::snapshot_status(&a),
         },
     }
 }

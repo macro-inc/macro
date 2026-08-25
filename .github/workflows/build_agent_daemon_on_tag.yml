@@ -88,8 +88,15 @@ jobs:
       continue-on-error: true
     - name: Setup Nix
       uses: './.github/actions/setup-nix'
+      with:
+        nix-cache-url: ${{ vars.NIX_CACHE_URL }}
+        nix-cache-public-key: ${{ vars.NIX_CACHE_PUBLIC_KEY }}
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
     - name: Setup Nix dev shell
       uses: './.github/actions/setup-nix-dev-shell'
+      with:
+        shell: agent-daemon
     - name: Configure Namespace remote sccache
       if: (github.event_name != 'pull_request' && github.event_name != 'pull_request_target') || github.event.pull_request.head.repo.full_name == github.repository
       run: |-
@@ -265,8 +272,15 @@ jobs:
       continue-on-error: true
     - name: Setup Nix
       uses: './.github/actions/setup-nix'
+      with:
+        nix-cache-url: ${{ vars.NIX_CACHE_URL }}
+        nix-cache-public-key: ${{ vars.NIX_CACHE_PUBLIC_KEY }}
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
     - name: Setup Nix dev shell
       uses: './.github/actions/setup-nix-dev-shell'
+      with:
+        shell: agent-daemon
     - name: Configure Namespace remote sccache
       if: (github.event_name != 'pull_request' && github.event_name != 'pull_request_target') || github.event.pull_request.head.repo.full_name == github.repository
       run: |-
@@ -712,6 +726,7 @@ jobs:
     - build-daemon-linux-aarch64
     - build-daemon-macos-aarch64
     - build-daemon-macos-x86-64
+    if: '!cancelled() && needs.resolve-ref.result == ''success'' && (needs.build-daemon-linux-x86-64.result == ''success'' || needs.build-daemon-linux-aarch64.result == ''success'' || needs.build-daemon-macos-aarch64.result == ''success'' || needs.build-daemon-macos-x86-64.result == ''success'')'
     name: Upload Release Artifacts
     runs-on: ubuntu-latest
     permissions:

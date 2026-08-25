@@ -2,7 +2,8 @@ use std::sync::Arc;
 
 use agent_runtime_protocol::domain::ports::Transport;
 use agent_runtime_protocol::domain::schema::v0::{ToRuntimeMessage, ToServerMessage};
-use agent_session::domain::model::AgentSessionId;
+use agent_session::domain::model::{AgentSessionId, SandboxSize};
+use tracing::Instrument as _;
 
 use super::client::NamespaceClient;
 use super::errors::NamespaceError;
@@ -10,7 +11,8 @@ use super::types::{ContainerSpec, Instance, NamespaceSettings};
 use crate::domain::error::{HarnessError, Result};
 use crate::domain::model::SpawnContainer;
 use crate::domain::ports::ContainerManager;
-use crate::outbound::daytona::GithubToken;
+use crate::domain::sandbox::{SandboxResizeEffect, create_only_resize_effect, resources};
+use crate::outbound::daytona::{AnthropicApiKey, GithubToken};
 use crate::outbound::provision;
 use crate::outbound::sidecar::SidecarTransport;
 
@@ -20,6 +22,7 @@ pub struct NamespaceContainerManager {
     image_ref: super::types::ImageRef,
     lifetime: std::time::Duration,
     github_token: GithubToken,
+    anthropic_api_key: AnthropicApiKey,
 }
 
 impl NamespaceContainerManager {
@@ -32,15 +35,23 @@ impl NamespaceContainerManager {
             image_ref,
             lifetime,
             github_token,
+            anthropic_api_key,
         } = settings;
         Self {
             client: NamespaceClient::new(api_url, token),
             image_ref,
             lifetime,
             github_token,
+            anthropic_api_key,
         }
     }
 
+    #[tracing::instrument(
+        name = "agent.container.boot",
+        err,
+        skip(self),
+        fields(agent.container.provider = "namespace", agent.container.id = %instance.id)
+    )]
     async fn bring_up(&self, instance: Instance) -> Result<NamespaceContainer> {
         self.client
             .wait_until_ready(&instance.id, provision::ENSURE_TIMEOUT)
@@ -52,6 +63,7 @@ impl NamespaceContainerManager {
                 &instance,
                 &["bash", "-lc", &provision::ensure_ready_command()],
             )
+            .instrument(tracing::info_span!("agent.container.ensure_ready"))
             .await
             .map_err(unavailable)?;
         if output.exit_code != 0 {
@@ -68,7 +80,10 @@ impl NamespaceContainerManager {
             .create_ingress(&instance.id, provision::SIDECAR_PORT)
             .await
             .map_err(unavailable)?;
-        let socket = dial_sidecar(&sidecar_url).await.map_err(unavailable)?;
+        let socket = dial_sidecar(&sidecar_url)
+            .instrument(tracing::info_span!("agent.container.websocket_connect"))
+            .await
+            .map_err(unavailable)?;
 
         Ok(NamespaceContainer {
             instance: Arc::new(instance),
@@ -81,7 +96,12 @@ impl NamespaceContainerManager {
 impl ContainerManager for NamespaceContainerManager {
     type Transport = NamespaceContainer;
 
-    #[tracing::instrument(err, skip(self))]
+    #[tracing::instrument(
+        name = "agent.container.spawn",
+        err,
+        skip(self),
+        fields(agent.container.provider = "namespace")
+    )]
     async fn spawn(&self, command: SpawnContainer) -> Result<Self::Transport> {
         let container = ContainerSpec {
             image_ref: self.image_ref.clone(),
@@ -91,12 +111,16 @@ impl ContainerManager for NamespaceContainerManager {
                     "GITHUB_TOKEN".to_owned(),
                     self.github_token.expose().to_owned(),
                 ),
+                (
+                    "ANTHROPIC_API_KEY".to_owned(),
+                    self.anthropic_api_key.expose().to_owned(),
+                ),
             ],
             exported_ports: vec![provision::SIDECAR_PORT],
         };
         let instance = self
             .client
-            .create_instance(&container, self.lifetime)
+            .create_instance(&container, self.lifetime, resources(command.size))
             .await
             .map_err(unavailable)?;
         tracing::info!(instance_id = %instance.id, url = %instance.url, "instance created");
@@ -115,6 +139,16 @@ impl ContainerManager for NamespaceContainerManager {
                 Err(error)
             }
         }
+    }
+
+    fn resize_effect(&self, from: SandboxSize, to: SandboxSize) -> SandboxResizeEffect {
+        create_only_resize_effect(from, to)
+    }
+
+    async fn resize(&self, _session: AgentSessionId, _size: SandboxSize) -> Result<()> {
+        Err(HarnessError::Container(
+            "Namespace instances cannot be resized in place".to_owned(),
+        ))
     }
 
     async fn resume(&self, _session: AgentSessionId) -> Result<Self::Transport> {

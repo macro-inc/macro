@@ -38,6 +38,7 @@ fn embedded_assets_select_their_consumers() {
     let set: BTreeSet<&str> = packages.split_whitespace().collect();
     for expected in [
         "cache-core",
+        "collab_surface",
         "complete_graph",
         "documents",
         "seed_cli",
@@ -57,6 +58,7 @@ fn embedded_assets_select_their_consumers() {
     let mixed_set: BTreeSet<&str> = mixed.split_whitespace().collect();
     assert!(mixed_set.contains("email_validator"));
     assert!(mixed_set.contains("documents"));
+    assert!(mixed_set.contains("collab_surface"));
 }
 
 /// Drift check: every workspace package whose Rust sources mention an

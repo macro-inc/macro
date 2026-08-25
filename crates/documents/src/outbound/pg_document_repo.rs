@@ -430,6 +430,7 @@ impl DocumentRepo for PgDocumentRepo {
             created_at: provided_created_at,
             sub_type: requested_sub_type,
             skip_history,
+            attribution: _,
         } = args;
 
         let now = chrono::Utc::now();

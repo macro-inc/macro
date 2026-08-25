@@ -110,6 +110,13 @@ fn sent_methods(effects: &[Effect<u32>]) -> Vec<String> {
                 message: ToRuntimeMessage::Acp(AcpMessage(RawJsonRpcMessage::Request(request))),
                 ..
             } => Some(request.method.to_string()),
+            Effect::Send {
+                message:
+                    ToRuntimeMessage::Acp(AcpMessage(RawJsonRpcMessage::Notification(
+                        notification,
+                    ))),
+                ..
+            } => Some(notification.method.to_string()),
             _ => None,
         })
         .collect()
@@ -192,7 +199,7 @@ fn a_second_acp_ready_only_logs() {
 }
 
 #[test]
-fn session_new_success_flushes_the_queue_positionally() {
+fn session_new_success_flushes_the_queue() {
     let mut machine = machine();
     machine.handle(command("first", 1));
     machine.handle(command("second", 2));
@@ -200,8 +207,6 @@ fn session_new_success_flushes_the_queue_positionally() {
 
     let effects = machine.handle(session_opened("acp-42"));
 
-    // Each action's completion directly follows its send: delivery is
-    // positional, not counted.
     assert!(matches!(
         effects[..],
         [

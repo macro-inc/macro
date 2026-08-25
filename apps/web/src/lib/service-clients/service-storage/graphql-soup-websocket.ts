@@ -3,6 +3,7 @@ import type { CacheHost } from '@graphql-cache/host/types';
 import type { Client } from '@urql/core';
 import {
   NotificationUpdatesDocument,
+  type NotificationUpdatesSubscription,
   SoupUpdatesDocument,
 } from './graphql/generated/graphql';
 
@@ -80,6 +81,25 @@ export function createGraphqlSoupWebSocketUrlResolver({
   };
 }
 
+export type GraphqlNotificationPatch =
+  NotificationUpdatesSubscription['notificationUpdates'];
+
+type NotificationPatchListener = (patch: GraphqlNotificationPatch) => void;
+
+const notificationPatchListeners = new Set<NotificationPatchListener>();
+
+/** Subscribes to typed notification patches received from GraphQL. */
+export function subscribeToGraphqlNotificationPatches(
+  listener: NotificationPatchListener
+): () => void {
+  notificationPatchListeners.add(listener);
+  return () => notificationPatchListeners.delete(listener);
+}
+
+function publishNotificationPatch(patch: GraphqlNotificationPatch): void {
+  for (const listener of notificationPatchListeners) listener(patch);
+}
+
 const LIVE_UPDATE_SUBSCRIPTIONS = [
   {
     document: SoupUpdatesDocument,
@@ -106,27 +126,40 @@ export function createGraphqlSoupSubscriptionsLifecycle(): {
   return {
     replace(client, host) {
       unsubscribeAll();
-      if (!client || !host || host.disabled) return;
+      if (!client) return;
 
+      const subscriptions =
+        host && !host.disabled
+          ? LIVE_UPDATE_SUBSCRIPTIONS
+          : LIVE_UPDATE_SUBSCRIPTIONS.filter(
+              ({ document }) => document === NotificationUpdatesDocument
+            );
       let signaledFailure = false;
-      unsubscribes = LIVE_UPDATE_SUBSCRIPTIONS.map(
-        ({ document, errorMessage }) => {
-          const subscription = client
-            .subscription(document, {})
-            .subscribe((result) => {
-              if (result.error) {
-                console.warn(errorMessage, result.error);
-                if (!signaledFailure) {
-                  signaledFailure = true;
-                  toast.failure('Live updates disconnected', {
-                    subtext: 'Refresh the app to reconnect.',
-                  });
-                }
+      unsubscribes = subscriptions.map(({ document, errorMessage }) => {
+        const subscription = client
+          .subscription(document, {})
+          .subscribe((result) => {
+            if (
+              document === NotificationUpdatesDocument &&
+              result.data != null
+            ) {
+              publishNotificationPatch(
+                (result.data as NotificationUpdatesSubscription)
+                  .notificationUpdates
+              );
+            }
+            if (result.error) {
+              console.warn(errorMessage, result.error);
+              if (!signaledFailure) {
+                signaledFailure = true;
+                toast.failure('Live updates disconnected', {
+                  subtext: 'Refresh the app to reconnect.',
+                });
               }
-            });
-          return () => subscription.unsubscribe();
-        }
-      );
+            }
+          });
+        return () => subscription.unsubscribe();
+      });
     },
     dispose: unsubscribeAll,
   };

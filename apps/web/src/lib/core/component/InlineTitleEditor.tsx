@@ -1,4 +1,5 @@
 import PencilIcon from '@phosphor/pencil-simple.svg';
+import { cn } from '@ui/utils/classname';
 import { createSignal } from 'solid-js';
 
 /**
@@ -13,6 +14,8 @@ export function InlineTitleEditor(props: {
   placeholder: string;
   ariaLabel: string;
   onRename: (name: string) => void;
+  /** Optional typography and sizing override for compact title contexts. */
+  class?: string;
 }) {
   // Local draft while the user is typing; null = show the current value.
   const [draft, setDraft] = createSignal<string | null>(null);
@@ -35,7 +38,10 @@ export function InlineTitleEditor(props: {
         aria-label={props.ariaLabel}
         autocomplete="off"
         data-1p-ignore
-        class="field-sizing-content min-w-0 max-w-full truncate bg-transparent text-xl font-semibold outline-none"
+        class={cn(
+          'field-sizing-content min-w-0 max-w-full truncate bg-transparent text-xl font-semibold outline-none',
+          props.class
+        )}
         placeholder={props.placeholder}
         value={draft() ?? props.value}
         onInput={(e) => setDraft(e.currentTarget.value)}

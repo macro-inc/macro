@@ -1,4 +1,4 @@
-use ::activity::Action;
+use ::activity::{Action, Actor};
 use chrono::Utc;
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::EntityType as ActivityEntityType;
@@ -25,6 +25,8 @@ fn update(actor: Option<MacroUserIdStr<'static>>) -> EntityPropertyUpdatedMetada
         entity_type: PropertyEntityType::Task,
         property_definition_id: Uuid::from_u128(3),
         actor_user_id: actor,
+        actor: None,
+        on_behalf_of: None,
         value: None,
         previous_value: None,
         updated_at: Utc::now(),
@@ -80,4 +82,24 @@ fn task_property_update_maps_to_property_changed_on_the_document() {
 fn unattributed_property_update_is_dropped() {
     let event = envelope(PropertyTopicEvent::EntityPropertyUpdated(update(None)));
     assert_eq!(event.event.ingest(event.event_id), Ingest::Ignore);
+}
+
+#[test]
+fn delegated_property_update_keeps_the_user_as_subject() {
+    let mut metadata = update(None);
+    metadata.actor = Some(
+        Actor::try_from("bot|00000000-0000-0000-0000-000000005759".to_string())
+            .expect("system bot"),
+    );
+    metadata.on_behalf_of = Some(user("macro|owner@example.com"));
+    let event = envelope(PropertyTopicEvent::EntityPropertyUpdated(metadata));
+
+    let Ingest::Insert(activities) = event.event.ingest(event.event_id) else {
+        panic!("expected activities");
+    };
+    assert_eq!(
+        activities[0].actor.as_ref(),
+        "bot|00000000-0000-0000-0000-000000005759"
+    );
+    assert_eq!(activities[0].subject_id, "macro|owner@example.com");
 }

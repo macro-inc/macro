@@ -1,3 +1,4 @@
+import { startPendingSession } from '@app/features/block-agent/context/pending-session';
 import { openStandaloneReminderComposer } from '@app/features/reminders/reminder-composer';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { setAutomationComposerOpen } from '@block-automation/component';
@@ -14,6 +15,9 @@ import { CHAT_INPUT_TEXT_AREA_ID } from '@core/component/AI/component/input/Chat
 import { getIconConfig } from '@core/component/EntityIcon';
 import {
   ENABLE_ANIMATED_ICONS,
+  ENABLE_CHAT_V3_AGENTS,
+  ENABLE_CHAT_V3_AGENTS_FLAG,
+  ENABLE_CHAT_V3_AGENTS_OVERRIDE,
   ENABLE_REMINDERS,
   ENABLE_REMINDERS_FLAG,
   ENABLE_REMINDERS_OVERRIDE,
@@ -66,6 +70,7 @@ import type { Span } from '@macro-inc/observability';
 import BellSimpleIcon from '@phosphor/bell-simple.svg';
 import MagnifyingGlassIcon from '@phosphor/magnifying-glass.svg';
 import PlusIcon from '@phosphor/plus.svg';
+import Robot from '@phosphor/robot.svg';
 import { createProject } from '@queries/storage/projects';
 import { makePersisted } from '@solid-primitives/storage';
 import {
@@ -410,6 +415,23 @@ export function runCreateAction(
       setCreateMenuOpen(false, false);
       openStandaloneReminderComposer();
       return;
+    // Nothing to ask for: a managed session's bot, repository and workspace
+    // are all deployment configuration, so this opens one straight away.
+    //
+    // Opened against a placeholder rather than awaited: the create does not
+    // answer until its sandbox has booted and cloned the repo, and no one
+    // should watch a spinner for that. The block mounts now — composer live,
+    // prompts queueing — and adopts the real id when it lands
+    // (`block-agent/context/pending-session.ts`).
+    case 'agent': {
+      const { openWithSplit } = useSplitLayout();
+      setCreateMenuOpen(false, false);
+      openWithSplit(
+        { type: 'agent', id: startPendingSession() },
+        { referredFrom: 'launcher', preferNewSplit: shouldInsert }
+      );
+      return;
+    }
   }
 }
 
@@ -432,6 +454,9 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
     },
   },
   {
+    // The pre-agent-session chat, kept on `a` for anyone the new agent flag
+    // has not reached. Mutually exclusive with the Coding Agent entry below:
+    // both bind `a`, and exactly one is ever enabled.
     label: 'Agent',
     icon: WideStar,
     animatedIcon: AnimatedStarIcon,
@@ -442,6 +467,11 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
     hotkeyToken: TOKENS.create.chat,
     altHotkeyToken: TOKENS.create.chatNewSplit,
     hotkey: 'a',
+    // Both `a` entries have to survive registration for the dispatcher to
+    // pick between them by condition; the default 'override' would let the
+    // later one silently replace the earlier.
+    registrationType: 'add',
+    enabled: () => !ENABLE_CHAT_V3_AGENTS(),
     keyDownHandler: () => {
       runCreateAction('chat', { shouldInsert: pressedKeys().has('shift') });
       return true;
@@ -458,6 +488,23 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
     hotkey: 'u',
     keyDownHandler: () => {
       runCreateAction('automation');
+      return true;
+    },
+  },
+  {
+    label: 'Coding Agent',
+    icon: Robot,
+    description: 'Create agent session',
+    launcherHint: 'Sandboxed coding session',
+    keywords: ['new', 'make', 'add', 'agent', 'code', 'coder', 'session'],
+    blockName: 'agent',
+    hotkeyToken: TOKENS.create.agent,
+    altHotkeyToken: TOKENS.create.agentNewSplit,
+    hotkey: 'a',
+    registrationType: 'add',
+    enabled: () => ENABLE_CHAT_V3_AGENTS(),
+    keyDownHandler: () => {
+      runCreateAction('agent', { shouldInsert: pressedKeys().has('shift') });
       return true;
     },
   },
@@ -638,13 +685,16 @@ export function useCreateMenuBlocks(
   const remindersFlag = useFeatureFlag(ENABLE_REMINDERS_FLAG, {
     enabledOverride: ENABLE_REMINDERS_OVERRIDE,
   });
+  const agentsFlag = useFeatureFlag(ENABLE_CHAT_V3_AGENTS_FLAG, {
+    enabledOverride: ENABLE_CHAT_V3_AGENTS_OVERRIDE,
+  });
   return createMemo(() => {
     remindersFlag();
-    return source().filter(
-      (block) =>
-        (block.blockName !== 'snippet' || snippetsFlag().enabled) &&
-        (block.enabled?.() ?? true)
-    );
+    agentsFlag();
+    return source().filter((block) => {
+      if (block.blockName === 'snippet') return snippetsFlag().enabled;
+      return block.enabled?.() ?? true;
+    });
   });
 }
 

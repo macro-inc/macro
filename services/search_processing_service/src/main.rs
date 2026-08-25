@@ -254,6 +254,7 @@ async fn main() -> anyhow::Result<()> {
             s3_client: s3_client.clone(),
             opensearch_client: opensearch_client.clone(),
             lexical_client: lexical_client.clone(),
+            calendar_search_enabled: config.calendar_search_enabled,
         };
         run_search_processing_workers(search_processing_context, config.worker_count);
 
@@ -263,6 +264,7 @@ async fn main() -> anyhow::Result<()> {
             s3_client: s3_client.clone(),
             document_storage_bucket: config.document_storage_bucket.to_string(),
             lexical_client,
+            calendar_search_enabled: config.calendar_search_enabled,
         };
         tokio::spawn(supervise_event_consumer(
             config.kafka_brokers.as_ref().to_owned(),

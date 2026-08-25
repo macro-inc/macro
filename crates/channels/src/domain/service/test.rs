@@ -1,16 +1,17 @@
 use super::*;
 use crate::domain::{
+    dm::ensure_dms_for_joining_member,
     events::ChannelEvent,
     models::{
         Activity, ActivityType, BotId, BotSenderProfile, ChannelAttachment, ChannelAttachmentType,
         ChannelContextMessage, ChannelInfo, ChannelMessageFilters, ChannelMetadata,
         ChannelParticipant, ChannelType, CountedReaction, CreateChannelRequest,
         CreateEntityMentionOptions, CreatedChannel, DeleteMessageQuery, EntityMention,
-        MessageAttachment, MessagePageDirection, MutatedAttachment, MutatedMessage,
-        NewChannelAttachment, ParticipantRole, PatchChannelRequest, PatchMessageRequest,
-        PostMessageRequest, PostReactionRequest, ReactionAction, ReferencedShareItem,
-        ReferencedShareItemType, ResolvedChannelMessage, Sender, SimpleMention, ThreadData,
-        ThreadReplyRow, TopLevelMessageRow,
+        GetOrCreateDmRequest, MessageAttachment, MessagePageDirection, MutatedAttachment,
+        MutatedMessage, NewChannelAttachment, ParticipantRole, PatchChannelRequest,
+        PatchMessageRequest, PostMessageRequest, PostReactionRequest, ReactionAction,
+        ReferencedShareItem, ReferencedShareItemType, ResolvedChannelMessage, Sender,
+        SimpleMention, ThreadData, ThreadReplyRow, TopLevelMessageRow,
     },
     ports::{
         ChannelEventDispatcher, ChannelMentionExtractor, ChannelReferenceSharePermissions,
@@ -2259,6 +2260,131 @@ async fn create_channel_event_carries_channel_name() {
         events.as_slice(),
         [ChannelEvent::ChannelCreated { channel_name: Some(name), .. }] if name == "general"
     ));
+}
+
+#[tokio::test]
+async fn ensure_dms_dispatches_created_channel_once() {
+    let channel_id = Uuid::new_v4();
+    let joiner = macro_id("macro|joiner@test.com");
+    let teammate = macro_id("macro|teammate@test.com");
+    let repo = FakeMutationRepo::new(channel_id, joiner.as_ref());
+    let events = FakeEvents::default();
+    let service = mutation_service(repo, events.clone(), FakeReferenceSharing::default());
+
+    let summary = service
+        .ensure_dms(ensure_dms_for_joining_member(
+            joiner.clone(),
+            vec![joiner.clone(), teammate.clone()],
+        ))
+        .await
+        .unwrap();
+
+    assert_eq!(
+        summary,
+        EnsureDmsSummary {
+            created: 1,
+            existing: 0,
+            failed: 0,
+        }
+    );
+    let events = events.events.lock().unwrap();
+    assert!(matches!(
+        events.as_slice(),
+        [ChannelEvent::ChannelCreated {
+            channel_id: actual_channel_id,
+            actor,
+            channel_type: ChannelType::DirectMessage,
+            channel_name: None,
+            participant_user_ids,
+        }] if actual_channel_id == &channel_id
+            && actor.as_user() == Some(&joiner)
+            && participant_user_ids.contains(&joiner)
+            && participant_user_ids.contains(&teammate)
+    ));
+}
+
+#[tokio::test]
+async fn ensure_dms_does_not_dispatch_for_existing_channel() {
+    let channel_id = Uuid::new_v4();
+    let joiner = macro_id("macro|joiner@test.com");
+    let teammate = macro_id("macro|teammate@test.com");
+    let mut repo = MockChannelRepo::new();
+    repo.expect_maybe_get_dm()
+        .once()
+        .returning(move |_, _| Box::pin(async move { Ok(Some(channel_id)) }));
+    let events = FakeEvents::default();
+    let service = ChannelServiceImpl::with_dependencies(
+        repo,
+        events.clone(),
+        FakeReferenceSharing::default(),
+    );
+
+    let summary = service
+        .ensure_dms(ensure_dms_for_joining_member(joiner, vec![teammate]))
+        .await
+        .unwrap();
+
+    assert_eq!(
+        summary,
+        EnsureDmsSummary {
+            created: 0,
+            existing: 1,
+            failed: 0,
+        }
+    );
+    assert!(events.events.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn get_or_create_dm_rejects_self_pair() {
+    let user = macro_id("macro|same@test.com");
+    let repo = FakeMutationRepo::new(Uuid::new_v4(), user.as_ref());
+    let service = mutation_service(repo, FakeEvents::default(), FakeReferenceSharing::default());
+
+    let error = service
+        .get_or_create_dm(
+            Sender::new_from_user(user.clone()),
+            GetOrCreateDmRequest { recipient_id: user },
+        )
+        .await
+        .unwrap_err();
+
+    assert!(matches!(
+        error,
+        ChannelMutationErr::BadRequest(message)
+            if message == "recipient_id cannot be the same as the user_id"
+    ));
+}
+
+#[tokio::test]
+async fn get_or_create_dm_returns_get_for_existing_pair() {
+    let channel_id = Uuid::new_v4();
+    let actor = macro_id("macro|actor@test.com");
+    let recipient = macro_id("macro|recipient@test.com");
+    let mut repo = MockChannelRepo::new();
+    repo.expect_maybe_get_dm()
+        .once()
+        .returning(move |_, _| Box::pin(async move { Ok(Some(channel_id)) }));
+    let events = FakeEvents::default();
+    let service = ChannelServiceImpl::with_dependencies(
+        repo,
+        events.clone(),
+        FakeReferenceSharing::default(),
+    );
+
+    let response = service
+        .get_or_create_dm(
+            Sender::new_from_user(actor),
+            GetOrCreateDmRequest {
+                recipient_id: recipient,
+            },
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.channel_id, channel_id.to_string());
+    assert_eq!(response.action, GetOrCreateAction::Get);
+    assert!(events.events.lock().unwrap().is_empty());
 }
 
 #[tokio::test]

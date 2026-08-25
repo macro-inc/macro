@@ -121,6 +121,8 @@ pub enum CloseReason {
     TransportFailed,
     /// The shell could not put an action on the transport.
     SendFailed,
+    /// The runtime did not finish its ACP handshake before the deadline.
+    HandshakeTimedOut,
     /// The shell could not persist a log entry, and an unlogged session may
     /// not keep running: the log stream is the session's history.
     LogFailed,
@@ -133,6 +135,7 @@ impl std::fmt::Display for CloseReason {
             Self::TransportClosed => "the transport closed",
             Self::TransportFailed => "the transport failed",
             Self::SendFailed => "an action could not be sent",
+            Self::HandshakeTimedOut => "the ACP handshake timed out",
             Self::LogFailed => "a log entry could not be persisted",
         })
     }

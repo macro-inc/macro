@@ -296,3 +296,10 @@ impl StreamRepo for RedisPostgresStreamRepo {
             .subscribe()
     }
 }
+
+// The domain error stays sqlx-free; this adapter owns the mapping.
+impl From<sqlx::Error> for StreamServiceError {
+    fn from(value: sqlx::Error) -> Self {
+        Self::StorageError(value.to_string())
+    }
+}

@@ -58,15 +58,17 @@ impl BotAuthorizer for SelfBotAuthorizer {
 #[derive(Default)]
 struct RecordingOpener {
     opened: Mutex<Vec<OpenExternalAgentSession>>,
+    managed: Mutex<Vec<OpenManagedSession>>,
 }
 
-impl ExternalSessionOpener for RecordingOpener {
+impl SessionOpener for RecordingOpener {
     async fn open_external_session(
         &self,
         request: OpenExternalAgentSession,
     ) -> crate::domain::error::Result<AgentSession> {
         let session = AgentSession {
             id: AgentSessionId::TEST_A,
+            name: crate::domain::model::DEFAULT_AGENT_SESSION_NAME.to_owned(),
             owner_id: request.owner.clone(),
             thread_id: request.thread.as_ref().map(|thread| thread.thread_id),
             thread_channel_id: request.thread.as_ref().map(|thread| thread.channel_id),
@@ -76,12 +78,39 @@ impl ExternalSessionOpener for RecordingOpener {
             harness: "opencode".to_owned(),
             repo_url: request.repo_url.clone(),
             workspace: request.workspace.clone(),
+            sandbox_size: crate::domain::model::SandboxSize::Default,
             acp_session_id: None,
             status: SessionStatus::NoMessages,
             created_at: Utc::now(),
             modified_at: Utc::now(),
         };
         self.opened.lock().unwrap().push(request);
+        Ok(session)
+    }
+
+    async fn open_managed_session(
+        &self,
+        request: OpenManagedSession,
+    ) -> crate::domain::error::Result<AgentSession> {
+        let session = AgentSession {
+            id: AgentSessionId::TEST_A,
+            name: crate::domain::model::DEFAULT_AGENT_SESSION_NAME.to_owned(),
+            owner_id: request.owner.clone(),
+            thread_id: None,
+            thread_channel_id: None,
+            originating_message_id: None,
+            bot_id: BotId::TEST_A,
+            model: "claude".to_owned(),
+            harness: "opencode".to_owned(),
+            repo_url: Some("https://github.com/macro-inc/macro".to_owned()),
+            workspace: crate::MANAGED_CONTAINER_WORKSPACE.to_owned(),
+            sandbox_size: crate::domain::model::SandboxSize::Default,
+            acp_session_id: None,
+            status: SessionStatus::NoMessages,
+            created_at: Utc::now(),
+            modified_at: Utc::now(),
+        };
+        self.managed.lock().unwrap().push(request);
         Ok(session)
     }
 

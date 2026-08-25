@@ -32,6 +32,7 @@ import { GlobalAppStateProvider } from '@components/app/GlobalAppState';
 import { Layout } from '@components/app/Layout';
 import { ReactiveFavicon } from '@components/app/ReactiveFavicon';
 import { LAYOUT_ROUTE } from '@components/app/split-layout/SplitLayoutRoute';
+import { publishLoginSuccess } from '@core/auth/login-events';
 import { ChatAttachmentsInit } from '@core/component/AI/signal/globalAttachments';
 import { LoadingBlock } from '@core/component/LoadingBlock';
 import { ToastRegion } from '@core/component/Toast/ToastRegion';
@@ -297,16 +298,12 @@ const ROUTES: RouteDefinition[] = [
   {
     path: '/login/popup/success',
     component: () => {
-      const channel = new BroadcastChannel('auth');
-
       onMount(() => {
-        channel.postMessage({ type: 'login-success' });
-        channel.close();
+        publishLoginSuccess();
         window.close();
       });
 
       onCleanup(() => {
-        channel.close();
         window.close();
       });
 
@@ -316,8 +313,7 @@ const ROUTES: RouteDefinition[] = [
             <Button
               variant="base"
               onClick={() => {
-                channel.postMessage({ type: 'login-success' });
-                channel.close();
+                publishLoginSuccess();
                 window.close();
               }}
             >

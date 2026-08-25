@@ -10,7 +10,9 @@
  * and keeps rows reconciled so a streaming turn updates in place.
  */
 
+import type { AgentSessionRenamedEvent } from '@queries/agent-session/realtime-protocol';
 import { acquireAgentSessionFold } from '@queries/agent-session/session-fold';
+import { subscribeAgentSessionRenamed } from '@queries/agent-session/session-metadata-sync';
 import type {
   FoldedMessage,
   SessionMetadata,
@@ -28,6 +30,7 @@ import {
   onCleanup,
 } from 'solid-js';
 import { createStore, produce, reconcile } from 'solid-js/store';
+import { lastTurnMessage } from '../state/control-message';
 
 export type AgentSessionFeed = {
   /** Session metadata, absent until the load resolves. */
@@ -57,8 +60,14 @@ function sameMessage(a: FoldedMessage, b: FoldedMessage): boolean {
   return a.turn === b.turn && a.author.kind === b.author.kind;
 }
 
+/**
+ * `sessionId` is absent while a just-created session's `POST` is still on the
+ * wire (`pending-session.ts`). `createResource` treats an absent source as
+ * "nothing to fetch", so the block simply renders its empty transcript until
+ * the id lands and the fetch runs itself.
+ */
 export function createAgentSessionFeed(
-  sessionId: Accessor<string>
+  sessionId: Accessor<string | undefined>
 ): AgentSessionFeed {
   const [list, setList] = createStore<FoldedMessage[]>([]);
   const [bot, setBot] = createSignal<SessionBot>();
@@ -94,14 +103,17 @@ export function createAgentSessionFeed(
   // acquisition or the shared fold leaks a reference.
   let generation = 0;
   let closed = false;
+  let latestRename: AgentSessionRenamedEvent | undefined;
+  let renameRefresh = 0;
   onCleanup(() => {
     closed = true;
     release?.();
     release = undefined;
   });
 
-  const [resource] = createResource(sessionId, async (id) => {
+  const [resource, { mutate }] = createResource(sessionId, async (id) => {
     const run = ++generation;
+    const renameRefreshAtStart = renameRefresh;
     const superseded = () => closed || generation !== run;
 
     release?.();
@@ -134,12 +146,44 @@ export function createAgentSessionFeed(
       upsert(fold.messages);
     });
 
-    return session.value;
+    return renameRefresh > renameRefreshAtStart &&
+      latestRename?.agentSessionId === id
+      ? { ...session.value, name: latestRename.name }
+      : session.value;
   });
 
+  onCleanup(
+    subscribeAgentSessionRenamed((event) => {
+      if (event.agentSessionId !== sessionId()) return;
+      const run = ++renameRefresh;
+      void agentHarnessServiceClient
+        .get(event.agentSessionId)
+        .then((session) => {
+          if (
+            session.isErr() ||
+            run !== renameRefresh ||
+            event.agentSessionId !== sessionId()
+          )
+            return;
+          latestRename = {
+            agentSessionId: event.agentSessionId,
+            name: session.value.name,
+          };
+          mutate((current) =>
+            current ? { ...current, name: session.value.name } : current
+          );
+        });
+    })
+  );
+
   const messages = () => list;
+  // A user-authored tail means a prompt is awaiting its reply — except when
+  // it is a control, which is user-authored, never gets a stop reason, and
+  // starts no turn. Counting one would latch this signal true forever, and
+  // the composer's drain holds every prompt behind it: changing the model
+  // would silently stop the session from accepting anything again.
   const working = () => {
-    const last = list.at(-1);
+    const last = lastTurnMessage(list);
     if (!last) return false;
     return last.author.kind === 'user' || last.stop == null;
   };

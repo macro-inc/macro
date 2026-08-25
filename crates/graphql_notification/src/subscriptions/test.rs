@@ -63,10 +63,35 @@ fn subscription(
     )
 }
 
+fn task_assignment(
+    owner_id: MacroUserIdStr<'static>,
+    notification_id: uuid::Uuid,
+) -> UserNotificationRow<NotifEvent> {
+    UserNotificationRow {
+        owner_id,
+        notification_id,
+        notification_event_type: "task_assigned".to_string(),
+        entity: EntityType::Document.with_entity_string("task-1".to_string()),
+        sent: true,
+        done: false,
+        created_at: Utc::now(),
+        viewed_at: None,
+        updated_at: Utc::now(),
+        deleted_at: None,
+        notification_metadata: NotifEvent::TaskAssigned(TaskAssignedMetadata {
+            task_id: "task-1".to_string(),
+            task_name: Some("Test task".to_string()),
+            sub_type: None,
+            assigned_by: MacroUserIdStr::parse_from_str("macro|assigner@example.com").unwrap(),
+            sender_profile_picture_url: None,
+        }),
+        sender_id: None,
+    }
+}
+
 #[tokio::test]
-async fn notification_updates_streams_realtime_notifications() {
+async fn notification_updates_streams_new_notifications() {
     let user_id = MacroUserIdStr::parse_from_str("macro|user@example.com").unwrap();
-    let assigned_by = MacroUserIdStr::parse_from_str("macro|assigner@example.com").unwrap();
     let (sender, subscription) = subscription(WebSocketNotificationSubscriptionExit::Closed);
     let service = TestSubscriptionService {
         subscriptions: Mutex::new(VecDeque::from([subscription])),
@@ -78,34 +103,15 @@ async fn notification_updates_streams_realtime_notifications() {
     );
     let mut responses = Box::pin(schema.execute_stream(
         async_graphql::Request::new(
-            "subscription { notificationUpdates { __typename ... on GraphqlNotification { id eventType entityType entityId metadata { __typename ... on GraphqlTaskAssignedMetadata { taskId taskName assignedBy } } } } }",
+            "subscription { notificationUpdates { __typename ... on GraphqlNewNotification { notification { id eventType entityType entityId metadata { __typename ... on GraphqlTaskAssignedMetadata { taskId taskName assignedBy } } } } } }",
         )
         .data(user_id.clone()),
     ));
 
     let notification_id = uuid::Uuid::from_u128(42);
     sender
-        .send(NotificationSubscriptionUpdate::Updated(Arc::new(
-            UserNotificationRow {
-                owner_id: user_id,
-                notification_id,
-                notification_event_type: "task_assigned".to_string(),
-                entity: EntityType::Document.with_entity_string("task-1".to_string()),
-                sent: true,
-                done: false,
-                created_at: Utc::now(),
-                viewed_at: None,
-                updated_at: Utc::now(),
-                deleted_at: None,
-                notification_metadata: NotifEvent::TaskAssigned(TaskAssignedMetadata {
-                    task_id: "task-1".to_string(),
-                    task_name: Some("Test task".to_string()),
-                    sub_type: None,
-                    assigned_by,
-                    sender_profile_picture_url: None,
-                }),
-                sender_id: None,
-            },
+        .send(NotificationSubscriptionUpdate::New(Arc::new(
+            task_assignment(user_id, notification_id),
         )))
         .await
         .expect("subscription remains open");
@@ -115,26 +121,62 @@ async fn notification_updates_streams_realtime_notifications() {
         .expect("subscription response");
     assert!(response.errors.is_empty(), "{:?}", response.errors);
     let data = response.data.into_json().expect("response data is JSON");
+    let update = &data["notificationUpdates"];
+    let notification = &update["notification"];
+    assert_eq!(update["__typename"], "GraphqlNewNotification");
+    assert_eq!(notification["id"], notification_id.to_string());
+    assert_eq!(notification["eventType"], "task_assigned");
+    assert_eq!(notification["entityType"], "DOCUMENT");
+    assert_eq!(notification["entityId"], "task-1");
     assert_eq!(
-        data["notificationUpdates"]["id"],
-        notification_id.to_string()
-    );
-    assert_eq!(data["notificationUpdates"]["eventType"], "task_assigned");
-    assert_eq!(data["notificationUpdates"]["entityType"], "DOCUMENT");
-    assert_eq!(data["notificationUpdates"]["entityId"], "task-1");
-    assert_eq!(
-        data["notificationUpdates"]["metadata"]["__typename"],
+        notification["metadata"]["__typename"],
         "GraphqlTaskAssignedMetadata"
     );
-    assert_eq!(data["notificationUpdates"]["metadata"]["taskId"], "task-1");
+    assert_eq!(notification["metadata"]["taskId"], "task-1");
+    assert_eq!(notification["metadata"]["taskName"], "Test task");
     assert_eq!(
-        data["notificationUpdates"]["metadata"]["taskName"],
-        "Test task"
-    );
-    assert_eq!(
-        data["notificationUpdates"]["metadata"]["assignedBy"],
+        notification["metadata"]["assignedBy"],
         "macro|assigner@example.com"
     );
+}
+
+#[tokio::test]
+async fn notification_updates_streams_updated_notifications() {
+    let user_id = MacroUserIdStr::parse_from_str("macro|user@example.com").unwrap();
+    let (sender, subscription) = subscription(WebSocketNotificationSubscriptionExit::Closed);
+    let service = TestSubscriptionService {
+        subscriptions: Mutex::new(VecDeque::from([subscription])),
+    };
+    let schema = Schema::new(
+        Query,
+        EmptyMutation,
+        NotificationSubscriptionRoot::new(service),
+    );
+    let mut responses = Box::pin(schema.execute_stream(
+        async_graphql::Request::new(
+            "subscription { notificationUpdates { __typename ... on GraphqlUpdatedNotification { notification { id done viewedAt } } } }",
+        )
+        .data(user_id.clone()),
+    ));
+
+    let notification_id = uuid::Uuid::from_u128(43);
+    sender
+        .send(NotificationSubscriptionUpdate::Updated(Arc::new(
+            task_assignment(user_id, notification_id),
+        )))
+        .await
+        .expect("subscription remains open");
+
+    let response = futures::StreamExt::next(&mut responses)
+        .await
+        .expect("subscription response");
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    let data = response.data.into_json().expect("response data is JSON");
+    let update = &data["notificationUpdates"];
+    assert_eq!(update["__typename"], "GraphqlUpdatedNotification");
+    assert_eq!(update["notification"]["id"], notification_id.to_string());
+    assert_eq!(update["notification"]["done"], false);
+    assert_eq!(update["notification"]["viewedAt"], serde_json::Value::Null);
 }
 
 #[tokio::test]

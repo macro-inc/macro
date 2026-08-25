@@ -2,6 +2,8 @@
 pub mod activity;
 /// Kafka event models for the `macro.channels` topic.
 pub mod broker_events;
+/// Direct-message identity and batch commands.
+pub mod dm;
 #[cfg(feature = "entity_mutation")]
 /// Unified entity-mutation capability impls.
 pub mod entity_mutation;
@@ -23,3 +25,6 @@ pub mod service;
 #[cfg(feature = "ports")]
 /// Domain orchestration for channel side effects.
 pub mod side_effects;
+/// Ensure teammate direct messages from a join payload.
+#[cfg(feature = "ports")]
+pub mod teammate_dms;

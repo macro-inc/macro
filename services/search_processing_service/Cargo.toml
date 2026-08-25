@@ -67,6 +67,7 @@ macro_db_client = { path = "../../crates/macro_db_client", optional = true } # M
 macro_entrypoint = { path = "../../crates/macro_entrypoint" }
 macro_env = { path = "../../crates/macro_env" }
 macro_env_var = { path = "../../crates/macro_env_var" }
+calendar_events = { path = "../../crates/calendar_events" }
 macro_event_broker = { path = "../../crates/macro_event_broker", default-features = false, features = [
   "outbound",
 ], optional = true }

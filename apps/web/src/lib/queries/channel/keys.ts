@@ -30,6 +30,9 @@ export const channelKeys = createQueryKeys('channel', {
   }),
   activity: null,
   listChannels: null,
+  quickAccessGraphql: (cacheClientId: string) => ({
+    queryKey: [cacheClientId],
+  }),
 });
 
 export const ChannelNonceKeys = {

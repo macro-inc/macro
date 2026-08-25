@@ -318,7 +318,6 @@ fn inject_trace_headers_emits_current_span_traceparent() {
 
         let mut headers = http::HeaderMap::new();
         inject_trace_headers(&mut headers);
-
         let traceparent = headers
             .get("traceparent")
             .expect("traceparent header should be injected inside a span")

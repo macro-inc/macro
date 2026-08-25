@@ -75,14 +75,40 @@ pub struct OpenExternalAgentSession {
     pub thread: Option<SessionThread>,
 }
 
-/// Opens externally-served sessions: rows whose runtime is hosted by the
-/// bot's operator and dials in on its own schedule. Implemented by the
-/// harness, which owns the session-opening semantics.
-pub trait ExternalSessionOpener: Send + Sync + 'static {
+/// Everything needed to open a session the server hosts itself.
+///
+/// Deliberately thin: a managed session runs in a sandbox this deployment
+/// provisions from its own configuration, so the bot, the repository and the
+/// workspace are not the caller's to choose. There is no originating mention
+/// and nothing to announce.
+#[derive(Debug, Clone)]
+pub struct OpenManagedSession {
+    /// The user who owns the session and is credited for its messages.
+    pub owner: MacroUserIdStr<'static>,
+    /// First prompt to deliver once the sandbox is attached. `None` opens an
+    /// idle session its owner prompts from the session's own surface.
+    pub prompt: Option<String>,
+}
+
+/// Opens sessions, however they are served. Implemented by the harness, which
+/// owns the session-opening semantics.
+///
+/// Two openings, because the two runtimes differ in who owns the machine: an
+/// external session's runtime is hosted by the bot's operator and dials in on
+/// its own schedule, while a managed session's sandbox is provisioned here.
+/// That difference is why only one of them takes a workspace.
+pub trait SessionOpener: Send + Sync + 'static {
     /// Open a session and return the persisted row.
     fn open_external_session(
         &self,
         request: OpenExternalAgentSession,
+    ) -> impl Future<Output = Result<AgentSession>> + Send;
+
+    /// Provision a sandbox, open a session on it and return the persisted
+    /// row, delivering `prompt` once it is attached.
+    fn open_managed_session(
+        &self,
+        request: OpenManagedSession,
     ) -> impl Future<Output = Result<AgentSession>> + Send;
 
     /// The session a thread's mentions already route to, if one exists.
@@ -147,6 +173,38 @@ pub trait AgentSessionRepo: Send + Sync + 'static {
     fn set_model(&self, id: AgentSessionId, model: &str)
     -> impl Future<Output = Result<()>> + Send;
 
+    /// Persist the user-facing session name. Idempotent.
+    fn set_name(&self, id: AgentSessionId, name: &str) -> impl Future<Output = Result<()>> + Send;
+
+    /// Persist an automatically generated name only while the default remains.
+    fn set_name_if_default(
+        &self,
+        id: AgentSessionId,
+        name: &str,
+    ) -> impl Future<Output = Result<bool>> + Send;
+
+    /// Persist the sandbox size this session was spawned with, or resized to.
+    fn set_sandbox_size(
+        &self,
+        id: AgentSessionId,
+        size: SandboxSize,
+    ) -> impl Future<Output = Result<()>> + Send;
+
+    /// The user's default sandbox size for new `@coder` sessions.
+    ///
+    /// A missing row is [`SandboxSize::Default`], not an error.
+    fn user_sandbox_size(
+        &self,
+        user_id: &MacroUserIdStr<'static>,
+    ) -> impl Future<Output = Result<SandboxSize>> + Send;
+
+    /// Upsert the user's default sandbox size for the next `@coder` mention.
+    fn set_user_sandbox_size(
+        &self,
+        user_id: &MacroUserIdStr<'static>,
+        size: SandboxSize,
+    ) -> impl Future<Output = Result<()>> + Send;
+
     /// Delete an agent session by id.
     fn delete(&self, id: AgentSessionId) -> impl Future<Output = Result<()>> + Send;
 }
@@ -191,6 +249,38 @@ pub trait AgentSessionRealtime {
         &self,
         event: LogAppended,
     ) -> impl Future<Output = Result<(), rootcause::Report>> + Send;
+
+    /// Publish a user-facing name change to the session's viewers.
+    fn publish_renamed(
+        &self,
+        _event: AgentSessionRenamed,
+    ) -> impl Future<Output = Result<(), rootcause::Report>> + Send {
+        async { Ok(()) }
+    }
+}
+
+/// Generates a concise display name from a session's first prompt.
+pub trait AgentSessionNameGenerator: Send + Sync + 'static {
+    /// Generate a name, or `None` when naming is disabled for this service.
+    fn generate_name(
+        &self,
+        session: &AgentSession,
+        initial_prompt: &str,
+    ) -> impl Future<Output = Result<Option<String>, rootcause::Report>> + Send;
+}
+
+/// Disables automatic agent-session naming.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct NoOpAgentSessionNameGenerator;
+
+impl AgentSessionNameGenerator for NoOpAgentSessionNameGenerator {
+    async fn generate_name(
+        &self,
+        _session: &AgentSession,
+        _initial_prompt: &str,
+    ) -> Result<Option<String>, rootcause::Report> {
+        Ok(None)
+    }
 }
 
 /// An [`AgentSessionRealtime`] that streams nowhere.
@@ -239,4 +329,11 @@ pub trait AgentSessionNotificationRecipient: Send + Sync + 'static {
         id: AgentSessionId,
         event: ControlEvent,
     ) -> impl Future<Output = Result<AgentActionId>> + Send;
+
+    /// Resize this session's sandbox and remember `size` as the owner's default.
+    fn set_sandbox_size(
+        &self,
+        id: AgentSessionId,
+        size: SandboxSize,
+    ) -> impl Future<Output = Result<()>> + Send;
 }

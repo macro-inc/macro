@@ -1,6 +1,9 @@
 /** The Connection Gateway event type for one appended agent-session frame. */
 export const AGENT_SESSION_LOG_EVENT = 'agent_session_log';
 
+/** The Connection Gateway event type for a persisted session-name change. */
+export const AGENT_SESSION_RENAMED_EVENT = 'agent_session_renamed';
+
 import type { AgentSessionLogEntryDto } from '@service-agent-harness/generated/schemas';
 
 /**
@@ -12,6 +15,12 @@ import type { AgentSessionLogEntryDto } from '@service-agent-harness/generated/s
 export type AgentSessionLogEvent = {
   agentSessionId: string;
 } & AgentSessionLogEntryDto;
+
+/** Mirrors `AgentSessionRenamedEvent` in the backend realtime adapter. */
+export type AgentSessionRenamedEvent = {
+  agentSessionId: string;
+  name: string;
+};
 
 /** Remove the realtime address, leaving the exact persisted entry shape. */
 export function entryOf(event: AgentSessionLogEvent): AgentSessionLogEntryDto {

@@ -8,19 +8,22 @@ import {
   CoordinatorRouter,
 } from './coordinator-router';
 
-class FakePort {
+class FakePort extends EventTarget {
   readonly messages: unknown[] = [];
   readonly events: string[] = [];
   closed = false;
   started = false;
   onmessage: ((event: MessageEvent<unknown>) => void) | null = null;
   onmessageerror: (() => void) | null = null;
+  effectProtocol = false;
+  readonly throwKinds = new Set<string>();
 
   postMessage(message: unknown): void {
+    const payload = effectPayload(message);
+    const kind = String((payload as { kind?: unknown })?.kind ?? 'unknown');
+    if (this.throwKinds.has(kind)) throw new Error(`${kind} send failed`);
     this.messages.push(message);
-    this.events.push(
-      `post:${String((message as { kind?: unknown })?.kind ?? 'unknown')}`
-    );
+    this.events.push(`post:${kind}`);
   }
 
   close(): void {
@@ -30,12 +33,24 @@ class FakePort {
 
   start(): void {
     this.started = true;
+    if (this.effectProtocol) this.effectReady();
   }
 
   receive(message: unknown): void {
+    if (this.effectProtocol) {
+      this.dispatchEvent(new MessageEvent('message', { data: [1, message] }));
+      return;
+    }
     this.onmessage?.({ data: message, ports: [] } as unknown as MessageEvent);
   }
+
+  effectReady(): void {
+    this.dispatchEvent(new MessageEvent('message', { data: [0] }));
+  }
 }
+
+const effectPayload = (message: unknown): unknown =>
+  Array.isArray(message) && message[0] === 0 ? message[1] : message;
 
 const version = {
   coordinatorVersion: CACHE_COORDINATOR_PROTOCOL_VERSION,
@@ -62,16 +77,14 @@ const attach = async (
   ownerEpoch: number,
   enginePort: FakePort
 ): Promise<void> => {
-  await router.handleTabMessage(
-    tabPort as CoordinatorMessagePort,
-    {
-      ...version,
-      kind: 'attach-engine-port',
-      tabId,
-      ownerEpoch,
-    },
-    [enginePort as unknown as MessagePort]
-  );
+  enginePort.effectProtocol = true;
+  await router.handleTabMessage(tabPort as CoordinatorMessagePort, {
+    ...version,
+    kind: 'attach-engine-port',
+    tabId,
+    ownerEpoch,
+    enginePort: enginePort as unknown as MessagePort,
+  });
 };
 
 const ready = (
@@ -96,12 +109,14 @@ const ready = (
 };
 
 const messagesOfKind = <T extends string>(port: FakePort, kind: T) =>
-  port.messages.filter(
-    (message): message is Record<string, unknown> & { kind: T } =>
-      typeof message === 'object' &&
-      message !== null &&
-      (message as { kind?: unknown }).kind === kind
-  );
+  port.messages
+    .map(effectPayload)
+    .filter(
+      (message): message is Record<string, unknown> & { kind: T } =>
+        typeof message === 'object' &&
+        message !== null &&
+        (message as { kind?: unknown }).kind === kind
+    );
 
 describe('CoordinatorRouter', () => {
   afterEach(() => {
@@ -359,6 +374,11 @@ describe('CoordinatorRouter', () => {
 
     expect(
       engine.messages
+        .map(effectPayload)
+        .filter(
+          (message) =>
+            typeof message === 'object' && message !== null && 'kind' in message
+        )
         .slice(-2)
         .map((message) => (message as { kind: string }).kind)
     ).toEqual(['engine-request', 'drain-engine']);
@@ -389,6 +409,96 @@ describe('CoordinatorRouter', () => {
     expect(tabA.closed).toBe(true);
   });
 
+  it('elects open-existing after an owner navigation departure', async () => {
+    const observations: Array<Record<string, unknown>> = [];
+    const router = new CoordinatorRouter({
+      verifyTabLockHeld: async () => true,
+      watchTabLock: () => () => {},
+      telemetry: {
+        record: (observation) => observations.push(observation),
+        flush: vi.fn(),
+      },
+    });
+    const tabA = new FakePort();
+    const tabB = new FakePort();
+    await register(router, tabA, 'tab-a');
+    await register(router, tabB, 'tab-b');
+    const engine = new FakePort();
+    await attach(router, tabA, 'tab-a', 1, engine);
+    ready(engine, 'tab-a', 1, 'opened-existing');
+
+    await router.handleTabMessage(tabA as CoordinatorMessagePort, {
+      ...version,
+      kind: 'navigation-departure',
+      tabId: 'tab-a',
+      ownerEpoch: 1,
+      reason: 'pagehide',
+    });
+
+    expect(messagesOfKind(tabB, 'become-owner')).toContainEqual(
+      expect.objectContaining({
+        ownerEpoch: 2,
+        databaseAction: 'open-existing',
+      })
+    );
+    expect(messagesOfKind(tabA, 'terminate-engine')).toHaveLength(0);
+    expect(tabA.closed).toBe(true);
+    expect(observations).toContainEqual(
+      expect.objectContaining({
+        name: 'graphql_cache.owner',
+        outcome: 'graceful',
+        ownerEvent: 'navigation-departure',
+      })
+    );
+    expect(observations).not.toContainEqual(
+      expect.objectContaining({
+        name: 'graphql_cache.storage_reset_required',
+      })
+    );
+  });
+
+  it('retains wipe-before-open when a recovery owner navigates during activation', async () => {
+    const router = new CoordinatorRouter({
+      verifyTabLockHeld: async () => true,
+      watchTabLock: () => () => {},
+    });
+    const tabA = new FakePort();
+    const tabB = new FakePort();
+    await register(router, tabA, 'tab-a');
+    await register(router, tabB, 'tab-b');
+    const engine = new FakePort();
+    await attach(router, tabA, 'tab-a', 1, engine);
+    ready(engine, 'tab-a', 1, 'opened-existing');
+    await router.handleTabMessage(tabA as CoordinatorMessagePort, {
+      ...version,
+      kind: 'engine-lost',
+      tabId: 'tab-a',
+      ownerEpoch: 1,
+      reason: 'engine failed',
+    });
+    expect(messagesOfKind(tabB, 'become-owner')).toContainEqual(
+      expect.objectContaining({
+        ownerEpoch: 2,
+        databaseAction: 'wipe-before-open',
+      })
+    );
+
+    await router.handleTabMessage(tabB as CoordinatorMessagePort, {
+      ...version,
+      kind: 'navigation-departure',
+      tabId: 'tab-b',
+      ownerEpoch: 2,
+      reason: 'pagehide during recovery',
+    });
+
+    expect(messagesOfKind(tabA, 'become-owner')).toContainEqual(
+      expect.objectContaining({
+        ownerEpoch: 3,
+        databaseAction: 'wipe-before-open',
+      })
+    );
+  });
+
   it('counts an unknown response with the current direct-route tuple as stale', async () => {
     const router = new CoordinatorRouter({
       verifyTabLockHeld: async () => true,
@@ -414,6 +524,68 @@ describe('CoordinatorRouter', () => {
       ownerEpoch: 1,
     });
     expect(messagesOfKind(tabA, 'terminate-engine')).toHaveLength(0);
+  });
+
+  it('closes the engine port and fails its owner when transport construction throws', async () => {
+    const router = new CoordinatorRouter({
+      verifyTabLockHeld: async () => true,
+      watchTabLock: () => () => {},
+    });
+    const tabA = new FakePort();
+    await register(router, tabA, 'tab-a');
+    const engine = new FakePort();
+    const addEventListener = engine.addEventListener.bind(engine);
+    vi.spyOn(engine, 'addEventListener').mockImplementation(
+      (type, listener, options) => {
+        if (type === 'messageerror') {
+          throw new Error('listener setup failed');
+        }
+        addEventListener(type, listener, options);
+      }
+    );
+
+    await expect(attach(router, tabA, 'tab-a', 1, engine)).resolves.toBe(
+      undefined
+    );
+
+    expect(engine.closed).toBe(true);
+    expect(messagesOfKind(tabA, 'terminate-engine')).toContainEqual(
+      expect.objectContaining({
+        ownerEpoch: 1,
+        reason: expect.stringContaining('listener setup failed'),
+      })
+    );
+  });
+
+  it('fails its owner instead of propagating an engine request send failure', async () => {
+    const router = new CoordinatorRouter({
+      verifyTabLockHeld: async () => true,
+      watchTabLock: () => () => {},
+    });
+    const tabA = new FakePort();
+    const tabB = new FakePort();
+    await register(router, tabA, 'tab-a');
+    await register(router, tabB, 'tab-b');
+    const engine = new FakePort();
+    await attach(router, tabA, 'tab-a', 1, engine);
+    ready(engine, 'tab-a', 1, 'opened-existing');
+    engine.throwKinds.add('engine-request');
+
+    await expect(
+      router.handleTabMessage(tabB as CoordinatorMessagePort, {
+        ...version,
+        kind: 'cache-request',
+        tabId: 'tab-b',
+        request: { id: 20, kind: 'clear' },
+      })
+    ).resolves.toBeUndefined();
+
+    expect(messagesOfKind(tabA, 'terminate-engine')).toContainEqual(
+      expect.objectContaining({
+        ownerEpoch: 1,
+        reason: expect.stringContaining('engine-request send failed'),
+      })
+    );
   });
 
   it('uses activation and heartbeat watchdogs to terminate and wipe', async () => {
@@ -458,6 +630,35 @@ describe('CoordinatorRouter', () => {
     );
     expect(router.snapshot()?.state.kind).toBe('activating');
     expect(router.snapshot()?.ownerEpoch).toBe(3);
+  });
+
+  it('fails its owner without arming a watchdog when heartbeat send fails', async () => {
+    vi.useFakeTimers();
+    const router = new CoordinatorRouter({
+      heartbeatIntervalMs: 5,
+      heartbeatTimeoutMs: 7,
+      verifyTabLockHeld: async () => true,
+      watchTabLock: () => () => {},
+    });
+    const tabA = new FakePort();
+    const tabB = new FakePort();
+    await register(router, tabA, 'tab-a');
+    await register(router, tabB, 'tab-b');
+    const engine = new FakePort();
+    await attach(router, tabA, 'tab-a', 1, engine);
+    ready(engine, 'tab-a', 1, 'opened-existing');
+    engine.throwKinds.add('heartbeat');
+
+    await vi.advanceTimersByTimeAsync(5);
+
+    expect(messagesOfKind(tabA, 'terminate-engine')).toContainEqual(
+      expect.objectContaining({
+        ownerEpoch: 1,
+        reason: expect.stringContaining('heartbeat send failed'),
+      })
+    );
+    expect(messagesOfKind(engine, 'heartbeat')).toHaveLength(0);
+    expect(vi.getTimerCount()).toBe(1);
   });
 
   it('accepts heartbeat acknowledgements and rearms the watchdog', async () => {

@@ -1,0 +1,106 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            event.id AS \"id!\",\n            event.owner_id AS \"owner_id!\",\n            event.source_link_id AS \"source_link_id!\",\n            event.ical_uid AS \"ical_uid!\",\n            event.title AS \"title!\",\n            event.status AS \"status!\",\n            event.starts_at,\n            event.ends_at,\n            event.start_date,\n            event.end_date,\n            (cardinality(event.recurrence_lines) > 0) AS \"is_recurring!\",\n            event.organizer_email,\n            event.created_at AS \"created_at!\",\n            event.updated_at AS \"updated_at!\",\n            COALESCE(\n                (\n                    SELECT array_agg(lower(attendee.email) ORDER BY lower(attendee.email))\n                    FROM calendar_event_attendees attendee\n                    WHERE attendee.event_id = event.id\n                ),\n                '{}'\n            ) AS \"attendee_emails!\"\n        FROM calendar_events event\n        WHERE event.id = $1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "owner_id!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "source_link_id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "ical_uid!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "title!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "status!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "starts_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 7,
+        "name": "ends_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 8,
+        "name": "start_date",
+        "type_info": "Date"
+      },
+      {
+        "ordinal": 9,
+        "name": "end_date",
+        "type_info": "Date"
+      },
+      {
+        "ordinal": 10,
+        "name": "is_recurring!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 11,
+        "name": "organizer_email",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 12,
+        "name": "created_at!",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 13,
+        "name": "updated_at!",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 14,
+        "name": "attendee_emails!",
+        "type_info": "TextArray"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      null,
+      true,
+      false,
+      false,
+      null
+    ]
+  },
+  "hash": "9f159ad721926ca7018cae3cdda9b9699bacb7dca55c37cbc701dd4b7be2f4e8"
+}

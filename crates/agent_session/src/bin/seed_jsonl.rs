@@ -248,6 +248,7 @@ async fn seed(args: &Args) -> Result<(), SeedError> {
             harness: args.harness.clone(),
             repo_url: Some(args.repo_url.clone()),
             workspace: args.workspace.clone(),
+            sandbox_size: agent_session::domain::model::SandboxSize::Default,
         },
     )
     .await

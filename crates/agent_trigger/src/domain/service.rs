@@ -45,6 +45,8 @@ where
         channel_id = %posted.channel_id,
         message_id = %posted.message_id,
         thread_id = ?posted.thread_id,
+        channel.message.scope = tracing::field::Empty,
+        agent.mention.bot_count = tracing::field::Empty,
     ))]
     pub async fn evaluate(
         &self,
@@ -52,6 +54,15 @@ where
     ) -> Result<Vec<AgentSessionMacroEvent>> {
         let mut mentioned = bot_mention_ids(&posted.mentions);
         mentioned.sort_by_key(ToString::to_string);
+        tracing::Span::current().record(
+            "channel.message.scope",
+            if posted.thread_id.is_some() {
+                "thread"
+            } else {
+                "channel_top_level"
+            },
+        );
+        tracing::Span::current().record("agent.mention.bot_count", mentioned.len());
         let mut seen_sessions = HashSet::new();
         let mut events = Vec::new();
 
@@ -74,6 +85,16 @@ where
         Ok(events)
     }
 
+    #[tracing::instrument(
+        err,
+        skip(self, posted, seen_sessions),
+        fields(
+            channel_id = %posted.channel_id,
+            message_id = %posted.message_id,
+            bot_id = ?mentioned_bot,
+            agent.trigger.outcome = tracing::field::Empty,
+        )
+    )]
     async fn evaluate_bot(
         &self,
         posted: &ChannelMessagePostedMetadata,
@@ -87,11 +108,9 @@ where
         if let Some(session_id) = session_id(&existing)
             && !seen_sessions.insert(session_id)
         {
-            log_no_event(
-                posted,
-                mentioned_bot,
-                NoEventReason::DuplicateSession { session_id },
-            );
+            let reason = NoEventReason::DuplicateSession { session_id };
+            tracing::Span::current().record("agent.trigger.outcome", reason.as_ref());
+            log_no_event(posted, mentioned_bot, reason);
             return Ok(None);
         }
         let bot = match &existing {
@@ -109,8 +128,16 @@ where
             mentioned_bot,
         };
         match yield_event(&message, has_agent) {
-            AgentSessionEventDecision::Event(event) => Ok(Some(event)),
+            AgentSessionEventDecision::Event(event) => {
+                let outcome = match existing {
+                    ChannelSession::None => "top_level_mentioned",
+                    ChannelSession::CreatedFromThread(_) => "mention_thread",
+                };
+                tracing::Span::current().record("agent.trigger.outcome", outcome);
+                Ok(Some(event))
+            }
             AgentSessionEventDecision::NoEvent(reason) => {
+                tracing::Span::current().record("agent.trigger.outcome", reason.as_ref());
                 log_no_event(posted, mentioned_bot, reason);
                 Ok(None)
             }

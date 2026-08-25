@@ -28,14 +28,16 @@ async fn insert_bot_token(
     .execute(pool)
     .await
     .unwrap();
+    let hashed = bot_token::HashedBotToken::from_raw(TOKEN);
     sqlx::query!(
         r#"
-        INSERT INTO bot_tokens (id, bot_id, token, revoked_at)
-        VALUES ($1, $2, $3, CASE WHEN $4 THEN now() ELSE NULL END)
+        INSERT INTO bot_tokens (id, bot_id, token_hash, token_prefix, revoked_at)
+        VALUES ($1, $2, $3, $4, CASE WHEN $5 THEN now() ELSE NULL END)
         "#,
         token_id,
         bot_id,
-        TOKEN,
+        &hashed.hash[..],
+        hashed.prefix,
         revoked,
     )
     .execute(pool)

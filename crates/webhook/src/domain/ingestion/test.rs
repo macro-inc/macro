@@ -159,7 +159,7 @@ impl EntityAccessService for MockAccessService {
     ) -> Result<Vec<MacroUserIdStr<'static>>, AccessError> {
         lock(&self.calls).push((entity_id.to_string(), entity_type));
         match self.failure {
-            Some(AccessFailure::Internal) => Err(AccessError::Internal),
+            Some(AccessFailure::Internal) => Err(AccessError::internal("mock access failure")),
             None => Ok(self.users.clone()),
         }
     }
@@ -447,6 +447,8 @@ fn document_event_cases() -> Vec<EventCase> {
                 DocumentTopicEvent::Created(DocumentCreatedMetadata {
                     document_id: DOCUMENT_ID.to_string(),
                     owner: user_id("macro|owner@example.com"),
+                    actor: None,
+                    on_behalf_of: None,
                     document_name: "notes".to_string(),
                     file_type: None,
                     project_id: None,
@@ -1264,11 +1266,13 @@ async fn malformed_document_id_is_permanent_and_skips_access_resolution() {
 
 #[test]
 fn classifies_adapter_and_contract_errors() {
-    let database_error = WebhookEventIngestionError::EntityAccess(AccessError::DatabaseError(
-        sqlx::Error::PoolTimedOut,
-    ));
-    assert!(database_error.is_transient());
-    assert!(WebhookEventIngestionError::EntityAccess(AccessError::Internal).is_transient());
+    let transient_db_error =
+        WebhookEventIngestionError::EntityAccess(AccessError::from(sqlx::Error::PoolTimedOut));
+    assert!(transient_db_error.is_transient());
+    let permanent_db_error =
+        WebhookEventIngestionError::EntityAccess(AccessError::from(sqlx::Error::RowNotFound));
+    assert!(!permanent_db_error.is_transient());
+    assert!(!WebhookEventIngestionError::EntityAccess(AccessError::internal("bug")).is_transient());
     assert!(!WebhookEventIngestionError::EntityAccess(AccessError::Unauthorized).is_transient());
 
     let serialization_error = serde_json::from_str::<Value>("{").expect_err("invalid json");
@@ -1279,7 +1283,7 @@ fn classifies_adapter_and_contract_errors() {
 }
 
 #[tokio::test]
-async fn entity_access_internal_error_is_transient() {
+async fn entity_access_internal_error_is_not_transient() {
     let access = MockAccessService {
         users: Vec::new(),
         failure: Some(AccessFailure::Internal),
@@ -1297,9 +1301,9 @@ async fn entity_access_internal_error_is_transient() {
 
     assert!(matches!(
         error,
-        WebhookEventIngestionError::EntityAccess(AccessError::Internal)
+        WebhookEventIngestionError::EntityAccess(AccessError::Internal(_))
     ));
-    assert!(error.is_transient());
+    assert!(!error.is_transient());
 }
 
 fn agent_trigger_new_event() -> Event<agent_trigger::domain::broker_events::AgentTriggerTopicEvent>

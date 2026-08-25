@@ -348,17 +348,28 @@ fn push_cursor_filter(
 }
 
 /// Local representation of the `notification_device_type_option` Postgres enum
-/// for compile-time checked sqlx queries.
+/// for compile-time checked sqlx queries. The domain `DeviceType` stays
+/// sqlx-free; adapters convert at the boundary.
 #[derive(Debug, sqlx::Type)]
 #[sqlx(
     type_name = "notification_device_type_option",
     rename_all = "lowercase"
 )]
-enum DbDeviceType {
+pub(crate) enum DbDeviceType {
     Ios,
     Android,
     #[sqlx(rename = "iosvoip")]
     IosVoip,
+}
+
+impl From<&DeviceType> for DbDeviceType {
+    fn from(value: &DeviceType) -> Self {
+        match value {
+            DeviceType::Ios => Self::Ios,
+            DeviceType::Android => Self::Android,
+            DeviceType::IosVoip => Self::IosVoip,
+        }
+    }
 }
 
 /// Database-backed implementation of the notification repository port.

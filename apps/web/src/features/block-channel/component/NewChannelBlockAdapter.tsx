@@ -46,7 +46,6 @@ import {
 } from '@components/app/split-layout/layoutUtils';
 import { useNavigatedFromJK } from '@components/app/useNavigatedFromJK';
 import { useBlockId } from '@core/block';
-import { EntityPermissionsGate } from '@core/component/EntityPermissionsGate';
 import { ENABLE_CALLS } from '@core/constant/featureFlags';
 import {
   useChannel,
@@ -54,7 +53,6 @@ import {
   useChannelType,
 } from '@core/context/channels';
 import { useUserId } from '@core/context/user';
-import { useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isMobile } from '@core/mobile/isMobile';
 import { awaitCondition, createMethodRegistration } from '@core/orchestrator';
@@ -266,19 +264,42 @@ function NewTop(props: { channelId: string }) {
 
 export function NewChannelBlockAdapter(props: BlockChannelProps) {
   // Every other block gets its hotkey scope from `BlockContainer`, which the
-  // channel block does not render — so `blockHotkeyScopeSignal` stayed empty
-  // here and `useBlockEntityCommands` registered nothing at all. Own the scope
-  // directly instead of adopting BlockContainer and its entity tracking.
-  const [attachHotkeys, hotkeyScope] = useHotkeyDOMScope('channel');
-  blockHotkeyScopeSignal.set(hotkeyScope);
-  useBlockEntityCommands();
-
+  // channel block does not render — so set `blockHotkeyScopeSignal` here or
+  // `useBlockEntityCommands` would register nothing at all. Commands go on
+  // the split scope so they keep working while focus sits on split chrome
+  // (header, toolbar, panel div) and across in-split navigation — same as
+  // BlockContainer. The adapter requires a split panel, so unlike
+  // BlockContainer it needs no fallback DOM scope of its own.
   const splitPanel = useSplitPanelOrThrow();
+  blockHotkeyScopeSignal.set(splitPanel.splitHotkeyScope);
+  useBlockEntityCommands();
   const canAutofocusSplitContent = useCanAutofocusSplitContent();
   const { navigatedFromJK } = useNavigatedFromJK();
   const channelId = useBlockId();
   const blockHandle = blockHandleSignal.get;
   const [searchParams, setSearchParams] = useSearchParams();
+
+  const initialTargetMessageParams = (): ChannelTargetMessageParams => {
+    const hasPropsTarget =
+      props[URL_PARAMS.message] !== undefined ||
+      props[URL_PARAMS.thread] !== undefined;
+    if (hasPropsTarget) {
+      return {
+        [URL_PARAMS.message]: props[URL_PARAMS.message],
+        [URL_PARAMS.thread]: props[URL_PARAMS.thread],
+      };
+    }
+    const isSingleSplit = globalSplitManager()?.splits().length === 1;
+    if (!isSingleSplit) return {};
+    return {
+      [URL_PARAMS.message]: searchParams[URL_PARAMS.message] as
+        | string
+        | undefined,
+      [URL_PARAMS.thread]: searchParams[URL_PARAMS.thread] as
+        | string
+        | undefined,
+    };
+  };
 
   // Decide whether the user asked to auto-join the call (via ?join_call=true
   // deep link or programmatic open props) before creating signals so we
@@ -457,28 +478,6 @@ export function NewChannelBlockAdapter(props: BlockChannelProps) {
     },
   });
 
-  const initialTargetMessageParams = (): ChannelTargetMessageParams => {
-    const hasPropsTarget =
-      props[URL_PARAMS.message] !== undefined ||
-      props[URL_PARAMS.thread] !== undefined;
-    if (hasPropsTarget) {
-      return {
-        [URL_PARAMS.message]: props[URL_PARAMS.message],
-        [URL_PARAMS.thread]: props[URL_PARAMS.thread],
-      };
-    }
-    const isSingleSplit = globalSplitManager()?.splits().length === 1;
-    if (!isSingleSplit) return {};
-    return {
-      [URL_PARAMS.message]: searchParams[URL_PARAMS.message] as
-        | string
-        | undefined,
-      [URL_PARAMS.thread]: searchParams[URL_PARAMS.thread] as
-        | string
-        | undefined,
-    };
-  };
-
   const onChannelReady = (handle: ChannelHandle) => {
     setMessagesHandle(() => handle);
   };
@@ -505,7 +504,7 @@ export function NewChannelBlockAdapter(props: BlockChannelProps) {
       : undefined;
 
   return (
-    <EntityPermissionsGate entityType="channel" entityId={channelId}>
+    <>
       <CallEventSync />
       <ChannelTabProvider activeTab={activeTab} setActiveTab={setActiveTab}>
         <ChannelCallAutoJoin
@@ -514,7 +513,6 @@ export function NewChannelBlockAdapter(props: BlockChannelProps) {
           onHandled={() => setPendingJoinCall(false)}
         />
         <div
-          ref={attachHotkeys}
           class={cn(
             'h-full flex flex-col px-2 touch:px-0',
             // The channel block is full-frame on mobile (messages scroll
@@ -556,6 +554,6 @@ export function NewChannelBlockAdapter(props: BlockChannelProps) {
           <NewTop channelId={channelId} />
         </div>
       </ChannelTabProvider>
-    </EntityPermissionsGate>
+    </>
   );
 }

@@ -1,8 +1,10 @@
 import { itemToSafeName } from '@core/constant/allBlocks';
-import { useChannelsContext } from '@core/context/channels';
+import {
+  useChannelsContext,
+  useDmActivityByUserId,
+} from '@core/context/channels';
 import {
   type IUser,
-  useAugmentUserWithDmActivity,
   useContacts,
   useIsConnectedSecondaryInbox,
 } from '@core/user';
@@ -13,6 +15,11 @@ import type {
   SkillEntity,
   SnippetEntity,
 } from '@entity';
+import { useCachedGraphqlChannelsQuery } from '@queries/channel/channels';
+import {
+  type CachedGraphqlChannel,
+  materializeCachedGraphqlChannels,
+} from '@queries/channel/graphql';
 import { queryReadyGate } from '@queries/gate';
 import { materializeCachedGraphqlHistoryItems } from '@queries/history/graphql';
 import { type HistoryItem, useHistoryQuery } from '@queries/history/history';
@@ -26,7 +33,7 @@ import { getGraphqlSoupCacheHost } from '@service-storage/graphql-soup';
 import { formatDocumentName } from '@service-storage/util/filename';
 import { createLazyMemo } from '@solid-primitives/memo';
 import { toDate } from 'date-fns';
-import { createEffect, createSignal, onCleanup } from 'solid-js';
+import { createEffect, createMemo, createSignal, onCleanup } from 'solid-js';
 import { searchQuickAccessItems } from './entity-search';
 import type {
   Bucket,
@@ -111,18 +118,34 @@ function historyItemToEntity(item: HistoryItem): QuickAccessEntity {
   }
 }
 
-function channelToEntity(channel: ApiChannelWithLatest): ChannelEntity {
+function apiChannelToQuickAccessChannel(
+  channel: ApiChannelWithLatest
+): CachedGraphqlChannel {
   return {
-    type: 'channel',
     id: channel.id,
     name: channel.name ?? '',
     ownerId: channel.owner_id ?? '',
     channelType: channel.channel_type ?? 'public',
-    participantIds: channel.participants?.map((p) => p.user_id),
+    participantIds: channel.participants?.map((p) => p.user_id) ?? [],
     createdAt: channel.created_at,
     updatedAt: channel.updated_at,
-    viewedAt: channel.viewed_at,
-    interactedAt: channel.interacted_at,
+    viewedAt: channel.viewed_at ?? undefined,
+    interactedAt: channel.interacted_at ?? undefined,
+  };
+}
+
+function channelToEntity(channel: CachedGraphqlChannel): ChannelEntity {
+  return {
+    type: 'channel',
+    id: channel.id,
+    name: channel.name,
+    ownerId: channel.ownerId,
+    channelType: channel.channelType,
+    participantIds: channel.participantIds,
+    createdAt: channel.createdAt,
+    updatedAt: channel.updatedAt,
+    viewedAt: channel.viewedAt,
+    interactedAt: channel.interactedAt,
   };
 }
 
@@ -162,19 +185,56 @@ function toTimestamp(value: DateValue | null | undefined): number {
   return toDate(value).getTime();
 }
 
+function channelToQuickAccessItem(
+  channel: CachedGraphqlChannel,
+  sortTimestamp = toTimestamp(channel.viewedAt) ||
+    toTimestamp(channel.updatedAt)
+): QuickAccessItem {
+  const bucket: Bucket =
+    channel.channelType === 'direct_message' ? 'dm' : 'channel';
+  return {
+    kind: 'entity',
+    id: channel.id,
+    bucket,
+    searchText: channel.name,
+    sortTimestamp,
+    timestamps: {
+      viewedAt: channel.viewedAt,
+      updatedAt: channel.updatedAt,
+      createdAt: channel.createdAt,
+    },
+    data: channelToEntity(channel),
+  };
+}
+
+function equalActivityMaps(
+  previous: Map<string, DateValue>,
+  next: Map<string, DateValue>
+): boolean {
+  if (previous.size !== next.size) return false;
+  for (const [id, value] of previous) {
+    if (!next.has(id)) return false;
+    if (toTimestamp(value) !== toTimestamp(next.get(id))) return false;
+  }
+  return true;
+}
+
 function getHistoryItemVersion(item: HistoryItem, viewedAt?: string): string {
   return `${item.name}|${item.updatedAt}|${viewedAt}|${item.deletedAt}`;
 }
 
 function getChannelVersion(
-  channel: ApiChannelWithLatest,
+  channel: CachedGraphqlChannel,
   viewedAt?: string
 ): string {
-  return `${channel.name}|${channel.updated_at}|${viewedAt}`;
+  return `${channel.name}|${channel.updatedAt}|${viewedAt}`;
 }
 
-function getUserVersion(user: IUser): string {
-  return `${user.name}|${user.email}|${user.lastInteraction}`;
+function getUserVersion(
+  user: IUser,
+  lastInteraction: DateValue | undefined
+): string {
+  return `${user.name}|${user.email}|${lastInteraction}`;
 }
 
 function getCrmCompanySearchText(company: CrmCompanyEntity): string {
@@ -237,18 +297,29 @@ function mergeMultipleSortedIndices(arrays: IndexEntry[][]): IndexEntry[] {
   return arrays.reduce((acc, arr) => mergeSortedIndices(acc, arr));
 }
 
+function sortIndexEntries(entries: IndexEntry[]): IndexEntry[] {
+  entries.sort((a, b) => b.sortTimestamp - a.sortTimestamp);
+  return entries;
+}
+
 /** Builds Quick Access from history and its supporting entity sources. */
 export function createQuickAccessValue(): QuickAccessContextValue {
   // queries
   const historyQuery = useHistoryQuery();
   const { channels, isLoading: channelsLoading } = useChannelsContext();
   const contacts = useContacts();
-  const augmentUserWithDmActivity = useAugmentUserWithDmActivity();
+  const rawDmActivityByUserId = useDmActivityByUserId();
+  const dmActivityByUserId = createMemo(rawDmActivityByUserId, undefined, {
+    equals: equalActivityMaps,
+  });
   const isConnectedSecondaryInbox = useIsConnectedSecondaryInbox();
-  const cacheHost = getGraphqlSoupCacheHost();
+  const graphqlCacheHost = getGraphqlSoupCacheHost();
+  const cacheHost = graphqlCacheHost?.disabled ? undefined : graphqlCacheHost;
   const [cacheRevision, setCacheRevision] = createSignal(0);
+  const cachedChannelsQuery = useCachedGraphqlChannelsQuery(cacheHost);
   const unsubscribeCacheChanges = cacheHost?.onCacheChanged(() => {
     setCacheRevision((revision) => revision + 1);
+    void cachedChannelsQuery.refetch();
   });
   onCleanup(() => unsubscribeCacheChanges?.());
   const instructionsIdQuery = useInstructionsMdIdQuery();
@@ -294,17 +365,10 @@ export function createQuickAccessValue(): QuickAccessContextValue {
     return map;
   });
 
-  const processedData = createLazyMemo(() => {
+  const historyEntries = createLazyMemo(() => {
     const viewedAtMap = soupViewedAtMap();
     const seenIds = new Set<string>();
     const allEntries: IndexEntry[] = [];
-
-    const transformedItems: Array<{
-      id: string;
-      name: string;
-      type: string;
-      reason: string;
-    }> = [];
 
     // Process history items
     const historyData = historyQuery.data ?? [];
@@ -320,15 +384,6 @@ export function createQuickAccessValue(): QuickAccessContextValue {
       const cached = itemCache.get(item.id);
 
       if (!cached || cached.version !== version) {
-        const reason = !cached
-          ? 'new'
-          : `changed (${cached.version} -> ${version})`;
-        transformedItems.push({
-          id: item.id,
-          name: item.name,
-          type: `history:${item.type}`,
-          reason,
-        });
         const bucket = getBucketForHistoryItem(item);
         const entity = {
           ...historyItemToEntity(item),
@@ -363,53 +418,37 @@ export function createQuickAccessValue(): QuickAccessContextValue {
       }
     }
 
-    // Process channels
-    const channelData = channels();
-    for (const channel of channelData) {
-      seenIds.add(channel.id);
+    return {
+      entries: sortIndexEntries(allEntries),
+      ids: seenIds,
+    };
+  });
 
-      const viewedAt =
-        viewedAtMap.get(channel.id) ?? channel.viewed_at ?? undefined;
+  const channelEntries = createLazyMemo(() => {
+    const viewedAtMap = soupViewedAtMap();
+    const allEntries: IndexEntry[] = [];
 
+    // The GraphQL cache is authoritative while enabled. Otherwise preserve the
+    // existing channel-list source unchanged.
+    const channelData = cacheHost
+      ? (cachedChannelsQuery.data ?? [])
+      : channels().map(apiChannelToQuickAccessChannel);
+    for (const sourceChannel of channelData) {
+      const viewedAt = cacheHost
+        ? sourceChannel.viewedAt
+        : (viewedAtMap.get(sourceChannel.id) ?? sourceChannel.viewedAt);
+      const channel = { ...sourceChannel, viewedAt };
       const version = getChannelVersion(channel, viewedAt);
       const cached = itemCache.get(channel.id);
 
       if (!cached || cached.version !== version) {
-        const reason = !cached
-          ? 'new'
-          : `changed (${cached.version} -> ${version})`;
-        transformedItems.push({
-          id: channel.id,
-          name: channel.name ?? '',
-          type: `channel:${channel.channel_type}`,
-          reason,
-        });
-        const isDm = channel.channel_type === 'direct_message';
-        const bucket: Bucket = isDm ? 'dm' : 'channel';
-        const entity = {
-          ...channelToEntity(channel),
-          viewedAt,
-        };
-        const viewedAtMs = toTimestamp(viewedAt);
-        const updatedAtMs = toTimestamp(channel.updated_at);
-        const sortTimestamp = viewedAtMs || updatedAtMs;
-
-        const quickAccessItem: QuickAccessItem = {
-          kind: 'entity',
-          id: channel.id,
-          bucket,
-          searchText: channel.name ?? '',
-          sortTimestamp,
-          timestamps: {
-            viewedAt,
-            updatedAt: channel.updated_at,
-            createdAt: channel.created_at,
-          },
-          data: entity,
-        };
-
+        const quickAccessItem = channelToQuickAccessItem(channel);
         itemCache.set(channel.id, { item: quickAccessItem, version });
-        allEntries.push({ id: channel.id, bucket, sortTimestamp });
+        allEntries.push({
+          id: channel.id,
+          bucket: quickAccessItem.bucket,
+          sortTimestamp: quickAccessItem.sortTimestamp,
+        });
       } else {
         allEntries.push({
           id: channel.id,
@@ -419,27 +458,25 @@ export function createQuickAccessValue(): QuickAccessContextValue {
       }
     }
 
+    return sortIndexEntries(allEntries);
+  });
+
+  const contactEntries = createLazyMemo(() => {
+    const activityByUserId = dmActivityByUserId();
+    const allEntries: IndexEntry[] = [];
+
     // Process contacts (users)
     const contactData = contacts();
     for (const contact of contactData) {
       if (isConnectedSecondaryInbox(contact.id)) continue;
-      const augmentedUser = augmentUserWithDmActivity(contact);
-      seenIds.add(augmentedUser.id);
+      const lastInteraction = activityByUserId.get(contact.id);
 
-      const version = getUserVersion(augmentedUser);
-      const cached = itemCache.get(augmentedUser.id);
+      const version = getUserVersion(contact, lastInteraction);
+      const cached = itemCache.get(contact.id);
 
       if (!cached || cached.version !== version) {
-        const reason = !cached
-          ? 'new'
-          : `changed (${cached.version} -> ${version})`;
-        transformedItems.push({
-          id: augmentedUser.id,
-          name: augmentedUser.name,
-          type: 'user',
-          reason,
-        });
-        const sortTimestamp = toTimestamp(augmentedUser.lastInteraction);
+        const augmentedUser = { ...contact, lastInteraction };
+        const sortTimestamp = toTimestamp(lastInteraction);
 
         const quickAccessItem: QuickAccessItem = {
           kind: 'user',
@@ -461,12 +498,20 @@ export function createQuickAccessValue(): QuickAccessContextValue {
         });
       } else {
         allEntries.push({
-          id: augmentedUser.id,
+          id: contact.id,
           bucket: cached.item.bucket,
           sortTimestamp: cached.item.sortTimestamp,
         });
       }
     }
+
+    return sortIndexEntries(allEntries);
+  });
+
+  const crmCompanyEntries = createLazyMemo(() => {
+    const viewedAtMap = soupViewedAtMap();
+    const allEntries: IndexEntry[] = [];
+    const hidden = hiddenIds();
 
     // Process CRM companies (live soup list, complements the
     // recently-viewed feed which only has companies the user has
@@ -475,7 +520,6 @@ export function createQuickAccessValue(): QuickAccessContextValue {
     const crmCompanyData = crmCompaniesAccessor();
     for (const company of crmCompanyData) {
       if (hidden.has(company.id)) continue;
-      seenIds.add(company.id);
 
       const viewedAt =
         viewedAtMap.get(company.id) ?? company.viewedAt ?? undefined;
@@ -487,15 +531,6 @@ export function createQuickAccessValue(): QuickAccessContextValue {
       const cached = itemCache.get(company.id);
 
       if (!cached || cached.version !== version) {
-        const reason = !cached
-          ? 'new'
-          : `changed (${cached.version} -> ${version})`;
-        transformedItems.push({
-          id: company.id,
-          name: company.name,
-          type: 'crm_company',
-          reason,
-        });
         const entity: CrmCompanyEntity = {
           ...company,
           viewedAt: (viewedAt ?? company.viewedAt) as DateValue | null,
@@ -533,6 +568,15 @@ export function createQuickAccessValue(): QuickAccessContextValue {
       }
     }
 
+    return sortIndexEntries(allEntries);
+  });
+
+  const snippetEntries = createLazyMemo(() => {
+    const viewedAtMap = soupViewedAtMap();
+    const seenIds = new Set(historyEntries().ids);
+    const allEntries: IndexEntry[] = [];
+    const hidden = hiddenIds();
+
     // Process snippets (live soup list, complements the history feed
     // which only has snippets the user has opened). Widens the pool to
     // team-shared snippets so the `;` menu lists snippets the user has
@@ -554,15 +598,6 @@ export function createQuickAccessValue(): QuickAccessContextValue {
       const cached = itemCache.get(snippet.id);
 
       if (!cached || cached.version !== version) {
-        const reason = !cached
-          ? 'new'
-          : `changed (${cached.version} -> ${version})`;
-        transformedItems.push({
-          id: snippet.id,
-          name: snippet.name,
-          type: 'snippet',
-          reason,
-        });
         const entity: SnippetEntity = {
           ...snippet,
           viewedAt: (viewedAt ?? snippet.viewedAt) as DateValue | null,
@@ -600,6 +635,15 @@ export function createQuickAccessValue(): QuickAccessContextValue {
       }
     }
 
+    return sortIndexEntries(allEntries);
+  });
+
+  const skillEntries = createLazyMemo(() => {
+    const viewedAtMap = soupViewedAtMap();
+    const seenIds = new Set(historyEntries().ids);
+    const allEntries: IndexEntry[] = [];
+    const hidden = hiddenIds();
+
     // Process skills (live soup list, complements the history feed which
     // only has skills the user has opened). Widens the pool to shared
     // skills so the `/` menu lists skills the user has never opened.
@@ -616,15 +660,6 @@ export function createQuickAccessValue(): QuickAccessContextValue {
       const cached = itemCache.get(skill.id);
 
       if (!cached || cached.version !== version) {
-        const reason = !cached
-          ? 'new'
-          : `changed (${cached.version} -> ${version})`;
-        transformedItems.push({
-          id: skill.id,
-          name: skill.name,
-          type: 'skill',
-          reason,
-        });
         const entity: SkillEntity = {
           ...skill,
           viewedAt: (viewedAt ?? skill.viewedAt) as DateValue | null,
@@ -662,15 +697,26 @@ export function createQuickAccessValue(): QuickAccessContextValue {
       }
     }
 
+    return sortIndexEntries(allEntries);
+  });
+
+  const processedData = createLazyMemo(() => {
+    const allEntries = mergeMultipleSortedIndices([
+      historyEntries().entries,
+      channelEntries(),
+      contactEntries(),
+      crmCompanyEntries(),
+      snippetEntries(),
+      skillEntries(),
+    ]);
+    const seenIds = new Set(allEntries.map((entry) => entry.id));
+
     // Clean up stale cache entries (items that no longer exist)
     for (const id of itemCache.keys()) {
       if (!seenIds.has(id)) {
         itemCache.delete(id);
       }
     }
-
-    // Sort all entries by timestamp descending
-    allEntries.sort((a, b) => b.sortTimestamp - a.sortTimestamp);
 
     // Deduplicate by id - keep the first occurrence (most recent timestamp)
     const deduplicatedEntries: IndexEntry[] = [];
@@ -820,7 +866,7 @@ export function createQuickAccessValue(): QuickAccessContextValue {
               profile: 'quick-access-v1',
               buckets,
               query,
-              limit: 500,
+              limit: query.trim() ? 500 : 50,
             });
             const missingDocuments = page.documents.filter(({ recordKey }) => {
               const separator = recordKey.indexOf(':');
@@ -828,13 +874,16 @@ export function createQuickAccessValue(): QuickAccessContextValue {
                 separator < 0 ? recordKey : recordKey.slice(separator + 1);
               return !itemCache.has(id);
             });
-            const historyItems = await materializeCachedGraphqlHistoryItems(
-              cacheHost,
-              missingDocuments
-            );
+            const [historyItems, cachedChannelItems] = await Promise.all([
+              materializeCachedGraphqlHistoryItems(cacheHost, missingDocuments),
+              materializeCachedGraphqlChannels(cacheHost, missingDocuments),
+            ]);
             if (currentGeneration !== generation) return;
             const materializedHistoryItems = new Map(
               historyItems.map((item) => [item.id, item] as const)
+            );
+            const materializedChannelItems = new Map(
+              cachedChannelItems.map((item) => [item.id, item] as const)
             );
             const recordKeys: string[] = [];
             const materialized = new Map<string, QuickAccessItem>();
@@ -852,20 +901,29 @@ export function createQuickAccessValue(): QuickAccessContextValue {
                 continue;
               }
               const historyItem = materializedHistoryItems.get(id);
-              if (!historyItem) continue;
-              const entity = historyItemToEntity(historyItem);
-              const item: QuickAccessItem = {
-                kind: 'entity',
-                id,
-                bucket: getBucketForHistoryItem(historyItem),
-                searchText: getEntitySearchText(entity),
-                sortTimestamp: document.timestampMs,
-                timestamps: {
-                  updatedAt: historyItem.updatedAt,
-                  createdAt: historyItem.createdAt,
-                },
-                data: entity,
-              };
+              const cachedChannel = materializedChannelItems.get(id);
+              let item: QuickAccessItem | undefined;
+              if (historyItem) {
+                const entity = historyItemToEntity(historyItem);
+                item = {
+                  kind: 'entity',
+                  id,
+                  bucket: getBucketForHistoryItem(historyItem),
+                  searchText: getEntitySearchText(entity),
+                  sortTimestamp: document.timestampMs,
+                  timestamps: {
+                    updatedAt: historyItem.updatedAt,
+                    createdAt: historyItem.createdAt,
+                  },
+                  data: entity,
+                };
+              } else if (cachedChannel) {
+                item = channelToQuickAccessItem(
+                  cachedChannel,
+                  document.timestampMs
+                );
+              }
+              if (!item) continue;
               seen.add(id);
               recordKeys.push(document.recordKey);
               materialized.set(id, item);
@@ -911,9 +969,15 @@ export function createQuickAccessValue(): QuickAccessContextValue {
 
   // CRM companies are additive — they fold into the list when their query
   // resolves rather than gating quick access on a slower/failing CRM fetch.
-  const isLoading = () => historyQuery.isLoading || channelsLoading();
+  const isLoading = () =>
+    historyQuery.isLoading ||
+    (cacheHost ? cachedChannelsQuery.isLoading : channelsLoading());
 
   const refresh = () => {
+    if (cacheHost) {
+      setCacheRevision((revision) => revision + 1);
+      void cachedChannelsQuery.refetch();
+    }
     historyQuery.refetch();
     crmCompaniesQuery.refetch();
     snippetsQuery.refetch();

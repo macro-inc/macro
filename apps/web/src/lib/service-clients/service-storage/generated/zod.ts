@@ -1156,6 +1156,40 @@ export const mentionPreviewsResponse = zod
   .describe('Batch calendar mention preview response.');
 
 /**
+ * Lists all active calls in channels the caller is an active member of,
+newest first. Calls with no active participants (orphaned by dropped RTC
+webhooks) are excluded.
+ * @summary Handler for `GET /call/active`.
+ */
+export const getActiveCallsResponse = zod
+  .object({
+    calls: zod
+      .array(
+        zod
+          .object({
+            callId: zod.uuid().describe('The call identifier.'),
+            channelId: zod.uuid().describe('The channel this call belongs to.'),
+            createdAt: zod.iso
+              .datetime({})
+              .describe('When the call was created.'),
+            createdBy: zod.string().describe('User who created the call.'),
+            participantCount: zod
+              .number()
+              .describe(
+                'Number of active participants. Always >= 1 — calls with no active\nparticipants (e.g. orphaned by a dropped RTC webhook) are excluded.'
+              ),
+          })
+          .describe(
+            'A currently active call, as returned by the batch active-calls listing.'
+          )
+      )
+      .describe('The active calls, newest first.'),
+  })
+  .describe(
+    'Response listing all active calls in channels the caller is a member of.'
+  );
+
+/**
  * Batch-fetches lightweight previews for a list of call ids. Mirrors the
 `POST /documents/preview` endpoint: no per-id access checks, duplicate
 ids are deduplicated server-side, and missing ids come back as
@@ -3222,6 +3256,156 @@ export const postChannelBotWebhookResponse = zod
     message_id: zod.string().describe('Created message id.'),
   })
   .describe('Response returned after posting a channel webhook message.');
+
+/**
+ * @summary Fetch a collab surface.
+ */
+export const getCollabSurfaceParams = zod.object({
+  id: zod.uuid().describe('The surface id.'),
+});
+
+export const getCollabSurfaceResponse = zod
+  .object({
+    id: zod
+      .uuid()
+      .describe('The surface id — also the sync-service session key.'),
+    parentEntityId: zod.string().describe('Id of the parent entity.'),
+    parentEntityType: zod
+      .enum([
+        'user',
+        'chat',
+        'channel',
+        'channel_message',
+        'document',
+        'project',
+        'email_thread',
+        'calendar_event',
+        'team',
+        'call',
+        'foreign_entity',
+        'static_file',
+        'crm_company',
+        'crm_contact',
+        'reminder',
+        'skill',
+        'agent_session',
+      ])
+      .describe('The type of an entity in Macro')
+      .describe('Type of the parent entity.'),
+    state: zod
+      .enum(['pending', 'ready'])
+      .describe(
+        'Lifecycle state of a collab surface.\n\n`Pending` means the row exists but the sync-service session may not: the\nrow is inserted before the durable object is initialized and flipped to\n`Ready` once the initial snapshot is stored. A persisted `Pending` row is\nan ensure that died or failed mid-init; the next ensure for the same id\nretries initialization (the initializer tolerates an already-initialized\nsession), so `Pending` is self-healing rather than terminal.'
+      ),
+  })
+  .describe('A collab surface, as returned by the API.');
+
+/**
+ * The id is caller-supplied, so an embedding surface can hold a stable id
+and blindly ensure it on mount: the first ensure creates and initializes
+the session, every later one (including concurrent ones) returns the same
+surface. A soft-deleted id is `410 Gone` and never comes back.
+ * @summary Idempotently ensure a collab surface exists (load-or-create).
+ */
+export const ensureCollabSurfaceParams = zod.object({
+  id: zod.uuid().describe('The surface id.'),
+});
+
+export const ensureCollabSurfaceBody = zod
+  .object({
+    initialMarkdown: zod
+      .string()
+      .optional()
+      .describe(
+        'Markdown to seed the surface with when this ensure creates it. Empty\n(or omitted) seeds the canonical blank document. Ignored when the\nsurface already exists and is ready.'
+      ),
+    parentEntityId: zod.string().describe('Id of the parent entity (a uuid).'),
+    parentEntityType: zod
+      .enum([
+        'user',
+        'chat',
+        'channel',
+        'channel_message',
+        'document',
+        'project',
+        'email_thread',
+        'calendar_event',
+        'team',
+        'call',
+        'foreign_entity',
+        'static_file',
+        'crm_company',
+        'crm_contact',
+        'reminder',
+        'skill',
+        'agent_session',
+      ])
+      .describe('The type of an entity in Macro')
+      .describe('Type of the parent entity access derives from.'),
+  })
+  .describe('Request body for ensuring a collab surface.');
+
+export const ensureCollabSurfaceResponse = zod
+  .object({
+    id: zod
+      .uuid()
+      .describe('The surface id — also the sync-service session key.'),
+    parentEntityId: zod.string().describe('Id of the parent entity.'),
+    parentEntityType: zod
+      .enum([
+        'user',
+        'chat',
+        'channel',
+        'channel_message',
+        'document',
+        'project',
+        'email_thread',
+        'calendar_event',
+        'team',
+        'call',
+        'foreign_entity',
+        'static_file',
+        'crm_company',
+        'crm_contact',
+        'reminder',
+        'skill',
+        'agent_session',
+      ])
+      .describe('The type of an entity in Macro')
+      .describe('Type of the parent entity.'),
+    state: zod
+      .enum(['pending', 'ready'])
+      .describe(
+        'Lifecycle state of a collab surface.\n\n`Pending` means the row exists but the sync-service session may not: the\nrow is inserted before the durable object is initialized and flipped to\n`Ready` once the initial snapshot is stored. A persisted `Pending` row is\nan ensure that died or failed mid-init; the next ensure for the same id\nretries initialization (the initializer tolerates an already-initialized\nsession), so `Pending` is self-healing rather than terminal.'
+      ),
+  })
+  .describe('A collab surface, as returned by the API.');
+
+/**
+ * @summary Soft-delete a collab surface.
+ */
+export const deleteCollabSurfaceParams = zod.object({
+  id: zod.uuid().describe('The surface id.'),
+});
+
+/**
+ * @summary Mint a sync-service connection token for a surface.
+ */
+export const createCollabSurfaceTokenParams = zod.object({
+  id: zod.uuid().describe('The surface id.'),
+});
+
+export const createCollabSurfaceTokenResponse = zod
+  .object({
+    token: zod
+      .string()
+      .describe(
+        'The signed JWT to pass to the sync-service websocket connect.'
+      ),
+  })
+  .describe(
+    'Response carrying a freshly minted sync-service connection token.'
+  );
 
 /**
  * @summary Handle channel list requests for `GET /comms/channels`.

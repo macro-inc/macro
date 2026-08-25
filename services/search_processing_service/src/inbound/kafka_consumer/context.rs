@@ -13,4 +13,6 @@ pub(crate) struct KafkaProcessingContext {
     pub(crate) s3_client: Arc<S3>,
     pub(crate) document_storage_bucket: String,
     pub(crate) lexical_client: Arc<LexicalClient>,
+    /// Whether calendar events are written to the search index.
+    pub(crate) calendar_search_enabled: bool,
 }

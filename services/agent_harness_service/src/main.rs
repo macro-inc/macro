@@ -1,8 +1,8 @@
 //! Composition root for the agent harness service.
 //!
 //! The hexagon lives in `crates/agent_harness`; this binary is the shell
-//! around it: it builds the Postgres repositories, the Daytona container
-//! manager, and a channel service with the full side-effect stack for
+//! around it: it builds the Postgres repositories, the container
+//! manager (Daytona, or local Docker when opted in), and a channel service with the full side-effect stack for
 //! announcements, derives agent triggers from `macro.channels`, then drives
 //! the orchestrator from the resulting `macro.agent_sessions` events.
 
@@ -11,25 +11,27 @@ mod bots_directory;
 mod config;
 mod trigger;
 
-use std::sync::Arc;
+use std::{future::Future, pin::Pin, sync::Arc};
 
 use agent_fold::domain::service::FoldedMessageService;
-use agent_harness::domain::model::SessionDefaults;
+use agent_harness::domain::model::{HarnessCommand, SessionDefaults};
 use agent_harness::domain::service::AgentHarnessService;
 use agent_harness::inbound::kafka::{RoutedTrigger, route_agent_trigger};
 use agent_harness::inbound::runtime_gateway::RuntimeGatewayState;
 use agent_harness::outbound::channel_announcer::ChannelAnnouncer;
+use agent_harness::outbound::containers::HarnessContainers;
 use agent_harness::outbound::daytona::{
-    DaytonaApiKey as DaytonaApiKeySecret, DaytonaContainerManager, DaytonaSettings,
-    GithubToken as GithubTokenSecret, Snapshot,
+    AnthropicApiKey as AnthropicApiKeySecret, DaytonaApiKey as DaytonaApiKeySecret,
+    DaytonaContainerManager, DaytonaSettings, GithubToken as GithubTokenSecret, Snapshot,
 };
+use agent_harness::outbound::local::{LocalContainerManager, LocalSettings};
 use agent_harness::outbound::runtime_registry::RuntimeRegistry;
-use agent_session::domain::ports::NoOpRealtime;
 use agent_session::domain::service::AgentSessionServiceImpl;
 use agent_session::inbound::axum_router::{
     AgentSessionControlState, AgentSessionRouterState, CreateSessionState,
 };
 use agent_session::outbound::connection_gateway_realtime::ConnectionGatewayAgentSessionRealtime;
+use agent_session::outbound::name_generator::HaikuAgentSessionNameGenerator;
 use agent_session::outbound::postgres::PgAgentSessionRepo;
 use agent_trigger::domain::broker_events::AgentSessionMacroEvent;
 use anyhow::Context as _;
@@ -43,9 +45,9 @@ use channels::outbound::contacts_dispatcher::ContactsChannelDispatcher;
 use channels::outbound::notification_sender::NotificationChannelSender;
 use channels::outbound::pg_channels_repo::PgChannelsRepo;
 use channels::outbound::pg_side_effect_context::PgChannelSideEffectContext;
-use config::Config;
+use config::{Config, Environment};
 use connection_gateway_client::ConnectionGatewayClient;
-use kafka_util::{GroupName, KafkaEventConsumer};
+use kafka_util::{GroupName, KafkaEventConsumer, consumer_span, record_span_error};
 use lexical_client::LexicalClient;
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_authorization::{
@@ -61,6 +63,7 @@ use macro_service_urls::{ConnectionGatewayUrl, LexicalServiceUrl};
 use rdkafka::consumer::CommitMode;
 use rdkafka::message::{BorrowedMessage, Message as _};
 use sqlx::postgres::PgPoolOptions;
+use tracing::Instrument as _;
 
 /// Consumer group owning this harness's agent-session offsets.
 ///
@@ -85,19 +88,28 @@ fn commit_message(consumer: &HarnessConsumer, message: &BorrowedMessage<'_>) -> 
         .map_err(|error| anyhow::anyhow!("failed to commit agent session offset: {error:?}"))
 }
 
+type HarnessWork =
+    Pin<Box<dyn Future<Output = agent_harness::domain::error::Result<()>> + Send + 'static>>;
+
+struct PendingHarnessWork {
+    session_id: agent_session::domain::model::AgentSessionId,
+    span: tracing::Span,
+    work: HarnessWork,
+    description: &'static str,
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    MacroEntrypoint::default().init();
+    let entrypoint = MacroEntrypoint::default().init();
+    let result = run().await;
+    entrypoint.shutdown();
+    result
+}
+
+async fn run() -> anyhow::Result<()> {
     agent_harness::install_tls_provider();
     let config = Config::from_env()?;
     let bot_id = BotId::new_from_uuid(config.harness_bot_id);
-    // Credential-less boot is deliberate: external sessions need neither.
-    // A managed spawn without them fails at spawn time instead, loudly.
-    if config.daytona_api_key.trim().is_empty() || config.github_token.trim().is_empty() {
-        tracing::warn!(
-            "DAYTONA_API_KEY and/or GITHUB_TOKEN are unset: managed sandboxes are unarmed; external agent sessions are unaffected"
-        );
-    }
 
     let pool = PgPoolOptions::new()
         .min_connections(1)
@@ -126,15 +138,60 @@ async fn main() -> anyhow::Result<()> {
             connection_gateway.clone(),
             session_repo.clone(),
         ),
-    );
+    )
+    .with_name_generator(HaikuAgentSessionNameGenerator::new(ai_usage::pg_recorder(
+        pool.clone(),
+    )));
 
-    // Containers: Daytona sandboxes.
-    let containers = DaytonaContainerManager::new(DaytonaSettings {
-        api_url: config.daytona_api_url.clone(),
-        api_key: DaytonaApiKeySecret::new(config.daytona_api_key.clone()),
-        snapshot: Snapshot::new(config.daytona_snapshot.clone()),
-        github_token: GithubTokenSecret::new(config.github_token.clone()),
-    });
+    // Containers: local Docker when a developer has opted in, Daytona otherwise.
+    // The key rides into every sandbox's environment; without it the runtime
+    // has no model provider at all (`container/opencode.json` enables only
+    // `anthropic`), so managed sessions would advertise no models and fail
+    // every prompt.
+    if config.anthropic_api_key.trim().is_empty() {
+        tracing::warn!(
+            "ANTHROPIC_API_KEY is unset: managed sandboxes have no model provider; external agent sessions are unaffected"
+        );
+    }
+    let anthropic_api_key = AnthropicApiKeySecret::new(config.anthropic_api_key.clone());
+    let containers = if config.dev_dangerous_local_containers {
+        if !matches!(config.environment, Environment::Local) {
+            anyhow::bail!("DEV_DANGEROUS_LOCAL_CONTAINERS is only allowed when ENVIRONMENT=local");
+        }
+        if config.github_token.trim().is_empty() {
+            tracing::warn!(
+                "GITHUB_TOKEN is unset: local sandboxes cannot clone private repositories; external agent sessions are unaffected"
+            );
+        }
+        let network = config.local_container_network.trim();
+        if network.is_empty() {
+            anyhow::bail!(
+                "LOCAL_CONTAINER_NETWORK is required when DEV_DANGEROUS_LOCAL_CONTAINERS is set"
+            );
+        }
+        HarnessContainers::Local(LocalContainerManager::new(LocalSettings {
+            docker_binary: config.local_container_docker_binary.clone(),
+            image: config.local_container_image.clone(),
+            network: network.to_owned(),
+            github_token: GithubTokenSecret::new(config.github_token.clone()),
+            anthropic_api_key: anthropic_api_key.clone(),
+        }))
+    } else {
+        // Credential-less boot is deliberate: external sessions need neither.
+        // A managed spawn without them fails at spawn time instead, loudly.
+        if config.daytona_api_key.trim().is_empty() || config.github_token.trim().is_empty() {
+            tracing::warn!(
+                "DAYTONA_API_KEY and/or GITHUB_TOKEN are unset: managed sandboxes are unarmed; external agent sessions are unaffected"
+            );
+        }
+        HarnessContainers::Daytona(DaytonaContainerManager::new(DaytonaSettings {
+            api_url: config.daytona_api_url.clone(),
+            api_key: DaytonaApiKeySecret::new(config.daytona_api_key.clone()),
+            snapshot: Snapshot::new(config.daytona_snapshot.clone()),
+            github_token: GithubTokenSecret::new(config.github_token.clone()),
+            anthropic_api_key,
+        }))
+    };
     let container_shutdown = containers.clone();
 
     let aws_config = macro_aws_config::get_macro_aws_config().await;
@@ -157,7 +214,7 @@ async fn main() -> anyhow::Result<()> {
     );
     let side_effects = ChannelSideEffectService::new(
         PgChannelSideEffectContext::new(pool.clone()),
-        ConnectionGatewayChannelRealtimePublisher::new(connection_gateway),
+        ConnectionGatewayChannelRealtimePublisher::new(connection_gateway.clone()),
         NotificationChannelSender::new(notifications),
         ContactsChannelDispatcher::new(contacts_ingress),
     )
@@ -185,6 +242,7 @@ async fn main() -> anyhow::Result<()> {
         announcer,
         Arc::clone(&runtimes),
         SessionDefaults {
+            bot_id,
             model: config.harness_model.clone(),
             harness: config.harness_slug.clone(),
             repo_url: config.harness_repo_url.clone(),
@@ -219,7 +277,7 @@ async fn main() -> anyhow::Result<()> {
         AgentSessionServiceImpl::new(
             session_repo.clone(),
             FoldedMessageService::new(session_repo.clone()),
-            NoOpRealtime,
+            ConnectionGatewayAgentSessionRealtime::new(connection_gateway, session_repo.clone()),
         ),
         entity_access.clone(),
         MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
@@ -305,69 +363,115 @@ async fn main() -> anyhow::Result<()> {
                         continue;
                     }
                 };
-                let kafka_message = message.inner();
-                let event = match message.decode_payload() {
-                    Ok(DeclaredMacroEvent::AgentSessionMacroEvent(event)) => event,
-                    Err(error) => {
-                        tracing::error!(
-                            error = ?error,
-                            partition = kafka_message.partition(),
-                            offset = kafka_message.offset(),
-                            "dropping undecodable agent session event"
-                        );
-                        match commit_message(&consumer, kafka_message) {
-                            Ok(()) => continue,
-                            Err(error) => {
-                                run_error = Some(error);
-                                break;
+                let span = consumer_span(message.inner(), AgentHarnessConsumerGroup::GROUP_NAME);
+                let processing = async {
+                    let kafka_message = message.inner();
+                    let event = match message.decode_payload() {
+                        Ok(DeclaredMacroEvent::AgentSessionMacroEvent(event)) => event,
+                        Err(error) => {
+                            record_span_error(&tracing::Span::current(), &error);
+                            tracing::error!(
+                                error = ?error,
+                                partition = kafka_message.partition(),
+                                offset = kafka_message.offset(),
+                                "dropping undecodable agent session event"
+                            );
+                            commit_message(&consumer, kafka_message)?;
+                            return Ok::<_, anyhow::Error>(None);
+                        }
+                    };
+                    tracing::Span::current()
+                        .record("macro.event.id", tracing::field::display(event.event().event_id));
+
+                    let routed = match route_agent_trigger(event.event().event.clone(), bot_id) {
+                        Ok(routed) => routed,
+                        Err(skipped) => {
+                            tracing::debug!(?skipped, "skipped an agent session event");
+                            commit_message(&consumer, kafka_message)?;
+                            return Ok(None);
+                        }
+                    };
+
+                    let pending = match routed {
+                        RoutedTrigger::Command(session_id, command) => {
+                            tracing::Span::current()
+                                .record("agent.session.id", tracing::field::display(session_id));
+                            let event_type = match &command {
+                                HarnessCommand::Open(_) => "agent_trigger.new",
+                                HarnessCommand::Deliver(_) => "agent_trigger.existing",
+                                HarnessCommand::Delete => "agent_trigger.delete",
+                                HarnessCommand::SetSandboxSize(_) => {
+                                    "agent_trigger.set_sandbox_size"
+                                }
+                            };
+                            tracing::Span::current().record("macro.event.type", event_type);
+                            let execution_span = tracing::info_span!(
+                                "harness.execute",
+                                agent.session.id = %session_id,
+                                agent.command.type = event_type,
+                                otel.status_code = tracing::field::Empty,
+                                otel.status_description = tracing::field::Empty,
+                            );
+                            // `execute` admits synchronously, so entering here is
+                            // what carries this child context through the queue.
+                            let execution = execution_span
+                                .in_scope(|| harness.execute(session_id, command));
+                            PendingHarnessWork {
+                                session_id,
+                                span: execution_span,
+                                work: Box::pin(execution),
+                                description: "executed an agent harness command",
                             }
                         }
-                    }
-                };
-
-                let routed = match route_agent_trigger(event.event().event.clone(), bot_id) {
-                    Ok(routed) => routed,
-                    Err(skipped) => {
-                        tracing::debug!(?skipped, "skipped an agent session event");
-                        match commit_message(&consumer, kafka_message) {
-                            Ok(()) => continue,
-                            Err(error) => {
-                                run_error = Some(error);
-                                break;
+                        RoutedTrigger::Announce(session_id, prompt) => {
+                            tracing::Span::current()
+                                .record("agent.session.id", tracing::field::display(session_id));
+                            tracing::Span::current()
+                                .record("macro.event.type", "agent_trigger.announce");
+                            let execution_span = tracing::info_span!(
+                                "harness.announce",
+                                agent.session.id = %session_id,
+                                otel.status_code = tracing::field::Empty,
+                                otel.status_description = tracing::field::Empty,
+                            );
+                            let harness = harness.clone();
+                            PendingHarnessWork {
+                                session_id,
+                                span: execution_span,
+                                work: Box::pin(async move {
+                                    harness.announce_external_prompt(session_id, prompt).await
+                                }),
+                                description: "announced an external prompt",
                             }
                         }
-                    }
-                };
+                    };
 
-                // Intentionally at-most-once: keep ingestion simple and never
-                // let concurrent task completion commit Kafka offsets out of order.
-                if let Err(error) = commit_message(&consumer, kafka_message) {
-                    run_error = Some(error);
-                    break;
+                    // Intentionally at-most-once: admission precedes commit, but
+                    // long-running harness work is independent of Kafka afterward.
+                    commit_message(&consumer, kafka_message)?;
+                    Ok(Some(pending))
                 }
-                match routed {
-                    RoutedTrigger::Command(session_id, command) => {
-                        let execution = harness.execute(session_id, command);
-                        tasks.spawn(async move {
-                            match execution.await {
-                                Ok(()) => tracing::info!(%session_id, "executed an agent harness command"),
-                                Err(error) => {
-                                    tracing::error!(error = ?error, %session_id, "failed to execute an agent harness command");
-                                }
-                            }
-                        });
+                .instrument(span.clone())
+                .await;
+
+                let pending = match processing {
+                    Ok(pending) => pending,
+                    Err(error) => {
+                        record_span_error(&span, &error);
+                        run_error = Some(error);
+                        break;
                     }
-                    RoutedTrigger::Announce(session_id, prompt) => {
-                        let harness = harness.clone();
-                        tasks.spawn(async move {
-                            match harness.announce_external_prompt(session_id, prompt).await {
-                                Ok(()) => tracing::info!(%session_id, "announced an external prompt"),
-                                Err(error) => {
-                                    tracing::error!(error = ?error, %session_id, "failed to announce an external prompt");
-                                }
+                };
+                if let Some(PendingHarnessWork { session_id, span, work, description }) = pending {
+                    tasks.spawn(async move {
+                        match work.instrument(span.clone()).await {
+                            Ok(()) => tracing::info!(%session_id, description, "agent harness work completed"),
+                            Err(error) => {
+                                record_span_error(&span, &error);
+                                tracing::error!(error = ?error, %session_id, "agent harness work failed");
                             }
-                        });
-                    }
+                        }
+                    });
                 }
             }
             Some(result) = tasks.join_next(), if !tasks.is_empty() => {
@@ -380,17 +484,15 @@ async fn main() -> anyhow::Result<()> {
 
     http.abort();
     trigger.abort();
-    container_shutdown.shutdown_all().await;
+    let stop_failures = container_shutdown.shutdown_all().await;
+    if stop_failures > 0 {
+        tracing::error!(stop_failures, "some sandboxes failed to stop");
+    }
 
     while let Some(result) = tasks.join_next().await {
         if let Err(error) = result {
             tracing::error!(error = ?error, "agent harness task failed during shutdown");
         }
-    }
-
-    let stop_failures = container_shutdown.shutdown_all().await;
-    if stop_failures > 0 {
-        tracing::error!(stop_failures, "some Daytona sandboxes failed to stop");
     }
 
     match run_error {

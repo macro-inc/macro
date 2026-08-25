@@ -5,15 +5,28 @@
 #
 # Override the prompt with `just boot-daytona "your prompt"`.
 #
-# Both recipes skip the image build when the image already exists, which is
+# `build-local` builds the same `container/` as a local Docker tag so
+# `just run_local` (which sets DEV_DANGEROUS_LOCAL_CONTAINERS) can spawn
+# sandboxes without a Daytona account. `run_local` / `stack up` already
+# `docker build` the tag with no `--platform` (BuildKit cache no-ops when
+# `container/` is unchanged); this recipe is the same unpinned build, so
+# Apple Silicon / ARM Linux bake native `aarch64-linux`.
+#
+# All recipes skip the image build when the image already exists, which is
 # wrong whenever `container/` has changed - a stale image is reused silently and
 # the failure shows up much later, inside the sandbox. Use `just rebuild-daytona`
-# / `rebuild-namespace` after touching the Dockerfile or the sidecar.
+# / `rebuild-namespace` / `build-local --force` after touching the Dockerfile
+# or the sidecar.
 set dotenv-load := true
 
 # What the image is called on both providers: a Daytona snapshot, and a
 # repository in Namespace's nscr.io workspace registry.
 image_name := env_var_or_default("AGENT_HARNESS_IMAGE", "macro-agent-harness")
+
+# Snapshot bake size from sandbox_sizes.json. Override with DAYTONA_SNAPSHOT_*.
+snapshot_cpu := env_var_or_default("DAYTONA_SNAPSHOT_CPU", `jq -r .snapshot.cpu sandbox_sizes.json`)
+snapshot_memory := env_var_or_default("DAYTONA_SNAPSHOT_MEMORY", `jq -r .snapshot.memoryGib sandbox_sizes.json`)
+snapshot_disk := env_var_or_default("DAYTONA_SNAPSHOT_DISK", `jq -r .snapshot.diskGib sandbox_sizes.json`)
 
 # Cheap for the agent to answer, and it proves the repo actually cloned.
 default_prompt := "list the files in the repo root, then stop"
@@ -22,30 +35,43 @@ default_prompt := "list the files in the repo root, then stop"
 default:
     @just --list
 
-# Build the Daytona snapshot if missing.
+# Build the Daytona snapshot if missing. If it exists at the wrong size,
+# fail without deleting it (a recreate that 400s on per-sandbox limits
+# would leave @coder unable to spawn).
 ensure-daytona:
     #!/usr/bin/env bash
     set -euo pipefail
     # Daytona has no "build from a local Dockerfile at create time" mode, so
     # the image becomes a snapshot once, out of band, and sandboxes boot from
     # that.
-    if daytona snapshot list | grep -qw {{image_name}}; then
-      echo "snapshot {{image_name}} already exists, skipping build"
-    else
-      echo "building snapshot {{image_name}} (slow: the image bakes two nix dev shells)"
-      # 10GB disk is the account's per-sandbox ceiling; raising it needs Daytona support.
-      # `--context .` matters twice over. Without any `--context` the CLI
-      # auto-detects from COPY lines and misses
-      # `COPY sidecar/Cargo.toml sidecar/Cargo.lock ./`; with per-entry contexts
-      # (`--context sidecar`) it uploads that directory's *contents* flattened, so
-      # the `sidecar/` prefix the Dockerfile copies from does not exist. Either
-      # way the build dies in the sidecar stage with "/sidecar/src: not found".
-      # Passing the directory keeps paths intact - it is only ~84KB.
-      ( cd container && daytona snapshot create {{image_name}} \
+    name={{image_name}}
+    cpu={{snapshot_cpu}}
+    memory={{snapshot_memory}}
+    disk={{snapshot_disk}}
+    echo "desired snapshot $name at --cpu $cpu --memory $memory --disk $disk"
+    snapshot="$(daytona snapshot list --format json | jq -c --arg name "$name" 'first(.[] | select(.name == $name)) // empty')"
+    if [[ -z "$snapshot" ]]; then
+      echo "building snapshot $name (slow: the image bakes two nix dev shells)"
+      # `--context .` keeps paths intact instead of flattening container/.
+      ( cd container && daytona snapshot create "$name" \
           --dockerfile Dockerfile \
           --context . \
-          --cpu 4 --memory 8 --disk 10 )
+          --cpu "$cpu" --memory "$memory" --disk "$disk" )
+      exit
     fi
+
+    IFS=$'\t' read -r current_cpu current_memory current_disk < <(
+      jq -r '[.cpu // 0, .mem // .memory // 0, .disk // 0] | @tsv' <<<"$snapshot"
+    )
+    if [[ "$current_cpu/$current_memory/$current_disk" == "$cpu/$memory/$disk" ]]; then
+      echo "snapshot $name already exists at the desired size, skipping build"
+      exit
+    fi
+
+    echo "snapshot $name has --cpu $current_cpu --memory $current_memory --disk $current_disk" >&2
+    echo "expected --cpu $cpu --memory $memory --disk $disk" >&2
+    echo "not deleting it: recreate with 'just rebuild-daytona' after Daytona raises per-sandbox limits (support@daytona.io)" >&2
+    exit 1
 
 # Build the Daytona snapshot if missing, then boot an agent in a sandbox
 boot-daytona prompt=default_prompt: ensure-daytona
@@ -109,3 +135,18 @@ boot-namespace prompt=default_prompt:
     fi
     echo "booting $NAMESPACE_IMAGE_REF"
     cargo run -p agent_harness --bin boot_agent -- namespace {{ quote(prompt) }}
+
+# Build the image for the local Docker provider if missing
+build-local force="":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    # The same `container/` the Daytona snapshot is built from, so a local
+    # stack exercises the deployed image rather than an approximation of it.
+    # Slow on a cold build: the image bakes two nix dev shells.
+    tag={{image_name}}:latest
+    if [ -z "{{force}}" ] && docker image inspect "$tag" >/dev/null 2>&1; then
+      echo "image $tag already exists, skipping build (pass --force to rebuild)"
+      exit 0
+    fi
+    echo "building $tag (native platform; flake has x86_64-linux and aarch64-linux)"
+    docker build --tag "$tag" container

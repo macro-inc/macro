@@ -48,6 +48,7 @@ axum = { workspace = true, features = [
 axum-extra = { workspace = true }
 base64 = { workspace = true }
 bots = { path = "../../crates/bots" }
+bot_id = { path = "../../crates/bot_id" }
 bytes = { workspace = true }
 calendar_events = { path = "../../crates/calendar_events", features = ["dispatch-sqs", "inbound", "notify", "postgres"] }
 bzip2 = { workspace = true, default-features = false, features = [
@@ -59,6 +60,7 @@ channel_bots = { path = "../../crates/channel_bots" }
 channels = { path = "../../crates/channels", features = [
   "entity_mutation",
   "inbound",
+  "kafka_consumer",
   "list",
   "outbound",
 ] }
@@ -67,6 +69,10 @@ chat = { path = "../../crates/chat", default-features = false, features = [
 ] }
 chrono = { workspace = true }
 clap = { workspace = true }
+collab_surface = { path = "../../crates/collab_surface", features = [
+  "inbound",
+  "postgres",
+] }
 cloudfront_sign = { workspace = true }
 comms_db_client = { path = "../../crates/comms_db_client" }
 complete_graph = { path = "../../crates/complete_graph" }

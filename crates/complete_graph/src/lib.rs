@@ -14,9 +14,11 @@ mod sdl_test;
 
 pub use edges::{SoupEdges, SoupEmailThreadEdges};
 pub use graphql_activity::{
-    ActivityEdgeKey, ActivityEdgeLoad, ActivityFeedInput, ActivityFeedReader, ActivityPortReader,
-    ActivityReader, EntityActivityLoader, GraphqlActivityAction, GraphqlActivityEvent,
-    GraphqlActivityPage, NoOpActivityReader, SoupActivityEdgeReader, entity_activity_loader,
+    ActivityEdgeKey, ActivityEdgeLoad, ActivityFeedInput, ActivityFeedReader,
+    ActivityOverviewInput, ActivityPortReader, ActivityReader, EntityActivityLoader,
+    GraphqlActivityAction, GraphqlActivityDay, GraphqlActivityEntityRank, GraphqlActivityEvent,
+    GraphqlActivityOverview, GraphqlActivityPage, NoOpActivityReader, SoupActivityEdgeReader,
+    entity_activity_loader,
 };
 pub use graphql_channel::{
     ChannelActivityAuthorizer, ChannelActivityMutationService, ChannelMutationRoot,

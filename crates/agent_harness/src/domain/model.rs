@@ -1,7 +1,7 @@
 //! Commands and values used by the harness domain.
 
 use agent_runtime_protocol::domain::action::{AgentAction, AgentActionId};
-use agent_session::domain::model::{AgentSessionId, MessageId};
+use agent_session::domain::model::{AgentSessionId, MessageId, SandboxSize};
 use agent_session::domain::ports::ControlEvent;
 use bot_id::BotId;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -26,7 +26,7 @@ pub struct MentionOrigin {
 ///
 /// Only for managed sessions - the ones whose sandbox this deployment
 /// provisions. External sessions are opened through
-/// [`agent_session::domain::ports::ExternalSessionOpener`] instead: they
+/// [`agent_session::domain::ports::SessionOpener`] instead: they
 /// need no provisioning, no announcement, and no first prompt, so they are
 /// a plain create rather than a harness command.
 #[derive(Debug, Clone)]
@@ -90,6 +90,8 @@ pub enum HarnessCommand {
     Open(OpenSession),
     /// Act on a session that already exists.
     Deliver(DeliverAction),
+    /// Change the session's sandbox size and the owner's default.
+    SetSandboxSize(SandboxSize),
     /// Release a session's live resources and delete it.
     Delete,
 }
@@ -169,11 +171,19 @@ pub struct SpawnContainer {
     pub session_id: AgentSessionId,
     /// Repository cloned into the container workspace.
     pub repo_url: String,
+    /// Compute tier to request from the provider.
+    pub size: SandboxSize,
 }
 
 /// Session-row values that remain deployment configuration for now.
 #[derive(Debug, Clone)]
 pub struct SessionDefaults {
+    /// The bot managed sessions run as.
+    ///
+    /// Configuration rather than a constant for the same reason as the
+    /// trigger path's: `@claude` and `@codex` are separate deployments of one
+    /// binary, differing only in the bot they answer for.
+    pub bot_id: BotId,
     /// Model slug, e.g. `claude`.
     pub model: String,
     /// Harness slug, e.g. `opencode`.

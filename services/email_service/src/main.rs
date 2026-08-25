@@ -212,6 +212,7 @@ async fn main() -> anyhow::Result<()> {
             RedisCalendarRequestGate::new((*redis_client).clone()),
         ),
         CalendarTokenProviderAdapter::new(redis_conn.clone(), auth_service_client.clone()),
+        macro_event_broker.clone(),
     ));
     let api_result = api::setup_and_serve(ApiContext {
         db,

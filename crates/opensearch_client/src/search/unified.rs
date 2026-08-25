@@ -5,6 +5,10 @@ use crate::{
     error::{OpensearchClientError, ResponseExt},
     search::{
         builder::{SearchQueryConfig, updated_at_sort},
+        calendar_events::{
+            CalendarEventIndex, CalendarEventQueryBuilder, CalendarEventSearchArgs,
+            CalendarEventSearchConfig,
+        },
         call_records::{
             CallRecordIndex, CallRecordQueryBuilder, CallRecordSearchArgs, CallRecordSearchConfig,
             CallRecordSearchMode,
@@ -68,6 +72,8 @@ pub struct UnifiedSearchArgs {
     pub call_record_search_args: UnifiedCallRecordSearchArgs,
     /// The project search args. If None, we do not search projects
     pub project_search_args: UnifiedProjectSearchArgs,
+    /// The calendar event search args. If None, we do not search calendar events
+    pub calendar_event_search_args: UnifiedCalendarEventSearchArgs,
 }
 
 impl From<UnifiedSearchArgs> for DocumentSearchArgs {
@@ -190,6 +196,27 @@ impl From<UnifiedSearchArgs> for ProjectSearchArgs {
     }
 }
 
+impl From<UnifiedSearchArgs> for CalendarEventSearchArgs {
+    fn from(args: UnifiedSearchArgs) -> Self {
+        CalendarEventSearchArgs {
+            terms: args.calendar_event_search_args.terms,
+            user_id: args.user_id,
+            page: args.page,
+            page_size: args.page_size,
+            match_type: args.match_type,
+            collapse: args.collapse,
+            ids_only: args.calendar_event_search_args.ids_only,
+            calendar_event_ids: args.calendar_event_search_args.calendar_event_ids,
+            link_ids: args.calendar_event_search_args.link_ids,
+            statuses: args.calendar_event_search_args.statuses,
+            organizer_emails: args.calendar_event_search_args.organizer_emails,
+            attendee_emails: args.calendar_event_search_args.attendee_emails,
+            tag_option_ids: args.calendar_event_search_args.tag_option_ids,
+            match_all_tags: args.calendar_event_search_args.match_all_tags,
+        }
+    }
+}
+
 #[derive(Debug, Default, Clone)]
 pub struct UnifiedChatSearchArgs {
     pub terms: Vec<String>,
@@ -252,6 +279,20 @@ pub struct UnifiedCallRecordSearchArgs {
 }
 
 #[derive(Debug, Default, Clone)]
+pub struct UnifiedCalendarEventSearchArgs {
+    pub terms: Vec<String>,
+    pub calendar_event_ids: Vec<String>,
+    /// Inbox links the caller reads through delegation.
+    pub link_ids: Vec<String>,
+    pub statuses: Vec<String>,
+    pub organizer_emails: Vec<String>,
+    pub attendee_emails: Vec<String>,
+    pub ids_only: bool,
+    pub tag_option_ids: Vec<String>,
+    pub match_all_tags: bool,
+}
+
+#[derive(Debug, Default, Clone)]
 pub struct UnifiedProjectSearchArgs {
     pub terms: Vec<String>,
     pub project_ids: Vec<String>,
@@ -260,21 +301,75 @@ pub struct UnifiedProjectSearchArgs {
     pub match_all_tags: bool,
 }
 
-/// Possible search result indices for unified search
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
-#[serde(untagged)]
+/// Possible search result indices for unified search.
+///
+/// Deliberately **not** `#[serde(untagged)]`. `_source` carries no type
+/// discriminator, so an untagged enum had to guess the entity from whichever
+/// fields happened to be present — first matching variant wins, silently — and
+/// several shapes are subsets of others: a calendar doc carries exactly the
+/// `entity_id`, `name`, and `owner_id` that a project doc requires.
+///
+/// Instead every entity's clause in the unified query is named after its
+/// entity, and OpenSearch reports the names a hit matched in its
+/// `matched_queries`. The discriminator therefore comes from the query this
+/// module wrote, not from the shape of the document or the name of the
+/// physical index it happened to live in.
+#[derive(Debug)]
 pub(crate) enum UnifiedSearchIndex {
     ChannelMessage(ChannelMessageIndex),
     Document(DocumentIndex),
     Chat(ChatIndex),
     Email(Box<EmailIndex>),
     CallRecord(CallRecordIndex),
-    // Keep last: with `untagged`, earlier variants win and every other doc
-    // shape carries required fields (document_name, title, message_id, …)
-    // a project doc lacks.
+    CalendarEvent(CalendarEventIndex),
     Project(ProjectIndex),
 }
 
+impl UnifiedSearchIndex {
+    /// Deserialize a hit's `_source` into the variant its matched clause names.
+    ///
+    /// Each entity's clause filters `_index` to its own alias, so exactly one
+    /// can match a hit. Zero matches, several, or a `_source` that fails to
+    /// parse as the shape its own clause promises are all errors — never a
+    /// guess at which entity was meant.
+    fn from_matched(matched_queries: &[String], source: serde_json::Value) -> Result<Self> {
+        let entity =
+            OpenSearchEntityType::from_matched_queries(matched_queries.iter().map(String::as_str))
+                .ok_or_else(|| crate::error::OpensearchClientError::Unknown {
+                    details: format!(
+                        "hit matched no single known entity clause: {matched_queries:?}"
+                    ),
+                    method: Some("UnifiedSearchIndex::from_matched".to_string()),
+                })?;
+
+        fn parse<T: serde::de::DeserializeOwned>(
+            entity: &OpenSearchEntityType,
+            source: serde_json::Value,
+        ) -> Result<T> {
+            serde_json::from_value(source).map_err(|error| {
+                crate::error::OpensearchClientError::DeserializationFailed {
+                    details: format!(
+                        "`{}` hit did not match its own shape: {error}",
+                        entity.query_name()
+                    ),
+                    method: Some("UnifiedSearchIndex::from_matched".to_string()),
+                }
+            })
+        }
+
+        Ok(match entity {
+            OpenSearchEntityType::Channels => Self::ChannelMessage(parse(&entity, source)?),
+            OpenSearchEntityType::Documents => Self::Document(parse(&entity, source)?),
+            OpenSearchEntityType::Chats => Self::Chat(parse(&entity, source)?),
+            OpenSearchEntityType::Emails => Self::Email(Box::new(parse(&entity, source)?)),
+            OpenSearchEntityType::CallRecords => Self::CallRecord(parse(&entity, source)?),
+            OpenSearchEntityType::CalendarEvents => Self::CalendarEvent(parse(&entity, source)?),
+            OpenSearchEntityType::Projects => Self::Project(parse(&entity, source)?),
+        })
+    }
+}
+
+#[derive(Default)]
 pub struct SplitUnifiedSearchResponseValues {
     pub channel_message: Vec<SearchHit>,
     pub chat: Vec<SearchHit>,
@@ -283,6 +378,7 @@ pub struct SplitUnifiedSearchResponseValues {
     pub project: Vec<SearchHit>,
     pub call_record: Vec<SearchHit>,
     pub crm_company: Vec<SearchHit>,
+    pub calendar_event: Vec<SearchHit>,
 }
 
 pub trait SplitUnifiedSearchResponse: Iterator<Item = SearchHit> {
@@ -294,63 +390,20 @@ where
     T: Iterator<Item = SearchHit>,
 {
     fn split_search_response(self) -> SplitUnifiedSearchResponseValues {
-        let (channel_message, chat, document, email, project, call_record, crm_company) =
-            self.into_iter().fold(
-                (vec![], vec![], vec![], vec![], vec![], vec![], vec![]),
-                |(
-                    mut channel_message,
-                    mut chat,
-                    mut document,
-                    mut email,
-                    mut project,
-                    mut call_record,
-                    mut crm_company,
-                ),
-                 item| {
-                    match item.entity_type {
-                        SearchEntityType::Channels => {
-                            channel_message.push(item);
-                        }
-                        SearchEntityType::Chats => {
-                            chat.push(item);
-                        }
-                        SearchEntityType::Documents => {
-                            document.push(item);
-                        }
-                        SearchEntityType::Emails => {
-                            email.push(item);
-                        }
-                        SearchEntityType::Projects => {
-                            project.push(item);
-                        }
-                        SearchEntityType::CallRecords => {
-                            call_record.push(item);
-                        }
-                        SearchEntityType::CrmCompanies => {
-                            crm_company.push(item);
-                        }
-                    }
-                    (
-                        channel_message,
-                        chat,
-                        document,
-                        email,
-                        project,
-                        call_record,
-                        crm_company,
-                    )
-                },
-            );
-
-        SplitUnifiedSearchResponseValues {
-            channel_message,
-            chat,
-            document,
-            email,
-            project,
-            call_record,
-            crm_company,
+        let mut split = SplitUnifiedSearchResponseValues::default();
+        for item in self {
+            match item.entity_type {
+                SearchEntityType::Channels => split.channel_message.push(item),
+                SearchEntityType::Chats => split.chat.push(item),
+                SearchEntityType::Documents => split.document.push(item),
+                SearchEntityType::Emails => split.email.push(item),
+                SearchEntityType::Projects => split.project.push(item),
+                SearchEntityType::CallRecords => split.call_record.push(item),
+                SearchEntityType::CrmCompanies => split.crm_company.push(item),
+                SearchEntityType::CalendarEvents => split.calendar_event.push(item),
+            }
         }
+        split
     }
 }
 
@@ -567,6 +620,25 @@ impl From<Hit<UnifiedSearchIndex>> for SearchHit {
                 goto: None,
                 updated_at: millis_to_datetime(a.updated_at_millis),
             },
+            UnifiedSearchIndex::CalendarEvent(a) => SearchHit {
+                entity_id: a.entity_id,
+                entity_type: SearchEntityType::CalendarEvents,
+                score: index.score,
+                highlight: index
+                    .highlight
+                    .map(|h| {
+                        parse_highlight_hit(
+                            h,
+                            Keys {
+                                title_key: CalendarEventSearchConfig::TITLE_KEY,
+                                content_key: CalendarEventSearchConfig::CONTENT_KEY,
+                            },
+                        )
+                    })
+                    .unwrap_or_default(),
+                goto: None,
+                updated_at: millis_to_datetime(a.updated_at_millis),
+            },
             UnifiedSearchIndex::Project(a) => SearchHit {
                 entity_id: a.entity_id,
                 entity_type: SearchEntityType::Projects,
@@ -644,7 +716,8 @@ fn build_unified_search_request(args: &UnifiedSearchArgs) -> Result<SearchReques
     {
         let document_search_args: DocumentSearchArgs = args.clone().into();
         let document_query_builder: DocumentQueryBuilder = document_search_args.into();
-        let document_bool_query = document_query_builder.build_bool_query()?;
+        let mut document_bool_query = document_query_builder.build_bool_query()?;
+        document_bool_query.name(OpenSearchEntityType::Documents.query_name());
         let query_type: QueryType = document_bool_query.build().into();
         bool_query.should(query_type.to_owned());
     }
@@ -652,7 +725,8 @@ fn build_unified_search_request(args: &UnifiedSearchArgs) -> Result<SearchReques
     if args.search_indices.contains(&OpenSearchEntityType::Emails) {
         let email_search_args: EmailSearchArgs = args.clone().into();
         let email_query_builder: EmailQueryBuilder = email_search_args.into();
-        let email_bool_query = email_query_builder.build_bool_query()?;
+        let mut email_bool_query = email_query_builder.build_bool_query()?;
+        email_bool_query.name(OpenSearchEntityType::Emails.query_name());
         let query_type: QueryType = email_bool_query.build().into();
         bool_query.should(query_type.to_owned());
     }
@@ -664,7 +738,8 @@ fn build_unified_search_request(args: &UnifiedSearchArgs) -> Result<SearchReques
         let channel_message_search_args: ChannelMessageSearchArgs = args.clone().into();
         let channel_message_query_builder: ChannelMessageQueryBuilder =
             channel_message_search_args.into();
-        let channel_message_bool_query = channel_message_query_builder.build_bool_query()?;
+        let mut channel_message_bool_query = channel_message_query_builder.build_bool_query()?;
+        channel_message_bool_query.name(OpenSearchEntityType::Channels.query_name());
         let query_type: QueryType = channel_message_bool_query.build().into();
         bool_query.should(query_type.to_owned());
     }
@@ -672,7 +747,8 @@ fn build_unified_search_request(args: &UnifiedSearchArgs) -> Result<SearchReques
     if args.search_indices.contains(&OpenSearchEntityType::Chats) {
         let chat_search_args: ChatSearchArgs = args.clone().into();
         let chat_query_builder: ChatQueryBuilder = chat_search_args.into();
-        let chat_bool_query = chat_query_builder.build_bool_query()?;
+        let mut chat_bool_query = chat_query_builder.build_bool_query()?;
+        chat_bool_query.name(OpenSearchEntityType::Chats.query_name());
         let query_type: QueryType = chat_bool_query.build().into();
         bool_query.should(query_type.to_owned());
     }
@@ -683,7 +759,8 @@ fn build_unified_search_request(args: &UnifiedSearchArgs) -> Result<SearchReques
     {
         let call_record_search_args: CallRecordSearchArgs = args.clone().into();
         let call_record_query_builder: CallRecordQueryBuilder = call_record_search_args.into();
-        let call_record_bool_query = call_record_query_builder.build_bool_query()?;
+        let mut call_record_bool_query = call_record_query_builder.build_bool_query()?;
+        call_record_bool_query.name(OpenSearchEntityType::CallRecords.query_name());
         let query_type: QueryType = call_record_bool_query.build().into();
         bool_query.should(query_type.to_owned());
     }
@@ -694,8 +771,22 @@ fn build_unified_search_request(args: &UnifiedSearchArgs) -> Result<SearchReques
     {
         let project_search_args: ProjectSearchArgs = args.clone().into();
         let project_query_builder: ProjectQueryBuilder = project_search_args.into();
-        let project_bool_query = project_query_builder.build_bool_query()?;
+        let mut project_bool_query = project_query_builder.build_bool_query()?;
+        project_bool_query.name(OpenSearchEntityType::Projects.query_name());
         let query_type: QueryType = project_bool_query.build().into();
+        bool_query.should(query_type.to_owned());
+    }
+
+    if args
+        .search_indices
+        .contains(&OpenSearchEntityType::CalendarEvents)
+    {
+        let calendar_event_search_args: CalendarEventSearchArgs = args.clone().into();
+        let calendar_event_query_builder: CalendarEventQueryBuilder =
+            calendar_event_search_args.into();
+        let mut calendar_event_bool_query = calendar_event_query_builder.build_bool_query()?;
+        calendar_event_bool_query.name(OpenSearchEntityType::CalendarEvents.query_name());
+        let query_type: QueryType = calendar_event_bool_query.build().into();
         bool_query.should(query_type.to_owned());
     }
 
@@ -764,7 +855,7 @@ fn build_unified_search_request(args: &UnifiedSearchArgs) -> Result<SearchReques
 /// child a parent expands into carries that parent's `entity_id`/`updated_at`,
 /// so the last expanded hit yields the correct `search_after` for the next page.
 fn paginate_unified_hits(
-    hits: Vec<Hit<UnifiedSearchIndex>>,
+    hits: Vec<Hit<serde_json::Value>>,
     page_size: usize,
 ) -> (Vec<SearchHit>, SearchCursorOption) {
     let has_more = hits.len() > page_size;
@@ -772,6 +863,39 @@ fn paginate_unified_hits(
     let results: Vec<SearchHit> = hits
         .into_iter()
         .take(page_size)
+        .filter_map(|hit| {
+            // A hit we cannot place is dropped rather than failing the whole
+            // page — but loudly, because it means an index is in the response
+            // that the caller never asked for, or a doc no longer matches the
+            // shape its index promises.
+            let Hit {
+                index,
+                matched_queries,
+                score,
+                source,
+                highlight,
+                inner_hits,
+            } = hit;
+            match UnifiedSearchIndex::from_matched(&matched_queries, source) {
+                Ok(source) => Some(Hit {
+                    index,
+                    matched_queries,
+                    score,
+                    source,
+                    highlight,
+                    inner_hits,
+                }),
+                Err(error) => {
+                    tracing::error!(
+                        error=?error,
+                        index=%index,
+                        matched_queries=?matched_queries,
+                        "dropping unplaceable search hit"
+                    );
+                    None
+                }
+            }
+        })
         .flat_map(expand_hit_into_search_hits)
         .collect();
 
@@ -806,6 +930,13 @@ pub(crate) async fn search_unified(
 
     let response = client
         .search(opensearch::SearchParts::Index(&search_indices))
+        // An index that does not exist yet — a newly added entity type before
+        // its create-index run, or an alias mid-reindex — otherwise fails the
+        // whole request with `index_not_found_exception`, taking down search
+        // for every entity rather than just that one. Degrade to the indices
+        // that are present; `warn_on_shard_failures` still reports partial
+        // results from indices that do exist.
+        .ignore_unavailable(true)
         .body(search_request)
         .send()
         .await
@@ -819,10 +950,12 @@ pub(crate) async fn search_unified(
             details: e.to_string(),
         })?;
 
-    let result: DefaultSearchResponse<UnifiedSearchIndex> = serde_json::from_slice(&bytes)
-        .map_err(|e| OpensearchClientError::SearchDeserializationFailed {
-            details: e.to_string(),
-            raw_body: String::from_utf8_lossy(&bytes).to_string(),
+    let result: DefaultSearchResponse<serde_json::Value> =
+        serde_json::from_slice(&bytes).map_err(|e| {
+            OpensearchClientError::SearchDeserializationFailed {
+                details: e.to_string(),
+                raw_body: String::from_utf8_lossy(&bytes).to_string(),
+            }
         })?;
 
     result.warn_on_shard_failures("search_unified");

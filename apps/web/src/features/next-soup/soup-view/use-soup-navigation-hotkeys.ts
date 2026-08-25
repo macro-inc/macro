@@ -267,6 +267,7 @@ export const useSoupNavigationHotkeys = (
     condition: canRunListNavigation,
     keyDownHandler: navigateDown,
     hide: true,
+    disposeWithOwner: false,
   });
 
   registerHotkey({
@@ -288,6 +289,7 @@ export const useSoupNavigationHotkeys = (
     condition: canRunListNavigation,
     keyDownHandler: navigateUp,
     hide: true,
+    disposeWithOwner: false,
   });
 
   registerHotkey({

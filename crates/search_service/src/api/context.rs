@@ -27,4 +27,9 @@ pub struct SearchHandlerState {
     pub entity_access_service: Arc<SearchEntityAccessService>,
     /// Authorization state used to authenticate search requests.
     pub authorization_state: MacroAuthorizationState<SearchAuthorizationService>,
+    /// Whether calendar events participate in search. Off in deployed
+    /// environments until the calendar index has been created and backfilled;
+    /// gating here covers every caller of the search API at once, the AI
+    /// search tools included.
+    pub calendar_search_enabled: bool,
 }

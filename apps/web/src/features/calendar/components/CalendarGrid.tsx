@@ -18,6 +18,7 @@ import {
   type JSX,
   Show,
 } from 'solid-js';
+import { useTimeGridOpeningScroll } from '../hooks/use-time-grid-opening-scroll';
 import {
   type CalendarEvent,
   type CalendarPeriodView,
@@ -39,6 +40,7 @@ import {
   formatCalendarTime,
   formatCompactCalendarTime,
 } from '../utils/time-format';
+import { TIME_GRID_OPENING_SCROLL_TIME } from '../utils/time-grid-scroller';
 import { EventContent } from './EventContent';
 import '../calendar.css';
 
@@ -66,19 +68,6 @@ function CurrentTimeAxisIndicator(props: {
       </span>
     </span>
   );
-}
-
-function getLocalScrollTime() {
-  const now = new Date();
-  const minutesSinceMidnight = now.getHours() * 60 + now.getMinutes();
-  const scrollMinutes = Math.max(
-    0,
-    Math.floor((minutesSinceMidnight - 60) / 30) * 30
-  );
-  const hours = Math.floor(scrollMinutes / 60);
-  const minutes = scrollMinutes % 60;
-
-  return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:00`;
 }
 
 export interface CalendarGridHandle extends FullCalendarContextValue {
@@ -113,6 +102,8 @@ export interface CalendarGridProps {
   eventsById: Map<string, CalendarEvent>;
   settings: CalendarGridSettings;
   selection: CalendarGridSelection;
+  /** Rendered occurrence ids that should visually stand out from nearby events. */
+  emphasizedEventIds?: ReadonlySet<string>;
   eventTimeChangePending?: boolean;
   onDatesSet?: (info: DatesSetArg) => void;
   onEventTimeChange?: (
@@ -130,6 +121,8 @@ function CalendarGridHost(props: {
 }) {
   const calendar = useFullCalendar();
   const [element, setElement] = createSignal<HTMLDivElement>();
+
+  useTimeGridOpeningScroll(element, calendar.api);
 
   const handle: CalendarGridHandle = {
     api: calendar.api,
@@ -159,9 +152,15 @@ export function CalendarGrid(props: CalendarGridProps) {
   const mappedEvents = createMemo<EventInput[]>(() =>
     props.events.map((event) => {
       const mapped = mapCalendarEventToFullCalendar(event);
-      return props.onEventTimeChange
-        ? mapped
-        : { ...mapped, startEditable: false, durationEditable: false };
+      const emphasized = props.emphasizedEventIds?.has(event.id);
+      return {
+        ...mapped,
+        classNames: emphasized ? ['calendar-event-emphasized'] : undefined,
+        startEditable: props.onEventTimeChange ? mapped.startEditable : false,
+        durationEditable: props.onEventTimeChange
+          ? mapped.durationEditable
+          : false,
+      };
     })
   );
   const [eventInteractionActive, setEventInteractionActive] =
@@ -206,6 +205,7 @@ export function CalendarGrid(props: CalendarGridProps) {
           ? undefined
           : { days: props.settings.dayCount }
       }
+      dateAlignment={props.settings.dayCount === undefined ? undefined : 'day'}
       dayHeaders={props.settings.showDayHeaders ?? true}
       allDaySlot={props.settings.showAllDaySlot ?? true}
       height="100%"
@@ -215,7 +215,7 @@ export function CalendarGrid(props: CalendarGridProps) {
       allDayText="All day"
       nowIndicator
       headerToolbar={false}
-      scrollTime={getLocalScrollTime()}
+      scrollTime={TIME_GRID_OPENING_SCROLL_TIME}
       scrollTimeReset={false}
       weekends={props.settings.showWeekends}
       firstDay={props.settings.weekStartsOn}

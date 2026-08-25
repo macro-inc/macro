@@ -478,3 +478,63 @@ fn replays_local_recordings() {
         }
     }
 }
+
+/// The exchange the local database recorded after a switch to a provider
+/// whose credentials were broken: the prompt is answered with a JSON-RPC
+/// error and nothing else ever arrives.
+const FAILED_PROMPT: &str = concat!(
+    r#"{"direction":"to_runtime","content":{"type":"acp","jsonrpc":"2.0","id":"p","method":"session/prompt","params":{"sessionId":"s1","prompt":[{"type":"text","text":"hi"}]}}}"#,
+    "\n",
+    r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","id":"p","error":{"code":-32603,"message":"Internal error: Bad Request: bad request: Authorization header is badly formatted"}}}"#,
+);
+
+/// A turn whose prompt errors is over, and says why.
+///
+/// The bug this pins: the turn used to be left with no stop reason at all,
+/// which every reader takes to mean "still running" — so one failed prompt
+/// wedged the composer against a turn that had already died, and the error
+/// itself was dropped on the floor.
+#[test]
+fn a_prompt_answered_with_an_error_ends_its_turn() {
+    let messages = fold(parse_log(FAILED_PROMPT));
+
+    assert_eq!(messages.len(), 2, "the prompt, and the turn that failed");
+    let agent = messages.last().expect("an agent message");
+    assert_eq!(agent.author, Author::Agent);
+    assert_eq!(
+        agent.stop,
+        Some(StopReason::Failed {
+            message: "Internal error: Bad Request: bad request: Authorization header is badly \
+                      formatted"
+                .to_owned()
+        }),
+        "the runtime's own words, carried verbatim"
+    );
+}
+
+/// The failure lands on whatever the agent had already said, rather than
+/// opening a second message beside it.
+#[test]
+fn a_turn_that_had_started_talking_fails_in_place() {
+    let chunk = concat!(
+        r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","method":"session/update","#,
+        r#""params":{"sessionId":"s1","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"working"}}}}}"#,
+    );
+    let (prompt, error) = FAILED_PROMPT
+        .split_once('\n')
+        .expect("the fixture has two frames");
+    let log = format!("{prompt}\n{chunk}\n{error}");
+
+    let messages = fold(parse_log(&log));
+
+    assert_eq!(messages.len(), 2, "no extra message for the failure");
+    let agent = messages.last().expect("an agent message");
+    assert!(matches!(agent.stop, Some(StopReason::Failed { .. })));
+    assert_eq!(
+        agent.parts.first(),
+        Some(&MessagePart::Text {
+            text: "working".to_owned()
+        }),
+        "what the agent managed to say is kept"
+    );
+}
