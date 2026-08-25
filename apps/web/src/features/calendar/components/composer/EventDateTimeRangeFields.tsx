@@ -93,7 +93,7 @@ function EventDateTimeDropdown(props: EventDateTimeDropdownProps) {
       <Popover.Portal>
         <Layer depth={3}>
           <Popover.Content
-            class="portal-scope z-action-menu w-72 max-w-[calc(100vw-1rem)] overflow-hidden rounded-xl border border-edge bg-menu shadow-menu menu-open-animation"
+            class="portal-scope z-action-menu w-72 max-w-[calc(100vw-1rem)] overflow-hidden rounded-xl border border-edge bg-menu-glass glass-lg menu-open-animation"
             on:keydown={(event: KeyboardEvent) => {
               if (event.key !== 'Escape') return;
               event.preventDefault();

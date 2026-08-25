@@ -420,10 +420,7 @@ export function TagsMenu(props: {
               clickOutside(el, () => () => closeMenu());
             }}
           >
-            <Surface
-              depth={2}
-              class="py-1.5 shadow-lg shadow-drop-shadow rounded-xl"
-            >
+            <Surface depth={2} class="py-1.5 glass-lg bg-menu-glass rounded-xl">
               <Show
                 when={createStep()}
                 fallback={

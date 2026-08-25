@@ -91,20 +91,39 @@ const sizeStyles: Record<ButtonSize, string> = {
   'icon-sm': 'size-6    p-0.5  [&_:where(svg)]:size-5                  ',
 };
 
-// The glass treatment (see the `glass` utility in index.css) — ported from the
-// marketing site's hero CTA ring. Every variant carries it; `ghost` is the one
-// exception, and only because it has no surface of its own to catch the light:
-// a persistent rim and drop shadow would put a chip around every bare toolbar
-// icon in the app. It picks the glass up on hover, where it does have a scrim.
-const glassStyles: Record<ButtonVariant, string> = {
-  danger: 'glass',
-  base: 'glass',
-  active: 'glass',
-  success: 'glass',
-  ghost: 'not-disabled:hover:glass',
-  contrast: 'glass',
-  cta: 'glass',
+// The glass treatment (see the `glass` utilities in index.css) — ported from
+// the marketing site's hero CTA ring. Every variant carries it; `ghost` is the
+// one exception, and only because it has no surface of its own to catch the
+// light: a persistent rim and drop shadow would put a chip around every bare
+// toolbar icon in the app. It picks the glass up on hover, where it does have
+// a scrim. The glass scales with the button: compact sizes get the subtler
+// `glass-sm` so dense toolbars don't shimmer.
+// Literal class strings only — Tailwind's scanner can't see classes built
+// from template strings, so the hover-variant map is spelled out in full.
+const glassSizeStyles: Record<ButtonSize, string> = {
+  xs: 'glass-sm',
+  'icon-xs': 'glass-sm',
+  sm: 'glass-sm',
+  'icon-sm': 'glass-sm',
+  md: 'glass',
+  'icon-md': 'glass',
+  lg: 'glass',
+  'icon-lg': 'glass',
 };
+
+const ghostGlassSizeStyles: Record<ButtonSize, string> = {
+  xs: 'not-disabled:hover:glass-sm',
+  'icon-xs': 'not-disabled:hover:glass-sm',
+  sm: 'not-disabled:hover:glass-sm',
+  'icon-sm': 'not-disabled:hover:glass-sm',
+  md: 'not-disabled:hover:glass',
+  'icon-md': 'not-disabled:hover:glass',
+  lg: 'not-disabled:hover:glass',
+  'icon-lg': 'not-disabled:hover:glass',
+};
+
+const glassClass = (variant: ButtonVariant, size: ButtonSize): string =>
+  variant === 'ghost' ? ghostGlassSizeStyles[size] : glassSizeStyles[size];
 
 export const Button = (props: ButtonProps) => {
   const [local, others] = splitProps(props, [
@@ -138,7 +157,8 @@ export const Button = (props: ButtonProps) => {
       // Inside a ButtonGroup the group owns the frame (it strips per-button
       // borders and rounding), so it carries the glass for the whole row —
       // one pane of glass instead of one per segment.
-      group === undefined && glassStyles[local.variant ?? 'ghost'],
+      group === undefined &&
+        glassClass(local.variant ?? 'ghost', local.size ?? 'md'),
       sizeStyles[local.size ?? group?.size ?? 'md'],
       local.class
     );

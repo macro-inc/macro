@@ -122,16 +122,26 @@
   /* Glass chrome, ported from the marketing site's hero CTA ring
      (solid-site `.home-hero-cta-bar`). The look is four things layered on a
      translucent surface: a backdrop blur, a bright inner top edge, a dark
-     inner bottom edge, and a 135deg specular rim. The site is dark-only, so
-     the strengths live in tokens here and get a light-mode pass below — in a
-     light theme the lift comes from white, not from the ink color. */
-  --glass-blur: 6px;
-  --glass-saturate: 1.25;
-  --glass-highlight: color-mix(in oklch, var(--color-content-1) 6%, transparent);
-  --glass-shade: color-mix(in oklch, var(--color-surface-0) 40%, transparent);
-  --glass-shadow: 0 14px 32px -22px oklch(0 0 0 / 0.55);
-  --glass-rim-strong: color-mix(in oklch, var(--color-content-1) 18%, transparent);
-  --glass-rim-soft: color-mix(in oklch, var(--color-content-1) 12%, transparent);
+     inner bottom edge, and a 135deg specular rim.
+
+     Split in two so the size scale and the theme stay independent:
+
+     - PALETTE (below, plus a light-mode pass) says which way the light comes
+       from and how strong the effect is at full size. The site is dark-only,
+       so its hard-coded values are the dark half; in a light theme the lift
+       comes from white, not from the (dark) ink color.
+     - GEOMETRY (owned by the utilities) says how big it is. Each size class
+       sets blur/shadow extents and scales the palette strengths through
+       `--glass-scale`. Sizes set their tokens *on the element*, which would
+       out-specify an inherited light-mode value, so they must never name a
+       color or a strength directly — palette lives here, and only here. */
+  --glass-tint: var(--color-content-1);
+  --glass-shade-color: var(--color-surface-0);
+  --glass-shadow-alpha: 0.55;
+  --glass-highlight-base: 6%;
+  --glass-shade-base: 40%;
+  --glass-rim-strong-base: 18%;
+  --glass-rim-soft-base: 12%;
 
   /* Depth-0 defaults for content rendered outside a Layer marker. */
   --layer-surface: var(--color-surface-0);
@@ -145,14 +155,18 @@
 }
 
 /* Light themes invert where the glass gets its lift: the bright edge is white
-   rather than the (dark) ink color, and the surrounding shadow is softer so
-   the pill reads as raised instead of cut out. */
+   rather than the (dark) ink color, the bottom edge is a hint of ink rather
+   than a hole punched in black, and the cast shadow is softer so the surface
+   reads as raised instead of cut out. Palette only — the geometry tokens are
+   shared, so every size scales the same way in both themes. */
 html[data-theme-light='true'] {
-  --glass-highlight: color-mix(in oklch, white 55%, transparent);
-  --glass-shade: color-mix(in oklch, var(--color-content-0) 8%, transparent);
-  --glass-shadow: 0 10px 24px -18px oklch(0 0 0 / 0.28);
-  --glass-rim-strong: color-mix(in oklch, white 70%, transparent);
-  --glass-rim-soft: color-mix(in oklch, white 40%, transparent);
+  --glass-tint: white;
+  --glass-shade-color: var(--color-content-0);
+  --glass-shadow-alpha: 0.28;
+  --glass-highlight-base: 55%;
+  --glass-shade-base: 8%;
+  --glass-rim-strong-base: 70%;
+  --glass-rim-soft-base: 40%;
 }
 
 html[data-platform='ios'],
@@ -276,6 +290,11 @@ body.tauri-ios {
   --color-panel: var(--theme-panel, var(--color-surface-1));
   --color-dialog: var(--color-surface-2);
   --color-menu: var(--color-surface-2);
+  /* Menu surface for glassed floating chrome (menus, popovers, cmd+k, the
+     channel input): the menu color with a hint of see-through, mirroring the
+     site hero bar's `--b1 86%`. Pair `bg-menu-glass` with a `glass-*` utility
+     so a backdrop blur sits behind the translucency. */
+  --color-menu-glass: color-mix(in oklch, var(--color-menu) 88%, transparent);
   --color-tooltip: var(--color-surface-2);
   --color-toast: var(--color-surface-2);
   --color-input: transparent;
@@ -527,15 +546,24 @@ body.tauri-ios {
    gradient masked to the border box (a plain `border` can't fade along its
    length). Shape and background come from the consumer, so this composes with
    any radius — the rim inherits it — and with variants (`hover:glass`).
-   Strengths come from the `--glass-*` tokens, which are theme-aware. */
+
+   Comes in three sizes; `glass` is the medium, tuned for buttons and pills.
+   `glass-lg` is the marketing-site strength, for hero surfaces: menus,
+   popovers, cmd+k, the channel input. `glass-sm` is a whisper for small
+   chrome like property pills. The size utilities restate the full recipe via
+   @apply, so each is a complete class — no pairing required — and they only
+   touch geometry tokens (see the `--glass-*` block in :root for why). */
 @utility glass {
   position: relative;
   backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
   -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
   box-shadow:
-    inset 0 1px 0 var(--glass-highlight),
-    inset 0 -1px 0 var(--glass-shade),
-    var(--glass-shadow);
+    inset 0 1px 0
+      color-mix(in oklch, var(--glass-tint) calc(var(--glass-highlight-base) * var(--glass-scale)), transparent),
+    inset 0 -1px 0
+      color-mix(in oklch, var(--glass-shade-color) calc(var(--glass-shade-base) * var(--glass-scale)), transparent),
+    0 var(--glass-shadow-y) var(--glass-shadow-blur) var(--glass-shadow-spread)
+      oklch(0 0 0 / calc(var(--glass-shadow-alpha) * var(--glass-shadow-scale, var(--glass-scale))));
 
   &::after {
     content: "";
@@ -545,10 +573,10 @@ body.tauri-ios {
     padding: 1px;
     background: linear-gradient(
       135deg,
-      var(--glass-rim-strong) 0%,
+      color-mix(in oklch, var(--glass-tint) calc(var(--glass-rim-strong-base) * var(--glass-scale)), transparent) 0%,
       transparent 24%,
       transparent 76%,
-      var(--glass-rim-soft) 100%
+      color-mix(in oklch, var(--glass-tint) calc(var(--glass-rim-soft-base) * var(--glass-scale)), transparent) 100%
     );
     -webkit-mask:
       linear-gradient(#000 0 0) content-box,
@@ -560,6 +588,62 @@ body.tauri-ios {
     mask-composite: exclude;
     pointer-events: none;
   }
+
+  /* Medium: buttons and standard controls — a step down from the site's
+     hero ring so rows of buttons don't shimmer. */
+  --glass-scale: 0.72;
+  --glass-blur: 4px;
+  --glass-saturate: 1.15;
+  --glass-shadow-y: 8px;
+  --glass-shadow-blur: 20px;
+  --glass-shadow-spread: -16px;
+}
+
+/* Small: subtle glass for compact chrome (property pills, tiny chips) —
+   mostly rim and top edge, barely-there blur, no real cast shadow. */
+@utility glass-sm {
+  @apply glass;
+  --glass-scale: 0.5;
+  --glass-blur: 3px;
+  --glass-saturate: 1.1;
+  --glass-shadow-y: 3px;
+  --glass-shadow-blur: 8px;
+  --glass-shadow-spread: -6px;
+}
+
+/* Large: the marketing site's hero-ring strength, verbatim — for floating
+   hero surfaces (menus, popovers, cmd+k, the channel input). */
+@utility glass-lg {
+  @apply glass;
+  --glass-scale: 1;
+  --glass-blur: 6px;
+  --glass-saturate: 1.25;
+  --glass-shadow-y: 14px;
+  --glass-shadow-blur: 32px;
+  --glass-shadow-spread: -22px;
+}
+
+/* Strip the glass under a variant (e.g. a container query collapsing a pill
+   to a bare icon, where a rim would chip it). Variant-prefixed utilities sort
+   after plain ones, so `@max-2xl/u-list:glass-none` beats a plain `glass-sm`. */
+@utility glass-none {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  box-shadow: none;
+  &::after {
+    content: none;
+  }
+}
+
+/* The channel/compose input: full-strength glass, but the tight menu shadow
+   swaps for a wide, faint ambient one (a la the ChatGPT composer) so the
+   input reads as floating over the conversation rather than popped out of it. */
+@utility glass-input {
+  @apply glass-lg;
+  --glass-shadow-y: 10px;
+  --glass-shadow-blur: 40px;
+  --glass-shadow-spread: -8px;
+  --glass-shadow-scale: 0.5;
 }
 
 [data-press-pulse] {

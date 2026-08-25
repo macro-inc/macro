@@ -250,7 +250,7 @@ function MobileTouchMenuContent(props: ParentProps) {
             }}
           >
             <div
-              class="mobile-touch-menu-content flex items-end justify-start overflow-hidden rounded-2xl border border-edge bg-menu shadow-xl"
+              class="mobile-touch-menu-content flex items-end justify-start overflow-hidden rounded-2xl border border-edge bg-menu-glass glass-lg"
               data-expanded={menu.open() ? '' : undefined}
               style={{
                 '--mobile-touch-menu-width': menuSize.width
