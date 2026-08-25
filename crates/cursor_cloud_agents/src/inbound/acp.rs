@@ -57,6 +57,10 @@ use tokio_util::compat::{TokioAsyncReadCompatExt as _, TokioAsyncWriteCompatExt 
 /// the harness uses the same literal for the same reason.
 const MODEL_CONFIG_ID: &str = "model";
 
+/// Cursor's own "let the server pick" model (`GET /v1/models` lists it as
+/// `default`, displayed "Auto") — the select's resting value when nothing has
+/// been chosen.
+const AUTO_MODEL_ID: &str = "default";
 
 /// Delivers session updates as `session/update` notifications on the ACP
 /// connection.
@@ -481,10 +485,25 @@ where
             return Vec::new();
         }
     };
-    // With no explicit or configured choice, Cursor resolves the user's own
-    // default and never tells us which it picked, so there is no id to mark
-    // current. Naming the first model would be a guess the client would render
-    // as fact.
+    // With no explicit or configured choice, the select rests on Cursor's own
+    // "Auto" entry — a real model in their list (`id: "default"`), the same
+    // resting value their own picker shows, and the closest ACP can get to
+    // the truth: the account's configured default is resolved server-side at
+    // agent creation and never disclosed (`/v1/me` and `/v1/models` both
+    // carry no marker for it). Display only — the session's state stays
+    // unset, so runs keep omitting `model` and Cursor keeps resolving the
+    // user's own default. Only an explicit pick of "Auto" pins `default` onto
+    // the wire, which forces Auto routing over the account default; the
+    // difference is invisible unless the account default is a concrete model.
+    //
+    // If Cursor ever drops the entry there is no honest resting value, and no
+    // picker beats one resting on a guess.
+    let current = current.or_else(|| {
+        models
+            .iter()
+            .find(|model| model.id == AUTO_MODEL_ID)
+            .map(|model| model.id.clone())
+    });
     let Some(current) = current else {
         return Vec::new();
     };

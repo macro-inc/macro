@@ -1022,3 +1022,95 @@ async fn session_load_restores_the_clients_mcp_servers() {
     assert_eq!(servers[0].name, "remote");
 }
 
+/// A fresh session with nothing pinned still gets the full picker, resting on
+/// Cursor's own "Auto" — the gap that used to make the selector unreachable:
+/// no current meant no options, and the picker was the only way to set one.
+#[tokio::test]
+async fn a_session_with_no_choice_rests_the_picker_on_auto() {
+    let cursor = FakeCursor::new();
+    let mut models = offered_models();
+    models.insert(
+        0,
+        CursorModel {
+            id: "default".to_owned(),
+            display_name: "Auto".to_owned(),
+            variants: vec![ModelVariant {
+                params: Vec::new(),
+                is_default: true,
+            }],
+        },
+    );
+    cursor.script_models(models);
+    let (service, mut client) = serve_over_channel(cursor.clone(), |_| {});
+
+    let opened = client
+        .call(
+            1,
+            "session/new",
+            serde_json::json!({"cwd": "/workspace", "mcpServers": []}),
+        )
+        .await;
+    let result = expect_result(&opened);
+    let option = &result["configOptions"][0];
+    assert_eq!(option["currentValue"], "default");
+    assert_eq!(
+        option["options"].as_array().expect("options").len(),
+        3,
+        "every offered model is listed, Auto included"
+    );
+    let session = result["sessionId"]
+        .as_str()
+        .expect("a session id")
+        .to_owned();
+
+    // Auto as the resting value is display, not state: the run still omits
+    // `model`, so Cursor resolves the user's own account default rather than
+    // being forced onto Auto routing.
+    let events = cursor.script_stream();
+    events
+        .send(CursorEvent::Result {
+            run_id: CursorRunId::new("run-fake-1"),
+            status: RunStatus::Finished,
+            text: None,
+            duration_ms: None,
+        })
+        .expect("stream open");
+    events.send(CursorEvent::Done).expect("stream open");
+    service
+        .prompt(&AcpSessionId::new(session), "go")
+        .await
+        .expect("prompt runs");
+    let asked = cursor
+        .calls()
+        .into_iter()
+        .find_map(|call| match call {
+            CursorCall::CreateAgent(_, _, _, model) => Some(model),
+            _ => None,
+        })
+        .expect("the prompt created an agent");
+    assert_eq!(asked, None, "resting on Auto sends no model field");
+}
+
+/// Cursor's list without an "Auto" entry leaves no honest resting value, so
+/// the picker is withheld rather than rested on a guess.
+#[tokio::test]
+async fn no_auto_entry_means_no_picker_rather_than_a_guess() {
+    let cursor = FakeCursor::new();
+    cursor.script_models(offered_models()); // no "default" entry
+    let (_service, mut client) = serve_over_channel(cursor, |_| {});
+
+    let opened = client
+        .call(
+            1,
+            "session/new",
+            serde_json::json!({"cwd": "/workspace", "mcpServers": []}),
+        )
+        .await;
+    let result = expect_result(&opened);
+    assert!(
+        result["configOptions"]
+            .as_array()
+            .is_none_or(|options| options.is_empty()),
+        "no resting value, no picker: {result}"
+    );
+}
