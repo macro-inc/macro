@@ -21,9 +21,11 @@ import {
   type Accessor,
   createContext,
   createEffect,
+  createMemo,
   type ParentProps,
   useContext,
 } from 'solid-js';
+import { activityLabel } from '../state/agent-activity';
 import { createAgentSessionFeed } from './create-agent-session-feed';
 import {
   type ComposerController,
@@ -74,6 +76,13 @@ export type AgentSessionState = {
    * runtime was disconnected, and a request it must wait on is outstanding.
    */
   resuming: Accessor<boolean>;
+  /**
+   * What the harness is doing while the transcript has nothing to show for
+   * it — the working indicator's shimmer label ("Starting container",
+   * "Thinking", …). Absent when there is nothing to narrate: content is
+   * streaming, or the session is idle.
+   */
+  activity: Accessor<string | undefined>;
   composer: ComposerController;
 };
 
@@ -116,6 +125,24 @@ export function AgentSessionProvider(
     composer.changingModel() !== undefined;
   const resuming = () => isDisconnected(status.status()) && awaitingRuntime();
 
+  // A create that failed leaves the block with nothing to load, which is the
+  // same dead end for the reader as a load that failed.
+  const loadFailed = () => feed.loadFailed() || failed();
+
+  // Memoized so the label only propagates on change — the streaming turn
+  // replaces its message hundreds of times while this stays "Thinking".
+  const activity = createMemo(() =>
+    activityLabel({
+      loadFailed: loadFailed(),
+      pending: pending(),
+      resuming: resuming(),
+      sending: composer.sendingId() !== undefined,
+      working: working(),
+      status: status.status(),
+      messages: feed.messages(),
+    })
+  );
+
   return (
     <AgentSessionCtx.Provider
       value={{
@@ -125,12 +152,11 @@ export function AgentSessionProvider(
         bot: feed.bot,
         metadata: feed.metadata,
         messages: feed.messages,
-        // A create that failed leaves the block with nothing to load, which
-        // is the same dead end for the reader as a load that failed.
-        loadFailed: () => feed.loadFailed() || failed(),
+        loadFailed,
         working,
         status: status.status,
         resuming,
+        activity,
         composer,
       }}
     >

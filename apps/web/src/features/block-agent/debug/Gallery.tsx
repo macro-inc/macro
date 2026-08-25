@@ -15,7 +15,6 @@ import {
   ActionLine,
   AgentInput,
   AnimatedNumber,
-  ComposerNotice,
   CountSummary,
   DiffChanges,
   PierreDiff,
@@ -26,6 +25,7 @@ import {
   ToolCard,
   ToolErrorCard,
   ToolStatusTitle,
+  WorkingIndicator,
 } from '../ui';
 
 function Item(props: { label: string; children: JSX.Element }) {
@@ -138,8 +138,10 @@ export default function AgentUiGallery() {
     <StaticMarkdownContext>
       <div class="size-full overflow-auto">
         <div class="mx-auto flex max-w-3xl flex-col gap-8 px-6 py-8">
-          <Item label="ComposerNotice">
-            <ComposerNotice text="Waking the agent's sandbox…" active />
+          <Item label="WorkingIndicator">
+            <WorkingIndicator label="Starting container" />
+            <WorkingIndicator label="Thinking" />
+            <WorkingIndicator label="Resuming container" />
           </Item>
 
           <Item label="ActionLine">

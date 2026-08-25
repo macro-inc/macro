@@ -23,6 +23,7 @@ import { Scroll } from '@ui';
 import { createSignal, onCleanup, Show } from 'solid-js';
 import { Virtualizer, type VirtualizerHandle } from 'virtua/solid';
 import { useAgentSession } from '../context/AgentSessionContext';
+import { WorkingIndicator } from '../ui';
 import { Message } from './AgentMessage';
 
 /** The channel's `NEAR_BOTTOM_THRESHOLD`: within this, the view follows. */
@@ -33,7 +34,7 @@ const SETTLE_MS = 1000;
 const ITEM_SIZE = 96;
 
 export function Transcript() {
-  const { messages, loadFailed } = useAgentSession();
+  const { messages, loadFailed, activity } = useAgentSession();
 
   let scrollRef: HTMLDivElement | undefined;
   let handle: VirtualizerHandle | undefined;
@@ -198,6 +199,15 @@ export function Transcript() {
                 </div>
               )}
             </Virtualizer>
+            {/* Inside the growth-observed wrapper, so appearing keeps the
+                view pinned like any other append. */}
+            <Show when={activity()}>
+              {(label) => (
+                <div class="w-full max-w-3xl mx-auto px-4 pb-4 min-w-0">
+                  <WorkingIndicator label={label()} />
+                </div>
+              )}
+            </Show>
           </div>
         </div>
       </Scroll>
