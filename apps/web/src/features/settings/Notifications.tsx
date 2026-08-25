@@ -7,10 +7,16 @@ import {
   NOTIFICATION_EVENT_GROUPS,
 } from '@notifications/notification-event-catalog';
 import { useNotificationSettings } from '@notifications/notification-settings';
-import { createMutedEntities } from '@notifications/queries/muted-entities-query';
-import { createNotificationTypePreferences } from '@notifications/queries/type-preferences-query';
+import {
+  useNotificationTypePreferencesQuery,
+  useSetNotificationTypeEnabledMutation,
+} from '@queries/notification/type-preferences';
+import {
+  useMutedEntitiesQuery,
+  useUnmuteItemMutation,
+} from '@queries/notification/unsubscribes';
 import { ToggleSwitch } from '@ui';
-import { For, Show } from 'solid-js';
+import { For, Show, Suspense } from 'solid-js';
 import {
   SettingsCard,
   SettingsPage,
@@ -18,27 +24,43 @@ import {
   SettingsSection,
 } from './primitives';
 
+function NotificationsFallback() {
+  return <div class="animate-pulse bg-skeleton rounded h-4 w-32 m-6" />;
+}
+
 export function Notifications() {
+  return (
+    <Suspense fallback={<NotificationsFallback />}>
+      <NotificationsContent />
+    </Suspense>
+  );
+}
+
+function NotificationsContent() {
   const analytics = useAnalytics();
   const platformSettings = useNotificationSettings();
-  const preferences = createNotificationTypePreferences();
-  const mutedEntities = createMutedEntities();
+  const preferencesQuery = useNotificationTypePreferencesQuery();
+  const setTypeEnabled = useSetNotificationTypeEnabledMutation();
+  const mutedEntitiesQuery = useMutedEntitiesQuery({ limit: 100 });
+  const unmuteItem = useUnmuteItemMutation();
 
-  const disabledTypes = () => new Set(preferences.data().disabled_types);
+  const disabledTypes = () =>
+    new Set(preferencesQuery.data?.disabled_types ?? []);
 
   const isTypeEnabled = (type: string) => !disabledTypes().has(type);
 
   const toggleType = async (type: string, enabled: boolean) => {
     try {
-      await preferences.setTypeEnabled(type, enabled);
+      await setTypeEnabled.mutateAsync({ type, enabled });
     } catch {
       toast.failure('Could not update notification preference');
     }
   };
 
   const unmuteEntity = async (item: { item_id: string; item_type: string }) => {
-    const result = await mutedEntities.unmute(item);
-    if (result.isErr()) {
+    try {
+      await unmuteItem.mutateAsync(item);
+    } catch {
       toast.failure('Could not unmute item');
     }
   };
@@ -93,7 +115,7 @@ export function Notifications() {
             <ToggleSwitch
               size="md"
               checked={isTypeEnabled(EMAIL_DIGEST_NOTIFICATION_TYPE)}
-              disabled={preferences.loading()}
+              disabled={preferencesQuery.isLoading}
               onChange={(enabled) =>
                 toggleType(EMAIL_DIGEST_NOTIFICATION_TYPE, enabled)
               }
@@ -115,7 +137,7 @@ export function Notifications() {
                     <ToggleSwitch
                       size="md"
                       checked={isTypeEnabled(event.type)}
-                      disabled={preferences.loading()}
+                      disabled={preferencesQuery.isLoading}
                       onChange={(enabled) => toggleType(event.type, enabled)}
                     />
                   </SettingsRow>
@@ -132,7 +154,7 @@ export function Notifications() {
       >
         <SettingsCard>
           <Show
-            when={mutedEntities.data().length > 0}
+            when={(mutedEntitiesQuery.data ?? []).length > 0}
             fallback={
               <SettingsRow
                 label="Nothing muted"
@@ -140,7 +162,7 @@ export function Notifications() {
               />
             }
           >
-            <For each={mutedEntities.data()}>
+            <For each={mutedEntitiesQuery.data ?? []}>
               {(item) => (
                 <SettingsRow
                   label={mutedEntityTypeLabel(item.item_type)}
