@@ -71,7 +71,7 @@ export function ExperimentalMemoriesView() {
             Memory
           </h1>
         </div>
-        <div class="mb-4 flex h-10 w-full min-w-20 max-w-md items-center gap-1 rounded-full border border-edge-muted bg-ink/5 px-3 text-sm text-ink-muted hover:bg-ink/7 hover:text-ink focus-within:border-accent focus-within:bg-ink/7 focus-within:text-ink">
+        <div class="mb-4 flex h-10 w-full min-w-20 max-w-md items-center gap-1 rounded-2xl border border-edge-muted bg-ink/5 px-3 text-sm text-ink-muted hover:bg-ink/7 hover:text-ink focus-within:border-accent focus-within:bg-ink/7 focus-within:text-ink">
           <MagnifyingGlassIcon class="size-4 shrink-0" />
           <input
             type="search"

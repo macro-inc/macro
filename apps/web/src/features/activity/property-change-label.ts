@@ -1,4 +1,5 @@
 import type { PropertyDefinitionDomain } from '@property/types';
+import type { EntityReference } from '@service-properties/generated/schemas/entityReference';
 import {
   formatBoolean,
   formatDate,
@@ -56,6 +57,29 @@ function asTaggedValue(
   const record = raw as Record<string, unknown>;
   if (typeof record.type !== 'string' || !('value' in record)) return undefined;
   return { type: record.type, value: record.value };
+}
+
+/** Resolves a stored EntityReference value into validated entity refs. */
+export function entityReferenceEntries(
+  raw: unknown
+): EntityReference[] | undefined {
+  const tagged = asTaggedValue(raw);
+  if (
+    !tagged ||
+    tagged.type !== 'EntityReference' ||
+    !Array.isArray(tagged.value)
+  ) {
+    return undefined;
+  }
+
+  const entries = tagged.value.filter(
+    (value): value is EntityReference =>
+      value !== null &&
+      typeof value === 'object' &&
+      typeof (value as Record<string, unknown>).entity_id === 'string' &&
+      typeof (value as Record<string, unknown>).entity_type === 'string'
+  );
+  return entries.length > 0 ? entries : undefined;
 }
 
 /**

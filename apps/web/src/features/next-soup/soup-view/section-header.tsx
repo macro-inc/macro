@@ -14,6 +14,7 @@ export const SoupSectionHeader = (props: {
         component={props.onClick ? 'button' : 'div'}
         type={props.onClick ? 'button' : undefined}
         onClick={props.onClick}
+        data-soup-section-header
         data-highlighted={props.highlighted || undefined}
         class={cn(
           'group/header relative w-[calc(100%-0.5rem)] mx-1 my-0.5 rounded-lg px-2 py-1.5 flex items-center gap-2.5 text-xs font-semibold tracking-tight',

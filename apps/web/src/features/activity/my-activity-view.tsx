@@ -33,7 +33,7 @@ import { PropertyChangeText } from './property-change';
  * raw id, so they (like teams and static files) return undefined and the row
  * shows without an entity reference.
  */
-function displayEntityType(
+export function displayEntityType(
   entityType: GraphqlEntityType
 ): EntityType | undefined {
   return match<GraphqlEntityType, EntityType | undefined>(entityType)
@@ -120,7 +120,15 @@ export function MyActivityView() {
       }
     >
       {(ActivityView) => (
-        <Dynamic component={ActivityView()}>
+        <Dynamic
+          component={ActivityView()}
+          events={feed.data ?? []}
+          isLoading={feed.isLoading}
+          isError={feed.isError}
+          hasNextPage={feed.hasNextPage}
+          isFetchingNextPage={feed.isFetchingNextPage}
+          onFetchNextPage={() => void feed.fetchNextPage()}
+        >
           <FeedContent experimental />
         </Dynamic>
       )}
@@ -175,7 +183,7 @@ function Timestamp(props: { event: ActivityEvent }) {
  * actor in medium weight, verb muted, the natural connector per action
  * kind, and the entity as a real mention.
  */
-function SentenceTimelineRow(props: {
+export function SentenceTimelineRow(props: {
   event: ActivityEvent;
   experimental?: boolean;
 }) {

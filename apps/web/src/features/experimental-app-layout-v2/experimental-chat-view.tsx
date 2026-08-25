@@ -49,7 +49,7 @@ export function ExperimentalChatHistoryItem(props: {
     <button
       type="button"
       class={cn(
-        'group/chat flex w-full shrink-0 items-center gap-2 rounded-lg px-3 py-2 text-left outline-none transition-colors',
+        'group/chat flex w-full shrink-0 items-center gap-2 rounded-xl px-3 py-2 text-left outline-none transition-colors',
         props.active
           ? 'bg-active text-ink'
           : 'text-ink-muted hover:bg-hover hover:text-ink focus-visible:ring-2 focus-visible:ring-accent/40'
@@ -99,7 +99,7 @@ function ChatHistorySection(props: {
     >
       <div class="flex flex-col gap-3">
         <div class="flex items-center gap-2">
-          <div class="flex h-9 min-w-0 flex-1 items-center gap-2 rounded-full bg-ink/4 px-3 text-ink-muted focus-within:ring-2 focus-within:ring-accent/30">
+          <div class="flex h-9 min-w-0 flex-1 items-center gap-2 rounded-2xl bg-ink/4 px-3 text-ink-muted focus-within:ring-2 focus-within:ring-accent/30">
             <MagnifyingGlassIcon class="size-3.5 shrink-0" />
             <input
               type="search"

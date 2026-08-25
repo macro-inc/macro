@@ -288,7 +288,7 @@ export function ExperimentalAppSidebar(props: ExperimentalAppSidebarProps) {
                     onClick={(event) => openItem(item, event)}
                   >
                     <span class="flex size-5 shrink-0 items-center justify-center">
-                      <Dynamic component={item.icon} class="size-4" />
+                      <Dynamic component={item.icon} class="size-[18px]" />
                     </span>
                     <Show when={isExpanded()}>
                       <span class="truncate">{item.label}</span>

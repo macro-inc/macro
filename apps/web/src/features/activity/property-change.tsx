@@ -1,10 +1,14 @@
 import { PropertyValueIcon } from '@property/component/propertyValue/PropertyValueIcon';
 import { useAllProperties } from '@property/editor/hooks/useAllProperties';
+import { usePropertyEntityDisplay } from '@property/hooks';
 import { TagDot } from '@property/tags/TagDot';
 import type { PropertyDefinitionDomain } from '@property/types';
 import type { ActivityEvent } from '@queries/activity/graphql/entity';
+import type { EntityReference } from '@service-properties/generated/schemas/entityReference';
+import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import { For, Show } from 'solid-js';
 import {
+  entityReferenceEntries,
   propertyValueLabel,
   selectOptionEntries,
 } from './property-change-label';
@@ -64,34 +68,63 @@ function PropertyValueDisplay(props: {
   definition: PropertyDefinitionDomain | undefined;
 }) {
   const options = () => selectOptionEntries(props.raw, props.definition);
+  const entities = () => entityReferenceEntries(props.raw);
 
   return (
     <Show
-      when={options()}
+      when={entities()}
       fallback={
-        <span class="min-w-0 truncate font-medium text-ink">
-          {propertyValueLabel(props.raw, props.definition)}
-        </span>
+        <Show
+          when={options()}
+          fallback={
+            <span class="min-w-0 truncate font-medium text-ink">
+              {propertyValueLabel(props.raw, props.definition)}
+            </span>
+          }
+        >
+          {(entries) => (
+            <span class="inline-flex min-w-0 flex-wrap items-center gap-1">
+              <For each={entries()}>
+                {(entry) => (
+                  <span class="inline-flex min-w-0 max-w-[20ch] items-center gap-1 rounded-full px-1.5 py-0.5 text-ink text-xs leading-tight ring ring-edge-muted/50 ring-inset">
+                    <PropertyValueIcon
+                      optionId={entry.id}
+                      class="size-3 shrink-0"
+                    />
+                    <Show when={entry.color}>
+                      {(color) => <TagDot color={color()} class="size-2" />}
+                    </Show>
+                    <span class="truncate">{entry.label}</span>
+                  </span>
+                )}
+              </For>
+            </span>
+          )}
+        </Show>
       }
     >
       {(entries) => (
         <span class="inline-flex min-w-0 flex-wrap items-center gap-1">
           <For each={entries()}>
-            {(entry) => (
-              <span class="inline-flex min-w-0 max-w-[20ch] items-center gap-1 rounded-full px-1.5 py-0.5 text-ink text-xs leading-tight ring ring-edge-muted/50 ring-inset">
-                <PropertyValueIcon
-                  optionId={entry.id}
-                  class="size-3 shrink-0"
-                />
-                <Show when={entry.color}>
-                  {(color) => <TagDot color={color()} class="size-2" />}
-                </Show>
-                <span class="truncate">{entry.label}</span>
-              </span>
-            )}
+            {(entity) => <EntityReferencePill entity={entity} />}
           </For>
         </span>
       )}
     </Show>
+  );
+}
+
+function EntityReferencePill(props: { entity: EntityReference }) {
+  const display = usePropertyEntityDisplay(
+    () => props.entity.entity_id,
+    () => props.entity.entity_type as EntityType,
+    { fallbackIcon: null }
+  );
+
+  return (
+    <span class="inline-flex min-w-0 max-w-[20ch] items-center gap-1 rounded-full px-1.5 py-0.5 text-xs leading-tight text-ink ring ring-edge-muted/50 ring-inset">
+      <Show when={display.icon()}>{display.icon()}</Show>
+      <span class="truncate">{display.name()}</span>
+    </span>
   );
 }

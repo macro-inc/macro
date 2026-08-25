@@ -19,6 +19,7 @@ import {
   experimentalSoupViewForContent as experimentalSoupViewForContentV2,
 } from '@app/features/experimental-app-layout-v2/experimental-soup-layout';
 import type { SidebarState } from '@components/app/app-sidebar/sidebar';
+import type { ActivityEvent } from '@queries/activity/graphql/entity';
 import type { Component, ParentProps } from 'solid-js';
 import type { AppLayoutId } from './layout-registry';
 import { effectiveAppLayoutId } from './layout-state';
@@ -30,9 +31,18 @@ export type AppSidebarSurfaceProps = {
   onOverlayOpenChange?: (open: boolean) => void;
 };
 
+export type ActivityViewSurfaceProps = ParentProps<{
+  events?: ActivityEvent[];
+  isLoading?: boolean;
+  isError?: boolean;
+  hasNextPage?: boolean;
+  isFetchingNextPage?: boolean;
+  onFetchNextPage?: () => void;
+}>;
+
 export type AppLayoutSurfaces = {
   AppSidebar: Component<AppSidebarSurfaceProps>;
-  ActivityView: Component<ParentProps>;
+  ActivityView: Component<ActivityViewSurfaceProps>;
   ChatView: Component;
   SoupLayout: Component<any>;
   SoupListEntity: Component<any>;

@@ -127,7 +127,7 @@ function ChannelOption(props: {
       <button
         type="button"
         class={cn(
-          'relative flex w-full min-w-0 items-center gap-2 rounded-lg px-2 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-accent/40 @max-[720px]/experimental-soup:mx-auto @max-[720px]/experimental-soup:size-10 @max-[720px]/experimental-soup:min-h-10 @max-[720px]/experimental-soup:justify-center @max-[720px]/experimental-soup:rounded-full @max-[720px]/experimental-soup:px-0 @max-[720px]/experimental-soup:py-0',
+          'relative flex w-full min-w-0 items-center gap-2 rounded-xl px-2 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-accent/40 @max-[720px]/experimental-soup:mx-auto @max-[720px]/experimental-soup:size-10 @max-[720px]/experimental-soup:min-h-10 @max-[720px]/experimental-soup:justify-center @max-[720px]/experimental-soup:rounded-full @max-[720px]/experimental-soup:px-0 @max-[720px]/experimental-soup:py-0',
         props.channel.channelType === 'direct_message'
           ? 'min-h-10 py-2'
           : 'h-8',
@@ -255,6 +255,7 @@ function CollapsibleSection(props: {
   title: string;
   narrowIcon: JSX.Element;
   open: boolean;
+  unreadCount?: number;
   onToggle: () => void;
   action?: () => JSX.Element;
   children: JSX.Element;
@@ -267,7 +268,7 @@ function CollapsibleSection(props: {
         role="button"
         tabIndex={0}
         class={cn(
-          'group/section-header flex h-9 w-full items-center gap-2 rounded-lg px-2 text-xs font-semibold uppercase tracking-wide text-ink-extra-muted outline-none transition-colors focus-visible:ring-2 focus-visible:ring-accent/40 @max-[720px]/experimental-soup:mx-auto @max-[720px]/experimental-soup:size-10 @max-[720px]/experimental-soup:justify-center @max-[720px]/experimental-soup:rounded-full @max-[720px]/experimental-soup:px-0 @max-[720px]/experimental-soup:text-ink-extra-muted/50',
+          'group/section-header relative flex h-9 w-full items-center gap-2 rounded-xl px-2 text-xs font-semibold uppercase tracking-wide text-ink-extra-muted outline-none transition-colors focus-visible:ring-2 focus-visible:ring-accent/40 @max-[720px]/experimental-soup:mx-auto @max-[720px]/experimental-soup:size-10 @max-[720px]/experimental-soup:justify-center @max-[720px]/experimental-soup:rounded-full @max-[720px]/experimental-soup:px-0 @max-[720px]/experimental-soup:text-ink-extra-muted/50',
           actionHovered()
             ? 'bg-transparent'
             : 'hover:bg-hover hover:text-ink-muted'
@@ -287,6 +288,11 @@ function CollapsibleSection(props: {
         <span class="min-w-0 flex-1 truncate @max-[720px]/experimental-soup:hidden">
           {props.title}
         </span>
+        <Show when={!props.open && (props.unreadCount ?? 0) > 0}>
+          <span class="flex h-4 min-w-4 shrink-0 items-center justify-center rounded-full bg-accent px-1 text-[9px] font-semibold leading-none text-panel @max-[720px]/experimental-soup:absolute @max-[720px]/experimental-soup:-right-0.5 @max-[720px]/experimental-soup:-top-0.5 @max-[720px]/experimental-soup:h-3.5 @max-[720px]/experimental-soup:min-w-3.5 @max-[720px]/experimental-soup:px-0.5 @max-[720px]/experimental-soup:text-[8px]">
+            {Math.min(props.unreadCount ?? 0, 99)}
+          </span>
+        </Show>
         <div class="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover/section-header:opacity-100 group-focus-within/section-header:opacity-100 @max-[720px]/experimental-soup:hidden">
           <div
             onClick={(event) => event.stopPropagation()}
@@ -444,6 +450,18 @@ export function ExperimentalMessagesRail(props: ExperimentalMessagesRailProps) {
   const directMessages = createMemo(() =>
     channels().filter((channel) => channel.channelType === 'direct_message')
   );
+  const unreadTeamChannelCount = createMemo(
+    () =>
+      teamChannels().filter((channel) =>
+        unreadChannelIds().has(channel.id)
+      ).length
+  );
+  const unreadDirectMessageCount = createMemo(
+    () =>
+      directMessages().filter((channel) =>
+        unreadChannelIds().has(channel.id)
+      ).length
+  );
   const recentConversations = createMemo(() =>
     channels()
       .filter((channel) => channel.latestRootMessage)
@@ -519,8 +537,8 @@ export function ExperimentalMessagesRail(props: ExperimentalMessagesRailProps) {
         <For
           each={
             [
-              { id: 'conversations', label: 'Conversations' },
-              { id: 'messages', label: 'Messages' },
+              { id: 'conversations', label: 'Browse' },
+              { id: 'messages', label: 'Recents' },
             ] as const
           }
         >
@@ -587,6 +605,7 @@ export function ExperimentalMessagesRail(props: ExperimentalMessagesRailProps) {
               title="Channels"
               narrowIcon={<ChannelIcon />}
               open={channelsOpen()}
+              unreadCount={unreadTeamChannelCount()}
               onToggle={() => setChannelsOpen((open) => !open)}
               action={() => (
                 <button
@@ -624,6 +643,7 @@ export function ExperimentalMessagesRail(props: ExperimentalMessagesRailProps) {
               title="DMs"
               narrowIcon={<ChatTeardropIcon />}
               open={directMessagesOpen()}
+              unreadCount={unreadDirectMessageCount()}
               onToggle={() => setDirectMessagesOpen((open) => !open)}
               action={() => (
                 <button

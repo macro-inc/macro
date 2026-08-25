@@ -1,6 +1,6 @@
 import { createSignal } from 'solid-js';
 
-export const DEFAULT_MESSAGES_SIDEBAR_WIDTH = 288;
+export const DEFAULT_MESSAGES_SIDEBAR_WIDTH = 320;
 export const MIN_MESSAGES_SIDEBAR_WIDTH = 224;
 export const MAX_MESSAGES_SIDEBAR_WIDTH = 360;
 

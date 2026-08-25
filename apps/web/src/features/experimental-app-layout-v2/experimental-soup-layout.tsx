@@ -4,6 +4,10 @@ import {
   getDefaultTimezone,
   parseCron,
 } from '@app/features/block-automation/component/automationUtils';
+import {
+  defineQueryFilters,
+  NIL_UUID,
+} from '@app/features/next-soup/filters/filter-store';
 import { InboxSelector } from '@app/features/next-soup/soup-view/filters-bar/inbox-selector';
 import { SoupViewContextGroup } from '@app/features/next-soup/soup-view/filters-bar/soup-view-context-group';
 import { SoupViewContextSort } from '@app/features/next-soup/soup-view/filters-bar/soup-view-context-sort';
@@ -47,6 +51,7 @@ import { Entity } from '@entity';
 import type { ChatEntity } from '@entity/types/entity';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { DOCS_BASE, LIST_VIEW_DOCS_URL } from '@app/constants/docs-links';
+import { useUserId } from '@core/context/user';
 import { TOKENS } from '@core/hotkey/tokens';
 import { createBlockInstance } from '@core/orchestrator';
 import SkillIcon from '@icon/skill.svg';
@@ -62,11 +67,9 @@ import SignalIcon from '@icon/wide-signal.svg';
 import ArrowSquareOutIcon from '@phosphor/arrow-square-out.svg';
 import ExpandIcon from '@phosphor/arrows-out.svg';
 import BrainIcon from '@phosphor/brain.svg';
-import CalendarIcon from '@phosphor/calendar-blank.svg';
 import CaretRightIcon from '@phosphor/caret-right.svg';
 import CheckIcon from '@phosphor/check.svg';
 import ClockIcon from '@phosphor/clock-counter-clockwise.svg';
-import ClipboardIcon from '@phosphor/clipboard-text.svg';
 import EnvelopeOpenIcon from '@phosphor/envelope-open.svg';
 import FilterIcon from '@phosphor/funnel-simple.svg';
 import FolderIcon from '@phosphor/folder-simple.svg';
@@ -74,13 +77,12 @@ import MenuIcon from '@phosphor/list.svg';
 import MagnifyingGlassIcon from '@phosphor/magnifying-glass.svg';
 import NoteIcon from '@phosphor/note-pencil.svg';
 import PaperPlaneIcon from '@phosphor/paper-plane-tilt.svg';
-import PaperclipIcon from '@phosphor/paperclip.svg';
-import PencilIcon from '@phosphor/pencil-line.svg';
 import PlugIcon from '@phosphor/plug.svg';
 import SquaresIcon from '@phosphor/squares-four.svg';
 import ShareIcon from '@phosphor/share-network.svg';
-import UserFocusIcon from '@phosphor/user-focus.svg';
+import RecordIcon from '@phosphor/record.svg';
 import UsersIcon from '@phosphor/users-three.svg';
+import type { Favorite } from '@service-storage/generated/schemas/favorite';
 import { useSoupItemsQuery } from '@queries/soup/items';
 import { useCurrentTeamQuery } from '@queries/team/teams';
 import { useNavigate, useParams } from '@solidjs/router';
@@ -116,6 +118,7 @@ import {
   isChatEntity,
 } from './experimental-chat-view';
 import { ExperimentalDriveFavoritesSection } from './experimental-drive-favorites-section';
+import { ExperimentalDriveTreeSection } from './experimental-drive-tree-section';
 import {
   ExperimentalIntegrationDetails,
   ExperimentalIntegrationIcon,
@@ -168,13 +171,13 @@ const INBOX_ITEMS: readonly ViewNavigationItem[] = [
 ];
 
 const TASK_PERSONAL_ITEMS: readonly ViewNavigationItem[] = [
-  { value: 'my-tasks', label: 'My tasks', icon: UserFocusIcon },
-  { value: 'created-by-me', label: 'Created by me', icon: PencilIcon },
+  { value: 'my-tasks', label: 'My tasks', icon: RecordIcon },
+  { value: 'created-by-me', label: 'Created by me', icon: NoteIcon },
   { value: 'projects', label: 'Projects', icon: FolderIcon },
 ];
 
 const TASK_TEAM_ITEMS: readonly ViewNavigationItem[] = [
-  { value: 'team-tasks', label: 'Team tasks', icon: ClipboardIcon },
+  { value: 'team-tasks', label: 'Team tasks', icon: RecordIcon },
 ];
 
 type PowersTab =
@@ -271,7 +274,6 @@ const EMAIL_TAB_ICONS: Record<
   important: SignalIcon,
   noise: NoiseIcon,
   sent: PaperPlaneIcon,
-  calendar: CalendarIcon,
   drafts: NoteIcon,
   shared: ShareIcon,
   all: EnvelopeOpenIcon,
@@ -279,10 +281,10 @@ const EMAIL_TAB_ICONS: Record<
 
 type LibrarySection =
   | 'recents'
+  | 'my-drive'
+  | 'favorites'
   | 'shared'
   | 'images'
-  | 'attachments'
-  | 'folders'
   | 'all';
 
 const LIBRARY_ITEMS: readonly (ViewNavigationItem & {
@@ -290,8 +292,6 @@ const LIBRARY_ITEMS: readonly (ViewNavigationItem & {
 })[] = [
   { value: 'recents', label: 'Recents', icon: ClockIcon },
   { value: 'shared', label: 'Shared with me', icon: ShareIcon },
-  { value: 'attachments', label: 'Email attachments', icon: PaperclipIcon },
-  { value: 'folders', label: 'Folders', icon: FolderIcon },
   { value: 'all', label: 'Everything', icon: SquaresIcon },
 ];
 
@@ -329,6 +329,7 @@ type ExperimentalSoupLayoutProps = {
  */
 export function ExperimentalSoupLayout(props: ExperimentalSoupLayoutProps) {
   const panel = useSplitPanelOrThrow();
+  const userId = useUserId();
   const layout = useContext(SplitLayoutContext);
   const navigate = useNavigate();
   const params = useParams<{
@@ -419,7 +420,8 @@ export function ExperimentalSoupLayout(props: ExperimentalSoupLayoutProps) {
   });
 
   const tabView = () => TAB_VIEW_BY_EXPERIMENTAL_VIEW[props.view];
-  const emailTabs = () => VIEW_TAB_LISTS.mail;
+  const emailTabs = () =>
+    VIEW_TAB_LISTS.mail.filter((tab) => tab.value !== 'calendar');
 
   const selectTab = (value: string) => {
     const view = tabView();
@@ -475,7 +477,7 @@ export function ExperimentalSoupLayout(props: ExperimentalSoupLayoutProps) {
     syncBrainSelection();
   };
 
-  const initialLibrarySection = (): LibrarySection => {
+  const initialLibrarySection = (): LibrarySection | undefined => {
     if (soupView.soup.predicates.isActive('file-image')) return 'images';
     const active = soupView.activeTab();
     if (
@@ -484,18 +486,26 @@ export function ExperimentalSoupLayout(props: ExperimentalSoupLayoutProps) {
     ) {
       return 'recents';
     }
-    if (
-      active === 'shared' ||
-      active === 'attachments' ||
-      active === 'folders' ||
-      active === 'all'
-    ) {
-      return active;
-    }
+    if (active === 'drive:recents') return 'recents';
+    if (active === 'drive:owned') return 'my-drive';
+    if (active === 'drive:favorites') return 'favorites';
+    if (active === 'drive:shared') return 'shared';
+    if (active === 'drive:all') return 'all';
+    if (active === 'shared' || active === 'all') return active;
+    if (active?.startsWith('project:')) return undefined;
     return 'recents';
   };
+  const initialLibraryProjectId = () => {
+    const active = soupView.activeTab();
+    return active?.startsWith('project:')
+      ? active.slice('project:'.length)
+      : undefined;
+  };
   const [librarySection, setLibrarySection] =
-    createSignal<LibrarySection>(initialLibrarySection());
+    createSignal<LibrarySection | undefined>(initialLibrarySection());
+  const [selectedLibraryProjectId, setSelectedLibraryProjectId] = createSignal<
+    string | undefined
+  >(initialLibraryProjectId());
 
   const clearLibraryImageFilter = () => {
     const imageQuery = buildDocumentTypeQuery(['file-image']);
@@ -536,25 +546,122 @@ export function ExperimentalSoupLayout(props: ExperimentalSoupLayoutProps) {
     if (nextQuery) soupView.queryFilters.add(nextQuery);
   };
 
-  const selectLibrarySection = (section: LibrarySection) => {
-    if (section === 'recents') {
-      applyTabPreset('documents', 'all');
-      clearLibraryImageFilter();
-      soupView.soup.sort.setAll(['viewed_at']);
-      setLibrarySection('recents');
-      return;
+  const applyBroadLibrarySection = (
+    section: Exclude<LibrarySection, 'images' | 'favorites'>
+  ) => {
+    applyTabPreset('search', 'all');
+    const currentUserId = userId();
+    if (section === 'my-drive' && currentUserId) {
+      soupView.queryFilters.add(
+        defineQueryFilters({
+          include: {
+            documentOwnerId: [currentUserId],
+            chatOwnerId: [currentUserId],
+            folderOwnerId: [currentUserId],
+          },
+        })
+      );
+      soupView.soup.predicates.set({
+        and: ['search-supported', 'owned-entity'],
+      });
+    } else if (section === 'shared' && currentUserId) {
+      soupView.queryFilters.add(
+        defineQueryFilters({
+          exclude: {
+            documentOwnerId: [currentUserId],
+            chatOwnerId: [currentUserId],
+            folderOwnerId: [currentUserId],
+          },
+        })
+      );
+      soupView.soup.predicates.set({
+        and: ['search-supported', 'shared-entity'],
+      });
     }
+    soupView.soup.sort.setAll([
+      section === 'recents' ? 'viewed_at' : 'updated_at',
+    ]);
+    soupView.setActiveTab(
+      section === 'my-drive' ? 'drive:owned' : `drive:${section}`
+    );
+  };
 
+  const selectLibraryFavorites = (favorites: Favorite[]) => {
+    const idsFor = (...types: Favorite['entityType'][]) =>
+      favorites
+        .filter((favorite) => types.includes(favorite.entityType))
+        .map((favorite) => favorite.entityId);
+    const idsOrNil = (ids: string[]) => (ids.length > 0 ? ids : [NIL_UUID]);
+    const channelIds = favorites.flatMap((favorite) => {
+      if (favorite.entityType === 'channel') return [favorite.entityId];
+      if (favorite.entityType === 'channel_message' && favorite.channelId) {
+        return [favorite.channelId];
+      }
+      return [];
+    });
+
+    soupView.queryFilters.replace(
+      defineQueryFilters({
+        include: {
+          documentId: idsOrNil(idsFor('document', 'static_file')),
+          calendarEventId: idsOrNil(idsFor('calendar_event')),
+          threadId: idsOrNil(idsFor('email_thread')),
+          channelId: idsOrNil(channelIds),
+          channelThreadId: [NIL_UUID],
+          chatId: idsOrNil(idsFor('chat')),
+          folderId: idsOrNil(idsFor('project')),
+          callId: idsOrNil(idsFor('call')),
+          foreignEntityRecordId: idsOrNil(idsFor('foreign_entity')),
+          crmCompanyId: idsOrNil(idsFor('crm_company')),
+          reminderId: idsOrNil(idsFor('reminder')),
+          includeReminders: true,
+        },
+        emailView: 'all',
+      })
+    );
+    soupView.soup.predicates.clear();
+    soupView.soup.grouping.setActiveGroupId(undefined);
+    soupView.soup.sort.setAll(['updated_at']);
+    soupView.setActiveTab('drive:favorites');
+    setLibrarySection('favorites');
+    setSelectedLibraryProjectId(undefined);
+    setViewMenuOpen(false);
+  };
+
+  const selectLibraryProject = (projectId: string) => {
+    soupView.queryFilters.replace(
+      defineQueryFilters({
+        include: {
+          projectId: [projectId],
+          chatProjectId: [projectId],
+          folderId: [projectId],
+          emailProjectId: [projectId],
+        },
+        emailView: 'all',
+      })
+    );
+    soupView.soup.predicates.clear();
+    soupView.soup.grouping.setActiveGroupId(undefined);
+    soupView.soup.sort.setAll(['updated_at']);
+    soupView.setActiveTab(`project:${projectId}`);
+    setLibrarySection(undefined);
+    setSelectedLibraryProjectId(projectId);
+    setViewMenuOpen(false);
+  };
+
+  const selectLibrarySection = (section: LibrarySection) => {
+    setSelectedLibraryProjectId(undefined);
     if (section === 'images') {
       applyTabPreset('documents', 'all');
       setLibraryTypeFilters(['file-image']);
       setLibrarySection('images');
       return;
     }
+    if (section === 'favorites') return;
 
-    applyTabPreset('documents', section);
-    clearLibraryImageFilter();
+    applyBroadLibrarySection(section);
     setLibrarySection(section);
+    setViewMenuOpen(false);
   };
 
   onMount(() => {
@@ -569,9 +676,16 @@ export function ExperimentalSoupLayout(props: ExperimentalSoupLayoutProps) {
       onCleanup(unregister);
     }
 
-    if (props.view === 'library' && soupView.activeTab() === 'owned') {
-      selectLibrarySection('recents');
-      return;
+    if (props.view === 'library') {
+      const active = soupView.activeTab();
+      if (['owned', 'attachments', 'folders'].includes(active ?? '')) {
+        selectLibrarySection('recents');
+        return;
+      }
+      if (active === 'shared' || active === 'all') {
+        selectLibrarySection(active);
+        return;
+      }
     }
     if (props.view === 'messages') {
       const unregister = panel.handle.registerEntryStateCaptor(
@@ -737,7 +851,7 @@ export function ExperimentalSoupLayout(props: ExperimentalSoupLayoutProps) {
       <SoupSearchbar
         variant="filled"
         size="comfortable"
-        class="rounded-full"
+        class="rounded-2xl"
         placeholder={searchPlaceholder()}
         initialValue={props.initialSearchText}
       />
@@ -845,7 +959,7 @@ export function ExperimentalSoupLayout(props: ExperimentalSoupLayoutProps) {
   const BrainNavigation = () => (
     <div class="flex min-h-0 flex-1 flex-col">
       <ExperimentalViewSidebarItems class="shrink-0">
-        <nav aria-label="Brain sections" class="flex flex-col gap-1">
+        <nav aria-label="Brain sections" class="flex flex-col gap-0.5">
           <For each={MACHINE_ITEMS.filter((item) => item.value !== 'agents')}>
             {(item) => {
               const active = () =>
@@ -854,7 +968,7 @@ export function ExperimentalSoupLayout(props: ExperimentalSoupLayoutProps) {
                 <button
                   type="button"
                   class={cn(
-                    'flex w-full shrink-0 items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-sm font-medium transition-colors',
+                    'flex w-full shrink-0 items-center gap-2.5 rounded-xl px-3 py-2 text-left text-sm font-medium transition-colors',
                     active()
                       ? 'bg-active text-ink'
                       : 'text-ink-muted hover:bg-ink/5 hover:text-ink'
@@ -883,7 +997,7 @@ export function ExperimentalSoupLayout(props: ExperimentalSoupLayoutProps) {
           </span>
         </div>
         <div class="flex shrink-0 items-center">
-          <div class="flex h-9 min-w-0 flex-1 items-center gap-2 rounded-full bg-ink/4 px-3 text-ink-muted focus-within:ring-2 focus-within:ring-accent/30">
+          <div class="flex h-9 min-w-0 flex-1 items-center gap-2 rounded-2xl bg-ink/4 px-3 text-ink-muted focus-within:ring-2 focus-within:ring-accent/30">
             <MagnifyingGlassIcon class="size-3.5 shrink-0" />
             <input
               type="search"
@@ -971,8 +1085,17 @@ export function ExperimentalSoupLayout(props: ExperimentalSoupLayoutProps) {
   );
 
   const Body = (_bodyProps: { adjacentToSidebar?: boolean } = {}) => (
-    <section class="min-h-0 flex-1 px-6 @max-[760px]/experimental-soup:px-3 @max-[480px]/experimental-soup:px-2">
-      <div class="flex size-full min-h-0 flex-col overflow-hidden">
+    <section class="min-h-0 flex-1 px-4 pb-4 @max-[760px]/experimental-soup:px-3 @max-[480px]/experimental-soup:px-2">
+      <div
+        class={cn(
+          'flex size-full min-h-0 flex-col overflow-hidden',
+          props.view !== 'messages' &&
+            props.view !== 'machines' &&
+            'rounded-2xl bg-ink/2 p-2',
+          props.view === 'tasks' &&
+            '[&_[data-soup-section-header]]:bg-transparent!'
+        )}
+      >
         {props.children}
       </div>
     </section>
@@ -980,7 +1103,7 @@ export function ExperimentalSoupLayout(props: ExperimentalSoupLayoutProps) {
 
   const MachineCollectionLayout = () => (
     <ListContentContainer>
-      <header class="shrink-0 px-6 pb-5 pt-5 @max-[760px]/experimental-soup:px-3 @max-[480px]/experimental-soup:px-2">
+      <header class="shrink-0 px-4 pb-5 pt-5 @max-[760px]/experimental-soup:px-3 @max-[480px]/experimental-soup:px-2">
         <div class="flex min-w-0 items-center gap-3">
           <h1 class="m-0 min-w-0 flex-1 truncate text-2xl font-medium tracking-[-0.03em] text-ink">
             {powersTab() === 'skills' ? 'Skills' : 'Routines'}
@@ -1439,7 +1562,7 @@ export function ExperimentalSoupLayout(props: ExperimentalSoupLayoutProps) {
       <ExperimentalViewSidebarItems
         class="mt-3"
       >
-        <nav aria-label="Email views" class="flex flex-col gap-1">
+        <nav aria-label="Email views" class="flex flex-col gap-0.5">
         <For each={emailTabs()}>
           {(tab) => {
             const active = () => soupView.activeTab() === tab.value;
@@ -1447,7 +1570,7 @@ export function ExperimentalSoupLayout(props: ExperimentalSoupLayoutProps) {
               <button
                 type="button"
                 class={cn(
-                  'flex w-full shrink-0 items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-sm font-medium transition-colors',
+                  'flex w-full shrink-0 items-center gap-2.5 rounded-xl px-3 py-2 text-left text-sm font-medium transition-colors',
                   active()
                     ? 'bg-active text-ink'
                     : 'text-ink-muted hover:bg-ink/5 hover:text-ink'
@@ -1474,7 +1597,7 @@ export function ExperimentalSoupLayout(props: ExperimentalSoupLayoutProps) {
 
   const LibraryNavigation = () => (
     <ExperimentalViewSidebarItems class="mt-0">
-      <nav aria-label="Drive views" class="flex flex-col gap-1">
+      <nav aria-label="Drive views" class="flex flex-col gap-0.5">
         <For each={LIBRARY_ITEMS}>
           {(item) => {
             const active = () => librarySection() === item.value;
@@ -1482,7 +1605,7 @@ export function ExperimentalSoupLayout(props: ExperimentalSoupLayoutProps) {
               <button
                 type="button"
                 class={cn(
-                  'flex w-full shrink-0 items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-sm font-medium transition-colors',
+                  'flex w-full shrink-0 items-center gap-2.5 rounded-xl px-3 py-2 text-left text-sm font-medium transition-colors',
                   active()
                     ? 'bg-active text-ink'
                     : 'text-ink-muted hover:bg-ink/5 hover:text-ink'
@@ -1499,11 +1622,20 @@ export function ExperimentalSoupLayout(props: ExperimentalSoupLayoutProps) {
             );
           }}
         </For>
-      </nav>
 
-      <ExperimentalDriveFavoritesSection
-        onOpen={() => setViewMenuOpen(false)}
-      />
+        <ExperimentalDriveTreeSection
+          active={librarySection() === 'my-drive'}
+          activeProjectId={selectedLibraryProjectId()}
+          onSelectRoot={() => selectLibrarySection('my-drive')}
+          onSelect={(project) => selectLibraryProject(project.id)}
+        />
+
+        <ExperimentalDriveFavoritesSection
+          active={librarySection() === 'favorites'}
+          onSelectRoot={selectLibraryFavorites}
+          onOpen={() => setViewMenuOpen(false)}
+        />
+      </nav>
 
       <Show when={soupView.tagFilter.hasTags()}>
         <section class="mt-5">
@@ -1526,14 +1658,13 @@ export function ExperimentalSoupLayout(props: ExperimentalSoupLayoutProps) {
                   <button
                     type="button"
                     class={cn(
-                      'inline-flex min-w-0 max-w-full items-center rounded-full px-2 py-1 text-xs text-ink transition-[filter,box-shadow]',
+                      'experimental-v2-drive-tag inline-flex min-w-0 max-w-full items-center rounded-full px-2 py-1 text-xs transition-[filter,background-color,color]',
                       active()
                         ? 'font-semibold saturate-125'
                         : 'saturate-100 hover:saturate-125'
                     )}
-                    style={{
-                      'background-color': `color-mix(in srgb, ${color()} ${active() ? 56 : 38}%, transparent)`,
-                    }}
+                    style={{ '--drive-tag-color': color() }}
+                    data-active={active() || undefined}
                     aria-pressed={active()}
                     onClick={() => {
                       const activeIds = soupView.tagFilter.activeIds();
@@ -1560,7 +1691,7 @@ export function ExperimentalSoupLayout(props: ExperimentalSoupLayoutProps) {
 
   const TaskNavigation = () => (
     <ExperimentalViewSidebarItems class="mt-0">
-      <nav aria-label="Task views" class="flex flex-col gap-1">
+      <nav aria-label="Task views" class="flex flex-col gap-0.5">
         <For each={TASK_PERSONAL_ITEMS}>
           {(item) => {
             const active = () => soupView.activeTab() === item.value;
@@ -1568,7 +1699,7 @@ export function ExperimentalSoupLayout(props: ExperimentalSoupLayoutProps) {
               <button
                 type="button"
                 class={cn(
-                  'flex w-full shrink-0 items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-sm font-medium transition-colors',
+                  'flex w-full shrink-0 items-center gap-2.5 rounded-xl px-3 py-2 text-left text-sm font-medium transition-colors',
                   active()
                     ? 'bg-active text-ink'
                     : 'text-ink-muted hover:bg-ink/5 hover:text-ink'
@@ -1589,7 +1720,7 @@ export function ExperimentalSoupLayout(props: ExperimentalSoupLayoutProps) {
         <button
           type="button"
           class={cn(
-            'mt-3 flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-sm font-medium text-ink-muted transition-colors hover:bg-ink/5 hover:text-ink',
+            'mt-3 flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-sm font-medium text-ink-muted transition-colors hover:bg-ink/5 hover:text-ink',
             TASK_TEAM_ITEMS.some(
               (item) => item.value === soupView.activeTab()
             ) && 'text-ink'
@@ -1614,7 +1745,7 @@ export function ExperimentalSoupLayout(props: ExperimentalSoupLayoutProps) {
               <button
                 type="button"
                 class={cn(
-                  'flex w-full shrink-0 items-center gap-2.5 rounded-lg py-2.5 pl-8 pr-3 text-left text-sm font-medium transition-colors',
+                  'flex w-full shrink-0 items-center gap-2.5 rounded-xl py-2 pl-8 pr-3 text-left text-sm font-medium transition-colors',
                   active()
                     ? 'bg-active text-ink'
                     : 'text-ink-muted hover:bg-ink/5 hover:text-ink'
@@ -1670,7 +1801,7 @@ export function ExperimentalSoupLayout(props: ExperimentalSoupLayoutProps) {
         <SoupViewCreateButton inline experimental />
       </ComposedSplitHeader>
       <ListContentContainer>
-        <header class="shrink-0 px-6 pb-5 pt-4 @max-[760px]/experimental-soup:px-3 @max-[480px]/experimental-soup:px-2">
+        <header class="shrink-0 px-4 pb-5 pt-4 @max-[760px]/experimental-soup:px-3 @max-[480px]/experimental-soup:px-2">
           <SearchAndControls flush />
         </header>
         <Body />
@@ -1682,16 +1813,17 @@ export function ExperimentalSoupLayout(props: ExperimentalSoupLayoutProps) {
     <div class="flex size-full min-h-0">
       <ExperimentalViewSidebar
         label="Email navigation"
-        class="mb-0 border-r-0! bg-ink/2 pt-2"
+        class="mb-0 border-r-0! pt-2"
         collapsed={viewSidebarCollapsed()}
       >
         <ComposedSplitHeader class="flex min-h-8 shrink-0 items-center">
           <ComposedSplitControls />
         </ComposedSplitHeader>
-        <div class="mt-3 shrink-0">
-          <h1 class="m-0 truncate text-2xl font-semibold tracking-[-0.03em] text-ink">
+        <div class="mt-3 flex shrink-0 items-center gap-2">
+          <h1 class="m-0 min-w-0 flex-1 truncate text-2xl font-semibold tracking-[-0.03em] text-ink">
             Email
           </h1>
+          <SoupViewCreateButton inline experimental />
         </div>
         <div class="mt-5 min-h-0 flex-1 overflow-y-auto">
           <EmailNavigation />
@@ -1703,13 +1835,10 @@ export function ExperimentalSoupLayout(props: ExperimentalSoupLayoutProps) {
           title="Email"
           navigation={<EmailNavigation />}
         />
-        <header class="shrink-0 px-6 pb-5 pt-4 @max-[760px]/experimental-soup:px-3 @max-[480px]/experimental-soup:px-2">
+        <header class="shrink-0 px-4 pb-5 pt-4 @max-[760px]/experimental-soup:px-3 @max-[480px]/experimental-soup:px-2">
           <div class="flex min-w-0 items-center gap-4 @max-[720px]/experimental-soup:gap-2">
             <div class="min-w-0 flex-1">
               <SearchBar />
-            </div>
-            <div class="ml-auto shrink-0 @max-[720px]/experimental-soup:hidden">
-              <SoupViewCreateButton inline experimental />
             </div>
           </div>
           <div class="mt-3 flex min-w-0 items-center justify-end">
@@ -1725,16 +1854,17 @@ export function ExperimentalSoupLayout(props: ExperimentalSoupLayoutProps) {
     <div class="flex size-full min-h-0">
       <ExperimentalViewSidebar
         label="Drive navigation"
-        class="mb-0 border-r-0! bg-ink/2 pt-2"
+        class="mb-0 border-r-0! pt-2"
         collapsed={viewSidebarCollapsed()}
       >
         <ComposedSplitHeader class="flex min-h-8 shrink-0 items-center">
           <ComposedSplitControls />
         </ComposedSplitHeader>
-        <div class="mt-3 shrink-0">
-          <h1 class="m-0 truncate text-2xl font-semibold tracking-[-0.03em] text-ink">
+        <div class="mt-3 flex shrink-0 items-center gap-2">
+          <h1 class="m-0 min-w-0 flex-1 truncate text-2xl font-semibold tracking-[-0.03em] text-ink">
             Drive
           </h1>
+          <SoupViewCreateButton inline experimental />
         </div>
         <div class="mt-5 min-h-0 flex-1 overflow-y-auto">
           <LibraryNavigation />
@@ -1746,13 +1876,10 @@ export function ExperimentalSoupLayout(props: ExperimentalSoupLayoutProps) {
           title="Drive"
           navigation={<LibraryNavigation />}
         />
-        <header class="shrink-0 px-6 pb-5 pt-4 @max-[760px]/experimental-soup:px-3 @max-[480px]/experimental-soup:px-2">
+        <header class="shrink-0 px-4 pb-5 pt-4 @max-[760px]/experimental-soup:px-3 @max-[480px]/experimental-soup:px-2">
           <div class="flex min-w-0 items-center gap-4 @max-[720px]/experimental-soup:gap-2">
             <div class="min-w-0 flex-1">
               <SearchBar />
-            </div>
-            <div class="ml-auto shrink-0 @max-[720px]/experimental-soup:hidden">
-              <SoupViewCreateButton inline experimental />
             </div>
           </div>
           <div class="mt-3 flex min-w-0 items-center gap-4 @max-[720px]/experimental-soup:gap-2">
@@ -1771,16 +1898,17 @@ export function ExperimentalSoupLayout(props: ExperimentalSoupLayoutProps) {
     <div class="flex size-full min-h-0">
       <ExperimentalViewSidebar
         label="Task navigation"
-        class="mb-0 border-r-0! bg-ink/2 pt-2"
+        class="mb-0 border-r-0! pt-2"
         collapsed={viewSidebarCollapsed()}
       >
         <ComposedSplitHeader class="flex min-h-8 shrink-0 items-center">
           <ComposedSplitControls />
         </ComposedSplitHeader>
-        <div class="mt-3 shrink-0">
-          <h1 class="m-0 truncate text-2xl font-semibold tracking-[-0.03em] text-ink">
+        <div class="mt-3 flex shrink-0 items-center gap-2">
+          <h1 class="m-0 min-w-0 flex-1 truncate text-2xl font-semibold tracking-[-0.03em] text-ink">
             Tasks
           </h1>
+          <SoupViewCreateButton inline experimental />
         </div>
         <div class="mt-5 min-h-0 flex-1 overflow-y-auto">
           <TaskNavigation />
@@ -1792,13 +1920,10 @@ export function ExperimentalSoupLayout(props: ExperimentalSoupLayoutProps) {
           title="Tasks"
           navigation={<TaskNavigation />}
         />
-        <header class="shrink-0 px-6 pb-5 pt-4 @max-[760px]/experimental-soup:px-3 @max-[480px]/experimental-soup:px-2">
+        <header class="shrink-0 px-4 pb-5 pt-4 @max-[760px]/experimental-soup:px-3 @max-[480px]/experimental-soup:px-2">
           <div class="flex min-w-0 items-center gap-4 @max-[720px]/experimental-soup:gap-2">
             <div class="min-w-0 flex-1">
               <SearchBar />
-            </div>
-            <div class="ml-auto shrink-0 @max-[720px]/experimental-soup:hidden">
-              <SoupViewCreateButton inline experimental />
             </div>
           </div>
           <div class="mt-3 flex min-w-0 items-center justify-end">
@@ -1820,7 +1945,7 @@ export function ExperimentalSoupLayout(props: ExperimentalSoupLayoutProps) {
         <SoupViewCreateButton inline experimental />
       </ComposedSplitHeader>
       <ListContentContainer>
-        <header class="shrink-0 px-6 pb-5 pt-4 @max-[760px]/experimental-soup:px-3 @max-[480px]/experimental-soup:px-2">
+        <header class="shrink-0 px-4 pb-5 pt-4 @max-[760px]/experimental-soup:px-3 @max-[480px]/experimental-soup:px-2">
           <SearchAndControls flush />
         </header>
         <Body />
