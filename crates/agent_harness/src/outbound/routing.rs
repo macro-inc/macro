@@ -57,7 +57,7 @@ where
     async fn spawn(&self, command: SpawnContainer) -> Result<Self::Transport> {
         match command.kind {
             AgentKind::Cursor => Ok(RoutedTransport::Cursor(self.cursor.spawn(command).await?)),
-            AgentKind::SandboxedCoder => {
+            AgentKind::SandboxedCoder | AgentKind::InMemory => {
                 Ok(RoutedTransport::Sandbox(self.sandbox.spawn(command).await?))
             }
             AgentKind::External => Err(external_is_unroutable()),
@@ -67,7 +67,7 @@ where
     async fn resume(&self, session: AgentSessionId) -> Result<Self::Transport> {
         match AgentKind::of(self.sessions.get(session).await?.bot_id) {
             AgentKind::Cursor => Ok(RoutedTransport::Cursor(self.cursor.resume(session).await?)),
-            AgentKind::SandboxedCoder => Ok(RoutedTransport::Sandbox(
+            AgentKind::SandboxedCoder | AgentKind::InMemory => Ok(RoutedTransport::Sandbox(
                 self.sandbox.resume(session).await?,
             )),
             AgentKind::External => Err(external_is_unroutable()),
@@ -77,7 +77,7 @@ where
     async fn teardown(&self, session: AgentSessionId) -> Result<()> {
         match AgentKind::of(self.sessions.get(session).await?.bot_id) {
             AgentKind::Cursor => self.cursor.teardown(session).await,
-            AgentKind::SandboxedCoder => self.sandbox.teardown(session).await,
+            AgentKind::SandboxedCoder | AgentKind::InMemory => self.sandbox.teardown(session).await,
             AgentKind::External => Err(external_is_unroutable()),
         }
     }
@@ -94,6 +94,9 @@ where
             AgentKind::SandboxedCoder => self.sandbox.resize(session, size).await,
             AgentKind::Cursor => Err(HarnessError::Container(
                 "a cursor session has no sandbox to resize".to_owned(),
+            )),
+            AgentKind::InMemory => Err(HarnessError::Container(
+                "an in-memory session has no sandbox to resize".to_owned(),
             )),
             AgentKind::External => Err(external_is_unroutable()),
         }
